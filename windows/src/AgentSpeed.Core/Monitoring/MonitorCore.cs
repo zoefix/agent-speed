@@ -3,6 +3,7 @@ using AgentSpeed.Core.Engine;
 using AgentSpeed.Core.IO;
 using AgentSpeed.Core.OpenCode;
 using AgentSpeed.Core.Parsing;
+using AgentSpeed.Core.Antigravity;
 
 namespace AgentSpeed.Core.Monitoring;
 
@@ -39,6 +40,8 @@ internal sealed class MonitorCore : IDisposable
     private readonly Dictionary<TrackedFile, BackgroundRead> _wholeReads = [];
     private readonly CancellationTokenSource _backgroundStop = new();
     private readonly OpenCodeSource? _openCode;
+    private readonly List<AntigravitySource> _antigravity = [];
+    private readonly Dictionary<SourceKind, string> _antigravityRoots;
     private bool _openCodeSeeded;
     private bool _linksChanged;
     private long _removedMalformedLines;
@@ -81,6 +84,11 @@ internal sealed class MonitorCore : IDisposable
         }
 
         OpenCodeRootPath = locations.OpenCodeRoot;
+        _antigravityRoots = locations.AntigravityRoots().ToDictionary(r => r.Kind, r => r.Path);
+        foreach (var (kind, path) in locations.AntigravityRoots())
+        {
+            if (_enabled.Contains(kind) && path.Length > 0) _antigravity.Add(new AntigravitySource(kind, path));
+        }
         RefreshAvailability();
     }
 
@@ -117,7 +125,8 @@ internal sealed class MonitorCore : IDisposable
     /// <summary>Every folder a file watcher should observe, including the OpenCode database folder.</summary>
     public IEnumerable<SourceRoot> WatchRoots => OpenCodeRoot is { } openCode ? _roots.Append(openCode) : _roots;
 
-    public bool AnyEnabledRootAvailable => _roots.Any(r => r.Enabled && r.Available) || OpenCodeRoot?.Available == true;
+    public bool AnyEnabledRootAvailable => _roots.Any(r => r.Enabled && r.Available) || OpenCodeRoot?.Available == true
+        || _antigravity.Any(s => s.Available);
 
     public int TrackedFileCount => _files.Count;
 
@@ -199,6 +208,7 @@ internal sealed class MonitorCore : IDisposable
     public SeedReport Seed(long nowMs, long todayStartMs, CancellationToken cancellationToken, Action<double>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
+        RefreshAntigravity(todayStartMs, seeded: true);
         var plans = new List<ReadPlan>();
         var discovered = 0;
         foreach (var root in _roots)
@@ -306,8 +316,9 @@ internal sealed class MonitorCore : IDisposable
     /// <summary>1-second fallback: stats files modified in the last 2 minutes.</summary>
     public bool PollRecent(long nowMs)
     {
+        var antigravityChanged = RefreshAntigravity(_antigravityTodayStart, seeded: false);
         var cutoff = DateTime.UnixEpoch.AddMilliseconds(nowMs - RecentWriteWindowMs);
-        var changed = _openCodeSeeded && _openCode?.RefreshIfChanged() is { } update && ApplyOpenCode(update, seeded: false);
+        var changed = (_openCodeSeeded && _openCode?.RefreshIfChanged() is { } update && ApplyOpenCode(update, seeded: false)) || antigravityChanged;
         List<TrackedFile>? due = null;
         foreach (var tracked in _files.Values)
         {
@@ -401,6 +412,8 @@ internal sealed class MonitorCore : IDisposable
     /// <summary>Files of that source with at least one line today.</summary>
     public int SessionCount(SourceKind kind, long todayStartMs)
     {
+        if (kind is SourceKind.Antigravity or SourceKind.AntigravityCli)
+            return _antigravity.FirstOrDefault(s => s.Kind == kind)?.SessionCount(todayStartMs) ?? 0;
         if (kind == SourceKind.OpenCode)
         {
             return _openCode?.ActiveSessionCount(todayStartMs) ?? 0;
@@ -448,22 +461,26 @@ internal sealed class MonitorCore : IDisposable
             warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.OpenCode));
         }
 
+        foreach (var source in _antigravity.Where(s => s.Unsupported))
+            warnings.Add(new MonitorWarning.UnsupportedFormat(source.Kind));
+
         return warnings;
     }
 
     public long MalformedLineCount =>
-        _removedMalformedLines + _files.Values.Sum(f => f.Parser.MalformedLines) + (_openCode?.MalformedRows ?? 0);
+        _removedMalformedLines + _files.Values.Sum(f => f.Parser.MalformedLines) + (_openCode?.MalformedRows ?? 0) + _antigravity.Sum(s => s.Malformed);
 
     public long OversizedLineCount => _removedOversizedLines + _files.Values.Sum(f => f.Tailer.OversizedLines);
 
     public int UnreadableFileCount =>
-        _files.Values.Count(f => f.Unreadable) + (_openCode?.Status == OpenCodeStatus.Unreadable ? 1 : 0);
+        _files.Values.Count(f => f.Unreadable) + (_openCode?.Status == OpenCodeStatus.Unreadable ? 1 : 0) + _antigravity.Sum(s => s.Unreadable);
 
     public bool PartialHistory => _partialHistory;
 
     public (SpeedSnapshot Snapshot, IReadOnlyList<SpeedEvent> Events) BuildSnapshot(
         long nowMs, long todayStartMs, MonitorState state, bool observeLive)
     {
+        _antigravityTodayStart = todayStartMs;
         ResolveParents();
         var frame = _engine.Compute(nowMs, todayStartMs, observeLive);
         var agents = frame.Agents
@@ -523,7 +540,14 @@ internal sealed class MonitorCore : IDisposable
         var enabled = _enabled.Contains(kind);
         string path;
         bool available, rootEnabled;
-        if (kind == SourceKind.OpenCode)
+        if (kind is SourceKind.Antigravity or SourceKind.AntigravityCli)
+        {
+            var source = _antigravity.FirstOrDefault(s => s.Kind == kind);
+            path = _antigravityRoots.GetValueOrDefault(kind, string.Empty);
+            available = Directory.Exists(path);
+            rootEnabled = source is not null;
+        }
+        else if (kind == SourceKind.OpenCode)
         {
             path = OpenCodeRootPath;
             available = OpenCodeRoot?.Available ?? SafeFileExists(OpenCodeDatabase.DatabasePath(OpenCodeRootPath));
@@ -835,6 +859,24 @@ internal sealed class MonitorCore : IDisposable
             parser.InFlightStartMs,
             parser.LastLineMs,
             _parents.GetValueOrDefault(parser.AgentId)));
+    }
+
+    private long _antigravityTodayStart;
+
+    private bool RefreshAntigravity(long todayStart, bool seeded)
+    {
+        _antigravityTodayStart = todayStart;
+        var changed = false;
+        foreach (var source in _antigravity)
+        {
+            changed |= source.Refresh(todayStart, agent => _engine.UpdateAgent(agent), (response, completion) =>
+            {
+                _responsesSeen++;
+                _engine.Upsert(response, completion, seeded);
+                _observer?.OnResponse(response, completion, seeded);
+            });
+        }
+        return changed;
     }
 
     /// <summary>Applies one read of the OpenCode database; true when anything changed.</summary>

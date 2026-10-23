@@ -100,6 +100,10 @@ public sealed class LiveMonitor : IDisposable
     /// <summary><c>&lt;home&gt;/.gemini/tmp</c>, where home is <c>%GEMINI_CLI_HOME%</c>, else the user profile.</summary>
     public static string DefaultGeminiRoot => Path.Combine(GeminiHome, ".gemini", "tmp");
 
+    public static string DefaultAntigravityRoot => Path.Combine(UserHome, ".gemini", "antigravity", "conversations");
+
+    public static string DefaultAntigravityCliRoot => Path.Combine(UserHome, ".gemini", "antigravity-cli", "conversations");
+
     /// <summary>Every default Gemini CLI root; on macOS also the seatbelt sandbox root (METRICS 2).</summary>
     internal static IReadOnlyList<string> DefaultGeminiRoots => OperatingSystem.IsMacOS()
         ? [DefaultGeminiRoot, Path.Combine(GeminiHome, ".cache", ".gemini", "tmp")]

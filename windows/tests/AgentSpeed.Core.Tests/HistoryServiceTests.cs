@@ -130,7 +130,9 @@ public sealed class HistoryServiceTests : IDisposable
         _temp.Combine("claude", "projects"),
         _temp.Combine("dsh", "sessions"),
         _temp.Combine("opencode"),
-        _temp.Combine("gemini", "tmp"));
+        _temp.Combine("gemini", "tmp"),
+        _temp.Combine("antigravity"),
+        _temp.Combine("antigravity-cli"));
 
     private string WriteClaude(string relative, long ms, string id, long output) =>
         _temp.WriteFile("claude/projects/" + relative,

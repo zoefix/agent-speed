@@ -78,6 +78,8 @@ public static class HeatPalette
         SourceKind.DeepSeek => Rgba.FromHex("#4D6BFE"),
         SourceKind.OpenCode => Rgba.FromHex("#F4B13E"),
         SourceKind.Gemini => Rgba.FromHex("#34B8F0"),
+        SourceKind.Antigravity => Rgba.FromHex("#7C92F4"),
+        SourceKind.AntigravityCli => Rgba.FromHex("#CE91EC"),
         _ => Rgba.FromHex("#7C8798"),
     };
 

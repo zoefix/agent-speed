@@ -8,6 +8,8 @@ public enum SourceKind
     DeepSeek,
     OpenCode,
     Gemini,
+    Antigravity,
+    AntigravityCli,
 }
 
 public enum AgentPhase
@@ -171,7 +173,9 @@ public sealed record MonitorConfiguration(
     string? ClaudeRoot = null,
     string? DshRoot = null,
     string? OpenCodeRoot = null,
-    string? GeminiRoot = null)
+    string? GeminiRoot = null,
+    string? AntigravityRoot = null,
+    string? AntigravityCliRoot = null)
 {
     public static MonitorConfiguration Default { get; } =
         new(new HashSet<SourceKind>(Enum.GetValues<SourceKind>()));
@@ -183,8 +187,10 @@ public sealed record MonitorConfiguration(
         && ClaudeRoot == other.ClaudeRoot
         && DshRoot == other.DshRoot
         && OpenCodeRoot == other.OpenCodeRoot
-        && GeminiRoot == other.GeminiRoot;
+        && GeminiRoot == other.GeminiRoot
+        && AntigravityRoot == other.AntigravityRoot
+        && AntigravityCliRoot == other.AntigravityCliRoot;
 
     public override int GetHashCode() =>
-        HashCode.Combine(EnabledSources.Count, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot);
+        HashCode.Combine(EnabledSources.Count, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, AntigravityRoot, AntigravityCliRoot);
 }

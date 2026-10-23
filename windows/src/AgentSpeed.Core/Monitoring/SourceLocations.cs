@@ -6,14 +6,24 @@ internal sealed record SourceLocations(
     string ClaudeRoot,
     string DshRoot,
     string OpenCodeRoot,
-    IReadOnlyList<string> GeminiRoots)
+    IReadOnlyList<string> GeminiRoots,
+    string AntigravityRoot = "",
+    string AntigravityCliRoot = "")
 {
     public static SourceLocations Resolve(MonitorConfiguration configuration) => new(
         Normalize(configuration.CodexRoot ?? LiveMonitor.DefaultCodexRoot),
         Normalize(configuration.ClaudeRoot ?? LiveMonitor.DefaultClaudeRoot),
         Normalize(configuration.DshRoot ?? LiveMonitor.DefaultDshRoot),
         Normalize(configuration.OpenCodeRoot ?? LiveMonitor.DefaultOpenCodeRoot),
-        configuration.GeminiRoot is { } gemini ? [Normalize(gemini)] : [.. LiveMonitor.DefaultGeminiRoots.Select(Normalize)]);
+        configuration.GeminiRoot is { } gemini ? [Normalize(gemini)] : [.. LiveMonitor.DefaultGeminiRoots.Select(Normalize)],
+        Normalize(configuration.AntigravityRoot ?? LiveMonitor.DefaultAntigravityRoot),
+        Normalize(configuration.AntigravityCliRoot ?? LiveMonitor.DefaultAntigravityCliRoot));
+
+    public IEnumerable<(SourceKind Kind, string Path)> AntigravityRoots()
+    {
+        yield return (SourceKind.Antigravity, AntigravityRoot);
+        yield return (SourceKind.AntigravityCli, AntigravityCliRoot);
+    }
 
     /// <summary>Codex <c>archived_sessions</c>, the sibling of the sessions root (METRICS 8).</summary>
     public string CodexArchiveRoot

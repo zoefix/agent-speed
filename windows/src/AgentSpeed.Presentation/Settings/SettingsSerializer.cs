@@ -75,6 +75,8 @@ public static class SettingsSerializer
             w.WriteBoolean("deepseek", s.DeepSeekEnabled);
             w.WriteBoolean("opencode", s.OpenCodeEnabled);
             w.WriteBoolean("gemini", s.GeminiEnabled);
+            w.WriteBoolean("antigravity", s.AntigravityEnabled);
+            w.WriteBoolean("antigravityCli", s.AntigravityCliEnabled);
             WriteNullableString(w, "codexRoot", s.CodexRoot);
             WriteNullableString(w, "claudeRoot", s.ClaudeRoot);
             WriteNullableString(w, "dshRoot", s.DshRoot);
@@ -173,6 +175,8 @@ public static class SettingsSerializer
             DeepSeekEnabled = ReadBool(sources, "deepseek", d.DeepSeekEnabled),
             OpenCodeEnabled = ReadBool(sources, "opencode", d.OpenCodeEnabled),
             GeminiEnabled = ReadBool(sources, "gemini", d.GeminiEnabled),
+            AntigravityEnabled = ReadBool(sources, "antigravity", d.AntigravityEnabled),
+            AntigravityCliEnabled = ReadBool(sources, "antigravityCli", d.AntigravityCliEnabled),
             CodexRoot = ReadString(sources, "codexRoot"),
             ClaudeRoot = ReadString(sources, "claudeRoot"),
             DshRoot = ReadString(sources, "dshRoot"),

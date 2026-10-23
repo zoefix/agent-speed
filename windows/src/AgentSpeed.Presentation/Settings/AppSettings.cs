@@ -126,6 +126,10 @@ public sealed record AppSettings
 
     public bool GeminiEnabled { get; init; } = true;
 
+    public bool AntigravityEnabled { get; init; } = true;
+
+    public bool AntigravityCliEnabled { get; init; } = true;
+
     /// <summary>Null uses the default Codex sessions folder.</summary>
     public string? CodexRoot { get; init; }
 
@@ -181,6 +185,8 @@ public sealed record AppSettings
         SourceKind.DeepSeek => DeepSeekEnabled,
         SourceKind.OpenCode => OpenCodeEnabled,
         SourceKind.Gemini => GeminiEnabled,
+        SourceKind.Antigravity => AntigravityEnabled,
+        SourceKind.AntigravityCli => AntigravityCliEnabled,
         _ => false,
     };
 
@@ -192,6 +198,8 @@ public sealed record AppSettings
         SourceKind.DeepSeek => this with { DeepSeekEnabled = enabled },
         SourceKind.OpenCode => this with { OpenCodeEnabled = enabled },
         SourceKind.Gemini => this with { GeminiEnabled = enabled },
+        SourceKind.Antigravity => this with { AntigravityEnabled = enabled },
+        SourceKind.AntigravityCli => this with { AntigravityCliEnabled = enabled },
         _ => this,
     };
 

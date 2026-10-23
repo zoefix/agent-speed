@@ -5,6 +5,7 @@ using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.OpenCode;
 using AgentSpeed.Core.Parsing;
+using AgentSpeed.Core.Antigravity;
 
 namespace AgentSpeed.Core.History;
 
@@ -191,6 +192,41 @@ internal sealed class HistoryAnalyzer
         finally
         {
             plan.Database?.Dispose();
+        }
+
+        if (!cancelled)
+        {
+            foreach (var (kind, root) in locations.AntigravityRoots())
+            {
+                if (!enabled.Contains(kind)) continue;
+                foreach (var path in AntigravitySource.Paths(root))
+                {
+                    if (cancellationToken.IsCancellationRequested) { cancelled = true; break; }
+                    plan.Discovered++;
+                    try
+                    {
+                        var stamp = AntigravitySource.FileStamp(path);
+                        var previous = _entries.GetValueOrDefault(path);
+                        var family = SourceNames.Of(kind);
+                        if (!zoneChanged && previous is not null && previous.Family == family && previous.Version == _options.Version
+                            && previous.Size == stamp.Size + stamp.WalSize && previous.Modified == Math.Max(stamp.Modified, stamp.WalModified)) continue;
+                        var read = AntigravityDatabase.Read(path, kind);
+                        // Never overwrite a good stored contribution with a partially decoded database.
+                        if (read.Malformed > 0) { unreadable++; continue; }
+                        var entry = new StoredFile
+                        {
+                            Id = previous?.Id ?? 0, Path = path, Family = family,
+                            Size = stamp.Size + stamp.WalSize, Modified = Math.Max(stamp.Modified, stamp.WalModified),
+                            Version = _options.Version,
+                            Days = DayAggregate.Contributions(read.Responses, kind, new DayLabeler(zone)),
+                        };
+                        _store.Save([(entry, Array.Empty<ulong>())]);
+                        _entries[path] = entry;
+                        sessions++;
+                    }
+                    catch (Exception e) when (e is SqliteException or IOException or UnauthorizedAccessException) { unreadable++; }
+                }
+            }
         }
 
         return new HistoryReport(plan.Discovered, plan.Files.Count + plan.Sessions.Count, analyzed, bytes, sessions, unreadable,

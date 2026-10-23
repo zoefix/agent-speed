@@ -181,7 +181,7 @@ public sealed class MonitorCoreTests : IDisposable
         Assert.Equal(4, core.TrackedFileCount);
         Assert.Equal(1, core.SessionCount(SourceKind.ClaudeDesktop, _todayStart));
         Assert.Equal(1, core.SessionCount(SourceKind.ClaudeCode, _todayStart));
-        Assert.Equal([0, 1, 1, 0, 0, 0], snapshot.Sources.Select(s => s.SessionCount));
+        Assert.Equal([0, 1, 1, 0, 0, 0, 0, 0], snapshot.Sources.Select(s => s.SessionCount));
     }
 
     [Fact]

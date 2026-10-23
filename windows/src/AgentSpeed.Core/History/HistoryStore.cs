@@ -398,6 +398,8 @@ internal static class SourceNames
         SourceKind.DeepSeek => "deepseek",
         SourceKind.OpenCode => "opencode",
         SourceKind.Gemini => "gemini",
+        SourceKind.Antigravity => "antigravity",
+        SourceKind.AntigravityCli => "antigravityCli",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
@@ -409,6 +411,8 @@ internal static class SourceNames
         "deepseek" => SourceKind.DeepSeek,
         "opencode" => SourceKind.OpenCode,
         "gemini" => SourceKind.Gemini,
+        "antigravity" => SourceKind.Antigravity,
+        "antigravityCli" => SourceKind.AntigravityCli,
         _ => null,
     };
 }

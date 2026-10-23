@@ -1,4 +1,16 @@
 {
+  "source.antigravity": {
+    "zh-Hant": "Antigravity 桌面版",
+    "zh-Hans": "Antigravity 桌面版",
+    "en": "Antigravity Desktop",
+    "ja": "Antigravity デスクトップ"
+  },
+  "source.antigravityCli": {
+    "zh-Hant": "Antigravity CLI (agy)",
+    "zh-Hans": "Antigravity CLI (agy)",
+    "en": "Antigravity CLI (agy)",
+    "ja": "Antigravity CLI (agy)"
+  },
   "_comment": "Windows-only UI strings. Same format as spec/strings.json; every key needs zh-Hant, zh-Hans, en and ja.",
   "win.chart.peak": {
     "zh-Hant": "峰值 %@",

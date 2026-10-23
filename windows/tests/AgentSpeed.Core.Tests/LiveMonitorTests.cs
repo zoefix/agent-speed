@@ -129,7 +129,9 @@ public sealed class LiveMonitorTests : IDisposable
         ClaudeRoot,
         DshRoot,
         OpenCodeRoot,
-        GeminiRoot);
+        GeminiRoot,
+        _temp.Combine("antigravity"),
+        _temp.Combine("antigravity-cli"));
 
     private sealed class HubProbe
     {
