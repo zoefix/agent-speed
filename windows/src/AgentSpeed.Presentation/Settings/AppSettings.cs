@@ -139,6 +139,9 @@ public sealed record AppSettings
 
     public bool CodexEnabled { get; init; } = true;
 
+    /// <summary>Opt-in account quota capsule on Windows orbs that include Codex.</summary>
+    public bool CodexQuotaEnabled { get; init; }
+
     public bool ClaudeCodeEnabled { get; init; } = true;
 
     public bool ClaudeDesktopEnabled { get; init; } = true;

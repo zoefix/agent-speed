@@ -41,6 +41,30 @@ internal sealed class NamePlates
     /// <summary>The orb shows a name plate, or will once it lands: its source chip is folded into it.</summary>
     public bool Owns(string orbId) => _placements.ContainsKey(orbId);
 
+    /// <summary>Space already occupied below the disc by its name and undo plates (DIPs).</summary>
+    public double BottomOf(string orbId)
+    {
+        var bottom = _plates.TryGetValue(orbId, out var plate) && plate.IsShowing && !plate.RestRect.IsEmpty ? plate.RestRect.Bottom : 0;
+        if (_undo is { } undo && undo.OrbId == orbId && undo.Plate.IsShowing && !undo.Plate.RestRect.IsEmpty)
+        {
+            bottom = Math.Max(bottom, undo.Plate.RestRect.Bottom);
+        }
+
+        return bottom;
+    }
+
+    /// <summary>Space already occupied above the disc by its name and undo plates (DIPs).</summary>
+    public double TopOf(string orbId)
+    {
+        var top = _plates.TryGetValue(orbId, out var plate) && plate.IsShowing && !plate.RestRect.IsEmpty ? plate.RestRect.Top : 0;
+        if (_undo is { } undo && undo.OrbId == orbId && undo.Plate.IsShowing && !undo.Plate.RestRect.IsEmpty)
+        {
+            top = Math.Min(top, undo.Plate.RestRect.Top);
+        }
+
+        return top;
+    }
+
     /// <summary>
     /// Lays out every plate (on drag release, display changes, and changes of a name, size, visibility, sources or the
     /// plate settings): who shows one, the collision-free slots, the shortened names; plates fade, move or morph to

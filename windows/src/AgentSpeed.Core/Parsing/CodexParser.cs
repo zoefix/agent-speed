@@ -1,4 +1,5 @@
 using System.Globalization;
+using AgentSpeed.Core.Quota;
 
 namespace AgentSpeed.Core.Parsing;
 
@@ -37,6 +38,8 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     /// <summary>The spawning thread named by the first <c>session_meta</c> (METRICS 6.7).</summary>
     public string? ParentThreadId => _parentThreadId;
 
+    public CodexQuotaSnapshot? LatestQuota { get; private set; }
+
     public override void Reset()
     {
         base.Reset();
@@ -49,6 +52,7 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         _streaming = false;
         _sawModernUsage = false;
         _previousLegacyTotals = null;
+        LatestQuota = null;
         SetSubagent(_pathIsSubagent);
     }
 
@@ -75,6 +79,13 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         if (_fileCreatedMs is { } created && ts < created - CopiedHistoryToleranceMs)
         {
             return;
+        }
+
+        if (line.Kind == CodexLineKind.EventMsg && line.PayloadKind == CodexPayloadKind.TokenCount && line.Quota is { } quota
+            && (LatestQuota is null || ts > LatestQuota.FetchedAt.ToUnixTimeMilliseconds()))
+        {
+            LatestQuota = quota with { FetchedAt = DateTimeOffset.FromUnixTimeMilliseconds(ts) };
+            MarkChanged();
         }
 
         Touch(ts);

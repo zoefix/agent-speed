@@ -43,6 +43,7 @@ internal sealed partial class MonitorCore : IDisposable
     private readonly Dictionary<string, AgentLink> _links = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _parents = new(StringComparer.Ordinal);
     private readonly Collector _collector = new();
+    private Quota.CodexQuotaSnapshot? _codexQuota;
     private readonly List<SourceRoot> _roots = [];
     private readonly Dictionary<TrackedFile, BackgroundRead> _wholeReads = [];
     private readonly CancellationTokenSource _backgroundStop = new();
@@ -592,6 +593,7 @@ internal sealed partial class MonitorCore : IDisposable
             TodayCost = frame.TodayCost,
             Report = frame.Report,
             TodayModes = frame.TodayModes,
+            CodexQuota = _codexQuota,
         };
         return (snapshot, frame.Events);
     }
@@ -974,6 +976,11 @@ internal sealed partial class MonitorCore : IDisposable
             _engine.RemoveAgent(parser.AgentId);
             _linksChanged |= _links.Remove(parser.AgentId);
             return;
+        }
+
+        if (parser is CodexParser { LatestQuota: { } quota } && (_codexQuota is null || quota.FetchedAt > _codexQuota.FetchedAt))
+        {
+            _codexQuota = quota;
         }
 
         var link = AgentLink.Of(parser);

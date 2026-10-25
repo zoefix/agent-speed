@@ -16,6 +16,11 @@
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
+        <controls:SettingsCard Header="{loc:Loc win.quota.setting}" Icon="&#xE9D9;" Description="{loc:Loc win.quota.settingHint}" Margin="0,12,0,4">
+            <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding CodexQuotaEnabled, Mode=TwoWay}"
+                      AutomationProperties.Name="{loc:Loc win.quota.setting}" AutomationProperties.HelpText="{loc:Loc win.quota.settingHint}" />
+        </controls:SettingsCard>
+
         <TextBlock Text="{loc:Loc win.settings.sources.folders}" Style="{StaticResource SectionHeaderText}" Margin="2,20,0,8" />
         <controls:SettingsCard Header="{loc:Loc source.codex}" Icon="&#xE8B7;" Description="{Binding CodexPath}">
             <StackPanel Orientation="Horizontal">

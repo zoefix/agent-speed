@@ -3,17 +3,17 @@
 Agent Speed reads local logs and works fully offline. It makes exactly three kinds of automatic network requests, all
 optional, all HTTPS `GET`, none of them carrying anything about the user: the update check (`spec/UPDATES.md`), the
 daily price-table sync (section 3) and the daily exchange rates (section 4). A fourth kind exists only when the user
-turns it on: live reporting (section 6, `spec/REPORTING.md`), the one feature that sends data about the user's
-activity, to a service the user chose. Both platforms implement exactly this behaviour; anything not listed here is
-never requested.
+turns it on: live reporting (section 6, `spec/REPORTING.md`), which sends data about the user's activity to a service
+the user chose. Windows also offers opt-in Codex account quota reads (section 7), delegated to the installed Codex
+executable and its existing sign-in. Anything not listed here is never requested.
 
 ## 1. Common rules
 
 - **Master switch** `networkEnabled` (Settings → About → `settings.network`), default on. Off: no request of any kind
   is made — automatic or manual (the manual buttons are disabled and show `settings.network.offHint`). Everything
   keeps working with the bundled or last good data. Turning it back on schedules each feature as after a launch.
-- **What is sent** (sections 2–4; live reporting has its own rules, section 6): the request line and these headers
-  only: `User-Agent: AgentSpeed/<version> (<macOS|Windows>)`,
+- **What is sent** (sections 2–4; live reporting and Codex quota have their own rules, sections 6–7): the request line
+  and these headers only: `User-Agent: AgentSpeed/<version> (<macOS|Windows>)`,
   `Accept` as stated per feature, and `If-None-Match` with the `ETag` that the same URL returned before (when one is
   stored). No cookies, no credentials, no identifiers, no query parameters derived from the user's data or settings.
   Every request asks for the same resource for every user (the price table, the USD-based rate list), so a server
@@ -217,3 +217,28 @@ Avatar input stays local until upload: PNG/JPEG up to 10 MiB is re-encoded witho
 256×256 PNG up to 512 KiB. Profile JSON responses are bounded to 64 KiB; these separate limits do not raise
 the existing 16 KiB periodic report limit. Avatar URLs are website metadata; native clients download their
 own avatar through the signed API endpoint rather than following an arbitrary external image URL.
+
+## 7. Codex account quota (Windows, opt-in)
+
+- Default off: Settings → Sources → Codex quota on orbs (`sources.codexQuota`). No account helper is started until
+  this switch, the Codex source and network access are enabled and a visible orb includes Codex.
+- Normal quota updates come from `token_count.rate_limits` in the transcripts already read by the monitor. There is
+  no extra watcher and no fixed network polling. `token_usage_record` alone is not a quota reading.
+- To seed the quota and obtain reset-card details, the app starts its own installed `codex app-server --listen
+  stdio://` process and sends `initialize`, `initialized`, then the read-only `account/rateLimits/read` RPC.
+  Initialization enables the experimental API needed by reset-credit metadata. Codex uses its existing local
+  sign-in and manages the connection to its configured account service; Agent Speed does not read, copy or store
+  credential files or issue direct authenticated HTTP requests. This delegation is an exception to the anonymous
+  public-data request rules in section 1. No prompt, conversation, project or report data is sent by this RPC.
+- Account details are read on enable/launch, tooltip opening, quota recovery, and a known reset-card expiry. Only
+  a single expiry deadline is scheduled. Known expired cards are removed locally even if the server is unavailable.
+  Requests overlap neither periodically nor concurrently; an event during a read can queue one follow-up read.
+  Failed card reads can retry with later response activity, at least one minute apart.
+- Turning off network access, the feature or all eligible orbs cancels the app's helper request and stops its expiry
+  timer. The helper has a 25-second request timeout and is closed afterward; only that process is terminated if it
+  fails to exit. Existing Codex sessions are untouched. Failures do not log server diagnostics or account details.
+- Snapshots stay in memory, do not enter history or live reporting, and never enter an installation package.
+  Missing card counts or expiry details remain unavailable. Card use on another device is rechecked when the
+  tooltip is opened; while idle this is not a cross-device push subscription.
+
+See [Codex quota](../docs/codex-quota.md) for display rules and verification. macOS is unchanged.

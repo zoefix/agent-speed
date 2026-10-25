@@ -173,6 +173,9 @@ public sealed record SpeedSnapshot(
     ResponseSummary? LastResponse,
     IReadOnlyList<MonitorWarning> Warnings)
 {
+    /// <summary>Latest account quota observed in a Codex response; no extra network request is made.</summary>
+    public Quota.CodexQuotaSnapshot? CodexQuota { get; init; }
+
     /// <summary>
     /// Today's measured output peak of every source set requested with <see cref="LiveMonitor.SetSubsets"/>
     /// (METRICS 6.8), keyed by the requested set: the maximum 3-bucket trailing average of the enabled members' summed

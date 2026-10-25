@@ -83,6 +83,7 @@ public static class SettingsSerializer
 
             w.WriteStartObject("sources");
             w.WriteBoolean("codex", s.CodexEnabled);
+            w.WriteBoolean("codexQuota", s.CodexQuotaEnabled);
             w.WriteBoolean("claudeCode", s.ClaudeCodeEnabled);
             w.WriteBoolean("claudeDesktop", s.ClaudeDesktopEnabled);
             w.WriteBoolean("deepseek", s.DeepSeekEnabled);
@@ -238,6 +239,7 @@ public static class SettingsSerializer
             CelebratePeaks = ReadBool(effects, "celebratePeaks", d.CelebratePeaks),
             ResponsePulses = ReadBool(effects, "responsePulses", d.ResponsePulses),
             CodexEnabled = ReadBool(sources, "codex", d.CodexEnabled),
+            CodexQuotaEnabled = ReadBool(sources, "codexQuota", d.CodexQuotaEnabled),
             ClaudeCodeEnabled = ReadBool(sources, "claudeCode", d.ClaudeCodeEnabled),
             ClaudeDesktopEnabled = ReadBool(sources, "claudeDesktop", d.ClaudeDesktopEnabled),
             DeepSeekEnabled = ReadBool(sources, "deepseek", d.DeepSeekEnabled),

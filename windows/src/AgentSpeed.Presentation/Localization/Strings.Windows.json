@@ -311,5 +311,149 @@
     "zh-Hans": "面板",
     "en": "Dashboard",
     "ja": "ダッシュボード"
+  },
+  "win.quota.setting": {
+    "en": "Codex quota on orbs",
+    "zh-Hans": "悬浮球显示 Codex 额度",
+    "zh-Hant": "懸浮球顯示 Codex 額度",
+    "ja": "オーブに Codex の残量を表示"
+  },
+  "win.quota.settingHint": {
+    "en": "Show remaining quota below orbs that include Codex. Uses your existing Codex sign-in for account details and requires network access.",
+    "zh-Hans": "在包含 Codex 的悬浮球下显示剩余额度。账号详情使用已有的 Codex 登录，需要网络访问。",
+    "zh-Hant": "在包含 Codex 的懸浮球下顯示剩餘額度。帳號詳細資料使用既有的 Codex 登入，需要網路存取。",
+    "ja": "Codex を含むオーブの下に残量を表示します。アカウント情報の取得には既存の Codex ログインとネットワーク接続を使います。"
+  },
+  "win.quota.privacy": {
+    "en": "Optional Codex quota is off by default. When enabled, it uses your existing Codex sign-in to read account limits and reset cards from OpenAI. Results stay on this computer. The network switch pauses these reads.",
+    "zh-Hans": "Codex 额度默认关闭。启用后，使用已有的 Codex 登录向 OpenAI 读取账号额度和重置卡，结果只在本机显示。网络总开关会暂停这些读取。",
+    "zh-Hant": "Codex 額度預設關閉。啟用後，使用既有的 Codex 登入向 OpenAI 讀取帳號額度與重置卡，結果只在本機顯示。網路總開關會暫停這些讀取。",
+    "ja": "Codex の残量表示は初期状態ではオフです。有効にすると既存の Codex ログインを使い、OpenAI から上限とリセットカードを読み取ります。結果はこのコンピューター内でのみ表示し、ネットワークのスイッチで取得を停止できます。"
+  },
+  "win.quota.prefix": {
+    "en": "Codex left",
+    "zh-Hans": "Codex 剩余",
+    "zh-Hant": "Codex 剩餘",
+    "ja": "Codex 残り"
+  },
+  "win.quota.title": {
+    "en": "Codex remaining quota",
+    "zh-Hans": "Codex 剩余额度",
+    "zh-Hant": "Codex 剩餘額度",
+    "ja": "Codex の残り利用枠"
+  },
+  "win.quota.paused": {
+    "en": "Paused",
+    "zh-Hans": "额度已暂停",
+    "zh-Hant": "額度已暫停",
+    "ja": "一時停止中"
+  },
+  "win.quota.pausedHint": {
+    "en": "Quota refresh is paused while network access is off.",
+    "zh-Hans": "网络访问已关闭，额度刷新已暂停。",
+    "zh-Hant": "網路存取已關閉，額度更新已暫停。",
+    "ja": "ネットワーク接続がオフのため、残量の更新を停止しています。"
+  },
+  "win.quota.loading": {
+    "en": "Reading…",
+    "zh-Hans": "读取中…",
+    "zh-Hant": "讀取中…",
+    "ja": "取得中…"
+  },
+  "win.quota.unavailable": {
+    "en": "Unavailable",
+    "zh-Hans": "额度暂不可用",
+    "zh-Hant": "額度暫不可用",
+    "ja": "残量を取得できません"
+  },
+  "win.quota.signInHint": {
+    "en": "Uses your existing Codex sign-in. Confirm Codex is signed in if this persists.",
+    "zh-Hans": "请确认 Codex 已登录。",
+    "zh-Hant": "請確認 Codex 已登入。",
+    "ja": "Codex にログイン済みか確認してください。"
+  },
+  "win.quota.stale": {
+    "en": "stale",
+    "zh-Hans": "待更新",
+    "zh-Hant": "待更新",
+    "ja": "更新待ち"
+  },
+  "win.quota.weekly": {
+    "en": "Weekly",
+    "zh-Hans": "周额度",
+    "zh-Hant": "週額度",
+    "ja": "週間"
+  },
+  "win.quota.daily": {
+    "en": "Daily",
+    "zh-Hans": "日额度",
+    "zh-Hant": "日額度",
+    "ja": "日間"
+  },
+  "win.quota.hours": {
+    "en": "%d-hour",
+    "zh-Hans": "%d 小时额度",
+    "zh-Hant": "%d 小時額度",
+    "ja": "%d 時間"
+  },
+  "win.quota.minutes": {
+    "en": "%d-minute",
+    "zh-Hans": "%d 分钟额度",
+    "zh-Hant": "%d 分鐘額度",
+    "ja": "%d 分間"
+  },
+  "win.quota.window": {
+    "en": "Window",
+    "zh-Hans": "额度窗口",
+    "zh-Hant": "額度視窗",
+    "ja": "利用枠"
+  },
+  "win.quota.resets": {
+    "en": "Resets: %@",
+    "zh-Hans": "重置：%@",
+    "zh-Hant": "重置：%@",
+    "ja": "リセット：%@"
+  },
+  "win.quota.updated": {
+    "en": "Updated: %@",
+    "zh-Hans": "更新：%@",
+    "zh-Hant": "更新：%@",
+    "ja": "更新：%@"
+  },
+  "win.quota.cards": {
+    "en": "Reset cards: %d",
+    "zh-Hans": "重置卡：%d 张",
+    "zh-Hant": "重置卡：%d 張",
+    "ja": "リセットカード：%d 枚"
+  },
+  "win.quota.cardsUnavailable": {
+    "en": "Reset cards: unavailable",
+    "zh-Hans": "重置卡：暂不可用",
+    "zh-Hant": "重置卡：暫時無法取得",
+    "ja": "リセットカード：取得できません"
+  },
+  "win.quota.expiryUnknown": {
+    "en": "Not provided",
+    "zh-Hans": "未提供到期时间",
+    "zh-Hant": "未提供到期時間",
+    "ja": "有効期限未提供"
+  },
+  "win.quota.expires": {
+    "en": "Expires: %@",
+    "zh-Hans": "到期：%@",
+    "zh-Hant": "到期：%@",
+    "ja": "有効期限：%@"
+  },
+  "win.quota.cardExpires": {
+    "en": "Card %d expires: %@",
+    "zh-Hans": "第 %d 张到期：%@",
+    "zh-Hant": "第 %d 張到期：%@",
+    "ja": "カード %d の有効期限：%@"
+  },
+  "win.quota.moreCards": {
+    "en": "%d more: expiry not provided",
+    "zh-Hans": "另 %d 张：未提供到期时间",
+    "zh-Hant": "另 %d 張：未提供到期時間",
+    "ja": "ほか %d 枚：有効期限未提供"
   }
 }

@@ -604,6 +604,12 @@ internal sealed class SettingsViewModel : ObservableObject
 
     public bool NetworkOff => !S.NetworkEnabled;
 
+    public bool CodexQuotaEnabled
+    {
+        get => S.CodexQuotaEnabled;
+        set => Apply(s => s with { CodexQuotaEnabled = value });
+    }
+
     /// <summary><c>settings.network.offHint</c> on the controls the master switch disables; null while it is on.</summary>
     public string? NetworkOffTooltip => S.NetworkEnabled ? null : _loc["settings.network.offHint"];
 
@@ -647,7 +653,8 @@ internal sealed class SettingsViewModel : ObservableObject
 
     public string PrivacyReport => _loc["privacy.report"];
 
-    public string NetworkHint => _loc[_reportHost is null ? "settings.network.hint" : "settings.network.hint.report"];
+    public string NetworkHint => _loc[_reportHost is null ? "settings.network.hint" : "settings.network.hint.report"]
+        + (S.CodexQuotaEnabled ? Environment.NewLine + _loc["win.quota.privacy"] : string.Empty);
 
     public void Relocalize(Localizer localizer)
     {

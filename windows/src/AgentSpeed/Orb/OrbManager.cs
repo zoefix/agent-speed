@@ -16,6 +16,7 @@ using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Menus;
 using AgentSpeed.Presentation.Motion;
 using AgentSpeed.Presentation.Orb;
+using AgentSpeed.Presentation.Quota;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Orbs;
 using AgentSpeed.Presentation.Titles;
@@ -70,6 +71,8 @@ internal sealed class OrbManager : IDisposable
     private readonly DispatcherTimer _undoTimer;
     private readonly List<OrbGuideWindow> _guides = [];
     private readonly NamePlates _plates;
+    private readonly CodexQuotaPlates _quotaPlates;
+    private readonly CodexQuotaService _codexQuota;
     private Localizer _loc;
     private OrbChipWindow? _chip;
     private string? _chipOrb;
@@ -94,6 +97,10 @@ internal sealed class OrbManager : IDisposable
         _loc = loc;
         _host = host;
         _plates = new NamePlates(theme, loc, () => _speed.Now);
+        _quotaPlates = new CodexQuotaPlates(theme, () => _speed.Now);
+        _codexQuota = new CodexQuotaService();
+        _codexQuota.Changed += (_, _) => ResolvePlates();
+        _quotaPlates.DetailsRequested += (_, _) => _ = _codexQuota.RefreshForViewAsync();
         _deadline = new DispatcherTimer(DispatcherPriority.Normal, ui);
         _deadline.Tick += (_, _) =>
         {
@@ -196,6 +203,7 @@ internal sealed class OrbManager : IDisposable
         }
 
         list.AddRange(_plates.CaptureTargets());
+        list.AddRange(_quotaPlates.CaptureTargets());
         if (_chip is { IsVisible: true } chip && chip.Content is FrameworkElement content
             && User32.GetWindowRect(new System.Windows.Interop.WindowInteropHelper(chip).Handle, out var chipRect))
         {
@@ -297,6 +305,8 @@ internal sealed class OrbManager : IDisposable
         _clock.RefreshDisplay();
         UpdateTraffic(_traffic);
         Update(_speed.Snapshot);
+        _codexQuota.Configure(settings.CodexQuotaEnabled && settings.NetworkEnabled && settings.CodexEnabled
+            && visible.Any(o => o.TrackedSources is not { } sources || sources.Contains(SourceKind.Codex)));
         ResolvePlates();
 
         // After the plates are laid out for the new sources: the chip (or the plate folding it) shows the new content.
@@ -309,6 +319,7 @@ internal sealed class OrbManager : IDisposable
     /// <summary>Applies a data snapshot to every orb.</summary>
     public void Update(SpeedSnapshot snapshot)
     {
+        if (!_speed.IsPreviewing) { _codexQuota.Observe(snapshot.CodexQuota); }
         if (_entries.Count == 0)
         {
             return;
@@ -508,6 +519,7 @@ internal sealed class OrbManager : IDisposable
         if (_entries.TryGetValue(id, out var entry) && entry.Window.IsVisible)
         {
             _plates.Vanish(id);
+            _quotaPlates.Vanish(id);
             entry.Window.Vanish(Finish);
         }
         else
@@ -579,6 +591,8 @@ internal sealed class OrbManager : IDisposable
         GpuOrbSurface.RendererFailed -= OnRendererFailed;
         CompositorTicker.DisplayStateChanged -= OnDisplayStateChanged;
         _plates.Dispose();
+        _codexQuota.Dispose();
+        _quotaPlates.Dispose();
         _deadline.Stop();
         _chipTimer.Stop();
         _undoTimer.Stop();
@@ -671,6 +685,7 @@ internal sealed class OrbManager : IDisposable
         }
 
         _plates.Remove(id);
+        _quotaPlates.Remove(id);
         entry.Window.Close();
     }
 
@@ -780,6 +795,12 @@ internal sealed class OrbManager : IDisposable
         {
             accessible += DisplayText.SpokenSeparator(_loc)
                 + _loc.Format("a11y.orb.traffic", DisplayText.SpokenTrafficRate(traffic.Rx), DisplayText.SpokenTrafficRate(traffic.Tx));
+        }
+
+        if (Settings.CodexQuotaEnabled && Settings.CodexEnabled && (orb.TrackedSources is not { } quotaSources || quotaSources.Contains(SourceKind.Codex)))
+        {
+            var quota = CodexQuotaDisplay.Create(_codexQuota.Snapshot, _codexQuota.Status, DateTimeOffset.UtcNow, _loc);
+            accessible += DisplayText.SpokenSeparator(_loc) + quota.Prefix + " " + quota.Value;
         }
 
         if (accessible != entry.PendingName)
@@ -945,6 +966,8 @@ internal sealed class OrbManager : IDisposable
             .Select(e => new PlateOrb(e.Definition, e.Window, e.Target ?? e.Window.Center, e.ShowChipOnLanding))
             .ToArray();
         _plates.Resolve(orbs, Settings, Availability());
+        _quotaPlates.Resolve(orbs, Settings, _plates,
+            CodexQuotaDisplay.Create(_codexQuota.Snapshot, _codexQuota.Status, DateTimeOffset.UtcNow, _loc), _loc);
 
         // The anchor's plate went away: the undo stays reachable on the plain chip for the rest of its 8 s.
         if (hadPlateUndo && !_plates.ShowsUndo && PendingUndo is not null)
@@ -1037,6 +1060,7 @@ internal sealed class OrbManager : IDisposable
 
             remaining++;
             _plates.Vanish(id);
+            _quotaPlates.Vanish(id);
             entry.Window.AnimateTo(keep.Window.Center, 0.3, 1, () =>
             {
                 entry.Window.Vanish(() =>
@@ -1076,6 +1100,7 @@ internal sealed class OrbManager : IDisposable
     private void OnHover(string id, bool hovering)
     {
         _plates.FollowHover(id);
+        _quotaPlates.FollowHover(id);
         if (hovering)
         {
             Prefer(id);
@@ -1120,7 +1145,8 @@ internal sealed class OrbManager : IDisposable
 
         // While a name plate shows, the chip is folded into it instead of drawn as a second capsule.
         _plates.Fold(id);
-        if (id is null || _plates.Owns(id) || !_entries.TryGetValue(id, out var entry) || !ChipApplies(entry))
+        if (id is null || _plates.Owns(id) || !_entries.TryGetValue(id, out var entry) || !ChipApplies(entry)
+            || _quotaPlates.Owns(id) && entry.Definition.TrackedSources is { Count: 1 } single && single.Contains(SourceKind.Codex))
         {
             if (_hoverOrb is null && (_chipOrb is null || DateTime.UtcNow >= _chipUntil))
             {
@@ -1186,6 +1212,7 @@ internal sealed class OrbManager : IDisposable
             _undoTimer.Stop();
             _undoChip?.Hide();
             _plates.HideUndo();
+            ResolvePlates();
             return;
         }
 
@@ -1204,6 +1231,7 @@ internal sealed class OrbManager : IDisposable
         if (_plates.ShowUndo(entry.Window, entry.Definition, text, Undo))
         {
             _undoChip?.Hide();
+            ResolvePlates();
             return;
         }
 

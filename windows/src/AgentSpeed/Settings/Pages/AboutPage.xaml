@@ -22,6 +22,7 @@
                 <TextBlock Text="{Binding PrivacyStatement}" Style="{StaticResource BodyText}" Margin="0,16,0,0" />
                 <TextBlock Text="{Binding PrivacyTraffic}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding PrivacyReport}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
+                <TextBlock Text="{loc:Loc win.quota.privacy}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <TextBlock Text="{loc:Loc settings.about.update}" Style="{StaticResource CaptionText}" Margin="0,8,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="-4,12,0,0">
                     <Button Style="{StaticResource LinkButton}" Command="{Binding OpenRepositoryCommand}" Content="{loc:Loc settings.about.github}" />

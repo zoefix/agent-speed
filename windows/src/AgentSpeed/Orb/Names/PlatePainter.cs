@@ -17,7 +17,7 @@ internal sealed class PlateInk
 {
     private readonly Dictionary<(NamePlateDotKind Kind, Presentation.Colors.Rgba Color), Brush> _dots = new();
 
-    public PlateInk(PlateLook look)
+    public PlateInk(PlateLook look, Rgba? accent = null)
     {
         Look = look;
         if (look.HighContrast)
@@ -39,7 +39,7 @@ internal sealed class PlateInk
         Border = MediaColors.FrozenPen(material.Outer.ToBrush(), NamePlateMaterial.OuterWidth);
         Text = material.Text.ToBrush();
         Secondary = material.Secondary.ToBrush();
-        Accent = material.Accent.ToBrush();
+        Accent = (accent ?? material.Accent).ToBrush();
         Separator = material.Separator.ToBrush();
         ShadowOpacity = material.Shadow.A;
     }

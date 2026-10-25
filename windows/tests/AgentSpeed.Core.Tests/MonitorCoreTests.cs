@@ -25,6 +25,23 @@ public sealed class MonitorCoreTests : IDisposable
     public void Dispose() => _temp.Dispose();
 
     [Fact]
+    public void CodexQuotaFollowsResponseMetadataThroughTheExistingLogMonitor()
+    {
+        var path = WriteCodex("2026/10/24/rollout-quota.jsonl", CodexLines.SessionMeta(_now - 10_000),
+            CodexLines.Envelope(_now - 5000, "event_msg", """{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","primary":{"used_percent":54,"window_minutes":10080}}}"""));
+        using var core = NewCore();
+        core.Seed(_now, _todayStart, CancellationToken.None);
+        Assert.Equal(46, core.BuildSnapshot(_now, _todayStart, MonitorState.Running, true).Snapshot.CodexQuota!.LimitingWindow.RemainingPercent);
+
+        File.AppendAllText(path, CodexLines.Envelope(_now - 1000, "event_msg", """{"type":"token_count","info":null,"rate_limits":{"limit_id":"codex","primary":{"used_percent":55,"window_minutes":10080}}}""") + "\n");
+        core.ProcessPaths([path], _now, _todayStart);
+        var snapshot = core.BuildSnapshot(_now, _todayStart, MonitorState.Running, true).Snapshot;
+        Assert.Equal(45, snapshot.CodexQuota!.LimitingWindow.RemainingPercent);
+        Assert.Equal(DateTimeOffset.FromUnixTimeMilliseconds(_now - 1000), snapshot.CodexQuota.FetchedAt);
+        Assert.Equal(0, snapshot.Today.Requests);
+    }
+
+    [Fact]
     public void SeedingOrderByModificationTimeDecidesTheOwnerOfADuplicatedKey()
     {
         var t = _now - 600_000;

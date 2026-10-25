@@ -1,4 +1,5 @@
 using System.Text.Json;
+using AgentSpeed.Core.Quota;
 
 namespace AgentSpeed.Core.Parsing;
 
@@ -86,6 +87,7 @@ internal struct CodexLine
     public string? SpawnParentThreadId;
     public string? ThreadId;
     public string? ResponseId;
+    public CodexQuotaSnapshot? Quota;
 
     /// <summary><c>payload.model_provider</c> of a <c>session_meta</c> (METRICS 3.2).</summary>
     public string? ModelProvider;
@@ -260,6 +262,19 @@ internal static class CodexLineReader
                 {
                     result.HasUsage = true;
                     result.Usage = ReadUsage(ref reader).Tokens;
+                }
+                else
+                {
+                    JsonScan.SkipValue(ref reader);
+                }
+            }
+            else if (hints.TokenCount && reader.ValueTextEquals("rate_limits"u8))
+            {
+                reader.Read();
+                if (reader.TokenType == JsonTokenType.StartObject)
+                {
+                    using var quota = JsonDocument.ParseValue(ref reader);
+                    result.Quota = CodexQuotaSnapshot.FromTranscript(quota.RootElement);
                 }
                 else
                 {
