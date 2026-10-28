@@ -1,0 +1,992 @@
+{
+  "Check for updates": {
+    "en": "Check for updates",
+    "zh-Hans": "检查更新",
+    "zh-Hant": "檢查更新",
+    "ja": "更新を確認"
+  },
+  "Download and install verified update…": {
+    "en": "Download and install verified update…",
+    "zh-Hans": "下载校验并安装更新…",
+    "zh-Hant": "下載校驗並安裝更新…",
+    "ja": "検証済みの更新をダウンロードしてインストール…"
+  },
+  "Install the verified update using the system package manager?": {
+    "en": "Install the verified update using the system package manager?",
+    "zh-Hans": "通过系统包管理器安装已校验的更新？",
+    "zh-Hant": "透過系統包管理器安裝已校驗的更新？",
+    "ja": "システムのパッケージマネージャーで検証済みの更新をインストールしますか？"
+  },
+  "Open the downloaded .deb with your package manager.": {
+    "en": "Open the downloaded .deb with your package manager.",
+    "zh-Hans": "请使用包管理器打开已下载的 .deb 文件。",
+    "zh-Hant": "請使用包管理器開啟已下載的 .deb 檔案。",
+    "ja": "ダウンロードした .deb をパッケージマネージャーで開いてください。"
+  },
+  "Clear usage history…": {
+    "en": "Clear usage history…",
+    "zh-Hans": "清除用量历史…",
+    "zh-Hant": "清除用量歷史…",
+    "ja": "使用履歴を消去…"
+  },
+  "Clear stored usage history? Available local logs will be analyzed again.": {
+    "en": "Clear stored usage history? Available local logs will be analyzed again.",
+    "zh-Hans": "清除已保存的历史？仍存在的本地记录会重新分析。",
+    "zh-Hant": "清除已儲存的歷史？仍存在的本地記錄會重新分析。",
+    "ja": "保存済みの使用履歴を消去しますか？残っているローカルログは再解析されます。"
+  },
+  "Quit Agent Speed": {
+    "en": "Quit Agent Speed",
+    "zh-Hans": "退出 Agent Speed",
+    "zh-Hant": "結束 Agent Speed",
+    "ja": "終了"
+  },
+  "API key (optional)": {
+    "en": "API key (optional)",
+    "zh-Hans": "API 密钥（可选）",
+    "zh-Hant": "API 金鑰（可選）",
+    "ja": "API キー（任意）"
+  },
+  "Reporting is optional and off by default. Review the service and shared fields before starting.": {
+    "en": "Reporting is optional and off by default. Review the service and shared fields before starting.",
+    "zh-Hans": "实时上报可选，默认关闭。开始前请核对服务地址与分享字段。",
+    "zh-Hant": "實時上報可選，預設關閉。開始前請核對服務地址與分享欄位。",
+    "ja": "ライブ共有は任意で、初期設定では無効です。開始する前にサービスと共有項目を確認してください。"
+  },
+  "Enable live reporting": {
+    "en": "Enable live reporting",
+    "zh-Hans": "启用实时上报",
+    "zh-Hant": "啟用實時上報",
+    "ja": "ライブ共有を有効化"
+  },
+  "Use this service": {
+    "en": "Use this service",
+    "zh-Hans": "使用此服务",
+    "zh-Hant": "使用此服務",
+    "ja": "このサービスを使用"
+  },
+  "Review service and consent": {
+    "en": "Review service and consent",
+    "zh-Hans": "查看服务与分享授权",
+    "zh-Hant": "檢視服務與分享授權",
+    "ja": "サービスと共有への同意を確認"
+  },
+  "Username": {
+    "en": "Username",
+    "zh-Hans": "用户名",
+    "zh-Hant": "使用者名稱",
+    "ja": "ユーザー名"
+  },
+  "Save API key": {
+    "en": "Save API key",
+    "zh-Hans": "保存 API 密钥",
+    "zh-Hant": "儲存 API 金鑰",
+    "ja": "API キーを保存"
+  },
+  "Clear API key": {
+    "en": "Clear API key",
+    "zh-Hans": "清除 API 密钥",
+    "zh-Hant": "清除 API 金鑰",
+    "ja": "API キーを削除"
+  },
+  "Pause 1 hour": {
+    "en": "Pause 1 hour",
+    "zh-Hans": "暂停一小时",
+    "zh-Hant": "暫停一小時",
+    "ja": "1 時間一時停止"
+  },
+  "Resume": {
+    "en": "Resume",
+    "zh-Hans": "恢复",
+    "zh-Hant": "恢復",
+    "ja": "再開"
+  },
+  "Preview outgoing data": {
+    "en": "Preview outgoing data",
+    "zh-Hans": "预览上报数据",
+    "zh-Hant": "預覽上報資料",
+    "ja": "送信データをプレビュー"
+  },
+  "Forget this device…": {
+    "en": "Forget this device…",
+    "zh-Hans": "让服务忘记此设备…",
+    "zh-Hant": "讓服務忘記此裝置…",
+    "ja": "サービスからこのデバイスを削除…"
+  },
+  "Forget this device?": {
+    "en": "Forget this device?",
+    "zh-Hans": "让服务忘记此设备？",
+    "zh-Hant": "讓服務忘記此裝置？",
+    "ja": "サービスからこのデバイスを削除しますか？"
+  },
+  "Profile and devices": {
+    "en": "Profile and devices",
+    "zh-Hans": "头像与多设备",
+    "zh-Hant": "頭像與多裝置",
+    "ja": "プロフィールとデバイス"
+  },
+  "Refresh profile": {
+    "en": "Refresh profile",
+    "zh-Hans": "刷新个人资料",
+    "zh-Hant": "重新整理個人資料",
+    "ja": "プロフィールを更新"
+  },
+  "Display name": {
+    "en": "Display name",
+    "zh-Hans": "显示名称",
+    "zh-Hant": "顯示名稱",
+    "ja": "表示名"
+  },
+  "Choose avatar…": {
+    "en": "Choose avatar…",
+    "zh-Hans": "选择头像…",
+    "zh-Hant": "選擇頭像…",
+    "ja": "アバターを選択…"
+  },
+  "Remove avatar": {
+    "en": "Remove avatar",
+    "zh-Hans": "移除头像",
+    "zh-Hant": "移除頭像",
+    "ja": "アバターを削除"
+  },
+  "Create shared identity": {
+    "en": "Create shared identity",
+    "zh-Hans": "创建多设备身份",
+    "zh-Hant": "建立共用身分",
+    "ja": "共有 ID を作成"
+  },
+  "Create pairing code": {
+    "en": "Create pairing code",
+    "zh-Hans": "生成配对码",
+    "zh-Hant": "生成配對碼",
+    "ja": "ペアリングコードを発行"
+  },
+  "Pairing code from the original device": {
+    "en": "Pairing code from the original device",
+    "zh-Hans": "原设备生成的一次性配对码",
+    "zh-Hant": "原裝置生成的一次性配對碼",
+    "ja": "元のデバイスで発行した使い捨てコード"
+  },
+  "Join with code": {
+    "en": "Join with code",
+    "zh-Hans": "输入配对码加入",
+    "zh-Hant": "輸入配對碼加入",
+    "ja": "コードで参加"
+  },
+  "Approve requesting device…": {
+    "en": "Approve requesting device…",
+    "zh-Hans": "批准请求配对的设备…",
+    "zh-Hant": "批准請求配對的裝置…",
+    "ja": "要求元のデバイスを承認…"
+  },
+  "Approve pairing?": {
+    "en": "Approve pairing?",
+    "zh-Hans": "批准此设备的配对请求？",
+    "zh-Hant": "批准此裝置的配對請求？",
+    "ja": "このペアリング要求を承認しますか？"
+  },
+  "Cancel pairing": {
+    "en": "Cancel pairing",
+    "zh-Hans": "取消配对",
+    "zh-Hant": "取消配對",
+    "ja": "ペアリングをキャンセル"
+  },
+  "Unlink this device…": {
+    "en": "Unlink this device…",
+    "zh-Hans": "解绑此设备…",
+    "zh-Hant": "解綁此裝置…",
+    "ja": "このデバイスの連携を解除…"
+  },
+  "Unlink this device? Its recorded history is retained.": {
+    "en": "Unlink this device? Its recorded history is retained.",
+    "zh-Hans": "解绑此设备？已入账的历史记录仍会保留。",
+    "zh-Hant": "解綁此裝置？已入賬的歷史記錄仍會保留。",
+    "ja": "このデバイスの連携を解除しますか？記録済みの履歴は保持されます。"
+  },
+  "Start sharing": {
+    "en": "Start sharing",
+    "zh-Hans": "开始分享",
+    "zh-Hant": "開始分享",
+    "ja": "共有を開始"
+  },
+  "Cancel": {
+    "en": "Cancel",
+    "zh-Hans": "取消",
+    "zh-Hant": "取消",
+    "ja": "キャンセル"
+  },
+  "Outgoing report": {
+    "en": "Outgoing report",
+    "zh-Hans": "上报数据预览",
+    "zh-Hant": "上報資料預覽",
+    "ja": "送信データのプレビュー"
+  },
+  "Pairing unavailable.": {
+    "en": "Pairing unavailable.",
+    "zh-Hans": "暂时无法配对。",
+    "zh-Hant": "暫時無法配對。",
+    "ja": "ペアリングを利用できません。"
+  },
+  "Enable reporting with a service that supports profiles.": {
+    "en": "Enable reporting with a service that supports profiles.",
+    "zh-Hans": "请先向支持个人资料的服务启用上报。",
+    "zh-Hant": "請先向支援個人資料的服務啟用上報。",
+    "ja": "プロフィール対応のサービスでライブ共有を有効にしてください。"
+  },
+  "This device": {
+    "en": "This device",
+    "zh-Hans": "此设备",
+    "zh-Hant": "此裝置",
+    "ja": "このデバイス"
+  },
+  "Upload this avatar to your reporting service?": {
+    "en": "Upload this avatar to your reporting service?",
+    "zh-Hans": "将所选头像上传到上报服务？",
+    "zh-Hant": "將所選頭像上傳到上報服務？",
+    "ja": "このアバターを共有先のサービスにアップロードしますか？"
+  },
+  "Confirm": {
+    "en": "Confirm",
+    "zh-Hans": "确认",
+    "zh-Hant": "確認",
+    "ja": "確認"
+  },
+  "Dashboard": {
+    "en": "Dashboard",
+    "zh-Hans": "实时面板",
+    "zh-Hant": "實時面板",
+    "ja": "ダッシュボード"
+  },
+  "Show / hide orbs": {
+    "en": "Show / hide orbs",
+    "zh-Hans": "显示／隐藏悬浮窗",
+    "zh-Hant": "顯示／隱藏懸浮窗",
+    "ja": "フロート表示切替"
+  },
+  "Restore mouse input": {
+    "en": "Restore mouse input",
+    "zh-Hans": "恢复鼠标交互",
+    "zh-Hant": "恢復滑鼠互動",
+    "ja": "マウス操作を復元"
+  },
+  "Your agents, at full speed": {
+    "en": "Your agents, at full speed",
+    "zh-Hans": "看见 agent 全速奔跑",
+    "zh-Hant": "看見 agent 全速奔跑",
+    "ja": "エージェントの速度を見よう"
+  },
+  "Agents": {
+    "en": "Agents",
+    "zh-Hans": "所有 agent",
+    "zh-Hant": "所有 agent",
+    "ja": "すべてのエージェント"
+  },
+  "Today": {
+    "en": "Today",
+    "zh-Hans": "今天",
+    "zh-Hant": "今天",
+    "ja": "今日"
+  },
+  "Peak": {
+    "en": "Peak",
+    "zh-Hans": "峰值",
+    "zh-Hant": "峰值",
+    "ja": "ピーク"
+  },
+  "Network: waiting for samples": {
+    "en": "Network: waiting for samples",
+    "zh-Hans": "网络：等待采样",
+    "zh-Hant": "網路：等待取樣",
+    "ja": "ネットワーク：測定待ち"
+  },
+  "Quiet. Start an agent to see live activity.": {
+    "en": "Quiet. Start an agent to see live activity.",
+    "zh-Hans": "当前空闲，启动 agent 后这里会显示实时活动。",
+    "zh-Hant": "當前空閒，啟動 agent 後這裡會顯示實時活動。",
+    "ja": "待機中。エージェントを起動すると表示されます。"
+  },
+  "All sources": {
+    "en": "All sources",
+    "zh-Hans": "全部来源",
+    "zh-Hant": "全部來源",
+    "ja": "すべて"
+  },
+  "Chart": {
+    "en": "Chart",
+    "zh-Hans": "图表",
+    "zh-Hant": "圖表",
+    "ja": "グラフ"
+  },
+  "Apply dates": {
+    "en": "Apply dates",
+    "zh-Hans": "应用日期",
+    "zh-Hant": "應用日期",
+    "ja": "適用"
+  },
+  "Yesterday": {
+    "en": "Yesterday",
+    "zh-Hans": "昨天",
+    "zh-Hant": "昨天",
+    "ja": "昨日"
+  },
+  "All": {
+    "en": "All",
+    "zh-Hans": "全部",
+    "zh-Hant": "全部",
+    "ja": "すべて"
+  },
+  "Modes CSV": {
+    "en": "Modes CSV",
+    "zh-Hans": "执行模式 CSV",
+    "zh-Hant": "執行模式 CSV",
+    "ja": "モード CSV"
+  },
+  "Refresh": {
+    "en": "Refresh",
+    "zh-Hans": "刷新",
+    "zh-Hant": "重新整理",
+    "ja": "更新"
+  },
+  "Use YYYY-MM-DD dates.": {
+    "en": "Use YYYY-MM-DD dates.",
+    "zh-Hans": "日期格式请使用 YYYY-MM-DD。",
+    "zh-Hant": "日期格式請使用 YYYY-MM-DD。",
+    "ja": "日付は YYYY-MM-DD 形式です。"
+  },
+  "Date · Output · Input · Requests · Average / peak · API value": {
+    "en": "Date · Output · Input · Requests · Average / peak · API value",
+    "zh-Hans": "日期 · 输出 · 输入 · 请求 · 均速／峰值 · API 等值费用",
+    "zh-Hant": "日期 · 輸出 · 輸入 · 請求 · 均速／峰值 · API 等值費用",
+    "ja": "日付 · 出力 · 入力 · リクエスト · 平均／最大速度 · API 相当額"
+  },
+  "Orbs": {
+    "en": "Orbs",
+    "zh-Hans": "悬浮窗",
+    "zh-Hant": "懸浮窗",
+    "ja": "フロート"
+  },
+  "Titles": {
+    "en": "Titles",
+    "zh-Hans": "称号",
+    "zh-Hant": "稱號",
+    "ja": "称号"
+  },
+  "Network": {
+    "en": "Network",
+    "zh-Hans": "网络",
+    "zh-Hant": "網路",
+    "ja": "ネットワーク"
+  },
+  "Reporting": {
+    "en": "Reporting",
+    "zh-Hans": "实时上报",
+    "zh-Hant": "實時上報",
+    "ja": "共有"
+  },
+  "About": {
+    "en": "About",
+    "zh-Hans": "关于",
+    "zh-Hant": "關於",
+    "ja": "情報"
+  },
+  "Language": {
+    "en": "Language",
+    "zh-Hans": "语言",
+    "zh-Hant": "語言",
+    "ja": "言語"
+  },
+  "Metric": {
+    "en": "Metric",
+    "zh-Hans": "测速口径",
+    "zh-Hant": "測速口徑",
+    "ja": "メトリクス"
+  },
+  "Redline (tok/s)": {
+    "en": "Redline (tok/s)",
+    "zh-Hans": "红线速度（tok/s）",
+    "zh-Hant": "紅線速度（tok/s）",
+    "ja": "レッドライン（tok/s）"
+  },
+  "Top bar network display": {
+    "en": "Top bar network display",
+    "zh-Hans": "顶栏网络流量",
+    "zh-Hant": "頂欄網路流量",
+    "ja": "トップバーの通信量"
+  },
+  "Start at login": {
+    "en": "Start at login",
+    "zh-Hans": "登录时启动",
+    "zh-Hant": "登入時啟動",
+    "ja": "ログイン時に起動"
+  },
+  "Restore all mouse input": {
+    "en": "Restore all mouse input",
+    "zh-Hans": "恢复全部悬浮窗鼠标交互",
+    "zh-Hant": "恢復全部懸浮窗滑鼠互動",
+    "ja": "すべてのフロートのマウス操作を復元"
+  },
+  "Enable GNOME top bar": {
+    "en": "Enable GNOME top bar",
+    "zh-Hans": "启用 GNOME 顶栏扩展",
+    "zh-Hant": "啟用 GNOME 頂欄擴充功能",
+    "ja": "GNOME トップバー拡張を有効化"
+  },
+  "Log out and back in after installing the package, then enable the extension.": {
+    "en": "Log out and back in after installing the package, then enable the extension.",
+    "zh-Hans": "安装软件包后请先注销并重新登录，再启用扩展。",
+    "zh-Hant": "安裝軟體包後請先登出並重新登入，再啟用擴充套件。",
+    "ja": "パッケージのインストール後にログインし直してから拡張を有効にしてください。"
+  },
+  "GNOME Extensions is unavailable.": {
+    "en": "GNOME Extensions is unavailable.",
+    "zh-Hans": "GNOME 扩展管理工具不可用。",
+    "zh-Hant": "GNOME 擴充套件管理工具不可用。",
+    "ja": "GNOME 拡張ツールを利用できません。"
+  },
+  "Only local usage records are read. Empty folders use automatic discovery.": {
+    "en": "Only local usage records are read. Empty folders use automatic discovery.",
+    "zh-Hans": "只读取本机用量记录；清空目录设置可恢复自动发现。",
+    "zh-Hant": "只讀取本機用量記錄；清空目錄設定可恢復自動發現。",
+    "ja": "ローカルの使用記録だけを読み取ります。フォルダーを空欄にすると自動検出します。"
+  },
+  "Folder": {
+    "en": "Folder",
+    "zh-Hans": "记录目录",
+    "zh-Hant": "記錄目錄",
+    "ja": "フォルダー"
+  },
+  "Choose an absolute folder path.": {
+    "en": "Choose an absolute folder path.",
+    "zh-Hans": "请使用绝对目录路径。",
+    "zh-Hant": "請使用絕對目錄路徑。",
+    "ja": "フォルダーは絶対パスで指定してください。"
+  },
+  "Show orbs": {
+    "en": "Show orbs",
+    "zh-Hans": "显示悬浮窗",
+    "zh-Hant": "顯示懸浮窗",
+    "ja": "フロートを表示"
+  },
+  "Add orb": {
+    "en": "Add orb",
+    "zh-Hans": "添加悬浮窗",
+    "zh-Hant": "新增懸浮窗",
+    "ja": "追加"
+  },
+  "Tracked sources (none selected = all)": {
+    "en": "Tracked sources (none selected = all)",
+    "zh-Hans": "追踪来源（未选择时表示全部）",
+    "zh-Hant": "追蹤來源（未選擇時表示全部）",
+    "ja": "追跡するソース（未選択ならすべて）"
+  },
+  "Name": {
+    "en": "Name",
+    "zh-Hans": "名称",
+    "zh-Hant": "名稱",
+    "ja": "名前"
+  },
+  "Style": {
+    "en": "Style",
+    "zh-Hans": "样式",
+    "zh-Hant": "樣式",
+    "ja": "スタイル"
+  },
+  "Size": {
+    "en": "Size",
+    "zh-Hans": "尺寸",
+    "zh-Hant": "大小",
+    "ja": "サイズ"
+  },
+  "Opacity (0.4–1)": {
+    "en": "Opacity (0.4–1)",
+    "zh-Hans": "透明度（0.4–1）",
+    "zh-Hant": "透明度（0.4–1）",
+    "ja": "不透明度（0.4–1）"
+  },
+  "Unit": {
+    "en": "Unit",
+    "zh-Hans": "单位",
+    "zh-Hant": "顯示單位",
+    "ja": "単位"
+  },
+  "Traffic": {
+    "en": "Traffic",
+    "zh-Hans": "网络流量",
+    "zh-Hant": "網路流量",
+    "ja": "通信量"
+  },
+  "Visible": {
+    "en": "Visible",
+    "zh-Hans": "显示",
+    "zh-Hant": "顯示",
+    "ja": "表示"
+  },
+  "Always on top": {
+    "en": "Always on top",
+    "zh-Hans": "总在最前",
+    "zh-Hant": "總在最前",
+    "ja": "最前面"
+  },
+  "Click through": {
+    "en": "Click through",
+    "zh-Hans": "鼠标穿透",
+    "zh-Hant": "滑鼠穿透",
+    "ja": "クリック透過"
+  },
+  "Fade while idle": {
+    "en": "Fade while idle",
+    "zh-Hans": "空闲时淡化",
+    "zh-Hant": "空閒時淡化",
+    "ja": "待機時に薄く表示"
+  },
+  "Sources": {
+    "en": "Sources",
+    "zh-Hans": "所选来源",
+    "zh-Hant": "所選來源",
+    "ja": "選択したソース"
+  },
+  "Duplicate": {
+    "en": "Duplicate",
+    "zh-Hans": "复制",
+    "zh-Hant": "複製",
+    "ja": "複製"
+  },
+  "Remove": {
+    "en": "Remove",
+    "zh-Hans": "删除",
+    "zh-Hant": "移除",
+    "ja": "削除"
+  },
+  "Currency": {
+    "en": "Currency",
+    "zh-Hans": "货币",
+    "zh-Hant": "貨幣",
+    "ja": "通貨"
+  },
+  "Live display": {
+    "en": "Live display",
+    "zh-Hans": "实时显示",
+    "zh-Hant": "實時顯示",
+    "ja": "ライブ表示"
+  },
+  "Update model prices daily": {
+    "en": "Update model prices daily",
+    "zh-Hans": "每天更新模型价格",
+    "zh-Hant": "每天更新模型價格",
+    "ja": "モデル料金を毎日更新"
+  },
+  "Include subscriptions in costs": {
+    "en": "Include subscriptions in costs",
+    "zh-Hans": "费用中包含订阅来源",
+    "zh-Hant": "費用中包含訂閱來源",
+    "ja": "サブスクリプションのソースを費用に含める"
+  },
+  "Title theme": {
+    "en": "Title theme",
+    "zh-Hans": "称号主题",
+    "zh-Hant": "稱號主題",
+    "ja": "称号テーマ"
+  },
+  "Add custom theme": {
+    "en": "Add custom theme",
+    "zh-Hans": "添加自定义称号",
+    "zh-Hant": "新增自定義稱號",
+    "ja": "カスタムテーマを追加"
+  },
+  "My titles": {
+    "en": "My titles",
+    "zh-Hans": "我的称号",
+    "zh-Hant": "我的稱號",
+    "ja": "自分の称号"
+  },
+  "Theme name": {
+    "en": "Theme name",
+    "zh-Hans": "主题名称",
+    "zh-Hant": "主題名稱",
+    "ja": "テーマ名"
+  },
+  "Allow network connections": {
+    "en": "Allow network connections",
+    "zh-Hans": "允许联网",
+    "zh-Hant": "允許聯網",
+    "ja": "ネットワーク接続を許可"
+  },
+  "This switch controls updates, public prices, exchange rates, reporting and profile requests. Local measurements keep running.": {
+    "en": "This switch controls updates, public prices, exchange rates, reporting and profile requests. Local measurements keep running.",
+    "zh-Hans": "此开关控制更新、公开价格、汇率、上报及个人资料请求。本地测速仍然运行。",
+    "zh-Hant": "此開關控制更新、公開價格、匯率、上報及個人資料請求。本地測速仍然執行。",
+    "ja": "更新、公開料金、為替レート、ライブ共有、プロフィールの通信を制御します。ローカルでの測定は継続します。"
+  },
+  "Measure network traffic": {
+    "en": "Measure network traffic",
+    "zh-Hans": "统计网络流量",
+    "zh-Hant": "記錄網路流量",
+    "ja": "通信量を計測"
+  },
+  "Include tool subprocesses": {
+    "en": "Include tool subprocesses",
+    "zh-Hans": "包含工具子进程流量",
+    "zh-Hant": "包含工具子程序流量",
+    "ja": "ツールの子プロセスを含める"
+  },
+  "Traffic units": {
+    "en": "Traffic units",
+    "zh-Hans": "流量单位",
+    "zh-Hant": "流量單位",
+    "ja": "通信量の単位"
+  },
+  "Process traffic": {
+    "en": "Process traffic",
+    "zh-Hans": "进程流量",
+    "zh-Hant": "程序流量",
+    "ja": "プロセスの通信量"
+  },
+  "Install traffic helper…": {
+    "en": "Install traffic helper…",
+    "zh-Hans": "安装流量辅助组件…",
+    "zh-Hant": "安裝流量輔助元件…",
+    "ja": "通信量ヘルパーをインストール…"
+  },
+  "Retry sampler": {
+    "en": "Retry sampler",
+    "zh-Hans": "重试采样",
+    "zh-Hant": "重試取樣",
+    "ja": "測定を再試行"
+  },
+  "Traffic helper installed.": {
+    "en": "Traffic helper installed.",
+    "zh-Hans": "流量辅助组件已安装。",
+    "zh-Hant": "流量輔助元件已安裝。",
+    "ja": "通信量ヘルパーをインストールしました。"
+  },
+  "Helper installation did not complete.": {
+    "en": "Helper installation did not complete.",
+    "zh-Hans": "辅助组件安装未完成。",
+    "zh-Hant": "輔助元件安裝未完成。",
+    "ja": "ヘルパーのインストールが完了しませんでした。"
+  },
+  "Install the .deb package to enable the helper installer.": {
+    "en": "Install the .deb package to enable the helper installer.",
+    "zh-Hans": "请先安装 .deb 包，再启用流量辅助组件。",
+    "zh-Hant": "請先安裝 .deb 包，再啟用流量輔助元件。",
+    "ja": ".deb パッケージをインストールしてからヘルパーを有効にしてください。"
+  },
+  "System": {
+    "en": "System",
+    "zh-Hans": "跟随系统",
+    "zh-Hant": "跟隨系統",
+    "ja": "システム設定"
+  },
+  "Off": {
+    "en": "Off",
+    "zh-Hans": "关闭",
+    "zh-Hant": "關閉",
+    "ja": "オフ"
+  },
+  "Soft": {
+    "en": "Soft",
+    "zh-Hans": "柔和",
+    "zh-Hant": "柔和",
+    "ja": "控えめ"
+  },
+  "Standard": {
+    "en": "Standard",
+    "zh-Hans": "标准",
+    "zh-Hant": "標準",
+    "ja": "標準"
+  },
+  "Max": {
+    "en": "Max",
+    "zh-Hans": "最强",
+    "zh-Hant": "最強",
+    "ja": "最大"
+  },
+  "Machine": {
+    "en": "Machine",
+    "zh-Hans": "整台电脑",
+    "zh-Hant": "整台電腦",
+    "ja": "コンピューター全体"
+  },
+  "Bytes": {
+    "en": "Bytes",
+    "zh-Hans": "字节",
+    "zh-Hant": "位元組",
+    "ja": "バイト"
+  },
+  "Bits": {
+    "en": "Bits",
+    "zh-Hans": "比特",
+    "zh-Hant": "位元",
+    "ja": "ビット"
+  },
+  "Cost": {
+    "en": "Cost",
+    "zh-Hans": "费用",
+    "zh-Hant": "費用",
+    "ja": "費用"
+  },
+  "Output": {
+    "en": "Output",
+    "zh-Hans": "输出",
+    "zh-Hant": "輸出",
+    "ja": "出力"
+  },
+  "Name plates": {
+    "en": "Name plates",
+    "zh-Hans": "名牌显示",
+    "zh-Hant": "名牌顯示",
+    "ja": "名前ラベル"
+  },
+  "Redline (blank follows general)": {
+    "en": "Redline (blank follows general)",
+    "zh-Hans": "红线速度（留空跟随全局）",
+    "zh-Hant": "紅線速度（留空跟隨全域性）",
+    "ja": "レッドライン（空欄で全体設定）"
+  },
+  "Show speed and cost in the top bar": {
+    "en": "Show speed and cost in the top bar",
+    "zh-Hans": "顶栏同时显示速度和费用",
+    "zh-Hant": "頂欄同時顯示速度和費用",
+    "ja": "トップバーに速度と費用を表示"
+  },
+  "Input": {
+    "en": "Input",
+    "zh-Hans": "输入",
+    "zh-Hant": "輸入",
+    "ja": "入力"
+  },
+  "Requests": {
+    "en": "Requests",
+    "zh-Hans": "请求",
+    "zh-Hant": "請求",
+    "ja": "リクエスト"
+  },
+  "Average / peak": {
+    "en": "Average / peak",
+    "zh-Hans": "均速／峰值",
+    "zh-Hant": "均速／峰值",
+    "ja": "平均／ピーク"
+  },
+  "Ready": {
+    "en": "Ready",
+    "zh-Hans": "已就绪",
+    "zh-Hant": "已就緒",
+    "ja": "準備完了"
+  },
+  "NotLoaded": {
+    "en": "NotLoaded",
+    "zh-Hans": "尚未加载",
+    "zh-Hant": "尚未載入",
+    "ja": "未読み込み"
+  },
+  "Analyzing": {
+    "en": "Analyzing",
+    "zh-Hans": "正在分析",
+    "zh-Hant": "分析中",
+    "ja": "分析中"
+  },
+  "Failed": {
+    "en": "Failed",
+    "zh-Hans": "加载失败",
+    "zh-Hant": "載入失敗",
+    "ja": "読み込み失敗"
+  },
+  "End date must be on or after start date.": {
+    "en": "End date must be on or after start date.",
+    "zh-Hans": "结束日期不能早于开始日期。",
+    "zh-Hant": "結束日期不能早於開始日期。",
+    "ja": "終了日は開始日以降にしてください。"
+  },
+  "Enter a valid number.": {
+    "en": "Enter a valid number.",
+    "zh-Hans": "请输入有效数字。",
+    "zh-Hant": "請輸入有效數字。",
+    "ja": "有効な数値を入力してください。"
+  },
+  "The value is outside the allowed range.": {
+    "en": "The value is outside the allowed range.",
+    "zh-Hans": "数值超出允许范围。",
+    "zh-Hant": "數值超出允許範圍。",
+    "ja": "許容範囲内の値を入力してください。"
+  },
+  "Live agent telemetry": {
+    "en": "Live agent telemetry",
+    "zh-Hans": "实时 agent 遥测",
+    "zh-Hant": "即時 agent 遙測",
+    "ja": "エージェントをリアルタイム計測"
+  },
+  "Live speed": {
+    "en": "Live speed",
+    "zh-Hans": "实时速度",
+    "zh-Hant": "即時速度",
+    "ja": "ライブ速度"
+  },
+  "Today's output": {
+    "en": "Today's output",
+    "zh-Hans": "今日输出",
+    "zh-Hant": "今日輸出",
+    "ja": "今日の出力"
+  },
+  "Today's input": {
+    "en": "Today's input",
+    "zh-Hans": "今日输入",
+    "zh-Hant": "今日輸入",
+    "ja": "今日の入力"
+  },
+  "Usage notice": {
+    "en": "Usage notice",
+    "zh-Hans": "用量提示",
+    "zh-Hant": "用量提示",
+    "ja": "使用量の注意"
+  },
+  "Estimated": {
+    "en": "Estimated",
+    "zh-Hans": "含估算",
+    "zh-Hant": "含估算",
+    "ja": "推定を含む"
+  },
+  "Live trend": {
+    "en": "Live trend",
+    "zh-Hans": "实时趋势",
+    "zh-Hant": "即時趨勢",
+    "ja": "ライブ推移"
+  },
+  "per second": {
+    "en": "per second",
+    "zh-Hans": "每秒",
+    "zh-Hant": "每秒",
+    "ja": "1秒あたり"
+  },
+  "Last 2 minutes": {
+    "en": "Last 2 minutes",
+    "zh-Hans": "最近 2 分钟",
+    "zh-Hant": "最近 2 分鐘",
+    "ja": "直近2分"
+  },
+  "2 minutes": {
+    "en": "2 minutes",
+    "zh-Hans": "2 分钟",
+    "zh-Hant": "2 分鐘",
+    "ja": "2分"
+  },
+  "Now": {
+    "en": "Now",
+    "zh-Hans": "现在",
+    "zh-Hant": "現在",
+    "ja": "現在"
+  },
+  "Waiting for data": {
+    "en": "Waiting for data",
+    "zh-Hans": "等待数据",
+    "zh-Hant": "等待資料",
+    "ja": "データ待ち"
+  },
+  "No source activity yet": {
+    "en": "No source activity yet",
+    "zh-Hans": "尚无来源活动",
+    "zh-Hant": "尚無來源活動",
+    "ja": "ソースの活動はまだありません"
+  },
+  "Other sources": {
+    "en": "Other sources",
+    "zh-Hans": "其他来源",
+    "zh-Hant": "其他來源",
+    "ja": "その他のソース"
+  },
+  "Working agents": {
+    "en": "Working agents",
+    "zh-Hans": "正在工作的 agent",
+    "zh-Hant": "正在工作的 agent",
+    "ja": "作業中の agent"
+  },
+  "Filter history by source": {
+    "en": "Filter history by source",
+    "zh-Hans": "点击来源筛选历史",
+    "zh-Hant": "點擊來源篩選歷史",
+    "ja": "ソースをクリックして履歴を絞り込む"
+  },
+  "Active": {
+    "en": "Active",
+    "zh-Hans": "活跃",
+    "zh-Hant": "活躍",
+    "ja": "稼働中"
+  },
+  "Available": {
+    "en": "Available",
+    "zh-Hans": "可用",
+    "zh-Hant": "可用",
+    "ja": "利用可能"
+  },
+  "Daily output, cost and traffic from local records.": {
+    "en": "Daily output, cost and traffic from local records.",
+    "zh-Hans": "来自本地记录的每日输出、费用与流量。",
+    "zh-Hant": "來自本機記錄的每日輸出、費用與流量。",
+    "ja": "ローカル記録から日別の出力・費用・通信量を表示します。"
+  },
+  "Appearance, sources, titles and privacy.": {
+    "en": "Appearance, sources, titles and privacy.",
+    "zh-Hans": "外观、来源、称号与隐私。",
+    "zh-Hant": "外觀、來源、稱號與隱私。",
+    "ja": "外観、ソース、称号、プライバシー。"
+  },
+  "Daily network traffic": {
+    "en": "Daily network traffic",
+    "zh-Hans": "每日网络流量",
+    "zh-Hant": "每日網路流量",
+    "ja": "日別の通信量"
+  },
+  "No data in this range": {
+    "en": "No data in this range",
+    "zh-Hans": "此日期范围内没有数据",
+    "zh-Hant": "此日期範圍內沒有資料",
+    "ja": "この期間にデータはありません"
+  },
+  "Machine network": {
+    "en": "Machine network",
+    "zh-Hans": "整机网络",
+    "zh-Hant": "整機網路",
+    "ja": "コンピューター全体の通信"
+  },
+  "Live speed, usage and sources from local logs.": {
+    "en": "Live speed, usage and sources from local logs.",
+    "zh-Hans": "来自本地记录的实时速度、用量与来源。",
+    "zh-Hant": "來自本機記錄的即時速度、用量與來源。",
+    "ja": "ローカル記録に基づく速度・使用量・ソース。"
+  },
+  "Loading history…": {
+    "en": "Loading history…",
+    "zh-Hant": "正在載入歷史紀錄…",
+    "zh-Hans": "正在加载历史记录…",
+    "ja": "履歴を読み込み中…"
+  },
+  "History could not be refreshed. Showing the last available data; use Refresh to retry.": {
+    "en": "History could not be refreshed. Showing the last available data; use Refresh to retry.",
+    "zh-Hant": "無法更新歷史紀錄。顯示上次可用的資料，請按重新整理以重試。",
+    "zh-Hans": "无法更新历史记录。显示上次可用的数据，请点击刷新重试。",
+    "ja": "履歴を更新できませんでした。前回のデータを表示しています。更新ボタンで再試行してください。"
+  },
+  "Choose a date range of 100 years or less.": {
+    "en": "Choose a date range of 100 years or less.",
+    "zh-Hant": "請選擇不超過 100 年的日期範圍。",
+    "zh-Hans": "请选择不超过 100 年的日期范围。",
+    "ja": "100年以内の日付範囲を選択してください。"
+  },
+  "History could not be loaded. Use Refresh to retry.": {
+    "en": "History could not be loaded. Use Refresh to retry.",
+    "zh-Hant": "無法載入歷史紀錄，請按重新整理以重試。",
+    "zh-Hans": "无法加载历史记录，请点击刷新重试。",
+    "ja": "履歴を読み込めませんでした。更新ボタンで再試行してください。"
+  },
+  "Unable to export CSV. Choose a writable file and try again.": {
+    "en": "Unable to export CSV. Choose a writable file and try again.",
+    "zh-Hans": "无法导出 CSV，请选择可写入的文件后重试。",
+    "zh-Hant": "無法匯出 CSV，請選擇可寫入的檔案後重試。",
+    "ja": "CSV を書き出せません。書き込み可能なファイルを選び直してください。"
+  },
+  "Unable to change start at login. Check your configuration folder permissions.": {
+    "en": "Unable to change start at login. Check your configuration folder permissions.",
+    "zh-Hans": "无法更改登录时启动设置，请检查配置目录权限。",
+    "zh-Hant": "無法變更登入時啟動設定，請檢查設定目錄權限。",
+    "ja": "ログイン時起動を変更できません。設定フォルダーの権限を確認してください。"
+  }
+}

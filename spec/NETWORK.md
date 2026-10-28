@@ -4,7 +4,7 @@ Agent Speed reads local logs and works fully offline. It makes exactly three kin
 optional, all HTTPS `GET`, none of them carrying anything about the user: the update check (`spec/UPDATES.md`), the
 daily price-table sync (section 3) and the daily exchange rates (section 4). A fourth kind exists only when the user
 turns it on: live reporting (section 6, `spec/REPORTING.md`), the one feature that sends data about the user's
-activity, to a service the user chose. Both platforms implement exactly this behaviour; anything not listed here is
+activity, to a service the user chose. All desktop platforms follow these common rules; anything not listed here is
 never requested.
 
 ## 1. Common rules
@@ -13,7 +13,7 @@ never requested.
   is made — automatic or manual (the manual buttons are disabled and show `settings.network.offHint`). Everything
   keeps working with the bundled or last good data. Turning it back on schedules each feature as after a launch.
 - **What is sent** (sections 2–4; live reporting has its own rules, section 6): the request line and these headers
-  only: `User-Agent: AgentSpeed/<version> (<macOS|Windows>)`,
+  only: `User-Agent: AgentSpeed/<version> (<macOS|Windows|Linux>)`,
   `Accept` as stated per feature, and `If-None-Match` with the `ETag` that the same URL returned before (when one is
   stored). No cookies, no credentials, no identifiers, no query parameters derived from the user's data or settings.
   Every request asks for the same resource for every user (the price table, the USD-based rate list), so a server

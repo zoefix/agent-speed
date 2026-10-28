@@ -11,3 +11,8 @@ __pycache__/
 /spec/REPORTING.md
 /spec/REPORTING.zh-Hans.md
 /spec/REPORTING-EXTENSIONS.md
+
+# .NET build output
+**/bin/
+**/obj/
+/linux/traffic-helper/build/

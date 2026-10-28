@@ -1,0 +1,8 @@
+{
+  "uuid": "agent-speed@zoefix.github.io",
+  "name": "Agent Speed",
+  "description": "Live AI agent speed, cost and network counters. Requires the Agent Speed Linux application.",
+  "shell-version": ["46"],
+  "version": 1,
+  "url": "https://github.com/zoefix/agent-speed"
+}

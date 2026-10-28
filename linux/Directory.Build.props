@@ -1,0 +1,3 @@
+<Project>
+  <Import Project="../shared/Directory.Build.props" />
+</Project>

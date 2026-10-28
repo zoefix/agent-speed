@@ -7,6 +7,6 @@
     <InvariantGlobalization>true</InvariantGlobalization>
   </PropertyGroup>
   <ItemGroup>
-    <ProjectReference Include="../../src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
+    <ProjectReference Include="../../../shared/src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
   </ItemGroup>
 </Project>

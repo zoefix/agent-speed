@@ -28,6 +28,20 @@ class ContractTests(unittest.TestCase):
     def test_shared_mode_vectors(self):
         self.assertEqual(modes.check_fixtures(), 55)
 
+    def test_client_os_major_is_platform_specific(self):
+        schema = json.loads(ref.SCHEMA_PATH.read_text())
+
+        def errors(platform, major):
+            client = {"app": "AgentSpeed", "version": "1.3.0", "platform": platform, "osMajor": major}
+            return ref.schema_errors(client, schema["$defs"]["client"], schema)
+
+        # Linux kernel majors are 1..99; macOS/Windows keep their original 10..99 floor.
+        self.assertEqual(errors("Linux", 6), [])
+        self.assertEqual(errors("Windows", 10), [])
+        self.assertEqual(errors("macOS", 10), [])
+        for platform, major in (("Windows", 7), ("macOS", 9), ("Linux", 0)):
+            self.assertTrue(errors(platform, major), f"{platform} {major} should be rejected")
+
     def test_modes_and_harness_must_conserve_parent_totals(self):
         model = {"sources": ["codex", "opencode"], "requests": 3, "output": 30, "measuredOutput": 20,
                  "measuredMs": 1000, "harnessRequests": [{"source": "codex", "requests": 1},

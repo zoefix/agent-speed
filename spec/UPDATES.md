@@ -1,6 +1,6 @@
 # Agent Speed — Update Specification
 
-Automatic update checks with one-click install. Both platforms implement exactly this behaviour. It sends nothing
+Automatic update checks with one-click install. All desktop platforms follow these common rules. It sends nothing
 about the user except the standard HTTP headers listed below. All network traffic of Agent Speed — this update check,
 the daily price-table sync, the exchange rates and the optional live reporting — and the master switch that turns it
 off are listed in `spec/NETWORK.md`; with that switch off, nothing in this document runs (manual checks included).
@@ -8,11 +8,11 @@ off are listed in `spec/NETWORK.md`; with that switch off, nothing in this docum
 ## 1. Source of truth
 
 - Releases are built and published by GitHub Actions (`.github/workflows/release.yml`) when a `vX.Y.Z` tag is pushed.
-  Every release contains `AgentSpeed-macOS.zip`, `AgentSpeed-Windows-x64.zip`, `AgentSpeed-Windows-arm64.zip` and
+  Every release contains `AgentSpeed-macOS.zip`, `AgentSpeed-Windows-x64.zip`, `AgentSpeed-Windows-arm64.zip`, `AgentSpeed-Linux-x64.deb` and
   `SHA256SUMS.txt` (`<sha256>  <file name>` per line).
 - Check: `GET https://api.github.com/repos/zoefix/agent-speed/releases/latest` with headers
   `Accept: application/vnd.github+json`, `X-GitHub-Api-Version: 2022-11-28`,
-  `User-Agent: AgentSpeed/<current version> (<macOS|Windows>)`. No cookies, no tokens, no other headers. Timeout 15 s.
+  `User-Agent: AgentSpeed/<current version> (<macOS|Windows|Linux>)`. No cookies, no tokens, no other headers. Timeout 15 s.
 - Fields used: `tag_name`, `name`, `body` (release notes, Markdown), `html_url`, `published_at`, `assets[].name`,
   `assets[].browser_download_url`, `assets[].size`. Drafts and pre-releases are never offered.
 - Asset downloads follow redirects, but every URL (initial and after redirects) must be `https` on `github.com`,
@@ -96,3 +96,7 @@ All update activity is logged (version, outcome, error) without personal data.
   cleaned up on success and failure.
 - The checksum file comes from the same release, so it protects against corruption and tampered mirrors, not against a
   compromised repository; this is stated in README.
+
+## Linux installation
+
+Linux follows the common feed, version, scheduling, host and checksum rules above. Its self-contained Ubuntu 24.04 x64 package is `AgentSpeed-Linux-x64.deb`. After verification the application hands installation to apt through Polkit, allowing the system package manager to request administrator authorization. User data remains in the XDG directories; no application archive is unpacked over the running process. GNOME integration and helper lifecycle are documented in `linux/README.md`.

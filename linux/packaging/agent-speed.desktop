@@ -1,0 +1,9 @@
+[Desktop Entry]
+Type=Application
+Name=Agent Speed
+Comment=Real-time AI agent speed and usage
+Exec=agent-speed
+Icon=agent-speed
+Terminal=false
+Categories=Utility;
+StartupWMClass=agent-speed

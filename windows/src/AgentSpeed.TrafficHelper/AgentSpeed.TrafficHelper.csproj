@@ -57,7 +57,7 @@
   </ItemGroup>
 
   <ItemGroup>
-    <Compile Include="..\AgentSpeed.Core\Traffic\Helper\HelperProtocol.cs" Link="Protocol\HelperProtocol.cs" />
+    <Compile Include="..\..\..\shared\src\AgentSpeed.Core\Traffic\Helper\HelperProtocol.cs" Link="Protocol\HelperProtocol.cs" />
   </ItemGroup>
 
   <ItemGroup>

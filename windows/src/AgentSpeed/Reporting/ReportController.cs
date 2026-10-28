@@ -1,4 +1,8 @@
+#if LINUX
+using AgentSpeed.Linux.Platform;
+#else
 using System.Windows.Threading;
+#endif
 using AgentSpeed.Core;
 using AgentSpeed.Core.Pricing;
 using AgentSpeed.Core.Reporting;
@@ -134,7 +138,7 @@ internal sealed partial class ReportController : IDisposable
         _traffic = traffic;
         _priceBook = priceBook;
         _keyStore = keyStore ?? ReportKeyStore.Standard();
-        Client = ReportClientInfo.Windows(version);
+        Client = OperatingSystem.IsLinux() ? ReportClientInfo.Linux(version) : ReportClientInfo.Windows(version);
         if (transport is null)
         {
             _ownedTransport = new HttpReportTransport();

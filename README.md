@@ -33,6 +33,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 That's it. The installer downloads the latest release from GitHub, verifies its SHA-256 checksum, installs it and starts it. Run the same command again to update.
 
+
+**Linux (Ubuntu 24.04 / GNOME / X11, x64)**
+
+See [Linux build and installation instructions](linux/README.md). The Debian package includes the .NET runtime; GNOME top-bar integration and optional per-process traffic accounting are included.
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install-linux.sh | sh
+```
+
 <details>
 <summary>Uninstall</summary>
 
@@ -130,8 +139,8 @@ swift test
 <summary>Windows (.NET 10 SDK; also cross-builds from macOS/Linux)</summary>
 
 ```sh
-dotnet test windows/tests/AgentSpeed.Core.Tests
-dotnet test windows/tests/AgentSpeed.Presentation.Tests
+dotnet test shared/tests/AgentSpeed.Core.Tests
+dotnet test shared/tests/AgentSpeed.Presentation.Tests
 ./windows/scripts/publish.sh    # → dist/AgentSpeed-Windows-{x64,arm64}.zip
 ```
 </details>

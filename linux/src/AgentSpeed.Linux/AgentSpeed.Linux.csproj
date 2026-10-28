@@ -1,0 +1,33 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <OutputType>WinExe</OutputType>
+    <DefineConstants>$(DefineConstants);LINUX</DefineConstants>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>agent-speed</AssemblyName>
+    <RootNamespace>AgentSpeed.Linux</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <AllowUnsafeBlocks>true</AllowUnsafeBlocks>
+    <AvaloniaUseCompiledBindingsByDefault>true</AvaloniaUseCompiledBindingsByDefault>
+  </PropertyGroup>
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentSpeed.Linux.Tests" />
+    <InternalsVisibleTo Include="AgentSpeed.RenderBenchmark" />
+    <PackageReference Include="Avalonia.Desktop" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Themes.Fluent" Version="12.1.4" />
+    <PackageReference Include="Avalonia.Fonts.Inter" Version="12.1.4" />
+    <PackageReference Include="Tmds.DBus" Version="0.95.1" />
+    <ProjectReference Include="../../../shared/src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
+    <ProjectReference Include="../../../shared/src/AgentSpeed.Presentation/AgentSpeed.Presentation.csproj" />
+  </ItemGroup>
+  <ItemGroup>
+    <Compile Include="../../../windows/src/AgentSpeed/Cost/*.cs" Link="Services/Cost/%(Filename)%(Extension)" />
+    <Compile Include="../../../windows/src/AgentSpeed/Services/SettingsService.cs" Link="Services/SettingsService.cs" />
+    <Compile Include="../../../windows/src/AgentSpeed/Reporting/ReportController*.cs" Link="Services/Reporting/%(Filename)%(Extension)" />
+    <Compile Include="../../../windows/src/AgentSpeed/Reporting/ReportStatus.cs" Link="Services/Reporting/ReportStatus.cs" />
+  </ItemGroup>
+  <ItemGroup>
+    <EmbeddedResource Include="Rendering/Shaders/*.sksl" LogicalName="AgentSpeed.Linux.Shaders.%(Filename)%(Extension)" />
+    <EmbeddedResource Include="UI/Strings.Linux.json" LogicalName="AgentSpeed.Linux.Strings.json" />
+    <AvaloniaResource Include="../../../assets/icon/icon-1024.png" Link="Assets/icon.png" />
+  </ItemGroup>
+</Project>

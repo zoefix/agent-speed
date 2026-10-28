@@ -15,6 +15,21 @@
 
 set -eu
 
+# Linux uses the Debian installer; keep the established macOS entry point.
+if [ "$(uname -s)" = Linux ]; then
+    case "$0" in
+        install.sh|*/install.sh)
+            linux_installer="$(dirname -- "$0")/install-linux.sh"
+            if [ -f "$linux_installer" ]; then exec sh "$linux_installer" "$@"; fi
+            ;;
+    esac
+    linux_installer=$(mktemp /tmp/agent-speed-linux-installer.XXXXXX)
+    trap 'rm -f -- "$linux_installer"' EXIT HUP INT TERM
+    curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install-linux.sh -o "$linux_installer"
+    sh "$linux_installer" "$@"
+    exit $?
+fi
+
 REPO="zoefix/agent-speed"
 APP_NAME="Agent Speed"
 BUNDLE_ID="io.github.zoefix.agentspeed"

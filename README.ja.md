@@ -28,6 +28,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 これだけです。インストーラーが GitHub から最新版をダウンロードし、SHA-256 チェックサムを検証してインストール・起動します。同じコマンドを再実行すると更新できます。
 
+
+**Linux（Ubuntu 24.04 / GNOME / X11、x64）**
+
+[Linux のビルド・インストール手順](linux/README.md)を参照してください。Debian パッケージには .NET ランタイム、GNOME 拡張とオプションのプロセス通信量ヘルパーが含まれます。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install-linux.sh | sh
+```
+
 <details>
 <summary>アンインストール</summary>
 
@@ -125,8 +134,8 @@ swift test
 <summary>Windows（.NET 10 SDK。macOS／Linux からのクロスビルドも可）</summary>
 
 ```sh
-dotnet test windows/tests/AgentSpeed.Core.Tests
-dotnet test windows/tests/AgentSpeed.Presentation.Tests
+dotnet test shared/tests/AgentSpeed.Core.Tests
+dotnet test shared/tests/AgentSpeed.Presentation.Tests
 ./windows/scripts/publish.sh    # → dist/AgentSpeed-Windows-{x64,arm64}.zip
 ```
 </details>

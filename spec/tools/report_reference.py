@@ -472,6 +472,15 @@ def schema_errors(value, schema: dict, root: dict, path: str = "$", closed: bool
         names = schema["type"] if isinstance(schema["type"], list) else [schema["type"]]
         if not any(_type_ok(value, name) for name in names):
             return [f"{path}: expected {'/'.join(names)}"]
+    # Conditional fragments are constraints, not complete closed objects: app/version may be siblings of a
+    # platform condition without becoming "unknown" properties under closed=False validation.
+    for subschema in schema.get("allOf", []):
+        errors += schema_errors(value, subschema, root, path, closed=False)
+    if "if" in schema:
+        matches = not schema_errors(value, schema["if"], root, path, closed=False)
+        branch = schema.get("then") if matches else schema.get("else")
+        if branch is not None:
+            errors += schema_errors(value, branch, root, path, closed=False)
     if "const" in schema and not _same(value, schema["const"]):
         errors.append(f"{path}: must be {schema['const']!r}")
     if "enum" in schema and value not in schema["enum"]:

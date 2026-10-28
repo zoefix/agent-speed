@@ -1,0 +1,5 @@
+#!/bin/sh
+set -eu
+[ "$(id -u)" = 0 ] || { echo 'Administrator authorization is required.' >&2; exit 1; }
+systemctl daemon-reload
+systemctl enable --now agent-speed-traffic.socket

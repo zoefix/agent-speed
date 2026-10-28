@@ -28,6 +28,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 就这样。安装程序会从 GitHub 下载最新版本、验证 SHA-256 校验码、安装并启动。之后重新运行同一行命令即可更新。
 
+
+**Linux（Ubuntu 24.04／GNOME／X11，x64）**
+
+参见 [Linux 构建与安装说明](linux/README.md)。Debian 安装包自带 .NET 运行时，包含 GNOME 顶栏扩展及可选的进程流量辅助组件。
+
+```sh
+curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install-linux.sh | sh
+```
+
 <details>
 <summary>卸载</summary>
 
@@ -125,8 +134,8 @@ swift test
 <summary>Windows（.NET 10 SDK；也能在 macOS／Linux 交叉构建）</summary>
 
 ```sh
-dotnet test windows/tests/AgentSpeed.Core.Tests
-dotnet test windows/tests/AgentSpeed.Presentation.Tests
+dotnet test shared/tests/AgentSpeed.Core.Tests
+dotnet test shared/tests/AgentSpeed.Presentation.Tests
 ./windows/scripts/publish.sh    # → dist/AgentSpeed-Windows-{x64,arm64}.zip
 ```
 </details>

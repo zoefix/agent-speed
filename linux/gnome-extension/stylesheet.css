@@ -1,0 +1,12 @@
+.agent-speed-value {
+    font-feature-settings: "tnum";
+    min-width: 0;
+    max-width: 200px;
+    text-align: right;
+    padding: 0 6px;
+}
+
+.agent-speed-details-value {
+    min-width: 0;
+    max-width: 360px;
+}

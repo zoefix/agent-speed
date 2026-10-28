@@ -10,6 +10,11 @@ struct ReportProfileTests {
     static let device = "22222222-2222-4222-8222-222222222222"
     static let profile = Data(#"{"sharedUserId":null,"displayName":"Zoe","avatar":null,"devices":[{"deviceId":"22222222-2222-4222-8222-222222222222","platform":"macOS","isCurrent":true,"online":true}]}"#.utf8)
 
+    @Test func acceptsLinuxPeers() {
+        let linux = Data(String(decoding: Self.profile, as: UTF8.self).replacingOccurrences(of: "macOS", with: "Linux").utf8)
+        #expect(ReportProfileSnapshot.parse(linux)?.devices.first?.platform == "Linux")
+    }
+
     @Test func rejectsMalformedProfilesAndPairingPaths() throws {
         #expect(ReportProfileSnapshot.parse(Self.profile)?.devices.count == 1)
         var root = try #require(try JSONSerialization.jsonObject(with: Self.profile) as? [String: Any])

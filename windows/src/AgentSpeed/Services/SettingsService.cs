@@ -1,4 +1,8 @@
+#if LINUX
+using AgentSpeed.Linux.Platform;
+#else
 using System.Windows.Threading;
+#endif
 using AgentSpeed.App;
 using AgentSpeed.Presentation.Settings;
 

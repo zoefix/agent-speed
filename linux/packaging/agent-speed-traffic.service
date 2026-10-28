@@ -1,0 +1,23 @@
+[Unit]
+Description=Agent Speed network accounting helper
+Requires=agent-speed-traffic.socket
+After=agent-speed-traffic.socket
+
+[Service]
+Type=simple
+ExecStart=/usr/lib/agent-speed/agent-speed-traffic
+User=root
+CapabilityBoundingSet=CAP_BPF CAP_PERFMON CAP_SYS_RESOURCE
+NoNewPrivileges=yes
+ProtectSystem=strict
+ProtectHome=yes
+PrivateTmp=yes
+PrivateDevices=yes
+ProtectKernelTunables=yes
+ProtectControlGroups=yes
+RestrictAddressFamilies=AF_UNIX
+RestrictSUIDSGID=yes
+LockPersonality=yes
+MemoryMax=256M
+TasksMax=8
+TimeoutStopSec=5

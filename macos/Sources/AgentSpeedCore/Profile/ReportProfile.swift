@@ -47,7 +47,7 @@ public struct ReportProfileSnapshot: Equatable, Sendable {
     }
 
     static func platform(_ raw: String?) -> String? {
-        guard let raw, ["macOS", "Windows"].contains(raw) else { return nil }
+        guard let raw, ["macOS", "Windows", "Linux"].contains(raw) else { return nil }
         return raw
     }
 }

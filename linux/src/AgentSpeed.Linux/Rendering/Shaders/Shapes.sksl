@@ -1,0 +1,340 @@
+// LED simplex noise: Ashima Arts / Stefan Gustavson (MIT); see source HLSL.
+uniform float4 viewport;
+uniform float4 transform;
+uniform float4 globals;
+uniform float mode;
+uniform shader palette;
+const float orb_tau = 6.28318530718;
+float sat(float x) { return clamp(x, 0.0, 1.0); }
+float2 sat(float2 x) { return clamp(x, 0.0, 1.0); }
+float3 sat(float3 x) { return clamp(x, 0.0, 1.0); }
+float4 sat(float4 x) { return clamp(x, 0.0, 1.0); }
+float orb_atan2(float y, float x) {
+    float ax = abs(x), ay = abs(y);
+    float r = min(ax, ay) / max(max(ax, ay), 0.0000001);
+    float q = r * r;
+    float a = r * (1.0 + q * (-0.3302995 + q * (0.180141 + q * (-0.085133 + q * 0.0208351))));
+    if (ay > ax) a = 1.57079632679 - a;
+    if (x < 0.0) a = 3.14159265359 - a;
+    return y < 0.0 ? -a : a;
+}
+float orb_degrees(float x) { return x * 57.2957795131; }
+float orb_radians(float x) { return x * 0.01745329252; }
+float orb_smoothstep(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+float orb_pow(float x, float y) { return x == 0.0 ? (y == 0.0 ? 1.0 : 0.0) : exp(log(x) * y); }
+float3 orb_pow(float3 x, float y) { return float3(orb_pow(x.x, y), orb_pow(x.y, y), orb_pow(x.z, y)); }
+float orb_step(float a, float x) { return x < a ? 0.0 : 1.0; }
+float3 orb_step(float3 a, float3 x) { return float3(orb_step(a.x, x.x), orb_step(a.y, x.y), orb_step(a.z, x.z)); }
+float4 orb_step(float4 a, float4 x) { return float4(orb_step(a.x, x.x), orb_step(a.y, x.y), orb_step(a.z, x.z), orb_step(a.w, x.w)); }
+float orb_round(float x) { return floor(x + 0.5); }
+uniform float4 shape_extra2;
+uniform float4 shape_extra;
+uniform float4 shape_color2;
+uniform float4 shape_color;
+uniform float4 shape_a;
+uniform float4 shape_b;
+float orb_clip_coverage(float2 canvas)
+{
+    if (viewport.w == 0.0)
+    {
+        return 1.0;
+    }
+
+    float aa = 1.0 / viewport.z;
+    float d = length(canvas - transform.yz) - abs(viewport.w);
+    if (viewport.w < 0.0)
+    {
+        return sat(0.5 + d / aa);
+    }
+
+    if (transform.w > 0.0)
+    {
+        return sat(-d / transform.w);
+    }
+
+    return sat(0.5 - d / aa);
+}
+
+float4 orb_output(float3 premultiplied, float alpha)
+{
+    float opacity = globals.x;
+    return float4(premultiplied * opacity, alpha * opacity);
+}
+float2 orb_rotate(float2 p, float angle)
+{
+    float c = cos(angle);
+    float s = sin(angle);
+    return float2(c * p.x - s * p.y, s * p.x + c * p.y);
+}
+
+float orb_uneven_capsule(float2 p, float r1, float r2, float h)
+{
+    p.x = abs(p.x);
+    float b = (r1 - r2) / max(h, 0.0001);
+    float a = sqrt(max(1.0 - b * b, 0.0));
+    float k = dot(p, float2(-b, a));
+    if (k < 0.0)
+    {
+        return length(p) - r1;
+    }
+
+    if (k > a * h)
+    {
+        return length(p - float2(0.0, h)) - r2;
+    }
+
+    return dot(p, float2(a, b)) - r1;
+}
+
+float4 orb_arc_bounds(float radius, float half_width, float start, float sweep)
+{
+    float outer = radius + half_width;
+    if (sweep >= orb_tau - 0.001)
+    {
+        return float4(-outer, -outer, outer, outer);
+    }
+
+    float inner = max(radius - half_width, 0.0);
+    float2 a = float2(cos(start), sin(start));
+    float2 b = float2(cos(start + sweep), sin(start + sweep));
+    float2 lo = min(min(a * outer, a * inner), min(b * outer, b * inner));
+    float2 hi = max(max(a * outer, a * inner), max(b * outer, b * inner));
+    float base = start - orb_tau * floor(start / orb_tau);
+
+    for (int k = 0; k < 8; k++)
+    {
+        float axis = float(k) * 1.5707963268;
+        float rel = axis - base;
+        if (rel >= 0.0 && rel <= sweep)
+        {
+            float2 d = float2(cos(axis), sin(axis)) * outer;
+            lo = min(lo, d);
+            hi = max(hi, d);
+        }
+    }
+
+    return float4(lo, hi);
+}
+
+half4 main(float2 canvas)
+{
+    float2 p = (canvas - shape_a.xy);
+    float shape = shape_a.w;
+    float aa = 1.0 / viewport.z;
+    float4 color = shape_color;
+    float fill = shape_extra2.x;
+    float d = 0.0;
+
+    if (shape < 0.5)
+    {
+
+        float2 q = orb_rotate(p, -shape_a.z);
+        float r = shape_b.z;
+        float2 k = abs(q) - shape_b.xy + r;
+        d = length(max(k, 0.0)) + min(max(k.x, k.y), 0.0) - r;
+    }
+    else if (shape < 1.5)
+    {
+        d = length(p) - shape_b.x;
+    }
+    else if (shape < 2.5)
+    {
+        d = abs(length(p) - shape_b.x) - shape_b.y * 0.5;
+    }
+    else if (shape < 3.5)
+    {
+
+        float2 direction = float2(cos(shape_a.z), sin(shape_a.z));
+        float half_length = shape_b.x * 0.5;
+        float t = clamp(dot(p, direction), -half_length, half_length);
+        d = length(p - direction * t) - shape_b.y * 0.5;
+        color = mix(shape_color2, shape_color, (t + half_length) / max(shape_b.x, 0.0001));
+    }
+    else if (shape < 4.5)
+    {
+
+        float r = length(p);
+        float inner = shape_extra.z;
+        float outer = shape_extra.w;
+        float t = sat((r - inner) / max(outer - inner, 0.0001));
+        float falloff = exp(-t * t * 4.2) * (1.0 - t * t);
+        float edge = sat((r - inner) / aa + 0.5);
+        float alpha = color.a * falloff * edge * shape_extra.x * orb_clip_coverage(canvas);
+        if (alpha <= 0.0005)
+        {
+            return half4(0);
+        }
+
+        return orb_output(color.rgb * alpha, alpha);
+    }
+    else if (shape < 5.5)
+    {
+
+        float r = length(p);
+        float angle = orb_atan2(p.y, p.x);
+        float rel = angle - shape_extra.z;
+        rel -= orb_tau * floor(rel / orb_tau);
+        if (rel > shape_extra.w)
+        {
+            return half4(0);
+        }
+
+        float t = rel / shape_extra.w;
+        d = abs(r - shape_b.x) - shape_b.y * 0.5 * (0.3 + 0.7 * t);
+        color = mix(shape_color2, shape_color, t);
+        color.a *= orb_pow(max(t, 0.0), 1.4);
+    }
+    else if (shape < 6.5)
+    {
+
+        float r = length(p);
+        float start = shape_extra.z;
+        float sweep = max(shape_extra.w, 0.0001);
+        float rel = orb_atan2(p.y, p.x) - start;
+        rel -= orb_tau * floor(rel / orb_tau);
+        float half_width = shape_b.y * 0.5;
+        float t;
+        if (rel <= sweep)
+        {
+            t = rel / sweep;
+            d = abs(r - shape_b.x) - half_width;
+        }
+        else
+        {
+            float to_end = rel - sweep;
+            float to_start = orb_tau - rel;
+            if (shape_b.z > 0.5)
+            {
+                float2 ps = shape_b.x * float2(cos(start), sin(start));
+                float2 pe = shape_b.x * float2(cos(start + sweep), sin(start + sweep));
+                float ds = length(p - ps) - half_width;
+                float de = length(p - pe) - half_width;
+                t = de < ds ? 1.0 : 0.0;
+                d = min(ds, de);
+            }
+            else
+            {
+                t = to_end < to_start ? 1.0 : 0.0;
+                float2 k = float2(abs(r - shape_b.x) - half_width, min(to_end, to_start) * r);
+                d = length(max(k, 0.0)) + min(max(k.x, k.y), 0.0);
+            }
+        }
+
+        if (fill > 2.5)
+        {
+            float n = mix(shape_extra2.y, shape_extra2.z, t);
+            float u = sat(n) * (255.0 / 256.0) + 0.5 / 256.0;
+            color = float4(palette.eval(float2(u * 256.0, 0.5)).rgb, shape_color.a);
+        }
+        else
+        {
+            color = mix(shape_color2, shape_color, t);
+        }
+
+        color.a *= mix(shape_extra2.w, 1.0, t);
+        fill = 0.0;
+    }
+    else if (shape < 7.5)
+    {
+
+        float2 q = orb_rotate(p, -shape_a.z);
+        float2 radii = max(shape_b.xy, float2(0.001, 0.001));
+        float k1 = length(q / radii);
+        float k2 = length(q / (radii * radii));
+        d = k1 * (k1 - 1.0) / max(k2, 0.00001);
+    }
+    else if (shape < 8.5)
+    {
+
+        float2 q = orb_rotate(p, -shape_a.z);
+        float tip = orb_uneven_capsule(float2(q.y, q.x), shape_extra.z, shape_extra.w, shape_b.x);
+        float tail = orb_uneven_capsule(float2(q.y, -q.x), shape_extra.z, shape_b.z, shape_b.y);
+        d = min(tip, tail);
+    }
+    else
+    {
+
+        float2 direction = float2(cos(shape_a.z), sin(shape_a.z));
+        float half_length = shape_b.x;
+        float2 cut0 = shape_extra2.xy;
+        float2 cut1 = shape_extra2.zw;
+        if (dot(cut0, cut0) > 0.0 && dot(p + direction * half_length, cut0) < 0.0)
+        {
+            return half4(0);
+        }
+
+        if (dot(cut1, cut1) > 0.0 && dot(p - direction * half_length, cut1) >= 0.0)
+        {
+            return half4(0);
+        }
+
+        float along = clamp(dot(p, direction), -half_length, half_length);
+        float dist = length(p - direction * along);
+        float3 layer = sat(0.5 - (dist - shape_b.yzw) / aa) * shape_extra.xyz;
+        float a_glow = layer.x * shape_color.a;
+        float a_body = layer.y * shape_color.a;
+        float a_core = layer.z * shape_color2.a;
+        float3 rgb;
+        float stroke_alpha;
+        if (shape_extra.w > 0.5)
+        {
+            rgb = shape_color.rgb * (a_glow + a_body) + shape_color2.rgb * a_core;
+            stroke_alpha = sat(a_glow + a_body + a_core);
+        }
+        else
+        {
+            rgb = shape_color.rgb * a_glow;
+            stroke_alpha = a_glow;
+            rgb = shape_color.rgb * a_body + rgb * (1.0 - a_body);
+            stroke_alpha = a_body + stroke_alpha * (1.0 - a_body);
+            rgb = shape_color2.rgb * a_core + rgb * (1.0 - a_core);
+            stroke_alpha = a_core + stroke_alpha * (1.0 - a_core);
+        }
+
+        float keep = orb_clip_coverage(canvas);
+        if (stroke_alpha * keep <= 0.0005)
+        {
+            return half4(0);
+        }
+
+        return orb_output(rgb * keep, stroke_alpha * keep);
+    }
+
+    if (fill > 0.5 && fill < 1.5)
+    {
+        float2 direction = float2(cos(shape_extra2.y), sin(shape_extra2.y));
+        float half_length = max(shape_extra2.z, 0.0001);
+        float t = sat((dot(p, direction) + half_length) / (2.0 * half_length));
+        color = mix(shape_color, shape_color2, t);
+    }
+    else if (fill > 1.5 && fill < 2.5)
+    {
+        float t = sat(length(p - shape_extra2.yz) / max(shape_extra2.w, 0.0001));
+        color = mix(shape_color, shape_color2, t);
+    }
+    else if (fill > 3.5 && fill < 4.5)
+    {
+
+        float t = sat(length(p) / max(shape_b.x, 0.0001));
+        float stop = shape_extra2.y;
+        color = t < stop ? mix(shape_color, shape_color2, t / stop)
+            : float4(shape_color2.rgb, shape_color2.a * sat(1.0 - (t - stop) / max(1.0 - stop, 0.0001)));
+    }
+
+    float coverage = sat(0.5 - d / aa);
+    float core = coverage * shape_extra.x;
+    float glow_amount = 0.0;
+    if (shape_b.w > 0.0)
+    {
+        float x = max(d, 0.0) / shape_b.w;
+        glow_amount = exp(-x * x) * shape_extra.y;
+    }
+
+    float alpha = (core + glow_amount * (1.0 - core)) * color.a * orb_clip_coverage(canvas);
+    if (alpha <= 0.0005)
+    {
+        return half4(0);
+    }
+
+    return orb_output(color.rgb * alpha, alpha);
+}

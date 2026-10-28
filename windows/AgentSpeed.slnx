@@ -1,13 +1,13 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
-    <Project Path="src/AgentSpeed.Presentation/AgentSpeed.Presentation.csproj" />
+    <Project Path="../shared/src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
+    <Project Path="../shared/src/AgentSpeed.Presentation/AgentSpeed.Presentation.csproj" />
     <Project Path="src/AgentSpeed/AgentSpeed.csproj" />
     <Project Path="src/AgentSpeed.TrafficHelper/AgentSpeed.TrafficHelper.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/AgentSpeed.Core.Tests/AgentSpeed.Core.Tests.csproj" />
-    <Project Path="tests/AgentSpeed.Presentation.Tests/AgentSpeed.Presentation.Tests.csproj" />
+    <Project Path="../shared/tests/AgentSpeed.Core.Tests/AgentSpeed.Core.Tests.csproj" />
+    <Project Path="../shared/tests/AgentSpeed.Presentation.Tests/AgentSpeed.Presentation.Tests.csproj" />
     <Project Path="tests/AgentSpeed.TrafficHelper.Tests/AgentSpeed.TrafficHelper.Tests.csproj" />
     <Project Path="tests/AgentSpeed.Windows.Tests/AgentSpeed.Windows.Tests.csproj" />
   </Folder>

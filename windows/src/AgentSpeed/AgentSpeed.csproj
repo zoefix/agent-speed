@@ -36,8 +36,8 @@
   </ItemGroup>
 
   <ItemGroup>
-    <ProjectReference Include="..\AgentSpeed.Core\AgentSpeed.Core.csproj" />
-    <ProjectReference Include="..\AgentSpeed.Presentation\AgentSpeed.Presentation.csproj" />
+    <ProjectReference Include="..\..\..\shared\src\AgentSpeed.Core\AgentSpeed.Core.csproj" />
+    <ProjectReference Include="..\..\..\shared\src\AgentSpeed.Presentation\AgentSpeed.Presentation.csproj" />
   </ItemGroup>
 
   <!-- The floating orb's Direct3D 11 + DirectComposition renderer (DESIGN 2a, Techniques). Managed bindings only (MIT);

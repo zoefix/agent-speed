@@ -1,0 +1,259 @@
+// LED simplex noise: Ashima Arts / Stefan Gustavson (MIT); see source HLSL.
+uniform float4 viewport;
+uniform float4 transform;
+uniform float4 globals;
+uniform float mode;
+uniform shader palette;
+const float orb_tau = 6.28318530718;
+float sat(float x) { return clamp(x, 0.0, 1.0); }
+float2 sat(float2 x) { return clamp(x, 0.0, 1.0); }
+float3 sat(float3 x) { return clamp(x, 0.0, 1.0); }
+float4 sat(float4 x) { return clamp(x, 0.0, 1.0); }
+float orb_atan2(float y, float x) {
+    float ax = abs(x), ay = abs(y);
+    float r = min(ax, ay) / max(max(ax, ay), 0.0000001);
+    float q = r * r;
+    float a = r * (1.0 + q * (-0.3302995 + q * (0.180141 + q * (-0.085133 + q * 0.0208351))));
+    if (ay > ax) a = 1.57079632679 - a;
+    if (x < 0.0) a = 3.14159265359 - a;
+    return y < 0.0 ? -a : a;
+}
+float orb_degrees(float x) { return x * 57.2957795131; }
+float orb_radians(float x) { return x * 0.01745329252; }
+float orb_smoothstep(float a, float b, float x) { float t = clamp((x - a) / (b - a), 0.0, 1.0); return t * t * (3.0 - 2.0 * t); }
+float orb_pow(float x, float y) { return x == 0.0 ? (y == 0.0 ? 1.0 : 0.0) : exp(log(x) * y); }
+float3 orb_pow(float3 x, float y) { return float3(orb_pow(x.x, y), orb_pow(x.y, y), orb_pow(x.z, y)); }
+float orb_step(float a, float x) { return x < a ? 0.0 : 1.0; }
+float3 orb_step(float3 a, float3 x) { return float3(orb_step(a.x, x.x), orb_step(a.y, x.y), orb_step(a.z, x.z)); }
+float4 orb_step(float4 a, float4 x) { return float4(orb_step(a.x, x.x), orb_step(a.y, x.y), orb_step(a.z, x.z), orb_step(a.w, x.w)); }
+float orb_round(float x) { return floor(x + 0.5); }
+
+    uniform float4 lq_frame;
+    uniform float4 lq_surface;
+    uniform float4 lq_phases;
+    uniform float4 lq_ripples[4];
+    uniform float4 lq_liquid;
+    uniform float4 lq_deep;
+    uniform float4 lq_back;
+    uniform float4 lq_spill;
+    uniform float4 lq_glow;
+    uniform float4 lq_glow_geom;
+    uniform float4 lq_shade;
+    uniform float4 lq_current;
+    uniform float4 lq_current_geom;
+    uniform float4 lq_meniscus;
+    uniform float4 lq_meniscus_glow;
+    uniform float4 lq_meniscus_geom;
+    uniform float4 lq_gold;
+    uniform float4 lq_flags;
+float orb_clip_coverage(float2 canvas)
+{
+    if (viewport.w == 0.0)
+    {
+        return 1.0;
+    }
+
+    float aa = 1.0 / viewport.z;
+    float d = length(canvas - transform.yz) - abs(viewport.w);
+    if (viewport.w < 0.0)
+    {
+        return sat(0.5 + d / aa);
+    }
+
+    if (transform.w > 0.0)
+    {
+        return sat(-d / transform.w);
+    }
+
+    return sat(0.5 - d / aa);
+}
+
+float4 orb_output(float3 premultiplied, float alpha)
+{
+    float opacity = globals.x;
+    return float4(premultiplied * opacity, alpha * opacity);
+}
+
+float orb_liquid_wave_y(float x, float back)
+{
+    float s = lq_frame.z;
+    float xr = x - lq_frame.x;
+    float offset = back > 0.5 ? 1.7 : 0.0;
+    float a = lq_surface.y * (back > 0.5 ? 0.75 : 1.0);
+    float y = lq_surface.x - (back > 0.5 ? 0.008 * s : 0.0);
+    if (a > 0.0)
+    {
+        y += a * (0.55 * sin(xr / (0.9 * s) * orb_tau + lq_phases.x + offset)
+                  + 0.30 * sin(xr / (0.47 * s) * orb_tau - lq_phases.y + offset * 1.3)
+                  + 0.15 * sin(xr / (0.23 * s) * orb_tau + lq_phases.z + offset * 0.7));
+    }
+
+    if (lq_surface.z > 0.0)
+    {
+        y += lq_surface.z * sin(xr / (0.11 * s) * orb_tau + lq_phases.w + offset)
+            * (0.7 + 0.3 * sin(xr / (0.05 * s) + lq_phases.w * 1.7));
+    }
+
+    for (int i = 0; i < 4; i++)
+    {
+        float4 ripple = lq_ripples[i];
+        if (ripple.w > 0.0)
+        {
+            float u = abs(x - ripple.x) - ripple.y;
+            float k = u / (0.075 * s);
+            y -= ripple.z * exp(-k * k) * cos(orb_tau * u / (0.1 * s)) * (back > 0.5 ? 0.6 : 1.0);
+        }
+    }
+
+    return y;
+}
+
+float orb_liquid_surface_y(float x)
+{
+    return orb_liquid_wave_y(x, 0.0);
+}
+
+void orb_liquid_over(inout float3 color, inout float alpha, float3 rgb, float a)
+{
+    a = sat(a);
+    color = rgb * a + color * (1.0 - a);
+    alpha = a + alpha * (1.0 - a);
+}
+
+void orb_liquid_light(inout float3 color, inout float alpha, float3 rgb, float a, float additive)
+{
+    if (additive > 0.5)
+    {
+        a = sat(a);
+        color += rgb * a;
+        alpha = a + alpha * (1.0 - a);
+    }
+    else
+    {
+        orb_liquid_over(color, alpha, rgb, a);
+    }
+}
+
+half4 main(float2 canvas)
+{
+    float2 p = canvas;
+    float2 c = lq_frame.xy;
+    float s = lq_frame.z;
+    float radius = lq_frame.w;
+    float aa = 1.0 / viewport.z;
+    float glass = sat((radius - length(p - c)) / aa + 0.5);
+    if (glass <= 0.0)
+    {
+        return half4(0);
+    }
+
+    float3 color = float3(0.0, 0.0, 0.0);
+    float alpha = 0.0;
+    float y_surface = orb_liquid_wave_y(p.x, 0.0);
+
+    if (mode == 1)
+    {
+
+        float slope = orb_liquid_wave_y(p.x + 0.5, 0.0) - orb_liquid_wave_y(p.x - 0.5, 0.0);
+        float d = abs(p.y - y_surface) / sqrt(1.0 + slope * slope);
+        float half_width = lq_meniscus_geom.x * 0.5;
+        if (lq_meniscus_glow.a > 0.0)
+        {
+            float sigma = max(lq_meniscus_geom.y, 0.001);
+            float x = max(d - half_width, 0.0) / sigma;
+            orb_liquid_light(color, alpha, lq_meniscus_glow.rgb, lq_meniscus_glow.a * exp(-0.5 * x * x), lq_meniscus_geom.z);
+        }
+
+        float core = sat((half_width - d) / aa + 0.5);
+        orb_liquid_over(color, alpha, lq_meniscus.rgb, lq_meniscus.a * core);
+        color *= glass;
+        alpha *= glass;
+        if (alpha <= 0.0005 && max(color.r, max(color.g, color.b)) <= 0.0005)
+        {
+            return half4(0);
+        }
+
+        return orb_output(color, alpha);
+    }
+
+    float y_level = lq_surface.x;
+
+    if (lq_spill.a > 0.0)
+    {
+        float t = (p.y - (y_level - 0.22 * s)) / (0.22 * s);
+        if (t >= 0.0 && t <= 1.0)
+        {
+            orb_liquid_light(color, alpha, lq_spill.rgb, lq_spill.a * t, lq_flags.x);
+        }
+    }
+
+    if (lq_surface.w > 0.5)
+    {
+        float y_back = orb_liquid_wave_y(p.x, 1.0);
+        float back_cover = sat((p.y - y_back) / aa + 0.5);
+        orb_liquid_over(color, alpha, lq_back.rgb, lq_back.a * back_cover);
+    }
+
+    float cover = sat((p.y - y_surface) / aa + 0.5);
+    if (cover > 0.0)
+    {
+        float t = sat((p.y - lq_flags.z) / max(lq_flags.w - lq_flags.z, 1.0));
+        orb_liquid_over(color, alpha, mix(lq_liquid.rgb, lq_deep.rgb, t), mix(lq_liquid.a, lq_deep.a, t) * cover);
+        float2 shade_center = c + float2(-0.06, -0.08) * s;
+        float inner = 0.35 * radius;
+        float shade = sat((length(p - shade_center) - inner) / max(radius - inner, 0.001));
+        orb_liquid_over(color, alpha, lq_shade.rgb, lq_shade.a * shade * cover);
+        if (lq_glow.a > 0.0)
+        {
+            float d = length(p - lq_glow_geom.xy) / max(lq_glow_geom.z, 0.001);
+            orb_liquid_light(color, alpha, lq_glow.rgb, lq_glow.a * max(0.0, 1.0 - d) * cover, lq_glow_geom.w);
+        }
+    }
+
+    if (lq_flags.y > 0.0)
+    {
+        float k = length((p - (c + float2(0.0, 0.1 * s))) / float2(0.36 * s, 0.26 * s));
+        if (k < 1.0)
+        {
+            float a = k < 0.55 ? mix(0.35, 0.30, k / 0.55) : mix(0.30, 0.0, (k - 0.55) / 0.45);
+            orb_liquid_over(color, alpha, float3(0.0, 0.0, 0.0), a * lq_flags.y);
+        }
+    }
+
+    if (lq_current.a > 0.0 && cover > 0.0)
+    {
+        float bottom = c.y + radius;
+        float u = (p.x - (c.x - radius)) / (2.0 * radius);
+        float sigma = max(lq_current_geom.y, 0.001);
+
+        for (int k = 0; k < 3; k++)
+        {
+            float depth = 0.25 + 0.25 * float(k);
+            float phase = lq_current_geom.z * (0.35 + 0.2 * float(k)) + 2.1 * float(k);
+            float y = y_level + (bottom - y_level) * depth + 0.03 * s * sin(u * 7.0 + phase) + 0.015 * s * sin(u * 13.0 - phase * 1.7);
+            float slope = (0.03 * s * 7.0 * cos(u * 7.0 + phase) + 0.015 * s * 13.0 * cos(u * 13.0 - phase * 1.7)) / (2.0 * radius);
+            float d = abs(p.y - y) / sqrt(1.0 + slope * slope);
+            float half_width = (0.018 - 0.004 * float(k)) * s * 0.5;
+            float profile = 1.0 - orb_smoothstep(max(half_width - 1.5 * sigma, 0.0), half_width + 1.5 * sigma, d);
+            orb_liquid_light(color, alpha, lq_current.rgb, lq_current.a * (1.0 - 0.25 * float(k)) * profile * cover, lq_current_geom.w);
+        }
+    }
+
+    if (lq_gold.y > 0.0)
+    {
+        float d = abs(p.y - lq_gold.x) / max(lq_gold.z, 0.001);
+        if (d < 1.0)
+        {
+            orb_liquid_light(color, alpha, float3(250.0, 204.0, 21.0) / 255.0, lq_gold.y * (1.0 - d), lq_gold.w);
+        }
+    }
+
+    color *= glass;
+    alpha *= glass;
+    if (alpha <= 0.0005 && max(color.r, max(color.g, color.b)) <= 0.0005)
+    {
+        return half4(0);
+    }
+
+    return orb_output(color, alpha);
+}

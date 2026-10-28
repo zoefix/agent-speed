@@ -94,15 +94,45 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         },
         "osMajor": {
+          "description": "Operating-system major version: Linux kernel major 1–99; macOS and Windows major 10–99.",
           "type": "integer",
-          "minimum": 10,
+          "minimum": 1,
           "maximum": 99
         }
-      }
+      },
+      "allOf": [
+        {
+          "if": {
+            "properties": {
+              "platform": {
+                "const": "Linux"
+              }
+            },
+            "required": [
+              "platform"
+            ]
+          },
+          "then": {
+            "properties": {
+              "osMajor": {
+                "minimum": 1
+              }
+            }
+          },
+          "else": {
+            "properties": {
+              "osMajor": {
+                "minimum": 10
+              }
+            }
+          }
+        }
+      ]
     },
     "jwk": {
       "description": "P-256 public key as a JSON Web Key (RFC 7517/7518): x and y are the 32-byte big-endian coordinates, base64url without padding.",
@@ -996,7 +1026,8 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         },
         "isCurrent": {
@@ -1072,7 +1103,8 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         }
       }

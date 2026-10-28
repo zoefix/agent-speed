@@ -1,4 +1,8 @@
+#if LINUX
+using AgentSpeed.Linux.Platform;
+#else
 using System.Windows.Threading;
+#endif
 using AgentSpeed.App;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Money;
@@ -8,7 +12,9 @@ using AgentSpeed.Presentation.Cost;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Services;
+#if !LINUX
 using Microsoft.Win32;
+#endif
 
 namespace AgentSpeed.Cost;
 
@@ -29,7 +35,7 @@ internal sealed class CostService : IDisposable
     {
         _dispatcher = dispatcher;
         _settings = settings;
-        var userAgent = HttpFetchRequest.UserAgentFor(version);
+        var userAgent = HttpFetchRequest.UserAgentFor(version, OperatingSystem.IsLinux() ? "Linux" : "Windows");
         var tables = new List<PriceTable> { PriceBook.Bundled };
         if (PriceSyncController.LoadStoredTable(AppDataDirectory) is { } stored)
         {
@@ -63,7 +69,11 @@ internal sealed class CostService : IDisposable
 
     /// <summary><c>%LOCALAPPDATA%\AgentSpeed</c> (NETWORK 3 storage).</summary>
     public static string AppDataDirectory =>
+        #if LINUX
+        AgentSpeed.Linux.Platform.LinuxPaths.Data;
+#else
         Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), AppPaths.ProductFolder);
+#endif
 
     /// <summary>Shared by the live engine and the daily history (METRICS 9.7).</summary>
     public PriceBook Book { get; }
@@ -85,7 +95,10 @@ internal sealed class CostService : IDisposable
         }
 
         _started = true;
-        SystemEvents.PowerModeChanged += OnPowerModeChanged;
+
+#if !LINUX
+            SystemEvents.PowerModeChanged += OnPowerModeChanged;
+#endif
         Apply(_settings.Current, asAfterLaunch: false);
     }
 
@@ -115,7 +128,10 @@ internal sealed class CostService : IDisposable
         _disposed = true;
         if (_started)
         {
+
+#if !LINUX
             SystemEvents.PowerModeChanged -= OnPowerModeChanged;
+#endif
         }
 
         Prices.Dispose();
@@ -130,6 +146,7 @@ internal sealed class CostService : IDisposable
         Rates.Update(settings.Cost.Currency, settings.NetworkEnabled);
     }
 
+#if !LINUX
     private void OnPowerModeChanged(object? sender, PowerModeChangedEventArgs e)
     {
         if (e.Mode != PowerModes.Resume)
@@ -146,4 +163,5 @@ internal sealed class CostService : IDisposable
             }
         });
     }
+#endif
 }

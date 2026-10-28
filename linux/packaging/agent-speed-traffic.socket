@@ -1,0 +1,12 @@
+[Unit]
+Description=Agent Speed optional per-user network counters
+
+[Socket]
+ListenStream=/run/agent-speed-traffic/helper.sock
+SocketMode=0666
+DirectoryMode=0755
+Backlog=8
+RemoveOnStop=yes
+
+[Install]
+WantedBy=sockets.target
