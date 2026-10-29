@@ -1,6 +1,7 @@
 import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
+import AgentSpeed.Orb
 import "Format.js" as Format
 import "Heat.js" as Heat
 
@@ -302,6 +303,73 @@ ColumnLayout {
                     wrapMode: Text.Wrap
                     Layout.fillWidth: true
                 }
+                // Live preview: the dashboard hero at 112 pt and a 96 pt orb in the selected orb's style, at the focused
+                // row's level × 1.05 of its threshold (idle row: idle; no field focused: level 13).
+                RowLayout {
+                    id: livePreview
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    Layout.bottomMargin: 4
+                    spacing: 18
+                    property int level: 13
+                    readonly property var rows: themes.editor.rows || []
+                    readonly property real value: {
+                        for (let i = 0; i < rows.length; ++i) if (rows[i].level === level) return level === 0 ? 0 : rows[i].threshold * 1.05
+                        return 0
+                    }
+                    readonly property string orbStyle: {
+                        const list = orbs.list
+                        for (let i = 0; i < list.length; ++i) if (list[i].id === orbs.selected) return list[i].style
+                        return list.length > 0 ? list[0].style : "led"
+                    }
+                    Item { Layout.fillWidth: true }
+                    Column {
+                        spacing: 4
+                        Item {
+                            width: 132
+                            height: 132
+                            HeroOrb {
+                                anchors.centerIn: parent
+                                width: 150
+                                height: 150
+                                diameter: 112
+                                dark: Theme.dark
+                                redline: prefs.redline
+                                effects: 2
+                                fps: 30
+                                snapshot: ({ liveOutput: livePreview.value })
+                            }
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: S.tr2(S.rev, "menu.dashboard") + " · 112 pt"
+                            color: Theme.ink3
+                            font.pixelSize: 11
+                        }
+                    }
+                    Column {
+                        spacing: 4
+                        OrbPreview {
+                            width: 132
+                            height: 132
+                            diameter: 96
+                            style: livePreview.orbStyle
+                            dark: Theme.dark
+                            fps: 30
+                            liveValue: livePreview.value
+                            redline: prefs.redline
+                            valueText: Format.speed(livePreview.value)
+                            titleText: themes.rev >= 0 ? themes.title(livePreview.level) : ""
+                        }
+                        Text {
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            text: S.tr2(S.rev, "settings.orb") + " · 96 pt"
+                            color: Theme.ink3
+                            font.pixelSize: 11
+                        }
+                    }
+                    Item { Layout.fillWidth: true }
+                }
                 // The title table: the idle row, then levels 1–13 with their thresholds at the current redline.
                 RowLayout {
                     Layout.fillWidth: true
@@ -350,6 +418,7 @@ ColumnLayout {
                             accessibleName: modelData.level === 0 ? S.tr2(S.rev, "titles.custom.idle.a11y")
                                                                   : Format.fill(S.tr2(S.rev, "titles.level"), [modelData.level])
                             onCommitted: (t) => themes.setText(modelData.level, t)
+                            onFocusedChanged: livePreview.level = focused ? modelData.level : 13
                         }
                         IconButton {
                             opacity: modelData.text.length > 0 ? 1 : 0

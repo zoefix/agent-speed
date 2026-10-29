@@ -26,6 +26,8 @@ class PreviewItem : public QQuickPaintedItem {
     Q_PROPERTY(QString valueText READ valueText WRITE setValueText NOTIFY liveChanged)
     Q_PROPERTY(double redline READ redline WRITE setRedline NOTIFY liveChanged)
     Q_PROPERTY(int fps READ fps WRITE setFps NOTIFY liveChanged)
+    // The speed title shown under the value (the title editor's live preview); empty: none.
+    Q_PROPERTY(QString titleText READ titleText WRITE setTitleText NOTIFY liveChanged)
 
 public:
     explicit PreviewItem(QQuickItem* parent = nullptr);
@@ -52,6 +54,8 @@ public:
     void setRedline(double redline);
     int fps() const { return fps_; }
     void setFps(int fps);
+    QString titleText() const { return titleText_; }
+    void setTitleText(const QString& text);
 
     void paint(QPainter* painter) override;
 
@@ -88,6 +92,9 @@ protected:
     QString valueText_;
     double redline_ = 400;
     int fps_ = 24;
+    QString titleText_;
+    QString previousTitle_;
+    double titleChangedAt_ = -1e9;
     QTimer timer_;
     QImage frame_;
     Gauge gauge_;

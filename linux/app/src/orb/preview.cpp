@@ -164,6 +164,14 @@ void PreviewItem::setRedline(double redline) {
     emit liveChanged();
 }
 
+void PreviewItem::setTitleText(const QString& text) {
+    if (text == titleText_) return;
+    previousTitle_ = titleText_;
+    titleText_ = text;
+    titleChangedAt_ = Engine::shared().now();
+    emit liveChanged();
+}
+
 void PreviewItem::setFps(int fps) {
     fps = std::clamp(fps, 1, 60);
     if (fps == fps_) return;
@@ -251,8 +259,13 @@ void PreviewItem::tick() {
 
     ReadoutContent content;
     content.value = liveValue_ >= 0 && !valueText_.isEmpty() ? valueText_ : QString::number(qRound(gauge_.value()));
-    // At 64 pt the 7 pt title floor would crowd the unit, so a preview shows the value and the unit.
+    // At 64 pt the 7 pt title floor would crowd the unit, so a preview shows the value and the unit (and a title only
+    // when one is given).
     content.unit = unitText();
+    content.title = titleText_;
+    content.previousTitle = previousTitle_;
+    content.titleChangedAt = titleChangedAt_;
+    content.titleHeat = f.heat;
 
     if (!engine.begin()) return;
     const double dpr = window()->effectiveDevicePixelRatio();

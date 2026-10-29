@@ -10,6 +10,7 @@ Item {
     property bool monospace: false
     property bool error: false
     property string accessibleName
+    readonly property bool focused: input.activeFocus
     signal edited(string text)
     signal committed(string text)
     implicitWidth: 240

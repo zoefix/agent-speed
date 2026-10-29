@@ -5,6 +5,7 @@
 #include <QStandardPaths>
 #include <QQmlContext>
 #include <QQuickStyle>
+#include <QQuickItem>
 #include <QQuickWindow>
 #include <QPalette>
 #include <QStyle>
@@ -492,6 +493,19 @@ int main(int argc, char* argv[]) {
         if (!settingsWindow) openSettings(0);
         if (const int tall = qEnvironmentVariableIntValue("AGENT_SPEED_SHOT_HEIGHT"); tall > 0) {
             if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) quick->resize(quick->width(), tall);
+        }
+        // AGENT_SPEED_SHOT_SCROLL scrolls the visible page down this many points first.
+        if (const int scroll = qEnvironmentVariableIntValue("AGENT_SPEED_SHOT_SCROLL"); scroll > 0) {
+            QTimer::singleShot(1500, &app, [&, scroll] {
+                if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) {
+                    const auto items = quick->findChildren<QQuickItem*>();
+                    for (auto* item : items) {
+                        if (!item->isVisible() || !item->inherits("QQuickFlickable")) continue;
+                        const double room = item->property("contentHeight").toDouble() - item->height();
+                        if (room > 0) item->setProperty("contentY", std::min<double>(scroll, room));
+                    }
+                }
+            });
         }
         QTimer::singleShot(3500, &app, [&] {
             if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) quick->grabWindow().save(settingsShot);
