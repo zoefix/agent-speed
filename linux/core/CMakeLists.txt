@@ -11,6 +11,7 @@ add_library(agentspeed_core STATIC
     src/json.cpp
     src/line_splitter.cpp
     src/model.cpp
+    src/modes.cpp
     src/monitor.cpp
     src/parents.cpp
     src/path_text.cpp

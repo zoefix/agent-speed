@@ -25,6 +25,18 @@ CodexParser::Usage readUsage(const json::Value& usage) {
     return u;
 }
 
+std::optional<std::string> token(const json::Value& value) { return value.isString() ? value.string() : std::nullopt; }
+
+// collaboration_mode.settings.reasoning_effort
+std::optional<std::string> collaborationEffort(const json::Value& mode) {
+    if (!mode.isObject()) return std::nullopt;
+    return token(mode["settings"]["reasoning_effort"]);
+}
+
+bool sessionSelection(const ModeFact& f, ModeKind kind, const std::optional<std::string>& provider) {
+    return f.kind == kind && f.evidence == ModeEvidence::Selected && f.scope == ModeScope::Session && f.provider == provider;
+}
+
 TokenCounts tokensOf(const CodexParser::Usage& u) {
     TokenCounts t;
     t.input = u.input;
@@ -55,6 +67,7 @@ void CodexParser::reset() {
     streaming_ = false;
     sawModernUsage_ = false;
     previousLegacyTotals_.reset();
+    context_ = ExecutionModes();
     setSubagent(pathIsSubagent_);
 }
 
@@ -70,7 +83,13 @@ void CodexParser::afterUsage(std::int64_t ts) {
     setPhase(Phase::Tools, ts, std::nullopt);
 }
 
-void CodexParser::emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink) {
+void CodexParser::setContext(const ExecutionModes& context) {
+    context_ = context;
+    setModes(context);
+}
+
+void CodexParser::emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink,
+                               const ExecutionModes& modes) {
     ParsedResponse response;
     response.key = key;
     response.source = SourceKind::Codex;
@@ -80,6 +99,7 @@ void CodexParser::emitResponse(const std::string& key, const TokenCounts& tokens
     response.endMs = ts;
     response.tokens = tokens;
     response.provider = provider_;
+    response.modes = modes;
     sink.onResponse(response, true);
 }
 
@@ -98,6 +118,11 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
     const std::int64_t ts = *parsedTs;
     const auto type = root["type"];
     const auto payload = root["payload"];
+    // The raw-text hints of the macOS and Windows readers.
+    const bool metaHint = text.find("\"session_meta\"") != std::string_view::npos ||
+                          text.find("\"turn_context\"") != std::string_view::npos;
+    const bool usageHint = text.find("\"token_usage_record\"") != std::string_view::npos;
+    const bool settingsHint = text.find("\"thread_settings_applied\"") != std::string_view::npos;
 
     if (type.equals("session_meta")) {
         if (fileCreatedMs_) return;
@@ -130,6 +155,17 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
     if (type.equals("turn_context")) {
         setProjectFromCwd(payload["cwd"].nonEmptyString());
         setModel(payload["model"].nonEmptyString());
+        // A turn context starts a turn: turn facts are replaced by its effort and selected tier.
+        std::optional<std::string> effort, tier;
+        if (metaHint && payload.isObject()) {
+            effort = token(payload["effort"]);
+            if (!effort) effort = collaborationEffort(payload["collaboration_mode"]);
+            tier = token(payload["service_tier"]);
+        }
+        auto context = context_.without([](const ModeFact& f) { return f.scope == ModeScope::Turn; })
+                           .with(native::effort(effort, ModeEvidence::Recorded, ModeScope::Turn));
+        if (tier) context = context.merge(native::openAiTier(tier, ModeEvidence::Selected, ModeScope::Turn));
+        setContext(context);
     } else if (type.equals("response_item")) {
         const auto role = payload["role"];
         if (kind == "reasoning" || endsWith(kind, "_call") || (kind == "message" && role.equals("assistant"))) {
@@ -170,12 +206,30 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
             previousLegacyTotals_ = total;
             const std::string key = "codex-legacy:" + threadId() + ":" + std::to_string(total.totalTokens);
             if (!deduper().tryClaim(key, agentId())) return;
-            emitResponse(key, tokens, ts, sink);
+            emitResponse(key, tokens, ts, sink, context_);
             afterUsage(ts);
         } else if (kind == "task_complete" || kind == "turn_aborted") {
             pendingStartMs_.reset();
             streaming_ = false;
             setPhase(Phase::Idle, ts, std::nullopt);
+        } else if (kind == "thread_settings_applied") {
+            // The thread's selected tier and effort from now on; a non-string clears one.
+            const auto settings = settingsHint ? payload["thread_settings"] : json::Value();
+            auto context = context_;
+            if (settings.isObject()) {
+                if (const auto tier = settings["service_tier"]; tier.valid()) {
+                    context = context
+                                  .without([](const ModeFact& f) {
+                                      return sessionSelection(f, ModeKind::ServiceTier, std::string("openai"));
+                                  })
+                                  .merge(native::openAiTier(token(tier), ModeEvidence::Selected, ModeScope::Session));
+                }
+                if (const auto effort = settings["reasoning_effort"]; effort.valid()) {
+                    context = context.without([](const ModeFact& f) { return sessionSelection(f, ModeKind::Effort, std::nullopt); })
+                                  .with(native::effort(token(effort), ModeEvidence::Selected, ModeScope::Session));
+                }
+            }
+            setContext(context);
         }
     } else if (type.equals("token_usage_record")) {
         sawModernUsage_ = true;
@@ -187,7 +241,10 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
             key = "codex:" + (thread ? *thread : threadId()) + ":" + std::to_string(ts);
         }
         if (!deduper().tryClaim(key, agentId())) return;
-        emitResponse(key, tokensOf(readUsage(payload["usage"])), ts, sink);
+        // A recorded request tier belongs to this response's snapshot only, never to the context.
+        const auto tier = usageHint ? token(payload["service_tier"]) : std::nullopt;
+        const auto modes = tier ? context_.merge(native::openAiTier(tier, ModeEvidence::Recorded, ModeScope::Request)) : context_;
+        emitResponse(key, tokensOf(readUsage(payload["usage"])), ts, sink, modes);
         afterUsage(ts);
     }
 }

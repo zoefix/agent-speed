@@ -24,6 +24,25 @@ public:
     std::map<std::string, ParsedResponse> byKey;
 };
 
+// A missing key is not checked; null means unknown.
+void expectMode(const std::optional<ModeAttribution>& got, const json::Value& want, const char* what) {
+    SCOPED_TRACE(what);
+    if (!want.valid()) return;
+    if (want.isNull()) {
+        EXPECT_FALSE(got.has_value()) << (got ? got->mode : "");
+        return;
+    }
+    ASSERT_TRUE(got.has_value());
+    EXPECT_EQ(got->mode, *want["mode"].string());
+    EXPECT_EQ(got->evidence, *want["evidence"].string());
+    EXPECT_EQ(got->provider, fixtures::optString(want["provider"]));
+}
+
+void expectModes(const ExecutionModes& modes, const json::Value& want) {
+    expectMode(effort_speed::effort(modes), want["effort"], "effort");
+    expectMode(effort_speed::speed(modes), want["speed"], "speed");
+}
+
 std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const std::string& agentId, Deduper& deduper) {
     if (relative.rfind("codex/", 0) == 0) return std::make_unique<CodexParser>(agentId, deduper);
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
@@ -60,6 +79,14 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         EXPECT_EQ(parser->inFlightStartMs(), fixtures::optInt(want["inFlightStartMs"]));
         EXPECT_EQ(parser->lastLineMs(), fixtures::optInt(want["lastLineMs"]));
         EXPECT_EQ(parser->malformedLines(), *fixtures::optInt(want["malformedLines"]));
+        expectModes(parser->modes(), want);
+        if (const auto modes = want["responseModes"]; modes.isObject()) {
+            for (const auto& [key, value] : modes.members()) {
+                SCOPED_TRACE(std::string(key));
+                ASSERT_TRUE(sink.byKey.contains(std::string(key)));
+                expectModes(sink.byKey[std::string(key)].modes, value);
+            }
+        }
 
         const auto responses = want["responses"].elements();
         ASSERT_EQ(sink.order.size(), responses.size());

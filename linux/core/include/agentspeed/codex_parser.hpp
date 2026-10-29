@@ -22,7 +22,9 @@ public:
 private:
     void onInput(std::int64_t ts);
     void afterUsage(std::int64_t ts);
-    void emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink);
+    void emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink,
+                      const ExecutionModes& modes);
+    void setContext(const ExecutionModes& context);
     std::string threadId() const { return metaThreadId_ ? *metaThreadId_ : agentId(); }
 
     bool pathIsSubagent_;
@@ -36,6 +38,8 @@ private:
     bool streaming_ = false;
     bool sawModernUsage_ = false;
     std::optional<Usage> previousLegacyTotals_;
+    // Facts that apply from their time on (EXECUTION-MODES, Codex); also the agent's current facts.
+    ExecutionModes context_;
 };
 
 }  // namespace agentspeed

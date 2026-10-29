@@ -13,12 +13,12 @@ void TranscriptParser::reset() {
     project_.reset();
     cwdPath_.reset();
     model_.reset();
+    modes_ = ExecutionModes();
     isSubagent_ = false;
     phase_ = Phase::Idle;
     phaseSinceMs_.reset();
     inFlightStartMs_.reset();
     lastLineMs_.reset();
-    malformedLines_ = 0;
     ++version_;
 }
 
@@ -45,6 +45,13 @@ void TranscriptParser::setProjectFromCwd(const std::optional<std::string>& cwd) 
 void TranscriptParser::setModel(const std::optional<std::string>& model) {
     if (model && model != model_) {
         model_ = model;
+        ++version_;
+    }
+}
+
+void TranscriptParser::setModes(const ExecutionModes& modes) {
+    if (!(modes == modes_)) {
+        modes_ = modes;
         ++version_;
     }
 }

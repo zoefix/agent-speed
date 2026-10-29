@@ -4,6 +4,8 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+
+#include "agentspeed/modes.hpp"
 #include <string_view>
 
 namespace agentspeed {
@@ -55,6 +57,7 @@ struct ParsedResponse {
     std::optional<std::string> provider;
     bool fast = false;
     std::int64_t requestCount = 1;
+    ExecutionModes modes;
 };
 
 class ResponseSink {

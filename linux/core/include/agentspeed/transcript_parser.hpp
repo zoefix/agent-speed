@@ -7,6 +7,7 @@
 
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/model.hpp"
+#include "agentspeed/modes.hpp"
 
 namespace agentspeed {
 
@@ -24,6 +25,7 @@ public:
     const std::optional<std::string>& project() const { return project_; }
     const std::optional<std::string>& cwdPath() const { return cwdPath_; }
     const std::optional<std::string>& model() const { return model_; }
+    const ExecutionModes& modes() const { return modes_; }
     bool isSubagent() const { return isSubagent_; }
     Phase phase() const { return phase_; }
     std::optional<std::int64_t> phaseSinceMs() const { return phaseSinceMs_; }
@@ -43,6 +45,7 @@ protected:
     void setSource(SourceKind source);
     void setPhase(Phase phase, std::int64_t timestampMs, std::optional<std::int64_t> inFlightStartMs);
     void markChanged() { ++version_; }
+    void setModes(const ExecutionModes& modes);
     bool sourceDecided() const { return sourceDecided_; }
     Deduper& deduper() { return deduper_; }
 
@@ -55,6 +58,7 @@ private:
     std::optional<std::string> project_;
     std::optional<std::string> cwdPath_;
     std::optional<std::string> model_;
+    ExecutionModes modes_;
     bool isSubagent_ = false;
     Phase phase_ = Phase::Idle;
     std::optional<std::int64_t> phaseSinceMs_;

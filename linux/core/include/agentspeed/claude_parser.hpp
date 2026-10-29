@@ -17,12 +17,19 @@ public:
 private:
     static constexpr std::size_t kMergeCacheCapacity = 64;
     void remember(const ParsedResponse& response);
+    bool ultracode() const { return ultraSession_ || ultraTurn_; }
+    void refreshModes();
 
     bool pathIsSubagent_;
     std::optional<std::int64_t> pendingStartMs_;
     bool preciseStart_ = false;
     std::unordered_map<std::string, ParsedResponse> recent_;
     std::deque<std::string> recentOrder_;
+    // Reasoning effort: the ultracode switches, the latest response's facts and the latest line effort.
+    bool ultraSession_ = false;
+    bool ultraTurn_ = false;
+    ExecutionModes latestModes_;
+    std::optional<ModeFact> lineEffort_;
 };
 
 }  // namespace agentspeed
