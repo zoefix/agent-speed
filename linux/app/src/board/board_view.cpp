@@ -109,6 +109,16 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
         }
         state.peak = std::max(state.peak, live);
         const double peak = spec.sources ? state.peak : std::max(snap.peakToday, live);
+        // newPeak_A (METRICS 6.8): 1 tok/s above the peak before this tick, at least 20, 60 s apart, never in the
+        // board's first 60 s.
+        if (state.firstMs == 0) state.firstMs = c.steadyMs;
+        bool newPeak = false;
+        if (state.peakBefore >= 0 && live >= 20 && live >= state.peakBefore + 1 && c.steadyMs - state.lastPeakMs >= 60'000 &&
+            c.steadyMs - state.firstMs >= 60'000) {
+            newPeak = true;
+            state.lastPeakMs = c.steadyMs;
+        }
+        state.peakBefore = peak;
 
         QVariantMap view;
         view.insert(QStringLiteral("live"), live);
@@ -121,6 +131,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
         view.insert(QStringLiteral("todayText"), format::tokens(today));
         view.insert(QStringLiteral("peak"), peak);
         view.insert(QStringLiteral("peakText"), format::speed(peak));
+        view.insert(QStringLiteral("newPeak"), newPeak);
         const auto todayMoney = agentspeed::money::format(agentspeed::money::amount(todayCost, rate), currency, language, Form::Amount);
         const auto liveMoney = agentspeed::money::format(agentspeed::money::ratePerSecond(liveCost, rate), currency, language, Form::Rate);
         const double knownShare = weight > 0 ? knownWeight / weight : 1;

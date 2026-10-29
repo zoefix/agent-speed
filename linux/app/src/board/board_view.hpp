@@ -46,6 +46,8 @@ private:
         std::deque<std::pair<qint64, double>> seconds;  // the last 60 one-second maxima of the board's live value
         double peak = 0;
         QString peakDay;
+        double peakBefore = -1;
+        qint64 firstMs = 0, lastPeakMs = -60'000;
         agentspeed::report::TitleTracker title;
     };
     std::map<QString, State> states_;

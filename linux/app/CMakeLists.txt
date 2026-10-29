@@ -74,6 +74,7 @@ set(agent_speed_qml
     qml/ReportProfileCard.qml
     qml/AgentRow.qml
     qml/Board.qml
+    qml/BoardEffects.qml
     qml/BoardsGroup.qml
     qml/CostPage.qml
     qml/CurrencyPicker.qml

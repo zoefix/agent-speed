@@ -121,6 +121,43 @@ Item {
             }
             Component.onCompleted: requestPaint()
         }
+        // Neon: hyperspace streaks behind the board from h = 0.2 (count 20 → 90 and speed with heat).
+        Canvas {
+            id: warp
+            visible: board.style === "neon" && board.heat >= 0.2 && board.effects !== "off" && board.effects !== "soft"
+            anchors.fill: parent
+            property real phase: 0
+            NumberAnimation on phase {
+                running: warp.visible
+                from: 0
+                to: 1000
+                duration: 1000000
+                loops: Animation.Infinite
+            }
+            onPhaseChanged: requestPaint()
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                var h = board.heat
+                var count = Math.round((20 + 70 * Math.min(1, (h - 0.2) / 0.8)) * (board.effects === "max" ? 1.5 : 1))
+                var speed = 0.15 + 0.6 * h
+                var cx = width / 2, cy = height / 2, reach = Math.sqrt(cx * cx + cy * cy)
+                var c = board.heatColor
+                for (var i = 0; i < count; ++i) {
+                    var seed = Math.sin(i * 12.9898) * 43758.5453
+                    var angle = (seed - Math.floor(seed)) * Math.PI * 2
+                    var offset = Math.cos(i * 78.233) * 0.5 + 0.5
+                    var u = ((phase * speed + offset) % 1)
+                    var r0 = reach * u * u, r1 = r0 + 6 + 30 * u * h
+                    ctx.strokeStyle = Qt.rgba(c.r, c.g, c.b, (board.dark ? 0.35 : 0.2) * u)
+                    ctx.lineWidth = 0.6 + u
+                    ctx.beginPath()
+                    ctx.moveTo(cx + Math.cos(angle) * r0, cy + Math.sin(angle) * r0)
+                    ctx.lineTo(cx + Math.cos(angle) * r1, cy + Math.sin(angle) * r1)
+                    ctx.stroke()
+                }
+            }
+        }
         Rectangle {
             visible: board.style === "neon"
             anchors.fill: parent
@@ -155,8 +192,28 @@ Item {
                 Row {
                     spacing: 6
                     Item {
+                        id: number
                         width: bigValue.implicitWidth
                         height: bigValue.implicitHeight
+                        transform: Scale {
+                            id: punchScale
+                            origin.x: number.width / 2
+                            origin.y: number.height / 2
+                        }
+                        // Neon from h = 0.85: chromatic fringes on the number.
+                        Repeater {
+                            model: board.style === "neon" && board.heat >= 0.85 && board.effects !== "off" ? [[-1.2, "#3CD2FF"], [1.2, "#FF3C8C"]] : []
+                            delegate: Text {
+                                required property var modelData
+                                x: bigValue.x + modelData[0]
+                                text: bigValue.text
+                                color: modelData[1]
+                                opacity: 0.45 * Math.min(1, (board.heat - 0.85) / 0.15 + 0.3)
+                                font: bigValue.font
+                                topPadding: bigValue.topPadding
+                                bottomPadding: bigValue.bottomPadding
+                            }
+                        }
                         // Neon: the digits glow in the heat color (a blurred copy behind them).
                         Text {
                             anchors.fill: bigValue
@@ -186,6 +243,55 @@ Item {
                             font.letterSpacing: -board.bigSize * 0.03
                             topPadding: -Math.round(board.bigSize * 0.12)
                             bottomPadding: -Math.round(board.bigSize * 0.1)
+                        }
+                        // A new peak sweeps a gold sheen across the digits.
+                        Item {
+                            id: sheen
+                            property real at: -1
+                            visible: at >= 0
+                            x: -24 + (number.width + 48) * Math.max(0, at)
+                            width: 22
+                            height: number.height
+                            clip: true
+                            Text {
+                                x: -sheen.x
+                                text: bigValue.text
+                                color: "#FACC15"
+                                font: bigValue.font
+                                topPadding: bigValue.topPadding
+                                bottomPadding: bigValue.bottomPadding
+                            }
+                            NumberAnimation on at {
+                                id: sheenAnimation
+                                running: false
+                                from: 0
+                                to: 1
+                                duration: 700
+                                onFinished: sheen.at = -1
+                            }
+                        }
+                        // … and pops boards.newPeak above them for 2.2 s.
+                        Text {
+                            id: peakPop
+                            anchors.horizontalCenter: parent.horizontalCenter
+                            anchors.bottom: parent.top
+                            text: S.tr2(S.rev, "boards.newPeak")
+                            color: board.dark ? "#FACC15" : "#B8860B"
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                            font.letterSpacing: 0.8
+                            opacity: 0
+                            SequentialAnimation {
+                                id: popAnimation
+                                NumberAnimation { target: peakPop; property: "opacity"; to: 1; duration: 200 }
+                                PauseAnimation { duration: 1700 }
+                                NumberAnimation { target: peakPop; property: "opacity"; to: 0; duration: 300 }
+                            }
+                        }
+                        SequentialAnimation {
+                            id: punchAnimation
+                            NumberAnimation { target: punchScale; properties: "xScale,yScale"; to: 1.06; duration: 120; easing.type: Easing.OutCubic }
+                            NumberAnimation { target: punchScale; properties: "xScale,yScale"; to: 1; duration: 280; easing.type: Easing.OutBack }
                         }
                     }
                     Text {
@@ -918,13 +1024,21 @@ Item {
         height: board.side
         visible: board.effects !== "off" && board.hot
         property real phase: 0
+        property real goldUntil: 0
+        property real lastSpark: 0
+        readonly property bool gold: Date.now() / 1000 < goldUntil
         readonly property int count: { var h = board.heat; var n = h < 0.25 ? 1 : h < 0.55 ? 2 : h < 0.85 ? 3 : 4; return board.effects === "soft" ? 1 : n }
         NumberAnimation on phase {
             running: comets.visible
             from: 0
             to: 1
             loops: Animation.Infinite
-            duration: Math.max(1600, 7000 - board.heat * 5400)
+            duration: Math.max(1600, 7000 - board.heat * 5400) / (comets.goldUntil > 0 ? 1.8 : 1)
+        }
+        Timer {
+            running: comets.goldUntil > 0
+            interval: Math.max(1, (comets.goldUntil - Date.now() / 1000) * 1000)
+            onTriggered: comets.goldUntil = 0
         }
         onPhaseChanged: requestPaint()
         onPaint: {
@@ -952,7 +1066,20 @@ Item {
                 var e = Math.PI + d / r
                 return [r + (r - 1) * Math.cos(e), r + (r - 1) * Math.sin(e)]
             }
-            var color = board.heatColor
+            var color = comets.goldUntil > 0 ? Qt.color("#FACC15") : board.heatColor
+            // From h = 0.55 a full ring lights around the board.
+            if (board.heat >= 0.55) {
+                ctx.strokeStyle = Qt.rgba(color.r, color.g, color.b, 0.18 + 0.4 * Math.min(1, (board.heat - 0.55) / 0.45))
+                ctx.lineWidth = 1.5
+                ctx.beginPath()
+                ctx.moveTo(r, 1); ctx.arcTo(w - 1, 1, w - 1, h - 1, r - 1); ctx.arcTo(w - 1, h - 1, 1, h - 1, r - 1)
+                ctx.arcTo(1, h - 1, 1, 1, r - 1); ctx.arcTo(1, 1, w - 1, 1, r - 1); ctx.closePath()
+                ctx.stroke()
+            }
+            // At the redline sparks fly outward from each comet head every 120 ms.
+            var nowSeconds = Date.now() / 1000
+            var sparking = board.heat >= 0.999 && nowSeconds - comets.lastSpark >= 0.12 && board.effects !== "soft"
+            if (sparking) comets.lastSpark = nowSeconds
             for (var k = 0; k < count; ++k) {
                 var head = (phase + k / count) * perimeter
                 for (var t = 0; t < 16; ++t) {
@@ -964,10 +1091,68 @@ Item {
                     ctx.fill()
                 }
                 var hp = point(head)
+                if (sparking) {
+                    var ox = hp[0] - w / 2, oy = hp[1] - h / 2, len = Math.max(1, Math.sqrt(ox * ox + oy * oy))
+                    for (var sp = 0; sp < 2; ++sp) {
+                        boardFx.spark(hp[0] + 40, hp[1] + 40, ox / len * (40 + 50 * Math.random()) + (Math.random() - 0.5) * 30,
+                                      oy / len * (40 + 50 * Math.random()) + (Math.random() - 0.5) * 30, 0.35, color, 1, 0, true)
+                    }
+                    boardFx.start()
+                }
                 ctx.fillStyle = board.heat > 0.85 ? "white" : Qt.lighter(color, 1.4)
                 ctx.beginPath()
                 ctx.arc(hp[0], hp[1], 1.8, 0, Math.PI * 2)
                 ctx.fill()
+            }
+        }
+    }
+
+    BoardEffects {
+        id: boardFx
+        x: 0
+        y: 0
+        width: board.side + 80
+        height: board.side + 80
+        style: board.style
+        level: board.effects
+        dark: board.dark
+    }
+
+    // Events of each engine tick: a punch on a sharp rise, the new-peak celebration, overtakes and a new leader.
+    property real lastLive: -1
+    onViewChanged: {
+        const live = view.live || 0
+        if (lastLive >= 0 && live > lastLive * 1.08 + 20 && board.effects !== "off") {
+            punchAnimation.restart()
+            const p = number.mapToItem(board, number.width / 2, number.height / 2)
+            boardFx.punch(p.x, p.y, board.heatColor)
+        }
+        lastLive = live
+        if (view.newPeak && prefs.celebratePeaks && board.effects !== "off") {
+            sheenAnimation.restart()
+            popAnimation.restart()
+            const c = number.mapToItem(board, number.width / 2, number.height / 2)
+            boardFx.goldRing(c.x, c.y)
+        }
+        const events = view.events || []
+        for (let i = 0; i < events.length; ++i) {
+            const e = events[i]
+            let rowY = -1, rowH = 0, passedY = undefined
+            for (let k = 0; k < rowModel.count; ++k) {
+                const item = rowModel.get(k)
+                if (item.key === e.id) { rowY = item.rowY; rowH = item.rowH }
+            }
+            if (rowY < 0) continue
+            const top = ranking.mapToItem(board, 0, rowY)
+            if (e.type === "newLeader" && prefs.celebratePeaks) {
+                boardFx.newLeader(top.x + 18, top.y + rowH / 2, board.side * 0.95)
+                comets.goldUntil = Date.now() / 1000 + 2.2
+            } else if (e.type === "overtake") {
+                const groups = view.groups || []
+                let color = board.heatColor
+                for (let g = 0; g < groups.length; ++g) if (groups[g].id === e.id) color = Theme.sourceColor(groups[g].source)
+                passedY = top.y + rowH * 1.5
+                boardFx.overtake(top.x, top.y, ranking.width, rowH, color, passedY)
             }
         }
     }
