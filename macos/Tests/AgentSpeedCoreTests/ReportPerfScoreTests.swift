@@ -110,8 +110,8 @@ import Testing
         for agent in try #require(input["agents"] as? [[String: Any]]) {
             let id = try #require(agent.string("model"))
             let form = try #require(PerfValueForm(rawValue: agent.string("form") ?? ""))
-            let value = PerfSetValue(form: form, score: agent.double("score"), agentId: try #require(agent.string("id")),
-                                     lastLineMs: nil)
+            let agentId: String = try #require(agent.string("id"))
+            let value = PerfSetValue(form: form, score: agent.double("score"), agentId: agentId, lastLineMs: nil)
             perf.value.merge(value)
             perf.models[id, default: ReportPerfModel()].value.merge(value)
             if form == .live { perf.models[id]?.liveSources.insert(try Self.source(agent)) }
