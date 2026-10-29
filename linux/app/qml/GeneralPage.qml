@@ -95,7 +95,41 @@ SettingsPage {
                     lineHeight: 1.2
                     wrapMode: Text.Wrap
                 }
+                // `title.ladder`: every title of the selected theme with its threshold at the current redline.
+                Text {
+                    Layout.fillWidth: true
+                    text: S.tr2(S.rev, "title.ladder")
+                    color: Theme.ink2
+                    font.pixelSize: 11
+                    font.weight: Font.DemiBold
+                }
+                Flow {
+                    Layout.fillWidth: true
+                    spacing: 10
+                    Repeater {
+                        model: 13
+                        Row {
+                            required property int index
+                            readonly property int level: index + 1
+                            spacing: 4
+                            Text {
+                                text: { themes.rev; return themes.title(parent.level) }
+                                color: Theme.ink3
+                                font.pixelSize: 11
+                            }
+                            Text {
+                                text: Format.speed(themes.threshold(parent.level, prefs.redline))
+                                color: Theme.heatText(Heat.color(Heat.heatOf(themes.threshold(parent.level, prefs.redline), prefs.redline)))
+                                font.pixelSize: 11
+                                font.weight: Font.DemiBold
+                                font.features: Theme.tabular
+                            }
+                        }
+                    }
+                }
             }
         }
     }
+
+    TitleThemesGroup {}
 }

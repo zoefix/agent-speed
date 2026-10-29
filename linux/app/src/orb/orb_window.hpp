@@ -15,6 +15,8 @@
 class QVariantAnimation;
 class Strings;
 
+class TitleThemes;
+
 namespace orb {
 
 // The floating orb (DESIGN 2): a frameless, transparent, always-on-top window 1.5 S square with the `led` instrument,
@@ -30,6 +32,8 @@ class OrbWindow : public QOpenGLWindow {
     Q_PROPERTY(QString traffic READ traffic WRITE setTraffic NOTIFY trafficChanged)
 public:
     explicit OrbWindow(const Strings& strings);
+    // DESIGN 1 Title themes: the orb names its levels with the selected theme.
+    void setTitles(const ::TitleThemes* titles);
     ~OrbWindow() override;
 
     bool clickThrough() const { return clickThrough_; }
@@ -101,6 +105,7 @@ private:
     void savePosition();
     void showMenu(QPoint global);
     QString titleText(int index) const;
+    const ::TitleThemes* titles_ = nullptr;
     void stepIntel(double time, double dt);
     IntelReadout intelContent(double time) const;
     bool intelBusy(double time) const;

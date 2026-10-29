@@ -1,5 +1,7 @@
 #include "orb/orb_window.hpp"
 
+#include "title_themes.hpp"
+
 #include <QOpenGLContext>
 
 #include <QActionGroup>
@@ -233,8 +235,18 @@ void OrbWindow::setAlwaysOnTop(bool on) {
 }
 
 QString OrbWindow::titleText(int index) const {
+    if (titles_) {
+        const auto text = titles_->title(index < 0 || index >= Gauge::kTitles ? 0 : index + 1);
+        // Latin is upper-case on the orb when the app speaks English (custom text as typed otherwise).
+        return strings_.language() == QLatin1String("en") ? text.toUpper() : text;
+    }
     if (index < 0 || index >= Gauge::kTitles) return strings_.t(QStringLiteral("tier.idle"));
     return strings_.t(QString::fromLatin1(kTitleKeys[index]));
+}
+
+void OrbWindow::setTitles(const TitleThemes* titles) {
+    titles_ = titles;
+    if (titles_) connect(titles_, &TitleThemes::changed, this, [this] { requestFrame(); });
 }
 
 void OrbWindow::setTraffic(const QString& traffic) {

@@ -281,7 +281,9 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         if (row.phase == Phase::Generating && info.lastLineMs && nowMs - *info.lastLineMs > kStaleGeneratingMs) row.phase = Phase::Idle;
         engine::Agent self = *engineAgents.at(id);
         if (row.phase == Phase::Idle) self.phase = Phase::Idle;
-        row.liveOutput = engine::liveRate(byAgent[id], {self}, nowMs).output;
+        const auto rate = engine::liveRate(byAgent[id], {self}, nowMs);
+        row.liveOutput = rate.output;
+        row.liveTotal = rate.total;
         row.depth = depth[id];
         row.subagent = info.isSubagent;
         row.parentId = self.parentId;

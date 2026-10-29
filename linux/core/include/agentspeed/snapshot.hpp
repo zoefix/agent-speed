@@ -30,6 +30,7 @@ struct AgentRow {
     std::optional<std::string> model;
     Phase phase = Phase::Idle;
     double liveOutput = 0;
+    double liveTotal = 0;
     int depth = 0;
     bool subagent = false;
     std::optional<std::string> parentId;

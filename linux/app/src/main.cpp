@@ -23,6 +23,7 @@
 #include "report/report_controller.hpp"
 #include "strings.hpp"
 #include "task_card.hpp"
+#include "title_themes.hpp"
 #include "tray_icon.hpp"
 
 namespace {
@@ -79,6 +80,8 @@ WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, cons
     options.trafficEnabled = prefs.trafficEnabled();
     options.trafficIncludeTools = prefs.trafficIncludeTools();
     options.trafficBits = prefs.trafficUnit() == QLatin1String("bits");
+    options.redline = prefs.redline();
+    options.totalMetric = prefs.metric() == QLatin1String("total");
     return options;
 }
 
@@ -129,7 +132,7 @@ int main(int argc, char* argv[]) {
     const auto pushOptions = [&](bool reconfigure) { worker->setOptions(optionsFrom(prefs, catalog, strings, prices), reconfigure); };
     QObject::connect(&prefs, &Preferences::sourcesChanged, &app, [=] { pushOptions(true); });
     for (auto signal : {&Preferences::currencyChanged, &Preferences::subscriptionsChanged, &Preferences::includeSubscriptionsChanged,
-                        &Preferences::trafficChanged}) {
+                        &Preferences::trafficChanged, &Preferences::redlineChanged, &Preferences::metricChanged}) {
         QObject::connect(&prefs, signal, &app, [=] { pushOptions(false); });
     }
     QObject::connect(&strings, &Strings::changed, &app, [=] { pushOptions(false); });
@@ -190,6 +193,7 @@ int main(int argc, char* argv[]) {
         }
     });
 
+    TitleThemes themes(strings, prefs);
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
     orb::OrbWindow orbWindow(strings);
@@ -203,6 +207,8 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
+    engine.rootContext()->setContextProperty(QStringLiteral("themes"), &themes);
+    orbWindow.setTitles(&themes);
     engine.rootContext()->setContextProperty(QStringLiteral("history"), &historyModel);
     // NETWORK 1–4 and UPDATES: price sync, exchange rates and the update check, under the master switch.
     NetworkService network(prefs, strings, catalog, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
@@ -413,6 +419,9 @@ int main(int argc, char* argv[]) {
     }
     if (!settingsShot.isEmpty()) {
         if (!settingsWindow) openSettings(0);
+        if (const int tall = qEnvironmentVariableIntValue("AGENT_SPEED_SHOT_HEIGHT"); tall > 0) {
+            if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) quick->resize(quick->width(), tall);
+        }
         QTimer::singleShot(3500, &app, [&] {
             if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) quick->grabWindow().save(settingsShot);
             QApplication::quit();

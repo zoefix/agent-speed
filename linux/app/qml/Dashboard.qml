@@ -302,6 +302,19 @@ Window {
                                 font.weight: Font.Medium
                             }
                         }
+                        // The speed title of the General title theme, in the heat color (idle in the secondary color).
+                        Text {
+                            id: heroTitle
+                            Layout.fillWidth: true
+                            readonly property int level: root.snap.titleLevel || 0
+                            text: { themes.rev; var t = themes.title(level); return S.language === "en" ? t.toUpperCase() : t }
+                            color: level > 0 ? Theme.heatText(Heat.color(root.snap.heat || 0)) : Theme.ink3
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            font.letterSpacing: S.language === "en" ? 0.6 : 0.4
+                            elide: Text.ElideRight
+                            Behavior on color { ColorAnimation { duration: 250 } }
+                        }
                         Text {
                             visible: root.bothUnits
                             Layout.fillWidth: true

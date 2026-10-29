@@ -38,6 +38,7 @@ qt_add_executable(agent-speed
     src/orb/x11.cpp
     src/strings.cpp
     src/task_card.cpp
+    src/title_themes.cpp
     src/tray_icon.cpp
 )
 
@@ -71,6 +72,7 @@ set(agent_speed_qml
     qml/SourcesPage.qml
     qml/SummaryCard.qml
     qml/TaskBar.qml
+    qml/TitleThemesGroup.qml
     qml/TaskModelTable.qml
     qml/TaskSide.qml
     qml/TasksSection.qml

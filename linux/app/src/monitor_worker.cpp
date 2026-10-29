@@ -311,6 +311,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
 void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
                             qint64 todayStart) {
     QVariantMap map = toVariant(snap);
+    title_.update(options_.totalMetric ? snap.liveTotal : snap.liveOutput, options_.redline, static_cast<double>(steadyMs()) / 1000.0);
+    map.insert(QStringLiteral("titleLevel"), title_.level());
     // Development aid: AGENT_SPEED_TRAFFIC_DEBUG=1 prints the traffic view (byte counts only) once a second.
     static const bool trafficDebug = qEnvironmentVariableIsSet("AGENT_SPEED_TRAFFIC_DEBUG");
     static qint64 lastDebugSecond = 0;

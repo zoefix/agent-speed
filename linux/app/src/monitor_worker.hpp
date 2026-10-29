@@ -26,6 +26,8 @@ struct WorkerOptions {
     bool trafficEnabled = true;
     bool trafficIncludeTools = true;
     bool trafficBits = false;
+    int redline = 2000;
+    bool totalMetric = false;
 };
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
@@ -109,4 +111,6 @@ private:
     double peakBefore_ = -1;
     qint64 lastPeakEventMs_ = 0;
     qint64 peakDay_ = 0;
+    // DESIGN 1: the dashboard's speed title level (the orb keeps its own tracker).
+    agentspeed::report::TitleTracker title_;
 };
