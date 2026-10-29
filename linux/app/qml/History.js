@@ -29,9 +29,18 @@ function emptyDay(date) {
              measuredMs: 0, unfinalized: 0, agents: 0, cost: null, unpriced: 0, hasCost: false, peak: null, models: {}, bySource: {} }
 }
 
-// Per-day totals between `from` and `to` (inclusive), for one source or all.
-function days(rows, source, from, to) {
+// Per-day totals between `from` and `to` (inclusive), for one source or all. A day with agent traffic of the selection
+// is a day with data even without token usage (DESIGN 10).
+function days(rows, source, from, to, traffic, disabled, includeTools) {
     var byDate = {}
+    var off = {}
+    for (var o = 0; o < (disabled || []).length; ++o) off[disabled[o]] = true
+    for (var k = 0; k < (traffic || []).length; ++k) {
+        var t = traffic[k]
+        if (t.date < from || t.date > to || t.key === "machine" || off[t.key]) continue
+        if (source !== "all" && t.key !== source) continue
+        if (t.rx + t.tx + (includeTools ? t.rxTools + t.txTools : 0) > 0 && !byDate[t.date]) byDate[t.date] = emptyDay(t.date)
+    }
     for (var i = 0; i < rows.length; ++i) {
         var r = rows[i]
         if (r.date < from || r.date > to) continue
@@ -73,7 +82,8 @@ function totals(list) {
         }
         if (!best || d.output > best.output) best = d
     }
-    t.activeDays = list.length
+    // 活躍 N 天 counts days with token usage only; a day with traffic alone is listed but not active (DESIGN 10).
+    t.activeDays = list.filter(function(d) { return d.requests > 0 || d.output > 0 }).length
     t.best = best
     return t
 }

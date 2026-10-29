@@ -137,6 +137,8 @@ int main(int argc, char* argv[]) {
     qRegisterMetaType<TaskRecords>();
     qRegisterMetaType<TaskModels>();
     HistoryModel historyModel(&strings);
+    historyModel.setDisabledSources(prefs.disabledSources());
+    QObject::connect(&prefs, &Preferences::sourcesChanged, &historyModel, [&] { historyModel.setDisabledSources(prefs.disabledSources()); });
     QThread historyThread;
     historyThread.setObjectName(QStringLiteral("history"));
     auto* historyWorker = new HistoryWorker(

@@ -31,7 +31,7 @@ Window {
 
     readonly property string firstDate: rows.length > 0 ? rows[0].date : today
     readonly property var span: H.bounds(range, firstDate)
-    readonly property var dayList: H.days(rows, source, span[0], span[1])
+    readonly property var dayList: H.days(rows, source, span[0], span[1], history.trafficRows, prefs.disabledSources, prefs.trafficIncludeTools)
     readonly property var total: H.totals(dayList)
     readonly property var previousSpan: {
         var n = H.dayCount(span[0], span[1])
@@ -331,11 +331,12 @@ Window {
                     { key: "output", title: S.tr2(S.rev, "history.table.output"), width: 0.9 },
                     { key: "input", title: S.tr2(S.rev, "history.table.input"), width: 1.1 },
                     { key: "cost", title: S.tr2(S.rev, "history.table.cost"), width: 0.9 },
+                    { key: "traffic", title: S.tr2(S.rev, "history.table.traffic"), width: 2.0 },
                     { key: "cacheHit", title: S.tr2(S.rev, "history.table.cacheHit"), width: 0.8 },
                     { key: "speed", title: S.tr2(S.rev, "history.table.speed"), width: 0.9 },
                     { key: "peak", title: S.tr2(S.rev, "history.table.peak"), width: 0.8 },
                     { key: "agents", title: S.tr2(S.rev, "history.table.agents"), width: 0.6 },
-                    { key: "models", title: S.tr2(S.rev, "history.table.models"), width: 1.8, align: Text.AlignLeft }
+                    { key: "models", title: S.tr2(S.rev, "history.table.models"), width: 1.5, align: Text.AlignLeft }
                 ]
                 readonly property real unit: (width - 32) / columns.reduce(function(a, c) { return a + c.width }, 0)
 
@@ -349,6 +350,9 @@ Window {
                     case "output": return H.compact(day.output)
                     case "input": return H.compact(day.input)
                     case "cost": return day.hasCost ? (day.unpriced > 0 ? "≥" : "") + win.money(day.cost) : "–"
+                    case "traffic":
+                        var t = history.trafficRows.length >= 0 ? history.trafficOf(day.date, win.source, prefs.trafficIncludeTools) : ({})
+                        return t.recorded ? Format.fill(S.tr2(S.rev, "traffic.pair"), [t.rxText, t.txText]) : "–"
                     case "cacheHit": return day.input > 0 ? Math.round(day.cachedInput / day.input * 100) + "%" : "–"
                     case "speed": var sp = H.speed(day.measuredOutput, day.measuredMs); return sp >= 0 ? Format.speed(sp) : S.tr2(S.rev, "history.noSpeed")
                     case "peak": return day.peak ? Format.speed(day.peak) : "–"

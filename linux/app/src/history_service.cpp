@@ -222,7 +222,9 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
                        QStringLiteral("reasoning_tokens"), QStringLiteral("cache_hit_percent"), QStringLiteral("measured_output_tokens"),
                        QStringLiteral("measured_ms"), QStringLiteral("avg_speed_tok_s"), QStringLiteral("peak_tok_s"), QStringLiteral("agents"),
                        QStringLiteral("unfinalized"), QStringLiteral("models"), QStringLiteral("cost_usd"),
-                       QStringLiteral("cost_") + currency.toLower(), QStringLiteral("unpriced_requests")};
+                       QStringLiteral("cost_") + currency.toLower(), QStringLiteral("unpriced_requests"),
+                       QStringLiteral("traffic_rx_bytes"), QStringLiteral("traffic_tx_bytes"), QStringLiteral("traffic_rx_tools_bytes"),
+                       QStringLiteral("traffic_tx_tools_bytes")};
     QByteArray out("\xEF\xBB\xBF");
     out += header.join(QLatin1Char(',')).toUtf8() + "\r\n";
     for (const auto& value : rows) {
@@ -258,10 +260,54 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
             cost.isValid() ? QString::fromStdString(agentspeed::money::csv(cost.toLongLong(), r, c.digits)) : QString(),
             row.value(QStringLiteral("unpriced")).isValid() ? QString::number(row.value(QStringLiteral("unpriced")).toLongLong()) : QString(),
         };
+        // DESIGN 10 CSV: the day's traffic of the row's source(s), empty before measuring began; then this computer's row.
+        const auto date = row.value(QStringLiteral("date")).toString();
+        const auto t = trafficSums(date, sourceCode == QLatin1String("all") ? QString() : row.value(QStringLiteral("source")).toString());
+        const bool recorded = !trafficSince_.isEmpty() && date >= trafficSince_;
+        for (const auto v : {t.rx, t.tx, t.rxTools, t.txTools}) fields << (recorded ? QString::number(v) : QString());
         for (auto& field : fields) field = csvField(field);
         out += fields.join(QLatin1Char(',')).toUtf8() + "\r\n";
+        if (recorded) {
+            const auto m = trafficSums(date, QStringLiteral("machine"));
+            QStringList machine(header.size());
+            machine[0] = date;
+            machine[1] = QStringLiteral("machine");
+            machine[header.size() - 4] = QString::number(m.rx);
+            machine[header.size() - 3] = QString::number(m.tx);
+            out += machine.join(QLatin1Char(',')).toUtf8() + "\r\n";
+        }
     }
     return file.write(out) == out.size();
+}
+
+HistoryModel::TrafficSums HistoryModel::trafficSums(const QString& date, const QString& source) const {
+    TrafficSums sums;
+    for (const auto& value : trafficRows_) {
+        const auto row = value.toMap();
+        if (row.value(QStringLiteral("date")).toString() != date) continue;
+        const auto key = row.value(QStringLiteral("key")).toString();
+        const bool wanted = source.isEmpty() ? key != QLatin1String("machine") && !disabled_.contains(key) : key == source;
+        if (!wanted) continue;
+        sums.rx += row.value(QStringLiteral("rx")).toLongLong();
+        sums.tx += row.value(QStringLiteral("tx")).toLongLong();
+        sums.rxTools += row.value(QStringLiteral("rxTools")).toLongLong();
+        sums.txTools += row.value(QStringLiteral("txTools")).toLongLong();
+    }
+    return sums;
+}
+
+QVariantMap HistoryModel::trafficOf(const QString& date, const QString& source, bool includeTools) const {
+    QVariantMap out;
+    const bool recorded = !trafficSince_.isEmpty() && date >= trafficSince_;
+    out.insert(QStringLiteral("recorded"), recorded);
+    if (!recorded) return out;
+    const auto s = trafficSums(date, source == QLatin1String("all") ? QString() : source);
+    const auto rx = s.rx + (includeTools ? s.rxTools : 0), tx = s.tx + (includeTools ? s.txTools : 0);
+    out.insert(QStringLiteral("rx"), rx);
+    out.insert(QStringLiteral("tx"), tx);
+    out.insert(QStringLiteral("rxText"), QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(rx))));
+    out.insert(QStringLiteral("txText"), QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(tx))));
+    return out;
 }
 
 void HistoryModel::applyTraffic(const QVariantList& rows, const QString& since) {

@@ -88,6 +88,9 @@ public:
     QString trafficSince() const { return trafficSince_; }
     // DESIGN 3c task performance over [first, last] (days `YYYY-MM-DD`), every source or `source` alone.
     Q_INVOKABLE QVariantMap taskComparison(const QString& first, const QString& last, const QString& source) const;
+    // DESIGN 10: a day's traffic of a source ("all": the enabled sources), tools per the setting.
+    Q_INVOKABLE QVariantMap trafficOf(const QString& date, const QString& source, bool includeTools) const;
+    void setDisabledSources(const QStringList& sources) { disabled_ = sources; }
     QVariantList rows() const { return rows_; }
     bool analyzing() const { return analyzing_; }
     qint64 updatedMs() const { return updatedMs_; }
@@ -120,5 +123,10 @@ private:
     TaskRecords tasks_;
     QVariantList trafficRows_;
     QString trafficSince_;
+    QStringList disabled_;
+    struct TrafficSums {
+        qint64 rx = 0, tx = 0, rxTools = 0, txTools = 0;
+    };
+    TrafficSums trafficSums(const QString& date, const QString& source) const;
     int tasksRevision_ = 0;
 };
