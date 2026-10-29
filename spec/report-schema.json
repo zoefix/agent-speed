@@ -94,12 +94,14 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         },
         "osMajor": {
+          "description": "macOS: the major version (e.g. 27); Windows: 10 or 11; Linux: the kernel's major version (e.g. 6).",
           "type": "integer",
-          "minimum": 10,
+          "minimum": 1,
           "maximum": 99
         }
       }
@@ -1129,7 +1131,8 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         },
         "isCurrent": {
@@ -1205,7 +1208,8 @@
         "platform": {
           "enum": [
             "macOS",
-            "Windows"
+            "Windows",
+            "Linux"
           ]
         }
       }

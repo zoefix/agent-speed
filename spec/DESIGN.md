@@ -3554,6 +3554,10 @@ find the setting.
     current user, the device id's 16 bytes as additional entropy, flags `CRYPTPROTECT_UI_FORBIDDEN` only and no
     prompt structure: readable whenever the user is signed in, the locked screen included, never prompting), written
     to a temporary file and renamed.
+  - Linux: `$XDG_DATA_HOME/AgentSpeed/report/<deviceId>.key` (the 32-byte private scalar as 64 hex digits) and
+    `<deviceId>.apikey` (UTF-8), each mode 0600 in a 0700 folder, written to a temporary file and renamed. No Secret
+    Service or KWallet item is used: a locked or missing wallet would prompt or fail, against the availability rule
+    above; the files are protected by the user's file permissions only, like SSH keys.
   - Both are deleted by *Forget*, *Reset* and when a service identity is forgotten locally.
 
 ### README and About wording (prepared; applied when the feature ships)
