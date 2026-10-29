@@ -38,6 +38,9 @@ add_library(agentspeed_core STATIC
     src/grok_parser.cpp
     src/harness.cpp
     src/hermes.cpp
+    src/history.cpp
+    src/history_analyzer.cpp
+    src/history_store.cpp
     src/json.cpp
     src/kimi_parser.cpp
     src/line_splitter.cpp

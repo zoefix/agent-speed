@@ -55,6 +55,11 @@ std::string sidecarOf(const std::string& transcript);
 std::string siblingTranscript(const std::string& transcript, const std::string& sessionId);
 std::string siblingSidecar(const std::string& transcript, const std::string& sessionId);
 
+// The `parent` of a transcript's session_start, read from its first 64 KiB (the history identity, METRICS 8).
+std::optional<std::string> parentOfTranscript(const std::string& transcript);
+// A file's size and modification time as "size:ns", "-" when it is missing or not a regular file.
+std::string stampText(const std::string& path);
+
 struct Line;
 
 class Parser : public TranscriptParser {

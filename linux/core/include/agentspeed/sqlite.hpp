@@ -19,6 +19,8 @@ enum class OpenMode {
     ReadOnly,
     // `immutable=1`: reads the database file alone (no WAL, no locks) and creates nothing.
     Immutable,
+    // The app's own stores: read and write, created when missing.
+    ReadWrite,
 };
 
 class Error : public std::runtime_error {
@@ -41,6 +43,9 @@ public:
 
     Statement& bind(int index, std::int64_t value);
     Statement& bind(int index, std::string_view value);
+    Statement& bindBlob(int index, std::string_view value);
+    Statement& bindNull(int index);
+    Statement& bind(int index, double value);
     bool step();
     void reset();
     std::optional<std::string> getString(int column) const;

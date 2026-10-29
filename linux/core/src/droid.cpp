@@ -5,6 +5,7 @@
 #include <unistd.h>
 
 #include <algorithm>
+#include <fstream>
 #include <numeric>
 
 #include "agentspeed/json.hpp"
@@ -247,6 +248,31 @@ SidecarRead readSidecar(const std::string& path, const std::optional<SidecarSign
     data.resize(total);
     if (total > kMaxSidecarBytes) return {SidecarStatus::Unreadable, signature, std::nullopt, std::nullopt};
     return parseSidecar(data, signature);
+}
+
+std::optional<std::string> parentOfTranscript(const std::string& transcript) {
+    std::ifstream in(transcript, std::ios::binary);
+    if (!in) return std::nullopt;
+    std::string data(64 * 1024, '\0');
+    in.read(data.data(), static_cast<std::streamsize>(data.size()));
+    data.resize(static_cast<std::size_t>(in.gcount()));
+    std::size_t start = 0;
+    while (start < data.size()) {
+        const auto newline = data.find('\n', start);
+        if (newline == std::string::npos) return std::nullopt;
+        const auto line = readLine(std::string_view(data).substr(start, newline - start), static_cast<std::int64_t>(start),
+                                   static_cast<std::int64_t>(newline - start + 1));
+        if (line.status == Line::Status::Valid && line.kind == LineKind::SessionStart) return line.parent;
+        start = newline + 1;
+    }
+    return std::nullopt;
+}
+
+std::string stampText(const std::string& path) {
+    struct stat st {};
+    if (::lstat(path.c_str(), &st) != 0 || !S_ISREG(st.st_mode)) return "-";
+    const auto ns = static_cast<std::int64_t>(st.st_mtim.tv_sec) * 1'000'000'000 + st.st_mtim.tv_nsec;
+    return std::to_string(st.st_size) + ":" + std::to_string(ns);
 }
 
 std::string defaultRoot(const std::string& home) { return home + "/.factory/sessions"; }

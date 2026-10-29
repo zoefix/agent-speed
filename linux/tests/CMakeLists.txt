@@ -10,6 +10,7 @@ add_executable(agentspeed_tests
     engine_fixture_test.cpp
     harness_fixture_test.cpp
     hermes_test.cpp
+    history_test.cpp
     json_test.cpp
     money_test.cpp
     monitor_test.cpp

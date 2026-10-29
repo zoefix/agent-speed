@@ -40,6 +40,21 @@ Statement& Statement::bind(int index, std::string_view value) {
     return *this;
 }
 
+Statement& Statement::bindBlob(int index, std::string_view value) {
+    sqlite3_bind_blob(stmt_, index, value.data(), static_cast<int>(value.size()), SQLITE_TRANSIENT);
+    return *this;
+}
+
+Statement& Statement::bindNull(int index) {
+    sqlite3_bind_null(stmt_, index);
+    return *this;
+}
+
+Statement& Statement::bind(int index, double value) {
+    sqlite3_bind_double(stmt_, index, value);
+    return *this;
+}
+
 bool Statement::step() {
     const int code = sqlite3_step(stmt_);
     if (code == SQLITE_ROW) return true;
@@ -89,7 +104,7 @@ std::optional<std::int64_t> Statement::getNullableInt64(int column) const {
 }
 
 Connection Connection::open(const std::string& path, OpenMode mode, int busyTimeoutMs) {
-    int flags = SQLITE_OPEN_NOMUTEX | SQLITE_OPEN_READONLY;
+    int flags = SQLITE_OPEN_NOMUTEX | (mode == OpenMode::ReadWrite ? SQLITE_OPEN_READWRITE | SQLITE_OPEN_CREATE : SQLITE_OPEN_READONLY);
     if (mode == OpenMode::Immutable) flags |= SQLITE_OPEN_URI;
     const std::string name = mode == OpenMode::Immutable ? immutableUri(path) : path;
     sqlite3* db = nullptr;
