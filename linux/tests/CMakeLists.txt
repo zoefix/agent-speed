@@ -20,6 +20,7 @@ add_executable(agentspeed_tests
     task_e2e_test.cpp
     task_parser_test.cpp
     task_score_test.cpp
+    traffic_test.cpp
     work_signals_test.cpp
 )
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)
