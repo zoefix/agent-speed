@@ -63,6 +63,77 @@ Canvas {
             ctx.lineWidth = 1.5
             ctx.beginPath(); ctx.moveTo(4.5, 6.2); ctx.lineTo(8, 9.8); ctx.lineTo(11.5, 6.2); ctx.stroke()
             break
+        case "gear":
+            ctx.lineWidth = 1.3
+            ctx.beginPath()
+            for (var t = 0; t < 8; ++t) {
+                var a0 = t * Math.PI / 4 - 0.2, a1 = t * Math.PI / 4 + 0.2
+                ctx.moveTo(8 + Math.cos(a0) * 5.2, 8 + Math.sin(a0) * 5.2)
+                ctx.lineTo(8 + Math.cos(a0) * 6.6, 8 + Math.sin(a0) * 6.6)
+                ctx.lineTo(8 + Math.cos(a1) * 6.6, 8 + Math.sin(a1) * 6.6)
+                ctx.lineTo(8 + Math.cos(a1) * 5.2, 8 + Math.sin(a1) * 5.2)
+            }
+            ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 4.6, 0, Math.PI * 2); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 1.9, 0, Math.PI * 2); ctx.stroke()
+            break
+        case "sliders":
+            ctx.lineWidth = 1.4
+            ctx.beginPath()
+            ctx.moveTo(2.5, 4.5); ctx.lineTo(13.5, 4.5)
+            ctx.moveTo(2.5, 11.5); ctx.lineTo(13.5, 11.5)
+            ctx.stroke()
+            ctx.beginPath(); ctx.arc(10.5, 4.5, 1.9, 0, Math.PI * 2); ctx.fill()
+            ctx.beginPath(); ctx.arc(5.5, 11.5, 1.9, 0, Math.PI * 2); ctx.fill()
+            break
+        case "orb":
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.arc(8, 8, 6, 0, Math.PI * 2); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 3.4, Math.PI * 0.75, Math.PI * 2.25, false); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 1.1, 0, Math.PI * 2); ctx.fill()
+            break
+        case "sparkle":
+            ctx.beginPath()
+            ctx.moveTo(7, 1.8); ctx.quadraticCurveTo(7.6, 6.4, 12.2, 7); ctx.quadraticCurveTo(7.6, 7.6, 7, 12.2)
+            ctx.quadraticCurveTo(6.4, 7.6, 1.8, 7); ctx.quadraticCurveTo(6.4, 6.4, 7, 1.8)
+            ctx.fill()
+            ctx.beginPath()
+            ctx.moveTo(12.4, 10); ctx.quadraticCurveTo(12.7, 12, 14.6, 12.3); ctx.quadraticCurveTo(12.7, 12.6, 12.4, 14.6)
+            ctx.quadraticCurveTo(12.1, 12.6, 10.2, 12.3); ctx.quadraticCurveTo(12.1, 12, 12.4, 10)
+            ctx.fill()
+            break
+        case "coin":
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.arc(8, 8, 6, 0, Math.PI * 2); ctx.stroke()
+            ctx.lineWidth = 1.3
+            ctx.beginPath()
+            ctx.moveTo(10.1, 5.8); ctx.bezierCurveTo(9.3, 4.9, 6, 4.8, 6, 6.6); ctx.bezierCurveTo(6, 8.2, 10.2, 7.6, 10.2, 9.5)
+            ctx.bezierCurveTo(10.2, 11.2, 6.9, 11.2, 5.8, 10.2)
+            ctx.moveTo(8, 3.6); ctx.lineTo(8, 4.7); ctx.moveTo(8, 11.3); ctx.lineTo(8, 12.4)
+            ctx.stroke()
+            break
+        case "folder":
+            ctx.lineWidth = 1.4
+            ctx.beginPath()
+            ctx.moveTo(2, 4.6); ctx.quadraticCurveTo(2, 3.4, 3.2, 3.4); ctx.lineTo(6, 3.4); ctx.lineTo(7.4, 4.9)
+            ctx.lineTo(12.8, 4.9); ctx.quadraticCurveTo(14, 4.9, 14, 6.1); ctx.lineTo(14, 11.6); ctx.quadraticCurveTo(14, 12.8, 12.8, 12.8)
+            ctx.lineTo(3.2, 12.8); ctx.quadraticCurveTo(2, 12.8, 2, 11.6); ctx.closePath()
+            ctx.stroke()
+            break
+        case "check":
+            ctx.lineWidth = 1.7
+            ctx.beginPath(); ctx.moveTo(3.4, 8.4); ctx.lineTo(6.6, 11.4); ctx.lineTo(12.6, 4.8); ctx.stroke()
+            break
+        case "search":
+            ctx.lineWidth = 1.5
+            ctx.beginPath(); ctx.arc(7, 7, 4.3, 0, Math.PI * 2); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(10.2, 10.2); ctx.lineTo(13.6, 13.6); ctx.stroke()
+            break
+        case "reset":
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.arc(8, 8.4, 5, -Math.PI * 0.9, Math.PI * 0.75, false); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(2.4, 2.8); ctx.lineTo(3.2, 6.2); ctx.lineTo(6.5, 5.2); ctx.stroke()
+            break
         case "gauge":
             ctx.lineWidth = 1.4
             ctx.beginPath(); ctx.arc(8, 9, 6, Math.PI * 0.8, Math.PI * 2.2, false); ctx.stroke()

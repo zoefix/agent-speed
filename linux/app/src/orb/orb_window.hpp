@@ -21,11 +21,19 @@ namespace orb {
 // drawn with OpenGL only while something moves (DESIGN 2a, Frame policy).
 class OrbWindow : public QOpenGLWindow {
     Q_OBJECT
+    Q_PROPERTY(bool orbVisible READ isVisible WRITE setOrbVisible NOTIFY orbVisibilityChanged)
+    Q_PROPERTY(bool clickThrough READ clickThrough WRITE setClickThrough NOTIFY clickThroughChanged)
+    Q_PROPERTY(double diameter READ diameter WRITE setDiameter NOTIFY diameterChanged)
+    Q_PROPERTY(int effectsLevel READ effectsLevel WRITE setEffectsLevel NOTIFY effectsLevelChanged)
+    Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
 public:
     explicit OrbWindow(const Strings& strings);
     ~OrbWindow() override;
 
     bool clickThrough() const { return clickThrough_; }
+    double diameter() const { return diameter_; }
+    int effectsLevel() const { return effectsLevel_; }
+    bool alwaysOnTop() const { return alwaysOnTop_; }
     // Development aid: draw the dark (smoked glass) look whatever the system appearance.
     void forceDark(bool on) { forcedDark_ = on; }
     void restore();
@@ -36,12 +44,19 @@ public slots:
     void applySnapshot(const QVariantMap& snapshot);
     void setOrbVisible(bool visible);
     void setClickThrough(bool on);
+    void setDiameter(double diameter);
+    void setEffectsLevel(int level);
+    void setAlwaysOnTop(bool on);
 
 signals:
     void dashboardRequested();
     void orbVisibilityChanged(bool visible);
     void clickThroughChanged(bool on);
+    void diameterChanged();
+    void effectsLevelChanged();
+    void alwaysOnTopChanged();
     void quitRequested();
+    void settingsRequested();
 
 protected:
     void initializeGL() override;
@@ -76,8 +91,6 @@ private:
     void setHovered(bool hovered);
     void applyFlags();
     void applyShape();
-    void setDiameter(double diameter);
-    void setEffectsLevel(int level);
     void snapToEdges();
     void savePosition();
     void showMenu(QPoint global);

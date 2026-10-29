@@ -57,28 +57,42 @@ QPixmap renderIcon(int size, const QString& text, int band) {
 
 TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     : QObject(parent), tray_(new QSystemTrayIcon(this)), menu_(new QMenu()), strings_(strings) {
-    auto* open = menu_->addAction(strings.t(QStringLiteral("menu.dashboard")));
-    connect(open, &QAction::triggered, this, &TrayIcon::toggleDashboard);
-    orb_ = menu_->addAction(strings.t(QStringLiteral("menu.showOrb")));
+    open_ = menu_->addAction(QString());
+    connect(open_, &QAction::triggered, this, &TrayIcon::toggleDashboard);
+    orb_ = menu_->addAction(QString());
     connect(orb_, &QAction::triggered, this, [this] { emit orbToggled(orb_->data().toBool() == false); });
-    clickThrough_ = menu_->addAction(strings.t(QStringLiteral("menu.clickThrough")));
+    clickThrough_ = menu_->addAction(QString());
     clickThrough_->setCheckable(true);
     connect(clickThrough_, &QAction::toggled, this, &TrayIcon::clickThroughToggled);
-    demo_ = menu_->addAction(strings.language().startsWith(QStringLiteral("zh")) ? QStringLiteral("示範模式")
-                             : strings.language() == QStringLiteral("ja")      ? QStringLiteral("デモモード")
-                                                                                : QStringLiteral("Demo Mode"));
+    demo_ = menu_->addAction(QString());
     demo_->setCheckable(true);
     demo_->setChecked(demo);
     connect(demo_, &QAction::toggled, this, &TrayIcon::demoToggled);
     menu_->addSeparator();
-    auto* quit = menu_->addAction(strings.t(QStringLiteral("menu.quit")));
-    connect(quit, &QAction::triggered, this, &TrayIcon::quitRequested);
+    settings_ = menu_->addAction(QString());
+    connect(settings_, &QAction::triggered, this, &TrayIcon::settingsRequested);
+    quit_ = menu_->addAction(QString());
+    connect(quit_, &QAction::triggered, this, &TrayIcon::quitRequested);
+    retranslate();
     tray_->setContextMenu(menu_);
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) emit toggleDashboard();
     });
     update(0, QStringLiteral("0"), strings.t(QStringLiteral("app.name")));
     tray_->show();
+}
+
+void TrayIcon::retranslate() {
+    open_->setText(strings_.t(QStringLiteral("menu.dashboard")));
+    orb_->setText(strings_.t(orb_->data().toBool() ? QStringLiteral("menu.hideOrb") : QStringLiteral("menu.showOrb")));
+    clickThrough_->setText(strings_.t(QStringLiteral("menu.clickThrough")));
+    const auto language = strings_.language();
+    demo_->setText(language == QStringLiteral("zh-Hans") ? QStringLiteral("演示模式")
+                   : language.startsWith(QStringLiteral("zh")) ? QStringLiteral("示範模式")
+                   : language == QStringLiteral("ja")           ? QStringLiteral("デモモード")
+                                                                : QStringLiteral("Demo Mode"));
+    settings_->setText(strings_.t(QStringLiteral("menu.settings")));
+    quit_->setText(strings_.t(QStringLiteral("menu.quit")));
 }
 
 TrayIcon::~TrayIcon() { delete menu_; }

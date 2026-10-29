@@ -1,5 +1,7 @@
 #include "orb/orb_window.hpp"
 
+#include <QOpenGLContext>
+
 #include <QActionGroup>
 #include <QCursor>
 #include <QGuiApplication>
@@ -179,6 +181,8 @@ void OrbWindow::setClickThrough(bool on) {
 }
 
 void OrbWindow::setDiameter(double diameter) {
+    diameter = std::clamp(diameter, 96.0, 240.0);
+    if (std::abs(diameter - diameter_) < 0.01) return;
     const QPointF discCenter = QPointF(position()) + center();
     diameter_ = diameter;
     resize(qCeil(side()), qCeil(side()));
@@ -187,12 +191,24 @@ void OrbWindow::setDiameter(double diameter) {
     QSettings().setValue(QStringLiteral("orb/size"), diameter);
     applyShape();
     requestFrame();
+    emit diameterChanged();
 }
 
 void OrbWindow::setEffectsLevel(int level) {
+    level = std::clamp(level, 0, 3);
+    if (level == effectsLevel_) return;
     effectsLevel_ = level;
     QSettings().setValue(QStringLiteral("orb/effects"), level);
     requestFrame();
+    emit effectsLevelChanged();
+}
+
+void OrbWindow::setAlwaysOnTop(bool on) {
+    if (on == alwaysOnTop_) return;
+    alwaysOnTop_ = on;
+    QSettings().setValue(QStringLiteral("orb/alwaysOnTop"), on);
+    applyFlags();
+    emit alwaysOnTopChanged();
 }
 
 QString OrbWindow::titleText(int index) const {
@@ -341,11 +357,14 @@ void OrbWindow::requestFrame() {
 }
 
 void OrbWindow::initializeGL() {
-    glReady_ = renderer_.initialize();
+    // Without a GL context (an offscreen platform, a broken driver) the orb stays blank instead of crashing.
+    glReady_ = context() && context()->isValid() && renderer_.initialize();
     bodyDirty_ = true;
 }
 
-void OrbWindow::paintGL() { renderFrame(); }
+void OrbWindow::paintGL() {
+    if (glReady_) renderFrame();
+}
 
 QImage OrbWindow::snapshot() {
     if (!glReady_) return {};
@@ -552,17 +571,14 @@ void OrbWindow::showMenu(QPoint global) {
     auto* top = menu->addAction(strings_.t(QStringLiteral("menu.alwaysOnTop")));
     top->setCheckable(true);
     top->setChecked(alwaysOnTop_);
-    connect(top, &QAction::toggled, this, [this](bool on) {
-        alwaysOnTop_ = on;
-        QSettings().setValue(QStringLiteral("orb/alwaysOnTop"), on);
-        applyFlags();
-    });
+    connect(top, &QAction::toggled, this, &OrbWindow::setAlwaysOnTop);
     auto* through = menu->addAction(strings_.t(QStringLiteral("menu.clickThrough")));
     through->setCheckable(true);
     through->setChecked(clickThrough_);
     connect(through, &QAction::toggled, this, &OrbWindow::setClickThrough);
     menu->addSeparator();
     menu->addAction(strings_.t(QStringLiteral("menu.orb.hide")), this, [this] { setOrbVisible(false); });
+    menu->addAction(strings_.t(QStringLiteral("menu.settings")), this, &OrbWindow::settingsRequested);
     menu->addAction(strings_.t(QStringLiteral("menu.quit")), this, &OrbWindow::quitRequested);
     menu->popup(global);
 }

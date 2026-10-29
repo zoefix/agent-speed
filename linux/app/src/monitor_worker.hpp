@@ -1,25 +1,37 @@
 #pragma once
 
 #include <QObject>
+#include <QStringList>
 #include <QVariantMap>
 #include <memory>
+#include <mutex>
+#include <optional>
 #include <vector>
+
+#include "agentspeed/monitor.hpp"
 
 class QTimer;
 class Strings;
 
-namespace agentspeed {
-class Monitor;
-struct Snapshot;
-struct Completion;
-}
+// What the worker needs from the settings; set from the UI thread, applied on the next tick.
+struct WorkerOptions {
+    agentspeed::MonitorConfig config;
+    QString currency = QStringLiteral("USD");
+    QString rate = QStringLiteral("1");  // units per US dollar, decimal text
+    QStringList subscriptions;
+    bool includeSubscriptions = false;
+    QString language = QStringLiteral("en");
+};
 
 // Runs the monitor off the UI thread and publishes one snapshot per engine tick (500 ms, METRICS 6).
 class MonitorWorker : public QObject {
     Q_OBJECT
 public:
-    MonitorWorker(const Strings* strings, bool demo);
+    MonitorWorker(const Strings* strings, bool demo, WorkerOptions options);
     ~MonitorWorker() override;
+
+    // Thread-safe. A changed monitor configuration restarts the monitor.
+    void setOptions(WorkerOptions options, bool reconfigure);
 
 public slots:
     void start();
@@ -30,11 +42,17 @@ signals:
 
 private:
     void tick();
+    void startMonitor(qint64 now);
     void publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
                  qint64 todayStart);
+    QVariantMap toVariant(const agentspeed::Snapshot& snap) const;
 
     const Strings* strings_;
     bool demo_;
+    WorkerOptions options_;
+    std::mutex optionsMutex_;
+    std::optional<WorkerOptions> pending_;
+    bool restartPending_ = false;
     std::unique_ptr<agentspeed::Monitor> monitor_;
     QTimer* timer_ = nullptr;
     qint64 lastPollMs_ = 0;

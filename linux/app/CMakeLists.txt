@@ -11,6 +11,8 @@ qt_add_executable(agent-speed
     src/graphics.cpp
     src/heat.cpp
     src/monitor_worker.cpp
+    src/catalog.cpp
+    src/preferences.cpp
     src/orb/body.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
@@ -27,8 +29,24 @@ qt_add_executable(agent-speed
 )
 
 set(agent_speed_qml
+    qml/AboutPage.qml
     qml/AgentRow.qml
+    qml/CostPage.qml
+    qml/CurrencyPicker.qml
     qml/Dashboard.qml
+    qml/Dropdown.qml
+    qml/EffectsPage.qml
+    qml/GeneralPage.qml
+    qml/OrbPage.qml
+    qml/PillButton.qml
+    qml/RedlineSlider.qml
+    qml/Segmented.qml
+    qml/SettingsGroup.qml
+    qml/SettingsPage.qml
+    qml/SettingsRow.qml
+    qml/SettingsWindow.qml
+    qml/SourcesPage.qml
+    qml/ToggleSwitch.qml
     qml/Format.js
     qml/Gauge.qml
     qml/Glyph.qml

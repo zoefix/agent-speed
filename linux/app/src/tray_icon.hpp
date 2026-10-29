@@ -21,17 +21,22 @@ public slots:
     void setDemo(bool demo);
     void setOrbVisible(bool visible);
     void setClickThrough(bool on);
+    void retranslate();
 
 signals:
     void toggleDashboard();
     void demoToggled(bool demo);
     void quitRequested();
+    void settingsRequested();
     void orbToggled(bool visible);
     void clickThroughToggled(bool on);
 
 private:
     QSystemTrayIcon* tray_;
     QMenu* menu_;
+    QAction* open_;
+    QAction* settings_;
+    QAction* quit_;
     QAction* demo_;
     QAction* orb_;
     QAction* clickThrough_;

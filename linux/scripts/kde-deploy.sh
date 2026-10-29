@@ -9,9 +9,11 @@ ssh_cmd=(ssh -i "$key" -o BatchMode=yes "$host")
 root=$(cd "$(dirname "$0")/../.." && pwd)
 
 rsync -az --delete --exclude build -e "ssh -i $key -o BatchMode=yes" "$root/linux" "$root/spec" "$host:/root/agent-speed-src/"
-"${ssh_cmd[@]}" 'cd /root/agent-speed-src/linux &&
-  cmake -S . -B build -G Ninja -DAGENTSPEED_BUILD_APP=ON -DAGENTSPEED_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local >/dev/null 2>&1 &&
-  cmake --build build 2>&1 | grep -E "warning:|error:" || true
+"${ssh_cmd[@]}" 'set -o pipefail; cd /root/agent-speed-src/linux &&
+  { cmake -S . -B build -G Ninja -DAGENTSPEED_BUILD_APP=ON -DAGENTSPEED_BUILD_TESTS=OFF -DCMAKE_INSTALL_PREFIX=/usr/local >/tmp/agent-speed-configure.log 2>&1 ||
+    { tail -20 /tmp/agent-speed-configure.log; exit 1; }; } &&
+  { cmake --build build >/tmp/agent-speed-build.log 2>&1 || { grep -E "error|FAILED" /tmp/agent-speed-build.log | head -30; exit 1; }; } &&
+  { grep -E "warning:" /tmp/agent-speed-build.log | head -20 || true; } &&
   cmake --install build >/dev/null'
 
 if [[ "${1:-}" == "--snapshot" ]]; then

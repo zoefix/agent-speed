@@ -1,19 +1,76 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlComponent>
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
 #include <QPalette>
+#include <QStyle>
 #include <QThread>
 #include <QTimer>
 
+#include "agentspeed/price_book.hpp"
 #include "app_state.hpp"
+#include "catalog.hpp"
 #include "flyout.hpp"
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
 #include "orb/orb_window.hpp"
+#include "preferences.hpp"
 #include "strings.hpp"
 #include "tray_icon.hpp"
+
+namespace {
+
+QPalette paletteFor(bool dark) {
+    QPalette p;
+    if (dark) {
+        p.setColor(QPalette::Window, QColor(0x20, 0x22, 0x28));
+        p.setColor(QPalette::WindowText, QColor(0xEC, 0xEF, 0xF4));
+        p.setColor(QPalette::Base, QColor(0x17, 0x19, 0x1F));
+        p.setColor(QPalette::AlternateBase, QColor(0x22, 0x25, 0x2C));
+        p.setColor(QPalette::Text, QColor(0xEC, 0xEF, 0xF4));
+        p.setColor(QPalette::Button, QColor(0x2A, 0x2D, 0x35));
+        p.setColor(QPalette::ButtonText, QColor(0xEC, 0xEF, 0xF4));
+        p.setColor(QPalette::Highlight, QColor(0x5B, 0x8C, 0xFF));
+        p.setColor(QPalette::HighlightedText, Qt::white);
+    } else {
+        p.setColor(QPalette::Window, QColor(0xF4, 0xF5, 0xF8));
+        p.setColor(QPalette::WindowText, QColor(0x16, 0x18, 0x1D));
+        p.setColor(QPalette::Base, Qt::white);
+        p.setColor(QPalette::AlternateBase, QColor(0xF2, 0xF3, 0xF7));
+        p.setColor(QPalette::Text, QColor(0x16, 0x18, 0x1D));
+        p.setColor(QPalette::Button, QColor(0xEE, 0xEF, 0xF3));
+        p.setColor(QPalette::ButtonText, QColor(0x16, 0x18, 0x1D));
+        p.setColor(QPalette::Highlight, QColor(0x2F, 0x6B, 0xFF));
+        p.setColor(QPalette::HighlightedText, Qt::white);
+    }
+    return p;
+}
+
+// DESIGN 0: Auto follows the desktop; Light and Dark override it for every window.
+void applyAppearance(const QString& choice) {
+    if (choice == QStringLiteral("dark") || choice == QStringLiteral("light")) {
+        QGuiApplication::setPalette(paletteFor(choice == QStringLiteral("dark")));
+    } else {
+        QGuiApplication::setPalette(QPalette());
+    }
+}
+
+WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, const Strings& strings,
+                          const std::shared_ptr<agentspeed::pricing::PriceBook>& prices) {
+    WorkerOptions options;
+    options.config = prefs.monitorConfig();
+    options.config.prices = prices;
+    options.currency = prefs.currency();
+    options.rate = catalog.rateFor(options.currency);
+    options.subscriptions = prefs.subscriptions();
+    options.includeSubscriptions = prefs.includeSubscriptions();
+    options.language = strings.language();
+    return options;
+}
+
+}  // namespace
 
 int main(int argc, char* argv[]) {
     // The flyout (and later the orbs) need global positions and keep-above, which Wayland does not give clients:
@@ -43,20 +100,26 @@ int main(int argc, char* argv[]) {
             snapshotDark = true;
         }
     }
-    if (snapshotDark) {
-        QPalette dark;
-        dark.setColor(QPalette::Window, QColor(0x20, 0x22, 0x28));
-        dark.setColor(QPalette::WindowText, QColor(0xEC, 0xEF, 0xF4));
-        dark.setColor(QPalette::Base, QColor(0x17, 0x19, 0x1F));
-        dark.setColor(QPalette::Text, QColor(0xEC, 0xEF, 0xF4));
-        QGuiApplication::setPalette(dark);
-    }
+    if (app.arguments().contains(QStringLiteral("--dark"))) snapshotDark = true;
+    Preferences prefs;
+    applyAppearance(snapshotDark ? QStringLiteral("dark") : prefs.appearance());
+    QObject::connect(&prefs, &Preferences::appearanceChanged, &app, [&] { applyAppearance(prefs.appearance()); });
     Strings strings;
+    strings.setChoice(prefs.language());
+    QObject::connect(&prefs, &Preferences::languageChanged, &app, [&] { strings.setChoice(prefs.language()); });
     AppState state(demo);
+    auto prices = std::make_shared<agentspeed::pricing::PriceBook>();
+    Catalog catalog(strings, prices);
 
     QThread thread;
     thread.setObjectName(QStringLiteral("monitor"));
-    auto* worker = new MonitorWorker(&strings, demo);
+    auto* worker = new MonitorWorker(&strings, demo, optionsFrom(prefs, catalog, strings, prices));
+    const auto pushOptions = [&](bool reconfigure) { worker->setOptions(optionsFrom(prefs, catalog, strings, prices), reconfigure); };
+    QObject::connect(&prefs, &Preferences::sourcesChanged, &app, [=] { pushOptions(true); });
+    for (auto signal : {&Preferences::currencyChanged, &Preferences::subscriptionsChanged, &Preferences::includeSubscriptionsChanged}) {
+        QObject::connect(&prefs, signal, &app, [=] { pushOptions(false); });
+    }
+    QObject::connect(&strings, &Strings::changed, &app, [=] { pushOptions(false); });
     worker->moveToThread(&thread);
     QObject::connect(&thread, &QThread::started, worker, &MonitorWorker::start);
     QObject::connect(&thread, &QThread::finished, worker, &QObject::deleteLater);
@@ -64,17 +127,35 @@ int main(int argc, char* argv[]) {
     QObject::connect(&state, &AppState::demoChanged, worker, &MonitorWorker::setDemo);
 
     TrayIcon tray(strings, demo);
+    QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
+    orb::OrbWindow orbWindow(strings);
 
     QQmlApplicationEngine engine;
     const bool popup = tray.available() || !snapshotPath.isEmpty();
     engine.setInitialProperties({{QStringLiteral("flyout"), popup}});
     engine.rootContext()->setContextProperty(QStringLiteral("S"), &strings);
     engine.rootContext()->setContextProperty(QStringLiteral("appState"), &state);
-    engine.rootContext()->setContextProperty(QStringLiteral("uiLanguage"), strings.language());
     engine.rootContext()->setContextProperty(QStringLiteral("softwareRendering"), softwareRendering);
+    engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
+    engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
+    engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
+    QQmlComponent settingsComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("SettingsWindow"));
+    QObject* settingsWindow = nullptr;
+    const auto openSettings = [&](int page) {
+        if (!settingsWindow) {
+            settingsWindow = settingsComponent.create(engine.rootContext());
+            if (!settingsWindow) {
+                qWarning() << settingsComponent.errorString();
+                return;
+            }
+        }
+        QMetaObject::invokeMethod(settingsWindow, "present", Q_ARG(QVariant, page));
+    };
+    QObject::connect(window, SIGNAL(settingsRequested()), &tray, SIGNAL(settingsRequested()));
+    QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
     Flyout flyout(window, popup);
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
         const auto snap = state.snapshot();
@@ -89,17 +170,21 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::quitRequested, &app, &QApplication::quit);
     QObject::connect(&tray, &TrayIcon::toggleDashboard, &flyout, &Flyout::toggle);
 
-    orb::OrbWindow orbWindow(strings);
     QObject::connect(&state, &AppState::snapshotChanged, &orbWindow, [&] { orbWindow.applySnapshot(state.snapshot()); });
     QObject::connect(&orbWindow, &orb::OrbWindow::dashboardRequested, &flyout, &Flyout::toggle);
     QObject::connect(&orbWindow, &orb::OrbWindow::quitRequested, &app, &QApplication::quit);
+    QObject::connect(&orbWindow, &orb::OrbWindow::settingsRequested, &app, [&] { openSettings(1); });
     QObject::connect(&orbWindow, &orb::OrbWindow::orbVisibilityChanged, &tray, &TrayIcon::setOrbVisible);
     QObject::connect(&orbWindow, &orb::OrbWindow::clickThroughChanged, &tray, &TrayIcon::setClickThrough);
     QObject::connect(&tray, &TrayIcon::orbToggled, &orbWindow, &orb::OrbWindow::setOrbVisible);
     QObject::connect(&tray, &TrayIcon::clickThroughToggled, &orbWindow, &orb::OrbWindow::setClickThrough);
     tray.setClickThrough(orbWindow.clickThrough());
     tray.setOrbVisible(false);
-    if (snapshotPath.isEmpty()) orbWindow.restore();
+    const auto arguments = app.arguments();
+    const bool offscreenShot = !snapshotPath.isEmpty() ||
+                               std::any_of(arguments.begin(), arguments.end(),
+                                           [](const QString& a) { return a.startsWith(QStringLiteral("--settings-snapshot=")); });
+    if (!offscreenShot) orbWindow.restore();
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
     QString orbShots;
     for (const auto& arg : app.arguments()) {
@@ -117,6 +202,22 @@ int main(int argc, char* argv[]) {
     }
     // Without a tray (GNOME without the AppIndicator extension) the dashboard is the only way in.
     if (!hidden || !tray.available()) flyout.present();
+    // Development aid: --settings[=page] opens the settings window; --settings-snapshot=<file.png> saves it and quits.
+    QString settingsShot;
+    for (const auto& arg : app.arguments()) {
+        if (arg.startsWith(QStringLiteral("--settings-snapshot="))) {
+            settingsShot = arg.mid(20);
+        } else if (arg.startsWith(QStringLiteral("--settings"))) {
+            openSettings(arg.contains(QLatin1Char('=')) ? arg.section(QLatin1Char('='), 1).toInt() : 0);
+        }
+    }
+    if (!settingsShot.isEmpty()) {
+        if (!settingsWindow) openSettings(0);
+        QTimer::singleShot(3500, &app, [&] {
+            if (auto* quick = qobject_cast<QQuickWindow*>(settingsWindow)) quick->grabWindow().save(settingsShot);
+            QApplication::quit();
+        });
+    }
     if (!snapshotPath.isEmpty()) {
         QTimer::singleShot(3000, &app, [&] {
             window->grabWindow().save(snapshotPath);

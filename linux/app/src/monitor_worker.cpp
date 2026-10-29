@@ -6,19 +6,67 @@
 #include <algorithm>
 
 #include "agentspeed/demo.hpp"
-#include "agentspeed/monitor.hpp"
+#include "agentspeed/money.hpp"
 #include "format.hpp"
 #include "heat.hpp"
 #include "strings.hpp"
 
 namespace {
 
+using agentspeed::money::Decimal;
+
 qint64 localMidnightMs(qint64 nowMs) {
     const auto now = QDateTime::fromMSecsSinceEpoch(nowMs);
     return QDateTime(now.date(), QTime(0, 0)).toMSecsSinceEpoch();
 }
 
-QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) {
+QString sourceKey(agentspeed::SourceKind kind) { return QString::fromUtf8(agentspeed::sourceId(kind)); }
+
+}  // namespace
+
+MonitorWorker::MonitorWorker(const Strings* strings, bool demo, WorkerOptions options)
+    : strings_(strings), demo_(demo), options_(std::move(options)) {}
+
+MonitorWorker::~MonitorWorker() = default;
+
+void MonitorWorker::setOptions(WorkerOptions options, bool reconfigure) {
+    std::lock_guard lock(optionsMutex_);
+    pending_ = std::move(options);
+    restartPending_ |= reconfigure;
+}
+
+void MonitorWorker::start() {
+    const qint64 now = QDateTime::currentMSecsSinceEpoch();
+    startMonitor(now);
+    timer_ = new QTimer(this);
+    timer_->setInterval(500);
+    connect(timer_, &QTimer::timeout, this, &MonitorWorker::tick);
+    timer_->start();
+    tick();
+}
+
+void MonitorWorker::startMonitor(qint64 now) {
+    monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
+    monitor_->start(now, localMidnightMs(now));
+    lastPollMs_ = now;
+}
+
+void MonitorWorker::setDemo(bool demo) {
+    demo_ = demo;
+    peakBefore_ = -1;
+    tick();
+}
+
+QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
+    using agentspeed::money::Form;
+    const auto& currencies = agentspeed::money::CurrencyTable::bundled();
+    const auto& currency = currencies.currencyOrUsd(options_.currency.toStdString());
+    const auto rate = Decimal::parse(options_.rate.toStdString()).value_or(Decimal(1));
+    const auto language = options_.language.toStdString();
+    const auto billable = [&](agentspeed::SourceKind kind) {
+        return options_.includeSubscriptions || !options_.subscriptions.contains(sourceKey(kind));
+    };
+
     QVariantMap map;
     map.insert(QStringLiteral("nowMs"), static_cast<qint64>(snap.nowMs));
     map.insert(QStringLiteral("liveOutput"), snap.liveOutput);
@@ -27,8 +75,7 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
     map.insert(QStringLiteral("estimatedShare"), snap.estimatedShare);
     map.insert(QStringLiteral("todayOutputText"), format::tokens(snap.todayOutput));
     map.insert(QStringLiteral("todayRequestsText"), QString::number(snap.todayRequests));
-    map.insert(QStringLiteral("todayAverageText"),
-               snap.todayAverage ? format::speed(*snap.todayAverage) : QStringLiteral("–"));
+    map.insert(QStringLiteral("todayAverageText"), snap.todayAverage ? format::speed(*snap.todayAverage) : QStringLiteral("–"));
     map.insert(QStringLiteral("peakText"), format::speed(snap.peakToday));
     map.insert(QStringLiteral("peak"), snap.peakToday);
     map.insert(QStringLiteral("todayInputText"), format::tokens(snap.todayInput));
@@ -40,13 +87,14 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
     map.insert(QStringLiteral("generating"), snap.generating);
     map.insert(QStringLiteral("tools"), snap.tools);
     map.insert(QStringLiteral("demo"), snap.demo);
+
     QVariantList agents;
     for (const auto& a : snap.agents) {
-        const auto source = QString::fromUtf8(agentspeed::sourceId(a.source));
+        const auto source = sourceKey(a.source);
         QVariantMap row;
         row.insert(QStringLiteral("id"), QString::fromStdString(a.id));
         row.insert(QStringLiteral("source"), source);
-        row.insert(QStringLiteral("sourceName"), strings.t(QStringLiteral("source.") + source));
+        row.insert(QStringLiteral("sourceName"), strings_->t(QStringLiteral("source.") + source));
         row.insert(QStringLiteral("project"), a.project ? QString::fromStdString(*a.project) : QString());
         row.insert(QStringLiteral("model"), a.model ? QString::fromStdString(*a.model) : QString());
         row.insert(QStringLiteral("phase"), QString::fromUtf8(agentspeed::phaseId(a.phase)));
@@ -54,53 +102,72 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
         row.insert(QStringLiteral("liveText"), format::speed(a.liveOutput));
         row.insert(QStringLiteral("depth"), a.depth);
         row.insert(QStringLiteral("subagent"), a.subagent);
+        row.insert(QStringLiteral("effort"), a.effort ? QString::fromStdString(*a.effort) : QString());
+        row.insert(QStringLiteral("speed"), a.speed ? QString::fromStdString(*a.speed) : QString());
         agents.push_back(row);
     }
     map.insert(QStringLiteral("agents"), agents);
+
+    // DESIGN 9: money values sum the billable sources (9.4); a partly unpriced value carries `≥`.
+    double liveCost = 0, knownWeight = 0, weight = 0;
+    std::int64_t todayCost = 0, unpriced = 0;
     QVariantList sources;
     for (const auto& s : snap.sources) {
-        const auto source = QString::fromUtf8(agentspeed::sourceId(s.source));
+        const auto source = sourceKey(s.source);
         QVariantMap row;
         row.insert(QStringLiteral("source"), source);
-        row.insert(QStringLiteral("name"), strings.t(QStringLiteral("source.") + source));
+        row.insert(QStringLiteral("name"), strings_->t(QStringLiteral("source.") + source));
+        row.insert(QStringLiteral("enabled"), s.enabled);
+        row.insert(QStringLiteral("available"), s.available);
+        row.insert(QStringLiteral("path"), QString::fromStdString(s.path));
+        row.insert(QStringLiteral("sessions"), s.sessions);
         row.insert(QStringLiteral("live"), s.liveOutput);
+        row.insert(QStringLiteral("today"), static_cast<qint64>(s.todayOutput));
         row.insert(QStringLiteral("todayText"), format::tokens(s.todayOutput));
+        const auto cost = agentspeed::money::format(agentspeed::money::amount(s.todayCostMicroUsd, rate), currency, language, Form::Amount);
+        row.insert(QStringLiteral("todayCostText"), QString::fromStdString(cost.text));
+        row.insert(QStringLiteral("unpriced"), static_cast<qint64>(s.unpricedRequests));
+        row.insert(QStringLiteral("subscribed"), options_.subscriptions.contains(source));
         sources.push_back(row);
+        if (!s.enabled || !billable(s.source)) continue;
+        liveCost += s.liveCost;
+        const double w = std::max(s.liveOutput, 1e-9);
+        weight += w;
+        knownWeight += w * s.liveCostKnownShare;
+        todayCost += s.todayCostMicroUsd;
+        unpriced += s.unpricedRequests;
     }
     map.insert(QStringLiteral("sources"), sources);
+    const double knownShare = weight > 0 ? knownWeight / weight : 1;
+    const auto liveMoney = agentspeed::money::format(agentspeed::money::ratePerSecond(liveCost, rate), currency, language, Form::Rate);
+    const auto todayMoney = agentspeed::money::format(agentspeed::money::amount(todayCost, rate), currency, language, Form::Amount);
+    const bool livePartial = knownShare < 0.999;
+    map.insert(QStringLiteral("costLiveNumber"), QString::fromStdString((livePartial ? "≥" : "") + liveMoney.number));
+    map.insert(QStringLiteral("costLiveText"), QString::fromStdString((livePartial ? "≥" : "") + liveMoney.text));
+    map.insert(QStringLiteral("costSymbol"), QString::fromStdString(liveMoney.symbol));
+    map.insert(QStringLiteral("costTodayText"),
+               todayCost == 0 && unpriced > 0 ? QStringLiteral("–") : QString::fromStdString((unpriced > 0 ? "≥" : "") + todayMoney.text));
+    map.insert(QStringLiteral("costUnpriced"), static_cast<qint64>(unpriced));
+    map.insert(QStringLiteral("liveCostMicroUsd"), liveCost);
+    map.insert(QStringLiteral("priceVersion"), snap.priceVersion);
+    QVariantMap warnings;
+    warnings.insert(QStringLiteral("partialHistory"), snap.warnings.partialHistory);
+    warnings.insert(QStringLiteral("unreadableFiles"), snap.warnings.unreadableFiles);
+    warnings.insert(QStringLiteral("malformedLines"), static_cast<qint64>(snap.warnings.malformedLines));
+    QStringList unsupported;
+    for (const auto kind : snap.warnings.unsupported) unsupported.push_back(sourceKey(kind));
+    warnings.insert(QStringLiteral("unsupported"), unsupported);
+    map.insert(QStringLiteral("warnings"), warnings);
     return map;
 }
 
-}  // namespace
-
-MonitorWorker::MonitorWorker(const Strings* strings, bool demo) : strings_(strings), demo_(demo) {}
-MonitorWorker::~MonitorWorker() = default;
-
-void MonitorWorker::start() {
-    const qint64 now = QDateTime::currentMSecsSinceEpoch();
-    monitor_ = std::make_unique<agentspeed::Monitor>(agentspeed::MonitorConfig::fromEnvironment());
-    monitor_->start(now, localMidnightMs(now));
-    lastPollMs_ = now;
-    timer_ = new QTimer(this);
-    timer_->setInterval(500);
-    connect(timer_, &QTimer::timeout, this, &MonitorWorker::tick);
-    timer_->start();
-    tick();
-}
-
-void MonitorWorker::setDemo(bool demo) {
-    demo_ = demo;
-    peakBefore_ = -1;
-    tick();
-}
-
-void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions,
-                            qint64 now, qint64 todayStart) {
-    QVariantMap map = toVariant(snap, *strings_);
+void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
+                            qint64 todayStart) {
+    QVariantMap map = toVariant(snap);
     QVariantList events;
     for (const auto& c : completions) {
         QVariantMap event;
-        event.insert(QStringLiteral("source"), QString::fromUtf8(agentspeed::sourceId(c.source)));
+        event.insert(QStringLiteral("source"), sourceKey(c.source));
         event.insert(QStringLiteral("output"), static_cast<qint64>(c.output));
         event.insert(QStringLiteral("speed"), c.speed ? *c.speed : -1.0);
         events.push_back(event);
@@ -122,6 +189,20 @@ void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<
 void MonitorWorker::tick() {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const qint64 todayStart = localMidnightMs(now);
+    bool restart = false;
+    {
+        std::lock_guard lock(optionsMutex_);
+        if (pending_) {
+            options_ = std::move(*pending_);
+            pending_.reset();
+            restart = restartPending_;
+            restartPending_ = false;
+        }
+    }
+    if (restart || (monitor_ && monitor_->restartRequested())) {
+        startMonitor(now);
+        peakBefore_ = -1;
+    }
     const qint64 previous = lastTickMs_;
     lastTickMs_ = now;
     if (demo_) {

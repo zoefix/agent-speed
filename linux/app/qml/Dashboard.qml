@@ -20,10 +20,13 @@ Window {
 
     width: 368 + margin * 2
     color: flyout ? "transparent" : Theme.panel
-    title: S.t("app.name")
+    title: S.tr2(S.rev, "app.name")
     flags: flyout ? (Qt.Tool | Qt.FramelessWindowHint | Qt.WindowStaysOnTopHint | Qt.NoDropShadowWindowHint) : Qt.Window
 
     signal dismissed()
+    signal settingsRequested()
+    readonly property bool moneyLive: prefs.liveUnit === "cost"
+    readonly property bool bothUnits: prefs.liveUnit === "both"
 
     Settings {
         id: prefs
@@ -40,6 +43,7 @@ Window {
         var rawSources = s.sources || []
         for (var i = 0; i < rawSources.length; ++i) {
             var src = rawSources[i]
+            if (!src.enabled || !(src.live > 0 || src.today > 0)) continue
             sources.push({ key: src.source, source: src.source, name: src.name, todayText: src.todayText, live: src.live })
         }
         Sync.sync(sourceModel, sources, "key")
@@ -173,7 +177,7 @@ Window {
                             implicitHeight: bigValue.implicitHeight
                             Text {
                                 id: bigValue
-                                text: Format.speed(valueRow.shown)
+                                text: root.moneyLive ? (root.snap.costLiveNumber || "0") : Format.speed(valueRow.shown)
                                 color: Theme.ink
                                 font.pixelSize: 44
                                 font.weight: Font.Bold
@@ -184,15 +188,16 @@ Window {
                                 anchors.left: bigValue.right
                                 anchors.leftMargin: 6
                                 anchors.baseline: bigValue.baseline
-                                text: S.t("unit.tokS")
+                                text: root.moneyLive ? (root.snap.costSymbol || "$") + "/s" : S.tr2(S.rev, "unit.tokS")
                                 color: Theme.ink2
                                 font.pixelSize: 14
                                 font.weight: Font.Medium
                             }
                         }
                         Text {
+                            visible: root.bothUnits
                             Layout.fillWidth: true
-                            text: Format.fill(S.t("agents.context"), [root.snap.generating || 0, root.snap.tools || 0])
+                            text: (root.snap.costLiveText || "") + " · " + S.tr2(S.rev, "cost.apiEquivalent")
                             color: Theme.ink2
                             font.pixelSize: 13
                             font.features: Theme.tabular
@@ -200,7 +205,15 @@ Window {
                         }
                         Text {
                             Layout.fillWidth: true
-                            text: Format.fill(S.t("today.summary"), [root.snap.todayOutputText || "0", (root.snap.agents || []).length])
+                            text: Format.fill(S.tr2(S.rev, "agents.context"), [root.snap.generating || 0, root.snap.tools || 0])
+                            color: Theme.ink2
+                            font.pixelSize: 13
+                            font.features: Theme.tabular
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: Format.fill(S.tr2(S.rev, "today.summary"), [root.snap.todayOutputText || "0", (root.snap.agents || []).length])
                             color: Theme.ink3
                             font.pixelSize: 12
                             font.features: Theme.tabular
@@ -213,29 +226,29 @@ Window {
 
                 // Live chart
                 SectionHeader {
-                    text: S.t("dashboard.live")
-                    trailing: (root.snap.estimatedShare || 0) > 0 ? S.t("chart.estimated") : ""
+                    text: S.tr2(S.rev, "dashboard.live")
+                    trailing: (root.snap.estimatedShare || 0) > 0 ? S.tr2(S.rev, "chart.estimated") : ""
                 }
                 LiveChart {
                     Layout.fillWidth: true
                     Layout.preferredHeight: 96
                     values: root.snap.history || []
                     peak: root.snap.peak || 0
-                    peakCaption: S.t("today.peak")
-                    unit: S.t("unit.tokS")
+                    peakCaption: S.tr2(S.rev, "today.peak")
+                    unit: S.tr2(S.rev, "unit.tokS")
                 }
 
                 Hairline {}
 
                 // Sources
                 SectionHeader {
-                    text: S.t("dashboard.sources")
-                    trailing: sourceModel.count > 0 ? S.t("unit.tokS") : ""
+                    text: S.tr2(S.rev, "dashboard.sources")
+                    trailing: sourceModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
                 }
                 Text {
                     visible: sourceModel.count === 0
                     Layout.fillWidth: true
-                    text: S.t("dashboard.sources.empty")
+                    text: S.tr2(S.rev, "dashboard.sources.empty")
                     color: Theme.ink2
                     font.pixelSize: 13
                     wrapMode: Text.Wrap
@@ -257,8 +270,8 @@ Window {
 
                 // Agents
                 SectionHeader {
-                    text: S.t("dashboard.agents")
-                    trailing: agentModel.count > 0 ? S.t("unit.tokS") : ""
+                    text: S.tr2(S.rev, "dashboard.agents")
+                    trailing: agentModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
                 }
                 RowLayout {
                     visible: agentModel.count === 0
@@ -269,7 +282,7 @@ Window {
                     Glyph { name: "gauge"; color: Theme.ink3; Layout.preferredWidth: 16; Layout.preferredHeight: 16 }
                     Text {
                         Layout.fillWidth: true
-                        text: S.t("agents.empty")
+                        text: S.tr2(S.rev, "agents.empty")
                         color: Theme.ink2
                         font.pixelSize: 13
                         elide: Text.ElideRight
@@ -317,8 +330,8 @@ Window {
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: prefs.agentsExpanded ? S.t("agents.collapse")
-                                                       : Format.fill(S.t("agents.expand"), [disclosure.total - root.collapsedRows])
+                            text: prefs.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                                                       : Format.fill(S.tr2(S.rev, "agents.expand"), [disclosure.total - root.collapsedRows])
                             color: Theme.ink2
                             font.pixelSize: 12
                             font.weight: Font.Medium
@@ -335,26 +348,31 @@ Window {
                         }
                     }
                     Accessible.role: Accessible.Button
-                    Accessible.name: prefs.agentsExpanded ? S.t("agents.collapse")
-                                                          : Format.fill(S.t("agents.expand.a11y"), [disclosure.total])
+                    Accessible.name: prefs.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                                                          : Format.fill(S.tr2(S.rev, "agents.expand.a11y"), [disclosure.total])
                 }
 
                 Hairline {}
 
                 // Today
-                SectionHeader { text: S.t("dashboard.today") }
+                SectionHeader { text: S.tr2(S.rev, "dashboard.today") }
                 GridLayout {
                     Layout.fillWidth: true
                     columns: 2
                     columnSpacing: 16
                     rowSpacing: 12
-                    StatCell { caption: S.t("today.output"); value: root.snap.todayOutputText || "0" }
-                    StatCell { caption: S.t("today.input"); value: root.snap.todayInputText || "0" }
-                    StatCell { caption: S.t("today.requests"); value: root.snap.todayRequestsText || "0" }
+                    StatCell { caption: S.tr2(S.rev, "today.output"); value: root.snap.todayOutputText || "0" }
+                    StatCell { caption: S.tr2(S.rev, "today.input"); value: root.snap.todayInputText || "0" }
+                    StatCell { caption: S.tr2(S.rev, "today.requests"); value: root.snap.todayRequestsText || "0" }
                     StatCell {
-                        caption: S.t("today.average")
+                        caption: S.tr2(S.rev, "today.average")
                         value: root.snap.todayAverageText || "–"
-                        unit: root.snap.todayAverageText && root.snap.todayAverageText !== "–" ? S.t("unit.tokS") : ""
+                        unit: root.snap.todayAverageText && root.snap.todayAverageText !== "–" ? S.tr2(S.rev, "unit.tokS") : ""
+                    }
+                    StatCell {
+                        Layout.columnSpan: 2
+                        caption: S.tr2(S.rev, "today.cost") + " · " + S.tr2(S.rev, "cost.apiEquivalent")
+                        value: root.snap.costTodayText || "–"
                     }
                 }
                 RowLayout {
@@ -369,13 +387,13 @@ Window {
                         color: tone
                     }
                     Text {
-                        text: S.t("today.peak")
+                        text: S.tr2(S.rev, "today.peak")
                         color: Theme.ink2
                         font.pixelSize: 12
                     }
                     Item { Layout.fillWidth: true }
                     Text {
-                        text: (root.snap.peakText || "0") + " " + S.t("unit.tokS")
+                        text: (root.snap.peakText || "0") + " " + S.tr2(S.rev, "unit.tokS")
                         color: Theme.ink
                         font.pixelSize: 13
                         font.weight: Font.Medium
@@ -391,7 +409,7 @@ Window {
                     visible: info.checked
                     Layout.fillWidth: true
                     Layout.bottomMargin: 10
-                    text: S.t("metric.info")
+                    text: S.tr2(S.rev, "metric.info")
                     color: Theme.ink2
                     font.pixelSize: 12
                     lineHeight: 1.3
@@ -401,7 +419,7 @@ Window {
                     Layout.fillWidth: true
                     spacing: 6
                     Text {
-                        text: S.t("app.name")
+                        text: S.tr2(S.rev, "app.name")
                         color: Theme.ink3
                         font.pixelSize: 12
                         font.weight: Font.Medium
@@ -415,7 +433,7 @@ Window {
                         Text {
                             id: demoLabel
                             anchors.centerIn: parent
-                            text: uiLanguage.startsWith("zh") ? "示範模式" : uiLanguage === "ja" ? "デモモード" : "Demo"
+                            text: S.language.startsWith("zh") ? (S.language === "zh-Hans" ? "演示模式" : "示範模式") : S.language === "ja" ? "デモモード" : "Demo"
                             color: Theme.amber
                             font.pixelSize: 11
                             font.weight: Font.DemiBold
@@ -423,14 +441,22 @@ Window {
                     }
                     Item { Layout.fillWidth: true }
                     IconButton {
+                        glyph: "gear"
+                        label: S.tr2(S.rev, "menu.settings")
+                        onClicked: {
+                            root.dismissed()
+                            root.settingsRequested()
+                        }
+                    }
+                    IconButton {
                         id: info
                         glyph: "info"
-                        label: S.t("metric.info")
+                        label: S.tr2(S.rev, "metric.info")
                         onClicked: info.checked = !info.checked
                     }
                     IconButton {
                         glyph: "power"
-                        label: S.t("menu.quit")
+                        label: S.tr2(S.rev, "menu.quit")
                         onClicked: Qt.quit()
                     }
                 }

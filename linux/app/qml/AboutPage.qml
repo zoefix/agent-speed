@@ -1,0 +1,86 @@
+import QtQuick
+import QtQuick.Layouts
+import "Format.js" as Format
+
+SettingsPage {
+    title: S.tr2(S.rev, "settings.about")
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 16
+        Gauge {
+            heat: appState.snapshot.heat || 0
+            Layout.preferredWidth: 64
+            Layout.preferredHeight: 64
+        }
+        ColumnLayout {
+            spacing: 3
+            Text {
+                text: S.tr2(S.rev, "app.name")
+                color: Theme.ink
+                font.pixelSize: 20
+                font.weight: Font.DemiBold
+            }
+            Text {
+                text: Format.fill(S.tr2(S.rev, "settings.about.version"), [catalog.version]) + " · Linux"
+                color: Theme.ink2
+                font.pixelSize: 12
+            }
+            Text {
+                text: S.tr2(S.rev, "settings.about.github")
+                color: Theme.accent
+                font.pixelSize: 12
+                font.underline: linkArea.containsMouse
+                MouseArea {
+                    id: linkArea
+                    anchors.fill: parent
+                    hoverEnabled: true
+                    cursorShape: Qt.PointingHandCursor
+                    onClicked: catalog.openUrl("https://github.com/zoefix/agent-speed")
+                }
+            }
+        }
+    }
+
+    SettingsGroup {
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: privacy.implicitHeight + 28
+            Text {
+                id: privacy
+                anchors.left: parent.left
+                anchors.right: parent.right
+                anchors.margins: 14
+                anchors.verticalCenter: parent.verticalCenter
+                text: S.tr2(S.rev, "privacy.statement") + "\n\n" + S.tr2(S.rev, "privacy.taskScore")
+                color: Theme.ink2
+                font.pixelSize: 12
+                lineHeight: 1.3
+                wrapMode: Text.Wrap
+            }
+        }
+    }
+
+    SettingsGroup {
+        SettingsRow {
+            label: S.tr2(S.rev, "settings.network")
+            caption: S.tr2(S.rev, "settings.network.hint")
+            ToggleSwitch {
+                label: S.tr2(S.rev, "settings.network")
+                checked: prefs.networkEnabled
+                onToggled: (on) => prefs.networkEnabled = on
+            }
+        }
+        SettingsRow {
+            label: S.tr2(S.rev, "update.check")
+            caption: S.tr2(S.rev, "settings.about.update")
+            divider: false
+            ToggleSwitch {
+                enabled: prefs.networkEnabled
+                label: S.tr2(S.rev, "update.check")
+                checked: prefs.autoCheckUpdates
+                onToggled: (on) => prefs.autoCheckUpdates = on
+            }
+        }
+    }
+}

@@ -25,6 +25,20 @@ QString languageFor(const QLocale& locale) {
 Strings::Strings(QObject* parent) : QObject(parent), language_(languageFor(QLocale::system())) {
     const auto forced = qEnvironmentVariable("AGENT_SPEED_LANGUAGE");
     if (!forced.isEmpty()) language_ = forced;
+    load();
+}
+
+void Strings::setChoice(const QString& choice) {
+    const auto language = choice == QStringLiteral("system") || choice.isEmpty() ? languageFor(QLocale::system()) : choice;
+    if (language == language_) return;
+    language_ = language;
+    load();
+    ++revision_;
+    emit changed();
+}
+
+void Strings::load() {
+    table_.clear();
     QFile file(QStringLiteral(":/strings.json"));
     if (!file.open(QIODevice::ReadOnly)) return;
     const auto root = QJsonDocument::fromJson(file.readAll()).object();
@@ -37,3 +51,5 @@ Strings::Strings(QObject* parent) : QObject(parent), language_(languageFor(QLoca
 }
 
 QString Strings::t(const QString& key) const { return table_.value(key, key); }
+
+QString Strings::tr2(int, const QString& key) const { return t(key); }
