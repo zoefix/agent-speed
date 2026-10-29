@@ -13,7 +13,7 @@ std::optional<std::string> optCwd(const json::Value& c) { return fixtures::optSt
 SourceKind sourceOf(const json::Value& c) { return *sourceFromId(*c["source"].string()); }
 
 // The groups ported so far; a case of any other group is skipped.
-const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification", "codeScript", "codeItems"};
+const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification", "codeScript", "codeItems", "edits"};
 
 }  // namespace
 
@@ -97,6 +97,16 @@ TEST(TaskParsers, MatchTheReferenceCases) {
                 const auto want = expect.elements();
                 ASSERT_EQ(items->size(), want.size());
                 for (std::size_t i = 0; i < want.size(); ++i) EXPECT_EQ((*items)[i], fixtures::optString(want[i]));
+            }
+        }
+        if (group == "edits") {
+            const auto hunks = tasks::editHunks(sourceOf(c), fixtures::optString(c["tool"]), c["input"], optCwd(c));
+            const auto want = expect.elements();
+            ASSERT_EQ(hunks.size(), want.size());
+            for (std::size_t i = 0; i < want.size(); ++i) {
+                EXPECT_EQ(hunks[i].file, *want[i]["file"].string());
+                EXPECT_EQ(hunks[i].oldDigest, fixtures::optString(want[i]["old"]));
+                EXPECT_EQ(hunks[i].newDigest, fixtures::optString(want[i]["new"]));
             }
         }
         ++checked;

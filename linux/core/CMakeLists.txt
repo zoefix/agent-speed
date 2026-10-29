@@ -66,6 +66,7 @@ add_library(agentspeed_core STATIC
     src/tasks/code_mode.cpp
     src/tasks/command.cpp
     src/tasks/common.cpp
+    src/tasks/edits.cpp
     src/tasks/programs.cpp
     src/tasks/results.cpp
     src/tasks/scripts.cpp
