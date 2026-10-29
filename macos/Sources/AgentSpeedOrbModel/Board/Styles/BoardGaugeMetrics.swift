@@ -1,3 +1,4 @@
+import AgentSpeedCore
 import Foundation
 
 /// The sub-gauge's numbers per style and size (DESIGN 2c Live metrics: *Sub-gauge, glass / timing / neon*), points
@@ -19,7 +20,7 @@ public struct BoardGaugeMetrics: Equatable, Sendable {
         }
     }
 
-    // MARK: 智力 (glass dial, neon digits)
+    // MARK: 性能 (glass dial, neon digits)
 
     /// Glass: the dial's `D` (its box is D × 0.742 D).
     public var dial: Double { per(54, 66, 74) }
@@ -36,8 +37,9 @@ public struct BoardGaugeMetrics: Equatable, Sendable {
     public var mainLabelBaseline: Double {
         style == .neon ? per(6, 7, 7) : per(19, 22, 24)
     }
+    /// Glass fits `8,888`, the widest compact score, 2 pt clear of the track's inner edge (DESIGN 2c).
     public var mainNumberSize: Double {
-        style == .neon ? per(21, 24, 28) : per(16, 19, 21)
+        style == .neon ? per(21, 24, 28) : per(13, 17, 19)
     }
     public var mainNumberBaseline: Double {
         style == .neon ? per(28.5, 32.5, 35.5) : per(35.5, 42.5, 46.5)
@@ -67,7 +69,7 @@ public struct BoardGaugeMetrics: Equatable, Sendable {
     public static let tableRow = 15.0
     /// Between table rows.
     public var tableRowGap: Double { style == .neon ? per(2, 3, 3) : 2 }
-    /// Between the 智力 part and the table.
+    /// Between the 性能 part and the table.
     public var tableGap: Double { style == .neon ? per(3, 6, 6) : 3 }
     /// A table row's baseline under its top.
     public var tableBaseline: Double { style == .neon ? per(8, 9, 10) : per(8, 10, 11) }
@@ -92,7 +94,7 @@ public struct BoardGaugeMetrics: Equatable, Sendable {
     public var boxUnitGap: Double { per(2, 3, 3) }
     public var boxRightPadding: Double { per(5, 7, 7) }
     public var boxLeftPadding: Double { per(4, 6, 6) }
-    /// 智力's baseline in its row; a small row's under its top when a separator leads it.
+    /// 性能's baseline in its row; a small row's under its top when a separator leads it.
     public var boxMainBaseline: Double { per(15.5, 17.5, 20) }
     public var boxRowBaseline: Double { per(11, 12.5, 14) }
 
@@ -136,7 +138,7 @@ public struct BoardGaugeMetrics: Equatable, Sendable {
     }
 }
 
-/// The vertical layout of a sub-gauge (from its top): the 智力 part, the table rows and the height.
+/// The vertical layout of a sub-gauge (from its top): the 性能 part, the table rows and the height.
 public struct BoardGaugeStack: Equatable, Sendable {
     public enum Row: Equatable, Sendable {
         case thinking, cost
@@ -149,9 +151,9 @@ public struct BoardGaugeStack: Equatable, Sendable {
         public var height: Double
     }
 
-    /// The 智力 part's top (glass: the dial box; neon: the label line; timing: its row); nil when 智力 is off.
+    /// The 性能 part's top (glass: the dial box; neon: the label line; timing: its row); nil when 性能 is off.
     public var main: Double?
-    /// 智力's number baseline.
+    /// 性能's number baseline.
     public var mainBaseline: Double?
     public var rows: [Line] = []
     public var height = 0.0
@@ -159,21 +161,22 @@ public struct BoardGaugeStack: Equatable, Sendable {
     public func row(_ key: Row) -> Line? { rows.first { $0.key == key } }
 }
 
-/// The sub-gauge's arc and meter over the task score's 0–100 (DESIGN 2c Live metrics: glass `f = shown / 100`, neon
-/// `lit = round(shown × 12 / 100)`).
+/// The sub-gauge's arc and meter on the log scale of the performance score (DESIGN 2c Live metrics; DESIGN 12 *Log
+/// scale*): `f = clamp(log2(v / 250) / 4, 0, 1)`, so 1000 lights half the arc and 6 of neon's 12 segments.
 public enum BoardIntelligenceScale {
-    public static let maximum = 100.0
+    /// The reference level, at the top of the arc.
+    public static let reference = 1000.0
 
     /// Glass: the share of the arc's sweep lit by the shown value.
     public static func arc(_ shown: Int?) -> Double {
         guard let shown else { return 0 }
-        return min(1, max(0, Double(shown) / maximum))
+        return PerfFormat.scale(Double(shown))
     }
 
-    /// Neon: the lit segments of the 12 (one per 8⅓ points), half a segment rounding away from zero.
+    /// Neon: `round(f × 12)` lit segments, half a segment rounding away from zero.
     public static func segments(_ shown: Int?) -> Int {
         guard let shown else { return 0 }
-        let lit = (Double(shown) * Double(BoardGaugeMetrics.meterSegments) / maximum).rounded(.toNearestOrAwayFromZero)
+        let lit = (PerfFormat.scale(Double(shown)) * Double(BoardGaugeMetrics.meterSegments)).rounded(.toNearestOrAwayFromZero)
         return min(BoardGaugeMetrics.meterSegments, max(0, Int(lit)))
     }
 }

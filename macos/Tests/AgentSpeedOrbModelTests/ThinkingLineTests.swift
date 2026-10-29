@@ -108,7 +108,7 @@ struct ThinkingLineTests {
 
     // MARK: The quiet rule
 
-    static func score(_ shown: Int) -> TaskSetReading { LineQuietTests.score(.live, shown) }
+    static func score(_ shown: Int) -> PerfSetReading { LineQuietTests.score(.live, shown) }
 
     @Test func theRuleStartsTheHoldWhenTheShownRateTurnsZero() throws {
         var rule = OrbLineQuietRule()

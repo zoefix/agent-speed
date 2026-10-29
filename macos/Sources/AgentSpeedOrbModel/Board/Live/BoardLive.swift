@@ -26,7 +26,7 @@ public struct BoardLiveFrame: Equatable, Sendable {
     public var state: SubsetState
     /// Members that are disabled or not detected, in source order.
     public var unavailable: [SourceKind]
-    /// The METRICS 6.9 sums over the board's sources (the hero's 智力 and 思考).
+    /// The METRICS 6.9 sums over the board's sources (the hero's 性能 and 思考).
     public var intelligence: IntelligenceSums
 
     public init(value: Double = 0, metric: SpeedMetric = .output, generating: Int = 0, tools: Int = 0,

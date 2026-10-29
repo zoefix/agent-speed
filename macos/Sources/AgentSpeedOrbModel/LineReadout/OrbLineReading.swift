@@ -2,7 +2,7 @@ import AgentSpeedCore
 import Foundation
 
 /// What an orb's two-line readout is set to show (DESIGN 10): network speed, with the unit cell `Mb/s` wide for bits,
-/// or 智力 and 思考. Known while the readout is quiet, so its width is.
+/// or 性能 and 思考. Known while the readout is quiet, so its width is.
 public enum OrbLineFormat: Equatable, Hashable, Sendable {
     case traffic(bits: Bool)
     case intelligence
@@ -12,8 +12,8 @@ public enum OrbLineFormat: Equatable, Hashable, Sendable {
 public enum OrbLineContent: Equatable, Sendable {
     /// Download over upload.
     case traffic(rx: TrafficFormat.Parts, tx: TrafficFormat.Parts)
-    /// The task score of the orb's set (METRICS 6.9, *Sets and groups*) and thinking tok/s as shown.
-    case intelligence(score: TaskSetReading, thinking: String)
+    /// The performance score of the orb's set (METRICS 6.9, *Sets and groups*) and thinking tok/s as shown.
+    case intelligence(score: PerfSetReading, thinking: String)
 
     /// The thinking rate as shown reads 0 (DESIGN 10, Thinking hidden at zero).
     public var thinkingReadsZero: Bool {
@@ -22,7 +22,7 @@ public enum OrbLineContent: Equatable, Sendable {
     }
 
     /// The intelligence readout's score; nil for network speed.
-    public var score: TaskSetReading? {
+    public var score: PerfSetReading? {
         guard case .intelligence(let score, _) = self else { return nil }
         return score
     }
@@ -164,17 +164,17 @@ public struct OrbLineQuietRule: Sendable {
         return apply(content, loud: (rate?.sum ?? 0) >= Self.trafficThreshold, at: time)
     }
 
-    /// One engine tick of the orb's set (DESIGN 10, Intelligence readout, revised quiet rule): loud while 智力 is live or
+    /// One engine tick of the orb's set (DESIGN 10, Performance readout, revised quiet rule): loud while 性能 is live or
     /// resting or one of its agents generates, so a resting score stays pale for as long as its agents are listed; a
     /// generating set without a score shows `–`. Once neither holds, the last score holds until the readout has faded.
     @discardableResult
-    public mutating func apply(score: TaskSetReading, thinking: Double, generating: Bool, at time: TimeInterval) -> Bool {
+    public mutating func apply(score: PerfSetReading, thinking: Double, generating: Bool, at time: TimeInterval) -> Bool {
         let loud = score.form != .none || generating
         let shown = loud ? score : heldScore(at: time) ?? score
         return apply(.intelligence(score: shown, thinking: SpeedFormat.speed(thinking)), loud: loud, at: time)
     }
 
-    private func heldScore(at time: TimeInterval) -> TaskSetReading? {
+    private func heldScore(at time: TimeInterval) -> PerfSetReading? {
         guard let reading, !reading.isGone(at: time) else { return nil }
         return reading.content.score
     }

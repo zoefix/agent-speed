@@ -3,198 +3,175 @@ import Foundation
 import Testing
 @testable import AgentSpeedOrbModel
 
-/// DESIGN 12, *Motion*, on the orb readout: climbs count up at the orb's 30 fps for their duration only, small rises
-/// replace the digits, falls and `–` ↔ a number crossfade, live ↔ resting crossfades the color, the proof mark fades
-/// with the state, Reduce Motion crossfades every change.
+/// DESIGN 12, *Motion*, on the orb readout: a change of at least 1 % and 3 counts up or down for
+/// `clamp(0.3 + 0.35 |log2(new/old)|, 0.3, 0.7)` s at the orb's 30 fps, smaller ones replace the digits, `–` ↔ a number
+/// crossfades, live ↔ resting crossfades the color, the provisional mark fades, Reduce Motion crossfades every change.
 @Suite("Orb score motion")
 struct ScoreMotionTests {
     static func near(_ a: Double, _ b: Double) -> Bool { abs(a - b) < 1e-9 }
 
-    static func score(_ form: TaskValueForm, _ shown: Int?, _ state: TaskState? = .passing) -> TaskSetReading {
-        LineQuietTests.score(form, shown, state)
-    }
-
-    static func seconds(_ change: OrbScoreMotion.Change) -> Double? {
-        switch change {
-        case .countUp(let seconds), .crossfade(let seconds): seconds
-        case .none, .replace: nil
-        }
+    static func score(_ form: PerfValueForm, _ shown: Int?, provisional: Bool = false) -> PerfSetReading {
+        LineQuietTests.score(form, shown, provisional: provisional)
     }
 
     // MARK: Decisions
 
-    @Test func risesOfThreeOrMoreCountUpSmallerOnesReplaceAndFallsCrossfade() {
-        #expect(OrbScoreMotion.change(from: 40, to: 40, reduceMotion: false) == .none)
-        #expect(OrbScoreMotion.change(from: 40, to: 41, reduceMotion: false) == .replace)
-        #expect(OrbScoreMotion.change(from: 40, to: 42, reduceMotion: false) == .replace)
-        #expect(OrbScoreMotion.change(from: 40, to: 43, reduceMotion: false) == .countUp(seconds: OrbScoreMotion.climbSeconds(3)))
-        #expect(OrbScoreMotion.change(from: 40, to: 39, reduceMotion: false) == .crossfade(seconds: 0.2))
-        #expect(OrbScoreMotion.change(from: 80, to: 0, reduceMotion: false) == .crossfade(seconds: 0.2))
-        #expect(OrbScoreMotion.change(from: nil, to: 12, reduceMotion: false) == .crossfade(seconds: 0.2))
-        #expect(OrbScoreMotion.change(from: 12, to: nil, reduceMotion: false) == .crossfade(seconds: 0.2))
-        for (old, new) in [(40, 41), (40, 80), (40, 0), (12, 13)] as [(Int?, Int?)] + [(nil, 12)] {
-            #expect(OrbScoreMotion.change(from: old, to: new, reduceMotion: true) == .crossfade(seconds: 0.15))
+    @Test func changesOfOnePercentAndThreeCountSmallerOnesReplace() {
+        #expect(PerfMotion.change(from: 1000, to: 1000, reduceMotion: false) == .none)
+        #expect(PerfMotion.change(from: 1000, to: 1009, reduceMotion: false) == .replace)
+        #expect(PerfMotion.change(from: 1000, to: 1010, reduceMotion: false)
+            == .count(seconds: PerfMotion.countSeconds(from: 1000, to: 1010)))
+        #expect(PerfMotion.change(from: 1000, to: 990, reduceMotion: false)
+            == .count(seconds: PerfMotion.countSeconds(from: 1000, to: 990)))
+        #expect(PerfMotion.change(from: 100, to: 102, reduceMotion: false) == .replace, "3 at least")
+        #expect(PerfMotion.change(from: 100, to: 103, reduceMotion: false) == .count(seconds: PerfMotion.countSeconds(from: 100, to: 103)))
+        #expect(PerfMotion.change(from: nil, to: 1286, reduceMotion: false) == .crossfade(seconds: 0.15))
+        #expect(PerfMotion.change(from: 1286, to: nil, reduceMotion: false) == .crossfade(seconds: 0.15))
+        #expect(PerfMotion.change(from: 1000, to: 2000, reduceMotion: false, counts: false) == .replace)
+        for (old, new) in [(1000, 1001), (1000, 2000), (2000, 1000)] as [(Int?, Int?)] + [(nil, 12)] {
+            #expect(PerfMotion.change(from: old, to: new, reduceMotion: true) == .crossfade(seconds: 0.15))
         }
-        #expect(OrbScoreMotion.change(from: nil, to: nil, reduceMotion: true) == .none)
+        #expect(PerfMotion.change(from: nil, to: nil, reduceMotion: true) == .none)
     }
 
-    @Test func aClimbTakesAtMostEightTenthsOfASecond() {
-        #expect(Self.near(OrbScoreMotion.climbSeconds(40), 0.78))
-        #expect(Self.near(OrbScoreMotion.climbSeconds(3), 0.336))
-        #expect(OrbScoreMotion.climbSeconds(42) == 0.8)
-        #expect(OrbScoreMotion.climbSeconds(100) == 0.8)
+    @Test func aCountTakesItsLogDistanceWithinThreeAndSevenTenthsOfASecond() {
+        #expect(Self.near(PerfMotion.countSeconds(from: 1000, to: 2000), 0.65))
+        #expect(Self.near(PerfMotion.countSeconds(from: 2000, to: 1000), 0.65))
+        #expect(PerfMotion.countSeconds(from: 1000, to: 1010) > 0.3 && PerfMotion.countSeconds(from: 1000, to: 1010) < 0.31)
+        #expect(PerfMotion.countSeconds(from: 1000, to: 8000) == 0.7)
+        #expect(PerfMotion.countSeconds(from: 0, to: 500) == 0.7)
     }
 
-    // MARK: Count-up
+    // MARK: Count
 
-    @Test func aCountUpPassesThroughEveryIntegerWithEaseOutCubicTiming() {
-        let seconds = OrbScoreMotion.climbSeconds(40)
-        var seen = Set<Int>()
-        var last = 40
-        for step in 0...Int(seconds * 10_000) {
-            let value = OrbScoreMotion.countUpValue(from: 40, to: 80, elapsed: Double(step) / 10_000)
+    @Test func aCountMovesMonotonicallyWithEaseOutCubicTiming() {
+        let seconds = PerfMotion.countSeconds(from: 902, to: 1286)
+        var last = 902
+        for step in 0...Int(seconds * 1000) {
+            let value = PerfMotion.countValue(from: 902, to: 1286, elapsed: Double(step) / 1000)
             #expect(value >= last)
             last = value
-            seen.insert(value)
         }
-        #expect(seen == Set(40...80))
-        #expect(OrbScoreMotion.countUpValue(from: 40, to: 80, elapsed: 0) == 40)
-        #expect(OrbScoreMotion.countUpValue(from: 40, to: 80, elapsed: seconds) == 80)
+        #expect(PerfMotion.countValue(from: 902, to: 1286, elapsed: 0) == 902)
+        #expect(PerfMotion.countValue(from: 902, to: 1286, elapsed: seconds) == 1286)
         // Quick at first, settling into the final number: half way in time is 7/8 of the way.
-        #expect(OrbScoreMotion.countUpValue(from: 40, to: 80, elapsed: seconds / 2) == 75)
+        #expect(PerfMotion.countValue(from: 902, to: 1286, elapsed: seconds / 2) == 902 + 336)
+        // Down as well.
+        #expect(PerfMotion.countValue(from: 1286, to: 902, elapsed: seconds / 2) == 1286 - 336)
     }
 
-    @Test func aClimbRendersAtTheOrbsRateForItsDurationOnly() {
-        var motion = OrbScoreMotion(Self.score(.live, 40, .failing))
+    @Test func aCountRendersAtTheOrbsRateForItsDurationOnlyInTheCompactForm() {
+        var motion = OrbScoreMotion(Self.score(.live, 902))
         #expect(!motion.isMoving(at: 0, reduceMotion: false))
-        motion.update(Self.score(.live, 80), at: 10)
-        let end = 10 + OrbScoreMotion.climbSeconds(40)
-        #expect(motion.frame(at: 10, reduceMotion: false).text == "40")
-        #expect(motion.frame(at: 10.39, reduceMotion: false).text == "75")
-        #expect(motion.frame(at: end, reduceMotion: false).text == "80")
-        #expect(motion.frame(at: 99, reduceMotion: false).text == "80")
-        #expect(motion.frame(at: 10.2, reduceMotion: false).alpha == 1)
-        #expect(motion.frame(at: 10.2, reduceMotion: false).outgoing == nil)
-        #expect(motion.isMoving(at: 10, reduceMotion: false))
-        #expect(motion.isMoving(at: end - 0.01, reduceMotion: false))
-        #expect(!motion.isMoving(at: end, reduceMotion: false))
-        #expect(!motion.isMoving(at: 9.99, reduceMotion: false))
+        motion.update(Self.score(.live, 1286), at: 10)
+        let seconds = PerfMotion.countSeconds(from: 902, to: 1286)
+        #expect(motion.frame(at: 10, reduceMotion: false).text == "902")
+        #expect(motion.frame(at: 10 + seconds / 2, reduceMotion: false).text == "1,238")
+        #expect(motion.frame(at: 10 + seconds, reduceMotion: false).text == "1,286")
+        #expect(motion.frame(at: 99, reduceMotion: false).text == "1,286")
+        #expect(motion.frame(at: 10.2, reduceMotion: false).alpha == 1 && motion.frame(at: 10.2, reduceMotion: false).outgoing == nil)
+        #expect(motion.isMoving(at: 10, reduceMotion: false) && motion.isMoving(at: 10 + seconds - 0.01, reduceMotion: false))
+        #expect(!motion.isMoving(at: 10 + seconds, reduceMotion: false) && !motion.isMoving(at: 9.99, reduceMotion: false))
+
+        var large = OrbScoreMotion(Self.score(.live, 9000))
+        large.update(Self.score(.live, 12_840), at: 0)
+        #expect(large.frame(at: 0, reduceMotion: false).text == "9,000")
+        #expect(large.frame(at: 1, reduceMotion: false).text == "12.8k")
     }
 
-    @Test func aSmallRiseReplacesTheDigitsWithoutFrames() {
-        var motion = OrbScoreMotion(Self.score(.live, 80))
-        motion.update(Self.score(.live, 82), at: 5)
+    @Test func aSmallChangeReplacesTheDigitsWithoutFrames() {
+        var motion = OrbScoreMotion(Self.score(.live, 1286))
+        motion.update(Self.score(.live, 1290), at: 5)
         #expect(motion.change(reduceMotion: false) == .replace)
-        #expect(motion.frame(at: 5, reduceMotion: false) == OrbScoreMotion.Frame(text: "82", alpha: 1, outgoing: nil,
-                                                                                 outgoingAlpha: 0, pale: 0, proof: 0))
+        #expect(motion.frame(at: 5, reduceMotion: false) == OrbScoreMotion.Frame(text: "1,290", alpha: 1, outgoing: nil,
+                                                                                 outgoingAlpha: 0, pale: 0, provisional: 0))
         #expect(!motion.isMoving(at: 5, reduceMotion: false))
     }
 
     // MARK: Crossfades
 
-    @Test func aFallCrossfadesInPlace() {
-        var motion = OrbScoreMotion(Self.score(.live, 80))
-        motion.update(Self.score(.live, 62), at: 5)
-        let frame = motion.frame(at: 5.05, reduceMotion: false)
-        #expect(frame.text == "62" && frame.outgoing == "80")
-        #expect(Self.near(frame.alpha, 0.25) && Self.near(frame.outgoingAlpha, 0.75))
-        #expect(motion.isMoving(at: 5.19, reduceMotion: false))
-        #expect(!motion.isMoving(at: 5.2, reduceMotion: false))
-        #expect(motion.frame(at: 5.2, reduceMotion: false).outgoing == nil)
-    }
-
     @Test func theAbsentMarkCrossfadesWithANumberInThePaleColor() {
         var motion = OrbScoreMotion(.none)
         #expect(motion.frame(at: 0, reduceMotion: false).text == "\u{2013}")
         #expect(motion.frame(at: 0, reduceMotion: false).pale == 1)
-        motion.update(Self.score(.live, 12, .unverified), at: 1)
-        let frame = motion.frame(at: 1.1, reduceMotion: false)
-        #expect(frame.text == "12" && frame.outgoing == "\u{2013}")
-        #expect(Self.near(frame.pale, 0.5))
+        motion.update(Self.score(.live, 1048, provisional: true), at: 1)
+        let frame = motion.frame(at: 1.075, reduceMotion: false)
+        #expect(frame.text == "1,048" && frame.outgoing == "\u{2013}")
+        #expect(Self.near(frame.alpha, 0.5))
+        #expect(Self.near(motion.frame(at: 1.1, reduceMotion: false).pale, 0.5))
         motion.update(.none, at: 5)
         #expect(motion.frame(at: 5.1, reduceMotion: false).text == "\u{2013}")
-        #expect(motion.frame(at: 5.1, reduceMotion: false).outgoing == "12")
+        #expect(motion.frame(at: 5.1, reduceMotion: false).outgoing == "1,048")
     }
 
     @Test func liveAndRestingCrossfadeTheColorEvenUnderReduceMotion() {
-        var motion = OrbScoreMotion(Self.score(.live, 80))
+        var motion = OrbScoreMotion(Self.score(.live, 1286))
         #expect(motion.frame(at: 0, reduceMotion: false).pale == 0)
-        motion.update(Self.score(.resting, 80), at: 3)
+        motion.update(Self.score(.resting, 1286), at: 3)
         for reduceMotion in [false, true] {
             #expect(Self.near(motion.frame(at: 3.05, reduceMotion: reduceMotion).pale, 0.25))
             #expect(motion.frame(at: 3.2, reduceMotion: reduceMotion).pale == 1)
             #expect(motion.isMoving(at: 3.1, reduceMotion: reduceMotion))
             #expect(!motion.isMoving(at: 3.2, reduceMotion: reduceMotion))
         }
-        // The text itself does not change.
         #expect(motion.frame(at: 3.1, reduceMotion: false).outgoing == nil)
-        // Back to live part way: from where the color stands.
-        var back = OrbScoreMotion(Self.score(.live, 80))
-        back.update(Self.score(.resting, 80), at: 3)
-        back.update(Self.score(.live, 80), at: 3.05)
+        var back = OrbScoreMotion(Self.score(.live, 1286))
+        back.update(Self.score(.resting, 1286), at: 3)
+        back.update(Self.score(.live, 1286), at: 3.05)
         #expect(Self.near(back.frame(at: 3.05, reduceMotion: false).pale, 0.25))
         #expect(back.frame(at: 3.1, reduceMotion: false).pale == 0)
     }
 
     @Test func reduceMotionCrossfadesEveryChangeFromTheValueThatWasShown() {
-        var motion = OrbScoreMotion(Self.score(.live, 40))
-        motion.update(Self.score(.live, 80), at: 1)
+        var motion = OrbScoreMotion(Self.score(.live, 902))
+        motion.update(Self.score(.live, 1286), at: 1)
         let frame = motion.frame(at: 1.075, reduceMotion: true)
-        #expect(frame.text == "80" && frame.outgoing == "40")
+        #expect(frame.text == "1,286" && frame.outgoing == "902")
         #expect(Self.near(frame.alpha, 0.5))
         #expect(motion.isMoving(at: 1.14, reduceMotion: true))
         #expect(!motion.isMoving(at: 1.15, reduceMotion: true))
-        // A change while a climb would still run: Reduce Motion showed 80 by then, so it fades from 80.
-        motion.update(Self.score(.live, 70), at: 1.5)
-        #expect(motion.frame(at: 1.55, reduceMotion: true).outgoing == "80")
+        motion.update(Self.score(.live, 1100), at: 1.2)
+        #expect(motion.frame(at: 1.25, reduceMotion: true).outgoing == "1,286")
     }
 
-    @Test func aChangeDuringACountUpStartsFromTheIntegerItReached() {
-        var motion = OrbScoreMotion(Self.score(.live, 40))
-        motion.update(Self.score(.live, 80), at: 0)
-        let reached = OrbScoreMotion.countUpValue(from: 40, to: 80, elapsed: 0.2)
-        motion.update(Self.score(.live, 90), at: 0.2)
-        #expect(motion.change(reduceMotion: false) == .countUp(seconds: OrbScoreMotion.climbSeconds(90 - reached)))
-        #expect(motion.frame(at: 0.2, reduceMotion: false).text == String(reached))
-        // A fall instead fades out the integer that was drawn.
-        var fall = OrbScoreMotion(Self.score(.live, 40))
-        fall.update(Self.score(.live, 80), at: 0)
-        fall.update(Self.score(.live, 30), at: 0.2)
-        #expect(fall.frame(at: 0.25, reduceMotion: false).outgoing == String(reached))
+    @Test func aChangeDuringACountStartsFromTheIntegerItReached() {
+        var motion = OrbScoreMotion(Self.score(.live, 902))
+        motion.update(Self.score(.live, 1286), at: 0)
+        let reached = PerfMotion.countValue(from: 902, to: 1286, elapsed: 0.2)
+        motion.update(Self.score(.live, 1500), at: 0.2)
+        #expect(motion.change(reduceMotion: false) == .count(seconds: PerfMotion.countSeconds(from: reached, to: 1500)))
+        #expect(motion.frame(at: 0.2, reduceMotion: false).text == PerfFormat.compact(reached))
     }
 
-    // MARK: Proof mark
+    // MARK: Provisional mark
 
-    @Test func theProofMarkFadesWithTheStateAndAtOnceUnderReduceMotion() {
-        var motion = OrbScoreMotion(Self.score(.live, 80))
-        #expect(motion.frame(at: 0, reduceMotion: false).proof == 0)
-        motion.update(Self.score(.live, 80, .pending), at: 2)
-        #expect(Self.near(motion.frame(at: 2.125, reduceMotion: false).proof, 0.5))
-        #expect(motion.frame(at: 2.25, reduceMotion: false).proof == 1)
+    @Test func theProvisionalMarkFadesAndAtOnceUnderReduceMotion() {
+        var motion = OrbScoreMotion(Self.score(.live, 1048))
+        #expect(motion.frame(at: 0, reduceMotion: false).provisional == 0)
+        motion.update(Self.score(.live, 1048, provisional: true), at: 2)
+        #expect(Self.near(motion.frame(at: 2.125, reduceMotion: false).provisional, 0.5))
+        #expect(motion.frame(at: 2.25, reduceMotion: false).provisional == 1)
         #expect(motion.isMoving(at: 2.2, reduceMotion: false) && !motion.isMoving(at: 2.25, reduceMotion: false))
-        #expect(motion.frame(at: 2, reduceMotion: true).proof == 1)
-        // Reduce Motion: the content change's own frame draws it.
+        #expect(motion.frame(at: 2, reduceMotion: true).provisional == 1)
         #expect(!motion.isMoving(at: 2, reduceMotion: true))
-        // Verified again part way out: from where the mark stands.
-        var reversal = OrbScoreMotion(Self.score(.live, 80))
-        reversal.update(Self.score(.live, 80, .unverified), at: 0)
-        reversal.update(Self.score(.live, 80, .passing), at: 0.1)
-        #expect(Self.near(reversal.frame(at: 0.1, reduceMotion: false).proof, 0.4))
-        #expect(reversal.frame(at: 0.2, reduceMotion: false).proof == 0)
+        var reversal = OrbScoreMotion(Self.score(.live, 1048))
+        reversal.update(Self.score(.live, 1048, provisional: true), at: 0)
+        reversal.update(Self.score(.live, 1048), at: 0.1)
+        #expect(Self.near(reversal.frame(at: 0.1, reduceMotion: false).provisional, 0.4))
+        #expect(reversal.frame(at: 0.2, reduceMotion: false).provisional == 0)
     }
 
-    @Test func onlyUnverifiedAndPendingCarryTheMarkAndNoneNever() {
-        for (state, marked) in [(TaskState.unverified, true), (.pending, true), (.passing, false), (.failing, false), (.none, false)] {
-            for form in [TaskValueForm.live, .resting] {
-                #expect(OrbScoreMotion(Self.score(form, 50, state)).frame(at: 0, reduceMotion: false).proof == (marked ? 1 : 0))
-            }
+    @Test func onlyAProvisionalScoreCarriesTheMarkAndNoneNever() {
+        for form in [PerfValueForm.live, .resting] {
+            #expect(OrbScoreMotion(Self.score(form, 1048, provisional: true)).frame(at: 0, reduceMotion: false).provisional == 1)
+            #expect(OrbScoreMotion(Self.score(form, 1048)).frame(at: 0, reduceMotion: false).provisional == 0)
         }
-        #expect(OrbScoreMotion(TaskSetReading(form: .none, shown: nil, state: .unverified, count: 0, agentId: nil))
-            .frame(at: 0, reduceMotion: false).proof == 0)
+        #expect(OrbScoreMotion(PerfSetReading(form: .none, shown: nil, provisional: true, count: 0, agentId: nil))
+            .frame(at: 0, reduceMotion: false).provisional == 0)
     }
 
     @Test func aNewMotionIsStill() {
-        for score in [Self.score(.live, 86), Self.score(.resting, 72, .pending), .none] {
+        for score in [Self.score(.live, 1286), Self.score(.resting, 1452, provisional: true), .none] {
             let motion = OrbScoreMotion(score)
             for time in [-1e9, 0, 1e9] {
                 #expect(!motion.isMoving(at: time, reduceMotion: false))
@@ -206,13 +183,13 @@ struct ScoreMotionTests {
     }
 
     @Test func theReadingsFramePolicyIncludesTheScoreButNotOnceGone() {
-        var motion = OrbScoreMotion(Self.score(.live, 40))
-        motion.update(Self.score(.live, 80), at: 20)
-        let reading = OrbLineReading(content: .intelligence(score: Self.score(.live, 80), thinking: "12"), shownAt: 0,
+        var motion = OrbScoreMotion(Self.score(.live, 902))
+        motion.update(Self.score(.live, 1286), at: 20)
+        let reading = OrbLineReading(content: .intelligence(score: Self.score(.live, 1286), thinking: "12"), shownAt: 0,
                                      quietAt: 30, scoreMotion: motion)
-        #expect(reading.motion(at: 20.5, reduceMotion: false).frames)
+        #expect(reading.motion(at: 20.3, reduceMotion: false).frames)
         #expect(!reading.motion(at: 21, reduceMotion: false).frames)
         let gone = OrbLineReading(content: reading.content, shownAt: 0, quietAt: 10, scoreMotion: motion)
-        #expect(!gone.motion(at: 20.5, reduceMotion: false).frames)
+        #expect(!gone.motion(at: 20.3, reduceMotion: false).frames)
     }
 }

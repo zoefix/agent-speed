@@ -24,9 +24,9 @@ public struct BoardGeometry: Equatable, Sendable {
         }
     }
 
-    /// The hero's sub-gauge shows (any of 智力, 思考, 費用).
+    /// The hero's sub-gauge shows (any of 性能, 思考, 費用).
     public var hasGauge: Bool { readouts.hero }
-    /// The rows' 智力 column and its captions line.
+    /// The rows' 性能 column and its captions line.
     public var hasIntelligence: Bool { readouts.intelligence }
     /// Group rows draw their second line (the model): at M and L whatever the switches, never at S.
     public var twoLine: Bool { size != .small }
@@ -105,7 +105,7 @@ public struct BoardGeometry: Equatable, Sendable {
 
     public var rankingHeight: Double { side - rankingTop - footerHeight }
 
-    /// The captions line at the top of the ranking (智力, tok/s; timing also 間隔), 0 without the 智力 column.
+    /// The captions line at the top of the ranking (性能, tok/s; timing also 間隔), 0 without the 性能 column.
     public var captionsHeight: Double {
         guard hasIntelligence else { return 0 }
         return style == .timing ? 14 : 12
@@ -143,10 +143,12 @@ public struct BoardGeometry: Equatable, Sendable {
 
     // MARK: Row columns
 
-    /// The 智力 cell's width (at least as wide as `888` and the caption; the app widens it when they are wider).
+    /// The 性能 cell's width (at least as wide as `8,888` and the caption; the app widens it when they are wider):
+    /// glass 33, timing and neon 34, and 39 / 40 on the two-line group rows of M and L.
     public var intelligenceColumn: Double {
         guard hasIntelligence else { return 0 }
-        return style == .timing ? per(22, 24, 26) : per(20, 22, 24)
+        let mono = style != .glass
+        return twoLine ? (mono ? 40 : 39) : (mono ? 34 : 33)
     }
 
     /// The value column.
@@ -167,7 +169,7 @@ public struct BoardGeometry: Equatable, Sendable {
     public static let firstLineBaseline = 16.0
     public var secondLineBaseline: Double { style == .glass ? 32 : 31 }
 
-    /// Two-line group rows: the row's figures (the 智力 cell and the value) leave line 1 and share one baseline with the
+    /// Two-line group rows: the row's figures (the 性能 cell and the value) leave line 1 and share one baseline with the
     /// cap-height centre of their digits on the row's centre line, 19 under the top at M and 20 at L (DESIGN 2c *The
     /// second line*).
     public var figureCentre: Double { groupRow / 2 }
