@@ -8,7 +8,7 @@ SettingsPage {
     SettingsGroup {
         SettingsRow {
             label: S.tr2(S.rev, "settings.traffic.enabled")
-            caption: S.tr2(S.rev, "settings.traffic.enabled.hint")
+            caption: S.tr2(S.rev, "settings.traffic.enabled.hint") + (report.trafficNote.length > 0 ? "\n" + report.trafficNote : "")
             ToggleSwitch {
                 label: S.tr2(S.rev, "settings.traffic.enabled")
                 checked: prefs.trafficEnabled

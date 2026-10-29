@@ -19,6 +19,7 @@ Window {
         { glyph: "sparkle", key: "settings.effects" },
         { glyph: "coin", key: "settings.cost" },
         { glyph: "chart", key: "settings.traffic" },
+        { glyph: "broadcast", key: "settings.report" },
         { glyph: "folder", key: "settings.sources" },
         { glyph: "info", key: "settings.about" }
     ]
@@ -140,6 +141,7 @@ Window {
             EffectsPage {}
             CostPage {}
             TrafficPage {}
+            ApiPage {}
             SourcesPage {}
             AboutPage {}
         }

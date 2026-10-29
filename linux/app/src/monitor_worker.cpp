@@ -397,5 +397,8 @@ void MonitorWorker::tick() {
         lastPollMs_ = now;
         completions = monitor_->takeCompletions();
     }
-    publish(monitor_->snapshot(now, todayStart), completions, now, todayStart);
+    const auto snap = monitor_->snapshot(now, todayStart);
+    publish(snap, completions, now, todayStart);
+    const auto traffic = agentspeed::report::TrafficSample::from(snap.traffic, options_.trafficIncludeTools, options_.config.enabled, monitor_->epoch());
+    emit reportTick({std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs()});
 }

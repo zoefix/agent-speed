@@ -127,6 +127,35 @@ void Json::write(std::string& out) const {
     }
 }
 
+void Json::writePretty(std::string& out, int indent) const {
+    const std::string pad(static_cast<std::size_t>(indent + 2), ' ');
+    if (kind_ == Kind::Array && !items_.empty()) {
+        out += "[\n";
+        for (std::size_t i = 0; i < items_.size(); ++i) {
+            out += pad;
+            items_[i].writePretty(out, indent + 2);
+            out += i + 1 < items_.size() ? ",\n" : "\n";
+        }
+        out += std::string(static_cast<std::size_t>(indent), ' ') + "]";
+    } else if (kind_ == Kind::Object && !members_.empty()) {
+        out += "{\n";
+        for (std::size_t i = 0; i < members_.size(); ++i) {
+            out += pad + quoted(members_[i].first) + ": ";
+            members_[i].second.writePretty(out, indent + 2);
+            out += i + 1 < members_.size() ? ",\n" : "\n";
+        }
+        out += std::string(static_cast<std::size_t>(indent), ' ') + "}";
+    } else {
+        write(out);
+    }
+}
+
+std::string Json::pretty() const {
+    std::string out;
+    writePretty(out, 0);
+    return out;
+}
+
 std::string Json::compact() const {
     std::string out;
     write(out);

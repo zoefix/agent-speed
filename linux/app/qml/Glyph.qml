@@ -180,6 +180,34 @@ Canvas {
             ctx.moveTo(13.5, 13.5); ctx.lineTo(13.5, 3)
             ctx.stroke()
             break
+        case "broadcast":
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.arc(8, 8, 1.5, 0, Math.PI * 2); ctx.fill()
+            ctx.beginPath(); ctx.arc(8, 8, 4, -Math.PI * 0.27, Math.PI * 0.27); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 4, Math.PI * 0.73, Math.PI * 1.27); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 6.6, -Math.PI * 0.25, Math.PI * 0.25); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 6.6, Math.PI * 0.75, Math.PI * 1.25); ctx.stroke()
+            break
+        case "dice":
+            ctx.lineWidth = 1.3
+            ctx.beginPath(); ctx.roundedRect(2.6, 2.6, 10.8, 10.8, 2.6, 2.6); ctx.stroke()
+            var pips = [[5.6, 5.6], [10.4, 10.4], [8, 8], [10.4, 5.6], [5.6, 10.4]]
+            for (var q = 0; q < pips.length; ++q) {
+                ctx.beginPath(); ctx.arc(pips[q][0], pips[q][1], 1, 0, Math.PI * 2); ctx.fill()
+            }
+            break
+        case "eye":
+            ctx.lineWidth = 1.3
+            ctx.beginPath()
+            ctx.moveTo(1.8, 8); ctx.bezierCurveTo(4, 3.8, 12, 3.8, 14.2, 8)
+            ctx.bezierCurveTo(12, 12.2, 4, 12.2, 1.8, 8)
+            ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 2.1, 0, Math.PI * 2); ctx.fill()
+            break
+        case "close":
+            ctx.lineWidth = 1.8
+            ctx.beginPath(); ctx.moveTo(4.5, 4.5); ctx.lineTo(11.5, 11.5); ctx.moveTo(11.5, 4.5); ctx.lineTo(4.5, 11.5); ctx.stroke()
+            break
         case "gauge":
             ctx.lineWidth = 1.4
             ctx.beginPath(); ctx.arc(8, 9, 6, Math.PI * 0.8, Math.PI * 2.2, false); ctx.stroke()

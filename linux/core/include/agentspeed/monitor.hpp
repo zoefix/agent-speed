@@ -97,6 +97,8 @@ public:
     void setTrafficEnabled(bool enabled) { traffic_->setEnabled(enabled); }
     std::vector<traffic::HistoryRow> trafficToday(std::int64_t nowMs) const { return traffic_->todayRows(nowMs); }
     void restoreTraffic(const std::vector<traffic::HistoryRow>& rows) { traffic_->restore(rows); }
+    // The engine instance live reporting's counters belong to (METRICS 11.4).
+    std::int64_t epoch() const { return epoch_; }
     // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
     void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
 

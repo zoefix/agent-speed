@@ -20,11 +20,16 @@
 #include "network_service.hpp"
 #include "orb/orb_window.hpp"
 #include "preferences.hpp"
+#include "report/report_controller.hpp"
 #include "strings.hpp"
 #include "task_card.hpp"
 #include "tray_icon.hpp"
 
 namespace {
+
+// The settings pane between 網路流量 and 資料來源 (DESIGN 11).
+constexpr int kApiPage = 5;
+
 
 QPalette paletteFor(bool dark) {
     QPalette p;
@@ -207,6 +212,11 @@ int main(int argc, char* argv[]) {
         QMetaObject::invokeMethod(historyWorker, "analyze", Qt::QueuedConnection);
     });
     QObject::connect(&catalog, &Catalog::changed, &app, [=] { pushOptions(false); });
+    // DESIGN 11: live reporting, fed by every live engine tick.
+    qRegisterMetaType<ReportTick>();
+    ReportController report(prefs, strings, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    engine.rootContext()->setContextProperty(QStringLiteral("report"), &report);
+    QObject::connect(worker, &MonitorWorker::reportTick, &report, &ReportController::onTick);
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
@@ -239,6 +249,33 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::historyRequested, &app, [&] { openHistory(QString()); });
     QObject::connect(&state, &AppState::historyRequested, &app, [&](const QString& source) { openHistory(source); });
     QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
+    QObject::connect(&report, &ReportController::settingsRequested, &app, [&] { openSettings(kApiPage); });
+    QObject::connect(&tray, &TrayIcon::reportSettings, &app, [&] { openSettings(kApiPage); });
+    QObject::connect(&tray, &TrayIcon::reportPause, &report, &ReportController::pause);
+    QObject::connect(&tray, &TrayIcon::reportResume, &report, &ReportController::resume);
+    QObject::connect(&tray, &TrayIcon::reportLeaderboard, &report, [&] { report.openLink(report.leaderboardUrl()); });
+    QObject::connect(&report, &ReportController::changed, &tray, [&] {
+        tray.setReport(report.menuVisible(), report.menuText(), report.paused(), !report.leaderboardUrl().isEmpty());
+    });
+    // The preview and the consent sheet are windows of their own (DESIGN 11).
+    QQmlComponent previewComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("ReportPreviewWindow"));
+    QQmlComponent consentComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("ReportConsentWindow"));
+    QQuickWindow* previewWindow = nullptr;
+    QQuickWindow* consentWindow = nullptr;
+    const auto present = [&](QQmlComponent& component, QQuickWindow*& slot) {
+        if (!slot) {
+            slot = qobject_cast<QQuickWindow*>(component.create(engine.rootContext()));
+            if (!slot) {
+                qWarning() << component.errorString();
+                return;
+            }
+        }
+        slot->show();
+        slot->raise();
+        slot->requestActivate();
+    };
+    QObject::connect(&report, &ReportController::previewRequested, &app, [&] { present(previewComponent, previewWindow); });
+    QObject::connect(&report, &ReportController::consentRequested, &app, [&] { present(consentComponent, consentWindow); });
     // The update window (UPDATES 4), from the tray item, the notification, the dashboard pill or Settings.
     QQmlComponent updateComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("UpdateWindow"));
     QQuickWindow* updateWindow = nullptr;
@@ -283,12 +320,14 @@ int main(int argc, char* argv[]) {
     });
     QObject::connect(&tray, &TrayIcon::demoToggled, &state, &AppState::setDemo);
     QObject::connect(&state, &AppState::demoChanged, &tray, &TrayIcon::setDemo);
-    QObject::connect(&tray, &TrayIcon::quitRequested, &app, &QApplication::quit);
+    // Quitting sends a leaving report when it can go out within 1 s (METRICS 11.5).
+    const auto quitApp = [&] { report.quitApp(); };
+    QObject::connect(&tray, &TrayIcon::quitRequested, &app, quitApp);
     QObject::connect(&tray, &TrayIcon::toggleDashboard, &flyout, &Flyout::toggle);
 
     QObject::connect(&state, &AppState::snapshotChanged, &orbWindow, [&] { orbWindow.applySnapshot(state.snapshot()); });
     QObject::connect(&orbWindow, &orb::OrbWindow::dashboardRequested, &flyout, &Flyout::toggle);
-    QObject::connect(&orbWindow, &orb::OrbWindow::quitRequested, &app, &QApplication::quit);
+    QObject::connect(&orbWindow, &orb::OrbWindow::quitRequested, &app, quitApp);
     QObject::connect(&orbWindow, &orb::OrbWindow::settingsRequested, &app, [&] { openSettings(1); });
     QObject::connect(&orbWindow, &orb::OrbWindow::orbVisibilityChanged, &tray, &TrayIcon::setOrbVisible);
     QObject::connect(&orbWindow, &orb::OrbWindow::clickThroughChanged, &tray, &TrayIcon::setClickThrough);
@@ -299,6 +338,11 @@ int main(int argc, char* argv[]) {
     tray.setOrbVisible(false);
     const auto arguments = app.arguments();
     network.start();
+    report.start();
+    // Development aid: --report-selftest=<http://127.0.0.1:port> reports to a local reference server.
+    for (const auto& arg : arguments) {
+        if (arg.startsWith(QStringLiteral("--report-selftest=")) && !report.startSelfTest(arg.mid(18))) qWarning("report selftest: loopback http only");
+    }
     // After a one-click update the new instance says so once (UPDATES 4).
     if (const auto at = arguments.indexOf(QStringLiteral("--after-update")); at >= 0) {
         QTimer::singleShot(1500, &tray, [&] {

@@ -52,7 +52,10 @@ SettingsPage {
                 anchors.right: parent.right
                 anchors.margins: 14
                 anchors.verticalCenter: parent.verticalCenter
-                text: S.tr2(S.rev, "privacy.statement") + "\n\n" + S.tr2(S.rev, "privacy.taskScore")
+                // DESIGN 11: while reporting is on, no sentence claims that nothing is sent.
+                text: S.tr2(S.rev, report.reporting ? "privacy.statement.report" : "privacy.statement") + "\n\n"
+                      + S.tr2(S.rev, report.reporting ? "privacy.traffic.report" : "privacy.traffic") + "\n\n"
+                      + S.tr2(S.rev, "privacy.report") + "\n\n" + S.tr2(S.rev, "privacy.taskScore")
                 color: Theme.ink2
                 font.pixelSize: 12
                 lineHeight: 1.3
@@ -64,7 +67,7 @@ SettingsPage {
     SettingsGroup {
         SettingsRow {
             label: S.tr2(S.rev, "settings.network")
-            caption: S.tr2(S.rev, "settings.network.hint")
+            caption: S.tr2(S.rev, report.reporting ? "settings.network.hint.report" : "settings.network.hint")
             ToggleSwitch {
                 label: S.tr2(S.rev, "settings.network")
                 checked: prefs.networkEnabled

@@ -3,12 +3,14 @@
 #include <QObject>
 #include <QStringList>
 #include <QVariantMap>
+#include <chrono>
 #include <memory>
 #include <mutex>
 #include <optional>
 #include <vector>
 
 #include "agentspeed/monitor.hpp"
+#include "agentspeed/report_body.hpp"
 
 class QTimer;
 class Strings;
@@ -28,6 +30,18 @@ struct WorkerOptions {
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
 Q_DECLARE_METATYPE(TrafficRows)
+
+// One engine tick for live reporting (METRICS 11.1): the instantaneous values and the ledger, on the monotonic clock.
+struct ReportTick {
+    std::shared_ptr<const agentspeed::report::Sample> sample;
+    qint64 monotonicMs = 0;
+};
+Q_DECLARE_METATYPE(ReportTick)
+
+// The monotonic clock live reporting runs on, shared by the worker's ticks and the report controller.
+inline qint64 steadyMs() {
+    return std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::steady_clock::now().time_since_epoch()).count();
+}
 
 // Runs the monitor off the UI thread and publishes one snapshot per engine tick (500 ms, METRICS 6).
 class MonitorWorker : public QObject {
@@ -57,6 +71,8 @@ signals:
     void snapshotReady(const QVariantMap& snapshot);
     // Every 60 s: today's traffic for the history store (METRICS 10.9).
     void trafficSave(TrafficRows rows);
+    // Every live tick (never in demo mode): what live reporting reads (METRICS 11.2).
+    void reportTick(ReportTick tick);
 
 private:
     void tick();

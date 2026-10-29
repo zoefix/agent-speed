@@ -260,6 +260,8 @@ Window {
                 width: 328
                 spacing: 0
 
+                ReportInviteCard {}
+
                 // Hero
                 RowLayout {
                     Layout.fillWidth: true
@@ -583,6 +585,28 @@ Window {
                         HoverHandler { cursorShape: Qt.PointingHandCursor }
                     }
                     Item { Layout.fillWidth: true }
+                    // DESIGN 11: reporting is on (or being set up); a dot when the user must act.
+                    IconButton {
+                        visible: report.indicatorVisible
+                        glyph: "broadcast"
+                        label: report.indicatorTip
+                        opacity: report.indicatorPaused ? 0.4 : 1
+                        onClicked: {
+                            root.dismissed()
+                            report.showSettings()
+                        }
+                        ToolTip.visible: hovered
+                        ToolTip.text: report.indicatorTip
+                        Rectangle {
+                            visible: report.indicatorAttention
+                            width: 5
+                            height: 5
+                            radius: 2.5
+                            color: Theme.amber
+                            x: parent.width - 9
+                            y: 5
+                        }
+                    }
                     IconButton {
                         glyph: "chart"
                         label: S.tr2(S.rev, "history.open")
@@ -608,7 +632,7 @@ Window {
                     IconButton {
                         glyph: "power"
                         label: S.tr2(S.rev, "menu.quit")
-                        onClicked: Qt.quit()
+                        onClicked: report.quitApp()
                     }
                 }
             }

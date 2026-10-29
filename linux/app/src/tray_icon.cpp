@@ -73,6 +73,19 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     demo_->setCheckable(true);
     demo_->setChecked(demo);
     connect(demo_, &QAction::toggled, this, &TrayIcon::demoToggled);
+    reportMenu_ = new QMenu(menu_);
+    reportItem_ = menu_->addMenu(reportMenu_);
+    reportItem_->setVisible(false);
+    reportHour_ = reportMenu_->addAction(QString());
+    connect(reportHour_, &QAction::triggered, this, [this] { emit reportPause(1); });
+    reportIndefinite_ = reportMenu_->addAction(QString());
+    connect(reportIndefinite_, &QAction::triggered, this, [this] { emit reportPause(0); });
+    reportResume_ = reportMenu_->addAction(QString());
+    connect(reportResume_, &QAction::triggered, this, &TrayIcon::reportResume);
+    reportLeaderboard_ = reportMenu_->addAction(QString());
+    connect(reportLeaderboard_, &QAction::triggered, this, &TrayIcon::reportLeaderboard);
+    reportSettings_ = reportMenu_->addAction(QString());
+    connect(reportSettings_, &QAction::triggered, this, &TrayIcon::reportSettings);
     menu_->addSeparator();
     history_ = menu_->addAction(QString());
     connect(history_, &QAction::triggered, this, &TrayIcon::historyRequested);
@@ -105,6 +118,20 @@ void TrayIcon::retranslate() {
     settings_->setText(strings_.t(QStringLiteral("menu.settings")));
     quit_->setText(strings_.t(QStringLiteral("menu.quit")));
     update_->setText(strings_.t(QStringLiteral("update.menu")).replace(QStringLiteral("%@"), updateVersion_));
+    reportHour_->setText(strings_.t(QStringLiteral("report.pause.hour")));
+    reportIndefinite_->setText(strings_.t(QStringLiteral("report.pause.indefinite")));
+    reportResume_->setText(strings_.t(QStringLiteral("report.resume")));
+    reportLeaderboard_->setText(strings_.t(QStringLiteral("report.service.leaderboard")));
+    reportSettings_->setText(strings_.t(QStringLiteral("report.menu.settings")));
+}
+
+void TrayIcon::setReport(bool visible, const QString& text, bool paused, bool leaderboard) {
+    reportItem_->setVisible(visible);
+    reportItem_->setText(text);
+    reportHour_->setVisible(!paused);
+    reportIndefinite_->setVisible(!paused);
+    reportResume_->setVisible(paused);
+    reportLeaderboard_->setVisible(leaderboard);
 }
 
 void TrayIcon::setUpdate(const QString& version) {

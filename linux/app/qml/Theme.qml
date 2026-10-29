@@ -16,6 +16,8 @@ QtObject {
     readonly property color pressed: dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.075)
     readonly property color connector: dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.15)
     readonly property color amber: dark ? "#FBBF24" : "#B45309"
+    readonly property color danger: dark ? "#F87171" : "#D92D20"
+    readonly property color good: dark ? "#4ADE80" : "#1F9D55"
     readonly property color accent: dark ? "#5B8CFF" : "#2F6BFF"
     readonly property color card: dark ? Qt.rgba(1, 1, 1, 0.035) : "#FFFFFF"
     readonly property color sidebar: dark ? "#13151A" : "#F2F3F7"

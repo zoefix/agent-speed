@@ -15,6 +15,13 @@ qt_add_executable(agent-speed
     src/network_service.cpp
     src/catalog.cpp
     src/preferences.cpp
+    src/report/report_account.cpp
+    src/report/report_controller.cpp
+    src/report/report_delivery.cpp
+    src/report/report_http.cpp
+    src/report/report_keys.cpp
+    src/report/report_preview.cpp
+    src/report/report_settings.cpp
     src/orb/body.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
@@ -33,6 +40,13 @@ qt_add_executable(agent-speed
 
 set(agent_speed_qml
     qml/AboutPage.qml
+    qml/ApiPage.qml
+    qml/FieldInput.qml
+    qml/LinkButton.qml
+    qml/ReportConsentWindow.qml
+    qml/ReportInviteCard.qml
+    qml/ReportPreviewText.qml
+    qml/ReportPreviewWindow.qml
     qml/AgentRow.qml
     qml/CostPage.qml
     qml/CurrencyPicker.qml

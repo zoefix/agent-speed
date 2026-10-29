@@ -6,6 +6,7 @@ Item {
     property alias glyph: icon.name
     property string label
     property bool checked: false
+    readonly property bool hovered: area.containsMouse
     signal clicked()
     implicitWidth: 28
     implicitHeight: 28

@@ -35,6 +35,8 @@ public:
     void push(Json value) { items_.push_back(std::move(value)); }
 
     std::string compact() const;
+    // Two-space indentation, members in order (the preview of DESIGN 11).
+    std::string pretty() const;
     static std::string quoted(std::string_view text);
     // Half away from zero to `places` (0 for a non-finite value).
     static double round(double value, int places);
@@ -42,6 +44,7 @@ public:
 
 private:
     void write(std::string& out) const;
+    void writePretty(std::string& out, int indent) const;
 
     Kind kind_ = Kind::Null;
     bool bool_ = false;
