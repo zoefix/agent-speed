@@ -3,6 +3,7 @@
 
 Usage: python3 spec/tools/generate_fixtures.py
 """
+import hashlib
 import json
 import math
 import os
@@ -19,7 +20,6 @@ import hermes_fixtures  # noqa: E402
 import omp_fixtures  # noqa: E402
 import openclaw_fixtures  # noqa: E402
 import pi_fixtures  # noqa: E402
-import task_e2e_fixtures  # noqa: E402
 import workbuddy_fixtures  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures"))
@@ -55,10 +55,24 @@ def cx(i, c, o, r, cw=None):
     return u
 
 
-def resp(key, start, end, inp, cached, cw, out, reasoning, model, final=True, cw1h=0, provider=None, fast=False):
-    return {"key": key, "startMs": start, "endMs": end, "input": inp, "cachedInput": cached,
+def resp(key, start, end, inp, cached, cw, out, reasoning, model, final=True, cw1h=0, provider=None, fast=False,
+         first=None):
+    return {"key": key, "startMs": start, "endMs": end, "firstMs": first, "input": inp, "cachedInput": cached,
             "cacheWriteInput": cw, "cacheWrite1hInput": cw1h, "output": out, "reasoning": reasoning, "model": model,
             "provider": provider, "fast": fast, "final": final}
+
+
+def sha16(text):
+    return hashlib.sha256(text.encode("utf-8")).hexdigest()[:16]
+
+
+def raw16(value):
+    """The digest of an object input as these files store it (compact JSON, METRICS 6.10)."""
+    return sha16(json.dumps(value, ensure_ascii=False, separators=(",", ":")))
+
+
+def act(tool, digest, call, result, failed, model):
+    return {"tool": tool, "digest": digest, "callMs": call, "resultMs": result, "failed": failed, "model": model}
 
 
 def mode(value, evidence="recorded", provider=None):
@@ -124,10 +138,12 @@ write_jsonl(rel, [
 expect(rel, source="codex", project="rocket", model="gpt-6.1-sol", isSubagent=False, parentFile=None,
        phase="idle", inFlightStartMs=None, lastLineMs=at(0, 10, 700), malformedLines=1,
        responses=[
-           resp("resp-1", at(0, 1, 10), at(0, 5, 10), 10000, 8000, 0, 200, 50, "gpt-6.1-sol", provider="openai"),
+           resp("resp-1", at(0, 1, 10), at(0, 5, 10), 10000, 8000, 0, 200, 50, "gpt-6.1-sol", provider="openai",
+                first=at(0, 3)),
            resp("resp-2", at(0, 7, 500), at(0, 10, 500), 10400, 10000, 0, 330, 0, "gpt-6.1-sol",
-                provider="openai"),
+                provider="openai", first=at(0, 9)),
        ],
+       actions=[act("shell", sha16("{}"), at(0, 5), at(0, 7, 500), None, "gpt-6.1-sol")],
        effort=mode("xhigh"), speed=mode("ultrafast", "selected", "openai"),
        responseModes={"resp-1": {"effort": mode("xhigh"), "speed": mode("fast", "selected", "openai")},
                       "resp-2": {"effort": mode("xhigh"), "speed": mode("ultrafast", "selected", "openai")}})
@@ -181,8 +197,9 @@ write_jsonl(rel, [
 ])
 expect(rel, source="codex", project="rocket", model="gpt-6.1-sol", isSubagent=True,
        parentFile="codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl", phase="tools", inFlightStartMs=None, lastLineMs=at(0, 47), malformedLines=0,
-       responses=[resp("resp-3", at(0, 21), at(0, 24), 5000, 0, 0, 120, 40, "gpt-6.1-sol"),
-                  resp("resp-4", at(0, 40), at(0, 47), 5200, 5000, 0, 60, 10, "gpt-6.1-sol")],
+       responses=[resp("resp-3", at(0, 21), at(0, 24), 5000, 0, 0, 120, 40, "gpt-6.1-sol", first=at(0, 22)),
+                  resp("resp-4", at(0, 40), at(0, 47), 5200, 5000, 0, 60, 10, "gpt-6.1-sol", first=at(0, 45))],
+       actions=[act("exec", sha16("ls"), at(0, 23, 900), at(0, 30), None, "gpt-6.1-sol")],
        effort=mode("max"), speed=None,
        responseModes={"resp-3": {"effort": mode("max"), "speed": None},
                       "resp-4": {"effort": mode("max"), "speed": mode("ultrafast", "selected", "openai")}})
@@ -209,7 +226,8 @@ write_jsonl(rel, [
 expect(rel, source="codex", project="legacy-app", model="gpt-5.5", isSubagent=False, parentFile=None,
        phase="idle", inFlightStartMs=None, lastLineMs=at(1, 9, 100), malformedLines=0,
        responses=[
-           resp("codex-legacy:thread-legacy:20213", at(1, 0, 500), at(1, 4), 19515, 7040, 0, 698, 368, "gpt-5.5"),
+           resp("codex-legacy:thread-legacy:20213", at(1, 0, 500), at(1, 4), 19515, 7040, 0, 698, 368, "gpt-5.5",
+                first=at(1, 2)),
            resp("codex-legacy:thread-legacy:41000", at(1, 6), at(1, 9), 20485, 11960, 0, 302, 32, "gpt-5.5"),
        ])
 
@@ -256,9 +274,9 @@ expect(rel, source="codex", project="comet", model="gpt-6.1-sol-mini", isSubagen
        phase="idle", inFlightStartMs=None, lastLineMs=at(1, 28, 700), malformedLines=0,
        responses=[
            resp("resp-z1", at(1, 21, 10), at(1, 24, 10), 6000, 5000, 0, 150, 40, "gpt-6.1-sol-mini",
-                provider="custom"),
+                provider="custom", first=at(1, 24)),
            resp("resp-z2", at(1, 25, 500), at(1, 28, 500), 6300, 6000, 0, 210, 0, "gpt-6.1-sol-mini",
-                provider="custom"),
+                provider="custom", first=at(1, 27)),
        ])
 
 
@@ -333,9 +351,12 @@ expect(rel, source="codex", project="rocket", model="gpt-6.1-sol-mini", isSubage
        parentFile="codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl", phase="idle",
        inFlightStartMs=None, lastLineMs=C + 8700, malformedLines=1,
        responses=[
-           resp("resp-p1", C + 610, C + 4010, 7000, 6000, 0, 90, 30, "gpt-6.1-sol-mini", provider="openai"),
-           resp("resp-p2", C + 6000, C + 8500, 7300, 7000, 0, 40, 0, "gpt-6.1-sol-mini", provider="openai"),
+           resp("resp-p1", C + 610, C + 4010, 7000, 6000, 0, 90, 30, "gpt-6.1-sol-mini", provider="openai",
+                first=C + 3000),
+           resp("resp-p2", C + 6000, C + 8500, 7300, 7000, 0, 40, 0, "gpt-6.1-sol-mini", provider="openai",
+                first=C + 7000),
        ],
+       actions=[act("exec", sha16("rg flaky"), C + 4000, C + 6000, None, "gpt-6.1-sol-mini")],
        effort=mode("medium"), speed=None,
        responseModes={"resp-p1": {"effort": mode("medium"), "speed": None},
                       "resp-p2": {"effort": mode("medium"), "speed": None}})
@@ -394,8 +415,9 @@ write_jsonl(rel, [
 expect(rel, source="claudeCode", project="nova", model="claude-opus-5-5", isSubagent=False, parentFile=None,
        phase="idle", inFlightStartMs=None, lastLineMs=at(2, 25), malformedLines=0,
        responses=[
-           resp("msg_A", at(2, 0, 50), at(2, 6, 50), 21002, 20000, 1000, 300, 60, "claude-opus-5-5", cw1h=600),
-           resp("msg_B", at(2, 9), at(2, 12), 21205, 21000, 200, 240, 0, "claude-opus-5-5"),
+           resp("msg_A", at(2, 0, 50), at(2, 6, 50), 21002, 20000, 1000, 300, 60, "claude-opus-5-5", cw1h=600,
+                first=at(2, 4)),
+           resp("msg_B", at(2, 9), at(2, 12), 21205, 21000, 200, 240, 0, "claude-opus-5-5", first=at(2, 12)),
        ],
        effort=mode("ultracode"), speed=mode("standard", "served", "anthropic"),
        responseModes={"msg_A": {"effort": mode("xhigh"), "speed": None},
@@ -417,8 +439,9 @@ write_jsonl(rel, [
 expect(rel, source="claudeCode", project="nova", model="claude-opus-5-5", isSubagent=True,
        parentFile="claude/projects/-Users-dev-projects-nova/s-cli.jsonl",
        phase="generating", inFlightStartMs=at(2, 16), lastLineMs=at(2, 16), malformedLines=0,
-       responses=[resp("msg_D", at(2, 7), at(2, 10), 504, 0, 500, 90, 0, "claude-opus-5-5", cw1h=500),
-                  resp("msg_E", at(2, 11), at(2, 15), 602, 600, 0, 8, 0, "claude-opus-5-5", final=False)],
+       responses=[resp("msg_D", at(2, 7), at(2, 10), 504, 0, 500, 90, 0, "claude-opus-5-5", cw1h=500, first=at(2, 10)),
+                  resp("msg_E", at(2, 11), at(2, 15), 602, 600, 0, 8, 0, "claude-opus-5-5", final=False,
+                       first=at(2, 14))],
        effort=None, speed=None,
        responseModes={"msg_D": {"effort": None, "speed": None}, "msg_E": {"effort": None, "speed": None}})
 
@@ -440,7 +463,8 @@ write_jsonl(rel, [
 ])
 expect(rel, source="claudeDesktop", project="orbit", model="claude-opus-5-5", isSubagent=False, parentFile=None,
        phase="tools", inFlightStartMs=None, lastLineMs=at(3, 5), malformedLines=0,
-       responses=[resp("msg_C", at(3, 0, 2), at(3, 5), 30003, 30000, 0, 500, 0, "claude-opus-5-5", fast=True)],
+       responses=[resp("msg_C", at(3, 0, 2), at(3, 5), 30003, 30000, 0, 500, 0, "claude-opus-5-5", fast=True,
+                       first=at(3, 5))],
        effort=mode("ultracode"), speed=mode("fast", "served", "anthropic"),
        responseModes={"msg_C": {"effort": mode("ultracode"), "speed": mode("fast", "served", "anthropic")}})
 
@@ -461,7 +485,8 @@ write_jsonl(rel, [
 expect(rel, source="claudeDesktop", project="orbit", model="claude-sonnet-5-5", isSubagent=True,
        parentFile="claude/projects/-Users-dev-projects-orbit/s-desk.jsonl",
        phase="idle", inFlightStartMs=None, lastLineMs=at(3, 4, 6), malformedLines=0,
-       responses=[resp("msg_W", at(3, 1), at(3, 4), 903, 900, 0, 60, 0, "claude-sonnet-5-5", fast=True)],
+       responses=[resp("msg_W", at(3, 1), at(3, 4), 903, 900, 0, 60, 0, "claude-sonnet-5-5", fast=True,
+                       first=at(3, 3))],
        effort=mode("medium"), speed=mode("fast", "served", "anthropic"),
        responseModes={"msg_W": {"effort": mode("medium"), "speed": mode("fast", "served", "anthropic")}})
 
@@ -552,6 +577,133 @@ expect(rel, source="deepseek", project="quasar", model="deepseek-pro", isSubagen
        phase="generating", inFlightStartMs=at(4, 15, 10), lastLineMs=at(4, 15, 10), malformedLines=0,
        responses=[resp("dss-1", at(4, 11), at(4, 14), 4500, 4000, 0, 240, 0, "deepseek-pro",
                        provider="deepseek-account")])
+
+
+
+# --- Claude Code: first-content times, actions; then a forked copy (METRICS 4.1, 6.10) -------------------------
+def cl_assistant(ms, mid, blocks, usage, stop, model="claude-opus-5-5", **kw):
+    return claude("assistant", ms, requestId="req_" + mid, uuid="uuid-" + mid + str(ms),
+                  message={"id": mid, "type": "message", "role": "assistant", "model": model, "content": blocks,
+                           "stop_reason": stop, "usage": usage}, **kw)
+
+
+def tool_result(tool_id, text, error=None):
+    block = {"type": "tool_result", "tool_use_id": tool_id, "content": text}
+    if error is not None:
+        block["is_error"] = error
+    return block
+
+
+v = dict(cwd="/Users/dev/projects/vega", session="s-vega")
+in_r1 = {"command": "cargo build", "description": "Build"}
+in_r2 = {"file_path": "src/main.rs", "old_string": "a", "new_string": "b"}
+in_r3 = {"command": "cargo build"}
+call_r1 = {"type": "tool_use", "id": "toolu_R1", "name": "Bash", "input": in_r1}
+rel = "claude/projects/-Users-dev-projects-vega/s-vega.jsonl"
+write_jsonl(rel, [
+    user(at(6, 0), "Fix the build", **v),
+    claude("system", at(6, 2, 600), subtype="api_error", level="error", retryAttempt=1, maxRetries=10, **v),
+    claude("api-request", at(6, 3), **v),
+    cl_assistant(at(6, 6), "msg_R1", [{"type": "thinking", "thinking": ""}], cl_usage(3, 0, 5000, 40), None, **v),
+    cl_assistant(at(6, 5, 500), "msg_R1", [call_r1], cl_usage(3, 0, 5000, 120), "tool_use", **v),
+    user(at(6, 8), [tool_result("toolu_R1", "error[E0425]", True)], **v),
+    claude("api-request", at(6, 8, 100), **v),
+    cl_assistant(at(6, 12), "msg_R2", [{"type": "tool_use", "id": "toolu_R2", "name": "Edit", "input": in_r2},
+                                       {"type": "tool_use", "id": "toolu_R3", "name": "Bash", "input": in_r3}],
+                 cl_usage(2, 100, 5100, 200), "tool_use", **v),
+    user(at(6, 13), [tool_result("toolu_R2", "ok")], **v),
+    user(at(6, 20), [tool_result("toolu_R3", "Finished"), tool_result("toolu_R2", "late", True),
+                     tool_result("toolu_none", "orphan")], **v),
+    claude("api-request", at(6, 22), **v),
+    cl_assistant(at(6, 25), "msg_R3", [{"type": "text", "text": "Fixed."}], cl_usage(1, 0, 5300, 60), "end_turn", **v),
+])
+# A `system` line (here an API error before a retry) changes nothing but lastLineMs. msg_R1's lines are out of order:
+# the earlier timestamp is its first content. toolu_R2's late second result is ignored (the first result counts);
+# toolu_none names no call.
+expect(rel, source="claudeCode", project="vega", model="claude-opus-5-5", isSubagent=False, parentFile=None,
+       phase="idle", inFlightStartMs=None, lastLineMs=at(6, 25), malformedLines=0,
+       responses=[resp("msg_R1", at(6, 3), at(6, 6), 5003, 5000, 0, 120, 0, "claude-opus-5-5", first=at(6, 5, 500)),
+                  resp("msg_R2", at(6, 8, 100), at(6, 12), 5202, 5100, 100, 200, 0, "claude-opus-5-5",
+                       first=at(6, 12)),
+                  resp("msg_R3", at(6, 22), at(6, 25), 5301, 5300, 0, 60, 0, "claude-opus-5-5", first=at(6, 25))],
+       actions=[act("Bash", raw16(in_r1), at(6, 5, 500), at(6, 8), True, "claude-opus-5-5"),
+                act("Edit", raw16(in_r2), at(6, 12), at(6, 13), False, "claude-opus-5-5"),
+                act("Bash", raw16(in_r3), at(6, 12), at(6, 20), False, "claude-opus-5-5")])
+
+# A fork (Claude Code `--fork-session`) copies the conversation with its uuids and timestamps: the copied assistant
+# line is a duplicate (no response, no action) and the copied tool result matches no call.
+f = dict(v, session="s-fork")
+in_f1 = {"file_path": "src/lib.rs"}
+rel = "claude/projects/-Users-dev-projects-vega/s-fork.jsonl"
+write_jsonl(rel, [
+    user(at(6, 0), "Fix the build", **f),
+    cl_assistant(at(6, 5, 500), "msg_R1", [call_r1], cl_usage(3, 0, 5000, 120), "tool_use", **f),
+    user(at(6, 8), [tool_result("toolu_R1", "error[E0425]", True)], **f),
+    user(at(7, 0), "Try it on a branch", **f),
+    claude("api-request", at(7, 1), **f),
+    cl_assistant(at(7, 4), "msg_F1", [{"type": "tool_use", "id": "toolu_F1", "name": "Read", "input": in_f1}],
+                 cl_usage(2, 0, 5000, 80), "tool_use", **f),
+    user(at(7, 4, 200), [tool_result("toolu_F1", "fn main")], **f),
+])
+expect(rel, source="claudeCode", project="vega", model="claude-opus-5-5", isSubagent=False, parentFile=None,
+       phase="generating", inFlightStartMs=at(7, 4, 200), lastLineMs=at(7, 4, 200), malformedLines=0,
+       responses=[resp("msg_F1", at(7, 1), at(7, 4), 5002, 5000, 0, 80, 0, "claude-opus-5-5", first=at(7, 4))],
+       actions=[act("Read", raw16(in_f1), at(7, 4), at(7, 4, 200), False, "claude-opus-5-5")])
+
+# --- Codex: first output times, a response without output, tool outcomes (METRICS 4.2, 6.10) ------------------
+rel = "codex/sessions/2026/10/20/rollout-2026-10-20T10-08-00-tools.jsonl"
+patch = "*** Begin Patch\n*** End Patch\n"
+array_output = json.dumps([{"type": "input_text", "text": "{\"exit_code\":0,\"output\":\"Done\"}"}])
+write_jsonl(rel, [
+    codex(at(8, 0), "session_meta", {"id": "thread-tools", "timestamp": ts(at(8, 0)), "cwd": "/Users/dev/projects/vega",
+                                     "originator": "codex_cli_rs", "cli_version": "0.170.0", "source": "cli",
+                                     "model_provider": "openai"}),
+    codex(at(8, 0, 100), "turn_context", {"cwd": "/Users/dev/projects/vega", "model": "gpt-6.1-sol"}),
+    codex(at(8, 1), "response_item", {"type": "message", "role": "user",
+                                      "content": [{"type": "input_text", "text": "Run the tests"}]}),
+    codex(at(8, 2), "response_item", {"type": "reasoning", "summary": []}),
+    codex(at(8, 3), "response_item", {"type": "function_call", "name": "exec_command",
+                                      "arguments": "{\"cmd\":\"cargo test\"}", "call_id": "call-t1"}),
+    codex(at(8, 3, 10), "token_usage_record", {"thread_id": "thread-tools", "response_id": "resp-t1",
+                                               "usage": cx(8000, 7000, 100, 20)}),
+    codex(at(8, 9), "response_item", {"type": "function_call_output", "call_id": "call-t1",
+                                      "output": "{\"exit_code\":101,\"duration_seconds\":5.9}"}),
+    codex(at(8, 9, 500), "token_usage_record", {"thread_id": "thread-tools", "response_id": "resp-t2",
+                                                "usage": cx(8200, 8000, 30, 0)}),
+    codex(at(8, 11), "response_item", {"type": "reasoning", "summary": []}),
+    codex(at(8, 12), "response_item", {"type": "custom_tool_call", "name": "apply_patch", "input": patch,
+                                       "call_id": "call-t2"}),
+    codex(at(8, 12, 10), "response_item", {"type": "function_call", "name": "shell",
+                                           "arguments": "{\"command\":[\"ls\"]}", "call_id": "call-t3"}),
+    codex(at(8, 12, 100), "token_usage_record", {"thread_id": "thread-tools", "response_id": "resp-t3",
+                                                 "usage": cx(8400, 8200, 90, 40)}),
+    codex(at(8, 13), "response_item", {"type": "custom_tool_call_output", "call_id": "call-t2",
+                                       "output": array_output}),
+    codex(at(8, 14), "response_item", {"type": "function_call_output", "call_id": "call-t3", "output": "a.txt"}),
+    codex(at(8, 15), "response_item", {"type": "function_call_output", "call_id": "call-t3",
+                                       "output": "{\"exit_code\":2}"}),
+    codex(at(8, 15, 100), "response_item", {"type": "function_call_output", "call_id": "call-unknown",
+                                            "output": "{\"exit_code\":1}"}),
+    codex(at(8, 16), "response_item", {"type": "message", "role": "assistant",
+                                       "content": [{"type": "output_text", "text": "Two tests fail."}]}),
+    codex(at(8, 17), "token_usage_record", {"thread_id": "thread-tools", "response_id": "resp-t4",
+                                            "usage": cx(8600, 8400, 50, 0)}),
+    codex(at(8, 17, 100), "event_msg", {"type": "task_complete", "turn_id": "turn-t"}),
+])
+# resp-t2 arrives without an output line since its request started: no first-content time. call-t3's first result
+# says nothing about failure (unknown); its later result is ignored.
+expect(rel, source="codex", project="vega", model="gpt-6.1-sol", isSubagent=False, parentFile=None,
+       phase="idle", inFlightStartMs=None, lastLineMs=at(8, 17, 100), malformedLines=0,
+       responses=[resp("resp-t1", at(8, 1), at(8, 3, 10), 8000, 7000, 0, 100, 20, "gpt-6.1-sol", provider="openai",
+                       first=at(8, 2)),
+                  resp("resp-t2", at(8, 9), at(8, 9, 500), 8200, 8000, 0, 30, 0, "gpt-6.1-sol", provider="openai"),
+                  resp("resp-t3", at(8, 9, 500), at(8, 12, 100), 8400, 8200, 0, 90, 40, "gpt-6.1-sol",
+                       provider="openai", first=at(8, 11)),
+                  resp("resp-t4", at(8, 15, 100), at(8, 17), 8600, 8400, 0, 50, 0, "gpt-6.1-sol", provider="openai",
+                       first=at(8, 16))],
+       actions=[act("exec_command", sha16("{\"cmd\":\"cargo test\"}"), at(8, 3), at(8, 9), True, "gpt-6.1-sol"),
+                act("apply_patch", sha16(patch), at(8, 12), at(8, 13), False, "gpt-6.1-sol"),
+                act("shell", sha16("{\"command\":[\"ls\"]}"), at(8, 12, 10), at(8, 14), None, "gpt-6.1-sol")])
 
 
 # --- OpenCode: SQLite database -------------------------------------------------
@@ -692,10 +844,6 @@ order += droid["order"]
 files.update(droid["files"])
 mtimes.update(droid["mtimes"])
 traces_droid = droid["traces"]
-
-# --- Task score end to end (METRICS 6.9): its own tree, spec/fixtures/tasks ------------
-# Its expectations are task-e2e-expected.json, written by reference.py --write-task-fixture.
-task_e2e_fixtures.write(ROOT)
 
 with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as f:
     json.dump({"_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the "

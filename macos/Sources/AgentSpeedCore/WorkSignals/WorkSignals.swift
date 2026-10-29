@@ -30,10 +30,10 @@ public struct WorkSignals: Equatable, Sendable {
         self.recovered = recovered
     }
 
-    /// The signals of `actions` (oldest first) at `nowMs`.
+    /// The signals of `actions` (oldest first) at `nowMs`; actions read while seeding do not count.
     init(_ actions: [ToolAction], nowMs: Int64) {
-        let recent = actions.filter { $0.atMs >= nowMs - Self.recentMs }
-        if let newest = recent.last, nowMs - newest.atMs < Self.freshMs {
+        let recent = actions.filter { !$0.seeded && $0.callMs >= nowMs - Self.recentMs }
+        if let newest = recent.last, nowMs - newest.callMs < Self.freshMs {
             for size in Self.loopBlockSizes {
                 let run = Self.repeatRun(recent, blockSize: size)
                 guard run.count >= Self.loopRepeats else { continue }
@@ -50,7 +50,7 @@ public struct WorkSignals: Equatable, Sendable {
         recovered = failures.filter { index in
             let failure = recent[index]
             return recent[(index + 1)..<min(recent.count, index + 1 + Self.recoveryReach)].contains {
-                $0.call.tool == failure.call.tool && $0.failed == false && $0.atMs - failure.atMs <= Self.recentMs
+                $0.call.tool == failure.call.tool && $0.failed == false && $0.callMs - failure.callMs <= Self.recentMs
             }
         }.count
         if recent.count >= Self.noveltyMinimum {

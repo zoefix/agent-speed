@@ -194,7 +194,7 @@ final class AppModel {
         appliedConfiguration = settings.monitorConfiguration
         monitor.setSubsets(orbSubsets.union(boardSubsets))
         monitor.start()
-        report.taskWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
+        report.perfWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
         report.activate()
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
@@ -247,8 +247,8 @@ final class AppModel {
         historyStartTimer = nil
         let service = HistoryService(store: history, configuration: settings.monitorConfiguration, liveStore: store,
                                      pricing: priceBook)
-        // The history's calibration drives the live predictions (METRICS 6.11).
-        history.taskModelsHandler = { [weak self] models in self?.monitor?.setTaskModels(models) }
+        // The stored performance records give the score card its baselines (METRICS 6.11).
+        history.perfRecordsHandler = { [weak self] records in self?.monitor?.setPerfHistory(records) }
         historyService = service
         service.start()
     }

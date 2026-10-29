@@ -27,7 +27,6 @@ internal sealed class PiParser : TranscriptParser<PiLine>
     {
         ParentPath = parentPath;
         RestorePathState();
-        EnableTasks(new global::AgentSpeed.Core.Tasks.PiFamilyTaskReader(SourceKind.Pi), SourceKind.Pi);
     }
 
     /// <summary>A package sub-agent's session file (<c>&lt;stem&gt;.jsonl</c> next to its folder); null for a main session.</summary>
@@ -65,23 +64,12 @@ internal sealed class PiParser : TranscriptParser<PiLine>
         }
 
         _headerProbed = true;
-        var header = ReadHeader(AgentId);
-        PiTaskFacts.Read(TaskReader, [], ref header);
-        pi.Header = header;
+        pi.Header = ReadHeader(AgentId);
     }
 
     public override ILineBatch NewBatch() => new PiBatch(this);
 
     public override void Apply(in PiLine line, IResponseSink sink)
-    {
-        ApplyLine(in line, sink);
-        if (line.TaskTracked)
-        {
-            ComposeTask(line.Task, line.TimestampMs!.Value);
-        }
-    }
-
-    private void ApplyLine(in PiLine line, IResponseSink sink)
     {
         if (line.Status == LineStatus.Malformed)
         {
@@ -128,12 +116,7 @@ internal sealed class PiParser : TranscriptParser<PiLine>
         }
     }
 
-    protected override PiLine Extract(ReadOnlySpan<byte> line)
-    {
-        var parsed = PiLineReader.Read(line);
-        PiTaskFacts.Read(TaskReader, line, ref parsed);
-        return parsed;
-    }
+    protected override PiLine Extract(ReadOnlySpan<byte> line) => PiLineReader.Read(line);
 
     /// <summary>The first <c>session</c> line among the first two lines of the file, else a blank line.</summary>
     internal static PiLine ReadHeader(string path)
@@ -225,7 +208,6 @@ internal sealed class PiParser : TranscriptParser<PiLine>
             return;
         }
 
-        RecordTools(in line.Tools, ts);
         var call = line.Call;
         if (!call.IsGuardedMessage)
         {
@@ -241,6 +223,8 @@ internal sealed class PiParser : TranscriptParser<PiLine>
             Emit(key, line.Failed ? null : line.StartedMs, end, in call, call.Model, call.Provider, _context, sink);
             SetModel(call.Model);
         }
+
+        RecordTools(in line.Tools, ts);
 
         if (line.Failed)
         {
@@ -321,15 +305,7 @@ internal sealed class PiParser : TranscriptParser<PiLine>
 
         public void OnLine(ReadOnlySpan<byte> line) => _items.Add(owner.Extract(line));
 
-        public void OnLine(ReadOnlySpan<byte> line, long offset, int length)
-        {
-            if (offset == 0)
-            {
-                owner.OnFileStart();
-            }
-
-            OnLine(line);
-        }
+        public void OnLine(ReadOnlySpan<byte> line, long offset, int length) => OnLine(line);
 
         public void OnMalformed() => _malformed++;
 

@@ -22,6 +22,24 @@ struct OpenClawParser: Sendable {
         state = AgentState(source: .openclaw, isSubagent: window.isSubagent)
     }
 
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
+    }
+
+    /// The dedupe key of an assistant entry (METRICS 4.14), whose calls another window may own; nil for other entries.
+    static func entryKey(_ extraction: LineExtraction<OpenClawLine>) -> String? {
+        guard case .line(.entry(let id, let timestamp, .assistant(let assistant))) = extraction else { return nil }
+        return keyPrefix + id + ":" + String(assistant.startedMs ?? timestamp)
+    }
+
     mutating func consume(
         _ extraction: LineExtraction<OpenClawLine>,
         tools: [ToolEvent] = [],
@@ -53,8 +71,8 @@ struct OpenClawParser: Sendable {
             guard headerSeen else { return }
             if let headerMs, timestamp < headerMs - OmpParser.copiedHistoryMs { return }
             state.noteLine(at: timestamp)
-            state.actions.record(tools, at: timestamp)
-            consume(record, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            state.actions.recordResults(tools, at: timestamp)
+            consume(record, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         }
     }
 
@@ -62,12 +80,13 @@ struct OpenClawParser: Sendable {
         _ record: OpenClawRecord,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
         switch record {
         case .assistant(let assistant):
-            consume(assistant, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            consume(assistant, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         case .input where !window.isDelegated:
             state.setPhase(.generating, at: timestamp, inFlightStartMs: timestamp)
             pendingToolCalls.removeAll()
@@ -85,12 +104,15 @@ struct OpenClawParser: Sendable {
         _ assistant: OpenClawAssistant,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
         let key = Self.keyPrefix + id + ":" + String(assistant.startedMs ?? timestamp)
         guard !deduper.isOwnedByOtherFile(key, for: fileID) else { return }
         let isMirror = assistant.isMirror || window.mirrorsTurns
+        // A mirror's tools ran in another runtime, which records them in its own log (METRICS 6.10).
+        defer { if !isMirror { state.actions.recordCalls(tools, at: timestamp, model: state.model) } }
         if !isMirror, !assistant.usageUnavailable, assistant.hasUsage {
             // A delegated or CLI turn's usage covers the whole turn; failed requests count in totals only.
             let timed = !window.isDelegated && !assistant.isCLI && !assistant.stopIsFailure

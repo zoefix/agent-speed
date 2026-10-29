@@ -3,7 +3,7 @@ using AgentSpeed.Core.Intelligence;
 using AgentSpeed.Core.Traffic;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Localization;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Orb.Lines;
 
@@ -27,12 +27,12 @@ public static class OrbLinesText
     }
 
     /// <summary>
-    /// The intelligence line — the orb's 智力 (DESIGN 12): the highest score of its agents, live before resting, <c>–</c>
+    /// The intelligence line — the orb's 性能 (DESIGN 12): the highest score of its agents in compact form, live before resting, <c>–</c>
     /// while none — over the thinking line (<c>liveThinking</c> tok/s, hidden after 3 s at 0). Loud while the score has a value
     /// or an agent of the orb generates (DESIGN 10, revised quiet rule); otherwise the sample carries nothing, so the readout
     /// keeps its last score while it fades — also after its agents have left the agents list.
     /// </summary>
-    public static OrbLinesSample Intelligence(TaskSetReading score, IntelligenceSums sums, bool generating, Localizer localizer)
+    public static OrbLinesSample Intelligence(PerfSetReading score, IntelligenceSums sums, bool generating, Localizer localizer)
     {
         ArgumentNullException.ThrowIfNull(score);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -44,7 +44,7 @@ public static class OrbLinesText
         var thinking = SpeedFormat.Speed(sums.LiveThinking);
         var content = new OrbLinesContent(
             OrbLinesKind.Intelligence,
-            new OrbLine(localizer["intel.glyph"], score.Number, string.Empty),
+            new OrbLine(localizer["intel.glyph"], score.Compact, string.Empty),
             new OrbLine(localizer["intel.thinking.glyph"], thinking, localizer["unit.tokS"]),
             false,
             score.Sentence(thinking, localizer),
@@ -57,12 +57,12 @@ public static class OrbLinesText
         return new OrbLinesSample(OrbLinesKind.Intelligence, content, true);
     }
 
-    /// <summary>The orb's text tooltip (DESIGN 10, Hover): <c>task.tooltip.top</c> while there is a score, then <c>intel.disclaimer</c>.</summary>
-    public static string Tooltip(TaskSetReading score, Localizer localizer)
+    /// <summary>The orb's text tooltip (DESIGN 10, Hover): <c>perf.tooltip.top</c> while there is a score, then <c>perf.tooltip.note</c>.</summary>
+    public static string Tooltip(PerfSetReading score, Localizer localizer)
     {
         ArgumentNullException.ThrowIfNull(score);
         ArgumentNullException.ThrowIfNull(localizer);
-        var disclaimer = localizer["intel.disclaimer"];
-        return score.Tooltip(localizer) is { } top ? top + "\n" + disclaimer : disclaimer;
+        var note = localizer["perf.tooltip.note"];
+        return score.Tooltip(localizer) is { } top ? top + "\n" + note : note;
     }
 }

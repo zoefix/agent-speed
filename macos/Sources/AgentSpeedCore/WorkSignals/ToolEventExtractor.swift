@@ -1,27 +1,59 @@
 import Foundation
 
-/// The tool calls and results of one line (METRICS 6.10), per source format. Only live lines are read this way, so
-/// seeding and history scans never hash; inputs and outputs are hashed or inspected in place and never kept.
+/// The tool calls and results of one line (METRICS 6.10), per source format. Inputs and outputs are hashed or
+/// inspected in place and never kept. Only live lines need the digests (the work signals); seeding and the history
+/// analysis read the calls without hashing their inputs.
 enum ToolEventExtractor {
-    static func events(_ family: TranscriptFamily, _ bytes: UnsafeRawBufferPointer) -> [ToolEvent] {
+    /// Whether the family's lines hold tool calls (METRICS 6.10 table).
+    static func reads(_ family: TranscriptFamily) -> Bool {
         switch family {
-        case .claude: scan(bytes, claudeLine)
-        case .codex: scan(bytes, codexLine)
-        case .omp, .pi: scan(bytes, piFamilyLine)
-        case .droid: scan(bytes, droidLine)
-        default: []
+        case .claude, .codex, .omp, .pi, .droid: true
+        default: false
         }
     }
 
+    static func events(_ family: TranscriptFamily, _ bytes: UnsafeRawBufferPointer, hashes: Bool = true) -> [ToolEvent] {
+        let reading = Reading(hashes: hashes)
+        let line: Line
+        switch family {
+        case .claude: line = claudeLine
+        case .codex: line = codexLine
+        case .omp, .pi: line = piFamilyLine
+        case .droid: line = droidLine
+        default: return []
+        }
+        return scan(bytes) { (scanner: inout JSONScanner) throws(JSONScanError) in try line(&scanner, reading) }
+    }
+
     /// An OpenClaw transcript entry (Pi's format, METRICS 6.10).
-    static func openclawEvents(_ bytes: UnsafeRawBufferPointer) -> [ToolEvent] {
-        scan(bytes, piFamilyLine)
+    static func openclawEvents(_ bytes: UnsafeRawBufferPointer, hashes: Bool = true) -> [ToolEvent] {
+        let reading = Reading(hashes: hashes)
+        return scan(bytes) { (scanner: inout JSONScanner) throws(JSONScanError) in try piFamilyLine(&scanner, reading) }
+    }
+
+    private typealias Line = (inout JSONScanner, Reading) throws(JSONScanError) -> [ToolEvent]
+
+    private static func blocks(_ reading: Reading) -> (inout JSONScanner) throws(JSONScanError) -> ToolEvent? {
+        { (scanner: inout JSONScanner) throws(JSONScanError) in try claudeBlock(&scanner, reading) }
+    }
+
+    /// How inputs are read: hashed, or skipped (every digest empty).
+    struct Reading {
+        var hashes: Bool
+
+        func digest(_ scanner: inout JSONScanner) throws(JSONScanError) -> ToolDigest {
+            guard hashes else {
+                try scanner.skipValue()
+                return .empty
+            }
+            return try scanner.readToolDigest()
+        }
     }
 
     // MARK: - Claude
 
     /// An assistant's `tool_use` blocks, or a user's `tool_result` blocks (`is_error`).
-    private static func claudeLine(_ scanner: inout JSONScanner) throws(JSONScanError) -> [ToolEvent] {
+    private static func claudeLine(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> [ToolEvent] {
         var role: Int?
         var blocks: [ToolEvent] = []
         while let key = try scanner.nextMember() {
@@ -29,7 +61,7 @@ enum ToolEventExtractor {
                 role = try scanner.readStringMatch(["assistant", "user"])
             } else if scanner.key(key, is: "message") {
                 blocks = try member("content", of: &scanner) { scanner throws(JSONScanError) in
-                    try objects(of: &scanner, claudeBlock)
+                    try objects(of: &scanner, Self.blocks(reading))
                 } ?? []
             } else {
                 try scanner.skipValue()
@@ -42,7 +74,7 @@ enum ToolEventExtractor {
         }
     }
 
-    private static func claudeBlock(_ scanner: inout JSONScanner) throws(JSONScanError) -> ToolEvent? {
+    private static func claudeBlock(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> ToolEvent? {
         var kind: Int?
         var id: String?
         var name: String?
@@ -57,7 +89,7 @@ enum ToolEventExtractor {
             } else if scanner.key(key, is: "name") {
                 name = try scanner.readString()
             } else if scanner.key(key, is: "input") {
-                digest = try scanner.readToolDigest()
+                digest = try reading.digest(&scanner)
             } else if scanner.key(key, is: "tool_use_id") {
                 resultId = try scanner.readString()
             } else if scanner.key(key, is: "is_error") {
@@ -76,7 +108,7 @@ enum ToolEventExtractor {
     // MARK: - Factory Droid
 
     /// A `message` line: the assistant's `tool_use` blocks, or the user's `tool_result` blocks (`is_error`).
-    private static func droidLine(_ scanner: inout JSONScanner) throws(JSONScanError) -> [ToolEvent] {
+    private static func droidLine(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> [ToolEvent] {
         var isMessage = false
         var role: Int?
         var blocks: [ToolEvent] = []
@@ -84,7 +116,7 @@ enum ToolEventExtractor {
             if scanner.key(key, is: "type") {
                 isMessage = try scanner.readStringMatch(["message"]) == 0
             } else if scanner.key(key, is: "message") {
-                (role, blocks) = try droidMessage(&scanner)
+                (role, blocks) = try droidMessage(&scanner, reading)
             } else {
                 try scanner.skipValue()
             }
@@ -97,7 +129,7 @@ enum ToolEventExtractor {
         }
     }
 
-    private static func droidMessage(_ scanner: inout JSONScanner) throws(JSONScanError) -> (Int?, [ToolEvent]) {
+    private static func droidMessage(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> (Int?, [ToolEvent]) {
         guard try scanner.beginObjectIfPresent() else { return (nil, []) }
         var role: Int?
         var blocks: [ToolEvent] = []
@@ -105,7 +137,7 @@ enum ToolEventExtractor {
             if scanner.key(key, is: "role") {
                 role = try scanner.readStringMatch(["assistant", "user"])
             } else if scanner.key(key, is: "content") {
-                blocks = try objects(of: &scanner, claudeBlock)
+                blocks = try objects(of: &scanner, Self.blocks(reading))
             } else {
                 try scanner.skipValue()
             }
@@ -116,14 +148,14 @@ enum ToolEventExtractor {
     // MARK: - Codex
 
     /// A `response_item` function or custom tool call, or its output with the exit code of an exec.
-    private static func codexLine(_ scanner: inout JSONScanner) throws(JSONScanError) -> [ToolEvent] {
+    private static func codexLine(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> [ToolEvent] {
         var isResponseItem = false
         var event: ToolEvent?
         while let key = try scanner.nextMember() {
             if scanner.key(key, is: "type") {
                 isResponseItem = try scanner.readStringMatch(["response_item"]) == 0
             } else if scanner.key(key, is: "payload") {
-                event = try scanner.beginObjectIfPresent() ? try codexPayload(&scanner) : nil
+                event = try scanner.beginObjectIfPresent() ? try codexPayload(&scanner, reading) : nil
             } else {
                 try scanner.skipValue()
             }
@@ -131,7 +163,7 @@ enum ToolEventExtractor {
         return isResponseItem ? [event].compactMap { $0 } : []
     }
 
-    private static func codexPayload(_ scanner: inout JSONScanner) throws(JSONScanError) -> ToolEvent? {
+    private static func codexPayload(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> ToolEvent? {
         var kind: Int?
         var callId: String?
         var name: String?
@@ -148,9 +180,9 @@ enum ToolEventExtractor {
             } else if scanner.key(key, is: "name") {
                 name = try scanner.readString()
             } else if scanner.key(key, is: "arguments") {
-                arguments = try scanner.readToolDigest()
+                arguments = try reading.digest(&scanner)
             } else if scanner.key(key, is: "input") {
-                input = try scanner.readToolDigest()
+                input = try reading.digest(&scanner)
             } else if scanner.key(key, is: "output") {
                 exitCode = try CodexExitCode.read(&scanner)
             } else {
@@ -168,14 +200,14 @@ enum ToolEventExtractor {
     // MARK: - omp and Pi
 
     /// omp and Pi share the message shape: an assistant's `toolCall` blocks, or a `toolResult` (`isError`).
-    private static func piFamilyLine(_ scanner: inout JSONScanner) throws(JSONScanError) -> [ToolEvent] {
+    private static func piFamilyLine(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> [ToolEvent] {
         var isMessage = false
         var events: [ToolEvent] = []
         while let key = try scanner.nextMember() {
             if scanner.key(key, is: "type") {
                 isMessage = try scanner.readStringMatch(["message"]) == 0
             } else if scanner.key(key, is: "message") {
-                events = try scanner.beginObjectIfPresent() ? try piFamilyMessage(&scanner) : []
+                events = try scanner.beginObjectIfPresent() ? try piFamilyMessage(&scanner, reading) : []
             } else {
                 try scanner.skipValue()
             }
@@ -183,7 +215,7 @@ enum ToolEventExtractor {
         return isMessage ? events : []
     }
 
-    private static func piFamilyMessage(_ scanner: inout JSONScanner) throws(JSONScanError) -> [ToolEvent] {
+    private static func piFamilyMessage(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> [ToolEvent] {
         var role: Int?
         var calls: [ToolEvent] = []
         var resultId: String?
@@ -192,7 +224,9 @@ enum ToolEventExtractor {
             if scanner.key(key, is: "role") {
                 role = try scanner.readStringMatch(["assistant", "toolResult"])
             } else if scanner.key(key, is: "content") {
-                calls = try objects(of: &scanner, piFamilyToolCall)
+                calls = try objects(of: &scanner) { (inner: inout JSONScanner) throws(JSONScanError) in
+                    try piFamilyToolCall(&inner, reading)
+                }
             } else if scanner.key(key, is: "toolCallId") {
                 resultId = try scanner.readString()
             } else if scanner.key(key, is: "isError") {
@@ -208,7 +242,7 @@ enum ToolEventExtractor {
         }
     }
 
-    private static func piFamilyToolCall(_ scanner: inout JSONScanner) throws(JSONScanError) -> ToolEvent? {
+    private static func piFamilyToolCall(_ scanner: inout JSONScanner, _ reading: Reading) throws(JSONScanError) -> ToolEvent? {
         var isToolCall = false
         var id: String?
         var name: String?
@@ -221,7 +255,7 @@ enum ToolEventExtractor {
             } else if scanner.key(key, is: "name") {
                 name = try scanner.readString()
             } else if scanner.key(key, is: "arguments") {
-                digest = try scanner.readToolDigest()
+                digest = try reading.digest(&scanner)
             } else {
                 try scanner.skipValue()
             }

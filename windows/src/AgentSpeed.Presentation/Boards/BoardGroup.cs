@@ -25,7 +25,7 @@ public sealed record BoardGroup(
 {
     public BoardRankInput RankInput => new(Id, Live, LastActiveMs);
 
-    /// <summary>The row's 智力 (METRICS 6.9, <i>Sets and groups</i>): the highest member score, live before resting, else none.</summary>
+    /// <summary>The row's 性能 (METRICS 6.9, <i>Sets and groups</i>): the highest member score, live before resting, else none.</summary>
     public AgentIntelligence Intelligence { get; init; }
 
     /// <summary>The root's phase badge shows generating while any member generates (the prototypes' group badge).</summary>

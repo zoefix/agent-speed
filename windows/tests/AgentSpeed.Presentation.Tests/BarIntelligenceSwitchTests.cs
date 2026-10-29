@@ -7,7 +7,7 @@ using AgentSpeed.Presentation.Settings;
 namespace AgentSpeed.Presentation.Tests;
 
 /// <summary>
-/// The taskbar's two readout blocks (DESIGN 10, Menu bar and taskbar): the network choice and the 智力 switch, stored on
+/// The taskbar's two readout blocks (DESIGN 10, Menu bar and taskbar): the network choice and the 性能 switch, stored on
 /// their own, an earlier build's intelligence choice migrated once, and the words in their order on the bar.
 /// </summary>
 public class BarIntelligenceSwitchTests
@@ -88,17 +88,17 @@ public class BarIntelligenceSwitchTests
         var traffic = new BarTrafficBlock(new TrafficFormat.Parts("1.28", "MB/s"), new TrafficFormat.Parts("64.0", "KB/s"), false,
             "下載每秒 1.28 MB，上傳每秒 64.0 KB");
         var intelligence = BarIntelligenceBlock.Of(TestSums.Of(300, 86, 30, 300), ZhHant);
-        Assert.Equal("532 tok/s，下載每秒 1.28 MB，上傳每秒 64.0 KB，智力 86，思考每秒 10 個 token",
+        Assert.Equal("532 tok/s，下載每秒 1.28 MB，上傳每秒 64.0 KB，性能 86，思考每秒 10 個 token",
             BarReadouts.Append("532 tok/s", "，", traffic, intelligence));
 
         // The tooltip's first line adds both after ` · `.
-        Assert.Equal("532 tok/s · 跑車 · 下載每秒 1.28 MB，上傳每秒 64.0 KB · 智力 86，思考每秒 10 個 token",
+        Assert.Equal("532 tok/s · 跑車 · 下載每秒 1.28 MB，上傳每秒 64.0 KB · 性能 86，思考每秒 10 個 token",
             BarReadouts.Append("532 tok/s · 跑車", " · ", traffic, intelligence));
 
         // Either alone, or neither; a network block without a sample has no words.
-        Assert.Equal("v · 智力 86，思考每秒 10 個 token", BarReadouts.Append("v", " · ", null, intelligence));
+        Assert.Equal("v · 性能 86，思考每秒 10 個 token", BarReadouts.Append("v", " · ", null, intelligence));
         Assert.Equal("v · 下載每秒 1.28 MB，上傳每秒 64.0 KB", BarReadouts.Append("v", " · ", traffic, null));
         Assert.Equal("v", BarReadouts.Append("v", " · ", new BarTrafficBlock(null, null, false, null), null));
-        Assert.Equal("v · 智力：尚無評分", BarReadouts.Append("v", " · ", null, BarIntelligenceBlock.Of(IntelligenceSums.Zero, ZhHant)));
+        Assert.Equal("v · 性能：尚無分數", BarReadouts.Append("v", " · ", null, BarIntelligenceBlock.Of(IntelligenceSums.Zero, ZhHant)));
     }
 }

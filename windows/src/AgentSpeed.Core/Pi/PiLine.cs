@@ -118,11 +118,6 @@ internal struct PiLine
     /// <summary><c>message.__openclaw.mirrorOrigin</c> is a non-empty string: a mirrored delegated turn (METRICS 4.14).</summary>
     public bool Mirrored;
 
-    /// <summary>The composer counts this line (METRICS 6.9 <i>Composing the stream</i>).</summary>
-    public bool TaskTracked;
-
-    /// <summary>What the line gives the task composer; null when nothing.</summary>
-    public Tasks.TaskLine? Task;
 
 
     /// <summary><c>error</c>, <c>aborted</c>, <c>pending</c> and <c>deferred</c>: totals only, phase idle.</summary>

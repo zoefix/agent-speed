@@ -216,7 +216,7 @@ private struct SourceShareBar: View {
 
 /// The card's surface: Liquid Glass floating over the chart on macOS 26 (the system makes it frosted under Reduce
 /// Transparency and outlines it under Increase Contrast), a solid card with a soft shadow before.
-private struct TooltipSurface: ViewModifier {
+struct TooltipSurface: ViewModifier {
     let dark: Bool
     let increasedContrast: Bool
 

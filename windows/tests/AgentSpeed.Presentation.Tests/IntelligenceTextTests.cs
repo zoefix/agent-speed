@@ -1,14 +1,14 @@
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Work;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Orb.Lines;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Tests;
 
-/// <summary>The 智力 and work-signal wording of orbs and agent rows (DESIGN 4, 10; METRICS 6.9 task score).</summary>
+/// <summary>The 性能 and work-signal wording of orbs and agent rows (DESIGN 4, 10, 12).</summary>
 public class IntelligenceTextTests
 {
     private static readonly Localizer En = new(Localizer.LoadEmbeddedTable(), LanguageCodes.En);
@@ -17,47 +17,48 @@ public class IntelligenceTextTests
     [Fact]
     public void TheOrbTooltipAndLabelReadTheScoreAndThinking()
     {
-        var sums = new IntelligenceSums(Output: 1200, Thinking: 528, ThinkingBasis: 1200) { Score = Live(74.25) };
-        var content = OrbLinesText.Intelligence(TaskSetReading.Of(sums, []), sums, generating: false, ZhHant).Content!;
-        Assert.Equal("任務進展的估算，不是模型能力測驗", content.Detail);
-        Assert.Equal("智力 74，思考每秒 176 個 token", content.Spoken);
+        var sums = new IntelligenceSums(Output: 1200, Thinking: 528, ThinkingBasis: 1200) { Score = TestSums.Live(1286.25) };
+        var content = OrbLinesText.Intelligence(PerfSetReading.Of(sums, []), sums, generating: false, ZhHant).Content!;
+        Assert.Equal("1000 為參考水準，沒有上限", content.Detail);
+        Assert.Equal("性能 1,286，思考每秒 176 個 token", content.Spoken);
+        Assert.Equal("1,286", content.First.Number);
     }
 
     [Fact]
     public void ASetWithoutAScoreShowsADashOnlyWhileItsAgentsGenerate()
     {
         var sums = new IntelligenceSums(Output: 1200, Thinking: 528, ThinkingBasis: 1200);
-        var generating = OrbLinesText.Intelligence(TaskSetReading.None, sums, generating: true, En).Content!;
+        var generating = OrbLinesText.Intelligence(PerfSetReading.None, sums, generating: true, En).Content!;
         Assert.Equal(("–", "176"), (generating.First.Number, generating.Second.Number));
-        Assert.Equal("intelligence: no score yet, thinking 176 tokens per second", generating.Spoken);
-        Assert.Null(OrbLinesText.Intelligence(TaskSetReading.None, sums, generating: false, En).Content);
+        Assert.Equal("performance: no score yet, thinking 176 tokens per second", generating.Spoken);
+        Assert.Null(OrbLinesText.Intelligence(PerfSetReading.None, sums, generating: false, En).Content);
     }
 
     [Theory]
-    [InlineData(LanguageCodes.ZhHant, "智力 9，尚未驗證，3 個 agent 中最高", "智力 72，閒置中")]
-    [InlineData(LanguageCodes.ZhHans, "智力 9，尚未验证，3 个 agent 中最高", "智力 72，空闲中")]
-    [InlineData(LanguageCodes.En, "intelligence 9, not verified, the highest of 3 agents", "intelligence 72, idle")]
-    [InlineData(LanguageCodes.Ja, "知能 9、未検証、3 個の agent の中で最高", "知能 72、待機中")]
-    public void TheOrbsWordsCarryTheProofAndTheRestingForm(string language, string unverified, string resting)
+    [InlineData(LanguageCodes.ZhHant, "性能 912，初步（樣本少），3 個 agent 中最高", "性能 1,540，閒置中")]
+    [InlineData(LanguageCodes.ZhHans, "性能 912，初步（样本少），3 个 agent 中最高", "性能 1,540，空闲中")]
+    [InlineData(LanguageCodes.En, "performance 912, provisional (few samples), the highest of 3 agents", "performance 1,540, idle")]
+    [InlineData(LanguageCodes.Ja, "性能 912、暫定（サンプルが少ない）、3 個の agent で最高", "性能 1,540、待機中")]
+    public void TheOrbsWordsCarryTheProvisionalAndTheRestingForm(string language, string provisional, string resting)
     {
         var localizer = new Localizer(Localizer.LoadEmbeddedTable(), language);
-        var score = new TaskSetReading(TaskForm.Live, 9, Presentation.TaskScore.TaskState.Unverified, 3, null);
-        Assert.Equal(unverified, OrbLinesText.Intelligence(score, IntelligenceSums.Zero, true, localizer).Content!.SpokenAlone);
-        var pale = new TaskSetReading(TaskForm.Resting, 72, Presentation.TaskScore.TaskState.Passing, 1, null);
+        var score = new PerfSetReading(PerfForm.Live, 912, true, 3, null, null);
+        Assert.Equal(provisional, OrbLinesText.Intelligence(score, IntelligenceSums.Zero, true, localizer).Content!.SpokenAlone);
+        var pale = new PerfSetReading(PerfForm.Resting, 1540, false, 1, null, null);
         Assert.Equal(resting, OrbLinesText.Intelligence(pale, IntelligenceSums.Zero, false, localizer).Content!.SpokenAlone);
     }
 
     [Theory]
-    [InlineData(LanguageCodes.ZhHant, "智力", "思考")]
-    [InlineData(LanguageCodes.ZhHans, "智力", "思考")]
-    [InlineData(LanguageCodes.En, "IQ", "TH")]
-    [InlineData(LanguageCodes.Ja, "知", "思考")]
-    public void TheOrbReadoutsGlyphsNameIntelligenceAndThinking(string language, string intelligence, string thinking)
+    [InlineData(LanguageCodes.ZhHant, "性能", "思考")]
+    [InlineData(LanguageCodes.ZhHans, "性能", "思考")]
+    [InlineData(LanguageCodes.En, "Perf", "TH")]
+    [InlineData(LanguageCodes.Ja, "性能", "思考")]
+    public void TheOrbReadoutsGlyphsNamePerformanceAndThinking(string language, string intelligence, string thinking)
     {
         var localizer = new Localizer(Localizer.LoadEmbeddedTable(), language);
-        var sums = new IntelligenceSums(Output: 300) { Score = Live(92) };
-        var content = OrbLinesText.Intelligence(TaskSetReading.Of(sums, []), sums, generating: true, localizer).Content!;
-        Assert.Equal((intelligence, "92", string.Empty), (content.First.Glyph, content.First.Number, content.First.Unit));
+        var sums = new IntelligenceSums(Output: 300) { Score = TestSums.Live(12_840) };
+        var content = OrbLinesText.Intelligence(PerfSetReading.Of(sums, []), sums, generating: true, localizer).Content!;
+        Assert.Equal((intelligence, "12.8k", string.Empty), (content.First.Glyph, content.First.Number, content.First.Unit));
         Assert.Equal((thinking, localizer["unit.tokS"]), (content.Second.Glyph, content.Second.Unit));
     }
 
@@ -74,5 +75,4 @@ public class IntelligenceTextTests
         Assert.Empty(WorkText.Closing(WorkSignals.None, En));
     }
 
-    private static TaskSetValue Live(double score) => new(TaskValueForm.Live, score, TaskRounding.HalfAwayFromZero(score), "a");
 }

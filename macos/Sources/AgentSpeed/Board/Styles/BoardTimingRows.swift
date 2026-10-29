@@ -4,9 +4,9 @@ import AppKit
 
 /// Timing tower rows (`board-timing.html` `.row` grid: 24 pt position block, 3 pt team stripe in the source color,
 /// name, capsule column, 38 pt interval, 46 pt value, 7 pt gaps, 4 pt padding; S drops the interval). With the live
-/// metrics (DESIGN 2c *Ranking rows*): a 34 pt interval and the 智力 cell before a 42 pt value (S 40), the captions
+/// metrics (DESIGN 2c *Ranking rows*): a 34 pt interval and the 性能 cell before a 42 pt value (S 40), the captions
 /// line and the capsule's word dropped below L. At M and L each group row has a second line (the detail), the position
-/// block and stripe spanning both, and its figures (智力 and the value) 2 pt larger, centred on the row; their columns
+/// block and stripe spanning both, and its figures (性能 and the value) 2 pt larger, centred on the row; their columns
 /// widen to fit them.
 @MainActor
 struct BoardTimingRows {
@@ -26,7 +26,7 @@ struct BoardTimingRows {
         self.geometry = geometry
         let large = geometry.twoLine
         if geometry.hasIntelligence {
-            let digits = BoardLabel("888", Self.intelFont(sub: false, live: true, large: large), color: palette.ink).width
+            let digits = BoardLabel(PerfFormat.measureText, Self.intelFont(sub: false, live: true, large: large), color: palette.ink).width
             let label = BoardLabel(caption, Self.captionFont, color: palette.ink3).width
             intelCell = max(CGFloat(geometry.intelligenceColumn), digits.rounded(.up), label.rounded(.up))
         } else {
@@ -37,7 +37,7 @@ struct BoardTimingRows {
             : base
     }
 
-    /// The capsule drops its word at S, and below L while the 智力 column shows (meter and bolts stay).
+    /// The capsule drops its word at S, and below L while the 性能 column shows (meter and bolts stay).
     var compact: Bool { size == .small || (intelCell > 0 && size != .large) }
 
     func frame(_ row: BoardPlannedRow, rowsTop: CGFloat, pad: CGFloat) -> CGRect {
@@ -59,7 +59,7 @@ struct BoardTimingRows {
     }
 
     private func capsuleX(_ width: CGFloat, column: CGFloat) -> CGFloat {
-        // Without the 智力 column the original layout stands (its S keeps the interval's gap).
+        // Without the 性能 column the original layout stands (its S keeps the interval's gap).
         guard intelCell > 0 else { return intervalX(width) - 7 - column }
         let right = intervalWidth > 0 ? intervalX(width) : intelRight(width) - intelCell
         return right - 7 - column
@@ -77,7 +77,7 @@ struct BoardTimingRows {
                             fonts: [Self.valueFont(sub: false, idle: model.idle, large: true)] + (intel.map { [$0] } ?? []))
     }
 
-    /// Where line 2 ends: the first figure column's left edge — the interval, else the 智力 cell, else the value.
+    /// Where line 2 ends: the first figure column's left edge — the interval, else the 性能 cell, else the value.
     func figuresLeft(_ width: CGFloat) -> CGFloat {
         if intervalWidth > 0 { return intervalX(width) }
         return intelCell > 0 ? intelRight(width) - intelCell : valueX(width)
@@ -85,7 +85,7 @@ struct BoardTimingRows {
 
     // MARK: Items
 
-    /// The row's body, position number, value, interval and 智力 as items of their own (see `BoardListRows.items`).
+    /// The row's body, position number, value, interval and 性能 as items of their own (see `BoardListRows.items`).
     func items(_ model: BoardRowModel, key: String, frame: CGRect, column: CGFloat, accents: BoardRowAccents) -> [BoardContentItem] {
         let rows = self, look = AnyHashable([AnyHashable(palette.dark), AnyHashable(palette.highContrast)])
         var body = BoardContentItem(key: key, frame: frame, revision: AnyHashable([AnyHashable(model.body), AnyHashable(column),
@@ -175,7 +175,7 @@ struct BoardTimingRows {
             let label = BoardLabel(text, font, color: color)
             let line = baseline ?? BoardLabel(text, valueFont, color: palette.ink).baseline(centeredOn: frame.height / 2)
             label.draw(in: context, x: right - label.width, baseline: line)
-            if score.unproven {
+            if score.provisional {
                 BoardScoreNumber.drawUnderline(in: context, x: right - label.width, baseline: line, width: label.width,
                                                textSize: font.size, color: color, highContrast: palette.highContrast)
             }
@@ -184,7 +184,7 @@ struct BoardTimingRows {
         return item
     }
 
-    /// The captions line: 間隔 over the intervals (not at S), 智力 over the cells, `TOK/S` over the values, a hairline
+    /// The captions line: 間隔 over the intervals (not at S), 性能 over the cells, `TOK/S` over the values, a hairline
     /// from the position column to the capsule column's end.
     func captions(frame: CGRect, gap: String, intel: String, unit: String) -> BoardContentItem {
         let palette = self.palette, font = Self.captionFont

@@ -1,7 +1,9 @@
 #!/usr/bin/env python3
 """Reference implementation of the live thinking line (METRICS 6.9, Live thinking).
 
-Imported by task_score.py, which checks the `thinking` cases of spec/fixtures/task-score-cases.json.
+  python3 spec/tools/live_thinking.py     check the `thinking` cases of spec/fixtures/perf-score-cases.json
+
+Imported by perf_score.py, which checks the same cases with the rest of that fixture.
 
 Every output token generating in the 3-second window (METRICS 6.3) weighs `w`; the part of it that is reasoning is
 `ρ`. `liveThinking = Σ ρ / 3 s`, `thinkingShare = Σ ρ / Σ w'`. The same sums restricted to one agent, or added over a
@@ -143,3 +145,22 @@ def board_groups(agents):
             stack.extend(reversed(children.get(agent_id, [])))
         groups[root] = members
     return groups
+
+
+def main():
+    import json
+    import perf_score
+    with open(perf_score.FIXTURE, encoding="utf-8") as f:
+        data = json.load(f)["thinking"]
+    inputs = perf_score.inputs_of({"thinking": data})["thinking"]
+    got = perf_score.compute_thinking(inputs)
+    failures = perf_score.diff(got, data, "thinking") if not perf_score.close(got, data) else []
+    if failures:
+        print("\n".join(failures[:40]))
+        return 1
+    print("live thinking matches %d cases" % sum(len(c["queries"]) for cases in data.values() for c in cases))
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

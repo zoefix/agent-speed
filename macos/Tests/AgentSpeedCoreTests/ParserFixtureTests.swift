@@ -116,6 +116,7 @@ struct ParserFixtureTests {
                 #expect(actual.key == wanted.string("key"), "\(relative) key")
                 #expect(actual.startMs == wanted.int64("startMs"), "\(relative) \(actual.key) startMs")
                 #expect(actual.endMs == wanted.int64("endMs"), "\(relative) \(actual.key) endMs")
+                #expect(actual.firstMs == wanted.int64("firstMs"), "\(relative) \(actual.key) firstMs")
                 #expect(actual.usage.input == wanted.int("input"), "\(relative) \(actual.key) input")
                 #expect(actual.usage.cachedInput == wanted.int("cachedInput"), "\(relative) \(actual.key) cachedInput")
                 #expect(actual.usage.cacheWriteInput == wanted.int("cacheWriteInput"), "\(relative) \(actual.key) cacheWriteInput")
@@ -127,7 +128,18 @@ struct ParserFixtureTests {
                 expectPricingFields(actual, wanted, "\(relative) \(actual.key)")
             }
             expectModeFields(state.modes, result.responses, spec, relative)
+            // The actions of 6.10, for the files the fixture lists them for.
+            if let wanted = spec["actions"] as? [[String: Any]] {
+                let actions = state.actions.actions.map(Self.json)
+                #expect(NSArray(array: actions).isEqual(to: wanted), "\(relative) actions: \(actions)")
+            }
         }
+    }
+
+    /// An action as `parser-expected.json` lists it.
+    static func json(_ action: ToolAction) -> [String: Any] {
+        ["tool": action.tool, "digest": action.call.digest.hex, "callMs": action.callMs,
+         "resultMs": action.resultMs ?? NSNull(), "failed": action.failed ?? NSNull(), "model": action.model ?? NSNull()]
     }
 
     @Test func parentLinksMatchExpectations() throws {

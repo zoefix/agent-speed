@@ -60,6 +60,10 @@ effects and fire a new-leader celebration.
 
 ## New live metrics (`board-metrics.html`)
 
+> Since 2026-10-29 the 智力 readout below is **性能**, the performance score (DESIGN 2c and 12): an uncapped number
+> where 1000 is the reference, drawn on a log arc and meter. `board-metrics.html` still shows the earlier index; the
+> 性能 numbers, arc, meter, row cells and score card are drawn in `spec/prototypes/perf-score/index.html`.
+
 The board also shows the live **intelligence index** (智力, METRICS 6.9), **thinking** tok/s (思考) and the **cost per
 second** (費用, METRICS 9.5 in the display currency, DESIGN 9 rate form, `≥` when part is unpriced, `–` when nothing is).
 `board-metrics.html` compares three layouts for them in every style, all rendered from the same simulation; the three

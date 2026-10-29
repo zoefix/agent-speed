@@ -31,7 +31,7 @@ namespace AgentSpeed.Boards.Harness;
 /// <c>AGENT_SPEED_BOARD_FRAMES_METRICS=1</c> renders the live metrics instead (DESIGN 2c, Live metrics): per style and appearance a
 /// sheet <c>metrics-STYLE-THEME.png</c> (rows S, M, L; columns <see cref="MetricsStates"/>) and each cell as
 /// <c>metrics-STYLE-SIZE-THEME-STATE.png</c>, after the team story's 40 ticks at rest, like the prototype's shots.
-/// <c>AGENT_SPEED_BOARD_FRAMES_SCORES=1</c> renders the task score's forms instead (<see cref="BoardScoreFrames"/>).
+/// <c>AGENT_SPEED_BOARD_FRAMES_SCORES=1</c> renders 性能's forms instead (<see cref="BoardScoreFrames"/>).
 /// </para>
 /// </summary>
 internal static class BoardFrameHarness
@@ -69,7 +69,7 @@ internal static class BoardFrameHarness
 
     /// <summary>
     /// The live metrics states of the metrics sheets: every readout on with 思考 above zero; 思考 hidden at zero (no source reports
-    /// reasoning); quiet (nothing generating); every switch off (the plain hero, two-line rows at M and L); 智力 off; every source a
+    /// reasoning); quiet (nothing generating); every switch off (the plain hero, two-line rows at M and L); 性能 off; every source a
     /// subscription (the tag).
     /// </summary>
     private static readonly (string Name, BoardReadouts Readouts, bool NoReasoning, bool Quiet, bool Subscriptions)[] MetricsStates =

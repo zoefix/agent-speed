@@ -3,7 +3,7 @@ namespace AgentSpeed.Presentation.Boards;
 /// <summary>One of a board's live metrics switches (DESIGN 2c, Live metrics: Switches), in menu and editor order.</summary>
 public enum BoardReadout
 {
-    /// <summary>智力 in the sub-gauge, and the rows' 智力 column with its captions line.</summary>
+    /// <summary>性能 in the sub-gauge, and the rows' 性能 column with its captions line.</summary>
     Intelligence,
 
     /// <summary>思考 in the sub-gauge.</summary>
@@ -36,7 +36,7 @@ public readonly record struct BoardReadouts
 
     public static IReadOnlyList<BoardReadout> Order { get; } = [BoardReadout.Intelligence, BoardReadout.Thinking, BoardReadout.Cost];
 
-    /// <summary>The hero has a sub-gauge (at least one of 智力, 思考 and 費用); otherwise it is the board without metrics.</summary>
+    /// <summary>The hero has a sub-gauge (at least one of 性能, 思考 and 費用); otherwise it is the board without metrics.</summary>
     public bool Hero => Intelligence || Thinking || Cost;
 
     /// <summary>Every switch off: no readouts (at M and L the group rows still have their second line).</summary>

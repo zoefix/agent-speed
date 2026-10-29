@@ -5,7 +5,7 @@ using AgentSpeed.Presentation.Cost;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Localization;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Titles;
 
 namespace AgentSpeed.Presentation.Boards.Live;
@@ -45,12 +45,12 @@ public sealed class BoardTexts
     public SourceSet Billable => Cost?.Billable ?? SourceSet.Everything;
 
     /// <summary>
-    /// The hero's 智力, 思考 and 費用 (DESIGN 2c, Live metrics: Values): the board's task score (<paramref name="score"/>, its own
+    /// The hero's 性能, 思考 and 費用 (DESIGN 2c, Live metrics: Values): the board's performance score (<paramref name="score"/>, its own
     /// form whatever the window holds), METRICS 7 of the thinking rate (<c>–</c> while nothing generates); the cost of the billable
     /// sources in the section 9 rate form, <c>≥</c> when partly priced, <c>–</c> when nothing is, the subscription tag when every
     /// source is excluded, a real 0 otherwise.
     /// </summary>
-    public BoardHeroReadouts Hero(IntelligenceSums sums, TaskSetReading score, CostReading cost)
+    public BoardHeroReadouts Hero(IntelligenceSums sums, PerfSetReading score, CostReading cost)
     {
         ArgumentNullException.ThrowIfNull(score);
         ArgumentNullException.ThrowIfNull(cost);
@@ -71,31 +71,31 @@ public sealed class BoardTexts
     }
 
     /// <summary>
-    /// A row's 智力 cell (DESIGN 2c, Ranking rows): a group row's highest member score (METRICS 6.9, <i>Sets and groups</i>), a sub
+    /// A row's 性能 cell (DESIGN 2c, Ranking rows): a group row's highest member score (METRICS 6.9, <i>Sets and groups</i>), a sub
     /// row's own value, with <c>a11y.agent.intel</c> and the score words while the column shows. It names no cost: 費用 is the
     /// board's only live cost.
     /// </summary>
     public BoardRowReadout? Row(BoardEntry entry, BoardReadouts readouts)
     {
         ArgumentNullException.ThrowIfNull(entry);
-        TaskSetReading score;
+        PerfSetReading score;
         switch (entry.Kind)
         {
             case BoardEntryKind.Group:
                 var group = entry.Group;
-                score = TaskSetReading.Of(group.Intelligence.Score, [group.Root, .. group.Subs]);
+                score = PerfSetReading.Of(group.Intelligence.Score, [group.Root, .. group.Subs]);
                 break;
             case BoardEntryKind.Sub when entry.Agent is { } agent:
-                score = TaskSetReading.Of(agent.Intelligence.Score, [agent]);
+                score = PerfSetReading.Of(agent.Intelligence.Score, [agent]);
                 break;
             case BoardEntryKind.Sub:
-                score = TaskSetReading.None;
+                score = PerfSetReading.None;
                 break;
             default:
                 return null;
         }
 
-        // The 智力 words follow the speed only while the column shows.
+        // The 性能 words follow the speed only while the column shows.
         var spoken = readouts.Intelligence && score.Words(Localizer) is { } words ? Localizer.Format("a11y.agent.intel", words) : string.Empty;
         return new BoardRowReadout(score, spoken);
     }

@@ -461,7 +461,7 @@ internal sealed class SettingsViewModel : ObservableObject
         set => Apply(s => s with { BarShowUnit = value });
     }
 
-    /// <summary><c>settings.bar.intelligence</c>: the 智力 block after the network block (DESIGN 10).</summary>
+    /// <summary><c>settings.bar.intelligence</c>: the 性能 block after the network block (DESIGN 10).</summary>
     public bool BarIntelligence
     {
         get => S.BarIntelligence;

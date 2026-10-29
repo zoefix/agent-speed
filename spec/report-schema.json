@@ -413,6 +413,16 @@
           "items": {
             "$ref": "#/$defs/taskStat"
           }
+        },
+        "perfScore": {
+          "$ref": "#/$defs/perfScoreLive"
+        },
+        "perfStats": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/perfStat"
+          }
         }
       }
     },
@@ -571,6 +581,9 @@
         },
         "taskScore": {
           "$ref": "#/$defs/taskScoreLive"
+        },
+        "perfScore": {
+          "$ref": "#/$defs/perfScoreLive"
         },
         "realtime": {
           "$ref": "#/$defs/realtime"
@@ -907,6 +920,10 @@
         "taskScore": {
           "type": "integer",
           "minimum": 1
+        },
+        "perfScore": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -983,7 +1000,7 @@
       }
     },
     "taskScoreLive": {
-      "description": "METRICS 11.10, REPORTING-EXTENSIONS 9 (extension taskScore): the highest task score (智力) of a set of agents, live before resting, rounded half away from zero, with its form, and the live thinking speed. score is null exactly when form is none. Present at the top level and on every models[] entry exactly when the extension is active for the report.",
+      "description": "Retired (METRICS 11.10, REPORTING-EXTENSIONS 10): the former task score extension taskScore. A current client sends it only to a service that advertises taskScore and not perfScore, with score null, form none and the live thinking speed; older clients sent the highest task score (智力), 0–100.",
       "type": "object",
       "required": [
         "score",
@@ -1012,7 +1029,7 @@
       }
     },
     "taskStat": {
-      "description": "METRICS 11.10, REPORTING-EXTENSIONS 9: the tasks of one source with this model that completed since the previous report and were watched from their start (increments, sent once). Invariants checked by services that advertise taskScore: scored <= completed; the sum of scoreBins equals scored; scoreSum lies within the bins' bounds; successes <= scored; stalls <= completed; fixFailures <= fixAttempts; recovered <= recoverAttempts <= fixAttempts; at most 1000 completed tasks per report.",
+      "description": "Retired (REPORTING-EXTENSIONS 10): the task statistics of the former taskScore extension. Current clients send an empty taskStats array; the definition stays so that services that still advertise taskScore keep validating older clients.",
       "type": "object",
       "required": [
         "source",
@@ -1085,6 +1102,140 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 1000000
+        }
+      }
+    },
+    "perfScoreLive": {
+      "description": "METRICS 11.10, REPORTING-EXTENSIONS 9 (extension perfScore): the highest performance score (性能) of a set of agents, live before resting, rounded half away from zero (1000 is the reference level; no upper limit, a client sends at most 10 000 000), with its form, and the live thinking speed. score is null exactly when form is none. Present at the top level and on every models[] entry exactly when the extension is active for the report.",
+      "type": "object",
+      "required": [
+        "score",
+        "form",
+        "thinkingTokS"
+      ],
+      "properties": {
+        "score": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "form": {
+          "enum": [
+            "live",
+            "resting",
+            "none"
+          ]
+        },
+        "thinkingTokS": {
+          "$ref": "#/$defs/tokS"
+        }
+      }
+    },
+    "perfStat": {
+      "description": "METRICS 11.10, REPORTING-EXTENSIONS 9: the sufficient statistics of the performance score (METRICS 6.11 Records) of one source with this model, for the measured responses and the tool calls that completed since the previous report (increments, sent once). A service adds rows per model and computes the pooled score with the METRICS 6.9 formula. Invariants checked by services that advertise perfScore: n + toolN >= 1; latencyBins holds [bucket 0-63, count >= 1] pairs in ascending bucket order whose counts add up to at most n; 500 n <= durationMsSum <= 900000 n; outputSum <= 10^12 n; reasonN <= n and reasonN <= reasonOutput <= outputSum and 500 reasonN <= reasonDurationMsSum <= min(durationMsSum, 900000 reasonN); cacheN <= n and cacheN <= cacheInput <= 10^12 cacheN and cacheCached <= cacheInput; toolN ln 50 <= toolLnSum <= toolN ln 900000 (within 1e-6); toolFailed <= toolN; activeMs <= durationMsSum + 900000 toolN; at most 100 000 responses and 100 000 tool calls per report.",
+      "type": "object",
+      "required": [
+        "source",
+        "n",
+        "outputSum",
+        "durationMsSum",
+        "latencyBins",
+        "reasonN",
+        "reasonOutput",
+        "reasonDurationMsSum",
+        "cacheN",
+        "cacheInput",
+        "cacheCached",
+        "toolN",
+        "toolLnSum",
+        "toolFailed",
+        "activeMs"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "n": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "outputSum": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "durationMsSum": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 90000000000
+        },
+        "latencyBins": {
+          "type": "array",
+          "maxItems": 64,
+          "items": {
+            "type": "array",
+            "minItems": 2,
+            "maxItems": 2,
+            "items": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 100000
+            }
+          }
+        },
+        "reasonN": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "reasonOutput": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reasonDurationMsSum": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 90000000000
+        },
+        "cacheN": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "cacheInput": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheCached": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "toolN": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "toolLnSum": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1400000
+        },
+        "toolFailed": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 100000
+        },
+        "activeMs": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 180000000000
         }
       }
     },

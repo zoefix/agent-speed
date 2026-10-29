@@ -7,9 +7,12 @@ using AgentSpeed.Core.Pi;
 namespace AgentSpeed.Core.OpenClaw;
 
 /// <summary>What one read of the OpenClaw databases changed.</summary>
-internal sealed class OpenClawUpdate : IResponseSink
+internal sealed class OpenClawUpdate : IResponseSink, ICallSink
 {
     public List<(ParsedResponse Response, bool IsCompletion)> Responses { get; } = [];
+
+    /// <summary>Responses and live tool results in the order they were read (METRICS 11.10 counts them in this order).</summary>
+    public List<(ParsedResponse? Response, bool IsCompletion, string? AgentId, Work.WorkAction Call)> Completions { get; } = [];
 
     /// <summary>Agent ids of windows that are gone (pruned, or their database vanished or was replaced).</summary>
     public List<string> Removed { get; } = [];
@@ -21,7 +24,13 @@ internal sealed class OpenClawUpdate : IResponseSink
 
     public int DatabasesRead { get; set; }
 
-    public void OnResponse(ParsedResponse response, bool isCompletion) => Responses.Add((response, isCompletion));
+    public void OnResponse(ParsedResponse response, bool isCompletion)
+    {
+        Responses.Add((response, isCompletion));
+        Completions.Add((response, isCompletion, null, default));
+    }
+
+    public void OnCallResult(string agentId, SourceKind source, Work.WorkAction action) => Completions.Add((null, false, agentId, action));
 }
 
 /// <summary>
@@ -57,11 +66,8 @@ internal sealed class OpenClawSource
     /// <summary>A state folder (or the folder or file of the setting) exists (METRICS 2).</summary>
     public bool Available => Roots.Any(OpenClawPaths.Exists);
 
-    /// <summary>Windows keep every task's events (the probe's dumps); set before the first read.</summary>
-    internal bool KeepEveryTask { get; set; }
-
-    /// <summary>Live reporting's watch (METRICS 11.10), given to every window's parser.</summary>
-    internal Tasks.TaskWatchContext? TaskWatch { get; init; }
+    /// <summary>A seeding read is in progress: actions read now are seeded (METRICS 6.10).</summary>
+    private bool _seeding;
 
     public IEnumerable<OpenClawParser> Parsers => _databases.Values.SelectMany(d => d.Windows.Values).Select(w => w.Parser);
 
@@ -131,17 +137,20 @@ internal sealed class OpenClawSource
         _thresholdMs = todayStartMs - Monitoring.MonitorCore.BacklogWindowMs;
         Roots = _rediscover?.Invoke() ?? Roots;
         var update = new OpenClawUpdate();
-        foreach (var (path, _) in Discover().OrderBy(d => d.Stamp.LastWriteUtc).ThenBy(d => d.Path, StringComparer.Ordinal))
+        _seeding = true;
+        try
         {
-            cancellationToken.ThrowIfCancellationRequested();
-            var tracked = new TrackedDatabase(path);
-            _databases[path] = tracked;
-            Read(tracked, update);
+            foreach (var (path, _) in Discover().OrderBy(d => d.Stamp.LastWriteUtc).ThenBy(d => d.Path, StringComparer.Ordinal))
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+                var tracked = new TrackedDatabase(path);
+                _databases[path] = tracked;
+                Read(tracked, update);
+            }
         }
-
-        foreach (var parser in Parsers)
+        finally
         {
-            parser.ForgetWork();
+            _seeding = false;
         }
 
         return update;
@@ -226,7 +235,7 @@ internal sealed class OpenClawSource
                 }
 
                 var parser = new OpenClawParser(path, window, deduper);
-                parser.KeepEveryTask();
+                parser.ReadWholeFile();
                 parsers.Add(parser);
                 var sink = sinkFor(parser);
                 var stop = stopAfter is { } at && at.Session == window.SessionId;
@@ -234,7 +243,7 @@ internal sealed class OpenClawSource
                 {
                     parser.Apply(in line, sink);
                     return !(stop && seq == stopAfter!.Value.Seq);
-                }, parser.TaskReader);
+                });
                 windowDone?.Invoke(parser);
                 if (stop)
                 {
@@ -346,12 +355,7 @@ internal sealed class OpenClawSource
             var generation = generations.GetValueOrDefault(window.SessionId);
             if (!tracked.Windows.TryGetValue(window.SessionId, out var state))
             {
-                var parser = new OpenClawParser(tracked.Path, window, _deduper) { TaskWatch = TaskWatch };
-                if (KeepEveryTask)
-                {
-                    parser.KeepEveryTask();
-                }
-
+                var parser = new OpenClawParser(tracked.Path, window, _deduper);
                 state = new WindowState(parser) { Generation = generation, UpdatedMs = window.UpdatedMs };
                 tracked.Windows[window.SessionId] = state;
                 if (first && (window.UpdatedMs ?? long.MinValue) < _thresholdMs)
@@ -399,24 +403,33 @@ internal sealed class OpenClawSource
         LinkParents(tracked.Path, [.. tracked.Windows.Values.Select(w => w.Parser)], database.CurrentSessions());
     }
 
-    private static void ReadRows(WindowState state, OpenClawDatabase database, OpenClawUpdate update)
+    private void ReadRows(WindowState state, OpenClawDatabase database, OpenClawUpdate update)
     {
-        if (state.NeedsHeader)
+        state.Parser.Seeding = _seeding;
+        state.Parser.CallSink = update;
+        try
         {
-            // An older window read from its end: its header first, as omp does for a file read from an offset (4.7).
-            state.NeedsHeader = false;
-            var header = database.Header(state.Parser.SessionId);
-            PiTaskFacts.Read(state.Parser.TaskReader, [], ref header);
-            state.Parser.Apply(in header, update);
-        }
+            if (state.NeedsHeader)
+            {
+                // An older window read from its end: its header first, as omp does for a file read from an offset (4.7).
+                state.NeedsHeader = false;
+                var header = database.Header(state.Parser.SessionId);
+                state.Parser.Apply(in header, update);
+            }
 
-        var before = state.Parser.Version;
-        state.LastSeq = database.Rows(state.Parser.SessionId, state.LastSeq, (_, line) =>
+            var before = state.Parser.Version;
+            state.LastSeq = database.Rows(state.Parser.SessionId, state.LastSeq, (_, line) =>
+            {
+                state.Parser.Apply(in line, update);
+                return true;
+            });
+            update.Changed |= state.Parser.Version != before;
+        }
+        finally
         {
-            state.Parser.Apply(in line, update);
-            return true;
-        }, state.Parser.TaskReader);
-        update.Changed |= state.Parser.Version != before;
+            state.Parser.Seeding = false;
+            state.Parser.CallSink = null;
+        }
     }
 
     private void RemoveWindow(TrackedDatabase tracked, string sessionId, OpenClawUpdate update)

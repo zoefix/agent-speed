@@ -29,6 +29,18 @@ struct PiParser: Sendable {
         state.malformedLines += 1
     }
 
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
+    }
+
     mutating func consume(
         _ extraction: LineExtraction<PiLine>,
         tools: [ToolEvent] = [],
@@ -62,8 +74,8 @@ struct PiParser: Sendable {
             guard headerSeen else { return }
             if let headerMs, timestamp < headerMs - OmpParser.copiedHistoryMs { return }
             state.noteLine(at: timestamp)
-            state.actions.record(tools, at: timestamp)
-            consume(record, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            state.actions.recordResults(tools, at: timestamp)
+            consume(record, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         }
     }
 
@@ -71,6 +83,7 @@ struct PiParser: Sendable {
         _ record: PiRecord,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
@@ -79,7 +92,7 @@ struct PiParser: Sendable {
             state.setPhase(.generating, at: timestamp, inFlightStartMs: timestamp)
             pendingToolCalls.removeAll()
         case .assistant(let assistant):
-            consume(assistant, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            consume(assistant, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         case .toolResult(let callId, let usage):
             side(usage, id: id, at: timestamp, model: nil, provider: nil, deduper: &deduper, emit: emit)
             if let callId { pendingToolCalls.remove(callId) }
@@ -101,11 +114,13 @@ struct PiParser: Sendable {
         _ assistant: PiAssistant,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
         let key = "pi:\(id):\(assistant.startedMs ?? timestamp)"
         guard !deduper.isOwnedByOtherFile(key, for: fileID) else { return }
+        defer { state.actions.recordCalls(tools, at: timestamp, model: state.model) }
         var endMs = timestamp
         if let started = assistant.startedMs, let duration = assistant.durationMs {
             let (sum, overflow) = started.addingReportingOverflow(duration)

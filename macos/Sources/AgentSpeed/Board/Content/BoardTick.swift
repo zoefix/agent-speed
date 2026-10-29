@@ -50,8 +50,8 @@ struct BoardContentLayout {
     var number: CGRect
     /// Sub-agent id → its row frame (hover cards, accessibility).
     var subRows: [String: CGRect] = [:]
-    /// The hero's 智力 (glass: the dial; neon: the digits and meter; timing: its row of the box), where its score card
-    /// opens; nil while 智力 is off.
+    /// The hero's 性能 (glass: the dial; neon: the digits and meter; timing: its row of the box), where its score card
+    /// opens; nil while 性能 is off.
     var scoreArea: CGRect?
 
     /// The items to show; their one-shot accents come with the first call only, so a layout applied again (a board
@@ -69,9 +69,9 @@ protocol BoardContentBuilding: AnyObject {
     func layout(_ tick: BoardTick) -> BoardContentLayout
     /// When a fixed cell of the sub-gauge narrows back (a later layout differs even if the tick does not).
     var wakeAt: TimeInterval? { get }
-    /// Reduce Motion: 智力 crossfades instead of counting up (DESIGN 12 *Motion*).
+    /// Reduce Motion: 性能 crossfades instead of counting up (DESIGN 12 *Motion*).
     var reduceMotion: Bool { get set }
-    /// While the hero's 智力 counts up: when it lands. Until then the board lays itself out on every frame of the roll
+    /// While the hero's 性能 counts up: when it lands. Until then the board lays itself out on every frame of the roll
     /// class (DESIGN 2c *Frame policy*), each layout showing the integer of its instant.
     func climbsUntil(after now: TimeInterval) -> TimeInterval?
 }

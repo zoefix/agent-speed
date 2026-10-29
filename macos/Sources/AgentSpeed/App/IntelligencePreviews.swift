@@ -3,28 +3,29 @@ import AgentSpeedOrbModel
 import AppKit
 import SwiftUI
 
-/// `--render-previews` group `intel`: the intelligence readout of every style at 112, 148 and 196 pt in the task
+/// `--render-previews` group `intel`: the intelligence readout of every style at 112, 148 and 196 pt in the performance
 /// score's five situations, in Chinese and English, a state sheet, the score's motion and the smallest sizes per
 /// appearance, the thinking line hidden at zero, the network and intelligence readouts side by side, and the dashboard
 /// with a looping agent (DESIGN 4, Looping mark; DESIGN 10, Intelligence readout; DESIGN 12).
 @MainActor
 enum IntelligencePreviews {
     struct Scenario {
-        var score: TaskSetReading
+        var score: PerfSetReading
         var thinking: Double
     }
 
-    static func score(_ form: TaskValueForm, _ shown: Int?, _ state: TaskState?, count: Int = 1) -> TaskSetReading {
-        TaskSetReading(form: form, shown: shown, state: state, count: count, agentId: form == .none ? nil : "nova")
+    static func score(_ form: PerfValueForm, _ shown: Int?, provisional: Bool = false, count: Int = 1) -> PerfSetReading {
+        PerfSetReading(form: form, shown: shown, provisional: provisional, count: count,
+                       agentId: form == .none ? nil : "nova")
     }
 
-    /// The prototype's gallery: passing (the top of four), unverified, pending, resting pale on one line, and none
-    /// while an agent has only read so far.
+    /// The prototype's gallery: live (the top of four), provisional, a compact five-digit score, resting pale on one
+    /// line, and none while an agent has fewer than three timed requests.
     static let scenarios = [
-        Scenario(score: score(.live, 86, .passing, count: 4), thinking: 128),
-        Scenario(score: score(.live, 9, .unverified), thinking: 64),
-        Scenario(score: score(.live, 34, .pending), thinking: 41),
-        Scenario(score: score(.resting, 72, .passing), thinking: 0),
+        Scenario(score: score(.live, 1286, count: 4), thinking: 128),
+        Scenario(score: score(.live, 1048, provisional: true), thinking: 64),
+        Scenario(score: score(.live, 12_840), thinking: 41),
+        Scenario(score: score(.resting, 1452), thinking: 0),
         Scenario(score: .none, thinking: 22),
     ]
 
@@ -61,7 +62,7 @@ enum IntelligencePreviews {
     }
 
     /// Columns: quiet (needle keeps its unit on the dial), steady, fading out, new-peak pill, Increase Contrast (live
-    /// unverified and resting), hovered, English and Japanese glyphs, 112 pt.
+    /// provisional and resting), hovered, English and Japanese glyphs, 112 pt.
     private static func writeStates(model: AppModel, dark: Bool, into directory: URL) {
         let busy = scenarios[0]
         let rows = OrbStyleKind.allCases.map { style -> [NSImage] in
@@ -95,18 +96,18 @@ enum IntelligencePreviews {
         SurfacePreviews.writeSheet(rows, dark: dark, to: directory.appendingPathComponent("orb-intel-states-\(dark ? "dark" : "light").png"))
     }
 
-    /// The score's motion (DESIGN 12, *Motion*) at 148 pt, each column a moment after a change: a +40 climb 0.1, 0.25
-    /// and 0.5 s in, a fall 0.1 s into its crossfade, live → resting 0.1 s into the color crossfade, the proof mark
-    /// 0.12 s into fading in with a +2 rise in place, `–` → a score 0.1 s in, and the same climb under Reduce Motion
-    /// 0.075 s into its crossfade.
+    /// The score's motion (DESIGN 12, *Motion*) at 148 pt, each column a moment after a change: a 902 → 1,286 count 0.1,
+    /// 0.25 and 0.5 s in, a fall counting down 0.2 s in, live → resting 0.1 s into the color crossfade, the provisional
+    /// mark 0.12 s into fading out with a +2 change replaced in place, `–` → a score 0.1 s in, and the same climb under
+    /// Reduce Motion 0.075 s into its crossfade.
     private static func writeMotion(model: AppModel, dark: Bool, into directory: URL) {
-        let climb = (score(.live, 40, .failing), score(.live, 80, .passing))
-        let moments: [(from: TaskSetReading, to: TaskSetReading, age: TimeInterval, reduceMotion: Bool)] = [
+        let climb = (score(.live, 902), score(.live, 1286))
+        let moments: [(from: PerfSetReading, to: PerfSetReading, age: TimeInterval, reduceMotion: Bool)] = [
             (climb.0, climb.1, 0.1, false), (climb.0, climb.1, 0.25, false), (climb.0, climb.1, 0.5, false),
-            (score(.live, 80, .passing), score(.live, 62, .pending), 0.1, false),
-            (score(.live, 80, .passing), score(.resting, 80, .passing), 0.1, false),
-            (score(.live, 80, .passing), score(.live, 82, .pending), 0.12, false),
-            (.none, score(.live, 12, .unverified), 0.1, false),
+            (score(.live, 1286), score(.live, 948), 0.2, false),
+            (score(.live, 1286), score(.resting, 1286), 0.1, false),
+            (score(.live, 1286, provisional: true), score(.live, 1288), 0.12, false),
+            (.none, score(.live, 1048, provisional: true), 0.1, false),
             (climb.0, climb.1, 0.075, true),
         ]
         let rows = OrbStyleKind.allCases.map { style -> [NSImage] in
@@ -126,9 +127,9 @@ enum IntelligencePreviews {
     }
 
     /// Every style at the smallest size that shows the readout, in Chinese, Japanese and English: the widest lines
-    /// against the LED arc, the core's rim and the needle's hub, with the proof mark at the 7 pt floor.
+    /// against the LED arc, the core's rim and the needle's hub, with the provisional mark at the 7 pt floor.
     private static func writeSmallest(model: AppModel, dark: Bool, into directory: URL) {
-        let widest = Scenario(score: score(.live, 100, .pending), thinking: 888)
+        let widest = Scenario(score: score(.live, 8888, provisional: true), thinking: 888)
         let rows = OrbStyleKind.allCases.map { style -> [NSImage] in
             [AppLanguage.zhHant, .ja, .en].compactMap { language in
                 let placement = OrbLinePlacement.of(style)
@@ -147,8 +148,8 @@ enum IntelligencePreviews {
     /// Thinking hidden at zero, every style at 148 and 196 pt: thinking above 0, the zero within its hold, 0.12 s into
     /// the fade and the glide, and the intelligence line alone where the line next to the value would be.
     private static func writeAlone(model: AppModel, dark: Bool, into directory: URL) {
-        let busy = Scenario(score: score(.live, 86, .passing), thinking: 10)
-        let zero = Scenario(score: score(.resting, 86, .passing), thinking: 0)
+        let busy = Scenario(score: score(.live, 1286), thinking: 10)
+        let zero = Scenario(score: score(.resting, 1286), thinking: 0)
         let rows = OrbStyleKind.allCases.map { style -> [NSImage] in
             ([148, 196] as [CGFloat]).flatMap { size in
                 [

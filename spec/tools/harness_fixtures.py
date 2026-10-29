@@ -10,7 +10,7 @@ BASE = 1792497600000  # 2026-10-20T12:00:00Z
 
 
 def response(key, start, end, inp, out, cached=0, write=0, reasoning=0, model="glm-5.3", provider="zai"):
-    return dict(key=key, startMs=BASE + start, endMs=BASE + end, input=inp, cachedInput=cached,
+    return dict(key=key, startMs=BASE + start, endMs=BASE + end, firstMs=None, input=inp, cachedInput=cached,
                 cacheWriteInput=write, cacheWrite1hInput=0, output=out, reasoning=reasoning,
                 model=model, provider=provider, final=True, fast=False, requestCount=1)
 

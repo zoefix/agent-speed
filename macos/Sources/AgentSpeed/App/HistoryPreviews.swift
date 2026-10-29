@@ -31,8 +31,8 @@ enum HistoryPreviews {
         /// DESIGN 10: a source whose token usage is left out (it only used the network), and sources turned off.
         var tokenless: SourceKind?
         var disabled: Set<SourceKind> = []
-        /// DESIGN 12: the task records of 任務表現 (none while the first analysis of this version runs).
-        var tasks = true
+        /// DESIGN 12: the performance records of 性能表現 (none while the first analysis of this version runs).
+        var perf = true
     }
 
     enum Days { case full, none, recent(Int) }
@@ -72,10 +72,11 @@ enum HistoryPreviews {
         Case(name: "today-ja-min", size: HistoryWindowController.minimumSize, source: .omp, range: .today, language: .ja),
         Case(name: "today-zh-hans-min", size: HistoryWindowController.minimumSize, range: .today, language: .zhHans),
         Case(name: "table", tall: true),
-        // 任務表現 (DESIGN 12): one source chosen, the minimum width in English, and the first re-analysis.
-        Case(name: "tasks-source", source: .claudeCode, tall: true),
-        Case(name: "tasks-min-en", size: HistoryWindowController.minimumSize, language: .en, tall: true),
-        Case(name: "tasks-analyzing", state: .analyzing(0.36, 112, 304), tall: true, tasks: false),
+        // 性能表現 (DESIGN 12): one source chosen, the minimum width in English, a single day, and the first re-analysis.
+        Case(name: "perf-source", source: .claudeCode, tall: true),
+        Case(name: "perf-min-en", size: HistoryWindowController.minimumSize, language: .en, tall: true),
+        Case(name: "perf-yesterday", range: .yesterday, tall: true),
+        Case(name: "perf-analyzing", state: .analyzing(0.36, 112, 304), tall: true, perf: false),
         Case(name: "table-sorted", source: .claudeDesktop, sort: .speed, tall: true),
         // Scrolled into the table: the column titles stay pinned under the toolbar (issue #21 keeps them in place).
         Case(name: "table-scrolled", sort: .cost, scrolled: true),
@@ -258,8 +259,8 @@ enum HistoryPreviews {
         case .notLoaded: .notLoaded
         }
         model.history.publish(state: state, days: days)
-        let tasks = days.isEmpty || !item.tasks ? [] : PreviewTaskRecords.records(endingAt: now, calendar: calendar)
-        model.history.publish(taskRecords: tasks.filter { !item.disabled.contains($0.source) }, taskModels: [:])
+        let perf = days.isEmpty || !item.perf ? [] : PerfPreviewData.historyRecords(today: DayKey(now, calendar: calendar))
+        model.history.publish(perfRecords: perf.filter { !item.disabled.contains($0.source) })
         TrafficPreviewData.publish(into: model.traffic, now: now)
         model.settings.currency = item.currency
         model.rates.preview(rates: previewRates, currency: item.currency)
@@ -330,7 +331,7 @@ enum HistoryPreviews {
     /// The whole scrolling column at its natural height, to review the table.
     private static func renderColumn(viewModel: HistoryViewModel, model: AppModel, width: CGFloat, dark: Bool, to url: URL) {
         let rows = viewModel.content.rows.count
-        let height = 460 + HistoryLayout.chartHeight + CGFloat(min(rows, 40)) * HistoryLayout.rowHeight + 120
+        let height = 460 + HistoryLayout.chartHeight + 520 + CGFloat(min(rows, 40)) * HistoryLayout.rowHeight + 120
         PreviewSnapshot.writeHosted(
             HistoryView(model: viewModel)
                 .appEnvironment(model)

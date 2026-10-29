@@ -22,7 +22,8 @@ public partial class ReportStringsTests
         "report.apiKey", "report.apiKey.optional", "report.apiKey.required", "report.apiKey.hint", "report.apiKey.get",
         "report.apiKey.clear",
         "report.sections", "report.sections.hint", "report.section.sources", "report.section.models", "report.section.cost",
-        "report.section.traffic", "report.section.notAccepted", "report.section.trafficOff", "report.section.models.taskScore",
+        "report.section.traffic", "report.section.notAccepted", "report.section.trafficOff", "report.section.models.perfScore",
+        "report.section.models.thinking",
         "report.preview", "report.preview.title", "report.preview.hint", "report.preview.assumed", "report.preview.copy",
         "report.preview.next",
         "report.consent.title", "report.consent.body", "report.consent.never", "report.consent.honesty", "report.start",
@@ -41,7 +42,7 @@ public partial class ReportStringsTests
         "report.indicator.attention", "report.traffic.note",
         "report.invite.title", "report.invite.body", "report.invite.username", "report.invite.preview", "report.invite.accept",
         "report.invite.decline", "report.invite.done",
-        "privacy.report", "privacy.taskScore", "privacy.statement.report", "privacy.traffic.report", "settings.network.hint.report",
+        "privacy.report", "privacy.perfScore", "privacy.statement.report", "privacy.traffic.report", "settings.network.hint.report",
         "settings.network.offHint", "time.secondsAgo", "history.cancel",
     ];
 

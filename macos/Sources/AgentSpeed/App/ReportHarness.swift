@@ -8,8 +8,8 @@ import AppKit
 /// `AGENT_SPEED_APP_DATA` pointing at a temporary folder and `AGENT_SPEED_REPORT_PRESET_URL` set to the same URL, so
 /// the preset never reaches the real service; settings live in the `AgentSpeedReportE2E` suite. Prints one line per
 /// check and quits. With `AGENT_SPEED_REPORT_E2E_WEBSOCKET=1` (and the server started with `--websocket`) it drives the
-/// WebSocket transport instead, see `ReportStreamHarness`; with `AGENT_SPEED_REPORT_E2E_TASKSCORE=1` (and the server
-/// started with `--task-score`) it first checks the task score extension, see `ReportTaskScoreHarness`.
+/// WebSocket transport instead, see `ReportStreamHarness`; with `AGENT_SPEED_REPORT_E2E_PERFSCORE=1` (and the server
+/// started with `--perf-score`) it first checks the performance score extension, see `ReportPerfScoreHarness`.
 @MainActor
 enum ReportHarness {
     private static var feed: Timer?
@@ -57,7 +57,7 @@ enum ReportHarness {
         snapshot.report = ReportLiveFacts(
             agents: [.claudeCode: ReportAgentCounts(generating: busy ? 1 : 0, active: 1)],
             generatingModels: busy ? [ReportModelKey(modelId: "claude-opus-5-5", source: .claudeCode): 1] : [:],
-            counters: counters, task: ReportTaskScoreHarness.facts(busy: busy))
+            counters: counters, perf: ReportPerfScoreHarness.facts(busy: busy))
         model.store.publishLive(snapshot)
     }
 
@@ -94,9 +94,9 @@ enum ReportHarness {
             return
         }
 
-        if ReportTaskScoreHarness.enabled {
+        if ReportPerfScoreHarness.enabled {
             busy = true
-            await ReportTaskScoreHarness.run(model, publish: { publish(model) }, check: { check($0, $1) },
+            await ReportPerfScoreHarness.run(model, publish: { publish(model) }, check: { check($0, $1) },
                                              wait: { name, seconds, condition in await check(name, within: seconds, condition) })
         }
 

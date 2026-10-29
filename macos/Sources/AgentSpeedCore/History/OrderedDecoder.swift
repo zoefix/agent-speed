@@ -12,8 +12,6 @@ final class OrderedDecoder: @unchecked Sendable {
         var size: Int64
         /// The reader to continue (the live monitor's, positioned for its backlog); nil reads the whole file.
         var reader: TranscriptReader?
-        /// The file's task reader (METRICS 6.9) to continue; nil makes a fresh one for a scored source.
-        var taskReader: TaskLineReader?
 
         /// Compressed sessions decode to several times their size; the window counts that. A database's size is its
         /// `.db` plus `-wal`.
@@ -23,11 +21,10 @@ final class OrderedDecoder: @unchecked Sendable {
     struct Output: Sendable {
         var lines: DecodedLines
         var read: FileTailer.ReadResult
-        /// The task lines of a scored source's file (METRICS 6.9), one per line; empty otherwise.
-        var tasks: [TaskLine] = []
-        /// The reader and task reader after the read.
+        /// Each line's tool events, read without hashing (METRICS 6.10); empty for a family without tool calls.
+        var tools: [[ToolEvent]] = []
+        /// The reader after the read.
         var reader: TranscriptReader
-        var taskReader: TaskLineReader?
     }
 
     private let jobs: [Job]
@@ -101,12 +98,10 @@ final class OrderedDecoder: @unchecked Sendable {
         while let index = claim() {
             let job = jobs[index]
             var reader = job.reader ?? TranscriptReader(path: job.path, start: .beginning)
-            var tasks = job.taskReader ?? job.family.sources.first.flatMap { TaskLineReader(source: $0) }
-            let output = TranscriptDecoder.decode(job.family, reader: &reader, tasks: &tasks)
+            let output = TranscriptDecoder.decode(job.family, reader: &reader, tools: true)
             condition.lock()
             if !cancelled {
-                results[index] = Output(lines: output.lines, read: output.read, tasks: output.tasks, reader: reader,
-                                        taskReader: tasks)
+                results[index] = Output(lines: output.lines, read: output.read, tools: output.tools, reader: reader)
             }
             condition.broadcast()
             condition.unlock()

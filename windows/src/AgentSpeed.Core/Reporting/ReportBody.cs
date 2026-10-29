@@ -1,4 +1,4 @@
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Traffic;
 
 namespace AgentSpeed.Core.Reporting;
@@ -84,14 +84,23 @@ public sealed record ReportOptions(
     /// <summary>A WebSocket body (METRICS 11.9): it ends with <c>realtime</c> and its message must fit too; null for HTTP.</summary>
     public ReportStreamBody? Stream { get; init; }
 
-    /// <summary>The size rule dropped <c>models</c> from this report (METRICS 11.10, Size): the top-level <c>taskScore</c> stays.</summary>
+    /// <summary>The size rule dropped <c>models</c> from this report (METRICS 11.10, Size): the top-level score object stays.</summary>
     public bool ModelsDroppedForSize { get; init; }
 
+    /// <summary>The report carries <c>models</c> by consent: the service lists it, <c>maxModels</c> ≥ 1 and the user's switch is on.</summary>
+    private bool ModelsShared => MaxModels >= 1 && (ModelsDroppedForSize || Sections.Contains(ReportSection.Models));
+
     /// <summary>
-    /// The task score extension is active (METRICS 11.10, Active): the service advertises it and the report carries
-    /// <c>models</c> by consent — the service lists it, <c>maxModels</c> ≥ 1 and the user's switch is on.
+    /// The score extension the report carries (METRICS 11.10, Active and Legacy): <c>perfScore</c> when the service
+    /// advertises it, else the retired <c>taskScore</c> with the thinking speed only, and only with <c>models</c> by consent.
     /// </summary>
-    public bool TaskScoreActive => Extensions.TaskScore && MaxModels >= 1 && (ModelsDroppedForSize || Sections.Contains(ReportSection.Models));
+    public ReportScoreExtension ScoreExtension => !ModelsShared ? ReportScoreExtension.None
+        : Extensions.PerfScore ? ReportScoreExtension.Perf
+        : Extensions.TaskScore ? ReportScoreExtension.LegacyTask
+        : ReportScoreExtension.None;
+
+    /// <summary>The performance score extension is active (METRICS 11.10, Active).</summary>
+    public bool PerfScoreActive => ScoreExtension == ReportScoreExtension.Perf;
 }
 
 /// <param name="ObservationAgeMs">The window's observation age at build, or null when the window had no new data.</param>
@@ -204,16 +213,20 @@ public static class ReportBody
             members.Add(("sources", ReportJson.Array(SourceEntries(content, sample, sections))));
         }
 
-        var taskScore = options.TaskScoreActive;
+        var scores = options.ScoreExtension;
         if (sections.Contains(ReportSection.Models) && options.MaxModels > 0)
         {
             members.Add(("models", ReportJson.Array(ModelEntries(content, sample, options.MaxModels, sections.Contains(ReportSection.Cost),
-                options.Extensions, taskScore))));
+                options.Extensions, scores))));
         }
 
-        if (taskScore)
+        if (scores == ReportScoreExtension.Perf)
         {
-            members.Add(("taskScore", sample.Facts.Tasks.Top.Json));
+            members.Add(("perfScore", sample.Facts.Perf.Top.Json));
+        }
+        else if (scores == ReportScoreExtension.LegacyTask)
+        {
+            members.Add(("taskScore", ReportPerfValue.Legacy(sample.Facts.Perf.Thinking).Json));
         }
 
         if (options.Stream is { } stream)
@@ -354,12 +367,14 @@ public static class ReportBody
 
     /// <summary>
     /// One entry per model with any increment in the window (a late price included) or a generating agent, by output then
-    /// id, <c>other</c> last (REPORTING 6.6.4, METRICS 11.3, 11.7). With the task score extension also the models an agent is
-    /// live with and the models with task rows, each entry with its <c>taskScore</c> and <c>taskStats</c> (METRICS 11.10).
+    /// id, <c>other</c> last (REPORTING 6.6.4, METRICS 11.3, 11.7). With the performance score extension also the models an
+    /// agent is live with and the models with statistics rows, each entry with its <c>perfScore</c> and <c>perfStats</c>; with
+    /// the retired task score only the thinking speed of each entry, as <c>taskScore</c> with empty <c>taskStats</c> (11.10).
     /// </summary>
     private static List<ReportJson> ModelEntries(ReportWindowContent content, ReportSample sample, int maxModels, bool withCost, ReportExtensions extensions,
-        bool taskScore)
+        ReportScoreExtension scores)
     {
+        var perfScore = scores == ReportScoreExtension.Perf;
         var byId = new Dictionary<string, ModelEntry>(StringComparer.Ordinal);
         ModelEntry Entry(string id) => byId.TryGetValue(id, out var entry) ? entry : byId[id] = new ModelEntry(id);
         foreach (var (key, value) in content.Usage.ByModel)
@@ -382,40 +397,43 @@ public static class ReportBody
             }
         }
 
-        if (taskScore)
+        var perf = sample.Facts.Perf;
+        if (perfScore)
         {
-            var tasks = sample.Facts.Tasks;
             foreach (var model in byId.Values)
             {
                 model.Usual = true;
             }
 
-            foreach (var agent in tasks.Agents)
+            foreach (var agent in perf.Agents)
             {
-                if (agent.Form == TaskValueForm.Live)
+                if (agent.Form == PerfForm.Live)
                 {
                     Entry(agent.ModelId).Sources.Add(agent.Source);
                 }
             }
 
-            foreach (var (key, row) in content.Tasks)
+            foreach (var (key, row) in content.Perf)
             {
                 var entry = Entry(key.ModelId);
                 entry.Sources.Add(key.Source);
-                entry.AddTaskRow(key.Source, row);
+                entry.AddPerfRow(key.Source, row);
             }
 
-            foreach (var agent in tasks.Agents)
+            foreach (var agent in perf.Agents)
             {
                 if (byId.TryGetValue(agent.ModelId, out var entry))
                 {
-                    entry.TaskAgents.Add(agent);
+                    entry.PerfAgents.Add(agent);
                 }
             }
+        }
 
+        if (scores != ReportScoreExtension.None)
+        {
             foreach (var entry in byId.Values)
             {
-                entry.Thinking = tasks.ModelThinking.GetValueOrDefault(entry.Id);
+                entry.Thinking = perf.ModelThinking.GetValueOrDefault(entry.Id);
             }
         }
 
@@ -434,10 +452,10 @@ public static class ReportBody
                 foreach (var (source, requests) in entry.HarnessRequests)
                     other.HarnessRequests[source] = other.HarnessRequests.GetValueOrDefault(source) + requests;
                 foreach (var (mode, usage) in entry.Modes) other.AddMode(mode, usage);
-                other.Usual |= entry.Usual || !taskScore;
-                other.TaskAgents.AddRange(entry.TaskAgents);
+                other.Usual |= entry.Usual || !perfScore;
+                other.PerfAgents.AddRange(entry.PerfAgents);
                 other.Thinking += entry.Thinking;
-                foreach (var (source, row) in entry.TaskRows) other.AddTaskRow(source, row);
+                foreach (var (source, row) in entry.PerfRows) other.AddPerfRow(source, row);
             }
 
             entries = [.. entries.Take(maxModels - 1), other];
@@ -460,17 +478,23 @@ public static class ReportBody
                 members.Add(("deltaMicroUsd", ReportJson.Of(entry.Usage.CostMicroUsd)));
             }
 
-            // An entry that exists only for the task score has zero usage and no breakdowns (METRICS 11.10, Other extensions).
-            var usual = !taskScore || entry.Usual;
+            // An entry that exists only for the performance score has zero usage and no breakdowns (METRICS 11.10, Other extensions).
+            var usual = !perfScore || entry.Usual;
             if (usual && extensions.ModelHarnessRequests && entry.HarnessRequests.Count <= 8
                 && entry.HarnessRequests.Values.All(IsSafeCount) && entry.HarnessRequests.Values.Sum() == entry.Usage.Requests)
                 members.Add(("harnessRequests", ReportJson.Array(entry.HarnessRequests.OrderBy(p => p.Key)
                     .Where(p => p.Value > 0).Select(p => ReportJson.Object(("source", ReportJson.Of(SourceId(p.Key))), ("requests", ReportJson.Of(p.Value)))))));
             if (usual && extensions.ExecutionModes && ModesJson(entry) is { } modes) members.Add(("modeUsage", modes));
-            if (taskScore)
+            if (perfScore)
             {
-                members.Add(("taskScore", ReportTaskValue.Of(entry.TaskAgents, entry.Thinking).Json));
-                members.Add(("taskStats", ReportJson.Array(SourceOrder.Where(entry.TaskRows.ContainsKey).Select(s => entry.TaskRows[s].Json(s)))));
+                members.Add(("perfScore", ReportPerfValue.Of(entry.PerfAgents, entry.Thinking).Json));
+                members.Add(("perfStats", ReportJson.Array(SourceOrder.Where(entry.PerfRows.ContainsKey)
+                    .Select(s => ReportPerfRow.Json(s, entry.PerfRows[s])))));
+            }
+            else if (scores == ReportScoreExtension.LegacyTask)
+            {
+                members.Add(("taskScore", ReportPerfValue.Legacy(entry.Thinking).Json));
+                members.Add(("taskStats", ReportJson.Array([])));
             }
 
             return ReportJson.Object(members);
@@ -508,15 +532,16 @@ public static class ReportBody
         public Dictionary<SourceKind, long> HarnessRequests { get; } = [];
         public Dictionary<ReportModeKey, ReportUsage> Modes { get; } = [];
 
-        /// <summary>The entry is one of METRICS 11.3 (usage or a generating agent), not one only the task score adds.</summary>
+        /// <summary>The entry is one of METRICS 11.3 (usage or a generating agent), not one only the performance score adds.</summary>
         public bool Usual { get; set; }
 
-        public List<ReportTaskAgent> TaskAgents { get; } = [];
+        public List<ReportPerfAgent> PerfAgents { get; } = [];
 
         /// <summary>Unrounded <c>liveThinking</c> of the model sums of the entry's raw models.</summary>
         public double Thinking { get; set; }
 
-        public Dictionary<SourceKind, ReportTaskRow> TaskRows { get; } = [];
+        /// <summary>The statistics rows per source, added up unrounded.</summary>
+        public Dictionary<SourceKind, PerfSums> PerfRows { get; } = [];
 
         public void AddMode(ReportModeKey key, ReportUsage usage)
         {
@@ -524,8 +549,15 @@ public static class ReportBody
             Modes[key] = Modes.GetValueOrDefault(key) + usage;
         }
 
-        public void AddTaskRow(SourceKind source, ReportTaskRow row) =>
-            TaskRows[source] = TaskRows.TryGetValue(source, out var held) ? held + row : row;
+        public void AddPerfRow(SourceKind source, PerfSums row)
+        {
+            if (!PerfRows.TryGetValue(source, out var held))
+            {
+                PerfRows[source] = held = new PerfSums();
+            }
+
+            held.Add(row);
+        }
     }
 
     private static bool IsSafeCount(long value) => value is >= 0 and <= 9_007_199_254_740_991;

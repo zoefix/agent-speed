@@ -1,7 +1,7 @@
 import AgentSpeedOrbModel
 import AppKit
 
-/// A two-line group row's figures, the 智力 cell and the value (DESIGN 2c *The second line*): off line 1, on one
+/// A two-line group row's figures, the 性能 cell and the value (DESIGN 2c *The second line*): off line 1, on one
 /// baseline that puts the cap-height centre of their digits on the row's centre line (both sizes' mean when the row
 /// shows both, so each lies within half a point of it).
 @MainActor

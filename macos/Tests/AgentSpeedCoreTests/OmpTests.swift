@@ -43,7 +43,7 @@ struct OmpTests {
         let responses: [[String: Any]] = result.responses.map { response in
             [
                 "key": response.key, "startMs": value(response.startMs), "endMs": response.endMs,
-                "input": response.usage.input, "cachedInput": response.usage.cachedInput,
+                "firstMs": value(response.firstMs), "input": response.usage.input, "cachedInput": response.usage.cachedInput,
                 "cacheWriteInput": response.usage.cacheWriteInput, "cacheWrite1hInput": response.usage.cacheWrite1hInput,
                 "output": response.usage.output, "reasoning": response.usage.reasoning, "model": value(response.model),
                 "provider": value(response.provider), "fast": response.fast, "final": response.isFinal,
@@ -53,6 +53,7 @@ struct OmpTests {
             "source": state.source.rawValue, "project": value(state.project), "model": value(state.model),
             "isSubagent": state.isSubagent, "phase": state.phase.rawValue, "inFlightStartMs": value(state.inFlightStartMs),
             "lastLineMs": value(state.lastLineMs), "malformedLines": state.malformedLines, "responses": responses,
+            "actions": state.actions.actions.map(ParserFixtureTests.json),
         ]
     }
 

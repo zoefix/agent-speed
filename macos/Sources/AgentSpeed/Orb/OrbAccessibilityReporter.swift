@@ -163,15 +163,15 @@ final class OrbAccessibilityReporter {
         case .traffic(let rx, let tx):
             return l10n("a11y.orb.traffic", TrafficText.spoken(rx), TrafficText.spoken(tx))
         case .intelligence(let score, let thinking):
-            return Self.intelligenceSentence(TaskScoreValue(score), thinking: reading.thinking.isHidden(at: now) ? nil : thinking, l10n)
+            return Self.intelligenceSentence(score, thinking: reading.thinking.isHidden(at: now) ? nil : thinking, l10n)
         }
     }
 
-    /// The intelligence readout's words (DESIGN 12, *Accessibility*): the score words in `a11y.orb.intel` with the
+    /// The performance readout's words (DESIGN 12, *Accessibility*): the score words in `a11y.orb.intel` with the
     /// thinking rate, or in `a11y.orb.intel.only` without it (`thinking` nil); while the value is none `intel.none`
-    /// replaces the 智力 words and the thinking words stay.
-    static func intelligenceSentence(_ value: TaskScoreValue, thinking: String?, _ l10n: Localizer) -> String {
-        guard let words = TaskScoreText.words(value, l10n) else {
+    /// replaces the 性能 words and the thinking words stay.
+    static func intelligenceSentence(_ value: PerfSetReading, thinking: String?, _ l10n: Localizer) -> String {
+        guard let words = PerfScoreText.words(value, l10n) else {
             guard let thinking else { return l10n("intel.none") }
             let marker = "\u{E000}"
             let full = l10n("a11y.orb.intel", marker, thinking)

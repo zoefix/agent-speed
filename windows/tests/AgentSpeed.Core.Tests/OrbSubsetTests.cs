@@ -1,5 +1,5 @@
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 
 namespace AgentSpeed.Core.Tests;
 
@@ -131,11 +131,11 @@ public sealed class OrbSubsetTests
     {
         var claude = new IntelligenceSums(Output: 300, Thinking: 100, ThinkingBasis: 300)
         {
-            Score = new TaskSetValue(TaskValueForm.Resting, 70.5, 71, "claude-a") { LastLineMs = 5 },
+            Score = new PerfSetValue(PerfForm.Resting, 2070.5, "claude-a") { LastLineMs = 5 },
         };
         var codex = new IntelligenceSums(Output: 100, Thinking: 50, ThinkingBasis: 100)
         {
-            Score = new TaskSetValue(TaskValueForm.Live, 12.5, 13, "codex-a") { LastLineMs = 9 },
+            Score = new PerfSetValue(PerfForm.Live, 812.5, "codex-a") { LastLineMs = 9 },
         };
         var snapshot = Snapshot with
         {
@@ -153,10 +153,10 @@ public sealed class OrbSubsetTests
         Assert.Equal(150, all.Thinking);
 
         // A live score beats a higher resting one (METRICS 6.9 Sets and groups).
-        Assert.Equal(13, all.Shown);
+        Assert.Equal(813, all.Shown);
         Assert.Equal("codex-a", all.Score.AgentId);
         Assert.Equal(claude, OrbSubset.Reading(snapshot, Partial).Intelligence);
-        Assert.Equal(71, OrbSubset.Reading(snapshot, Partial).Intelligence.Shown);
+        Assert.Equal(2071, OrbSubset.Reading(snapshot, Partial).Intelligence.Shown);
         Assert.True(OrbSubset.Reading(snapshot, Partial).Intelligence.Resting);
         var gemini = OrbSubset.Reading(snapshot, [SourceKind.Gemini]).Intelligence;
         Assert.False(gemini.IsActive);

@@ -9,14 +9,16 @@ rules, size and rate limits, and prints every report it accepts. State is in mem
   python3 spec/tools/report_server.py --api-path /agent-speed --api-key-mode required --api-key secret-123
   python3 spec/tools/report_server.py --tls-cert cert.pem --tls-key key.pem --public-url https://test.local:8787
   python3 spec/tools/report_server.py --websocket            also offer GET {api}/v1/reports/ws (METRICS 11.9)
-  python3 spec/tools/report_server.py --task-score           advertise and check the taskScore extension (METRICS 11.10)
+  python3 spec/tools/report_server.py --perf-score           advertise and check the perfScore extension (METRICS 11.10)
+  python3 spec/tools/report_server.py --task-score           advertise only the retired taskScore (thinking speed only)
 
 Then, in another terminal, the reference client:
 
   python3 spec/tools/report_reference.py client --url http://127.0.0.1:8787 --username demo --reports 3
 
-GET / shows a plain-text table of the devices and their summed deltas (with --task-score also the merged model
-table, whose JSON is GET {api}/public/models). Not for production use.
+GET / shows a plain-text table of the devices and their summed deltas (with --perf-score also the model leaderboard
+pooled from every accepted perfStats row with the METRICS 6.9 formula, whose JSON is GET {api}/public/models). Not for
+production use.
 """
 
 from __future__ import annotations
@@ -52,6 +54,8 @@ def build_service(args) -> ref.ReferenceService:
 
 def extensions(args) -> dict | None:
     chosen = {name: 1 for name in ref.EXTENSIONS} if args.extensions else {}
+    if args.perf_score:
+        chosen["perfScore"] = 1
     if args.task_score:
         chosen["taskScore"] = 1
     return chosen or None
@@ -183,24 +187,25 @@ class Handler(BaseHTTPRequestHandler):
                          f"{last.get('activity', '-'):<8} {last.get('live', {}).get('outputTokS', 0):>9.1f} "
                          f"{totals.get('output', 0):>12} {totals.get('requests', 0):>9} "
                          f"{totals.get('costMicroUsd', 0) / 1e6:>12.6f}")
-        if self.service.task_board:
+        if self.service.perf_board:
             with self.lock:
                 online = [i for i, d in self.service.devices.items() if id(d) in online]
-                board = self.service.task_board.leaderboard(online)
+                board = self.service.perf_board.leaderboard(online)
             score = board["live"]["score"]
-            lines += ["", f"taskScore: IQ {'-' if score is None else score} ({board['live']['form']}), "
-                          f"thinking {board['live']['thinkingTokS']:.1f} tok/s over online devices", "",
-                      f"{'model':<28} {'tasks':>6} {'scored':>7} {'mean IQ':>8} {'success':>8} {'stalls':>7} "
-                      f"{'fix fail':>9} {'live IQ':>8}"]
+            lines += ["", f"perfScore: {'-' if score is None else score} ({board['live']['form']}), "
+                          f"thinking {board['live']['thinkingTokS']:.1f} tok/s over online devices; pooled scores "
+                          f"need 20 responses", "",
+                      f"{'model':<28} {'ranked':<7} {'score':>7} {'n':>7} {'tools':>7} {'T tok/s':>8} {'L ms':>7} "
+                      f"{'live':>7}"]
             for row in board["models"]:
-                stats, live = row["stats"], row["live"] or {}
-                mean = "-" if row["meanScore"] is None else f"{row['meanScore']:.1f}"
-                success = "-" if row["successRate"] is None else f"{row['successRate']:.0%}"
-                fix = "-" if row["fixFailureRate"] is None else f"{row['fixFailureRate']:.0%}"
+                live = row["live"] or {}
+                t, latency = row["components"]["T"], row["components"]["L"]
                 live_score = ("-" if live.get("score") is None
                               else f"{live['score']}{'' if live['form'] == 'live' else '*'}")
-                lines.append(f"{row['id']:<28} {stats['completed']:>6} {stats['scored']:>7} {mean:>8} {success:>8} "
-                             f"{stats['stalls']:>7} {fix:>9} {live_score:>8}")
+                lines.append(f"{row['id']:<28} {'yes' if row['ranked'] else 'no':<7} "
+                             f"{'-' if row['shown'] is None else row['shown']:>7} {row['n']:>7} {row['tools']:>7} "
+                             f"{'-' if t is None else format(t['measure'], '.1f'):>8} "
+                             f"{'-' if latency is None else format(latency['measure'], '.0f'):>7} {live_score:>7}")
         return "\n".join(lines) + "\n"
 
     do_GET = do_POST = do_PATCH = do_PUT = do_DELETE = _dispatch
@@ -228,9 +233,11 @@ def main() -> int:
     parser.add_argument("--tls-key")
     parser.add_argument("--verbose", action="store_true", help="print every accepted report in full")
     parser.add_argument("--extensions", action="store_true",
-                        help="enable every optional extension: modes, profiles, pairing, taskScore")
+                        help="enable every optional extension: modes, profiles, pairing, perfScore, taskScore")
+    parser.add_argument("--perf-score", action="store_true",
+                        help="advertise and check the perfScore extension (METRICS 11.10)")
     parser.add_argument("--task-score", action="store_true",
-                        help="advertise and check only the taskScore extension (METRICS 11.10)")
+                        help="advertise the retired taskScore extension (clients send the thinking speed only)")
     parser.add_argument("--websocket", action="store_true", help="offer the WebSocket transport (METRICS 11.9)")
     parser.add_argument("--ws-min-interval", type=int, help="minIntervalMs in the discovery document")
     parser.add_argument("--ws-max-in-flight", type=int, help="maxInFlight in the discovery document")

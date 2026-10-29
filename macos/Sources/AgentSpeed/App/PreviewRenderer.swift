@@ -131,8 +131,8 @@ enum PreviewRenderer {
         if wants("update") {
             UpdatePreviews.render(model: model, into: directory)
         }
-        if wants("taskcard") { TaskScoreCardPreviews.render(model: model, into: directory) }
-        if wants("taskhistory") { TaskPerformancePreviews.render(model: model, into: directory) }
+        if wants("perfcard") { PerfCardPreviews.render(model: model, into: directory) }
+        if wants("perfhistory") { PerfHistoryPreviews.render(model: model, into: directory) }
         if wants("settings") {
             publish(model, speed: redline * 0.4)
             settleOrbs(model)

@@ -127,7 +127,7 @@ internal sealed partial class HistoryWindow : Window
         var (reduceMotion, highContrast) = (appearance.ReduceMotion, appearance.HighContrast);
         ReduceMotion = reduceMotion;
         _model.SetModeAppearance(appearance);
-        _model.SetTaskAppearance(appearance.Dark, appearance.HighContrast, appearance.ReduceMotion);
+        _model.SetPerfAppearance(appearance.Dark, appearance.HighContrast, appearance.ReduceMotion);
         if (_modeRowsPanel is { } rows)
         {
             rows.ReduceMotion = reduceMotion;

@@ -251,7 +251,7 @@ public sealed class ReportSigningTests
     public void ServerSequences()
     {
         var cases = ReportSpec.Vector("server").EnumerateArray().ToList();
-        Assert.Equal(6, cases.Count);
+        Assert.Equal(7, cases.Count);
         var keys = new[] { "device", "other", "rotated" }.Select(name => ReportSpec.Key(name).PublicKey).ToArray();
         var steps = 0;
         var advertised = 0;
@@ -264,7 +264,7 @@ public sealed class ReportSigningTests
                 var raw = System.Text.Json.Nodes.JsonNode.Parse(ReportSpec.Example("discovery.json"))!.AsObject();
                 raw["extensions"] = System.Text.Json.Nodes.JsonNode.Parse(extensions.GetRawText());
                 var document = ReportDiscovery.Parse(ReportSpec.Utf8(raw.ToJsonString()), ReportServiceUrl.Parse("https://example.com")!, out _);
-                Assert.True(document!.Extensions.TaskScore, item.Text("name"));
+                Assert.True(document!.Extensions.PerfScore || document.Extensions.TaskScore, item.Text("name"));
                 advertised++;
             }
 
@@ -344,7 +344,7 @@ public sealed class ReportSigningTests
         }
 
         Assert.True(steps > 40);
-        Assert.Equal(1, advertised);
+        Assert.Equal(2, advertised);
     }
 
     [Fact]

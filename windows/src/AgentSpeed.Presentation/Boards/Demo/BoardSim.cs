@@ -1,6 +1,6 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Presentation.Hero;
 
 namespace AgentSpeed.Presentation.Boards.Demo;
@@ -184,13 +184,12 @@ public sealed class BoardSim
             var activity = epoch.AddSeconds(a.LastActive);
             // A sub-agent's label stands in its project, which is what tells it apart on a sub row.
             var (intelligence, _) = Measure(a);
-            var task = Task(a);
-            var score = TaskSetValue.Of(a.Id, (long)(a.LastActive * 1000), task);
+            var score = PerfSetValue.Of(a.Id, (long)(a.LastActive * 1000), Score(a));
             list[i] = new AgentStatus(a.Id, a.Source, a.ParentId is null ? a.Project : a.Label, a.Model, a.Phase, a.ParentId is not null,
                 new Rate(a.Live, a.Live * 4), null, activity, a.ParentId)
             {
                 Modes = Modes(a),
-                Intelligence = new AgentIntelligence(intelligence with { Score = score }, score, task.State),
+                Intelligence = new AgentIntelligence(intelligence with { Score = score }, score),
             };
         }
 
@@ -211,20 +210,22 @@ public sealed class BoardSim
     }
 
     /// <summary>
-    /// A demo task score (METRICS 6.9) from the agent's id alone: about one agent in six has none yet, the rest a score in
-    /// quarter points (the dimensions' steps), passing from 50 up; resting while idle.
+    /// A demo performance score (METRICS 6.9) from the agent's id alone: about one agent in six has none yet, the rest a score
+    /// from about 500 to 4,600 (log-uniform, around the reference 1000), one in five of them provisional; resting while idle.
     /// </summary>
-    private static TaskValue Task(BoardSimAgent a)
+    private static PerfEvaluation Score(BoardSimAgent a)
     {
-        var seed = HashUnit(a.Id + "#task");
+        var seed = HashUnit(a.Id + "#perf");
+        var empty = PerfEvaluation.Empty(a.Source);
         if (seed < 0.16)
         {
-            return new TaskValue(TaskValueForm.None, null, null, TaskState.None);
+            return empty;
         }
 
-        var score = Math.Round(seed * 400) / 4;
-        var form = a.Phase == AgentPhase.Idle ? TaskValueForm.Resting : TaskValueForm.Live;
-        return new TaskValue(form, score, TaskRounding.HalfAwayFromZero(score), score >= 50 ? TaskState.Passing : TaskState.Unverified);
+        var score = Math.Round(500 * Math.Pow(2, (seed - 0.16) / 0.84 * 3.2), 2);
+        var form = a.Phase == AgentPhase.Idle ? PerfForm.Resting : PerfForm.Live;
+        var samples = HashUnit(a.Id + "#n") < 0.2 ? 6 : PerfFormula.SampleSize;
+        return empty with { Form = form, Score = score, N = samples };
     }
 
     /// <summary>

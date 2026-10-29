@@ -1,8 +1,9 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Intelligence;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Presentation.Localization;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Settings;
-using AgentSpeed.Presentation.TaskScore;
 
 namespace AgentSpeed.Presentation.Formatting;
 
@@ -16,8 +17,8 @@ public readonly record struct BarIntelligenceCells(double Label, double Number, 
     public double Width => Label + LabelGap + Number + UnitGap + Unit;
 }
 
-/// <summary>One dot of the proof mark, its box on the device pixel grid (DIP).</summary>
-public readonly record struct BarProofDot(double X, double Y, double Diameter);
+/// <summary>One dot of the provisional mark, its box on the device pixel grid (DIP).</summary>
+public readonly record struct BarDot(double X, double Y, double Diameter);
 
 /// <summary>The color a part of the intelligence block takes (DESIGN 10, Menu bar and taskbar; DESIGN 12, Platform details).</summary>
 public enum BarIntelligenceInk
@@ -36,29 +37,32 @@ public enum BarIntelligenceInk
 }
 
 /// <summary>
-/// The taskbar intelligence block (DESIGN 10, Menu bar and taskbar): after the value, the money block and the network block,
-/// <c>智力 86</c> over
-/// <c>思考 128 tok/s</c>. 智力 is the highest task score among the agents of all enabled sources, live before resting
-/// (DESIGN 12; METRICS 6.9, <i>Sets and groups</i>): live in the label color at 85 %, resting and <c>–</c> in the secondary
-/// color, on the dotted proof mark while unproven. Labels sit in a column, both numbers right-aligned in one cell as wide
-/// as <c>8.88k</c>, so the block's width depends on the language only. It never hides while chosen: with nothing generated
-/// in the window the thinking number reads <c>–</c> and <c>tok/s</c> stays, while 智力 keeps its own form. Once the thinking
+/// The taskbar 性能 block (DESIGN 10, Menu bar and taskbar): after the value, the money block and the network block,
+/// <c>性能 1,286</c> over <c>思考 128 tok/s</c>. 性能 is the highest performance score among the agents of all enabled
+/// sources, live before resting (DESIGN 12; METRICS 6.9), in compact form: live in the label color at 85 %, resting and
+/// <c>–</c> in the secondary color, on the dotted provisional mark while provisional. Labels sit in a column, both numbers
+/// right-aligned in one cell as wide as the wider of <c>8.88k</c> and <c>8,888</c>, so the block's width depends on the
+/// language only. It never hides while chosen: with nothing generated in the window the thinking number reads <c>–</c> and
+/// <c>tok/s</c> stays, while 性能 keeps its own form. Once the thinking
 /// rate has read 0 for 3 s under a score, line 1 stands alone, centred in the same cells. Every change replaces characters
 /// in place, a drop included: the widget is one image. It needs neither network measuring nor the helper.
 /// </summary>
-/// <param name="Form">智力's form: live, resting (pale) or none (<c>–</c>).</param>
+/// <param name="Form">性能's form: live, resting (pale) or none (<c>–</c>).</param>
 /// <param name="ThinkingDim">The thinking number takes the secondary color: <c>–</c>, or a rate that reads 0.</param>
 /// <param name="Spoken">
 /// <c>a11y.orb.intel</c> with the score words, <c>a11y.orb.intel.only</c> while line 2 is hidden or reads <c>–</c>; while
-/// none <c>intel.none</c> takes the 智力 words' place. Read after the value and in the tooltip's first line.
+/// none <c>intel.none</c> takes the 性能 words' place. Read after the value and in the tooltip's first line.
 /// </param>
 public sealed record BarIntelligenceBlock(
-    string Label, string ThinkingLabel, string Index, string Thinking, string Unit, TaskForm Form, bool ThinkingDim, string Spoken)
+    string Label, string ThinkingLabel, string Index, string Thinking, string Unit, PerfForm Form, bool ThinkingDim, string Spoken)
 {
-    public const string Dash = TaskScoreText.Dash;
+    public const string Dash = PerfNumber.Dash;
 
-    /// <summary>The widest METRICS 7 form below 1 M tok/s; <c>888</c> fits in it too.</summary>
+    /// <summary>The widest METRICS 7 form below 1 M tok/s.</summary>
     public const string WidestNumber = "8.88k";
+
+    /// <summary>The widest compact score below a million (DESIGN 12, <i>Number formats</i>).</summary>
+    public const string WidestScore = PerfNumber.WidestCompact;
 
     /// <summary>A live score in the label color at this share (high contrast: the full label color, DESIGN 12 <i>Platform details</i>).</summary>
     public const double LiveOpacity = 0.85;
@@ -66,10 +70,10 @@ public sealed record BarIntelligenceBlock(
     /// <summary>The language whose UI face draws the labels.</summary>
     public string LanguageCode { get; init; } = LanguageCodes.ZhHant;
 
-    /// <summary>The supplying agent's state is unverified or pending: the proof mark goes under 智力 (DESIGN 12).</summary>
-    public bool Unproven { get; init; }
+    /// <summary>The supplying agent's score is provisional: the dotted mark goes under 性能 (DESIGN 12).</summary>
+    public bool Provisional { get; init; }
 
-    /// <summary>The tooltip's second line, <c>task.tooltip.top</c>: the score and its supplying agent; null while none.</summary>
+    /// <summary>The tooltip's second line, <c>perf.tooltip.top</c>: the score and its supplying agent; null while none.</summary>
     public string? Top { get; init; }
 
     /// <summary>Line 2 is not drawn: its rate has read 0 for 3 s under a score (DESIGN 10, Thinking hidden at zero).</summary>
@@ -92,11 +96,11 @@ public sealed record BarIntelligenceBlock(
         _ => BarIntelligenceInk.Secondary,
     };
 
-    /// <summary>智力 has a value, live or resting.</summary>
-    public bool HasScore => Form != TaskForm.None;
+    /// <summary>性能 has a value, live or resting.</summary>
+    public bool HasScore => Form != PerfForm.None;
 
-    /// <summary>智力's number takes the secondary color: resting or <c>–</c>.</summary>
-    public bool IndexDim => Form != TaskForm.Live;
+    /// <summary>性能's number takes the secondary color: resting or <c>–</c>.</summary>
+    public bool IndexDim => Form != PerfForm.Live;
 
     /// <summary>The thinking rate reads 0 (or nothing was generated) under a score: line 2 hides after its hold.</summary>
     public bool ThinkingZero => HasScore && ThinkingDim;
@@ -133,10 +137,10 @@ public sealed record BarIntelligenceBlock(
     public static BarIntelligenceBlock Of(IntelligenceSums sums, IEnumerable<AgentStatus> agents, Localizer localizer)
     {
         ArgumentNullException.ThrowIfNull(agents);
-        return Of(TaskSetReading.Of(sums, agents), sums, localizer);
+        return Of(PerfSetReading.Of(sums, agents), sums, localizer);
     }
 
-    public static BarIntelligenceBlock Of(TaskSetReading score, IntelligenceSums sums, Localizer localizer)
+    public static BarIntelligenceBlock Of(PerfSetReading score, IntelligenceSums sums, Localizer localizer)
     {
         ArgumentNullException.ThrowIfNull(score);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -145,11 +149,11 @@ public sealed record BarIntelligenceBlock(
         var zero = ThinkingZeroHold.ReadsZero(sums.LiveThinking);
         var thinking = !sums.IsActive ? Dash : zero ? "0" : SpeedFormat.Speed(sums.LiveThinking);
         var alone = score.Sentence(null, localizer);
-        return new BarIntelligenceBlock(localizer["intel.glyph"], localizer["intel.thinking.glyph"], score.Number, thinking,
+        return new BarIntelligenceBlock(localizer["intel.glyph"], localizer["intel.thinking.glyph"], score.Compact, thinking,
             localizer["unit.tokS"], score.Form, thinking == Dash || zero, thinking == Dash ? alone : score.Sentence(thinking, localizer))
         {
             LanguageCode = localizer.LanguageCode,
-            Unproven = score.IsUnproven,
+            Provisional = score.IsProvisional,
             Top = score.Tooltip(localizer),
             SpokenAlone = alone,
         };
@@ -166,8 +170,9 @@ public sealed record BarIntelligenceBlock(
         ThinkingHidden ? centerY + capHeight / 2 : centerY - pitch / 2 + capHeight / 2;
 
     /// <summary>
-    /// The cells for a measure of text and of tabular numbers: the number cell is <see cref="WidestNumber"/> wide unless a
-    /// number is wider (1 M tok/s or more), so it never changes with the values below that.
+    /// The cells for a measure of text and of tabular numbers: the number cell is as wide as the wider of
+    /// <see cref="WidestNumber"/> and <see cref="WidestScore"/> unless a number is wider (1 M tok/s or a million points or
+    /// more), so it never changes with the values below that.
     /// </summary>
     public BarIntelligenceCells Cells(Func<string, double> text, Func<string, double> number)
     {
@@ -175,29 +180,29 @@ public sealed record BarIntelligenceBlock(
         ArgumentNullException.ThrowIfNull(number);
         return new BarIntelligenceCells(
             Math.Max(text(Label), text(ThinkingLabel)),
-            Math.Max(number(WidestNumber), Math.Max(number(Index), number(Thinking))),
+            Math.Max(Math.Max(number(WidestNumber), number(WidestScore)), Math.Max(number(Index), number(Thinking))),
             text(Unit));
     }
 
     /// <summary>
-    /// The proof mark under line 1's number (DESIGN 12, <i>Proof mark</i>), its advance <paramref name="width"/> starting at
+    /// The provisional mark under line 1's number (DESIGN 12, <i>Provisional mark</i>), its advance <paramref name="width"/> starting at
     /// <paramref name="left"/> on <paramref name="baseline"/> at text size <paramref name="size"/>: dots centred 0.17 × the size
     /// below the baseline (the room line 2 leaves), each box on the device pixel grid so the 1 px dots stay round and even.
-    /// Empty unless unproven.
+    /// Empty unless provisional.
     /// </summary>
-    public IReadOnlyList<BarProofDot> ProofDots(double left, double width, double baseline, double size, double pixelsPerDip,
+    public IReadOnlyList<BarDot> ProvisionalDots(double left, double width, double baseline, double size, double pixelsPerDip,
         bool highContrast)
     {
-        if (!Unproven)
+        if (!Provisional)
         {
             return [];
         }
 
-        var mark = TaskProofMark.Underline(size, width, pixelsPerDip, barBlock: true, highContrast);
+        var mark = PerfProvisionalMark.Underline(size, width, pixelsPerDip, barBlock: true, highContrast);
         var scale = double.IsFinite(pixelsPerDip) && pixelsPerDip > 0 ? pixelsPerDip : 1;
         var d = mark.Diameter;
         var top = Snap(baseline + mark.Below - d / 2, scale);
-        return [.. mark.Centers.Select(center => new BarProofDot(Snap(left + center - d / 2, scale), top, d))];
+        return [.. mark.Centers.Select(center => new BarDot(Snap(left + center - d / 2, scale), top, d))];
     }
 
     private static double Snap(double value, double scale) => Math.Round(value * scale) / scale;

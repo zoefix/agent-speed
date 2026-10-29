@@ -87,7 +87,7 @@ struct HistoryView: View {
                     .padding(.bottom, HistoryLayout.sectionSpacing + Spacing.xxs)
                     EffortHistorySection(model: model)
                         .padding(.bottom, HistoryLayout.sectionSpacing)
-                    TaskPerformanceHistoryCard(model: model)
+                    PerfHistorySection(model: model)
                         .padding(.bottom, HistoryLayout.sectionSpacing)
                     Text(model.l10n("mac.history.table"))
                         .font(HistoryFont.sectionTitle)

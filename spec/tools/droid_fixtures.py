@@ -172,7 +172,7 @@ def tokens(share):
 
 def resp(key, start_ms, end_ms, share, model):
     provider = "custom" if model and model[:7].lower() == "custom:" else None
-    r = {"key": key, "startMs": start_ms, "endMs": end_ms, "model": model, "provider": provider, "fast": False,
+    r = {"key": key, "startMs": start_ms, "endMs": end_ms, "firstMs": None, "model": model, "provider": provider, "fast": False,
          "final": True}
     r.update(tokens(share))
     return r

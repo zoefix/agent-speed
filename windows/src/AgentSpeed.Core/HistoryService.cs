@@ -4,15 +4,15 @@ using AgentSpeed.Core.History;
 using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.Pricing;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 
 namespace AgentSpeed.Core;
 
 /// <summary>
-/// Keeps the daily usage history (METRICS 8) and the task records (6.11) on a below-normal-priority background thread and
+/// Keeps the daily usage history (METRICS 8) and the performance records (6.11) on a below-normal-priority background thread and
 /// publishes them to a <see cref="HistoryHub"/>. Runs at start, every 10 minutes, after local midnight and on
 /// <see cref="HistoryHub.Refresh"/>; <see cref="HistoryHub.Clear"/> deletes the store and recomputes. Never touches the
-/// live monitor; <see cref="CalibrationUpdated"/> hands it the calibrated task models.
+/// live monitor; <see cref="PerfRecordsUpdated"/> hands it the records its baselines come from.
 /// </summary>
 public sealed class HistoryService : IDisposable
 {
@@ -71,10 +71,10 @@ public sealed class HistoryService : IDisposable
     public PriceBook Pricing { get; }
 
     /// <summary>
-    /// Called on the history thread with every scored source's calibrated task models (METRICS 6.11 <i>Calibration</i>):
-    /// once the stored records are loaded and after every completed run. A source without an entry uses the prior.
+    /// Called on the history thread with the stored performance records of the enabled sources (METRICS 6.11
+    /// <i>Baseline</i>): once the store is loaded and after every completed run.
     /// </summary>
-    public Action<IReadOnlyDictionary<SourceKind, TaskModels>>? CalibrationUpdated { get; set; }
+    public Action<IReadOnlyList<PerfRecord>>? PerfRecordsUpdated { get; set; }
 
     /// <summary>
     /// Loads the day bindings and table copies of the store into <paramref name="book"/> (a quick read that never changes
@@ -446,13 +446,12 @@ public sealed class HistoryService : IDisposable
         }
     }
 
-    /// <summary>The days with the task records of the enabled sources and the calibration, which also goes to the live monitor.</summary>
+    /// <summary>The days with the performance records of the enabled sources, which also go to the live monitor.</summary>
     private void PublishAll(HistoryState state, HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled)
     {
-        var calibration = analyzer.Calibration;
-        IReadOnlyList<TaskRecord> records = [.. analyzer.TaskRecords().Where(r => enabled.Contains(r.Source))];
-        _hub.Publish(state, Days(analyzer, enabled), records, calibration);
-        CalibrationUpdated?.Invoke(calibration);
+        IReadOnlyList<PerfRecord> records = [.. analyzer.PerfRecords().Where(r => enabled.Contains(r.Source))];
+        _hub.Publish(state, Days(analyzer, enabled), records);
+        PerfRecordsUpdated?.Invoke(records);
     }
 
     private List<DailyUsage> Days(HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled)

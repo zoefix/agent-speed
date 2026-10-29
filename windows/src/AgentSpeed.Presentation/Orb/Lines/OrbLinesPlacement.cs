@@ -28,6 +28,13 @@ public sealed record OrbLinesPlacement(double NearestBaseline, bool Below, doubl
 
     /// <summary>Intelligence in a round hub (<c>needle</c>): each line's bottom corners stay within this × S of the center.</summary>
     public double? HubReach { get; init; }
+
+    /// <summary>
+    /// The 性能 line's size p, × t: 1.25, and 1.1 in <c>needle</c>'s hub, where <c>8,888</c> at 1.25 t would fit only from
+    /// 151 pt and take the readout off the medium orb (DESIGN 10, Performance readout).
+    /// </summary>
+    public double ScoreScale { get; init; } = IntelligenceScale;
+
     /// <summary>Line pitch, × t.</summary>
     public const double Pitch = 1.32;
 
@@ -42,7 +49,7 @@ public sealed record OrbLinesPlacement(double NearestBaseline, bool Below, doubl
     /// <summary>Unit size, and a text glyph's size, × the line's size.</summary>
     public const double UnitScale = 0.82;
 
-    /// <summary>The intelligence line's size p, × t (DESIGN 10, Intelligence readout).</summary>
+    /// <summary>The 性能 line's size p, × t (DESIGN 10, Performance readout).</summary>
     public const double IntelligenceScale = 1.25;
 
     /// <summary>Gap between the intelligence line's glyph and its number, × p.</summary>
@@ -63,7 +70,12 @@ public sealed record OrbLinesPlacement(double NearestBaseline, bool Below, doubl
 
     public static OrbLinesPlacement Reactor { get; } = new(-0.175, false, 0.046, 0.32) { ThinkingBaseline = -0.155 };
 
-    public static OrbLinesPlacement Needle { get; } = new(0.108, true, 0.046, 0.285) { ThinkingUnit = false, HubReach = 0.223 };
+    public static OrbLinesPlacement Needle { get; } = new(0.108, true, 0.046, 0.285)
+    {
+        ThinkingUnit = false,
+        HubReach = 0.223,
+        ScoreScale = 1.1,
+    };
 
     public static OrbLinesPlacement Minimal { get; } = new(-0.228, false, 0.054, 0.50, Recenters: true);
 
@@ -89,7 +101,7 @@ public sealed record OrbLinesPlacement(double NearestBaseline, bool Below, doubl
 
     /// <summary>Size of the top line: the intelligence line's p, else t.</summary>
     public double TopSize(OrbLinesKind kind, double s) =>
-        kind == OrbLinesKind.Intelligence ? IntelligenceScale * TextSize(s) : TextSize(s);
+        kind == OrbLinesKind.Intelligence ? ScoreScale * TextSize(s) : TextSize(s);
 
     /// <summary>
     /// Baselines of the top and bottom lines, from the center <paramref name="y"/>. Above the value the intelligence

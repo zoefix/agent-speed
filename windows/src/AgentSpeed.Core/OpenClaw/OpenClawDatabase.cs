@@ -196,8 +196,7 @@ internal sealed class OpenClawDatabase : IDisposable
     /// The window's rows above <paramref name="afterSeq"/> in <c>seq</c> order, each decoded to an entry; stops when
     /// <paramref name="onRow"/> returns false. Returns the highest <c>seq</c> visited.
     /// </summary>
-    /// <param name="tasks">The window's composer file side, which reads every entry as it is decoded.</param>
-    public long Rows(string sessionId, long afterSeq, Func<long, PiLine, bool> onRow, Tasks.TaskLineReader? tasks = null)
+    public long Rows(string sessionId, long afterSeq, Func<long, PiLine, bool> onRow)
     {
         using var statement = _connection.Prepare(_rowsSql);
         statement.Bind(1, sessionId).Bind(2, afterSeq);
@@ -206,7 +205,7 @@ internal sealed class OpenClawDatabase : IDisposable
         {
             var seq = Integer(statement, 0) ?? last;
             last = Math.Max(last, seq);
-            if (!onRow(seq, Entry(statement, tasks)))
+            if (!onRow(seq, Entry(statement)))
             {
                 break;
             }
@@ -238,11 +237,11 @@ internal sealed class OpenClawDatabase : IDisposable
     /// The entry of the current row: <c>event_json</c> when it is text, else the zstd frame in <c>event_zstd</c> decoded
     /// within <c>event_utf8_bytes</c>. Undecodable, invalid or non-object entries are malformed; longer ones are skipped.
     /// </summary>
-    private static PiLine Entry(SqliteStatement statement, Tasks.TaskLineReader? tasks)
+    private static PiLine Entry(SqliteStatement statement)
     {
         if (statement.ColumnType(1) == SqliteNative.ColumnText)
         {
-            return Parse(statement.GetUtf8(1), tasks);
+            return Parse(statement.GetUtf8(1));
         }
 
         if (statement.ColumnType(2) != SqliteNative.ColumnBlob || statement.ColumnType(3) != SqliteNative.ColumnInteger
@@ -256,7 +255,7 @@ internal sealed class OpenClawDatabase : IDisposable
         {
             using var decompressor = new ZstdSharp.Decompressor();
             var written = decompressor.Unwrap(statement.GetBlob(2), decoded);
-            return Parse(decoded.AsSpan(0, written), tasks);
+            return Parse(decoded.AsSpan(0, written));
         }
         catch (Exception e) when (e is ZstdSharp.ZstdException or ArgumentException or InvalidOperationException)
         {
@@ -265,7 +264,7 @@ internal sealed class OpenClawDatabase : IDisposable
     }
 
     // A row's entry is one JSON object: blank text, other JSON values and invalid UTF-8 are malformed (unlike a blank line).
-    private static PiLine Parse(ReadOnlySpan<byte> raw, Tasks.TaskLineReader? tasks)
+    private static PiLine Parse(ReadOnlySpan<byte> raw)
     {
         if (raw.Length > MaxEntryBytes)
         {
@@ -277,9 +276,7 @@ internal sealed class OpenClawDatabase : IDisposable
             return Malformed;
         }
 
-        var line = PiLineReader.Read(raw);
-        PiTaskFacts.Read(tasks, raw, ref line);
-        return line;
+        return PiLineReader.Read(raw);
     }
 
     private static PiLine Malformed => new() { Status = LineStatus.Malformed };

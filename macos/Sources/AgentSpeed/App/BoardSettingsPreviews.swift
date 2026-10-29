@@ -82,9 +82,9 @@ enum BoardSettingsPreviews {
             let name = "\(config.style.rawValue)"
             if config.readouts.intelligence {
                 let card = BoardScoreCards.group(group, l10n: model.l10n)
-                text += "  card: " + TaskScoreCardText.accessibilityLines(card, model.l10n).joined(separator: " | ") + "\n"
+                text += "  card: " + PerfCardText.accessibilityLines(card, model.l10n).joined(separator: " | ") + "\n"
                 for dark in [false, true] {
-                    PreviewSnapshot.writeHosted(TaskScoreCardView(model: card, l10n: model.l10n).modifier(TaskScoreCardSolidSurface())
+                    PreviewSnapshot.writeHosted(PerfCardView(model: card, l10n: model.l10n).modifier(PerfCardSolidSurface())
                         .padding(12), dark: dark,
                                                 to: directory.appendingPathComponent("boards-card-\(name)-\(dark ? "dark" : "light").png"))
                 }

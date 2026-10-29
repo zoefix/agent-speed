@@ -1,7 +1,7 @@
 using AgentSpeed.Core.History;
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
 using AgentSpeed.Core.Parsing;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Pricing;
 using AgentSpeed.Core.Work;
 using AgentSpeed.Core.Reporting;
@@ -55,6 +55,9 @@ internal sealed class SpeedEngine
     /// <summary>What live reporting counts (METRICS 11.4); fed whatever reporting does, so nothing depends on its settings.</summary>
     private readonly ReportLedger _reportLedger = new();
 
+    /// <summary>The engine side of the performance statistics ledger (METRICS 11.10).</summary>
+    private readonly ReportPerfLedger _perfLedger;
+
     /// <summary>The provider of each agent's latest response, for the model id of a generating agent (METRICS 11.2).</summary>
     private readonly Dictionary<string, string> _agentProviders = new(StringComparer.Ordinal);
     private ReportCounters _reportCounters = ReportCounters.Zero;
@@ -66,7 +69,11 @@ internal sealed class SpeedEngine
         _pricing = pricing;
         _pricedVersion = pricing?.CurrentVersion;
         _dayLabeler = new DayLabeler(zone ?? TimeZoneInfo.Local);
+        _perfLedger = new ReportPerfLedger(_reportLedger.Counters) { Epoch = ReportEpoch };
     }
+
+    /// <summary>The 14-day baselines of the score card (METRICS 6.11), from the history store; null without a history.</summary>
+    public IPerfBaselines? PerfBaselines { get; set; }
 
     public long TodayStartMs => _today.StartMs;
 
@@ -97,6 +104,13 @@ internal sealed class SpeedEngine
             response = response with { CostMicroUsd = Price(response) };
         }
 
+        if (_responses.TryGetValue(response.Key, out var held) && held.Response.FirstMs is { } heldFirst
+            && (response.FirstMs is not { } first || heldFirst < first))
+        {
+            // firstMs only ever moves earlier (METRICS 4.1 step 4).
+            response = response with { FirstMs = heldFirst };
+        }
+
         _responses[response.Key] = new Stored(response);
         if (response.Provider is { } provider)
         {
@@ -112,6 +126,7 @@ internal sealed class SpeedEngine
             _reportLedger.Grow(response, ReportModelId(response.Model, response.Provider));
         }
 
+        _perfLedger.Response(response, ReportModelId(response.Model, response.Provider), _reportLedger.IsCounted(response.Key));
         _today.Upsert(response);
         if (isCompletion && !seeded)
         {
@@ -280,8 +295,8 @@ internal sealed class SpeedEngine
         }
 
         liveCost = PerSecond(liveCost, seconds);
-        var agents = BuildAgents(nowMs, measured, estimated, agentIntelligence, recent, seconds, out var generating, out var tools);
-        AddTaskScores(intelligence, agents);
+        var agents = BuildAgents(nowMs, measured, estimated, agentIntelligence, recent, valid, seconds, out var generating, out var tools);
+        AddPerfScores(intelligence, agents);
         var history = BuildHistory(nowMs, valid, estimates);
         var events = DrainCompletions(nowMs);
         var peak = UpdatePeak(nowMs, live, observeLive, events);
@@ -336,48 +351,63 @@ internal sealed class SpeedEngine
     private string ReportModelId(string? model, string? provider) => CurrentTable.ReportModelId(model, provider);
 
     /// <summary>
-    /// Each source's task score (METRICS 6.9 <i>Sets and groups</i>): the highest value among its agents in the agents
+    /// Each source's performance value (METRICS 6.9 <i>Sets and groups</i>): the highest value among its agents in the agents
     /// list (6.7), which sets of sources merge by the same rule.
     /// </summary>
-    private static void AddTaskScores(IntelligenceSums[] sources, List<AgentFrame> agents)
+    private static void AddPerfScores(IntelligenceSums[] sources, List<AgentFrame> agents)
     {
         foreach (var agent in agents)
         {
             ref var sums = ref sources[(int)agent.Info.Source];
-            sums = sums with { Score = TaskSetValue.Merge(sums.Score, agent.Intelligence.Score) };
+            sums = sums with { Score = PerfSetValue.Merge(sums.Score, agent.Intelligence.Score) };
         }
     }
 
     /// <summary>The reasoning part of a response's output (METRICS 6.9): never more than the output.</summary>
     private static long ReasoningOf(in TokenCounts tokens) => Math.Min(tokens.Reasoning, tokens.Output);
 
+    /// <summary>The statistics ledger follows the watch the controller published (METRICS 11.10, Watch and Break).</summary>
+    public void FollowPerfWatch(ReportPerfWatch watch) => _perfLedger.Follow(watch);
+
     /// <summary>
-    /// Counts the watched tasks that completed (METRICS 11.10, Counting) into the task ledger, under the report id of each
-    /// task's model and its agent's source, while their watch generation is on.
+    /// Counts a tool call of <paramref name="agentId"/> whose first result was read live (METRICS 11.10, Counting), under
+    /// the report id of the call's model and the agent's source.
     /// </summary>
-    public void CountTasks(IReadOnlyList<TaskCompletion> completions, ReportTaskWatch watch)
+    public void CountCall(string agentId, SourceKind source, Work.WorkAction call, long nowMs) =>
+        _perfLedger.Call(agentId, source, call, ReportModelId(call.Model, _agentProviders.GetValueOrDefault(agentId)), nowMs);
+
+    /// <summary>
+    /// Every known agent's evaluation at <paramref name="nowMs"/> (METRICS 6.9 <i>Dumps</i>), listed or not, with its phase as
+    /// read and its parent link; call before <see cref="Compute"/> evicts what the instant still needs.
+    /// </summary>
+    public List<PerfAgentView> PerfViews(long nowMs)
     {
-        _reportLedger.FollowTaskWatch(watch);
-        foreach (var task in completions)
+        var byAgent = _responses.Values.Select(s => s.Response).ToLookup(r => r.AgentId, StringComparer.Ordinal);
+        var views = new List<PerfAgentView>(_agents.Count);
+        foreach (var agent in _agents.Values)
         {
-            var key = new ReportModelKey(ReportModelId(task.Model, _agentProviders.GetValueOrDefault(task.AgentId)), task.Source);
-            _reportLedger.CountTask(key, task.Row, task.Generation, watch, ReportEpoch);
+            var idle = PerfSetView.EffectivePhase(agent.Phase, agent.LastLineMs, nowMs) == AgentPhase.Idle;
+            var evaluation = PerfEvaluator.Evaluate(agent.Source, idle, PerfEvaluator.Sample(byAgent[agent.Id], nowMs), agent.Work, nowMs,
+                PerfBaselines);
+            views.Add(new PerfAgentView(agent.Id, agent.Source, agent.Phase, agent.LastLineMs, agent.ParentId, evaluation));
         }
+
+        return views;
     }
 
     /// <summary>
-    /// The task score's live facts (METRICS 11.10): every agent of the agents list with a score, under its current model's
-    /// report id; the all-sources thinking; each report id's thinking, its raw models' model sums added.
+    /// The performance score's live facts (METRICS 11.10): every agent of the agents list with a score, under its current
+    /// model's report id; the all-sources thinking; each report id's thinking, its raw models' model sums added.
     /// </summary>
-    private ReportTaskFacts TaskFacts(List<AgentFrame> agents, IntelligenceSums[] sources, Dictionary<ModelSumKey, IntelligenceSums> models)
+    private ReportPerfFacts PerfFacts(List<AgentFrame> agents, IntelligenceSums[] sources, Dictionary<ModelSumKey, IntelligenceSums> models)
     {
-        List<ReportTaskAgent>? scored = null;
+        List<ReportPerfAgent>? scored = null;
         foreach (var agent in agents)
         {
-            if (agent.Intelligence.Score is { Score: { } score, Form: TaskValueForm.Live or TaskValueForm.Resting } value)
+            if (agent.Intelligence.Score is { Score: { } score, Form: PerfForm.Live or PerfForm.Resting } value)
             {
                 var id = ReportModelId(agent.Info.Model, _agentProviders.GetValueOrDefault(agent.Info.Id));
-                (scored ??= []).Add(new ReportTaskAgent(agent.Info.Source, id, value.Form, score));
+                (scored ??= []).Add(new ReportPerfAgent(agent.Info.Source, id, value.Form, score));
             }
         }
 
@@ -389,7 +419,7 @@ internal sealed class SpeedEngine
 
         if (scored is null && models.Count == 0 && total.Thinking == 0)
         {
-            return ReportTaskFacts.Empty;
+            return ReportPerfFacts.Empty;
         }
 
         var byId = new Dictionary<string, IntelligenceSums>(StringComparer.Ordinal);
@@ -405,7 +435,7 @@ internal sealed class SpeedEngine
             thinking[id] = sums.LiveThinking;
         }
 
-        return new ReportTaskFacts(scored ?? [], total.LiveThinking, thinking);
+        return new ReportPerfFacts(scored ?? [], total.LiveThinking, thinking);
     }
 
     /// <summary>Agents of the 6.7 base set per source, generating agents per model, and the report ledger (METRICS 11.2).</summary>
@@ -444,7 +474,7 @@ internal sealed class SpeedEngine
             _reportCountersVersion = _reportLedger.Counters.Version;
         }
 
-        return new ReportLiveFacts(agents, generating, _reportCounters, ReportEpoch) { Tasks = TaskFacts(list, sources, models) };
+        return new ReportLiveFacts(agents, generating, _reportCounters, ReportEpoch) { Perf = PerfFacts(list, sources, models) };
     }
 
     /// <summary>
@@ -636,21 +666,25 @@ internal sealed class SpeedEngine
         Accumulator estimated,
         Dictionary<string, IntelligenceSums> intelligence,
         Dictionary<string, SpeedPair> recent,
+        List<Stored> validNewestFirst,
         double seconds,
         out int generating,
         out int tools)
     {
+        var samples = Samples(validNewestFirst, nowMs);
         var list = AgentList.Build(_agents, nowMs, (agent, phase) =>
         {
             measured.AgentTotals.TryGetValue(agent.Id, out var m);
             estimated.AgentTotals.TryGetValue(agent.Id, out var e);
             var live = new Rate((m.Output + e.Output) / seconds, (m.Total + e.Total) / seconds);
             double? recentSpeed = recent.TryGetValue(agent.Id, out var own) ? own.Output : null;
-            var task = agent.Task?.Value(phase == AgentPhase.Idle) ?? TaskValue.None;
-            var score = TaskSetValue.Of(agent.Id, agent.LastLineMs ?? 0, task);
+            var perf = PerfEvaluator.Evaluate(agent.Source, phase == AgentPhase.Idle,
+                samples.TryGetValue(agent.Id, out var sample) ? sample : [], agent.Work, nowMs, PerfBaselines);
+            var score = PerfSetValue.Of(agent.Id, agent.LastLineMs ?? 0, perf);
             return new AgentFrame(agent, phase, live, recentSpeed)
             {
-                Intelligence = new AgentIntelligence(intelligence.GetValueOrDefault(agent.Id) with { Score = score }, score, task.State),
+                Intelligence = new AgentIntelligence(intelligence.GetValueOrDefault(agent.Id) with { Score = score }, score),
+                Perf = perf,
                 Work = WorkSignals.Of(agent.Work, nowMs),
             };
         });
@@ -658,6 +692,35 @@ internal sealed class SpeedEngine
         generating = list.Count(a => a.Phase == AgentPhase.Generating);
         tools = list.Count(a => a.Phase == AgentPhase.Tools);
         return list;
+    }
+
+    /// <summary>
+    /// Each agent's sample (METRICS 6.9 <i>Sample</i>): its newest 20 measured responses with <c>endMs ≤ nowMs</c> (the
+    /// retention keeps the last 30 minutes), newest first.
+    /// </summary>
+    private static Dictionary<string, List<ParsedResponse>> Samples(List<Stored> validNewestFirst, long nowMs)
+    {
+        var samples = new Dictionary<string, List<ParsedResponse>>(StringComparer.Ordinal);
+        foreach (var stored in validNewestFirst)
+        {
+            var response = stored.Response;
+            if (response.EndMs > nowMs || response.EndMs < nowMs - PerfFormula.WindowMs)
+            {
+                continue;
+            }
+
+            if (!samples.TryGetValue(response.AgentId, out var sample))
+            {
+                samples[response.AgentId] = sample = new List<ParsedResponse>(PerfFormula.SampleSize);
+            }
+
+            if (sample.Count < PerfFormula.SampleSize)
+            {
+                sample.Add(response);
+            }
+        }
+
+        return samples;
     }
 
     private static List<HistoryPoint> BuildHistory(

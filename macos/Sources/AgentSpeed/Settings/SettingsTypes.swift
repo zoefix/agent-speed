@@ -56,7 +56,7 @@ enum TrafficUnit: String, CaseIterable, Identifiable, Sendable {
 }
 
 /// The menu bar's network block after the value (DESIGN 10, Menu bar and taskbar): network speed of this computer or
-/// of the agents. An unknown stored value reads as `off`; 智力 has a switch of its own (`AppSettings.barIntelligence`).
+/// of the agents. An unknown stored value reads as `off`; 性能 has a switch of its own (`AppSettings.barIntelligence`).
 enum BarTraffic: String, CaseIterable, Identifiable, Sendable {
     case off, machine, agents
 

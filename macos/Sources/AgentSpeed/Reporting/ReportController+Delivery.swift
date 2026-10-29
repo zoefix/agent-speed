@@ -12,14 +12,14 @@ extension ReportController {
     func handleLive(_ snapshot: SpeedSnapshot) {
         monitorRunning = snapshot.state == .running
         guard monitorRunning else {
-            // Seeding again: its tasks are history, and the ledger goes (METRICS 11.10 *Watch*).
-            updateTaskWatch()
+            // Seeding again: what it reads is history, and the ledger goes (METRICS 11.10 *Watch*).
+            updatePerfWatch()
             return
         }
         lastSnapshot = snapshot
         // Off and unwatched: nothing to compute until reporting or a preview needs this tick.
         guard run != nil || stream != nil || preferences.enabled || previewWindow != nil else {
-            if taskTracker.epoch != nil { updateTaskWatch() }
+            if perfTracker.epoch != nil { updatePerfWatch() }
             return
         }
         if let observed = snapshot.observedAtMs { pendingObservation = min(pendingObservation ?? observed, observed) }
@@ -52,18 +52,18 @@ extension ReportController {
     }
 
     /// Picks the transport by the effective one (METRICS 11.9); a run left on the other one is replaced first. The
-    /// task score's watch follows each tick's actions, so a leaving report takes the ledger before a break.
+    /// performance score's watch follows each tick's actions, so a leaving report takes the ledger before a break.
     func tick() {
         let effective = effectiveTransport
         if (run != nil && effective == .websocket) || (stream != nil && effective == .http) {
             transportChanged()
             return
         }
-        defer { updateTaskWatch() }
+        defer { updatePerfWatch() }
         let sample = lastSample
         let now = ReportClock.monotonicMs
         previewWindow?.observe(sample)
-        let completed = beginTaskTick(sample)
+        let completed = beginPerfTick(sample)
         if effective == .websocket {
             streamTick(sample, now: now, wake: false, completed: completed)
             return
@@ -144,7 +144,7 @@ extension ReportController {
         guard var run, let identity, let username = identity.username, let document = identity.discovery else { return }
         var content = run.window.take(sample)
         let options = options(for: document)
-        content.taskStats = takeTaskStats(options)
+        content.perfStats = takePerfStats(options)
         let envelope = ReportEnvelope(
             client: client, deviceId: identity.deviceId, username: username, runId: run.id, seq: ticket.seq,
             sentAtMs: ReportClock.unixMs + clockCorrection * 1000, windowMs: ticket.windowMs, activity: ticket.activity,

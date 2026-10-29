@@ -12,6 +12,8 @@ struct CodexParser: Sendable {
     private var myAgentPath = CodexParser.defaultAgentPath
     private var pendingStartMs: Int64?
     private var streaming = false
+    /// The output line that started the streaming response (METRICS 4.2).
+    private var firstOutputMs: Int64?
     private var sawModernUsage = false
     private var previousLegacyTotals: CodexRawUsage?
     /// `model_provider` of the first `session_meta` (METRICS 3.2).
@@ -26,6 +28,18 @@ struct CodexParser: Sendable {
 
     mutating func noteMalformedLine() {
         state.malformedLines += 1
+    }
+
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
     }
 
     mutating func consume(
@@ -66,7 +80,8 @@ struct CodexParser: Sendable {
             return
         }
         state.noteLine(at: timestamp)
-        state.actions.record(tools, at: timestamp)
+        // After the line, with the model of the current turn (METRICS 6.10).
+        defer { state.actions.record(tools, at: timestamp, model: state.model) }
         var requestModes = ExecutionModes.empty
         switch line.modeUpdate {
         case .none: break
@@ -101,6 +116,7 @@ struct CodexParser: Sendable {
             if recipient == myAgentPath, !streaming { pendingStartMs = timestamp }
 
         case .output:
+            if !streaming { firstOutputMs = timestamp }
             streaming = true
             state.setPhase(.generating, at: timestamp, inFlightStartMs: pendingStartMs ?? timestamp)
 
@@ -164,7 +180,8 @@ struct CodexParser: Sendable {
             endMs: timestamp,
             usage: usage,
             provider: provider,
-            modes: modes
+            modes: modes,
+            firstMs: streaming ? firstOutputMs : nil
         )
         finishWithoutUsage(at: timestamp)
         emit(ResponseUpsert(record: record, isCompletion: true))

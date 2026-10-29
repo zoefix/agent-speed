@@ -4,6 +4,7 @@ using System.Windows.Controls;
 using System.Windows.Documents;
 using System.Windows.Media;
 using AgentSpeed.Core.Intelligence;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Dashboard;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Localization;
@@ -31,7 +32,7 @@ public class IntelligenceColumnTests(ITestOutputHelper output)
         }).ToArray());
         foreach (var (language, width, number, caption) in widths)
         {
-            output.WriteLine($"{language}: cell {width} DIP (888 {number:0.0}, caption {caption:0.0})");
+            output.WriteLine($"{language}: cell {width} DIP (8,888 {number:0.0}, caption {caption:0.0})");
             Assert.Equal(Math.Ceiling(width), width);
             Assert.True(width >= number && width >= caption, language);
             Assert.True(width < Math.Max(number, caption) + 1, language);
@@ -39,10 +40,10 @@ public class IntelligenceColumnTests(ITestOutputHelper output)
     }
 
     [Theory]
-    [InlineData(AgentIntelligenceForm.Live)]
-    [InlineData(AgentIntelligenceForm.Resting)]
-    [InlineData(AgentIntelligenceForm.None)]
-    public void TheNumberSharesTheLiveValuesBaseline(AgentIntelligenceForm form)
+    [InlineData(PerfForm.Live)]
+    [InlineData(PerfForm.Resting)]
+    [InlineData(PerfForm.None)]
+    public void TheNumberSharesTheLiveValuesBaseline(PerfForm form)
     {
         var (cell, live) = OnStaThread(() =>
         {
@@ -51,7 +52,7 @@ public class IntelligenceColumnTests(ITestOutputHelper output)
             TextElement.SetFontFamily(row, family);
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = GridLength.Auto });
             row.ColumnDefinitions.Add(new ColumnDefinition { Width = new GridLength(56) });
-            var intelligence = new IntelligenceCell { Width = 24, Text = form == AgentIntelligenceForm.None ? "–" : "136", Form = form };
+            var intelligence = new IntelligenceCell { Width = 24, Text = form == PerfForm.None ? "–" : "1,286", Form = form };
             var value = new LiveValue { Text = "88.8", Kind = LiveValueKind.Number, HorizontalAlignment = HorizontalAlignment.Right, VerticalAlignment = VerticalAlignment.Center };
             TextElement.SetFontSize(value, IntelligenceCell.LiveValueSize);
             TextElement.SetFontWeight(value, FontWeights.SemiBold);

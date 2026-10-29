@@ -105,11 +105,11 @@ internal sealed partial class ReportController
             options = options with { Stream = new ReportStreamBody(age, limits.MaxMessageBytes) };
         }
 
-        // The task rows are the selected service's (METRICS 11.10); a consent draft has watched nothing yet.
+        // The statistics rows are the selected service's (METRICS 11.10); a consent draft has watched nothing yet.
         var content = window.Content(sample);
         if (draft is null)
         {
-            content = content with { Tasks = _tasks.Content(sample) };
+            content = content with { Perf = _perf.Content(sample) };
         }
 
         var (body, data) = ReportBody.Fitted(envelope, content, sample, options);

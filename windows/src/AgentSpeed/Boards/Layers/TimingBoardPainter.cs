@@ -57,7 +57,7 @@ internal sealed class TimingBoardPainter : BoardStylePainter
 
     protected override float ValueWidth(BoardSize size) => size == BoardSize.S ? 48 : 50;
 
-    // With the 智力 column the tower drops the capsule's word below L (meter and bolts stay; the word is in the tooltip).
+    // With the 性能 column the tower drops the capsule's word below L (meter and bolts stay; the word is in the tooltip).
     protected override BoardCapsuleLook CapsuleLook(BoardScene scene, bool sub) =>
         new(4, 5, 4, 1, new BoardTextStyle(BoardFont.Mono, 10, FontWeight.Bold, 0.02f, true), false, 3, 0,
             scene.Size == BoardSize.S || (scene.Metrics.IntelligenceColumn && scene.Size != BoardSize.L), scene.Palette);
@@ -184,7 +184,7 @@ internal sealed class TimingBoardPainter : BoardStylePainter
             return;
         }
 
-        // The fastest agent anywhere: a purple dot 9 pt before the value column, like a fastest lap; with the 智力 column it
+        // The fastest agent anywhere: a purple dot 9 pt before the value column, like a fastest lap; with the 性能 column it
         // keeps to the gap before the value.
         var scene = row.Scene;
         var cx = scene.Metrics.IntelligenceColumn ? width - 4 - (float)scene.Columns.Value - 3.5f : width - 4 - (row.Compact ? 44 : 46) - 6;

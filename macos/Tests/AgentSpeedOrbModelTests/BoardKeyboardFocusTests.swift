@@ -27,7 +27,7 @@ struct BoardKeyboardFocusTests {
                 "group and sub rows top to bottom; the more lines take no focus")
         #expect(BoardKeyboardFocus.keys(Self.rows, intelligence: true, keyboardNavigation: false).isEmpty)
         #expect(BoardKeyboardFocus.keys(Self.rows, intelligence: false, keyboardNavigation: true).isEmpty,
-                "with 智力 off no row shows a score")
+                "with 性能 off no row shows a score")
         var off = BoardKeyboardFocus()
         off.update([])
         let space = off.handle(.space, cardShown: false), tab = off.handle(.tab(backward: false), cardShown: false)

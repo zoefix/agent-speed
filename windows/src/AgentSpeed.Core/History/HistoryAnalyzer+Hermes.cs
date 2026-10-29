@@ -109,7 +109,8 @@ internal sealed partial class HistoryAnalyzer
             }
 
             state = state with { FilesDone = state.FilesDone + 1, BytesDone = state.BytesDone + log.Size };
-            var sink = new LatestResponses(merge: false);
+            var completions = new Perf.PerfCompletionLog();
+            var sink = new LatestResponses(merge: false, completions);
             long size;
             DateTime writeUtc;
             try
@@ -153,13 +154,14 @@ internal sealed partial class HistoryAnalyzer
                 var path = log.Marker + group.Key[log.Folder.Length..];
                 written.Add(path);
                 AddHermesEntry(pending, log, path, size, writeUtc,
-                    DayAggregate.Contributions(group, SourceKind.Hermes, labeler, Pricing));
+                    DayAggregate.Contributions(group, SourceKind.Hermes, labeler, Pricing),
+                    PerfRecordsOf(completions, sink.Items, group.Key, SourceKind.Hermes, labeler, group.Key));
             }
 
             // Sessions this file no longer has (it was rewritten) keep nothing of it.
             foreach (var stale in log.Sessions.Where(s => !written.Contains(s.Path)))
             {
-                AddHermesEntry(pending, log, stale.Path, size, writeUtc, []);
+                AddHermesEntry(pending, log, stale.Path, size, writeUtc, [], []);
             }
 
             analyzed++;
@@ -171,8 +173,8 @@ internal sealed partial class HistoryAnalyzer
         return true;
     }
 
-    private void AddHermesEntry(
-        List<(StoredFile, ulong[])> pending, PlannedHermesLog log, string path, long size, DateTime writeUtc, Dictionary<DayKey, DayAggregate> days)
+    private void AddHermesEntry(List<(StoredFile, ulong[])> pending, PlannedHermesLog log, string path, long size, DateTime writeUtc,
+        Dictionary<DayKey, DayAggregate> days, IReadOnlyList<Perf.PerfRecord> perf)
     {
         var entry = new StoredFile
         {
@@ -183,6 +185,7 @@ internal sealed partial class HistoryAnalyzer
             Modified = writeUtc.Ticks,
             Version = _options.Version,
             Days = days,
+            PerfRecords = perf,
         };
         _entries[path] = entry;
         pending.Add((entry, []));

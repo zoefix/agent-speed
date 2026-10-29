@@ -8,7 +8,7 @@ struct BoardRowAccents {
     var change = BoardValueChange.steady
     var previousRank: Int?
     var event: BoardRankEvent?
-    /// The 智力 cell's crossfade (a fall, `–` ↔ a number, live ↔ resting, the proof mark; DESIGN 2c *Updates*).
+    /// The 性能 cell's crossfade (a fall, `–` ↔ a number, live ↔ resting, the provisional mark; DESIGN 2c *Updates*).
     var intelFade: Double?
 
     static let none = BoardRowAccents()

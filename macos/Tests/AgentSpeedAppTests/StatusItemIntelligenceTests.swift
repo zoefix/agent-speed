@@ -4,76 +4,76 @@ import Foundation
 import Testing
 @testable import AgentSpeed
 
-/// DESIGN 10, Menu bar and taskbar, and DESIGN 12: the intelligence block's fixed cells, the task score's forms (live,
-/// resting pale, none `–`), the proof mark under an unproven score, the score words, the quiet state, the thinking
-/// hold, the `settings.bar.intelligence` switch with its one-time migration, and both blocks side by side.
+/// DESIGN 10, Menu bar and taskbar, and DESIGN 12: the intelligence block's fixed cells, the performance score's forms
+/// (live, resting pale, none `–`) in compact form, the provisional mark under a provisional score, the score words, the
+/// quiet state, the thinking hold, the `settings.bar.intelligence` switch with its one-time migration, and both blocks
+/// side by side.
 @Suite("Menu bar intelligence block")
 @MainActor
 struct StatusItemIntelligenceTests {
     /// The sums of all enabled sources: `score` in `form` from agent `a` (nil: none), `output` tok/s generated in the
     /// window (`Σ w`), `thinking` of it reasoning.
-    static func sums(score: Double?, form: TaskValueForm = .live, thinking: Double, output: Double? = nil) -> IntelligenceSums {
+    static func sums(score: Double?, form: PerfValueForm = .live, provisional: Bool = false, thinking: Double,
+                     output: Double? = nil) -> IntelligenceSums {
         var sums = IntelligenceSums()
         sums.output = output ?? max(thinking * 2, 40)
         sums.thinking = thinking
         sums.thinkingBase = sums.output
         if let score {
-            sums.score = TaskSetValue(form: form, score: score, shown: TaskScoreText.rounded(score), agentId: "a",
-                                      lastLineMs: nil)
+            sums.score = PerfSetValue(form: form, score: score, agentId: "a", lastLineMs: nil, provisional: provisional)
         }
         return sums
     }
 
-    /// An agent whose current task has `score` in `form` and `state`.
-    static func agent(_ id: String, _ form: TaskValueForm, _ score: Double?, _ state: TaskState?, project: String = "nova",
-                      lastLineMs: Int64? = nil) -> AgentStatus {
-        var result = TaskResult(TaskEvaluation([TaskEvent](), now: nil))
-        result.state = state ?? .none
-        result.score = score
-        result.shown = score.map(TaskScoreText.rounded)
+    /// An agent with `score` in `form` (nil: fewer than three timed requests).
+    static func agent(_ id: String, _ form: PerfValueForm, _ score: Double?, provisional: Bool = false,
+                      project: String = "nova", lastLineMs: Int64? = nil) -> AgentStatus {
         var intelligence = IntelligenceSums()
-        let value = TaskAgentValue(form: score == nil ? .none : form, score: score, shown: result.shown, state: result.state)
-        intelligence.score = TaskSetValue(id: id, lastLineMs: lastLineMs, value: value)
+        intelligence.score = PerfSetValue(form: form, score: score, agentId: id, lastLineMs: lastLineMs,
+                                          provisional: provisional)
         return AgentStatus(id: id, source: .codex, project: project, model: "gpt-5.5", phase: form == .live ? .generating : .idle,
-                           isSubagent: false, live: Rate(), recentSpeed: nil, lastActivity: Date(), intelligence: intelligence,
-                           task: AgentTaskStatus(taskStartMs: nil, result: result, predictions: nil, models: .prior))
+                           isSubagent: false, live: Rate(), recentSpeed: nil, lastActivity: Date(), intelligence: intelligence)
     }
 
     /// The block over `agents`, with their highest score and `thinking` tok/s (`output` generated).
     static func block(_ agents: [AgentStatus], thinking: Double, output: Double? = nil, language: LanguagePreference = .zhHant,
                       thinkingHidden: Bool = false) -> StatusItemIntelligence {
         var sums = Self.sums(score: nil, thinking: thinking, output: output)
-        sums.score = agents.reduce(TaskSetValue.empty) { $0.merged(with: $1.intelligence.score) }
+        sums.score = agents.reduce(PerfSetValue.empty) { $0.merged(with: $1.intelligence.score) }
         return StatusItemIntelligence(sums, agents: agents, l10n: Localizer(preference: language), thinkingHidden: thinkingHidden)
     }
 
     // MARK: Cells
 
     @Test func theBlockKeepsOneWidthPerLanguageWhateverTheNumbersAndForms() {
-        // SF Pro 9 pt with every cell rounded up: 73.5 pt in Chinese and Japanese, 68.5 pt in English, plus the gap.
-        let expected: [LanguagePreference: CGFloat] = [.zhHant: 73.5, .zhHans: 73.5, .ja: 73.5, .en: 68.5]
-        let readings: [(Double?, TaskValueForm, Double)] = [
-            (nil, .live, 0), (0, .live, 0), (9, .live, 4.2), (100, .live, 1_280), (100, .live, 12_800), (86, .live, 9.8),
-            (72, .resting, 0), (61, .resting, 412),
+        let readings: [(Double?, PerfValueForm, Double)] = [
+            (nil, .live, 0), (0, .live, 0), (948, .live, 4.2), (8888, .live, 1_280), (12_840, .live, 12_800),
+            (999_499, .live, 9.8), (1452, .resting, 0), (99_960, .resting, 412),
         ]
-        for (language, width) in expected {
+        var widths: [LanguagePreference: CGFloat] = [:]
+        for language in [LanguagePreference.zhHant, .zhHans, .ja, .en] {
             let l10n = Localizer(preference: language)
-            for (score, form, thinking) in readings {
-                let block = StatusItemIntelligence(Self.sums(score: score, form: form, thinking: thinking), l10n: l10n)
-                #expect(block.width == StatusItemIntelligence.gap + width, "\(language) \(String(describing: score)) \(thinking)")
-            }
+            let measured = Set(readings.map { score, form, thinking in
+                StatusItemIntelligence(Self.sums(score: score, form: form, thinking: thinking), l10n: l10n).width
+            })
+            #expect(measured.count == 1, "\(language) \(measured)")
+            widths[language] = measured.first
         }
+        #expect(widths[.zhHant] == widths[.zhHans] && widths[.zhHant] == widths[.ja])
     }
 
     @Test func numbersShareOneCellThatOnlyAMillionWidens() {
         let l10n = Localizer(preference: .zhHant)
         let base = StatusItemIntelligence(.zero, l10n: l10n).cell
-        for text in ["–", "0", "9", "86", "100", "888", "4.2", "128", "1.28k", "12.8k", "8.88k"] {
+        for text in ["–", "0", "948", "1,286", "8,888", "12.8k", "99.9k", "999k", "4.2", "128", "1.28k", "8.88k"] {
             #expect(base >= Self.textWidth(text), "\(text)")
         }
-        let million = StatusItemIntelligence(Self.sums(score: 100, thinking: 1_200_000), l10n: l10n)
+        #expect(base == 27, "DESIGN 12, *Number formats*: `8,888` in SF Pro 9 pt medium is 26.7")
+        let million = StatusItemIntelligence(Self.sums(score: 1286, thinking: 1_200_000), l10n: l10n)
         #expect(million.thinking.number == "1.20M")
         #expect(million.cell > base)
+        let millionScore = StatusItemIntelligence(Self.sums(score: 1_284_000, thinking: 12), l10n: l10n)
+        #expect(millionScore.intelligence.number == "1.28M" && millionScore.cell > base)
     }
 
     private static func textWidth(_ text: String) -> CGFloat {
@@ -83,49 +83,49 @@ struct StatusItemIntelligenceTests {
     // MARK: Forms
 
     @Test func aLiveScoreTakesTheNumberColorWithTheThinkingRate() {
-        let block = StatusItemIntelligence(Self.sums(score: 86.4, thinking: 10), l10n: Localizer(preference: .zhHant))
-        #expect(block.intelligence == .init(label: "智力", number: "86", dim: false))
+        let block = StatusItemIntelligence(Self.sums(score: 1286.4, thinking: 10), l10n: Localizer(preference: .zhHant))
+        #expect(block.intelligence == .init(label: "性能", number: "1,286", dim: false))
         #expect(block.thinking == .init(label: "思考", number: "10", dim: false))
         #expect(block.unit == "tok/s")
-        #expect(block.spoken == "智力 86，思考每秒 10 個 token")
-        let english = StatusItemIntelligence(Self.sums(score: 99.5, thinking: 1_280), l10n: Localizer(preference: .en))
-        #expect([english.intelligence.label, english.thinking.label] == ["IQ", "TH"])
-        #expect(english.intelligence.number == "100")
-        #expect(english.spoken == "intelligence 100, thinking 1.28k tokens per second")
+        #expect(block.spoken == "性能 1,286，思考每秒 10 個 token")
+        let english = StatusItemIntelligence(Self.sums(score: 12_840, thinking: 1_280), l10n: Localizer(preference: .en))
+        #expect([english.intelligence.label, english.thinking.label] == ["Perf", "TH"])
+        #expect(english.intelligence.number == "12.8k", "compact from 10,000")
+        #expect(english.spoken == "performance 12,840, thinking 1.28k tokens per second", "spoken in full")
     }
 
     @Test func aRestingScoreIsPaleAndSaysIdle() {
         let l10n = Localizer(preference: .zhHant)
-        let resting = StatusItemIntelligence(Self.sums(score: 72, form: .resting, thinking: 0, output: 0), l10n: l10n)
-        #expect(resting.intelligence == .init(label: "智力", number: "72", dim: true))
-        #expect(resting.spoken == "智力 72，閒置中，思考每秒 0 個 token")
-        let alone = StatusItemIntelligence(Self.sums(score: 72, form: .resting, thinking: 0, output: 0), l10n: l10n,
+        let resting = StatusItemIntelligence(Self.sums(score: 1452, form: .resting, thinking: 0, output: 0), l10n: l10n)
+        #expect(resting.intelligence == .init(label: "性能", number: "1,452", dim: true))
+        #expect(resting.spoken == "性能 1,452，閒置中，思考每秒 0 個 token")
+        let alone = StatusItemIntelligence(Self.sums(score: 1452, form: .resting, thinking: 0, output: 0), l10n: l10n,
                                            thinkingHidden: true)
         #expect(alone.alone)
         #expect(alone.intelligence.dim)
-        #expect(alone.spoken == "智力 72，閒置中")
-        #expect(StatusItemIntelligence(Self.sums(score: 72, form: .resting, thinking: 0, output: 0), l10n: Localizer(preference: .en),
-                                       thinkingHidden: true).spoken == "intelligence 72, idle")
+        #expect(alone.spoken == "性能 1,452，閒置中")
+        #expect(StatusItemIntelligence(Self.sums(score: 1452, form: .resting, thinking: 0, output: 0), l10n: Localizer(preference: .en),
+                                       thinkingHidden: true).spoken == "performance 1,452, idle")
     }
 
     @Test func noneIsADashNeverAZero() {
         let l10n = Localizer(preference: .zhHant)
         let none = StatusItemIntelligence(.zero, l10n: l10n)
-        #expect(none.intelligence == .init(label: "智力", number: "–", dim: true))
+        #expect(none.intelligence == .init(label: "性能", number: "–", dim: true))
         #expect(none.intelligence.number.unicodeScalars.map(\.value) == [0x2013])
-        // `intel.none` replaces only the 智力 words; the thinking words stay, as on the orb.
-        #expect(none.spoken == "智力：尚無評分，思考每秒 0 個 token")
+        // `intel.none` replaces only the 性能 words; the thinking words stay, as on the orb.
+        #expect(none.spoken == "性能：尚無分數，思考每秒 0 個 token")
         #expect(StatusItemIntelligence(.zero, l10n: Localizer(preference: .en)).spoken
-            == "intelligence: no score yet, thinking 0 tokens per second")
+            == "performance: no score yet, thinking 0 tokens per second")
         // 0 is a real score.
         let zero = StatusItemIntelligence(Self.sums(score: 0, thinking: 4.2), l10n: l10n)
-        #expect(zero.intelligence == .init(label: "智力", number: "0", dim: false))
-        #expect(zero.spoken == "智力 0，思考每秒 4.2 個 token")
+        #expect(zero.intelligence == .init(label: "性能", number: "0", dim: false))
+        #expect(zero.spoken == "性能 0，思考每秒 4.2 個 token")
     }
 
     @Test func quietTheBlockStaysWithDashes() {
         let block = StatusItemIntelligence(.zero, l10n: Localizer(preference: .zhHant))
-        #expect(block.intelligence == .init(label: "智力", number: "–", dim: true))
+        #expect(block.intelligence == .init(label: "性能", number: "–", dim: true))
         #expect(block.thinking == .init(label: "思考", number: "–", dim: true))
         #expect(block.unit == "tok/s")
         #expect(!block.alone)
@@ -133,71 +133,72 @@ struct StatusItemIntelligenceTests {
 
     @Test func theThinkingNumberIsADashOnlyWhileNothingIsGenerated() {
         let l10n = Localizer(preference: .zhHant)
-        // Agents read and think before any task has a score: 智力 `–`, 思考 its rate; `intel.none` and the rate.
+        // Agents think before they have three timed requests: 性能 `–`, 思考 its rate; `intel.none` and the rate.
         let reading = StatusItemIntelligence(Self.sums(score: nil, thinking: 128, output: 300), l10n: l10n)
         #expect(reading.intelligence.number == "–")
         #expect(reading.thinking == .init(label: "思考", number: "128", dim: false))
-        #expect(reading.spoken == "智力：尚無評分，思考每秒 128 個 token")
-        // A test running under a live score generates nothing (`Σ w = 0`).
-        let testing = StatusItemIntelligence(Self.sums(score: 45, thinking: 0, output: 0), l10n: l10n)
-        #expect(testing.intelligence == .init(label: "智力", number: "45", dim: false))
+        #expect(reading.spoken == "性能：尚無分數，思考每秒 128 個 token")
+        // A tool call running under a live score generates nothing (`Σ w = 0`).
+        let testing = StatusItemIntelligence(Self.sums(score: 948, thinking: 0, output: 0), l10n: l10n)
+        #expect(testing.intelligence == .init(label: "性能", number: "948", dim: false))
         #expect(testing.thinking == .init(label: "思考", number: "–", dim: true))
         // Generated without reasoning: a dimmed 0.
-        let zero = StatusItemIntelligence(Self.sums(score: 45, thinking: 0, output: 40), l10n: l10n)
+        let zero = StatusItemIntelligence(Self.sums(score: 948, thinking: 0, output: 40), l10n: l10n)
         #expect(zero.thinking == .init(label: "思考", number: "0", dim: true))
     }
 
-    // MARK: Proof mark and words
+    // MARK: Provisional mark and words
 
-    @Test func theProofMarkFollowsTheSupplyingAgentsState() {
-        for state in TaskState.allCases {
-            for form in [TaskValueForm.live, .resting] {
-                let block = Self.block([Self.agent("a", form, 54, state)], thinking: 4.2)
-                #expect(block.intelligence.unproven == (state == .unverified || state == .pending), "\(state) \(form)")
+    @Test func theProvisionalMarkFollowsTheSupplyingAgent() {
+        for provisional in [true, false] {
+            for form in [PerfValueForm.live, .resting] {
+                let block = Self.block([Self.agent("a", form, 948, provisional: provisional)], thinking: 4.2)
+                #expect(block.intelligence.provisional == provisional, "\(provisional) \(form)")
                 #expect(block.intelligence.dim == (form == .resting))
-                #expect(!block.thinking.unproven)
+                #expect(!block.thinking.provisional)
             }
         }
-        // A lower unverified agent does not mark a verified top; an unverified top is marked over a verified one.
-        #expect(!Self.block([Self.agent("a", .live, 86, .passing), Self.agent("b", .live, 9, .unverified)], thinking: 64)
-            .intelligence.unproven)
-        #expect(Self.block([Self.agent("a", .live, 41, .failing), Self.agent("b", .live, 54, .pending)], thinking: 64)
-            .intelligence.unproven)
+        // A lower provisional agent does not mark a settled top; a provisional top is marked over a settled one.
+        #expect(!Self.block([Self.agent("a", .live, 1286), Self.agent("b", .live, 948, provisional: true)], thinking: 64)
+            .intelligence.provisional)
+        #expect(Self.block([Self.agent("a", .live, 948), Self.agent("b", .live, 1286, provisional: true)], thinking: 64)
+            .intelligence.provisional)
         // A live score beats a higher resting one, and so does its mark.
-        let mixed = Self.block([Self.agent("a", .resting, 90, .passing), Self.agent("b", .live, 12, .unverified)], thinking: 64)
-        #expect(mixed.intelligence.number == "12")
-        #expect(mixed.intelligence.unproven)
+        let mixed = Self.block([Self.agent("a", .resting, 1452), Self.agent("b", .live, 702, provisional: true)], thinking: 64)
+        #expect(mixed.intelligence.number == "702")
+        #expect(mixed.intelligence.provisional)
         #expect(!mixed.intelligence.dim)
         // None never carries the mark.
-        #expect(!Self.block([Self.agent("a", .live, nil, .unverified)], thinking: 64).intelligence.unproven)
+        #expect(!Self.block([Self.agent("a", .live, nil, provisional: true)], thinking: 64).intelligence.provisional)
     }
 
-    @Test func theScoreWordsWrapStateThenIdleThenTopOfN() {
-        let unverified = [Self.agent("a", .live, 8.6, .unverified), Self.agent("b", .live, 4, .failing)]
-        #expect(Self.block(unverified, thinking: 64).spoken == "智力 9，尚未驗證，2 個 agent 中最高，思考每秒 64 個 token")
-        #expect(Self.block(unverified, thinking: 64, language: .en).spoken
-            == "intelligence 9, not verified, the highest of 2 agents, thinking 64 tokens per second")
-        let crew = [Self.agent("a", .live, 85.7, .passing), Self.agent("b", .live, 41, .failing),
-                    Self.agent("c", .live, 61, .passing), Self.agent("d", .live, 8.6, .unverified)]
-        #expect(Self.block(crew, thinking: 128).spoken == "智力 86，4 個 agent 中最高，思考每秒 128 個 token")
+    @Test func theScoreWordsWrapProvisionalThenIdleThenTopOfN() {
+        let provisional = [Self.agent("a", .live, 1048.2, provisional: true), Self.agent("b", .live, 702)]
+        #expect(Self.block(provisional, thinking: 64).spoken == "性能 1,048，初步（樣本少），2 個 agent 中最高，思考每秒 64 個 token")
+        #expect(Self.block(provisional, thinking: 64, language: .en).spoken
+            == "performance 1,048, provisional (few samples), the highest of 2 agents, thinking 64 tokens per second")
+        let crew = [Self.agent("a", .live, 1286.4), Self.agent("b", .live, 1123),
+                    Self.agent("c", .live, 942.7), Self.agent("d", .live, 702.1, provisional: true)]
+        #expect(Self.block(crew, thinking: 128).spoken == "性能 1,286，4 個 agent 中最高，思考每秒 128 個 token")
         // N counts the agents with a score in the shown form only.
-        let resting = [Self.agent("a", .resting, 72.3, .passing), Self.agent("b", .resting, 25, .failing),
-                       Self.agent("c", .live, nil, nil)]
-        #expect(Self.block(resting, thinking: 0, output: 0, thinkingHidden: true).spoken == "智力 72，閒置中，2 個 agent 中最高")
-        let pending = [Self.agent("a", .resting, 61, .pending)]
-        #expect(Self.block(pending, thinking: 0, output: 0, thinkingHidden: true).spoken == "智力 61，待重新驗證，閒置中")
-        #expect(Self.block(pending, thinking: 0, output: 0, language: .ja, thinkingHidden: true).spoken == "知能 61、再検証待ち、待機中")
+        let resting = [Self.agent("a", .resting, 1452.3), Self.agent("b", .resting, 893),
+                       Self.agent("c", .live, nil)]
+        #expect(Self.block(resting, thinking: 0, output: 0, thinkingHidden: true).spoken == "性能 1,452，閒置中，2 個 agent 中最高")
+        let pier = [Self.agent("a", .resting, 893, provisional: true)]
+        #expect(Self.block(pier, thinking: 0, output: 0, thinkingHidden: true).spoken == "性能 893，初步（樣本少），閒置中")
+        #expect(Self.block(pier, thinking: 0, output: 0, language: .ja, thinkingHidden: true).spoken
+            == "性能 893、暫定（サンプルが少ない）、待機中")
     }
 
-    @Test func theTooltipNamesTheSupplyingAgent() {
+    @Test func theTooltipNamesTheSupplyingAgentInFullForm() {
         let l10n = Localizer(preference: .zhHant)
-        let agents = [Self.agent("a", .live, 61, .passing, project: "orbit"), Self.agent("b", .live, 85.7, .passing, project: "nova")]
-        let score = agents.reduce(TaskSetValue.empty) { $0.merged(with: $1.intelligence.score) }
-        #expect(StatusItemIntelligence.topAgent(score, agents: agents, l10n: l10n) == "智力 86 · 最高：nova")
-        #expect(StatusItemIntelligence.topAgent(score, agents: agents, l10n: Localizer(preference: .en)) == "Intelligence 86 · top: nova")
+        let agents = [Self.agent("a", .live, 948, project: "orbit"), Self.agent("b", .live, 12_840, project: "nova")]
+        let score = agents.reduce(PerfSetValue.empty) { $0.merged(with: $1.intelligence.score) }
+        #expect(StatusItemIntelligence.topAgent(score, agents: agents, l10n: l10n) == "性能 12,840 · 最高：nova")
+        #expect(StatusItemIntelligence.topAgent(score, agents: agents, l10n: Localizer(preference: .en)) == "Perf 12,840 · top: nova")
         // Without a project the source names it; nothing while none.
-        let unnamed = [Self.agent("a", .resting, 40, .failing, project: "")]
-        #expect(StatusItemIntelligence.topAgent(unnamed[0].intelligence.score, agents: unnamed, l10n: l10n) == "智力 40 · 最高：Codex")
+        let unnamed = [Self.agent("a", .resting, 893, project: "")]
+        #expect(StatusItemIntelligence.topAgent(unnamed[0].intelligence.score, agents: unnamed, l10n: l10n) == "性能 893 · 最高：Codex")
         #expect(StatusItemIntelligence.topAgent(.empty, agents: agents, l10n: l10n) == nil)
     }
 
@@ -234,7 +235,7 @@ struct StatusItemIntelligenceTests {
 
     @Test func increaseContrastDrawsALiveScoreInTheFullLabelColor() {
         // DESIGN 12, *Platform details*: live and resting differ by more than the pale level.
-        let live = StatusItemIntelligence(Self.sums(score: 86, thinking: 0), l10n: Localizer(preference: .zhHant), thinkingHidden: true)
+        let live = StatusItemIntelligence(Self.sums(score: 1286, thinking: 0), l10n: Localizer(preference: .zhHant), thinkingHidden: true)
         func strongest(_ increasedContrast: Bool) -> UInt8 {
             let bytes = Self.pixels(live, increasedContrast: increasedContrast)
             return stride(from: 3, to: bytes.count, by: 4).map { bytes[$0] }.max() ?? 0
@@ -243,14 +244,14 @@ struct StatusItemIntelligenceTests {
         #expect(strongest(false) < 230)
     }
 
-    @Test func theProofMarkIsDottedUnderTheNumberAndMovesNothingElse() throws {
-        for (sums, thinkingHidden) in [(Self.sums(score: 54, thinking: 4.2), false), (Self.sums(score: 100, thinking: 1_280), false),
-                                       (Self.sums(score: 9, thinking: 0), true)] {
+    @Test func theProvisionalMarkIsDottedUnderTheNumberAndMovesNothingElse() throws {
+        for (sums, thinkingHidden) in [(Self.sums(score: 948, thinking: 4.2), false), (Self.sums(score: 12_840, thinking: 1_280), false),
+                                       (Self.sums(score: 1048, thinking: 0), true)] {
             for increasedContrast in [false, true] {
                 let l10n = Localizer(preference: .zhHant)
                 let plain = StatusItemIntelligence(sums, l10n: l10n, thinkingHidden: thinkingHidden)
                 var marked = plain
-                marked.intelligence.unproven = true
+                marked.intelligence.provisional = true
                 #expect(marked.width == plain.width)
                 let width = Int(ceil(plain.width * 2))
                 let changed = Self.difference(Self.pixels(plain, increasedContrast: increasedContrast),
@@ -274,11 +275,11 @@ struct StatusItemIntelligenceTests {
     @Test func theDotsAreRoundEvenAndInTheNumbersColorAt70Percent() {
         let l10n = Localizer(preference: .zhHant)
         for scale in [1, 2, 3] as [CGFloat] {
-            #expect(ProofMark.dotDiameter(textSize: StatusItemIntelligence.size, scale: scale, increasedContrast: false) == 1)
+            #expect(ProvisionalMark.dotDiameter(textSize: StatusItemIntelligence.size, scale: scale, increasedContrast: false) == 1)
         }
-        #expect(ProofMark.dotDiameter(textSize: StatusItemIntelligence.size, scale: 2, increasedContrast: true) == 1.5)
-        var block = StatusItemIntelligence(Self.sums(score: 54, thinking: 4.2), l10n: l10n)
-        block.intelligence.unproven = true
+        #expect(ProvisionalMark.dotDiameter(textSize: StatusItemIntelligence.size, scale: 2, increasedContrast: true) == 1.5)
+        var block = StatusItemIntelligence(Self.sums(score: 948, thinking: 4.2), l10n: l10n)
+        block.intelligence.provisional = true
         let bytes = Self.pixels(block)
         let width = Int(ceil(block.width * 2))
         let row = Int(block.baselines(height: 22).intelligence * 2) + 2
@@ -291,14 +292,14 @@ struct StatusItemIntelligenceTests {
         let runs = lit.reduce(into: [[Int]]()) { runs, column in
             if let last = runs.last?.last, last == column - 1 { runs[runs.count - 1].append(column) } else { runs.append([column]) }
         }
-        #expect(runs.count == ProofMark.dotCount(width: (block.intelligence.number as NSString)
+        #expect(runs.count == ProvisionalMark.dotCount(width: (block.intelligence.number as NSString)
             .size(withAttributes: [.font: StatusItemIntelligence.font]).width, diameter: 1))
         #expect(runs.allSatisfy { $0.count == 2 })
         let gaps = zip(runs, runs.dropFirst()).map { $1[0] - $0[0] }
         #expect((gaps.max() ?? 0) - (gaps.min() ?? 0) <= 1)
         let strongest = Double(alphas.max() ?? 0) / 255
-        #expect(strongest <= 0.85 * ProofMark.opacity + 0.01)
-        #expect(strongest >= 0.85 * ProofMark.opacity * 0.7)
+        #expect(strongest <= 0.85 * ProvisionalMark.opacity + 0.01)
+        #expect(strongest >= 0.85 * ProvisionalMark.opacity * 0.7)
         #expect(cell.map { bytes[((row + 1) * width + $0) * 4 + 3] } == alphas)
     }
 
@@ -307,7 +308,7 @@ struct StatusItemIntelligenceTests {
     @Test func afterTheHoldLineOneStandsAloneCentredInTheSameCells() {
         for language in [LanguagePreference.zhHant, .en, .ja] {
             let l10n = Localizer(preference: language)
-            for sums in [Self.sums(score: 86, thinking: 0), Self.sums(score: 72, form: .resting, thinking: 0, output: 0)] {
+            for sums in [Self.sums(score: 1286, thinking: 0), Self.sums(score: 1452, form: .resting, thinking: 0, output: 0)] {
                 let pair = StatusItemIntelligence(sums, l10n: l10n)
                 let alone = StatusItemIntelligence(sums, l10n: l10n, thinkingHidden: true)
                 #expect(!pair.alone)
@@ -321,44 +322,44 @@ struct StatusItemIntelligenceTests {
                 }
             }
         }
-        #expect(StatusItemIntelligence(Self.sums(score: 86, thinking: 0), l10n: Localizer(preference: .zhHant), thinkingHidden: true)
-            .spoken == "智力 86")
-        #expect(StatusItemIntelligence(Self.sums(score: 86, thinking: 0), l10n: Localizer(preference: .en), thinkingHidden: true)
-            .spoken == "intelligence 86")
+        #expect(StatusItemIntelligence(Self.sums(score: 1286, thinking: 0), l10n: Localizer(preference: .zhHant), thinkingHidden: true)
+            .spoken == "性能 1,286")
+        #expect(StatusItemIntelligence(Self.sums(score: 1286, thinking: 0), l10n: Localizer(preference: .en), thinkingHidden: true)
+            .spoken == "performance 1,286")
     }
 
     @Test func onlyAZeroUnderAScoreGoes() {
         let l10n = Localizer(preference: .zhHant)
         // A rate above 0 draws line 2 at once, even before the hold catches up.
-        let busy = StatusItemIntelligence(Self.sums(score: 86, thinking: 10), l10n: l10n, thinkingHidden: true)
+        let busy = StatusItemIntelligence(Self.sums(score: 1286, thinking: 10), l10n: l10n, thinkingHidden: true)
         #expect(!busy.alone)
-        #expect(busy.spoken == "智力 86，思考每秒 10 個 token")
+        #expect(busy.spoken == "性能 1,286，思考每秒 10 個 token")
         // Without a score both lines stay.
         let quiet = StatusItemIntelligence(.zero, l10n: l10n, thinkingHidden: true)
         #expect(!quiet.alone)
-        #expect(quiet.spoken == "智力：尚無評分，思考每秒 0 個 token")
+        #expect(quiet.spoken == "性能：尚無分數，思考每秒 0 個 token")
         #expect(!StatusItemIntelligence(Self.sums(score: nil, thinking: 0, output: 40), l10n: l10n, thinkingHidden: true).alone)
     }
 
     @Test func theHoldHidesAfterThreeSecondsAndReturnsAtOnce() {
         let hold = StatusItemThinkingHold()
-        let zero = Self.sums(score: 86, thinking: 0)
+        let zero = Self.sums(score: 1286, thinking: 0)
         hold.update(zero, at: 10)
         #expect(!hold.hidden)
         hold.update(zero, at: 12.9)
         #expect(!hold.hidden)
         hold.update(zero, at: 13)
         #expect(hold.hidden)
-        hold.update(Self.sums(score: 86, thinking: 4.2), at: 14)
+        hold.update(Self.sums(score: 1286, thinking: 4.2), at: 14)
         #expect(!hold.hidden)
         // A pause shorter than the hold never hides it.
         hold.update(zero, at: 15)
-        hold.update(Self.sums(score: 86, thinking: 3), at: 17.5)
+        hold.update(Self.sums(score: 1286, thinking: 3), at: 17.5)
         hold.update(zero, at: 18)
         hold.update(zero, at: 20.9)
         #expect(!hold.hidden)
         // A resting score after work goes the same way.
-        let resting = Self.sums(score: 72, form: .resting, thinking: 0, output: 0)
+        let resting = Self.sums(score: 1452, form: .resting, thinking: 0, output: 0)
         hold.update(resting, at: 21)
         hold.update(resting, at: 24)
         #expect(hold.hidden)
@@ -366,8 +367,8 @@ struct StatusItemIntelligenceTests {
         hold.update(.zero, at: 30)
         hold.update(.zero, at: 40)
         #expect(!hold.hidden)
-        #expect(StatusItemThinkingHold.readsZero(Self.sums(score: 86, thinking: 0.04)))
-        #expect(!StatusItemThinkingHold.readsZero(Self.sums(score: 86, thinking: 0.05)))
+        #expect(StatusItemThinkingHold.readsZero(Self.sums(score: 1286, thinking: 0.04)))
+        #expect(!StatusItemThinkingHold.readsZero(Self.sums(score: 1286, thinking: 0.05)))
         #expect(!StatusItemThinkingHold.readsZero(.zero))
     }
 
@@ -419,7 +420,7 @@ struct StatusItemIntelligenceTests {
         #expect(BarTraffic.allCases.filter(\.isNetwork) == [.machine, .agents])
         let l10n = Localizer(preference: .zhHant)
         #expect(BarTraffic.allCases.map { l10n($0.titleKey) } == ["不顯示", "網路速度：整台電腦", "網路速度：只看 agent"])
-        #expect(l10n("settings.bar.intelligence") == "顯示智力")
+        #expect(l10n("settings.bar.intelligence") == "顯示性能")
     }
 
     // MARK: Both blocks
@@ -467,8 +468,8 @@ struct StatusItemIntelligenceTests {
 
         // The values never move the width: a wide score and wide rates measure the same.
         var snapshot = model.snapshot
-        snapshot.intelligence = Self.sums(score: 100, thinking: 12_800)
-        snapshot.agents = [Self.agent("a", .live, 100, .passing)]
+        snapshot.intelligence = Self.sums(score: 12_840, thinking: 12_800)
+        snapshot.agents = [Self.agent("a", .live, 12_840)]
         model.store.publishLive(snapshot)
         model.settings.barTraffic = .machine
         model.settings.barIntelligence = true

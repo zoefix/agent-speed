@@ -1,10 +1,10 @@
 import AgentSpeedOrbModel
 import AppKit
 
-/// Neon's sub-gauge, LED 副錶 (DESIGN 2c Live metrics): 智力 in lit LED digits over ghost segments, a 12-segment
+/// Neon's sub-gauge, LED 副錶 (DESIGN 2c Live metrics): 性能 in lit LED digits over ghost segments, a 12-segment
 /// meter, the 思考 / 費用 table under it; right-aligned at the side inset and centred in the band less the LED bar.
-/// Resting draws the digits in `ink-3` and the lit segments at 35 %, without glow; an unproven score draws the lit
-/// segments hollow and the dotted underline under the digits (DESIGN 12 *Proof mark*).
+/// Resting draws the digits in `ink-3` and the lit segments at 35 %, without glow; a provisional score draws the lit
+/// segments hollow and the dotted underline under the digits (DESIGN 12 *Provisional mark*).
 @MainActor
 final class BoardNeonGauge {
     let size: BoardSize
@@ -15,7 +15,7 @@ final class BoardNeonGauge {
     private var tableKey: [String] = []
     private var numberCell = BoardCellWidth()
     private var score = BoardHeroScore()
-    /// The digits and the meter, where the hero's score card opens (board points); nil without 智力.
+    /// The digits and the meter, where the hero's score card opens (board points); nil without 性能.
     private(set) var scoreArea: CGRect?
 
     /// When a running count-up lands (the board lays itself out on every frame until then).
@@ -86,7 +86,7 @@ final class BoardNeonGauge {
         let previous = memory.previousHeroScore
         let (shown, motion) = score.update(reading, previous: previous, fresh: memory.fresh, now: gauge.now,
                                            reduceMotion: gauge.reduceMotion)
-        let live = reading.form == .live, resting = reading.isResting, unproven = reading.isUnproven
+        let live = reading.form == .live, resting = reading.isResting, provisional = reading.isProvisional
         let board = CGRect(x: 0, y: 0, width: CGFloat(size.side), height: CGFloat(size.side))
         let theme = AnyHashable([AnyHashable(palette.dark), AnyHashable(palette.highContrast), AnyHashable(size.rawValue)])
         var items: [BoardContentItem] = []
@@ -105,12 +105,12 @@ final class BoardNeonGauge {
 
         let numberFont = BoardFont(family: .mono, size: CGFloat(metrics.mainNumberSize), weight: .bold, tracking: -0.03)
         let baseline = top + CGFloat(metrics.mainNumberBaseline)
-        let number = BoardScoreNumber(key: "gauge.iq.n", shown: shown, font: numberFont, color: live ? palette.led : palette.quiet,
-                                      anchor: .center(center), baseline: baseline, unproven: unproven,
-                                      highContrast: palette.highContrast)
-        // Ghost segments: as many dim 8s as the number has digits (none with Increase Contrast).
+        let number = BoardScoreNumber(key: "gauge.iq.n", shown: shown, form: .full, font: numberFont,
+                                      color: live ? palette.led : palette.quiet, anchor: .center(center), baseline: baseline,
+                                      provisional: provisional, highContrast: palette.highContrast)
+        // Ghost segments: the shown text with every digit as 8 and the comma kept (none with Increase Contrast).
         let text = number.label.text
-        let ghostText = String(text.map { $0.isNumber ? "8" : " " })
+        let ghostText = String(text.map { $0.isNumber ? "8" : $0 == "," || $0 == "." ? $0 : " " })
         if palette.glows, text.contains(where: \.isNumber) {
             let ghost = BoardLabel(ghostText, numberFont, color: palette.ghost)
             let x = number.x
@@ -132,8 +132,8 @@ final class BoardNeonGauge {
         }
         items += number.items(fade: motion.numberFade)
 
-        // The meter: 12 segments, 3 tall and 2 apart, lit from the left (one per 8⅓ points); a new count crossfades in
-        // the roll's 0.24 s (Reduce Motion: at once), a count-up's frames replace it.
+        // The meter: 12 segments, 3 tall and 2 apart, `round(f × 12)` lit from the left on the log scale; a new count
+        // crossfades in the roll's 0.24 s (Reduce Motion: at once), a count's frames replace it.
         let lit = BoardIntelligenceScale.segments(shown)
         let meterWidth = CGFloat(metrics.meterWidth)
         let segments = BoardGaugeMetrics.meterSegments
@@ -142,12 +142,13 @@ final class BoardNeonGauge {
         let digitsTop = number.box.minY
         scoreArea = CGRect(x: min(meter.minX, number.box.minX), y: digitsTop,
                            width: max(meter.width, number.box.width), height: meter.maxY - digitsTop).insetBy(dx: -2, dy: -2)
-        let glows = palette.dark && palette.glows && !resting && !unproven
+        let glows = palette.dark && palette.glows && !resting && !provisional
         // Increase Contrast: lit `ink` over unlit `ink-3`, a resting meter in the quiet ink rather than faded below it.
         let unlit = palette.highContrast ? palette.ink3Token : palette.unlit
         let litColor = palette.highContrast ? (resting ? palette.quiet : palette.mind) : palette.mind.opacity(resting ? 0.35 : 1)
         var item = BoardContentItem.part("gauge.meter", of: board, rect: meter.insetBy(dx: -8, dy: -8),
-                                         revision: AnyHashable([AnyHashable(lit), AnyHashable(resting), AnyHashable(unproven), theme])) { context in
+                                         revision: AnyHashable([AnyHashable(lit), AnyHashable(resting), AnyHashable(provisional),
+                                                                theme])) { context in
             let gap: CGFloat = 2
             let width = (meter.width - gap * CGFloat(segments - 1)) / CGFloat(segments)
             func segment(_ index: Int) -> CGRect {
@@ -164,9 +165,9 @@ final class BoardNeonGauge {
                     BoardDrawing.fill(rect, radius: 1, color: unlit, in: context)
                     continue
                 }
-                if unproven {
+                if provisional {
                     let path = CGPath(roundedRect: rect, cornerWidth: 1, cornerHeight: 1, transform: nil)
-                    ProofMark.strokeHollow(path, in: context, color: litColor.cgColor)
+                    ProvisionalMark.strokeHollow(path, in: context, color: litColor.cgColor)
                 } else {
                     BoardDrawing.fill(rect, radius: 1, color: litColor, in: context)
                 }
@@ -175,7 +176,7 @@ final class BoardNeonGauge {
         item.motion = .glide(fade: 0.25)
         item.group = .hero
         var fade = motion.shapeFade
-        if memory.fresh, let previous, !gauge.reduceMotion, motion.climb == nil,
+        if memory.fresh, let previous, !gauge.reduceMotion, motion.count == nil,
            BoardIntelligenceScale.segments(previous.shown) != lit {
             fade = max(fade ?? 0, BoardContentStack.sweepSeconds)
         }

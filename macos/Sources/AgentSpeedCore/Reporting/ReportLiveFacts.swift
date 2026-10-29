@@ -141,19 +141,19 @@ public struct ReportLiveFacts: Equatable, Sendable {
     /// Generating agents by the resolved id of their current model and their source.
     public var generatingModels: [ReportModelKey: Int]
     public var counters: ReportCounters
-    /// The task score's values and completions (METRICS 11.10).
-    public var task: ReportTaskFacts
+    /// The performance score's values and counted completions (METRICS 11.10).
+    public var perf: ReportPerfFacts
 
     public init(
         agents: [SourceKind: ReportAgentCounts] = [:],
         generatingModels: [ReportModelKey: Int] = [:],
         counters: ReportCounters = .zero,
-        task: ReportTaskFacts = .empty
+        perf: ReportPerfFacts = .empty
     ) {
         self.agents = agents
         self.generatingModels = generatingModels
         self.counters = counters
-        self.task = task
+        self.perf = perf
     }
 
     public static let empty = ReportLiveFacts()

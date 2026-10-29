@@ -10,7 +10,7 @@ public readonly record struct BoardGaugeCells(double Label, double AtLeast, doub
 
 /// <summary>
 /// Where the sub-gauge's parts lie at one moment, in hero coordinates (pt from the hero's top-left corner): its box, the
-/// glass dial or the neon meter, 智力's label and number, and each table row's baseline (timing: its row box). Thinking hidden
+/// glass dial or the neon meter, 性能's label and number, and each table row's baseline (timing: its row box). Thinking hidden
 /// at zero glides every part between the stack with 思考 and the one without it.
 /// </summary>
 public readonly record struct BoardGaugePlacement
@@ -49,7 +49,7 @@ public readonly record struct BoardGaugePlacement
     /// <summary>Where <c>≥</c> starts.</summary>
     public double AtLeastLeft { get; init; }
 
-    /// <summary>The numbers' right edge (timing: of the small rows; 智力's ends a unit gap further left).</summary>
+    /// <summary>The numbers' right edge (timing: of the small rows; 性能's ends a unit gap further left).</summary>
     public double NumberRight { get; init; }
 
     /// <summary>Where the units start.</summary>
@@ -114,7 +114,7 @@ public static class BoardGaugeLayout
 
     /// <summary>
     /// The sub-gauge's height with 思考 shown or hidden (Folding; Thinking hidden at zero: glass 17 shorter, neon 17 / 18 / 18,
-    /// timing 15 / 17 / 19). Only 智力: the dial (glass), the digits and meter (neon) or the 智力 row (timing).
+    /// timing 15 / 17 / 19). Only 性能: the dial (glass), the digits and meter (neon) or the 性能 row (timing).
     /// </summary>
     public static double Height(BoardStyle style, BoardGaugeSpec spec, BoardReadouts readouts, bool thinkingShown)
     {
@@ -162,7 +162,7 @@ public static class BoardGaugeLayout
         return style == BoardStyle.Timing ? Timing(placement, spec, readouts, cells, g) : Table(placement, style, spec, readouts, cells, g);
     }
 
-    // Glass and neon: 智力 (dial or digits and meter) on top, then the table; 費用 slides up into 思考's place as it hides.
+    // Glass and neon: 性能 (dial or digits and meter) on top, then the table; 費用 slides up into 思考's place as it hides.
     private static BoardGaugePlacement Table(BoardGaugePlacement p, BoardStyle style, BoardGaugeSpec spec, BoardReadouts readouts,
         BoardGaugeCells cells, double glide)
     {
@@ -189,7 +189,7 @@ public static class BoardGaugeLayout
         };
     }
 
-    // Timing: rows from the box's top, 智力 first; 思考 leaves the box and 費用 takes its place.
+    // Timing: rows from the box's top, 性能 first; 思考 leaves the box and 費用 takes its place.
     private static BoardGaugePlacement Timing(BoardGaugePlacement p, BoardGaugeSpec spec, BoardReadouts readouts, BoardGaugeCells cells,
         double glide)
     {

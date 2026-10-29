@@ -19,8 +19,8 @@ public final class DemoDriver {
     private var today = TokenTotals.zero
     private var lastResponse: ResponseSummary?
     private static let estimatedShare = 0.15
-    /// A third of the output is reasoning and every scored agent has a task score, so an orb set to the intelligence
-    /// readout shows both while previewing (METRICS 6.9).
+    /// A third of the output is reasoning and most agents have a performance score, so an orb set to the 性能 readout
+    /// shows both while previewing (METRICS 6.9).
     private static let thinkingShare = 0.35
 
     private struct FakeAgent {
@@ -30,21 +30,21 @@ public final class DemoDriver {
         let model: String
         let isSubagent: Bool
         let weight: Double
-        /// Its task score; nil for a source without one.
+        /// Its performance score; nil for an agent without one.
         let score: Double?
     }
 
     private let agents: [FakeAgent] = [
         FakeAgent(id: "demo-rocket", source: .codex, project: "rocket", model: "gpt-6.1-sol", isSubagent: false, weight: 0.28,
-                  score: 86.25),
+                  score: 812.4),
         FakeAgent(id: "demo-nova", source: .claudeCode, project: "nova", model: "claude-opus-5-5", isSubagent: false, weight: 0.26,
-                  score: 73.75),
+                  score: 1286.3),
         FakeAgent(id: "demo-quasar", source: .deepseek, project: "quasar", model: "deepseek-v4-pro", isSubagent: false, weight: 0.18,
                   score: nil),
         FakeAgent(id: "demo-nova-sub", source: .claudeCode, project: "nova", model: "claude-sonnet-5-5", isSubagent: true, weight: 0.14,
-                  score: 61.5),
+                  score: 940.2),
         FakeAgent(id: "demo-orbit", source: .claudeDesktop, project: "orbit", model: "claude-fable-5-1", isSubagent: false, weight: 0.14,
-                  score: 48.0),
+                  score: 1604.6),
     ]
 
     public init(store: SpeedStore) {
@@ -169,9 +169,8 @@ public final class DemoDriver {
             let phase: AgentPhase = active ? .generating : (speed > 0.5 ? .tools : .idle)
             var intelligence = Self.intelligence(output: share, from: agent.source)
             if let score = agent.score {
-                let value = TaskAgentValue(form: phase == .idle ? .resting : .live, score: score,
-                                           shown: taskRoundHalfAway(score), state: .passing)
-                intelligence.score = TaskSetValue(id: agent.id, lastLineMs: Clock.milliseconds(now), value: value)
+                intelligence.score = PerfSetValue(form: phase == .idle ? .resting : .live, score: score, agentId: agent.id,
+                                                  lastLineMs: Clock.milliseconds(now))
             }
             return AgentStatus(
                 id: agent.id,

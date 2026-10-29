@@ -2,23 +2,23 @@ using AgentSpeed.Core;
 using AgentSpeed.Presentation.Boards.Scene;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Modes;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Boards.Live;
 
 /// <summary>A board's score card: what it shows, and the agent it is for (a new agent under the same row crossfades).</summary>
-public sealed record BoardScoreCard(string AgentId, TaskCardSubject Subject);
+public sealed record BoardScoreCard(string AgentId, PerfCardSubject Subject);
 
 /// <summary>
 /// A board's score cards (DESIGN 2c, Tooltip and score card; DESIGN 12, <i>Score card</i>) while its <c>intelligence</c> readout
 /// is on: a group row's is the card of the member whose score the row shows (a group without one: its root's), a sub row's its
-/// sub-agent's, and the hero's 智力 opens the supplying agent's card with <c>task.card.top</c> from two scored agents (nothing
+/// sub-agent's, and the hero's 性能 opens the supplying agent's card with <c>perf.card.top</c> from two scored agents (nothing
 /// while none). Their facts are the row's former tooltip lines that the card's header does not already carry (project, source
 /// and model): the agent's recorded effort and speed, then the row's speed. No card names a cost.
 /// </summary>
 public static class BoardScoreCards
 {
-    /// <summary>The hover key of the hero's 智力, beside the row keys (agent ids, <c>group#more</c>, <c>#rest</c>).</summary>
+    /// <summary>The hover key of the hero's 性能, beside the row keys (agent ids, <c>group#more</c>, <c>#rest</c>).</summary>
     public const string HeroKey = "#score";
 
     /// <summary>The card a hover key opens on <paramref name="tick"/>; null with <c>intelligence</c> off or when nothing shows it.</summary>
@@ -56,18 +56,18 @@ public static class BoardScoreCards
         {
             case BoardEntryKind.Group:
                 var group = entry.Group;
-                var supplier = (entry.Readout?.Score ?? TaskSetReading.Group(group.Root, group.Subs)).Agent;
+                var supplier = (entry.Readout?.Score ?? PerfSetReading.Group(group.Root, group.Subs)).Agent;
                 var shown = supplier ?? group.Root;
-                return new BoardScoreCard(shown.Id, TaskScoreMapping.Subject(group.Root, Facts(shown, BoardTooltip.SpeedLine(group, loc), loc),
+                return new BoardScoreCard(shown.Id, PerfCardSubject.Of(group.Root, Facts(shown, BoardTooltip.SpeedLine(group, loc), loc),
                     supplier, group.Subs.Count));
             case BoardEntryKind.Sub when entry.Agent is { } agent:
-                return new BoardScoreCard(agent.Id, TaskScoreMapping.Subject(agent, Facts(agent, SpeedLine(agent, metric, loc), loc)));
+                return new BoardScoreCard(agent.Id, PerfCardSubject.Of(agent, Facts(agent, SpeedLine(agent, metric, loc), loc)));
             default:
                 return null;
         }
     }
 
-    /// <summary>The hero's card: the agent that supplies the board's 智力, its eyebrow naming N; null while none.</summary>
+    /// <summary>The hero's card: the agent that supplies the board's 性能, its eyebrow naming N; null while none.</summary>
     public static BoardScoreCard? Hero(BoardTick tick, Localizer loc)
     {
         ArgumentNullException.ThrowIfNull(tick);
@@ -78,7 +78,7 @@ public static class BoardScoreCards
             return null;
         }
 
-        return new BoardScoreCard(agent.Id, TaskScoreMapping.Subject(agent, Facts(agent, SpeedLine(agent, tick.Metric, loc), loc),
+        return new BoardScoreCard(agent.Id, PerfCardSubject.Of(agent, Facts(agent, SpeedLine(agent, tick.Metric, loc), loc),
             topCount: score.Count));
     }
 
@@ -90,7 +90,7 @@ public static class BoardScoreCards
     {
         ArgumentNullException.ThrowIfNull(tick);
         ArgumentNullException.ThrowIfNull(entry);
-        return tick.Readouts.Intelligence && Row(entry, tick.Metric, loc) is { } card ? TaskScoreCard.Build(card.Subject, loc).FullDescription
+        return tick.Readouts.Intelligence && Row(entry, tick.Metric, loc) is { } card ? PerfCard.Build(card.Subject, loc).Description
             : string.Empty;
     }
 

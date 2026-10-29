@@ -45,7 +45,7 @@ final class AppSettings {
     var trafficUnit: TrafficUnit { didSet { store(trafficUnit.rawValue, .trafficUnit) } }
     /// The menu bar traffic block (DESIGN 10): off (default), this computer or the agents.
     var barTraffic: BarTraffic { didSet { store(barTraffic.rawValue, .barTraffic) } }
-    /// The menu bar intelligence block (DESIGN 10): 智力 and 思考 after the network block; off by default.
+    /// The menu bar intelligence block (DESIGN 10): 性能 and 思考 after the network block; off by default.
     var barIntelligence: Bool { didSet { store(barIntelligence, .barIntelligence) } }
     /// The menu bar money block (DESIGN 3): the live money rate and today's total after a tok/s value.
     var barSecondary: Bool { didSet { store(barSecondary, .barSecondary) } }
@@ -144,7 +144,7 @@ final class AppSettings {
         trafficEnabled = defaults.object(forKey: Key.trafficEnabled.rawValue) as? Bool ?? true
         trafficIncludeTools = defaults.object(forKey: Key.trafficIncludeTools.rawValue) as? Bool ?? true
         trafficUnit = TrafficUnit(rawValue: defaults.string(forKey: Key.trafficUnit.rawValue) ?? "") ?? .bytes
-        // Earlier builds kept 智力 as a fourth traffic choice: it becomes the switch once, and the network block off.
+        // Earlier builds kept 性能 as a fourth traffic choice: it becomes the switch once, and the network block off.
         let storedTraffic = defaults.string(forKey: Key.barTraffic.rawValue)
         let migrates = storedTraffic == Self.retiredIntelligenceTraffic
         barTraffic = BarTraffic(rawValue: storedTraffic ?? "") ?? .off
@@ -275,7 +275,7 @@ final class AppSettings {
         return URL(fileURLWithPath: path)
     }
 
-    /// The stored `barTraffic` value of builds before 智力 had its own switch (DESIGN 10).
+    /// The stored `barTraffic` value of builds before 性能 had its own switch (DESIGN 10).
     static let retiredIntelligenceTraffic = "intelligence"
 
     private func store(_ value: Any?, _ key: Key) {

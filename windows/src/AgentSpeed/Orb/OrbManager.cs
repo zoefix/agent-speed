@@ -19,7 +19,7 @@ using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Orb.Lines;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Orbs;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Titles;
 using AgentSpeed.Services;
 using AgentSpeed.Theme;
@@ -382,11 +382,11 @@ internal sealed class OrbManager : IDisposable
     }
 
     /// <summary>
-    /// 智力 of the orb's agents <c>A</c> (METRICS 6.8, 6.9 <i>Sets and groups</i>): the highest score, live before resting,
+    /// 性能 of the orb's agents <c>A</c> (METRICS 6.8, 6.9 <i>Sets and groups</i>): the highest score, live before resting,
     /// with the supplying agent's state and N, over the thinking rate of the orb's sources.
     /// </summary>
     private OrbLinesSample IntelligenceSample(SubsetReading reading) =>
-        OrbLinesText.Intelligence(TaskSetReading.Of(reading.Intelligence, reading.Agents), reading.Intelligence,
+        OrbLinesText.Intelligence(PerfSetReading.Of(reading.Intelligence, reading.Agents), reading.Intelligence,
             reading.GeneratingSources.Count > 0, _loc);
 
     /// <summary>

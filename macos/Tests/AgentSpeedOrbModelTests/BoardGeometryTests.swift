@@ -47,10 +47,13 @@ struct BoardGeometryTests {
 
     @Test func rowColumnsFollowTheTable() {
         let glass = BoardGeometry(.glass, .medium, readouts: .all)
-        #expect(glass.intelligenceColumn == 22 && glass.valueColumn == 44 && glass.groupRow == 38 && glass.groupGap == 0)
+        // DESIGN 12, *Number formats*: `8,888` at 13 pt on the two-line group rows of M and L, at 11 pt at S.
+        #expect(glass.intelligenceColumn == 39 && glass.valueColumn == 44 && glass.groupRow == 38 && glass.groupGap == 0)
+        #expect(BoardGeometry(.glass, .small, readouts: .all).intelligenceColumn == 33)
+        #expect(BoardGeometry(.neon, .small, readouts: .all).intelligenceColumn == 34)
         #expect(glass.secondLineBaseline == 32 && BoardGeometry(.neon, .medium, readouts: .all).secondLineBaseline == 31)
         let timing = BoardGeometry(.timing, .large, readouts: .all)
-        #expect(timing.intelligenceColumn == 26 && timing.valueColumn == 42 && timing.intervalColumn == 34 && timing.groupRow == 40)
+        #expect(timing.intelligenceColumn == 40 && timing.valueColumn == 42 && timing.intervalColumn == 34 && timing.groupRow == 40)
         let small = BoardGeometry(.timing, .small, readouts: .all)
         #expect(small.valueColumn == 40 && small.intervalColumn == 0 && !small.twoLine && small.groupRow == 30)
         let noIntelligence = BoardGeometry(.glass, .medium, readouts: BoardReadouts(intelligence: false, thinking: true, cost: true))
@@ -107,7 +110,7 @@ struct BoardGeometryTests {
                 #expect(folded.height == hidden, "\(style) \(size) hidden height")
                 // 費用 takes 思考's baseline; the dial moves down and 費用 up by half the difference once re-centred.
                 #expect(folded.row(.cost)?.baseline == thinking, "\(style) \(size) 費用 on 思考's baseline")
-                // Folding: without 智力 the table (or the box's small rows) alone; with 智力 alone its part only.
+                // Folding: without 性能 the table (or the box's small rows) alone; with 性能 alone its part only.
                 let table = metrics.stack(intelligence: false, thinking: true, cost: true)
                 #expect(table.main == nil && table.rows.first?.top == 0)
                 #expect(metrics.stack(intelligence: true, thinking: false, cost: false).height == (style == .timing ? metrics.mainRow : metrics.mainHeight))
@@ -118,15 +121,17 @@ struct BoardGeometryTests {
         #expect(BoardGaugeMetrics(.timing, .medium).stack(intelligence: false, thinking: true, cost: true).rows.map(\.baseline) == [12, 29.5])
     }
 
-    /// DESIGN 2c Live metrics: the arc lights `shown / 100` of its sweep, the meter `round(shown × 12 / 100)` segments.
-    @Test func theArcAndTheMeterSpanTheTaskScore() {
-        #expect(BoardIntelligenceScale.arc(86) == 0.86 && BoardIntelligenceScale.arc(100) == 1)
-        #expect(BoardIntelligenceScale.arc(nil) == 0 && BoardIntelligenceScale.arc(0) == 0)
-        #expect(BoardIntelligenceScale.segments(86) == 10 && BoardIntelligenceScale.segments(100) == 12)
+    /// DESIGN 12, *Log scale*: the arc lights `f = clamp(log2(v / 250) / 4, 0, 1)` of its sweep, the meter `round(f × 12)`
+    /// segments; 1000 is half, 4000 and above full.
+    @Test func theArcAndTheMeterFollowTheLogScale() {
+        #expect(BoardIntelligenceScale.arc(1000) == 0.5 && BoardIntelligenceScale.arc(2000) == 0.75)
+        #expect(BoardIntelligenceScale.arc(4000) == 1 && BoardIntelligenceScale.arc(16_000) == 1)
+        #expect(BoardIntelligenceScale.arc(nil) == 0 && BoardIntelligenceScale.arc(0) == 0 && BoardIntelligenceScale.arc(250) == 0)
+        #expect(BoardIntelligenceScale.segments(1000) == 6 && BoardIntelligenceScale.segments(2000) == 9)
+        #expect(BoardIntelligenceScale.segments(4000) == 12 && BoardIntelligenceScale.segments(99_999) == 12)
         #expect(BoardIntelligenceScale.segments(nil) == 0 && BoardIntelligenceScale.segments(0) == 0)
-        // One segment per 8⅓ points: 4 → 0.48 stays dark, 5 → 0.6 lights the first, 21 → 2.52 lights three.
-        #expect(BoardIntelligenceScale.segments(4) == 0 && BoardIntelligenceScale.segments(5) == 1)
-        #expect(BoardIntelligenceScale.segments(21) == 3 && BoardIntelligenceScale.segments(95) == 11)
+        // f × 12 for 270 is 0.33, for 300 0.79: dark, then the first segment.
+        #expect(BoardIntelligenceScale.segments(270) == 0 && BoardIntelligenceScale.segments(300) == 1)
     }
 
     @Test func theStripSparklineKeepsItsMargins() {
@@ -153,41 +158,39 @@ struct BoardGroupSumsTests {
                            intelligence: Self.scored(sums, id: id, score: score, live: output > 0))
     }
 
-    static func scored(_ sums: IntelligenceSums, id: String, score: Double?, live: Bool) -> IntelligenceSums {
+    static func scored(_ sums: IntelligenceSums, id: String, score: Double?, live: Bool,
+                       provisional: Bool = false) -> IntelligenceSums {
         guard let score else { return sums }
         var sums = sums
-        sums.score = TaskSetValue(id: id, lastLineMs: 0, value: TaskAgentValue(
-            form: live ? .live : .resting, score: score, shown: taskRoundHalfAway(score), state: .passing))
+        sums.score = PerfSetValue(form: live ? .live : .resting, score: score, agentId: id, lastLineMs: 0,
+                                  provisional: provisional)
         return sums
     }
 
-    /// `agent` with a current task in `state` (the proof mark follows the supplying agent's state).
-    static func withTask(_ agent: AgentStatus, _ state: TaskState) -> AgentStatus {
+    /// `agent` with a provisional score (fewer than 10 timed requests): the mark follows the supplying agent.
+    static func provisional(_ agent: AgentStatus) -> AgentStatus {
         var agent = agent
-        var result = TaskResult(TaskEvaluation([TaskEvent](), now: nil))
-        result.state = state
-        result.score = agent.intelligence.score.score
-        agent.task = AgentTaskStatus(taskStartMs: 0, result: result, predictions: nil, models: .prior)
+        agent.intelligence.score.provisional = true
         return agent
     }
 
-    /// DESIGN 12: a group row shows its highest member score, its proof mark follows the member that supplies it, N
-    /// counts the members scored in that form, and its card is the supplier's (a group without a score: its root's).
+    /// DESIGN 12: a group row shows its highest member score, its provisional mark follows the member that supplies it,
+    /// N counts the members scored in that form, and its card is the supplier's (a group without a score: its root's).
     @Test func theGroupsReadingFollowsItsSupplier() throws {
-        let agents = [Self.withTask(Self.agent("r", output: 10, score: 41.2), .failing),
-                      Self.withTask(Self.agent("s", parent: "r", output: 4, score: 57.6), .pending),
-                      Self.withTask(Self.agent("t", parent: "r", output: 0, score: 90), .passing)]
+        let agents = [Self.agent("r", output: 10, score: 1123.4),
+                      Self.provisional(Self.agent("s", parent: "r", output: 4, score: 1286.4)),
+                      Self.agent("t", parent: "r", output: 0, score: 1452)]
         let group = try #require(BoardGrouping.groups(agents, metric: .output).first)
         let reading = group.intelligenceReading
-        #expect(reading.form == .live && reading.shown == 58 && reading.state == .pending && reading.isUnproven)
-        #expect(reading.count == 2, "two members are live; the resting 90 does not count")
+        #expect(reading.form == .live && reading.shown == 1286 && reading.isProvisional)
+        #expect(reading.count == 2, "two members are live; the resting 1452 does not count")
         #expect(group.cardAgent.id == "s")
         let none = try #require(BoardGrouping.groups([Self.agent("r", output: 3), Self.agent("s", parent: "r", output: 1)],
                                                      metric: .output).first)
         #expect(none.intelligenceReading == .none && none.cardAgent.id == "r")
-        // A sub row's own value: resting, passing, no mark.
-        let own = TaskSetReading(agent: agents[2])
-        #expect(own.form == .resting && own.shown == 90 && !own.isUnproven && own.count == 1)
+        // A sub row's own value: resting, no mark.
+        let own = PerfSetReading(agent: agents[2])
+        #expect(own.form == .resting && own.shown == 1452 && !own.isProvisional && own.count == 1)
     }
 
     @Test func membersAddTheirSumsNeverAnAverageOfTheirShares() throws {
@@ -199,10 +202,10 @@ struct BoardGroupSumsTests {
     }
 
     @Test func theGroupShowsItsHighestLiveScoreElseItsHighestResting() throws {
-        let mixed = [Self.agent("r", output: 0, score: 81.5), Self.agent("s", parent: "r", output: 12, score: 47.25)]
-        #expect(try #require(BoardGrouping.groups(mixed, metric: .output).first).intelligence == .live(47.25))
-        let resting = [Self.agent("r", output: 0, score: 60), Self.agent("s", parent: "r", output: 0, score: 72.5)]
-        #expect(try #require(BoardGrouping.groups(resting, metric: .output).first).intelligence == .resting(72.5))
+        let mixed = [Self.agent("r", output: 0, score: 1452.5), Self.agent("s", parent: "r", output: 12, score: 947.25)]
+        #expect(try #require(BoardGrouping.groups(mixed, metric: .output).first).intelligence == .live(947.25))
+        let resting = [Self.agent("r", output: 0, score: 1000), Self.agent("s", parent: "r", output: 0, score: 1286.5)]
+        #expect(try #require(BoardGrouping.groups(resting, metric: .output).first).intelligence == .resting(1286.5))
         let none = [Self.agent("r", output: 9), Self.agent("s", parent: "r", output: 3)]
         #expect(try #require(BoardGrouping.groups(none, metric: .output).first).intelligence == .none)
     }
@@ -214,11 +217,11 @@ struct BoardGroupSumsTests {
         #expect(group.sums.intelligence.thinkingShare == 0.25)
     }
 
-    /// The groups of the `thinking` `groupWindows` cases of `spec/fixtures/task-score-cases.json`: a root and all its
+    /// The groups of the `thinking` `groupWindows` cases of `spec/fixtures/perf-score-cases.json`: a root and all its
     /// descendants.
     @Test func theFixtureGroupsAreRootsWithTheirDescendants() throws {
         let url = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent().deletingLastPathComponent()
-            .deletingLastPathComponent().appendingPathComponent("spec/fixtures/task-score-cases.json")
+            .deletingLastPathComponent().appendingPathComponent("spec/fixtures/perf-score-cases.json")
         let root = try #require(JSONSerialization.jsonObject(with: Data(contentsOf: url)) as? [String: Any])
         let thinking = try #require(root["thinking"] as? [String: Any])
         var checked = 0

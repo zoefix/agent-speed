@@ -22,7 +22,7 @@ public sealed record WorkSignals(int? Looping, int? Repeating, double? Novelty, 
 
     public bool IsLooping => Looping is not null;
 
-    /// <summary>The signals of <paramref name="actions"/> (file order) at <paramref name="nowMs"/>.</summary>
+    /// <summary>The signals of <paramref name="actions"/> (file order) at <paramref name="nowMs"/>; seeded actions are ignored.</summary>
     internal static WorkSignals Of(IReadOnlyList<WorkAction> actions, long nowMs)
     {
         ArgumentNullException.ThrowIfNull(actions);
@@ -31,7 +31,7 @@ public sealed record WorkSignals(int? Looping, int? Repeating, double? Novelty, 
             return None;
         }
 
-        var recent = actions.Where(a => a.AtMs >= nowMs - RecentMs).ToArray();
+        var recent = actions.Where(a => !a.Seeded && a.AtMs >= nowMs - RecentMs).ToArray();
         if (recent.Length == 0)
         {
             return None;

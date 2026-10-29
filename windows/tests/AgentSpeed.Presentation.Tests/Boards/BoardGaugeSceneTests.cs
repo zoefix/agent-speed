@@ -102,7 +102,7 @@ public class BoardGaugeSceneTests
     [InlineData(BoardStyle.Glass, BoardSize.M)]
     [InlineData(BoardStyle.Neon, BoardSize.L)]
     [InlineData(BoardStyle.Timing, BoardSize.S)]
-    public void The智力NumberSitsOnItsBaselineInTheSubGauge(BoardStyle style, BoardSize size)
+    public void The性能NumberSitsOnItsBaselineInTheSubGauge(BoardStyle style, BoardSize size)
     {
         var (scene, layers, list, tick, _) = Run(style, size, BoardReadouts.All);
         var placement = Placement(scene, layers);
@@ -121,26 +121,34 @@ public class BoardGaugeSceneTests
     [Fact]
     public void GlassDrawsItsTrackValueArcAndTip()
     {
-        var (scene, layers, list, _, _) = Run(BoardStyle.Glass, BoardSize.M, BoardReadouts.All);
+        var (scene, layers, list, tick, _) = Run(BoardStyle.Glass, BoardSize.M, BoardReadouts.All);
         var placement = Placement(scene, layers);
         var m = BoardCanvas.Margin;
         var cx = m + scene.Metrics.Pad + placement.CenterX;
         var arcs = list.Instances.ToArray().Where(i => (OrbShape)(int)i.A.W == OrbShape.BandArc && Math.Abs(i.A.X - cx) < 1e-3).ToArray();
-        // The track, the glow and at least one gradient piece.
-        Assert.True(arcs.Length >= 3, $"{arcs.Length} arcs");
         Assert.Equal(BoardGaugeSpec.For(BoardStyle.Glass, BoardSize.M).ArcRadius, arcs[0].B.X, 3);
+
+        // The track, then the glow and at least one gradient piece; a provisional value is dotted instead.
+        Assert.True(tick.Gauge.Score.HasScore);
+        Assert.True(tick.Gauge.Score.IsProvisional ? arcs.Length == 1 : arcs.Length >= 3, $"{arcs.Length} arcs");
     }
 
     [Fact]
-    public void NeonLightsItsMeterByTheIndex()
+    public void NeonLightsItsMeterByTheScoreOnTheLogScale()
     {
         var (_, _, list, tick, _) = Run(BoardStyle.Neon, BoardSize.M, BoardReadouts.All);
-        var segments = list.Instances.ToArray().Where(i => (OrbShape)(int)i.A.W == OrbShape.RoundedRect && Math.Abs(i.B.Y - 1.5) < 1e-3).ToArray();
-        // The 0–100 task score over 12 segments.
-        var lit = Math.Clamp((int)Math.Floor(tick.Gauge.Shown!.Value / (100 / 12.0) + 0.5), 0, 12);
+        var instances = list.Instances.ToArray();
+        var segments = instances.Where(i => (OrbShape)(int)i.A.W == OrbShape.RoundedRect && Math.Abs(i.B.Y - 1.5) < 1e-3).ToArray();
+
+        // round(f × 12), f = clamp(log2(v / 250) / 4, 0, 1): 6 at 1000, all 12 from 4000.
+        var lit = BoardHeroScore.Lit(tick.Gauge.Shown);
+        Assert.Equal((int)Math.Round(Math.Clamp(Math.Log2(tick.Gauge.Shown!.Value / 250.0) / 4, 0, 1) * 12, MidpointRounding.AwayFromZero), lit);
         Assert.True(lit > 0);
-        // Each segment once: lit (glowing on dark) over the first `lit`, unlit after them.
-        Assert.Equal(12, segments.Length);
+
+        // Each segment once: lit (glowing on dark; hollow while provisional) over the first `lit`, unlit after them.
+        var hollow = instances.Count(i => (OrbShape)(int)i.A.W == OrbShape.RoundedRing && Math.Abs(i.B.Y - (1.5 - Presentation.Perf.PerfProvisionalMark.HollowInset)) < 1e-3);
+        Assert.Equal(tick.Gauge.Score.IsProvisional ? lit : 0, hollow);
+        Assert.Equal(12, segments.Length + hollow);
         Assert.Equal(12 - lit, segments.Count(s => s.Color.W > 0.001 && s.Extra.Y <= 0.001));
     }
 
@@ -171,7 +179,7 @@ public class BoardGaugeSceneTests
     }
 
     [Fact]
-    public void RowsDrawThe智力CellOnTheValuesBaseline()
+    public void RowsDrawThe性能CellOnTheValuesBaseline()
     {
         var (scene, layers, list, _, _) = Run(BoardStyle.Glass, BoardSize.M, BoardReadouts.All);
         var m = BoardCanvas.Margin;

@@ -1,16 +1,16 @@
 namespace AgentSpeed.Presentation.Boards;
 
 /// <summary>
-/// The figures of a two-line group row (DESIGN 2c, Ranking rows: The second line): the 智力 cell and the value leave line 1,
+/// The figures of a two-line group row (DESIGN 2c, Ranking rows: The second line): the 性能 cell and the value leave line 1,
 /// 2 pt larger than in a one-line row, and share one baseline that puts the cap-height centre of their digits on the row's
 /// centre line (19 under the top at M, 20 at L) — the mean of their two cap heights, so each lies within a quarter of their
 /// difference of it; timing's interval is centred on its own baseline at its own size. The platform measures the fonts:
-/// <see cref="Intelligence"/> and <see cref="Value"/> are the widest figures at the new sizes (<c>888</c>; the widest value
+/// <see cref="Intelligence"/> and <see cref="Value"/> are the widest figures at the new sizes (<c>8,888</c>; the widest value
 /// METRICS 7 writes), which the cells widen to fit, and the caps are the digits' cap heights.
 /// </summary>
-/// <param name="Intelligence">The width of <see cref="IntelligenceSample"/> in a two-line group row's 智力 font.</param>
+/// <param name="Intelligence">The width of <see cref="IntelligenceSample"/> in a two-line group row's 性能 font.</param>
 /// <param name="Value">The widest of <see cref="ValueSamples"/> in a two-line group row's value font.</param>
-/// <param name="IntelligenceCap">The cap height of that 智力 font.</param>
+/// <param name="IntelligenceCap">The cap height of that 性能 font.</param>
 /// <param name="ValueCap">The cap height of that value font.</param>
 /// <param name="IntervalCap">The cap height of timing's interval font.</param>
 public readonly record struct BoardRowFigures(double Intelligence, double Value, double IntelligenceCap, double ValueCap, double IntervalCap)
@@ -18,8 +18,8 @@ public readonly record struct BoardRowFigures(double Intelligence, double Value,
     /// <summary>A two-line group row's figures are this much larger than a one-line row's.</summary>
     public const double Growth = 2;
 
-    /// <summary>The 智力 cell fits this.</summary>
-    public const string IntelligenceSample = "888";
+    /// <summary>The 性能 cell fits this: the widest compact score (DESIGN 12, <i>Number formats</i>).</summary>
+    public const string IntelligenceSample = Perf.PerfNumber.WidestCompact;
 
     /// <summary>Timing's interval digits (<c>.gap</c>), unchanged in size.</summary>
     public const double IntervalSize = 10.5;
@@ -37,7 +37,7 @@ public readonly record struct BoardRowFigures(double Intelligence, double Value,
     public static double Centre(double rowHeight) => rowHeight / 2;
 
     /// <summary>
-    /// The figures' shared baseline under the row's top: the value's cap centred on the centre line, or, with the 智力 cell, the
+    /// The figures' shared baseline under the row's top: the value's cap centred on the centre line, or, with the 性能 cell, the
     /// mean of both caps.
     /// </summary>
     public double Baseline(double rowHeight, bool intelligence) =>

@@ -47,7 +47,7 @@
                 <ComboBoxItem Content="{loc:Loc settings.bar.traffic.agents}" IsEnabled="{Binding Traffic.Enabled}" />
             </ComboBox>
         </controls:SettingsCard>
-        <!-- DESIGN 10: 智力 has a switch of its own, right after the network control, always enabled; it shows beside the
+        <!-- DESIGN 10: 性能 has a switch of its own, right after the network control, always enabled; it shows beside the
              network block. Its caption says what the score is while it is on. -->
         <controls:SettingsCard Header="{loc:Loc settings.bar.intelligence}" Icon="&#xE82F;" Description="{Binding BarIntelligenceHint}">
             <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding BarIntelligence, Mode=TwoWay}"

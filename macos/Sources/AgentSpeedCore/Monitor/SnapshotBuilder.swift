@@ -82,7 +82,7 @@ enum SnapshotBuilder {
                 cwdPath: row.agent.cwdPath,
                 modes: row.agent.modes,
                 intelligence: row.intelligence,
-                task: row.agent.task,
+                perf: row.perf,
                 signals: row.signals
             )
         }

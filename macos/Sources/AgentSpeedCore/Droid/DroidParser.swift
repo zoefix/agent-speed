@@ -68,6 +68,18 @@ struct DroidParser: Sendable {
         state.malformedLines += 1
     }
 
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
+    }
+
     /// Where the reader began; weights before the first compaction count from here.
     mutating func noteReadStart(_ offset: Int64?) {
         if let offset { readStart = offset }
@@ -75,7 +87,7 @@ struct DroidParser: Sendable {
 
     // MARK: - Transcript lines
 
-    /// `tools`: the line's tool calls and results, read only from live lines (METRICS 6.10).
+    /// `tools`: the line's tool calls and results (METRICS 6.10).
     mutating func consume(_ line: DroidLineRead, tools: [ToolEvent] = [], deduper: inout Deduper) {
         switch line.extraction {
         case .blank:
@@ -109,7 +121,7 @@ struct DroidParser: Sendable {
             state.noteLine(at: timestamp)
             switch record {
             case .input:
-                state.actions.record(tools, at: timestamp)
+                state.actions.recordResults(tools, at: timestamp)
                 pendingStartMs = timestamp
                 state.setPhase(.generating, at: timestamp, inFlightStartMs: timestamp)
             case .compaction:
@@ -121,12 +133,11 @@ struct DroidParser: Sendable {
                 }
             case .assistant(let assistant):
                 // Another file's message (a fork's copy) adds no actions (METRICS 6.10).
-                if let id = assistant.id, !deduper.isOwnedByOtherFile("droid:" + id, for: fileID) {
-                    state.actions.record(tools, at: timestamp)
-                }
+                let accepted = assistant.id.map { !deduper.isOwnedByOtherFile("droid:" + $0, for: fileID) } ?? false
                 call(assistant, at: timestamp, offset: offset, length: length, deduper: &deduper)
+                if accepted { state.actions.recordCalls(tools, at: timestamp, model: state.model) }
             case .notice:
-                state.actions.record(tools, at: timestamp)
+                state.actions.recordResults(tools, at: timestamp)
             case .other:
                 break
             }

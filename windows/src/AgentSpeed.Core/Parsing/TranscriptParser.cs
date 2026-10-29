@@ -1,4 +1,4 @@
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Work;
 
 namespace AgentSpeed.Core.Parsing;
@@ -21,6 +21,12 @@ internal interface IPositionedLineSink : ILineSink
     void OnLine(ReadOnlySpan<byte> line, long offset, int length);
 }
 
+/// <summary>Receives the tool calls whose first result was read live (METRICS 6.10, 11.10), in the order they are read.</summary>
+internal interface ICallSink
+{
+    void OnCallResult(string agentId, SourceKind source, WorkAction action);
+}
+
 /// <summary>Lines extracted off-thread, applied later to their parser in file order.</summary>
 internal interface ILineBatch : ILineSink
 {
@@ -36,7 +42,7 @@ internal abstract class TranscriptParser
 {
     private AgentPhase _phase = AgentPhase.Idle;
     private WorkLog? _work;
-    private TaskComposer? _tasks;
+    private bool _wholeFile;
 
     protected TranscriptParser(string agentId, IDeduper deduper, SourceKind initialSource)
     {
@@ -79,17 +85,17 @@ internal abstract class TranscriptParser
     /// <summary>The file's latest tool calls as actions, oldest first (METRICS 6.10); empty for sources without tool calls.</summary>
     public IReadOnlyList<WorkAction> WorkActions => _work?.Actions ?? [];
 
+    /// <summary>The monitor is applying a seeding read: actions are stored as seeded and their results are not live (METRICS 6.10).</summary>
+    internal bool Seeding { get; set; }
+
     /// <summary>
-    /// The agent's task stream (METRICS 6.9 <i>Composing the stream</i>) for a source with a task score; null otherwise.
-    /// Seeded lines compose like live ones.
+    /// The order in which the agent's responses become measured and its calls get their first result (METRICS 6.11
+    /// <i>Completion order</i>); set by whole-file reads (history, dumps), which also keep every action.
     /// </summary>
-    public TaskComposer? Tasks => _tasks;
+    internal PerfCompletionLog? Completions { get; private set; }
 
-    /// <summary>The file side of the composer, used by <c>Extract</c> on the reading thread.</summary>
-    internal TaskLineReader? TaskReader { get; private set; }
-
-    /// <summary>Live reporting's watch (METRICS 11.10), given by the live monitor; null elsewhere (history, dumps, tests).</summary>
-    internal TaskWatchContext? TaskWatch { get; set; }
+    /// <summary>Takes the calls whose first result is read live (not while seeding), in line order; set by the live monitor.</summary>
+    internal ICallSink? CallSink { get; set; }
 
     /// <summary>Changes whenever agent-visible state changes.</summary>
     public int Version { get; private set; }
@@ -122,76 +128,46 @@ internal abstract class TranscriptParser
         InFlightStartMs = null;
         LastLineMs = null;
         _work?.Clear();
-        _tasks?.Reset();
+        Completions?.Clear();
         Version++;
     }
 
-    /// <summary>Keeps every task's events instead of the current task's (history analysis, dumps); call before any line.</summary>
-    public void KeepEveryTask()
+    /// <summary>
+    /// A whole-file read (history analysis, dumps; call before any line): every action is kept and the completion order is
+    /// logged (METRICS 6.10 <i>Storage</i>, 6.11).
+    /// </summary>
+    public void ReadWholeFile()
     {
-        if (_tasks is { } tasks)
-        {
-            _tasks = new TaskComposer(tasks.Source, keepAll: true);
-        }
-    }
-
-    /// <summary>Seeding adds no actions (METRICS 6.10): a file's actions start with its live lines.</summary>
-    public void ForgetWork()
-    {
-        if (_work is { Actions.Count: > 0 } work)
-        {
-            work.Clear();
-            Version++;
-        }
+        _wholeFile = true;
+        Completions ??= new PerfCompletionLog();
     }
 
     protected void CountMalformed() => MalformedLines++;
 
-    /// <summary>Gives the parser a composer (a source with a task score; call from the constructor).</summary>
-    protected void EnableTasks(TaskLineReader reader, SourceKind source)
-    {
-        TaskReader = reader;
-        _tasks = new TaskComposer(source, keepAll: false);
-    }
-
-    /// <summary>A line the reader starts the file with: the composer's file side starts over.</summary>
-    internal void OnFileStart() => TaskReader?.Reset();
-
     /// <summary>
-    /// Feeds one counted line to the composer, after the source handler: its assistant entry is a duplicate when the
-    /// handler left its key to another file (4.1 step 2, 4.7 step 2, 4.16).
+    /// Logs a line's tool calls and results; callers skip copied history and lines another file owns, and call it after the
+    /// line set the agent's model, which each call records (METRICS 6.10).
     /// </summary>
-    /// <param name="assistant">The line is an assistant line that decides a withdrawal even without facts (Claude).</param>
-    /// <param name="dedupeKey">That line's dedupe key.</param>
-    protected void ComposeTask(TaskLine? line, long t, bool suppressCalls = false, bool assistant = false, string? dedupeKey = null)
+    protected void RecordTools(in LineTools tools, long atMs)
     {
-        if (_tasks is not { } tasks)
+        if (tools.Calls is null && tools.Outcomes is null)
         {
             return;
         }
 
-        var key = line?.DedupeKey ?? dedupeKey;
-        var duplicate = key is not null && Deduper.TryGetOwner(key, out var owner)
-            && !string.Equals(owner, AgentId, StringComparison.Ordinal);
-        var before = tasks.Revision;
-        tasks.Feed(line, t, assistant || line?.Assistant == true, duplicate, suppressCalls, Model, EffortAndSpeed.Effort(Modes)?.Mode, TaskWatch);
-        if (tasks.Revision != before)
+        _work ??= new WorkLog(_wholeFile ? null : WorkLog.MaxActions) { Completed = OnCallCompleted };
+        if (_work.Apply(tools, atMs, Model, Seeding))
         {
             Version++;
-        }
-
-        if (TaskWatch is { } watch && (tasks.HasWatchedTask || tasks.HasDone))
-        {
-            watch.Collect(this);
         }
     }
 
-    /// <summary>Logs a line's tool calls and results; callers skip copied history and lines another file owns.</summary>
-    protected void RecordTools(in LineTools tools, long atMs)
+    private void OnCallCompleted(WorkAction action)
     {
-        if ((tools.Calls is not null || tools.Outcomes is not null) && (_work ??= new WorkLog()).Apply(tools, atMs))
+        Completions?.Add(action);
+        if (!Seeding)
         {
-            Version++;
+            CallSink?.OnCallResult(AgentId, Source, action);
         }
     }
 
@@ -297,15 +273,7 @@ internal abstract class TranscriptParser<TLine> : TranscriptParser
 
         public void OnLine(ReadOnlySpan<byte> line) => _lines.Add(owner.Extract(line));
 
-        public void OnLine(ReadOnlySpan<byte> line, long offset, int length)
-        {
-            if (offset == 0)
-            {
-                owner.OnFileStart();
-            }
-
-            _lines.Add(owner.Extract(line));
-        }
+        public void OnLine(ReadOnlySpan<byte> line, long offset, int length) => _lines.Add(owner.Extract(line));
 
         public void OnMalformed() => _malformed++;
 

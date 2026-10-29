@@ -2,7 +2,7 @@ import AgentSpeedOrbModel
 import AppKit
 
 /// The sub-gauge's table rows of one tick as text (DESIGN 2c Live metrics): 思考 and 費用 as they show (思考 hidden at
-/// zero leaves its row out). Quiet values — `–`, a `0` of 思考 or 費用, the tag — are drawn quietly. 智力 is the
+/// zero leaves its row out). Quiet values — `–`, a `0` of 思考 or 費用, the tag — are drawn quietly. 性能 is the
 /// gauges' own (`BoardHeroScore`, `BoardScoreNumber`).
 @MainActor
 struct BoardGaugeReadings {
@@ -61,7 +61,7 @@ struct BoardGaugeFrame {
     var right: CGFloat
     var memory: BoardTickMemory
     var now: TimeInterval
-    /// Reduce Motion: no count-up, every 智力 change a 0.15 s crossfade, the arc and the meter jump.
+    /// Reduce Motion: no count, every 性能 change a 0.15 s crossfade, the arc and the meter jump.
     var reduceMotion = false
 }
 

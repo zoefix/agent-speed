@@ -2,7 +2,8 @@ import AgentSpeedCore
 import Foundation
 
 /// The menu bar block's sample moments (DESIGN 12, Values and forms; DESIGN 10, Menu bar and taskbar): the agents of
-/// all enabled sources with their task states, modelled on the prototype's menu bar section, and their thinking sums.
+/// all enabled sources with their performance scores, modelled on the prototype's menu bar section, and their thinking
+/// sums.
 @MainActor
 enum IntelligenceBarPreviewData {
     struct Scenario {
@@ -20,71 +21,68 @@ enum IntelligenceBarPreviewData {
             sums.output = output
             sums.thinking = thinking
             sums.thinkingBase = output
-            sums.score = agents.reduce(TaskSetValue.empty) { $0.merged(with: $1.intelligence.score) }
+            sums.score = agents.reduce(PerfSetValue.empty) { $0.merged(with: $1.intelligence.score) }
             return sums
         }
     }
 
     static let hold: TimeInterval = 3
 
-    /// Every form and proof state of 智力, with 思考 shown, read as 0 within its hold, and hidden after it; then the
-    /// widest numbers.
+    /// Every form of 性能 and the provisional mark, with 思考 shown, read as 0 within its hold, and hidden after it; then
+    /// the widest numbers. Indices 3, 4, 5 and 11 carry the provisional mark.
     static let scenarios: [Scenario] = [
-        Scenario(name: "none · quiet", agents: [agent("a", "atlas", .codex, .live, nil, nil)], output: 0, thinking: 0),
-        Scenario(name: "none · reading", agents: [agent("a", "atlas", .codex, .live, nil, nil)], output: 180, thinking: 128),
-        Scenario(name: "live 86 · passing · top of 4", agents: crew, output: 532, thinking: 128),
-        Scenario(name: "live 9 · unverified · top of 2", agents: [
-            agent("e", "ember", .claudeCode, .live, 8.6, .unverified), agent("f", "fjord", .codex, .live, 4, .failing),
+        Scenario(name: "none · quiet", agents: [agent("a", "atlas", .codex, .live, nil)], output: 0, thinking: 0),
+        Scenario(name: "none · fewer than 3 timed", agents: [agent("a", "atlas", .codex, .live, nil)], output: 180,
+                 thinking: 128),
+        Scenario(name: "live 1,286 · top of 4", agents: crew, output: 532, thinking: 128),
+        Scenario(name: "live 1,048 · provisional · top of 2", agents: [
+            agent("e", "ember", .claudeCode, .live, 1048.2, provisional: true), agent("f", "fjord", .codex, .live, 702),
         ], output: 180, thinking: 64),
-        Scenario(name: "live 54 · pending", agents: [agent("g", "gale", .codex, .live, 54, .pending)], output: 96,
-                 thinking: 4.2),
-        Scenario(name: "live 100 · pending", agents: [agent("h", "halo", .claudeCode, .live, 99.6, .pending)],
+        Scenario(name: "live 642 · provisional", agents: [agent("g", "gale", .codex, .live, 642.4, provisional: true)],
+                 output: 96, thinking: 4.2),
+        Scenario(name: "live 8,888 · provisional", agents: [agent("h", "halo", .claudeCode, .live, 8888, provisional: true)],
                  output: 2_600, thinking: 1_280),
-        Scenario(name: "live 72 · thinking 0", agents: [agent("n", "nova", .codex, .live, 72, .passing)], output: 40,
+        Scenario(name: "live 1,286 · thinking 0", agents: [agent("n", "nova", .codex, .live, 1286.4)], output: 40,
                  thinking: 0),
-        Scenario(name: "live 72 · thinking 0 · 3 s", agents: [agent("n", "nova", .codex, .live, 72, .passing)], output: 40,
+        Scenario(name: "live 1,286 · thinking 0 · 3 s", agents: [agent("n", "nova", .codex, .live, 1286.4)], output: 40,
                  thinking: 0, held: hold),
-        Scenario(name: "live 9 · unverified · 3 s", agents: [agent("e", "ember", .claudeCode, .live, 8.6, .unverified)],
+        Scenario(name: "live 1,048 · provisional · 3 s",
+                 agents: [agent("e", "ember", .claudeCode, .live, 1048.2, provisional: true)],
                  output: 40, thinking: 0, held: hold),
-        Scenario(name: "resting 72 · top of 2", agents: resting, output: 0, thinking: 0),
-        Scenario(name: "resting 72 · top of 2 · 3 s", agents: resting, output: 0, thinking: 0, held: hold),
-        Scenario(name: "resting 61 · pending · 3 s", agents: [agent("p", "pier", .codex, .resting, 61, .pending)],
+        Scenario(name: "resting 1,452 · top of 2", agents: resting, output: 0, thinking: 0),
+        Scenario(name: "resting 1,452 · top of 2 · 3 s", agents: resting, output: 0, thinking: 0, held: hold),
+        Scenario(name: "resting 893 · provisional · 3 s",
+                 agents: [agent("p", "pier", .codex, .resting, 893, provisional: true)],
                  output: 0, thinking: 0, held: hold),
-        Scenario(name: "live 100 · 12.8k", agents: [agent("h", "halo", .claudeCode, .live, 100, .passing)],
+        Scenario(name: "live 12.8k · 12.8k", agents: [agent("h", "halo", .claudeCode, .live, 12_840)],
                  output: 26_000, thinking: 12_800),
-        Scenario(name: "live 100 · 1.20M", agents: [agent("h", "halo", .claudeCode, .live, 100, .passing)],
+        Scenario(name: "live 1.28M · 1.20M", agents: [agent("h", "halo", .claudeCode, .live, 1_284_000)],
                  output: 2_400_000, thinking: 1_200_000),
     ]
 
-    /// The prototype's four live agents: nova supplies 86.
+    /// The prototype's four live agents: nova supplies 1,286.
     private static var crew: [AgentStatus] {
         [
-            agent("n", "nova", .codex, .live, 85.7, .passing), agent("o", "orbit", .claudeCode, .live, 41.2, .failing),
-            agent("q", "quill", .claudeCode, .live, 61.4, .passing), agent("e", "ember", .codex, .live, 8.6, .unverified),
+            agent("n", "nova", .codex, .live, 1286.4), agent("o", "orbit", .claudeCode, .live, 1123),
+            agent("q", "quill", .claudeCode, .live, 942.7), agent("e", "ember", .codex, .live, 702.1, provisional: true),
         ]
     }
 
     private static var resting: [AgentStatus] {
-        [agent("n", "nova", .codex, .resting, 72.3, .passing), agent("o", "orbit", .claudeCode, .resting, 25.1, .failing)]
+        [agent("n", "nova", .codex, .resting, 1452.3), agent("o", "orbit", .claudeCode, .resting, 893)]
     }
 
-    /// One agent whose current task has `score` in `state` (nil: a task that has only read so far).
-    static func agent(_ id: String, _ project: String, _ source: SourceKind, _ form: TaskValueForm, _ score: Double?,
-                      _ state: TaskState?) -> AgentStatus {
+    /// One agent with `score` in `form` (nil: fewer than three timed requests).
+    static func agent(_ id: String, _ project: String, _ source: SourceKind, _ form: PerfValueForm, _ score: Double?,
+                      provisional: Bool = false) -> AgentStatus {
         let path = "/preview/bar/\(id).jsonl"
-        var result = TaskResult(TaskEvaluation([TaskEvent](), now: nil))
-        result.state = state ?? .none
-        result.score = score
-        result.shown = score.map(TaskScoreText.rounded)
-        let value = TaskAgentValue(form: score == nil ? .none : form, score: score, shown: result.shown, state: result.state)
         var intelligence = IntelligenceSums()
-        intelligence.score = TaskSetValue(id: path, lastLineMs: nil, value: value)
+        intelligence.score = PerfSetValue(form: form, score: score, agentId: path, lastLineMs: nil, provisional: provisional)
         let live = form == .live ? 120.0 : 0
         return AgentStatus(
             id: path, source: source, project: project, model: source == .codex ? "gpt-5.5" : "claude-opus-5-5",
             phase: form == .live ? .generating : .idle, isSubagent: false, live: Rate(output: live, total: live * 26),
-            recentSpeed: live > 0 ? live : nil, lastActivity: Date(), intelligence: intelligence,
-            task: AgentTaskStatus(taskStartMs: nil, result: result, predictions: nil, models: .prior)
+            recentSpeed: live > 0 ? live : nil, lastActivity: Date(), intelligence: intelligence
         )
     }
 }

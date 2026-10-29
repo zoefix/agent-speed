@@ -1,6 +1,6 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Presentation.Boards;
 using AgentSpeed.Presentation.Boards.Demo;
 using AgentSpeed.Presentation.Boards.Live;
@@ -9,16 +9,13 @@ using AgentSpeed.Presentation.Cost;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings.Boards;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Titles;
 using static AgentSpeed.Presentation.Tests.Boards.BoardGroupingTests;
-using CoreState = AgentSpeed.Core.Tasks.TaskState;
-using CoreTasks = AgentSpeed.Core.Tasks;
-using TaskState = AgentSpeed.Presentation.TaskScore.TaskState;
 
 namespace AgentSpeed.Presentation.Tests.Boards;
 
-/// <summary>DESIGN 2c, Live metrics (智力 · 思考 · 費用): layout B per style and size, switches, rows, wording.</summary>
+/// <summary>DESIGN 2c, Live metrics (性能 · 思考 · 費用): layout B per style and size, switches, rows, wording.</summary>
 public class BoardLiveMetricsTests
 {
     private static readonly Localizer Zh = new(Localizer.LoadEmbeddedTable(), LanguageCodes.ZhHant);
@@ -102,11 +99,11 @@ public class BoardLiveMetricsTests
     }
 
     [Theory]
-    [InlineData(BoardStyle.Glass, BoardSize.M, 6, 8, 44, 22, 0)]
-    [InlineData(BoardStyle.Neon, BoardSize.S, 6, 8, 44, 20, 0)]
-    [InlineData(BoardStyle.Timing, BoardSize.S, 4, 7, 40, 22, 0)]
-    [InlineData(BoardStyle.Timing, BoardSize.L, 4, 7, 42, 26, 34)]
-    public void RowsGainThe智力ColumnBeforeTheValue(BoardStyle style, BoardSize size, double pad, double gap, double value, double cell, double interval)
+    [InlineData(BoardStyle.Glass, BoardSize.M, 6, 8, 44, 39, 0)]
+    [InlineData(BoardStyle.Neon, BoardSize.S, 6, 8, 44, 34, 0)]
+    [InlineData(BoardStyle.Timing, BoardSize.S, 4, 7, 40, 34, 0)]
+    [InlineData(BoardStyle.Timing, BoardSize.L, 4, 7, 42, 40, 34)]
+    public void RowsGainThe性能ColumnBeforeTheValue(BoardStyle style, BoardSize size, double pad, double gap, double value, double cell, double interval)
     {
         var columns = BoardRowColumns.For(style, size, BoardReadouts.All);
         Assert.Equal(new BoardRowColumns(pad, gap, value, cell, interval), columns);
@@ -196,7 +193,7 @@ public class BoardLiveMetricsTests
         var spec = BoardGaugeSpec.For(style, BoardSize.M);
         var only = BoardReadouts.None with { Intelligence = true };
         Assert.Equal(spec.MainHeight, BoardGaugeLayout.Height(style, spec, only, true), 6);
-        // 智力 off: the table alone (timing: the box starts with 思考 at the small row height).
+        // 性能 off: the table alone (timing: the box starts with 思考 at the small row height).
         var table = BoardReadouts.None with { Thinking = true, Cost = true };
         var expected = style == BoardStyle.Timing ? 2 * spec.RowPitch : BoardGaugeSpec.RowHeight + spec.RowPitch;
         Assert.Equal(expected, BoardGaugeLayout.Height(style, spec, table, true), 6);
@@ -231,11 +228,13 @@ public class BoardLiveMetricsTests
     public void TheHeroReadsIntelligenceThinkingAndCost()
     {
         var texts = new BoardTexts(Zh, TitleTheme.Vehicles, new CostDisplay(Zh));
-        var sums = TestSums.Of(2121, 86, 3 * 174, 2121);
-        var score = new TaskSetReading(TaskForm.Live, 86, TaskState.Passing, 4, null);
+        var sums = TestSums.Of(2121, 1286, 3 * 174, 2121);
+        var score = new PerfSetReading(PerfForm.Live, 12_840, false, 4, null, null);
         var hero = texts.Hero(sums, score, new CostReading(24_000, 1, 707, CostTally.Zero, 0, [], [], CostState.Priced));
-        Assert.Equal("86", hero.Intelligence);
-        Assert.Equal(86, hero.Shown);
+
+        // The hero reads the full form; glass's dial draws the compact one itself.
+        Assert.Equal("12,840", hero.Intelligence);
+        Assert.Equal(12_840, hero.Shown);
         Assert.Same(score, hero.Score);
         Assert.Equal("174", hero.Thinking);
         Assert.False(hero.Quiet);
@@ -243,17 +242,17 @@ public class BoardLiveMetricsTests
         Assert.Equal(Zh.Format("cost.unitPerSecond", "US$"), hero.Cost.Unit);
         Assert.Equal(BoardMoneyState.Value, hero.Cost.State);
 
-        var quiet = texts.Hero(IntelligenceSums.Zero, TaskSetReading.None, CostReading.Zero);
+        var quiet = texts.Hero(IntelligenceSums.Zero, PerfSetReading.None, CostReading.Zero);
         Assert.Equal(("–", "–", true), (quiet.Intelligence, quiet.Thinking, quiet.Quiet));
         Assert.Equal(("0", BoardMoneyState.Zero), (quiet.Cost.Number, quiet.Cost.State));
         Assert.Equal("0", quiet.SpokenThinking);
 
-        // Quiet is Σ w = 0 alone: a resting score stays pale after work, and a running test is still live though nothing generates.
-        var resting = texts.Hero(IntelligenceSums.Zero, new TaskSetReading(TaskForm.Resting, 72, TaskState.Passing, 2, null), CostReading.Zero);
-        Assert.Equal(("72", "–", true), (resting.Intelligence, resting.Thinking, resting.Quiet));
-        var testing = texts.Hero(IntelligenceSums.Zero, new TaskSetReading(TaskForm.Live, 40, TaskState.Pending, 1, null), CostReading.Zero);
-        Assert.Equal(("40", TaskForm.Live, true), (testing.Intelligence, testing.Score.Form, testing.Quiet));
-        Assert.True(testing.Score.IsUnproven);
+        // Quiet is Σ w = 0 alone: a resting score stays pale after work, and a live one stays live though nothing generates.
+        var resting = texts.Hero(IntelligenceSums.Zero, new PerfSetReading(PerfForm.Resting, 1540, false, 2, null, null), CostReading.Zero);
+        Assert.Equal(("1,540", "–", true), (resting.Intelligence, resting.Thinking, resting.Quiet));
+        var provisional = texts.Hero(IntelligenceSums.Zero, new PerfSetReading(PerfForm.Live, 912, true, 1, null, null), CostReading.Zero);
+        Assert.Equal(("912", PerfForm.Live, true), (provisional.Intelligence, provisional.Score.Form, provisional.Quiet));
+        Assert.True(provisional.Score.IsProvisional);
 
         var partial = texts.Hero(sums, score, new CostReading(24_000, 0.5, 707, CostTally.Zero, 0, [], [], CostState.Partial));
         Assert.True(partial.Cost.AtLeast);
@@ -295,84 +294,90 @@ public class BoardLiveMetricsTests
         var tick = new BoardTick(707, "707", SpeedTier.Boost, 2000, SpeedMetric.Output, true, [], [], false)
         {
             Readouts = BoardReadouts.All,
-            Gauge = new BoardHeroReadouts(new TaskSetReading(TaskForm.Live, 86, TaskState.Passing, 4, null), "174", false, false,
+            Gauge = new BoardHeroReadouts(new PerfSetReading(PerfForm.Live, 1286, false, 4, null, null), "174", false, false,
                 new BoardMoney("0.024", "US$/s", false, BoardMoneyState.Value, "0.024", Zh["currency.USD"])),
         };
-        Assert.Equal("排行看板，全部來源：每秒 707 個 token，噴射客機，智力 86，4 個 agent 中最高，思考每秒 174 個 token，費用每秒 0.024 美元（API 等值）",
+        Assert.Equal("排行看板，全部來源：每秒 707 個 token，噴射客機，性能 1,286，4 個 agent 中最高，思考每秒 174 個 token，費用每秒 0.024 美元（API 等值）",
             BoardAccessibility.Board(new BoardDefinition("b"), tick, "噴射客機", Zh));
     }
 
-    // DESIGN 12, Accessibility: unproven, idle and the highest of N, and intel.none in place of the 智力 words while none.
+    // DESIGN 12, Accessibility: provisional, idle and the highest of N, and intel.none in place of the 性能 words while none.
     [Fact]
     public void TheBoardsLabelSpeaksTheScoreWords()
     {
-        BoardTick Tick(TaskSetReading score, bool quiet = false) => new(707, "707", SpeedTier.Boost, 2000, SpeedMetric.Output, true, [], [], false)
+        BoardTick Tick(PerfSetReading score, bool quiet = false) => new(707, "707", SpeedTier.Boost, 2000, SpeedMetric.Output, true, [], [], false)
         {
             Readouts = BoardReadouts.All with { Cost = false },
             Gauge = new BoardHeroReadouts(score, quiet ? "–" : "174", quiet, false, BoardHeroReadouts.Empty.Cost),
         };
         var board = new BoardDefinition("b");
         var prefix = "排行看板，全部來源：每秒 707 個 token，噴射客機，";
-        Assert.Equal(prefix + "智力 9，尚未驗證，思考每秒 174 個 token",
-            BoardAccessibility.Board(board, Tick(new TaskSetReading(TaskForm.Live, 9, TaskState.Unverified, 1, null)), "噴射客機", Zh));
-        Assert.Equal(prefix + "智力 72，閒置中，2 個 agent 中最高，思考每秒 0 個 token",
-            BoardAccessibility.Board(board, Tick(new TaskSetReading(TaskForm.Resting, 72, TaskState.Passing, 2, null), quiet: true), "噴射客機", Zh));
-        Assert.Equal(prefix + "智力：尚無評分，思考每秒 174 個 token", BoardAccessibility.Board(board, Tick(TaskSetReading.None), "噴射客機", Zh));
-        Assert.Equal(prefix + "智力：尚無評分",
-            BoardAccessibility.Board(board, Tick(TaskSetReading.None) with { ThinkingHidden = true }, "噴射客機", Zh));
+        Assert.Equal(prefix + "性能 912，初步（樣本少），思考每秒 174 個 token",
+            BoardAccessibility.Board(board, Tick(new PerfSetReading(PerfForm.Live, 912, true, 1, null, null)), "噴射客機", Zh));
+        Assert.Equal(prefix + "性能 1,540，閒置中，2 個 agent 中最高，思考每秒 0 個 token",
+            BoardAccessibility.Board(board, Tick(new PerfSetReading(PerfForm.Resting, 1540, false, 2, null, null), quiet: true), "噴射客機", Zh));
+        Assert.Equal(prefix + "性能 12,840，思考每秒 174 個 token",
+            BoardAccessibility.Board(board, Tick(new PerfSetReading(PerfForm.Live, 12_840, false, 1, null, null)), "噴射客機", Zh));
+        Assert.Equal(prefix + "性能：尚無分數，思考每秒 174 個 token", BoardAccessibility.Board(board, Tick(PerfSetReading.None), "噴射客機", Zh));
+        Assert.Equal(prefix + "性能：尚無分數",
+            BoardAccessibility.Board(board, Tick(PerfSetReading.None) with { ThinkingHidden = true }, "噴射客機", Zh));
     }
 
     [Fact]
     public void GroupRowsShowTheirHighestMemberAndSubRowsTheirOwn()
     {
         var texts = new BoardTexts(Zh, TitleTheme.Vehicles, new CostDisplay(Zh));
-        var root = Agent("r", 120) with { Intelligence = Scored(72, CoreTasks.TaskValueForm.Live, CoreState.Passing, "r") };
-        var sub = Agent("s", 60, "r") with { Intelligence = Scored(86, CoreTasks.TaskValueForm.Live, CoreState.Unverified, "s") };
+        var root = Agent("r", 120) with { Intelligence = Scored(720, PerfForm.Live, false, "r") };
+        var sub = Agent("s", 60, "r") with { Intelligence = Scored(12_840, PerfForm.Live, true, "s") };
         var group = BoardGrouping.Group([root, sub], SpeedMetric.Output)[0];
         var entry = new BoardEntry(BoardEntryKind.Group, "r", group, root, 1, 0, 38) { TwoLine = true };
         var row = texts.Row(entry, BoardReadouts.All)!;
-        Assert.Equal("86", row.Intelligence);
+
+        // Rows show the compact form and say the full one.
+        Assert.Equal("12.8k", row.Intelligence);
         Assert.True(row.Live);
-        // The group's proof mark follows the member that supplies its value.
-        Assert.True(row.IsUnproven);
+
+        // The group's provisional mark follows the member that supplies its value.
+        Assert.True(row.IsProvisional);
         Assert.Same(sub, row.Score.Agent);
-        Assert.Equal("智力 86，尚未驗證，2 個 agent 中最高", row.Spoken);
-        // The row's label names no cost: its 智力 words follow the speed.
+        Assert.Equal("性能 12,840，初步（樣本少），2 個 agent 中最高", row.Spoken);
+
+        // The row's label names no cost: its 性能 words follow the speed.
         Assert.Equal(Zh.Format("a11y.board.row", 1, root.Project, SpeedFormat.Speed(group.Live)) + "，" + row.Spoken + "，" + Zh.Format("boards.subCount", 1),
             BoardAccessibility.Row(entry with { Readout = row }, Zh));
 
         // A sub row shows its sub-agent's own value; one agent is never "the highest of".
         var own = texts.Row(new BoardEntry(BoardEntryKind.Sub, "s", group, sub, 0, 38, 22), BoardReadouts.All)!;
-        Assert.Equal(("86", "智力 86，尚未驗證"), (own.Intelligence, own.Spoken));
+        Assert.Equal(("12.8k", "性能 12,840，初步（樣本少）"), (own.Intelligence, own.Spoken));
         var rootRow = texts.Row(new BoardEntry(BoardEntryKind.Sub, "r", group, root, 0, 38, 22), BoardReadouts.All)!;
-        Assert.Equal(("72", false), (rootRow.Intelligence, rootRow.IsUnproven));
+        Assert.Equal(("720", false), (rootRow.Intelligence, rootRow.IsProvisional));
 
         // An idle group: the highest resting score, pale.
-        var idle = root with { Live = Rate.Zero, Intelligence = Scored(72, CoreTasks.TaskValueForm.Resting, CoreState.Passing, "r") };
-        var idleSub = sub with { Live = Rate.Zero, Intelligence = Scored(64, CoreTasks.TaskValueForm.Resting, CoreState.Pending, "s") };
+        var idle = root with { Live = Rate.Zero, Intelligence = Scored(1540, PerfForm.Resting, false, "r") };
+        var idleSub = sub with { Live = Rate.Zero, Intelligence = Scored(640, PerfForm.Resting, true, "s") };
         var resting = BoardGrouping.Group([idle, idleSub], SpeedMetric.Output)[0];
         var quiet = texts.Row(new BoardEntry(BoardEntryKind.Group, "r", resting, idle, 1, 0, 38), BoardReadouts.All)!;
-        Assert.Equal(("72", false, false), (quiet.Intelligence, quiet.Live, quiet.IsUnproven));
-        Assert.Equal("智力 72，閒置中，2 個 agent 中最高", quiet.Spoken);
+        Assert.Equal(("1,540", false, false), (quiet.Intelligence, quiet.Live, quiet.IsProvisional));
+        Assert.Equal("性能 1,540，閒置中，2 個 agent 中最高", quiet.Spoken);
 
         // None: a dash, no words; live before resting whatever the numbers.
         var none = texts.Row(new BoardEntry(BoardEntryKind.Group, "n", BoardGrouping.Group([Agent("n", 5)], SpeedMetric.Output)[0], null, 2, 0, 38),
             BoardReadouts.All)!;
         Assert.Equal(("–", false, string.Empty), (none.Intelligence, none.Live, none.Spoken));
-        var mixed = BoardGrouping.Group([idle, sub with { Intelligence = Scored(30, CoreTasks.TaskValueForm.Live, CoreState.Passing, "s") }],
+        var mixed = BoardGrouping.Group([idle, sub with { Intelligence = Scored(300, PerfForm.Live, false, "s") }],
             SpeedMetric.Output)[0];
-        Assert.Equal("30", texts.Row(new BoardEntry(BoardEntryKind.Group, "r", mixed, idle, 1, 0, 38), BoardReadouts.All)!.Intelligence);
+        Assert.Equal("300", texts.Row(new BoardEntry(BoardEntryKind.Group, "r", mixed, idle, 1, 0, 38), BoardReadouts.All)!.Intelligence);
 
-        // 智力 off: no words; the more lines carry no cell.
+        // 性能 off: no words; the more lines carry no cell.
         Assert.Empty(texts.Row(entry, BoardReadouts.All with { Intelligence = false })!.Spoken);
         Assert.Null(texts.Row(new BoardEntry(BoardEntryKind.MoreGroups, "#rest", group, null, 0, 0, 22), BoardReadouts.All));
     }
 
-    // An agent's 智力 with the given score, form and state (supplied by `id`).
-    internal static AgentIntelligence Scored(double score, CoreTasks.TaskValueForm form, CoreState state, string id)
+    // An agent's 性能 with the given score and form (supplied by `id`), provisional or not.
+    internal static AgentIntelligence Scored(double score, PerfForm form, bool provisional, string id)
     {
-        var value = new CoreTasks.TaskSetValue(form, score, CoreTasks.TaskRounding.HalfAwayFromZero(score), id);
-        return new AgentIntelligence(IntelligenceSums.Zero with { Score = value }, value, state);
+        var value = (form == PerfForm.Resting ? TestSums.Resting(score, provisional) : TestSums.Live(score, provisional)) with { AgentId = id };
+        return new AgentIntelligence(IntelligenceSums.Zero with { Score = value }, value);
     }
 
     // Lines that would carry a cost: the 費用 label or the cost words, the subscription tag, a currency unit.
@@ -416,8 +421,8 @@ public class BoardLiveMetricsTests
         }
 
         Assert.Equal("707", tick.ValueText);
-        // The simulation's highest task score (a demo value per agent id) over the team's thinking rate.
-        Assert.Equal(("88", "174"), (tick.Gauge.Intelligence, tick.Gauge.Thinking));
+        // The simulation's highest performance score (a demo value per agent id, in full form) over the team's thinking rate.
+        Assert.Equal(("4,272", "174"), (tick.Gauge.Intelligence, tick.Gauge.Thinking));
         Assert.Equal(("0.024", BoardMoneyState.Value), (tick.Gauge.Cost.Number, tick.Gauge.Cost.State));
         Assert.All(tick.Entries.Where(e => e.Kind is BoardEntryKind.Group or BoardEntryKind.Sub),
             e => Assert.Empty(CostLines(BoardScoreCards.Row(e, tick.Metric, Zh)!.Subject.FactLines!)));
@@ -482,7 +487,7 @@ public class BoardLiveMetricsTests
     }
 
     private static BoardHeroReadouts Hero(string thinking, bool quiet, bool zero) =>
-        new(new TaskSetReading(TaskForm.Live, 60, TaskState.Passing, 1, null), thinking, quiet, zero, BoardHeroReadouts.Empty.Cost);
+        new(new PerfSetReading(PerfForm.Live, 600, false, 1, null, null), thinking, quiet, zero, BoardHeroReadouts.Empty.Cost);
 
     private static BoardGaugePlacement Place(BoardStyle style, BoardSize size, BoardReadouts readouts, double glide, double band = 86) =>
         BoardGaugeLayout.Place(style, size, readouts, new BoardGaugeCells(18, 7, 36, 24), 300, band, glide, 1 - glide);

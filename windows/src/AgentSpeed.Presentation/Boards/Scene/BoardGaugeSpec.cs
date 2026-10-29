@@ -6,18 +6,18 @@ namespace AgentSpeed.Presentation.Boards.Scene;
 /// Variable and Cascadia Mono sit within half a point of them at these sizes).
 /// </summary>
 /// <param name="Nominal">The sub-gauge's nominal width (timing: the data box's).</param>
-/// <param name="LabelSize">智力's label (glass, neon) or the tab labels (timing).</param>
-/// <param name="LabelTracking">Letter spacing of 智力's label (timing: of the tab labels), in em.</param>
-/// <param name="MainSize">智力's number.</param>
+/// <param name="LabelSize">性能's label (glass, neon) or the tab labels (timing).</param>
+/// <param name="LabelTracking">Letter spacing of 性能's label (timing: of the tab labels), in em.</param>
+/// <param name="MainSize">性能's number.</param>
 /// <param name="TableSize">The numbers of 思考 and 費用.</param>
 /// <param name="TableLabelSize">The table's labels (glass, neon).</param>
 /// <param name="UnitSize">The table's units.</param>
-/// <param name="LabelBaseline">智力's label (glass, neon).</param>
-/// <param name="MainBaseline">智力's number (glass, neon; timing: the 智力 row's).</param>
-/// <param name="TableTop">The table's first row with 智力 above it (glass: 3 under the dial box; neon: the gap under the meter).</param>
+/// <param name="LabelBaseline">性能's label (glass, neon).</param>
+/// <param name="MainBaseline">性能's number (glass, neon; timing: the 性能 row's).</param>
+/// <param name="TableTop">The table's first row with 性能 above it (glass: 3 under the dial box; neon: the gap under the meter).</param>
 /// <param name="RowBaseline">A table row's baseline under its top (timing: under the top of a row with its separator).</param>
 /// <param name="RowPitch">From one table row to the next (glass and neon: 15 tall and the gap; timing: the small row height).</param>
-/// <param name="MainHeight">Glass: the dial box (D × 0.742 D); neon: the meter's bottom; timing: the 智力 row.</param>
+/// <param name="MainHeight">Glass: the dial box (D × 0.742 D); neon: the meter's bottom; timing: the 性能 row.</param>
 /// <param name="LabelPad">Glass and neon: after the label cell (S 3, else 4); timing: the tab's horizontal padding.</param>
 /// <param name="UnitGap">Before the unit (S 2, else 3).</param>
 /// <param name="RightPad">Timing: the values' right padding.</param>
@@ -73,12 +73,12 @@ public sealed record BoardGaugeSpec(
 
     public const double ArcSweep = 240;
 
-    /// <summary>The range the arc and the meter span: the task score, 0 to 100 (METRICS 6.9).</summary>
+    /// <summary>The range the arc and the meter span: the performance score, 0 to 100 (METRICS 6.9).</summary>
     public const double IndexFloor = 0;
 
     public const double IndexSpan = 100;
 
-    /// <summary>Timing's 智力 row height and the small rows' (with their 1 pt separator).</summary>
+    /// <summary>Timing's 性能 row height and the small rows' (with their 1 pt separator).</summary>
     public double TimingMainRow => MainHeight;
 
     public static BoardGaugeSpec For(BoardStyle style, BoardSize size)

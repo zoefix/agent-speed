@@ -1,3 +1,4 @@
+import AgentSpeedCore
 import AgentSpeedOrbModel
 import AppKit
 
@@ -19,15 +20,17 @@ struct OrbLinePlacement: Equatable {
     var thinkingBaseline: CGFloat?
     /// The thinking line ends with `tok/s`; `needle` prints the unit on its dial instead.
     var thinkingUnit = true
-    /// The intelligence readout sits in a round hub (`needle`): each line's bottom corners stay within this × S of the
+    /// The performance readout sits in a round hub (`needle`): each line's bottom corners stay within this × S of the
     /// center.
     var hubReach: CGFloat?
+    /// The 性能 line's size `p`, × t: 1.25, and 1.1 in `needle`'s hub (DESIGN 10, Performance readout).
+    var scoreScale: CGFloat = 1.25
 
     static let led = OrbLinePlacement(nearestBaseline: -0.245, below: false, size: 0.050, fit: 0.44, recenters: true)
     static let liquid = led
     static let reactor = OrbLinePlacement(nearestBaseline: -0.175, below: false, size: 0.046, fit: 0.32, thinkingBaseline: -0.155)
     static let needle = OrbLinePlacement(nearestBaseline: 0.108, below: true, size: 0.046, fit: 0.285, thinkingUnit: false,
-                                         hubReach: 0.223)
+                                         hubReach: 0.223, scoreScale: 1.1)
     static let minimal = OrbLinePlacement(nearestBaseline: -0.228, below: false, size: 0.054, fit: 0.50, recenters: true)
 
     static func of(_ style: OrbStyleKind) -> OrbLinePlacement {
@@ -49,8 +52,7 @@ struct OrbLinePlacement: Equatable {
     static let arrowHeight: CGFloat = 0.66
     /// Unit size, × t.
     static let unitScale: CGFloat = 0.82
-    /// The intelligence line's size `p`, × t, and the gap after its glyphs, × p (DESIGN 10, Intelligence readout).
-    static let intelligenceScale: CGFloat = 1.25
+    /// The gap after the 性能 line's glyphs, × p (DESIGN 10, Performance readout).
     static let intelligenceGap: CGFloat = 0.20
 
     /// Never below the 7 pt floor of every orb label.
@@ -72,7 +74,7 @@ struct OrbLinePlacement: Equatable {
     func stackShift(layout: OrbReadoutLayout, diameter s: CGFloat, format: OrbLineFormat, single: CGFloat = 0) -> CGFloat {
         guard recenters, !below else { return 0 }
         let t = textSize(diameter: s)
-        let top = format == .intelligence ? Self.intelligenceScale * t : t
+        let top = format == .intelligence ? scoreScale * t : t
         let nearest = format == .intelligence ? (thinkingBaseline ?? nearestBaseline) : nearestBaseline
         let blockTop = nearest * s - (1 - single) * Self.pitch * t - Self.capHeight * top
         let valueTop = (layout.valueBaseline - Self.capHeight * layout.valueSize) * s
@@ -102,7 +104,7 @@ struct OrbLinePlacement: Equatable {
             let thinking = y + (thinkingBaseline ?? nearestBaseline) * s
             return (thinking - (1 - single) * pitch, thinking)
         }
-        let intelligence = y + nearestBaseline * s + Self.capHeight * (Self.intelligenceScale - 1) * t
+        let intelligence = y + nearestBaseline * s + Self.capHeight * (scoreScale - 1) * t
         return (intelligence, intelligence + pitch)
     }
 }
@@ -120,8 +122,8 @@ struct OrbLineGlyphs: Hashable {
 
 /// The readout's widths, measured with the platform font once per size (DESIGN 10: the readout shows only where its
 /// widest lines fit, computed per size, never truncated or shrunk below 7 pt). The network readout keeps fixed cells:
-/// the arrow, the `8.88` number cell and the unit cell (`MB/s`, `Mb/s` for bits). Each intelligence line is centred
-/// with its current text, so only its widest text is measured: the intelligence line with `888`, the thinking line
+/// the arrow, the `8.88` number cell and the unit cell (`MB/s`, `Mb/s` for bits). Each performance line is centred
+/// with its current text, so only its widest text is measured: the 性能 line with `8,888`, the thinking line
 /// with `8.88` (and `tok/s` where the line carries it).
 @MainActor
 enum OrbLineMetrics {
@@ -151,6 +153,7 @@ enum OrbLineMetrics {
         var size: CGFloat
         var language: AppLanguage
         var unit: Bool
+        var scoreScale: CGFloat
     }
 
     private static var cellsCache: [CellsKey: Cells] = [:]
@@ -173,15 +176,15 @@ enum OrbLineMetrics {
         return cells
     }
 
-    static func widest(size t: CGFloat, language: AppLanguage, unit: Bool = true) -> Widest {
-        let key = WidestKey(size: t, language: language, unit: unit)
+    static func widest(size t: CGFloat, language: AppLanguage, unit: Bool = true, scoreScale: CGFloat = 1.25) -> Widest {
+        let key = WidestKey(size: t, language: language, unit: unit, scoreScale: scoreScale)
         if let cached = widestCache[key] { return cached }
         let glyphs = OrbLineGlyphs(language)
-        let p = OrbLinePlacement.intelligenceScale * t
+        let p = scoreScale * t
         let gap = OrbLinePlacement.gap * t
         let widest = Widest(
             intelligence: width(glyphs.intelligence, glyphFont(p), language: language) + OrbLinePlacement.intelligenceGap * p
-                + width("888", numberFont(p)),
+                + width(PerfFormat.measureText, numberFont(p)),
             thinking: width(glyphs.thinking, glyphFont(t), language: language) + gap + width("8.88", numberFont(t))
                 + (unit ? gap + width(thinkingUnit, unitFont(t)) : 0)
         )
@@ -198,7 +201,7 @@ enum OrbLineMetrics {
         case .traffic(let bits):
             return cells(size: t, bits: bits).lineWidth(size: t) <= placement.fit * s
         case .intelligence:
-            let widest = widest(size: t, language: language, unit: placement.thinkingUnit)
+            let widest = widest(size: t, language: language, unit: placement.thinkingUnit, scoreScale: placement.scoreScale)
             guard widest.line <= placement.fit * s else { return false }
             guard let reach = placement.hubReach else { return true }
             let baselines = placement.intelligenceBaselines(center: 0, diameter: s)

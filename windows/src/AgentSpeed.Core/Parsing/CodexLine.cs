@@ -117,12 +117,6 @@ internal struct CodexLine
 
     /// <summary>A <c>response_item</c>'s tool call or its output (METRICS 6.10).</summary>
     public LineTools Tools;
-
-    /// <summary>The composer counts this line (METRICS 6.9 <i>Composing the stream</i>).</summary>
-    public bool TaskTracked;
-
-    /// <summary>What the line gives the task composer; null when nothing.</summary>
-    public Tasks.TaskLine? Task;
 }
 
 /// <summary>Pure, thread-safe extraction of <see cref="CodexLine"/> from one JSONL line.</summary>

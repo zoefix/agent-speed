@@ -148,36 +148,11 @@
       "generating": 2,
       "deltaMicroUsd": 18003,
       "taskScore": {
-        "score": 92,
-        "form": "live",
+        "score": null,
+        "form": "none",
         "thinkingTokS": 0.0
       },
-      "taskStats": [
-        {
-          "source": "claudeCode",
-          "completed": 2,
-          "scored": 2,
-          "scoreSum": 141,
-          "scoreBins": [
-            0,
-            0,
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            0,
-            1
-          ],
-          "successes": 1,
-          "stalls": 0,
-          "fixAttempts": 3,
-          "fixFailures": 1,
-          "recovered": 1,
-          "recoverAttempts": 2
-        }
-      ]
+      "taskStats": []
     },
     {
       "id": "gpt-5.5",
@@ -191,59 +166,16 @@
       "generating": 1,
       "deltaMicroUsd": 3000,
       "taskScore": {
-        "score": 64,
-        "form": "live",
+        "score": null,
+        "form": "none",
         "thinkingTokS": 38.6
       },
       "taskStats": []
-    },
-    {
-      "id": "claude-sonnet-5-5",
-      "sources": [
-        "claudeDesktop"
-      ],
-      "requests": 0,
-      "output": 0,
-      "measuredOutput": 0,
-      "measuredMs": 0,
-      "generating": 0,
-      "deltaMicroUsd": 0,
-      "taskScore": {
-        "score": 23,
-        "form": "resting",
-        "thinkingTokS": 0.0
-      },
-      "taskStats": [
-        {
-          "source": "claudeDesktop",
-          "completed": 1,
-          "scored": 1,
-          "scoreSum": 23,
-          "scoreBins": [
-            0,
-            0,
-            1,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0,
-            0
-          ],
-          "successes": 0,
-          "stalls": 1,
-          "fixAttempts": 4,
-          "fixFailures": 4,
-          "recovered": 0,
-          "recoverAttempts": 0
-        }
-      ]
     }
   ],
   "taskScore": {
-    "score": 92,
-    "form": "live",
+    "score": null,
+    "form": "none",
     "thinkingTokS": 38.6
   }
 }

@@ -158,7 +158,8 @@ struct DroidTests {
     static func response(_ record: ResponseRecord) -> [String: Any] {
         func value(_ value: Any?) -> Any { value ?? NSNull() }
         return [
-            "key": record.key, "startMs": value(record.startMs), "endMs": record.endMs, "model": value(record.model),
+            "key": record.key, "startMs": value(record.startMs), "endMs": record.endMs, "firstMs": value(record.firstMs),
+            "model": value(record.model),
             "provider": value(record.provider), "fast": record.fast, "final": record.isFinal, "input": record.usage.input,
             "cachedInput": record.usage.cachedInput, "cacheWriteInput": record.usage.cacheWriteInput,
             "cacheWrite1hInput": record.usage.cacheWrite1hInput, "output": record.usage.output,

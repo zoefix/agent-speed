@@ -21,6 +21,9 @@ internal sealed record ParsedResponse(
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
 
+    /// <summary>When the response's first content was written (METRICS 3.3); null for every source but Claude and Codex.</summary>
+    public long? FirstMs { get; init; }
+
     public long Requests => Math.Clamp(RequestCount, 0, TokenCounts.MaxValue);
 }
 

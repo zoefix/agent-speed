@@ -72,7 +72,7 @@ enum BoardStackChecks {
     }
 
     /// The live metrics' motion (DESIGN 2c Live metrics): 思考 hiding fades its row in place while the sub-gauge glides
-    /// (at once with Reduce Motion), a new 智力 moves the arc's end and tip and rolls its digits, a switch change
+    /// (at once with Reduce Motion), a new 性能 moves the arc's end and tip and rolls its digits, a switch change
     /// crossfades the hero while rows spring, and an equal tick adds nothing.
     private static func liveMetrics(_ check: (String, Bool) -> Void) {
         let l10n = BoardSimFeed.harnessLocalizer()
@@ -102,7 +102,7 @@ enum BoardStackChecks {
             }
         }
 
-        // A small rise of 智力 (1 or 2): the arc's mask and the tip move on the roll's curve, the digits change in place;
+        // A small rise of 性能 (below the count threshold): the arc's mask and the tip move on the roll's curve, the digits change in place;
         // the table's changed digits roll.
         let builder = BoardContentBuilders.make(style: .glass, size: .medium, dark: true, l10n: l10n, capsule: nil, highContrast: false)
         let stack = BoardContentStack()
@@ -112,17 +112,17 @@ enum BoardStackChecks {
         clear(stack.layer)
         var next = shown
         let score = shown.metrics.intelligence
-        next.metrics.intelligence = TaskSetReading(form: .live, shown: (score.shown ?? 50) + 2, state: score.state,
-                                                   count: score.count, agentId: score.agentId)
+        next.metrics.intelligence = PerfSetReading(form: .live, shown: (score.shown ?? 1000) + 2,
+                                                   provisional: score.provisional, count: score.count, agentId: score.agentId)
         next.metrics.thinking = "175"
         var moved = builder.layout(next)
         stack.apply(moved.takeItems(), animated: true)
-        check("a new 智力 sweeps the arc", !animations(stack.layer, key: "sweep").isEmpty)
-        check("a new 智力 turns the tip", !animations(stack.layer, key: "turn").isEmpty)
+        check("a new 性能 sweeps the arc", !animations(stack.layer, key: "sweep").isEmpty)
+        check("a new 性能 turns the tip", !animations(stack.layer, key: "turn").isEmpty)
         // Core Animation files the rolls' push transitions under "transition".
         let pushes = animations(stack.layer, key: "transition").compactMap { $0 as? CATransition }.filter { $0.type == .push }
-        // 思考 174 → 175: its last digit rolls; 智力's digits never roll (DESIGN 12 Motion).
-        check("changed 思考 digits roll, 智力's do not", pushes.count == 1)
+        // 思考 174 → 175: its last digit rolls; 性能's digits never roll (DESIGN 12 Motion).
+        check("changed 思考 digits roll, 性能's do not", pushes.count == 1)
         clear(stack.layer)
         var again = builder.layout(next)
         stack.apply(again.takeItems(), animated: true)

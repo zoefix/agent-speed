@@ -3,9 +3,9 @@ import AgentSpeedOrbModel
 import AppKit
 import SwiftUI
 
-/// The agents' intelligence column (DESIGN 4, Intelligence column): a fixed cell between the effort capsule column and
-/// the live value, as wide as the wider of `888` and the header caption, so the digits of every row share one right
-/// edge whatever the indent. One point under the live value, so tok/s stays the row's main number.
+/// The agents' 性能 column (DESIGN 4, 性能 column): a fixed cell between the effort capsule column and the live value,
+/// as wide as the wider of `8,888` (the widest compact score) and the header caption, so the digits of every row share
+/// one right edge whatever the indent. One point under the live value, so tok/s stays the row's main number.
 enum AgentIntelligenceColumn {
     /// Between the cell and the live value.
     static let gap: CGFloat = 6
@@ -23,7 +23,7 @@ enum AgentIntelligenceColumn {
             (text as NSString).size(withAttributes: [.font: font]).width
         }
         let width = ceil(max(
-            advance("888", .monospacedDigitSystemFont(ofSize: numberSize, weight: .medium)),
+            advance(PerfFormat.measureText, .monospacedDigitSystemFont(ofSize: numberSize, weight: .medium)),
             advance(caption, .systemFont(ofSize: captionSize, weight: .medium))
         ))
         widths[caption] = width
@@ -31,15 +31,15 @@ enum AgentIntelligenceColumn {
     }
 }
 
-/// One row's task score (DESIGN 4, 智力 column; DESIGN 12): live in the live value's color, resting and `–` in the
-/// tertiary color (Increase Contrast: secondary), the proof mark under an unverified or pending score. A rise of 3 or
-/// more rolls the changed digits upward, a fall crossfades, smaller rises replace the digits; a change of form
-/// crossfades the color in 0.2 s, kept with Reduce Motion. The row says the value in words, so the cell is hidden from
-/// accessibility.
+/// One row's performance score (DESIGN 4, 性能 column; DESIGN 12) in compact form: live in the live value's color,
+/// resting and `–` in the tertiary color (Increase Contrast: secondary), the provisional mark under a provisional score.
+/// A change of at least 1 % and 3 counts through the integers, up or down; smaller changes replace the digits; a change
+/// of form crossfades the color in 0.2 s, kept with Reduce Motion. The row says the value in words, so the cell is
+/// hidden from accessibility.
 struct AgentIntelligenceCell: View {
-    static let fade = Animation.easeOut(duration: TaskScoreMotion.formSeconds)
+    static let fade = Animation.easeOut(duration: PerfMotion.form)
 
-    let reading: TaskSetReading
+    let reading: PerfSetReading
     let width: CGFloat
 
     @Environment(\.colorSchemeContrast) private var contrast
@@ -47,9 +47,9 @@ struct AgentIntelligenceCell: View {
     var body: some View {
         let live = reading.form == .live && reading.shown != nil
         let quiet = contrast == .increased ? AnyShapeStyle(.dashboardSecondary) : AnyShapeStyle(.tertiary)
-        TaskScoreNumber(value: reading.shown, style: .roll, font: AgentIntelligenceColumn.font)
+        PerfScoreNumber(value: reading.shown, form: .compact, font: AgentIntelligenceColumn.font)
             .lineLimit(1)
-            .proofMark(reading.isUnproven, textSize: AgentIntelligenceColumn.numberSize)
+            .provisionalMark(reading.isProvisional, textSize: AgentIntelligenceColumn.numberSize)
             .foregroundStyle(live ? AnyShapeStyle(.primary) : quiet)
             .frame(width: width, alignment: .trailing)
             .animation(Self.fade, value: live)

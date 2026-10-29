@@ -21,6 +21,9 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     private string? _provider;
     private long? _pendingStartMs;
     private bool _streaming;
+
+    /// <summary>The output line that started the current response (METRICS 4.2 <c>firstOutputMs</c>).</summary>
+    private long? _firstOutputMs;
     private bool _sawModernUsage;
     private CodexUsage? _previousLegacyTotals;
 
@@ -32,7 +35,6 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     {
         _pathIsSubagent = PathText.HasDirectoryComponent(agentId, "subagents");
         SetSubagent(_pathIsSubagent);
-        EnableTasks(new global::AgentSpeed.Core.Tasks.CodexTaskReader(), SourceKind.Codex);
     }
 
     /// <summary>Time of the first <c>session_meta</c>, i.e. when the rollout was created.</summary>
@@ -55,6 +57,7 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         _provider = null;
         _pendingStartMs = null;
         _streaming = false;
+        _firstOutputMs = null;
         _sawModernUsage = false;
         _previousLegacyTotals = null;
         _context = ExecutionModes.Empty;
@@ -62,15 +65,6 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     }
 
     public override void Apply(in CodexLine line, IResponseSink sink)
-    {
-        ApplyLine(in line, sink);
-        if (line.TaskTracked)
-        {
-            ComposeTask(line.Task, line.TimestampMs);
-        }
-    }
-
-    private void ApplyLine(in CodexLine line, IResponseSink sink)
     {
         if (line.Status == LineStatus.Malformed)
         {
@@ -121,12 +115,7 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         }
     }
 
-    protected override CodexLine Extract(ReadOnlySpan<byte> line)
-    {
-        var parsed = CodexLineReader.Read(line);
-        (TaskReader as global::AgentSpeed.Core.Tasks.CodexTaskReader)?.Read(line, ref parsed);
-        return parsed;
-    }
+    protected override CodexLine Extract(ReadOnlySpan<byte> line) => CodexLineReader.Read(line);
 
     // Only the first session_meta applies; sub-agents copy their parent's afterwards.
     private void ApplySessionMeta(in CodexLine line, long ts)
@@ -154,6 +143,11 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         {
             case CodexPayloadKind.Reasoning or CodexPayloadKind.CallSuffix:
             case CodexPayloadKind.Message when line.Role == CodexRole.Assistant:
+                if (!_streaming)
+                {
+                    _firstOutputMs = ts;
+                }
+
                 _streaming = true;
                 SetPhase(AgentPhase.Generating, ts, _pendingStartMs ?? ts);
                 break;
@@ -308,6 +302,7 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         sink.OnResponse(new ParsedResponse(key, SourceKind.Codex, AgentId, Model, _pendingStartMs, ts, tokens, Provider: _provider)
         {
             Modes = modes,
+            FirstMs = _streaming ? _firstOutputMs : null,
         }, true);
         AfterUsage(ts);
     }

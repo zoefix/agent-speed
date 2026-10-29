@@ -107,8 +107,8 @@ struct ReportInviteTests {
         #expect(assumed.api == Self.service)
         #expect(assumed.sections == Set(ReportSection.allCases))
         #expect(assumed.limits == .standard && assumed.usernameRules == .standard && assumed.apiKeyMode == .none)
-        #expect(assumed.extensions == ReportExtensions(taskScore: true))
-        #expect(ReportTaskScoreRule.isActive(assumed, switches: Set(ReportSection.allCases)))
+        #expect(assumed.extensions == ReportExtensions(perfScore: true))
+        #expect(ReportPerfScoreRule.isActive(assumed, switches: Set(ReportSection.allCases)))
         let loopback = try ReportServiceURL.parse("http://127.0.0.1:8787").get()
         #expect(ReportDiscovery.assumed(for: loopback, name: "Local")?.api == loopback)
     }

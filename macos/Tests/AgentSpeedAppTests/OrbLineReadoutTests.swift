@@ -5,7 +5,7 @@ import Testing
 @testable import AgentSpeed
 
 /// DESIGN 10, Intelligence readout: a larger intelligence line over a smaller thinking line, each centred on the orb on
-/// its own, the score in its form's color, dotted while unproven and moving as DESIGN 12 says; the network readout keeps
+/// its own, the score in its form's color, dotted while provisional and moving as DESIGN 12 says; the network readout keeps
 /// its fixed cells.
 @Suite("Orb line readout")
 @MainActor
@@ -15,7 +15,7 @@ struct OrbLineReadoutTests {
     // MARK: Glyphs
 
     @Test func glyphsSpellIntelligenceAndThinking() {
-        let expected: [AppLanguage: [String]] = [.zhHant: ["智力", "思考"], .zhHans: ["智力", "思考"], .en: ["IQ", "TH"], .ja: ["知", "思考"]]
+        let expected: [AppLanguage: [String]] = [.zhHant: ["性能", "思考"], .zhHans: ["性能", "思考"], .en: ["Perf", "TH"], .ja: ["性能", "思考"]]
         for (language, glyphs) in expected {
             let actual = OrbLineGlyphs(language)
             #expect([actual.intelligence, actual.thinking] == glyphs)
@@ -47,7 +47,7 @@ struct OrbLineReadoutTests {
         let placement = OrbLinePlacement.needle
         for s in [148, 196] as [CGFloat] {
             let t = placement.textSize(diameter: s)
-            let p = 1.25 * t
+            let p = placement.scoreScale * t
             let lines = placement.intelligenceBaselines(center: 0, diameter: s)
             #expect(abs((lines.intelligence - 0.70 * p) - (0.108 * s - 0.70 * t)) < 1e-9)
             #expect(abs(lines.thinking - (lines.intelligence + 1.32 * t)) < 1e-9)
@@ -91,7 +91,7 @@ struct OrbLineReadoutTests {
             let placement = OrbLinePlacement.of(style)
             for s in [112, 148, 196] as [CGFloat] {
                 let t = placement.textSize(diameter: s)
-                let p = 1.25 * t
+                let p = placement.scoreScale * t
                 let pair = placement.intelligenceBaselines(center: 300, diameter: s)
                 let alone = placement.intelligenceBaselines(center: 300, diameter: s, single: 1)
                 let half = placement.intelligenceBaselines(center: 300, diameter: s, single: 0.5)
@@ -119,7 +119,7 @@ struct OrbLineReadoutTests {
             let placement = OrbLinePlacement.of(style)
             for s in [112, 148, 196] as [CGFloat] {
                 let t = placement.textSize(diameter: s)
-                let p = 1.25 * t
+                let p = placement.scoreScale * t
                 let pair = placement.stackShift(layout: layout, diameter: s, format: .intelligence)
                 let alone = placement.stackShift(layout: layout, diameter: s, format: .intelligence, single: 1)
                 let half = placement.stackShift(layout: layout, diameter: s, format: .intelligence, single: 0.5)
@@ -138,9 +138,9 @@ struct OrbLineReadoutTests {
     }
 
     @Test func theLocalizedWordsReadTheIntelligenceAlone() {
-        let expected: [LanguagePreference: String] = [.zhHant: "智力 125", .zhHans: "智力 125", .en: "intelligence 125", .ja: "知能 125"]
+        let expected: [LanguagePreference: String] = [.zhHant: "性能 1,286", .zhHans: "性能 1,286", .en: "performance 1,286", .ja: "性能 1,286"]
         for (language, text) in expected {
-            #expect(Localizer(preference: language)("a11y.orb.intel.only", "125") == text)
+            #expect(Localizer(preference: language)("a11y.orb.intel.only", "1,286") == text)
         }
     }
 
@@ -153,9 +153,8 @@ struct OrbLineReadoutTests {
         #expect(full.intelligence == bare.intelligence)
         #expect(full.thinking > bare.thinking + 0.16 * t + 1.5 * t)
         #expect(full.line == max(full.intelligence, full.thinking))
-        // 思考 is wider than TH; 智力 than 知.
+        // 思考 is wider than TH.
         #expect(full.thinking > OrbLineMetrics.widest(size: t, language: .en).thinking)
-        #expect(full.intelligence > OrbLineMetrics.widest(size: t, language: .ja).intelligence)
     }
 
     @Test func openStylesFitByWidthAlone() {
@@ -173,25 +172,26 @@ struct OrbLineReadoutTests {
 
     @Test func needleKeepsBothLinesInsideItsHub() {
         let placement = OrbLinePlacement.needle
-        var hubDecided = false
         for language in AppLanguage.allCases {
             for s in Self.sizes {
                 let t = placement.textSize(diameter: s)
-                let widest = OrbLineMetrics.widest(size: t, language: language, unit: false)
+                let widest = OrbLineMetrics.widest(size: t, language: language, unit: false, scoreScale: placement.scoreScale)
                 let lines = placement.intelligenceBaselines(center: 0, diameter: s)
                 let inside = hypot(widest.intelligence / 2, lines.intelligence) <= 0.223 * s
                     && hypot(widest.thinking / 2, lines.thinking) <= 0.223 * s
                 let fits = OrbLineMetrics.fits(placement, diameter: s, format: .intelligence, language: language)
                 #expect(fits == (inside && widest.line <= 0.285 * s))
-                if widest.line <= 0.285 * s, !inside { hubDecided = true }
                 // With `tok/s` the thinking line could never fit the hub in Chinese.
                 if language == .zhHant {
                     #expect(OrbLineMetrics.widest(size: t, language: language).thinking > 0.285 * s)
                 }
             }
         }
-        // At the 7 pt floor the hub, not the width, hides the readout of small orbs.
-        #expect(hubDecided)
+        // DESIGN 10: at 1.1 t the 性能 line with `8,888` shows from 134 pt in Chinese and 139 pt in English.
+        #expect(!OrbLineMetrics.fits(placement, diameter: 133, format: .intelligence, language: .zhHant))
+        #expect(OrbLineMetrics.fits(placement, diameter: 134, format: .intelligence, language: .zhHant))
+        #expect(!OrbLineMetrics.fits(placement, diameter: 138, format: .intelligence, language: .en))
+        #expect(OrbLineMetrics.fits(placement, diameter: 139, format: .intelligence, language: .en))
     }
 
     @Test func everyStyleShowsTheReadoutAtTheDefaultSizeAndTheSmallOnesWhereTheNetworkDoes() {
@@ -236,11 +236,11 @@ struct OrbLineReadoutTests {
         var texture: OrbTextTexture
     }
 
-    static func score(_ form: TaskValueForm, _ shown: Int?, _ state: TaskState? = .passing, count: Int = 1) -> TaskSetReading {
-        TaskSetReading(form: form, shown: shown, state: state, count: count, agentId: form == .none ? nil : "nova")
+    static func score(_ form: PerfValueForm, _ shown: Int?, provisional: Bool = false, count: Int = 1) -> PerfSetReading {
+        PerfSetReading(form: form, shown: shown, provisional: provisional, count: count, agentId: form == .none ? nil : "nova")
     }
 
-    static func live(_ shown: Int) -> TaskSetReading { score(.live, shown) }
+    static func live(_ shown: Int) -> PerfSetReading { score(.live, shown) }
 
     static func frame(_ style: OrbStyleKind, diameter s: CGFloat, language: AppLanguage, format: OrbLineFormat,
                               _ content: OrbLineContent, thinking: OrbThinkingLine = OrbThinkingLine(),
@@ -260,7 +260,7 @@ struct OrbLineReadoutTests {
                         signOfLife: nil, peakAge: .infinity, alpha: 1)
     }
 
-    /// The readout's text pieces and proof marks (quads a few points tall), in drawing order.
+    /// The readout's text pieces and provisional marks (quads a few points tall), in drawing order.
     static func pieces(_ frame: OrbFrame, placement: OrbLinePlacement) -> (text: [Piece], marks: [Piece]) {
         var scene = OrbScene(capacity: 32)
         let palette = OrbLineReadout.Palette.standard(dark: true, increaseContrast: frame.content.increaseContrast)
@@ -275,7 +275,7 @@ struct OrbLineReadoutTests {
         return (pieces.filter { $0.height >= 5 }, pieces.filter { $0.height < 5 })
     }
 
-    /// The readout's text pieces, grouped by baseline from top to bottom (proof marks left out).
+    /// The readout's text pieces, grouped by baseline from top to bottom (provisional marks left out).
     static func lines(_ frame: OrbFrame, placement: OrbLinePlacement) -> [[Piece]] {
         let pieces = pieces(frame, placement: placement).text
         var lines: [[Piece]] = []
@@ -292,8 +292,8 @@ struct OrbLineReadoutTests {
     @Test(.enabled(if: OrbGPU.shared != nil))
     func eachIntelligenceLineIsCentredOnItsOwnOnDevicePixels() throws {
         let cases: [(OrbStyleKind, AppLanguage, Int, String)] = [
-            (.led, .zhHant, 86, "412"), (.liquid, .zhHant, 9, "9.8"), (.reactor, .en, 100, "10"),
-            (.minimal, .ja, 72, "0"), (.needle, .zhHant, 86, "412"), (.needle, .en, 34, "0"),
+            (.led, .zhHant, 1286, "412"), (.liquid, .zhHant, 948, "9.8"), (.reactor, .en, 12_840, "10"),
+            (.minimal, .ja, 1452, "0"), (.needle, .zhHant, 8888, "412"), (.needle, .en, 734, "0"),
         ]
         for (style, language, index, thinking) in cases {
             for s in [148, 196] as [CGFloat] {
@@ -306,8 +306,8 @@ struct OrbLineReadoutTests {
                 let expected = placement.intelligenceBaselines(center: frame.center.y, diameter: s)
                 #expect(abs(intelligence[0].baseline - expected.intelligence) < 0.01)
                 #expect(abs(thinkingLine[0].baseline - expected.thinking) < 0.01)
-                // Glyph, digits (and tok/s, except in needle).
-                #expect(intelligence.count == 1 + String(index).count)
+                // Glyph, the compact number's characters (and tok/s, except in needle).
+                #expect(intelligence.count == 1 + PerfFormat.compact(index).count)
                 #expect(thinkingLine.count == 1 + thinking.count + (placement.thinkingUnit ? 1 : 0))
                 for line in lines {
                     let middle = (line.map(\.x).min()! + line.map(\.right).max()!) / 2
@@ -316,10 +316,10 @@ struct OrbLineReadoutTests {
                         #expect(abs(piece.x * 2 - (piece.x * 2).rounded()) < 0.01)
                     }
                 }
-                // The intelligence digits are 1.25 × the thinking digits.
+                // The 性能 digits are 1.25 × the thinking digits (needle's hub 1.1 ×).
                 let big = intelligence[1].right - intelligence[1].x
                 let small = thinkingLine[1].right - thinkingLine[1].x
-                #expect(abs(big / small - 1.25) < 0.06)
+                #expect(abs(big / small - placement.scoreScale) < 0.06)
             }
         }
     }
@@ -333,10 +333,10 @@ struct OrbLineReadoutTests {
             try #require(lines.count == 2)
             return (lines[0][0].x, lines[1][0].x)
         }
-        #expect(try left(86, "412") == left(34, "987"))
-        #expect(try left(9, "412").0 > left(86, "412").0)
-        #expect(try left(100, "412").0 < left(86, "412").0)
-        #expect(try left(86, "9.8").1 > left(86, "412").1)
+        #expect(try left(1286, "412") == left(1034, "987"))
+        #expect(try left(948, "412").0 > left(1286, "412").0)
+        #expect(try left(98, "412").0 > left(948, "412").0)
+        #expect(try left(1286, "9.8").1 > left(1286, "412").1)
     }
 
     /// A thinking line at `0` since `zeroAt`, seen at the frame's time (100).
@@ -376,9 +376,9 @@ struct OrbLineReadoutTests {
         let placement = OrbLinePlacement.led
         // 0.1 s into the fade and the glide: thinking at 60 % of its ink, the glide at smoothstep(1/3).
         let frame = Self.frame(.led, diameter: 148, language: .zhHant, format: .intelligence,
-                               .intelligence(score: Self.live(86), thinking: "0"), thinking: Self.zero(since: 96.9))
+                               .intelligence(score: Self.live(1286), thinking: "0"), thinking: Self.zero(since: 96.9))
         let steady = Self.frame(.led, diameter: 148, language: .zhHant, format: .intelligence,
-                                .intelligence(score: Self.live(86), thinking: "0"))
+                                .intelligence(score: Self.live(1286), thinking: "0"))
         let lines = Self.lines(frame, placement: placement)
         let full = Self.lines(steady, placement: placement)
         try #require(lines.count == 2 && full.count == 2)
@@ -403,7 +403,7 @@ struct OrbLineReadoutTests {
     func nothingIsDrawnWhereTheLinesDoNotFit() {
         for style in [OrbStyleKind.reactor, .needle] {
             let frame = Self.frame(style, diameter: 112, language: .zhHant, format: .intelligence,
-                                   .intelligence(score: Self.score(.live, 9, .unverified), thinking: "412"))
+                                   .intelligence(score: Self.score(.live, 1048, provisional: true), thinking: "412"))
             #expect(Self.lines(frame, placement: .of(style)).isEmpty)
         }
     }

@@ -11,7 +11,6 @@ shared fixtures in `spec/fixtures/`.
 | Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid). This is the append-only *source order*. |
 | Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16.) |
 | Response | One model API call that produced a usage record. |
-| Task | One user request to one agent, from its prompt to the next one that is not a continuation (6.9). |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
 
 Parsers normally emit one record per response. A native Grok model batch is one record with `requestCount` underlying
@@ -128,6 +127,8 @@ false (Codex records only the user's speed setting, not the tier a request was b
   valid interval. Unmeasured responses never contribute measured speed; their time is estimated instead (6.3).
 - Minimum duration: if `endMs - startMs < 500 ms`, use `startMs' = endMs - 500`.
 - `speed = output / ((endMs - startMs') / 1000)` — this is end-to-end output speed and includes time to first token.
+- `firstMs` = when the response's first content was written (Claude 4.1, Codex 4.2), else null: no other source's log
+  says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
 
 ### 3.4 Deduplication
 A global, bounded (65 536 entries, FIFO eviction) set of response keys shared by all files of all sources.
@@ -167,7 +168,9 @@ is malformed (section 4).
 ## 4. Parsers
 
 Each parser is a per-file state machine fed complete lines in order. It produces:
-- response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, normalized tokens)
+- response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, `firstMs`, normalized tokens; `firstMs`
+  is null for every source but Claude and Codex)
+- the actions of 6.10 (sources with tool calls)
 - phase updates (`phase`, `phaseSinceMs`, `inFlightStartMs`; `inFlightStartMs` is null whenever the phase is not
   `generating`)
 - metadata (`project` = last path component of `cwd`, `cwdPath` = the full working directory, used only by 10.6,
@@ -199,9 +202,10 @@ State: `pendingStartMs` (nullable), `preciseStart` (bool), `phase`.
 Assistant line:
 1. `key = message.id`, else `requestId`, else `uuid`. Skip the line if `message.model == "<synthetic>"`.
 2. If `key` was first seen in another file: ignore the line entirely.
-3. If `key` is new: create the response with `startMs = pendingStartMs` (may be null), then
-   `pendingStartMs = null`, `preciseStart = false`.
-4. Merge: `endMs = max(endMs, ts)`, every token field = `max(previous, new)`, `model = message.model`.
+3. If `key` is new: create the response with `startMs = pendingStartMs` (may be null) and `firstMs = ts` (the line
+   that created it), then `pendingStartMs = null`, `preciseStart = false`.
+4. Merge: `endMs = max(endMs, ts)`, `firstMs = min(firstMs, ts)` (only a line of the same key in the same file with
+   an earlier timestamp moves it), every token field = `max(previous, new)`, `model = message.model`.
 5. `final = final || stop_reason != null`.
 6. Phase from `message.stop_reason`: `"tool_use"` → `tools`; `null`/missing → `tools` when the line's
    `message.content` contains a block of type `tool_use`, otherwise `generating`; `"pause_turn"` → `generating`
@@ -212,7 +216,7 @@ Assistant line:
 Every line is an envelope `{ "timestamp", "type", "payload" }`.
 
 State: `fileCreatedMs`, `subagentStartOrdinal` (nullable), `myAgentPath`, `pendingStartMs`, `streaming` (bool),
-`sawModernUsage` (bool), `previousLegacyTotals` (nullable), `phase`.
+`firstOutputMs` (nullable), `sawModernUsage` (bool), `previousLegacyTotals` (nullable), `phase`.
 
 Every later line first passes both copied-history rules of 3.5 (timestamp, then `ordinal` below
 `subagentStartOrdinal`); a copied line does nothing below.
@@ -223,7 +227,7 @@ Every later line first passes both copied-history rules of 3.5 (timestamp, then 
 | `turn_context` | `model = payload.model`; `project` from `payload.cwd` when present |
 | input (see below) | if not `streaming`: `pendingStartMs = ts`; phase `generating` (`inFlightStartMs = pendingStartMs`) |
 | mailbox input (see below) | if not `streaming`: `pendingStartMs = ts`; the phase does not change |
-| output (see below) | `streaming = true`; phase `generating` (`inFlightStartMs = pendingStartMs ?? ts`) |
+| output (see below) | if not `streaming`: `firstOutputMs = ts`; then `streaming = true`; phase `generating` (`inFlightStartMs = pendingStartMs ?? ts`) |
 | `token_usage_record` | modern usage (below) |
 | `event_msg` + `payload.type == "token_count"` | if `sawModernUsage` and `streaming`: the response ended without a usage record — `streaming = false`, `pendingStartMs = ts`, phase `tools`. Otherwise legacy usage (below). |
 | `event_msg` + `payload.type` in `task_complete`, `turn_aborted` | phase `idle`, `pendingStartMs = null`, `streaming = false` |
@@ -245,7 +249,9 @@ Modern usage (`token_usage_record`):
 2. `sawModernUsage = true`. `key = payload.response_id`, else `"codex:" + threadId + ":" + ts`.
    (`threadId` = `payload.thread_id` ?? `session_meta.payload.id` ?? file path.) Skip if already seen anywhere.
 3. Tokens from `payload.usage`. Ignore `turn_token_usage` and `thread_token_usage`.
-4. Emit the response with `startMs = pendingStartMs`, `endMs = ts`.
+4. Emit the response with `startMs = pendingStartMs`, `endMs = ts`, and `firstMs = firstOutputMs` when `streaming`
+   is true (the output line that started this response), else null (the usage arrived without an output line since
+   the request started, or after a `token_count` or `task_complete` ended the stream).
 5. `pendingStartMs = ts`, `streaming = false`, phase `tools`.
 
 Legacy usage (`event_msg` / `token_count`):
@@ -256,7 +262,8 @@ Legacy usage (`event_msg` / `token_count`):
    any state). If any delta field is negative → tokens = `last`. Otherwise tokens = `delta`.
 4. `previousLegacyTotals = total`.
 5. `key = "codex-legacy:" + threadId + ":" + total.total_tokens`. Skip if already seen.
-6. Emit with `startMs = pendingStartMs`, `endMs = ts`. Then `pendingStartMs = ts`, `streaming = false`, phase `tools`.
+6. Emit with `startMs = pendingStartMs`, `endMs = ts`, `firstMs` as in modern usage step 4. Then
+   `pendingStartMs = ts`, `streaming = false`, phase `tools`.
 
 ### 4.3 DeepSeek Harness (dsh)
 
@@ -941,7 +948,7 @@ fields, `providerData`, the session's working directory `cwd` (on every line exc
 `session-meta`) and `sessionId`. `timestamp` is valid when it is a finite number > 0, truncated (3.6: `0.5` gives 0,
 `1e19` gives 2^63 − 1), or a timestamp string (3.1); lines without a valid timestamp are ignored entirely. Only `id`,
 `type`, `role`, `status`, `timestamp`, `cwd`, `callId` and the `providerData` fields named below are read; content,
-arguments and tool output never are (WorkBuddy has no task score, 6.9).
+arguments and tool output never are (WorkBuddy records no tool actions, 6.10).
 
 Values of the wrong type count as absent: `id` and `providerData.messageId` only as non-empty strings, `callId` only
 as a string (a `callId` that is an object or an array opens and closes no call), `providerData` only as an object, flags
@@ -1295,7 +1302,7 @@ assistant steps 1–5, tokens, metadata (`project` = basename of the header `cwd
   program, whose own log shows their live state when Agent Speed reads it).
 - **Effort and speed**: none (EXECUTION-MODES). `thinking_level_change` entries are written when a session starts and
   when a level is selected explicitly, not for a level a single message asks for, so they are not used.
-- **Work signals and the task score** (6.10, 6.9): prompts, tool calls and results as Pi.
+- **Actions** (6.10): tool calls and results as Pi; a mirror's calls add none.
 
 Startup and reading (section 5): an agent database takes part in the startup order with the modification time of
 the newer of `openclaw-agent.sqlite` and its `-wal`; within a database the windows are read in `created_at` order, ties
@@ -1399,7 +1406,7 @@ such as U+2028 included):
 
 The turn-start message continues with a preview of the user's message (`msg=` and a Python `repr`); only the two
 groups of the pattern are read and nothing after `msg=` is ever looked at or kept. No other part of any line is kept
-either: tool lines, which quote tool output, are not read (Hermes Agent has no task score, 6.9).
+either: tool lines, which quote tool output, are not read (Hermes Agent records no tool actions, 6.10).
 
 **Time.** The timestamp is the wall clock of the writing process (Python's `time.localtime`, milliseconds truncated),
 without a zone. It is converted with the time-zone rules of this computer at the time of reading: a wall time that
@@ -1745,7 +1752,7 @@ the same day (9.6) until the next launch seeds the session by the history rule.
   a call that asked for tools until their results are written, and `idle` follows a call without tools and a turn
   outcome. The sidecar never changes the phase.
 - Effort (EXECUTION-MODES): each call's `reasoningEffort`; no speed facts.
-- Work signals (6.10) and the task score (6.9) read its tool calls, which the transcript records in Anthropic's shape
+- Actions (6.10: work signals, the performance score) come from its tool calls, which the transcript records in Anthropic's shape
   (`tool_use` blocks in assistant messages, `tool_result` blocks in the next user message); a Task worker's
   `callingToolUseId` is the parent's `Task` call.
 - Settings (DESIGN 5) count today's main sessions: session files whose `lastLineMs` is today and whose session is not a
@@ -2003,466 +2010,126 @@ contributes nothing (the orb shows it as unavailable).
   still use `live_A`.
 - The history store (8) is unaffected: its `peak` stays the all-sources `peakToday`.
 - **Boards** (DESIGN 2c) are evaluated exactly like orbs, each with its own `A`, `peakToday_A` and `newPeak_A`. A
-  board's hero adds the 6.9 values of `A` (the highest task score, *Sets and groups*, and the thinking sums, *Live
-  thinking*) and the cost above; its group rows use the group form of 6.9 (*Sets and groups*). Boards show no cost per
-  agent or group (9.5).
-
-### 6.9 Task score
-
-智力 (DESIGN 10, *Intelligence readout*; the agent rows of DESIGN 4; the boards of DESIGN 2c) is the **task score**: a
-number from 0 to 100 per agent that starts with every user request and climbs with evidence that the agent is solving
-it — changes that pass reliable checks, failures that shrink and get fixed, actions that keep finding something new. It
-answers one question: is the agent solving the problem, or burning tokens in circles? It is computed from the logs by
-the fixed algorithm below (user's choice, 2026-10-28). The five weights are the user's and are not validated against
-outcomes; the predictions of 6.11 are calibrated on the user's own history. `spec/tools/task_score.py` implements 6.9
-and 6.11 and checks `spec/fixtures/task-score-cases.json` (regenerated with `--write` from
-`spec/tools/task_score_cases.py`, which holds every expectation written by hand and refuses to write when a result
-differs).
-
-The score replaces the grade of earlier versions (model class from the price table, 6 × effort level, 20 × thinking
-share), which is retired everywhere. The thinking line (*Live thinking*, below) is unchanged.
-
-Sources: Claude Code, Claude Desktop, Codex, omp, Pi, OpenClaw and Factory Droid, which record tool calls (6.10).
-Every other source
-has no tasks, and its agents' value is none.
-
-#### Tasks
-
-A **task** is one user request to one agent (1). A sub-agent is an agent of its own, so the request its parent gave it
-is its own first task. The agent's lines are read in order (4), and:
-
-- a *prompt* starts a new task;
-- a *continuation* (a prompt in the list below) joins the current task; with no current task it starts one;
-- the events before the first prompt (a sub-agent whose task arrived in a line that is not a prompt, a file read from an
-  offset, 5) form a task of their own, which starts at its first event.
-
-The latest task is the agent's **current task**. It stays current after the agent goes idle, until the next prompt.
-
-**Prompt lines**, after each source's copied-history rules (3.5, 4.7):
-
-| Source | Prompt | Never a prompt |
-| --- | --- | --- |
-| Claude (both) | a `type == "user"` line classified *prompt* or *command* below; a *queued message* (below) | assistant lines, every other attachment, every other type |
-| Codex | a `response_item` with `payload.type == "message"` and `payload.role == "user"` whose content (a string, or its `input_text` and `text` blocks) has a non-blank text or an `input_image` block, unless the first text, with leading whitespace removed, starts with `<` and an ASCII letter or with `# AGENTS.md instructions`; its text is the string, or the text blocks that do not start (after leading whitespace) with `<`, joined with LF | injected user-role context (`<environment_context>`, `<heartbeat>`, `<subagent_notification>`, `<turn_aborted>`, the user's reply to the agent's question `<send_user_message_question_reply>`, AGENTS.md), `developer` and `system` messages, the `event_msg` `user_message` (older versions write it beside the item; the versions on this Mac since 2026-04 write none), mailbox input (4.2), tool outputs |
-| omp, Pi, OpenClaw | a `message` entry with `message.role == "user"` whose content is a non-blank string, or has a non-blank `text` block or an `image` block; its text is the string, or the `text` blocks joined with LF | `developer`, `toolResult`, `bashExecution` and the other roles; `compaction`, `branch_summary`, `custom_message` and every other entry |
-| Factory Droid | a `type == "message"` line with `message.role == "user"` and no `message.visibility` (absent or null: the user's own message) whose content has no `tool_result` block and has a non-blank text or an `image` block (rule 1 below, with `image` only); its text as rule 5 | tool results (the same role, with `tool_result` blocks), the per-turn context (`visibility: "llm_only"`, id `context-<turn id>`), notices and hook records (`user_only`), assistant messages and every other type (4.16). From public recordings; no Droid session was read on this machine |
-
-*Blank* and *trimmed* are as in 4.9. A Claude `type == "user"` line is classified by the first rule that matches:
-
-1. **Not a prompt**: `isMeta`, `isCompactSummary` or `isVisibleInTranscriptOnly` is `true` (injected skill and hook
-   text, compaction summaries); `message.content` is an array with a `tool_result` block (tool results, also with text
-   beside them); the content has no non-blank text (the string content, or the `text` blocks' texts) and no `image` or
-   `document` block.
-2. The *lead* is the string content, else the first `text` block's text, with leading whitespace removed. **Not a
-   prompt** when the lead starts with `[Request interrupted by user`, or with `<` and one of the tags
-   `local-command-caveat`, `bash-input`, `bash-stdout`, `bash-stderr`, `user-memory-input`, `system-reminder`,
-   `task-notification`, followed by `>`, `/`, whitespace or the end (local-command caveats, the `!` shell mode, `#`
-   memory input, injected reminders, background-task notifications).
-3. **Command output**: the lead starts with `<local-command-stdout` or `<local-command-stderr` (same tag rule).
-4. **Command**: the lead starts with `<command-name>` or `<command-message>` (a slash command or skill the user typed).
-5. Otherwise a **prompt**. Its text is the string content, or the `text` blocks whose text, with leading whitespace
-   removed, does not start with `<` (IDE selections and other tag blocks attached to the prompt), joined with LF.
-
-A message the user types while the agent works is not a `user` line: Claude Code stores it as a `type ==
-"attachment"` line whose `attachment.type` is `queued_command`. It is a **queued message**, a prompt, when
-`attachment.commandMode == "prompt"`, `attachment.humanTurn == true`, and neither the line's nor the attachment's
-`isMeta` is `true`; its content is `attachment.prompt` (a string or blocks), read like a `user` line's content (rule 1's
-test for text or an image or document, rule 5's text), so it can be a continuation. Its time is
-`attachment.timestamp` (when the user sent it) when that is a timestamp (3.1), else the line's own. Every other
-`queued_command` is not a prompt: background-task notices (`commandMode == "task-notification"`) and the hand-back
-messages of sub-agents (`isMeta`, text starting `<agent-message`). Checked against real Claude Code logs, counts and
-field names only (2026-10-28).
-
-**Withdrawal** (Claude, omp, Pi, OpenClaw, Factory Droid). A prompt or command takes effect as soon as its line is
-read, so the new
-task shows at once. It is *withdrawn* — as if the line were not there, and the previous task stays current — when:
-
-- the first assistant line (Claude) or assistant `message` entry (omp, Pi, OpenClaw, Factory Droid) after it is ignored
-  because its key was first seen in another file (4.1 step 2, 4.7 step 2, 4.16 *Calls*): the prompt was copied with
-  its conversation (a forked Claude or Droid session, omp's byte copies of sub-agent transcripts);
-- for a command only: a command output line comes before any assistant line that is not ignored. The command never
-  asked the model anything (`/model`, `/cost`, `/compact`, …).
-
-Only the first assistant line after the prompt decides; lines skipped as `<synthetic>` (4.1 step 1) do not count. A
-command is never a continuation. Codex needs neither rule: 3.5 removes its copies, and its commands are not user
-messages. Cases: `promptLines` (one line each) and `segmentation` (withdrawal over classified lines).
-
-**Continuation.** The prompt's text is normalised: Unicode NFKC; trimmed; trailing characters among `.` `!` `~` `,` `。`
-`、` and whitespace removed until none is left; ASCII `A`–`Z` lower-cased; every run of whitespace replaced by one
-space. It is a continuation when the result is one of:
-
-- `continue`, `continue please`, `please continue`, `go on`, `keep going`, `proceed`, `please proceed`, `carry on`,
-  `go ahead`, `resume`, `ok`, `okay`, `ok continue`, `ok go ahead`, `yes`, `y`, `yep`, `yes please`, `sure`, `do it`,
-  `lgtm`;
-- `繼續`, `繼續吧`, `請繼續`, `繼續做`, `接著做`, `好`, `好的`, `好啊`, `可以`, `嗯`, `是`, `對`, `行`, `沒問題`;
-- `继续`, `继续吧`, `请继续`, `继续做`, `接着做`, `对`, `没问题`;
-- `続けて`, `続けてください`, `続行`, `進めて`, `進めてください`, `はい`, `お願いします`, `うん`, `いいよ`, `どうぞ`.
-
-So `Continue.`, `ＯＫ!`, `繼續。` and `go ahead…` continue (NFKC turns `…` into `...`), while `continue?`, `next` and
-`continue with the tests` start a new task. The plan says "case-folded": only ASCII letters are folded, because every
-entry is ASCII or CJK (after NFKC, which also maps full-width letters to ASCII), so full Unicode case folding could
-change no result and would differ between platforms. The text is compared in memory and never kept. Cases:
-`continuations`.
-
-A message the user sends while the agent works (steering: a Claude queued message, a Codex user message item) starts
-a new task unless it is in the list. A correction typed mid-task therefore splits the task: an approximation. The Codex
-rule was first written from format knowledge (the `event_msg` `user_message`) and changed after the end-to-end check
-on real logs (2026-10-28): no rollout on this Mac since 2026-04 has that event, so every Codex file read as one task;
-the item rule was checked against the same logs by counts and leading markers only.
-
-#### Event stream
-
-The model's input per agent is a stream of prompts and *actions* (6.10) in file order, a message's tool calls in
-content order. It is the contract with the parsers: `spec/TASK-PARSERS.md` defines the functions named below, whose
-outputs arrive here already parsed; their inputs are never kept.
-
-```
-{t, type: "prompt", continuation}
-{t, type: "action", kind, tool, digest, command?, outcome?, failures?, hunks?}
-```
-
-| Field | Value |
-| --- | --- |
-| `t` | the time of the line that holds the prompt or the call (Unix ms); a queued Claude message's own time (*Tasks*) |
-| `continuation` | *Continuation*, above |
-| `kind` | `action_kind(source, tool, input, cwd)`: `read`, `search`, `edit`, `command`, `delegate`, `web` or `other` |
-| `tool`, `digest` | as 6.10 |
-| `command` | `kind == "command"` with command text (TASK-PARSERS 3.1) only: the fields `class` (`test`, `build`, `check` or `other`), `suite`, `targeted` and `key` of `command_info(text, cwd)` |
-| `outcome` | once the result is read: `outcome(source, result, t, tool, input, cwd)` = `{exitCode, failed, t}` (`failed` true, false or null; `t` the time of the result line) |
-| `failures` | with the outcome of an action that has `command`: `failures(info, result_text(source, result), cwd, outcome.failed)` = `{fingerprints, failedCount, passedCount, framework}` |
-| `hunks` | `kind == "edit"` only: `edit_hunks(source, tool, input, cwd)` = `[{file, old, new}]`, 16-hex digests; `old` is null for a whole-file write, whose `new` is the digest of the whole content |
-
-`cwd` is the agent's working directory when the call's line was read (*Composing the stream*, below): every function of
-one action, also those applied when its result arrives, receives that same value.
-
-- Results match their call by id (*Composing the stream*); a result for an unknown call is ignored.
-- Seeded lines (5) add events, unlike the signals' action list (6.10), so the current task is rebuilt from the file
-  after a relaunch. Copied lines (3.5, 4.7) and assistant lines ignored as duplicates (4.1 step 2, 4.7 step 2) add
-  none.
-- An evaluation at `nowMs` (the fixture queries) uses the events with `t ≤ nowMs`, and treats an outcome (with its
-  failures) whose `t` is after `nowMs` as not read yet. The live engine evaluates everything it has read; it may keep
-  incremental state for each agent's current task instead of evaluating the task again, as long as every value equals
-  these definitions.
-
-#### Composing the stream
-
-The *composer* turns one agent's lines into the event stream. It reads every line right after the source's parser (4)
-has read it and takes the parser's decisions as they are: a line the parser skips as copied history (3.5, 4.7) or for
-want of a usable time adds nothing, and an assistant line or entry the parser ignores because its key was first seen in
-another file (4.1 step 2, 4.7 step 2) is a **duplicate**. `spec/tools/task_events.py` implements it;
-`spec/fixtures/task-e2e-expected.json` checks it end to end (below).
-
-| Source | Line time `t` | `cwd` | Prompts | Calls | Results |
-| --- | --- | --- | --- | --- | --- |
-| Claude (both) | the line's `timestamp` (3.1); a line without one adds nothing | a non-blank string `cwd` of the line, taken before the line's own calls; the latest wins | `user` lines classified *prompt*, *command* or *command output*, and queued messages (*Tasks*) | blocks `tool_use` (`id`, `name`, `input`) of an `assistant` line that is not `<synthetic>` (4.1 step 1) and not a duplicate | blocks `tool_result` of a `user` line, by `tool_use_id`; the result is the block |
-| Codex | the envelope's `timestamp`; lines that 3.5 removes add nothing | the first `session_meta`'s `payload.cwd`, then every `turn_context`'s `payload.cwd` (non-blank strings) | `response_item` user messages (*Tasks*) | `response_item` / `function_call` (`call_id`, `name`, `arguments`) and `custom_tool_call` (`call_id`, `name`, `input`); a code-mode script gives its tool calls instead (below) | `response_item` / `function_call_output` and `custom_tool_call_output`, by `call_id`; the result is the payload |
-| omp, Pi, OpenClaw | the entry's `timestamp`; entries that 4.7 ignores (before the header, without a string `id` or a time, copied history) add nothing | the header's `cwd` (a non-blank string) | `message` entries of role `user` (*Tasks*) | blocks `toolCall` (`id`, `name`, `arguments`) of an assistant `message` that passes 4.7 step 1, is not a duplicate and, for OpenClaw, is not a mirror (4.14) | `message` entries of role `toolResult`, by `toolCallId`; the result is the message |
-| Factory Droid | the line's `timestamp`; a line without one (`agent_turn_outcome`) adds nothing | the first `session_start`'s `cwd` (a non-blank string) | user `message` lines (*Tasks*) | blocks `tool_use` (`id`, `name`, `input`) of an assistant `message` line whose `id` is a non-empty string and whose key `droid:<id>` is not a duplicate (4.16 *Calls*) | blocks `tool_result` of a user `message` line, by `tool_use_id`; the result is the block |
-
-*Non-blank* is as in 4.9; the `cwd` is passed to the parsers as stored (TASK-PARSERS normalises it).
-
-**Prompts.** Prompt, command and command-output lines and the assistant lines with their duplicate flag go through the
-withdrawal of *Tasks* in line order: a prompt or command adds its prompt event at once and is removed again when the
-first assistant line after it is a duplicate, or, for a command, when a command output comes first. The assistant lines
-that decide are, for Claude, every `assistant` line with a time except `<synthetic>` ones, for Factory Droid every
-assistant `message` line with a time and a non-empty string `id`, and for omp, Pi and OpenClaw
-every assistant `message` that passes 4.7 step 1 (an OpenClaw mirror decides like any other). Codex has no withdrawal.
-
-**Calls.** A call needs a string id and a string tool name; an id the agent's file already had is a repeat and adds
-nothing (a Claude message's lines can repeat its blocks). The action takes the call line's `t` and `cwd`, and:
-
-- `kind` and `digest` (6.10: an object or array input hashes as the JSON text exactly as the line stores it, a string
-  input as its text, an absent or null input as empty text);
-- `command` when the kind is `command` and the tool has command text (TASK-PARSERS 3.1): `command_info(text, cwd)`'s
-  four fields; its `masked` and `background` stay in memory for the outcome. A shell command that only reads or searches
-  has kind `read` or `search` and no `command`; a shell call without readable text has kind `command` and no `command`;
-- `hunks` when the kind is `edit`.
-
-The call's input is held in memory until its result arrives, then released.
-
-**Codex code mode** (TASK-PARSERS 4.4). Recent Codex versions run most tools from a JavaScript cell: a
-`custom_tool_call` named `exec` whose script calls `tools.exec_command(…)`, `tools.write_stdin(…)`,
-`tools.apply_patch(…)` and so on (on this Mac, 84 760 such calls since 2026-07, against a few thousand direct ones).
-When `code_script(source, tool, input)` gives calls, the script adds no action of its own: each of its calls becomes an
-action in source order, with the script line's `t` and `cwd`, its own tool name and input, and the digest of its source
-text (in place of the 6.10 digest of the whole script). When the script's result arrives, the printing statements of
-a plain script take the items of `code_items(source, result)` in order — each item read as its call's result above —
-provided the counts match; every other call of the script gets no result. The 6.10 work
-signals keep one action per script (they never look inside the input).
-
-**Results.** A result belongs to the call with its id anywhere in the agent's stream (a result read after a new prompt
-still completes the earlier task's action). Only the first result of a call counts; later ones, and results whose id
-names no call, are ignored. The action's `outcome` is `outcome(source, result, t, tool, input, cwd)` with the result
-line's `t` and the call's tool, input and `cwd`. An action with `command` also gets
-`failures(info, result_text(source, result), cwd, outcome.failed)`, except while the result leaves a session running.
-
-**Sessions** (TASK-PARSERS 4.3). Codex's unified exec returns after about 10 seconds while a slow command keeps running,
-and the command's outcome arrives in the results of later `write_stdin` calls; a Claude background `Bash` ends with a
-task notice (`queued_command` in `task-notification` mode) that states its exit code, or is read with `BashOutput` /
-`TaskOutput` in older versions. Without stitching them back, a slow test suite would never count as a run, and Codex
-would score below Claude Code for the same work. The composer keeps, per agent, a map from session key to the action
-whose result left that session running:
-
-1. When a call that is not itself a continuation gets a result with `running_session(source, result) = K`, its action
-   keeps that result's outcome (state running: `exitCode` and `failed` null) and no `failures` yet, and K maps to the
-   action, its command's `masked` flag and its output so far (the result's `result_text`). A later such result for the
-   same K replaces the entry.
-2. A call with `continuation(source, tool, input) = K` is an action of its own (kind `other`, its own outcome). When
-   its result arrives and K is mapped, the result's `result_text` is appended to K's output (Codex parts concatenated
-   as they are, being slices of one stream; Claude parts joined with LF).
-   When that result's own outcome has a non-null `exitCode` and a non-null `failed` (finished with an exit code), the
-   mapped action's outcome becomes `{exitCode, failed, t}` of it — with `failed` null when the mapped command is
-   `masked`, since the exit code is then the pipeline's — its `failures` (when it has `command`) are computed over the
-   whole output, and K leaves the map.
-3. A Claude line for which `notification(source, line)` gives `{session: K, exitCode: N}`, when K is mapped, ends it
-   the same way with the outcome `{exitCode: N, failed: N ≠ 0, t}` (`failed` null when `masked`), `t` being
-   `attachment.timestamp` when it is a timestamp (3.1), else the line's; the notice carries no output, so the failures
-   are computed over the output held so far.
-4. A session that never reports an exit code leaves the action without a result (not a run, *Runs*). Its output is
-   held in memory only, until then.
-
-The stitched outcome keeps the action where the call was: a test started before an edit verifies the code before it,
-whenever it finishes. An evaluation at `nowMs` sees it from the continuation result's `t` on.
-
-**Reading from an offset, copies and sub-agents.**
-
-- Seeded lines are composed like live ones (6.4's `responseCompleted` and `newPeak` are a different thing and never
-  fire while seeding). A file read from an offset (5) composes from that offset, after the header that omp and Pi read
-  first (its `cwd` counts); its events before the first prompt form a task of their own (*Tasks*).
-- Copied history adds nothing: Codex lines that 3.5 removes, and omp, Pi and OpenClaw entries before `headerMs − 2000`.
-  Claude and Factory Droid copies (forks, resumes) are found by deduplication: their assistant lines are duplicates (no
-  actions, and the prompt before them is withdrawn), and their tool results match no call. omp's byte copies of sub-agent transcripts are
-  duplicates the same way.
-- Every agent has its own stream: a Claude `subagents/*.jsonl` file, a Codex sub-agent rollout, an omp or Pi nested
-  file, an OpenClaw spawned window, a Factory Droid Task worker (its own session file, with `callingSessionId`; its
-  `callingToolUseId` names the parent's `Task` call, which is the parent's `delegate` action). The request its parent gave it is its first prompt (a Claude `user` line, a Codex
-  `user_message`, a user message of the Pi family); a request that arrives otherwise (a Codex mailbox message, 4.2)
-  leaves its first events to a task before the first prompt.
-- An OpenClaw delegated window's mirrors add no actions (the runtime that ran the turn records the tools in its own
-  log, scored there when Agent Speed reads it); its prompts still start tasks, so its value is none.
-
-**Model and effort.** After every line with a time that adds or could add something (above), the composer notes
-`(t, model, effort)`: the agent's model (4) and the mode of its current effort attribution (EXECUTION-MODES), null when
-unknown. 6.11 *Task records* takes the last note whose `t` is at most the task's `endMs`, in line order. A note equal
-to the previous kept one, with a `t` not earlier than its, may be dropped: the choice stays the same.
-
-**Privacy.** Held in memory only: a call's input until its result, a running session's output until its exit code, the
-`cwd`. Prompt texts are compared with the continuation list and dropped. The stream keeps what the table of *Event
-stream* lists.
-
-**End to end.** `spec/fixtures/tasks/` holds hand-written sessions of every scored source (`spec/tools/task_e2e_fixtures.py`
-writes them for `generate_fixtures.py`, with expectations written by hand) and `spec/fixtures/task-e2e-expected.json`
-the expected result of reading them in its `order` with one dedupe set (3.4): per agent its event stream, its value
-at `nowMs` (form, score, state, dimensions, facts, predictions with the source's coefficients) and its records (6.11,
-`analysisMs`), then the sets and board groups (*Values*), the calibration and the comparison. `reference.py
---check-fixtures` checks it and `reference.py --write-task-fixture` regenerates it after checking the hand
-expectations. Ports read the files with their own parsers and composer and must match every value (numbers within
-10⁻⁹, calibration within 10⁻⁶).
-
-**Dumps** (parity on real logs). `reference.py --dump-today` ends with one `task` row per seeded agent of a scored
-source — `agentId`, `source`, `phase` (after staleness), `lastLineMs`, `parentId`, `taskStartMs`, `form`, `score`,
-`shown`, `state`, the dimensions and facts of `task_result`, `predictions` (the prior coefficients: the dump analyses no
-history) and the model flags — and one `taskSets` row (the agents list, the all-sources set, one set per scored source
-with listed agents, the board groups), evaluated at `--now MS` or the capture time (`summary.nowMs`).
-`reference.py --dump-tasks` prints a `record` row per task record of every log read whole (Codex archives included),
-a `calibration` row per source and a `comparison` row (`--first` / `--last`, default every day; `--source`; `--utc`).
-`spec/tools/compare_dumps.py` compares these rows whenever both dumps have them, skipping agents still being written.
-
-#### Runs, checks and edits
-
-**Weights.** `w = 0` for `other` (todo lists, plans, questions to the user: neither evidence nor waste), `w = 2` for a
-command of class `test`, `build` or `check`, `w = 1` for every other action. *Counted* actions have `w > 0`; `n` is
-their number.
-
-**Runs.** A command of class `test`, `build` or `check` is a *run* once its result is known:
-
-- **fail** when `outcome.failed` is true or `failures.failedCount > 0` (an exit code 0 with reported failures, such as
-  `cargo test | tail`, still fails);
-- **pass** otherwise, when `outcome.failed` is false, or when `failedCount == 0` and `passedCount` is not 0 (a
-  summary that reports no failure: tests that passed, or a checker or build, which counts no passes — unless it says
-  that nothing ran);
-- otherwise (no outcome yet, or `failed` null — backgrounded, interrupted or still running, or masked by a pipe or a
-  list without a status the output states, TASK-PARSERS 3.10 — without counts) it is not a run, only a counted
-  action. A masked command whose output prints its own exit code (`; echo $?` after a command that owns its status,
-  `${PIPESTATUS[0]}`, `&& echo ok || echo fail`, `|| echo "failed $?"`) gets that status, and a build or check piped
-  into a grep for error lines that printed nothing passes (user's decision, 2026-10-28).
-
-The error count of a run is `F = 0` for a pass and `max(1, |fingerprints|, failedCount)` for a fail (a null count is 0).
-
-**Checks.** A run belongs to the check `suite:<suite>` when it is not targeted and its `suite` is known, else to
-`key:<key>`. So full runs of one runner share a check whatever their flags, and every targeted command is a check of its
-own: a narrowed run never makes the full suite look converged. The *sequence* of a check is its runs in order; a targeted
-check whose suite is known also gets every **passing** non-targeted run of that suite after its own first run (a full
-pass proves the targeted part too; a failing full run says nothing about it).
-
-**Episodes.** Per check, over its sequence: a fail whose predecessor is a pass, or that has none, opens an episode; the
-fails after it join; the next pass closes it (*recovered*). Its *attempts* are its number of fails.
-
-**Effective edits.** An `edit` action is *effective* when its outcome is not `failed: true` (an unread outcome counts as
-not failed) and it changes something. The task keeps, per file digest, the contents of its whole-file writes, the file's
-latest known content, and two sets of hunk texts, *current* and *superseded*. The hunks are applied in order:
-
-- whole-file (`old` null): no change when `new` equals the latest known content. Otherwise it changes the file; it
-  *oscillates* when `new` is one of the file's earlier written contents; then `new` is added to the written contents,
-  becomes the latest known content, and both hunk sets are cleared (a rewrite replaces every region);
-- a hunk: no change when `old == new`. Otherwise it changes the file; it *oscillates* when `old` is a current text and
-  `new` a superseded one (an exact revert, or `A → B → C → A`); then `old` moves to the superseded texts, `new` becomes
-  current, and the latest known content becomes unknown.
-
-An edit is effective when one of its hunks changed something, and *oscillating* when it is effective and one of its
-hunks oscillated. An edit without hunks (an input the parser could not split) is effective and does not oscillate.
-Edits made by shell commands other than `apply_patch` (`sed -i`, formatters, `git checkout`) are not edits: a known
-approximation.
-
-**Blocks.** Effective edits split a task's runs into blocks: block `m` holds the runs after the `m`-th effective edit and
-before the next one (block 0 the runs before the first). The **current block** is the runs after the last effective
-edit (every run when there is none). A block *fails* when some check with a run in the block has a fail as the last of
-its sequence's elements that lie in the block.
-
-#### States
-
-| State | When |
-| --- | --- |
-| `none` | no effective edit and no run |
-| `unverified` | effective edits, no run |
-| `passing` | the current block is not empty and does not fail |
-| `failing` | the current block fails; or it is empty and the latest non-empty block fails (failed, then edited: the fix is not proven yet) |
-| `pending` | the current block is empty and the latest non-empty block does not fail (passed, then edited: the credit waits for a re-run) |
-
-The plan names the first, second and last states only by example; *failed, then edited* stays `failing` because there
-is no earlier pass whose credit could be pending.
-
-#### Dimensions
-
-| Dimension | Max | Value |
-| --- | ---: | --- |
-| V 驗證成功 verification success | 40 | `passing` with a passing test run in the current block: 40; `passing` with build and check runs only: 20; any other state: 0 |
-| C 錯誤收斂 error convergence | 25 | below |
-| R 錯誤恢復 error recovery | 15 | below |
-| E 行為效率 behaviour efficiency | 10 | below |
-| K 驗證完整性 verification completeness | 10 | below |
-
-**C.** No run: 0. Otherwise, for every check `j` whose peak `F_peak = max F` over its sequence is above 0:
-
-`c_j = max(0, 1 − (F_last + N_new) / F_peak)`
-
-where `F_last` is the `F` of the sequence's last element and `N_new` (0 when that element passes) is the number of its
-fingerprints found in no element of the sequence up to and including the first one with `F = F_peak`.
-`C = 25 × Σ F_peak·c_j / Σ F_peak`; `C = 25` when runs exist and no check ever failed. Checks weigh by their peak, so a
-check that went from 40 failures to 2 counts more than a one-off flaky failure. `N_new` is the regression penalty of the
-plan: a fingerprint that appears after the peak (fix three, break one new) counts twice, once in `F_last` and once as
-new.
-
-**R.** With episodes: `R = 15 × mean q` over every episode of every check, with `q = 2 / (attempts + 1)` for a recovered
-episode (1, 2/3, 1/2, 2/5, … for 1, 2, 3, 4 attempts) and `q = 0` for an open one. Without episodes: 15 when some run
-passed, else 0.
-
-**E.** From four parts over the task's counted actions:
-
-- *New evidence* `ΔI` of each counted action, in order:
-  - an edit: 1 when effective and not oscillating, else 0;
-  - a run: 1 when no earlier run of the task has its `key`, or an effective edit came after the latest earlier run with
-    that key, or its *signature* (result, sorted fingerprints, `failedCount`) differs from that run's; else 0 (the same
-    check again on unchanged code);
-  - any other counted action, a test, build or check command without a result included: 1 when no earlier such action
-    has its `(tool, digest)`, or an effective edit came after the latest one; else 0 (re-reading after an edit is new).
-- *Information gain* `IG = Σ w·ΔI / Σ w` (0 when `n = 0`).
-- *Loop share* `L` = marked actions ÷ `n`: wherever a block of 1, 2 or 3 consecutive `(tool, digest)` pairs repeats at
-  least 3 times back to back (6.10's *Looping* and *Repeating*, at every position, with or without a failure), the
-  repeats after the block's first occurrence are marked.
-- *Oscillation share* `O` = oscillating effective edits ÷ effective edits (0 without any).
-
-`E = 10 × min(1, n / 8) × IG × (1 − L) × (1 − O)`: it ramps in over the first 8 counted actions, so it climbs from 0.
-The plan divides by the number of tool calls; dividing by `Σ w` instead keeps `other` tools out of both sides, so a todo
-list neither adds evidence nor dilutes it, and runs weigh double because they are the strongest evidence and the
-costliest repeats. Loops are found among counted actions only, so a todo update between identical runs does not hide the
-loop.
-
-**K.** Over the current block: +4 when it has a build or check run, or a passing test run; +4 when it has a test run;
-+2 when it has a passing non-targeted test run with no failing test run after it. Two deviations from the plan, argued:
-a passing test run also earns the build credit, because runners such as `cargo test`, `swift test`, `go test` and
-`dotnet test` build first and an interpreted suite has no build step; and the +2 goes to "the full suite passed last"
-rather than only "after a targeted fix", so a task that ran the full suite from the start is not capped at 98.
-
-Cases: `tasks` (one per dimension and edge case: none, unverified, ideal, convergence and recovery, pending, regression
-and its penalty, loops, oscillation, whole-file writes, failed edits, build-only, pending after a build-only pass, a
-failure without counts, verification without edits, targeted then full, continuation, a check beside a failing test,
-failed then edited, unknown outcomes, piped failures, stall, `other` tools).
-
-#### Score
-
-`score = V + C + R + E + K`, from 0 to 100; **none** when the state is `none`. It is shown rounded half away from
-zero, an integer of at most three digits; fixtures compare unrounded values within 10⁻⁹.
-
-It changes only when an event is read, never with time alone. It rises with progress and drops only when:
-
-1. a run fails: a check that passed fails again, a check fails on its first run, or a failing check's errors grow
-   (V, C and R fall, and K loses what the failing run no longer earns) — the work turned out not to be verified;
-2. an effective edit follows a run: V and K start over until a check runs again (`pending`, or `failing` after a failed
-   run);
-3. behaviour gets worse: the share of actions that repeat without new evidence, loop or undo earlier edits grows (E, at
-   most 10 points). The plan's "drops only when" lists the first two; the third follows from its own definition of E
-   ("loops, repeats and edit oscillation lower it") and is bounded by E's 10 points.
-
-A task that never runs a check scores at most 10 (E alone), within the plan's "roughly ≤ 25". A new prompt starts a new
-task, so the agent's value starts over; the finished task keeps its final score (6.11 records it).
-
-#### Task facts
-
-Besides its state, score and dimensions, a task gives the score card (DESIGN 12) these facts, from the same evaluation:
-
-| Fact | Value |
-| --- | --- |
-| `vHeld` | `pending` only: the V of the latest non-empty block (40 when it has a passing test run, else 20) — the credit a passing re-run restores; null in every other state |
-| `openFailure` | `failing` only: the *open failure*, the newest failing run that is still the last element of its check's sequence (in state `failing` there always is one): its `suite` (null when unknown), `class` and `key`; `errors`, its `F`; `peak`, its check's `F_peak`; `counted`, true when `F` comes from fingerprints or a `failedCount` above 0 rather than the minimum of 1; `edited`, true when an effective edit followed it. Null in every other state |
-| `lastPass` | `passing` and `pending` only: the last run of the current block (`passing`) or of the latest non-empty block (`pending`) — it passes, since that block does not fail: its `suite`, `class` and `key`; `buildOnly`, true when that block has no passing test run (V, or `vHeld`, is 20). Null in every other state |
-| `oscillations` | the task's oscillating effective edits (the numerator of `O`; also a record count, 6.11) |
-
-`IG`, `L` and `O` (*Dimensions*) and the counts of 6.11 *Task records* are facts too. A `suite` names a check for
-display; a `key` is a digest and only tells checks apart. Cases: the `tasks` queries carry every fact.
+  board's hero adds the 6.9 values of `A` (the highest performance score, *Sets and groups*, and the thinking sums,
+  *Live thinking*) and the cost above; its group rows use the group form of 6.9 (*Sets and groups*). Boards show no
+  cost per agent or group (9.5).
+
+### 6.9 Performance score
+
+性能 (DESIGN 10, *Performance readout*; the agent rows of DESIGN 4; the boards of DESIGN 2c; the score card and the
+History window of DESIGN 12) is the **performance score**: an absolute, benchmark-style number per agent. **1000 is
+the fixed reference level and there is no upper limit**: a faster setup scores higher, and agents and models of
+different sources are directly comparable, so boards rank meaningfully. It combines everything the logs measure about
+how fast an agent works — request output throughput, first-content latency, the pace of its tool calls, reasoning
+speed, cache hits, tool time and tool success — into one weighted geometric mean (user's decision, 2026-10-29: it
+replaces the task score 智力 everywhere, and the retired task score, its parsers and records are gone).
+`spec/tools/perf_score.py` implements 6.9 and 6.11 and checks `spec/fixtures/perf-score-cases.json`, which
+`spec/tools/perf_score_cases.py --write` writes after checking every expectation written by hand (it refuses to write
+when one differs). Fixtures compare unrounded values within 10⁻⁹ (relative above 1).
+
+The reference values and weights are a calibration on the user's own logs (Claude Code, Claude Desktop and Codex on
+the development Mac, 2026-10-29), not an industry standard; the score card says so in one line (DESIGN 12).
+
+#### Sample
+
+Per agent `a` at `nowMs`, evaluated on every engine tick (500 ms) with that tick's agents list (6.7):
+
+- The **sample** (有效計時請求) is the agent's measured responses (3.3) with `nowMs − 30 min ≤ endMs ≤ nowMs`, the
+  newest 20 by `endMs`, ties by `key` (ordinal, UTF-16 code units: the smaller key is newer). `n` is its size;
+  `n < 3` → the agent has **no score**. Responses are retained 30 minutes anyway (6.1).
+- `spanStart` = the smallest `startMs'` (3.3, with the 500 ms rule) of the sample.
+- `C` = the agent's completed tool calls: the actions in its storage (6.10: the last 64 in file order, seeded ones
+  included) with a result, `callMs ≥ spanStart`, `resultMs ≤ nowMs` and `0 ≤ resultMs − callMs ≤ 15 min`. Sources
+  without actions (6.10 table) have none.
+- `activeMs` = the length of the union of the sample's intervals `[startMs', endMs]` and `C`'s intervals
+  `[callMs, resultMs]`: parallel tool calls and the time a sub-agent works while its parent waits count once.
+
+#### Components
+
+| Id | 名稱 | Weight `w` | Measure | Ratio `r` | Present when |
+| --- | --- | ---: | --- | --- | --- |
+| T | 輸出吞吐 output throughput | 0.30 | `Σ output / Σ duration_s` over the sample (3.3 durations, 500 ms minimum) | `T / 50` | always (n ≥ 3) |
+| L | 首段延遲 first-content latency P50 (ms) | 0.20 | the median of `firstMs − startMs` over the sample responses that have both, with `firstMs ≥ startMs` (an even count: the mean of the two middle values) | `5000 / max(L, 250)` | ≥ 3 values |
+| N | 行動節奏 tool calls per active minute | 0.15 | `|C| / (activeMs / 60 000)` | `N / 3` | `|C| ≥ 3` and `activeMs > 0` |
+| R | 思考速度 reasoning throughput | 0.10 | `Σ min(reasoning, output) / Σ duration_s` over the sample responses with `min(reasoning, output) > 0` | `R / 20` | ≥ 3 such responses |
+| H | 快取命中 cache hit rate | 0.10 | `Σ cachedInput / Σ input` over the sample responses with `input > 0` | `H / 0.95` | ≥ 3 such responses |
+| U | 工具耗時 tool time (ms) | 0.10 | the geometric mean of `max(resultMs − callMs, 50)` over `C`: `exp(Σ ln max(d, 50) / |C|)` | `400 / U` | `|C| ≥ 3` |
+| S | 工具成功率 tool success | 0.05 | `1 − failed / |C|`, `failed` = the calls of `C` whose `failed` is true (unknown is not failed, 6.10) | `S / 0.95` | `|C| ≥ 3` |
+
+- **Clamps**: `r_T ≥ 0.01` with no upper bound (throughput is what makes the score uncapped); every other ratio is
+  clamped to `[0.05, 20]`.
+- **Score** `= 1000 × exp(Σ_present w_i · ln r_i / Σ_present w_i)`: a weighted geometric mean, the benchmark
+  convention — one outlier cannot dominate, doubling every component doubles the score, and a missing component is
+  left out instead of punished. The sums run over the present components in the order T, L, N, R, H, U, S, as plain
+  left-to-right IEEE 754 double additions (the reference uses `live_thinking.seq_sum`). Shown rounded half away from
+  zero, grouped by locale (`1,286`; DESIGN 12 gives the compact forms).
+- **Sub-score** of a present component = `1000 × r_i` (clamped): the score that component alone would give. The card
+  shows it beside the measure.
+- **Absent components** carry a reason: `notRecorded` when the agent's source never records what the component
+  measures — L for every source but Claude (both) and Codex (no `firstMs`, 3.3); N, U and S for sources without
+  actions (6.10); R for DeepSeek Harness, whose output does not split out reasoning (the sources *Live thinking*
+  leaves out of `w'`); H for Hermes Agent, whose log line states a cache read only when the provider reported one
+  (4.15) — and `fewSamples` otherwise (including `n < 3`, when every component is absent). Each component also
+  reports its `samples`: `n` for T, the latency values for L, `|C|` for N, U and S, the responses that count for R and
+  H.
+- Real-data check (2026-10-29, this Mac, the last two days, the score evaluated at the end of every measured response):
+  Claude Code `claude-opus-5-5` p10/p50/p90 1109 / 1734 / 2105, Claude Desktop `claude-opus-5-5` 920 / 1235 / 1709,
+  Codex `gpt-6.1-sol` 546 / 810 / 1157.
 
 #### Values
 
-**Agent.** Evaluated on every engine tick (500 ms) with the agents list (6.7) and that tick's phases (after the
-staleness rule). Exactly one form:
+**Agent.** Exactly one form, with the phase after the staleness rule (6.7 step 1: a phase older than 300 s without a
+new line is `idle`):
 
-- **live**: the agent is not `idle` and its current task has a score: that score;
-- **resting**: the agent is `idle` and its current task has a score: that score, the task's final one until a
-  continuation reopens it (shown pale, DESIGN);
-- **none**: no current task, or one without a score (a task that has only read so far shows none until it edits or
-  runs a check).
+- **live**: the agent is not `idle` and has a score;
+- **resting**: the agent is `idle` and has a score (shown pale, DESIGN 12);
+- **none**: no score (`n < 3`).
 
-**Sets and groups: the highest score** (user's decision, 2026-10-28: "every agent session has its own 智力; pick the
-highest one and show it"). For a set of agents — all enabled sources (menu bar or taskbar block), an orb's or a board's
-set `A` (the agents list filtered by 6.8: the orb readout, the board hero), or a board group (a root and its descendants
-in the board's agents list, DESIGN 2c):
+The score rises and falls with each response and tool result and as old responses leave the 30-minute window; there
+is no other decay. It is **provisional** while `3 ≤ n < 10` (few samples; DESIGN 12 marks it).
+
+**Sets and groups: the highest score.** For a set of agents — all enabled sources (menu bar or taskbar block), an
+orb's or a board's set `A` (the agents list filtered by 6.8: the orb readout, the board hero), a board group (a root
+and its descendants in the board's agents list, DESIGN 2c), or the agents of one model (live reporting, 11.10):
 
 - **live** when some agent of the set is live: the highest live score;
 - else **resting** when some agent is resting: the highest resting score (shown pale);
 - else **none**.
 
-Tokens do not weigh: an agent that writes far more but scores lower does not pull the value down. The value names the
-agent that supplied it (for tooltips): among the agents with that exact score in that form, the one with the latest
-`lastLineMs`, then the smallest id (ordinal). A sub row shows its sub-agent's own value. Values never drive heat, tiers,
-titles or peaks; live reporting sends them only through its `taskScore` extension (11.10). Cases: `values`.
+Tokens do not weigh. The value names the agent that supplied it (for tooltips): among the agents with that exact
+unrounded score in that form, the one with the latest `lastLineMs`, then the smallest id (ordinal). A sub row shows
+its sub-agent's own value. Values never drive heat, tiers, titles, peaks or celebrations; live reporting sends them
+only through its `perfScore` extension (11.10). Cases: `sets`.
+
+#### Facts for the card
+
+From the same evaluation, for the score card (DESIGN 12): `n`, `tools` (`|C|`, 工具調用次數), `activeMs`,
+`spanStartMs`, `provisional`, the model of the newest sample response (`model`, as logged), and every component's
+`present`, `reason`, `samples`, `measure`, `ratio` and `subScore` (null when absent). With a history store (6.11):
+`baseline`, the 14-day baseline of the agent's `(source, model)`, and `vsUsual = score / baseline − 1` with
+`vsUsualPercent` = `100 × vsUsual` rounded half away from zero (DESIGN 12 shows `+8%`, `−12%`, `±0%`); both null
+without a baseline. Cases: `agents` (every component present with a baseline; the lower and upper clamps; the minimum
+sample; the newest 20 with a tie; the 64 stored actions and the 15-minute limit; an even median; sources that record
+no latency, no actions, no reasoning or no cache; the 30-minute window edge and the provisional mark).
+
+**Dumps** (parity on real logs). `reference.py --dump-today` ends with one `perf` row per seeded agent with a sample
+response — `agentId`, `source`, `phase` (after staleness), `lastLineMs`, `parentId` and the evaluation above — and one
+`perfSets` row (the agents list, the all-sources set, one set per source with listed agents, the board groups),
+evaluated at `--now MS` or the capture time (`summary.nowMs`). `reference.py --dump-history` ends with one `perf` row
+per history record (6.11). `spec/tools/compare_dumps.py` compares them whenever both dumps have them.
 
 #### Privacy
 
-User-approved (2026-10-28). The parsers of TASK-PARSERS read a tool call's input (command text, edit input) and its
-result's output in memory, while the line is parsed; the engine keeps, for each agent's current task only, what the
-event stream lists: classes, flags, suite names (a fixed vocabulary), 16-hex digests, counts, exit codes and times. Prompt texts are compared with the
-continuation list in memory. No text, path, command line, output, fingerprint source text or prompt is ever stored,
-displayed, logged or reported; the history store keeps only the records of 6.11. Live reporting sends numbers only, and
-only through its `taskScore` extension with the `models` section (11.10, user's decision 2026-10-29): the highest
-score and its form, the thinking speed, and per model and source the counts of tasks that completed while reporting was
-on — never a digest, suite name, key, time or record of a task. Every other source keeps its own exclusions (4.9
-WorkBuddy, 4.15 Hermes Agent, …): sources without a score are read exactly as before.
+The score reads only times, token counts, models and the 6.10 actions (`tool`, `digest`, times, `failed`, `model`):
+no prompt, command, path or output. Live reporting sends the displayed value and, for ranking, per-model sums of the
+measures (11.10) — never anything per request or per tool call, and no time.
 
 #### Live thinking
 
-The `思考` line next to 智力 (DESIGN 10) is unchanged by the task score: the reasoning tokens generating right now.
-`spec/tools/live_thinking.py` implements it; the `thinking` cases of `spec/fixtures/task-score-cases.json` check it
-(the values of the retired intelligence cases, carried over unchanged).
+The `思考` line next to 性能 (DESIGN 10) is unchanged by the performance score: the reasoning tokens generating right
+now. `spec/tools/live_thinking.py` implements it; the `thinking` cases of `spec/fixtures/perf-score-cases.json` check
+it (the values of the retired intelligence and task score cases, carried over unchanged; their inputs are in
+`spec/tools/thinking_cases.py`).
 
 **Window sums**, with the window, intervals and estimates of 6.3, over the responses and agents of a set (all enabled
 sources, or an orb's `A`, 6.8):
@@ -2497,43 +2164,47 @@ raw model, the empty string when unknown; reporting adds the raw models that res
 ### 6.10 Work signals
 
 Per agent, from the tool calls in its own file: whether it is going in circles, and whether its recent actions keep
-finding something new. Signals appear on the agent's row and tooltip (DESIGN 4); the task score (6.9) builds on the same
-actions and on the same loop detection. `spec/tools/work_signals.py` implements the signals and checks
-`spec/fixtures/work-signal-cases.json`.
+finding something new. Signals appear on the agent's row and tooltip (DESIGN 4); the performance score (6.9) and its
+history (6.11) take their tool components from the same actions. `spec/tools/work_signals.py` implements the signals
+and checks `spec/fixtures/work-signal-cases.json`; `spec/tools/tool_actions.py` reads the actions from log lines for
+`reference.py`, and `spec/fixtures/parser-expected.json` lists them for the files that have them (`actions`).
 
-**Actions.** A parser turns every tool call into an action `(time, tool, digest)` and every tool result into an
-outcome `(time, failed)`, matched by call id:
+**Actions.** A parser turns every tool call into an action `(callMs, tool, digest, model)` and the first tool result
+of that call into its outcome `(resultMs, failed)`, matched by call id:
 
 | Source | Call | `tool`, `digest` input | Result | `failed` |
 | --- | --- | --- | --- | --- |
 | Claude (both) | assistant `message.content[]` block `tool_use` (each `id` once per file: a message's lines repeat it) | `name`; `input` | user block `tool_result` with that `tool_use_id` | `is_error == true` |
-| Codex | `response_item` `function_call` / `custom_tool_call` | `name`; `arguments` / `input` | `…_output` with that `call_id` | the output's leading JSON object (in the first `input_text` item when `output` is an array) has an integer `exit_code` ≠ 0 |
+| Codex | `response_item` `function_call` / `custom_tool_call` | `name`; `arguments` / `input` | `…_output` with that `call_id` | the output's leading JSON object (in the first `input_text` item when `output` is an array) has an integer `exit_code` ≠ 0; unknown when there is no integer `exit_code` |
 | omp, Pi, OpenClaw | assistant `toolCall` block | `name`; `arguments` | `toolResult` with that `toolCallId` | `isError == true` |
 | Factory Droid | assistant `message` line, `message.content[]` block `tool_use` (each `id` once per file) | `name`; `input` | user `message` line, block `tool_result` with that `tool_use_id` | `is_error == true` |
-| others | — (no actions; no signals) | | | |
+| others | — (no actions; no signals, no tool components) | | | |
+
+- A call needs a string id and a string tool name; an id the file already had adds nothing.
+- `callMs` is the time (3.1) of the line that holds the call, `resultMs` the time of the line that holds its first
+  result (null until one is read). Only the first result of a call counts: a later result with the same id is
+  ignored, and so is a result whose id names no call. `failed` is true, false or unknown (only Codex says nothing
+  sometimes); unknown is not a failure.
+- `model` is the agent's model (4) right after the call's line is read: the model of the response that issued the
+  call (Claude, omp, Pi, OpenClaw and Factory Droid name it on the same message; a Codex call precedes the usage
+  record that takes the model of the current turn).
 
 `digest` = the first 16 lowercase hex digits of SHA-256 over the call's input as the file stores it: the UTF-8 text of
 a string input (Codex `arguments` and `input` are strings), the raw JSON text of an object or array exactly as it
-appears in the line (Claude and Factory Droid `input`, omp and Pi `arguments`; OpenClaw: in the decoded entry). It is computed while the
-line is parsed. An assistant line or entry ignored because its key was first seen in another file (4.1 step 2, 4.7
-step 2) adds no actions, and its results match nothing.
+appears in the line (Claude and Factory Droid `input`, omp and Pi `arguments`; OpenClaw: in the decoded entry); an
+absent or null input hashes as empty text. It is computed while the line is parsed. An assistant line or entry ignored
+because its key was first seen in another file (4.1 step 2, 4.7 step 2, 4.16 *Calls*) adds no actions, and its
+results match nothing; neither do lines that copied-history rules skip (3.5, 4.7). An OpenClaw assistant entry that is
+a mirror (4.14) adds no actions: the runtime that ran the delegated turn records its tools in its own log.
 
-**Task fields.** For the task score, each action also carries what the functions of `spec/TASK-PARSERS.md` derive while
-the call and its result are parsed, with the agent's working directory: `kind` (`action_kind`), for a command `command`
-(`command_info`), with the result `outcome` (`outcome`) and for a command `failures` (`failures`, over the result's
-output text), for an edit `hunks` (`edit_hunks`) — the event stream of 6.9, composed as 6.9 *Composing the stream*
-says (including the late outcomes of commands that outlive their call). They are computed in memory from the call's input and the result's output
-(6.9 *Privacy*); only the fields listed there are kept. The signals below use only `tool`, `digest`, times and
-`failed` from the table above; `outcome.failed` refines the same fact for the score (null for a command that did not
-finish).
+**Storage.** Per agent, the last **64 actions** in file order, each with `tool`, `digest`, `callMs`, `resultMs`,
+`failed`, `model` and `seeded`; inputs and outputs are never kept. Lines read while seeding (5) add actions with
+`seeded = true`, so the performance score (6.9) is the same before and after a relaunch; the signals ignore seeded
+actions, so their list still starts with the file's live lines. The history analysis (6.11) reads whole files and
+uses every action, without the cap.
 
-**Storage.** For the signals only `tool`, `digest`, times and `failed` are kept, at most the last **64 actions** per
-agent. An outcome never read (no result yet, or a format that does not say) is `unknown`, which is not a failure. Copied
-history (3.5, 4.7) and seeding (6.4) add no actions to this list: it starts with the file's live lines. The task score
-keeps its own state for the agent's current task, seeded lines included (6.9 *Event stream*), and the history analysis
-(6.11) reads whole files.
-
-**Signals** of an agent at `nowMs`, over its actions within the last 10 minutes (`recent`):
+**Signals** of an agent at `nowMs`, over its actions that are not seeded and whose `callMs` is within the last 10
+minutes (`recent`), in file order:
 
 - **Looping**: the newest actions repeat the same block of 1, 2 or 3 consecutive `(tool, digest)` pairs at least 3
   times in a row (the same call 3 times; `A B A B A B`; `A B C A B C A B C`), the newest action is less than 120 s
@@ -2546,177 +2217,112 @@ keeps its own state for the agent's current task, seeded lines included (6.9 *Ev
   same `tool` that did not fail. The counts of failed and recovered actions in `recent` are shown in the tooltip.
 
 A signal never changes phase, speed, totals or anything reported (11): it describes behaviour, not quality, and
-identical actions can be legitimate (a test re-run after an edit has the same digest when the command is the same). The
-score's behaviour efficiency (6.9 E) applies the same repeat detection to every position of the current task, and its
-new-evidence rule tells a re-run after an edit from a re-run on unchanged code.
+identical actions can be legitimate (a test re-run after an edit has the same digest when the command is the same).
 
-### 6.11 Task history, predictions and comparison
+### 6.11 Performance history
 
-Per-task records from the history analysis (8), the predictions shown with a live score, their calibration on those
-records, and the comparison of sources and models in the Usage History window (DESIGN). `spec/tools/task_score.py`
-implements this section with 6.9.
+The per-day records of the history analysis (8), the baseline the score card compares with, and the 性能表現 section of
+the Usage History window (DESIGN 12). `spec/tools/perf_score.py` implements this section with 6.9.
 
-#### Task records
+#### Records
 
-The history analysis (8) runs the rules of 6.9 over every whole file of a scored source (copied lines excluded, as 3.5
-and 4.7; seeding does not apply). Every task with at least one action gets a **record**; tasks without actions (a
-question answered without tools, an empty prompt) have none.
+The history analysis (8) reads every whole file (copied lines excluded as 3.5 and 4.7 say; seeding does not apply) and
+keeps per local day, source and raw model (the model as logged; the empty string when null) a **record**:
 
-| Field | Value |
+| Field | Meaning |
 | --- | --- |
-| `ordinal` | the record's index among the agent's records, from 0 |
-| `startMs` | the task's first prompt, or its first event for the task before the first prompt |
-| `endMs` | the latest `t` of the task's events and of their outcomes |
-| `day` | the local date of `endMs`, as 8 |
-| `complete` | another task (with or without a record) follows in the agent, or `analysisMs − lastLineMs ≥ 30 min` (the agent's `lastLineMs`, 4) |
-| `source`, `model`, `effort` | the agent's source, and its model (4) and current effort (EXECUTION-MODES) after the last line whose time is at most `endMs`; null when unknown |
-| `state`, `score`, `V` … `K` | 6.9 over the whole task (`score` null when the state is `none`) |
-| counts | `actions`, `counted`, `edits` (effective), `oscillations`, `loopActions` (marked, 6.9 E), `runs`, `failingRuns`, `episodes`, `recovered`, `recoverAttempts` (Σ attempts of recovered episodes), `fixAttempts` (= failing runs), `fixFailures` |
-| `firstPassMs` | the earliest outcome `t` of a passing run; null when none passed |
-| `success` | the final state is `passing` |
-| `stalled` | the task has a *stall*: a window of 8 consecutive counted actions whose `Σ w·ΔI ≤ 0.25 × Σ w` (6.9 E) |
-| `snapshots` | rows for the success and stall models (below) |
-| `fixRows` | rows for the fix model (below) |
+| `n`, `outputSum`, `durationMsSum` | the measured responses (3.3) whose `endMs` falls on the day (local date, as 8), Σ `output`, Σ `endMs − startMs'` |
+| `latencyBins` | 64 counts of `firstMs − startMs` over those responses that have both with `firstMs ≥ startMs` (below) |
+| `reasonN`, `reasonOutput`, `reasonDurationMsSum` | those with `min(reasoning, output) > 0` of every source but DeepSeek Harness (6.9 R), Σ `min(reasoning, output)`, Σ durations |
+| `cacheN`, `cacheInput`, `cacheCached` | those with `input > 0` of every source but Hermes Agent (6.9 H), Σ `input`, Σ `cachedInput` |
+| `toolN`, `toolLnSum`, `toolFailed` | the tool calls (6.10) with a result and `0 ≤ d = resultMs − callMs ≤ 15 min`, on the day of `resultMs`, under the action's `model` (the model of the response that issued it); Σ `ln max(d, 50)` (a double); the calls whose `failed` is true |
+| `activeMs` | the online union rule (below) |
 
-**Labels.** `success` labels every snapshot of the task. The stall label of the snapshot at `n` is 1 when a stall
-window ends at a counted index above `n` (the task stalls after that point). The fix label of a failing run is 1 when
-the next element of its check's sequence fails, or when there is none (the failure was never fixed in the task), and 0
-when it passes; `fixFailures` is the number of 1 labels.
+- A response counts with its final values (after the whole file); one that never becomes measured does not count.
+  Responses and calls without a date (8) are left out.
+- **Latency buckets.** Bucket `k` of an integer latency `v` (ms) is the number of edges `E_1 … E_63` with `v ≥ E_j`,
+  where `E_j = ⌈100 · 2^(j/4)⌉` (integers, so every platform buckets alike: 119, 142, 169, 200, 238, … 4 634 096,
+  5 510 899; the fixture's `edges` lists `E_0 … E_64`). So bucket `k` holds `[100 · 2^(k/4), 100 · 2^((k+1)/4))` ms;
+  below 119 ms is bucket 0 and from 5 510 899 ms on bucket 63. Cases: `latencyBins`.
+- **Completion order.** An agent's responses and calls are taken in the order they complete while its file is read:
+  a response at the upsert (4.4) that first makes it measured (final with a valid interval: a Claude message usually
+  at its line with `stop_reason`), a tool call when its first result is read; within one line in the order the parser
+  emits them (content order; Factory Droid's responses when a read cycle allocates them, 4.16).
+- **Online union rule** (this section and live reporting, 11.10). Per agent and per model of the record (history: the
+  raw model; reports: the resolved id, 11.3) keep `coveredUntil`, initially none. Each interval `[s, e]` — a measured
+  response's `[startMs', endMs]`, a counted call's `[callMs, resultMs]` — taken in completion order adds
+  `max(0, e − max(s, coveredUntil))` (`e − s` while there is no `coveredUntil`) to the `activeMs` of the record of the
+  day of `e`, then `coveredUntil = max(coveredUntil, e)`. Parallel calls and the time a sub-agent works while the agent
+  waits count once, and the sum is computed incrementally; an interval that completes late but started before an
+  uncovered gap does not fill that gap, so it can be a little below the exact union the live score uses (6.9).
 
-**Snapshots.** For every `n` in 1, 2, 4, 8, …, 512 up to the task's counted actions: 6.9 evaluated over the task's
-events up to and including its `n`-th counted action (all outcomes known); kept when that state is not `none`, as
-`[n, passing, failing, conv, ig, loop, osc, size, yStall]` (*Features*, below). **Fix rows**: for every failing run,
-6.9 evaluated up to and including that run, as `[attempts, errors, trend, osc, ig, yFix]`. Powers of two keep rows from
-every stage of short and long tasks at a bounded cost.
+Cases: `days` (completions in order → records: unmeasured responses, calls over 15 minutes or without a result, the
+online rule, a response ending after midnight, a call without a model, a source without separate reasoning).
+`spec/fixtures/history-expected.json` → `perf` holds the records of every fixture file (written by `reference.py
+--write-history-fixture` from the parsers, so ports check their analyzer end to end; `toolLnSum` within 10⁻⁹).
 
-**Store.** The side table `task_records` of the history database (8):
+#### Pooled score
+
+For any set of records of one source — the days of a `(source, model)`, a range, the baseline — add every field
+(`latencyBins` bucket by bucket; `toolLnSum` as doubles in record order) and apply 6.9 to the pooled measures:
+
+| Id | Pooled measure | Present when |
+| --- | --- | --- |
+| T | `outputSum / (durationMsSum / 1000)` | `n ≥ 3` |
+| L | `100 · 2^((k + 0.5) / 4)`, the geometric centre of the bucket `k` that holds the `⌈count / 2⌉`-th value in ascending order, `count = Σ latencyBins` | `count ≥ 3` |
+| N | `toolN / (activeMs / 60 000)` | `toolN ≥ 3` and `activeMs > 0` |
+| R | `reasonOutput / (reasonDurationMsSum / 1000)` | `reasonN ≥ 3` |
+| H | `cacheCached / cacheInput` | `cacheN ≥ 3` |
+| U | `exp(toolLnSum / toolN)` | `toolN ≥ 3` |
+| S | `1 − toolFailed / toolN` | `toolN ≥ 3` |
+
+Ratios, clamps, weights, the formula and the reasons are those of 6.9. The pooled set has a **score only when
+`Σ n ≥ 20`**; below that its components are still shown, without a score. Cases: `pooled`.
+
+#### Baseline (比平常)
+
+For an agent with a score: the pooled score of the records of the agent's source and the raw model of its newest
+sample response (6.9 *Facts*) whose day lies in `[today − 14, today − 1]` (local dates; today never counts), as the
+store last saved them (8: on launch, every 10 minutes, at midnight). None when `Σ n < 20`. Cases: `baseline` and the
+first `agents` case.
+
+#### History window
+
+性能表現 (DESIGN 12) over the window's range [`first`, `last`] — of every source, or only of the one source chosen in
+its source picker — has one row per `(source, model)` with records in the range: the pooled values (score, `n`,
+`tools`, `activeMs`, components) and the daily trend, one point per day of the range: that day's pooled score, null
+(a gap) when the day has fewer than 20 responses. Rows are ordered by the source order of section 1, then `n`
+descending, then the model's UTF-8 bytes. Cases: `range`.
+
+#### Store
+
+The side table `perf_records` of the history database (8):
 
 ```
-task_records(file_id INTEGER NOT NULL, ordinal INTEGER NOT NULL, source TEXT NOT NULL, model TEXT, effort TEXT,
-             start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, day TEXT NOT NULL, complete INTEGER NOT NULL,
-             state TEXT NOT NULL, score REAL, v REAL NOT NULL, c REAL NOT NULL, r REAL NOT NULL, e REAL NOT NULL,
-             k REAL NOT NULL, counts TEXT NOT NULL, first_pass_ms INTEGER, success INTEGER NOT NULL,
-             stalled INTEGER NOT NULL, snapshots TEXT NOT NULL, fix_rows TEXT NOT NULL, version INTEGER NOT NULL,
-             PRIMARY KEY (file_id, ordinal)) WITHOUT ROWID
+perf_records(file_id INTEGER NOT NULL, day TEXT NOT NULL, source TEXT NOT NULL, model TEXT NOT NULL,
+             n INTEGER NOT NULL, output_sum INTEGER NOT NULL, duration_ms_sum INTEGER NOT NULL,
+             latency_bins TEXT NOT NULL, reason_n INTEGER NOT NULL, reason_output INTEGER NOT NULL,
+             reason_duration_ms_sum INTEGER NOT NULL, cache_n INTEGER NOT NULL, cache_input INTEGER NOT NULL,
+             cache_cached INTEGER NOT NULL, tool_n INTEGER NOT NULL, tool_ln_sum REAL NOT NULL,
+             tool_failed INTEGER NOT NULL, active_ms INTEGER NOT NULL, version INTEGER NOT NULL,
+             PRIMARY KEY (file_id, day, source, model)) WITHOUT ROWID
 ```
 
-- `file_id` is the `files` entry that holds the agent's contributions (a log file; an OpenClaw transcript window).
-  `counts` is a JSON object of the counts above; `snapshots` and `fix_rows` are JSON arrays of the rows above (numbers
-  only); `version` is the analysis version that wrote the row (the file's `files.version`).
+- One row per day, source and model of the agents of a `files` entry (a log file; an OpenClaw transcript window; a
+  Hermes Agent log adds up its agents). `latency_bins` is a JSON array of 64 integers; `version` is the analysis
+  version that wrote the row (the file's `files.version`).
 - Created if missing every time the database is opened, like `contribution_unpriced` (9.10): `user_version` does not
   change, and older builds ignore the table.
-- **Writes**: whenever a file's contributions are saved, the same transaction deletes the file's records and inserts
-  its new ones. A file whose records include an incomplete task is analysed again, even unchanged, on the first run
-  (8: launch, every 10 minutes) at least 30 minutes after its modification time, so its last task completes.
-- **Reading**: only rows whose `version` equals the file's `files.version` count (an older build that re-analyses a
-  file leaves stale rows). Records of files whose logs are gone stay, like their contributions. "Clear history" deletes
-  the table with the store.
-- No content: no prompt, text, path, command, output or digest is stored — only the fields above; `model` and
-  `effort` are the ids as logged, like the per-model rows of the history (8).
-
-Adding the records raised the history analysis version to **8** (8), so every log that still exists is analysed again
-and the comparison and calibration have a baseline from the first launch. Cases: `records`. Records are never reported;
-live reporting counts the tasks that complete while it is on with the same fields (11.10).
-
-#### Features
-
-Computed from a 6.9 evaluation (a snapshot, a fix row, or the live current task), with fixed scaling so that no
-statistic of the data enters a feature:
-
-| Feature | Value |
-| --- | --- |
-| `passing`, `failing` | 1 when the state is that, else 0 (`unverified` and `pending` are the base) |
-| `conv` | `C / 25` |
-| `ig`, `loop`, `osc` | `IG`, `L`, `O` (6.9 E) |
-| `size` | `min(1, log2(1 + n) / 9)` (1 from 511 counted actions) |
-| `attempts` | `min(1, (a − 1) / 4)`, `a` = the failing run's position in its episode (1 for the first fail) |
-| `errors` | `min(1, log2(1 + F) / 8)`, `F` of the failing run |
-| `trend` | `F / F_peak`, over the check's sequence up to that run (1 when it is the worst so far) |
-
-#### Predictions
-
-Three logistic models, `P = σ(β₀ + Σ βᵢ·xᵢ)` with `σ(η) = 1 / (1 + e^(−η))` and `η` clamped to [−35, 35]:
-
-| Model | Question | Features `x` (in this order) | Prior `β` (intercept first) |
-| --- | --- | --- | --- |
-| `success` | will the task end `passing`? | `passing`, `failing`, `conv`, `ig`, `loop`, `osc`, `size` | −1.5, 3.0, −0.5, 1.0, 1.0, −2.0, −1.5, −0.5 |
-| `stall` | will it stall from here on? | `ig`, `loop`, `osc`, `failing`, `size` | −1.0, −2.0, 3.0, 2.0, 0.8, 0.5 |
-| `fix` | will the next run of the failing check fail too? | `attempts`, `errors`, `trend`, `osc`, `ig` | −0.5, 1.5, 1.0, 1.0, 1.5, −1.0 |
-
-The priors are documented guesses, not fitted: their signs say what the dimensions mean (a pass, convergence and new
-evidence raise success; loops, oscillation and a failing state raise the stall risk; repeated attempts, many errors, no
-trend and undone edits make a fix more likely to fail), and their sizes give plausible values: an unverified task that
-keeps finding something new reads about 35 % success and 5 % stall; a passing, converged task about 97 % success.
-
-For an agent's current task **with a score** (6.9), on every engine tick: `P(success)` and `P(stall)` from the live
-features; `P(fix fails)` only in state `failing`, from the fix-row features of the open failure (6.9 *Task facts*) as
-they stood right after that run. Shown as percentages
-rounded half away from zero (DESIGN). They use the coefficients of the agent's source (*Calibration*), with the flag
-"prior" or "calibrated on N tasks" per model. Cases: `predictions`.
-
-#### Calibration
-
-Per scored source and per model, from that source's records, on every history analysis run (8; in memory, never
-stored):
-
-1. Take the source's complete records, ordered by `endMs`, then `startMs`, then the agent id (ordinal), then `ordinal`,
-   and keep the latest **2000**.
-2. Rows: for `success` and `stall`, every snapshot (labels `success` and `yStall`); for `fix`, every fix row. Each row
-   weighs `s = 1 / m`, `m` the task's number of rows for that model, so every task counts once. `N` is the number of
-   tasks with at least one row.
-3. The model is **calibrated** when `N ≥ 40` and both the positive and the negative rows weigh at least 5 in total;
-   otherwise it keeps the prior and shows "prior".
-4. Fit: the maximum a-posteriori estimate with a Gaussian prior centred on the prior coefficients, minimising
-   `−Σ s·[y·log p + (1 − y)·log(1 − p)] + (λ/2)·Σₖ (βₖ − β⁰ₖ)²` with `λ = 4` (the prior weighs like a handful of
-   tasks, so 40 tasks already move it and a few hundred dominate it). Newton–Raphson (IRLS) from `β = β⁰`, exactly 25
-   iterations, no early stop:
-   - gradient `g = Σ s·(p − y)·x + λ·(β − β⁰)`, Hessian `H = Σ s·p·(1 − p)·x·xᵀ + λ·I`, rows summed in the order of
-     step 1 and within a task in row order, `x` with a leading 1;
-   - solve `H·δ = g` by Cholesky (`H = L·Lᵀ`, column by column; forward then back substitution) and set `β ← β − δ`.
-     `H` is positive definite because `λ > 0`.
-   Every sum in 6.9 – 6.11 (dimensions, information gain, the fit, the comparison) is plain left-to-right IEEE 754
-   double addition in the stated order, never compensated or pairwise summation. The reference uses
-   `live_thinking.seq_sum` for this, because Python 3.12's `sum` compensates float rounding.
-5. Python, Swift and C# agree within 10⁻⁶ on every coefficient and probability; the fixture checks 10⁻⁹ in the
-   reference and, independently of the fitting path, that the gradient vanishes (below 10⁻⁹) at the stored
-   coefficients.
-
-Cases: `calibration` (a synthetic history: one source calibrated, one below 40 tasks, one with a single outcome).
-
-#### Comparison
-
-The Usage History window's *task performance* (DESIGN 12) compares sources and models over its date range
-[`first`, `last`]: the complete records whose `day` lies in the range (incomplete ones join once complete) — of every
-scored source, or only of the one source chosen in the window's source picker. For each source with records, in the
-source order of section 1 (`bySource`), and for each model id with records across those sources, the empty string for
-an unknown model (`byModel`, ordered by `tasks` descending, then the id's UTF-8 bytes; each row also lists its
-`sources`, the sources with records of that model, in source order):
-
-| Value | Computation (null when its denominator is 0, or when there is no value to take a quantile of) |
-| --- | --- |
-| `tasks` | records |
-| `scoredTasks` | records with a score |
-| `medianScore` | `q(0.5)` of their scores; shown rounded half away from zero |
-| `lowerQuartile`, `upperQuartile` | `q(0.25)` and `q(0.75)` of their scores |
-| `histogram` | ten counts of their scores, bins `[0, 10)`, `[10, 20)`, … `[80, 90)` and `[90, 100]` (all zeros without a scored record) |
-| `successes`, `stalls` | `success` records (among the scored ones), `stalled` records: the numerators of the two rates, for the tooltips of DESIGN 12 (`96 / 128`) |
-| `fixFailures`, `fixAttempts`, `recovered` | Σ `fixFailures`, Σ `fixAttempts`, Σ `recovered` |
-| `successRate` | `successes` ÷ `scoredTasks` |
-| `stallRate` | `stalls` ÷ `tasks` |
-| `fixFailureRate` | `fixFailures` ÷ `fixAttempts` |
-| `recoverAttempts` | Σ `recoverAttempts` ÷ `recovered`: the mean attempts of a recovered episode |
-| `timeToFirstPassMs` | `q(0.5)` of `firstPassMs − startMs` over records with a pass |
-
-- *Scores* are the unrounded `score`s of the records with a score; tasks without one count only in `tasks` and
-  `stallRate`.
-- `q(p)` over values sorted ascending `v[0] … v[n − 1]`: `h = (n − 1)·p`, `i = ⌊h⌋`; `q = v[i]` when `h = i`, else
-  `v[i] + (h − i)·(v[i + 1] − v[i])` (linear interpolation between order statistics). So the median is the middle value,
-  or the two middle ones' midpoint, and one value is every quantile.
-- A score's bin is the number of the edges 10, 20, 30, 40, 50, 60, 70, 80 and 90 that it reaches (`score ≥ edge`),
-  compared exactly, never by dividing: 9.999 is in bin 0, 10 in bin 1, 90 and 100 in bin 9.
-
-Cases: `comparison` (a range, one source, an empty range, quartiles and bins at their edges with a model across two
-sources, a source without scored tasks).
+- **Writes**: whenever a file's contributions are saved, the same transaction deletes the file's rows and inserts its
+  new ones.
+- **Reading**: only rows whose `version` equals the file's `files.version` count; a day's record of a `(source,
+  model)` is the sum over files (latency bins per bucket). Rows of files whose logs are gone stay, like their
+  contributions. "Clear history" deletes the table with the store.
+- **Migration** (analysis version **9**): every open also runs `DROP TABLE IF EXISTS task_records`, the records of the
+  retired task score (user's decision, 2026-10-29). Raising the analysis version analyses every log that still exists
+  again, which writes its performance rows; days whose logs are gone keep their totals (8) and have no performance data,
+  which the History window shows as unavailable (DESIGN 12).
+- No content: only the numbers above, and the model as logged, like the per-model rows of the history (8).
 
 ## 7. Number formatting (both platforms)
 
@@ -2734,8 +2340,8 @@ summaries use the same compact form (`1.2M`, `384k`, `2.49B`).
 ## 8. Daily history
 
 Daily statistics are computed from the complete logs and kept permanently, so they survive tools deleting their own
-logs (Claude Code removes transcripts after 30 days by default). Only aggregates and per-task records without content
-(6.11) are stored — never requests, keys in plain text, prompts or content.
+logs (Claude Code removes transcripts after 30 days by default). Only aggregates — the daily totals below and the
+performance records of 6.11 — are stored, never requests, keys in plain text, prompts or content.
 
 Scope: every discovered file of every enabled source with no date filter and no file-count limit (Codex `.jsonl.zst`,
 all Gemini roots with legacy `.json`, every omp root including profiles, every Antigravity conversation database
@@ -2766,7 +2372,9 @@ logs (4.15) are cached by file identity instead of path: a rotation renames a lo
 contributions and keys under its new name, and the oldest log, which rotation deletes, keeps its contributions like any
 deleted file. Daily totals are the sums over files. The history store is versioned: a parser change bumps the version
 and triggers a full recomputation that keeps previously stored days for which no logs exist any more (analysis version
-8: the task records of 6.11; 7: the unpriced facts of 9.10; 6: the Codex ordinal rule of 3.5). "Clear history"
+9: the performance records of 6.11, with `firstMs` (3.3) and the action times (6.10), and the retired task records
+dropped; 8: the task records of the retired task score; 7: the unpriced facts of 9.10; 6: the Codex ordinal rule of
+3.5). "Clear history"
 (settings) deletes the store and recomputes from the current logs.
 
 Factory Droid (4.16): a session's identity adds its sidecar's size and modification time and, for a session with a
@@ -2784,9 +2392,9 @@ them as unavailable (DESIGN 9), never as 0.
 Unpriced facts (9.10) are stored in the side table `contribution_unpriced` of the same database, written with each
 file's contributions; older builds ignore it, and readers check its rows against the file's analysis version.
 
-Task records (6.11) are stored the same way in the side table `task_records`, one row per task of a scored source's
-agent, written with the file's contributions. A file whose last task was still open is analysed again once it has been
-quiet for 30 minutes (6.11 *Store*).
+Performance records (6.11) are stored the same way in the side table `perf_records`, per file, day, source and model,
+written with the file's contributions; the store upgrade to analysis version 9 drops the retired `task_records` table
+(6.11 *Store*).
 
 Network traffic (10.9) is stored in its own table of the same database. It is observed, not derived from logs:
 version bumps and recomputations never touch it, and "Clear history" deletes it too.
@@ -3552,9 +3160,9 @@ with the protocol of `spec/REPORTING.md`. This section defines how every reporte
 *report ledger* that makes deltas exact, and the report scheduler. `spec/tools/report_reference.py` implements 11.5 as
 a simulator and checks `spec/fixtures/report-vectors.json` → `scheduler`; both apps run the same cases through their
 own scheduler core with a fake clock and instant sends. Only realtime values are reported: nothing of sections 6.6
-(today), 6.10 (signals), 6.11 (task records, predictions, calibration, comparison), 8 (daily history), 9.6–9.7 or
-10.8–10.9 is ever sent. The task score of 6.9 is sent, as live values and as counts of tasks completed while reporting
-is on, only by the `taskScore` extension with the `models` section (11.10).
+(today), 6.10 (signals), 6.11 (history records, baselines), 8 (daily history), 9.6–9.7 or 10.8–10.9 is ever sent.
+The performance score of 6.9 is sent, as live values and as per-model sums of its measures over the work completed
+while reporting is on, only by the `perfScore` extension with the `models` section (11.10).
 
 ### 11.1 Scope and clock
 
@@ -3564,7 +3172,7 @@ is on, only by the `taskScore` extension with the `models` section (11.10).
   6.1). Default switches (DESIGN 11): `sources`, `models`, `cost`, `traffic`, all on. A section that
   is off is left out of the report.
 - **Extensions** of REPORTING-EXTENSIONS add fields when the confirmed document advertises them; the per-model ones
-  (Harness counts, execution modes, the task score of 11.10) ride with the `models` section and its switch.
+  (Harness counts, execution modes, the performance score of 11.10) ride with the `models` section and its switch.
 - **Build time** `t` is an engine tick (6: every 500 ms) with `nowMs = t`. Durations (`windowMs`, holds, retries) use
   the monotonic clock. `sentAt` is the wall clock at `t` plus the session's clock correction (11.6), formatted
   `YYYY-MM-DDTHH:MM:SS.sssZ` in UTC.
@@ -3603,8 +3211,8 @@ resolved id (11.3) of the agent's current model (the model the agents list shows
 `unknown`, a free suffix without an entry) → `unknown`. The raw model string never leaves the app. Entries are grouped
 by id and sorted by `output` descending, then `id`. With more than `maxModels` (discovery, ≤ 16) entries the first
 `maxModels − 1` are kept and the rest are merged into `other` (fields summed, `sources` united, placed last).
-`maxModels = 0` means the section is not sent. With the `taskScore` extension, more ids get entries and the merged
-`other` entry also merges the task fields (11.10).
+`maxModels = 0` means the section is not sent. With the `perfScore` extension, more ids get entries and the merged
+`other` entry also merges the performance fields (11.10).
 
 ### 11.4 Report ledger
 
@@ -3682,8 +3290,8 @@ not start a new run.
    `activity` = the mode.
 8. **Deliver** (below).
 
-**Build**: `seq + 1`; the report takes the ledger and the instantaneous values at `t` (with the `taskScore`
-extension also the task ledger, 11.10, which discards leave alone); `windowMs = t − windowStart`;
+**Build**: `seq + 1`; the report takes the ledger and the instantaneous values at `t` (with the `perfScore`
+extension also the statistics ledger, 11.10, which discards leave alone); `windowMs = t − windowStart`;
 then the ledger is empty and `windowStart = t`. A built report goes to the one-slot outbox; a report already waiting
 there is lost (the newer one replaces it), and an in-flight report that is waiting for its retry is lost too (newest
 wins).
@@ -3736,9 +3344,9 @@ end of a backoff — waits at least `I` after the previous report.)
   is above 0. A source whose only increment in the window is cost (a counted response priced only now, 11.4) is
   listed, so the per-source cost sums add up. `models[]` lists every resolved id (11.3) that received a ledger
   increment in the window, a cost increment included, or that an agent is generating with at `t`; with the
-  `taskScore` extension also the ids of 11.10 *Membership*.
+  `perfScore` extension also the ids of 11.10 *Membership*.
 - The body stays within `min(16384, maxBodyBytes)` bytes: when it would not, drop `models`, then `sources`, for that
-  report only (11.10 *Size* for the `taskScore` fields).
+  report only (11.10 *Size* for the `perfScore` fields).
 
 ### 11.8 Fixtures
 
@@ -3747,7 +3355,7 @@ ranges is a sleep), activity ranges, output increments (`from`, `to`, `step`, `o
 (`pause`, `resume`, `networkOff`, `networkOn`) and per-`seq` attempt outcomes (`ok`, `fail`, `rateLimited:<s>`;
 default `ok`). `expect.delivered` lists `[seq, endMs, windowMs, activity, output]` of every delivered report and
 `expect.lost` the lost `seq`s. The expected values were written by hand from 11.5 and the simulator must reproduce
-them. The `taskScore` extension has its own vectors (11.10 *Fixtures*).
+them. The `perfScore` extension has its own vectors (11.10 *Fixtures*).
 
 ### 11.9 WebSocket transport
 
@@ -3796,7 +3404,8 @@ text, one JSON object, no duplicate member names, no lone surrogates, no NaN, de
 400–599, `error.code`, optional `error.retryAfterSeconds` and `error.serverTime`, and `fatal`. A message of another
 `type` is ignored; an invalid message from the service, or a binary one, counts as `close 1002`.
 
-**`realtime`** (only in WebSocket bodies, last member of the body, after the `taskScore` object of 11.10):
+**`realtime`** (only in WebSocket bodies, last member of the body, after the `perfScore` object of 11.10, or the
+legacy `taskScore` object):
 
 | Field | Value |
 | --- | --- |
@@ -3825,7 +3434,7 @@ or a change of service or transport), not to a run, so `seq_conflict` keeps them
 the user) and the transport available and no `stop`. A tick is **changed** when the ledger received an increment at
 it, or when one of the values a report would carry at it, rounded as sent (11.7) — `live.outputTokS`,
 `live.totalTokS`, `live.estimatedShare`, `live.agents.generating`, `.tools`, `.active` — differs from the last built
-report's; with the `taskScore` extension also as 11.10 *WebSocket* says.
+report's; with the `perfScore` extension (or the legacy `taskScore`) also as 11.10 *WebSocket* says.
 
 **Each tick `t`** (an engine tick, a snapshot after a read, or a wake-up the scheduler asked for), in this order.
 *Discard* empties the ledger, sets `windowStart = t` and clears the window's observation; *leave* builds `leaving`
@@ -3941,34 +3550,37 @@ unless a listed tick has the same time. Writes are instant. `expect.log` lists e
 `expect.latency` the samples, `expect.state` the connection, `seq`, `failures`, `stop` and the last delivery time.
 The expected values were written by hand from this section; the simulator and both apps must reproduce them.
 
-### 11.10 Task score (extension `taskScore`)
+### 11.10 Performance score (extension `perfScore`)
 
-User's decision (2026-10-29): live reporting carries the task score (6.9) — the highest 智力 with its form, and the
-thinking speed — overall and per model, plus per-model statistics of the tasks that complete while reporting is on, so
-that a service can rank models by score and success rate. It rides with the `models` section: no switch, section or
-consent of its own; DESIGN 11 says it under the `models` switch, and the README privacy sections name it. The protocol
-is `spec/REPORTING-EXTENSIONS.md` section 9 (kept with the partner documents). `spec/tools/report_task_score.py`
-implements this section and checks `spec/fixtures/report-vectors.json` → `taskScore`.
+User's decisions (2026-10-29): live reporting carries the performance score (6.9) for **ranking and statistical
+analysis** — the highest 性能 with its form and the thinking speed, overall and per model, plus per model and source
+the **sufficient statistics** of the score (6.11 *Records*) for the work that completed since the previous report, so
+that a service recomputes the exact pooled score of any set of reports, users and days with the 6.9 formula and its
+constants and weighs by sample size. It replaces the retired `taskScore` extension. It rides with the `models`
+section: no switch, section or consent of its own; DESIGN 11 says it under the `models` switch, and the README privacy
+sections name it. The protocol is `spec/REPORTING-EXTENSIONS.md` section 9 (kept with the partner documents).
+`spec/tools/report_perf_score.py` implements this section and checks `spec/fixtures/report-vectors.json` →
+`perfScore`.
 
-**Active.** The extension is *active* for a report when the confirmed document has `extensions.taskScore` equal to the
+**Active.** The extension is *active* for a report when the confirmed document has `extensions.perfScore` equal to the
 JSON integer `1` (a missing value, `null`, `true`, `"1"` or another number is not) and the report carries `models` by
 consent: the document lists `models`, `maxModels` ≥ 1 and the user's `models` switch is on (11.1). A report while it is
-inactive carries nothing of this section, and its models list is exactly that of 11.3 and 11.7. A refreshed document
-that adds or drops the capability takes effect at once and asks for no new consent (REPORTING 3.3 lists the changes
-that do; the user's decision is that existing users are not asked again).
+inactive carries nothing of this section, and its models list is exactly that of 11.3 and 11.7 (*Legacy* below aside).
+A refreshed document that adds or drops the capability takes effect at once and asks for no new consent (REPORTING 3.3
+lists the changes that do; existing users are not asked again).
 
 **Body.** With the extension active the body adds:
 
-- a top-level object `taskScore`, after `models` and before `realtime` (11.9); it stays when the size rule drops
+- a top-level object `perfScore`, after `models` and before `realtime` (11.9); it stays when the size rule drops
   `models`;
-- on every `models[]` entry, after its other fields: `taskScore` (the same shape) and `taskStats` (an array, empty when
-  no counted task of that model is in the report).
+- on every `models[]` entry, after its other fields: `perfScore` (the same shape) and `perfStats` (an array, empty when
+  the statistics ledger has no row of that model).
 
-`taskScore` is `{score, form, thinkingTokS}`:
+`perfScore` is `{score, form, thinkingTokS}`:
 
 | Field | Value |
 | --- | --- |
-| `score` | the set's value (6.9 *Values*) rounded half away from zero, an integer 0–100; `null` exactly when `form` is `none` |
+| `score` | the set's value (6.9 *Values*) rounded half away from zero, an integer ≥ 0, at most 10 000 000 (a larger value, which only a broken log could give, is sent as 10 000 000); `null` exactly when `form` is `none` |
 | `form` | `live`, `resting` or `none` (6.9 *Values*) |
 | `thinkingTokS` | the set's `liveThinking` (6.9 *Live thinking*), rounded to 0.1 |
 
@@ -3978,96 +3590,94 @@ sums. Per model it is the agents of that set whose current model (the model the 
 the raw models that resolve to that id. The top-level value is the highest of every agent, not of the listed entries:
 a model with nothing else to report has no entry.
 
-**Membership.** With the extension active, `models[]` also lists every id that an agent of the set is *live* with (not
-idle, with a score: an agent running a test is in phase `tools` and has no increment) and every id with a row in the
-task ledger (below); `sources` adds the sources of those agents and rows. A model that is only resting gets no entry.
-Order, `maxModels` and `other` stay as 11.3 says. The merged `other` entry's `taskScore` is the set rule over the
-merged ids' agents (the highest live score, else the highest resting, else none), its `thinkingTokS` the sum of their
-unrounded model sums, rounded once, and its `taskStats` their rows added up per source.
+**Membership.** With the extension active, `models[]` also lists every id that an agent of the set is *live* with (an
+agent waiting for a tool is in phase `tools` and has no increment) and every id with a row in the statistics ledger
+(below); `sources` adds the sources of those agents and rows. A model that is only resting gets no entry. Order,
+`maxModels` and `other` stay as 11.3 says. The merged `other` entry's `perfScore` is the set rule over the merged ids'
+agents (the highest live score, else the highest resting, else none), its `thinkingTokS` the sum of their unrounded
+model sums, rounded once, and its `perfStats` their rows added up per source (latency buckets per bucket, `toolLnSum`
+unrounded, then rounded once).
 
-**Task statistics.** `taskStats` has one row per source, in the source order of section 1, for the tasks counted
-(below) since the previous build:
+**Statistics.** `perfStats` has one row per source, in the source order of section 1, with the 6.11 record fields of
+the completions counted (below) since the previous build:
 
-| Field | Value |
+| Field | Value (each completion adds) |
 | --- | --- |
-| `source` | the agent's source; it is one of the entry's `sources` |
-| `completed` | counted tasks, 1–1000 |
-| `scored` | those with a score (6.9) |
-| `scoreSum` | the sum of their scores rounded half away from zero, as shown: means merge exactly |
-| `scoreBins` | ten counts of those rounded scores, bins `[0, 10)`, `[10, 20)`, … `[80, 90)` and `[90, 100]`; they add up to `scored` |
-| `successes`, `stalls` | tasks whose 6.11 `success` / `stalled` is true |
-| `fixAttempts`, `fixFailures`, `recovered`, `recoverAttempts` | sums of the 6.11 counts |
+| `source` | the agent's source; one of the entry's `sources` |
+| `n`, `outputSum`, `durationMsSum` | a measured response: 1, its `output`, its duration `endMs − startMs'` (3.3) |
+| `latencyBins` | sparse `[[k, count], …]`, ascending `k`, only counts ≥ 1: the response's `firstMs − startMs` in bucket `k` of 6.11 when both exist and `firstMs ≥ startMs` |
+| `reasonN`, `reasonOutput`, `reasonDurationMsSum` | a response with `min(reasoning, output) > 0` of a source other than DeepSeek Harness: 1, that minimum, its duration |
+| `cacheN`, `cacheInput`, `cacheCached` | a response with `input > 0` of a source other than Hermes Agent: 1, `input`, `cachedInput` |
+| `toolN`, `toolLnSum`, `toolFailed` | a tool call: 1, `ln max(resultMs − callMs, 50)` (sent rounded half away from zero to 6 decimals), 1 when `failed` is true |
+| `activeMs` | the online union rule of 6.11, per agent and resolved id, over the counted intervals in the order they complete |
 
-The bins take the rounded score so that they agree with `scoreSum`; the comparison of 6.11 bins unrounded scores, which
-differs only for a score within half a point below an edge.
+A row is listed when its `n + toolN ≥ 1`. The sums are additive across reports, users, sources and time; the pooled
+score of any set of rows is 6.11 *Pooled score* (T, L, N, R, H, U, S from the summed fields, a score only from
+`Σ n ≥ 20`), so a service ranks with exactly the app's formula and constants.
 
 **Watch.** The *watch* is on at a tick when reporting is on for a confirmed and registered service, the network switch
 is on, reporting is not paused, no error or `stop` needs the user (REPORTING 8.3, 11.9), the extension is active and
 seeding has finished (6.4). Transient waits leave it on: a backoff, a `Retry-After`, quiet, a sleep gap, a new run
-(`seq_conflict`, a change of transport, `run_conflict`). A task is *watched* when its first event (its prompt, or the
-first event of a task before the first prompt, 6.9 *Tasks*) is read at a tick when the watch is on and that event's `t`
-is at most 2 minutes before `nowMs` (the 120 000 ms of 11.4). Every other task is history and is never counted: one read
-while seeding, one that started before the watch was on (reporting turned on mid-task included), one whose first event
-is older when it is read (a session found late, section 5).
+(`seq_conflict`, a change of transport, `run_conflict`).
 
-- A withdrawn prompt (6.9 *Withdrawal*) never started a task; the previous task keeps its own watch.
-- **Break**: at the tick the watch turns off — reporting turned off, paused or switched to another service, the network
-  switch off, the `models` switch off, a refreshed document without `models` or the capability, an error or `stop` that
-  needs the user, quitting — every task is unwatched and the task ledger is emptied, after a `leaving` report of that
-  tick (11.5 step 4, 11.9 step 4) has taken it. A task whose agent's file goes away or whose source is disabled is
-  unwatched.
+**Counting.** While the watch is on:
 
-**Counting.** A watched task is counted once, at the first tick at which it completes:
+1. a **measured response** counts once, at the tick at which it first becomes measured (its completion, 6.11), when
+   the report ledger counted its key (11.4: read live, not while seeding, `endMs ≥ nowMs − 120 000`, its source
+   enabled), with its values at that moment, under the resolved id (11.3) of its model and its source;
+2. a **tool call** (6.10) counts once, when its first result is read live (not while seeding) with
+   `resultMs ≥ nowMs − 120 000`, `0 ≤ resultMs − callMs ≤ 15 min` and its agent's source enabled, under the resolved
+   id of the action's `model` (the response that issued it) and its agent's source;
+3. each counted interval (`[startMs', endMs]`, `[callMs, resultMs]`) adds to `activeMs` by the online union rule
+   (6.11), with one `coveredUntil` per agent and resolved id, kept in memory until a relaunch.
 
-1. a later task of the same agent is *settled*, its prompt no longer withdrawable: for Claude, omp, Pi, OpenClaw and
-   Factory Droid when the first deciding assistant line after it (6.9 *Composing the stream*) has been read and is not a
-   duplicate (for a command, with no command output before it); for Codex at once;
-2. `nowMs − lastLineMs ≥ 30 min` for its agent (6.11 `complete`), whether or not the agent is still in the agents list.
+When the ledger already holds 100 000 responses (Σ `n`), a further response is dropped, not deferred, and likewise for
+100 000 tool calls. Nothing else is counted: completions read while seeding, before the watch was on, or that are older
+than 2 minutes when read (a session found late) are history.
 
-Counting a task with at least one action (one that has a 6.11 record) adds one row to the task ledger, under the
-resolved id (11.3) of its model — the last composer note whose `t` is at most the task's `endMs` (6.9 *Model and
-effort*, 6.11) — and its agent's source: `completed` 1, and the 6.11 fields evaluated over the task's events read so
-far — its score rounded (`scored` 1, its bin) or none, `success`, `stalled`, `fixAttempts`, `fixFailures`, `recovered`,
-`recoverAttempts`. A task without actions adds nothing. Either way the task is no longer watched, so it is never counted
-again: a continuation that reopens it later (6.9 *Values*) and outcomes that arrive after it completed (a result read
-after the next prompt, a background command's exit code) stay out of the report, though its history record (6.11) has
-them. When the task ledger already holds 1000 completed tasks, a further completion is dropped, not deferred.
+**Statistics ledger.** The rows counted since the previous build, per resolved id and source. A *build* (11.5, 11.9)
+with the extension active takes the whole ledger into `models[].perfStats` and empties it; a build whose `models` the
+size rule dropped empties it too, and those completions are lost. Discards (11.5 steps 2, 5 and 6; 11.9 *discard* and
+`saturated`) leave it alone: completions are outcomes, not usage of a window, so work that completes during a quiet
+period, a sleep or a backoff goes out with the next built report. **Break**: at the tick the watch turns off —
+reporting turned off, paused or switched to another service, the network switch off, the `models` switch off, a
+refreshed document without `models` or the capability, an error or `stop` that needs the user, quitting — the ledger is
+emptied, after a `leaving` report of that tick (11.5 step 4, 11.9 step 4) has taken it. A built report that is lost
+loses its rows, which are never resent (REPORTING 6.2): across retries, duplicates, `seq_conflict`, new runs and
+reconnections every completion is in at most one built report. The ledger is never persisted: a relaunch starts empty.
+Completions are already activity through the report ledger (11.5 *Activity*); the statistics ledger adds none.
 
-**Task ledger.** The rows counted since the previous build, per resolved id and source. A *build* (11.5, 11.9) with the
-extension active takes the whole task ledger into `models[].taskStats` and empties it; a build whose `models` the size
-rule dropped empties it too, and those completions are lost. Discards (11.5 steps 2, 5 and 6; 11.9 *discard* and
-`saturated`) leave it alone: completions are outcomes, not usage of a window, so a task that completes during a quiet
-period, a sleep or a backoff goes out with the next built report. Dropping it instead would lose the last task before
-every break and bias the success rates. Otherwise only a break empties the task ledger. A built report that is lost
-loses its completions, which are never resent (REPORTING 6.2): across retries, duplicates, `seq_conflict`, new runs and
-reconnections every completed task is in at most one built report. The task ledger is never persisted: a relaunch
-starts empty, and the tasks rebuilt from their files after it (6.9 *Event stream*) are history.
+**WebSocket.** A tick is also *changed* (11.9) when the statistics ledger received a completion at it, or when a
+`perfScore` the report would carry — the top-level one or an entry's, rounded as sent — differs from the last built
+report's: a tool result changes the score while every token value stands still.
 
-Completions are not activity (11.5 *Activity*): a task that completes by the 30-minute rule does not wake the
-scheduler, keep a device online or start a report.
-
-**WebSocket.** A tick is also *changed* (11.9) when the task ledger received a completion at it, or when a `taskScore`
-the report would carry — the top-level one or an entry's, rounded as sent — differs from the last built report's: a
-test result changes the score while every token value stands still.
-
-**Size.** The top-level `taskScore` always stays. The per-model fields go with `models` when 11.7 drops it; a step that
+**Size.** The top-level `perfScore` always stays. The per-model fields go with `models` when 11.7 drops it; a step that
 first drops the per-model Harness and mode breakdowns (REPORTING-EXTENSIONS 2, 3) keeps them.
 
 **Other extensions.** An entry that exists only for this extension has zero usage: its `harnessRequests` is empty or
-absent and its `modeUsage` absent, so their sums stay exact. Task rows are not split by Harness beyond `source`, nor by
-execution mode; the 6.11 `effort` is not sent.
+absent and its `modeUsage` absent, so their sums stay exact. Rows are not split by Harness beyond `source`, nor by
+execution mode.
 
-**Never sent**, also with the extension: prompts, commands, outputs, paths, digests, fingerprints, suite names or keys;
-any time of a task (start, end, first pass); a row per task (only sums per model and source within one report);
-predictions, calibration, comparisons and the history records of 6.11; the work signals of 6.10.
+**Legacy (`taskScore`).** The retired task score extension: when `perfScore` is not active but the confirmed document
+has `extensions.taskScore` equal to `1` and the report carries `models` by consent, the body carries the top-level
+`taskScore` `{score: null, form: "none", thinkingTokS}` (the all-sources thinking speed, as above) and on every
+`models[]` entry `taskScore` of the same shape with the entry's thinking speed and `taskStats: []` — and no extra
+membership, no other field. A tick is *changed* when a `taskScore` the report would carry differs from the last built
+report's. When both are active, only `perfScore` is sent. Services that still advertise `taskScore` keep receiving
+the thinking speed until they advertise `perfScore` (REPORTING-EXTENSIONS 10).
 
-**Fixtures** (`report-vectors.json` → `taskScore`): `capability` (a discovery document and the models switch → active),
-`records` (a completed task → its row), `assembly` (agents' values, model sums, the models of 11.3 and the task ledger
-→ the top-level `taskScore` and the final `models[]`), `ledger` (events in order — `watch`, `start` with the first
-event's `t` or `seeding`, `withdraw`, `drop`, `complete` with the task's record, `build` with `models: false` for a size
-drop, `discard`, `newRun`, `relaunch` — → what each build carries, `null` when `models` was dropped), `validation` (a
-body → the pointers a service that advertises the extension rejects) and `receiver` (accepted reports → the merged
-leaderboard of REPORTING-EXTENSIONS 9). The expected values were written by hand; both apps run `capability`,
-`records`, `assembly` and `ledger` through their own code. The example bodies are `report-examples/report-taskscore.json`
-(HTTP) and `report-taskscore-websocket.json`; the model sums are checked by the `modelWindows` cases of
-`task-score-cases.json`.
+**Never sent**, also with the extension: anything per request or per tool call (only sums per model and source within
+one report); any time (start, end, first content, call or result); prompts, commands, outputs, paths, digests or tool
+names; the components as the card shows them, baselines, the history records of 6.11 and the work signals of 6.10.
+
+**Fixtures** (`report-vectors.json` → `perfScore`): `edges` (the latency bucket edges of 6.11), `capability` (a
+discovery document and the models switch → the extension a report carries: `perfScore`, `taskScore` or none),
+`assembly` (agents' values, model sums, the models of 11.3 and the statistics ledger → the top-level object and the
+final `models[]`; one case in the legacy form), `ledger` (events in order — `watch`, `response` with `counted`, `call`
+with `seeding`, `build` with `models: false` for a size drop, `discard`, `newRun`, `relaunch` — → the `perfStats` of
+each build, `null` when `models` was dropped), `validation` (a body → the pointers a service that advertises the
+extension rejects) and `receiver` (accepted reports → the pooled leaderboard of REPORTING-EXTENSIONS 9). The expected
+values were written by hand; both apps run `capability`, `assembly` and `ledger` through their own code. The example
+bodies are `report-examples/report-perfscore.json` (HTTP) and `report-perfscore-websocket.json`; the legacy bodies are
+`report-taskscore.json` and `report-taskscore-websocket.json`; the model sums are checked by the `modelWindows` cases of
+`perf-score-cases.json`.

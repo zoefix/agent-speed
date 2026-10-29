@@ -132,7 +132,7 @@ class Session:
 
 
 def resp(key, start, end, inp, cached, cache_write, out, reasoning, model, provider, cache_write_1h=0):
-    return {"key": key, "startMs": start, "endMs": end, "input": inp, "cachedInput": cached,
+    return {"key": key, "startMs": start, "endMs": end, "firstMs": None, "input": inp, "cachedInput": cached,
             "cacheWriteInput": cache_write, "cacheWrite1hInput": cache_write_1h, "output": out,
             "reasoning": reasoning, "model": model, "provider": provider, "fast": False, "final": True}
 

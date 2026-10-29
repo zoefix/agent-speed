@@ -4,8 +4,8 @@ import AppKit
 
 /// Glass and neon ranking rows (the prototypes' `.row` grid: 16 pt rank, 10 pt badge, name, capsule column, 46 pt
 /// value, 8 pt gaps, 6 pt padding), with the share underline from the name to the value. With the live metrics
-/// (DESIGN 2c *Ranking rows*): the 智力 cell before a 44 pt value and the captions line over the ranking. At M and L
-/// each group row has a second line, the detail under the name, and its figures (智力 and the value) 2 pt larger,
+/// (DESIGN 2c *Ranking rows*): the 性能 cell before a 44 pt value and the captions line over the ranking. At M and L
+/// each group row has a second line, the detail under the name, and its figures (性能 and the value) 2 pt larger,
 /// centred on the row; their columns widen to fit them.
 @MainActor
 struct BoardListRows {
@@ -14,7 +14,7 @@ struct BoardListRows {
     let palette: BoardPalette
     let capsules: BoardCapsuleDrawing
     let geometry: BoardGeometry
-    /// The 智力 cell's width: at least as wide as `888` in its font (a two-line group row's) and as the caption.
+    /// The 性能 cell's width: at least as wide as `8,888` in its font (a two-line group row's) and as the caption.
     let intelCell: CGFloat
     /// The value column: at least as wide as the widest value in a two-line group row's font.
     let valueWidth: CGFloat
@@ -29,7 +29,7 @@ struct BoardListRows {
         self.geometry = geometry
         let large = geometry.twoLine
         if geometry.hasIntelligence {
-            let digits = BoardLabel("888", Self.intelFont(style: style, sub: false, live: true, large: large), color: palette.ink).width
+            let digits = BoardLabel(PerfFormat.measureText, Self.intelFont(style: style, sub: false, live: true, large: large), color: palette.ink).width
             let label = BoardLabel(caption, Self.captionFont(style), color: palette.ink3).width
             intelCell = max(CGFloat(geometry.intelligenceColumn), digits.rounded(.up), label.rounded(.up))
         } else {
@@ -82,7 +82,7 @@ struct BoardListRows {
 
     // MARK: Items
 
-    /// The row's items: its body, its rank (groups), its value and its 智力, each cached apart so a new value or rank
+    /// The row's items: its body, its rank (groups), its value and its 性能, each cached apart so a new value or rank
     /// redraws only itself and can roll or flash; all spring together.
     func items(_ model: BoardRowModel, key: String, frame: CGRect, column: CGFloat, accents: BoardRowAccents) -> [BoardContentItem] {
         let rows = self, look = AnyHashable([AnyHashable(palette.dark), AnyHashable(palette.highContrast)])
@@ -142,7 +142,7 @@ struct BoardListRows {
         return items
     }
 
-    /// The 智力 cell: right-aligned on the value's baseline; live one step quieter than the value, resting and `–`
+    /// The 性能 cell: right-aligned on the value's baseline; live one step quieter than the value, resting and `–`
     /// quieter still, the proof mark under an unproven score (drawn in the cell's cached image). Its text changes in
     /// place; a fall, live ↔ resting and the proof mark crossfade.
     private func intelItem(_ score: BoardRowScore, model: BoardRowModel, sub: Bool, key: String, frame: CGRect, baseline: CGFloat?,
@@ -162,7 +162,7 @@ struct BoardListRows {
             let line = baseline ?? BoardLabel(text, valueFont, color: palette.ink).baseline(centeredOn: frame.height / 2)
             let glow = neon && live && palette.dark && palette.glows ? BoardPalette.ledGlow : nil
             label.draw(in: context, x: right - label.width, baseline: line, glow: glow, blur: 6)
-            if score.unproven {
+            if score.provisional {
                 BoardScoreNumber.drawUnderline(in: context, x: right - label.width, baseline: line, width: label.width,
                                                textSize: font.size, color: color, highContrast: palette.highContrast)
             }
@@ -171,7 +171,7 @@ struct BoardListRows {
         return item
     }
 
-    /// The captions line at the top of the ranking: 智力 over the cells, `tok/s` over the values, and a hairline from
+    /// The captions line at the top of the ranking: 性能 over the cells, `tok/s` over the values, and a hairline from
     /// the rank column to the capsule column's end (it replaces glass's top rule).
     func captions(frame: CGRect, intel: String, unit: String) -> BoardContentItem {
         let palette = self.palette

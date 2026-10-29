@@ -65,11 +65,11 @@ struct LineQuietTests {
         #expect(rule.reading == nil)
     }
 
-    static func score(_ form: TaskValueForm, _ shown: Int?, _ state: TaskState? = .passing, count: Int = 1) -> TaskSetReading {
-        TaskSetReading(form: form, shown: shown, state: state, count: count, agentId: form == .none ? nil : "a")
+    static func score(_ form: PerfValueForm, _ shown: Int?, provisional: Bool = false, count: Int = 1) -> PerfSetReading {
+        PerfSetReading(form: form, shown: shown, provisional: provisional, count: count, agentId: form == .none ? nil : "a")
     }
 
-    static func intelligence(_ reading: OrbLineReading?) -> (score: TaskSetReading, thinking: String)? {
+    static func intelligence(_ reading: OrbLineReading?) -> (score: PerfSetReading, thinking: String)? {
         guard case .intelligence(let score, let thinking)? = reading?.content else { return nil }
         return (score, thinking)
     }
@@ -79,22 +79,22 @@ struct LineQuietTests {
         let idle = rule.apply(score: .none, thinking: 0, generating: false, at: 0)
         #expect(!idle)
         #expect(rule.reading == nil)
-        let working = rule.apply(score: Self.score(.live, 92), thinking: 41.25, generating: true, at: 1)
+        let working = rule.apply(score: Self.score(.live, 1286), thinking: 41.25, generating: true, at: 1)
         #expect(working)
-        #expect(Self.intelligence(rule.reading)?.score == Self.score(.live, 92))
+        #expect(Self.intelligence(rule.reading)?.score == Self.score(.live, 1286))
         #expect(Self.intelligence(rule.reading)?.thinking == "41")
-        // A test run generates nothing, but a live score keeps the readout loud.
-        rule.apply(score: Self.score(.live, 92), thinking: 0, generating: false, at: 30)
+        // A tool call generates nothing, but a live score keeps the readout loud.
+        rule.apply(score: Self.score(.live, 1286), thinking: 0, generating: false, at: 30)
         #expect(rule.reading?.quietAt == 40)
         #expect(Self.intelligence(rule.reading)?.thinking == "0")
     }
 
     @Test func aRestingScoreStaysPaleForAsLongAsItsAgentsAreListedThenFades() throws {
         var rule = OrbLineQuietRule()
-        rule.apply(score: Self.score(.live, 72), thinking: 12, generating: true, at: 0)
+        rule.apply(score: Self.score(.live, 1452), thinking: 12, generating: true, at: 0)
         // The agent goes idle: resting keeps the readout loud, tick after tick, without a token.
         for time in stride(from: 1.0, through: 600, by: 0.5) {
-            rule.apply(score: Self.score(.resting, 72), thinking: 0, generating: false, at: time)
+            rule.apply(score: Self.score(.resting, 1452), thinking: 0, generating: false, at: time)
         }
         let resting = try #require(rule.reading)
         #expect(resting.quietAt == 610)
@@ -102,10 +102,10 @@ struct LineQuietTests {
         #expect(Self.intelligence(resting)?.score.isResting == true)
         // 10 minutes after its last line the agent leaves the list: the pale score holds until the readout has faded.
         rule.apply(score: .none, thinking: 0, generating: false, at: 600.5)
-        #expect(Self.intelligence(rule.reading)?.score == Self.score(.resting, 72))
+        #expect(Self.intelligence(rule.reading)?.score == Self.score(.resting, 1452))
         #expect(rule.reading?.quietAt == 610)
         rule.apply(score: .none, thinking: 0, generating: false, at: 609)
-        #expect(Self.intelligence(rule.reading)?.score == Self.score(.resting, 72))
+        #expect(Self.intelligence(rule.reading)?.score == Self.score(.resting, 1452))
         let gone = rule.apply(score: .none, thinking: 0, generating: false, at: 611)
         #expect(!gone)
         #expect(rule.reading.map { $0.isGone(at: 611) } == true)
@@ -116,43 +116,43 @@ struct LineQuietTests {
         let changed = rule.apply(score: .none, thinking: 22, generating: true, at: 0)
         #expect(changed)
         let reading = try #require(rule.reading)
-        #expect(Self.intelligence(reading)?.score == TaskSetReading.none)
+        #expect(Self.intelligence(reading)?.score == PerfSetReading.none)
         #expect(reading.quietAt == 10)
         // Between bursts nothing holds it: 10 s after the last token it fades, showing `–` until then.
         rule.apply(score: .none, thinking: 0, generating: false, at: 2)
-        #expect(Self.intelligence(rule.reading)?.score == TaskSetReading.none)
+        #expect(Self.intelligence(rule.reading)?.score == PerfSetReading.none)
         #expect(rule.reading?.quietAt == 10)
     }
 
     @Test func aNewPromptAfterRestingShowsTheAbsentMarkWhileTheAgentReads() {
         var rule = OrbLineQuietRule()
-        rule.apply(score: Self.score(.resting, 72), thinking: 0, generating: false, at: 0)
-        // The next request starts a task that has only read so far: none, with the agent generating.
+        rule.apply(score: Self.score(.resting, 1452), thinking: 0, generating: false, at: 0)
+        // A new agent with fewer than three timed requests: none, with the agent generating.
         rule.apply(score: .none, thinking: 30, generating: true, at: 5)
-        #expect(Self.intelligence(rule.reading)?.score == TaskSetReading.none)
+        #expect(Self.intelligence(rule.reading)?.score == PerfSetReading.none)
         #expect(rule.reading?.shownAt == 0)
-        // Its first edit brings a live score.
-        rule.apply(score: Self.score(.live, 9, .unverified), thinking: 30, generating: true, at: 9)
-        #expect(Self.intelligence(rule.reading)?.score.isUnproven == true)
+        // Its third timed request brings a provisional live score.
+        rule.apply(score: Self.score(.live, 1048, provisional: true), thinking: 30, generating: true, at: 9)
+        #expect(Self.intelligence(rule.reading)?.score.isProvisional == true)
     }
 
     @Test func aScoreChangeMovesTheReadingsScoreMotion() throws {
         var rule = OrbLineQuietRule()
-        rule.apply(score: Self.score(.live, 40, .failing), thinking: 12, generating: true, at: 0)
-        #expect(rule.reading?.scoreMotion == OrbScoreMotion(Self.score(.live, 40, .failing)))
-        rule.apply(score: Self.score(.live, 80), thinking: 12, generating: true, at: 1)
+        rule.apply(score: Self.score(.live, 1000), thinking: 12, generating: true, at: 0)
+        #expect(rule.reading?.scoreMotion == OrbScoreMotion(Self.score(.live, 1000)))
+        rule.apply(score: Self.score(.live, 2000), thinking: 12, generating: true, at: 1)
         let reading = try #require(rule.reading)
-        guard case .countUp(let seconds) = reading.scoreMotion.change(reduceMotion: false) else {
-            Issue.record("a +40 rise counts up")
+        guard case .count(let seconds) = reading.scoreMotion.change(reduceMotion: false) else {
+            Issue.record("a doubling counts")
             return
         }
-        #expect(abs(seconds - 0.78) < 1e-9)
+        #expect(abs(seconds - 0.65) < 1e-9)
         #expect(reading.motion(at: 1.5, reduceMotion: false).frames)
-        #expect(!reading.motion(at: 1.79, reduceMotion: false).frames)
-        // A later tick with the same values moves only the quiet moment; the count-up runs on.
-        rule.apply(score: Self.score(.live, 80), thinking: 12, generating: true, at: 1.5)
+        #expect(!reading.motion(at: 1.66, reduceMotion: false).frames)
+        // A later tick with the same values moves only the quiet moment; the count runs on.
+        rule.apply(score: Self.score(.live, 2000), thinking: 12, generating: true, at: 1.5)
         #expect(rule.reading?.scoreMotion == reading.scoreMotion)
-        let still = rule.apply(score: Self.score(.live, 80), thinking: 12, generating: true, at: 1.5)
+        let still = rule.apply(score: Self.score(.live, 2000), thinking: 12, generating: true, at: 1.5)
         #expect(!still)
     }
 
@@ -160,16 +160,16 @@ struct LineQuietTests {
         var rule = OrbLineQuietRule()
         rule.apply(score: .none, thinking: 12, generating: true, at: 0)
         rule.apply(score: .none, thinking: 0, generating: false, at: 1)
-        rule.apply(score: Self.score(.live, 60), thinking: 12, generating: true, at: 30)
+        rule.apply(score: Self.score(.live, 948), thinking: 12, generating: true, at: 30)
         #expect(rule.reading?.shownAt == 30)
-        #expect(rule.reading?.scoreMotion == OrbScoreMotion(Self.score(.live, 60)))
+        #expect(rule.reading?.scoreMotion == OrbScoreMotion(Self.score(.live, 948)))
         #expect(rule.reading?.motion(at: 30.5, reduceMotion: false).frames == false)
     }
 
     @Test func switchingKindsStartsOver() {
         var rule = OrbLineQuietRule()
         rule.apply(TrafficRate(rx: 5000, tx: 0), bits: false, at: 0)
-        rule.apply(score: Self.score(.live, 100), thinking: 0, generating: true, at: 2)
+        rule.apply(score: Self.score(.live, 1000), thinking: 0, generating: true, at: 2)
         #expect(rule.reading?.shownAt == 2)
         rule.apply(TrafficRate(rx: 10, tx: 0), bits: false, at: 3)
         #expect(rule.reading == nil)

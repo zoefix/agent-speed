@@ -9,10 +9,6 @@ guard let arguments = ProbeArguments.parse(Array(CommandLine.arguments.dropFirst
 switch arguments.mode {
 case .dumpToday:
     DumpToday.run(configuration: arguments.configuration, table: arguments.priceTable(), now: arguments.now)
-case .dumpTasks(let first, let last, let source):
-    let text = TaskDump.tasks(configuration: arguments.configuration, first: first, last: last, source: source,
-                              utc: arguments.utc)
-    FileHandle.standardOutput.write(Data(text.utf8))
 case .dumpHistory:
     DumpHistory.run(
         configuration: arguments.configuration, utc: arguments.utc, storePath: arguments.historyStore,

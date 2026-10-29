@@ -145,7 +145,7 @@ import Testing
     /// answer maps to the client reaction of REPORTING 8.3.
     @Test func serverSequences() throws {
         let cases = try #require(Self.vectors["server"] as? [[String: Any]])
-        #expect(cases.count == 6)
+        #expect(cases.count == 7)
         let keys = try ["device", "other", "rotated"].map { try Self.key($0).signer.publicKey }
         var steps = 0
         var advertised = 0

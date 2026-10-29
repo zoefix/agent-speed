@@ -4,7 +4,7 @@ import Foundation
 /// switches, all on for a new board and for a board saved by an earlier version. Decoding is tolerant: a missing key,
 /// or a value that is not a boolean, reads as on; the retired `rowCost` key is ignored and no longer written.
 public struct BoardReadouts: Equatable, Hashable, Sendable {
-    /// 智力 in the sub-gauge, and the rows' 智力 column with its captions line.
+    /// 性能 in the sub-gauge, and the rows' 性能 column with its captions line.
     public var intelligence: Bool
     /// 思考 in the sub-gauge.
     public var thinking: Bool

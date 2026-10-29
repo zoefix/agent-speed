@@ -41,7 +41,7 @@ internal sealed class ReportSectionRow(ReportSection section, string titleKey, A
 
     public bool IsEnabled { get => _isEnabled; set => Set(ref _isEnabled, value); }
 
-    /// <summary><c>report.section.notAccepted</c>, <c>report.section.trafficOff</c> or <c>report.section.models.taskScore</c>.</summary>
+    /// <summary><c>report.section.notAccepted</c>, <c>report.section.trafficOff</c>, <c>report.section.models.perfScore</c> or <c>report.section.models.thinking</c>.</summary>
     public string? Caption { get => _caption; set => Set(ref _caption, value); }
 
     public void Sync(bool on, bool enabled, string? caption)

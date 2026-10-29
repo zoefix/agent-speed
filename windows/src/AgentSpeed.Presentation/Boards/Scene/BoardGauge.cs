@@ -17,10 +17,10 @@ public enum BoardGaugePart
 }
 
 /// <summary>
-/// The hero's sub-gauge of layout B (DESIGN 2c, Live metrics): 智力 large — glass's pearl arc, neon's LED digits and 12-segment
-/// meter, timing's data box — with 思考 and 費用 smaller beneath it. 智力 is the board's task score (DESIGN 12): it counts up on
-/// a climb with the arc's end and the meter following, crossfades on a fall, rests pale and carries the proof mark while
-/// unproven (<see cref="BoardHeroScore"/>, <see cref="BoardScoreDraw"/>); the other numbers roll with the hero's (0.24 s); 思考
+/// The hero's sub-gauge of layout B (DESIGN 2c, Live metrics): 性能 large — glass's pearl arc, neon's LED digits and 12-segment
+/// meter, timing's data box — with 思考 and 費用 smaller beneath it. 性能 is the board's performance score (DESIGN 12): it counts up on
+/// a climb with the arc's end and the meter following, crossfades on a fall, rests pale and carries the provisional mark while
+/// provisional (<see cref="BoardHeroScore"/>, <see cref="BoardScoreDraw"/>); the other numbers roll with the hero's (0.24 s); 思考
 /// folds away after reading 0 for 3 s. Labels, units, <c>≥</c> and the tag are cached text layers; numbers are value glyphs;
 /// the arc, meter, dots and box are instanced shapes. Nothing allocates per frame.
 /// </summary>
@@ -56,12 +56,12 @@ public sealed class BoardGauge
     /// <summary>The readouts on display.</summary>
     public BoardHeroReadouts Readouts => _readouts;
 
-    /// <summary>The 智力 on display, with its motion.</summary>
+    /// <summary>The 性能 on display, with its motion.</summary>
     public BoardHeroScore Score => _score;
 
     /// <summary>
     /// Where hovering opens the hero's score card (DESIGN 2c, Tooltip and score card), in canvas points as last drawn: glass's
-    /// dial, neon's digits and meter, timing's 智力 row; null without 智力.
+    /// dial, neon's digits and meter, timing's 性能 row; null without 性能.
     /// </summary>
     public RectBounds? ScoreArea => _scoreArea;
 
@@ -74,7 +74,7 @@ public sealed class BoardGauge
         ArgumentNullException.ThrowIfNull(tick);
         var readouts = tick.Gauge;
         _readouts = readouts;
-        // A hidden 智力 takes its value without motion, so it asks for no frames.
+        // A hidden 性能 takes its value without motion, so it asks for no frames.
         _score.Apply(readouts.Score, now, animate && tick.Readouts.Intelligence, reduceMotion);
         _thinking.Set(readouts.Thinking, now, animate, reduceMotion);
         var tag = readouts.Cost.State == BoardMoneyState.Tag;
@@ -98,7 +98,7 @@ public sealed class BoardGauge
     }
 
     /// <summary>
-    /// 智力's count-up or crossfade, a roll, the tag's crossfade or the fold runs (60 fps; a count-up at most 0.8 s, the rest
+    /// 性能's count or crossfade, a roll, the tag's crossfade or the fold runs (60 fps; a count at most 0.8 s, the rest
     /// within the hero roll's frames).
     /// </summary>
     public bool Animating(double now) =>
@@ -343,24 +343,45 @@ public sealed class BoardGauge
         return number.Emit(list, layers, set, right, 1, baseline, size, tracking, quiet ? palette.Quiet : palette.Number, baked ? 0 : 1, alpha, now);
     }
 
-    // 智力's number: the shown integer (a count-up's), the outgoing one while a crossfade runs, each in its live or resting color
-    // (neon live: the baked LED digits with their glow), with the dotted underline of an unproven score.
+    // 性能's number: the shown integer (a count's), the outgoing one while a crossfade runs, each in its live or resting color
+    // (neon live: the baked LED digits with their glow), with the dotted underline of an provisional score.
     private void EmitScore(BoardDrawList list, IBoardLayers layers, BoardStyle style, BoardGaugePalette palette, double x, int align, double baseline,
         double size, double tracking, double alpha, double now)
     {
         var (outgoing, incoming) = _score.Fade(now);
         var has = _score.HasScore;
-        ScoreText(list, layers, style, palette, _score.Text(now), has ? _score.Liveness(now) : 0, has ? _score.Proof(now) : 0, x, align, baseline, size,
-            tracking, alpha * incoming);
-        if (_score.Outgoing(now) is { } old)
+        var compact = style == BoardStyle.Glass;
+        Span<char> text = stackalloc char[BoardHeroScore.MaxLength];
+        var length = _score.Format(text, now, compact);
+        ScoreText(list, layers, style, palette, text[..length], has ? _score.Liveness(now) : 0, has ? _score.Proof(now) : 0, x, align,
+            baseline, size, tracking, alpha * incoming);
+        length = _score.FormatOutgoing(text, now, compact);
+        if (length > 0)
         {
-            var number = !string.Equals(old, BoardHeroReadouts.Dash, StringComparison.Ordinal);
-            ScoreText(list, layers, style, palette, old, number && _score.OutgoingLive ? 1 : 0, number && _score.OutgoingUnproven ? 1 : 0, x, align,
+            var old = text[..length];
+            var number = !IsDash(old);
+            ScoreText(list, layers, style, palette, old, number && _score.OutgoingLive ? 1 : 0, number && _score.OutgoingProvisional ? 1 : 0, x, align,
                 baseline, size, tracking, alpha * outgoing);
         }
     }
 
-    private static void ScoreText(BoardDrawList list, IBoardLayers layers, BoardStyle style, BoardGaugePalette palette, string text, double live,
+    private static bool IsDash(ReadOnlySpan<char> text) => text.SequenceEqual(BoardHeroReadouts.Dash);
+
+    // A plain loop: MemoryExtensions.ContainsAnyInRange allocates on every call here, and frames must allocate nothing.
+    private static bool HasDigit(ReadOnlySpan<char> text)
+    {
+        foreach (var c in text)
+        {
+            if (char.IsAsciiDigit(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
+    private static void ScoreText(BoardDrawList list, IBoardLayers layers, BoardStyle style, BoardGaugePalette palette, ReadOnlySpan<char> text, double live,
         double proof, double x, int align, double baseline, double size, double tracking, double alpha)
     {
         if (alpha <= 0.002)
@@ -382,7 +403,7 @@ public sealed class BoardGauge
             width = BoardValueGlyphs.EmitOnBaseline(list, layers, text, plain, x, align, baseline, tracking, color, 1, alpha);
         }
 
-        if (proof > 0.002 && width > 0 && !string.Equals(text, BoardHeroReadouts.Dash, StringComparison.Ordinal))
+        if (proof > 0.002 && width > 0 && !IsDash(text))
         {
             var left = align < 0 ? x : align == 0 ? x - width / 2 : x - width;
             // Windows high contrast: the dots in the text color, whatever the number's form.
@@ -391,30 +412,23 @@ public sealed class BoardGauge
         }
     }
 
-    // As many ghost 8s as the number has digits, behind it.
+    // Neon's ghost segments behind the number: its text with every digit as 8 and the comma kept (8,888 behind 1,286).
     private void Ghost(BoardDrawList list, IBoardLayers layers, double cx, double baseline, double tracking, Rgba ghost, double alpha, double now)
     {
-        var digits = 0;
-        foreach (var c in _score.Text(now))
-        {
-            digits += c is >= '0' and <= '9' ? 1 : 0;
-        }
-
-        if (digits == 0 || ghost.A <= 0 || !BoardValueGlyphs.TryGet('8', BoardValueSet.GaugeMainPlain, layers, out var slot))
+        Span<char> eights = stackalloc char[BoardHeroScore.MaxLength];
+        eights = eights[.._score.Format(eights, now, compact: false)];
+        if (ghost.A <= 0 || !HasDigit(eights))
         {
             return;
         }
 
-        var pad = BoardValueGlyphs.PadOf(BoardValueSet.GaugeMainPlain);
-        var advance = slot.Width - 2 * pad;
-        var width = digits * advance + (digits - 1) * tracking;
-        var at = cx - width / 2;
-        for (var i = 0; i < digits; i++)
+        for (var i = 0; i < eights.Length; i++)
         {
-            list.AddLayer(BoardLayerInstance.Create(slot, at - pad, baseline - BoardValueGlyphs.Baseline(slot), alpha * ghost.A,
-                ghost.WithAlpha(1), 1));
-            at += advance + tracking;
+            eights[i] = char.IsAsciiDigit(eights[i]) ? '8' : eights[i];
         }
+
+        BoardValueGlyphs.EmitOnBaseline(list, layers, eights, BoardValueSet.GaugeMainPlain, cx, 0, baseline, tracking, ghost.WithAlpha(1), 1,
+            alpha * ghost.A);
     }
 
     private static void Separator(BoardDrawList list, double left, double right, double top, Rgba color, double alpha) =>

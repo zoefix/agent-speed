@@ -72,6 +72,7 @@ public sealed class ParserFixtureTests
             var label = relative + " " + r.Key;
             Assert.True(NullableLong(e.GetProperty("startMs")) == r.StartMs, $"{label} startMs: expected {e.GetProperty("startMs")}, got {r.StartMs}");
             Assert.True(e.GetProperty("endMs").GetInt64() == r.EndMs, $"{label} endMs: expected {e.GetProperty("endMs")}, got {r.EndMs}");
+            Assert.True(NullableLong(e.GetProperty("firstMs")) == r.FirstMs, $"{label} firstMs: expected {e.GetProperty("firstMs")}, got {r.FirstMs}");
             Assert.True(e.GetProperty("input").GetInt64() == r.Tokens.Input, $"{label} input: got {r.Tokens.Input}");
             Assert.True(e.GetProperty("cachedInput").GetInt64() == r.Tokens.CachedInput, $"{label} cachedInput: got {r.Tokens.CachedInput}");
             Assert.True(e.GetProperty("cacheWriteInput").GetInt64() == r.Tokens.CacheWriteInput, $"{label} cacheWriteInput: got {r.Tokens.CacheWriteInput}");
@@ -88,6 +89,34 @@ public sealed class ParserFixtureTests
         }
 
         AssertModes(expected, relative, parser.Modes, responses);
+        AssertActions(expected, relative, parser.WorkActions);
+    }
+
+    /// <summary>
+    /// The actions of METRICS 6.10 (<c>actions</c>, listed for the files that have them): tool, digest, call time, the first
+    /// result's time and outcome, and the model of the response that issued the call.
+    /// </summary>
+    internal static void AssertActions(JsonElement expected, string label, IReadOnlyList<AgentSpeed.Core.Work.WorkAction> actions)
+    {
+        if (!expected.TryGetProperty("actions", out var list))
+        {
+            return;
+        }
+
+        Assert.True(list.GetArrayLength() == actions.Count, $"{label}: expected {list.GetArrayLength()} actions, got {actions.Count}");
+        var i = 0;
+        foreach (var e in list.EnumerateArray())
+        {
+            var a = actions[i];
+            var at = $"{label} action {i++}";
+            Assert.Equal(e.GetProperty("tool").GetString(), a.Tool);
+            Assert.True(e.GetProperty("digest").GetString() == AgentSpeed.Core.Work.ActionDigest.Hex(a.Digest), $"{at} digest");
+            Assert.True(e.GetProperty("callMs").GetInt64() == a.AtMs, $"{at} callMs: got {a.AtMs}");
+            Assert.True(NullableLong(e.GetProperty("resultMs")) == a.ResultMs, $"{at} resultMs: got {a.ResultMs}");
+            bool? failed = e.GetProperty("failed").ValueKind == JsonValueKind.Null ? null : e.GetProperty("failed").GetBoolean();
+            Assert.True(failed == a.Failed, $"{at} failed: got {a.Failed}");
+            Assert.True(e.GetProperty("model").GetString() == a.Model, $"{at} model: got {a.Model}");
+        }
     }
 
     [Theory]

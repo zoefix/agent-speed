@@ -143,7 +143,7 @@ struct HistoryTrafficTests {
 
         try HistoryDatabase.saveTraffic(Self.rows, at: path)
         #expect(try Self.pragma("user_version", at: path) == "2", "saving traffic never migrates")
-        #expect(try Self.tables(at: path) == before.union(["day_traffic", "contribution_unpriced", "task_records"]))
+        #expect(try Self.tables(at: path) == before.union(["day_traffic", "contribution_unpriced", "perf_records"]))
         #expect(try Self.columns(of: "contributions", at: path) == contributionColumns)
         let stored = HistoryDatabase.storedTraffic(at: path)
         #expect(stored.days == Self.sorted(Self.rows))

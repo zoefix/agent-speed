@@ -13,7 +13,7 @@ import json
 import os
 import sys
 from collections import OrderedDict
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 
 FIXTURES = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures")
 
@@ -32,6 +32,7 @@ class Action:
     tool: str
     digest: str
     failed: bool | None = None          # None: outcome unknown
+    answered: bool = field(default=False, compare=False)
 
     @property
     def key(self):
@@ -63,9 +64,11 @@ class ActionLog:
             self.by_call = OrderedDict((k, a) for k, a in self.by_call.items() if a is not dropped)
 
     def result(self, call_id, failed):
+        """Only the first result of a call is its outcome (METRICS 6.10); a later one is ignored."""
         action = self.by_call.get(call_id)
-        if action is not None and failed is not None:
-            action.failed = failed
+        if action is None or action.answered:
+            return
+        action.answered, action.failed = True, failed
 
 
 # ----------------------------------------------------------------------------- per-source extraction

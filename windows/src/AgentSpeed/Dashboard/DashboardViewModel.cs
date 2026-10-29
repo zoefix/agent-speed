@@ -5,6 +5,7 @@ using System.Windows.Media;
 using AgentSpeed.Controls;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Intelligence;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Modes;
 using AgentSpeed.Presentation.Colors;
 using AgentSpeed.Presentation.Cost;
@@ -14,9 +15,9 @@ using AgentSpeed.Presentation.Layout;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Modes;
 using AgentSpeed.Presentation.Settings;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Titles;
-using AgentSpeed.TaskScore;
+using AgentSpeed.Perf;
 using AgentSpeed.Theme;
 
 namespace AgentSpeed.Dashboard;
@@ -81,7 +82,7 @@ internal sealed class SourceRow : ObservableObject
     public bool IsListed { get => _isListed; set => Set(ref _isListed, value); }
 }
 
-internal sealed class AgentRow : ObservableObject, IScoreCardRow
+internal sealed class AgentRow : ObservableObject, IPerfCardRow
 {
     private string _project = string.Empty;
     private string _detail = string.Empty;
@@ -114,16 +115,16 @@ internal sealed class AgentRow : ObservableObject, IScoreCardRow
     /// <summary>The speed with its unit, or the phase name when no number is shown.</summary>
     public string LiveAccessibleName { get => _liveAccessibleName; set => Set(ref _liveAccessibleName, value); }
 
-    /// <summary>The agent's 智力: its task score, or <c>–</c> (DESIGN 4, Intelligence column; DESIGN 12).</summary>
+    /// <summary>The agent's 性能 in compact form, or <c>–</c> (DESIGN 4, 性能 column; DESIGN 12).</summary>
     public string IntelligenceText { get => _intelligenceText; set => Set(ref _intelligenceText, value); }
 
-    public AgentIntelligenceForm IntelligenceForm { get => _intelligenceForm; set => Set(ref _intelligenceForm, value); }
+    public PerfForm IntelligenceForm { get => _intelligenceForm; set => Set(ref _intelligenceForm, value); }
 
     /// <summary>The shown score, which plans the cell's motion; null for none.</summary>
     public int? IntelligenceShown { get => _intelligenceShown; set => Set(ref _intelligenceShown, value); }
 
-    /// <summary>An unverified or pending score: the cell draws the proof mark.</summary>
-    public bool IntelligenceUnproven { get => _intelligenceUnproven; set => Set(ref _intelligenceUnproven, value); }
+    /// <summary>A score from 3 to 9 timed requests: the cell draws the provisional mark.</summary>
+    public bool IntelligenceProvisional { get => _intelligenceProvisional; set => Set(ref _intelligenceProvisional, value); }
 
     /// <summary><c>a11y.agent.intel</c> with the score words; empty without a score.</summary>
     public string IntelligenceAccessibleName { get => _intelligenceAccessibleName; set => Set(ref _intelligenceAccessibleName, value); }
@@ -132,7 +133,7 @@ internal sealed class AgentRow : ObservableObject, IScoreCardRow
     public object CardKey { get => _cardKey; set => Set(ref _cardKey, value); }
 
     /// <summary>The row's score card (DESIGN 12): its tooltip, with the row's former tooltip lines as its facts.</summary>
-    public TaskScoreCard? Card { get => _card; set => Set(ref _card, value); }
+    public PerfCard? Card { get => _card; set => Set(ref _card, value); }
 
     /// <summary>The card's text, the row's help text for screen readers (DESIGN 12, <i>Accessibility</i>).</summary>
     public string CardDescription { get => _cardDescription; set => Set(ref _cardDescription, value); }
@@ -154,11 +155,11 @@ internal sealed class AgentRow : ObservableObject, IScoreCardRow
     private bool _isLooping;
     private string _intelligenceText = AgentIntelligenceCell.Dash;
     private int? _intelligenceShown;
-    private bool _intelligenceUnproven;
+    private bool _intelligenceProvisional;
     private object _cardKey = string.Empty;
-    private TaskScoreCard? _card;
+    private PerfCard? _card;
     private string _cardDescription = string.Empty;
-    private AgentIntelligenceForm _intelligenceForm = AgentIntelligenceForm.None;
+    private PerfForm _intelligenceForm = PerfForm.None;
     private string _intelligenceAccessibleName = string.Empty;
 }
 
@@ -637,12 +638,12 @@ internal sealed partial class DashboardViewModel : ObservableObject
             row.IntelligenceText = intelligence.Text;
             row.IntelligenceForm = intelligence.Form;
             row.IntelligenceShown = intelligence.Shown;
-            row.IntelligenceUnproven = intelligence.Unproven;
+            row.IntelligenceProvisional = intelligence.Provisional;
             row.IntelligenceAccessibleName = intelligence.Spoken;
             row.CardKey = agent.Id;
-            var card = TaskScoreCard.Build(TaskScoreMapping.Subject(agent, facts), loc);
+            var card = PerfCard.Build(PerfCardSubject.Of(agent, facts), loc);
             row.Card = card;
-            row.CardDescription = card.FullDescription;
+            row.CardDescription = card.Description;
 
             row.Phase = agent.Phase;
             row.Color = HeatPalette.SourceColor(agent.Source).ToColor();

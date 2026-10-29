@@ -29,7 +29,6 @@ internal sealed class DroidParser : TranscriptParser
         : base(agentId, deduper, SourceKind.Droid)
     {
         SetSource(SourceKind.Droid);
-        EnableTasks(new global::AgentSpeed.Core.Tasks.DroidTaskReader(), SourceKind.Droid);
     }
 
     /// <summary><c>session_start.parent</c>: the session a fork or successor started from, whose counters it subtracts.</summary>
@@ -132,18 +131,6 @@ internal sealed class DroidParser : TranscriptParser
     /// <summary>Applies one line (step 1 of a read cycle); calls stay open until tokens are allocated to them.</summary>
     public void Feed(in DroidLine line)
     {
-        FeedLine(in line);
-        if (line.TaskTracked)
-        {
-            ComposeTask(line.Task, line.TimestampMs!.Value);
-        }
-    }
-
-    /// <summary>Reads one line for the composer's file side (on the reading thread, in file order).</summary>
-    internal void ReadTask(ReadOnlySpan<byte> raw, ref DroidLine line) => (TaskReader as global::AgentSpeed.Core.Tasks.DroidTaskReader)?.Read(raw, ref line);
-
-    private void FeedLine(in DroidLine line)
-    {
         if (line.Status == LineStatus.Malformed)
         {
             CountMalformed();
@@ -243,9 +230,9 @@ internal sealed class DroidParser : TranscriptParser
             return;
         }
 
-        RecordTools(in line.Tools, ts);
         if (_seen.Contains(key))
         {
+            RecordTools(in line.Tools, ts);
             return;
         }
 
@@ -266,6 +253,7 @@ internal sealed class DroidParser : TranscriptParser
         SetAgentModel(line.ModelId ?? _sessionModel);
         _pendingStartMs = null;
         SetPhase(line.HasToolUse ? AgentPhase.Tools : AgentPhase.Idle, ts, null);
+        RecordTools(in line.Tools, ts);
     }
 
     /// <summary>
@@ -446,14 +434,7 @@ internal sealed class DroidBatch(DroidParser owner) : ILineBatch, IPositionedLin
 
     public void OnLine(ReadOnlySpan<byte> line, long offset, int length)
     {
-        if (offset == 0)
-        {
-            owner.OnFileStart();
-        }
-
-        var parsed = DroidLineReader.Read(line, offset, length);
-        owner.ReadTask(line, ref parsed);
-        _lines.Add(parsed);
+        _lines.Add(DroidLineReader.Read(line, offset, length));
         _next = offset + length + 1;
     }
 

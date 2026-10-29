@@ -1,7 +1,7 @@
 import AgentSpeedOrbModel
 import SwiftUI
 
-/// The selected board's live metrics switches (DESIGN 2c Live metrics, *Switches*): 智力, 思考 and 費用 as three
+/// The selected board's live metrics switches (DESIGN 2c Live metrics, *Switches*): 性能, 思考 and 費用 as three
 /// independent checkboxes in the menu's order, with `boards.readouts.hint` under them. Each change applies and saves
 /// at once; the style cards above show the readouts as switched.
 struct BoardReadoutsSection: View {

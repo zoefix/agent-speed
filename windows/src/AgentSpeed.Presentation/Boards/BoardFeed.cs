@@ -1,7 +1,7 @@
 using AgentSpeed.Core;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Orb;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Boards;
 
@@ -32,8 +32,8 @@ public sealed record BoardData(
     /// <summary>The live intelligence sums of the board's sources (METRICS 6.9 over <c>A</c>).</summary>
     public Core.Intelligence.IntelligenceSums Intelligence { get; init; }
 
-    /// <summary>The board's 智力 (METRICS 6.9, <i>Sets and groups</i>, over <c>A</c>) with its supplying agent and N.</summary>
-    public TaskSetReading Score { get; init; } = TaskSetReading.None;
+    /// <summary>The board's 性能 (METRICS 6.9 over <c>A</c>) with its supplying agent and N.</summary>
+    public PerfSetReading Score { get; init; } = PerfSetReading.None;
 
     /// <summary>The live cost of the board's billable sources (METRICS 9.5, 9.4).</summary>
     public CostReading Cost { get; init; } = CostReading.Zero;
@@ -159,19 +159,19 @@ public sealed class BoardFeed
     }
 
     /// <summary>
-    /// The highest task score among <paramref name="agents"/> (METRICS 6.9, <i>Sets and groups</i>: live before resting, then the
+    /// The highest performance score among <paramref name="agents"/> (METRICS 6.9, <i>Sets and groups</i>: live before resting, then the
     /// supplying agent's latest line and smallest id), read over the same agents for its supplier and N.
     /// </summary>
-    public static TaskSetReading Highest(IReadOnlyList<AgentStatus> agents)
+    public static PerfSetReading Highest(IReadOnlyList<AgentStatus> agents)
     {
         ArgumentNullException.ThrowIfNull(agents);
-        var value = Core.Tasks.TaskSetValue.None;
+        var value = Core.Perf.PerfSetValue.None;
         foreach (var agent in agents)
         {
-            value = Core.Tasks.TaskSetValue.Merge(value, agent.Intelligence.Score);
+            value = Core.Perf.PerfSetValue.Merge(value, agent.Intelligence.Score);
         }
 
-        return TaskSetReading.Of(value, agents);
+        return PerfSetReading.Of(value, agents);
     }
 
     /// <summary>The groups in the ranking's order; groups the ranking has not seen yet (between ticks) follow by value.</summary>

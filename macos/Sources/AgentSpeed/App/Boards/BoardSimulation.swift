@@ -4,8 +4,8 @@ import Foundation
 
 /// Swift port of the board prototypes' shared simulation (`spec/prototypes/board/sim.js`) for the developer
 /// harnesses: the same scenarios, seeded generator, agent phases and mode changes, the live metrics of each agent
-/// (grade, thinking, cost rate), ranked by the production `BoardRanking`. Step for step it shows what the prototypes
-/// show (`?scenario=team&steps=40`: 707 tok/s, 智力 123, 思考 174, 0.024 US$/s). `speedScale` multiplies every agent's
+/// (a steady performance score, thinking, cost rate), ranked by the production `BoardRanking`. Step for step it shows
+/// what the prototypes show (`?scenario=team&steps=40`: 707 tok/s, 思考 174, 0.024 US$/s). `speedScale` multiplies every agent's
 /// speed (the benchmark's cruise and redline states); `recordsReasoning` false simulates sources that never report
 /// reasoning apart from output (the prototypes' `noreasoning=1`).
 struct BoardSimulation {
@@ -34,7 +34,7 @@ struct BoardSimulation {
         var speed: String?
         /// sim.js `hashUnit(id)`, 0..<1.
         var seed = 0.0
-        /// The live metrics (sim.js `measure`): task score, thinking tok/s, cost µUSD/s, priced.
+        /// The live metrics (sim.js `measure`): performance score, thinking tok/s, cost µUSD/s, priced.
         var score: Double?
         var thinking = 0.0
         var recordsReasoning = true
@@ -173,13 +173,13 @@ struct BoardSimulation {
         return Double(h) / 4_294_967_296
     }
 
-    /// A simulated task score (METRICS 6.9): steady per agent, none for a source without one.
+    /// A simulated performance score (METRICS 6.9): steady per agent, around the reference 1000.
     static func score(_ agent: Agent) -> Double? {
-        guard let source = SourceKind(rawValue: agent.source), TaskScoring.scores(source) else { return nil }
-        return (20 + 75 * agent.seed).rounded() + 0.25
+        guard SourceKind(rawValue: agent.source) != nil else { return nil }
+        return (620 + 1180 * agent.seed).rounded() + 0.25
     }
 
-    /// sim.js `measure`: the agent's task score, its reasoning (breathing ±20 % over ~7 s), its cost rate (Ultrafast has no
+    /// sim.js `measure`: the agent's performance score, its reasoning (breathing ±20 % over ~7 s), its cost rate (Ultrafast has no
     /// list price, Fast is billed at 2×).
     private func measure(_ a: inout Agent) {
         let level = a.effort.flatMap { effort in Self.effortLevels[effort].map { $0 + (effort == "ultra" || effort == "ultracode" ? 1 : 0) } } ?? 2

@@ -92,7 +92,7 @@ def set_updated(clock):
 
 
 def resp(key, start, end, inp, cached, out, reasoning, model):
-    return {"key": key, "startMs": None if start is None else ms(start), "endMs": ms(end), "input": inp,
+    return {"key": key, "startMs": None if start is None else ms(start), "endMs": ms(end), "firstMs": None, "input": inp,
             "cachedInput": cached, "cacheWriteInput": 0, "cacheWrite1hInput": 0, "output": out,
             "reasoning": reasoning, "model": model, "provider": None, "fast": False,
             "final": True}

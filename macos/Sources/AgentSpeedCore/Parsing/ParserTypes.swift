@@ -10,6 +10,8 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
     /// When the request was sent; nil when unknown.
     public var startMs: Int64?
     public var endMs: Int64
+    /// When the response's first content was written (METRICS 3.3); nil for sources whose logs do not say.
+    public var firstMs: Int64?
     public var usage: TokenUsage
     public var requestCount: Int
     public var modes: ExecutionModes
@@ -38,9 +40,11 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
         fast: Bool = false,
         costMicroUsd: Int64? = nil,
         requestCount: Int = 1,
-        modes: ExecutionModes = .empty
+        modes: ExecutionModes = .empty,
+        firstMs: Int64? = nil
     ) {
         self.key = key
+        self.firstMs = firstMs
         self.source = source
         self.agentId = agentId
         self.model = model
@@ -86,7 +90,7 @@ struct AgentState: Equatable, Sendable {
     var inFlightStartMs: Int64?
     var lastLineMs: Int64?
     var malformedLines = 0
-    /// The file's tool calls of live lines (METRICS 6.10).
+    /// The file's tool calls (METRICS 6.10).
     var actions = ActionLog()
 
     init(source: SourceKind, isSubagent: Bool = false) {

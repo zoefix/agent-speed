@@ -28,7 +28,6 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
     {
         PathIsSubagent = OmpDiscovery.DepthBelow(root, agentId) >= 3;
         RestorePathState();
-        EnableTasks(new global::AgentSpeed.Core.Tasks.PiFamilyTaskReader(SourceKind.Omp), SourceKind.Omp);
     }
 
     /// <summary>The file lives inside a session's artifacts folder (task sub-agents, advisors, seance consults).</summary>
@@ -67,23 +66,12 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
         }
 
         _headerProbed = true;
-        var header = ReadHeader(AgentId);
-        ReadTask([], ref header);
-        omp.Header = header;
+        omp.Header = ReadHeader(AgentId);
     }
 
     public override ILineBatch NewBatch() => new OmpBatch(this);
 
     public override void Apply(in OmpLine line, IResponseSink sink)
-    {
-        ApplyLine(in line, sink);
-        if (line.TaskTracked)
-        {
-            ComposeTask(line.Task, line.TimestampMs!.Value);
-        }
-    }
-
-    private void ApplyLine(in OmpLine line, IResponseSink sink)
     {
         if (line.Status == LineStatus.Malformed)
         {
@@ -129,33 +117,7 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
         }
     }
 
-    protected override OmpLine Extract(ReadOnlySpan<byte> line)
-    {
-        var parsed = OmpLineReader.Read(line);
-        ReadTask(line, ref parsed);
-        return parsed;
-    }
-
-    private void ReadTask(ReadOnlySpan<byte> raw, ref OmpLine line)
-    {
-        if (TaskReader is not global::AgentSpeed.Core.Tasks.PiFamilyTaskReader reader)
-        {
-            return;
-        }
-
-        var role = line.Role switch
-        {
-            OmpRole.User => global::AgentSpeed.Core.Tasks.PiEntryRole.User,
-            OmpRole.Assistant => global::AgentSpeed.Core.Tasks.PiEntryRole.Assistant,
-            OmpRole.ToolResult => global::AgentSpeed.Core.Tasks.PiEntryRole.ToolResult,
-            _ => global::AgentSpeed.Core.Tasks.PiEntryRole.Other,
-        };
-        var facts = new global::AgentSpeed.Core.Tasks.PiEntryFacts(line.Status == LineStatus.Valid, line.Kind == OmpEntryKind.Session,
-            line.Kind == OmpEntryKind.Message, line.Id, line.TimestampMs, line.Cwd, role, line.Call.Guarded, line.StartedMs,
-            line.ToolCallIds is { Length: > 0 });
-        line.Task = reader.Read(raw, in facts, out var tracked);
-        line.TaskTracked = tracked;
-    }
+    protected override OmpLine Extract(ReadOnlySpan<byte> line) => OmpLineReader.Read(line);
 
     /// <summary>The first <c>session</c> line among the first two lines of the file, else a blank line.</summary>
     internal static OmpLine ReadHeader(string path)
@@ -248,7 +210,6 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
             return;
         }
 
-        RecordTools(in line.Tools, ts);
         var call = line.Call;
         if (!call.Guarded)
         {
@@ -264,6 +225,8 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
             Emit(key, failed ? null : line.StartedMs, end, in call, sink);
             SetModel(call.Model);
         }
+
+        RecordTools(in line.Tools, ts);
 
         if (failed)
         {
@@ -345,15 +308,7 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
 
         public void OnLine(ReadOnlySpan<byte> line) => _lines.OnLine(line);
 
-        public void OnLine(ReadOnlySpan<byte> line, long offset, int length)
-        {
-            if (offset == 0)
-            {
-                owner.OnFileStart();
-            }
-
-            _lines.OnLine(line);
-        }
+        public void OnLine(ReadOnlySpan<byte> line, long offset, int length) => _lines.OnLine(line);
 
         public void OnMalformed() => _lines.OnMalformed();
 
