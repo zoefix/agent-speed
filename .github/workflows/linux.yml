@@ -60,6 +60,7 @@ jobs:
           host: ${{ matrix.host }}
           target: desktop
           arch: ${{ matrix.qtarch }}
+          modules: qtwebsockets
           cache: true
       - name: Version
         id: version
