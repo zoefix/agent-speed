@@ -90,7 +90,8 @@ bool Sample::working() const {
 Window::Window(const Sample& sample)
     : baseline_(sample.facts.counters), lastCounters_(sample.facts.counters), baselineEpoch_(sample.facts.epoch), lastEpoch_(sample.facts.epoch),
       trafficBaseline_(sample.traffic.totals), lastTraffic_(sample.traffic.totals), taskBaseline_(tasksOf(sample).rows),
-      taskGeneration_(tasksOf(sample).generation), lastCompleted_(tasksOf(sample).completed), lastTaskGeneration_(tasksOf(sample).generation) {}
+      taskGeneration_(tasksOf(sample).generation), lastCompleted_(tasksOf(sample).completed), lastTaskGeneration_(tasksOf(sample).generation),
+      takenCompleted_(tasksOf(sample).completed) {}
 
 bool Window::hasTokenIncrement(const Sample& sample) const {
     return sample.facts.counters->hasTokensSince(sample.facts.epoch == lastEpoch_ ? *lastCounters_ : *zeroCounters());
@@ -163,6 +164,7 @@ WindowContent Window::take(const Sample& sample) {
     observe(sample, false);
     taskBaseline_ = tasksOf(sample).rows;
     taskGeneration_ = tasksOf(sample).generation;
+    takenCompleted_ = tasksOf(sample).completed;
     return taken;
 }
 

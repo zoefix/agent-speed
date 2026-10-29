@@ -217,6 +217,7 @@ int main(int argc, char* argv[]) {
     ReportController report(prefs, strings, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
     engine.rootContext()->setContextProperty(QStringLiteral("report"), &report);
     QObject::connect(worker, &MonitorWorker::reportTick, &report, &ReportController::onTick);
+    report.setWatchSink([worker](bool on, qint64 taken) { worker->setReportWatch(on, taken); });
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());

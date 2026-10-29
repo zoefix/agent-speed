@@ -377,6 +377,10 @@ void MonitorWorker::tick() {
         }
     }
     if (monitor_) monitor_->setTrafficEnabled(options_.trafficEnabled);
+    {
+        std::lock_guard lock(optionsMutex_);
+        if (monitor_) monitor_->setTaskWatch(watchOn_, watchTaken_);
+    }
     if (restart || (monitor_ && monitor_->restartRequested())) {
         startMonitor(now);
         peakBefore_ = -1;
@@ -403,4 +407,10 @@ void MonitorWorker::tick() {
     publish(snap, completions, now, todayStart);
     const auto traffic = agentspeed::report::TrafficSample::from(snap.traffic, options_.trafficIncludeTools, options_.config.enabled, monitor_->epoch());
     emit reportTick({std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs(), observed});
+}
+
+void MonitorWorker::setReportWatch(bool on, qint64 taken) {
+    std::lock_guard lock(optionsMutex_);
+    watchOn_ = on;
+    watchTaken_ = taken;
 }

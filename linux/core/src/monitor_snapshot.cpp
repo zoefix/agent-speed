@@ -31,6 +31,7 @@ const tasks::TaskTracker* Monitor::trackerOf(const std::string& id) const {
 void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
                          std::int64_t nowMs) {
     const auto thinking = engine::thinking(recent, agents, nowMs);
+    lastThinking_ = thinking;
     std::vector<tasks::AgentRow> rows;
     std::set<std::string> present;
     for (auto& row : snap.agents) {
@@ -104,7 +105,69 @@ void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& re
 
 // METRICS 11.2: agents of the 6.7 base set (staleness applied, no ancestor closure) per source, generating agents per
 // reported model id, and the report ledger (copied only after a change).
-report::Facts Monitor::reportFacts(std::int64_t nowMs) {
+// METRICS 11.10 Counting: a watched task is counted once, when a later task of its agent exists or its agent has been
+// quiet for 30 minutes, under the report id of its model and its agent's source.
+void Monitor::countTasks(std::int64_t nowMs) {
+    constexpr std::int64_t kCompleteIdleMs = 30 * 60'000;
+    const auto visit = [&](const std::string& id, const tasks::TaskTracker& tracker) {
+        const auto info = agents_.find(id);
+        if (info == agents_.end() || !config_.enabled.contains(info->second.source)) return;
+        auto& seen = taskSeen_[id];
+        const auto& composer = tracker.composer();
+        if (composer.version() != seen.version) {
+            seen.version = composer.version();
+            std::vector<std::int64_t> starts;
+            for (const auto& task : tasks::splitTasks(composer.events())) {
+                starts.push_back(task.startMs);
+                if (std::find(seen.starts.begin(), seen.starts.end(), task.startMs) == seen.starts.end())
+                    taskLedger_.start(id + "#" + std::to_string(task.startMs), task.startMs, nowMs);
+            }
+            seen.starts = std::move(starts);
+        }
+        const auto lastLine = info->second.lastLineMs.value_or(0);
+        std::vector<std::size_t> due;
+        for (std::size_t i = 0; i < seen.starts.size(); ++i) {
+            if (!taskLedger_.watched(id + "#" + std::to_string(seen.starts[i]))) continue;
+            if (i + 1 < seen.starts.size() || nowMs - lastLine >= kCompleteIdleMs) due.push_back(i);
+        }
+        if (due.empty()) return;
+        const auto records = tasks::taskRecords(composer.events(), nowMs, lastLine, composer.models());
+        for (const auto i : due) {
+            const auto start = seen.starts[i];
+            const auto record = std::find_if(records.begin(), records.end(), [&](const tasks::TaskRecord& r) { return r.startMs == start; });
+            std::optional<report::TaskRow> row;
+            std::string modelId = store_->reportModelId(std::nullopt, std::nullopt);
+            if (record != records.end()) {
+                report::TaskOutcome outcome;
+                outcome.actions = record->counts.actions;
+                outcome.score = record->score;
+                outcome.success = record->success;
+                outcome.stalled = record->stalled;
+                outcome.fixAttempts = record->counts.fixAttempts;
+                outcome.fixFailures = record->counts.fixFailures;
+                outcome.recovered = record->counts.recovered;
+                outcome.recoverAttempts = record->counts.recoverAttempts;
+                row = report::recordRow(outcome);
+                modelId = store_->reportModelId(record->model, store_->providerOf(id));
+            }
+            taskLedger_.complete(id + "#" + std::to_string(start), {modelId, info->second.source}, row);
+        }
+    };
+    for (const auto& [path, file] : files_)
+        if (file->tasks) visit(path, *file->tasks);
+    for (const auto& [id, tracker] : windowTasks_) visit(id, *tracker);
+    for (auto it = taskSeen_.begin(); it != taskSeen_.end();) {
+        if (agents_.contains(it->first)) {
+            ++it;
+            continue;
+        }
+        // An agent whose file went away: its tasks are unwatched.
+        for (const auto start : it->second.starts) taskLedger_.drop(it->first + "#" + std::to_string(start));
+        it = taskSeen_.erase(it);
+    }
+}
+
+report::Facts Monitor::reportFacts(std::int64_t nowMs, const Snapshot& snap) {
     report::Facts facts;
     for (const auto& [id, info] : agents_) {
         if (!config_.enabled.contains(info.source)) continue;
@@ -127,6 +190,24 @@ report::Facts Monitor::reportFacts(std::int64_t nowMs) {
     }
     facts.counters = reportCounters_;
     facts.epoch = epoch_;
+    // METRICS 11.10: the agents list's values under their current model's report id, the thinking sums, the ledger.
+    auto tasks = std::make_shared<report::TaskFacts>();
+    for (const auto& row : snap.agents) {
+        if (!row.task || row.task->value.form == "none" || !row.task->value.score) continue;
+        tasks->agents.push_back({row.source, store_->reportModelId(row.model, store_->providerOf(row.id)), row.task->value.form, row.task->value.score});
+    }
+    tasks->thinking = lastThinking_.total.liveThinking();
+    for (const auto& [model, window] : lastThinking_.perModel)
+        tasks->modelThinking[store_->reportModelId(model.empty() ? std::nullopt : std::optional<std::string>(model), std::nullopt)] += window.liveThinking();
+    countTasks(nowMs);
+    if (taskLedger_.version() != taskRowsVersion_) {
+        taskRows_ = std::make_shared<const report::TaskRows>(taskLedger_.rows());
+        taskRowsVersion_ = taskLedger_.version();
+    }
+    tasks->rows = taskRows_;
+    tasks->generation = taskLedger_.generation();
+    tasks->completed = taskLedger_.completed();
+    facts.tasks = tasks;
     return facts;
 }
 
@@ -214,7 +295,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
 
     scoreTasks(snap, recent, agents, nowMs);
     snap.traffic = traffic_->view(nowMs);
-    snap.report = reportFacts(nowMs);
+    snap.report = reportFacts(nowMs, snap);
 
     for (const auto kind : MonitorConfig::allSources()) {
         SourceRow row;

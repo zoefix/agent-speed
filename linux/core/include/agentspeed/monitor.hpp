@@ -11,6 +11,7 @@
 #include "agentspeed/discovery.hpp"
 #include "agentspeed/engine.hpp"
 #include "agentspeed/locations.hpp"
+#include "agentspeed/report_task.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/task_tracker.hpp"
@@ -98,6 +99,12 @@ public:
     void setTrafficEnabled(bool enabled) { traffic_->setEnabled(enabled); }
     std::vector<traffic::HistoryRow> trafficToday(std::int64_t nowMs) const { return traffic_->todayRows(nowMs); }
     void restoreTraffic(const std::vector<traffic::HistoryRow>& rows) { traffic_->restore(rows); }
+    // METRICS 11.10 Watch: tasks that start while it is on are counted when they complete; `taken` is how many of this
+    // generation's completions the reports already took.
+    void setTaskWatch(bool on, std::int64_t taken) {
+        taskLedger_.setWatch(on);
+        taskLedger_.setTaken(taken);
+    }
     // The engine instance live reporting's counters belong to (METRICS 11.4).
     std::int64_t epoch() const { return epoch_; }
     // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
@@ -203,7 +210,17 @@ private:
     const std::int64_t epoch_;
     std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
     std::uint64_t reportCountersVersion_ = 0;
-    report::Facts reportFacts(std::int64_t nowMs);
+    report::Facts reportFacts(std::int64_t nowMs, const Snapshot& snap);
+    void countTasks(std::int64_t nowMs);
+    struct TaskSeen {
+        std::uint64_t version = UINT64_MAX;
+        std::vector<std::int64_t> starts;
+    };
+    std::map<std::string, TaskSeen> taskSeen_;
+    report::TaskLedger taskLedger_;
+    std::shared_ptr<const report::TaskRows> taskRows_ = std::make_shared<report::TaskRows>();
+    std::uint64_t taskRowsVersion_ = 0;
+    engine::Thinking lastThinking_;
 };
 
 }  // namespace agentspeed

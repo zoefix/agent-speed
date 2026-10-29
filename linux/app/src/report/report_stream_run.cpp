@@ -69,7 +69,8 @@ void ReportController::streamTick(const std::shared_ptr<const agentspeed::report
     const bool active = wake ? s.lastActive : sample->working() || sample->live.output > 0 || s.window->hasTokenIncrement(*sample);
     s.lastActive = active;
     const bool carriesTraffic = discovery_ && acceptedSections(*discovery_, switches()).contains(agentspeed::report::Section::Traffic);
-    const bool changed = !wake && (s.window->hasIncrement(*sample, carriesTraffic) || !s.lastBuilt || *s.lastBuilt != sentLive(*sample));
+    const bool changed = !wake && (s.window->hasIncrement(*sample, carriesTraffic) || !s.lastBuilt || *s.lastBuilt != sentLive(*sample) ||
+                                   s.lastTaskScores != taskSignature(*sample));
     s.title.update(sample->value(prefs_.metric() == QLatin1String("total")), prefs_.redline(), static_cast<double>(now) / 1000.0);
     s.scheduler->setReporting(ready());
     s.scheduler->setHeartbeat(discovery_->limits.heartbeatSeconds * 1000LL);
@@ -114,6 +115,7 @@ void ReportController::applyStream(const std::vector<agentspeed::report::stream:
             const auto body = agentspeed::report::fitted(envelope, content, *sample, opts).data;
             s.bodies[action.seq] = {body, agentspeed::report::sha256Hex(body)};
             s.lastBuilt = sentLive(*sample);
+            s.lastTaskScores = taskSignature(*sample);
             break;
         }
         case Kind::Write: streamWrite(action.seq); break;

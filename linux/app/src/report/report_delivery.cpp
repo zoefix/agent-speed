@@ -24,6 +24,38 @@ void ReportController::onTick(const ReportTick& tick) {
     lastSample_ = tick.sample;
     if (previewWindow_) previewWindow_->observe(*tick.sample);
     tickRun(tick.sample, tick.monotonicMs, tick.observedMs);
+    updateTaskWatch();
+}
+
+void ReportController::updateTaskWatch() {
+    if (!watchSink_) return;
+    bool on = enabled() && networkEnabled() && !paused() && problem_ == agentspeed::report::Problem::None && !streamStop_ && identity_ &&
+              identity_->registered && identity_->pin && discovery_ && !needsReview() && options(*discovery_, switches()).taskScoreActive();
+    qint64 taken = 0;
+    if (run_) taken = run_->window->takenCompleted();
+    else if (stream_) taken = stream_->window->takenCompleted();
+    else on = false;
+    const auto state = std::make_pair(on, on ? taken : 0);
+    if (sentWatch_ == state) return;
+    sentWatch_ = state;
+    watchSink_(state.first, state.second);
+}
+
+std::string ReportController::taskSignature(const agentspeed::report::Sample& sample) const {
+    if (!sample.facts.tasks || !discovery_ || !options(*discovery_, switches()).taskScoreActive()) return {};
+    const auto& tasks = *sample.facts.tasks;
+    std::vector<const agentspeed::report::TaskAgent*> all;
+    std::map<std::string, std::vector<const agentspeed::report::TaskAgent*>> byModel;
+    for (const auto& agent : tasks.agents) {
+        all.push_back(&agent);
+        byModel[agent.modelId].push_back(&agent);
+    }
+    auto signature = agentspeed::report::taskValue(all, tasks.thinking).compact();
+    for (const auto& [id, agents] : byModel) {
+        const auto it = tasks.modelThinking.find(id);
+        signature += id + agentspeed::report::taskValue(agents, it == tasks.modelThinking.end() ? 0 : it->second).compact();
+    }
+    return signature;
 }
 
 // A user event (pause, resume, network, stop) is handled at once with the latest values.
@@ -117,6 +149,7 @@ agentspeed::report::Options ReportController::options(const agentspeed::report::
         options.priceVersion = prices_->boundVersion(today).value_or(prices_->currentVersion());
     }
     options.extensions.modelHarnessRequests = discovery.has("modelHarnessRequests");
+    options.extensions.taskScore = discovery.has("taskScore");
     return options;
 }
 

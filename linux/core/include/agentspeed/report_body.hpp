@@ -148,6 +148,8 @@ public:
     WindowContent content(const Sample& sample) const;
     // Builds: the content, then an empty window starting at `sample`.
     WindowContent take(const Sample& sample);
+    // The completions of the current task generation the builds took (METRICS 11.10: the 1000 cap counts the rest).
+    std::int64_t takenCompleted() const { return takenCompleted_; }
 
 private:
     std::shared_ptr<const Counters> baseline_, lastCounters_;
@@ -160,6 +162,7 @@ private:
     std::uint64_t taskGeneration_ = 0;
     std::int64_t lastCompleted_ = 0;
     std::uint64_t lastTaskGeneration_ = 0;
+    std::int64_t takenCompleted_ = 0;
 };
 
 // The report title tracker (METRICS 11.2, REPORTING 6.4): the speed title level 0–13 of DESIGN 1 — entered at a

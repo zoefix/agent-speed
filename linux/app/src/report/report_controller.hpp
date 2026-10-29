@@ -253,6 +253,8 @@ public:
     // Development aid: reports to a local reference server (loopback http only, spec/tools/report_server.py) without
     // the consent clicks, and logs the status. Returns false for any other URL.
     bool startSelfTest(const QString& url);
+    // Where the task watch goes (the monitor worker).
+    void setWatchSink(std::function<void(bool, qint64)> sink) { watchSink_ = std::move(sink); }
     // The preview body with its keys in `keyColor` (DESIGN 11: keys secondary, values in the label color).
     Q_INVOKABLE QString previewRich(const QString& keyColor) const;
 
@@ -284,6 +286,7 @@ private:
         agentspeed::report::TitleTracker title;
         std::map<int, std::pair<std::string, std::string>> bodies;  // seq → body, its SHA-256
         std::optional<std::array<double, 6>> lastBuilt;             // the live values of the last built report, rounded as sent
+        std::string lastTaskScores;                                  // its taskScore objects (METRICS 11.10 WebSocket)
         bool lastActive = false;
     };
     struct Run {
@@ -363,6 +366,10 @@ private:
     void onSocketMessage(const QByteArray& text, bool binary);
     std::array<double, 6> sentLive(const agentspeed::report::Sample& sample) const;
 
+    // METRICS 11.10 Watch, sent to the engine when it changes.
+    void updateTaskWatch();
+    std::string taskSignature(const agentspeed::report::Sample& sample) const;
+
     // report_preview.cpp.
     void refreshPreview();
 
@@ -390,6 +397,8 @@ private:
     agentspeed::report::stream::Counters streamCounters_;
     std::vector<std::int64_t> streamLatency_;
     std::optional<std::optional<agentspeed::report::StreamSettings>> pendingStreamSettings_;
+    std::function<void(bool, qint64)> watchSink_;
+    std::optional<std::pair<bool, qint64>> sentWatch_;
     std::vector<agentspeed::report::Event> pendingEvents_;
     std::shared_ptr<const agentspeed::report::Sample> lastSample_;
     qint64 clockCorrectionSeconds_ = 0;
