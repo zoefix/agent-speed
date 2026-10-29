@@ -25,6 +25,7 @@ add_library(agentspeed_core STATIC
     src/text.cpp
     src/sqlite.cpp
     src/transcript_parser.cpp
+    src/workbuddy_parser.cpp
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)

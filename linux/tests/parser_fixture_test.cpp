@@ -12,6 +12,7 @@
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/gemini_parser.hpp"
 #include "agentspeed/omp_parser.hpp"
+#include "agentspeed/workbuddy_parser.hpp"
 #include "agentspeed/opencode.hpp"
 #include "agentspeed/parents.hpp"
 #include "fixture_support.hpp"
@@ -71,6 +72,12 @@ std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const s
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
     if (relative.rfind("dsh/", 0) == 0) return std::make_unique<DshParser>(agentId, deduper);
     if (relative.rfind("gemini/", 0) == 0) return std::make_unique<GeminiParser>(agentId, deduper);
+    if (relative.rfind("workbuddy/", 0) == 0) {
+        // The folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai).
+        const bool ai = relative.rfind("workbuddy/.workbuddy-ai/", 0) == 0;
+        const auto root = (fixtures::fixtureDir() / (ai ? "workbuddy/.workbuddy-ai/projects" : "workbuddy/.workbuddy/projects")).string();
+        return std::make_unique<WorkBuddyParser>(agentId, deduper, ai ? SourceKind::WorkBuddyAi : SourceKind::WorkBuddy, root);
+    }
     if (relative.rfind("omp/", 0) == 0) {
         // The folder `omp` plays ~/.omp: roots omp/agent/sessions and omp/profiles/*/agent/sessions.
         const auto cut = agentId.find("/agent/sessions/");
@@ -155,7 +162,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 28);
+    EXPECT_EQ(checked, 36);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
