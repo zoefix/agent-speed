@@ -1,5 +1,6 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
+pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 
 add_library(agentspeed_core STATIC
     src/claude_parser.cpp
@@ -14,11 +15,13 @@ add_library(agentspeed_core STATIC
     src/model.cpp
     src/modes.cpp
     src/monitor.cpp
+    src/opencode.cpp
     src/parents.cpp
     src/path_text.cpp
     src/rfc3339.cpp
+    src/sqlite.cpp
     src/transcript_parser.cpp
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)
-target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD)
+target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE)

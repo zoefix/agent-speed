@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 #include <memory>
 #include <vector>
@@ -8,6 +9,7 @@
 #include "agentspeed/codex_parser.hpp"
 #include "agentspeed/dsh_parser.hpp"
 #include "agentspeed/file_reader.hpp"
+#include "agentspeed/opencode.hpp"
 #include "agentspeed/parents.hpp"
 #include "fixture_support.hpp"
 
@@ -42,6 +44,23 @@ void expectMode(const std::optional<ModeAttribution>& got, const json::Value& wa
 void expectModes(const ExecutionModes& modes, const json::Value& want) {
     expectMode(effort_speed::effort(modes), want["effort"], "effort");
     expectMode(effort_speed::speed(modes), want["speed"], "speed");
+}
+
+void expectResponse(const ParsedResponse& got, const json::Value& r) {
+    SCOPED_TRACE(got.key);
+    EXPECT_EQ(got.key, *r["key"].string());
+    EXPECT_EQ(got.startMs, fixtures::optInt(r["startMs"]));
+    EXPECT_EQ(got.endMs, *fixtures::optInt(r["endMs"]));
+    EXPECT_EQ(got.tokens.input, *fixtures::optInt(r["input"]));
+    EXPECT_EQ(got.tokens.cachedInput, *fixtures::optInt(r["cachedInput"]));
+    EXPECT_EQ(got.tokens.cacheWriteInput, *fixtures::optInt(r["cacheWriteInput"]));
+    EXPECT_EQ(got.tokens.cacheWrite1hInput, *fixtures::optInt(r["cacheWrite1hInput"]));
+    EXPECT_EQ(got.tokens.output, *fixtures::optInt(r["output"]));
+    EXPECT_EQ(got.tokens.reasoning, *fixtures::optInt(r["reasoning"]));
+    EXPECT_EQ(got.model, fixtures::optString(r["model"]));
+    EXPECT_EQ(got.provider, fixtures::optString(r["provider"]));
+    EXPECT_EQ(got.fast, r["fast"].isTrue());
+    EXPECT_EQ(got.final, r["final"].isTrue());
 }
 
 std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const std::string& agentId, Deduper& deduper) {
@@ -92,24 +111,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
 
         const auto responses = want["responses"].elements();
         ASSERT_EQ(sink.order.size(), responses.size());
-        for (std::size_t i = 0; i < responses.size(); ++i) {
-            const auto& r = responses[i];
-            const auto& got = sink.byKey[sink.order[i]];
-            SCOPED_TRACE(got.key);
-            EXPECT_EQ(got.key, *r["key"].string());
-            EXPECT_EQ(got.startMs, fixtures::optInt(r["startMs"]));
-            EXPECT_EQ(got.endMs, *fixtures::optInt(r["endMs"]));
-            EXPECT_EQ(got.tokens.input, *fixtures::optInt(r["input"]));
-            EXPECT_EQ(got.tokens.cachedInput, *fixtures::optInt(r["cachedInput"]));
-            EXPECT_EQ(got.tokens.cacheWriteInput, *fixtures::optInt(r["cacheWriteInput"]));
-            EXPECT_EQ(got.tokens.cacheWrite1hInput, *fixtures::optInt(r["cacheWrite1hInput"]));
-            EXPECT_EQ(got.tokens.output, *fixtures::optInt(r["output"]));
-            EXPECT_EQ(got.tokens.reasoning, *fixtures::optInt(r["reasoning"]));
-            EXPECT_EQ(got.model, fixtures::optString(r["model"]));
-            EXPECT_EQ(got.provider, fixtures::optString(r["provider"]));
-            EXPECT_EQ(got.fast, r["fast"].isTrue());
-            EXPECT_EQ(got.final, r["final"].isTrue());
-        }
+        for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
         facts.push_back(parser->link());
         if (auto parent = fixtures::optString(want["parentFile"])) {
             wantParents[absolute] = (fixtures::fixtureDir() / *parent).string();
@@ -120,4 +122,47 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
+
+    // Then the OpenCode database, with the same dedupe set; reading it must not create any file.
+    const auto opencodeDir = fixtures::fixtureDir() / "opencode";
+    const auto before = fixtures::listFiles(opencodeDir);
+    opencode::Source source(opencodeDir.string(), deduper);
+    source.refreshAvailability();
+    ASSERT_EQ(source.status(), opencode::Status::Ready);
+    const auto update = source.seed(0);
+    const auto wantAgents = expected.root()["opencode"]["agents"];
+    ASSERT_EQ(update.agents.size(), wantAgents.members().size());
+    for (const auto& [id, want] : wantAgents.members()) {
+        SCOPED_TRACE(id);
+        ASSERT_TRUE(update.agents.contains(id));
+        const auto& got = update.agents.at(id);
+        EXPECT_EQ(sourceId(SourceKind::OpenCode), *want["source"].string());
+        EXPECT_EQ(got.project, fixtures::optString(want["project"]));
+        EXPECT_EQ(got.model, fixtures::optString(want["model"]));
+        EXPECT_EQ(got.isSubagent, want["isSubagent"].isTrue());
+        const std::optional<std::string> parent =
+            got.parentSessionId && update.agents.contains(opencode::agentId(*got.parentSessionId))
+                ? std::optional<std::string>(opencode::agentId(*got.parentSessionId))
+                : std::nullopt;
+        EXPECT_EQ(parent, fixtures::optString(want["parentId"]));
+        EXPECT_EQ(phaseId(got.phase), *want["phase"].string());
+        EXPECT_EQ(got.inFlightStartMs, fixtures::optInt(want["inFlightStartMs"]));
+        EXPECT_EQ(got.lastLineMs, fixtures::optInt(want["lastLineMs"]));
+        expectModes(got.modes, want);
+        std::vector<ParsedResponse> mine;
+        for (const auto& [r, _] : update.responses) {
+            if (r.agentId == id) mine.push_back(r);
+        }
+        const auto responses = want["responses"].elements();
+        ASSERT_EQ(mine.size(), responses.size());
+        for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(mine[i], responses[i]);
+        if (const auto modes = want["responseModes"]; modes.isObject()) {
+            for (const auto& [key, value] : modes.members()) {
+                const auto r = std::find_if(mine.begin(), mine.end(), [&](const ParsedResponse& p) { return p.key == key; });
+                ASSERT_NE(r, mine.end()) << key;
+                expectModes(r->modes, value);
+            }
+        }
+    }
+    EXPECT_EQ(fixtures::listFiles(opencodeDir), before);
 }
