@@ -13,7 +13,7 @@ std::optional<std::string> optCwd(const json::Value& c) { return fixtures::optSt
 SourceKind sourceOf(const json::Value& c) { return *sourceFromId(*c["source"].string()); }
 
 // The groups ported so far; a case of any other group is skipped.
-const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification"};
+const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification", "codeScript", "codeItems"};
 
 }  // namespace
 
@@ -65,6 +65,38 @@ TEST(TaskParsers, MatchTheReferenceCases) {
                 ASSERT_TRUE(n.has_value());
                 EXPECT_EQ(n->session, *expect["session"].string());
                 EXPECT_EQ(n->exitCode, fixtures::optInt(expect["exitCode"]));
+            }
+        }
+        if (group == "codeScript") {
+            const auto script = tasks::codeScript(sourceOf(c), fixtures::optString(c["tool"]), c["input"]);
+            if (expect.isNull()) {
+                EXPECT_FALSE(script.has_value());
+            } else {
+                ASSERT_TRUE(script.has_value());
+                const auto calls = expect["calls"].elements();
+                ASSERT_EQ(script->calls.size(), calls.size());
+                for (std::size_t i = 0; i < calls.size(); ++i) {
+                    EXPECT_EQ(script->calls[i].tool, *calls[i]["tool"].string());
+                    EXPECT_EQ(script->calls[i].input, fixtures::compactJson(calls[i]["input"]));
+                    EXPECT_EQ(script->calls[i].digest, *calls[i]["digest"].string());
+                }
+                EXPECT_EQ(script->plain, expect["plain"].isTrue());
+                const auto prints = expect["prints"].elements();
+                ASSERT_EQ(script->prints.size(), prints.size());
+                for (std::size_t i = 0; i < prints.size(); ++i) {
+                    EXPECT_EQ(script->prints[i].first, *fixtures::optInt(prints[i].at(0)));
+                    EXPECT_EQ(script->prints[i].second, *prints[i].at(1).string());
+                }
+            }
+        } else if (group == "codeItems") {
+            const auto items = tasks::codeItems(sourceOf(c), c["result"]);
+            if (expect.isNull()) {
+                EXPECT_FALSE(items.has_value());
+            } else {
+                ASSERT_TRUE(items.has_value());
+                const auto want = expect.elements();
+                ASSERT_EQ(items->size(), want.size());
+                for (std::size_t i = 0; i < want.size(); ++i) EXPECT_EQ((*items)[i], fixtures::optString(want[i]));
             }
         }
         ++checked;

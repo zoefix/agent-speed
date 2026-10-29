@@ -63,6 +63,7 @@ add_library(agentspeed_core STATIC
     src/pricing.cpp
     src/rfc3339.cpp
     src/tailer.cpp
+    src/tasks/code_mode.cpp
     src/tasks/command.cpp
     src/tasks/common.cpp
     src/tasks/programs.cpp
