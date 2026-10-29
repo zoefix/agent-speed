@@ -69,4 +69,33 @@ std::string strip(std::string_view s) {
     return std::string(s.substr(start, end - start));
 }
 
+void appendUtf8(std::string& out, std::uint32_t cp) {
+    if (cp < 0x80) {
+        out += static_cast<char>(cp);
+    } else if (cp < 0x800) {
+        out += static_cast<char>(0xC0 | (cp >> 6));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else if (cp < 0x10000) {
+        out += static_cast<char>(0xE0 | (cp >> 12));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    } else {
+        out += static_cast<char>(0xF0 | (cp >> 18));
+        out += static_cast<char>(0x80 | ((cp >> 12) & 0x3F));
+        out += static_cast<char>(0x80 | ((cp >> 6) & 0x3F));
+        out += static_cast<char>(0x80 | (cp & 0x3F));
+    }
+}
+
+std::string sanitizeUtf8(std::string_view bytes) {
+    std::string out;
+    out.reserve(bytes.size());
+    for (std::size_t i = 0; i < bytes.size();) {
+        std::uint32_t cp = nextCodePoint(bytes, i);
+        if ((cp >= 0xD800 && cp <= 0xDFFF) || cp > 0x10FFFF) cp = 0xFFFD;
+        appendUtf8(out, cp);
+    }
+    return out;
+}
+
 }  // namespace agentspeed::text

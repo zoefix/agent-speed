@@ -69,6 +69,13 @@ std::string_view Statement::getText(int column) const {
     return text ? std::string_view(text, static_cast<std::size_t>(size)) : std::string_view();
 }
 
+std::string_view Statement::getBlob(int column) const {
+    if (isNull(column)) return {};
+    const auto* data = static_cast<const char*>(sqlite3_column_blob(stmt_, column));
+    const int size = sqlite3_column_bytes(stmt_, column);
+    return data ? std::string_view(data, static_cast<std::size_t>(size)) : std::string_view();
+}
+
 std::int64_t Statement::getInt64(int column) const { return sqlite3_column_int64(stmt_, column); }
 
 std::optional<std::int64_t> Statement::getNullableInt64(int column) const {
@@ -108,6 +115,15 @@ Statement Connection::prepare(std::string_view sql) const {
 std::int64_t Connection::scalarInt64(std::string_view sql) const {
     Statement statement = prepare(sql);
     return statement.step() ? statement.getInt64(0) : 0;
+}
+
+void Connection::execute(const std::string& sql) const {
+    char* error = nullptr;
+    const int code = sqlite3_exec(db_, sql.c_str(), nullptr, nullptr, &error);
+    if (code == SQLITE_OK) return;
+    const std::string text = error ? error : message(db_);
+    sqlite3_free(error);
+    throw Error(code, text);
 }
 
 bool Connection::hasTables(std::initializer_list<std::string_view> names) const {

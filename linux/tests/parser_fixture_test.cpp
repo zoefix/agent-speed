@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "agentspeed/antigravity.hpp"
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
 #include "agentspeed/dsh_parser.hpp"
@@ -201,4 +202,60 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
     }
     EXPECT_EQ(fixtures::listFiles(opencodeDir), before);
+
+    // Then the Antigravity databases, same dedupe set; reading must not create any file.
+    const auto antigravityDir = fixtures::fixtureDir() / "antigravity";
+    const auto antigravityBefore = fixtures::listFiles(antigravityDir);
+    const auto wantDatabases = expected.root()["antigravity"]["databases"];
+    std::vector<std::unique_ptr<antigravity::Parser>> databases;
+    std::vector<Collector> databaseSinks;
+    databaseSinks.reserve(32);
+    std::vector<AgentLink> databaseLinks;
+    for (const auto& entry : expected.root()["antigravity"]["order"].elements()) {
+        const std::string relative = *entry.string();
+        const auto absolute = (fixtures::fixtureDir() / relative).string();
+        SCOPED_TRACE(relative);
+        auto parser = std::make_unique<antigravity::Parser>(absolute, deduper);
+        auto database = antigravity::Database::open(absolute);
+        antigravity::Batch batch;
+        antigravity::Cursors cursors;
+        databaseSinks.emplace_back();
+        Collector& sink = databaseSinks.back();
+        if (database->supported()) {
+            database->read(cursors, batch);
+        } else {
+            batch.unsupported = true;
+        }
+        parser->apply(batch, sink);
+        const auto want = wantDatabases[relative];
+        ASSERT_TRUE(want.valid());
+        if (want["unsupported"].isTrue()) {
+            EXPECT_TRUE(parser->unsupported());
+            EXPECT_TRUE(sink.order.empty());
+            continue;
+        }
+        EXPECT_FALSE(parser->unsupported());
+        EXPECT_EQ(sourceId(parser->source()), *want["source"].string());
+        EXPECT_EQ(parser->project(), fixtures::optString(want["project"]));
+        EXPECT_EQ(parser->model(), fixtures::optString(want["model"]));
+        EXPECT_EQ(parser->isSubagent(), want["isSubagent"].isTrue());
+        EXPECT_EQ(phaseId(parser->phase()), *want["phase"].string());
+        EXPECT_EQ(parser->inFlightStartMs(), fixtures::optInt(want["inFlightStartMs"]));
+        EXPECT_EQ(parser->lastLineMs(), fixtures::optInt(want["lastLineMs"]));
+        EXPECT_EQ(parser->malformedLines(), *fixtures::optInt(want["malformedLines"]));
+        const auto responses = want["responses"].elements();
+        ASSERT_EQ(sink.order.size(), responses.size());
+        for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
+        databaseLinks.push_back(parser->link());
+        databases.push_back(std::move(parser));
+    }
+    std::map<std::string, std::string> wantDatabaseParents, gotDatabaseParents;
+    for (const auto& [relative, want] : wantDatabases.members()) {
+        if (auto parent = fixtures::optString(want["parentFile"])) {
+            wantDatabaseParents[(fixtures::fixtureDir() / relative).string()] = (fixtures::fixtureDir() / *parent).string();
+        }
+    }
+    for (const auto& [id, parent] : parent_links::resolve(databaseLinks)) gotDatabaseParents[id] = parent;
+    EXPECT_EQ(gotDatabaseParents, wantDatabaseParents);
+    EXPECT_EQ(fixtures::listFiles(antigravityDir), antigravityBefore);
 }

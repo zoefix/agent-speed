@@ -3,6 +3,7 @@ pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 
 add_library(agentspeed_core STATIC
+    src/antigravity.cpp
     src/claude_parser.cpp
     src/codex_parser.cpp
     src/dedupe.cpp

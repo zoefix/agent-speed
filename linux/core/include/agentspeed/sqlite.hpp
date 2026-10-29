@@ -44,6 +44,7 @@ public:
     void reset();
     std::optional<std::string> getString(int column) const;
     std::string_view getText(int column) const;
+    std::string_view getBlob(int column) const;
     std::int64_t getInt64(int column) const;
     std::optional<std::int64_t> getNullableInt64(int column) const;
     bool isNull(int column) const;
@@ -63,6 +64,7 @@ public:
 
     Statement prepare(std::string_view sql) const;
     std::int64_t scalarInt64(std::string_view sql) const;
+    void execute(const std::string& sql) const;
     bool hasTables(std::initializer_list<std::string_view> names) const;
     const std::string& path() const { return path_; }
 

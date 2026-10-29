@@ -14,5 +14,8 @@ bool isPythonSpace(std::uint32_t cp);
 // True when the text has a code point outside isPythonSpace.
 bool hasVisibleText(std::string_view s);
 std::string strip(std::string_view s);
+// Bytes as UTF-8 with invalid sequences replaced by U+FFFD.
+std::string sanitizeUtf8(std::string_view bytes);
+void appendUtf8(std::string& out, std::uint32_t cp);
 
 }  // namespace agentspeed::text
