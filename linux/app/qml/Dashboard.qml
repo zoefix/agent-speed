@@ -6,6 +6,7 @@ import QtCore
 import "Format.js" as Format
 import "Heat.js" as Heat
 import "Sync.js" as Sync
+import AgentSpeed.Orb
 
 // DESIGN 4: the dashboard, a 368-wide flyout beside the tray (or a plain window where there is no tray).
 Window {
@@ -30,7 +31,7 @@ Window {
     readonly property bool bothUnits: prefs.liveUnit === "both"
 
     Settings {
-        id: prefs
+        id: dashboardState
         category: "dashboard"
         property bool agentsExpanded: false
     }
@@ -50,7 +51,7 @@ Window {
         Sync.sync(sourceModel, sources, "key")
 
         var raw = s.agents || []
-        var shown = prefs.agentsExpanded ? raw : raw.slice(0, collapsedRows)
+        var shown = dashboardState.agentsExpanded ? raw : raw.slice(0, collapsedRows)
         var facts = Sync.tree(shown)
         var agents = []
         for (var j = 0; j < shown.length; ++j) {
@@ -267,10 +268,21 @@ Window {
                     Layout.fillWidth: true
                     spacing: 18
 
-                    Gauge {
-                        heat: root.snap.heat || 0
+                    // DESIGN 4 Hero: the 112 pt orb (ring effects capped at Soft) with the hero vehicle or title badge.
+                    Item {
                         Layout.preferredWidth: 112
                         Layout.preferredHeight: 112
+                        HeroOrb {
+                            anchors.centerIn: parent
+                            width: 150
+                            height: 150
+                            diameter: 112
+                            dark: Theme.dark
+                            redline: prefs.redline
+                            effects: orbs.effectsLevel
+                            snapshot: root.snap
+                            running: root.visible
+                        }
                     }
 
                     ColumnLayout {
@@ -456,12 +468,12 @@ Window {
                             height: 12
                             name: "chevron"
                             color: Theme.ink2
-                            rotation: prefs.agentsExpanded ? 180 : 0
+                            rotation: dashboardState.agentsExpanded ? 180 : 0
                             Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
                         }
                         Text {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: prefs.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                            text: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
                                                        : Format.fill(S.tr2(S.rev, "agents.expand"), [disclosure.total - root.collapsedRows])
                             color: Theme.ink2
                             font.pixelSize: 12
@@ -474,12 +486,12 @@ Window {
                         hoverEnabled: true
                         cursorShape: Qt.PointingHandCursor
                         onClicked: {
-                            prefs.agentsExpanded = !prefs.agentsExpanded
+                            dashboardState.agentsExpanded = !dashboardState.agentsExpanded
                             root.applySnapshot()
                         }
                     }
                     Accessible.role: Accessible.Button
-                    Accessible.name: prefs.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                    Accessible.name: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
                                                           : Format.fill(S.tr2(S.rev, "agents.expand.a11y"), [disclosure.total])
                 }
 

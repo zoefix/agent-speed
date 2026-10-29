@@ -13,6 +13,8 @@ public:
     static constexpr int kTitles = 13;
 
     void setRedline(double redline) { redline_ = redline > 0 ? redline : 2000; }
+    // Entry speed of title `index` (0 walk … 12 rocket) for a redline (DESIGN 1).
+    static double titleThreshold(int index, double redline);
     double redline() const { return redline_; }
     // A new live value (each data tick). The first one sets everything without transitions.
     void update(double value, double now);

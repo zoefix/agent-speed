@@ -28,6 +28,11 @@ qt_add_executable(agent-speed
     src/report/report_settings.cpp
     src/report/report_socket.cpp
     src/report/report_stream_run.cpp
+    src/hero/hero_badge.cpp
+    src/hero/hero_item.cpp
+    src/hero/hero_library.cpp
+    src/hero/hero_painter.cpp
+    src/hero/hero_stage.cpp
     src/orb/body.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
@@ -128,6 +133,12 @@ qt_add_qml_module(agent-speed
     URI AgentSpeed
     VERSION 1.0
     QML_FILES ${agent_speed_qml}
+)
+
+qt_add_resources(agent-speed "vehicles"
+    PREFIX "/assets"
+    BASE "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets"
+    FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/vehicles.json"
 )
 
 qt_add_resources(agent-speed "strings"

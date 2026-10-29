@@ -138,6 +138,13 @@ void PreviewItem::setRunning(bool running) {
     updateTimer();
 }
 
+void PreviewItem::pulse(double strength, double heat) { style_->pulse(Engine::shared().now(), strength, heat); }
+
+void PreviewItem::celebrate() {
+    peakStart_ = Engine::shared().now();
+    style_->celebrate(peakStart_);
+}
+
 void PreviewItem::setLiveValue(double value) {
     if (value == liveValue_) return;
     liveValue_ = value;
@@ -158,7 +165,7 @@ void PreviewItem::setRedline(double redline) {
 }
 
 void PreviewItem::setFps(int fps) {
-    fps = std::clamp(fps, 1, 24);
+    fps = std::clamp(fps, 1, 60);
     if (fps == fps_) return;
     fps_ = fps;
     timer_.setInterval(1000 / fps_);
@@ -224,9 +231,12 @@ void PreviewItem::tick() {
     f.unit = s / 148;
     f.dark = dark_;
     f.tokens = Tokens::forDark(dark_);
-    f.effects = led::Effects::make(1, true);
+    f.effects = led::Effects::make(effectsLevel_, smallEffects_);
     f.heat = gauge_.heat();
-    f.displayHeat = f.heat;
+    const double sincePeak = t - peakStart_;
+    f.peakAge = sincePeak >= 0 && sincePeak < 2.0 ? sincePeak : -1;
+    f.displayHeat = f.heat * (sincePeak >= 0 && sincePeak < 0.5 ? led::easeOut(sincePeak / 0.5) : 1);
+    lastTick_ = t;
     f.overdrive = gauge_.overdrive();
     f.rawHeat = heat::of(gauge_.value(), redline);
     f.rawOverdrive = std::clamp((gauge_.value() - redline) / redline, 0.0, 1.0);
@@ -251,7 +261,7 @@ void PreviewItem::tick() {
     style_->step(f);
     if (style_->sharedAura()) shared::addAura(scene, f);
     style_->build(scene, f);
-    style_->buildReadout(scene, f, content, measure);
+    if (showsReadout_) style_->buildReadout(scene, f, content, measure);
     frame_ = engine.render(scene, kind_, dark_, s, dpr);
     engine.end();
     update();

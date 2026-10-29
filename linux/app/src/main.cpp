@@ -24,6 +24,7 @@
 #include "orb/orb_window.hpp"
 #include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
+#include "hero/hero_item.hpp"
 #include "preferences.hpp"
 #include "report/report_controller.hpp"
 #include "strings.hpp"
@@ -233,6 +234,8 @@ int main(int argc, char* argv[]) {
     OrbManager orbs(strings, prefs, orbStore);
     orb::PreviewItem::setUnit(strings.t(QStringLiteral("unit.tokS")));
     qmlRegisterType<orb::PreviewItem>("AgentSpeed.Orb", 1, 0, "OrbPreview");
+    HeroItem::setContext(&themes, &strings);
+    qmlRegisterType<HeroItem>("AgentSpeed.Orb", 1, 0, "HeroOrb");
 
     QQmlApplicationEngine engine;
     const bool popup = tray.available() || !snapshotPath.isEmpty();

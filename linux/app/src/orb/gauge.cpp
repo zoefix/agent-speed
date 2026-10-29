@@ -40,7 +40,12 @@ double Gauge::enterTier(Tier tier) const {
     return 0;
 }
 
-double Gauge::enterTitle(int index) const { return index == 0 ? 0.5 : kTitleFractions[index] * redline_; }
+double Gauge::titleThreshold(int index, double redline) {
+    index = std::clamp(index, 0, kTitles - 1);
+    return index == 0 ? 0.5 : kTitleFractions[index] * redline;
+}
+
+double Gauge::enterTitle(int index) const { return titleThreshold(index, redline_); }
 
 Tier Gauge::desiredTier(double now) const {
     const double v = value_;

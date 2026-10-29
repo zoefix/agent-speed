@@ -65,14 +65,18 @@ signals:
 
 protected:
     void itemChange(ItemChange change, const ItemChangeData& value) override;
-
-private:
+    // Renders the next frame into frame_ (subclasses add their own layers after it).
+    virtual void tick();
     void updateTimer();
-    void tick();
+    // The dashboard hero: no readout, the global effects level capped at Soft, its own pulses and peaks.
+    bool showsReadout_ = true;
+    int effectsLevel_ = 1;
+    bool smallEffects_ = true;
+    void pulse(double strength, double heat);
+    void celebrate();
 
     StyleKind kind_ = StyleKind::Led;
     std::unique_ptr<Style> style_;
-    Gauge gauge_;
     double diameter_ = 64;
     double offset_ = 0;
     bool dark_ = true;
@@ -86,6 +90,11 @@ private:
     int fps_ = 24;
     QTimer timer_;
     QImage frame_;
+    Gauge gauge_;
+    double peakStart_ = -1e9;
+    double lastTick_ = 0;
+
+private:
 };
 
 }  // namespace orb
