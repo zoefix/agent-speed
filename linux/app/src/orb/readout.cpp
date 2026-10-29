@@ -26,8 +26,39 @@ bool latin(const QString& text) {
 
 void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const MeasureText& measure) {
     const double s = f.s;
-    const double cx = f.center.x(), cy = f.center.y();
+    const double cx = f.center.x(), dotsY = f.center.y();
     const bool idle = f.idle();
+
+    // The intelligence block (DESIGN 10): drawn when both lines fit 0.44 S with their widest text; while it shows, the
+    // value, unit, title and pill move down by half the block's height over the value's cap top.
+    const auto& intelIn = c.intel;
+    const double ts = std::max(7.0, 0.050 * s), ps = 1.25 * ts;
+    const auto widthOf = [&](const QString& text, double size, int weight) {
+        TextDraw d;
+        d.text = text;
+        d.pixelSize = size;
+        d.weight = weight;
+        return measure ? measure(d) : size * 0.6 * static_cast<double>(text.size());
+    };
+    bool intel = false;
+    double shift = 0;
+    if (intelIn.opacity > 0.01) {
+        const double intelWidth = widthOf(intelIn.glyph, 0.82 * ps, 600) + 0.20 * ps + widthOf(QStringLiteral("888"), ps, 600);
+        const double thinkWidth = widthOf(intelIn.thinkingGlyph, 0.82 * ts, 600) + 0.16 * ts + widthOf(QStringLiteral("8.88"), ts, 600) + 0.16 * ts +
+                                  widthOf(intelIn.unit, 0.82 * ts, 500);
+        intel = intelWidth <= 0.44 * s && thinkWidth <= 0.44 * s;
+        if (intel) {
+            const double nearest = -0.245 * s;
+            const double capTop = (kValueBaseline - 0.70 * kValueSize) * s;
+            const double blockTop = nearest - 1.32 * ts * (1 - intelIn.glide) - 0.70 * ps;
+            const double titleBottom = (kValueBaseline + kUnitGap + kTitleGap + 0.22 * kTitleSize) * s;
+            const double dotsTop = kDots * s - 2 * f.unit;
+            const double wanted = std::min(std::max(0.0, (capTop - blockTop) / 2), std::max(0.0, dotsTop - 0.05 * s - titleBottom));
+            const double e = intelIn.opacity * intelIn.opacity * (3 - 2 * intelIn.opacity);
+            shift = wanted * e;
+        }
+    }
+    const double cy = dotsY + shift;
 
     // Value: tabular bold 0.24 S; from boost a heat glow, from overdrive a lean and a wider soft glow.
     TextDraw value;
@@ -98,7 +129,7 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
         const int dots = overflow > 0 ? 5 : count;
         const double d = 4 * f.unit, spacing = 3.2 * f.unit, more = 0.075 * s;
         const double total = dots * d + std::max(0, dots - 1) * spacing + (overflow > 0 ? spacing + more : 0);
-        const double y = cy + kDots * s;
+        const double y = dotsY + kDots * s;
         double x = cx - total / 2;
         for (int i = 0; i < dots; ++i) {
             const Rgba tint = Rgba::from(c.agents[static_cast<std::size_t>(i)]);
@@ -141,6 +172,67 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
         label.baselineCenter = QPointF(cx, y + 0.36 * label.pixelSize);
         label.color = gold.withAlpha(alpha);
         scene.add(label);
+    }
+
+    if (!intel) return;
+    // The readout steps aside for the new-peak pill.
+    double pill = 0;
+    if (f.effects.celebrate && f.peakAge >= 0 && f.peakAge < kPeakPill) pill = std::min({1.0, f.peakAge / 0.15, (kPeakPill - f.peakAge) / 0.15});
+    const double alpha = intelIn.opacity * (1 - pill);
+    if (alpha <= 0.01) return;
+    struct Piece {
+        TextDraw draw;
+        double gap = 0;
+        double width = 0;
+    };
+    const auto line = [&](std::vector<Piece> pieces, double baseline, double opacity) -> std::vector<Piece> {
+        double total = 0;
+        for (auto& piece : pieces) {
+            piece.width = widthOf(piece.draw.text, piece.draw.pixelSize, piece.draw.weight);
+            total += piece.width + piece.gap;
+        }
+        double x = std::round(cx - total / 2);
+        for (auto& piece : pieces) {
+            piece.draw.baselineCenter = QPointF(x + piece.width / 2, baseline);
+            piece.draw.color = piece.draw.color.withAlpha(piece.draw.color.a * opacity);
+            if (piece.draw.color.a > 0.005) scene.add(piece.draw);
+            piece.draw.baselineCenter.setX(x);
+            x = std::round(x + piece.width + piece.gap);
+        }
+        return pieces;
+    };
+    const auto text = [](const QString& label, double size, int weight, Rgba color, double gap) {
+        Piece piece;
+        piece.draw.text = label;
+        piece.draw.pixelSize = size;
+        piece.draw.weight = weight;
+        piece.draw.color = color;
+        piece.gap = gap;
+        return piece;
+    };
+    const Rgba unitColor = f.tokens.secondaryText;
+    const Rgba numberColor = intelIn.form == 1 ? f.tokens.valueText.withAlpha(f.tokens.valueText.a * 0.8) : unitColor;
+    const double nearest = dotsY + shift - 0.245 * s;
+    const double intelBaseline = nearest - 1.32 * ts * (1 - intelIn.glide);
+    auto number = text(intelIn.number, ps, 600, numberColor, 0);
+    number.draw.color = number.draw.color.withAlpha(number.draw.color.a * intelIn.numberAlpha);
+    const auto drawn = line({text(intelIn.glyph, 0.82 * ps, 600, unitColor, 0.20 * ps), number}, intelBaseline, alpha);
+    if (intelIn.proof && drawn.size() == 2) {
+        // The proof mark: a dotted underline under the digits, 0.22 p below the baseline, no glow.
+        const double w = drawn[1].width, left = drawn[1].draw.baselineCenter.x();
+        const double d = std::max(1.0, 0.1 * ps);
+        const int n = std::max(2, static_cast<int>(std::floor((w - d) / (2.4 * d))) + 1);
+        const Rgba dot = numberColor.withAlpha(numberColor.a * 0.7 * alpha);
+        for (int i = 0; i < n; ++i) {
+            const double x = left + d / 2 + (n > 1 ? i * (w - d) / (n - 1) : 0);
+            scene.add(Instance::circle(QPointF(x, intelBaseline + 0.22 * ps), d / 2, dot, 1, 0, 0), Blend::Over);
+        }
+    }
+    if (intelIn.thinkingOpacity > 0.01) {
+        line({text(intelIn.thinkingGlyph, 0.82 * ts, 600, unitColor, 0.16 * ts),
+              text(intelIn.thinking, ts, 600, f.tokens.valueText.withAlpha(f.tokens.valueText.a * 0.8), 0.16 * ts),
+              text(intelIn.unit, 0.82 * ts, 500, unitColor, 0)},
+             nearest, alpha * intelIn.thinkingOpacity);
     }
 }
 

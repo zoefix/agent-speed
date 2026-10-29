@@ -26,6 +26,21 @@ SettingsPage {
             }
         }
         SettingsRow {
+            label: S.tr2(S.rev, "orbs.traffic")
+            caption: orb.traffic === "intelligence" ? S.tr2(S.rev, "orbs.traffic.hint.intel") : S.tr2(S.rev, "orbs.traffic.hint")
+            Dropdown {
+                value: orb.traffic
+                popupWidth: 200
+                options: [
+                    { value: "sources", label: S.tr2(S.rev, "orbs.traffic.sources") },
+                    { value: "machine", label: S.tr2(S.rev, "orbs.traffic.machine") },
+                    { value: "intelligence", label: S.tr2(S.rev, "orbs.traffic.intelligence") },
+                    { value: "off", label: S.tr2(S.rev, "orbs.traffic.off") }
+                ]
+                onActivated: (v) => orb.traffic = v
+            }
+        }
+        SettingsRow {
             label: S.tr2(S.rev, "menu.alwaysOnTop")
             ToggleSwitch {
                 label: S.tr2(S.rev, "menu.alwaysOnTop")

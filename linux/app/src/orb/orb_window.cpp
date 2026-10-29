@@ -88,6 +88,11 @@ OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), s
     effectsLevel_ = std::clamp(settings.value(QStringLiteral("effects"), 2).toInt(), 0, 3);
     alwaysOnTop_ = settings.value(QStringLiteral("alwaysOnTop"), true).toBool();
     clickThrough_ = settings.value(QStringLiteral("clickThrough"), false).toBool();
+    // Absent (older builds) → sources; unknown → off (DESIGN 2b).
+    traffic_ = settings.value(QStringLiteral("traffic"), QStringLiteral("sources")).toString();
+    if (traffic_ != QLatin1String("sources") && traffic_ != QLatin1String("machine") && traffic_ != QLatin1String("intelligence")) {
+        traffic_ = QStringLiteral("off");
+    }
     settings.endGroup();
     blur_ = x11::blurSupported();
     applyFlags();
@@ -216,6 +221,90 @@ QString OrbWindow::titleText(int index) const {
     return strings_.t(QString::fromLatin1(kTitleKeys[index]));
 }
 
+void OrbWindow::setTraffic(const QString& traffic) {
+    if (traffic == traffic_) return;
+    traffic_ = traffic;
+    QSettings().setValue(QStringLiteral("orb/traffic"), traffic);
+    emit trafficChanged();
+    requestFrame();
+}
+
+namespace {
+
+double smoothstep(double x) {
+    x = std::clamp(x, 0.0, 1.0);
+    return x * x * (3 - 2 * x);
+}
+
+double ramp(double value, double target, double dt, double seconds) {
+    const double step = dt / seconds;
+    return value < target ? std::min(target, value + step) : std::max(target, value - step);
+}
+
+}  // namespace
+
+// DESIGN 10 Intelligence readout: visible while 智力 has a value or an agent generates, fading out 10 s after neither;
+// 思考 hides 3 s after it reads 0 and the 智力 line glides to the single-line position.
+void OrbWindow::stepIntel(double time, double dt) {
+    const bool enabled = traffic_ == QLatin1String("intelligence");
+    if (enabled && (intelForm_ != 0 || intelGenerating_)) intelLastActive_ = time;
+    const double target = enabled && time - intelLastActive_ < 10 ? 1 : 0;
+    intelOpacity_ = ramp(intelOpacity_, target, dt, target > intelOpacity_ ? 0.25 : 0.6);
+    const bool zero = thinkingText_.isEmpty() || thinkingText_ == QLatin1String("0");
+    if (!zero) thinkingZeroSince_ = -1;
+    else if (thinkingZeroSince_ < 0) thinkingZeroSince_ = time;
+    const double shown = zero && time - thinkingZeroSince_ >= 3 ? 0 : 1;
+    thinkingOpacity_ = ramp(thinkingOpacity_, shown, dt, 0.25);
+    glide_ = ramp(glide_, 1 - shown, dt, 0.3);
+}
+
+IntelReadout OrbWindow::intelContent(double time) const {
+    IntelReadout in;
+    in.opacity = intelOpacity_;
+    in.glyph = strings_.t(QStringLiteral("intel.glyph"));
+    in.thinkingGlyph = strings_.t(QStringLiteral("intel.thinking.glyph"));
+    in.thinking = thinkingText_.isEmpty() ? QStringLiteral("0") : thinkingText_;
+    in.unit = strings_.t(QStringLiteral("unit.tokS"));
+    in.thinkingOpacity = thinkingOpacity_;
+    in.glide = smoothstep(glide_);
+    int value = intelShown_;
+    in.form = intelForm_;
+    if (value < 0 && intelLast_ >= 0 && intelOpacity_ > 0 && traffic_ == QLatin1String("intelligence") && time - intelLastActive_ >= 10) {
+        value = intelLast_;  // the quiet fade keeps the last score
+        in.form = 2;
+    }
+    const double into = time - countStart_;
+    if (value >= 0 && countTo_ == value && into >= 0 && into < countDuration_) {
+        const double u = into / countDuration_;
+        value = countFrom_ + static_cast<int>(std::lround((countTo_ - countFrom_) * (1 - std::pow(1 - u, 3))));
+    }
+    in.number = value >= 0 ? QString::number(value) : QStringLiteral("–");
+    in.proof = intelProof_ && value >= 0;
+    const double fade = time - numberFadeStart_;
+    in.numberAlpha = fade >= 0 && fade < 0.2 ? 0.25 + 0.75 * fade / 0.2 : 1;
+    return in;
+}
+
+bool OrbWindow::intelBusy(double time) const {
+    const bool enabled = traffic_ == QLatin1String("intelligence");
+    const double target = enabled && time - intelLastActive_ < 10 ? 1 : 0;
+    const bool zero = thinkingText_.isEmpty() || thinkingText_ == QLatin1String("0");
+    const double shown = zero && thinkingZeroSince_ >= 0 && time - thinkingZeroSince_ >= 3 ? 0 : 1;
+    return std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 || std::abs(glide_ - (1 - shown)) > 0.001 ||
+           (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.2);
+}
+
+double OrbWindow::nextIntelWake(double time) const {
+    if (traffic_ != QLatin1String("intelligence")) return -1;
+    double wake = -1;
+    const auto consider = [&](double at) {
+        if (at > time && (wake < 0 || at < wake)) wake = at;
+    };
+    if (intelOpacity_ > 0) consider(intelLastActive_ + 10);
+    if (thinkingZeroSince_ >= 0 && thinkingOpacity_ > 0) consider(thinkingZeroSince_ + 3);
+    return wake;
+}
+
 void OrbWindow::applySnapshot(const QVariantMap& snap) {
     const double t = now();
     const int tierBefore = static_cast<int>(gauge_.tier());
@@ -255,6 +344,31 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         key += source;
     }
     key += QString::number(static_cast<int>(gauge_.tier())) + QString::number(gauge_.title());
+    // 智力 and 思考 of the orb's agents: the first score set (every enabled source while there is one orb).
+    const auto sets = snap.value(QStringLiteral("scoreSets")).toList();
+    const auto set = sets.isEmpty() ? QVariantMap() : sets.front().toMap();
+    const auto form = set.value(QStringLiteral("form")).toString();
+    intelForm_ = form == QLatin1String("live") ? 1 : form == QLatin1String("resting") ? 2 : 0;
+    const int shown = set.value(QStringLiteral("shown"), -1).toInt();
+    if (shown != intelShown_) {
+        if (shown >= 0 && intelShown_ >= 0 && shown - intelShown_ >= 3) {
+            countFrom_ = intelShown_;
+            countTo_ = shown;
+            countStart_ = t;
+            countDuration_ = std::min(0.8, 0.3 + 0.012 * (shown - intelShown_));
+        } else if (shown >= 0 && intelShown_ >= 0 && shown < intelShown_) {
+            numberFadeStart_ = t;
+        }
+        intelShown_ = shown;
+    }
+    if (shown >= 0) intelLast_ = shown;
+    intelProof_ = set.value(QStringLiteral("proof")).toBool();
+    intelGenerating_ = set.value(QStringLiteral("generating")).toBool();
+    thinkingText_ = set.value(QStringLiteral("thinkingText")).toString();
+    if (traffic_ == QLatin1String("intelligence")) {
+        key += QString::number(intelForm_) + QString::number(shown) + (intelProof_ ? QStringLiteral("p") : QString()) + thinkingText_ +
+               (intelGenerating_ ? QStringLiteral("g") : QString());
+    }
     const bool changed = key != contentKey_ || static_cast<int>(gauge_.tier()) != tierBefore ||
                          gauge_.title() != titleBefore || !gauge_.isSettled();
     contentKey_ = key;
@@ -320,7 +434,7 @@ int OrbWindow::desiredFps(double time, const Frame& f) const {
     const bool envelopes = redline_.settled(f.tier == Tier::Redline ? 1 : 0) && hover_.settled(hovered_ ? 1 : 0) &&
                            activity_.settled(active ? 1 : 0) && valueGlow_.settled(f.tier >= Tier::Boost ? 1 : 0) &&
                            skew_.settled(f.tier >= Tier::Overdrive && f.effects.skew ? 1 : 0);
-    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_.isBusy();
+    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_.isBusy() || intelBusy(time);
     if (effectsLevel_ == 0) return motion ? 30 : 0;
     int fps = style_.ambientFps(f);
     if (motion || f.signOfLife) fps = std::max(fps, 30);
@@ -348,7 +462,8 @@ void OrbWindow::schedule() {
         return;
     }
     frameTimer_.stop();
-    const double wake = nextSignOfLife(t);
+    double wake = nextSignOfLife(t);
+    if (const double intel = nextIntelWake(t); intel > t && (wake <= t || intel < wake)) wake = intel;
     if (wake > t) wakeTimer_.start(static_cast<int>(std::ceil((wake - t) * 1000)));
 }
 
@@ -405,6 +520,7 @@ void OrbWindow::renderFrame() {
     valueGlow_.step(tier >= Tier::Boost ? 1 : 0, dt, 0.22);
     skew_.step(tier >= Tier::Overdrive && e.skew ? 1 : 0, dt, 0.3);
     if (e.breathing) breathPhase_ = std::fmod(breathPhase_ + (0.25 + (1 / 0.7 - 0.25) * gauge_.heat()) * dt, 1.0);
+    stepIntel(t, dt);
 
     Frame f = makeFrame(t, dt);
     f.resumed = resumed;
@@ -443,6 +559,7 @@ void OrbWindow::renderFrame() {
     QString peak = strings_.t(QStringLiteral("peak.new"));
     if (!peak.contains(QLatin1String("PEAK"), Qt::CaseInsensitive)) peak += QStringLiteral(" NEW PEAK");
     content.peakLabel = peak;
+    content.intel = intelContent(t);
     buildReadout(scene_, f, content, [this, dpr](const TextDraw& text) { return renderer_.measure(text, dpr).width; });
 
     renderer_.render(scene_, QSizeF(side(), side()), dpr, center());
@@ -567,6 +684,16 @@ void OrbWindow::showMenu(QPoint global) {
         action->setChecked(effectsLevel_ == i);
         levels->addAction(action);
         connect(action, &QAction::triggered, this, [this, i] { setEffectsLevel(i); });
+    }
+    auto* traffic = menu->addMenu(strings_.t(QStringLiteral("orbs.traffic")));
+    auto* modes = new QActionGroup(traffic);
+    for (const char* mode : {"sources", "machine", "intelligence", "off"}) {
+        const auto value = QString::fromLatin1(mode);
+        auto* action = traffic->addAction(strings_.t(QStringLiteral("orbs.traffic.") + value));
+        action->setCheckable(true);
+        action->setChecked(traffic_ == value);
+        modes->addAction(action);
+        connect(action, &QAction::triggered, this, [this, value] { setTraffic(value); });
     }
     auto* top = menu->addAction(strings_.t(QStringLiteral("menu.alwaysOnTop")));
     top->setCheckable(true);

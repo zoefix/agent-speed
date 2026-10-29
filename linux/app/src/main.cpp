@@ -20,6 +20,7 @@
 #include "orb/orb_window.hpp"
 #include "preferences.hpp"
 #include "strings.hpp"
+#include "task_card.hpp"
 #include "tray_icon.hpp"
 
 namespace {
@@ -223,6 +224,16 @@ int main(int argc, char* argv[]) {
         const auto live = snap.value(QStringLiteral("liveText")).toString();
         QString tip = strings.t(QStringLiteral("app.name")) + QStringLiteral(" — ") + live + QLatin1Char(' ') +
                       strings.t(QStringLiteral("unit.tokS"));
+        // DESIGN 10: the taskbar tooltip adds the highest 智力 and the project that supplies it, then the caption.
+        const auto sets = snap.value(QStringLiteral("scoreSets")).toList();
+        if (!sets.isEmpty()) {
+            const auto top = sets.front().toMap();
+            if (const int shown = top.value(QStringLiteral("shown"), -1).toInt(); shown >= 0) {
+                tip += QLatin1Char('\n') + task_card::fmt(strings, QStringLiteral("task.tooltip.top"),
+                                                          {QString::number(shown), top.value(QStringLiteral("project")).toString()});
+                tip += QLatin1Char('\n') + strings.t(QStringLiteral("intel.disclaimer"));
+            }
+        }
         tray.update(snap.value(QStringLiteral("liveOutput")).toDouble(), snap.value(QStringLiteral("compactText")).toString(),
                     tip);
     });
@@ -250,6 +261,10 @@ int main(int argc, char* argv[]) {
                                                       a.startsWith(QStringLiteral("--card-snapshot="));
                                            });
     if (!offscreenShot) orbWindow.restore();
+    // Development aid: --orb-traffic=<mode> sets the orb's readout (sources, machine, intelligence, off).
+    for (const auto& arg : arguments) {
+        if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbWindow.setTraffic(arg.mid(14));
+    }
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
     QString orbShots;
     for (const auto& arg : app.arguments()) {

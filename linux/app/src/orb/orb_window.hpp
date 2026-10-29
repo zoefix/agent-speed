@@ -26,6 +26,8 @@ class OrbWindow : public QOpenGLWindow {
     Q_PROPERTY(double diameter READ diameter WRITE setDiameter NOTIFY diameterChanged)
     Q_PROPERTY(int effectsLevel READ effectsLevel WRITE setEffectsLevel NOTIFY effectsLevelChanged)
     Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
+    // DESIGN 2b `traffic`: what the two-line readout shows — sources, machine, intelligence or off.
+    Q_PROPERTY(QString traffic READ traffic WRITE setTraffic NOTIFY trafficChanged)
 public:
     explicit OrbWindow(const Strings& strings);
     ~OrbWindow() override;
@@ -34,6 +36,7 @@ public:
     double diameter() const { return diameter_; }
     int effectsLevel() const { return effectsLevel_; }
     bool alwaysOnTop() const { return alwaysOnTop_; }
+    QString traffic() const { return traffic_; }
     // Development aid: draw the dark (smoked glass) look whatever the system appearance.
     void forceDark(bool on) { forcedDark_ = on; }
     void restore();
@@ -47,8 +50,10 @@ public slots:
     void setDiameter(double diameter);
     void setEffectsLevel(int level);
     void setAlwaysOnTop(bool on);
+    void setTraffic(const QString& traffic);
 
 signals:
+    void trafficChanged();
     void dashboardRequested();
     void orbVisibilityChanged(bool visible);
     void clickThroughChanged(bool on);
@@ -95,6 +100,10 @@ private:
     void savePosition();
     void showMenu(QPoint global);
     QString titleText(int index) const;
+    void stepIntel(double time, double dt);
+    IntelReadout intelContent(double time) const;
+    bool intelBusy(double time) const;
+    double nextIntelWake(double time) const;
 
     const Strings& strings_;
     Renderer renderer_;
@@ -124,10 +133,27 @@ private:
     std::vector<QColor> agents_;
     QString contentKey_;
 
+    // The intelligence readout (DESIGN 10, 12): the orb's set from the snapshot, and its fades.
+    int intelForm_ = 0;  // 0 none, 1 live, 2 resting
+    int intelShown_ = -1;
+    int intelLast_ = -1;  // kept through the quiet fade
+    bool intelProof_ = false;
+    bool intelGenerating_ = false;
+    QString thinkingText_;
+    double intelLastActive_ = -1e9;
+    double intelOpacity_ = 0;
+    double thinkingZeroSince_ = -1;
+    double thinkingOpacity_ = 1;
+    double glide_ = 0;
+    int countFrom_ = -1, countTo_ = -1;
+    double countStart_ = -1e9, countDuration_ = 0;
+    double numberFadeStart_ = -1e9;
+
     // Settings.
     double diameter_ = 148;
     int effectsLevel_ = 2;
     bool alwaysOnTop_ = true;
+    QString traffic_ = QStringLiteral("sources");
     bool clickThrough_ = false;
     bool blur_ = false;
     bool forcedDark_ = false;

@@ -9,6 +9,18 @@
 
 namespace orb {
 
+// The intelligence readout (DESIGN 10): 智力 over 思考, above the value.
+struct IntelReadout {
+    double opacity = 0;  // the quiet rule's fade
+    QString glyph, number;
+    int form = 0;  // 0 none, 1 live, 2 resting
+    bool proof = false;
+    double numberAlpha = 1;  // a fall crossfades the digits
+    QString thinkingGlyph, thinking, unit;
+    double thinkingOpacity = 1;  // hidden at zero
+    double glide = 0;            // 0: two lines; 1: the single-line position
+};
+
 // What the readout shows this frame (DESIGN 2 layer 6).
 struct ReadoutContent {
     QString value;
@@ -24,6 +36,7 @@ struct ReadoutContent {
     QPointF jitter;
     std::vector<QColor> agents;  // one dot per generating agent
     QString peakLabel;
+    IntelReadout intel;
 };
 
 using MeasureText = std::function<double(const TextDraw&)>;
