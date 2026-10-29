@@ -135,6 +135,7 @@ public sealed class HarnessFixtureTests
             var start = row.GetProperty("startMs");
             Assert.Equal(start.ValueKind == JsonValueKind.Null ? (long?)null : start.GetInt64(), response.StartMs);
             Assert.Equal(row.GetProperty("endMs").GetInt64(), response.EndMs);
+            Assert.True(row.GetProperty("firstMs").ValueKind == JsonValueKind.Null && response.FirstMs is null, "firstMs is null for every harness source");
             Assert.Equal(row.GetProperty("input").GetInt64(), response.Tokens.Input);
             Assert.Equal(row.GetProperty("cachedInput").GetInt64(), response.Tokens.CachedInput);
             Assert.Equal(row.GetProperty("cacheWriteInput").GetInt64(), response.Tokens.CacheWriteInput);

@@ -36,7 +36,7 @@ internal sealed class JsonLine
 
     public static string Array(IEnumerable<string> items) => "[" + string.Join(',', items) + "]";
 
-    /// <summary><c>{"key":value}</c> with the value from a <see cref="Utf8JsonWriter"/> (the task score's dump writers), text kept as is.</summary>
+    /// <summary><c>{"key":value}</c> with the value from a <see cref="Utf8JsonWriter"/> (the performance score's dump writers), text kept as is.</summary>
     public static string Of(string key, Action<Utf8JsonWriter> writeValue)
     {
         var buffer = new ArrayBufferWriter<byte>();

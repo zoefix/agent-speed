@@ -77,7 +77,7 @@ internal sealed class NeonBoardPainter : BoardStylePainter
         };
     }
 
-    // On dark the lit digits carry the LED glow (智力: 4 pt and 12 pt; the table and the rows' 智力: 6 pt).
+    // On dark the lit digits carry the LED glow (性能: 4 pt and 12 pt; the table and the rows' 性能: 6 pt).
     protected override (Rgba Color, (Rgba Color, float Radius)[] Glows)? Baked(BoardScene scene, BoardValueSet set)
     {
         if (!scene.Dark || scene.Palette.HighContrast)

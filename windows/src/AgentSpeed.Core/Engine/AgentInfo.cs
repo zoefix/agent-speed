@@ -17,7 +17,4 @@ internal readonly record struct AgentInfo(
 
     /// <summary>The file's latest tool calls (METRICS 6.10), oldest first.</summary>
     public IReadOnlyList<Work.WorkAction> Work { get; init; } = [];
-
-    /// <summary>The current task (METRICS 6.9) of a source with a task score; null for every other source.</summary>
-    public Tasks.AgentTaskStatus? Task { get; init; }
 }

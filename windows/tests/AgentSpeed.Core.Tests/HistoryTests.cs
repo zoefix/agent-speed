@@ -55,6 +55,31 @@ public sealed class HistoryTests : IDisposable
         Assert.True(JsonNode.DeepEquals(expected, actual), $"expected {expected.ToJsonString()}\nactual   {actual.ToJsonString()}");
         Assert.Equal((false, 0), (report.Cancelled, report.FilesUnreadable));
         Assert.Equal(2, report.SessionsAnalyzed);
+
+        // The performance records (METRICS 6.11) of every fixture file, as analysed and as the store reads them back.
+        var perf = JsonDocument.Parse(document["perf"]!.ToJsonString()).RootElement;
+        Perf.PerfJson.AssertSame(perf, PerfRows(analyzer.PerfRecords()), "history perf");
+        Perf.PerfJson.AssertSame(perf, PerfRows(new HistoryAnalyzer(store).PerfRecords()), "stored history perf");
+    }
+
+    /// <summary>The files' records added up per day, source and model, in the fixture's order.</summary>
+    private static JsonArray PerfRows(IReadOnlyList<AgentSpeed.Core.Perf.PerfRecord> records)
+    {
+        var sums = new Dictionary<AgentSpeed.Core.Perf.PerfRecordKey, AgentSpeed.Core.Perf.PerfSums>();
+        foreach (var record in records)
+        {
+            var key = new AgentSpeed.Core.Perf.PerfRecordKey(record.Day, record.Source, record.Model);
+            if (!sums.TryGetValue(key, out var total))
+            {
+                sums[key] = total = new AgentSpeed.Core.Perf.PerfSums();
+            }
+
+            total.Add(record.Sums);
+        }
+
+        var rows = sums.Select(p => new AgentSpeed.Core.Perf.PerfRecord(p.Key.Day, p.Key.Source, p.Key.Model, p.Value)).ToList();
+        rows.Sort(AgentSpeed.Core.Perf.PerfRecord.Compare);
+        return new JsonArray([.. rows.Select(r => (JsonNode?)Perf.PerfJson.Record(r))]);
     }
 
     [Fact]

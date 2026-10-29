@@ -158,7 +158,7 @@ internal sealed class OrderedFileReader : IDisposable
         try
         {
             parser = Families.CreateParser(family, path, _deduper, root);
-            parser.KeepEveryTask();
+            parser.ReadWholeFile();
             tailer = Families.CreateTailer(family, path);
             tailer.StartAt(0);
             var batch = parser.NewBatch();

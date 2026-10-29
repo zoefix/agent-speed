@@ -2,19 +2,19 @@ using System.Globalization;
 using System.Windows;
 using System.Windows.Media;
 using AgentSpeed.Presentation.Formatting;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Theme;
 
 namespace AgentSpeed.Taskbar;
 
 /// <summary>
-/// Draws the taskbar intelligence block (DESIGN 10, Menu bar and taskbar): <c>智力 86</c> over <c>思考 128 tok/s</c> in
-/// 10 px medium tabular text, labels left-aligned in a column, both numbers right-aligned in one cell as wide as
-/// <c>8.88k</c>, the unit after the second. A live score and a thinking rate in the label color at 85 %; labels, the unit, a
-/// resting score, <c>–</c> and a zero rate in the secondary color. High contrast follows the orb readout for every part
-/// (<see cref="BarIntelligenceBlock.InkOf"/>): live numbers in the text color, everything else in the gray-text color. An
-/// unverified or pending score sits on the dotted proof mark (DESIGN 12). With the thinking line hidden at zero, line 1
-/// alone, centred in the same cells. Runs on the taskbar thread.
+/// Draws the taskbar 性能 block (DESIGN 10, Menu bar and taskbar): <c>性能 1,286</c> over <c>思考 128 tok/s</c> in 10 px
+/// medium tabular text, labels left-aligned in a column, both numbers right-aligned in one cell as wide as the wider of
+/// <c>8.88k</c> and <c>8,888</c>, the unit after the second. A live score and a thinking rate in the label color at 85 %;
+/// labels, the unit, a resting score, <c>–</c> and a zero rate in the secondary color. High contrast follows the orb readout
+/// for every part (<see cref="BarIntelligenceBlock.InkOf"/>): live numbers in the text color, everything else in the
+/// gray-text color. A provisional score sits on the dotted provisional mark (DESIGN 12). With the thinking line hidden at
+/// zero, line 1 alone, centred in the same cells. Runs on the taskbar thread.
 /// </summary>
 internal sealed class TaskbarIntelligenceText
 {
@@ -60,10 +60,10 @@ internal sealed class TaskbarIntelligenceText
         var capHeight = (_face.CapsHeight > 0 ? _face.CapsHeight : 0.7) * TextSize;
         var first = Snap(block.FirstBaseline(centerY, capHeight, Pitch), scale);
         DrawLine(dc, block.Label, block.Index, block.IndexDim, null, left, numberRight, first, scale);
-        if (block.Unproven)
+        if (block.Provisional)
         {
             var width = Tabular(block.Index, Role(block.IndexDim));
-            ProofMark(dc, block.ProofDots(numberRight - width, width, first, TextSize, scale, highContrast), block.IndexDim);
+            ProvisionalMark(dc, block.ProvisionalDots(numberRight - width, width, first, TextSize, scale, highContrast), block.IndexDim);
         }
 
         if (!block.ThinkingHidden)
@@ -72,8 +72,8 @@ internal sealed class TaskbarIntelligenceText
         }
     }
 
-    /// <summary>The dots in the number's color at 70 % (high contrast: 100 % and thicker, from <see cref="BarIntelligenceBlock.ProofDots"/>).</summary>
-    private void ProofMark(DrawingContext dc, IReadOnlyList<BarProofDot> dots, bool dim)
+    /// <summary>The dots in the number's color at 70 % (high contrast: 100 % and thicker, from <see cref="BarIntelligenceBlock.ProvisionalDots"/>).</summary>
+    private void ProvisionalMark(DrawingContext dc, IReadOnlyList<BarDot> dots, bool dim)
     {
         if (dots.Count == 0)
         {
@@ -81,7 +81,7 @@ internal sealed class TaskbarIntelligenceText
         }
 
         var color = NumberColor(Role(dim));
-        var brush = new SolidColorBrush(_highContrast ? color : Color.FromArgb((byte)Math.Round(color.A * TaskProofMark.Opacity), color.R, color.G, color.B));
+        var brush = new SolidColorBrush(_highContrast ? color : Color.FromArgb((byte)Math.Round(color.A * PerfProvisionalMark.Opacity), color.R, color.G, color.B));
         brush.Freeze();
         foreach (var dot in dots)
         {
@@ -199,7 +199,7 @@ internal sealed class TaskbarIntelligenceText
         }
     }
 
-    /// <summary>The UI face with the language's CJK fallback, so 智力 / 知 / 思考 take the right glyph forms.</summary>
+    /// <summary>The UI face with the language's CJK fallback, so 性能 / 思考 take the right glyph forms.</summary>
     private static Typeface Face(string language) => new(AppFonts.Ui(language), FontStyles.Normal, FontWeights.Medium, FontStretches.Normal);
 
     private static double Snap(double value, double scale) => Math.Round(value * scale) / scale;

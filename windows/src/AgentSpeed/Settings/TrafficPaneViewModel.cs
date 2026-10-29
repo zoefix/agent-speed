@@ -93,7 +93,7 @@ internal sealed class TrafficPaneViewModel : ObservableObject
 
     /// <summary>
     /// <c>settings.bar.traffic</c>: the taskbar's network block — off, this computer or the agents (the same control as on the
-    /// taskbar page; 智力 has its own switch there).
+    /// taskbar page; 性能 has its own switch there).
     /// </summary>
     public int BarIndex
     {

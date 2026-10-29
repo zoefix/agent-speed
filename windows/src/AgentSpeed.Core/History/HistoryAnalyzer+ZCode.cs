@@ -63,11 +63,13 @@ internal sealed partial class HistoryAnalyzer
             }
 
             var responses = new Dictionary<string, ParsedResponse>(StringComparer.Ordinal);
+            var completions = new Perf.PerfCompletionLog();
             foreach (var response in session.Responses)
             {
                 if (ledger.TryClaim(response.Key, session.Id, out var owner) || string.Equals(owner, session.Id, StringComparison.Ordinal))
                 {
                     responses[response.Key] = response;
+                    completions.Upsert(response);
                 }
             }
 
@@ -75,6 +77,7 @@ internal sealed partial class HistoryAnalyzer
             {
                 Id = session.Previous?.Id ?? 0, Path = session.Id, Family = "zcode", Size = session.Size, Modified = session.Modified,
                 Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, SourceKind.ZCode, labeler, Pricing),
+                PerfRecords = PerfRecordsOf(completions, responses, session.Id, SourceKind.ZCode, labeler),
             };
             _entries[session.Id] = entry;
             pending.Add((entry, ledger.FinishFile()));

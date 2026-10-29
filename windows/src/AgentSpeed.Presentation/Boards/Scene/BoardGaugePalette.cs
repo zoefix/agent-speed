@@ -16,7 +16,7 @@ namespace AgentSpeed.Presentation.Boards.Scene;
 /// <param name="BoxLine">Timing's inner stroke and separators (<c>line-2</c>).</param>
 /// <param name="Tab">Timing's tab column (<c>block</c>).</param>
 /// <param name="TabInk">Timing's small tab labels (<c>ink-2</c>).</param>
-/// <param name="TabMainInk">Timing's 智力 tab label (<c>block-ink</c>).</param>
+/// <param name="TabMainInk">Timing's 性能 tab label (<c>block-ink</c>).</param>
 /// <param name="Ghost">Neon's ghost <c>8</c>s.</param>
 /// <param name="Mind">Neon's lit meter segments.</param>
 /// <param name="Unlit">Neon's unlit meter segments.</param>
@@ -38,16 +38,16 @@ public sealed record BoardGaugePalette(
     Rgba Unlit,
     bool Glows)
 {
-    /// <summary>The rows' 智力 cell while live (neon's <c>led</c> at 78 %).</summary>
+    /// <summary>The rows' 性能 cell while live (neon's <c>led</c> at 78 %).</summary>
     public Rgba RowLive { get; init; }
 
-    /// <summary>The rows' 智力 cell while resting or none.</summary>
+    /// <summary>The rows' 性能 cell while resting or none.</summary>
     public Rgba RowQuiet { get; init; }
 
     /// <summary>The dark appearance (glass's tip is white with a glow on dark, <c>pearl-b</c> without one on light).</summary>
     public bool Dark { get; init; }
 
-    /// <summary>Windows high contrast: solid inks, the proof mark's dots at 100 % and thicker, a resting look in the quiet ink.</summary>
+    /// <summary>Windows high contrast: solid inks, the provisional mark's dots at 100 % and thicker, a resting look in the quiet ink.</summary>
     public bool HighContrast { get; init; }
 
     public static BoardGaugePalette For(BoardStyle style, BoardPalette palette)
@@ -57,7 +57,7 @@ public sealed record BoardGaugePalette(
         if (palette.HighContrast)
         {
             // The track and the unlit segments keep the ink-3 token itself, under the strengthened quiet ink that a resting arc
-            // or segment takes, so values, resting values and the proof mark's dots all stand apart from them (DESIGN 12,
+            // or segment takes, so values, resting values and the provisional mark's dots all stand apart from them (DESIGN 12,
             // Platform details: Board under Increase Contrast).
             var ink = palette.Ink;
             var dim = palette.Ink3;

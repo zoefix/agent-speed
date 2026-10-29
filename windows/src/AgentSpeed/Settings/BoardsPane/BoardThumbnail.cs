@@ -8,7 +8,7 @@ namespace AgentSpeed.Settings.BoardsPane;
 /// A still miniature of a board style for the Boards list and the style cards (DESIGN 2c Styles; colors from the
 /// prototypes in spec/prototypes/board): glass's frosted panel with its aurora and sparkline, timing's slab with the heat
 /// rail and position blocks, neon's deck with its tube edge and LED bar; light or dark with the app; with the live metrics on,
-/// the hero's sub-gauge (glass's pearl arc, timing's data box, neon's LED digits and meter) and the rows' 智力 column. Drawn
+/// the hero's sub-gauge (glass's pearl arc, timing's data box, neon's LED digits and meter) and the rows' 性能 column. Drawn
 /// once per change.
 /// </summary>
 internal sealed class BoardThumbnail : FrameworkElement
@@ -38,7 +38,7 @@ internal sealed class BoardThumbnail : FrameworkElement
 
     public double Side { get => (double)GetValue(SideProperty); set => SetValue(SideProperty, value); }
 
-    /// <summary>The live metrics switches (DESIGN 2c): the hero's sub-gauge and the rows' 智力 column show as switched.</summary>
+    /// <summary>The live metrics switches (DESIGN 2c): the hero's sub-gauge and the rows' 性能 column show as switched.</summary>
     public BoardReadouts Readouts { get => (BoardReadouts)GetValue(ReadoutsProperty); set => SetValue(ReadoutsProperty, value); }
 
     protected override Size MeasureOverride(Size availableSize) => new(Side, Side);
@@ -189,8 +189,8 @@ internal sealed class BoardThumbnail : FrameworkElement
     }
 
     /// <summary>
-    /// Three ranking rows: the leader's gold rank dot, names fading down the list and a share underline; with 智力 on, a quiet
-    /// 智力 cell before each row's value.
+    /// Three ranking rows: the leader's gold rank dot, names fading down the list and a share underline; with 性能 on, a quiet
+    /// 性能 cell before each row's value.
     /// </summary>
     private static void Rows(DrawingContext dc, Rect box, double u, Color ink, Color share, double fill, bool intelligence)
     {
@@ -209,7 +209,7 @@ internal sealed class BoardThumbnail : FrameworkElement
         }
     }
 
-    // Glass's pearl arc around 智力 (240° from the lower left over the top), its number a soft bar.
+    // Glass's pearl arc around 性能 (240° from the lower left over the top), its number a soft bar.
     private void GlassDial(DrawingContext dc, Point center, double u, Color ink, bool intelligence)
     {
         var radius = 6.2 * u;

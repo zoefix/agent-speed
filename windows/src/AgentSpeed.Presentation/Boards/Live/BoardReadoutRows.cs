@@ -1,6 +1,6 @@
 namespace AgentSpeed.Presentation.Boards.Live;
 
-/// <summary>Puts each row's 智力 (its cell and words) on the entries of a layout plan while the column shows.</summary>
+/// <summary>Puts each row's 性能 (its cell and words) on the entries of a layout plan while the column shows.</summary>
 public static class BoardReadoutRows
 {
     public static IReadOnlyList<BoardEntry> Word(IReadOnlyList<BoardEntry> entries, BoardReadouts readouts, BoardTexts texts)

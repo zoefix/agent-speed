@@ -97,7 +97,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 
     /// <summary>
     /// What the cursor is over changed (the tooltip or score card, the expansion's interaction): a group or sub row's key, the
-    /// hero's 智力 (<see cref="BoardScoreCards.HeroKey"/>), or null.
+    /// hero's 性能 (<see cref="BoardScoreCards.HeroKey"/>), or null.
     /// </summary>
     public event EventHandler<string?>? HoveredRowChanged;
 
@@ -121,7 +121,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         return new RECT(window.Left + margin, window.Top + margin, window.Right - margin, window.Bottom - margin);
     }
 
-    /// <summary>The hero's 智力 as last drawn (glass: the dial; neon: digits and meter; timing: its row) in screen pixels, or null.</summary>
+    /// <summary>The hero's 性能 as last drawn (glass: the dial; neon: digits and meter; timing: its row) in screen pixels, or null.</summary>
     public RECT? ScoreRect()
     {
         if (_surface.Scene.Gauge.ScoreArea is not { } area || _host.Handle == 0 || !User32.GetWindowRect(_host.Handle, out var window))
@@ -501,7 +501,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 
     // ---- Hover and click-through ----
 
-    // A window point (pixels): the hero's 智力, a group or sub row (a group row's tint lifts), or nothing; `atRest` tests where the
+    // A window point (pixels): the hero's 性能, a group or sub row (a group row's tint lifts), or nothing; `atRest` tests where the
     // rows are heading.
     private void Hover(int x, int y, bool atRest = false)
     {

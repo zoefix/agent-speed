@@ -32,8 +32,11 @@ public sealed class LiveMonitor : IDisposable
     private MonitorConfiguration _configuration;
     private SourceSet[] _subsets = [];
     private int _subsetsChanged;
-    private IReadOnlyDictionary<SourceKind, Tasks.TaskModels>? _taskModels;
-    private int _taskModelsChanged;
+    private IReadOnlyList<Perf.PerfRecord>? _perfRecords;
+    private int _perfRecordsChanged;
+
+    /// <summary>The local date the current baselines end before; owned by the monitor thread.</summary>
+    private string? _baselineDay;
     private Thread? _thread;
     private CancellationTokenSource? _stop;
     private CancellationTokenSource? _session;
@@ -289,14 +292,14 @@ public sealed class LiveMonitor : IDisposable
     }
 
     /// <summary>
-    /// The task predictions' coefficients per scored source, calibrated on the history (METRICS 6.11): callable from any
-    /// thread (the history service calls it after each analysis); kept across configuration changes.
+    /// The stored performance records the score card's baselines come from (METRICS 6.11 <i>Baseline</i>): callable from
+    /// any thread (the history service calls it after each analysis); kept across configuration changes.
     /// </summary>
-    public void SetTaskCalibration(IReadOnlyDictionary<SourceKind, Tasks.TaskModels> models)
+    public void SetPerfRecords(IReadOnlyList<Perf.PerfRecord> records)
     {
-        ArgumentNullException.ThrowIfNull(models);
-        Volatile.Write(ref _taskModels, models);
-        Interlocked.Exchange(ref _taskModelsChanged, 1);
+        ArgumentNullException.ThrowIfNull(records);
+        Volatile.Write(ref _perfRecords, records);
+        Interlocked.Exchange(ref _perfRecordsChanged, 1);
         SignalWake();
     }
 
@@ -384,10 +387,8 @@ public sealed class LiveMonitor : IDisposable
         core.ReadWholeFilesInBackground = true;
         core.BackgroundReadCompleted = SignalWake;
         core.BeforeBackgroundRead = BeforeBackgroundRead;
-        if (Volatile.Read(ref _taskModels) is { } models)
-        {
-            core.SetTaskModels(models);
-        }
+        _baselineDay = null;
+        ApplyPerfRecords(core, NowMs(), zone, force: true);
 
         var watchers = new Dictionary<SourceRoot, RootWatcher>();
         try
@@ -455,7 +456,7 @@ public sealed class LiveMonitor : IDisposable
 
             elapsed = Stopwatch.GetElapsedTime(start);
             var now = NowMs();
-            core.TaskWatch = _hub.TaskWatch;
+            core.PerfWatch = _hub.PerfWatch;
             if (elapsed >= nextZoneRefresh)
             {
                 TimeZoneInfo.ClearCachedData();
@@ -502,7 +503,7 @@ public sealed class LiveMonitor : IDisposable
             }
 
             elapsed = Stopwatch.GetElapsedTime(start);
-            dirty |= changed | (Interlocked.Exchange(ref _subsetsChanged, 0) != 0) | ApplyTaskModels(core);
+            dirty |= changed | (Interlocked.Exchange(ref _subsetsChanged, 0) != 0) | ApplyPerfRecords(core, now, zone, force: false);
             if (elapsed >= nextPublish || (dirty && elapsed - lastPublish >= ChangePublishMinInterval))
             {
                 Publish(core, StateOf(core), zone, observeLive: true);
@@ -513,14 +514,19 @@ public sealed class LiveMonitor : IDisposable
         }
     }
 
-    private bool ApplyTaskModels(MonitorCore core)
+    /// <summary>The baselines over the stored records, rebuilt when they change and when the local day does (METRICS 6.11).</summary>
+    private bool ApplyPerfRecords(MonitorCore core, long nowMs, TimeZoneInfo zone, bool force)
     {
-        if (Interlocked.Exchange(ref _taskModelsChanged, 0) == 0 || Volatile.Read(ref _taskModels) is not { } models)
+        var today = TimeZoneInfo.ConvertTime(DateTimeOffset.FromUnixTimeMilliseconds(nowMs), zone)
+            .ToString("yyyy-MM-dd", System.Globalization.CultureInfo.InvariantCulture);
+        var changed = Interlocked.Exchange(ref _perfRecordsChanged, 0) != 0;
+        if (!force && !changed && today == _baselineDay)
         {
             return false;
         }
 
-        core.SetTaskModels(models);
+        _baselineDay = today;
+        core.PerfBaselines = Volatile.Read(ref _perfRecords) is { } records ? new Perf.PerfHistory(records, today) : null;
         return true;
     }
 

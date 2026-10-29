@@ -110,10 +110,4 @@ internal struct OmpLine
     /// <summary>Tool result of <c>yield</c> whose <c>isError</c> is not <c>true</c>: a sub-agent's final yield.</summary>
     public bool IsFinalYield;
 
-    /// <summary>The composer counts this line (METRICS 6.9 <i>Composing the stream</i>).</summary>
-    public bool TaskTracked;
-
-    /// <summary>What the line gives the task composer; null when nothing.</summary>
-    public Tasks.TaskLine? Task;
-
 }

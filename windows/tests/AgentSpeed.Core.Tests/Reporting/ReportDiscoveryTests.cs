@@ -397,7 +397,7 @@ public sealed class ReportDiscoveryTests
         Assert.Equal("https://deng.codexradar.com", assumed.Api.Text);
         Assert.Equal(4, assumed.Sections.Count);
         Assert.Equal(ReportLimits.Standard, assumed.Limits);
-        Assert.Equal(new ReportExtensions(TaskScore: true), assumed.Extensions);
+        Assert.Equal(new ReportExtensions(PerfScore: true), assumed.Extensions);
     }
 
     [Fact]

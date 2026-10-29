@@ -1,5 +1,5 @@
 using AgentSpeed.Presentation.Motion;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Boards.Scene;
 
@@ -18,9 +18,10 @@ public static class BoardRowSprings
 /// <summary>
 /// One row's motion in a board (DESIGN 2c Rows): its place (a spring to the plan's y), entering (fade in 0.3 s from 10 pt
 /// below), leaving (fade out 0.3 s), and the value's flash (a rise of more than 5 % flashes warm for 0.8 s, a fall dims it).
-/// With Reduce Motion a row that moves crossfades at its new place instead of travelling. Its 智力 cell (DESIGN 12,
-/// <i>Motion</i>) replaces its digits in place, crossfades on a fall (0.2 s; Reduce Motion: every change, 0.15 s), crossfades its
-/// color between live and resting (0.2 s) and fades its proof mark in and out (0.25 s; Reduce Motion: at once).
+/// With Reduce Motion a row that moves crossfades at its new place instead of travelling. Its 性能 cell (DESIGN 12,
+/// <i>Motion</i>) replaces its characters in place, up or down, crossfades between <c>–</c> and a number (0.15 s; Reduce
+/// Motion: every change), crossfades its color between live and resting (0.2 s) and fades its provisional mark in and out
+/// (0.25 s; Reduce Motion: at once).
 /// </summary>
 public sealed class BoardRowMotion
 {
@@ -105,10 +106,10 @@ public sealed class BoardRowMotion
     /// <summary>The underline is still easing.</summary>
     public bool Sharing(double now) => now - _shareStart < ShareSeconds;
 
-    /// <summary>The 智力 cell's color crossfades in 0.2 s between live and resting (an opacity change, kept with Reduce Motion).</summary>
+    /// <summary>The 性能 cell's color crossfades in 0.2 s between live and resting (an opacity change, kept with Reduce Motion).</summary>
     public const double IntelFadeSeconds = 0.2;
 
-    /// <summary>How live the 智力 cell's color is: 1 live, 0 resting or none, between them while it crossfades.</summary>
+    /// <summary>How live the 性能 cell's color is: 1 live, 0 resting or none, between them while it crossfades.</summary>
     public double IntelLive(double now)
     {
         var live = _intelLive == true ? 1.0 : 0;
@@ -116,19 +117,19 @@ public sealed class BoardRowMotion
         return t is >= 0 and < 1 ? (1 - live) + (2 * live - 1) * Easing.OutQuad(t) : live;
     }
 
-    /// <summary>The 智力 cell's text on display (the score, or <c>–</c>).</summary>
-    public string IntelText { get; private set; } = TaskScoreText.Dash;
+    /// <summary>The 性能 cell's text on display (the score, or <c>–</c>).</summary>
+    public string IntelText { get; private set; } = PerfNumber.Dash;
 
-    /// <summary>The 智力 cell's old text while it crossfades out, else null.</summary>
+    /// <summary>The 性能 cell's old text while it crossfades out, else null.</summary>
     public string? IntelOutgoing(double now) => now - _intelFadeStart < _intelFadeSeconds ? _intelOld : null;
 
-    /// <summary>The outgoing text carried the proof mark (its underline fades out with it).</summary>
-    public bool IntelOutgoingUnproven => _intelOldProof;
+    /// <summary>The outgoing text carried the provisional mark (its underline fades out with it).</summary>
+    public bool IntelOutgoingProvisional => _intelOldProof;
 
-    /// <summary>The 智力 cell shows a score (not <c>–</c>).</summary>
+    /// <summary>The 性能 cell shows a score (not <c>–</c>).</summary>
     public bool IntelHasScore => _intelShown is not null;
 
-    /// <summary>The 智力 cell's crossfade: the outgoing and the incoming text's opacities (0 and 1 outside one).</summary>
+    /// <summary>The 性能 cell's crossfade: the outgoing and the incoming text's opacities (0 and 1 outside one).</summary>
     public (double Outgoing, double Incoming) IntelFade(double now)
     {
         var t = (now - _intelFadeStart) / _intelFadeSeconds;
@@ -141,11 +142,11 @@ public sealed class BoardRowMotion
         return (0, 1);
     }
 
-    /// <summary>How present the 智力 cell's proof mark is: 1 unproven, 0 proven or none, between them while it fades.</summary>
+    /// <summary>How present the 性能 cell's provisional mark is: 1 provisional, 0 settled or none, between them while it fades.</summary>
     public double IntelProof(double now)
     {
         var target = _intelProof ? 1.0 : 0;
-        var t = (now - _proofChange) / TaskProofMark.FadeSeconds;
+        var t = (now - _proofChange) / PerfProvisionalMark.FadeSeconds;
         return t is >= 0 and < 1 ? (1 - target) + (2 * target - 1) * Easing.OutQuad(t) : target;
     }
 
@@ -196,8 +197,8 @@ public sealed class BoardRowMotion
             var shown = readout.Score.Shown;
             if (_intelKnown && shown != _intelShown)
             {
-                var change = TaskScoreMotion.Plan(_intelShown, shown, TaskScoreSurface.BoardRow, reduceMotion);
-                if (change.Kind == TaskScoreChangeKind.Crossfade)
+                var change = PerfMotion.Plan(_intelShown, shown, PerfSurface.BoardRow, reduceMotion);
+                if (change.Kind == PerfChangeKind.Crossfade)
                 {
                     _intelOldProof = _intelShown is not null && IntelProof(now) >= 0.5;
                     _intelOld = IntelText;
@@ -210,14 +211,14 @@ public sealed class BoardRowMotion
                 }
             }
 
-            if (_intelKnown && readout.IsUnproven != _intelProof)
+            if (_intelKnown && readout.IsProvisional != _intelProof)
             {
                 _proofChange = reduceMotion ? double.NegativeInfinity : now;
             }
 
             _intelKnown = true;
             _intelShown = shown;
-            _intelProof = readout.IsUnproven;
+            _intelProof = readout.IsProvisional;
             IntelText = readout.Intelligence;
         }
 
@@ -264,9 +265,9 @@ public sealed class BoardRowMotion
     /// <summary>Moving to its place, entering or leaving (DESIGN 2c Frame policy: a row move needs 60 fps).</summary>
     public bool Moving(double now) => !_y.IsSettled(_target, 0.05) || now - _enterStart < FadeSeconds || Leaving;
 
-    /// <summary>Its value flashes warm or dims, its underline eases or its 智力 cell fades (no travel: 30 fps is enough).</summary>
+    /// <summary>Its value flashes warm or dims, its underline eases or its 性能 cell fades (no travel: 30 fps is enough).</summary>
     public bool Flashing(double now) => FlashProgress(now) < 1 || Sharing(now) || now - _intelChange < IntelFadeSeconds ||
-        now - _intelFadeStart < _intelFadeSeconds || now - _proofChange < TaskProofMark.FadeSeconds;
+        now - _intelFadeStart < _intelFadeSeconds || now - _proofChange < PerfProvisionalMark.FadeSeconds;
 
     public void Settle()
     {

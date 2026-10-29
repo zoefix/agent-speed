@@ -1,14 +1,14 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.Parsing;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Pricing;
-using AgentSpeed.Core.Tasks;
 
 namespace AgentSpeed.Probe;
 
 /// <summary>
-/// <c>--dump-today</c>: seeds from the real roots and prints every response that ended today, then the task values of
-/// the seeded agents of scored sources at <c>--now</c> or the capture time (METRICS 6.9 <i>Dumps</i>).
+/// <c>--dump-today</c>: seeds from the real roots and prints every response that ended today, then the performance score of
+/// every seeded agent with a sample response and the sets at <c>--now</c> or the capture time (METRICS 6.9 <i>Dumps</i>).
 /// </summary>
 internal static class DumpToday
 {
@@ -24,8 +24,10 @@ internal static class DumpToday
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
         var todayStart = options.SinceMs ?? LocalDay.StartMs(now, TimeZoneInfo.Local);
         var collector = new Collector();
-        using var core = new MonitorCore(MonitorConfiguration.Default, options.Locations, todayStart, collector) { KeepEveryTask = true };
+        using var core = new MonitorCore(MonitorConfiguration.Default, options.Locations, todayStart, collector);
         var report = core.Seed(now, todayStart, CancellationToken.None);
+        var nowMs = options.NowMs ?? now;
+        var perf = core.PerfViews(nowMs).Where(a => SeededLike(a.Source)).ToList();
         var (snapshot, _) = core.BuildSnapshot(now, todayStart, MonitorState.Running, observeLive: false);
 
         var today = collector.Latest.Values
@@ -55,6 +57,7 @@ internal static class DumpToday
                 .Add("model", r.Model)
                 .Add("startMs", r.StartMs)
                 .Add("endMs", r.EndMs)
+                .Add("firstMs", r.FirstMs)
                 .Add("input", r.Tokens.Input)
                 .Add("cachedInput", r.Tokens.CachedInput)
                 .Add("cacheWriteInput", r.Tokens.CacheWriteInput)
@@ -71,14 +74,13 @@ internal static class DumpToday
             output.Line(row.Text);
         }
 
-        var nowMs = options.NowMs ?? now;
-        var tasks = TaskRows(core, options.Locations, todayStart, nowMs);
-        foreach (var task in tasks)
+        var rows = perf.Where(a => a.Value.N > 0).OrderBy(a => a.Id, StringComparer.Ordinal).ToList();
+        foreach (var agent in rows)
         {
-            output.Line(JsonLine.Of("task", w => TaskDumpJson.WriteAgentRow(w, task, Identity)));
+            output.Line(JsonLine.Of("perf", w => PerfDumpJson.WriteAgent(w, agent, nowMs)));
         }
 
-        output.Line(JsonLine.Of("taskSets", w => TaskDumpJson.WriteSets(w, TaskSetView.Of(tasks, nowMs), Identity)));
+        output.Line(JsonLine.Of("perfSets", w => PerfDumpJson.WriteSets(w, PerfSetView.Of(perf, nowMs))));
 
         var counts = new JsonLine();
         foreach (var kind in Enum.GetValues<SourceKind>())
@@ -102,7 +104,7 @@ internal static class DumpToday
             .Add("partialHistory", core.PartialHistory)
             .Add("unfinalized", today.Count(r => !r.Final))
             .Add("nowMs", nowMs)
-            .Add("taskAgents", tasks.Count);
+            .Add("perfAgents", rows.Count);
         output.Line(new JsonLine().Raw("summary", summary.Text).Text);
         output.Flush();
 
@@ -111,49 +113,16 @@ internal static class DumpToday
             $"oversized lines {core.OversizedLineCount}; average today {snapshot.AverageToday:F1} tok/s; " +
             $"peak today {snapshot.PeakToday.Output:F1} tok/s; " +
             $"Antigravity connections {core.OpenDatabaseConnections} open, {core.ImmutableDatabaseConnections} immutable; " +
-            $"{tasks.Count} task agents");
+            $"{rows.Count} agents with a performance sample");
         return 0;
     }
 
     /// <summary>
-    /// The seeded transcripts of scored sources and every window of the OpenClaw databases changed within the seeding
-    /// window, read whole, in startup order with a database's windows at its place, like the reference's seeding; prior
-    /// coefficients (the dump analyses no history).
+    /// The agents <c>reference.py --dump-today</c> seeds as parser states: OpenCode is not read there, and ZCode, Kimi Code
+    /// CLI and Grok Build are collected as responses only.
     /// </summary>
-    private static List<TaskAgentRow> TaskRows(MonitorCore core, SourceLocations locations, long todayStart, long nowMs)
-    {
-        var timed = new List<(DateTime Time, string Log, TaskAgentRow Row)>();
-        foreach (var agent in core.TaskAgents)
-        {
-            timed.Add((TaskLogs.TranscriptTime(agent.AgentId, agent.Source), agent.AgentId, Row(agent, core.ParentOf(agent.AgentId), nowMs)));
-        }
-
-        var deduper = new Deduper();
-        foreach (var (database, time) in TaskLogs.OpenClawSince(locations, todayStart - MonitorCore.BacklogWindowMs))
-        {
-            var windows = TaskAgentsReader.Read([database], deduper);
-            var parents = TaskAgentsReader.Parents(windows);
-            foreach (var window in windows)
-            {
-                timed.Add((time, database.Path, Row(window, parents.GetValueOrDefault(window.AgentId), nowMs)));
-            }
-        }
-
-        return [.. timed.OrderBy(t => t.Time).ThenBy(t => t.Log, StringComparer.Ordinal).Select(t => t.Row)];
-    }
-
-    private static TaskAgentRow Row(TranscriptParser agent, string? parentId, long nowMs) => TaskAgentRow.Of(
-        new TaskAgentView(
-            agent.AgentId,
-            agent.Source,
-            TaskAgentRow.EffectivePhase(agent.Phase, agent.LastLineMs, nowMs),
-            agent.LastLineMs,
-            parentId,
-            agent.Tasks!.Events),
-        nowMs,
-        TaskModels.Prior);
-
-    private static string Identity(string id) => id;
+    private static bool SeededLike(SourceKind source) =>
+        source is not (SourceKind.OpenCode or SourceKind.ZCode or SourceKind.Kimi or SourceKind.GrokBuild);
 
     private sealed class Collector : IResponseObserver
     {

@@ -1,5 +1,6 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Intelligence;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Presentation.Colors;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Motion;
@@ -8,44 +9,48 @@ using AgentSpeed.Presentation.Orb.Gpu;
 using AgentSpeed.Presentation.Orb.Gpu.Styles;
 using AgentSpeed.Presentation.Orb.Lines;
 using AgentSpeed.Presentation.Orb.Styles;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Settings;
-using AgentSpeed.Presentation.TaskScore;
 using AgentSpeed.Presentation.Tests.TestSupport;
-using CoreTasks = AgentSpeed.Core.Tasks;
 
 namespace AgentSpeed.Presentation.Tests.Gpu;
 
 /// <summary>
-/// 智力 on the orb's intelligence readout (DESIGN 10, Intelligence readout; DESIGN 12): the set's value and words, the revised
-/// quiet rule, the forms' colors, the proof mark and the score's motion.
+/// 性能 on the orb's readout (DESIGN 10, Performance readout; DESIGN 12): the set's value in compact form and its words, the
+/// quiet rule, the forms' colors, the provisional mark and the score's motion.
 /// </summary>
 public partial class OrbLinesTests
 {
     /// <summary>176 tok/s of thinking in the window.</summary>
     private static readonly IntelligenceSums Thinking176 = new(1200, 528, 1200);
 
-    private static TaskSetReading Score(int? shown, TaskForm form = TaskForm.Live, TaskState state = TaskState.Passing, int count = 1) =>
-        shown is null ? TaskSetReading.None : new TaskSetReading(form, shown, state, count, null);
+    private static PerfSetReading Score(int? shown, PerfForm form = PerfForm.Live, bool provisional = false, int count = 1) =>
+        shown is null ? PerfSetReading.None : new PerfSetReading(form, shown, provisional, count, null, null);
 
-    private static OrbLinesSample Scored(TaskSetReading score, bool generating = true, IntelligenceSums? sums = null) =>
+    private static OrbLinesSample Scored(PerfSetReading score, bool generating = true, IntelligenceSums? sums = null) =>
         OrbLinesText.Intelligence(score, sums ?? Thinking176, generating, ZhHant);
 
-    private static AgentStatus ScoredAgent(string id, string project, CoreTasks.TaskValueForm form, double score, CoreTasks.TaskState state,
-        double thinking = 0)
+    private static AgentStatus ScoredAgent(string id, string project, PerfForm form, double score, double thinking = 0)
     {
-        var set = CoreTasks.TaskSetValue.Of(id, 0, new CoreTasks.TaskValue(form, score, CoreTasks.TaskRounding.HalfAwayFromZero(score), state));
+        var set = (form == PerfForm.Live ? TestSums.Live(score) : TestSums.Resting(score)) with { AgentId = id };
         var sums = new IntelligenceSums(thinking > 0 ? 3 * thinking : 0, 3 * thinking, thinking > 0 ? 3 * thinking : 0) { Score = set };
-        return new AgentStatus(id, SourceKind.ClaudeCode, project, "model",
-            form == CoreTasks.TaskValueForm.Live ? AgentPhase.Generating : AgentPhase.Idle, false, Rate.Zero, null, DateTimeOffset.UnixEpoch)
+        return new AgentStatus(id, SourceKind.ClaudeCode, project, "model", form == PerfForm.Live ? AgentPhase.Generating : AgentPhase.Idle,
+            false, Rate.Zero, null, DateTimeOffset.UnixEpoch)
         {
-            Intelligence = new AgentIntelligence(sums, set, state),
+            Intelligence = new AgentIntelligence(sums, set),
         };
     }
 
-    private static (TaskSetReading Score, IntelligenceSums Sums) Set(params AgentStatus[] agents)
+    private static (PerfSetReading Score, IntelligenceSums Sums) Set(params AgentStatus[] agents)
     {
         var sums = agents.Aggregate(IntelligenceSums.Zero, (sum, agent) => sum + agent.Intelligence.Sums);
-        return (TaskSetReading.Of(sums, agents), sums);
+        return (PerfSetReading.Of(sums, agents), sums);
+    }
+
+    private static double ScoreSize(OrbStyle style, double size = 196)
+    {
+        var placement = OrbLinesPlacement.For(style);
+        return placement.ScoreScale * placement.TextSize(size);
     }
 
     private static OrbGpuOrb Showing(OrbStyle style, OrbLinesSample sample, double size = 196, bool reduceMotion = false, bool highContrast = false)
@@ -81,51 +86,55 @@ public partial class OrbLinesTests
     public void TheReadoutShowsTheHighestScoreOfTheOrbsAgentsAndNamesItsSupplier()
     {
         var (score, sums) = Set(
-            ScoredAgent("a1", "nova", CoreTasks.TaskValueForm.Live, 86.2, CoreTasks.TaskState.Passing, thinking: 128),
-            ScoredAgent("a2", "rocket", CoreTasks.TaskValueForm.Live, 41, CoreTasks.TaskState.Failing),
-            ScoredAgent("a3", "atlas", CoreTasks.TaskValueForm.Resting, 95, CoreTasks.TaskState.Passing));
-        Assert.Equal((TaskForm.Live, 86, 2), (score.Form, score.Shown, score.Count));
+            ScoredAgent("a1", "nova", PerfForm.Live, 1286.2, thinking: 128),
+            ScoredAgent("a2", "rocket", PerfForm.Live, 410),
+            ScoredAgent("a3", "atlas", PerfForm.Resting, 9500));
+        Assert.Equal((PerfForm.Live, 1286, 2), (score.Form, score.Shown, score.Count));
 
         var content = OrbLinesText.Intelligence(score, sums, generating: true, ZhHant).Content!;
-        Assert.Equal(new OrbLine("智力", "86", string.Empty), content.First);
-        Assert.Equal(new OrbLineScore(86, false, false), content.Score);
-        Assert.Equal("智力 86，2 個 agent 中最高，思考每秒 128 個 token", content.Spoken);
-        Assert.Equal("智力 86，2 個 agent 中最高", content.SpokenAlone);
+        Assert.Equal(new OrbLine("性能", "1,286", string.Empty), content.First);
+        Assert.Equal(new OrbLineScore(1286, false, false), content.Score);
+        Assert.Equal("性能 1,286，2 個 agent 中最高，思考每秒 128 個 token", content.Spoken);
+        Assert.Equal("性能 1,286，2 個 agent 中最高", content.SpokenAlone);
 
-        // The Windows tooltip: task.tooltip.top with the supplying agent's project, then the disclaimer.
-        Assert.Equal("智力 86 · 最高：nova\n任務進展的估算，不是模型能力測驗", content.Detail);
+        // The Windows tooltip: perf.tooltip.top with the supplying agent's project, then the reference note.
+        Assert.Equal("性能 1,286 · 最高：nova\n1000 為參考水準，沒有上限", content.Detail);
     }
 
     [Fact]
-    public void UnprovenAndRestingScoresSayItAndCarryTheirForm()
+    public void FromTenThousandTheReadoutShowsTheCompactFormAndSaysTheFullOne()
     {
-        var unverified = Scored(Score(9, state: TaskState.Unverified, count: 2)).Content!;
-        Assert.Equal(new OrbLineScore(9, false, true), unverified.Score);
-        Assert.Equal("智力 9，尚未驗證，2 個 agent 中最高，思考每秒 176 個 token", unverified.Spoken);
+        var content = Scored(Score(12_840)).Content!;
+        Assert.Equal("12.8k", content.First.Number);
+        Assert.Equal("性能 12,840，思考每秒 176 個 token", content.Spoken);
+    }
 
-        var pending = Scored(Score(34, state: TaskState.Pending)).Content!;
-        Assert.True(pending.Score.Unproven);
-        Assert.Equal("智力 34，待重新驗證，思考每秒 176 個 token", pending.Spoken);
+    [Fact]
+    public void ProvisionalAndRestingScoresSayItAndCarryTheirForm()
+    {
+        var provisional = Scored(Score(912, provisional: true, count: 2)).Content!;
+        Assert.Equal(new OrbLineScore(912, false, true), provisional.Score);
+        Assert.Equal("性能 912，初步（樣本少），2 個 agent 中最高，思考每秒 176 個 token", provisional.Spoken);
 
-        var resting = Scored(Score(72, TaskForm.Resting, count: 2), generating: false, sums: IntelligenceSums.Zero).Content!;
-        Assert.Equal(new OrbLineScore(72, true, false), resting.Score);
+        var resting = Scored(Score(1540, PerfForm.Resting, count: 2), generating: false, sums: IntelligenceSums.Zero).Content!;
+        Assert.Equal(new OrbLineScore(1540, true, false), resting.Score);
         Assert.True(resting.ThinkingZero);
-        Assert.Equal("智力 72，閒置中，2 個 agent 中最高", resting.SpokenAlone);
+        Assert.Equal("性能 1,540，閒置中，2 個 agent 中最高", resting.SpokenAlone);
     }
 
     [Fact]
     public void NoScoreShowsADashWhileItsAgentsGenerateAndNothingOtherwise()
     {
-        var reading = Scored(TaskSetReading.None);
+        var reading = Scored(PerfSetReading.None);
         Assert.True(reading.Loud);
         var content = reading.Content!;
         Assert.Equal("–", content.First.Number);
         Assert.Equal(OrbLineScore.None, content.Score);
-        Assert.Equal("智力：尚無評分，思考每秒 176 個 token", content.Spoken);
-        Assert.Equal("智力：尚無評分", content.SpokenAlone);
-        Assert.Equal("任務進展的估算，不是模型能力測驗", content.Detail);
+        Assert.Equal("性能：尚無分數，思考每秒 176 個 token", content.Spoken);
+        Assert.Equal("性能：尚無分數", content.SpokenAlone);
+        Assert.Equal("1000 為參考水準，沒有上限", content.Detail);
 
-        var quiet = Scored(TaskSetReading.None, generating: false);
+        var quiet = Scored(PerfSetReading.None, generating: false);
         Assert.False(quiet.Loud);
         Assert.Null(quiet.Content);
     }
@@ -134,136 +143,146 @@ public partial class OrbLinesTests
     public void ARestingScoreKeepsTheReadoutUpWithoutAnyGeneration()
     {
         var rule = new OrbLinesQuietRule();
-        Assert.True(rule.Apply(Scored(Score(72, TaskForm.Resting), generating: false, IntelligenceSums.Zero), 0));
+        Assert.True(rule.Apply(Scored(Score(720, PerfForm.Resting), generating: false, IntelligenceSums.Zero), 0));
         foreach (var time in new[] { 30.0, 300, 590 })
         {
-            rule.Apply(Scored(Score(72, TaskForm.Resting), generating: false, IntelligenceSums.Zero), time);
+            rule.Apply(Scored(Score(720, PerfForm.Resting), generating: false, IntelligenceSums.Zero), time);
             Assert.Equal(time + OrbLinesQuietRule.QuietAfter, rule.Reading!.Value.QuietAt);
         }
 
         // A set with nothing to show and no agent generating never brings a readout up.
-        Assert.False(new OrbLinesQuietRule().Apply(Scored(TaskSetReading.None, generating: false), 0));
+        Assert.False(new OrbLinesQuietRule().Apply(Scored(PerfSetReading.None, generating: false), 0));
     }
 
     [Fact]
     public void AfterItsAgentsLeaveTheOrbKeepsItsLastScoreWhileItFades()
     {
         var rule = new OrbLinesQuietRule();
-        rule.Apply(Scored(Score(72, TaskForm.Resting, count: 2), generating: false, IntelligenceSums.Zero), 0);
+        rule.Apply(Scored(Score(720, PerfForm.Resting, count: 2), generating: false, IntelligenceSums.Zero), 0);
         var last = rule.Reading!.Value;
 
-        // The agents leave the list: the set has no score and nobody generates. The pale 72 stays, unchanged, for the 10 s
+        // The agents leave the list: the set has no score and nobody generates. The pale 720 stays, unchanged, for the 10 s
         // and the 0.6 s fade; then the readout is gone and further quiet samples change nothing.
-        Assert.False(rule.Apply(Scored(TaskSetReading.None, generating: false), 1));
+        Assert.False(rule.Apply(Scored(PerfSetReading.None, generating: false), 1));
         Assert.Equal(last, rule.Reading!.Value);
-        Assert.Equal("72", rule.Reading!.Value.Content.First.Number);
-        Assert.Equal(new OrbLineScore(72, true, false), rule.Reading!.Value.Content.Score);
+        Assert.Equal("720", rule.Reading!.Value.Content.First.Number);
+        Assert.Equal(new OrbLineScore(720, true, false), rule.Reading!.Value.Content.Score);
         Assert.Equal(0.5, rule.Reading!.Value.Alpha(10.3, false), 6);
         Assert.True(rule.Reading!.Value.IsGone(10.6));
-        Assert.False(rule.Apply(Scored(TaskSetReading.None, generating: false), 11));
+        Assert.False(rule.Apply(Scored(PerfSetReading.None, generating: false), 11));
     }
 
     [Fact]
-    public void ARiseOfThreeOrMoreCountsUpWithEaseOutCubic()
+    public void AChangeOfAtLeastOnePercentAndThreeCountsWithEaseOutCubic()
     {
-        var motion = OrbScoreMotion.Start(new OrbLineScore(40, false, false)).Next(new OrbLineScore(80, false, false), 10);
-        var duration = TaskScoreMotion.CountUpDuration(40);
-        Assert.Equal(0.78, duration, 9);
+        var motion = OrbScoreMotion.Start(new OrbLineScore(600, false, false)).Next(new OrbLineScore(1200, false, false), 10);
+        var duration = PerfMotion.CountDuration(600, 1200);
+        Assert.Equal(0.65, duration, 9);
 
-        Assert.Equal(40, motion.Frame(10, false).Shown);
+        Assert.Equal(600, motion.Frame(10, false).Shown);
         var mid = motion.Frame(10 + duration / 2, false);
-        Assert.Equal((int)Math.Round(40 + 40 * (1 - Math.Pow(0.5, 3)), MidpointRounding.AwayFromZero), mid.Shown);
+        Assert.Equal((int)Math.Round(600 + 600 * (1 - Math.Pow(0.5, 3)), MidpointRounding.AwayFromZero), mid.Shown);
         Assert.Equal((1.0, 0.0), (mid.Alpha, mid.OutgoingAlpha));
-        Assert.Equal(80, motion.Frame(10 + duration, false).Shown);
+        Assert.Equal(1200, motion.Frame(10 + duration, false).Shown);
 
         // Frames at 30 fps only for its duration.
         Assert.True(motion.IsMoving(10 + duration - 0.01, false));
         Assert.False(motion.IsMoving(10 + duration + 1e-9, false));
+
+        // A fall counts down the same way.
+        var fall = OrbScoreMotion.Start(new OrbLineScore(1200, false, false)).Next(new OrbLineScore(600, false, false), 0);
+        Assert.InRange(fall.Frame(0.1, false).Shown!.Value, 601, 1199);
+        Assert.Equal(0.0, fall.Frame(0.1, false).OutgoingAlpha);
+        Assert.Equal(600, fall.Frame(0.65, false).Shown);
     }
 
     [Fact]
-    public void SmallRisesReplaceTheDigitsAndFallsAndDashesCrossfade()
+    public void SmallChangesReplaceTheDigitsAndDashesCrossfade()
     {
-        var start = OrbScoreMotion.Start(new OrbLineScore(40, false, false));
-        var small = start.Next(new OrbLineScore(42, false, false), 5);
-        Assert.Equal(42, small.Frame(5, false).Shown);
-        Assert.False(small.IsMoving(5, false));
+        var start = OrbScoreMotion.Start(new OrbLineScore(1000, false, false));
 
-        // A fall: the old number fades out over the new one in 0.2 s, never rolling down.
-        var fall = start.Next(new OrbLineScore(31, false, false), 5);
-        var half = fall.Frame(5.1, false);
-        Assert.Equal((31, 40), (half.Shown, half.Outgoing));
-        Assert.InRange(half.Alpha, 0.01, 0.99);
-        Assert.Equal(1, half.Alpha + half.OutgoingAlpha, 9);
-        Assert.True(fall.IsMoving(5.19, false));
-        Assert.Equal((1.0, 0.0), (fall.Frame(5.2, false).Alpha, fall.Frame(5.2, false).OutgoingAlpha));
-        Assert.False(fall.IsMoving(5.2, false));
+        // +5 is under 1 % of 1,000; +2 is under 3.
+        foreach (var to in new[] { 1005, 998 })
+        {
+            var small = start.Next(new OrbLineScore(to, false, false), 5);
+            Assert.Equal(to, small.Frame(5, false).Shown);
+            Assert.False(small.IsMoving(5, false));
+        }
 
-        // `–` ↔ a number crossfades too.
+        // `–` ↔ a number crossfades in 0.15 s.
         var none = start.Next(OrbLineScore.None, 5);
-        Assert.Equal(((int?)null, 40), (none.Frame(5.05, false).Shown, none.Frame(5.05, false).Outgoing));
-        Assert.Equal(TaskScoreText.Dash, OrbScoreMotion.Text(null));
-        Assert.Same(OrbScoreMotion.Text(86), OrbScoreMotion.Text(86));
+        var half = none.Frame(5.05, false);
+        Assert.Equal(((int?)null, 1000), (half.Shown, half.Outgoing));
+        Assert.Equal(1, half.Alpha + half.OutgoingAlpha, 9);
+        Assert.False(none.Frame(5 + PerfMotion.CrossfadeSeconds, false).OutgoingAlpha > 0);
+
+        // The color goes pale with it over its own 0.2 s.
+        Assert.True(none.IsMoving(5.19, false));
+        Assert.False(none.IsMoving(5 + PerfMotion.FormSeconds, false));
+        Assert.Equal(PerfNumber.Dash, OrbScoreMotion.Text(null));
+        Assert.Equal("12.8k", OrbScoreMotion.Text(12_840));
     }
 
     [Fact]
-    public void ACountUpInterruptedByANewValueStartsFromTheIntegerItReached()
+    public void ACountInterruptedByANewValueStartsFromTheIntegerItReached()
     {
-        var climbing = OrbScoreMotion.Start(new OrbLineScore(10, false, false)).Next(new OrbLineScore(90, false, false), 0);
+        var climbing = OrbScoreMotion.Start(new OrbLineScore(100, false, false)).Next(new OrbLineScore(900, false, false), 0);
         var reached = climbing.Frame(0.2, false).Shown!.Value;
-        Assert.InRange(reached, 11, 89);
+        Assert.InRange(reached, 101, 899);
 
-        var retarget = climbing.Next(new OrbLineScore(95, false, false), 0.2);
+        var retarget = climbing.Next(new OrbLineScore(950, false, false), 0.2);
         Assert.Equal(reached, retarget.Frame(0.2, false).Shown);
-        Assert.Equal(95, retarget.Frame(0.2 + TaskScoreMotion.CountUpDuration(95 - reached), false).Shown);
+        Assert.Equal(950, retarget.Frame(0.2 + PerfMotion.CountDuration(reached, 950), false).Shown);
 
-        // A fall mid-climb fades out the integer on display.
-        var dropped = climbing.Next(new OrbLineScore(50, false, false), 0.2);
-        var frame = dropped.Frame(0.25, false);
-        Assert.Equal((50, reached), (frame.Shown, frame.Outgoing));
+        // A fall mid-climb counts down from the integer on display.
+        var dropped = climbing.Next(new OrbLineScore(500, false, false), 0.2);
+        Assert.Equal(reached, dropped.Frame(0.2, false).Shown);
+        Assert.Equal(500, dropped.Frame(0.2 + PerfMotion.CountDuration(reached, 500), false).Shown);
     }
 
     [Fact]
     public void ReduceMotionCrossfadesEveryChangeAndKeepsTheColorFade()
     {
-        var start = OrbScoreMotion.Start(new OrbLineScore(40, false, true));
-        var rise = start.Next(new OrbLineScore(80, true, false), 3);
-        var frame = rise.Frame(3 + TaskScoreMotion.ReducedSeconds / 2, true);
-        Assert.Equal((80, 40), (frame.Shown, frame.Outgoing));
+        var start = OrbScoreMotion.Start(new OrbLineScore(400, false, true));
+        var rise = start.Next(new OrbLineScore(800, true, false), 3);
+        var frame = rise.Frame(3 + PerfMotion.CrossfadeSeconds / 2, true);
+        Assert.Equal((800, 400), (frame.Shown, frame.Outgoing));
         Assert.True(rise.IsMoving(3.1, true));
-        Assert.Equal(80, rise.Frame(3 + TaskScoreMotion.ReducedSeconds, true).Shown);
+        Assert.Equal(800, rise.Frame(3 + PerfMotion.CrossfadeSeconds, true).Shown);
 
-        // Live → resting still crossfades the color in 0.2 s; the proof mark goes at once.
+        // Live → resting still crossfades the color in 0.2 s; the provisional mark goes at once.
         Assert.Equal(0.5, rise.Frame(3.1, true).Pale, 9);
-        Assert.Equal(0, rise.Frame(3, true).Proof);
+        Assert.Equal(0, rise.Frame(3, true).Mark);
         Assert.True(rise.IsMoving(3.19, true));
         Assert.False(rise.IsMoving(3.2, true));
     }
 
     [Fact]
-    public void TheColorAndTheProofMarkReverseFromWhereTheyStand()
+    public void TheColorAndTheProvisionalMarkReverseFromWhereTheyStand()
     {
-        var start = OrbScoreMotion.Start(new OrbLineScore(60, false, false));
-        var resting = start.Next(new OrbLineScore(60, true, true), 0);
+        var start = OrbScoreMotion.Start(new OrbLineScore(600, false, false));
+        var resting = start.Next(new OrbLineScore(600, true, true), 0);
         Assert.Equal(0.5, resting.Frame(0.1, false).Pale, 9);
-        Assert.Equal(0.4, resting.Frame(0.1, false).Proof, 9);
+        Assert.Equal(0.4, resting.Frame(0.1, false).Mark, 9);
 
-        var live = resting.Next(new OrbLineScore(60, false, false), 0.1);
+        var live = resting.Next(new OrbLineScore(600, false, false), 0.1);
         Assert.Equal(0.5, live.Frame(0.1, false).Pale, 9);
-        Assert.Equal(0.4, live.Frame(0.1, false).Proof, 9);
-        Assert.Equal((0.0, 0.0), (live.Frame(0.2, false).Pale, live.Frame(0.2, false).Proof));
+        Assert.Equal(0.4, live.Frame(0.1, false).Mark, 9);
+        Assert.Equal(0.0, live.Frame(0.2, false).Pale, 9);
+        Assert.Equal(0.0, live.Frame(0.2, false).Mark, 9);
         Assert.False(live.IsMoving(0.2, false));
+        Assert.False(live.IsMoving(0.1 + 0.4 * PerfProvisionalMark.FadeSeconds + 1e-9, false));
     }
 
     [Fact]
     public void LiveAndRestingTakeTheNumberAndTheUnitTokens()
     {
-        var p = OrbLinesPlacement.IntelligenceScale * OrbLinesPlacement.Led.TextSize(196);
-        var orb = Showing(OrbStyle.Led, Scored(Score(86)));
+        var p = ScoreSize(OrbStyle.Led);
+        var orb = Showing(OrbStyle.Led, Scored(Score(860)));
         Assert.All(Digits(LinesOnly(orb, OrbStyle.Led), p), q => Assert.Equal(0.78, q.Color.W, 3));
 
         // Resting: the unit token (white 50 %), reached over a 0.2 s crossfade of the color.
-        orb.SetLines(1, Scored(Score(86, TaskForm.Resting), generating: false, IntelligenceSums.Zero), true);
+        orb.SetLines(1, Scored(Score(860, PerfForm.Resting), generating: false, IntelligenceSums.Zero), true);
         orb.Render(1.1);
         Assert.All(Digits(LinesOnly(orb, OrbStyle.Led), p), q => Assert.Equal(0.64, q.Color.W, 3));
         Assert.Equal(FrameClass.Fps30, orb.Demand);
@@ -272,7 +291,7 @@ public partial class OrbLinesTests
         Assert.Equal(FrameClass.None, orb.Demand);
 
         // `–` takes the unit token as well.
-        var none = Showing(OrbStyle.Led, Scored(TaskSetReading.None));
+        var none = Showing(OrbStyle.Led, Scored(PerfSetReading.None));
         Assert.All(Digits(LinesOnly(none, OrbStyle.Led), p), q => Assert.Equal(0.50, q.Color.W, 3));
     }
 
@@ -282,20 +301,20 @@ public partial class OrbLinesTests
     [InlineData(OrbStyle.Reactor)]
     [InlineData(OrbStyle.Needle)]
     [InlineData(OrbStyle.Minimal)]
-    public void AnUnprovenScoreSitsOnDotsThatTakeNoWidth(OrbStyle style)
+    public void AProvisionalScoreSitsOnDotsThatTakeNoWidth(OrbStyle style)
     {
-        var proven = Showing(style, Scored(Score(9)));
-        var orb = Showing(style, Scored(Score(9, state: TaskState.Unverified)));
-        Assert.Empty(Dots(LinesOnly(proven, style)));
-        Assert.Equal(Drawn(proven, style, 196).Select(l => l.Left), Drawn(orb, style, 196).Select(l => l.Left));
+        var settled = Showing(style, Scored(Score(9)));
+        var orb = Showing(style, Scored(Score(9, provisional: true)));
+        Assert.Empty(Dots(LinesOnly(settled, style)));
+        Assert.Equal(Drawn(settled, style, 196).Select(l => l.Left), Drawn(orb, style, 196).Select(l => l.Left));
 
-        var p = OrbLinesPlacement.IntelligenceScale * OrbLinesPlacement.For(style).TextSize(196);
+        var p = ScoreSize(style);
         var list = LinesOnly(orb, style);
         var digits = Digits(list, p);
         var left = digits[0].Rect.X + 2;
         var width = 0.56 * p;
         var baseline = Drawn(orb, style, 196)[0].Baseline;
-        var mark = TaskProofMark.Underline(p, width, 2);
+        var mark = PerfProvisionalMark.Underline(p, width, 2);
         var dots = Dots(list);
         Assert.Equal(mark.Centers.Count, dots.Length);
         Assert.All(dots, dot =>
@@ -304,7 +323,7 @@ public partial class OrbLinesTests
             Assert.InRange(dot.A.Y, baseline + 0.22 * p - 0.25 - 1e-4, baseline + 0.22 * p + 0.25 + 1e-4);
             Assert.Equal(Math.Round((dot.A.Y - dot.B.X) * 2), (dot.A.Y - dot.B.X) * 2, 3);
             Assert.Equal(Math.Round((dot.A.X - dot.B.X) * 2), (dot.A.X - dot.B.X) * 2, 3);
-            Assert.Equal(0.78 * TaskProofMark.Opacity, dot.Color.W, 3);
+            Assert.Equal(0.78 * PerfProvisionalMark.Opacity, dot.Color.W, 3);
         });
 
         // From the number's left edge to its right edge, the dots spread evenly.
@@ -315,60 +334,60 @@ public partial class OrbLinesTests
     [Fact]
     public void HighContrastDrawsTheDotsInTheTextColorAtFullStrengthAndThicker()
     {
-        var orb = Showing(OrbStyle.Led, Scored(Score(34, state: TaskState.Pending)), highContrast: true);
-        var p = OrbLinesPlacement.IntelligenceScale * OrbLinesPlacement.Led.TextSize(196);
+        var orb = Showing(OrbStyle.Led, Scored(Score(340, provisional: true)), highContrast: true);
+        var p = ScoreSize(OrbStyle.Led);
         var dots = Dots(LinesOnly(orb, OrbStyle.Led, highContrast: true));
         Assert.NotEmpty(dots);
         Assert.All(dots, dot =>
         {
-            Assert.Equal(TaskProofMark.Diameter(p, 2, highContrast: true) / 2, dot.B.X, 4);
+            Assert.Equal(PerfProvisionalMark.Diameter(p, 2, highContrast: true) / 2, dot.B.X, 4);
             Assert.Equal((1f, 1f, 1f, 1f), (dot.Color.X, dot.Color.Y, dot.Color.Z, dot.Color.W));
         });
     }
 
     [Fact]
-    public void TheProofMarkFadesWithTheStateAndAtOnceUnderReduceMotion()
+    public void TheProvisionalMarkFadesWithTheStateAndAtOnceUnderReduceMotion()
     {
-        var orb = Showing(OrbStyle.Minimal, Scored(Score(60)));
-        orb.SetLines(1, Scored(Score(60, state: TaskState.Pending)), true);
-        orb.Render(1.125);
+        var orb = Showing(OrbStyle.Minimal, Scored(Score(600)));
+        orb.SetLines(1, Scored(Score(600, provisional: true)), true);
+        orb.Render(1 + PerfProvisionalMark.FadeSeconds / 2);
         Assert.Equal(0.78 * 0.7 * 0.5, Dots(LinesOnly(orb, OrbStyle.Minimal))[0].Color.W, 3);
         Assert.Equal(FrameClass.Fps30, orb.Demand);
         RenderFor(orb, 1.125, 0.5);
         Assert.Equal(FrameClass.None, orb.Demand);
 
-        var reduced = Showing(OrbStyle.Minimal, Scored(Score(60)), reduceMotion: true);
-        reduced.SetLines(1, Scored(Score(60, state: TaskState.Pending)), true);
+        var reduced = Showing(OrbStyle.Minimal, Scored(Score(600)), reduceMotion: true);
+        reduced.SetLines(1, Scored(Score(600, provisional: true)), true);
         reduced.Render(1.01);
         Assert.Equal(0.78 * 0.7, Dots(LinesOnly(reduced, OrbStyle.Minimal))[0].Color.W, 3);
         Assert.Equal(FrameClass.None, reduced.Demand);
     }
 
     [Fact]
-    public void ACountUpAsksForThirtyFramesForItsDurationAndAStillScoreForNone()
+    public void ACountAsksForThirtyFramesForItsDurationAndAStillScoreForNone()
     {
-        var orb = Showing(OrbStyle.Minimal, Scored(Score(20, state: TaskState.Unverified)));
+        var orb = Showing(OrbStyle.Minimal, Scored(Score(200, provisional: true)));
         Assert.Equal(FrameClass.None, orb.Demand);
         var still = orb.List.Fingerprint();
         orb.Render(1.5);
         Assert.Equal(still, orb.List.Fingerprint());
 
-        Assert.True(orb.SetLines(2, Scored(Score(60, state: TaskState.Unverified)), true));
+        Assert.True(orb.SetLines(2, Scored(Score(600, provisional: true)), true));
         orb.Render(2.02);
         Assert.Equal(FrameClass.Fps30, orb.Demand);
-        var duration = TaskScoreMotion.CountUpDuration(40);
+        var duration = PerfMotion.CountDuration(200, 600);
         orb.Render(2 + duration - 0.02);
         Assert.Equal(FrameClass.Fps30, orb.Demand);
         orb.Render(2 + duration + 0.01);
         Assert.Equal(FrameClass.None, orb.Demand);
-        Assert.Equal(60, orb.LinesReading!.Value.Score.Frame(2 + duration, false).Shown);
+        Assert.Equal(600, orb.LinesReading!.Value.Score.Frame(2 + duration, false).Shown);
     }
 
     [Fact]
-    public void AWarmCountUpFrameWithItsProofMarkAllocatesNothing()
+    public void AWarmCountFrameWithItsProvisionalMarkAllocatesNothing()
     {
-        var orb = Showing(OrbStyle.Led, Scored(Score(50, state: TaskState.Unverified)), size: 240);
-        orb.SetLines(1, Scored(Score(57, state: TaskState.Unverified)), true);
+        var orb = Showing(OrbStyle.Led, Scored(Score(5000, provisional: true)), size: 240);
+        orb.SetLines(1, Scored(Score(57_000, provisional: true)), true);
         var time = 1.0;
         orb.Render(time += 1 / 60.0);
         orb.Render(time += 1 / 60.0);
@@ -378,7 +397,7 @@ public partial class OrbLinesTests
     [Fact]
     public void TheLiquidSplitsTheDotsAtItsSurfaceAndDrawsEachOnce()
     {
-        var orb = Showing(OrbStyle.Liquid, Scored(Score(88, state: TaskState.Unverified)));
+        var orb = Showing(OrbStyle.Liquid, Scored(Score(88, provisional: true)));
         orb.SetData(1, Redline * 1.1, HeatMath.RawTier(Redline * 1.1, Redline), SpeedTitles.Raw(Redline * 1.1, Redline),
             [SourceKind.Codex], "today", null);
         var time = RenderFor(orb, 1, 3);
@@ -406,9 +425,9 @@ public partial class OrbLinesTests
                 yieldsToPill: false);
         }
 
-        var p = OrbLinesPlacement.IntelligenceScale * OrbLinesPlacement.Liquid.TextSize(196);
+        var p = OrbLinesPlacement.Liquid.ScoreScale * OrbLinesPlacement.Liquid.TextSize(196);
         var all = Dots(above).Concat(Dots(below)).ToArray();
-        Assert.Equal(TaskProofMark.Underline(p, 2 * 0.56 * p, 2).Centers.Count, all.Length);
+        Assert.Equal(PerfProvisionalMark.Underline(p, 2 * 0.56 * p, 2).Centers.Count, all.Length);
         Assert.All(Dots(above), dot => Assert.True(dot.A.Y <= u.SurfaceY(dot.A.X)));
         Assert.All(Dots(below), dot => Assert.True(dot.A.Y > u.SurfaceY(dot.A.X)));
         Assert.True(time > 3);

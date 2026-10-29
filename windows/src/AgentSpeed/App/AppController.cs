@@ -783,7 +783,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
     /// <summary>
     /// The taskbar and tray tooltip line: tok/s or money, the second value when shown (DESIGN 3), the title, then the
-    /// readout blocks' words (DESIGN 10): network speed, then 智力.
+    /// readout blocks' words (DESIGN 10): network speed, then 性能.
     /// </summary>
     private string LiveLine()
     {
@@ -1026,7 +1026,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         {
             _historyService = new HistoryService(_historyHub, Settings.ToMonitorConfiguration(), pricing: _cost.Book)
             {
-                CalibrationUpdated = models => _monitor?.SetTaskCalibration(models),
+                PerfRecordsUpdated = records => _monitor?.SetPerfRecords(records),
             };
             _historyService.Start();
         }

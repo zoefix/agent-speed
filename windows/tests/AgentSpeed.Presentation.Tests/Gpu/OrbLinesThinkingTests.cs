@@ -91,7 +91,7 @@ public partial class OrbLinesTests
         // The same zero again keeps the hold, and so does a quiet sample, which carries nothing.
         rule.Apply(Intelligence(Unthinking), 1.5);
         Assert.Equal(4, rule.Reading!.Value.Thinking.HideAt);
-        rule.Apply(OrbLinesText.Intelligence(Presentation.TaskScore.TaskSetReading.None, IntelligenceSums.Zero, generating: false, En), 2);
+        rule.Apply(OrbLinesText.Intelligence(Presentation.Perf.PerfSetReading.None, IntelligenceSums.Zero, generating: false, En), 2);
         Assert.Equal(4, rule.Reading!.Value.Thinking.HideAt);
         rule.Apply(Intelligence(Long), 2.5);
         Assert.Null(rule.Reading!.Value.Thinking.HideAt);
@@ -117,10 +117,10 @@ public partial class OrbLinesTests
     }
 
     [Theory]
-    [InlineData(LanguageCodes.ZhHant, "智力 125")]
-    [InlineData(LanguageCodes.ZhHans, "智力 125")]
-    [InlineData(LanguageCodes.En, "intelligence 125")]
-    [InlineData(LanguageCodes.Ja, "知能 125")]
+    [InlineData(LanguageCodes.ZhHant, "性能 125")]
+    [InlineData(LanguageCodes.ZhHans, "性能 125")]
+    [InlineData(LanguageCodes.En, "performance 125")]
+    [InlineData(LanguageCodes.Ja, "性能 125")]
     public void TheLabelReadsTheIntelligenceAloneOnceTheThinkingLineHides(string language, string alone)
     {
         var localizer = new Localizer(Localizer.LoadEmbeddedTable(), language);
@@ -163,7 +163,7 @@ public partial class OrbLinesTests
         var expected = style switch
         {
             OrbStyle.Reactor => 0.75 * 196 - 0.155 * 196,
-            OrbStyle.Needle => 0.75 * 196 + 0.108 * 196 + 0.70 * (1.25 * t - t),
+            OrbStyle.Needle => 0.75 * 196 + 0.108 * 196 + 0.70 * (1.1 * t - t),
             OrbStyle.Minimal => 0.75 * 196 - 0.228 * 196,
             _ => 0.75 * 196 - 0.245 * 196,
         };
@@ -171,9 +171,9 @@ public partial class OrbLinesTests
         Assert.Equal(placement.SingleBaseline(0.75 * 196, 196), line.Baseline, 3);
         Assert.Equal(style == OrbStyle.Needle ? top : bottom, line.Baseline, 3);
 
-        // 智力 · 125, centered and on device pixels; fit is unchanged, so the readout stays.
+        // 性能 · 125, centered and on device pixels; fit is unchanged, so the readout stays.
         Assert.Equal(1 + 3, line.Pieces);
-        Assert.Equal(Math.Round(1.25 * t * 4) / 4, line.Size, 3);
+        Assert.Equal(Math.Round(placement.ScoreScale * t * 4) / 4, line.Size, 3);
         Assert.InRange((line.Left + line.Right) / 2, 0.75 * 196 - 0.5, 0.75 * 196 + 0.5);
         Assert.True(line.Snapped);
         Assert.True(orb.LinesVisible(3.3));

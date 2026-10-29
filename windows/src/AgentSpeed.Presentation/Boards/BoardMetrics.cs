@@ -53,7 +53,7 @@ public sealed record BoardMetrics(
     /// <summary>The hero is layout B: its right side is the sub-gauge (glass and timing draw their history as a strip).</summary>
     public bool Gauge => Readouts.Hero;
 
-    /// <summary>The rows show the 智力 column and the captions line above the ranking.</summary>
+    /// <summary>The rows show the 性能 column and the captions line above the ranking.</summary>
     public bool IntelligenceColumn => Readouts.Intelligence;
 
     /// <summary>Group rows have a second line with the model (at M and L, whatever the switches; never at S).</summary>
@@ -62,7 +62,7 @@ public sealed record BoardMetrics(
     /// <summary>The board's size.</summary>
     public BoardSize Size { get; init; } = BoardSize.M;
 
-    /// <summary>The captions line at the top of the ranking (12 tall, timing 14); 0 without the 智力 column.</summary>
+    /// <summary>The captions line at the top of the ranking (12 tall, timing 14); 0 without the 性能 column.</summary>
     public double CaptionsHeight { get; init; }
 
     /// <summary>The history strip under a layout B hero (glass, timing), in board coordinates; empty otherwise.</summary>
@@ -75,7 +75,7 @@ public sealed record BoardMetrics(
 
     /// <summary>
     /// The geometry with the live metrics switched as <paramref name="readouts"/> (DESIGN 2c, Live metrics: Hero, Ranking rows):
-    /// a layout B hero moves glass's and timing's history to a strip under it and makes neon's hero taller; the 智力 column adds
+    /// a layout B hero moves glass's and timing's history to a strip under it and makes neon's hero taller; the 性能 column adds
     /// the captions line above the first row; at M and L the second line makes group rows 8 taller (glass and neon then leave
     /// out their 2 pt between group rows).
     /// </summary>

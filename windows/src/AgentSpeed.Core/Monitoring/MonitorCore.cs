@@ -67,9 +67,6 @@ internal sealed partial class MonitorCore : IDisposable
     private int _responsesSeen;
     private bool _partialHistory;
     private long? _observedAtMs;
-    private bool _keepEveryTask;
-    private IReadOnlyDictionary<SourceKind, Tasks.TaskModels> _taskModels = new Dictionary<SourceKind, Tasks.TaskModels>();
-    private readonly Tasks.TaskWatchContext _taskWatch;
     private long _seededFiles;
 
     public MonitorCore(
@@ -94,7 +91,6 @@ internal sealed partial class MonitorCore : IDisposable
         _enabled = configuration.EnabledSources;
         _enabledSet = SourceSet.From(_enabled);
         _observer = observer;
-        _taskWatch = new Tasks.TaskWatchContext(() => Clock());
         _engine = new SpeedEngine(todayStartMs, pricing, zone);
         foreach (var (family, path) in locations.FileRoots())
         {
@@ -119,11 +115,14 @@ internal sealed partial class MonitorCore : IDisposable
         RefreshAvailability();
     }
 
-    /// <summary>Live reporting's task watch (METRICS 11.10), as last published; the monitor thread sets it before reading.</summary>
-    internal Reporting.ReportTaskWatch TaskWatch
+    /// <summary>Live reporting's statistics watch (METRICS 11.10), as last published; the monitor thread sets it before reading.</summary>
+    internal Reporting.ReportPerfWatch PerfWatch { get; set; } = Reporting.ReportPerfWatch.Off;
+
+    /// <summary>The 14-day baselines of the score card (METRICS 6.11), from the history store.</summary>
+    internal Perf.IPerfBaselines? PerfBaselines
     {
-        get => _taskWatch.Watch;
-        set => _taskWatch.Watch = value ?? Reporting.ReportTaskWatch.Off;
+        get => _engine.PerfBaselines;
+        set => _engine.PerfBaselines = value;
     }
 
     public SourceRoot CodexRoot { get; }
@@ -710,8 +709,7 @@ internal sealed partial class MonitorCore : IDisposable
         long nowMs, long todayStartMs, MonitorState state, bool observeLive, IReadOnlyCollection<SourceSet>? subsets = null)
     {
         ResolveParents();
-        _taskWatch.Tick(nowMs);
-        _engine.CountTasks(_taskWatch.TakeCompletions(), _taskWatch.Watch);
+        _engine.FollowPerfWatch(PerfWatch);
         var frame = _engine.Compute(nowMs, todayStartMs, observeLive);
         var agents = frame.Agents
             .Select(a => new AgentStatus(
@@ -724,7 +722,7 @@ internal sealed partial class MonitorCore : IDisposable
                 a.Live,
                 a.RecentSpeed,
                 UnixTime.FromMs(a.Info.LastLineMs ?? nowMs),
-                a.ParentId) { Modes = a.Info.Modes, Intelligence = a.Intelligence, Task = a.Info.Task, Work = a.Work })
+                a.ParentId) { Modes = a.Info.Modes, Intelligence = a.Intelligence, Perf = a.Perf, Work = a.Work })
             .ToList();
 
         var sources = Enum.GetValues<SourceKind>()
@@ -1036,19 +1034,17 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         _collector.Items.Clear();
-        _taskWatch.Seeding = seeded;
+        _engine.FollowPerfWatch(PerfWatch);
+        tracked.Parser.Seeding = seeded;
+        tracked.Parser.CallSink = _collector;
         try
         {
             prepared.Batch.ApplyTo(_collector);
         }
         finally
         {
-            _taskWatch.Seeding = false;
-        }
-
-        if (seeded)
-        {
-            tracked.Parser.ForgetWork();
+            tracked.Parser.Seeding = false;
+            tracked.Parser.CallSink = null;
         }
 
         _partialHistory |= tracked.Tailer is DocumentTailer { Oversized: true } || tracked.Parser is GrokBuild.GrokParser { PendingOverflow: true };
@@ -1062,8 +1058,19 @@ internal sealed partial class MonitorCore : IDisposable
 
         PushAgent(tracked);
         long? liveNowMs = seeded ? null : Clock();
-        foreach (var (response, isCompletion) in _collector.Items)
+        foreach (var (response, isCompletion, agentId, call) in _collector.Items)
         {
+            if (response is null)
+            {
+                // A tool call's first result read live (METRICS 11.10), in read order among the responses.
+                if (liveNowMs is { } now && _enabled.Contains(tracked.Parser.Source))
+                {
+                    _engine.CountCall(agentId!, tracked.Parser.Source, call, now);
+                }
+
+                continue;
+            }
+
             _responsesSeen++;
             if (_enabled.Contains(response.Source))
             {
@@ -1193,7 +1200,6 @@ internal sealed partial class MonitorCore : IDisposable
 
         if (!_enabled.Contains(parser.Source))
         {
-            _taskWatch.Forget(parser.AgentId);
             _engine.RemoveAgent(parser.AgentId);
             _linksChanged |= _links.Remove(parser.AgentId);
             return;
@@ -1215,39 +1221,8 @@ internal sealed partial class MonitorCore : IDisposable
             parser.Phase,
             parser.InFlightStartMs,
             parser.LastLineMs,
-            _parents.GetValueOrDefault(parser.AgentId)) { Modes = parser.Modes, Work = parser.WorkActions, Task = TaskStatusOf(parser) });
+            _parents.GetValueOrDefault(parser.AgentId)) { Modes = parser.Modes, Work = parser.WorkActions });
     }
-
-    /// <summary>
-    /// The coefficients the predictions of each scored source use (METRICS 6.11 <i>Calibration</i>, from the history);
-    /// a source without an entry uses the priors. Every scored agent is evaluated again with the new models.
-    /// </summary>
-    internal void SetTaskModels(IReadOnlyDictionary<SourceKind, Tasks.TaskModels> models)
-    {
-        ArgumentNullException.ThrowIfNull(models);
-        if (ReferenceEquals(models, _taskModels))
-        {
-            return;
-        }
-
-        _taskModels = models;
-        foreach (var tracked in _files.Values)
-        {
-            if (tracked.Parser.Tasks is not null)
-            {
-                tracked.PushedVersion = -1;
-                PushAgent(tracked);
-            }
-        }
-
-        RepushOpenClawAgents();
-    }
-
-    /// <summary>The agent's current task, evaluated over everything read (METRICS 6.9 <i>Event stream</i>).</summary>
-    private Tasks.AgentTaskStatus? TaskStatusOf(TranscriptParser parser) =>
-        parser.Tasks is { } tasks
-            ? Tasks.AgentTaskStatus.Of(tasks.Events, _taskModels.GetValueOrDefault(parser.Source) ?? Tasks.TaskModels.Prior)
-            : null;
 
     /// <summary>Applies one read of the OpenCode database; true when anything changed.</summary>
     private bool ApplyOpenCode(OpenCodeUpdate update, bool seeded)
@@ -1307,30 +1282,12 @@ internal sealed partial class MonitorCore : IDisposable
     private static string? DisplayProject(TranscriptParser parser) =>
         parser is AntigravityParser ? AntigravityPaths.StoreNameOf(parser.AgentId) : null;
 
-    /// <summary>
-    /// Keep every task's events instead of each agent's current task (the probe's dumps evaluate at any instant); set
-    /// before seeding.
-    /// </summary>
-    internal bool KeepEveryTask
+    /// <summary>Every known agent's performance evaluation at <paramref name="nowMs"/> (the dumps; before the first snapshot).</summary>
+    internal List<Perf.PerfAgentView> PerfViews(long nowMs)
     {
-        get => _keepEveryTask;
-        set
-        {
-            _keepEveryTask = value;
-            if (_openClaw is { } openClaw)
-            {
-                openClaw.KeepEveryTask = value;
-            }
-        }
+        ResolveParents();
+        return _engine.PerfViews(nowMs);
     }
-
-    /// <summary>
-    /// The transcripts of the sources with a task score (METRICS 6.9) that seeding read, in startup order, with their
-    /// composers: the seeded agents of <c>--dump-today</c>. Files seeding started at the end of are left out, and so are
-    /// OpenClaw windows, which the dump reads whole per database like the reference.
-    /// </summary>
-    internal IEnumerable<TranscriptParser> TaskAgents =>
-        _files.Values.Where(f => f.SeedOrder is not null && f.Parser.Tasks is not null).OrderBy(f => f.SeedOrder).Select(f => f.Parser);
 
     /// <summary>An agent's parent link (METRICS 6.7) as last resolved; null for none.</summary>
     internal string? ParentOf(string agentId)
@@ -1341,14 +1298,7 @@ internal sealed partial class MonitorCore : IDisposable
 
     private TrackedFile NewTrackedFile(SourceRoot root, string path)
     {
-        var tracked = new TrackedFile(root, path, _deduper);
-        tracked.Parser.TaskWatch = _taskWatch;
-        if (_keepEveryTask)
-        {
-            tracked.Parser.KeepEveryTask();
-        }
-
-        return tracked;
+        return new TrackedFile(root, path, _deduper);
     }
 
     /// <summary>Re-resolves parent links over the engine's agents after any of them changed (METRICS 6.7).</summary>
@@ -1402,7 +1352,6 @@ internal sealed partial class MonitorCore : IDisposable
 
             _removedMalformedLines += tracked.Parser.MalformedLines;
             _removedOversizedLines += tracked.Tailer.OversizedLines;
-            _taskWatch.Forget(tracked.Parser.AgentId);
             _engine.RemoveAgent(tracked.Parser.AgentId);
             _linksChanged |= _links.Remove(tracked.Parser.AgentId);
         }
@@ -1522,10 +1471,13 @@ internal sealed partial class MonitorCore : IDisposable
         public bool Again { get; set; }
     }
 
-    private sealed class Collector : IResponseSink
+    /// <summary>Responses and live tool results of one read, in the order they were read.</summary>
+    private sealed class Collector : IResponseSink, ICallSink
     {
-        public List<(ParsedResponse Response, bool IsCompletion)> Items { get; } = [];
+        public List<(ParsedResponse? Response, bool IsCompletion, string? AgentId, Work.WorkAction Call)> Items { get; } = [];
 
-        public void OnResponse(ParsedResponse response, bool isCompletion) => Items.Add((response, isCompletion));
+        public void OnResponse(ParsedResponse response, bool isCompletion) => Items.Add((response, isCompletion, null, default));
+
+        public void OnCallResult(string agentId, SourceKind source, Work.WorkAction action) => Items.Add((null, false, agentId, action));
     }
 }

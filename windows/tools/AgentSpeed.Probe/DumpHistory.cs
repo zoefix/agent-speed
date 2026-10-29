@@ -17,7 +17,7 @@ internal static class DumpHistory
 
         var zone = options.Utc ? TimeZoneInfo.Utc : TimeZoneInfo.Local;
         var process = Process.GetCurrentProcess();
-        var (report, days, storeBytes) = HistoryRun.Analyze(options, table, zone);
+        var (report, days, perf, storeBytes) = HistoryRun.Analyze(options, table, zone);
 
         foreach (var day in days)
         {
@@ -55,13 +55,18 @@ internal static class DumpHistory
                 .Text);
         }
 
+        foreach (var record in perf)
+        {
+            output.Line(JsonLine.Of("perf", w => PerfDumpJson.WriteRecord(w, record)));
+        }
+
         output.Flush();
         process.Refresh();
         Console.Error.WriteLine(
             $"history: discovered {report.FilesDiscovered}, analysed {report.FilesAnalyzed} files ({report.BytesAnalyzed} bytes) " +
             $"and {report.SessionsAnalyzed} OpenCode sessions in {report.ElapsedMs} ms; unreadable {report.FilesUnreadable}; " +
             $"store {storeBytes} bytes; working set {process.WorkingSet64 / 1048576.0:F1} MB; " +
-            $"allocated {GC.GetTotalAllocatedBytes() / 1048576.0:F0} MB; {days.Count} rows");
+            $"allocated {GC.GetTotalAllocatedBytes() / 1048576.0:F0} MB; {days.Count} rows, {perf.Count} performance records");
         return 0;
     }
 

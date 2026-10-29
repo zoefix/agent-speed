@@ -145,13 +145,10 @@ public static class SettingsSerializer
             }
 
             w.WriteString("modeKind", s.HistoryModeKind == ExecutionModeKind.Speed ? "speed" : "effort");
-            if (s.HistoryTaskPair is { IsValid: true } pair)
-            {
-                w.WriteStartArray("taskPair");
-                w.WriteStringValue(Orbs.OrbSources.KeyOf(pair.A));
-                w.WriteStringValue(Orbs.OrbSources.KeyOf(pair.B));
-                w.WriteEndArray();
-            }
+            w.WriteStartObject("perfSort");
+            w.WriteString("column", PerfSortName(s.HistoryPerfSort.Column));
+            w.WriteBoolean("descending", s.HistoryPerfSort.Descending);
+            w.WriteEndObject();
 
             w.WriteEndObject();
 
@@ -234,7 +231,7 @@ public static class SettingsSerializer
         var traffic = Child(root, "traffic");
         var report = Child(root, "report");
 
-        // DESIGN 10: an earlier build's `traffic.bar = intelligence` becomes the network block off and the 智力 switch on.
+        // DESIGN 10: an earlier build's `traffic.bar = intelligence` becomes the network block off and the 性能 switch on.
         var storedBar = ReadString(traffic, "bar");
         var legacyIntelligence = storedBar == TrafficSettings.LegacyIntelligenceKey;
 
@@ -300,7 +297,7 @@ public static class SettingsSerializer
             DroidRoot = ReadString(sources, "droidRoot"),
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),
             HistoryModeKind = ReadString(history, "modeKind") == "speed" ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
-            HistoryTaskPair = ReadTaskPair(history is { } th && th.TryGetProperty("taskPair", out var taskPair) ? taskPair : null),
+            HistoryPerfSort = ReadPerfSort(history is { } ph ? Child(ph, "perfSort") : null),
             ChartSeconds = (int)Math.Round(ReadDouble(dashboard, "chartSeconds", d.ChartSeconds)),
             AgentsExpanded = ReadBool(dashboard, "agentsExpanded", d.AgentsExpanded),
             HeroLastTitle = ReadString(dashboard, "heroLastTitle"),
@@ -438,25 +435,36 @@ public static class SettingsSerializer
             : null;
     }
 
-    /// <summary>The history's remembered task pair: two different scored source keys, else null.</summary>
-    private static History.Tasks.TaskPair? ReadTaskPair(JsonElement? pair)
+    /// <summary>The 性能表現 table's remembered sort; anything unknown is the default (score, descending).</summary>
+    private static History.Perf.PerfSort ReadPerfSort(JsonElement? sort)
     {
-        if (pair is not { ValueKind: JsonValueKind.Array } array || array.GetArrayLength() != 2)
+        if (sort is not { ValueKind: JsonValueKind.Object } value)
         {
-            return null;
+            return History.Perf.PerfSort.Default;
         }
 
-        var a = array[0];
-        var b = array[1];
-        if (a.ValueKind != JsonValueKind.String || b.ValueKind != JsonValueKind.String
-            || !Orbs.OrbSources.TryParseKey(a.GetString(), out var first) || !Orbs.OrbSources.TryParseKey(b.GetString(), out var second))
-        {
-            return null;
-        }
-
-        var parsed = new History.Tasks.TaskPair(first, second);
-        return parsed.IsValid ? parsed : null;
+        var column = Enum.GetValues<History.Perf.PerfSortColumn>()
+            .Cast<History.Perf.PerfSortColumn?>()
+            .FirstOrDefault(c => PerfSortName(c!.Value) == ReadString(value, "column"));
+        return column is { } known
+            ? new History.Perf.PerfSort(known, ReadBool(value, "descending", true))
+            : History.Perf.PerfSort.Default;
     }
+
+    private static string PerfSortName(History.Perf.PerfSortColumn column) => column switch
+    {
+        History.Perf.PerfSortColumn.Model => "model",
+        History.Perf.PerfSortColumn.Score => "score",
+        History.Perf.PerfSortColumn.Usual => "usual",
+        History.Perf.PerfSortColumn.Timed => "timed",
+        History.Perf.PerfSortColumn.Throughput => "throughput",
+        History.Perf.PerfSortColumn.Latency => "latency",
+        History.Perf.PerfSortColumn.Reasoning => "reasoning",
+        History.Perf.PerfSortColumn.Pace => "pace",
+        History.Perf.PerfSortColumn.ToolTime => "toolTime",
+        History.Perf.PerfSortColumn.ToolSuccess => "toolSuccess",
+        _ => "cache",
+    };
 
     private static WindowFrame? ReadWindowFrame(JsonElement? window)
     {

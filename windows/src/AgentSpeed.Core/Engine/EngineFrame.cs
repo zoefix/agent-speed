@@ -3,8 +3,11 @@ namespace AgentSpeed.Core.Engine;
 /// <param name="ParentId">The parent's id when the parent is listed too (METRICS 6.7).</param>
 internal sealed record AgentFrame(AgentInfo Info, AgentPhase Phase, Rate Live, double? RecentSpeed, string? ParentId = null)
 {
-    /// <summary>The agent's 智力 (METRICS 6.9 <i>Values</i>): its task score by phase and its own thinking sums.</summary>
+    /// <summary>The agent's 性能 (METRICS 6.9 <i>Values</i>): its performance value by phase and its own thinking sums.</summary>
     public Intelligence.AgentIntelligence Intelligence { get; init; }
+
+    /// <summary>The agent's own evaluation with the facts of its score card (METRICS 6.9 <i>Facts for the card</i>).</summary>
+    public Perf.PerfEvaluation? Perf { get; init; }
 
     /// <summary>What the agent's recent tool calls say (METRICS 6.10).</summary>
     public Work.WorkSignals Work { get; init; } = Core.Work.WorkSignals.None;
@@ -51,7 +54,7 @@ internal sealed record EngineFrame(
     /// <summary>Each source's unpriced facts of today (METRICS 9.10 <i>Live</i>), indexed by <see cref="SourceKind"/>.</summary>
     public IReadOnlyList<Unpriced.UnpricedCount>[] SourceUnpricedFacts { get; init; } = [];
 
-    /// <summary>The live intelligence sums of each source (METRICS 6.9), indexed by <see cref="SourceKind"/>.</summary>
+    /// <summary>The live thinking sums and highest performance value of each source (METRICS 6.9), indexed by <see cref="SourceKind"/>.</summary>
     public Intelligence.IntelligenceSums[] SourceIntelligence { get; init; } = [];
 
     /// <summary>

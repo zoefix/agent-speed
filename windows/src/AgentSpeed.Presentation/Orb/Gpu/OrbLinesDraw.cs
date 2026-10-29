@@ -1,7 +1,7 @@
 using AgentSpeed.Presentation.Colors;
 using AgentSpeed.Presentation.Motion;
 using AgentSpeed.Presentation.Orb.Lines;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Orb.Gpu;
 
@@ -41,10 +41,10 @@ public readonly record struct OrbLinesColors(Rgba Number, Rgba Secondary, Rgba? 
 /// <summary>
 /// The orb's two-line readout on the GPU (DESIGN 10). Network speed: each line a vector arrow, a number right-aligned in a
 /// cell as wide as <c>8.88</c> and a unit left-aligned in a cell as wide as <c>MB/s</c>, sharing their left edge and
-/// centered on the orb. Intelligence: a larger intelligence line (glyph · 智力) over a smaller thinking line
+/// centered on the orb. Intelligence: a larger intelligence line (glyph · 性能) over a smaller thinking line
 /// (glyph · tok/s value · unit), each centered on the orb by its own width with every piece on a device pixel; after 3 s
-/// at 0 the thinking line fades out and the intelligence line glides to its place by the value. 智力 moves as DESIGN 12
-/// <i>Motion</i> says (count-up, crossfades, the pale color) and sits on the dotted proof mark while unproven; every other
+/// at 0 the thinking line fades out and the intelligence line glides to its place by the value. 性能 moves as DESIGN 12
+/// <i>Motion</i> says (counts, crossfades, the pale color) and sits on the dotted provisional mark while provisional; every other
 /// character is replaced once per sample. The block fades by the quiet rule and steps aside for the new-peak pill.
 /// Allocates nothing per frame.
 /// </summary>
@@ -54,7 +54,7 @@ public sealed class OrbLinesDraw
     public const double PillFade = 0.15;
 
     private IOrbGlyphs _glyphs;
-    private TaskUnderline? _underline;
+    private PerfUnderline? _underline;
     private (double Size, double Width, double Scale, bool HighContrast) _underlineKey;
 
     public OrbLinesDraw(IOrbGlyphs glyphs)
@@ -83,16 +83,16 @@ public sealed class OrbLinesDraw
     }
 
     /// <summary>
-    /// Intelligence at diameter <paramref name="s"/>: the widths the two lines reach with their widest numbers, the
-    /// intelligence line with <c>888</c> and the thinking line with <c>8.88</c> (and <c>tok/s</c> where it carries it).
+    /// Intelligence at diameter <paramref name="s"/>: the widths the two lines reach with their widest numbers, the 性能 line
+    /// with <c>8,888</c> (the widest compact score) and the thinking line with <c>8.88</c> (and <c>tok/s</c> where it carries it).
     /// </summary>
     public (double Intelligence, double Thinking) WidestLines(OrbLinesPlacement placement, double s, OrbLinesContent content)
     {
         ArgumentNullException.ThrowIfNull(placement);
         ArgumentNullException.ThrowIfNull(content);
         var t = placement.TextSize(s);
-        var p = OrbLinesPlacement.IntelligenceScale * t;
-        return (Width(content.First, p, OrbLinesPlacement.IntelligenceGap * p, 3 * _glyphs.DigitCell(OrbFont.TrafficNumber, p), unit: false),
+        var p = placement.ScoreScale * t;
+        return (Width(content.First, p, OrbLinesPlacement.IntelligenceGap * p, NumberWidth(PerfNumber.WidestCompact, p, 0), unit: false),
             Width(content.Second, t, OrbLinesPlacement.Gap * t, DecimalCell(t), placement.ThinkingUnit));
     }
 
@@ -177,7 +177,7 @@ public sealed class OrbLinesDraw
         }
 
         // The thinking line hidden at zero: it fades while the intelligence line glides to the single-line position.
-        var p = OrbLinesPlacement.IntelligenceScale * t;
+        var p = placement.ScoreScale * t;
         var reduce = scene.Effects.ReduceMotion;
         var single = reading.Thinking.Single(scene.Time, reduce);
         var first = single > 0 ? Easing.Lerp(top, placement.SingleBaseline(ctx.CenterY + shift, ctx.Size), single) : top;
@@ -242,10 +242,10 @@ public sealed class OrbLinesDraw
     }
 
     /// <summary>
-    /// The intelligence line, glyph · gap · 智力, centered by the score as drawn (DESIGN 10; DESIGN 12, <i>Values and forms</i>,
-    /// <i>Proof mark</i>, <i>Motion</i>): live in the number color, resting and <c>–</c> in the unit token's, crossfading between
-    /// them; a count-up draws its current integer and a fall or <c>–</c> ↔ a number crossfades in place. An unproven score
-    /// sits on the dotted underline, which takes no width and fades with the state.
+    /// The intelligence line, glyph · gap · 性能, centered by the score as drawn (DESIGN 10; DESIGN 12, <i>Values and forms</i>,
+    /// <i>Provisional mark</i>, <i>Motion</i>): live in the number color, resting and <c>–</c> in the unit token's, crossfading
+    /// between them; a count draws its current integer and <c>–</c> ↔ a number crossfades in place. A provisional score sits
+    /// on the dotted underline, which takes no width and fades with the state.
     /// </summary>
     private void ScoreLine(OrbDrawList list, OrbGpuContext ctx, in OrbLine line, in OrbScoreFrame score, double size, double baseline,
         in LinePaint paint)
@@ -253,13 +253,16 @@ public sealed class OrbLinesDraw
         var small = OrbLinesPlacement.UnitScale * size;
         var gap = OrbLinesPlacement.IntelligenceGap * size;
         var pixels = ctx.Scale;
-        var text = OrbScoreMotion.Text(score.Shown);
+        Span<char> text = stackalloc char[PerfNumber.MaxCompactLength];
+        text = text[..PerfNumber.FormatCompact(score.Shown, text)];
         var x = ctx.CenterX - (Advance(line.Glyph, OrbFont.Title, small) + gap + NumberWidth(text, size, paint.Sigma)) / 2;
         var left = Text(list, line.Glyph, OrbFont.Title, small, x, baseline, paint, pixels) + gap;
         var color = Rgba.Lerp(paint.Number, paint.Secondary, score.Pale);
+        Span<char> other = stackalloc char[PerfNumber.MaxCompactLength];
         if (score.OutgoingAlpha > 0.01)
         {
-            Number(list, OrbScoreMotion.Text(score.Outgoing), size, left, baseline, paint.Inked(color, score.OutgoingAlpha), pixels);
+            Number(list, other[..PerfNumber.FormatCompact(score.Outgoing, other)], size, left, baseline,
+                paint.Inked(color, score.OutgoingAlpha), pixels);
         }
 
         if (score.Alpha > 0.01)
@@ -267,19 +270,19 @@ public sealed class OrbLinesDraw
             Number(list, text, size, left, baseline, paint.Inked(color, score.Alpha), pixels);
         }
 
-        if (score.Proof > 0.01 && score.Marked is { } marked)
+        if (score.Mark > 0.01 && score.Marked is { } marked)
         {
-            var width = NumberWidth(OrbScoreMotion.Text(marked), size, paint.Sigma);
-            ProofMark(list, ctx, Snap(left, pixels), width, size, baseline, color.MultiplyAlpha(score.Proof), paint.Clip);
+            var width = NumberWidth(other[..PerfNumber.FormatCompact(marked, other)], size, paint.Sigma);
+            ProvisionalMark(list, ctx, Snap(left, pixels), width, size, baseline, color.MultiplyAlpha(score.Mark), paint.Clip);
         }
     }
 
     /// <summary>
-    /// The proof mark under a number <paramref name="width"/> wide from <paramref name="left"/> (DESIGN 12): round dots in the
+    /// The provisional mark under a number <paramref name="width"/> wide from <paramref name="left"/> (DESIGN 12): round dots in the
     /// content layer, under the text and never a glow, the number's color at 70 % (high contrast: 100 % and d + 0.5), each on
     /// the device pixel grid. Split by the liquid surface like the text: the pass for one side draws the dots on that side.
     /// </summary>
-    private void ProofMark(OrbDrawList list, OrbGpuContext ctx, double left, double width, double size, double baseline, Rgba color,
+    private void ProvisionalMark(OrbDrawList list, OrbGpuContext ctx, double left, double width, double size, double baseline, Rgba color,
         OrbTextClip clip)
     {
         var mark = Underline(size, width, ctx.Scale, ctx.HighContrast);
@@ -306,13 +309,13 @@ public sealed class OrbLinesDraw
         }
     }
 
-    /// <summary>The underline's geometry, kept while the number's width, size, scale and contrast stay (a count-up crosses few widths).</summary>
-    private TaskUnderline Underline(double size, double width, double scale, bool highContrast)
+    /// <summary>The underline's geometry, kept while the number's width, size, scale and contrast stay (a count crosses few widths).</summary>
+    private PerfUnderline Underline(double size, double width, double scale, bool highContrast)
     {
         var key = (size, width, scale, highContrast);
         if (_underline is null || _underlineKey != key)
         {
-            _underline = TaskProofMark.Underline(size, width, scale, barBlock: false, highContrast);
+            _underline = PerfProvisionalMark.Underline(size, width, scale, barBlock: false, highContrast);
             _underlineKey = key;
         }
 
@@ -323,7 +326,7 @@ public sealed class OrbLinesDraw
     /// A number from <paramref name="x"/>, each character centered in its tabular cell (on the device pixel with
     /// <paramref name="pixels"/> per point); returns its right end.
     /// </summary>
-    private double Number(OrbDrawList list, string number, double size, double x, double baseline, in LinePaint paint, double pixels = 0)
+    private double Number(OrbDrawList list, ReadOnlySpan<char> number, double size, double x, double baseline, in LinePaint paint, double pixels = 0)
     {
         var digit = _glyphs.DigitCell(OrbFont.TrafficNumber, size);
         foreach (var ch in number)
@@ -354,7 +357,7 @@ public sealed class OrbLinesDraw
         return Advance(line.Glyph, OrbFont.Title, small) + gap + number + tail;
     }
 
-    private double NumberWidth(string number, double size, double sigma)
+    private double NumberWidth(ReadOnlySpan<char> number, double size, double sigma)
     {
         var digit = _glyphs.DigitCell(OrbFont.TrafficNumber, size);
         var width = 0.0;

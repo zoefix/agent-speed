@@ -25,10 +25,7 @@ internal sealed partial class MonitorCore
         _codexAutomatic = locations.CodexAutomatic;
         if (_enabled.Contains(SourceKind.OpenClaw) && _openClawRootPaths.Count > 0)
         {
-            _openClaw = new OpenClawSource(_openClawRootPaths, _openClawAutomatic ? () => CurrentOpenClawRoots() : null, _deduper)
-            {
-                TaskWatch = _taskWatch,
-            };
+            _openClaw = new OpenClawSource(_openClawRootPaths, _openClawAutomatic ? () => CurrentOpenClawRoots() : null, _deduper);
             RefreshOpenClawWatchRoots();
         }
     }
@@ -67,16 +64,7 @@ internal sealed partial class MonitorCore
             return;
         }
 
-        OpenClawUpdate update;
-        _taskWatch.Seeding = true;
-        try
-        {
-            update = openClaw.Seed(todayStartMs, cancellationToken);
-        }
-        finally
-        {
-            _taskWatch.Seeding = false;
-        }
+        var update = openClaw.Seed(todayStartMs, cancellationToken);
 
         discovered += openClaw.DatabasePaths.Count;
         filesRead += update.DatabasesRead;
@@ -129,7 +117,6 @@ internal sealed partial class MonitorCore
         foreach (var id in update.Removed)
         {
             _openClawPushed.Remove(id);
-            _taskWatch.Forget(id);
             _engine.RemoveAgent(id);
             _linksChanged |= _links.Remove(id);
         }
@@ -140,8 +127,18 @@ internal sealed partial class MonitorCore
         }
 
         long? liveNowMs = seeded ? null : Clock();
-        foreach (var (response, isCompletion) in update.Responses)
+        foreach (var (response, isCompletion, agentId, call) in update.Completions)
         {
+            if (response is null)
+            {
+                if (liveNowMs is { } now)
+                {
+                    _engine.CountCall(agentId!, SourceKind.OpenClaw, call, now);
+                }
+
+                continue;
+            }
+
             _responsesSeen++;
             _engine.Upsert(response, isCompletion, seeded, liveNowMs);
             _observer?.OnResponse(response, isCompletion, seeded);
@@ -179,7 +176,7 @@ internal sealed partial class MonitorCore
             parser.Phase,
             parser.InFlightStartMs,
             parser.LastLineMs,
-            _parents.GetValueOrDefault(parser.AgentId)) { Modes = parser.Modes, Work = parser.WorkActions, Task = TaskStatusOf(parser) });
+            _parents.GetValueOrDefault(parser.AgentId)) { Modes = parser.Modes, Work = parser.WorkActions });
     }
 
     private void RepushOpenClawAgents()

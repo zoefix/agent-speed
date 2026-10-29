@@ -1,9 +1,9 @@
 using AgentSpeed.Core.Intelligence;
-using AgentSpeed.Core.Tasks;
+using AgentSpeed.Core.Perf;
 
 namespace AgentSpeed.Presentation.Tests;
 
-/// <summary>Readout sums for presentation tests: thinking window sums and a 智力 value, live or resting.</summary>
+/// <summary>Readout sums for presentation tests: thinking window sums and a 性能 value, live or resting.</summary>
 internal static class TestSums
 {
     /// <summary>
@@ -11,11 +11,14 @@ internal static class TestSums
     /// <paramref name="basis"/>, and a live score of <paramref name="score"/> (none when the window is empty).
     /// </summary>
     public static IntelligenceSums Of(double output, double score, double thinking = 0, double basis = 0) =>
-        new(output, thinking, basis) { Score = output > 0 ? Live(score) : TaskSetValue.None };
+        new(output, thinking, basis) { Score = output > 0 ? Live(score) : PerfSetValue.None };
 
-    public static TaskSetValue Live(double score) => Value(TaskValueForm.Live, score);
+    public static PerfSetValue Live(double score, bool provisional = false) => Value(PerfForm.Live, score, provisional);
 
-    public static TaskSetValue Resting(double score) => Value(TaskValueForm.Resting, score);
+    public static PerfSetValue Resting(double score, bool provisional = false) => Value(PerfForm.Resting, score, provisional);
 
-    private static TaskSetValue Value(TaskValueForm form, double score) => new(form, score, TaskRounding.HalfAwayFromZero(score), "a");
+    private static PerfSetValue Value(PerfForm form, double score, bool provisional) => new(form, score, "a")
+    {
+        Evaluation = PerfEvaluation.Empty(Core.SourceKind.ClaudeCode) with { Form = form, Score = score, N = provisional ? 6 : 20 },
+    };
 }
