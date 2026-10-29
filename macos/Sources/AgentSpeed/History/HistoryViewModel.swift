@@ -10,8 +10,8 @@ import SwiftUI
 final class HistoryViewModel {
     /// The window's own `history.includeSubscriptions` choice (DESIGN 9); absent until the user changes it.
     static let includeSubscriptionsKey = "historyIncludeSubscriptions"
-    /// The pair 任務表現 compares side by side (DESIGN 12), as `first,second` source ids.
-    static let taskPairKey = "historyTaskPair"
+    /// The sort of 性能表現 (DESIGN 12), as `column:asc|desc`.
+    static let perfSortKey = "historyPerfSort"
 
     let store: HistoryStore
     let l10n: Localizer
@@ -30,13 +30,19 @@ final class HistoryViewModel {
     private(set) var chartMetric: HistoryChartMetric = .output
     /// Whether subscription sources count at their API-equivalent cost in this window.
     private(set) var includeSubscriptions: Bool
-    /// The remembered pair of 任務表現; nil until the user picks one.
-    private(set) var taskPair: TaskPerformancePair?
+    /// The remembered sort of 性能表現.
+    private(set) var perfSort: PerfHistorySort
+    /// The row whose trend 性能表現 charts; kept while the window is open, nil for the default.
+    private(set) var perfSelection: PerfHistoryKey?
     private(set) var content: HistoryContent
+    private(set) var perf: PerfHistoryContent
     /// Whether the window is open. A closed window keeps its filter but neither rebuilds its content nor shows its
     /// views: the data it follows changes every few seconds, and none of it is laid out until the window opens again.
     var isOpen = true {
-        didSet { if isOpen, needsRebuild { rebuild() } }
+        didSet {
+            if !isOpen { perfSelection = nil }
+            if isOpen, needsRebuild { rebuild() }
+        }
     }
 
     @ObservationIgnored private var needsRebuild = false
@@ -52,17 +58,20 @@ final class HistoryViewModel {
         let stored = cost.settings.storage.object(forKey: Self.includeSubscriptionsKey) as? Bool
         let include = stored ?? cost.settings.includeSubscriptions
         includeSubscriptions = include
-        taskPair = Self.storedPair(cost.settings.storage.string(forKey: Self.taskPairKey))
+        perfSort = PerfHistorySort(storageValue: cost.settings.storage.string(forKey: Self.perfSortKey))
         let today = DayKey(Date(), calendar: HistoryDates.calendar)
-        content = HistoryContent.build(
+        let initial = HistoryContent.build(
             usage: store.days, source: nil, rangeKind: .days30, customRange: nil, sort: HistorySort(), today: today, l10n: l10n,
             money: HistoryMoney(cost), costOptions: HistoryCostOptions(marked: cost.settings.subscriptionSources,
                                                                         includeSubscriptions: include),
             traffic: Self.historyTraffic(traffic, settings: cost.settings), prices: cost.prices.book.current
         )
+        content = initial
+        perf = PerfHistoryContent.build(store.perfRecords, range: initial.range, source: nil, today: today)
         dataLoop = ObservationLoop { [weak self] in
             guard let self else { return }
             _ = self.store.days
+            _ = self.store.perfRecords
             _ = self.cost.prices.table
             _ = self.l10n.language
             _ = HistoryMoney(self.cost)
@@ -124,18 +133,16 @@ final class HistoryViewModel {
         rebuild()
     }
 
-    /// The 任務表現 pickers; the window remembers the pair.
-    func setTaskPair(_ pair: TaskPerformancePair?) {
-        guard pair != taskPair else { return }
-        taskPair = pair
-        let value = pair.map { "\($0.first.rawValue),\($0.second.rawValue)" }
-        cost.settings.storage.set(value, forKey: Self.taskPairKey)
+    /// A 性能表現 header click; the window remembers the sort.
+    func setPerfSort(_ sort: PerfHistorySort) {
+        guard sort != perfSort else { return }
+        perfSort = sort
+        cost.settings.storage.set(sort.storageValue, forKey: Self.perfSortKey)
     }
 
-    private static func storedPair(_ value: String?) -> TaskPerformancePair? {
-        let parts = (value ?? "").split(separator: ",").compactMap { SourceKind(rawValue: String($0)) }
-        guard parts.count == 2, parts[0] != parts[1] else { return nil }
-        return TaskPerformancePair(first: parts[0], second: parts[1])
+    /// The row whose trend 性能表現 charts.
+    func selectPerf(_ key: PerfHistoryKey) {
+        if key != perfSelection { perfSelection = key }
     }
 
     /// The toolbar checkbox; the window remembers its own choice.
@@ -184,6 +191,8 @@ final class HistoryViewModel {
             traffic: Self.historyTraffic(traffic, settings: cost.settings), prices: cost.prices.book.current
         )
         if next != content { content = next }
+        let nextPerf = PerfHistoryContent.build(store.perfRecords, range: next.range, source: source, today: today)
+        if nextPerf != perf { perf = nextPerf }
     }
 
     /// Disabled sources' rows are left out (METRICS 10.5, DESIGN 10); this computer's rows stay.
