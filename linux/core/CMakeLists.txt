@@ -10,6 +10,7 @@ add_library(agentspeed_core STATIC
     src/json.cpp
     src/line_splitter.cpp
     src/model.cpp
+    src/parents.cpp
     src/path_text.cpp
     src/rfc3339.cpp
     src/transcript_parser.cpp

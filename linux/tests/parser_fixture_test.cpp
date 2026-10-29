@@ -7,6 +7,7 @@
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
 #include "agentspeed/file_reader.hpp"
+#include "agentspeed/parents.hpp"
 #include "fixture_support.hpp"
 
 using namespace agentspeed;
@@ -37,6 +38,8 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
     ASSERT_TRUE(expected.ok);
     Deduper deduper;
     int checked = 0;
+    std::vector<ParentFacts> facts;
+    std::map<std::string, std::string> wantParents;
     for (const auto& entry : expected.root()["order"].elements()) {
         const std::string relative = *entry.string();
         const auto absolute = (fixtures::fixtureDir() / relative).string();
@@ -78,7 +81,24 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
             EXPECT_EQ(got.fast, r["fast"].isTrue());
             EXPECT_EQ(got.final, r["final"].isTrue());
         }
+        ParentFacts fact;
+        fact.agentId = absolute;
+        fact.source = parser->source();
+        if (auto* codex = dynamic_cast<CodexParser*>(parser.get())) {
+            fact.codexThreadId = codex->metaThreadId();
+            fact.codexParentThreadId = codex->parentThreadId();
+            fact.createdMs = codex->createdMs();
+        }
+        facts.push_back(fact);
+        if (auto parent = fixtures::optString(want["parentFile"])) {
+            wantParents[absolute] = (fixtures::fixtureDir() / *parent).string();
+        }
         ++checked;
     }
     EXPECT_EQ(checked, 9);
+    std::map<std::string, std::string> gotParents;
+    for (const auto& [id, parent] : resolveParents(facts)) {
+        if (parent) gotParents[id] = *parent;
+    }
+    EXPECT_EQ(gotParents, wantParents);
 }
