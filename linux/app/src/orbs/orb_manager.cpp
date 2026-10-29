@@ -12,11 +12,11 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSettings>
-#include <QStyleHints>
 #include <algorithm>
 #include <cmath>
 
 #include "agentspeed/model.hpp"
+#include "appearance.hpp"
 #include "orb/orb_window.hpp"
 #include "orbs/name_plate.hpp"
 #include "preferences.hpp"
@@ -59,12 +59,6 @@ QStringList ordered(const QStringList& keys) {
     return out;
 }
 
-bool dark() {
-    const auto scheme = QGuiApplication::styleHints()->colorScheme();
-    if (scheme != Qt::ColorScheme::Unknown) return scheme == Qt::ColorScheme::Dark;
-    return QGuiApplication::palette().color(QPalette::Window).lightnessF() < 0.5;
-}
-
 }  // namespace
 
 OrbManager::OrbManager(const Strings& strings, const Preferences& prefs, OrbsStore& store, QObject* parent)
@@ -88,7 +82,7 @@ OrbManager::OrbManager(const Strings& strings, const Preferences& prefs, OrbsSto
     // Display changes: every orb takes its record from the new arrangement.
     connect(qApp, &QGuiApplication::screenAdded, this, [this] { QTimer::singleShot(500, this, &OrbManager::placeAll); });
     connect(qApp, &QGuiApplication::screenRemoved, this, [this] { QTimer::singleShot(500, this, &OrbManager::placeAll); });
-    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, &OrbManager::layoutPlates);
+    connect(&Appearance::instance(), &Appearance::changed, this, &OrbManager::layoutPlates);
     connect(&prefs_, &Preferences::redlineChanged, this, &OrbManager::sync);
     connect(&prefs_, &Preferences::metricChanged, this, &OrbManager::sync);
     sync();
@@ -839,7 +833,7 @@ void OrbManager::moveToNextCorner(const QString& id) {
 // first slot that stays 3 pt inside the usable area and 4 pt from every other disc and plate; the chip widens it.
 void OrbManager::layoutPlates() {
     const double now = static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000;
-    const bool isDark = forcedDark_ || dark();
+    const bool isDark = forcedDark_ || Appearance::instance().dark();
     std::vector<QRectF> taken;
     for (const auto& d : discs(QString())) taken.push_back(QRectF(d.center.x() - d.radius, d.center.y() - d.radius, 2 * d.radius, 2 * d.radius));
     for (const auto& c : store_.orbs()) {

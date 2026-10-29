@@ -8,13 +8,13 @@
 #include <QQuickStyle>
 #include <QQuickItem>
 #include <QQuickWindow>
-#include <QPalette>
 #include <QStyle>
 #include <QThread>
 #include <QTimer>
 
 #include "agentspeed/price_book.hpp"
 #include "app_state.hpp"
+#include "appearance.hpp"
 #include "board/board_store.hpp"
 #include "board/board_windows.hpp"
 #include "catalog.hpp"
@@ -40,41 +40,6 @@ namespace {
 // The settings pane between 網路流量 and 資料來源 (DESIGN 11).
 constexpr int kApiPage = 5;
 
-
-QPalette paletteFor(bool dark) {
-    QPalette p;
-    if (dark) {
-        p.setColor(QPalette::Window, QColor(0x20, 0x22, 0x28));
-        p.setColor(QPalette::WindowText, QColor(0xEC, 0xEF, 0xF4));
-        p.setColor(QPalette::Base, QColor(0x17, 0x19, 0x1F));
-        p.setColor(QPalette::AlternateBase, QColor(0x22, 0x25, 0x2C));
-        p.setColor(QPalette::Text, QColor(0xEC, 0xEF, 0xF4));
-        p.setColor(QPalette::Button, QColor(0x2A, 0x2D, 0x35));
-        p.setColor(QPalette::ButtonText, QColor(0xEC, 0xEF, 0xF4));
-        p.setColor(QPalette::Highlight, QColor(0x5B, 0x8C, 0xFF));
-        p.setColor(QPalette::HighlightedText, Qt::white);
-    } else {
-        p.setColor(QPalette::Window, QColor(0xF4, 0xF5, 0xF8));
-        p.setColor(QPalette::WindowText, QColor(0x16, 0x18, 0x1D));
-        p.setColor(QPalette::Base, Qt::white);
-        p.setColor(QPalette::AlternateBase, QColor(0xF2, 0xF3, 0xF7));
-        p.setColor(QPalette::Text, QColor(0x16, 0x18, 0x1D));
-        p.setColor(QPalette::Button, QColor(0xEE, 0xEF, 0xF3));
-        p.setColor(QPalette::ButtonText, QColor(0x16, 0x18, 0x1D));
-        p.setColor(QPalette::Highlight, QColor(0x2F, 0x6B, 0xFF));
-        p.setColor(QPalette::HighlightedText, Qt::white);
-    }
-    return p;
-}
-
-// DESIGN 0: Auto follows the desktop; Light and Dark override it for every window.
-void applyAppearance(const QString& choice) {
-    if (choice == QStringLiteral("dark") || choice == QStringLiteral("light")) {
-        QGuiApplication::setPalette(paletteFor(choice == QStringLiteral("dark")));
-    } else {
-        QGuiApplication::setPalette(QPalette());
-    }
-}
 
 std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
     std::vector<BoardSpec> specs;
@@ -153,8 +118,8 @@ int main(int argc, char* argv[]) {
     }
     if (app.arguments().contains(QStringLiteral("--dark"))) snapshotDark = true;
     Preferences prefs;
-    applyAppearance(snapshotDark ? QStringLiteral("dark") : prefs.appearance());
-    QObject::connect(&prefs, &Preferences::appearanceChanged, &app, [&] { applyAppearance(prefs.appearance()); });
+    Appearance::instance().apply(snapshotDark ? QStringLiteral("dark") : prefs.appearance());
+    QObject::connect(&prefs, &Preferences::appearanceChanged, &app, [&] { Appearance::instance().apply(prefs.appearance()); });
     Strings strings;
     strings.setChoice(prefs.language());
     QObject::connect(&prefs, &Preferences::languageChanged, &app, [&] { strings.setChoice(prefs.language()); });

@@ -12,7 +12,6 @@
 #include <QMenu>
 #include <QMouseEvent>
 #include <QOpenGLFramebufferObject>
-#include <QPalette>
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSettings>
@@ -23,6 +22,7 @@
 #include <algorithm>
 #include <cmath>
 
+#include "appearance.hpp"
 #include "heat.hpp"
 #include "source_colors.hpp"
 #include "orb/body.hpp"
@@ -87,7 +87,7 @@ OrbWindow::OrbWindow(const Strings& strings, const QString& id) : QOpenGLWindow(
     connect(&unitTimer_, &QTimer::timeout, this, [this] {
         emit editRequested(id_, QStringLiteral("unit"), unit_ == QLatin1String("cost") ? QStringLiteral("tokens") : QStringLiteral("cost"));
     });
-    connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
+    connect(&Appearance::instance(), &Appearance::changed, this, [this] {
         bodyDirty_ = true;
         requestFrame();
     });
@@ -104,10 +104,7 @@ OrbWindow::~OrbWindow() {
 void OrbWindow::placeAt(QPointF globalCenter) { setPosition((globalCenter - center()).toPoint()); }
 
 bool OrbWindow::dark() const {
-    if (forcedDark_) return true;
-    const auto scheme = QGuiApplication::styleHints()->colorScheme();
-    if (scheme != Qt::ColorScheme::Unknown) return scheme == Qt::ColorScheme::Dark;
-    return QGuiApplication::palette().color(QPalette::Window).lightnessF() < 0.5;
+    return forcedDark_ || Appearance::instance().dark();
 }
 
 led::Effects OrbWindow::effects() const { return led::Effects::make(effectsLevel_, diameter_ < 120); }

@@ -6,6 +6,7 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_executable(agent-speed
     src/main.cpp
     src/app_state.cpp
+    src/appearance.cpp
     src/board/board_store.cpp
     src/board/board_view.cpp
     src/board/board_windows.cpp

@@ -25,15 +25,16 @@ void Preferences::store(const char* key, const T& value, void (Preferences::*sig
     emit(this->*signal)();
 }
 
-QString Preferences::appearance() const { return settings_.value(QStringLiteral("general/appearance"), QStringLiteral("auto")).toString(); }
-void Preferences::setAppearance(const QString& value) { store("general/appearance", value, &Preferences::appearanceChanged); }
+// The group is spelled "General": QSettings writes any case of it as [%General] and reads that back as "General".
+QString Preferences::appearance() const { return settings_.value(QStringLiteral("General/appearance"), QStringLiteral("auto")).toString(); }
+void Preferences::setAppearance(const QString& value) { store("General/appearance", value, &Preferences::appearanceChanged); }
 
 QString Preferences::language() const {
-    const auto value = settings_.value(QStringLiteral("general/language"), QStringLiteral("system")).toString();
+    const auto value = settings_.value(QStringLiteral("General/language"), QStringLiteral("system")).toString();
     return kLanguages.contains(value) ? value : QStringLiteral("system");
 }
 void Preferences::setLanguage(const QString& value) {
-    if (kLanguages.contains(value)) store("general/language", value, &Preferences::languageChanged);
+    if (kLanguages.contains(value)) store("General/language", value, &Preferences::languageChanged);
 }
 
 bool Preferences::launchAtLogin() const { return QFile::exists(autostartPath()); }
@@ -53,11 +54,11 @@ void Preferences::setLaunchAtLogin(bool value) {
     emit launchAtLoginChanged();
 }
 
-QString Preferences::metric() const { return settings_.value(QStringLiteral("general/metric"), QStringLiteral("output")).toString(); }
-void Preferences::setMetric(const QString& value) { store("general/metric", value, &Preferences::metricChanged); }
+QString Preferences::metric() const { return settings_.value(QStringLiteral("General/metric"), QStringLiteral("output")).toString(); }
+void Preferences::setMetric(const QString& value) { store("General/metric", value, &Preferences::metricChanged); }
 
-int Preferences::redline() const { return std::clamp(settings_.value(QStringLiteral("general/redline"), 2000).toInt(), 50, 2000); }
-void Preferences::setRedline(int value) { store("general/redline", std::clamp(value / 50 * 50, 50, 2000), &Preferences::redlineChanged); }
+int Preferences::redline() const { return std::clamp(settings_.value(QStringLiteral("General/redline"), 2000).toInt(), 50, 2000); }
+void Preferences::setRedline(int value) { store("General/redline", std::clamp(value / 50 * 50, 50, 2000), &Preferences::redlineChanged); }
 
 QString Preferences::effects() const { return settings_.value(QStringLiteral("effects/intensity"), QStringLiteral("standard")).toString(); }
 void Preferences::setEffects(const QString& value) { store("effects/intensity", value, &Preferences::effectsChanged); }
