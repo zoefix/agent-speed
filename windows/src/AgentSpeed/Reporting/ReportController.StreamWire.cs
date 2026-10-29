@@ -92,8 +92,8 @@ internal sealed partial class ReportController
 
     private void Build(ReportStreamRun run, ReportStreamTicket ticket, ReportSample sample)
     {
-        var content = run.Window.Take(sample) with { Tasks = TakeTasks(sample) };
-        run.LastBuilt = ReportStreamValues.Of(sample, TaskScoreActive);
+        var content = run.Window.Take(sample) with { Perf = TakePerf(sample) };
+        run.LastBuilt = ReportStreamValues.Of(sample, ScoreExtension);
         if (Identity is not { Username: { } username, Discovery: { } document } identity)
         {
             return;

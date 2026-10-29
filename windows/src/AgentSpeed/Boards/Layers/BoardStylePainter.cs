@@ -15,7 +15,7 @@ namespace AgentSpeed.Boards.Layers;
 /// <summary>The fonts of the live metrics (DESIGN 2c, Live metrics), resolved per style and size by its painter.</summary>
 internal enum BoardReadoutFont
 {
-    /// <summary>智力's label over its number (glass, neon).</summary>
+    /// <summary>性能's label over its number (glass, neon).</summary>
     MainLabel,
 
     /// <summary>The table's labels (glass, neon).</summary>
@@ -165,7 +165,7 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
         var intelligence = GlyphStyle(scene, BoardValueSet.IntelGroup, false);
         var value = GlyphStyle(scene, BoardValueSet.Group, false);
         var interval = ValueStyle(BoardValueSet.Interval, false);
-        // As the scene composes them: glass's 智力 without tracking, every other figure at −0.02 em.
+        // As the scene composes them: glass's 性能 without tracking, every other figure at −0.02 em.
         var figures = new BoardRowFigures(
             BoardRowFigures.Width(BoardRowFigures.IntelligenceSample, c => Advance(c, intelligence), Style == BoardStyle.Glass ? 0 : -0.02 * intelligence.Size),
             BoardRowFigures.WidestValue(c => Advance(c, value), -0.02 * value.Size),
@@ -516,7 +516,7 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
         return width;
     }
 
-    // The captions line: a hairline from the rank column to the end of the capsule column, 智力 over the 智力 cells, tok/s over the
+    // The captions line: a hairline from the rank column to the end of the capsule column, 性能 over the 性能 cells, tok/s over the
     // values and timing's 間隔 over the interval column (not at S), all in ink-3.
     private void PaintCaptions(ID2D1DeviceContext context, BoardScene scene, BoardTick tick, float width, float height)
     {
@@ -560,7 +560,7 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
             ? Math.Max(ValueWidth(scene.Size), scene.Columns.ValueRight + scene.Columns.Value)
             : 0);
 
-    /// <summary>The capsule column's right end in a row body <paramref name="width"/> wide, moved left by the 智力 column.</summary>
+    /// <summary>The capsule column's right end in a row body <paramref name="width"/> wide, moved left by the 性能 column.</summary>
     protected float RowCapsuleRight(in BoardRowContent row, float width) =>
         row.Scene.Metrics.IntelligenceColumn ? (float)(row.Scene.Metrics.ListWidth - row.Scene.Columns.CapsuleRight) : CapsuleRight(row, width);
 

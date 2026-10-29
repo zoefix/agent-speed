@@ -21,8 +21,8 @@
                 </StackPanel>
                 <TextBlock Text="{Binding PrivacyStatement}" Style="{StaticResource BodyText}" Margin="0,16,0,0" />
                 <TextBlock Text="{Binding PrivacyTraffic}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
-                <!-- What the task score reads in memory and keeps (DESIGN 12, Privacy), the same with live reporting on. -->
-                <TextBlock Text="{loc:Loc privacy.taskScore}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
+                <!-- What the performance score reads and keeps (DESIGN 12, Privacy and wording), unchanged while live reporting is on. -->
+                <TextBlock Text="{loc:Loc privacy.perfScore}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding PrivacyReport}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <TextBlock Text="{loc:Loc settings.about.update}" Style="{StaticResource CaptionText}" Margin="0,8,0,0" />
                 <StackPanel Orientation="Horizontal" Margin="-4,12,0,0">

@@ -14,7 +14,8 @@ using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Orb.Gpu;
 using AgentSpeed.Presentation.Orb.Lines;
 using AgentSpeed.Presentation.Settings;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Core.Perf;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Orb.Gpu;
 
@@ -24,8 +25,8 @@ namespace AgentSpeed.Orb.Gpu;
 /// boost, overdrive, redline, beyond, new peak, hover, pulse; rows 96 (64 for minimal), 148 and 240 pt at 2×, R = 2000,
 /// three agents, zh-Hant), plus per-level sheets, the two-line readout's network and intelligence modes (<c>orb-lines.png</c>),
 /// the intelligence readout at 112, 148 and 196 pt (<c>orb-intel-dark|light.png</c>, its fit in the report), its thinking
-/// line hidden at zero (<c>orb-intel-zero-dark|light.png</c>, its single-line baselines in the report), 智力's forms and
-/// proof mark (<c>orb-score-dark|light|contrast.png</c>) and the GPU/CPU
+/// line hidden at zero (<c>orb-intel-zero-dark|light.png</c>, its single-line baselines in the report), 性能's forms and
+/// provisional mark (<c>orb-score-dark|light|contrast.png</c>) and the GPU/CPU
 /// cost of each frame, then exits. Deterministic: fixed seeds, fixed time steps; no window, so it also runs without a
 /// desktop. <c>AGENT_SPEED_ORB_FRAMES_STYLES</c> limits the styles, <c>AGENT_SPEED_ORB_FRAMES_SCALE</c> sets the pixel
 /// scale, <c>AGENT_SPEED_ORB_FRAMES_LANG</c> the language (zh-Hant, zh-Hans, en, ja), and
@@ -207,23 +208,15 @@ internal static class OrbFrameHarness
     }
 
     /// <summary>
-    /// An intelligence sample: window output and reasoning tokens, and the orb's 智力 in <paramref name="form"/> (none:
-    /// <c>–</c>) with the supplying agent's <paramref name="state"/> and N = <paramref name="count"/>.
+    /// An intelligence sample: window output and reasoning tokens, and the orb's 性能 in <paramref name="form"/> (none:
+    /// <c>–</c>), <paramref name="provisional"/> or not, with N = <paramref name="count"/>.
     /// </summary>
     private static OrbLinesSample HarnessIntelligence(Localizer loc, double output, double thinking, double score,
-        TaskForm form = TaskForm.Live, TaskState state = TaskState.Passing, int count = 1)
+        PerfForm form = PerfForm.Live, bool provisional = false, int count = 1)
     {
-        var valueForm = form switch
-        {
-            TaskForm.Live => Core.Tasks.TaskValueForm.Live,
-            TaskForm.Resting => Core.Tasks.TaskValueForm.Resting,
-            _ => Core.Tasks.TaskValueForm.None,
-        };
-        var value = form == TaskForm.None
-            ? Core.Tasks.TaskSetValue.None
-            : new Core.Tasks.TaskSetValue(valueForm, score, Core.Tasks.TaskRounding.HalfAwayFromZero(score), "harness");
+        var value = form == PerfForm.None ? PerfSetValue.None : new PerfSetValue(form, score, "harness");
         var sums = new Core.Intelligence.IntelligenceSums(output, thinking, output) { Score = value };
-        var reading = form == TaskForm.None ? TaskSetReading.None : new TaskSetReading(form, value.Shown, state, count, null);
+        var reading = form == PerfForm.None ? PerfSetReading.None : new PerfSetReading(form, value.Shown, provisional, count, null, null);
         return OrbLinesText.Intelligence(reading, sums, generating: true, loc);
     }
 
@@ -236,7 +229,7 @@ internal static class OrbFrameHarness
         string info, Localizer loc, string directory, System.Text.StringBuilder report)
     {
         var traffic = OrbLinesText.Traffic(new Core.Traffic.TrafficRate(1_280_000, 64_000), false, loc);
-        var intelligence = HarnessIntelligence(loc, 1200, 528, 74.25, count: 4);
+        var intelligence = HarnessIntelligence(loc, 1200, 528, 1286.25, count: 4);
         var lines = new List<List<BitmapSource>>();
         foreach (var (dark, highContrast) in new[] { (true, false), (false, false), (true, true) })
         {
@@ -262,10 +255,10 @@ internal static class OrbFrameHarness
 
         WriteSheet(lines, true, scale, Path.Combine(directory, "orb-lines.png"));
 
-        // 7 (unverified) over 5.0 tok/s, and 74 over 176 tok/s.
+        // 940 (provisional) over 5.0 tok/s, and 1,286 over 176 tok/s.
         var readings = new[]
         {
-            HarnessIntelligence(loc, 400, 15, 6.5, state: TaskState.Unverified),
+            HarnessIntelligence(loc, 400, 15, 940, provisional: true),
             intelligence,
         };
         var sizes = new[] { 112.0, 148, 196 };
@@ -320,20 +313,21 @@ internal static class OrbFrameHarness
     }
 
     /// <summary>
-    /// 智力's forms on the intelligence readout (DESIGN 12, <i>Values and forms</i>, <i>Proof mark</i>) at 148 and 196 pt, a
-    /// row per style (<c>orb-score-dark|light|contrast.png</c>): passing 86 (the highest of 4), unverified 9 and pending 34 on
-    /// the dotted underline, resting 72 pale on one line once 思考 has hidden at zero, and <c>–</c> while none.
+    /// 性能's forms on the performance readout (DESIGN 12, <i>Values and forms</i>, <i>Provisional mark</i>) at 148 and 196 pt,
+    /// a row per style (<c>orb-score-dark|light|contrast.png</c>): live 1,286 (the highest of 4), provisional 940 on the
+    /// dotted underline, 12.8k in compact form, resting 1,604 pale on one line once 思考 has hidden at zero, and <c>–</c>
+    /// while none.
     /// </summary>
     private static void ScoreSheets(GpuDevice device, OffscreenTarget target, OrbStyle[] styles, double scale, OrbReadoutStrings strings,
         string info, Localizer loc, string directory)
     {
         (OrbLinesSample Sample, double Seconds)[] forms =
         [
-            (HarnessIntelligence(loc, 1200, 384, 86.2, count: 4), 2.4),
-            (HarnessIntelligence(loc, 600, 192, 9.4, state: TaskState.Unverified, count: 2), 2.4),
-            (HarnessIntelligence(loc, 600, 123, 34, state: TaskState.Pending), 2.4),
-            (HarnessIntelligence(loc, 0, 0, 72, TaskForm.Resting, count: 2), ThinkingZeroHold.Seconds + 1),
-            (HarnessIntelligence(loc, 300, 66, 0, TaskForm.None), 2.4),
+            (HarnessIntelligence(loc, 1200, 384, 1286.2, count: 4), 2.4),
+            (HarnessIntelligence(loc, 600, 192, 940, provisional: true, count: 2), 2.4),
+            (HarnessIntelligence(loc, 600, 123, 12_840, count: 2), 2.4),
+            (HarnessIntelligence(loc, 0, 0, 1604, PerfForm.Resting, count: 2), ThinkingZeroHold.Seconds + 1),
+            (HarnessIntelligence(loc, 300, 66, 0, PerfForm.None), 2.4),
         ];
         foreach (var (dark, highContrast, name) in new[] { (true, false, "dark"), (false, false, "light"), (true, true, "contrast") })
         {
@@ -369,7 +363,7 @@ internal static class OrbFrameHarness
     private static void ThinkingZeroSheets(GpuDevice device, OffscreenTarget target, OrbStyle[] styles, double scale, OrbReadoutStrings strings,
         string info, Localizer loc, string directory, System.Text.StringBuilder report, OrbLinesSample live)
     {
-        var zero = HarnessIntelligence(loc, 400, 0, 61.25);
+        var zero = HarnessIntelligence(loc, 400, 0, 1225.5);
         var hold = ThinkingZeroHold.Seconds;
         (OrbLinesSample Sample, double Seconds)[] moments =
             [(live, 2.4), (zero, 2.4), (zero, hold + OrbThinkingFade.Glide / 2), (zero, hold + 2 * OrbThinkingFade.Glide)];

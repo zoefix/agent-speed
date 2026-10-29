@@ -12,7 +12,7 @@ using AgentSpeed.Interop;
 using AgentSpeed.Orb;
 using AgentSpeed.Presentation.Layout;
 using AgentSpeed.Presentation.Motion;
-using AgentSpeed.TaskScore;
+using AgentSpeed.Perf;
 
 namespace AgentSpeed.Dashboard;
 
@@ -49,8 +49,8 @@ internal sealed partial class DashboardWindow : Window
 
     public DashboardWindow(DashboardViewModel viewModel, Func<double> clock)
     {
-        ScoreCards = new ScoreCardPresenter(Dispatcher,
-            () => new TaskCardAppearance(viewModel.CapsuleAppearance.Dark, viewModel.CapsuleAppearance.HighContrast, viewModel.ReduceMotion,
+        ScoreCards = new PerfCardPresenter(Dispatcher,
+            () => new PerfCardAppearance(viewModel.CapsuleAppearance.Dark, viewModel.CapsuleAppearance.HighContrast, viewModel.ReduceMotion,
                 viewModel.TransparencyEnabled),
             () => viewModel.LanguageCode);
         viewModel.AgentsUpdated += (_, _) => ScoreCards.Refresh();
@@ -92,7 +92,7 @@ internal sealed partial class DashboardWindow : Window
     }
 
     /// <summary>The agent rows' score cards (DESIGN 12): beside the panel, toward the screen's centre.</summary>
-    public ScoreCardPresenter ScoreCards { get; }
+    public PerfCardPresenter ScoreCards { get; }
 
     public event EventHandler? SettingsRequested;
 

@@ -405,7 +405,7 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
     public void Relocalize(Localizer loc)
     {
         _loc = loc;
-        RelocalizeTasks();
+        RelocalizePerformance();
         Recompute(HistoryUpdate.Text);
     }
 
@@ -471,7 +471,7 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
         _clock.Stop();
         _messageTimer.Stop();
         _liveDay.Stop();
-        DisposeTasks();
+        DisposePerformance();
     }
 
     private void OnHubChanged(object? sender, EventArgs e)
@@ -575,7 +575,7 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
             : Bars.Order.Select(s => new LegendItem(_loc[DisplayText.SourceKey(s)], HeatPalette.SourceColor(s).ToBrush())).ToArray();
         UpdateSources(usage);
         UpdateState();
-        UpdateTasks();
+        UpdatePerformance();
         UpdateLiveDayTimer();
         if (!_clock.IsEnabled)
         {

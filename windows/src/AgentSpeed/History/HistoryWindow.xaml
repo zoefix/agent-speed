@@ -6,7 +6,7 @@
         xmlns:controls="clr-namespace:AgentSpeed.Controls"
         xmlns:history="clr-namespace:AgentSpeed.History"
         xmlns:modes="clr-namespace:AgentSpeed.Modes"
-        xmlns:tasks="clr-namespace:AgentSpeed.History.Tasks"
+        xmlns:perf="clr-namespace:AgentSpeed.History.Perf"
         xmlns:layout="clr-namespace:AgentSpeed.Presentation.History;assembly=AgentSpeed.Presentation"
         Title="{loc:Loc history.title}"
         Width="920" Height="680" MinWidth="720" MinHeight="540"
@@ -772,9 +772,9 @@
                         </StackPanel>
                     </Border>
 
-                    <!-- Task performance (DESIGN 4b, 3c; DESIGN 12): the range's tasks compared by source and by model -->
-                    <Border x:Name="TasksCard" Style="{StaticResource Card}" Margin="0,20,0,0" Padding="16,14,16,12">
-                        <tasks:TaskPerformanceSection DataContext="{Binding TaskPerformance}" />
+                    <!-- 性能表現 (DESIGN 4b, 3c; DESIGN 12): the range's performance per source and model, with the selected row's trend -->
+                    <Border x:Name="PerformanceCard" Style="{StaticResource Card}" Margin="0,20,0,0" Padding="16,14,16,12">
+                        <perf:PerfPerformanceSection DataContext="{Binding Performance}" />
                     </Border>
 
                     <!-- Daily table -->

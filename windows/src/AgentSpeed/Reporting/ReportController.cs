@@ -494,7 +494,7 @@ internal sealed partial class ReportController : IDisposable
     {
         _hub.LivePublished -= OnLive;
         _settings.Changed -= OnSettingsChanged;
-        _hub.TaskWatch = ReportTaskWatch.Off;
+        _hub.PerfWatch = ReportPerfWatch.Off;
         foreach (var timer in _timers.ToArray())
         {
             timer.Stop();

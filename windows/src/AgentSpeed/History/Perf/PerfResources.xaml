@@ -1,0 +1,7 @@
+<ResourceDictionary xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+                    xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+                    xmlns:controls="clr-namespace:AgentSpeed.Controls">
+    <!-- Shared by the 性能表現 section's parts (DESIGN 12, Usage History: performance). -->
+    <BooleanToVisibilityConverter x:Key="Visible" />
+    <controls:InverseBoolToVisibilityConverter x:Key="Hidden" />
+</ResourceDictionary>

@@ -6,7 +6,7 @@
         xmlns:controls="clr-namespace:AgentSpeed.Controls"
         xmlns:dash="clr-namespace:AgentSpeed.Dashboard"
         xmlns:modes="clr-namespace:AgentSpeed.Modes"
-        xmlns:task="clr-namespace:AgentSpeed.TaskScore"
+        xmlns:perf="clr-namespace:AgentSpeed.Perf"
         Title="{loc:Loc app.name}"
         Width="368"
         WindowStyle="SingleBorderWindow"
@@ -337,8 +337,8 @@
                                     <Grid Height="{x:Static dash:DashboardViewModel.AgentRowHeight}" AutomationProperties.Name="{Binding AccessibleName}"
                                           AutomationProperties.HelpText="{Binding CardDescription}" Background="Transparent"
                                           FocusVisualStyle="{StaticResource RoundedFocusVisual}"
-                                          task:ScoreCardRow.Host="Dashboard" task:ScoreCardRow.Source="{Binding}"
-                                          task:ScoreCardRow.Presenter="{Binding ScoreCards, RelativeSource={RelativeSource AncestorType=Window}}">
+                                          perf:PerfCardRow.Host="Dashboard" perf:PerfCardRow.Source="{Binding}"
+                                          perf:PerfCardRow.Presenter="{Binding ScoreCards, RelativeSource={RelativeSource AncestorType=Window}}">
                                         <dash:TreeConnectors Guides="{Binding Guides}" Stroke="{DynamicResource DividerStrokeColorDefaultBrush}" />
                                         <Grid Margin="{Binding Indent}">
                                             <Grid.ColumnDefinitions>
@@ -369,10 +369,10 @@
                                                                      Compact="{Binding DataContext.CapsuleColumn.Compact, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                      Appearance="{Binding DataContext.CapsuleAppearance, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                      LanguageCode="{Binding DataContext.LanguageCode, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                            <!-- The fixed 智力 cell, 6 DIP before the live value: the task score, pale resting, or a dash, with the proof
-                                                 mark under an unproven score (DESIGN 4, DESIGN 12). -->
+                                            <!-- The fixed 性能 cell, 6 DIP before the live value: the score in compact form, pale resting, or a dash, with the
+                                                 provisional mark under a provisional score (DESIGN 4, DESIGN 12). -->
                                             <dash:IntelligenceCell Grid.Column="3" Text="{Binding IntelligenceText}" Form="{Binding IntelligenceForm}" Margin="0,0,6,0"
-                                                                   Value="{Binding IntelligenceShown}" Unproven="{Binding IntelligenceUnproven}"
+                                                                   Value="{Binding IntelligenceShown}" Provisional="{Binding IntelligenceProvisional}"
                                                                    ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                    Width="{Binding DataContext.IntelligenceWidth, RelativeSource={RelativeSource AncestorType=Window}}"
                                                                    HighContrast="{Binding DataContext.CapsuleAppearance.HighContrast, RelativeSource={RelativeSource AncestorType=Window}}"

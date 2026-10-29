@@ -81,6 +81,17 @@ public sealed record PerfSort(PerfSortColumn Column = PerfSortColumn.Score, bool
     private static double? Cell(PerfHistoryRow row, PerfComponentId id) =>
         row.Cells.FirstOrDefault(c => c.Id == id)?.Value;
 
+    public static PerfSortColumn ColumnOf(PerfComponentId id) => id switch
+    {
+        PerfComponentId.T => PerfSortColumn.Throughput,
+        PerfComponentId.L => PerfSortColumn.Latency,
+        PerfComponentId.R => PerfSortColumn.Reasoning,
+        PerfComponentId.N => PerfSortColumn.Pace,
+        PerfComponentId.U => PerfSortColumn.ToolTime,
+        PerfComponentId.S => PerfSortColumn.ToolSuccess,
+        _ => PerfSortColumn.Cache,
+    };
+
     public static PerfComponentId Component(PerfSortColumn column) => column switch
     {
         PerfSortColumn.Throughput => PerfComponentId.T,

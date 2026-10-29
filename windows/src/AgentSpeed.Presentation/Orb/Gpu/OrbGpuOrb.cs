@@ -524,7 +524,7 @@ public sealed class OrbGpuOrb
 
     /// <summary>
     /// The readout fades (quiet rule), its thinking line fades as the intelligence line glides, 性能 counts, crossfades or
-    /// changes its color or proof mark (DESIGN 12, Motion), or it fades back after the pill (DESIGN 10): frames at 30 fps.
+    /// changes its color or provisional mark (DESIGN 12, Motion), or it fades back after the pill (DESIGN 10): frames at 30 fps.
     /// </summary>
     private bool LinesMoving(double now)
     {

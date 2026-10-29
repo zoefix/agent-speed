@@ -25,7 +25,7 @@ public sealed class DemoDriver : IDisposable
     private static readonly SourceKind[] Sources = Enum.GetValues<SourceKind>();
 
     /// <summary>Every demo agent's grade: a flagship model at high effort.</summary>
-    /// <summary>Demo task scores by agent position: a passing task, an unverified one, one that reads without a score yet.</summary>
+    /// <summary>Demo performance scores by agent position: one above the reference, one below it, one without a score yet.</summary>
     private static readonly double?[] DemoScores = [1286.4, 742.25, null, 2140.75];
 
     private readonly SpeedHub _hub;

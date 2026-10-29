@@ -29,7 +29,7 @@ public sealed record OrbLinesContent(OrbLinesKind Kind, OrbLine First, OrbLine S
     /// <summary>Intelligence: what the label adds while the thinking line is hidden (<c>a11y.orb.intel.only</c>).</summary>
     public string? SpokenAlone { get; init; }
 
-    /// <summary>Intelligence: the score on the first line, its form and its proof mark (DESIGN 12).</summary>
+    /// <summary>Intelligence: the score on the first line, its form and its provisional mark (DESIGN 12).</summary>
     public OrbLineScore Score { get; init; } = OrbLineScore.None;
 }
 

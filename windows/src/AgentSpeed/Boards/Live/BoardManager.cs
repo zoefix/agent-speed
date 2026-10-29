@@ -14,11 +14,11 @@ using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Boards;
 using AgentSpeed.Presentation.Settings.Orbs;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Presentation.Titles;
 using AgentSpeed.Services;
 using AgentSpeed.Taskbar;
-using AgentSpeed.TaskScore;
+using AgentSpeed.Perf;
 using AgentSpeed.Theme;
 using AgentSpeed.Titles;
 
@@ -38,7 +38,7 @@ internal interface IBoardHost
 /// The leaderboard boards (DESIGN 2c): one GPU window per visible board of the settings' <see cref="BoardsDocument"/>,
 /// each fed from the engine snapshot for its sources (METRICS 6.8), placed per display arrangement clear of the orbs,
 /// with its tooltip or score cards, click-to-expand, accessibility and the shared effects, appearance and title theme.
-/// While a board's <c>intelligence</c> readout is on, its group and sub rows and its hero's 智力 open the score card (DESIGN
+/// While a board's <c>intelligence</c> readout is on, its group and sub rows and its hero's 性能 open the score card (DESIGN
 /// 2c, Tooltip and score card; one card window for every board) instead of the text tooltip.
 /// </summary>
 internal sealed class BoardManager : IDisposable
@@ -53,7 +53,7 @@ internal sealed class BoardManager : IDisposable
     private readonly Dictionary<string, Entry> _entries = new(StringComparer.Ordinal);
     private readonly DispatcherTimer _deadline;
     private readonly DispatcherTimer _tipTimer;
-    private readonly ScoreCardPresenter _cards;
+    private readonly PerfCardPresenter _cards;
     private readonly HashSet<CardKey> _cardKeys = [];
     private Localizer _loc;
     private HoverTooltip? _tooltip;
@@ -86,7 +86,7 @@ internal sealed class BoardManager : IDisposable
         };
         _tipTimer = new DispatcherTimer(TimeSpan.FromSeconds(BoardTooltip.DelaySeconds), DispatcherPriority.Normal, (_, _) => ShowTip(), ui);
         _tipTimer.Stop();
-        _cards = new ScoreCardPresenter(ui, () => new TaskCardAppearance(_theme.IsDark, _theme.HighContrast, _theme.ReduceMotion,
+        _cards = new PerfCardPresenter(ui, () => new PerfCardAppearance(_theme.IsDark, _theme.HighContrast, _theme.ReduceMotion,
             _theme.TransparencyEnabled), () => _loc.LanguageCode);
         Microsoft.Win32.SystemEvents.SessionSwitch += OnSessionSwitch;
         GpuOrbSurface.RendererFailed += OnRendererFailed;
@@ -491,7 +491,7 @@ internal sealed class BoardManager : IDisposable
             last = entry.Feed.Last;
         }
 
-        // While 智力 shows, rows and the hero's 智力 open the score card; otherwise group rows keep the text tooltip.
+        // While 性能 shows, rows and the hero's 性能 open the score card; otherwise group rows keep the text tooltip.
         var card = cards && key is not null ? new CardKey(id, key) : null;
         if (_cardHover is { } hovered && !hovered.Equals(card) && (card is not null || hovered.Board == id))
         {
@@ -503,7 +503,7 @@ internal sealed class BoardManager : IDisposable
         {
             _cardHover = card;
             _cardKeys.Add(card);
-            _cards.Hover(card, TaskCardHost.Board, () => CardRequest(card));
+            _cards.Hover(card, PerfCardHost.Board, () => CardRequest(card));
         }
 
         if (cards || last?.Entries.Any(e => e.Kind == BoardEntryKind.Group && e.Key == key) != true)
@@ -560,9 +560,9 @@ internal sealed class BoardManager : IDisposable
 
     /// <summary>
     /// A hovered row's or hero's card on the board's latest tick, beside the board's square and level with the row (the hero:
-    /// with its 智力); null when nothing shows it any more.
+    /// with its 性能); null when nothing shows it any more.
     /// </summary>
-    private TaskCardRequest? CardRequest(CardKey key)
+    private PerfCardRequest? CardRequest(CardKey key)
     {
         if (!_entries.TryGetValue(key.Board, out var entry) || !entry.Window.IsVisible || entry.Feed.Last is not { } tick ||
             BoardScoreCards.For(tick, key.Row, _loc) is not { } card || entry.Window.SquareRect() is not { } square)
@@ -571,11 +571,11 @@ internal sealed class BoardManager : IDisposable
         }
 
         var row = key.Row == BoardScoreCards.HeroKey ? entry.Window.ScoreRect() : entry.Window.RowRect(key.Row);
-        return row is { } anchor ? new TaskCardRequest(TaskScoreCard.Build(card.Subject, _loc), card.AgentId, square, anchor.Top, TaskCardHost.Board)
+        return row is { } anchor ? new PerfCardRequest(PerfCard.Build(card.Subject, _loc), card.AgentId, square, anchor.Top, PerfCardHost.Board)
             : null;
     }
 
-    /// <summary>A group row's help text: its score card's full description while the board's 智力 shows.</summary>
+    /// <summary>A group row's help text: its score card's full description while the board's 性能 shows.</summary>
     private string RowHelp(string board, string key)
     {
         if (!_entries.TryGetValue(board, out var entry) || entry.Feed.Last is not { } tick)
@@ -706,7 +706,7 @@ internal sealed class BoardManager : IDisposable
     /// <summary>What a board's painter depends on besides its style: appearance and language.</summary>
     private readonly record struct BoardLook(bool Dark, bool HighContrast, string Language);
 
-    /// <summary>A score card's row: a board and a row key (an agent id, or the hero's 智力).</summary>
+    /// <summary>A score card's row: a board and a row key (an agent id, or the hero's 性能).</summary>
     private sealed record CardKey(string Board, string Row);
 
     private sealed class Entry(BoardDefinition definition, BoardLiveFeed feed)

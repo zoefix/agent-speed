@@ -45,7 +45,7 @@ internal enum BoardLayerKind
     /// <summary>A text of the hero's sub-gauge (<see cref="BoardLayerRequest.Part"/>): a label, a unit, <c>≥</c> or the tag, white.</summary>
     GaugeText,
 
-    /// <summary>The captions line at the top of the ranking (智力, tok/s, timing's 間隔 and the hairline).</summary>
+    /// <summary>The captions line at the top of the ranking (性能, tok/s, timing's 間隔 and the hairline).</summary>
     Captions,
 }
 
@@ -74,7 +74,7 @@ internal interface IBoardLayerPainter
 
     /// <summary>
     /// The two-line group rows' figures measured in the style's fonts at the scene's size (DESIGN 2c, The second line): the widest
-    /// 智力 and value at their new sizes, and the cap heights that centre them on the row.
+    /// 性能 and value at their new sizes, and the cap heights that centre them on the row.
     /// </summary>
     BoardRowFigures Figures(BoardScene scene);
 }

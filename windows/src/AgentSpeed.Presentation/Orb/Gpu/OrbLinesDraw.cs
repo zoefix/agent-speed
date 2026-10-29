@@ -44,7 +44,7 @@ public readonly record struct OrbLinesColors(Rgba Number, Rgba Secondary, Rgba? 
 /// centered on the orb. Intelligence: a larger intelligence line (glyph · 性能) over a smaller thinking line
 /// (glyph · tok/s value · unit), each centered on the orb by its own width with every piece on a device pixel; after 3 s
 /// at 0 the thinking line fades out and the intelligence line glides to its place by the value. 性能 moves as DESIGN 12
-/// <i>Motion</i> says (count-up, crossfades, the pale color) and sits on the dotted proof mark while unproven; every other
+/// <i>Motion</i> says (counts, crossfades, the pale color) and sits on the dotted provisional mark while provisional; every other
 /// character is replaced once per sample. The block fades by the quiet rule and steps aside for the new-peak pill.
 /// Allocates nothing per frame.
 /// </summary>

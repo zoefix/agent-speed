@@ -2,7 +2,8 @@ using AgentSpeed.Core.Intelligence;
 using AgentSpeed.Core.Traffic;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Localization;
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Core.Perf;
+using AgentSpeed.Presentation.Perf;
 using AgentSpeed.Taskbar;
 
 namespace AgentSpeed.Windows.Tests;
@@ -22,7 +23,7 @@ public class TaskbarBlocksTests
         new(new TrafficFormat.Parts(rx, "MB/s"), new TrafficFormat.Parts(tx, "KB/s"), false, null);
 
     private static BarIntelligenceBlock Score(int? shown, double thinking) => BarIntelligenceBlock.Of(
-        shown is null ? TaskSetReading.None : new TaskSetReading(TaskForm.Live, shown, TaskState.Passing, 1, null),
+        shown is null ? PerfSetReading.None : new PerfSetReading(PerfForm.Live, shown, false, 1, null, null),
         new IntelligenceSums(thinking > 0 ? 3 * thinking : 0, 3 * thinking, 3 * thinking), ZhHant);
 
     [Theory]
@@ -37,12 +38,13 @@ public class TaskbarBlocksTests
             var renderer = new TaskbarRenderer();
             int Length(TaskbarState state) => renderer.MeasureLength(state, scale, vertical: false);
             var traffic = Network("1.28", "64.0");
-            var score = Score(86, 128);
+            var score = Score(1286, 128);
             var variants = new[]
             {
                 Length(Widget(Network("0", "0"), Score(null, 0))),
-                Length(Widget(Network("8.88", "888"), Score(100, 8_880))),
-                Length(Widget(new BarTrafficBlock(null, null, false, null), Score(7, 0.4))),
+                Length(Widget(Network("8.88", "888"), Score(8_888, 8_880))),
+                Length(Widget(Network("8.88", "888"), Score(99_960, 8_880))),
+                Length(Widget(new BarTrafficBlock(null, null, false, null), Score(940, 0.4))),
             };
             return (Length(Widget(null, null)), Length(Widget(traffic, null)), Length(Widget(null, score)), Length(Widget(traffic, score)), variants);
         });

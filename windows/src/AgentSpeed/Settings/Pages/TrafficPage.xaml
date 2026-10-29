@@ -50,7 +50,7 @@
                 </StackPanel>
             </Border>
         </controls:SettingsCard>
-        <!-- DESIGN 10: the network block only; 智力 has its own switch in 選單列 / 工作列. -->
+        <!-- DESIGN 10: the network block only; 性能 has its own switch in 選單列 / 工作列. -->
         <controls:SettingsCard Header="{loc:Loc settings.bar.traffic}" Icon="&#xE7F4;" IsEnabled="{Binding Enabled}">
             <ComboBox MinWidth="200" SelectedIndex="{Binding BarIndex, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc settings.bar.traffic}">
                 <ComboBoxItem Content="{loc:Loc settings.bar.traffic.off}" />
