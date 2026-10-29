@@ -18,6 +18,7 @@ add_executable(agentspeed_tests
     pricing_test.cpp
     rfc3339_test.cpp
     task_parser_test.cpp
+    task_score_test.cpp
 )
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)
 target_compile_definitions(agentspeed_tests PRIVATE

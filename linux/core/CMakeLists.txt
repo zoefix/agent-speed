@@ -2,6 +2,7 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 pkg_check_modules(PCRE2 REQUIRED IMPORTED_TARGET libpcre2-8)
+pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
 set(AGENTSPEED_PRICES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/prices.json")
@@ -67,6 +68,9 @@ add_library(agentspeed_core STATIC
     src/tasks/code_mode.cpp
     src/tasks/command.cpp
     src/tasks/common.cpp
+    src/task_eval.cpp
+    src/task_model.cpp
+    src/task_score.cpp
     src/tasks/edits.cpp
     src/tasks/failures.cpp
     src/tasks/pcre.cpp
@@ -84,4 +88,4 @@ add_library(agentspeed_core STATIC
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)
-target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::PCRE2)
+target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::PCRE2 PkgConfig::ICU)

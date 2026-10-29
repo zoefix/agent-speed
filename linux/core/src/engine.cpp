@@ -315,4 +315,89 @@ TodayStats todayStats(const std::vector<Response>& responses, std::int64_t today
     return stats;
 }
 
+void ThinkingWindow::add(SourceKind source, double w, double r) {
+    weight += w;
+    if (source != SourceKind::Deepseek) {
+        reasoning += r;
+        reasoningWeight += w;
+    }
+}
+
+void ThinkingWindow::merge(const ThinkingWindow& other) {
+    weight += other.weight;
+    reasoning += other.reasoning;
+    reasoningWeight += other.reasoningWeight;
+}
+
+namespace {
+
+double reasoningShare(const std::vector<const Response*>& responses) {
+    std::int64_t output = 0, reasoning = 0;
+    for (const auto* r : responses) output += r->output;
+    for (const auto* r : responses) reasoning += std::min(r->reasoning, r->output);
+    return output > 0 ? static_cast<double>(reasoning) / static_cast<double>(output) : 0.0;
+}
+
+}  // namespace
+
+Thinking thinking(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+    Thinking out;
+    const auto add = [&](const std::string& agentId, SourceKind source, double weight, double reasoning,
+                         const std::optional<std::string>& model) {
+        out.total.add(source, weight, reasoning);
+        out.perAgent[agentId].add(source, weight, reasoning);
+        out.perModel[model.value_or("")].add(source, weight, reasoning);
+    };
+    const std::int64_t w0 = now - kWindowMs;
+    const auto parts = split(responses);
+    for (const auto* r : parts.valid) {
+        const auto [s, e] = *interval(*r);
+        const double share = overlap(w0, now, s, e) / static_cast<double>(e - s);
+        add(r->agentId, r->source, static_cast<double>(r->output) * share,
+            static_cast<double>(std::min(r->reasoning, r->output)) * share, r->model);
+    }
+    const auto estimate = [&](const Agent& agent, double seconds, const std::optional<std::string>& model) {
+        const auto refs = referenceSet(parts.valid, now, agent);
+        const auto speed = refs.empty() ? std::nullopt : speedOf(refs);
+        if (!speed || seconds <= 0) return;
+        const double weight = speed->output * seconds;
+        add(agent.id, agent.source, weight, weight * reasoningShare(refs), model);
+    };
+    for (const auto* r : parts.unmeasured) {
+        const auto [s, e] = *interval(*r);
+        estimate(agentOf(*r, agents), overlap(w0, now, s, e) / 1000.0, r->model);
+    }
+    for (const auto& a : agents) {
+        if (!estimatesInFlight(a, now)) continue;
+        estimate(a, overlap(w0, now, estimateStart(a, responses), now) / 1000.0, a.model);
+    }
+    return out;
+}
+
+std::vector<std::pair<std::string, std::vector<std::string>>> boardGroups(const std::vector<Agent>& agents) {
+    std::set<std::string> ids;
+    for (const auto& a : agents) ids.insert(a.id);
+    std::map<std::string, std::vector<std::string>> children;
+    std::vector<std::string> roots;
+    for (const auto& a : agents) {
+        if (a.parentId && ids.contains(*a.parentId) && *a.parentId != a.id) {
+            children[*a.parentId].push_back(a.id);
+        } else {
+            roots.push_back(a.id);
+        }
+    }
+    std::vector<std::pair<std::string, std::vector<std::string>>> groups;
+    for (const auto& root : roots) {
+        std::vector<std::string> members, stack{root};
+        while (!stack.empty()) {
+            auto id = stack.back();
+            stack.pop_back();
+            members.push_back(id);
+            if (const auto it = children.find(id); it != children.end()) stack.insert(stack.end(), it->second.rbegin(), it->second.rend());
+        }
+        groups.emplace_back(root, std::move(members));
+    }
+    return groups;
+}
+
 }  // namespace agentspeed::engine
