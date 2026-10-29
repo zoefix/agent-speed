@@ -257,7 +257,7 @@ def tiny_db(path, statements):
 
 
 def resp(key_, start, end, inp, cached, out, reasoning, model):
-    return {"key": key_, "startMs": None if start is None else ms(start), "endMs": ms(end), "input": inp,
+    return {"key": key_, "startMs": None if start is None else ms(start), "endMs": ms(end), "firstMs": None, "input": inp,
             "cachedInput": cached, "cacheWriteInput": 0, "cacheWrite1hInput": 0, "output": out,
             "reasoning": reasoning, "model": model, "provider": None, "fast": False,
             "final": True}

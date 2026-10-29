@@ -128,6 +128,8 @@ false (Codex records only the user's speed setting, not the tier a request was b
   valid interval. Unmeasured responses never contribute measured speed; their time is estimated instead (6.3).
 - Minimum duration: if `endMs - startMs < 500 ms`, use `startMs' = endMs - 500`.
 - `speed = output / ((endMs - startMs') / 1000)` — this is end-to-end output speed and includes time to first token.
+- `firstMs` = when the response's first content was written (Claude 4.1, Codex 4.2), else null: no other source's log
+  says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
 
 ### 3.4 Deduplication
 A global, bounded (65 536 entries, FIFO eviction) set of response keys shared by all files of all sources.
@@ -167,7 +169,9 @@ is malformed (section 4).
 ## 4. Parsers
 
 Each parser is a per-file state machine fed complete lines in order. It produces:
-- response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, normalized tokens)
+- response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, `firstMs`, normalized tokens; `firstMs`
+  is null for every source but Claude and Codex)
+- the actions of 6.10 (sources with tool calls)
 - phase updates (`phase`, `phaseSinceMs`, `inFlightStartMs`; `inFlightStartMs` is null whenever the phase is not
   `generating`)
 - metadata (`project` = last path component of `cwd`, `cwdPath` = the full working directory, used only by 10.6,
@@ -199,9 +203,10 @@ State: `pendingStartMs` (nullable), `preciseStart` (bool), `phase`.
 Assistant line:
 1. `key = message.id`, else `requestId`, else `uuid`. Skip the line if `message.model == "<synthetic>"`.
 2. If `key` was first seen in another file: ignore the line entirely.
-3. If `key` is new: create the response with `startMs = pendingStartMs` (may be null), then
-   `pendingStartMs = null`, `preciseStart = false`.
-4. Merge: `endMs = max(endMs, ts)`, every token field = `max(previous, new)`, `model = message.model`.
+3. If `key` is new: create the response with `startMs = pendingStartMs` (may be null) and `firstMs = ts` (the line
+   that created it), then `pendingStartMs = null`, `preciseStart = false`.
+4. Merge: `endMs = max(endMs, ts)`, `firstMs = min(firstMs, ts)` (only a line of the same key in the same file with
+   an earlier timestamp moves it), every token field = `max(previous, new)`, `model = message.model`.
 5. `final = final || stop_reason != null`.
 6. Phase from `message.stop_reason`: `"tool_use"` → `tools`; `null`/missing → `tools` when the line's
    `message.content` contains a block of type `tool_use`, otherwise `generating`; `"pause_turn"` → `generating`
@@ -212,7 +217,7 @@ Assistant line:
 Every line is an envelope `{ "timestamp", "type", "payload" }`.
 
 State: `fileCreatedMs`, `subagentStartOrdinal` (nullable), `myAgentPath`, `pendingStartMs`, `streaming` (bool),
-`sawModernUsage` (bool), `previousLegacyTotals` (nullable), `phase`.
+`firstOutputMs` (nullable), `sawModernUsage` (bool), `previousLegacyTotals` (nullable), `phase`.
 
 Every later line first passes both copied-history rules of 3.5 (timestamp, then `ordinal` below
 `subagentStartOrdinal`); a copied line does nothing below.
@@ -223,7 +228,7 @@ Every later line first passes both copied-history rules of 3.5 (timestamp, then 
 | `turn_context` | `model = payload.model`; `project` from `payload.cwd` when present |
 | input (see below) | if not `streaming`: `pendingStartMs = ts`; phase `generating` (`inFlightStartMs = pendingStartMs`) |
 | mailbox input (see below) | if not `streaming`: `pendingStartMs = ts`; the phase does not change |
-| output (see below) | `streaming = true`; phase `generating` (`inFlightStartMs = pendingStartMs ?? ts`) |
+| output (see below) | if not `streaming`: `firstOutputMs = ts`; then `streaming = true`; phase `generating` (`inFlightStartMs = pendingStartMs ?? ts`) |
 | `token_usage_record` | modern usage (below) |
 | `event_msg` + `payload.type == "token_count"` | if `sawModernUsage` and `streaming`: the response ended without a usage record — `streaming = false`, `pendingStartMs = ts`, phase `tools`. Otherwise legacy usage (below). |
 | `event_msg` + `payload.type` in `task_complete`, `turn_aborted` | phase `idle`, `pendingStartMs = null`, `streaming = false` |
@@ -245,7 +250,9 @@ Modern usage (`token_usage_record`):
 2. `sawModernUsage = true`. `key = payload.response_id`, else `"codex:" + threadId + ":" + ts`.
    (`threadId` = `payload.thread_id` ?? `session_meta.payload.id` ?? file path.) Skip if already seen anywhere.
 3. Tokens from `payload.usage`. Ignore `turn_token_usage` and `thread_token_usage`.
-4. Emit the response with `startMs = pendingStartMs`, `endMs = ts`.
+4. Emit the response with `startMs = pendingStartMs`, `endMs = ts`, and `firstMs = firstOutputMs` when `streaming`
+   is true (the output line that started this response), else null (the usage arrived without an output line since
+   the request started, or after a `token_count` or `task_complete` ended the stream).
 5. `pendingStartMs = ts`, `streaming = false`, phase `tools`.
 
 Legacy usage (`event_msg` / `token_count`):
@@ -256,7 +263,8 @@ Legacy usage (`event_msg` / `token_count`):
    any state). If any delta field is negative → tokens = `last`. Otherwise tokens = `delta`.
 4. `previousLegacyTotals = total`.
 5. `key = "codex-legacy:" + threadId + ":" + total.total_tokens`. Skip if already seen.
-6. Emit with `startMs = pendingStartMs`, `endMs = ts`. Then `pendingStartMs = ts`, `streaming = false`, phase `tools`.
+6. Emit with `startMs = pendingStartMs`, `endMs = ts`, `firstMs` as in modern usage step 4. Then
+   `pendingStartMs = ts`, `streaming = false`, phase `tools`.
 
 ### 4.3 DeepSeek Harness (dsh)
 
@@ -2497,43 +2505,47 @@ raw model, the empty string when unknown; reporting adds the raw models that res
 ### 6.10 Work signals
 
 Per agent, from the tool calls in its own file: whether it is going in circles, and whether its recent actions keep
-finding something new. Signals appear on the agent's row and tooltip (DESIGN 4); the task score (6.9) builds on the same
-actions and on the same loop detection. `spec/tools/work_signals.py` implements the signals and checks
-`spec/fixtures/work-signal-cases.json`.
+finding something new. Signals appear on the agent's row and tooltip (DESIGN 4); the performance score (6.9) and its
+history (6.11) take their tool components from the same actions. `spec/tools/work_signals.py` implements the signals
+and checks `spec/fixtures/work-signal-cases.json`; `spec/tools/tool_actions.py` reads the actions from log lines for
+`reference.py`, and `spec/fixtures/parser-expected.json` lists them for the files that have them (`actions`).
 
-**Actions.** A parser turns every tool call into an action `(time, tool, digest)` and every tool result into an
-outcome `(time, failed)`, matched by call id:
+**Actions.** A parser turns every tool call into an action `(callMs, tool, digest, model)` and the first tool result
+of that call into its outcome `(resultMs, failed)`, matched by call id:
 
 | Source | Call | `tool`, `digest` input | Result | `failed` |
 | --- | --- | --- | --- | --- |
 | Claude (both) | assistant `message.content[]` block `tool_use` (each `id` once per file: a message's lines repeat it) | `name`; `input` | user block `tool_result` with that `tool_use_id` | `is_error == true` |
-| Codex | `response_item` `function_call` / `custom_tool_call` | `name`; `arguments` / `input` | `…_output` with that `call_id` | the output's leading JSON object (in the first `input_text` item when `output` is an array) has an integer `exit_code` ≠ 0 |
+| Codex | `response_item` `function_call` / `custom_tool_call` | `name`; `arguments` / `input` | `…_output` with that `call_id` | the output's leading JSON object (in the first `input_text` item when `output` is an array) has an integer `exit_code` ≠ 0; unknown when there is no integer `exit_code` |
 | omp, Pi, OpenClaw | assistant `toolCall` block | `name`; `arguments` | `toolResult` with that `toolCallId` | `isError == true` |
 | Factory Droid | assistant `message` line, `message.content[]` block `tool_use` (each `id` once per file) | `name`; `input` | user `message` line, block `tool_result` with that `tool_use_id` | `is_error == true` |
-| others | — (no actions; no signals) | | | |
+| others | — (no actions; no signals, no tool components) | | | |
+
+- A call needs a string id and a string tool name; an id the file already had adds nothing.
+- `callMs` is the time (3.1) of the line that holds the call, `resultMs` the time of the line that holds its first
+  result (null until one is read). Only the first result of a call counts: a later result with the same id is
+  ignored, and so is a result whose id names no call. `failed` is true, false or unknown (only Codex says nothing
+  sometimes); unknown is not a failure.
+- `model` is the agent's model (4) right after the call's line is read: the model of the response that issued the
+  call (Claude, omp, Pi, OpenClaw and Factory Droid name it on the same message; a Codex call precedes the usage
+  record that takes the model of the current turn).
 
 `digest` = the first 16 lowercase hex digits of SHA-256 over the call's input as the file stores it: the UTF-8 text of
 a string input (Codex `arguments` and `input` are strings), the raw JSON text of an object or array exactly as it
-appears in the line (Claude and Factory Droid `input`, omp and Pi `arguments`; OpenClaw: in the decoded entry). It is computed while the
-line is parsed. An assistant line or entry ignored because its key was first seen in another file (4.1 step 2, 4.7
-step 2) adds no actions, and its results match nothing.
+appears in the line (Claude and Factory Droid `input`, omp and Pi `arguments`; OpenClaw: in the decoded entry); an
+absent or null input hashes as empty text. It is computed while the line is parsed. An assistant line or entry ignored
+because its key was first seen in another file (4.1 step 2, 4.7 step 2, 4.16 *Calls*) adds no actions, and its
+results match nothing; neither do lines that copied-history rules skip (3.5, 4.7). An OpenClaw assistant entry that is
+a mirror (4.14) adds no actions: the runtime that ran the delegated turn records its tools in its own log.
 
-**Task fields.** For the task score, each action also carries what the functions of `spec/TASK-PARSERS.md` derive while
-the call and its result are parsed, with the agent's working directory: `kind` (`action_kind`), for a command `command`
-(`command_info`), with the result `outcome` (`outcome`) and for a command `failures` (`failures`, over the result's
-output text), for an edit `hunks` (`edit_hunks`) — the event stream of 6.9, composed as 6.9 *Composing the stream*
-says (including the late outcomes of commands that outlive their call). They are computed in memory from the call's input and the result's output
-(6.9 *Privacy*); only the fields listed there are kept. The signals below use only `tool`, `digest`, times and
-`failed` from the table above; `outcome.failed` refines the same fact for the score (null for a command that did not
-finish).
+**Storage.** Per agent, the last **64 actions** in file order, each with `tool`, `digest`, `callMs`, `resultMs`,
+`failed`, `model` and `seeded`; inputs and outputs are never kept. Lines read while seeding (5) add actions with
+`seeded = true`, so the performance score (6.9) is the same before and after a relaunch; the signals ignore seeded
+actions, so their list still starts with the file's live lines. The history analysis (6.11) reads whole files and
+uses every action, without the cap.
 
-**Storage.** For the signals only `tool`, `digest`, times and `failed` are kept, at most the last **64 actions** per
-agent. An outcome never read (no result yet, or a format that does not say) is `unknown`, which is not a failure. Copied
-history (3.5, 4.7) and seeding (6.4) add no actions to this list: it starts with the file's live lines. The task score
-keeps its own state for the agent's current task, seeded lines included (6.9 *Event stream*), and the history analysis
-(6.11) reads whole files.
-
-**Signals** of an agent at `nowMs`, over its actions within the last 10 minutes (`recent`):
+**Signals** of an agent at `nowMs`, over its actions that are not seeded and whose `callMs` is within the last 10
+minutes (`recent`), in file order:
 
 - **Looping**: the newest actions repeat the same block of 1, 2 or 3 consecutive `(tool, digest)` pairs at least 3
   times in a row (the same call 3 times; `A B A B A B`; `A B C A B C A B C`), the newest action is less than 120 s
@@ -2546,9 +2558,7 @@ keeps its own state for the agent's current task, seeded lines included (6.9 *Ev
   same `tool` that did not fail. The counts of failed and recovered actions in `recent` are shown in the tooltip.
 
 A signal never changes phase, speed, totals or anything reported (11): it describes behaviour, not quality, and
-identical actions can be legitimate (a test re-run after an edit has the same digest when the command is the same). The
-score's behaviour efficiency (6.9 E) applies the same repeat detection to every position of the current task, and its
-new-evidence rule tells a re-run after an edit from a re-run on unchanged code.
+identical actions can be legitimate (a test re-run after an edit has the same digest when the command is the same).
 
 ### 6.11 Task history, predictions and comparison
 

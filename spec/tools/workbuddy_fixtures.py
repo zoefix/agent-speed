@@ -227,7 +227,7 @@ def attach(pd, fields, use, raw_use):
 
 
 def resp(source_model, key, start, end, inp, cached, write, out, reasoning, provider=None):
-    return {"key": key, "startMs": start, "endMs": end, "input": inp, "cachedInput": cached, "cacheWriteInput": write,
+    return {"key": key, "startMs": start, "endMs": end, "firstMs": None, "input": inp, "cachedInput": cached, "cacheWriteInput": write,
             "cacheWrite1hInput": 0, "output": out, "reasoning": reasoning, "model": source_model,
             "provider": provider, "fast": False, "final": True}
 

@@ -42,7 +42,7 @@ def text(value):
 
 
 def record(key, start, end, usage, model=None, provider=None, requests=1):
-    return dict(key=key, startMs=start, endMs=end, **{field: count(usage.get(field)) for field in FIELDS},
+    return dict(key=key, startMs=start, endMs=end, firstMs=None, **{field: count(usage.get(field)) for field in FIELDS},
                 model=text(model), provider=text(provider), final=True, fast=False,
                 requestCount=max(1, min(100000, count(requests))))
 

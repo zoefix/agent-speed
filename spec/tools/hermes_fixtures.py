@@ -57,7 +57,7 @@ def ended(clock, sid, model, reason="text_response(finish_reason=stop)", calls=1
 
 
 def resp(key, start, end, inp, cached, cache_write, out, model, provider):
-    return {"key": key, "startMs": start, "endMs": end, "input": inp, "cachedInput": cached,
+    return {"key": key, "startMs": start, "endMs": end, "firstMs": None, "input": inp, "cachedInput": cached,
             "cacheWriteInput": cache_write, "cacheWrite1hInput": 0, "output": out, "reasoning": 0,
             "model": model, "provider": provider, "fast": False, "final": True}
 

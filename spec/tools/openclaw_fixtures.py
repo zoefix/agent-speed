@@ -211,8 +211,8 @@ def write_database(path, schema, windows, journal_wal):
     assert (header[18], header[19]) == ((2, 2) if journal_wal else (1, 1)), path
 
 
-def resp(key, start, end, inp, cached, cache_write, out, reasoning, model, provider, cache_write_1h=0):
-    return {"key": key, "startMs": start, "endMs": end, "input": inp, "cachedInput": cached,
+def resp(key, start, end, inp, cached, cache_write, out, reasoning, model, provider, cache_write_1h=0, first=None):
+    return {"key": key, "startMs": start, "endMs": end, "firstMs": first, "input": inp, "cachedInput": cached,
             "cacheWriteInput": cache_write, "cacheWrite1hInput": cache_write_1h, "output": out,
             "reasoning": reasoning, "model": model, "provider": provider, "fast": False, "final": True}
 
@@ -458,9 +458,9 @@ def write_fixtures(out_dir):
         source="codex", project="workspace", model="gpt-5.5", isSubagent=False, parentFile=None, phase="idle",
         inFlightStartMs=None, lastLineMs=ms("13:10:40.000"), malformedLines=0,
         responses=[resp("resp-oc-1", ms("13:10:00.300"), ms("13:10:20.000"), 12000, 9000, 0, 300, 120, "gpt-5.5",
-                        "openai"),
+                        "openai", first=ms("13:10:05.000")),
                    resp("resp-oc-2", ms("13:10:30.000"), ms("13:10:39.900"), 12500, 12000, 0, 210, 0, "gpt-5.5",
-                        "openai")])}
+                        "openai", first=ms("13:10:39.000"))])}
 
     # ---- Discovery decoys: none of these is an agent database.
     decoys = [

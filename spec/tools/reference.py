@@ -46,6 +46,7 @@ import prices as pricing  # noqa: E402
 import harness_reference as harnesses  # noqa: E402
 import unpriced as diagnostics  # noqa: E402
 import execution_modes_reference as modes  # noqa: E402
+import tool_actions  # noqa: E402
 
 if hasattr(sys, "set_int_max_str_digits"):
     sys.set_int_max_str_digits(0)  # integer literals of any length are numbers (METRICS 3.6), not malformed lines
@@ -266,12 +267,15 @@ class FileState:
             self.source_decided = True
             rel = [p for p in re.split(r"[\\/]", os.path.relpath(path, root) if root else path) if p]
             self.is_subagent = len(rel) == 4 and rel[2] == "subagents"
+        # performance score (METRICS 4.2, 6.10): Codex's first output line of a response, the actions
+        self.first_output = None
+        self.tools = tool_actions.Reader(self) if source in tool_actions.SOURCES else None
 
 
-def emit(state, key, start, end, tokens, model, final=True, provider=None, fast=False):
+def emit(state, key, start, end, tokens, model, final=True, provider=None, fast=False, first=None):
     tokens.setdefault("cacheWrite1hInput", 0)
-    state.responses[key] = dict(key=key, startMs=start, endMs=end, model=model, provider=provider, fast=fast,
-                                final=final, **tokens)
+    state.responses[key] = dict(key=key, startMs=start, endMs=end, firstMs=first, model=model, provider=provider,
+                                fast=fast, final=final, **tokens)
 
 
 def codex_tokens(usage):
@@ -325,7 +329,7 @@ def codex_line(state, obj, dedupe):
             return
         dedupe.claim(key, state.path)
         emit(state, key, state.pending, ts, codex_tokens(payload.get("usage")), state.model,
-             provider=state.provider)
+             provider=state.provider, first=state.first_output if state.streaming else None)
         tier = payload.get("service_tier")
         state.response_facts[key] = modes.put(list(state.facts), modes.normalize(
             "serviceTier", tier, "openai", "recorded", "request") if isinstance(tier, str) else None)
@@ -348,6 +352,8 @@ def codex_line(state, obj, dedupe):
         role = payload.get("role")
         if ptype == "reasoning" or (isinstance(ptype, str) and ptype.endswith("_call")) or (
                 ptype == "message" and role == "assistant"):
+            if not state.streaming:
+                state.first_output = ts
             state.streaming = True
             state.phase = "generating"
             state.in_flight = state.pending if state.pending is not None else ts
@@ -421,7 +427,8 @@ def legacy(state, ts, payload, dedupe):
     if dedupe.owner(key) is not None:
         return
     dedupe.claim(key, state.path)
-    emit(state, key, state.pending, ts, codex_tokens(usage), state.model, provider=state.provider)
+    emit(state, key, state.pending, ts, codex_tokens(usage), state.model, provider=state.provider,
+         first=state.first_output if state.streaming else None)
     state.response_facts[key] = list(state.facts)
     after_usage(state, ts)
 
@@ -521,11 +528,12 @@ def claude_line(state, obj, dedupe):
         resp = state.responses.get(key)
         if resp is None:
             dedupe.claim(key, state.path)
-            emit(state, key, state.pending, ts, tokens, message.get("model"), stop is not None, fast=fast)
+            emit(state, key, state.pending, ts, tokens, message.get("model"), stop is not None, fast=fast, first=ts)
             state.pending, state.precise = None, False
             resp = state.responses[key]
         else:
             resp["endMs"] = max(resp["endMs"], ts)
+            resp["firstMs"] = min(resp["firstMs"], ts)
             for f in TOKEN_FIELDS:
                 resp[f] = max(resp[f], tokens[f])
             resp["model"] = message.get("model") or resp["model"]
@@ -686,6 +694,8 @@ def process_file(state, dedupe, start_offset=0, max_lines=None):
             state.malformed += 1
             continue
         handler(state, obj, dedupe)
+        if state.tools is not None:
+            state.tools.feed(state, obj, dedupe, raw)
         if composer is not None:
             composer.feed(state, obj, dedupe, raw)
 
@@ -1283,6 +1293,8 @@ def omp_read_header(state, dedupe):
                 continue
             if isinstance(obj, dict) and obj.get("type") == "session":
                 (pi_line if state.source == "pi" else omp_line)(state, obj, dedupe)
+                if state.tools is not None:
+                    state.tools.feed(state, obj, dedupe, raw)
                 if state.tasks is not None:
                     state.tasks.feed(state, obj, dedupe, raw)
                 return
@@ -1705,6 +1717,8 @@ def openclaw_states(db_path, dedupe, stop_at=None, tasks=False):
                 entry = openclaw_event(st, text, blob, size, with_raw=True)
                 if entry is not None:
                     openclaw_entry(st, entry[0], dedupe)
+                    if st.tools is not None:
+                        st.tools.feed(st, entry[0], dedupe, entry[1])
                     if st.tasks is not None:
                         st.tasks.feed(st, entry[0], dedupe, entry[1])
                 if stop_at == (sid, seq):
@@ -2350,6 +2364,8 @@ def droid_feed(state, dedupe, start_offset=0, max_lines=None):
             state.malformed += 1
             continue
         droid_line(state, obj, dedupe, offset, len(raw))
+        if state.tools is not None:
+            state.tools.feed(state, obj, dedupe, raw)
         if state.tasks is not None:
             state.tasks.feed(state, obj, dedupe, raw)
     return end
@@ -3381,7 +3397,8 @@ def check_fixtures():
         states.append(state)
         got = dict(source=state.source, project=state.project, model=state.model, isSubagent=state.is_subagent,
                    phase=state.phase, inFlightStartMs=state.in_flight, lastLineMs=state.last_line,
-                   malformedLines=state.malformed, responses=list(state.responses.values()), **mode_fields(state))
+                   malformedLines=state.malformed, responses=list(state.responses.values()),
+                   actions=state.tools.actions if state.tools is not None else [], **mode_fields(state))
         for k, v in exp.items():
             if k != "parentFile" and got[k] != v:
                 failures.append("%s: %s expected %r got %r" % (rel, k, v, got[k]))
