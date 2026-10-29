@@ -761,6 +761,39 @@ bool OrbWindow::onUnit(QPointF local) const {
     return area.contains(local) && insideDisc(local);
 }
 
+void OrbWindow::plateHover(bool hovered) { setHovered(hovered); }
+
+void OrbWindow::beginDrag(QPointF global) {
+    if (snap_) snap_->stop();
+    dragging_ = true;
+    moved_ = false;
+    pressOnUnit_ = false;
+    pressGlobal_ = global;
+    pressPosition_ = position();
+    pressAt_ = now();
+}
+
+void OrbWindow::dragTo(QPointF global) {
+    if (!dragging_) return;
+    const QPointF delta = global - pressGlobal_;
+    if (!moved_ && std::hypot(delta.x(), delta.y()) < 4) return;
+    if (!moved_) {
+        moved_ = true;
+        emit dragChanged(id_, true);
+    }
+    const QPointF raw = QPointF(pressPosition_ + delta.toPoint()) + center();
+    setPosition((snapped(raw, false) - center()).toPoint());
+}
+
+void OrbWindow::endDrag() {
+    if (!dragging_) return;
+    dragging_ = false;
+    if (moved_) {
+        emit dragChanged(id_, false);
+        settle();
+    }
+}
+
 void OrbWindow::mousePressEvent(QMouseEvent* event) {
     if (!insideDisc(event->position())) {
         event->ignore();

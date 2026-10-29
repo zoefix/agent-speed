@@ -60,6 +60,16 @@ void setInputDisc(QWindow* window, QPointF center, double radius) {
     xcb_flush(c);
 }
 
+void setInputRect(QWindow* window, QRectF rect) {
+    xcb_connection_t* c = connection();
+    if (!c || !window->handle()) return;
+    const double dpr = window->devicePixelRatio();
+    xcb_rectangle_t r{static_cast<std::int16_t>(std::lround(rect.x() * dpr)), static_cast<std::int16_t>(std::lround(rect.y() * dpr)),
+                      static_cast<std::uint16_t>(std::lround(rect.width() * dpr)), static_cast<std::uint16_t>(std::lround(rect.height() * dpr))};
+    xcb_shape_rectangles(c, XCB_SHAPE_SO_SET, XCB_SHAPE_SK_INPUT, XCB_CLIP_ORDERING_UNSORTED, static_cast<xcb_window_t>(window->winId()), 0, 0, 1, &r);
+    xcb_flush(c);
+}
+
 bool blurSupported() {
     xcb_connection_t* c = connection();
     if (!c) return false;

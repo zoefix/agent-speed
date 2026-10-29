@@ -51,6 +51,11 @@ public:
     // The other orbs' discs, for orb-to-orb snapping and alignment.
     void setNeighbors(std::function<std::vector<Disc>()> neighbors) { neighbors_ = std::move(neighbors); }
     void placeAt(QPointF globalCenter);
+    // The name plate belongs to the orb (DESIGN 2b Name plate): hovering it hovers the orb, dragging it moves the orb.
+    void plateHover(bool hovered);
+    void beginDrag(QPointF global);
+    void dragTo(QPointF global);
+    void endDrag();
 
     double diameter() const { return diameter_; }
     QPointF discCenter() const { return QPointF(position()) + center(); }

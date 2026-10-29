@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QPointer>
+#include <QMouseEvent>
 #include <QRasterWindow>
 #include <QStringList>
 #include <vector>
@@ -10,7 +11,9 @@ class QVariantAnimation;
 
 // DESIGN 2b Name plate and Source chip: a small glass capsule beside an orb with its colour dots and name, the orb's
 // own glass, never wrapped and never shrunk. While the orb is hovered, dragged or just changed it widens to the chip's
-// content (every source with its status). Click-through; the window carries a margin for the shadow.
+// content (every source with its status). It belongs to its orb: the pointer events of the capsule are handed to it
+// (hover, drag, menu, double-click); outside the capsule and with click-through it ignores the mouse. The window carries
+// a margin for the shadow.
 class NamePlate : public QRasterWindow {
     Q_OBJECT
 public:
@@ -40,11 +43,24 @@ public:
     void placeCapsule(QPointF point);
     void appear();
     void disappear();
+    void setClickThrough(bool on);
     static double gap(double diameter);
     static constexpr int kMargin = 8;
 
+signals:
+    void hovered(bool on);
+    void pressed(QPointF global, Qt::MouseButton button);
+    void dragged(QPointF global);
+    void released();
+    void doubleClicked();
+
 protected:
     void paintEvent(QPaintEvent* event) override;
+    bool event(QEvent* event) override;
+    void mousePressEvent(QMouseEvent* event) override;
+    void mouseMoveEvent(QMouseEvent* event) override;
+    void mouseReleaseEvent(QMouseEvent* event) override;
+    void mouseDoubleClickEvent(QMouseEvent* event) override;
 
 private:
     QFont font() const;
@@ -54,5 +70,7 @@ private:
     QString text_;
     QSizeF capsule_;
     bool wanted_ = false;
+    bool inside_ = false;
+    bool pressing_ = false;
     QPointer<QVariantAnimation> fade_;
 };

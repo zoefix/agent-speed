@@ -1,5 +1,7 @@
 #include "orbs/name_plate.hpp"
 
+#include "orb/x11.hpp"
+
 #include <QConicalGradient>
 #include <QFontMetricsF>
 #include <QGuiApplication>
@@ -32,8 +34,52 @@ NamePlate::NamePlate() {
     format.setAlphaBufferSize(8);
     setFormat(format);
     setFlags(Qt::Tool | Qt::FramelessWindowHint | Qt::NoDropShadowWindowHint | Qt::WindowDoesNotAcceptFocus |
-             Qt::WindowStaysOnTopHint | Qt::WindowTransparentForInput);
+             Qt::WindowStaysOnTopHint);
     setOpacity(0);
+}
+
+void NamePlate::setClickThrough(bool on) {
+    const Qt::WindowFlags wanted = on ? flags() | Qt::WindowTransparentForInput : flags() & ~Qt::WindowTransparentForInput;
+    if (wanted == flags()) return;
+    const bool shown = isVisible();
+    setFlags(wanted);
+    if (shown) show();
+}
+
+bool NamePlate::event(QEvent* e) {
+    if (e->type() == QEvent::Leave && inside_) {
+        inside_ = false;
+        emit hovered(false);
+    }
+    return QRasterWindow::event(e);
+}
+
+void NamePlate::mousePressEvent(QMouseEvent* e) {
+    if (!QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()).contains(e->position())) {
+        e->ignore();
+        return;
+    }
+    pressing_ = e->button() == Qt::LeftButton;
+    emit pressed(e->globalPosition(), e->button());
+}
+
+void NamePlate::mouseMoveEvent(QMouseEvent* e) {
+    const bool inside = QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()).contains(e->position());
+    if (inside != inside_ && !pressing_) {
+        inside_ = inside;
+        emit hovered(inside);
+    }
+    if (pressing_) emit dragged(e->globalPosition());
+}
+
+void NamePlate::mouseReleaseEvent(QMouseEvent* e) {
+    if (e->button() != Qt::LeftButton || !pressing_) return;
+    pressing_ = false;
+    emit released();
+}
+
+void NamePlate::mouseDoubleClickEvent(QMouseEvent* e) {
+    if (e->button() == Qt::LeftButton) emit doubleClicked();
 }
 
 double NamePlate::gap(double s) { return std::clamp(std::round(0.034 * s), 4.0, 7.0); }
@@ -76,6 +122,8 @@ void NamePlate::setLook(const Look& look) {
     const double width = h / 2 + (dots > 0 ? (dots - 1) * d * 2 / 3 + d / 2 + 0.42 * f : 0) + fm.horizontalAdvance(text_ + status) + 0.52 * h;
     capsule_ = QSizeF(std::ceil(width), h);
     resize(qCeil(capsule_.width()) + 2 * kMargin, qCeil(capsule_.height()) + 2 * kMargin);
+    // Outside the capsule clicks reach what is below.
+    if (isVisible()) orb::x11::setInputRect(this, QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()));
     update();
 }
 
@@ -85,7 +133,10 @@ void NamePlate::placeCapsule(QPointF point) { setPosition((point - QPointF(kMarg
 void NamePlate::appear() {
     if (wanted_ && isVisible()) return;
     wanted_ = true;
-    if (!isVisible()) show();
+    if (!isVisible()) {
+        show();
+        orb::x11::setInputRect(this, QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()));
+    }
     if (fade_) fade_->stop();
     auto* fade = new QVariantAnimation(this);
     fade->setStartValue(opacity());

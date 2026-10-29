@@ -275,7 +275,17 @@ void OrbManager::sync() {
             orb.window->setEffectsLevel(effectsLevel_);
             orb.plate = std::make_unique<NamePlate>();
             auto* window = orb.window.get();
+            auto* plate = orb.plate.get();
             const QString id = c.id;
+            // The plate belongs to its orb: hover, drag, menu and double-click.
+            connect(plate, &NamePlate::hovered, window, &orb::OrbWindow::plateHover);
+            connect(plate, &NamePlate::pressed, this, [this, window, id](QPointF global, Qt::MouseButton button) {
+                if (button == Qt::RightButton) showMenu(id, global.toPoint());
+                else if (button == Qt::LeftButton) window->beginDrag(global);
+            });
+            connect(plate, &NamePlate::dragged, window, &orb::OrbWindow::dragTo);
+            connect(plate, &NamePlate::released, window, &orb::OrbWindow::endDrag);
+            connect(plate, &NamePlate::doubleClicked, this, &OrbManager::dashboardRequested);
             window->setNeighbors([this, id] { return discs(id); });
             connect(window, &orb::OrbWindow::dashboardRequested, this, &OrbManager::dashboardRequested);
             connect(window, &orb::OrbWindow::menuRequested, this, &OrbManager::showMenu);
@@ -323,7 +333,10 @@ void OrbManager::sync() {
     emit listChanged();
 }
 
-void OrbManager::syncWindow(const OrbConfig& c, Orb& orb) { orb.window->apply(c, store_.orbs().size() > 1 || !c.tracksAll() ? nameOf(c) : QString(), redlineOf(c)); }
+void OrbManager::syncWindow(const OrbConfig& c, Orb& orb) {
+    orb.window->apply(c, store_.orbs().size() > 1 || !c.tracksAll() ? nameOf(c) : QString(), redlineOf(c));
+    orb.plate->setClickThrough(c.clickThrough);
+}
 
 void OrbManager::applySnapshot(const QVariantMap& snap) {
     const auto rows = snap.value(QStringLiteral("sources")).toList();
