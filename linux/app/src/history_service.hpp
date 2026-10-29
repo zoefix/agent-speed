@@ -100,6 +100,8 @@ public:
                                const QString& rate) const;
     Q_INVOKABLE QString chooseCsvPath(const QString& suggestedName) const;
     Q_INVOKABLE QString money(qint64 microUsd, const QString& currency, const QString& rate, const QString& language) const;
+    // A byte total as METRICS 10.11 formats it.
+    Q_INVOKABLE QString bytes(double value) const;
 
 public slots:
     void applyRows(const QVariantList& rows, qint64 updatedMs);

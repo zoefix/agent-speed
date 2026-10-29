@@ -53,6 +53,10 @@ function days(rows, source, from, to, traffic, disabled, includeTools) {
         if (r.unpriced) d.unpriced += r.unpriced
         if (source === "all" && r.peak !== undefined && r.peak !== null) d.peak = Math.max(d.peak || 0, r.peak)
         d.bySource[r.source] = (d.bySource[r.source] || 0) + r.output
+        if (r.cost !== undefined && r.cost !== null) {
+            if (!d.costBySource) d.costBySource = {}
+            d.costBySource[r.source] = (d.costBySource[r.source] || 0) + r.cost
+        }
         for (var m = 0; m < r.models.length; ++m) {
             var model = r.models[m]
             var key = model.name || "?"
@@ -103,4 +107,24 @@ function delta(now, before) {
     if (!(before > 0)) return ""
     var p = (now - before) / before * 100
     return (p >= 0 ? "+" : "−") + Math.abs(p).toFixed(Math.abs(p) < 10 ? 1 : 0) + "%"
+}
+
+// DESIGN 10 Usage history: each day's traffic of the selection (tools per the setting), per source, and this computer's
+// total, keyed by date.
+function trafficByDate(traffic, source, from, to, disabled, includeTools) {
+    var off = {}
+    for (var o = 0; o < (disabled || []).length; ++o) off[disabled[o]] = true
+    var out = {}
+    for (var k = 0; k < (traffic || []).length; ++k) {
+        var t = traffic[k]
+        if (t.date < from || t.date > to) continue
+        var d = out[t.date] || (out[t.date] = { rx: 0, tx: 0, rxTools: 0, txTools: 0, machineRx: 0, machineTx: 0, bySource: {} })
+        if (t.key === "machine") { d.machineRx += t.rx; d.machineTx += t.tx; continue }
+        if (off[t.key] || (source !== "all" && t.key !== source)) continue
+        var rx = t.rx + (includeTools ? t.rxTools : 0), tx = t.tx + (includeTools ? t.txTools : 0)
+        d.rx += rx; d.tx += tx; d.rxTools += t.rxTools; d.txTools += t.txTools
+        var s = d.bySource[t.key] || (d.bySource[t.key] = { rx: 0, tx: 0 })
+        s.rx += rx; s.tx += tx
+    }
+    return out
 }

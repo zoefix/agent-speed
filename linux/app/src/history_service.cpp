@@ -296,6 +296,8 @@ HistoryModel::TrafficSums HistoryModel::trafficSums(const QString& date, const Q
     return sums;
 }
 
+QString HistoryModel::bytes(double value) const { return QString::fromStdString(agentspeed::traffic::formatTotal(value)); }
+
 QVariantMap HistoryModel::trafficOf(const QString& date, const QString& source, bool includeTools) const {
     QVariantMap out;
     const bool recorded = !trafficSince_.isEmpty() && date >= trafficSince_;

@@ -24,6 +24,29 @@ Window {
 
     property string source: "all"
     property string range: "30d"
+    // DESIGN 9 / 10 Usage history: the chart shows output, cost or traffic.
+    property string metric: "output"
+    readonly property var trafficDays: H.trafficByDate(history.trafficRows, source, span[0], span[1], prefs.disabledSources, prefs.trafficIncludeTools)
+    readonly property var trafficTotal: {
+        var t = { rx: 0, tx: 0 }
+        for (var date in trafficDays) { t.rx += trafficDays[date].rx; t.tx += trafficDays[date].tx }
+        return t
+    }
+    // Opening on traffic: a range with agent traffic but no token usage never opens on an empty chart.
+    function openOnTraffic() {
+        if (metric !== "traffic" && total.output <= 0 && trafficTotal.rx + trafficTotal.tx > 0) metric = "traffic"
+    }
+    onSourceChanged: openOnTraffic()
+    onRangeChanged: openOnTraffic()
+    Component.onCompleted: {
+        // Development aids: --history-metric=<output|cost|traffic>, --history-range=<today|…|all>.
+        for (var i = 0; i < Qt.application.arguments.length; ++i) {
+            var arg = Qt.application.arguments[i]
+            if (arg.indexOf("--history-metric=") === 0) metric = arg.substr(17)
+            if (arg.indexOf("--history-range=") === 0) range = arg.substr(16)
+        }
+        openOnTraffic()
+    }
     readonly property string today: H.iso(new Date())
     readonly property string currency: prefs.currency
     readonly property string rate: S.rev >= 0 && catalog.revision >= 0 ? catalog.rateFor(currency) : "1"
@@ -214,10 +237,25 @@ Window {
                     x: 16
                     y: 12
                     text: win.singleDay ? (win.source === "all" ? S.tr2(S.rev, "history.chart.bySource") : S.tr2(S.rev, "history.chart.byModel"))
-                                        : S.tr2(S.rev, "history.chart.output")
+                        : win.metric === "traffic" ? S.tr2(S.rev, "history.chart.traffic") + "  ·  "
+                                                     + Format.fill(S.tr2(S.rev, "traffic.pair"), [history.bytes(win.trafficTotal.rx), history.bytes(win.trafficTotal.tx)])
+                        : win.metric === "cost" ? S.tr2(S.rev, "history.chart.cost") : S.tr2(S.rev, "history.chart.output")
                     color: Theme.ink2
                     font.pixelSize: 12
                     font.weight: Font.DemiBold
+                }
+                Segmented {
+                    visible: !win.singleDay
+                    anchors.right: parent.right
+                    anchors.rightMargin: 12
+                    y: 8
+                    value: win.metric
+                    options: [
+                        { value: "output", label: S.tr2(S.rev, "history.chart.output") },
+                        { value: "cost", label: S.tr2(S.rev, "history.chart.cost") },
+                        { value: "traffic", label: S.tr2(S.rev, "history.chart.traffic") }
+                    ]
+                    onActivated: (v) => win.metric = v
                 }
                 HistoryChart {
                     visible: !win.singleDay && win.dayList.length > 0
@@ -226,6 +264,12 @@ Window {
                     anchors.margins: 10
                     series: win.chartSeries
                     source: win.source
+                    metric: win.metric
+                    traffic: win.trafficDays
+                    trafficSince: history.trafficSince
+                    includeTools: prefs.trafficIncludeTools
+                    formatMoney: function(v) { return win.money(v) }
+                    formatBytes: function(v) { return history.bytes(v) }
                     today: win.today
                     sourceOrder: {
                         var totals = win.total.bySource
