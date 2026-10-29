@@ -117,7 +117,7 @@ public sealed class PerfMonitorTests : IDisposable
 
     private string Write(string relative, string content)
     {
-        var path = Path.Combine(_temp.Combine("claude", "projects"), relative);
+        var path = Path.Combine([_temp.Combine("claude", "projects"), .. relative.Split('/')]);
         Directory.CreateDirectory(Path.GetDirectoryName(path)!);
         File.WriteAllText(path, content);
         return path;

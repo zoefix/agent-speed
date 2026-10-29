@@ -79,6 +79,8 @@ public class PerfCardViewTests(ITestOutputHelper output)
             {
                 view.Compact = level;
                 view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+                view.Arrange(new Rect(view.DesiredSize));
+                view.UpdateLayout();
                 shown.Add(view.DesiredSize.Height);
             }
 
