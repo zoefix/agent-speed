@@ -225,7 +225,7 @@ struct TaskScoreModelTests {
     @Test func sourceOrderIsTheReferences() {
         #expect(SourceKind.allCases.map(\.rawValue) == [
             "codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-            "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid",
+            "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "trae",
         ])
     }
 

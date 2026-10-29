@@ -22,8 +22,8 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     /// Factory Droid: a session transcript read with its settings file (METRICS 4.16).
     case droid
 
-    /// Nil for sources that are not read from transcript files: OpenCode, ZCode and OpenClaw keep databases
-    /// (`OpencodeSource`, `ZcodeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
+    /// Nil for sources that are not read from transcript files: OpenCode, ZCode, Trae and OpenClaw keep databases
+    /// (`OpencodeSource`, `ZcodeSource`, `TraeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
     /// (`HermesSource`).
     init?(_ source: SourceKind) {
         switch source {
@@ -39,7 +39,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: self = .grokBuild
         case .pi: self = .pi
         case .droid: self = .droid
-        case .opencode, .zcode, .openclaw, .hermes: return nil
+        case .opencode, .zcode, .openclaw, .hermes, .trae: return nil
         }
     }
 

@@ -40,6 +40,7 @@ enum HistoryCSV {
         case .openclaw: "openclaw"
         case .hermes: "hermes"
         case .droid: "droid"
+        case .trae: "trae"
         }
     }
 

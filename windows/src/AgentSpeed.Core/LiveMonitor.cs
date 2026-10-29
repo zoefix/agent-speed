@@ -196,6 +196,8 @@ public sealed class LiveMonitor : IDisposable
     public static string DefaultGrokBuildRoot => Path.Combine(
         Environment.GetEnvironmentVariable("GROK_HOME") is { Length: > 0 } home ? home : Path.Combine(UserHome, ".grok"), "sessions");
 
+    public static IReadOnlyList<string> DefaultTraeFolders => Trae.TraePaths.DefaultFolders;
+
     private static string GeminiHome
     {
         get

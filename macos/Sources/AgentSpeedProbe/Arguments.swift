@@ -54,7 +54,7 @@ struct ProbeArguments {
                                [--prices PATH] [--codex PATH] [--claude PATH] [--dsh PATH] [--opencode PATH]
                                [--gemini PATH] [--omp PATH] [--antigravity PATH] [--workbuddy PATH] [--workbuddy-ai PATH]
                                [--zcode PATH] [--kimi PATH] [--grok-build PATH] [--pi PATH]
-                               [--openclaw PATH] [--hermes PATH] [--droid PATH]
+                               [--openclaw PATH] [--hermes PATH] [--droid PATH] [--trae PATH]
                AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY
         """
 
@@ -179,6 +179,9 @@ struct ProbeArguments {
                 // `reference.py --droid`.
                 guard let path = iterator.next() else { return nil }
                 configuration.droidRoot = URL(fileURLWithPath: path, isDirectory: true)
+            case "--trae":
+                guard let path = iterator.next() else { return nil }
+                configuration.traeRoot = URL(fileURLWithPath: path, isDirectory: true)
             case "--opencode":
                 // The database file (as in reference.py) or the folder that contains it.
                 guard let path = iterator.next() else { return nil }

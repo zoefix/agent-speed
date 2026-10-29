@@ -27,7 +27,7 @@ FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtur
 
 SCORED_SOURCES = ("codex", "claudeCode", "claudeDesktop", "omp", "pi", "openclaw", "droid")
 SOURCE_ORDER = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
-                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid")
+                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "trae")
 VERIFY = ("test", "build", "check")
 
 V_TEST, V_BUILD = 40.0, 20.0

@@ -88,6 +88,14 @@ Agent Speed 只讀取 agent 本來就寫在你電腦上的紀錄：
 | ZCode | `~/.zcode/cli/db/db.sqlite`（或 `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
 | Kimi Code CLI（TypeScript v2） | `~/.kimi-code/sessions`（或 `$KIMI_CODE_HOME/sessions`） |
 | Grok Build | `~/.grok/sessions`（或 `$GROK_HOME/sessions`） |
+| Trae（僅部分用量） | macOS `~/Library/Application Support/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}`；Windows `%APPDATA%/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}` 下的 `ModularData/ai-agent/database.db`，相容舊版 `ai-chat` 資料庫 |
+
+Trae 適配唯讀本機加密資料庫，不將明文副本寫入磁碟。統計已完成回合的末次請求，並在精確用量可核對時
+補充此前每次模型請求，避免重複計數。**token 用量及 API 等價成本仍可能不完整。** 請求日誌對應後，
+以 HTTP 傳送到串流 `DONE` 計算 TPS，包含首字等待並排除後續工具執行；缺少計時仍保留可靠用量。
+新的請求狀態接入現有即時估速，並區分估算與實測；沒有實測參考值時不估速。
+設定支援自訂資料目錄並保留歷史不完整提示。已核對 macOS Trae CN 原生完成紀錄，即時狀態切換通過
+合成事件回放測試；Windows 需要系統 SQLite 支援記憶體反序列化。詳見 [Trae 資料限制](spec/research/trae.md)。
 
 Grok Build 提供每回合、每模型的原生批次紀錄：Token、API 耗時與實際呼叫數交給同一套速度引擎計算。子 agent 用量已合併在父工作階段中，因此只計算一次，仍會顯示子 agent 的活動狀態；上游未保存每次呼叫的獨立時間線，無法重建批次內的並行速度。
 

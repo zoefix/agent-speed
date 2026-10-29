@@ -28,7 +28,7 @@ PYTHON_HOST = re.compile(r"python(?:w|[0-9][0-9.]*)?")
 HERMES_MARKERS = ("hermes_bootstrap", "hermes_cli", "acp_adapter")
 HERMES_SCRIPTS = {"hermes", "hermes-agent", "hermes-acp"}
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid")
+           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "trae")
 
 
 # ---------------------------------------------------------------------------------------------------- formatting

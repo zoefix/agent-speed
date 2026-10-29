@@ -55,7 +55,8 @@ internal sealed record ProbeOptions(
     string? PiRoot = null,
     string? OpenClawRoot = null,
     string? HermesRoot = null,
-    string? DroidRoot = null)
+    string? DroidRoot = null,
+    string? TraeRoot = null)
 {
     public const string Usage =
         "usage: AgentSpeed.Probe (--dump-today [--since UNIXMS] [--now UNIXMS] | --dump-history [--utc] [--history-store PATH] | " +
@@ -63,7 +64,7 @@ internal sealed record ProbeOptions(
         "--dump-tasks [--utc] [--first YYYY-MM-DD] [--last YYYY-MM-DD] [--source ID] [--now UNIXMS] | " +
         "--watch N | --sync-prices DIR | --sync-rates DIR CURRENCY) [--prices PATH] " +
         "[--codex PATH] [--claude PATH] [--dsh PATH] [--opencode PATH] [--gemini PATH]... [--omp PATH]... [--antigravity PATH]... " +
-        "[--workbuddy PATH] [--workbuddy-ai PATH] [--zcode PATH] [--kimi PATH] [--grok-build PATH] [--pi PATH] [--openclaw PATH] [--hermes PATH] [--droid PATH]";
+        "[--workbuddy PATH] [--workbuddy-ai PATH] [--zcode PATH] [--kimi PATH] [--grok-build PATH] [--pi PATH] [--openclaw PATH] [--hermes PATH] [--droid PATH] [--trae PATH]";
 
     /// <summary><c>--days N</c> of <c>--dump-unpriced</c>: the last N local days, today included.</summary>
     public int? Days { get; init; }
@@ -95,7 +96,7 @@ internal sealed record ProbeOptions(
         OmpRoots is { Count: > 0 } omp ? omp[0] : null,
         AntigravityRoots is { Count: > 0 } antigravity ? antigravity[0] : null,
         WorkBuddyRoot,
-        WorkBuddyAiRoot, ZCodeRoot, KimiRoot, GrokBuildRoot, PiRoot, OpenClawRoot, HermesRoot, DroidRoot);
+        WorkBuddyAiRoot, ZCodeRoot, KimiRoot, GrokBuildRoot, PiRoot, OpenClawRoot, HermesRoot, DroidRoot, TraeRoot);
 
     /// <summary>Resolved roots; several <c>--gemini</c>, <c>--omp</c> or <c>--antigravity</c> folders are all read (like the reference).</summary>
     public SourceLocations Locations
@@ -157,7 +158,7 @@ internal sealed record ProbeOptions(
         var seconds = 0;
         var utc = false;
         string? codex = null, claude = null, dsh = null, opencode = null, store = null, prices = null, sync = null, currency = null;
-        string? workBuddy = null, workBuddyAi = null, zcode = null, kimi = null, grokBuild = null, pi = null, openClaw = null, hermes = null, droid = null;
+        string? workBuddy = null, workBuddyAi = null, zcode = null, kimi = null, grokBuild = null, pi = null, openClaw = null, hermes = null, droid = null, trae = null;
         long? since = null, nowMs = null;
         int? days = null;
         string? first = null, last = null, sourceId = null;
@@ -245,6 +246,9 @@ internal sealed record ProbeOptions(
                 case "--grok-build" when i + 1 < args.Length:
                     grokBuild = args[++i];
                     break;
+                case "--trae" when i + 1 < args.Length:
+                    trae = args[++i];
+                    break;
                 case "--pi" when i + 1 < args.Length:
                     pi = args[++i];
                     break;
@@ -303,7 +307,7 @@ internal sealed record ProbeOptions(
 
         return new ProbeOptions(
             mode.Value, seconds, codex, claude, dsh, opencode, gemini, utc, store, since, omp, antigravity, prices, sync, currency,
-            workBuddy, workBuddyAi, zcode, kimi, grokBuild, pi, openClaw, hermes, droid)
+            workBuddy, workBuddyAi, zcode, kimi, grokBuild, pi, openClaw, hermes, droid, trae)
         {
             Days = days,
             First = first,

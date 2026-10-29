@@ -120,7 +120,7 @@ public static class TaskComparison
     [
         SourceKind.Codex, SourceKind.ClaudeCode, SourceKind.ClaudeDesktop, SourceKind.DeepSeek, SourceKind.OpenCode, SourceKind.Gemini,
         SourceKind.Omp, SourceKind.Antigravity, SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.ZCode, SourceKind.Kimi,
-        SourceKind.GrokBuild, SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid,
+        SourceKind.GrokBuild, SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid, SourceKind.Trae,
     ];
 
     private static readonly double[] HistogramEdges = [10, 20, 30, 40, 50, 60, 70, 80, 90];

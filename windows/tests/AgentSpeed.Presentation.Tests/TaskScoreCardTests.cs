@@ -181,6 +181,7 @@ public class TaskScoreCardTests
         Assert.Equal(["今天的網路流量：1.2 MB"], card.Facts);
         Assert.Equal("這個來源不會記錄工具呼叫，所以無法為任務評分。，今天的網路流量：1.2 MB", card.FullDescription);
         Assert.False(TaskScoreCard.Build(Subject(Passing, source: SourceKind.Droid), Loc()).IsUnsupported);
+        Assert.True(TaskScoreCard.Build(Subject(Passing, source: SourceKind.Trae), Loc()).IsUnsupported);
     }
 
     [Fact]

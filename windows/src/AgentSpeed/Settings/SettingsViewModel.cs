@@ -185,6 +185,9 @@ internal sealed class SettingsViewModel : ObservableObject
             () => _settings.Current.DroidRoot is not null);
         ResetTaskbarPositionCommand = new RelayCommand(() => _settings.Update(s => s with { TaskbarOffset = 0 }),
             () => _settings.Current.TaskbarOffset > 0);
+        ChangeTraeCommand = new RelayCommand(() => ChangeFolder(TraeFolders.FirstOrDefault() ?? string.Empty, (s, path) => s with { TraeRoot = path }));
+        ResetTraeCommand = new RelayCommand(() => _settings.Update(s => s with { TraeRoot = null }),
+            () => _settings.Current.TraeRoot is not null);
         OpenHistoryCommand = new RelayCommand(openHistory);
         ClearHistoryCommand = new RelayCommand(() =>
         {
@@ -358,6 +361,9 @@ internal sealed class SettingsViewModel : ObservableObject
     public RelayCommand ChangeDroidCommand { get; }
 
     public RelayCommand ResetDroidCommand { get; }
+    public RelayCommand ChangeTraeCommand { get; }
+
+    public RelayCommand ResetTraeCommand { get; }
 
     public RelayCommand OpenHistoryCommand { get; }
 
@@ -622,6 +628,11 @@ internal sealed class SettingsViewModel : ObservableObject
 
     /// <summary>Today's main sessions; Task-tool workers are not counted (DESIGN 5).</summary>
     public string DroidStatus => StatusFor(SourceKind.Droid);
+    public IReadOnlyList<string> TraeFolders => SourceFolders.Antigravity(S.TraeRoot, LiveMonitor.DefaultTraeFolders, Directory.Exists);
+
+    public string TraePath => string.Join(Environment.NewLine, TraeFolders);
+
+    public string TraeStatus => StatusFor(SourceKind.Trae);
 
     public string CodexStatus => StatusFor(SourceKind.Codex);
 
@@ -787,6 +798,8 @@ internal sealed class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HermesStatus));
         OnPropertyChanged(nameof(DroidStatus));
         OnPropertyChanged(nameof(DroidPath));
+        OnPropertyChanged(nameof(TraeStatus));
+        OnPropertyChanged(nameof(TraePath));
         OnPropertyChanged(nameof(UpdateLastCheckedText));
     }
 

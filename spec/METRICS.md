@@ -8,8 +8,8 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid). This is the append-only *source order*. |
-| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16.) |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `trae` (Trae, partial request usage). This is the append-only *source order*. |
+| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Trae: one per native database session, 4.17.) |
 | Response | One model API call that produced a usage record. |
 | Task | One user request to one agent, from its prompt to the next one that is not a continuation (6.9). |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
@@ -39,6 +39,7 @@ from cumulative session counters (4.16).
 | OpenClaw (a Gateway on this computer, 2026.8.1+) | the agent databases `<state>/agents/<agentId>/agent/openclaw-agent.sqlite` of every state folder: `$OPENCLAW_STATE_DIR`, else `<base>/.openclaw` and every named-profile folder `<base>/.openclaw-<profile>`, with `<base>` = `$OPENCLAW_HOME`, else `~` (4.14) | user setting (a state folder, an agent folder or a database; replaces every automatic root) |
 | Hermes Agent (CLI, TUI, desktop app, messaging gateway, cron, ACP) | the log folders of the Hermes home: `<home>/logs` and `<home>/profiles/<name>/logs`, with `<home>` from `$HERMES_HOME` (4.15), else macOS `~/.hermes`, Windows `%LOCALAPPDATA%\hermes` | user setting (a Hermes home or one `logs` folder; replaces the automatic home) |
 | Factory Droid (CLI `droid`, interactive and `droid exec`; Factory Desktop) | `~/.factory/sessions`; no environment variable (4.16) | user setting (the `.factory` folder or its `sessions` folder) |
+| Trae (IDE, China and SOLO editions) | macOS `~/Library/Application Support/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}`; Windows `%APPDATA%/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}`. Each reads `ModularData/ai-agent/database.db`, falling back to `ModularData/ai-chat/database.db` | user setting (one application data folder, database folder or exact database file, replacing automatic roots) |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
@@ -1785,6 +1786,140 @@ the same day (9.6) until the next launch seeds the session by the history rule.
   (evidence in `spec/research/droid.md`); not yet verified against a running droid. Verification target (by hand): for
   a session watched live, the sums of its responses' fields equal its sidecar's own counters, and each response's
   `endMs − startMs` equals the gap between its assistant message and the user line before it.
+
+### 4.17 Trae: reconciled partial request usage
+
+Trae counts completed-turn final requests and adds earlier exact per-call usage only after reconciling the final
+request. A readable Trae database always carries the partial-history warning: these optional records are not a
+complete Trae billing ledger. Execution modes and per-process network attribution remain unknown.
+
+#### Base completed-turn records
+
+Read undeleted `chat_turn` rows whose status is exactly `completed`. Require positive valid epoch-millisecond
+`context.chat_end_time`; native `created_at`/`updated_at` and whole-turn `chat_start_time` are not model endpoints.
+Skip failed, canceled, running, malformed and missing-end rows. The fallback key remains
+`trae:<session_id>:<turn_id>` (row id substitutes for an empty turn id), agent `<database path>#<session_id>`.
+`requestCount = 1`, `startMs = null`, `endMs = chat_end_time` until timing is verified.
+
+`input = prompt_tokens`, `output = completion_tokens`; cached input and reasoning are already included. Input/output
+must be finite nonnegative integers <=10^12. Optional cache/reasoning fields are zero when absent/null, otherwise
+meet the same rule. Reject cache-read plus cache-write greater than input, reasoning greater than output, and a
+present `total_tokens` unequal to input+output (maximum 2*10^12). Ignore all-zero rows and `*_tokens_total` fields.
+Model comes from the first nonempty `persist_user_message_context.model_info.{display_model_name,model_name,config_name}`;
+project comes from `workspace_folders`. Query only safe scalars, never message bodies or credentials.
+
+#### Earlier per-request usage and stable identity
+
+Find the unique latest undeleted `history_v2` row whose `content_source = llm_default`, matching the turn's session
+and `response_message_id`. Include newer rows without server metadata when deciding latest; they block an older
+final proof. Join by `history_v2_id = server_history_info.client_history_id` with `source = llm_default`,
+`history_source = server`, and `coalesce(is_deleted,0)=0`. Duplicated client/server identities are ambiguous.
+
+The final anchor requires `extra_info.exact_usage_v1 = chat_completion` and
+`exact_token_semantics_v1 = provider_raw_usage_completion_includes_reasoning`. Strict decimal-string fields
+`exact_prompt_tokens_v1`, `exact_output_tokens_v1`, `exact_total_tokens_v1`, `exact_reasoning_tokens_v1` and
+`exact_cache_read_input_tokens_v1` must be valid and agree exactly with the base record; require zero cache-write
+input because this metadata has no cache-creation field. Require a nonempty `config_name` and positive integer
+history creation times <=253402300799 seconds. A final-anchor failure leaves the original fallback intact.
+
+Once reconciled, append other valid exact history rows for the same session/response message, excluding that final
+history ID. Earlier `content_source` may be a tool name. Each client and server history ID must be unique within
+that session across the queried turns. Require the same nonempty `agent_run_id` on client, server and final anchor;
+client and server creation times must be within the completed turn's floor(start/1000)..ceil(end/1000), and no later
+than the corresponding final history timestamp. Missing run columns or turn start disables expansion, not legacy
+final usage/timing. Invalid earlier rows are skipped individually.
+
+Earlier key = `trae:history:<session_id>:<history_v2_id>`; model = that call's `config_name`, cache-write input = 0.
+Fallback `endMs = server_history_info.created_at*1000` (second-resolution completion), with unknown start.
+These counters do not depend on logs: unavailable, oversized, rotated or ambiguous timing never removes exact
+usage. The final request keeps its original key; late metadata only adds earlier IDs, never a second final record.
+Copies, reopens and repeated polls deduplicate the same keys. History uses a parser revision to reanalyze old caches.
+
+#### Verified per-request timing
+
+Read app-root `logs/<launch>/Modular/ai_agent*.alaudalog` only. Supported layout: `AalG`/`Atab`, one `AALG` segment at
+152, raw DEFLATE with definite CBOR maps. Bound files, expanded bytes, depth and nodes; reject symlinks/unknown
+containers. Read newest logs first; skip individually oversized files, and stop at the aggregate compressed or
+expanded-byte budget while retaining newer valid graphs. Merge start/end/tag records using unsigned 64-bit span IDs scoped to each log. Retain only projected
+identities and timestamps. An open `do_chat` is normal; request generation must close for measured timing.
+
+Exact history ID identifies a unique `add_origin_history` span; its nearest `call_server_generate_plan_item`
+ancestor owns the request. `update_history_by_server` replays old history and is not an origin. A unique
+`create_chat_turn_with_id` with exact session/turn tags must identify the same `do_chat` root. Events belong to the
+nearest generation ancestor, excluding nested calls. Require:
+
+- One POST Fetch at `/api/agent/v3/create_agent_task` or `/api/agent/v3/commit_toolcall_result`, from
+  `byted_aha_ffi::aha_net::http`; one uppercase `DONE`, then `EOF`, from `ai_agent::infrastructure::aha_net::stream`.
+- One `TimingCostOriginEvent` from `ai_agent::domain::plan::simple_service_v2`, boolean `is_retry=false` and exact
+  model config. Nonempty traces in Fetch..EOF must match the turn trace when present; undated traces reject timing.
+- Request-owned ERROR/retry/retried/reconnect events in Fetch..DONE reject timing; undated unsafe events reject too.
+  Errors from subsequent tools do not invalidate an already finished model stream. Feature-name substrings such
+  as `enable_retry_after_content_loop` are not retry events.
+- Ordered times: generation start <= Fetch < DONE <= EOF <= generation close <= turn end; request <=15 minutes,
+  EOF-DONE <=1 second. The unique origin is inside the generation interval after Fetch and within 1 second of DONE.
+- Auxiliary markers may repeat. Require at least one closed `update_turn_context` within Fetch..min(close,DONE+1s)
+  and at least one closed `IcubeAiAgentTaskPlanToolTokenUsage` marker within Fetch..min(close,DONE+5s). These bounds
+  corroborate identity; they do not change the measured denominator.
+- Reject actual overlapping Fetch..DONE intervals. An incomplete earlier request whose interval could overlap is
+  ambiguous; a later Fetch after this response ended does not invalidate an earlier response. Nested wrapper span
+  lifetimes are not network intervals. The final request additionally has no later request and turnEnd-DONE<=60s;
+  earlier requests can be followed by long tools and more calls.
+
+Set `startMs = Fetch`, `endMs = DONE`. This is end-to-end request throughput, including TTFT/network overhead and
+excluding post-DONE tools. Header arrival (`send_streaming` close) and whole-turn duration are not substitutes.
+The common 500ms minimum still applies. Missing evidence keeps the unmeasured row and all valid counters.
+
+#### Live lifecycle and existing estimator
+
+Lifecycle is read separately from completed usage, including when exact metadata tables are absent. Project safe
+latest-turn session/turn/status/start/end/model/trace fields. Require a unique latest valid `chat_start_time` per
+session. A malformed row can only be ignored if its valid `created_at` second ends before that latest start;
+otherwise the session is conservatively idle. This prevents an unknown newer turn from reviving an older request.
+
+The shipped status enum includes `in_progress/completed/failed/canceled/paused/queuing/unknown`. Only `in_progress`
+with no positive end may produce activity; the other statuses are idle. Status alone is insufficient:
+
+- Exact turn-root association and a unique fresh supported Fetch with an open request, no DONE/EOF/error and no
+  unresolved concurrent request => `generating`, `inFlightStartMs = Fetch`.
+- A completed unique stream in an in-progress turn => `tools`; the next Fetch starts generation again.
+- A terminal/end-time update, closed `chat_turn_finish`, closed failed request, EOF without DONE, identity conflict,
+  malformed endpoint, future event or >300s stale request => idle. Closed earlier failed requests do not block a
+  valid later Fetch, but their Fetch <= close <= laterFetch ordering must be established.
+
+These phase updates feed section 6's existing estimator: recent same-agent, same-model, then same-source measured
+speed; no reference means no estimate. Completed requests within the latest `in_progress` turn can supply
+non-accounting reference responses before the turn finishes. Each requires unique client/server history identities,
+matching nonempty run ids, valid exact-usage semantics/counters, creation seconds within the current turn and
+observation time, and the same strict request timing proof above (`final=false`). Keep at most the latest ten
+within 30 minutes. Merge these by response identity with measured references, using the existing recent-agent /
+model / source selection rules. They never enter usage, request counts, completion events or measured history;
+the completed-turn reconciliation remains the sole accounting authority. Clear the transient pool when the turn
+becomes terminal, ambiguous, stale or idle. Without any previous measurement, the first request remains unknown;
+its verified completion can seed subsequent generation in the same turn.
+`liveEstimatedShare` marks estimates separately. Fetch never fabricates
+usage, request counts or measured history. File-independent staleness is reevaluated while polling.
+
+#### Storage, refresh and checks
+
+SQLCipher 4: authenticated 4096-byte pages, AES-256-CBC/SHA-512 HMAC and 80 reserved bytes. Bounded in-memory snapshots
+apply only checksum-valid committed WAL frames, reject active rollback journals/unstable reads and never write
+source or plaintext databases. Plain SQLite snapshots are accepted. Unsupported keys, schema or system SQLite
+`sqlite3_deserialize` capability produce a warning. See [native research](research/trae.md) and
+[third-party attribution](research/trae-third-party.txt).
+
+Log signatures refresh live/history timing without recounting. Surviving sessions replace their history aggregate
+when native rows change; deleted rows can reduce that aggregate, while wholly disappeared sessions retain stored
+history under the common history policy. Projected graph caches reuse stable files and evict rotated entries.
+
+After startup, native snapshots and log parsing run outside the live monitor's publishing loop. Only one Trae read
+may be pending per source; changes during that read are coalesced and detected on the next poll. The monitor commits
+the projected result and deduplication changes on its own queue, rejects results from replaced sessions, and keeps
+publishing other sources and aging stale activity while Trae is being read.
+
+Shared fixtures cover plain/encrypted/committed-WAL stores, 50 timing/accounting scenarios and 22 lifecycle scenarios.
+Both platform suites test real engine estimation, no-reference behavior, transitions, late metadata/logs, copied
+stores, stale state and persistence. The independent Python/OpenSSL reference checks accounting/timing and is part
+of `reference.py --check-fixtures`. No test fixture contains native conversation content.
 
 ## 5. Reading files
 

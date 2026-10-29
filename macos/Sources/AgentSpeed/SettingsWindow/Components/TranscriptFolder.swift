@@ -25,6 +25,7 @@ enum TranscriptFolder: CaseIterable {
     case openclaw
     case hermes
     case droid
+    case trae
 
     /// Every default location, in reading order.
     var defaultURLs: [URL] {
@@ -40,6 +41,7 @@ enum TranscriptFolder: CaseIterable {
         case .zcode: [LiveMonitor.defaultZcodeRoot]
         case .kimi: [LiveMonitor.defaultKimiRoot]
         case .grokBuild: [LiveMonitor.defaultGrokBuildRoot]
+        case .trae: LiveMonitor.defaultTraeRoots
         case .workbuddyAi: [LiveMonitor.defaultWorkBuddyAiDataFolder]
         case .pi: LiveMonitor.defaultPiRoots
         case .openclaw: LiveMonitor.defaultOpenclawRoots
@@ -63,6 +65,7 @@ enum TranscriptFolder: CaseIterable {
         case .zcode: "mac.settings.sources.chooseZcode"
         case .kimi: "mac.settings.sources.chooseKimi"
         case .grokBuild: "mac.settings.sources.chooseGrokBuild"
+        case .trae: "mac.settings.sources.chooseTrae"
         case .workbuddyAi: "mac.settings.sources.chooseWorkbuddyAi"
         case .pi: "mac.settings.sources.choosePi"
         case .openclaw: "mac.settings.sources.chooseOpenClaw"
@@ -85,6 +88,7 @@ enum TranscriptFolder: CaseIterable {
         case .zcode: "settings.sources.zcodeHint"
         case .kimi: "settings.sources.kimiHint"
         case .grokBuild: "settings.sources.grokBuildHint"
+        case .trae: "settings.sources.traeHint"
         case .workbuddyAi: "settings.sources.workbuddyAiHint"
         case .pi: "settings.sources.piHint"
         case .openclaw: "settings.sources.openclawHint"
@@ -107,6 +111,7 @@ enum TranscriptFolder: CaseIterable {
         case .zcode: settings.zcodeRoot
         case .kimi: settings.kimiRoot
         case .grokBuild: settings.grokBuildRoot
+        case .trae: settings.traeRoot
         case .workbuddyAi: settings.workbuddyAiRoot
         case .pi: settings.piRoot
         case .openclaw: settings.openclawRoot
@@ -137,7 +142,7 @@ enum TranscriptFolder: CaseIterable {
             return [LiveMonitor.defaultOmpRoot]
         case .pi:
             return [defaultURL]
-        case .antigravity:
+        case .antigravity, .trae:
             let found = defaultURLs.filter(isReadable)
             return found.isEmpty ? defaultURLs : found
         case .openclaw:
@@ -179,6 +184,7 @@ enum TranscriptFolder: CaseIterable {
         case .zcode: settings.zcodeRoot = value
         case .kimi: settings.kimiRoot = value
         case .grokBuild: settings.grokBuildRoot = value
+        case .trae: settings.traeRoot = value
         case .workbuddyAi: settings.workbuddyAiRoot = value
         case .pi: settings.piRoot = value
         case .openclaw: settings.openclawRoot = value
@@ -187,7 +193,7 @@ enum TranscriptFolder: CaseIterable {
         }
     }
 
-    private var replacesAutomaticSet: Bool { self == .omp || self == .antigravity || self == .pi || self == .openclaw }
+    private var replacesAutomaticSet: Bool { self == .omp || self == .antigravity || self == .pi || self == .openclaw || self == .trae }
 
     private func isDefaultLocation(_ url: URL) -> Bool {
         switch self {
@@ -195,7 +201,7 @@ enum TranscriptFolder: CaseIterable {
             Self.isSameFolder(LiveMonitor.workbuddyProjectsFolder(url), LiveMonitor.workbuddyProjectsFolder(defaultURL))
         case .droid:
             Self.isSameFolder(LiveMonitor.droidSessionsFolder(url), defaultURL)
-        case .codex, .claude, .dsh, .opencode, .gemini, .omp, .antigravity, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes:
+        case .codex, .claude, .dsh, .opencode, .gemini, .omp, .antigravity, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .trae:
             Self.isSameFolder(url, defaultURL)
         }
     }

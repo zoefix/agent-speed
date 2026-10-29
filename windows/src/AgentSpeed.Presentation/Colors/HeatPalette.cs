@@ -92,6 +92,7 @@ public static class HeatPalette
         SourceKind.OpenClaw => Rgba.FromHex("#DE2E1F"),
         SourceKind.Hermes => Rgba.FromHex("#B8860B"),
         SourceKind.Droid => Rgba.FromHex("#9E5F46"),
+        SourceKind.Trae => Rgba.FromHex("#40E0B0"),
         _ => Neutral,
     };
 

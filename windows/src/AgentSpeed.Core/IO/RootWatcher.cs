@@ -19,7 +19,7 @@ internal sealed class RootWatcher : IDisposable
         try
         {
             var database = naming is TranscriptNaming.OpenCodeDatabase or TranscriptNaming.AntigravityDatabase or TranscriptNaming.ZCodeDatabase
-                or TranscriptNaming.HermesLog;
+                or TranscriptNaming.HermesLog or TranscriptNaming.TraeDatabase;
             watcher = new FileSystemWatcher(root)
             {
                 IncludeSubdirectories = !database,
@@ -59,6 +59,7 @@ internal sealed class RootWatcher : IDisposable
         TranscriptNaming.OpenCodeDatabase => [OpenCode.OpenCodeDatabase.FileName, OpenCode.OpenCodeDatabase.FileName + "-wal"],
         TranscriptNaming.ZCodeDatabase => ["db.sqlite", "db.sqlite-wal"],
         TranscriptNaming.OpenClawDatabase => [OpenClaw.OpenClawPaths.DatabaseName, OpenClaw.OpenClawPaths.DatabaseName + "-wal"],
+        TranscriptNaming.TraeDatabase => ["database.db", "database.db-wal"],
         TranscriptNaming.KimiSession => ["wire.jsonl"],
         TranscriptNaming.GrokBuildSession => ["updates.jsonl", "summary.json"],
         TranscriptNaming.HermesLog => [Hermes.HermesPaths.LiveLogName + "*"],

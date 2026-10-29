@@ -1,0 +1,164 @@
+{
+  "version": 1,
+  "files": [
+    {
+      "path": "trae/plain/database.db",
+      "responses": [
+        {
+          "key": "trae:s-main:t-one",
+          "startMs": null,
+          "endMs": 1792497610000,
+          "input": 1200,
+          "output": 240,
+          "cachedInput": 400,
+          "cacheWriteInput": 100,
+          "cacheWrite1hInput": 0,
+          "reasoning": 40,
+          "model": "claude-sonnet-4-5",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-main:t-two",
+          "startMs": null,
+          "endMs": 1792497660000,
+          "input": 800,
+          "output": 100,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": null,
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-other:t-empty-output",
+          "startMs": null,
+          "endMs": 1792497680000,
+          "input": 200,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": "test-model",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        }
+      ]
+    },
+    {
+      "path": "trae/encrypted/database.db",
+      "responses": [
+        {
+          "key": "trae:s-main:t-one",
+          "startMs": null,
+          "endMs": 1792497610000,
+          "input": 1200,
+          "output": 240,
+          "cachedInput": 400,
+          "cacheWriteInput": 100,
+          "cacheWrite1hInput": 0,
+          "reasoning": 40,
+          "model": "claude-sonnet-4-5",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-main:t-two",
+          "startMs": null,
+          "endMs": 1792497660000,
+          "input": 800,
+          "output": 100,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": null,
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-other:t-empty-output",
+          "startMs": null,
+          "endMs": 1792497680000,
+          "input": 200,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": "test-model",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        }
+      ]
+    },
+    {
+      "path": "trae/wal/database.db",
+      "responses": [
+        {
+          "key": "trae:s-main:t-one",
+          "startMs": null,
+          "endMs": 1792497610000,
+          "input": 1200,
+          "output": 240,
+          "cachedInput": 400,
+          "cacheWriteInput": 100,
+          "cacheWrite1hInput": 0,
+          "reasoning": 40,
+          "model": "claude-sonnet-4-5",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-main:t-two",
+          "startMs": null,
+          "endMs": 1792497665000,
+          "input": 800,
+          "output": 180,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": null,
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "trae:s-other:t-empty-output",
+          "startMs": null,
+          "endMs": 1792497680000,
+          "input": 200,
+          "output": 0,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": "test-model",
+          "provider": null,
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        }
+      ]
+    }
+  ]
+}

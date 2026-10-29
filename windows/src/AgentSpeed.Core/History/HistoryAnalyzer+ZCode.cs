@@ -8,7 +8,7 @@ namespace AgentSpeed.Core.History;
 
 internal sealed partial class HistoryAnalyzer
 {
-    private sealed record PlannedZCodeSession(string Id, List<ParsedResponse> Responses, long Size, long Modified, StoredFile? Previous);
+    private sealed record PlannedZCodeSession(string Id, List<ParsedResponse> Responses, long Size, long Modified, StoredFile? Previous, SourceKind Source = SourceKind.ZCode);
 
     private void PlanZCode(Plan plan, SourceLocations locations, IReadOnlySet<SourceKind> enabled, bool zoneChanged, bool repricing,
         CancellationToken cancellationToken)
@@ -73,8 +73,8 @@ internal sealed partial class HistoryAnalyzer
 
             var entry = new StoredFile
             {
-                Id = session.Previous?.Id ?? 0, Path = session.Id, Family = "zcode", Size = session.Size, Modified = session.Modified,
-                Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, SourceKind.ZCode, labeler, Pricing),
+                Id = session.Previous?.Id ?? 0, Path = session.Id, Family = SourceNames.Of(session.Source), Size = session.Size, Modified = session.Modified,
+                Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, session.Source, labeler, Pricing),
             };
             _entries[session.Id] = entry;
             pending.Add((entry, ledger.FinishFile()));

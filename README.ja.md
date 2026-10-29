@@ -88,6 +88,16 @@ Agent Speed は、agent がすでにローカルに書き出している記録�
 | ZCode | `~/.zcode/cli/db/db.sqlite`（または `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
 | Kimi Code CLI（TypeScript v2） | `~/.kimi-code/sessions`（または `$KIMI_CODE_HOME/sessions`） |
 | Grok Build | `~/.grok/sessions`（または `$GROK_HOME/sessions`） |
+| Trae（使用量の一部のみ） | macOS `~/Library/Application Support/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}`、Windows `%APPDATA%/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}` 内の `ModularData/ai-agent/database.db`（旧 `ai-chat` も対応） |
+
+Trae の暗号化されたローカルデータベースを読み取り専用で扱い、平文コピーを保存しません。
+完了ターンの最終リクエストに、照合できた以前のリクエストの正確な使用量を重複なく追加します。
+**使用量と API 相当コストは不完全な場合があります。** 対応するログの HTTP 送信から `DONE` までを測定し、
+初回トークン待機を含め、後続ツールの実行時間を除きます。時間不明でも確かな使用量は集計します。
+生成中は既存の推定機能を使い、実測と区別します。実測の参考値がなければ速度を推定しません。
+macOS Trae CN の完了データで照合し、動作状態の遷移は合成イベントで検証しました。
+設定ではデータフォルダを指定できます。Windows はシステム SQLite のメモリ逆シリアル化対応が必要です。
+[Trae の制限](spec/research/trae.md)をご覧ください。
 
 Grok Build のターン別・モデル別バッチに保存されたトークン数、API 所要時間、実際の呼び出し回数を、既存の速度エンジンで計算します。サブエージェントの使用量は親に集約されるため一度だけ計上し、子の動作状態も表示します。個々の呼び出しのタイムラインは保存されないため、バッチ内の並列実行速度は復元できません。
 

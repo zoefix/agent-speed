@@ -563,5 +563,11 @@
     "zh-Hans": "选择 Factory Droid 的 .factory 文件夹或 sessions 文件夹",
     "en": "Choose Factory Droid's .factory folder or its sessions folder",
     "ja": "Factory Droid の .factory フォルダまたは sessions フォルダを選択"
+  },
+  "mac.settings.sources.chooseTrae": {
+    "zh-Hant": "選擇 Trae 資料資料夾",
+    "zh-Hans": "选择 Trae 数据文件夹",
+    "en": "Choose Trae Data Folder",
+    "ja": "Trae データフォルダを選択"
   }
 }

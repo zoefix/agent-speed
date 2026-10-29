@@ -39,6 +39,7 @@ internal sealed unsafe class SqliteConnection : IDisposable
 
     private readonly HashSet<SqliteStatement> _statements = [];
     private IntPtr _db;
+    private IntPtr _snapshot;
 
     private SqliteConnection(IntPtr db, string path)
     {
@@ -90,6 +91,31 @@ internal sealed unsafe class SqliteConnection : IDisposable
         SqliteNative.sqlite3_extended_result_codes(db, 1);
         SqliteNative.sqlite3_busy_timeout(db, busyTimeoutMs);
         return new SqliteConnection(db, path);
+    }
+
+    /// <summary>Queries an immutable in-memory snapshot; its bytes are never written to disk.</summary>
+    public static SqliteConnection FromSnapshot(byte[] bytes)
+    {
+        var connection = Open(":memory:", SqliteOpenMode.ReadWriteCreate);
+        try
+        {
+            connection._snapshot = (IntPtr)NativeMemory.Alloc((nuint)bytes.Length);
+            bytes.CopyTo(new Span<byte>((void*)connection._snapshot, bytes.Length));
+            var name = Utf8("main");
+            fixed (byte* schema = name)
+            {
+                var result = SqliteNative.sqlite3_deserialize(connection.Handle, schema,
+                    (byte*)connection._snapshot, bytes.Length, bytes.Length, 4); // SQLITE_DESERIALIZE_READONLY
+                if (result != SqliteNative.Ok) throw connection.Failure(result);
+            }
+
+            return connection;
+        }
+        catch
+        {
+            connection.Dispose();
+            throw;
+        }
     }
 
     /// <summary>Runs one or more statements that return no rows.</summary>
@@ -186,6 +212,11 @@ internal sealed unsafe class SqliteConnection : IDisposable
 
         SqliteNative.sqlite3_close_v2(_db);
         _db = IntPtr.Zero;
+        if (_snapshot != IntPtr.Zero)
+        {
+            NativeMemory.Free((void*)_snapshot);
+            _snapshot = IntPtr.Zero;
+        }
     }
 
     internal void Forget(SqliteStatement statement) => _statements.Remove(statement);

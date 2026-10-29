@@ -162,8 +162,7 @@ public sealed class LiveMonitorTests : IDisposable
         _temp.Combine("gemini-home", "antigravity-cli"),
         _temp.Combine("home", ".workbuddy"),
         _temp.Combine("home", ".workbuddy-ai"),
-        HermesRoot: _temp.Combine("home", ".hermes"),
-        DroidRoot: _temp.Combine("home", ".factory"));
+        ZCodeRoot: _temp.Combine("zcode"), KimiRoot: _temp.Combine("kimi"), GrokBuildRoot: _temp.Combine("grok"), TraeRoot: _temp.Combine("trae"), PiRoot: _temp.Combine("pi"), OpenClawRoot: _temp.Combine("openclaw"), HermesRoot: _temp.Combine(".hermes"), DroidRoot: _temp.Combine(".factory"));
 
     private sealed class HubProbe
     {

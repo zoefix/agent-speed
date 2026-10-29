@@ -125,6 +125,12 @@ enum TranscriptLocations {
         (TranscriptDiscovery.normalizedRoot(root) as NSString).deletingLastPathComponent
     }
 
+    /// Trae IDE and SOLO editions share a store format and one source id.
+    static var defaultTraeRoots: [URL] {
+        let support = home.appendingPathComponent("Library/Application Support", isDirectory: true)
+        return ["Trae", "Trae CN", "TRAE SOLO", "TRAE SOLO CN"].map { support.appendingPathComponent($0, isDirectory: true) }
+    }
+
     static var defaultZcodeRoot: URL {
         let base = environment("ZCODE_DATA_BASE_DIR").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? home
         return base.appendingPathComponent(".zcode/cli/db", isDirectory: true)
@@ -326,6 +332,10 @@ extension MonitorConfiguration {
     var readsClaude: Bool { reads(.claude) }
     var readsDsh: Bool { reads(.dsh) }
     var readsOpencode: Bool { enabledSources.contains(.opencode) }
+    var readsTrae: Bool { enabledSources.contains(.trae) }
+    var resolvedTraeRoots: [String] {
+        (traeRoot.map { [$0] } ?? TranscriptLocations.defaultTraeRoots).map { TranscriptDiscovery.normalizedRoot($0.path) }
+    }
     var readsZcode: Bool { enabledSources.contains(.zcode) }
     var resolvedZcodeRoot: String { TranscriptDiscovery.normalizedRoot((zcodeRoot ?? TranscriptLocations.defaultZcodeRoot).path) }
 
@@ -337,5 +347,6 @@ extension MonitorConfiguration {
             || resolvedZcodeRoot != other.resolvedZcodeRoot
             || resolvedOpenclawRoots != other.resolvedOpenclawRoots
             || resolvedHermesRoot != other.resolvedHermesRoot
+            || resolvedTraeRoots != other.resolvedTraeRoots
     }
 }

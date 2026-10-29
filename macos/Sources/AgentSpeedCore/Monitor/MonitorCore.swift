@@ -21,6 +21,8 @@ final class MonitorCore: @unchecked Sendable {
     private let queue = DispatchQueue(label: "app.agentspeed.monitor", qos: .utility)
     /// Whole-file reads (METRICS 5.3), one at a time, off the live loop.
     private let wholeFileQueue = DispatchQueue(label: "app.agentspeed.monitor.whole-file", qos: .utility)
+    private let traeQueue = DispatchQueue(label: "app.agentspeed.monitor.trae", qos: .utility)
+    private let traeReadHook: (@Sendable () -> Void)?
     /// Runs before each whole-file read on its queue; tests use it to make a read slow.
     private let wholeFileReadHook: (@Sendable (String) -> Void)?
     private let cancelled = OSAllocatedUnfairLock(initialState: false)
@@ -48,7 +50,8 @@ final class MonitorCore: @unchecked Sendable {
         subsets: Set<SourceSet> = [],
         pricing: PriceBook? = nil,
         rediscoveryInterval: DispatchTimeInterval = MonitorCore.rediscoveryInterval,
-        wholeFileReadHook: (@Sendable (String) -> Void)? = nil
+        wholeFileReadHook: (@Sendable (String) -> Void)? = nil,
+        traeReadHook: (@Sendable () -> Void)? = nil
     ) {
         self.configuration = configuration
         self.pricing = pricing
@@ -56,6 +59,7 @@ final class MonitorCore: @unchecked Sendable {
         rediscoveryEvery = rediscoveryInterval
         self.subsets = OSAllocatedUnfairLock(initialState: subsets)
         self.wholeFileReadHook = wholeFileReadHook
+        self.traeReadHook = traeReadHook
     }
 
     /// An abandoned core (its owner released it without `stop()`) still releases its timers and stream.
@@ -160,6 +164,7 @@ final class MonitorCore: @unchecked Sendable {
             nowMs: Clock.milliseconds(seededNow), todayStartMs: Self.todayStartMs(for: seededNow), emitsEvents: false,
             subsets: subsets.withLock { $0 }
         )
+        session.trae?.backgroundReads = { [weak self] job in self?.scheduleTraeRead(job) }
         isLive = true
         updateWatcher()
         timers = [
@@ -218,6 +223,24 @@ final class MonitorCore: @unchecked Sendable {
         if changed {
             observe(began)
             publish()
+        }
+    }
+
+    private func scheduleTraeRead(_ job: TraeSource.ReadJob) {
+        let hook = traeReadHook
+        traeQueue.async { [weak self] in
+            guard let self, !isCancelled else { return }
+            hook?()
+            guard !isCancelled else { return }
+            let began = Clock.monotonicMs()
+            let result = job.perform()
+            queue.async { [weak self] in
+                guard let self, !isCancelled, isLive, let session else { return }
+                if session.completeTraeRead(result) {
+                    observe(began)
+                    publish()
+                }
+            }
         }
     }
 

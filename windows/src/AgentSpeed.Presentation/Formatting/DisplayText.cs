@@ -73,6 +73,7 @@ public static class DisplayText
         SourceKind.OpenClaw => "source.openclaw",
         SourceKind.Hermes => "source.hermes",
         SourceKind.Droid => "source.droid",
+        SourceKind.Trae => "source.trae",
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
     };
 

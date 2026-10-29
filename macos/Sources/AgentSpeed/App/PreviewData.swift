@@ -236,7 +236,7 @@ enum PreviewData {
             switch source.kind {
             case .deepseek: source.available = false
             case .claudeDesktop: source.enabled = false
-            case .codex, .claudeCode, .opencode, .gemini, .omp, .antigravity, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .droid: return source
+            case .codex, .claudeCode, .opencode, .gemini, .omp, .antigravity, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .droid, .trae: return source
             }
             source.sessionCount = 0
             source.live = .zero
@@ -302,6 +302,7 @@ enum PreviewData {
         case .openclaw: 6
         case .hermes: 3
         case .droid: 2
+        case .trae: 1
         }
     }
 }

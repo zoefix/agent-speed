@@ -1,0 +1,245 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "before-first-completion",
+      "root": "trae/live-reference-before-first-completion",
+      "nowMs": 1792497605000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "next-request",
+      "root": "trae/live-reference-next-request",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 1,
+      "expectedLiveOutput": 30.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "tools",
+      "root": "trae/live-reference-tools",
+      "nowMs": 1792497610000,
+      "phase": "tools",
+      "expectedReferenceCount": 1,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "completed",
+      "root": "trae/live-reference-completed",
+      "nowMs": 1792497622000,
+      "phase": "idle",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 2,
+      "expectedOutput": 840
+    },
+    {
+      "name": "canceled",
+      "root": "trae/live-reference-canceled",
+      "nowMs": 1792497615000,
+      "phase": "idle",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "failed",
+      "root": "trae/live-reference-failed",
+      "nowMs": 1792497615000,
+      "phase": "idle",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "missing-metadata",
+      "root": "trae/live-reference-missing-metadata",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "invalid-usage",
+      "root": "trae/live-reference-invalid-usage",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "deleted-client",
+      "root": "trae/live-reference-deleted-client",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "deleted-server",
+      "root": "trae/live-reference-deleted-server",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "duplicate-client",
+      "root": "trae/live-reference-duplicate-client",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "duplicate-server",
+      "root": "trae/live-reference-duplicate-server",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "foreign-run",
+      "root": "trae/live-reference-foreign-run",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "missing-run-columns",
+      "root": "trae/live-reference-missing-run-columns",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "pre-turn-created",
+      "root": "trae/live-reference-pre-turn-created",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "future-created",
+      "root": "trae/live-reference-future-created",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "fractional-created",
+      "root": "trae/live-reference-fractional-created",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "wrong-trace",
+      "root": "trae/live-reference-wrong-trace",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "missing-done",
+      "root": "trae/live-reference-missing-done",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "missing-eof",
+      "root": "trae/live-reference-missing-eof",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "retry",
+      "root": "trae/live-reference-retry",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "request-error",
+      "root": "trae/live-reference-request-error",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "unclosed-call",
+      "root": "trae/live-reference-unclosed-call",
+      "nowMs": 1792497615000,
+      "phase": "generating",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    },
+    {
+      "name": "no-log",
+      "root": "trae/live-reference-no-log",
+      "nowMs": 1792497615000,
+      "phase": "idle",
+      "expectedReferenceCount": 0,
+      "expectedLiveOutput": 0.0,
+      "expectedRequests": 0,
+      "expectedOutput": 0
+    }
+  ]
+}

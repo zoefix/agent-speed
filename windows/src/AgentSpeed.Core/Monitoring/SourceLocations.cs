@@ -38,7 +38,8 @@ internal sealed record SourceLocations(
     bool CodexAutomatic = true,
     string HermesRoot = "",
     bool HermesChosen = false,
-    string DroidRoot = "")
+    string DroidRoot = "",
+    IReadOnlyList<string>? TraeStores = null)
 {
     public static SourceLocations Resolve(MonitorConfiguration configuration) => new(
         Normalize(configuration.CodexRoot ?? LiveMonitor.DefaultCodexRoot),
@@ -61,7 +62,8 @@ internal sealed record SourceLocations(
         CodexAutomatic: configuration.CodexRoot is null,
         HermesRoot: Normalize(configuration.HermesRoot ?? LiveMonitor.DefaultHermesRoot),
         HermesChosen: configuration.HermesRoot is not null,
-        DroidRoot: DroidRootOf(configuration.DroidRoot));
+        DroidRoot: DroidRootOf(configuration.DroidRoot),
+        TraeStores: NormalizeAll(Trae.TraePaths.Stores(configuration.TraeRoot)));
 
     /// <summary>The Factory Droid root for a setting: its <c>sessions</c> folder or the folder itself; null: the automatic root (METRICS 4.16).</summary>
     public static string DroidRootOf(string? setting) =>

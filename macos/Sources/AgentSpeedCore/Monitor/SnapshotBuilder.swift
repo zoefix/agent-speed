@@ -31,6 +31,9 @@ struct SnapshotContext: Sendable {
             } else if kind == .opencode {
                 let location = session.opencodeLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
+            } else if kind == .trae {
+                let location = session.traeLocation
+                sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
             } else if kind == .zcode {
                 let location = session.zcodeLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)

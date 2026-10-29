@@ -422,7 +422,7 @@ final class OpenClawSource {
     private func fileID(_ agentId: String) -> FileID {
         if let id = fileIDs[agentId] { return id }
         let id = nextFileID
-        nextFileID = nextFileID == -3 ? Self.firstFileID : nextFileID &+ 1
+        nextFileID = nextFileID == -4 ? Self.firstFileID : nextFileID &+ 1
         fileIDs[agentId] = id
         return id
     }

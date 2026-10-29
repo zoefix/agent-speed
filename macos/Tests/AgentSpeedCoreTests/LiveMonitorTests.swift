@@ -26,10 +26,16 @@ struct LiveMonitorTests {
             geminiRoot: directory.file("missing-gemini"),
             ompRoot: directory.file("missing-omp"),
             antigravityRoot: directory.file("missing-antigravity"),
+            workbuddyRoot: directory.file("missing-workbuddy"),
+            workbuddyAiRoot: directory.file("missing-workbuddy-ai"),
+            zcodeRoot: directory.file("missing-zcode"),
+            kimiRoot: directory.file("missing-kimi"),
+            grokBuildRoot: directory.file("missing-grok"),
             piRoot: directory.file("missing-pi"),
             openclawRoot: directory.file("missing-openclaw"),
             hermesRoot: directory.file("missing-hermes"),
-            droidRoot: directory.file("missing-droid")
+            droidRoot: directory.file("missing-droid"),
+            traeRoot: directory.file("missing-trae")
         ))
         monitor.start()
         defer { monitor.stop() }
@@ -179,6 +185,46 @@ struct LiveMonitorTests {
         gate.signal()
         #expect(await Self.waitUntil { !received.completions.isEmpty })
         #expect(received.completions.map(\.outputTokens) == [42])
+    }
+
+    @Test func aSlowTraeReadDoesNotFreezeOtherSourcesOrTheClock() async throws {
+        let directory = try TempDirectory()
+        try FileManager.default.createDirectory(at: directory.file("codex/sessions"), withIntermediateDirectories: true)
+        try directory.write("trae/database.db", bytes: Array(Data(contentsOf: Fixtures.root.appendingPathComponent("trae/plain/database.db"))))
+        let received = Received()
+        let mailbox = SnapshotMailbox { snapshot, events in
+            received.snapshots.append(snapshot)
+            for case .responseCompleted(let summary) in events { received.completions.append(summary) }
+        }
+        let gate = DispatchSemaphore(value: 0)
+        let readCount = OSAllocatedUnfairLock(initialState: 0)
+        let core = MonitorCore(configuration: MonitorConfiguration(enabledSources: [.codex, .trae],
+            codexRoot: directory.file("codex/sessions"), traeRoot: directory.file("trae")), mailbox: mailbox,
+            rediscoveryInterval: .milliseconds(300), traeReadHook: {
+                let count = readCount.withLock { value in value += 1; return value }
+                if count == 1 { _ = gate.wait(timeout: .now() + 10) }
+            })
+        core.start()
+        defer { gate.signal(); mailbox.close(); core.stop() }
+        #expect(await Self.waitUntil { received.snapshots.last?.state == .running })
+        try FileManager.default.setAttributes([.modificationDate: Date().addingTimeInterval(1)], ofItemAtPath: directory.file("trae/database.db").path)
+        #expect(await Self.waitUntil { readCount.withLock { $0 } == 1 })
+        let first = try #require(received.snapshots.last?.timestamp)
+        let count = received.snapshots.count
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        let now = Date()
+        try directory.write("codex/sessions/rollout-during-trae.jsonl", [
+            #"{"timestamp":"\#(formatter.string(from: now.addingTimeInterval(-3)))","type":"session_meta","payload":{"id":"t-during-trae","cwd":"/w/live"}}"#,
+            #"{"timestamp":"\#(formatter.string(from: now.addingTimeInterval(-2)))","type":"event_msg","payload":{"type":"user_message","message":"x"}}"#,
+            #"{"timestamp":"\#(formatter.string(from: now))","type":"token_usage_record","payload":{"response_id":"live-during-trae","usage":{"input_tokens":5,"output_tokens":42}}}"#,
+        ].joined(separator: "\n") + "\n")
+        #expect(await Self.waitUntil(timeout: 5) { received.completions.contains { $0.source == .codex && $0.outputTokens == 42 } })
+        #expect(await Self.waitUntil(timeout: 3) { received.snapshots.count >= count + 3 && (received.snapshots.last?.timestamp.timeIntervalSince(first) ?? 0) >= 1 })
+        #expect(readCount.withLock { $0 } == 1, "poll and rediscovery coalesce while Trae is busy")
+        #expect(received.snapshots.last?.sources.first { $0.kind == .codex }?.today.output == 42)
+        gate.signal()
+        #expect(await Self.waitUntil { received.snapshots.last?.timestamp.timeIntervalSince(first) ?? 0 > 2 })
     }
 
     /// Issue #26: FSEvents reports nothing for appends to a file its writer keeps open (Codex keeps a session's rollout

@@ -123,7 +123,8 @@ final class HistoryAnalyzer {
         var previous: HistoryDatabase.Entry?
     }
 
-    private struct PlannedZcodeSession {
+    private struct PlannedUsageSession {
+        var source: SourceKind = .zcode
         var path: String
         var records: [ResponseRecord]
         var modified: Int64
@@ -163,10 +164,12 @@ final class HistoryAnalyzer {
         var discovered = 0
         var opencode: (database: OpencodeDatabase, sessions: [PlannedSession], identity: String)?
         var opencodeIdentity: String?
-        var zcode: [PlannedZcodeSession] = []
+        var zcode: [PlannedUsageSession] = []
         var zcodeIdentity: String?
         var openclaw: [PlannedOpenClawDatabase] = []
         var hermes: [PlannedHermesFile] = []
+        var trae: [PlannedUsageSession] = []
+        var traeIdentities: [String: String] = [:]
 
         var openclawWindows: Int { openclaw.reduce(0) { $0 + $1.windows.count } }
 
@@ -210,6 +213,9 @@ final class HistoryAnalyzer {
         }
         if configuration.readsZcode {
             try planZcode(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
+        }
+        if configuration.readsTrae {
+            try planTrae(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
         }
         if configuration.readsOpenclaw {
             try planOpenclaw(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
@@ -347,8 +353,30 @@ final class HistoryAnalyzer {
         for session in batch.sessions.sorted(by: { $0.id < $1.id }) {
             let key = source.agentId(session.id)
             let records = (grouped[session.id] ?? []).compactMap(source.record)
-            plan.zcode.append(PlannedZcodeSession(path: key, records: records,
+            plan.zcode.append(PlannedUsageSession(path: key, records: records,
                                                   modified: max(stat.modifiedNs, wal?.modifiedNs ?? 0), previous: entries[key]))
+        }
+    }
+
+    private func planTrae(configuration: MonitorConfiguration, options: Options, zoneChanged: Bool,
+                          repricing: Bool, into plan: inout Plan) throws {
+        for path in Set(configuration.resolvedTraeRoots.map(TraeDatabase.databasePath)).sorted() {
+            guard let stat = FileStat.lstat(path), stat.isRegularFile else { continue }
+            plan.discovered += 1
+            let signature = TraeSource.signature(path)
+            let identity = signature.map { value in
+                value.map { "\($0.identity.device):\($0.identity.inode):\($0.size):\($0.modifiedNs)" } ?? "-"
+            }.joined(separator: "|") + "|v\(options.analysisVersion)|trae-v\(TraeDatabase.analysisRevision)"
+            let meta = "trae:" + path
+            let reprices = repricing && entries.values.contains { $0.family == "trae" && $0.hasUnpriced }
+            if !zoneChanged, !reprices, try database.meta(meta) == identity { continue }
+            guard let source = try? TraeDatabase(path: path), let rows = try? source.read() else { continue }
+            plan.traeIdentities[meta] = identity
+            let grouped = Dictionary(grouping: rows.map(\.record), by: \.agentId)
+            for agent in grouped.keys.sorted() {
+                plan.trae.append(PlannedUsageSession(source: .trae, path: agent, records: grouped[agent] ?? [],
+                    modified: signature.compactMap { $0?.modifiedNs }.max() ?? stat.modifiedNs, previous: entries[agent]))
+            }
         }
     }
 
@@ -419,11 +447,11 @@ final class HistoryAnalyzer {
         report.filesDiscovered = plan.discovered
         let sessions = plan.opencode?.sessions ?? []
         var state = Progress(filesTotal: plan.files.count + sessions.count + plan.zcode.count + plan.openclawWindows
-                                + plan.hermes.count, bytesTotal: plan.bytes)
+                                + plan.hermes.count + plan.trae.count, bytesTotal: plan.bytes)
         progress(state)
         func elapsedMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
 
-        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty {
+        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty && plan.trae.isEmpty {
             try finish(plan: plan, zone: zone, priceVersion: priceVersion)
             report.durationMs = elapsedMs()
             return report
@@ -431,7 +459,7 @@ final class HistoryAnalyzer {
 
         var deduper = Deduper.hashed()
         let replaced = Set(plan.files.compactMap(\.previous?.id) + sessions.compactMap(\.previous?.id) + plan.zcode.compactMap(\.previous?.id)
-            + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id))
+            + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id) + plan.trae.compactMap(\.previous?.id))
         try database.loadKeys(excluding: replaced, into: &deduper)
         var labeler = DayLabeler(timeZone: options.timeZone)
         var pending: [(path: String, entry: HistoryDatabase.Entry, keys: [UInt64])] = []
@@ -569,13 +597,13 @@ final class HistoryAnalyzer {
         }
 
         if !report.cancelled {
-            for session in plan.zcode {
+            for session in plan.zcode + plan.trae {
                 if isCancelled() { report.cancelled = true; break }
-                let records = session.records.filter { deduper.claim($0.key, for: TranscriptSession.zcodeFileID) != .otherFile }
+                let records = session.records.filter { deduper.claim($0.key, for: session.source == .trae ? TranscriptSession.traeFileID : TranscriptSession.zcodeFileID) != .otherFile }
                 let keys = deduper.finishFile()
-                let entry = HistoryDatabase.Entry(id: session.previous?.id, family: "zcode", size: Int64(records.count),
+                let entry = HistoryDatabase.Entry(id: session.previous?.id, family: session.source.rawValue, size: Int64(records.count),
                                                   modified: session.modified, version: options.analysisVersion,
-                                                  days: DayAggregate.contributions(of: records, source: .zcode, labeler: &labeler, pricing: pricing))
+                                                  days: DayAggregate.contributions(of: records, source: session.source, labeler: &labeler, pricing: pricing))
                 entries[session.path] = entry
                 pending.append((session.path, entry, keys))
                 report.sessionsAnalyzed += 1
@@ -698,6 +726,7 @@ final class HistoryAnalyzer {
         if opencodeComplete, let identity = plan.opencodeIdentity { try database.setMeta("opencode", identity) }
         if let identity = plan.zcodeIdentity { try database.setMeta("zcode", identity) }
         for planned in plan.openclaw { try database.setMeta(Self.openclawMetaPrefix + planned.path, planned.identity) }
+        for (key, identity) in plan.traeIdentities { try database.setMeta(key, identity) }
     }
 
     // MARK: - Results

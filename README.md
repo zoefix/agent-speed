@@ -93,6 +93,16 @@ Agent Speed reads the transcripts your agents already write on your disk:
 | ZCode | `~/.zcode/cli/db/db.sqlite` (or `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`) |
 | Kimi Code CLI (TypeScript v2) | `~/.kimi-code/sessions` (or `$KIMI_CODE_HOME/sessions`) |
 | Grok Build | `~/.grok/sessions` (or `$GROK_HOME/sessions`) |
+| Trae (partial usage only) | macOS `~/Library/Application Support/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}`; Windows `%APPDATA%/{Trae,Trae CN,TRAE SOLO,TRAE SOLO CN}` — `ModularData/ai-agent/database.db`, or the legacy `ai-chat` database |
+
+Trae support reads its encrypted local database without writing plaintext copies. It counts completed turns' final
+requests and adds earlier exact per-request usage when the final request reconciles, without counting it twice.
+**Usage and API-equivalent costs remain incomplete.** Retained request logs can provide HTTP-send-to-`DONE` TPS,
+including first-token latency and excluding subsequent tools. Valid usage still counts when timing is unavailable.
+Fresh request lifecycle events drive the same marked in-flight estimator as other sources; no measured reference
+means no estimated speed. Settings allow a custom data folder and show the partial-history limitation.
+Native completed data was checked on macOS Trae CN; live transitions were tested with synthetic event sequences.
+Windows requires system SQLite deserialization support. See [Trae's data limits](spec/research/trae.md).
 
 Grok Build supplies native per-turn model batches: token counts, API duration and the actual number of model calls enter the same speed engine. Child usage is already included in its parent and is counted once; child activity remains visible. Its individual-call timeline is not stored, so intra-batch concurrency cannot be reconstructed.
 

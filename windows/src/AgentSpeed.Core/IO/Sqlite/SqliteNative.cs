@@ -93,6 +93,9 @@ internal static unsafe partial class SqliteNative
     public static partial int sqlite3_open_v2(byte* filename, out IntPtr db, int flags, IntPtr vfs);
 
     [LibraryImport(Library)]
+    public static partial int sqlite3_deserialize(IntPtr db, byte* schema, byte* data, long size, long capacity, uint flags);
+
+    [LibraryImport(Library)]
     public static partial int sqlite3_close_v2(IntPtr db);
 
     [LibraryImport(Library)]

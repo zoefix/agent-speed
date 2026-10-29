@@ -202,7 +202,26 @@ internal sealed class SpeedEngine
             ? b.Response.EndMs.CompareTo(a.Response.EndMs)
             : string.CompareOrdinal(a.Response.Key, b.Response.Key));
 
-        var recent = RecentSpeeds(valid, nowMs);
+        // Keep reference-only samples out of measured live tokens, history, totals and completion events.
+        // Committed responses win when the same native history key is already present.
+        var references = new List<Stored>(valid);
+        var referenceKeys = _responses.Keys.ToHashSet(StringComparer.Ordinal);
+        foreach (var agent in _agents.Values)
+        {
+            if (agent.Phase == AgentPhase.Idle || agent.LastLineMs is not { } last
+                || last > nowMs || nowMs - last > StaleMs) continue;
+            foreach (var response in agent.ReferenceResponses)
+            {
+                if (response.AgentId != agent.Id || response.Source != agent.Source || !response.Final
+                    || response.EndMs > nowMs || response.EndMs < nowMs - FallbackWindowMs
+                    || !referenceKeys.Add(response.Key)) continue;
+                var stored = new Stored(_pricing is null ? response : response with { CostMicroUsd = Price(response) });
+                if (stored.Valid) references.Add(stored);
+            }
+        }
+        references.Sort(static (a, b) => b.Response.EndMs != a.Response.EndMs
+            ? b.Response.EndMs.CompareTo(a.Response.EndMs) : string.CompareOrdinal(a.Response.Key, b.Response.Key));
+        var recent = RecentSpeeds(references, nowMs);
         var estimated = new Accumulator(SourceCount);
         var estimates = new List<(long StartMs, long EndMs, SpeedPair Speed)>();
 
@@ -225,7 +244,7 @@ internal sealed class SpeedEngine
             var owner = _agents.TryGetValue(response.AgentId, out var known)
                 ? known
                 : new AgentInfo(response.AgentId, response.Source, null, response.Model, false, AgentPhase.Idle, null, null);
-            SpeedPair? speed = recent.TryGetValue(owner.Id, out var ownSpeed) ? ownSpeed : Fallback(valid, nowMs, owner);
+            SpeedPair? speed = recent.TryGetValue(owner.Id, out var ownSpeed) ? ownSpeed : Fallback(references, nowMs, owner);
             if (speed is not { } reference)
             {
                 continue;
@@ -244,7 +263,7 @@ internal sealed class SpeedEngine
                 continue;
             }
 
-            SpeedPair? speed = recent.TryGetValue(agent.Id, out var own) ? own : Fallback(valid, nowMs, agent);
+            SpeedPair? speed = recent.TryGetValue(agent.Id, out var own) ? own : Fallback(references, nowMs, agent);
             if (speed is not { } estimate)
             {
                 continue;

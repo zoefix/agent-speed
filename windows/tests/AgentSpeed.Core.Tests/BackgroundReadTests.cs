@@ -63,8 +63,8 @@ public sealed class BackgroundReadTests : IDisposable
         using var monitor = new LiveMonitor(hub, new MonitorConfiguration(
             new HashSet<SourceKind>(Enum.GetValues<SourceKind>()), CodexRoot, ClaudeRoot, _temp.Combine("dsh"),
             _temp.Combine("opencode"), _temp.Combine("gemini", "tmp"), _temp.Combine("omp", "sessions"), _temp.Combine("antigravity-cli"),
-            _temp.Combine(".workbuddy"), _temp.Combine(".workbuddy-ai"), HermesRoot: _temp.Combine(".hermes"),
-            DroidRoot: _temp.Combine(".factory")))
+            _temp.Combine(".workbuddy"), _temp.Combine(".workbuddy-ai"),
+            ZCodeRoot: _temp.Combine("zcode"), KimiRoot: _temp.Combine("kimi"), GrokBuildRoot: _temp.Combine("grok"), TraeRoot: _temp.Combine("trae"), PiRoot: _temp.Combine("pi"), OpenClawRoot: _temp.Combine("openclaw"), HermesRoot: _temp.Combine(".hermes"), DroidRoot: _temp.Combine(".factory")))
         {
             BeforeBackgroundRead = _ => gate.Wait(TimeSpan.FromSeconds(20)),
         };

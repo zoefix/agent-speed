@@ -110,7 +110,7 @@ struct SpeedEngine: Sendable {
         let timed = recentTimedResponses(nowMs: nowMs)
         let measured = timed.filter(\.record.isFinal)
         let unmeasured = timed.filter { !$0.record.isFinal }
-        let references = SpeedReferences(timed: measured, nowMs: nowMs)
+        let references = SpeedReferences(timed: referenceResponses(measured: measured, nowMs: nowMs), nowMs: nowMs)
         let window = LiveWindow(
             nowMs: nowMs, measured: measured, unmeasured: unmeasured, agents: agents,
             latestEnds: latestEndsByAgent(), references: references, providers: agentProviders
@@ -310,6 +310,26 @@ struct SpeedEngine: Sendable {
             ends[record.agentId] = max(ends[record.agentId] ?? record.endMs, record.endMs)
         }
         return ends
+    }
+
+    /// Some sources persist turn totals only after tools finish. Independently completed model calls may seed
+    /// estimates sooner, without inventing usage, completion events, measured history, or measured peaks.
+    private mutating func referenceResponses(measured: [TimedResponse], nowMs: Int64) -> [TimedResponse] {
+        var records = Dictionary(uniqueKeysWithValues: measured.map { ($0.record.key, $0) })
+        for agent in agents.values where agent.phase != .idle {
+            guard let lastLine = agent.lastLineMs, lastLine <= nowMs, nowMs - lastLine <= Self.staleMs else { continue }
+            for var record in agent.referenceResponses where record.agentId == agent.id && record.source == agent.source
+                && record.endMs <= nowMs && record.endMs >= nowMs - Self.fallbackWindowMs
+                && record.isFinal && responses[record.key] == nil && records[record.key] == nil {
+                if let pricing, DayLabeler.hasDay(record.endMs) {
+                    record.costMicroUsd = pricing.cost(of: record, day: dayLabeler.label(forMs: record.endMs))
+                }
+                if let timed = TimedResponse(record) { records[record.key] = timed }
+            }
+        }
+        return records.values.sorted {
+            $0.endMs != $1.endMs ? $0.endMs > $1.endMs : $0.record.key < $1.record.key
+        }
     }
 
     /// Valid responses ending within the retention window, most recent first.

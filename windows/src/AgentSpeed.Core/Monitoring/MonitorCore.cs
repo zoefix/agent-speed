@@ -113,6 +113,7 @@ internal sealed partial class MonitorCore : IDisposable
         InitializeZCode(locations);
         InitializeOpenClaw(locations);
         InitializeHermes(locations, zone);
+        InitializeTrae(locations);
         OpenCodeRootPath = locations.OpenCodeRoot;
         _ompAutomatic = locations.OmpAutomatic;
         _piAutomatic = locations.PiAutomatic;
@@ -140,7 +141,7 @@ internal sealed partial class MonitorCore : IDisposable
     internal OpenCodeSource? OpenCode => _openCode;
 
     /// <summary>
-    /// While running, whole-file reads (<c>.jsonl.zst</c>, legacy Gemini <c>.json</c>) happen on the pool and are applied
+    /// While running, whole-file reads (<c>.jsonl.zst</c>, legacy Gemini <c>.json</c>, Trae stores and logs) happen on the pool and are applied
     /// later by <see cref="ApplyCompletedReads"/>, so the live loop never waits for them (METRICS 5.3).
     /// </summary>
     public bool ReadWholeFilesInBackground { get; set; }
@@ -151,7 +152,7 @@ internal sealed partial class MonitorCore : IDisposable
     /// <summary>Runs on the pool thread right before a background read (tests use it to make a read slow).</summary>
     internal Action<string>? BeforeBackgroundRead { get; set; }
 
-    public int PendingReadCount => _wholeReads.Count;
+    public int PendingReadCount => _wholeReads.Count + _traeReads.Count;
 
     /// <summary>The live clock for live reporting's counting rule (METRICS 11.4); tests replace it.</summary>
     internal Func<long> Clock { get; set; } = static () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
@@ -175,10 +176,10 @@ internal sealed partial class MonitorCore : IDisposable
     public IEnumerable<SourceRoot> WatchRoots => (_zcodeRoot is { } zcode ? _roots.Append(zcode) : _roots)
         .Concat(OpenCodeRoot is { } openCode ? [openCode] : [])
         .Concat(_openClawWatchRoots)
-        .Concat(_hermesWatchRoots);
+        .Concat(_hermesWatchRoots).Concat(_traeRoots);
 
     public bool AnyEnabledRootAvailable => _roots.Any(r => r.Enabled && r.Available) || OpenCodeRoot?.Available == true
-        || _zcodeRoot?.Available == true || _openClaw?.Available == true || _hermes?.Available == true;
+        || _zcodeRoot?.Available == true || _openClaw?.Available == true || _hermes?.Available == true || _traeRoots.Any(root => root.Available);
 
     public int TrackedFileCount => _files.Count;
 
@@ -193,6 +194,7 @@ internal sealed partial class MonitorCore : IDisposable
         RefreshZCodeAvailability();
         RefreshOpenClawWatchRoots();
         RefreshHermesWatchRoots();
+        RefreshTraeAvailability();
         foreach (var root in _roots)
         {
             root.Available = SafeDirectoryExists(root.DetectionPath);
@@ -207,11 +209,11 @@ internal sealed partial class MonitorCore : IDisposable
     public void Dispose()
     {
         _backgroundStop.Cancel();
-        if (_wholeReads.Count > 0)
+        if (PendingReadCount > 0)
         {
             try
             {
-                Task.WaitAll([.. _wholeReads.Values.Select(r => r.Task)], TimeSpan.FromSeconds(5));
+                Task.WaitAll([.. _wholeReads.Values.Select(r => (Task)r.Task), .. _traeReads.Values.Select(r => r.Task)], TimeSpan.FromSeconds(5));
             }
             catch (AggregateException)
             {
@@ -219,6 +221,7 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         _wholeReads.Clear();
+        _traeReads.Clear();
         _openCode?.Dispose();
         foreach (var tracked in _files.Values)
         {
@@ -231,12 +234,12 @@ internal sealed partial class MonitorCore : IDisposable
     /// <summary>Applies whole-file reads that finished in the background, each in one step; true when anything changed.</summary>
     public bool ApplyCompletedReads()
     {
+        var changed = ApplyCompletedTraeReads();
         if (_wholeReads.Count == 0)
         {
-            return false;
+            return changed;
         }
 
-        var changed = false;
         foreach (var (tracked, read) in _wholeReads.Where(r => r.Value.Task.IsCompleted).ToList())
         {
             _wholeReads.Remove(tracked);
@@ -357,6 +360,7 @@ internal sealed partial class MonitorCore : IDisposable
         SeedZCode(todayStartMs);
         SeedOpenClaw(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         SeedHermes(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
+        SeedTrae(todayStartMs);
         return new SeedReport(stopwatch.ElapsedMilliseconds, discovered, filesRead, bytesRead, _responsesSeen);
     }
 
@@ -375,6 +379,7 @@ internal sealed partial class MonitorCore : IDisposable
         var openClawChanged = false;
         var openClawNew = false;
         var hermesChanged = false;
+        var traeChanged = false;
         foreach (var incoming in paths)
         {
             var path = incoming;
@@ -387,6 +392,11 @@ internal sealed partial class MonitorCore : IDisposable
                 {
                     path = updates;
                 }
+            }
+            if (_trae.Any(source => source.IsWatchedPath(path)))
+            {
+                traeChanged = true;
+                continue;
             }
             if (_zcode?.IsWatchedPath(path) == true)
             {
@@ -438,6 +448,8 @@ internal sealed partial class MonitorCore : IDisposable
             }
         }
 
+        if (traeChanged && _traeSeeded) changed |= RefreshTrae();
+
         if (zcodeChanged && _zcodeSeeded)
         {
             changed |= RefreshZCode();
@@ -475,6 +487,7 @@ internal sealed partial class MonitorCore : IDisposable
         changed |= _zcodeSeeded && RefreshZCode();
         changed |= RefreshOpenClaw(discover: false);
         changed |= RefreshHermes(discover: false);
+        changed |= _traeSeeded && RefreshTrae();
         _connections.CloseIdle();
         List<TrackedFile>? due = null;
         foreach (var tracked in _files.Values)
@@ -526,6 +539,7 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         RefreshZCodeAvailability();
+        RefreshTraeAvailability();
         if (_zcodeSeeded)
         {
             changed |= RefreshZCode();
@@ -536,6 +550,7 @@ internal sealed partial class MonitorCore : IDisposable
         {
             return changed;
         }
+        if (_traeSeeded) changed |= RefreshTrae();
 
         AddNewOmpRoots();
         AddNewCodexHomeRoots();
@@ -631,6 +646,8 @@ internal sealed partial class MonitorCore : IDisposable
             return _hermes?.ActiveSessionCount(todayStartMs) ?? 0;
         }
 
+        if (kind == SourceKind.Trae) return _trae.Sum(source => source.ActiveSessionCount(todayStartMs));
+
         var mainOnly = WorkBuddyPaths.IsWorkBuddy(kind) || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid;
         var count = 0;
         foreach (var tracked in _files.Values)
@@ -648,7 +665,7 @@ internal sealed partial class MonitorCore : IDisposable
     public IReadOnlyList<MonitorWarning> Warnings(int unfinalizedToday = 0)
     {
         var warnings = new List<MonitorWarning>();
-        if (_partialHistory)
+        if (PartialHistory)
         {
             warnings.Add(new MonitorWarning.PartialHistory());
         }
@@ -669,6 +686,8 @@ internal sealed partial class MonitorCore : IDisposable
         {
             warnings.Add(new MonitorWarning.UnfinalizedUsage(unfinalizedToday));
         }
+
+        if (_trae.Any(source => source.Unsupported)) warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.Trae));
 
         if (_zcode?.Unsupported == true)
         {
@@ -701,9 +720,9 @@ internal sealed partial class MonitorCore : IDisposable
 
     public int UnreadableFileCount =>
         _files.Values.Count(f => f.Unreadable) + (_openCode?.Status == OpenCodeStatus.Unreadable ? 1 : 0) + (_zcode?.Unreadable == true ? 1 : 0)
-        + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0);
+        + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0) + _trae.Count(source => source.Unreadable);
 
-    public bool PartialHistory => _partialHistory;
+    public bool PartialHistory => _partialHistory || _trae.Any(source => source.PartialHistory);
 
     /// <param name="subsets">Source sets whose measured peak today the snapshot reports in <see cref="SpeedSnapshot.SubsetPeaks"/>.</param>
     public (SpeedSnapshot Snapshot, IReadOnlyList<SpeedEvent> Events) BuildSnapshot(
@@ -825,7 +844,13 @@ internal sealed partial class MonitorCore : IDisposable
         var enabled = _enabled.Contains(kind);
         string path;
         bool available, rootEnabled;
-        if (kind == SourceKind.ZCode)
+        if (kind == SourceKind.Trae)
+        {
+            path = string.Join(Environment.NewLine, _traeStores);
+            available = _traeStores.Any(store => File.Exists(Trae.TraePaths.DatabasePath(store)));
+            rootEnabled = _trae.Count > 0;
+        }
+        else if (kind == SourceKind.ZCode)
         {
             path = _zcodeRootPath;
             available = _zcodeRoot?.Available ?? File.Exists(ZCode.ZCodeDatabase.DatabasePath(_zcodeRootPath));

@@ -58,7 +58,7 @@ Mode changes affect their native scope and time, not earlier responses. Upserts 
   routing facts. A synthetic compatibility `service_tier:"standard"` is not served evidence.
 - Antigravity: Planning/Fast is a workflow dimension only when its actual native field is known. Turbo permissions,
   animation speed and effort are excluded. Unknown protobuf tier semantics remain unclassified.
-- Gemini CLI, Grok Build: expose the common unknown state until an explicit supported native field is present;
+- Gemini CLI, Grok Build, Trae: expose the common unknown state until an explicit supported native field is present;
   a provider API's capability alone is not evidence that its harness selected it.
 - DSH: `request/header` `data.header.config.reasoningEffort` is the effort the harness sent with that request (see
   *Reasoning effort and speed*). Observed on DeepSeek Harness 0.2.1 (Windows, 2026-10-25): `max`; headers of older

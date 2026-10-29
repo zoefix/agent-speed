@@ -187,6 +187,7 @@ public sealed record AppSettings
     public bool HermesEnabled { get; init; } = true;
 
     public bool DroidEnabled { get; init; } = true;
+    public bool TraeEnabled { get; init; } = true;
 
     /// <summary>Null uses the default Codex sessions folder.</summary>
     public string? CodexRoot { get; init; }
@@ -232,6 +233,7 @@ public sealed record AppSettings
 
     /// <summary>The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder; null uses <c>~/.factory/sessions</c>.</summary>
     public string? DroidRoot { get; init; }
+    public string? TraeRoot { get; init; }
 
     public int ChartSeconds { get; init; } = 120;
 
@@ -305,6 +307,7 @@ public sealed record AppSettings
         SourceKind.OpenClaw => OpenClawEnabled,
         SourceKind.Hermes => HermesEnabled,
         SourceKind.Droid => DroidEnabled,
+        SourceKind.Trae => TraeEnabled,
         _ => false,
     };
 
@@ -342,6 +345,7 @@ public sealed record AppSettings
         SourceKind.OpenClaw => this with { OpenClawEnabled = enabled },
         SourceKind.Hermes => this with { HermesEnabled = enabled },
         SourceKind.Droid => this with { DroidEnabled = enabled },
+        SourceKind.Trae => this with { TraeEnabled = enabled },
         _ => this,
     };
 
@@ -351,7 +355,7 @@ public sealed record AppSettings
         return new MonitorConfiguration(enabled, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, OmpRoot, AntigravityRoot,
             WorkBuddyRoot: WorkBuddyRoot, WorkBuddyAiRoot: WorkBuddyAiRoot,
             ZCodeRoot: ZCodeRoot, KimiRoot: KimiRoot, GrokBuildRoot: GrokBuildRoot, PiRoot: PiRoot,
-            OpenClawRoot: OpenClawRoot, HermesRoot: HermesRoot, DroidRoot: DroidRoot);
+            OpenClawRoot: OpenClawRoot, HermesRoot: HermesRoot, DroidRoot: DroidRoot, TraeRoot: TraeRoot);
     }
 
     /// <summary>The master switch; turning it on while every orb is individually hidden makes them all visible.</summary>
@@ -405,6 +409,7 @@ public sealed record AppSettings
         OpenClawRoot = CleanPath(OpenClawRoot),
         HermesRoot = CleanPath(HermesRoot),
         DroidRoot = CleanPath(DroidRoot),
+        TraeRoot = CleanPath(TraeRoot),
         HistoryWindow = WindowFrame.ValidHistory(HistoryWindow),
         HistoryModeKind = HistoryModeKind == ExecutionModeKind.Speed ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
         HistoryTaskPair = HistoryTaskPair is { IsValid: true } pair ? pair : null,

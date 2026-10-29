@@ -6305,5 +6305,17 @@
     "zh-Hant": "裝置管理",
     "zh-Hans": "设备管理",
     "ja": "デバイス管理"
+  },
+  "source.trae": {
+    "zh-Hant": "Trae",
+    "zh-Hans": "Trae",
+    "en": "Trae",
+    "ja": "Trae"
+  },
+  "settings.sources.traeHint": {
+    "zh-Hant": "讀取 Trae、中國版與 SOLO 的本機資料。統計已完成回合，並以核實的逐請求用量補充；歷史仍可能不完整。請求日誌對應後顯示實測速度，生成中依近期實測估算。可選擇應用程式資料資料夾。",
+    "zh-Hans": "读取 Trae、中国版与 SOLO 的本地数据。统计已完成回合，并以核实的逐请求用量补充；历史仍可能不完整。请求日志对应后显示实测速度，生成中按近期实测估算。可选择应用数据文件夹。",
+    "en": "Reads local Trae, China and SOLO data. Counts completed turns and adds verified per-request usage; history may be incomplete. Matched request logs provide measured speed; in-flight speed uses recent measurements. Choose the application data folder.",
+    "ja": "中国版と SOLO を含む Trae のローカルデータを読み取ります。完了ターンに検証済みの各リクエスト使用量を補い、履歴は不完全な場合があります。ログが一致した応答は実測し、生成中は最近の実測値から推定します。"
   }
 }

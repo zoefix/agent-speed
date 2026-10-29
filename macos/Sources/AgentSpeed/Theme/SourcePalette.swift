@@ -21,6 +21,7 @@ extension SourceKind {
         case .openclaw: RGBColor(hex: 0xDE2E1F)
         case .hermes: RGBColor(hex: 0xB8860B)
         case .droid: RGBColor(hex: 0x9E5F46)
+        case .trae: RGBColor(hex: 0x40E0B0)
         }
     }
 

@@ -370,6 +370,7 @@ internal sealed partial class HistoryAnalyzer
 
         PlanZCode(plan, locations, enabled, zoneChanged, repricing, cancellationToken);
         PlanOpenClaw(plan, locations, enabled, zoneChanged, repricing);
+        PlanTrae(plan, locations, enabled, zoneChanged, repricing, cancellationToken);
         return plan;
     }
 

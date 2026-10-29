@@ -56,6 +56,7 @@ public static class HistoryCsv
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
+        SourceKind.Trae => "trae",
         _ => "unknown",
     };
 

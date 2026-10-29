@@ -1,0 +1,335 @@
+{
+  "version": 1,
+  "cases": [
+    {
+      "name": "generating",
+      "root": "trae/activity-generating",
+      "database": "trae/activity-generating/ModularData/ai-agent/database.db",
+      "log": "trae/activity-generating/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "generating",
+          "inFlightStartMs": 1792497621100,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "tools",
+      "root": "trae/activity-tools",
+      "database": "trae/activity-tools/ModularData/ai-agent/database.db",
+      "log": "trae/activity-tools/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497624000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "tools",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "next-fetch",
+      "root": "trae/activity-next-fetch",
+      "database": "trae/activity-next-fetch/ModularData/ai-agent/database.db",
+      "log": "trae/activity-next-fetch/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497625000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "generating",
+          "inFlightStartMs": 1792497624200,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "completed",
+      "root": "trae/activity-completed",
+      "database": "trae/activity-completed/ModularData/ai-agent/database.db",
+      "log": "trae/activity-completed/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "canceled",
+      "root": "trae/activity-canceled",
+      "database": "trae/activity-canceled/ModularData/ai-agent/database.db",
+      "log": "trae/activity-canceled/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "paused",
+      "root": "trae/activity-paused",
+      "database": "trae/activity-paused/ModularData/ai-agent/database.db",
+      "log": "trae/activity-paused/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "queuing",
+      "root": "trae/activity-queuing",
+      "database": "trae/activity-queuing/ModularData/ai-agent/database.db",
+      "log": "trae/activity-queuing/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "unknown-status",
+      "root": "trae/activity-unknown-status",
+      "database": "trae/activity-unknown-status/ModularData/ai-agent/database.db",
+      "log": "trae/activity-unknown-status/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "positive-end",
+      "root": "trae/activity-positive-end",
+      "database": "trae/activity-positive-end/ModularData/ai-agent/database.db",
+      "log": "trae/activity-positive-end/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "finished-span",
+      "root": "trae/activity-finished-span",
+      "database": "trae/activity-finished-span/ModularData/ai-agent/database.db",
+      "log": "trae/activity-finished-span/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497624000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "stale",
+      "root": "trae/activity-stale",
+      "database": "trae/activity-stale/ModularData/ai-agent/database.db",
+      "log": "trae/activity-stale/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792498000000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "future",
+      "root": "trae/activity-future",
+      "database": "trae/activity-future/ModularData/ai-agent/database.db",
+      "log": "trae/activity-future/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497621050,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "wrong-trace",
+      "root": "trae/activity-wrong-trace",
+      "database": "trae/activity-wrong-trace/ModularData/ai-agent/database.db",
+      "log": "trae/activity-wrong-trace/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "missing-root",
+      "root": "trae/activity-missing-root",
+      "database": "trae/activity-missing-root/ModularData/ai-agent/database.db",
+      "log": "trae/activity-missing-root/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "closed-failed",
+      "root": "trae/activity-closed-failed",
+      "database": "trae/activity-closed-failed/ModularData/ai-agent/database.db",
+      "log": "trae/activity-closed-failed/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "failed-then-next",
+      "root": "trae/activity-failed-then-next",
+      "database": "trae/activity-failed-then-next/ModularData/ai-agent/database.db",
+      "log": "trae/activity-failed-then-next/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "generating",
+          "inFlightStartMs": 1792497621700,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "overlapping",
+      "root": "trae/activity-overlapping",
+      "database": "trae/activity-overlapping/ModularData/ai-agent/database.db",
+      "log": "trae/activity-overlapping/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "eof-without-done",
+      "root": "trae/activity-eof-without-done",
+      "database": "trae/activity-eof-without-done/ModularData/ai-agent/database.db",
+      "log": "trae/activity-eof-without-done/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "error",
+      "root": "trae/activity-error",
+      "database": "trae/activity-error/ModularData/ai-agent/database.db",
+      "log": "trae/activity-error/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "missing-start",
+      "root": "trae/activity-missing-start",
+      "database": "trae/activity-missing-start/ModularData/ai-agent/database.db",
+      "log": "trae/activity-missing-start/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "malformed-latest",
+      "root": "trae/activity-malformed-latest",
+      "database": "trae/activity-malformed-latest/ModularData/ai-agent/database.db",
+      "log": "trae/activity-malformed-latest/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "idle",
+          "inFlightStartMs": null,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    },
+    {
+      "name": "old-malformed",
+      "root": "trae/activity-old-malformed",
+      "database": "trae/activity-old-malformed/ModularData/ai-agent/database.db",
+      "log": "trae/activity-old-malformed/logs/20261020T120000/Modular/ai_agent-0-2026-10-20.alaudalog",
+      "nowMs": 1792497622000,
+      "expected": [
+        {
+          "sessionId": "s-main",
+          "phase": "generating",
+          "inFlightStartMs": 1792497621100,
+          "model": "claude-sonnet-4-5"
+        }
+      ]
+    }
+  ]
+}

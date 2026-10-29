@@ -177,7 +177,7 @@ public class OrbMenuModelTests
         Assert.Equal(new MenuAction.SetOrbAllSources("a"), sources.Rows.First().Action);
         Assert.IsType<MenuSeparator>(sources.Entries[1]);
         Assert.Equal(Enum.GetValues<SourceKind>().Select(k => En[DisplayText.SourceKey(k)]), sources.Rows.Skip(1).Select(r => r.Label));
-        Assert.Equal(["OpenClaw", "Hermes Agent", "Factory Droid"], sources.Rows.TakeLast(3).Select(r => r.Label));
+        Assert.Equal(["OpenClaw", "Hermes Agent", "Factory Droid", "Trae"], sources.Rows.TakeLast(4).Select(r => r.Label));
 
         foreach (var kind in Enum.GetValues<SourceKind>())
         {

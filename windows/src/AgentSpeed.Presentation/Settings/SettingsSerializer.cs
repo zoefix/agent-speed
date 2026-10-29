@@ -104,6 +104,7 @@ public static class SettingsSerializer
             w.WriteBoolean("openclaw", s.OpenClawEnabled);
             w.WriteBoolean("hermes", s.HermesEnabled);
             w.WriteBoolean("droid", s.DroidEnabled);
+            w.WriteBoolean("trae", s.TraeEnabled);
             WriteNullableString(w, "codexRoot", s.CodexRoot);
             WriteNullableString(w, "claudeRoot", s.ClaudeRoot);
             WriteNullableString(w, "dshRoot", s.DshRoot);
@@ -120,6 +121,7 @@ public static class SettingsSerializer
             WriteNullableString(w, "openclawRoot", s.OpenClawRoot);
             WriteNullableString(w, "hermesRoot", s.HermesRoot);
             WriteNullableString(w, "droidRoot", s.DroidRoot);
+            WriteNullableString(w, "traeRoot", s.TraeRoot);
             w.WriteEndObject();
 
             w.WriteStartObject("dashboard");
@@ -282,6 +284,7 @@ public static class SettingsSerializer
             OpenClawEnabled = ReadBool(sources, "openclaw", d.OpenClawEnabled),
             HermesEnabled = ReadBool(sources, "hermes", d.HermesEnabled),
             DroidEnabled = ReadBool(sources, "droid", d.DroidEnabled),
+            TraeEnabled = ReadBool(sources, "trae", d.TraeEnabled),
             CodexRoot = ReadString(sources, "codexRoot"),
             ClaudeRoot = ReadString(sources, "claudeRoot"),
             DshRoot = ReadString(sources, "dshRoot"),
@@ -298,6 +301,7 @@ public static class SettingsSerializer
             OpenClawRoot = ReadString(sources, "openclawRoot"),
             HermesRoot = ReadString(sources, "hermesRoot"),
             DroidRoot = ReadString(sources, "droidRoot"),
+            TraeRoot = ReadString(sources, "traeRoot"),
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),
             HistoryModeKind = ReadString(history, "modeKind") == "speed" ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
             HistoryTaskPair = ReadTaskPair(history is { } th && th.TryGetProperty("taskPair", out var taskPair) ? taskPair : null),
