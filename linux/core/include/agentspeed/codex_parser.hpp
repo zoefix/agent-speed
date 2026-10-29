@@ -22,7 +22,7 @@ public:
 private:
     void onInput(std::int64_t ts);
     void afterUsage(std::int64_t ts);
-    void emit(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink);
+    void emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink);
     std::string threadId() const { return metaThreadId_ ? *metaThreadId_ : agentId(); }
 
     bool pathIsSubagent_;

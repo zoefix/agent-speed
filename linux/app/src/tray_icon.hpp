@@ -1,0 +1,34 @@
+#pragma once
+
+#include <QObject>
+#include <QString>
+
+class QAction;
+class QMenu;
+class QSystemTrayIcon;
+class Strings;
+
+// The StatusNotifierItem tray icon with the live number drawn into it (no text label on KDE).
+class TrayIcon : public QObject {
+    Q_OBJECT
+public:
+    TrayIcon(const Strings& strings, bool demo, QObject* parent = nullptr);
+    ~TrayIcon() override;
+    bool available() const;
+
+public slots:
+    void update(double liveOutput, const QString& compactText, const QString& tooltip);
+    void setDemo(bool demo);
+
+signals:
+    void toggleDashboard();
+    void demoToggled(bool demo);
+    void quitRequested();
+
+private:
+    QSystemTrayIcon* tray_;
+    QMenu* menu_;
+    QAction* demo_;
+    QString lastText_;
+    int lastBand_ = -1;
+};

@@ -1,0 +1,10 @@
+[Desktop Entry]
+Type=Application
+Name=Agent Speed
+GenericName=AI agent speed meter
+Comment=Live token speed of your AI coding agents
+Exec=agent-speed
+Icon=agent-speed
+Terminal=false
+Categories=Utility;Monitor;Development;
+StartupNotify=false

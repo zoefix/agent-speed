@@ -70,7 +70,7 @@ void CodexParser::afterUsage(std::int64_t ts) {
     setPhase(Phase::Tools, ts, std::nullopt);
 }
 
-void CodexParser::emit(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink) {
+void CodexParser::emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink) {
     ParsedResponse response;
     response.key = key;
     response.source = SourceKind::Codex;
@@ -170,7 +170,7 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
             previousLegacyTotals_ = total;
             const std::string key = "codex-legacy:" + threadId() + ":" + std::to_string(total.totalTokens);
             if (!deduper().tryClaim(key, agentId())) return;
-            emit(key, tokens, ts, sink);
+            emitResponse(key, tokens, ts, sink);
             afterUsage(ts);
         } else if (kind == "task_complete" || kind == "turn_aborted") {
             pendingStartMs_.reset();
@@ -187,7 +187,7 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
             key = "codex:" + (thread ? *thread : threadId()) + ":" + std::to_string(ts);
         }
         if (!deduper().tryClaim(key, agentId())) return;
-        emit(key, tokensOf(readUsage(payload["usage"])), ts, sink);
+        emitResponse(key, tokensOf(readUsage(payload["usage"])), ts, sink);
         afterUsage(ts);
     }
 }

@@ -20,7 +20,7 @@ public:
     std::int64_t oversizedLines() const { return oversized_; }
 
 private:
-    void emit(std::string_view line, const LineHandler& onLine);
+    void deliver(std::string_view line, const LineHandler& onLine);
 
     std::string partial_;
     bool skipping_ = false;

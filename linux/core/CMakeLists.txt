@@ -5,11 +5,13 @@ add_library(agentspeed_core STATIC
     src/claude_parser.cpp
     src/codex_parser.cpp
     src/dedupe.cpp
+    src/demo.cpp
     src/engine.cpp
     src/file_reader.cpp
     src/json.cpp
     src/line_splitter.cpp
     src/model.cpp
+    src/monitor.cpp
     src/parents.cpp
     src/path_text.cpp
     src/rfc3339.cpp

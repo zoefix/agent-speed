@@ -2,7 +2,7 @@
 
 namespace agentspeed {
 
-void LineSplitter::emit(std::string_view line, const LineHandler& onLine) {
+void LineSplitter::deliver(std::string_view line, const LineHandler& onLine) {
     if (line.size() > kMaxLineBytes) {
         ++oversized_;
         return;
@@ -32,13 +32,13 @@ void LineSplitter::feed(std::string_view data, const LineHandler& onLine) {
             continue;
         }
         if (partial_.empty()) {
-            emit(segment, onLine);
+            deliver(segment, onLine);
         } else if (partial_.size() + segment.size() > kMaxLineBytes) {
             partial_.clear();
             ++oversized_;
         } else {
             partial_.append(segment);
-            emit(partial_, onLine);
+            deliver(partial_, onLine);
             partial_.clear();
         }
     }

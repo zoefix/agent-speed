@@ -15,6 +15,10 @@ endif()
 
 add_subdirectory(core)
 
+if(AGENTSPEED_BUILD_APP)
+    add_subdirectory(app)
+endif()
+
 if(AGENTSPEED_BUILD_TESTS)
     enable_testing()
     add_subdirectory(tests)
