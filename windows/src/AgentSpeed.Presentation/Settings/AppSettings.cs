@@ -115,7 +115,7 @@ public sealed record AppSettings
     public bool BarSecondary { get; init; }
 
     /// <summary>
-    /// <c>settings.bar.intelligence</c> (DESIGN 10, Menu bar and taskbar): the 智力 block after the value, the money block
+    /// <c>settings.bar.intelligence</c> (DESIGN 10, Menu bar and taskbar): the 性能 block after the value, the money block
     /// and the network block. Off by default; hidden in glyph-only mode; needs no network measuring.
     /// </summary>
     public bool BarIntelligence { get; init; }
@@ -253,8 +253,8 @@ public sealed record AppSettings
     /// <summary>The history's effort and speed section shows this kind (DESIGN 4b, 3b): effort or speed.</summary>
     public ExecutionModeKind HistoryModeKind { get; init; } = ExecutionModeKind.Effort;
 
-    /// <summary>The two sources the history's task performance compares (DESIGN 12); null takes the default pair.</summary>
-    public History.Tasks.TaskPair? HistoryTaskPair { get; init; }
+    /// <summary>The sort of the history's 性能表現 table, which the window remembers (DESIGN 12).</summary>
+    public History.Perf.PerfSort HistoryPerfSort { get; init; } = History.Perf.PerfSort.Default;
 
     /// <summary>Key of the monitor the orb was last placed on.</summary>
     public string? OrbMonitor { get; init; }
@@ -407,7 +407,7 @@ public sealed record AppSettings
         DroidRoot = CleanPath(DroidRoot),
         HistoryWindow = WindowFrame.ValidHistory(HistoryWindow),
         HistoryModeKind = HistoryModeKind == ExecutionModeKind.Speed ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
-        HistoryTaskPair = HistoryTaskPair is { IsValid: true } pair ? pair : null,
+        HistoryPerfSort = HistoryPerfSort ?? History.Perf.PerfSort.Default,
         ChartSeconds = ChartMath.NormalizeRange(ChartSeconds),
         HeroLastTitle = VehicleArt.NormalizeKey(HeroLastTitle),
         TitleThemes = (TitleThemes ?? TitleThemesDocument.Default).Validated(),

@@ -1,20 +1,17 @@
-namespace AgentSpeed.Presentation.TaskScore;
+namespace AgentSpeed.Presentation.Perf;
 
 /// <summary>A dotted underline laid out under a number, relative to the number's left edge and baseline.</summary>
 /// <param name="Diameter">The dot diameter in DIP, a whole number of device pixels.</param>
 /// <param name="Centers">Dot centres from the left edge of the number's advance width.</param>
 /// <param name="Below">The dots' centre line below the baseline.</param>
 /// <param name="Opacity">Of the number's color (70 %; 100 % in high contrast).</param>
-public sealed record TaskUnderline(double Diameter, IReadOnlyList<double> Centers, double Below, double Opacity);
-
-/// <summary>One stretch of a bar in DIP.</summary>
-public readonly record struct TaskBarRect(double X, double Width, bool IsGhost);
+public sealed record PerfUnderline(double Diameter, IReadOnlyList<double> Centers, double Below, double Opacity);
 
 /// <summary>
-/// The proof mark (待證記號, DESIGN 12): "not yet proven" drawn dotted on every surface. Geometry only, so the WPF
-/// drawing, the orb and board renderers and the tests share one rule.
+/// The provisional mark (DESIGN 12, <i>Provisional mark</i>): a score from fewer than 10 timed requests drawn dotted on
+/// every surface. Geometry only, so the WPF drawing, the orb and board renderers and the tests share one rule.
 /// </summary>
-public static class TaskProofMark
+public static class PerfProvisionalMark
 {
     /// <summary>The number's color at 70 %, never a glow.</summary>
     public const double Opacity = 0.7;
@@ -37,20 +34,8 @@ public static class TaskProofMark
     /// <summary>High contrast thickens the dots by this much (DESIGN 12: Increase Contrast, <c>d + 0.5 pt</c>).</summary>
     public const double ContrastExtra = 0.5;
 
-    /// <summary>The card's dotted tracks: 3 DIP dots on a 5 DIP pitch (tertiary).</summary>
-    public const double TrackDot = 3;
-
-    public const double TrackPitch = 5;
-
-    /// <summary>A dimension bar's held credit: 4 DIP dots on a 5 DIP pitch in the score ink.</summary>
-    public const double GhostDot = 4;
-
-    public const double GhostPitch = 5;
-
-    /// <summary>The composition bar's held credit: 3 DIP dots on a 4 DIP pitch.</summary>
-    public const double CompositionGhostDot = 3;
-
-    public const double CompositionGhostPitch = 4;
+    /// <summary>The card's dotted fills and absent tracks: round dots of the track's height on a 2.2 × pitch.</summary>
+    public const double ShapePitch = 2.2;
 
     /// <summary><c>d = max(1 device px, 0.1 × size)</c>, rounded to the device pixel (plus the contrast extra).</summary>
     public static double Diameter(double textSize, double pixelsPerDip, bool highContrast = false)
@@ -78,15 +63,15 @@ public static class TaskProofMark
 
     /// <summary>The dotted underline under a number of <paramref name="textSize"/> whose advance width is <paramref name="width"/>.</summary>
     /// <param name="barBlock">The taskbar block's line 1 (<see cref="BarBelow"/>).</param>
-    public static TaskUnderline Underline(double textSize, double width, double pixelsPerDip, bool barBlock = false, bool highContrast = false)
+    public static PerfUnderline Underline(double textSize, double width, double pixelsPerDip, bool barBlock = false, bool highContrast = false)
     {
         var d = Diameter(textSize, pixelsPerDip, highContrast);
-        return new TaskUnderline(d, UnderlineCenters(width, d), (barBlock ? BarBelow : Below) * Math.Max(0, textSize), highContrast ? 1 : Opacity);
+        return new PerfUnderline(d, UnderlineCenters(width, d), (barBlock ? BarBelow : Below) * Math.Max(0, textSize), highContrast ? 1 : Opacity);
     }
 
     /// <summary>
     /// Dots of <paramref name="diameter"/> tiled at <paramref name="pitch"/> over <paramref name="width"/>, the leftover spread
-    /// between them so the first and last touch the ends (CSS <c>space</c>): the card's dotted tracks and held credits.
+    /// between them so the first and last touch the ends (CSS <c>space</c>): the card's dotted fills and absent tracks.
     /// </summary>
     public static IReadOnlyList<double> SpacedCenters(double width, double pitch, double diameter)
     {
@@ -138,33 +123,6 @@ public static class TaskProofMark
     public const double HollowStroke = 1;
 
     public static double HollowInset => HollowStroke / 2;
-
-    /// <summary>
-    /// The composition bar's stretches over <paramref name="width"/>: each as long as its points, with a gap between
-    /// neighbours (taken from the end of each but the last).
-    /// </summary>
-    public static IReadOnlyList<TaskBarRect> Composition(IReadOnlyList<TaskCompositionSegment> segments, double width, double gap = 2)
-    {
-        ArgumentNullException.ThrowIfNull(segments);
-        var rects = new List<TaskBarRect>(segments.Count);
-        if (!(width > 0))
-        {
-            return rects;
-        }
-
-        for (var i = 0; i < segments.Count; i++)
-        {
-            var segment = segments[i];
-            var x = segment.Start / TaskScoreText.MaxScore * width;
-            var right = (segment.Start + segment.Length) / TaskScoreText.MaxScore * width - (i < segments.Count - 1 ? gap : 0);
-            if (right - x > 0)
-            {
-                rects.Add(new TaskBarRect(x, right - x, segment.IsGhost));
-            }
-        }
-
-        return rects;
-    }
 
     private static double PositiveOr(double value, double fallback) => double.IsFinite(value) && value > 0 ? value : fallback;
 }

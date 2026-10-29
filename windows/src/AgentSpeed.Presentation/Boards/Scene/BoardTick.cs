@@ -52,7 +52,7 @@ public sealed record BoardTick(
     /// <summary>The board's live metrics switches (DESIGN 2c, Live metrics); the entries were laid out for them.</summary>
     public BoardReadouts Readouts { get; init; } = BoardReadouts.None;
 
-    /// <summary>The hero's 智力, 思考 and 費用 as shown.</summary>
+    /// <summary>The hero's 性能, 思考 and 費用 as shown.</summary>
     public BoardHeroReadouts Gauge { get; init; } = BoardHeroReadouts.Empty;
 
     /// <summary>思考 has read 0 for 3 s under a live value while another hero readout shows: it is hidden (DESIGN 2c).</summary>

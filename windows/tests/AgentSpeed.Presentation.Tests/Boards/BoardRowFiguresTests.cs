@@ -40,7 +40,7 @@ public class BoardRowFiguresTests
         Assert.Equal(table.Intelligence + 2, wide.Intelligence, 9);
         Assert.Equal(table.Value + 3, wide.Value, 9);
         Assert.Equal(table.CapsuleRight + 5, wide.CapsuleRight, 9);
-        // Figures that fit keep the table's widths; S has no two-line rows; with 智力 off there is no cell to widen.
+        // Figures that fit keep the table's widths; S has no two-line rows; with 性能 off there is no cell to widen.
         Assert.Equal(table, BoardRowColumns.For(style, size, BoardReadouts.All, new BoardRowFigures(10, 20, 9, 10, 7)));
         Assert.Equal(BoardRowColumns.For(style, BoardSize.S, BoardReadouts.All),
             BoardRowColumns.For(style, BoardSize.S, BoardReadouts.All, new BoardRowFigures(99, 99, 9, 10, 7)));
@@ -63,15 +63,15 @@ public class BoardRowFiguresTests
         var feed = new BoardDemoFeed(BoardSimScenario.Team) { Localizer = Zh, Readouts = BoardReadouts.All };
         scene.Apply(feed.Step(BoardStyle.Neon, BoardSize.M), 0);
         var table = scene.Columns;
-        scene.Figures = new BoardRowFigures(30, 50, 9, 10.4, 7.3);
-        Assert.Equal((30.0, 50.0), (scene.Columns.Intelligence, scene.Columns.Value));
+        scene.Figures = new BoardRowFigures(45, 50, 9, 10.4, 7.3);
+        Assert.Equal((45.0, 50.0), (scene.Columns.Intelligence, scene.Columns.Value));
         scene.Figures = BoardRowFigures.Nominal;
         Assert.Equal(table, scene.Columns);
     }
 
     // Each figure's cap-height centre within 0.4 pt of the row's centre line (19 under the top at M, 20 at L): the two sizes share
     // one baseline at their caps' mean. Cap heights from 0.65 to 0.75 em cover the boards' fonts (Segoe UI Variable, Cascadia
-    // Mono); the last case gives the 智力 and value weights slightly different shares.
+    // Mono); the last case gives the 性能 and value weights slightly different shares.
     [Theory]
     [InlineData(BoardStyle.Glass, BoardSize.M, 0.70, 0.70)]
     [InlineData(BoardStyle.Glass, BoardSize.L, 0.65, 0.65)]
@@ -116,7 +116,7 @@ public class BoardRowFiguresTests
     }
 
     [Fact]
-    public void WithoutThe智力ColumnTheValueAloneIsCentred()
+    public void WithoutThe性能ColumnTheValueAloneIsCentred()
     {
         var figures = new BoardRowFigures(0, 0, 9.1, 10.5, 7.35);
         var (scene, layers, list) = Render(BoardStyle.Glass, BoardSize.M, figures, BoardReadouts.All with { Intelligence = false });
@@ -137,7 +137,7 @@ public class BoardRowFiguresTests
         Assert.NotNull(sub);
         var top = BoardCanvas.Margin + scene.Metrics.ListTop + sub!.Y;
         var height = scene.RowHeight(sub.Entry);
-        // A sub row's value and 智力 sit on the sub row's own line, not on a figure baseline.
+        // A sub row's value and 性能 sit on the sub row's own line, not on a figure baseline.
         var value = Baselines(layers, list, top, height, BoardValueSet.Sub);
         var intelligence = Baselines(layers, list, top, height, BoardValueSet.IntelSub, BoardValueSet.IntelSubRest);
         Assert.NotEmpty(value);

@@ -42,18 +42,18 @@ public class BarThinkingHoldTests
         var first = BarIntelligenceBlock.From(Chosen, Snapshot(Unthinking), ZhHant, hold, 100)!;
         Assert.True(first.ThinkingZero);
         Assert.False(first.ThinkingHidden);
-        Assert.Equal("智力 125，思考每秒 0 個 token", first.Spoken);
+        Assert.Equal("性能 125，思考每秒 0 個 token", first.Spoken);
         Assert.False(BarIntelligenceBlock.From(Chosen, Snapshot(Unthinking), ZhHant, hold, 102.5)!.ThinkingHidden);
 
         var hidden = BarIntelligenceBlock.From(Chosen, Snapshot(Unthinking), ZhHant, hold, 103)!;
         Assert.True(hidden.ThinkingHidden);
-        Assert.Equal("智力 125", hidden.Spoken);
+        Assert.Equal("性能 125", hidden.Spoken);
         Assert.Equal(("125", "0", "tok/s"), (hidden.Index, hidden.Thinking, hidden.Unit));
 
         // A rate above 0 draws line 2 again at once.
         var back = BarIntelligenceBlock.From(Chosen, Snapshot(Thinking), ZhHant, hold, 103.5)!;
         Assert.False(back.ThinkingHidden);
-        Assert.Equal("智力 125，思考每秒 10 個 token", back.Spoken);
+        Assert.Equal("性能 125，思考每秒 10 個 token", back.Spoken);
     }
 
     [Fact]
@@ -80,10 +80,10 @@ public class BarThinkingHoldTests
     }
 
     [Theory]
-    [InlineData(LanguageCodes.ZhHant, "智力 125")]
-    [InlineData(LanguageCodes.ZhHans, "智力 125")]
-    [InlineData(LanguageCodes.En, "intelligence 125")]
-    [InlineData(LanguageCodes.Ja, "知能 125")]
+    [InlineData(LanguageCodes.ZhHant, "性能 125")]
+    [InlineData(LanguageCodes.ZhHans, "性能 125")]
+    [InlineData(LanguageCodes.En, "performance 125")]
+    [InlineData(LanguageCodes.Ja, "性能 125")]
     public void TheLabelReadsTheIndexAloneWhileLineTwoIsHidden(string language, string spoken)
     {
         var localizer = new Localizer(Localizer.LoadEmbeddedTable(), language);

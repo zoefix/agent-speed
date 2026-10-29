@@ -18,24 +18,24 @@ public enum BoardValueSet
     /// <summary>Timing's interval to the group above (<c>.gap</c>).</summary>
     Interval,
 
-    /// <summary>A group row's live 智力 (neon: baked <c>led</c> with its glow).</summary>
+    /// <summary>A group row's live 性能 (neon: baked <c>led</c> with its glow).</summary>
     IntelGroup,
 
-    /// <summary>A sub row's live 智力.</summary>
+    /// <summary>A sub row's live 性能.</summary>
     IntelSub,
 
-    /// <summary>A group row's resting 智力 or <c>–</c> (the quieter weight; tinted <c>ink-3</c>).</summary>
+    /// <summary>A group row's resting 性能 or <c>–</c> (the quieter weight; tinted <c>ink-3</c>).</summary>
     IntelGroupRest,
 
     IntelSubRest,
 
-    /// <summary>The sub-gauge's 智力 number (neon: baked LED digits with their glow).</summary>
+    /// <summary>The sub-gauge's 性能 number (neon: baked LED digits with their glow).</summary>
     GaugeMain,
 
     /// <summary>The sub-gauge's 思考 and 費用 numbers (neon: baked with their glow).</summary>
     GaugeTable,
 
-    /// <summary>Neon's plain 智力 digits: quiet values in <c>ink-3</c> and the ghost <c>8</c>s.</summary>
+    /// <summary>Neon's plain 性能 digits: quiet values in <c>ink-3</c> and the ghost <c>8</c>s.</summary>
     GaugeMainPlain,
 
     /// <summary>Neon's plain table digits for quiet values.</summary>
@@ -58,11 +58,11 @@ public static class BoardValueGlyphs
     /// <summary>Room around a glyph's advance box in its layer.</summary>
     public const double Pad = 2;
 
-    /// <summary>The characters a set draws (an index is digits or <c>–</c>; a rate also has its separators and suffixes).</summary>
+    /// <summary>The characters a set draws (a score: digits, the grouping comma and the compact form's <c>.</c>, <c>k</c>, <c>M</c>, or <c>–</c>; a rate also has its other separators and suffixes).</summary>
     public static string Alphabet(BoardValueSet set) => set switch
     {
         BoardValueSet.IntelGroup or BoardValueSet.IntelSub or BoardValueSet.IntelGroupRest or BoardValueSet.IntelSubRest or BoardValueSet.GaugeMain
-            or BoardValueSet.GaugeMainPlain => "0123456789–",
+            or BoardValueSet.GaugeMainPlain => "0123456789,.kM–",
         BoardValueSet.GaugeTable or BoardValueSet.GaugeTablePlain => "0123456789.,kMB–<",
         _ => "0123456789.kMB–−+",
     };
@@ -132,10 +132,9 @@ public static class BoardValueGlyphs
     }
 
     /// <summary>The width of <paramref name="text"/> in a set, <paramref name="tracking"/> between glyphs (0 while glyphs are missing).</summary>
-    public static double Measure(IBoardLayers layers, string text, BoardValueSet set, double tracking)
+    public static double Measure(IBoardLayers layers, ReadOnlySpan<char> text, BoardValueSet set, double tracking)
     {
         ArgumentNullException.ThrowIfNull(layers);
-        ArgumentNullException.ThrowIfNull(text);
         var width = 0.0;
         var count = 0;
         var pad = PadOf(set);
@@ -156,7 +155,7 @@ public static class BoardValueGlyphs
     /// keeps a baked color); <paramref name="dy"/> per glyph is not used here (rolls use <see cref="BoardReadoutNumber"/>).
     /// Returns the drawn width.
     /// </summary>
-    public static double EmitOnBaseline(BoardDrawList list, IBoardLayers layers, string text, BoardValueSet set, double x, int align, double baseline,
+    public static double EmitOnBaseline(BoardDrawList list, IBoardLayers layers, ReadOnlySpan<char> text, BoardValueSet set, double x, int align, double baseline,
         double tracking, Rgba tint, double amount, double alpha, RectBounds clip = default)
     {
         ArgumentNullException.ThrowIfNull(list);

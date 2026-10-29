@@ -1,11 +1,11 @@
-namespace AgentSpeed.Presentation.TaskScore;
+namespace AgentSpeed.Presentation.Perf;
 
 /// <summary>What the score card window should do after an event.</summary>
-public enum TaskCardAction
+public enum PerfCardAction
 {
     None,
 
-    /// <summary>Appear for <see cref="TaskCardHover.Shown"/>: a 0.15 s fade and a 2 DIP slide.</summary>
+    /// <summary>Appear for <see cref="PerfCardHover.Shown"/>: a 0.15 s fade and a 2 DIP slide.</summary>
     Show,
 
     /// <summary>Another row's card replaces the shown one at once, with a 0.12 s crossfade.</summary>
@@ -20,7 +20,7 @@ public enum TaskCardAction
 /// keyboard focus while shown, and Esc hides it. Times are seconds on one clock; call <see cref="Tick"/> at
 /// <see cref="NextDue"/>.
 /// </summary>
-public sealed class TaskCardHover
+public sealed class PerfCardHover
 {
     private object? _pendingKey;
     private double _pendingAt = double.PositiveInfinity;
@@ -30,7 +30,7 @@ public sealed class TaskCardHover
     public object? Shown { get; private set; }
 
     /// <summary>The host of the shown or pending card.</summary>
-    public TaskCardHost Host { get; private set; }
+    public PerfCardHost Host { get; private set; }
 
     /// <summary>The row under the pointer, or null.</summary>
     public object? Hovered { get; private set; }
@@ -48,7 +48,7 @@ public sealed class TaskCardHover
     public bool IsShown => Shown is not null;
 
     /// <summary>The pointer entered a row.</summary>
-    public TaskCardAction Hover(object key, TaskCardHost host, double now)
+    public PerfCardAction Hover(object key, PerfCardHost host, double now)
     {
         ArgumentNullException.ThrowIfNull(key);
         Hovered = key;
@@ -62,15 +62,15 @@ public sealed class TaskCardHover
         if (!Equals(_pendingKey, key))
         {
             _pendingKey = key;
-            _pendingAt = now + TaskCardPlacement.Delay(host);
+            _pendingAt = now + PerfCardPlacement.Delay(host);
             Host = host;
         }
 
-        return TaskCardAction.None;
+        return PerfCardAction.None;
     }
 
     /// <summary>The pointer left a row.</summary>
-    public TaskCardAction Leave(object key, double now)
+    public PerfCardAction Leave(object key, double now)
     {
         ArgumentNullException.ThrowIfNull(key);
         if (Equals(Hovered, key))
@@ -85,20 +85,20 @@ public sealed class TaskCardHover
 
         if (Shown is not null && Hovered is null)
         {
-            _hideAt = now + TaskCardPlacement.HideDelay;
+            _hideAt = now + PerfCardPlacement.HideDelay;
         }
 
-        return TaskCardAction.None;
+        return PerfCardAction.None;
     }
 
     /// <summary>Runs what has come due.</summary>
-    public TaskCardAction Tick(double now)
+    public PerfCardAction Tick(double now)
     {
         if (now >= _pendingAt && _pendingKey is { } key)
         {
             CancelPending();
             Shown = key;
-            return TaskCardAction.Show;
+            return PerfCardAction.Show;
         }
 
         if (now >= _hideAt)
@@ -106,11 +106,11 @@ public sealed class TaskCardHover
             return Hide();
         }
 
-        return TaskCardAction.None;
+        return PerfCardAction.None;
     }
 
     /// <summary>Space on a focused row: shows its card at once.</summary>
-    public TaskCardAction Show(object key, TaskCardHost host)
+    public PerfCardAction Show(object key, PerfCardHost host)
     {
         ArgumentNullException.ThrowIfNull(key);
         CancelPending();
@@ -118,37 +118,37 @@ public sealed class TaskCardHover
         Host = host;
         if (Equals(Shown, key))
         {
-            return TaskCardAction.None;
+            return PerfCardAction.None;
         }
 
-        var action = Shown is null ? TaskCardAction.Show : TaskCardAction.Switch;
+        var action = Shown is null ? PerfCardAction.Show : PerfCardAction.Switch;
         Shown = key;
         return action;
     }
 
     /// <summary>The keyboard focus moved to a row (null: away from every row); a shown card follows it.</summary>
-    public TaskCardAction Focus(object? key, TaskCardHost host)
+    public PerfCardAction Focus(object? key, PerfCardHost host)
     {
         if (Shown is null || Hovered is not null)
         {
-            return TaskCardAction.None;
+            return PerfCardAction.None;
         }
 
         return key is null ? Hide() : Show(key, host);
     }
 
     /// <summary>Esc, a closing window, or a row that went away.</summary>
-    public TaskCardAction Hide()
+    public PerfCardAction Hide()
     {
         CancelPending();
         _hideAt = double.PositiveInfinity;
         if (Shown is null)
         {
-            return TaskCardAction.None;
+            return PerfCardAction.None;
         }
 
         Shown = null;
-        return TaskCardAction.Hide;
+        return PerfCardAction.Hide;
     }
 
     private void CancelPending()

@@ -1,4 +1,5 @@
-using AgentSpeed.Presentation.TaskScore;
+using AgentSpeed.Core.Perf;
+using AgentSpeed.Presentation.Perf;
 
 namespace AgentSpeed.Presentation.Boards;
 
@@ -32,25 +33,25 @@ public sealed record BoardMoney(string Number, string Unit, bool AtLeast, BoardM
 }
 
 /// <summary>
-/// The hero's live metrics of one tick (DESIGN 2c, Live metrics: Values): 智力 over the board's agents, its thinking rate and
+/// The hero's live metrics of one tick (DESIGN 2c, Live metrics: Values): 性能 over the board's agents, its thinking rate and
 /// its cost per second, as shown.
 /// </summary>
-/// <param name="Score">The board's 智力 (METRICS 6.9, <i>Sets and groups</i>, over <c>A</c>): the highest score, live before
-/// resting, with its supplying agent's state for the proof mark and N for the words.</param>
+/// <param name="Score">The board's 性能 (METRICS 6.9 over <c>A</c>): the highest score, live before resting, with its
+/// supplying agent's provisional mark and N for the words.</param>
 /// <param name="Thinking">METRICS 7 of <c>liveThinking</c>; <c>–</c> while quiet.</param>
-/// <param name="Quiet">Nothing generated in the window over the board's agents (<c>Σ w = 0</c>): 思考 reads <c>–</c>; 智力 keeps
+/// <param name="Quiet">Nothing generated in the window over the board's agents (<c>Σ w = 0</c>): 思考 reads <c>–</c>; 性能 keeps
 /// its own form (DESIGN 2c, Updates, motion and quiet).</param>
 /// <param name="ThinkingZero">The shown thinking reads 0 under a live value (it hides after 3 s).</param>
-public sealed record BoardHeroReadouts(TaskSetReading Score, string Thinking, bool Quiet, bool ThinkingZero, BoardMoney Cost)
+public sealed record BoardHeroReadouts(PerfSetReading Score, string Thinking, bool Quiet, bool ThinkingZero, BoardMoney Cost)
 {
-    public const string Dash = TaskScoreText.Dash;
+    public const string Dash = PerfNumber.Dash;
 
     /// <summary>A quiet hero in US dollars (before the first tick).</summary>
-    public static BoardHeroReadouts Empty { get; } = new(TaskSetReading.None, Dash, true, false,
+    public static BoardHeroReadouts Empty { get; } = new(PerfSetReading.None, Dash, true, false,
         new BoardMoney("0", "$/s", false, BoardMoneyState.Zero, "0", string.Empty));
 
-    /// <summary>The 智力 number as shown, or <c>–</c> while none.</summary>
-    public string Intelligence => Score.Number;
+    /// <summary>The 性能 number in full form (neon, timing), or <c>–</c> while none.</summary>
+    public string Intelligence => Score.Full;
 
     /// <summary>The score as shown; null while none.</summary>
     public int? Shown => Score.Shown;
@@ -60,19 +61,19 @@ public sealed record BoardHeroReadouts(TaskSetReading Score, string Thinking, bo
 }
 
 /// <summary>
-/// A ranking row's 智力 of one tick (DESIGN 2c, Ranking rows; DESIGN 12, <i>Values and forms</i>): a group row's highest member
+/// A ranking row's 性能 of one tick (DESIGN 2c, Ranking rows; DESIGN 12, <i>Values and forms</i>): a group row's highest member
 /// score, a sub row's own value, with the words its label adds.
 /// </summary>
-/// <param name="Score">The value with its supplying agent's state (the proof mark) and N (the words).</param>
-/// <param name="Spoken"><c>a11y.agent.intel</c> with the score words while the column shows; empty for none or with 智力 off.</param>
-public sealed record BoardRowReadout(TaskSetReading Score, string Spoken)
+/// <param name="Score">The value with its supplying agent's provisional mark and N (the words).</param>
+/// <param name="Spoken"><c>a11y.agent.intel</c> with the score words while the column shows; empty for none or with 性能 off.</param>
+public sealed record BoardRowReadout(PerfSetReading Score, string Spoken)
 {
-    /// <summary>The cell's text: the score, or <c>–</c>.</summary>
-    public string Intelligence => Score.Number;
+    /// <summary>The cell's text: the score in compact form, or <c>–</c>.</summary>
+    public string Intelligence => Score.Compact;
 
     /// <summary>Drawn in the style's live row color; resting and none take its resting color.</summary>
-    public bool Live => Score.HasScore && Score.Form == TaskForm.Live;
+    public bool Live => Score.HasScore && Score.Form == PerfForm.Live;
 
-    /// <summary>The dotted underline goes under the digits (the supplying agent is unverified or pending).</summary>
-    public bool IsUnproven => Score.IsUnproven;
+    /// <summary>The dotted underline goes under the digits (the supplying agent's score is provisional).</summary>
+    public bool IsProvisional => Score.IsProvisional;
 }

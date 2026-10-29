@@ -39,7 +39,7 @@ public sealed record BoardEntry(
     /// <summary>A group row with its second line (its model; DESIGN 2c, Live metrics, at M and L).</summary>
     public bool TwoLine { get; init; }
 
-    /// <summary>The row's 智力 as worded for this tick; null for the more lines or while the column is off.</summary>
+    /// <summary>The row's 性能 as worded for this tick; null for the more lines or while the column is off.</summary>
     public BoardRowReadout? Readout { get; init; }
 }
 

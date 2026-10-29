@@ -2,7 +2,7 @@ namespace AgentSpeed.Presentation.Settings;
 
 /// <summary>
 /// The taskbar's network block after the value (DESIGN 10, Menu bar and taskbar): network speed of this computer or of the
-/// agents. 智力 has a switch of its own (<see cref="AppSettings.BarIntelligence"/>) and can show beside it.
+/// agents. 性能 has a switch of its own (<see cref="AppSettings.BarIntelligence"/>) and can show beside it.
 /// </summary>
 public enum BarTraffic
 {
@@ -45,7 +45,7 @@ public sealed record TrafficSettings
     };
 
     /// <summary>
-    /// The stored choice of earlier builds that showed 智力 in place of the network block: it reads as off and turns
+    /// The stored choice of earlier builds that showed 智力 (now 性能) in place of the network block: it reads as off and turns
     /// <see cref="AppSettings.BarIntelligence"/> on, once (DESIGN 10).
     /// </summary>
     public const string LegacyIntelligenceKey = "intelligence";

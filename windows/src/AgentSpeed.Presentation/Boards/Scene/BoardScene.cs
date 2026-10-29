@@ -34,7 +34,7 @@ public sealed class BoardScene
     public const string FooterKey = "#footer";
     public const string BackdropKey = "#backdrop";
 
-    /// <summary>The captions line at the top of the ranking (智力 over the 智力 cells, tok/s over the values, timing's 間隔).</summary>
+    /// <summary>The captions line at the top of the ranking (性能 over the 性能 cells, tok/s over the values, timing's 間隔).</summary>
     public const string CaptionsKey = "#caps";
 
     /// <summary>A switch change crossfades the hero (DESIGN 2c, Live metrics: Switches).</summary>
@@ -454,7 +454,7 @@ public sealed class BoardScene
         return entry.Kind == BoardEntryKind.Group && Style != BoardStyle.Timing && !entry.TwoLine ? entry.Height - 2 : entry.Height;
     }
 
-    /// <summary>A two-line group row's figures' shared baseline under its top (the 智力 cell joins the value while the column shows).</summary>
+    /// <summary>A two-line group row's figures' shared baseline under its top (the 性能 cell joins the value while the column shows).</summary>
     public double FigureBaseline(BoardEntry entry)
     {
         ArgumentNullException.ThrowIfNull(entry);
@@ -469,7 +469,7 @@ public sealed class BoardScene
     }
 
     /// <summary>
-    /// Whether a canvas point lies on the hero's 智力 (glass: the dial; neon: the digits and meter; timing: the 智力 row), where
+    /// Whether a canvas point lies on the hero's 性能 (glass: the dial; neon: the digits and meter; timing: the 性能 row), where
     /// hovering opens the score card (DESIGN 2c, Tooltip and score card).
     /// </summary>
     public bool HitScore(double x, double y) =>
@@ -714,8 +714,8 @@ public sealed class BoardScene
         return BoardValueGlyphs.TryGet('0', set, layers, out var zero) ? center - zero.Height / 2 + BoardValueGlyphs.Baseline(zero) : center + 4;
     }
 
-    // A row's 智力 cell on the value's baseline: its digits replaced in place (a fall crossfades), its color crossfading between
-    // live and resting, and the dotted underline of an unproven score with the digits, as part of the row's content.
+    // A row's 性能 cell on the value's baseline: its digits replaced in place (a fall crossfades), its color crossfading between
+    // live and resting, and the dotted underline of an provisional score with the digits, as part of the row's content.
     private void Readout(BoardDrawList list, IBoardLayers layers, BoardRowMotion row, double right, double baseline, double alpha, double now, RectBounds clip)
     {
         if (row.Entry.Readout is null || !Metrics.IntelligenceColumn)
@@ -741,14 +741,14 @@ public sealed class BoardScene
         if (row.IntelOutgoing(now) is { } old)
         {
             var oldWidth = Cell(list, layers, old, sub, x, baseline, tracking, live, alpha * outgoing, clip);
-            if (row.IntelOutgoingUnproven && oldWidth > 0)
+            if (row.IntelOutgoingProvisional && oldWidth > 0)
             {
                 BoardScoreDraw.Underline(list, x - oldWidth, oldWidth, baseline, size, ink, alpha * outgoing, Palette.HighContrast, clip);
             }
         }
     }
 
-    // One text of the 智力 cell, right-aligned at x, in the live set by `live` and the resting set by the rest; returns its width.
+    // One text of the 性能 cell, right-aligned at x, in the live set by `live` and the resting set by the rest; returns its width.
     private double Cell(BoardDrawList list, IBoardLayers layers, string text, bool sub, double x, double baseline, double tracking, double live,
         double alpha, RectBounds clip)
     {
