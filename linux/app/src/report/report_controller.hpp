@@ -12,6 +12,7 @@
 
 #include "agentspeed/report_body.hpp"
 #include "agentspeed/report_scheduler.hpp"
+#include "agentspeed/report_profile.hpp"
 #include "agentspeed/report_service.hpp"
 #include "agentspeed/report_stream.hpp"
 #include "monitor_worker.hpp"
@@ -122,6 +123,21 @@ class ReportController : public QObject {
     Q_PROPERTY(QString menuText READ menuText NOTIFY changed)
     Q_PROPERTY(bool reporting READ reporting NOTIFY changed)
     Q_PROPERTY(QString trafficNote READ trafficNote NOTIFY changed)
+    // The profile extensions (REPORTING-EXTENSIONS 4–6).
+    Q_PROPERTY(bool profileAvailable READ profileAvailable NOTIFY changed)
+    Q_PROPERTY(bool avatarSupported READ avatarSupported NOTIFY changed)
+    Q_PROPERTY(bool identitySupported READ identitySupported NOTIFY changed)
+    Q_PROPERTY(bool profileBound READ profileBound NOTIFY changed)
+    Q_PROPERTY(QString profileName READ profileName NOTIFY changed)
+    Q_PROPERTY(QString avatarSource READ avatarSource NOTIFY changed)
+    Q_PROPERTY(bool avatarPending READ avatarPending NOTIFY changed)
+    Q_PROPERTY(bool profileBusy READ profileBusy NOTIFY changed)
+    Q_PROPERTY(QString profileError READ profileError NOTIFY changed)
+    Q_PROPERTY(QVariantList profileDevices READ profileDevices NOTIFY changed)
+    Q_PROPERTY(QString pairingState READ pairingState NOTIFY changed)
+    Q_PROPERTY(QString pairingCode READ pairingCode NOTIFY changed)
+    Q_PROPERTY(QString pairingClaimant READ pairingClaimant NOTIFY changed)
+    Q_PROPERTY(bool pairingInviter READ pairingInviter NOTIFY changed)
 
 public:
     ReportController(Preferences& prefs, const Strings& strings, std::shared_ptr<agentspeed::pricing::PriceBook> prices, QString dataDir,
@@ -213,6 +229,20 @@ public:
     QString menuText() const;
     bool reporting() const { return enabled(); }
     QString trafficNote() const;
+    bool profileAvailable() const;
+    bool avatarSupported() const;
+    bool identitySupported() const;
+    bool profileBound() const { return profile_ && profile_->sharedUserId.has_value(); }
+    QString profileName() const;
+    QString avatarSource() const;
+    bool avatarPending() const { return !pendingAvatar_.isEmpty(); }
+    bool profileBusy() const { return profileBusy_; }
+    QString profileError() const { return profileError_; }
+    QVariantList profileDevices() const;
+    QString pairingState() const { return pairing_ ? QString::fromStdString(pairing_->state) : QString(); }
+    QString pairingCode() const { return pairingCode_; }
+    QString pairingClaimant() const;
+    bool pairingInviter() const { return pairingInviter_; }
 
     Q_INVOKABLE void setEnabledByUser(bool on);
     Q_INVOKABLE void chooseService(int index);
@@ -247,6 +277,23 @@ public:
     Q_INVOKABLE void acceptInvite();
     Q_INVOKABLE void declineInvite();
     Q_INVOKABLE void openLink(const QString& url);
+    Q_INVOKABLE void refreshProfile();
+    Q_INVOKABLE void chooseAvatar();
+    // The local preview of an image file (nothing is sent before uploadAvatar).
+    void loadAvatar(const QString& path);
+    Q_INVOKABLE void uploadAvatar();
+    Q_INVOKABLE void cancelAvatar();
+    Q_INVOKABLE void removeAvatar();
+    Q_INVOKABLE void saveProfileName(const QString& name);
+    Q_INVOKABLE void createIdentity();
+    Q_INVOKABLE void unlinkDevice();
+    Q_INVOKABLE void invitePairing();
+    Q_INVOKABLE void joinPairing(const QString& code);
+    Q_INVOKABLE void approvePairing();
+    Q_INVOKABLE void cancelPairing();
+    Q_INVOKABLE void checkPairing();
+    Q_INVOKABLE void openDevices();
+    Q_INVOKABLE void closeDevices();
     Q_INVOKABLE void showSettings() { emit settingsRequested(); }
     // Quits the app after the leaving report (METRICS 11.5: at most 1 s).
     Q_INVOKABLE void quitApp();
@@ -268,6 +315,7 @@ signals:
     void consentRequested();
     void settingsRequested();
     void forgetConfirmRequested();
+    void devicesRequested();
 
 private:
     struct Draft {
@@ -335,7 +383,7 @@ private:
     void rotateKeyIfDue();
     void promotePendingKey();
     void signedCall(const QByteArray& method, const std::string& path, const std::string& body, bool usePending, bool withNewKey,
-                    std::function<void(const ReportResponse&)> done);
+                    std::function<void(const ReportResponse&)> done, const char* contentType = nullptr, qint64 cap = 16'384);
     void scheduleRefresh();
     void endIdentity(bool deleteKeys);
 
@@ -369,6 +417,13 @@ private:
     // METRICS 11.10 Watch, sent to the engine when it changes.
     void updateTaskWatch();
     std::string taskSignature(const agentspeed::report::Sample& sample) const;
+
+    // report_profile_ui.cpp.
+    void profileCall(const QByteArray& method, const std::string& path, const std::string& body, const char* contentType,
+                     std::function<void(const ReportResponse&)> done);
+    void applyProfile(const ReportResponse& response);
+    void fetchAvatar();
+    void pollPairing();
 
     // report_preview.cpp.
     void refreshPreview();
@@ -427,4 +482,10 @@ private:
     qint64 previewStartedMs_ = 0;
     QString previewRunId_, previewDeviceId_;
     QString previewBody_, previewRequest_, previewFooter_, previewCopy_;
+    std::optional<agentspeed::report::profile::Profile> profile_;
+    QByteArray pendingAvatar_, avatarImage_;
+    bool profileBusy_ = false, pairingInviter_ = false, devicesOpen_ = false;
+    QString profileError_, pairingCode_;
+    std::optional<agentspeed::report::profile::Pairing> pairing_;
+    QTimer pairingTimer_;
 };

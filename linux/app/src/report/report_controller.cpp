@@ -69,6 +69,7 @@ ReportController::ReportController(Preferences& prefs, const Strings& strings, s
     connect(&prefs_, &Preferences::networkEnabledChanged, this, [this] {
         post(prefs_.networkEnabled() ? agentspeed::report::Event::NetworkOn : agentspeed::report::Event::NetworkOff);
         if (prefs_.networkEnabled() && enabled()) fetchDiscovery(false);
+        if (!prefs_.networkEnabled()) pairingTimer_.stop();
         notify();
     });
     for (auto signal : {&Preferences::trafficChanged, &Preferences::metricChanged, &Preferences::redlineChanged})

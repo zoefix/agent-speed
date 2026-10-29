@@ -21,6 +21,7 @@ qt_add_executable(agent-speed
     src/report/report_http.cpp
     src/report/report_keys.cpp
     src/report/report_preview.cpp
+    src/report/report_profile_ui.cpp
     src/report/report_settings.cpp
     src/report/report_socket.cpp
     src/report/report_stream_run.cpp
@@ -46,9 +47,11 @@ set(agent_speed_qml
     qml/FieldInput.qml
     qml/LinkButton.qml
     qml/ReportConsentWindow.qml
+    qml/ReportDevicesWindow.qml
     qml/ReportInviteCard.qml
     qml/ReportPreviewText.qml
     qml/ReportPreviewWindow.qml
+    qml/ReportProfileCard.qml
     qml/AgentRow.qml
     qml/CostPage.qml
     qml/CurrencyPicker.qml

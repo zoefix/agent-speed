@@ -264,6 +264,11 @@ SettingsPage {
         }
     }
 
+    // The profile card (REPORTING-EXTENSIONS) when the service offers it.
+    ReportProfileCard {
+        visible: report.profileAvailable
+    }
+
     // 3. Username and 4. API key
     SettingsGroup {
         Item {

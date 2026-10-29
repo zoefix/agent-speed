@@ -261,8 +261,10 @@ int main(int argc, char* argv[]) {
     // The preview and the consent sheet are windows of their own (DESIGN 11).
     QQmlComponent previewComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("ReportPreviewWindow"));
     QQmlComponent consentComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("ReportConsentWindow"));
+    QQmlComponent devicesComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("ReportDevicesWindow"));
     QQuickWindow* previewWindow = nullptr;
     QQuickWindow* consentWindow = nullptr;
+    QQuickWindow* devicesWindow = nullptr;
     const auto present = [&](QQmlComponent& component, QQuickWindow*& slot) {
         if (!slot) {
             slot = qobject_cast<QQuickWindow*>(component.create(engine.rootContext()));
@@ -277,6 +279,7 @@ int main(int argc, char* argv[]) {
     };
     QObject::connect(&report, &ReportController::previewRequested, &app, [&] { present(previewComponent, previewWindow); });
     QObject::connect(&report, &ReportController::consentRequested, &app, [&] { present(consentComponent, consentWindow); });
+    QObject::connect(&report, &ReportController::devicesRequested, &app, [&] { present(devicesComponent, devicesWindow); });
     // The update window (UPDATES 4), from the tray item, the notification, the dashboard pill or Settings.
     QQmlComponent updateComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("UpdateWindow"));
     QQuickWindow* updateWindow = nullptr;

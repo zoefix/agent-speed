@@ -249,7 +249,7 @@ static std::optional<agentspeed::report::ServiceUrl> apiOf(const std::optional<a
 }
 
 void ReportController::signedCall(const QByteArray& method, const std::string& path, const std::string& body, bool usePending, bool withNewKey,
-                                  std::function<void(const ReportResponse&)> done) {
+                                  std::function<void(const ReportResponse&)> done, const char* contentType, qint64 cap) {
     ReportResponse failed;
     // The network master switch stops every request (NETWORK 1).
     if (!networkEnabled() || !service_ || !identity_) {
@@ -272,8 +272,12 @@ void ReportController::signedCall(const QByteArray& method, const std::string& p
     options.platform = "Linux";
     if (withNewKey) options.newKey = &*pendingKey_;
     const auto url = api->endpoint(path);
-    const auto headers = agentspeed::report::signedHeaders(*key, method.toStdString(), url, sv(identity_->deviceId), body, options);
-    http_.send(method, url, body, headers, std::move(done));
+    auto headers = agentspeed::report::signedHeaders(*key, method.toStdString(), url, sv(identity_->deviceId), body, options);
+    if (contentType) {
+        for (auto& [name, value] : headers)
+            if (name == "Content-Type") value = contentType;
+    }
+    http_.send(method, url, body, headers, std::move(done), cap);
 }
 
 void ReportController::registerDevice(bool transfer, std::function<void(const ReportResponse&)> done) {
@@ -563,8 +567,26 @@ bool ReportController::startSelfTest(const QString& url) {
     commitCustomUrl();
     setEnabledByUser(true);
     auto* poll = new QTimer(this);
-    connect(poll, &QTimer::timeout, this, [this, poll] {
+    // AGENT_SPEED_SELFTEST_AVATAR=<image>: once registered, also create a shared identity and upload that avatar.
+    const auto avatarPath = qEnvironmentVariable("AGENT_SPEED_SELFTEST_AVATAR");
+    auto profileStep = std::make_shared<int>(0);
+    connect(poll, &QTimer::timeout, this, [this, poll, avatarPath, profileStep] {
         if (consent_ && consentReady()) startReporting();
+        if (!avatarPath.isEmpty() && profileAvailable() && !profileBusy_) {
+            switch ((*profileStep)++) {
+            case 0: createIdentity(); break;
+            case 1:
+                loadAvatar(avatarPath);
+                uploadAvatar();
+                break;
+            case 2: refreshProfile(); break;
+            case 3:
+                qInfo("report selftest: profile bound=%d avatar=%d devices=%d error=%s", profileBound(), !avatarImage_.isEmpty(),
+                      static_cast<int>(profileDevices().size()), qPrintable(profileError_));
+                break;
+            default: break;
+            }
+        }
         static QString last;
         const auto line = statusLevel() + QStringLiteral(" ") + statusText();
         if (line != last) qInfo("report selftest: %s", qPrintable(line));

@@ -19,6 +19,7 @@ struct ReportFetch {
 struct ReportResponse {
     std::optional<agentspeed::report::Reply> reply;  // nullopt: a transport failure
     ReportFailure failure = ReportFailure::Unreachable;
+    QByteArray body;  // the raw answer (profile snapshots, avatar images)
 };
 
 // REPORTING 2.3 on Qt: HTTPS with the system's trust and proxy, no cookies, no answered authentication challenge, at
@@ -29,8 +30,9 @@ class ReportHttp : public QObject {
 public:
     explicit ReportHttp(QObject* parent = nullptr);
     void discover(const agentspeed::report::ServiceUrl& service, std::function<void(ReportFetch)> done);
+    // `cap`: the body limit of the answer (16 KiB for the API, 64 KiB for profile JSON, 512 KiB for an avatar).
     void send(const QByteArray& method, const std::string& url, const std::string& body, const agentspeed::report::Headers& headers,
-              std::function<void(ReportResponse)> done);
+              std::function<void(ReportResponse)> done, qint64 cap = 16'384);
     // Every request in flight ends without calling back (forget, quit).
     void abortAll();
 

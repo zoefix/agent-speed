@@ -140,13 +140,13 @@ void ReportHttp::discover(const agentspeed::report::ServiceUrl& service, std::fu
 }
 
 void ReportHttp::send(const QByteArray& method, const std::string& url, const std::string& body, const agentspeed::report::Headers& headers,
-                      std::function<void(ReportResponse)> done) {
+                      std::function<void(ReportResponse)> done, qint64 cap) {
     const QUrl target(QString::fromStdString(url));
     auto request = baseRequest(target, kApiTimeoutMs);
     for (const auto& [name, value] : headers) request.setRawHeader(QByteArray::fromStdString(name), QByteArray::fromStdString(value));
     const auto data = QByteArray::fromStdString(body);
     auto* reply = nam_.sendCustomRequest(request, method, data);
-    guard(reply, kApiTimeoutMs, kApiCap);
+    guard(reply, kApiTimeoutMs, std::max(cap, kApiCap));
     const auto generation = generation_;
     const auto started = QDateTime::currentMSecsSinceEpoch();
     QPointer<ReportHttp> self(this);
@@ -156,6 +156,7 @@ void ReportHttp::send(const QByteArray& method, const std::string& url, const st
         const int status = reply->attribute(QNetworkRequest::HttpStatusCodeAttribute).toInt();
         const auto bytes = reply->readAll();
         ReportResponse response;
+        response.body = bytes;
         if (reply->property("tooBig").toBool()) {
             response.failure = ReportFailure::Response;
         } else if (status > 0 && !reply->property("timedOut").toBool()) {
