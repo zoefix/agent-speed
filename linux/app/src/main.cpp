@@ -240,7 +240,8 @@ int main(int argc, char* argv[]) {
                                std::any_of(arguments.begin(), arguments.end(),
                                            [](const QString& a) {
                                                return a.startsWith(QStringLiteral("--settings-snapshot=")) ||
-                                                      a.startsWith(QStringLiteral("--history-snapshot="));
+                                                      a.startsWith(QStringLiteral("--history-snapshot=")) ||
+                                                      a.startsWith(QStringLiteral("--card-snapshot="));
                                            });
     if (!offscreenShot) orbWindow.restore();
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
@@ -291,6 +292,24 @@ int main(int argc, char* argv[]) {
     if (!snapshotPath.isEmpty()) {
         QTimer::singleShot(3000, &app, [&] {
             window->grabWindow().save(snapshotPath);
+            QApplication::quit();
+        });
+    }
+    // Development aid: --card-snapshot=<file.png>[:row] opens the score card of a dashboard row, saves it and quits.
+    for (const auto& arg : arguments) {
+        if (!arg.startsWith(QStringLiteral("--card-snapshot="))) continue;
+        auto spec = arg.mid(16);
+        int row = 0;
+        if (const auto colon = spec.lastIndexOf(QLatin1Char(':')); colon > 0) {
+            row = spec.mid(colon + 1).toInt();
+            spec = spec.left(colon);
+        }
+        QTimer::singleShot(2500, &app, [&, row] {
+            window->show();
+            QMetaObject::invokeMethod(window, "showCardFor", Q_ARG(QVariant, row));
+        });
+        QTimer::singleShot(3500, &app, [&, spec] {
+            if (auto* card = qobject_cast<QQuickWindow*>(window->property("card").value<QObject*>())) card->grabWindow().save(spec);
             QApplication::quit();
         });
     }

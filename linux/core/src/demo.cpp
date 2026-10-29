@@ -26,6 +26,57 @@ double surge(double seconds) {
 
 constexpr double kResponsePeriods[] = {2.9, 3.7, 4.3};
 
+// A demo task that moves through the states on a 120-second loop, so every form of 智力 shows.
+AgentTask demoTask(double t, double offset, Phase phase, const char* suite) {
+    const double into = std::fmod(t + offset, 120.0);
+    AgentTask task;
+    tasks::TaskResult r;
+    r.counts.actions = 6 + static_cast<std::int64_t>(into / 6);
+    r.counts.counted = r.counts.actions;
+    r.counts.edits = 2;
+    r.ig = 0.82;
+    r.dims.E = 10 * std::min(1.0, static_cast<double>(r.counts.counted) / 8) * r.ig;
+    if (into < 25) {
+        r.state = "unverified";
+    } else if (into < 55) {
+        r.state = "failing";
+        r.dims.C = 15;
+        r.openFailure = tasks::OpenFailure{suite, "test", "demo", 3, 5, true, false};
+        r.counts.runs = 2;
+        r.counts.failingRuns = r.counts.fixAttempts = r.counts.episodes = 2;
+    } else if (into < 100) {
+        r.state = "passing";
+        r.dims = {40, 25, 7.5, r.dims.E, 10};
+        r.lastPass = tasks::LastPass{suite, "test", "demo", false};
+        r.counts.runs = 3;
+    } else {
+        r.state = "pending";
+        r.dims = {0, 25, 7.5, r.dims.E, 4};
+        r.vHeld = 40;
+        r.lastPass = tasks::LastPass{suite, "test", "demo", false};
+        r.counts.runs = 3;
+    }
+    const double score = r.dims.V + r.dims.C + r.dims.R + r.dims.E + r.dims.K;
+    r.score = score;
+    r.shown = tasks::roundHalfAway(score);
+    task.value.form = phase == Phase::Idle ? "resting" : "live";
+    task.value.score = score;
+    task.value.shown = r.shown;
+    task.value.state = r.state;
+    task.models = tasks::priorModels();
+    task.models.success.tasks = task.models.stall.tasks = 23;
+    task.models.fix.tasks = 9;
+    tasks::Predictions p;
+    p.success = r.state == "passing" ? 0.91 : r.state == "failing" ? 0.37 : 0.58;
+    p.stall = r.state == "failing" ? 0.19 : 0.08;
+    if (r.state == "failing") p.fix = 0.34;
+    task.predictions = p;
+    task.workSignals.failed = r.state == "failing" ? 2 : 0;
+    task.workSignals.novelty = 0.78;
+    task.task = r;
+    return task;
+}
+
 }  // namespace
 
 Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory);
@@ -69,8 +120,24 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
         (s.source == SourceKind::Codex ? codex : claude) += row.liveOutput;
         if (row.phase == Phase::Generating) ++snap.generating;
         if (row.phase == Phase::Tools) ++snap.tools;
+        row.effort = s.depth == 0 ? (s.source == SourceKind::Codex ? "xhigh" : "high") : "medium";
+        if (s.source == SourceKind::Codex) row.speed = "fast";
+        row.task = demoTask(t, s.period * 9 + s.phase * 13, row.phase, s.source == SourceKind::Codex ? "cargo test" : "pytest");
+        row.liveThinking = row.liveOutput * 0.35;
         snap.agents.push_back(row);
     }
+    std::vector<tasks::ValuedAgent> valued;
+    for (const auto& a : snap.agents) valued.push_back({a.id, nowMs, a.task->value});
+    ScoreSet all;
+    all.value = tasks::highest(valued);
+    for (const auto& a : snap.agents) {
+        if (all.value.agent && a.id == *all.value.agent) all.state = a.task->value.state;
+        if (all.value.form != "none" && a.task->value.form == all.value.form) ++all.scored;
+        all.liveThinking += a.liveThinking;
+        all.generating |= a.phase == Phase::Generating;
+    }
+    all.thinkingShare = 0.35;
+    snap.scoreSets.push_back(all);
     snap.liveOutput = codex + claude;
     snap.liveTotal = snap.liveOutput * 18.5;
     snap.estimatedShare = 0.12;

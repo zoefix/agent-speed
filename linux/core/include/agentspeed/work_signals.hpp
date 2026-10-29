@@ -43,7 +43,7 @@ struct Signals {
     std::optional<double> novelty;
     std::int64_t failed = 0, recovered = 0;
 };
-Signals signals(const std::deque<Action>& actions, std::int64_t now);
+Signals signalsOf(const std::deque<Action>& actions, std::int64_t now);
 
 // `exit_code` of the leading JSON object of a Codex exec output, or nullopt.
 std::optional<std::int64_t> codexExitCode(const json::Value& output);

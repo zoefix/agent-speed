@@ -18,7 +18,7 @@ struct AgentTask {
     std::optional<std::int64_t> taskStartMs;
     std::optional<tasks::Predictions> predictions;
     tasks::Models models;
-    work::Signals signals;
+    work::Signals workSignals;  // not `signals`: a Qt keyword in the app
 };
 
 struct AgentRow {

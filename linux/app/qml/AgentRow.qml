@@ -1,8 +1,10 @@
 import QtQuick
 
-// One agent: phase badge, project over "model · source", and the live value; sub-agents indent 12 with connectors.
+// One agent: phase badge, project over "model · source", effort capsule, 智力 and the live value; sub-agents indent 12
+// with connectors (DESIGN 4).
 Item {
     id: row
+    required property string key
     required property string project
     required property string detail
     required property string phase
@@ -12,6 +14,19 @@ Item {
     required property bool continues
     required property bool hasChildren
     required property int rails
+    required property string effort
+    required property int effortLevel
+    required property bool effortTop
+    required property int bolts
+    required property int iq
+    required property string iqForm
+    required property bool iqProof
+    required property bool looping
+    // Set by the list: the shared capsule column width and the 智力 cell width (DESIGN 4).
+    property real capsuleColumn: 0
+    property real iqWidth: 24
+    property bool capsuleWords: true
+    signal hoverChanged(bool hovered)
     implicitHeight: 40
 
     readonly property real indent: depth * 12
@@ -25,7 +40,10 @@ Item {
         color: hover.hovered ? Theme.hover : "transparent"
         Behavior on color { ColorAnimation { duration: 120 } }
     }
-    HoverHandler { id: hover }
+    HoverHandler {
+        id: hover
+        onHoveredChanged: row.hoverChanged(hovered)
+    }
 
     Repeater {
         model: row.depth > 1 ? row.depth - 1 : 0
@@ -73,17 +91,32 @@ Item {
     Column {
         anchors.left: badge.right
         anchors.leftMargin: 10
-        anchors.right: slot.left
+        anchors.right: capsuleSlot.left
         anchors.rightMargin: 10
         anchors.verticalCenter: parent.verticalCenter
         spacing: 1
-        Text {
+        Row {
             width: parent.width
-            text: row.project
-            color: Theme.ink
-            font.pixelSize: 13
-            font.weight: Font.DemiBold
-            elide: Text.ElideRight
+            spacing: 4
+            Glyph {
+                id: loopMark
+                anchors.verticalCenter: parent.verticalCenter
+                width: row.looping || opacity > 0 ? 11 : 0
+                height: 11
+                name: "loop"
+                color: Theme.amber
+                opacity: row.looping ? 1 : 0
+                visible: width > 0
+                Behavior on opacity { NumberAnimation { duration: row.looping ? 250 : 600 } }
+            }
+            Text {
+                width: parent.width - (loopMark.visible ? loopMark.width + 4 : 0)
+                text: row.project
+                color: Theme.ink
+                font.pixelSize: 13
+                font.weight: Font.DemiBold
+                elide: Text.ElideRight
+            }
         }
         Text {
             width: parent.width
@@ -92,6 +125,36 @@ Item {
             font.pixelSize: 12
             elide: Text.ElideRight
         }
+    }
+
+    Item {
+        id: capsuleSlot
+        anchors.right: iqCell.left
+        anchors.rightMargin: row.capsuleColumn > 0 ? 8 : 6
+        anchors.verticalCenter: parent.verticalCenter
+        width: row.capsuleColumn
+        height: 18
+        Behavior on width { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+        EffortCapsule {
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            level: row.effortLevel
+            word: row.effort
+            topRung: row.effortTop
+            bolts: row.bolts
+            showWord: row.capsuleWords
+        }
+    }
+
+    IqCell {
+        id: iqCell
+        anchors.right: slot.left
+        anchors.rightMargin: 6
+        anchors.verticalCenter: parent.verticalCenter
+        width: row.iqWidth
+        value: row.iq
+        form: row.iqForm
+        proof: row.iqProof
     }
 
     LiveSlot {

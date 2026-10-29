@@ -22,7 +22,7 @@ TEST(WorkSignals, MatchTheReferenceCases) {
             const auto failed = a["failed"].isBool() ? std::optional<bool>(a["failed"].isTrue()) : std::nullopt;
             actions.push_back({*a["at"].truncated(), *a["tool"].string(), *a["digest"].string(), failed, 0});
         }
-        const auto got = work::signals(actions, *c["nowMs"].truncated());
+        const auto got = work::signalsOf(actions, *c["nowMs"].truncated());
         const auto w = c["expect"];
         EXPECT_EQ(got.looping, fixtures::optInt(w["looping"]));
         EXPECT_EQ(got.repeating, fixtures::optInt(w["repeating"]));

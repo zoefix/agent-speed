@@ -21,6 +21,22 @@ QtObject {
     readonly property color sidebar: dark ? "#13151A" : "#F2F3F7"
     readonly property color field: dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.045)
 
+    // Task score (DESIGN 12): the score ink, its track and the state chips.
+    readonly property color scoreInk: dark ? "#93A4D6" : "#4B5FA6"
+    readonly property color track: dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.075)
+    readonly property color passInk: dark ? "#6EE7B7" : "#047857"
+    readonly property color passFill: dark ? Qt.rgba(0.204, 0.827, 0.6, 0.14) : Qt.rgba(0.063, 0.725, 0.506, 0.12)
+    readonly property color failInk: dark ? "#FBBF24" : "#B45309"
+    readonly property color failFill: dark ? Qt.rgba(0.961, 0.647, 0.141, 0.14) : Qt.rgba(0.961, 0.62, 0.043, 0.14)
+    readonly property color cardFill: dark ? "#26272B" : "#FFFFFF"
+    readonly property color cardLine: dark ? Qt.rgba(1, 1, 1, 0.12) : Qt.rgba(0, 0, 0, 0.09)
+    readonly property color caption: dark ? Qt.rgba(0.922, 0.922, 0.961, 0.56) : Qt.rgba(0.235, 0.235, 0.263, 0.72)
+    readonly property color cellFill: dark ? Qt.rgba(1, 1, 1, 0.06) : Qt.rgba(0, 0, 0, 0.05)
+    readonly property color bolt: dark ? "#F5A524" : "#B86E00"
+    readonly property color capsuleFill: dark ? Qt.rgba(1, 1, 1, 0.07) : Qt.rgba(0, 0, 0, 0.055)
+    readonly property color capsuleLine: dark ? Qt.rgba(1, 1, 1, 0.08) : Qt.rgba(0, 0, 0, 0.08)
+    readonly property color meterOff: dark ? Qt.rgba(1, 1, 1, 0.18) : Qt.rgba(0, 0, 0, 0.14)
+
     readonly property var tabular: ({ "tnum": 1 })
 
     readonly property var sourceColors: ({

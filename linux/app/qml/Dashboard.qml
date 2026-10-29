@@ -59,10 +59,114 @@ Window {
             agents.push({
                 key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, phase: a.phase,
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
-                rails: facts[j].rails
+                rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
+                bolts: a.bolts, iq: a.iq, iqForm: a.iqForm, iqProof: a.iqProof, looping: a.looping
             })
         }
         Sync.sync(agentModel, agents, "key")
+        // The capsule column is as wide as the widest capsule among the visible rows (DESIGN 4).
+        var widest = 0, deepest = 0
+        for (var c = 0; c < shown.length; ++c) {
+            widest = Math.max(widest, capsuleWidth(shown[c], true))
+            deepest = Math.max(deepest, shown[c].depth)
+        }
+        // The name block keeps 72 px at the deepest indent, or every capsule drops its word.
+        var room = 328 - deepest * 12 - 16 - 10 - 10 - iqCellWidth - 6 - 52 - (widest > 0 ? 8 : 0)
+        capsuleWords = room - widest >= 72
+        if (!capsuleWords) {
+            widest = 0
+            for (var w = 0; w < shown.length; ++w) widest = Math.max(widest, capsuleWidth(shown[w], false))
+        }
+        capsuleColumn = widest
+        if (scoreCard.visible) {
+            var info = cardInfo(cardKey)
+            if (info) scoreCard.info = info
+            else hideCard()
+        }
+    }
+
+    property real capsuleColumn: 0
+    property bool capsuleWords: true
+    FontMetrics { id: capsuleMetrics; font.pixelSize: 11; font.weight: Font.Medium }
+    FontMetrics { id: iqMetrics; font.pixelSize: 12; font.weight: Font.Medium }
+    FontMetrics { id: captionMetrics; font.pixelSize: 11; font.weight: Font.Medium }
+    readonly property real iqCellWidth: Math.ceil(Math.max(iqMetrics.advanceWidth("888"), captionMetrics.advanceWidth(S.tr2(S.rev, "intel.glyph"))))
+
+    function capsuleWidth(a, withWord) {
+        var parts = []
+        if (a.effortLevel >= 0) parts.push(18.5)
+        if (withWord && a.effort) parts.push(capsuleMetrics.advanceWidth(a.effort.toLowerCase()))
+        if (a.bolts > 0) parts.push(a.bolts > 1 ? 15 : 9)
+        if (parts.length === 0) return 0
+        var sum = 12 + 5 * (parts.length - 1)
+        for (var i = 0; i < parts.length; ++i) sum += parts[i]
+        return Math.ceil(sum)
+    }
+
+    // The score card (DESIGN 12): 0.45 s of hover shows it beside the panel; another row switches at once; it hides
+    // 0.15 s after the pointer leaves.
+    property string cardKey: ""
+    property string hoverKey: ""
+    property Item hoverItem: null
+    function cardInfo(key) {
+        var rows = (appState.snapshot.agents || [])
+        for (var i = 0; i < rows.length; ++i) {
+            if (rows[i].id === key) return rows[i].card
+        }
+        return null
+    }
+    function rowHover(key, item, hovered) {
+        if (hovered) {
+            hoverKey = key
+            hoverItem = item
+            cardHide.stop()
+            if (scoreCard.visible) openCard()
+            else cardShow.restart()
+        } else if (hoverKey === key) {
+            hoverKey = ""
+            cardShow.stop()
+            if (scoreCard.visible) cardHide.restart()
+        }
+    }
+    function openCard() {
+        var info = cardInfo(hoverKey)
+        if (!info || !hoverItem) return
+        const changed = cardKey !== hoverKey
+        cardKey = hoverKey
+        scoreCard.info = info
+        var top = hoverItem.mapToItem(null, 0, 0).y
+        var scr = root.screen
+        scoreCard.availableHeight = scr ? scr.desktopAvailableHeight : 10000
+        var towardLeft = !scr || (root.x + root.width / 2 > scr.virtualX + scr.width / 2)
+        scoreCard.x = towardLeft ? root.x + frame.x - 8 - 300 - scoreCard.pad : root.x + frame.x + frame.width + 8 - scoreCard.pad
+        var y = root.y + top - scoreCard.pad
+        if (scr) {
+            var minY = scr.virtualY + 8 - scoreCard.pad
+            var maxY = scr.virtualY + scr.desktopAvailableHeight - 8 - scoreCard.height + scoreCard.pad
+            y = Math.max(minY, Math.min(y, maxY))
+        }
+        scoreCard.y = y
+        scoreCard.visible = true
+        if (changed) scoreCard.fit()
+    }
+    function hideCard() {
+        cardShow.stop()
+        cardHide.stop()
+        scoreCard.visible = false
+        cardKey = ""
+    }
+    Timer { id: cardShow; interval: 450; onTriggered: root.openCard() }
+    Timer { id: cardHide; interval: 150; onTriggered: root.hideCard() }
+    onVisibleChanged: if (!visible) hideCard()
+    ScoreCard { id: scoreCard; visible: false }
+    property alias card: scoreCard
+    // Development aid (--card-snapshot): the card of the row at `index` without hovering.
+    function showCardFor(index) {
+        var rows = appState.snapshot.agents || []
+        if (index >= rows.length) return
+        hoverKey = rows[index].id
+        hoverItem = agentList.itemAtIndex(index)
+        openCard()
     }
 
     Connections {
@@ -273,6 +377,10 @@ Window {
                 SectionHeader {
                     text: S.tr2(S.rev, "dashboard.agents")
                     trailing: agentModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
+                    secondary: agentModel.count > 0 ? S.tr2(S.rev, "intel.glyph") : ""
+                    secondaryTip: S.tr2(S.rev, "agents.intel.hint")
+                    // The 智力 caption's right edge sits on the 智力 column's: the live slot (52) and the 6 px gap.
+                    secondaryEdge: 58
                 }
                 RowLayout {
                     visible: agentModel.count === 0
@@ -299,7 +407,13 @@ Window {
                     clip: interactive
                     model: agentModel
                     ScrollBar.vertical: ScrollBar { policy: agentList.interactive ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
-                    delegate: AgentRow { width: agentList.width }
+                    delegate: AgentRow {
+                        width: agentList.width
+                        capsuleColumn: root.capsuleColumn
+                        capsuleWords: root.capsuleWords
+                        iqWidth: root.iqCellWidth
+                        onHoverChanged: hovered => root.rowHover(key, this, hovered)
+                    }
                     add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
                     remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
                     displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }

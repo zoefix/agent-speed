@@ -26,6 +26,7 @@ qt_add_executable(agent-speed
     src/orb/shaders.cpp
     src/orb/x11.cpp
     src/strings.cpp
+    src/task_card.cpp
     src/tray_icon.cpp
 )
 
@@ -37,6 +38,7 @@ set(agent_speed_qml
     qml/Dashboard.qml
     qml/Dropdown.qml
     qml/EffectsPage.qml
+    qml/EffortCapsule.qml
     qml/GeneralPage.qml
     qml/OrbPage.qml
     qml/PillButton.qml
@@ -58,9 +60,12 @@ set(agent_speed_qml
     qml/HistoryChart.qml
     qml/HistoryWindow.qml
     qml/IconButton.qml
+    qml/IqCell.qml
     qml/LiveChart.qml
     qml/LiveSlot.qml
     qml/PhaseBadge.qml
+    qml/ProofDots.qml
+    qml/ScoreCard.qml
     qml/SectionHeader.qml
     qml/SourceRow.qml
     qml/Sync.js

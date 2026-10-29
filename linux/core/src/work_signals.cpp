@@ -161,7 +161,7 @@ void ActionLog::feed(SourceKind source, const json::Value& obj, std::int64_t at)
     }
 }
 
-Signals signals(const std::deque<Action>& actions, std::int64_t now) {
+Signals signalsOf(const std::deque<Action>& actions, std::int64_t now) {
     std::vector<const Action*> recent;
     for (const auto& a : actions) {
         if (a.at >= now - kRecentMs) recent.push_back(&a);

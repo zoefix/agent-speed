@@ -120,6 +120,43 @@ Canvas {
             ctx.lineTo(3.2, 12.8); ctx.quadraticCurveTo(2, 12.8, 2, 11.6); ctx.closePath()
             ctx.stroke()
             break
+        case "bolt":
+            ctx.beginPath()
+            ctx.moveTo(9.4, 1); ctx.lineTo(3, 9.2); ctx.lineTo(7.4, 9.2); ctx.lineTo(6.4, 15)
+            ctx.lineTo(13, 6.6); ctx.lineTo(8.6, 6.6); ctx.closePath()
+            ctx.fill()
+            break
+        case "loop":
+            ctx.lineWidth = 1.5
+            ctx.beginPath(); ctx.arc(8, 8, 5.2, Math.PI * 1.08, Math.PI * 1.92, false); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(11.2, 1.9); ctx.lineTo(13.2, 4.4); ctx.lineTo(10.2, 5.2); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 8, 5.2, Math.PI * 0.08, Math.PI * 0.92, false); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(4.8, 14.1); ctx.lineTo(2.8, 11.6); ctx.lineTo(5.8, 10.8); ctx.stroke()
+            break
+        case "checkCircle":
+            ctx.beginPath(); ctx.arc(8, 8, 7, 0, Math.PI * 2); ctx.fill()
+            ctx.globalCompositeOperation = "destination-out"
+            ctx.lineWidth = 1.8
+            ctx.beginPath(); ctx.moveTo(4.6, 8.3); ctx.lineTo(7, 10.6); ctx.lineTo(11.4, 5.6); ctx.stroke()
+            break
+        case "alertCircle":
+            ctx.beginPath(); ctx.arc(8, 8, 7, 0, Math.PI * 2); ctx.fill()
+            ctx.globalCompositeOperation = "destination-out"
+            ctx.lineWidth = 1.9
+            ctx.beginPath(); ctx.moveTo(8, 4.2); ctx.lineTo(8, 8.8); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 11.6, 1.05, 0, Math.PI * 2); ctx.fill()
+            break
+        case "clock":
+            ctx.lineWidth = 1.4
+            ctx.beginPath(); ctx.arc(8, 8, 6.2, 0, Math.PI * 2); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(8, 4.4); ctx.lineTo(8, 8.3); ctx.lineTo(10.6, 9.8); ctx.stroke()
+            break
+        case "dotRing":
+            for (var k = 0; k < 8; ++k) {
+                var a = k * Math.PI / 4
+                ctx.beginPath(); ctx.arc(8 + 5.6 * Math.cos(a), 8 + 5.6 * Math.sin(a), 1.15, 0, Math.PI * 2); ctx.fill()
+            }
+            break
         case "check":
             ctx.lineWidth = 1.7
             ctx.beginPath(); ctx.moveTo(3.4, 8.4); ctx.lineTo(6.6, 11.4); ctx.lineTo(12.6, 4.8); ctx.stroke()

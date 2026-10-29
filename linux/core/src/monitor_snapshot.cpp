@@ -60,7 +60,7 @@ void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& re
         }
         cached.row.agent.lastLineMs = info.lastLineMs;
         row.task = AgentTask{cached.row.value,       cached.row.task,   cached.row.taskStartMs,
-                             cached.row.predictions, cached.row.models, work::signals(tracker->actions().actions(), nowMs)};
+                             cached.row.predictions, cached.row.models, work::signalsOf(tracker->actions().actions(), nowMs)};
         rows.push_back(cached.row);
     }
     std::erase_if(taskCache_, [&](const auto& entry) { return !present.contains(entry.first) && !agents_.contains(entry.first); });

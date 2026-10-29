@@ -10,6 +10,7 @@
 #include "format.hpp"
 #include "heat.hpp"
 #include "strings.hpp"
+#include "task_card.hpp"
 
 namespace {
 
@@ -104,9 +105,39 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("subagent"), a.subagent);
         row.insert(QStringLiteral("effort"), a.effort ? QString::fromStdString(*a.effort) : QString());
         row.insert(QStringLiteral("speed"), a.speed ? QString::fromStdString(*a.speed) : QString());
+        const auto level = a.effort ? agentspeed::effort_speed::level(*a.effort) : std::nullopt;
+        row.insert(QStringLiteral("effortLevel"), level ? *level : -1);
+        row.insert(QStringLiteral("effortTop"), a.effort && agentspeed::effort_speed::isTopRung(*a.effort));
+        row.insert(QStringLiteral("bolts"), a.speed ? agentspeed::effort_speed::bolts(*a.speed) : 0);
+        row.insert(QStringLiteral("looping"), a.task && a.task->workSignals.looping.has_value());
+        row.insert(QStringLiteral("liveThinking"), a.liveThinking);
+        task_card::cell(a, row);
+        row.insert(QStringLiteral("card"), task_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source)));
         agents.push_back(row);
     }
     map.insert(QStringLiteral("agents"), agents);
+
+    // 智力 and 思考 of every requested source set (DESIGN 10, 12); the first is every enabled source.
+    QVariantList sets;
+    for (const auto& set : snap.scoreSets) {
+        QVariantMap value;
+        value.insert(QStringLiteral("form"), QString::fromStdString(set.value.form));
+        value.insert(QStringLiteral("shown"), set.value.shown ? static_cast<int>(*set.value.shown) : -1);
+        value.insert(QStringLiteral("agent"), set.value.agent ? QString::fromStdString(*set.value.agent) : QString());
+        value.insert(QStringLiteral("scored"), static_cast<int>(set.scored));
+        const auto state = set.state.value_or("");
+        value.insert(QStringLiteral("proof"), set.value.shown && (state == "unverified" || state == "pending"));
+        value.insert(QStringLiteral("liveThinking"), set.liveThinking);
+        value.insert(QStringLiteral("thinkingText"), format::speed(set.liveThinking));
+        value.insert(QStringLiteral("generating"), set.generating);
+        QString project;
+        for (const auto& a : snap.agents) {
+            if (set.value.agent && a.id == *set.value.agent) project = a.project ? QString::fromStdString(*a.project) : QString();
+        }
+        value.insert(QStringLiteral("project"), project);
+        sets.push_back(value);
+    }
+    map.insert(QStringLiteral("scoreSets"), sets);
 
     // DESIGN 9: money values sum the billable sources (9.4); a partly unpriced value carries `≥`.
     double liveCost = 0, knownWeight = 0, weight = 0;
