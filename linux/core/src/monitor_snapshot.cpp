@@ -7,6 +7,7 @@
 #include "agentspeed/monitor_store.hpp"
 #include "agentspeed/openclaw.hpp"
 #include "agentspeed/opencode.hpp"
+#include "agentspeed/price_book.hpp"
 #include "agentspeed/zcode.hpp"
 
 // The engine tick (METRICS 6): live rate, today, history buckets, the agents list and the source rows.
@@ -53,6 +54,12 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
     snap.todayRequests = today.requests;
     snap.todayAverage = today.average;
     snap.peakToday = std::max(today.peak, live.output);
+    const auto cost = engine::liveCost(recent, agents, nowMs);
+    snap.liveCost = cost.microUsdPerSecond;
+    snap.liveCostKnownShare = cost.knownShare;
+    snap.todayCostMicroUsd = today.costMicroUsd;
+    snap.todayUnpricedRequests = today.unpricedRequests;
+    snap.priceVersion = config_.prices->currentVersion();
     const std::int64_t lastBucket = (nowMs / 1000) * 1000;
     const std::int64_t firstBucket = lastBucket - 119'000;
     const auto measured = engine::buckets(recent, firstBucket, lastBucket);
@@ -103,23 +110,26 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         row.available = available;
         row.sessions = sessionCount(kind, todayStartMs);
         if (row.enabled) {
-            std::vector<engine::Response> own;
-            std::int64_t requests = 0;
+            std::vector<engine::Response> own, ownToday;
             for (const auto& r : responses) {
                 if (r.source != kind) continue;
-                if (r.endMs >= todayStartMs && r.endMs <= nowMs) {
-                    row.todayOutput += r.output;
-                    row.todayInput += r.input;
-                    requests += r.requestCount;
-                }
+                ownToday.push_back(r);
                 if (r.endMs >= nowMs - Store::kRetentionMs) own.push_back(r);
             }
-            row.todayRequests = requests;
+            const auto stats = engine::todayStats(ownToday, todayStartMs, nowMs);
+            row.todayOutput = stats.output;
+            row.todayInput = stats.input;
+            row.todayRequests = stats.requests;
+            row.todayCostMicroUsd = stats.costMicroUsd;
+            row.unpricedRequests = stats.unpricedRequests;
             std::vector<engine::Agent> ownAgents;
             for (const auto& a : agents) {
                 if (a.source == kind) ownAgents.push_back(a);
             }
             row.liveOutput = engine::liveRate(own, ownAgents, nowMs).output;
+            const auto ownCost = engine::liveCost(own, ownAgents, nowMs);
+            row.liveCost = ownCost.microUsdPerSecond;
+            row.liveCostKnownShare = ownCost.knownShare;
             row.activeAgents = static_cast<int>(std::count_if(snap.agents.begin(), snap.agents.end(), [&](const AgentRow& a) {
                 return a.source == kind && a.phase == Phase::Generating;
             }));

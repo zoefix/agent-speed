@@ -32,10 +32,15 @@ class Source;
 struct Update;
 }
 class TimeZone;
+namespace pricing {
+class PriceBook;
+}
 
 struct MonitorConfig {
     std::set<SourceKind> enabled = allSources();
     SourceLocations locations;
+    // Null: a book with the bundled table only.
+    std::shared_ptr<pricing::PriceBook> prices;
 
     static std::set<SourceKind> allSources();
     // METRICS 2 roots from the process environment and the user's folder settings.
@@ -78,6 +83,8 @@ public:
     std::optional<std::string> parentOf(const std::string& agentId);
     // Every response held (today and the retention window), latest version per key.
     std::vector<ParsedResponse> responses() const;
+    // A newer price table arrived: today's unpriced responses are priced again.
+    void repriceToday();
 
 private:
     struct Root {

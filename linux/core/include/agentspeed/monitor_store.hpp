@@ -8,6 +8,9 @@
 
 #include "agentspeed/engine.hpp"
 #include "agentspeed/monitor.hpp"
+#include "agentspeed/price_book.hpp"
+#include "agentspeed/pricing.hpp"
+#include "agentspeed/tz.hpp"
 
 namespace agentspeed {
 
@@ -20,6 +23,14 @@ public:
 
     explicit Store(const std::set<SourceKind>* enabled = nullptr) : enabled_(enabled) {}
     void setEnabled(const std::set<SourceKind>* enabled) { enabled_ = enabled; }
+    // METRICS 9.3, 9.7: every response is priced with the table bound to its local date.
+    void setPricing(std::shared_ptr<pricing::PriceBook> book, std::shared_ptr<const TimeZone> zone) {
+        book_ = std::move(book);
+        zone_ = std::move(zone);
+    }
+    std::string localDate(std::int64_t ms) const {
+        return pricing::UtcDay(ms + (zone_ ? zone_->offsetMs(ms) : 0)).label();
+    }
 
     void onResponse(const ParsedResponse& r, bool completion) override {
         if (enabled_ && !enabled_->contains(r.source)) return;
@@ -45,6 +56,15 @@ public:
         e.output = r.tokens.output;
         e.final = r.final;
         e.requestCount = r.requestCount;
+        e.costMicroUsd = book_ ? book_->cost(r, localDate(r.endMs)) : std::nullopt;
+    }
+
+    // A new current table prices today's unpriced responses again (METRICS 9.7).
+    void reprice() {
+        if (!book_) return;
+        for (auto& [_, slot] : byKey_) {
+            if (!slot.engine.costMicroUsd) slot.engine.costMicroUsd = book_->cost(slot.parsed, localDate(slot.parsed.endMs));
+        }
     }
 
     void goLive() { live_ = true; }
@@ -79,6 +99,8 @@ private:
         engine::Response engine;
     };
     const std::set<SourceKind>* enabled_;
+    std::shared_ptr<pricing::PriceBook> book_;
+    std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, Slot> byKey_;
     std::vector<Completion> completions_;
     bool live_ = false;

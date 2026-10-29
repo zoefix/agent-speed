@@ -13,8 +13,6 @@
 // The database and log sources (METRICS 4.5, 4.10, 4.14, 4.15): each keeps its own state and hands the monitor updates.
 namespace agentspeed {
 
-namespace {
-
 std::shared_ptr<const TimeZone> localZone(const Environment& environment) {
     if (auto tz = environment("TZ"); tz && !tz->empty()) {
         const auto id = tz->front() == ':' ? tz->substr(1) : *tz;
@@ -23,8 +21,6 @@ std::shared_ptr<const TimeZone> localZone(const Environment& environment) {
     if (auto zone = TimeZone::load("localtime")) return zone;
     return TimeZone::utc();
 }
-
-}  // namespace
 
 void Monitor::initSources() {
     const auto& l = config_.locations;
@@ -49,7 +45,6 @@ void Monitor::initSources() {
             deduper_);
     }
     if (config_.enabled.contains(SourceKind::Hermes) && !l.hermesRoot.empty()) {
-        zone_ = localZone(environment_);
         hermes_ = std::make_unique<hermes::Source>(l.hermesRoot, l.hermesChosen, deduper_, zone_);
     }
 }

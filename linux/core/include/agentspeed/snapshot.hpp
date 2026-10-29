@@ -44,6 +44,11 @@ struct SourceRow {
     int activeAgents = 0;
     std::int64_t todayInput = 0;
     std::int64_t todayRequests = 0;
+    // METRICS 9.5, 9.6: micro-USD per second, today's known costs and the responses without a price.
+    double liveCost = 0;
+    double liveCostKnownShare = 1;
+    std::int64_t todayCostMicroUsd = 0;
+    std::int64_t unpricedRequests = 0;
 };
 
 struct Warnings {
@@ -65,6 +70,11 @@ struct Snapshot {
     std::int64_t todayRequests = 0;
     std::optional<double> todayAverage;
     double peakToday = 0;
+    double liveCost = 0;
+    double liveCostKnownShare = 1;
+    std::int64_t todayCostMicroUsd = 0;
+    std::int64_t todayUnpricedRequests = 0;
+    int priceVersion = 0;
     int generating = 0;
     int tools = 0;
     std::vector<AgentRow> agents;

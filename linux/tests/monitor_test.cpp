@@ -84,5 +84,7 @@ TEST(Monitor, EverySourceIsReadFromItsRoot) {
         EXPECT_TRUE(seen.contains(kind)) << sourceId(kind);
     }
     EXPECT_GT(snap.todayOutput, 0);
+    EXPECT_GT(snap.todayCostMicroUsd, 0);
+    EXPECT_GT(rowOf(snap, SourceKind::ClaudeCode).todayCostMicroUsd, 0);
     EXPECT_GT(monitor.trackedFiles(), 40u);
 }

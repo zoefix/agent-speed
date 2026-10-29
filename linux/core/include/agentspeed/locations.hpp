@@ -1,6 +1,7 @@
 #pragma once
 
 #include <functional>
+#include <memory>
 #include <optional>
 #include <string>
 #include <string_view>
@@ -16,6 +17,9 @@ namespace agentspeed {
 using Environment = std::function<std::optional<std::string>(const std::string&)>;
 Environment processEnvironment();
 std::string userHome(const Environment& environment);
+class TimeZone;
+// This computer's zone: $TZ, else /etc/localtime, else UTC.
+std::shared_ptr<const TimeZone> localZone(const Environment& environment);
 
 enum class RootFamily {
     Codex,

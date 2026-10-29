@@ -13,6 +13,7 @@
 #include "agentspeed/openclaw.hpp"
 #include "agentspeed/opencode.hpp"
 #include "agentspeed/parents.hpp"
+#include "agentspeed/price_book.hpp"
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/tz.hpp"
 #include "agentspeed/zcode.hpp"
@@ -50,6 +51,9 @@ Monitor::Monitor(MonitorConfig config)
     : config_(std::move(config)), environment_(processEnvironment()), home_(userHome(environment_)),
       store_(std::make_unique<Store>()) {
     store_->setEnabled(&config_.enabled);
+    if (!config_.prices) config_.prices = std::make_shared<pricing::PriceBook>();
+    zone_ = localZone(environment_);
+    store_->setPricing(config_.prices, zone_);
     for (const auto& [family, path] : config_.locations.fileRoots()) addRoot(family, path);
     initSources();
     refreshAvailability();
@@ -442,5 +446,7 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
 std::vector<Completion> Monitor::takeCompletions() { return store_->takeCompletions(); }
 
 std::vector<ParsedResponse> Monitor::responses() const { return store_->responses(); }
+
+void Monitor::repriceToday() { store_->reprice(); }
 
 }  // namespace agentspeed
