@@ -8,6 +8,7 @@
 
 #include "agentspeed/history.hpp"
 #include "agentspeed/sqlite.hpp"
+#include "agentspeed/task_score.hpp"
 
 // The persistent daily history (METRICS 8): per-file identities, owned key hashes and per-day contributions, plus the
 // peaks observed live, the price bindings (9.7) and the table copies they reference.
@@ -21,7 +22,10 @@ struct StoredFile {
     std::int64_t modified = 0;
     int version = 0;
     Contributions days;
+    // METRICS 6.11: the task records of a scored agent's file (an OpenClaw window), current version only.
+    std::vector<tasks::TaskRecord> records;
     bool hasUnpriced() const;
+    bool hasIncompleteTask() const;
 };
 
 class Store {

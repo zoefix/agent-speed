@@ -1,6 +1,7 @@
 #include "agentspeed/history_analyzer.hpp"
 
 #include <algorithm>
+#include <chrono>
 #include <cmath>
 #include <fstream>
 
@@ -14,6 +15,7 @@
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/tailer.hpp"
+#include "agentspeed/task_events.hpp"
 #include "agentspeed/tz.hpp"
 #include "agentspeed/zcode.hpp"
 
@@ -157,8 +159,44 @@ const StoredFile* Analyzer::previousOf(const std::string& path) const {
 
 bool Analyzer::unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const {
     return previous && !force && previous->version == kVersion && previous->family == family && previous->size == size &&
-           previous->modified == modified && !(repricing_ && previous->hasUnpriced());
+           previous->modified == modified && !(repricing_ && previous->hasUnpriced()) && !settlesTask(*previous);
 }
+
+// METRICS 6.11 Writes: a file whose last task is open is read again once 30 minutes have passed since that task's
+// last event (no later than the file's last change), so the task completes.
+bool Analyzer::settlesTask(const StoredFile& file) const {
+    constexpr std::int64_t kCompleteIdleMs = 30 * 60'000;
+    std::optional<std::int64_t> lastEnd;
+    for (const auto& r : file.records) {
+        if (!r.complete) lastEnd = std::max(lastEnd.value_or(r.endMs), r.endMs);
+    }
+    return lastEnd && analysisMs_ - *lastEnd >= kCompleteIdleMs;
+}
+
+std::vector<tasks::TaskRecord> Analyzer::taskRecords(const std::set<SourceKind>* sources) const {
+    std::vector<tasks::TaskRecord> out;
+    for (const auto& [path, file] : entries_) {
+        for (const auto& r : file.records) {
+            if (!sources || sources->contains(r.source)) out.push_back(r);
+        }
+    }
+    return out;
+}
+
+namespace {
+
+std::vector<tasks::TaskRecord> recordsOf(const tasks::Composer& composer, const TranscriptParser& parser, std::int64_t analysisMs,
+                                         const DayLabeler& labeler) {
+    auto records = tasks::taskRecords(composer.events(), analysisMs, parser.lastLineMs().value_or(0), composer.models());
+    for (auto& r : records) {
+        r.agentId = parser.agentId();
+        r.source = parser.source();
+        r.day = labeler.label(r.endMs).value_or("");
+    }
+    return records;
+}
+
+}  // namespace
 
 StoredFile& Analyzer::keep(StoredFile file, std::vector<std::uint64_t> owned) {
     if (const auto* previous = previousOf(file.path)) file.id = previous->id;
@@ -177,6 +215,7 @@ void Analyzer::flush(std::vector<std::pair<StoredFile*, std::vector<std::uint64_
 Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind>& enabled, std::shared_ptr<const TimeZone> zone,
                      const std::string& zoneId, const std::function<bool()>& cancelled) {
     Report report;
+    analysisMs_ = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
     const bool zoneChanged = !entries_.empty() && store_.meta("timeZone") != zoneId;
     const auto priceVersion = std::to_string(prices_->currentVersion());
     repricing_ = !entries_.empty() && store_.meta("priceTableVersion") != priceVersion;
@@ -247,6 +286,11 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         auto parser = makeParser(file.family, file.path, file.root, ledger);
         auto tailer = makeTailer(file.family, file.path);
         Latest sink(file.family == RootFamily::Claude);
+        std::unique_ptr<tasks::Composer> composer;
+        if (tasks::isScoredSource(parser->source())) {
+            composer = std::make_unique<tasks::Composer>(file.path, parser->source());
+            parser->setLineObserver(composer.get());
+        }
         auto* droidParser = dynamic_cast<droid::Parser*>(parser.get());
         TailResult result;
         try {
@@ -284,6 +328,7 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.modified = file.family == RootFamily::Droid ? file.identity : result.writeNs;
         entry.version = kVersion;
         entry.days = contributionsOf(sink.items(), parser->source(), labeler, *prices_);
+        if (composer) entry.records = recordsOf(*composer, *parser, analysisMs_, labeler);
         keep(std::move(entry), ledger.finish(parser->agentId()));
         ++report.filesAnalyzed;
         report.bytesAnalyzed += result.length;
@@ -433,8 +478,13 @@ void Analyzer::planOpenClaw(const SourceLocations& locations, const std::set<Sou
         const auto prefix = path + "#";
         bool windowsUnpriced = false;
         for (const auto& [p, e] : entries_) windowsUnpriced |= e.family == kOpenClawFamily && p.rfind(prefix, 0) == 0 && e.hasUnpriced();
+        bool windowsOpen = false;
+        for (const auto& [p, e] : entries_) windowsOpen |= e.family == kOpenClawFamily && p.rfind(prefix, 0) == 0 && settlesTask(e);
         const auto* previous = previousOf(path);
-        if (unchanged(previous, kOpenClawDatabaseFamily, stamp->length(), stamp->lastWriteNs(), force) && !(repricing_ && windowsUnpriced)) continue;
+        if (unchanged(previous, kOpenClawDatabaseFamily, stamp->length(), stamp->lastWriteNs(), force) && !(repricing_ && windowsUnpriced) &&
+            !windowsOpen) {
+            continue;
+        }
         if (previous) work.replaced.insert(previous->id);
         for (const auto& [p, e] : entries_) {
             if (e.family == kOpenClawFamily && p.rfind(prefix, 0) == 0) work.replaced.insert(e.id);
@@ -449,11 +499,15 @@ void Analyzer::planOpenClaw(const SourceLocations& locations, const std::set<Sou
 void Analyzer::analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
     for (const auto& database : work.openClaw) {
         std::map<const openclaw::Parser*, std::unique_ptr<Latest>> sinks;
+        std::map<const openclaw::Parser*, std::unique_ptr<tasks::Composer>> composers;
         std::optional<std::vector<std::unique_ptr<openclaw::Parser>>> parsers;
         try {
             parsers = openclaw::readAll(database.path, ledger, [&](openclaw::Parser& parser) -> ResponseSink& {
                 auto& sink = sinks[&parser];
                 if (!sink) sink = std::make_unique<Latest>(false);
+                auto& composer = composers[&parser];
+                composer = std::make_unique<tasks::Composer>(parser.agentId(), SourceKind::OpenClaw);
+                parser.setLineObserver(composer.get());
                 return *sink;
             });
         } catch (...) {
@@ -473,6 +527,9 @@ void Analyzer::analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& 
                 const auto sink = sinks.find(parser.get());
                 entry.days = contributionsOf(sink == sinks.end() ? std::vector<ParsedResponse>{} : sink->second->items(), SourceKind::OpenClaw,
                                              labeler, *prices_);
+                if (const auto c = composers.find(parser.get()); c != composers.end()) {
+                    entry.records = recordsOf(*c->second, *parser, analysisMs_, labeler);
+                }
                 keep(std::move(entry), owned[parser->agentId()]);
             }
             ++report.filesAnalyzed;

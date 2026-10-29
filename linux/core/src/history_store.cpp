@@ -8,6 +8,59 @@ namespace agentspeed::history {
 
 namespace {
 
+constexpr std::pair<const char*, std::int64_t tasks::TaskCounts::*> kCountFields[] = {
+    {"actions", &tasks::TaskCounts::actions},         {"counted", &tasks::TaskCounts::counted},
+    {"edits", &tasks::TaskCounts::edits},             {"oscillations", &tasks::TaskCounts::oscillations},
+    {"loopActions", &tasks::TaskCounts::loopActions}, {"runs", &tasks::TaskCounts::runs},
+    {"failingRuns", &tasks::TaskCounts::failingRuns}, {"episodes", &tasks::TaskCounts::episodes},
+    {"recovered", &tasks::TaskCounts::recovered},     {"recoverAttempts", &tasks::TaskCounts::recoverAttempts},
+    {"fixAttempts", &tasks::TaskCounts::fixAttempts}, {"fixFailures", &tasks::TaskCounts::fixFailures}};
+
+std::string encodeCounts(const tasks::TaskCounts& counts) {
+    std::string out = "{";
+    for (const auto& [name, field] : kCountFields) {
+        if (out.size() > 1) out += ",";
+        out += "\"" + std::string(name) + "\":" + std::to_string(counts.*field);
+    }
+    return out + "}";
+}
+
+tasks::TaskCounts decodeCounts(std::string_view text) {
+    tasks::TaskCounts counts;
+    json::Document doc;
+    if (!doc.parse(text) || !doc.root().isObject()) return counts;
+    for (const auto& [name, field] : kCountFields) counts.*field = doc.root()[name].truncated().value_or(0);
+    return counts;
+}
+
+std::string encodeRows(const std::vector<std::vector<double>>& rows) {
+    std::string out = "[";
+    char buffer[32];
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        out += i ? ",[" : "[";
+        for (std::size_t k = 0; k < rows[i].size(); ++k) {
+            std::snprintf(buffer, sizeof buffer, "%.17g", rows[i][k]);
+            if (k) out += ",";
+            out += buffer;
+        }
+        out += "]";
+    }
+    return out + "]";
+}
+
+std::vector<std::vector<double>> decodeRows(std::string_view text) {
+    std::vector<std::vector<double>> rows;
+    json::Document doc;
+    if (!doc.parse(text) || !doc.root().isArray()) return rows;
+    for (const auto& row : doc.root().elements()) {
+        std::vector<double> cells;
+        for (const auto& cell : row.elements()) cells.push_back(cell.number().value_or(0));
+        rows.push_back(std::move(cells));
+    }
+    return rows;
+}
+
+
 void appendString(std::string& out, std::string_view text) {
     out += '"';
     for (const unsigned char c : text) {
@@ -58,6 +111,13 @@ std::vector<std::uint64_t> unpackHashes(std::string_view blob) {
 }
 
 }  // namespace
+
+bool StoredFile::hasIncompleteTask() const {
+    for (const auto& r : records) {
+        if (!r.complete) return true;
+    }
+    return false;
+}
 
 bool StoredFile::hasUnpriced() const {
     for (const auto& [key, day] : days) {
@@ -188,6 +248,12 @@ void Store::createSchema() {
     db_.execute("CREATE TABLE IF NOT EXISTS peaks(day TEXT PRIMARY KEY, peak REAL NOT NULL)");
     db_.execute("CREATE TABLE IF NOT EXISTS bindings(day TEXT PRIMARY KEY, version INTEGER NOT NULL)");
     db_.execute("CREATE TABLE IF NOT EXISTS price_tables(version INTEGER PRIMARY KEY, data BLOB NOT NULL)");
+    db_.execute(
+        "CREATE TABLE IF NOT EXISTS task_records(file_id INTEGER NOT NULL, ordinal INTEGER NOT NULL, source TEXT NOT NULL, model TEXT,"
+        " effort TEXT, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, day TEXT NOT NULL, complete INTEGER NOT NULL,"
+        " state TEXT NOT NULL, score REAL, v REAL NOT NULL, c REAL NOT NULL, r REAL NOT NULL, e REAL NOT NULL, k REAL NOT NULL,"
+        " counts TEXT NOT NULL, first_pass_ms INTEGER, success INTEGER NOT NULL, stalled INTEGER NOT NULL, snapshots TEXT NOT NULL,"
+        " fix_rows TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (file_id, ordinal)) WITHOUT ROWID");
 }
 
 std::map<std::string, StoredFile> Store::loadFiles() const {
@@ -214,6 +280,35 @@ std::map<std::string, StoredFile> Store::loadFiles() const {
         if (!source || !data) continue;
         files[it->second].days[DayKey{days.getString(1).value_or(""), *source}] = *data;
     }
+    auto records = db_.prepare(
+        "SELECT r.file_id, r.ordinal, r.source, r.model, r.effort, r.start_ms, r.end_ms, r.day, r.complete, r.state, r.score, r.v, r.c,"
+        " r.r, r.e, r.k, r.counts, r.first_pass_ms, r.success, r.stalled, r.snapshots, r.fix_rows FROM task_records r"
+        " JOIN files f ON f.id = r.file_id AND f.version = r.version ORDER BY r.file_id, r.ordinal");
+    while (records.step()) {
+        const auto it = byId.find(records.getInt64(0));
+        const auto source = sourceFromId(records.getText(2));
+        if (it == byId.end() || !source) continue;
+        tasks::TaskRecord r;
+        r.agentId = it->second;
+        r.ordinal = records.getInt64(1);
+        r.source = *source;
+        r.model = records.getString(3);
+        r.effort = records.getString(4);
+        r.startMs = records.getInt64(5);
+        r.endMs = records.getInt64(6);
+        r.day = records.getString(7).value_or("");
+        r.complete = records.getInt64(8) != 0;
+        r.state = records.getString(9).value_or("");
+        if (!records.isNull(10)) r.score = records.getDouble(10);
+        r.dims = {records.getDouble(11), records.getDouble(12), records.getDouble(13), records.getDouble(14), records.getDouble(15)};
+        r.counts = decodeCounts(records.getText(16));
+        if (!records.isNull(17)) r.firstPassMs = records.getInt64(17);
+        r.success = records.getInt64(18) != 0;
+        r.stalled = records.getInt64(19) != 0;
+        r.snapshots = decodeRows(records.getText(20));
+        r.fixRows = decodeRows(records.getText(21));
+        files[it->second].records.push_back(std::move(r));
+    }
     return files;
 }
 
@@ -226,6 +321,11 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
             " version=excluded.version, keys=excluded.keys RETURNING id");
         auto clear = db_.prepare("DELETE FROM contributions WHERE file_id=?1");
         auto insert = db_.prepare("INSERT INTO contributions(file_id, day, source, data) VALUES(?1, ?2, ?3, ?4)");
+        auto clearRecords = db_.prepare("DELETE FROM task_records WHERE file_id=?1");
+        auto insertRecord = db_.prepare(
+            "INSERT INTO task_records(file_id, ordinal, source, model, effort, start_ms, end_ms, day, complete, state, score, v, c, r, e, k,"
+            " counts, first_pass_ms, success, stalled, snapshots, fix_rows, version)"
+            " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)");
         for (auto& [file, hashes] : files) {
             upsert.reset();
             upsert.bind(1, std::string_view(file->path)).bind(2, std::string_view(file->family)).bind(3, file->size).bind(4, file->modified);
@@ -240,6 +340,28 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
                 insert.reset();
                 insert.bind(1, file->id).bind(2, std::string_view(key.day)).bind(3, sourceId(key.source)).bind(4, std::string_view(encode(day)));
                 insert.step();
+            }
+            clearRecords.reset();
+            clearRecords.bind(1, file->id);
+            clearRecords.step();
+            for (const auto& r : file->records) {
+                insertRecord.reset();
+                insertRecord.bind(1, file->id).bind(2, r.ordinal).bind(3, sourceId(r.source));
+                r.model ? insertRecord.bind(4, std::string_view(*r.model)) : insertRecord.bindNull(4);
+                r.effort ? insertRecord.bind(5, std::string_view(*r.effort)) : insertRecord.bindNull(5);
+                insertRecord.bind(6, r.startMs).bind(7, r.endMs).bind(8, std::string_view(r.day)).bind(9, static_cast<std::int64_t>(r.complete));
+                insertRecord.bind(10, std::string_view(r.state));
+                r.score ? insertRecord.bind(11, *r.score) : insertRecord.bindNull(11);
+                insertRecord.bind(12, r.dims.V).bind(13, r.dims.C).bind(14, r.dims.R).bind(15, r.dims.E).bind(16, r.dims.K);
+                const auto counts = encodeCounts(r.counts);
+                const auto snapshots = encodeRows(r.snapshots);
+                const auto fixRows = encodeRows(r.fixRows);
+                insertRecord.bind(17, std::string_view(counts));
+                r.firstPassMs ? insertRecord.bind(18, *r.firstPassMs) : insertRecord.bindNull(18);
+                insertRecord.bind(19, static_cast<std::int64_t>(r.success)).bind(20, static_cast<std::int64_t>(r.stalled));
+                insertRecord.bind(21, std::string_view(snapshots)).bind(22, std::string_view(fixRows));
+                insertRecord.bind(23, static_cast<std::int64_t>(file->version));
+                insertRecord.step();
             }
         }
         db_.execute("COMMIT");
@@ -326,7 +448,9 @@ void Store::setMeta(const std::string& key, const std::string& value) {
 }
 
 void Store::clear() {
-    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables"}) db_.execute(std::string("DELETE FROM ") + table);
+    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "task_records"}) {
+        db_.execute(std::string("DELETE FROM ") + table);
+    }
     db_.execute("DELETE FROM meta WHERE key<>'schema'");
 }
 

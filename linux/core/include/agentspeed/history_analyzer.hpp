@@ -33,7 +33,8 @@ struct Report {
 class Analyzer {
 public:
     // The parsers' analysis version: a change re-analyses every file.
-    static constexpr int kVersion = 1;
+    // 2: task records (METRICS 6.11).
+    static constexpr int kVersion = 2;
 
     Analyzer(Store& store, std::shared_ptr<pricing::PriceBook> prices, std::shared_ptr<const TimeZone> hermesZone = nullptr);
 
@@ -43,6 +44,8 @@ public:
     // Day rows, by day then source id; live peaks raise the stored ones.
     std::vector<DailyUsage> days(const std::set<SourceKind>* sources = nullptr, const std::map<std::string, double>* livePeaks = nullptr) const;
     bool recordPeaks(const std::map<std::string, double>& peaks);
+    // Every stored task record (METRICS 6.11), agent id = the file path or OpenClaw window id.
+    std::vector<tasks::TaskRecord> taskRecords(const std::set<SourceKind>* sources = nullptr) const;
     void clear();
     pricing::PriceBook& prices() { return *prices_; }
 
@@ -68,9 +71,11 @@ private:
     void analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const;
+    bool settlesTask(const StoredFile& file) const;
     const StoredFile* previousOf(const std::string& path) const;
     StoredFile& keep(StoredFile file, std::vector<std::uint64_t> owned);
     std::map<std::string, droid::SidecarSignature> droidUnreadableParents_;
+    std::int64_t analysisMs_ = 0;
 
     Store& store_;
     std::shared_ptr<pricing::PriceBook> prices_;

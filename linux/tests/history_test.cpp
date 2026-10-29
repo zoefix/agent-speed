@@ -165,3 +165,41 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
     }
     fs::remove_all(temp);
 }
+
+TEST(History, TaskRecordsAreStoredAndReloaded) {
+    const auto temp = makeTemp();
+    fs::copy(fixtures::fixtureDir() / "tasks", temp / "tasks", fs::copy_options::recursive);
+    const auto copy = fsx::normalize((temp / "tasks").string());
+    SourceLocations l;
+    l.codexRoot = copy + "/codex/sessions";
+    l.claudeRoot = copy + "/claude/projects";
+    l.droidRoot = droid::defaultRoot(copy + "/droid");
+    const std::set<SourceKind> enabled = {SourceKind::Codex, SourceKind::ClaudeCode, SourceKind::ClaudeDesktop, SourceKind::Droid};
+    std::vector<tasks::TaskRecord> first;
+    {
+        auto store = Store::open((temp / "store" / "history.sqlite").string());
+        Analyzer analyzer(*store, std::make_shared<pricing::PriceBook>());
+        analyzer.run(l, enabled, TimeZone::utc(), "UTC");
+        first = analyzer.taskRecords();
+    }
+    ASSERT_GT(first.size(), 50u);
+    EXPECT_TRUE(std::any_of(first.begin(), first.end(), [](const tasks::TaskRecord& r) { return r.score && !r.snapshots.empty(); }));
+    auto store = Store::open((temp / "store" / "history.sqlite").string());
+    Analyzer reopened(*store, std::make_shared<pricing::PriceBook>());
+    const auto again = reopened.taskRecords();
+    ASSERT_EQ(again.size(), first.size());
+    for (std::size_t i = 0; i < first.size(); ++i) {
+        EXPECT_EQ(again[i].agentId, first[i].agentId);
+        EXPECT_EQ(again[i].ordinal, first[i].ordinal);
+        EXPECT_EQ(again[i].source, first[i].source);
+        EXPECT_EQ(again[i].model, first[i].model);
+        EXPECT_EQ(again[i].effort, first[i].effort);
+        EXPECT_EQ(again[i].day, first[i].day);
+        EXPECT_EQ(again[i].state, first[i].state);
+        EXPECT_EQ(again[i].score, first[i].score);
+        EXPECT_EQ(again[i].counts.fixFailures, first[i].counts.fixFailures);
+        EXPECT_EQ(again[i].snapshots, first[i].snapshots);
+        EXPECT_EQ(again[i].fixRows, first[i].fixRows);
+        EXPECT_EQ(again[i].firstPassMs, first[i].firstPassMs);
+    }
+}
