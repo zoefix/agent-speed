@@ -306,6 +306,11 @@ void OrbManager::sync() {
                 }
             });
             connect(window, &orb::OrbWindow::dragChanged, this, [this](const QString&, bool) { layoutPlates(); });
+            connect(window, &orb::OrbWindow::cornerRequested, this, &OrbManager::moveToNextCorner);
+            connect(window, &orb::OrbWindow::settingsRequested, this, [this](const QString& orbId) {
+                select(orbId);
+                emit settingsRequested();
+            });
             connect(window, &QWindow::xChanged, this, [this] { plateTimer_.start(0); });
             connect(window, &QWindow::yChanged, this, [this] { plateTimer_.start(0); });
             created.push_back(c.id);
@@ -335,6 +340,10 @@ void OrbManager::sync() {
 
 void OrbManager::syncWindow(const OrbConfig& c, Orb& orb) {
     orb.window->apply(c, store_.orbs().size() > 1 || !c.tracksAll() ? nameOf(c) : QString(), redlineOf(c));
+    // a11y.orb.sources: the tracked sources joined with list.separator.
+    QStringList names;
+    for (const auto& key : c.sources ? ordered(*c.sources) : detected()) names.push_back(sourceName(key));
+    orb.window->setAccessibleHint(fill(strings_.t(QStringLiteral("a11y.orb.sources")), {names.join(strings_.t(QStringLiteral("list.separator")))}));
     orb.plate->setClickThrough(c.clickThrough);
 }
 
@@ -795,6 +804,33 @@ void OrbManager::resetPosition(const QString& id) {
     it->second.window->placeAt(center);
     savePosition(id);
     layoutPlates();
+}
+
+void OrbManager::moveToNextCorner(const QString& id) {
+    const auto* c = store_.find(id);
+    auto it = orbs_.find(id);
+    if (!c || it == orbs_.end()) return;
+    const QPointF center = it->second.window->discCenter();
+    QScreen* screen = QGuiApplication::screenAt(center.toPoint());
+    if (!screen) screen = QGuiApplication::primaryScreen();
+    const QRectF avail = screen->availableGeometry();
+    const double r = c->size / 2, m = kSnapMargin + r;
+    const QPointF corners[] = {{avail.right() + 1 - m, avail.top() + m}, {avail.right() + 1 - m, avail.bottom() + 1 - m},
+                               {avail.left() + m, avail.bottom() + 1 - m}, {avail.left() + m, avail.top() + m}};
+    int nearest = 0;
+    for (int i = 1; i < 4; ++i) {
+        if (std::hypot(center.x() - corners[i].x(), center.y() - corners[i].y()) < std::hypot(center.x() - corners[nearest].x(), center.y() - corners[nearest].y())) nearest = i;
+    }
+    for (int step = 1; step <= 4; ++step) {
+        QPointF target = corners[(nearest + step) % 4];
+        if (!fits(target, r, id)) target = freeSpot(target, r, r, id);
+        if (fits(target, r, id) || step == 4) {
+            it->second.window->placeAt(target);
+            savePosition(id);
+            layoutPlates();
+            return;
+        }
+    }
 }
 
 // ---- name plates and chips

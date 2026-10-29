@@ -1,3 +1,4 @@
+#include <QAccessible>
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlEngine>
@@ -22,6 +23,7 @@
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
 #include "network_service.hpp"
+#include "orb/orb_accessible.hpp"
 #include "orb/orb_window.hpp"
 #include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
@@ -126,6 +128,8 @@ int main(int argc, char* argv[]) {
         qputenv("QT_QPA_PLATFORM", "xcb");
     }
     QApplication app(argc, argv);
+    // DESIGN 2b Accessibility: each orb window is one element with its label, hint and actions.
+    QAccessible::installFactory(&orb::OrbAccessible::factory);
     QApplication::setApplicationName(QStringLiteral("Agent Speed"));
     QApplication::setApplicationVersion(QStringLiteral(AGENTSPEED_VERSION));
     QApplication::setOrganizationName(QStringLiteral("zoefix"));

@@ -34,6 +34,7 @@ qt_add_executable(agent-speed
     src/hero/hero_painter.cpp
     src/hero/hero_stage.cpp
     src/orb/body.cpp
+    src/orb/orb_accessible.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
     src/orb/led_math.cpp

@@ -15,6 +15,7 @@
 #include "orb/shared_layers.hpp"
 #include "orb/style.hpp"
 
+class QAccessibleInterface;
 class QVariantAnimation;
 class Strings;
 
@@ -68,6 +69,13 @@ public:
     void forceDark(bool on) { forcedDark_ = on; }
     // Development aid: renders the current frame offscreen.
     QImage snapshot();
+    // Accessibility (OrbAccessible): label, hint, and the actions by string key.
+    QString accessibleLabel() const { return labelText_; }
+    QString accessibleHint() const { return hint_; }
+    void setAccessibleHint(const QString& hint) { hint_ = hint; }
+    QString actionName(const QString& key) const;
+    void performAction(const QString& key);
+    QAccessibleInterface* accessibleRoot() const override;
 
 public slots:
     // This orb's values of an engine tick (OrbViews: counted over its sources).
@@ -81,6 +89,8 @@ signals:
     void moved(const QString& id);
     void hoverChanged(const QString& id, bool hovered);
     void dragChanged(const QString& id, bool dragging);
+    void cornerRequested(const QString& id);
+    void settingsRequested(const QString& id);
 
 protected:
     void initializeGL() override;
@@ -179,6 +189,7 @@ private:
     QStringList unavailableSources_;
     double lastActive_ = -1e9;  // the last tick with a live value (fade when idle)
     QString labelText_;
+    QString hint_;
     double labelAt_ = -1e9;
     std::vector<QColor> agents_;
     QString contentKey_;

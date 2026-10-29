@@ -4,6 +4,7 @@
 
 #include <QOpenGLContext>
 
+#include <QAccessible>
 #include <QActionGroup>
 #include <QCursor>
 #include <QGuiApplication>
@@ -975,6 +976,22 @@ void OrbWindow::updateLabel() {
     labelText_ = label;
     labelAt_ = now();
     setTitle(label);
+    QAccessibleEvent event(this, QAccessible::NameChanged);
+    QAccessible::updateAccessibility(&event);
+}
+
+QString OrbWindow::actionName(const QString& key) const { return strings_.t(key); }
+
+// The application's accessible children are the top-level windows' roots: the orb is its own element.
+QAccessibleInterface* OrbWindow::accessibleRoot() const { return QAccessible::queryAccessibleInterface(const_cast<OrbWindow*>(this)); }
+
+void OrbWindow::performAction(const QString& key) {
+    if (key == QLatin1String("menu.dashboard")) emit dashboardRequested();
+    else if (key == QLatin1String("a11y.orb.showMenu")) emit menuRequested(id_, discCenter().toPoint());
+    else if (key == QLatin1String("a11y.orb.toggleUnit"))
+        emit editRequested(id_, QStringLiteral("unit"), unit_ == QLatin1String("cost") ? QStringLiteral("tokens") : QStringLiteral("cost"));
+    else if (key == QLatin1String("a11y.orb.moveCorner")) emit cornerRequested(id_);
+    else if (key == QLatin1String("menu.orb.settings")) emit settingsRequested(id_);
 }
 
 }  // namespace orb

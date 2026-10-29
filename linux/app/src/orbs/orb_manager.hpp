@@ -79,6 +79,8 @@ public:
     Q_INVOKABLE void move(int from, int to);
     Q_INVOKABLE void highlight(const QString& id, bool on);
     Q_INVOKABLE void resetPosition(const QString& id);
+    // a11y.orb.moveCorner: top-right → bottom-right → bottom-left → top-left of its display, skipping occupied ones.
+    void moveToNextCorner(const QString& id);
     Q_INVOKABLE QString autoName(const QString& id) const;
     Q_INVOKABLE bool platesShown(const QString& id) const;
 
