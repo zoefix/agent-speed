@@ -41,6 +41,11 @@ Counters Counters::since(const Counters& baseline) const {
         const auto change = it == baseline.byModel_.end() ? value : value - it->second;
         if (!change.zero()) delta.byModel_[key] = change;
     }
+    for (const auto& [key, value] : byMode_) {
+        const auto it = baseline.byMode_.find(key);
+        const auto change = it == baseline.byMode_.end() ? value : value - it->second;
+        if (!change.zero()) delta.byMode_[key] = change;
+    }
     return delta;
 }
 
@@ -52,9 +57,14 @@ bool Counters::hasTokensSince(const Counters& baseline) const {
     return false;
 }
 
-void Counters::add(const Usage& usage, const ModelKey& key) {
+void Counters::add(const Usage& usage, const ModelKey& key, const ExecutionModes* modes) {
     if (usage.zero()) return;
     byModel_[key] += usage;
+    static const ExecutionModes none;
+    for (const auto kind : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing, ModeKind::Workflow}) {
+        const auto mode = (modes ? *modes : none).attribute(kind);
+        byMode_[{key.modelId, key.source, kind, mode.mode, mode.evidence, mode.provider}] += usage;
+    }
     ++version_;
 }
 
@@ -78,6 +88,7 @@ Ledger::Reported Ledger::valuesOf(const ParsedResponse& response, std::optional<
     u.costMicroUsd = costMicroUsd.value_or(0);
     u.unpricedRequests = costMicroUsd ? 0 : response.requestCount;
     out.endMs = response.endMs;
+    out.modes = response.modes;
     return out;
 }
 
@@ -87,7 +98,7 @@ void Ledger::count(const ParsedResponse& response, std::optional<std::int64_t> c
         return;
     }
     const auto values = valuesOf(response, costMicroUsd);
-    counters_.add(values.usage, {modelId, response.source});
+    counters_.add(values.usage, {modelId, response.source}, &values.modes);
     counted_[response.key] = values;
     order_.push_back(response.key);
     while (counted_.size() > kMaxCountedKeys && !order_.empty()) {
@@ -110,7 +121,7 @@ void Ledger::grow(const ParsedResponse& response, std::optional<std::int64_t> co
          std::max(r.measuredOutput, n.measuredOutput),   std::max(r.measuredMs, n.measuredMs),
          std::max(r.costMicroUsd, n.costMicroUsd),       std::max(r.unpricedRequests, n.unpricedRequests)};
     reported.endMs = std::max(reported.endMs, now.endMs);
-    counters_.add(added, {modelId, response.source});
+    counters_.add(added, {modelId, response.source}, &reported.modes);
 }
 
 void Ledger::prune(std::int64_t cutoffMs) {

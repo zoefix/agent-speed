@@ -150,6 +150,7 @@ agentspeed::report::Options ReportController::options(const agentspeed::report::
     }
     options.extensions.modelHarnessRequests = discovery.has("modelHarnessRequests");
     options.extensions.taskScore = discovery.has("taskScore");
+    options.extensions.executionModes = discovery.has("executionModes");
     return options;
 }
 

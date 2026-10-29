@@ -9,6 +9,7 @@
 #include <unordered_map>
 
 #include "agentspeed/model.hpp"
+#include "agentspeed/modes.hpp"
 
 // The values live reporting takes from the engine (METRICS 11.2–11.4): the report ledger's cumulative counters and the
 // agent counts of each tick. A report window is the difference of two counter values, so every increment lands in
@@ -35,19 +36,32 @@ struct ModelKey {
     auto operator<=>(const ModelKey&) const = default;
 };
 
+// A model and source's usage under one execution mode (REPORTING-EXTENSIONS 3).
+struct ModeKey {
+    std::string modelId;
+    SourceKind source = SourceKind::Codex;
+    ModeKind kind = ModeKind::ServiceTier;
+    std::string mode, evidence;
+    std::optional<std::string> provider;
+    auto operator<=>(const ModeKey&) const = default;
+};
+
 class Counters {
 public:
     const std::map<ModelKey, Usage>& byModel() const { return byModel_; }
+    const std::map<ModeKey, Usage>& byMode() const { return byMode_; }
     // Changes with every non-zero add, so an owner copies only after a change.
     std::uint64_t version() const { return version_; }
     Usage total() const;
     // The increments since `baseline`, per model and source; zero entries are left out.
     Counters since(const Counters& baseline) const;
     bool hasTokensSince(const Counters& baseline) const;
-    void add(const Usage& usage, const ModelKey& key);
+    // `modes` attributes the usage to every report kind of REPORTING-EXTENSIONS 3 (unknown where no fact says).
+    void add(const Usage& usage, const ModelKey& key, const ExecutionModes* modes = nullptr);
 
 private:
     std::map<ModelKey, Usage> byModel_;
+    std::map<ModeKey, Usage> byMode_;
     std::uint64_t version_ = 0;
 };
 
@@ -86,6 +100,7 @@ private:
     struct Reported {
         Usage usage;
         std::int64_t endMs = 0;
+        ExecutionModes modes;  // frozen at the first count, so later metadata never moves counted usage
     };
     static Reported valuesOf(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd);
 

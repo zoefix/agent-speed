@@ -140,7 +140,47 @@ struct ModelEntry {
     std::vector<const TaskAgent*> taskAgents;
     double thinking = 0;  // unrounded model sums of the entry's raw models
     std::map<SourceKind, TaskRow> taskRows;
+    std::map<ModeKey, Usage> modes;
+    void addMode(ModeKey key, const Usage& value) {
+        key.modelId = id;
+        modes[key] += value;
+    }
 };
+
+bool safeCount(std::int64_t v) { return v >= 0 && v <= 9'007'199'254'740'991; }
+
+// REPORTING-EXTENSIONS 3: the per-mode breakdown, or nullopt when it cannot be sent whole (sums, sizes, identifiers).
+std::optional<Json> modesJson(const ModelEntry& entry) {
+    const auto& u = entry.usage;
+    if (entry.modes.size() > 64 || !safeCount(u.requests) || !safeCount(u.output) || !safeCount(u.measuredOutput) || !safeCount(u.measuredMs))
+        return std::nullopt;
+    if (entry.modes.empty() && (u.requests > 0 || u.output > 0 || u.measuredOutput > 0 || u.measuredMs > 0)) return std::nullopt;
+    std::map<ModeKind, Usage> sums;
+    for (const auto& [key, usage] : entry.modes) sums[key.kind] += usage;
+    for (const auto& [_, sum] : sums) {
+        if (sum.requests != u.requests || sum.output != u.output || sum.measuredOutput != u.measuredOutput || sum.measuredMs != u.measuredMs)
+            return std::nullopt;
+    }
+    std::vector<Json> rows;
+    for (const auto& [key, usage] : entry.modes) {
+        const bool evidenceOk = key.evidence == "served" || key.evidence == "recorded" || key.evidence == "selected" || key.evidence == "unknown";
+        if (!entry.sources.contains(key.source) || !ExecutionModes::isReportKind(key.kind) || !ExecutionModes::isIdentifier(key.mode, 64) || !evidenceOk ||
+            ((key.mode == "unknown") != (key.evidence == "unknown")) || (key.provider && !ExecutionModes::isIdentifier(*key.provider, 32)) ||
+            !safeCount(usage.requests) || !safeCount(usage.output) || !safeCount(usage.measuredOutput) || !safeCount(usage.measuredMs))
+            return std::nullopt;
+        auto row = Json::object({{"source", Json::of(sourceId(key.source))}});
+        if (key.provider) row.add("provider", Json::of(*key.provider));
+        row.add("kind", Json::of(modeKindName(key.kind)));
+        row.add("mode", Json::of(key.mode));
+        row.add("evidence", Json::of(key.evidence));
+        row.add("requests", Json::of(usage.requests));
+        row.add("output", Json::of(usage.output));
+        row.add("measuredOutput", Json::of(usage.measuredOutput));
+        row.add("measuredMs", Json::of(usage.measuredMs));
+        rows.push_back(std::move(row));
+    }
+    return Json::array(std::move(rows));
+}
 
 const TaskFacts& noTaskFacts() {
     static const TaskFacts empty;
@@ -163,6 +203,7 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         entry.sources.insert(key.source);
         entry.harnessRequests[key.source] += value.requests;
     }
+    for (const auto& [key, value] : content.usage.byMode()) entryOf(key.modelId).addMode(key, value);
     for (const auto& [key, count] : sample.facts.generatingModels) {
         if (count <= 0) continue;
         auto& entry = entryOf(key.modelId);
@@ -202,6 +243,7 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
             other.taskAgents.insert(other.taskAgents.end(), it->taskAgents.begin(), it->taskAgents.end());
             other.thinking += it->thinking;
             for (const auto& [source, row] : it->taskRows) other.taskRows[source] += row;
+            for (const auto& [mode, usage] : it->modes) other.addMode(mode, usage);
         }
         entries.resize(static_cast<std::size_t>(maxModels - 1));
         entries.push_back(std::move(other));
@@ -228,6 +270,9 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
                 if (requests > 0) rows.push_back(Json::object({{"source", Json::of(sourceId(source))}, {"requests", Json::of(requests)}}));
             }
             json.add("harnessRequests", Json::array(std::move(rows)));
+        }
+        if (usual && extensions.executionModes) {
+            if (auto modes = modesJson(entry)) json.add("modeUsage", std::move(*modes));
         }
         if (taskScore) {
             json.add("taskScore", taskValue(entry.taskAgents, entry.thinking));

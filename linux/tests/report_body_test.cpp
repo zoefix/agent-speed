@@ -283,3 +283,31 @@ TEST(ReportBody, TitleTrackerFollowsDesign1) {
     EXPECT_EQ(title.level(), 0);
     EXPECT_NEAR(TitleTracker::heat(400, 2000), 0.381, 0.001);
 }
+
+TEST(ReportBody, ModeUsageKeepsEveryKindWhole) {
+    Sample sample;
+    auto counters = std::make_shared<Counters>();
+    const auto fast = ExecutionModes::of(ModeFact::create(ModeKind::ServiceTier, std::string("priority"), ModeEvidence::Served, std::string("openai")));
+    counters->add({2, 300, 0, 0, 0, 0, 300, 1000, 0, 0}, {"gpt-5.5", SourceKind::Codex}, &fast);
+    counters->add({1, 100, 0, 0, 0, 0, 100, 500, 0, 0}, {"gpt-5.5", SourceKind::Codex}, nullptr);
+    sample.facts.counters = counters;
+    const auto content = Window(Sample{}).content(sample);
+    Options options;
+    options.sections = {Section::Models};
+    options.extensions.executionModes = true;
+    options.extensions.modelHarnessRequests = true;
+    const auto json = body(linuxEnvelope(), content, sample, options);
+    const auto& model = json.find("models")->items().at(0);
+    ASSERT_TRUE(model.find("modeUsage"));
+    std::int64_t tierRequests = 0;
+    int tierRows = 0;
+    for (const auto& row : model.find("modeUsage")->items()) {
+        if (row.find("kind")->compact() != "\"serviceTier\"") continue;
+        ++tierRows;
+        tierRequests += std::stoll(row.find("requests")->compact());
+    }
+    EXPECT_EQ(tierRows, 2);  // fast (served by openai) and the unknown bucket
+    EXPECT_EQ(tierRequests, 3);
+    EXPECT_EQ(model.find("modeUsage")->items().size(), 6U);  // 2 tier rows and one unknown row for each other kind
+    EXPECT_EQ(model.find("harnessRequests")->compact(), R"([{"source":"codex","requests":3}])");
+}
