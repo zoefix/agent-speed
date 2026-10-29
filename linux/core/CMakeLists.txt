@@ -2,7 +2,17 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 
+set(AGENTSPEED_PRICES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/prices.json")
+set(AGENTSPEED_PRICES_CPP "${CMAKE_CURRENT_BINARY_DIR}/bundled_prices.cpp")
+add_custom_command(
+    OUTPUT "${AGENTSPEED_PRICES_CPP}"
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${AGENTSPEED_PRICES} -DOUTPUT=${AGENTSPEED_PRICES_CPP}
+            -DNAMESPACE=agentspeed::pricing -DFUNCTION=bundledPricesJson -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake
+    DEPENDS "${AGENTSPEED_PRICES}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake"
+    VERBATIM)
+
 add_library(agentspeed_core STATIC
+    "${AGENTSPEED_PRICES_CPP}"
     src/antigravity.cpp
     src/claude_parser.cpp
     src/codex_parser.cpp
@@ -33,6 +43,9 @@ add_library(agentspeed_core STATIC
     src/parents.cpp
     src/path_text.cpp
     src/pi_parser.cpp
+    src/price_book.cpp
+    src/price_validator.cpp
+    src/pricing.cpp
     src/rfc3339.cpp
     src/tailer.cpp
     src/text.cpp
