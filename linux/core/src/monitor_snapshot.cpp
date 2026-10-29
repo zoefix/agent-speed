@@ -17,6 +17,7 @@ namespace agentspeed {
 namespace {
 
 constexpr std::int64_t kStaleGeneratingMs = 300'000;
+constexpr std::int64_t kListHorizonMs = 600'000;
 
 }  // namespace
 
@@ -99,6 +100,34 @@ void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& re
         snap.scoreSets.push_back(std::move(set));
     }
     snap.scoreGroups = values.groups;
+}
+
+// METRICS 11.2: agents of the 6.7 base set (staleness applied, no ancestor closure) per source, generating agents per
+// reported model id, and the report ledger (copied only after a change).
+report::Facts Monitor::reportFacts(std::int64_t nowMs) {
+    report::Facts facts;
+    for (const auto& [id, info] : agents_) {
+        if (!config_.enabled.contains(info.source)) continue;
+        auto phase = info.phase;
+        if (phase == Phase::Generating && info.lastLineMs && nowMs - *info.lastLineMs > kStaleGeneratingMs) phase = Phase::Idle;
+        const bool recent = info.lastLineMs && nowMs - *info.lastLineMs <= kListHorizonMs;
+        if (!recent && phase != Phase::Generating) continue;
+        auto& counts = facts.agents[info.source];
+        ++counts.active;
+        if (phase == Phase::Generating) {
+            ++counts.generating;
+            ++facts.generatingModels[{store_->reportModelId(info.model, store_->providerOf(id)), info.source}];
+        } else if (phase == Phase::Tools) {
+            ++counts.tools;
+        }
+    }
+    if (store_->ledger().counters().version() != reportCountersVersion_) {
+        reportCounters_ = std::make_shared<const report::Counters>(store_->ledger().counters());
+        reportCountersVersion_ = store_->ledger().counters().version();
+    }
+    facts.counters = reportCounters_;
+    facts.epoch = epoch_;
+    return facts;
 }
 
 Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
@@ -185,6 +214,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
 
     scoreTasks(snap, recent, agents, nowMs);
     snap.traffic = traffic_->view(nowMs);
+    snap.report = reportFacts(nowMs);
 
     for (const auto kind : MonitorConfig::allSources()) {
         SourceRow row;
@@ -211,7 +241,10 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
             for (const auto& a : agents) {
                 if (a.source == kind) ownAgents.push_back(a);
             }
-            row.liveOutput = engine::liveRate(own, ownAgents, nowMs).output;
+            const auto ownRate = engine::liveRate(own, ownAgents, nowMs);
+            row.liveOutput = ownRate.output;
+            row.liveTotal = ownRate.total;
+            row.liveEstimatedShare = ownRate.estimatedShare;
             const auto ownCost = engine::liveCost(own, ownAgents, nowMs);
             row.liveCost = ownCost.microUsdPerSecond;
             row.liveCostKnownShare = ownCost.knownShare;

@@ -147,6 +147,9 @@ public:
     const std::map<SourceKind, Buckets>& sourceBuckets() const { return sourceBuckets_; }
     // Adds today's totals saved earlier (a relaunch, 10.8).
     void restoreDay(const std::string& date, const Day& day);
+    // Cumulative bytes per source since the engine started (rxSelf, txSelf, rxTools, txTools), without the deltas of a
+    // sample after a gap: what live reporting takes its deltas from (METRICS 11.4).
+    const std::map<SourceKind, std::array<std::uint64_t, 4>>& reportTotals() const { return reportTotals_; }
     // Exited processes leave the table.
     void forget(const std::vector<Key>& keys) { table_.forget(keys); }
 
@@ -181,6 +184,7 @@ private:
     std::map<std::string, std::map<std::string, AgentDay>> agentDays_;
     Buckets machineBuckets_;
     std::map<SourceKind, Buckets> sourceBuckets_;
+    std::map<SourceKind, std::array<std::uint64_t, 4>> reportTotals_;
 };
 
 }  // namespace agentspeed::traffic

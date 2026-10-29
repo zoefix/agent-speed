@@ -6,6 +6,7 @@
 #include <vector>
 
 #include "agentspeed/model.hpp"
+#include "agentspeed/report_values.hpp"
 #include "agentspeed/task_events.hpp"
 #include "agentspeed/traffic_service.hpp"
 #include "agentspeed/work_signals.hpp"
@@ -65,6 +66,8 @@ struct SourceRow {
     SourceKind source = SourceKind::Codex;
     std::int64_t todayOutput = 0;
     double liveOutput = 0;
+    double liveTotal = 0;
+    double liveEstimatedShare = 0;
     bool enabled = true;
     // METRICS 2: detected (its root exists) and the root shown in settings.
     bool available = false;
@@ -115,6 +118,8 @@ struct Snapshot {
     traffic::View traffic;
     // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).
     std::vector<double> history;
+    // METRICS 11.2, 11.4: what live reporting takes from this tick.
+    report::Facts report;
     bool demo = false;
     std::int64_t todayStartMs = 0;
     Warnings warnings;

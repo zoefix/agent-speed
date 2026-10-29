@@ -67,6 +67,10 @@ add_library(agentspeed_core STATIC
     src/report/discovery.cpp
     src/report/protocol.cpp
     src/report/scheduler.cpp
+    src/report/values.cpp
+    src/report/window.cpp
+    src/report/body.cpp
+    src/report/json_writer.cpp
     src/report/usernames.cpp
     src/rfc3339.cpp
     src/tailer.cpp

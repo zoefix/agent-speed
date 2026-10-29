@@ -27,6 +27,8 @@ struct View {
     std::map<std::string, AgentDay> agentsToday;  // by agent tree root
     std::map<std::string, RatePair> agentRates;
     std::vector<std::pair<double, double>> machineSeries;  // the last 60 s, oldest first (rx, tx bytes per second)
+    // METRICS 11.4: cumulative bytes per source (rxSelf, txSelf, rxTools, txTools) of every source, disabled ones included.
+    std::map<SourceKind, std::array<std::uint64_t, 4>> reportTotals;
 };
 
 // METRICS 10 on Linux: samples once a second while enabled, attributes, keeps today's totals.

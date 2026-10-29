@@ -108,6 +108,7 @@ View Service::view(std::int64_t nowMs) const {
     v.machine = engine_->machineRate();
     v.sources = engine_->sourceRates();
     v.agentRates = engine_->agentRates();
+    v.reportTotals = engine_->reportTotals();
     const auto date = dateOf(nowMs);
     if (const auto it = engine_->days().find(date); it != engine_->days().end()) {
         v.machineToday = it->second.machine;

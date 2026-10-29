@@ -1,6 +1,7 @@
 #include "agentspeed/monitor.hpp"
 
 #include <algorithm>
+#include <atomic>
 #include <utility>
 
 #include "agentspeed/antigravity.hpp"
@@ -31,6 +32,11 @@ constexpr std::int64_t kDatabaseReadIntervalMs = 500;
 
 std::int64_t msOf(std::int64_t ns) { return ns / 1'000'000; }
 
+std::int64_t nextEpoch() {
+    static std::atomic<std::int64_t> next{0};
+    return ++next;
+}
+
 }  // namespace
 
 std::set<SourceKind> MonitorConfig::allSources() {
@@ -49,7 +55,7 @@ MonitorConfig MonitorConfig::fromEnvironment(const RootSettings& settings, std::
 
 Monitor::Monitor(MonitorConfig config)
     : config_(std::move(config)), environment_(processEnvironment()), home_(userHome(environment_)),
-      store_(std::make_unique<Store>()) {
+      store_(std::make_unique<Store>()), epoch_(nextEpoch()) {
     store_->setEnabled(&config_.enabled);
     if (!config_.prices) config_.prices = std::make_shared<pricing::PriceBook>();
     zone_ = localZone(environment_);

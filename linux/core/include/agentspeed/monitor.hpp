@@ -197,6 +197,10 @@ private:
     void scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
                     std::int64_t nowMs);
     bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
+    const std::int64_t epoch_;
+    std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
+    std::uint64_t reportCountersVersion_ = 0;
+    report::Facts reportFacts(std::int64_t nowMs);
 };
 
 }  // namespace agentspeed

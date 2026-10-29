@@ -10,12 +10,13 @@
 #include "agentspeed/monitor.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/pricing.hpp"
+#include "agentspeed/report_values.hpp"
 #include "agentspeed/tz.hpp"
 
 namespace agentspeed {
 
-// Keeps every response of today and of the retention window by key (METRICS 4.4 upserts, 6.1) and raises
-// responseCompleted for first emissions while running (6.4).
+// Keeps every response of today and of the retention window by key (METRICS 4.4 upserts, 6.1), raises
+// responseCompleted for first emissions while running (6.4) and keeps the report ledger (11.4).
 class Monitor::Store : public ResponseSink {
 public:
     static constexpr std::int64_t kRetentionMs = 30 * 60'000;
@@ -43,6 +44,7 @@ public:
             }
             completions_.push_back(c);
         }
+        if (r.provider) providers_[r.agentId] = *r.provider;
         auto& slot = byKey_[r.key];
         slot.parsed = r;
         engine::Response& e = slot.engine;
@@ -58,13 +60,32 @@ public:
         e.final = r.final;
         e.requestCount = r.requestCount;
         e.costMicroUsd = book_ ? book_->cost(r, localDate(r.endMs)) : std::nullopt;
+        if (completion && live_ && !seeding_ && r.endMs >= nowMs_ - kCompletionWindowMs) {
+            ledger_.count(r, e.costMicroUsd, reportModelId(r.model, r.provider));
+        } else if (ledger_.counted(r.key)) {
+            ledger_.grow(r, e.costMicroUsd, reportModelId(r.model, r.provider));
+        }
     }
+
+    // The id a model is reported as (METRICS 11.3), by the current table.
+    std::string reportModelId(const std::optional<std::string>& model, const std::optional<std::string>& provider) const {
+        return (book_ ? book_->current() : pricing::PriceBook::bundled())->reportModelId(model, provider);
+    }
+    std::optional<std::string> providerOf(const std::string& agentId) const {
+        const auto it = providers_.find(agentId);
+        return it == providers_.end() ? std::nullopt : std::optional<std::string>(it->second);
+    }
+    const report::Ledger& ledger() const { return ledger_; }
 
     // A new current table prices today's unpriced responses again (METRICS 9.7).
     void reprice() {
         if (!book_) return;
         for (auto& [_, slot] : byKey_) {
-            if (!slot.engine.costMicroUsd) slot.engine.costMicroUsd = book_->cost(slot.parsed, localDate(slot.parsed.endMs));
+            if (slot.engine.costMicroUsd) continue;
+            slot.engine.costMicroUsd = book_->cost(slot.parsed, localDate(slot.parsed.endMs));
+            if (slot.engine.costMicroUsd && ledger_.counted(slot.parsed.key)) {
+                ledger_.grow(slot.parsed, slot.engine.costMicroUsd, reportModelId(slot.parsed.model, slot.parsed.provider));
+            }
         }
     }
 
@@ -78,6 +99,7 @@ public:
         for (auto it = byKey_.begin(); it != byKey_.end();) {
             it = it->second.engine.endMs < keepFrom ? byKey_.erase(it) : std::next(it);
         }
+        ledger_.prune(keepFrom);
     }
 
     std::vector<engine::Response> all() const {
@@ -104,6 +126,8 @@ private:
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, Slot> byKey_;
     std::vector<Completion> completions_;
+    std::map<std::string, std::string> providers_;
+    report::Ledger ledger_;
     bool live_ = false;
     bool seeding_ = false;
     std::int64_t nowMs_ = 0;

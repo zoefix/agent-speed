@@ -580,6 +580,10 @@ void Engine::tick(const Sample& sample, const std::vector<AgentFacts>& agents) {
         const std::array<std::uint64_t, 4> v = it == totals.end() ? std::array<std::uint64_t, 4>{} : it->second;
         sources_[source].add(t, v, cgap);
         if (!cgap && cdt) sourceBuckets_[source].add(t, *cdt, v[0] + v[2], v[1] + v[3]);
+        if (!cgap && it != totals.end()) {
+            auto& report = reportTotals_[source];
+            for (std::size_t i = 0; i < 4; ++i) report[i] += v[i];
+        }
     }
     std::map<std::string, const AgentFacts*> byId;
     for (const auto& a : agents) byId[a.id] = &a;
