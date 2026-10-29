@@ -18,6 +18,7 @@ add_executable(agentspeed_tests
     pricing_test.cpp
     report_body_test.cpp
     report_scheduler_test.cpp
+    report_service_test.cpp
     report_test.cpp
     rfc3339_test.cpp
     task_e2e_test.cpp
