@@ -12,6 +12,8 @@
 
 #include "agentspeed/price_book.hpp"
 #include "app_state.hpp"
+#include "board/board_store.hpp"
+#include "board/board_windows.hpp"
 #include "catalog.hpp"
 #include "flyout.hpp"
 #include "history_service.hpp"
@@ -67,6 +69,28 @@ void applyAppearance(const QString& choice) {
     }
 }
 
+std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
+    std::vector<BoardSpec> specs;
+    if (!store) return specs;
+    for (const auto& entry : store->boards()) {
+        const auto b = entry.toMap();
+        if (!b.value(QStringLiteral("visible")).toBool()) continue;
+        BoardSpec spec;
+        spec.id = b.value(QStringLiteral("id")).toString();
+        const auto sources = b.value(QStringLiteral("sources"));
+        if (sources.typeId() == QMetaType::QVariantList || sources.typeId() == QMetaType::QStringList) {
+            std::vector<agentspeed::SourceKind> kinds;
+            for (const auto& s : sources.toStringList())
+                if (const auto kind = agentspeed::sourceFromId(s.toStdString())) kinds.push_back(*kind);
+            spec.sources = kinds;
+        }
+        specs.push_back(spec);
+    }
+    return specs;
+}
+
+const BoardStore* gBoards = nullptr;
+
 WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, const Strings& strings,
                           const std::shared_ptr<agentspeed::pricing::PriceBook>& prices) {
     WorkerOptions options;
@@ -82,6 +106,7 @@ WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, cons
     options.trafficBits = prefs.trafficUnit() == QLatin1String("bits");
     options.redline = prefs.redline();
     options.totalMetric = prefs.metric() == QLatin1String("total");
+    options.boards = boardSpecs(gBoards);
     return options;
 }
 
@@ -123,6 +148,8 @@ int main(int argc, char* argv[]) {
     strings.setChoice(prefs.language());
     QObject::connect(&prefs, &Preferences::languageChanged, &app, [&] { strings.setChoice(prefs.language()); });
     AppState state(demo);
+    BoardStore boardStore;
+    gBoards = &boardStore;
     auto prices = std::make_shared<agentspeed::pricing::PriceBook>();
     Catalog catalog(strings, prices);
 
@@ -208,6 +235,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
     engine.rootContext()->setContextProperty(QStringLiteral("themes"), &themes);
+    engine.rootContext()->setContextProperty(QStringLiteral("boardStore"), &boardStore);
     orbWindow.setTitles(&themes);
     engine.rootContext()->setContextProperty(QStringLiteral("history"), &historyModel);
     // NETWORK 1–4 and UPDATES: price sync, exchange rates and the update check, under the master switch.
@@ -224,6 +252,11 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("report"), &report);
     QObject::connect(worker, &MonitorWorker::reportTick, &report, &ReportController::onTick);
     report.setWatchSink([worker](bool on, qint64 taken) { worker->setReportWatch(on, taken); });
+    // DESIGN 2c: the boards, their windows fed by every snapshot.
+    BoardWindows boardWindows(boardStore, engine);
+    engine.rootContext()->setContextProperty(QStringLiteral("boardWindows"), &boardWindows);
+    QObject::connect(&boardStore, &BoardStore::changed, &app, [=] { pushOptions(false); });
+    QObject::connect(&state, &AppState::snapshotChanged, &boardWindows, [&] { boardWindows.apply(state.snapshot().value(QStringLiteral("boards")).toMap()); });
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
@@ -334,6 +367,13 @@ int main(int argc, char* argv[]) {
     const auto quitApp = [&] { report.quitApp(); };
     QObject::connect(&tray, &TrayIcon::quitRequested, &app, quitApp);
     QObject::connect(&tray, &TrayIcon::toggleDashboard, &flyout, &Flyout::toggle);
+    QObject::connect(&boardWindows, &BoardWindows::dashboardRequested, &flyout, &Flyout::toggle);
+    QObject::connect(&boardWindows, &BoardWindows::settingsRequested, &app, [&] { openSettings(1); });
+    QObject::connect(&tray, &TrayIcon::boardsToggled, &boardStore, [&] { boardStore.setAllVisible(!boardStore.anyVisible()); });
+    QObject::connect(&tray, &TrayIcon::boardAdd, &boardStore, [&] { boardStore.add(); });
+    const auto syncBoardMenu = [&] { tray.setBoards(!boardStore.boards().isEmpty(), boardStore.anyVisible(), boardStore.canAdd()); };
+    QObject::connect(&boardStore, &BoardStore::changed, &tray, syncBoardMenu);
+    syncBoardMenu();
 
     QObject::connect(&state, &AppState::snapshotChanged, &orbWindow, [&] { orbWindow.applySnapshot(state.snapshot()); });
     QObject::connect(&orbWindow, &orb::OrbWindow::dashboardRequested, &flyout, &Flyout::toggle);
@@ -448,6 +488,20 @@ int main(int argc, char* argv[]) {
         });
         QTimer::singleShot(3500, &app, [&, spec] {
             if (auto* card = qobject_cast<QQuickWindow*>(window->property("card").value<QObject*>())) card->grabWindow().save(spec);
+            QApplication::quit();
+        });
+    }
+
+    // Development aid: --board-snapshot=<file.png>[:style[:size]] adds a board, saves its window and quits.
+    for (const auto& arg : arguments) {
+        if (!arg.startsWith(QStringLiteral("--board-snapshot="))) continue;
+        const auto parts = arg.mid(17).split(QLatin1Char(':'));
+        const auto id = boardStore.add();
+        if (parts.size() > 1) boardStore.set(id, QStringLiteral("style"), parts[1]);
+        if (parts.size() > 2) boardStore.set(id, QStringLiteral("size"), parts[2]);
+        QTimer::singleShot(5000, &app, [&, id, path = parts[0]] {
+            if (auto* w = boardWindows.window(id)) w->grabWindow().save(path);
+            boardStore.remove(id);
             QApplication::quit();
         });
     }

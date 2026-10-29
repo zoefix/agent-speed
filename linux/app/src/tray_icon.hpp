@@ -28,6 +28,8 @@ public slots:
     // DESIGN 11 Quick menu: while reporting is on and registered, an item with a submenu (pause, resume, leaderboard,
     // settings).
     void setReport(bool visible, const QString& text, bool paused, bool leaderboard);
+    // DESIGN 2c: show / hide every board and add one.
+    void setBoards(bool any, bool visible, bool canAdd);
 
 signals:
     void toggleDashboard();
@@ -42,6 +44,8 @@ signals:
     void reportResume();
     void reportLeaderboard();
     void reportSettings();
+    void boardsToggled();
+    void boardAdd();
 
 private:
     QSystemTrayIcon* tray_;
@@ -62,6 +66,9 @@ private:
     QAction* reportResume_ = nullptr;
     QAction* reportLeaderboard_ = nullptr;
     QAction* reportSettings_ = nullptr;
+    QAction* boardsToggle_ = nullptr;
+    QAction* boardAdd_ = nullptr;
+    bool boardsVisible_ = false;
     QString updateVersion_;
     const Strings& strings_;
     QString lastText_;

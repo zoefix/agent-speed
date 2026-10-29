@@ -11,6 +11,7 @@
 
 #include "agentspeed/monitor.hpp"
 #include "agentspeed/report_body.hpp"
+#include "board/board_view.hpp"
 
 class QTimer;
 class Strings;
@@ -28,6 +29,7 @@ struct WorkerOptions {
     bool trafficBits = false;
     int redline = 2000;
     bool totalMetric = false;
+    std::vector<BoardSpec> boards;  // DESIGN 2c: every board's sources
 };
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
@@ -113,4 +115,8 @@ private:
     qint64 peakDay_ = 0;
     // DESIGN 1: the dashboard's speed title level (the orb keeps its own tracker).
     agentspeed::report::TitleTracker title_;
+    BoardViews boards_;
+    // The requested score sets, then one per board.
+    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> allSets() const;
+    std::vector<BoardSpec> appliedBoards_;
 };

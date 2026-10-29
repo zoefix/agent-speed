@@ -68,4 +68,6 @@ SettingsPage {
             Glyph { name: "check"; color: Theme.accent; width: 15; height: 15 }
         }
     }
+
+    BoardsGroup {}
 }

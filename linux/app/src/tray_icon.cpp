@@ -86,6 +86,11 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     connect(reportLeaderboard_, &QAction::triggered, this, &TrayIcon::reportLeaderboard);
     reportSettings_ = reportMenu_->addAction(QString());
     connect(reportSettings_, &QAction::triggered, this, &TrayIcon::reportSettings);
+    boardsToggle_ = menu_->addAction(QString());
+    boardsToggle_->setVisible(false);
+    connect(boardsToggle_, &QAction::triggered, this, &TrayIcon::boardsToggled);
+    boardAdd_ = menu_->addAction(QString());
+    connect(boardAdd_, &QAction::triggered, this, &TrayIcon::boardAdd);
     menu_->addSeparator();
     history_ = menu_->addAction(QString());
     connect(history_, &QAction::triggered, this, &TrayIcon::historyRequested);
@@ -123,6 +128,15 @@ void TrayIcon::retranslate() {
     reportResume_->setText(strings_.t(QStringLiteral("report.resume")));
     reportLeaderboard_->setText(strings_.t(QStringLiteral("report.service.leaderboard")));
     reportSettings_->setText(strings_.t(QStringLiteral("report.menu.settings")));
+    boardsToggle_->setText(strings_.t(boardsVisible_ ? QStringLiteral("boards.hide") : QStringLiteral("boards.show")));
+    boardAdd_->setText(strings_.t(QStringLiteral("boards.add")));
+}
+
+void TrayIcon::setBoards(bool any, bool visible, bool canAdd) {
+    boardsVisible_ = visible;
+    boardsToggle_->setVisible(any);
+    boardAdd_->setEnabled(canAdd);
+    retranslate();
 }
 
 void TrayIcon::setReport(bool visible, const QString& text, bool paused, bool leaderboard) {

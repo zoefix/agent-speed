@@ -1,5 +1,6 @@
 #include "monitor_worker.hpp"
 
+#include <QDate>
 #include <QDateTime>
 #include <QTimer>
 #include <QVariantList>
@@ -77,7 +78,7 @@ void MonitorWorker::startMonitor(qint64 now) {
     monitor_->restoreTraffic(carried);
     monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setTaskModels(models_);
-    monitor_->setScoreSets(sets_);
+    monitor_->setScoreSets(allSets());
     monitor_->start(now, localMidnightMs(now));
     lastPollMs_ = now;
 }
@@ -313,6 +314,20 @@ void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<
     QVariantMap map = toVariant(snap);
     title_.update(options_.totalMetric ? snap.liveTotal : snap.liveOutput, options_.redline, static_cast<double>(steadyMs()) / 1000.0);
     map.insert(QStringLiteral("titleLevel"), title_.level());
+    if (!options_.boards.empty()) {
+        BoardContext context;
+        context.strings = strings_;
+        context.currency = options_.currency;
+        context.rate = options_.rate;
+        context.language = options_.language;
+        context.subscriptions = options_.subscriptions;
+        context.includeSubscriptions = options_.includeSubscriptions;
+        context.totalMetric = options_.totalMetric;
+        context.redline = options_.redline;
+        context.steadyMs = steadyMs();
+        context.day = QDate::currentDate().toString(Qt::ISODate);
+        map.insert(QStringLiteral("boards"), boards_.compute(snap, options_.boards, context, sets_.size()));
+    }
     // Development aid: AGENT_SPEED_TRAFFIC_DEBUG=1 prints the traffic view (byte counts only) once a second.
     static const bool trafficDebug = qEnvironmentVariableIsSet("AGENT_SPEED_TRAFFIC_DEBUG");
     static qint64 lastDebugSecond = 0;
@@ -367,7 +382,7 @@ void MonitorWorker::tick() {
         if (pendingSets_) {
             sets_ = std::move(*pendingSets_);
             pendingSets_.reset();
-            if (monitor_) monitor_->setScoreSets(sets_);
+            if (monitor_) monitor_->setScoreSets(allSets());
         }
         if (pendingReprice_ && monitor_) {
             monitor_->repriceToday();
@@ -379,6 +394,10 @@ void MonitorWorker::tick() {
         }
     }
     if (monitor_) monitor_->setTrafficEnabled(options_.trafficEnabled);
+    if (monitor_ && options_.boards != appliedBoards_) {
+        appliedBoards_ = options_.boards;
+        monitor_->setScoreSets(allSets());
+    }
     {
         std::lock_guard lock(optionsMutex_);
         if (monitor_) monitor_->setTaskWatch(watchOn_, watchTaken_);
@@ -415,4 +434,10 @@ void MonitorWorker::setReportWatch(bool on, qint64 taken) {
     std::lock_guard lock(optionsMutex_);
     watchOn_ = on;
     watchTaken_ = taken;
+}
+
+std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::allSets() const {
+    auto sets = sets_;
+    for (const auto& board : options_.boards) sets.push_back(board.sources);
+    return sets;
 }

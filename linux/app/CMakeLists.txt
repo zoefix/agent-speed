@@ -6,6 +6,9 @@ qt_standard_project_setup(REQUIRES 6.5)
 qt_add_executable(agent-speed
     src/main.cpp
     src/app_state.cpp
+    src/board/board_store.cpp
+    src/board/board_view.cpp
+    src/board/board_windows.cpp
     src/flyout.cpp
     src/history_service.cpp
     src/format.cpp
@@ -54,6 +57,8 @@ set(agent_speed_qml
     qml/ReportPreviewWindow.qml
     qml/ReportProfileCard.qml
     qml/AgentRow.qml
+    qml/Board.qml
+    qml/BoardsGroup.qml
     qml/CostPage.qml
     qml/CurrencyPicker.qml
     qml/Dashboard.qml
