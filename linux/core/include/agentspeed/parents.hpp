@@ -6,20 +6,43 @@
 #include <string>
 #include <vector>
 
-#include "agentspeed/model.hpp"
-
 namespace agentspeed {
 
-// What METRICS 6.7 needs from a tracked agent to find its parent.
-struct ParentFacts {
-    std::string agentId;  // the file path
-    SourceKind source = SourceKind::Codex;
-    std::optional<std::string> codexThreadId;  // the first session_meta's payload.id
-    std::optional<std::string> codexParentThreadId;
-    std::optional<std::int64_t> createdMs;
+enum class LinkKind {
+    Path,
+    CodexThread,
+    DshSession,
+    OpenCodeSession,
+    GeminiSession,
+    OmpPath,
+    AntigravityConversation,
+    WorkBuddyPath,
+    WorkBuddyAiPath,
+    ZCodeSession,
+    KimiSession,
+    GrokBuildSession,
+    PiPath,
+    OpenClawWindow,
+    DroidPath,
 };
 
-// METRICS 6.7 parent links for the ported sources; self references and cycles resolve to null.
-std::map<std::string, std::optional<std::string>> resolveParents(const std::vector<ParentFacts>& agents);
+// What METRICS 6.7 needs from a tracked agent to find its parent.
+struct AgentLink {
+    std::string id;
+    LinkKind kind = LinkKind::Path;
+    std::optional<std::string> threadId;
+    std::optional<std::string> parentThreadId;
+    std::optional<std::int64_t> createdMs;
+    int rank = 0;
+};
+
+namespace parent_links {
+
+// METRICS 6.7 parent links (agent id → parent id); self references and cycles are dropped.
+std::map<std::string, std::string> resolve(const std::vector<AgentLink>& agents);
+// `<dir>/<session>/subagents/<name>.jsonl` → `<dir>/<session>.jsonl`.
+std::optional<std::string> claudeParentPath(const std::string& path);
+
+}  // namespace parent_links
 
 }  // namespace agentspeed

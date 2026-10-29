@@ -8,6 +8,7 @@
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/model.hpp"
 #include "agentspeed/modes.hpp"
+#include "agentspeed/parents.hpp"
 
 namespace agentspeed {
 
@@ -33,6 +34,8 @@ public:
     std::optional<std::int64_t> lastLineMs() const { return lastLineMs_; }
     std::int64_t malformedLines() const { return malformedLines_; }
     std::uint64_t version() const { return version_; }
+    // What METRICS 6.7 needs to find this agent's parent.
+    virtual AgentLink link() const { return {agentId_, LinkKind::Path, std::nullopt, std::nullopt, std::nullopt, 0}; }
     // A reading error outside the parser (a zstd decoding error, METRICS 5.3) counts as malformed lines.
     void addMalformed(std::int64_t count) { malformedLines_ += count; }
 

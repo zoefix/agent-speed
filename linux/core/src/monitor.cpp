@@ -299,19 +299,14 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) const 
     for (const auto& r : responses) {
         if (r.endMs >= nowMs - kRetentionMs) recent.push_back(r);
     }
-    std::vector<ParentFacts> facts;
-    for (const auto& [id, file] : files_) {
-        ParentFacts fact;
-        fact.agentId = id;
-        fact.source = file->parser->source();
-        if (const auto* codex = dynamic_cast<const CodexParser*>(file->parser.get())) {
-            fact.codexThreadId = codex->metaThreadId();
-            fact.codexParentThreadId = codex->parentThreadId();
-            fact.createdMs = codex->createdMs();
-        }
-        facts.push_back(std::move(fact));
+    std::vector<AgentLink> links;
+    for (const auto& [id, file] : files_) links.push_back(file->parser->link());
+    const auto resolved = parent_links::resolve(links);
+    std::map<std::string, std::optional<std::string>> parents;
+    for (const auto& [id, _] : files_) {
+        const auto it = resolved.find(id);
+        parents[id] = it == resolved.end() ? std::nullopt : std::optional<std::string>(it->second);
     }
-    const auto parents = resolveParents(facts);
     std::vector<engine::Agent> agents;
     std::map<std::string, const Tracked*> byId;
     for (const auto& [id, file] : files_) {

@@ -6,6 +6,7 @@
 
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
+#include "agentspeed/dsh_parser.hpp"
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/parents.hpp"
 #include "fixture_support.hpp"
@@ -46,6 +47,7 @@ void expectModes(const ExecutionModes& modes, const json::Value& want) {
 std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const std::string& agentId, Deduper& deduper) {
     if (relative.rfind("codex/", 0) == 0) return std::make_unique<CodexParser>(agentId, deduper);
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
+    if (relative.rfind("dsh/", 0) == 0) return std::make_unique<DshParser>(agentId, deduper);
     return nullptr;
 }
 
@@ -57,7 +59,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
     ASSERT_TRUE(expected.ok);
     Deduper deduper;
     int checked = 0;
-    std::vector<ParentFacts> facts;
+    std::vector<AgentLink> facts;
     std::map<std::string, std::string> wantParents;
     for (const auto& entry : expected.root()["order"].elements()) {
         const std::string relative = *entry.string();
@@ -108,24 +110,14 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
             EXPECT_EQ(got.fast, r["fast"].isTrue());
             EXPECT_EQ(got.final, r["final"].isTrue());
         }
-        ParentFacts fact;
-        fact.agentId = absolute;
-        fact.source = parser->source();
-        if (auto* codex = dynamic_cast<CodexParser*>(parser.get())) {
-            fact.codexThreadId = codex->metaThreadId();
-            fact.codexParentThreadId = codex->parentThreadId();
-            fact.createdMs = codex->createdMs();
-        }
-        facts.push_back(fact);
+        facts.push_back(parser->link());
         if (auto parent = fixtures::optString(want["parentFile"])) {
             wantParents[absolute] = (fixtures::fixtureDir() / *parent).string();
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 9);
+    EXPECT_EQ(checked, 11);
     std::map<std::string, std::string> gotParents;
-    for (const auto& [id, parent] : resolveParents(facts)) {
-        if (parent) gotParents[id] = *parent;
-    }
+    for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
 }

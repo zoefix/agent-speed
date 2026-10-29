@@ -6,6 +6,7 @@ add_library(agentspeed_core STATIC
     src/codex_parser.cpp
     src/dedupe.cpp
     src/demo.cpp
+    src/dsh_parser.cpp
     src/engine.cpp
     src/file_reader.cpp
     src/json.cpp
@@ -17,6 +18,7 @@ add_library(agentspeed_core STATIC
     src/path_text.cpp
     src/rfc3339.cpp
     src/transcript_parser.cpp
+    src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)
 target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD)

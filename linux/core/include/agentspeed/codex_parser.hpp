@@ -14,6 +14,9 @@ public:
     std::optional<std::int64_t> createdMs() const { return fileCreatedMs_; }
     const std::optional<std::string>& metaThreadId() const { return metaThreadId_; }
     const std::optional<std::string>& parentThreadId() const { return parentThreadId_; }
+    AgentLink link() const override {
+        return {agentId(), LinkKind::CodexThread, metaThreadId_, parentThreadId_, fileCreatedMs_, 0};
+    }
 
     struct Usage {
         std::int64_t input = 0, cached = 0, cacheWrite = 0, output = 0, reasoning = 0, totalTokens = 0;

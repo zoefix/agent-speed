@@ -3,9 +3,12 @@
 #include <zstd.h>
 
 #include <fstream>
+#include <iterator>
+#include <string>
 #include <vector>
 
 #include "agentspeed/line_splitter.hpp"
+#include "agentspeed/zstd_frames.hpp"
 
 namespace agentspeed {
 
@@ -27,6 +30,13 @@ ReadResult readWholeFile(const std::filesystem::path& path, const std::function<
     }
     LineSplitter splitter;
     std::vector<char> input(1 << 20);
+    if (hasSuffix(path, ".zstd")) {
+        std::string bytes((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+        result.bytesRead = static_cast<std::int64_t>(bytes.size());
+        ZstdFrameScanner scanner;
+        scanner.scan(bytes, onLine, [&] { ++result.decodeErrors; });
+        return result;
+    }
     if (!hasSuffix(path, ".zst")) {
         while (in) {
             in.read(input.data(), static_cast<std::streamsize>(input.size()));

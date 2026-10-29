@@ -14,7 +14,7 @@ struct ReadResult {
 };
 
 // Reads a whole transcript and hands its complete lines to `onLine` (METRICS 5); `.zst` files are decompressed as
-// one stream (5.3). An incomplete last line is not delivered.
+// one stream (5.3), `.zstd` files frame by frame (5.1). An incomplete last line is not delivered.
 ReadResult readWholeFile(const std::filesystem::path& path, const std::function<void(std::string_view)>& onLine);
 
 }  // namespace agentspeed
