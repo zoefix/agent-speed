@@ -2,23 +2,25 @@
 
 #include <vector>
 
-#include "orb/frame.hpp"
+#include "orb/style.hpp"
 
 namespace orb {
 
 // `led` — the LED gauge (DESIGN 2 layers 1–8) with the v1.4 effects of DESIGN 2.1: silk core, gauge energy flow, tip
 // flare, comets, corona and warp streaks, sparks and embers, shockwaves with a wake, and the new-peak flash, ring,
 // rays and burst. Electric arcs and digit lightning are not ported yet.
-class LedStyle {
+class LedStyle : public Style {
 public:
-    void pulse(double time, double strength, double heat);
-    void celebrate();
-    void step(const Frame& frame);
-    void build(Scene& scene, const Frame& frame);
-    bool isBusy() const;
-    // 0: static, 30 or 60 frames per second at rest in this state (DESIGN 2a, Frame policy).
-    int ambientFps(const Frame& frame) const;
-    static constexpr double kSignOfLifeDuration = 0.9;
+    StyleKind kind() const override { return StyleKind::Led; }
+    bool sharedAura() const override { return false; }
+    bool sharedWave() const override { return false; }
+    bool sharedRays() const override { return false; }
+    void pulse(double time, double strength, double heat) override;
+    void celebrate(double time) override;
+    void step(const Frame& frame) override;
+    void build(Scene& scene, const Frame& frame) override;
+    bool isBusy(const Frame& frame) const override;
+    int ambientFps(const Frame& frame) const override;
 
 private:
     struct Pulse {

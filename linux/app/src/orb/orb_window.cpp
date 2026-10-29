@@ -34,6 +34,7 @@ namespace {
 constexpr double kPi = 3.14159265358979323846;
 constexpr double kSizes[] = {112, 148, 196};
 constexpr double kSnapReach = 24, kSnapMargin = 12;
+constexpr double kStyleFade = 0.25;
 constexpr const char* kTitleKeys[Gauge::kTitles] = {
     "title.walk",       "title.bicycle", "title.ebike",   "title.motorcycle", "title.car",
     "title.sportsCar",  "title.bulletTrain", "title.raceCar", "title.maglev",  "title.jetliner",
@@ -87,7 +88,8 @@ OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), s
 
     QSettings settings;
     settings.beginGroup(QStringLiteral("orb"));
-    diameter_ = std::clamp(settings.value(QStringLiteral("size"), 148.0).toDouble(), 96.0, 240.0);
+    styleKind_ = styleFromKey(settings.value(QStringLiteral("style")).toString());
+    diameter_ = std::clamp(settings.value(QStringLiteral("size"), 148.0).toDouble(), minimumDiameter(), 240.0);
     effectsLevel_ = std::clamp(settings.value(QStringLiteral("effects"), 2).toInt(), 0, 3);
     alwaysOnTop_ = settings.value(QStringLiteral("alwaysOnTop"), true).toBool();
     clickThrough_ = settings.value(QStringLiteral("clickThrough"), false).toBool();
@@ -97,6 +99,7 @@ OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), s
         traffic_ = QStringLiteral("off");
     }
     settings.endGroup();
+    style_ = Style::make(styleKind_);
     blur_ = x11::blurSupported();
     applyFlags();
     resize(qCeil(side()), qCeil(side()));
@@ -204,7 +207,7 @@ void OrbWindow::setClickThrough(bool on) {
 }
 
 void OrbWindow::setDiameter(double diameter) {
-    diameter = std::clamp(diameter, 96.0, 240.0);
+    diameter = std::clamp(diameter, minimumDiameter(), 240.0);
     if (std::abs(diameter - diameter_) < 0.01) return;
     const QPointF discCenter = QPointF(position()) + center();
     diameter_ = diameter;
@@ -247,6 +250,32 @@ QString OrbWindow::titleText(int index) const {
 void OrbWindow::setTitles(const TitleThemes* titles) {
     titles_ = titles;
     if (titles_) connect(titles_, &TitleThemes::changed, this, [this] { requestFrame(); });
+}
+
+// The outgoing and incoming instruments crossfade for 0.25 s (DESIGN 2a, Style change); a size below 96 pt only
+// `minimal` allows grows back.
+void OrbWindow::setStyle(const QString& key) {
+    const StyleKind kind = styleFromKey(key);
+    if (kind == styleKind_) return;
+    const double t = now();
+    outgoing_ = std::move(style_);
+    style_ = Style::make(kind);
+    styleKind_ = kind;
+    styleChangedAt_ = t;
+    bodyDirty_ = true;
+    bodyCrossfade_ = true;
+    resumeStyle_ = true;
+    QSettings().setValue(QStringLiteral("orb/style"), styleKey(kind));
+    emit styleChanged();
+    if (diameter_ < minimumDiameter()) {
+        setDiameter(minimumDiameter());
+    }
+    requestFrame();
+}
+
+double OrbWindow::styleMix(double time) const {
+    if (!outgoing_) return 1;
+    return std::clamp((time - styleChangedAt_) / kStyleFade, 0.0, 1.0);
 }
 
 void OrbWindow::setTraffic(const QString& traffic) {
@@ -354,13 +383,15 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         const double heat = std::max(heat::of(speed >= 0 ? speed : gauge_.value(), gauge_.redline()), 0.08);
         if (t - lastPulse_ < 0.15) continue;
         lastPulse_ = t;
-        style_.pulse(t, strength, heat);
+        style_->pulse(t, strength, heat);
+        if (wavePulses_.size() >= 4) wavePulses_.erase(wavePulses_.begin());
+        wavePulses_.push_back({t, strength, heat});
         flare_.value = std::max(flare_.value, strength);
         events = true;
     }
     if (snap.value(QStringLiteral("newPeak")).toBool() && e.celebrate) {
         peakStart_ = t;
-        style_.celebrate();
+        style_->celebrate(t);
         events = true;
     }
     valueText_ = snap.value(QStringLiteral("liveText")).toString();
@@ -426,16 +457,17 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
 }
 
 std::optional<double> OrbWindow::signOfLife(double time) const {
-    if (gauge_.tier() != Tier::Idle || !effects().idleSweep) return std::nullopt;
+    const double duration = style_->signOfLifeDuration();
+    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || duration <= 0) return std::nullopt;
     const double cycleStart = std::floor(time / 6) * 6;
     if (cycleStart < gauge_.tierChangedAt() + 2) return std::nullopt;
-    const double u = (time - cycleStart) / LedStyle::kSignOfLifeDuration;
+    const double u = (time - cycleStart) / duration;
     if (u < 0 || u > 1) return std::nullopt;
     return u;
 }
 
 double OrbWindow::nextSignOfLife(double time) const {
-    if (gauge_.tier() != Tier::Idle || !effects().idleSweep) return -1;
+    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || style_->signOfLifeDuration() <= 0) return -1;
     double start = (std::floor(time / 6) + 1) * 6;
     while (start < gauge_.tierChangedAt() + 2) start += 6;
     return start;
@@ -453,6 +485,8 @@ Frame OrbWindow::makeFrame(double time, double dt) {
     f.effects = effects();
     f.heat = gauge_.heat();
     f.overdrive = gauge_.overdrive();
+    f.rawHeat = heat::of(gauge_.value(), gauge_.redline());
+    f.rawOverdrive = std::clamp((gauge_.value() - gauge_.redline()) / gauge_.redline(), 0.0, 1.0);
     f.tier = gauge_.tier();
     f.redline = gauge_.redline();
     const double sinceePeak = time - peakStart_;
@@ -472,17 +506,19 @@ Frame OrbWindow::makeFrame(double time, double dt) {
 }
 
 int OrbWindow::desiredFps(double time, const Frame& f) const {
+    const int transition = styleKind_ == StyleKind::Minimal ? 30 : 60;
     if (time - peakStart_ < 2.0 || time - gauge_.tierChangedAt() < 0.5 || time - gauge_.titleChangedAt() < 0.45 ||
-        time - hoverChangedAt_ < 0.45) {
-        return 60;
+        time - hoverChangedAt_ < 0.45 || styleMix(time) < 1) {
+        return transition;
     }
     const bool active = f.tier != Tier::Idle;
     const bool envelopes = redline_.settled(f.tier == Tier::Redline ? 1 : 0) && hover_.settled(hovered_ ? 1 : 0) &&
                            activity_.settled(active ? 1 : 0) && valueGlow_.settled(f.tier >= Tier::Boost ? 1 : 0) &&
                            skew_.settled(f.tier >= Tier::Overdrive && f.effects.skew ? 1 : 0);
-    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_.isBusy() || intelBusy(time);
+    const bool waves = !wavePulses_.empty() && time - wavePulses_.back().start < shared::kPulseDuration && style_->sharedWave();
+    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_->isBusy(f) || intelBusy(time) || waves;
     if (effectsLevel_ == 0) return motion ? 30 : 0;
-    int fps = style_.ambientFps(f);
+    int fps = style_->ambientFps(f);
     if (motion || f.signOfLife) fps = std::max(fps, 30);
     return fps;
 }
@@ -570,17 +606,18 @@ void OrbWindow::renderFrame() {
 
     Frame f = makeFrame(t, dt);
     f.resumed = resumed;
-    style_.step(f);
+    while (!wavePulses_.empty() && t - wavePulses_.front().start >= shared::kPulseDuration) wavePulses_.erase(wavePulses_.begin());
+    if (resumed) wavePulses_.clear();
 
     const double dpr = devicePixelRatio();
+    const double mix = styleMix(t);
     if (glReady_ && (bodyDirty_ || bodyDark_ != f.dark)) {
-        renderer_.setBody(renderBody(diameter_, side(), dpr, f.tokens, blur_), QRectF(0, 0, side(), side()));
+        renderer_.setBody(renderBody(diameter_, side(), dpr, f.tokens, blur_, styleKind_), QRectF(0, 0, side(), side()),
+                          bodyCrossfade_ && mix < 1);
         bodyDirty_ = false;
+        bodyCrossfade_ = false;
         bodyDark_ = f.dark;
     }
-    scene_.reset();
-    scene_.hoverScale = 1 + 0.03 * hover_.value;
-    style_.build(scene_, f);
 
     ReadoutContent content;
     content.value = valueText_;
@@ -613,10 +650,45 @@ void OrbWindow::renderFrame() {
     content.net.opacity = netOpacity_;
     std::tie(content.net.downNumber, content.net.downUnit) = split(netDown_);
     std::tie(content.net.upNumber, content.net.upUnit) = split(netUp_);
-    buildReadout(scene_, f, content, [this, dpr](const TextDraw& text) { return renderer_.measure(text, dpr).width; });
+    f.unitText = content.unit;
+    const MeasureText measure = [this, dpr](const TextDraw& text) { return renderer_.measure(text, dpr).width; };
+
+    scene_.reset();
+    scene_.hoverScale = 1 + 0.03 * hover_.value;
+    scene_.bodyMix = mix;
+    if (outgoing_ && mix < 1) {
+        Frame out = f;
+        out.alpha = 1 - mix;
+        drawStyle(*outgoing_, out, content, measure);
+    }
+    if (mix >= 1) outgoing_.reset();
+    Frame in = f;
+    in.alpha = mix;
+    in.resumed = resumed || resumeStyle_;
+    resumeStyle_ = false;
+    drawStyle(*style_, in, content, measure);
+    scene_.alphaScale = 1;
 
     renderer_.render(scene_, QSizeF(side(), side()), dpr, center());
     schedule();
+}
+
+void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, const MeasureText& measure) {
+    const auto& placement = style.linePlacement();
+    if (f.s >= 64) {
+        f.linesFit = linesFit(f, placement, content, measure);
+        f.readoutShift = readoutShift(f, style.readoutLayout(), placement, content, measure);
+    }
+    style.step(f);
+    scene_.alphaScale = f.alpha;
+    if (f.alpha <= 0.002) return;
+    if (f.s >= 64) {
+        if (style.sharedAura()) shared::addAura(scene_, f);
+        if (style.sharedWave() && f.effects.pulses) shared::addPulses(scene_, f, wavePulses_);
+        if (style.sharedRays()) shared::addPeakRays(scene_, f);
+    }
+    style.build(scene_, f);
+    style.buildReadout(scene_, f, content, measure);
 }
 
 bool OrbWindow::event(QEvent* event) {
@@ -727,6 +799,16 @@ void OrbWindow::showMenu(QPoint global) {
         sizes->addAction(action);
         const double d = kSizes[i];
         connect(action, &QAction::triggered, this, [this, d] { setDiameter(d); });
+    }
+    auto* styleMenu = menu->addMenu(strings_.t(QStringLiteral("orbs.style")));
+    auto* styles = new QActionGroup(styleMenu);
+    for (const auto kind : kStyles) {
+        const QString key = styleKey(kind);
+        auto* action = styleMenu->addAction(strings_.t(QStringLiteral("style.") + key));
+        action->setCheckable(true);
+        action->setChecked(kind == styleKind_);
+        styles->addAction(action);
+        connect(action, &QAction::triggered, this, [this, key] { setStyle(key); });
     }
     auto* fx = menu->addMenu(strings_.t(QStringLiteral("menu.effects")));
     auto* levels = new QActionGroup(fx);

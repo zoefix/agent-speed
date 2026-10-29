@@ -47,7 +47,7 @@ void LedStyle::pulse(double time, double strength, double heat) {
     pulses_.push_back({time, strength, heat});
 }
 
-void LedStyle::celebrate() { pendingBurst_ = true; }
+void LedStyle::celebrate(double) { pendingBurst_ = true; }
 
 void LedStyle::step(const Frame& f) {
     const auto& e = f.effects;
@@ -77,12 +77,12 @@ void LedStyle::step(const Frame& f) {
     }
 }
 
-bool LedStyle::isBusy() const {
+bool LedStyle::isBusy(const Frame&) const {
     return !particles_.empty() || !pulses_.empty() || pendingBurst_ || cometVisibility_ != cometTarget_;
 }
 
 int LedStyle::ambientFps(const Frame& f) const {
-    if (f.idle()) return isBusy() ? 30 : 0;
+    if (f.idle()) return isBusy(f) ? 30 : 0;
     return f.heat >= 0.45 || f.tier >= Tier::Overdrive ? 60 : 30;
 }
 

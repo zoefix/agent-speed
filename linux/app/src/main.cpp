@@ -1,5 +1,6 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
+#include <QQmlEngine>
 #include <QQmlComponent>
 #include <QStandardPaths>
 #include <QQmlContext>
@@ -21,6 +22,7 @@
 #include "monitor_worker.hpp"
 #include "network_service.hpp"
 #include "orb/orb_window.hpp"
+#include "orb/preview.hpp"
 #include "preferences.hpp"
 #include "report/report_controller.hpp"
 #include "strings.hpp"
@@ -224,6 +226,8 @@ int main(int argc, char* argv[]) {
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
     orb::OrbWindow orbWindow(strings);
+    orb::PreviewItem::setUnit(strings.t(QStringLiteral("unit.tokS")));
+    qmlRegisterType<orb::PreviewItem>("AgentSpeed.Orb", 1, 0, "OrbPreview");
 
     QQmlApplicationEngine engine;
     const bool popup = tray.available() || !snapshotPath.isEmpty();
@@ -408,9 +412,11 @@ int main(int argc, char* argv[]) {
                                                       a.startsWith(QStringLiteral("--card-snapshot="));
                                            });
     if (!offscreenShot) orbWindow.restore();
-    // Development aid: --orb-traffic=<mode> sets the orb's readout (sources, machine, intelligence, off).
+    // Development aid: --orb-traffic=<mode> sets the orb's readout (sources, machine, intelligence, off);
+    // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal).
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbWindow.setTraffic(arg.mid(14));
+        if (arg.startsWith(QStringLiteral("--orb-style="))) orbWindow.setStyle(arg.mid(12));
     }
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
     QString orbShots;

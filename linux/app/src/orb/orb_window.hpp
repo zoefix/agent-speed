@@ -5,12 +5,14 @@
 #include <QPointer>
 #include <QTimer>
 #include <QVariantMap>
+#include <memory>
 #include <vector>
 
 #include "orb/gauge.hpp"
-#include "orb/led_style.hpp"
 #include "orb/readout.hpp"
 #include "orb/renderer.hpp"
+#include "orb/shared_layers.hpp"
+#include "orb/style.hpp"
 
 class QVariantAnimation;
 class Strings;
@@ -19,8 +21,8 @@ class TitleThemes;
 
 namespace orb {
 
-// The floating orb (DESIGN 2): a frameless, transparent, always-on-top window 1.5 S square with the `led` instrument,
-// drawn with OpenGL only while something moves (DESIGN 2a, Frame policy).
+// The floating orb (DESIGN 2): a frameless, transparent, always-on-top window 1.5 S square with one of the five
+// instruments of DESIGN 2a, drawn with OpenGL only while something moves (DESIGN 2a, Frame policy).
 class OrbWindow : public QOpenGLWindow {
     Q_OBJECT
     Q_PROPERTY(bool orbVisible READ isVisible WRITE setOrbVisible NOTIFY orbVisibilityChanged)
@@ -30,6 +32,9 @@ class OrbWindow : public QOpenGLWindow {
     Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
     // DESIGN 2b `traffic`: what the two-line readout shows — sources, machine, intelligence or off.
     Q_PROPERTY(QString traffic READ traffic WRITE setTraffic NOTIFY trafficChanged)
+    // DESIGN 2a: led, needle, liquid, reactor or minimal.
+    Q_PROPERTY(QString style READ style WRITE setStyle NOTIFY styleChanged)
+    Q_PROPERTY(double minimumDiameter READ minimumDiameter NOTIFY styleChanged)
 public:
     explicit OrbWindow(const Strings& strings);
     // DESIGN 1 Title themes: the orb names its levels with the selected theme.
@@ -41,6 +46,8 @@ public:
     int effectsLevel() const { return effectsLevel_; }
     bool alwaysOnTop() const { return alwaysOnTop_; }
     QString traffic() const { return traffic_; }
+    QString style() const { return styleKey(styleKind_); }
+    double minimumDiameter() const { return styleKind_ == StyleKind::Minimal ? 64 : 96; }
     // Development aid: draw the dark (smoked glass) look whatever the system appearance.
     void forceDark(bool on) { forcedDark_ = on; }
     void restore();
@@ -55,9 +62,11 @@ public slots:
     void setEffectsLevel(int level);
     void setAlwaysOnTop(bool on);
     void setTraffic(const QString& traffic);
+    void setStyle(const QString& style);
 
 signals:
     void trafficChanged();
+    void styleChanged();
     void dashboardRequested();
     void orbVisibilityChanged(bool visible);
     void clickThroughChanged(bool on);
@@ -93,6 +102,9 @@ private:
     bool dark() const;
     led::Effects effects() const;
     Frame makeFrame(double time, double dt);
+    double styleMix(double time) const;
+    // Steps and draws one style at its crossfade share, with the shared layers it uses and its readout.
+    void drawStyle(Style& style, Frame frame, const ReadoutContent& content, const MeasureText& measure);
     std::optional<double> signOfLife(double time) const;
     double nextSignOfLife(double time) const;
     int desiredFps(double time, const Frame& frame) const;
@@ -114,13 +126,19 @@ private:
     const Strings& strings_;
     Renderer renderer_;
     Scene scene_;
-    LedStyle style_;
+    StyleKind styleKind_ = StyleKind::Led;
+    std::unique_ptr<Style> style_;
+    std::unique_ptr<Style> outgoing_;  // the style fading out after a change
+    double styleChangedAt_ = -1e9;
+    std::vector<shared::Pulse> wavePulses_;
     Gauge gauge_;
     QElapsedTimer clock_;
     QTimer frameTimer_;
     QTimer wakeTimer_;
     bool glReady_ = false;
     bool bodyDirty_ = true;
+    bool bodyCrossfade_ = false;  // the next body keeps the previous one for the style crossfade
+    bool resumeStyle_ = false;    // the new style's first frame shows the current state
     bool bodyDark_ = true;
     bool resumePending_ = true;
     double lastFrame_ = -1;

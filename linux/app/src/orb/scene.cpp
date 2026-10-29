@@ -96,6 +96,37 @@ Instance Instance::bandArc(QPointF center, double radius, double width, double s
     return i;
 }
 
+Instance Instance::bandArc(QPointF center, double radius, double width, double start, double sweep, Rgba color,
+                           Rgba startColor, const Band& band) {
+    Instance i = make(BandArc, center, 0, static_cast<float>(radius), static_cast<float>(width), band.roundCaps ? 1.0f : 0.0f,
+                      band.glow, color, startColor, band.core, band.glowAlpha, static_cast<float>(start * kPi / 180),
+                      static_cast<float>(std::clamp(sweep, 0.0001, 360.0) * kPi / 180));
+    i.extra2 = {static_cast<float>(Solid), 0, 0, static_cast<float>(band.startAlpha)};
+    return i;
+}
+
+Instance Instance::paletteArc(QPointF center, double radius, double width, double start, double sweep, double heatFrom,
+                              double heatTo, double alpha, const Band& band) {
+    Instance i = bandArc(center, radius, width, start, sweep, Rgba::white(static_cast<float>(alpha)),
+                         Rgba::white(static_cast<float>(alpha)), band);
+    i.extra2 = {static_cast<float>(Palette), static_cast<float>(heatFrom), static_cast<float>(heatTo),
+                static_cast<float>(band.startAlpha)};
+    return i;
+}
+
+Instance Instance::ellipse(QPointF center, double rx, double ry, double rotation, Rgba color, double core, double glow,
+                           double glowAlpha) {
+    return make(Ellipse, center, rotation * kPi / 180, static_cast<float>(rx), static_cast<float>(ry), 0, glow, color, color,
+                core, glowAlpha);
+}
+
+Instance Instance::blade(QPointF pivot, double angle, double tipLength, double tailLength, double pivotHalf, double tipHalf,
+                         double tailHalf, Rgba color, double core, double glow, double glowAlpha) {
+    return make(Blade, pivot, angle * kPi / 180, static_cast<float>(tipLength), static_cast<float>(tailLength),
+                static_cast<float>(tailHalf), glow, color, color, core, glowAlpha, static_cast<float>(pivotHalf),
+                static_cast<float>(tipHalf));
+}
+
 Instance Instance::flare(QPointF center, double rotation, double tangential, double radial, double radialWidth,
                          double tangentialWidth, Rgba color) {
     return make(Flare, center, rotation, static_cast<float>(tangential), static_cast<float>(radial), 0, 0, color, color,
@@ -107,24 +138,60 @@ void Scene::reset() {
     batches_.clear();
     texts_.clear();
     hoverScale = 1;
+    alphaScale = 1;
+    clipRadius = clipFeather = 0;
+    bodyMix = 1;
+    hasLiquid = false;
 }
 
 void Scene::add(const Instance& instance, Blend blend) {
+    Instance item = instance;
+    if (alphaScale < 1) {
+        item.color[3] *= static_cast<float>(alphaScale);
+        item.color2[3] *= static_cast<float>(alphaScale);
+    }
+    const auto clip = static_cast<float>(clipRadius), feather = static_cast<float>(clipFeather);
     if (!batches_.empty()) {
         Batch& last = batches_.back();
-        if (last.kind == Batch::Kind::Shapes && last.blend == blend &&
+        if (last.kind == Batch::Kind::Shapes && last.blend == blend && last.clip == clip && last.feather == feather &&
             last.start + last.count == static_cast<int>(instances_.size())) {
             ++last.count;
-            instances_.push_back(instance);
+            instances_.push_back(item);
             return;
         }
     }
-    batches_.push_back({Batch::Kind::Shapes, blend, 0, static_cast<int>(instances_.size()), 1});
-    instances_.push_back(instance);
+    Batch batch{Batch::Kind::Shapes, blend, 0, static_cast<int>(instances_.size()), 1};
+    batch.clip = clip;
+    batch.feather = feather;
+    batches_.push_back(batch);
+    instances_.push_back(item);
 }
 
 void Scene::addLedField(int mode, Blend blend) {
-    batches_.push_back({Batch::Kind::LedField, blend, mode, static_cast<int>(instances_.size()), 0});
+    Batch batch{Batch::Kind::LedField, blend, mode, static_cast<int>(instances_.size()), 0};
+    batch.alpha = static_cast<float>(alphaScale);
+    batches_.push_back(batch);
+}
+
+void Scene::addLiquid(int mode) {
+    Batch batch{Batch::Kind::Liquid, Blend::Over, mode, static_cast<int>(instances_.size()), 0};
+    batch.alpha = static_cast<float>(alphaScale);
+    batches_.push_back(batch);
+    hasLiquid = true;
+}
+
+void Scene::add(const TextDraw& text) {
+    TextDraw item = text;
+    if (alphaScale < 1) {
+        item.color = item.color.opacity(alphaScale);
+        item.glowStrength *= alphaScale;
+    }
+    texts_.push_back(item);
+}
+
+void Scene::addUnder(const TextDraw& text) {
+    add(text);
+    texts_.back().layer = static_cast<int>(batches_.size());
 }
 
 }  // namespace orb

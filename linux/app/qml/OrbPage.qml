@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 
 SettingsPage {
@@ -16,13 +17,36 @@ SettingsPage {
         SettingsRow {
             label: S.tr2(S.rev, "settings.orb.size")
             Segmented {
-                value: orb.diameter < 130 ? 112 : orb.diameter < 172 ? 148 : 196
+                anchors.verticalCenter: parent.verticalCenter
+                value: Math.abs(orb.diameter - 112) < 0.5 ? 112 : Math.abs(orb.diameter - 148) < 0.5 ? 148
+                     : Math.abs(orb.diameter - 196) < 0.5 ? 196 : -1
                 options: [
                     { value: 112, label: S.tr2(S.rev, "menu.size.small") },
                     { value: 148, label: S.tr2(S.rev, "menu.size.medium") },
                     { value: 196, label: S.tr2(S.rev, "menu.size.large") }
                 ]
                 onActivated: (v) => orb.diameter = v
+            }
+            Slider {
+                id: sizeSlider
+                anchors.verticalCenter: parent.verticalCenter
+                width: 140
+                from: orb.minimumDiameter
+                to: 240
+                stepSize: 4
+                snapMode: Slider.SnapAlways
+                value: orb.diameter
+                onMoved: orb.diameter = value
+                Accessible.name: S.tr2(S.rev, "settings.orb.size")
+            }
+            Text {
+                anchors.verticalCenter: parent.verticalCenter
+                width: 46
+                horizontalAlignment: Text.AlignRight
+                text: Math.round(orb.diameter) + " pt"
+                color: Theme.ink2
+                font.pixelSize: 12
+                font.features: Theme.tabular
             }
         }
         SettingsRow {
@@ -60,12 +84,18 @@ SettingsPage {
     }
 
     SettingsGroup {
-        title: S.tr2(S.rev, "style.led")
-        SettingsRow {
-            label: S.tr2(S.rev, "style.led")
-            caption: S.tr2(S.rev, "style.led.desc")
-            divider: false
-            Glyph { name: "check"; color: Theme.accent; width: 15; height: 15 }
+        title: S.tr2(S.rev, "orbs.style")
+        Item {
+            Layout.fillWidth: true
+            implicitHeight: stylePicker.implicitHeight + 28
+            OrbStylePicker {
+                id: stylePicker
+                x: 14
+                y: 14
+                width: parent.width - 28
+                selected: orb.style
+                onPicked: (key) => orb.style = key
+            }
         }
     }
 

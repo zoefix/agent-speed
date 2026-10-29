@@ -56,7 +56,8 @@ bool Renderer::initialize() {
     led_ = build(shaders::ledVertex(), shaders::ledFragment(), "led field");
     text_ = build(shaders::textVertex(), shaders::textFragment(), "text");
     image_ = build(shaders::imageVertex(), shaders::imageFragment(), "image");
-    if (!shapes_ || !led_ || !text_ || !image_) return false;
+    liquid_ = build(shaders::liquidVertex(), shaders::liquidFragment(), "liquid");
+    if (!shapes_ || !led_ || !text_ || !image_ || !liquid_) return false;
 
     glGenVertexArrays(1, &emptyVao_);
     glGenVertexArrays(1, &instanceVao_);
@@ -89,6 +90,8 @@ void Renderer::release() {
     silkTexture_ = silkFbo_ = 0;
     silkSize_ = 0;
     if (body_) glDeleteTextures(1, &body_);
+    if (previousBody_) glDeleteTextures(1, &previousBody_);
+    previousBody_ = 0;
     glDeleteBuffers(1, &instanceBuffer_);
     glDeleteVertexArrays(1, &instanceVao_);
     glDeleteVertexArrays(1, &emptyVao_);
@@ -96,7 +99,8 @@ void Renderer::release() {
     delete led_;
     delete text_;
     delete image_;
-    shapes_ = led_ = text_ = image_ = nullptr;
+    delete liquid_;
+    shapes_ = led_ = text_ = image_ = liquid_ = nullptr;
     body_ = 0;
     ready_ = false;
 }
@@ -118,8 +122,12 @@ unsigned int Renderer::upload(const QImage& source, unsigned int existing) {
     return id;
 }
 
-void Renderer::setBody(const QImage& image, const QRectF& rect) {
+void Renderer::setBody(const QImage& image, const QRectF& rect, bool keepPrevious) {
     if (!ready_) return;
+    if (keepPrevious && body_) {
+        std::swap(body_, previousBody_);
+        previousBodyRect_ = bodyRect_;
+    }
     body_ = upload(image, body_);
     bodyRect_ = rect;
 }
@@ -232,9 +240,10 @@ void Renderer::renderSilk(const Scene& scene, double dpr, unsigned int target) {
 }
 
 void Renderer::drawImage(unsigned int texture, const QRectF& rect, QSizeF viewport, double dpr, QPointF center,
-                         double scale) {
+                         double scale, double alpha) {
     image_->bind();
     setCommon(image_, viewport, dpr, center, scale);
+    image_->setUniformValue("uAlpha", static_cast<float>(alpha));
     image_->setUniformValue("uRect", static_cast<float>(rect.x()), static_cast<float>(rect.y()),
                             static_cast<float>(rect.width()), static_cast<float>(rect.height()));
     image_->setUniformValue("uImage", 0);
@@ -242,6 +251,45 @@ void Renderer::drawImage(unsigned int texture, const QRectF& rect, QSizeF viewpo
     glBindTexture(GL_TEXTURE_2D, texture);
     glBindVertexArray(emptyVao_);
     glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void Renderer::drawText(const TextDraw& text, double dpr) {
+    TextTexture& t = textTexture(text, dpr);
+    const auto& m = t.metrics;
+    const double x = text.baselineCenter.x() - m.width / 2 - m.padding;
+    const double y = text.baselineCenter.y() - m.ascent - m.padding;
+    text_->setUniformValue("uRect", static_cast<float>(x), static_cast<float>(y), static_cast<float>(m.size.width()),
+                           static_cast<float>(m.size.height()));
+    text_->setUniformValue("uParams", static_cast<float>(text.shear), static_cast<float>(text.baselineCenter.y()),
+                           static_cast<float>(text.glowRadius), static_cast<float>(text.clip));
+    text_->setUniformValue("uColor", text.color.r, text.color.g, text.color.b, text.color.a);
+    text_->setUniformValue("uGlow", text.glowColor.r, text.glowColor.g, text.glowColor.b, static_cast<float>(text.glowStrength));
+    glBindTexture(GL_TEXTURE_2D, t.id);
+    glDrawArrays(GL_TRIANGLES, 0, 6);
+}
+
+void Renderer::setLiquidUniforms(QOpenGLShaderProgram* program, const Scene& scene, bool surfaceOnly) {
+    const auto& l = scene.liquidField;
+    const auto set = [program](const char* name, const std::array<float, 4>& v) { program->setUniformValue(name, v[0], v[1], v[2], v[3]); };
+    set("uLFrame", l.frame);
+    set("uLSurface", l.surface);
+    set("uLPhases", l.phases);
+    program->setUniformValueArray("uLRipples", reinterpret_cast<const GLfloat*>(l.ripples.data()), 4, 4);
+    if (surfaceOnly) return;
+    set("uLLiquid", l.liquid);
+    set("uLDeep", l.deep);
+    set("uLBack", l.back);
+    set("uLSpill", l.spill);
+    set("uLGlow", l.glow);
+    set("uLGlowGeom", l.glowGeom);
+    set("uLShade", l.shade);
+    set("uLCurrent", l.current);
+    set("uLCurrentGeom", l.currentGeom);
+    set("uLMeniscus", l.meniscus);
+    set("uLMeniscusGlow", l.meniscusGlow);
+    set("uLMeniscusGeom", l.meniscusGeom);
+    set("uLGold", l.gold);
+    set("uLFlags", l.flags);
 }
 
 void Renderer::setBlend(Blend blend) {
@@ -264,10 +312,9 @@ void Renderer::render(const Scene& scene, QSizeF viewport, double dpr, QPointF c
     if (!ready_) return;
     const double scale = scene.hoverScale;
 
-    if (body_) {
-        setBlend(Blend::Over);
-        drawImage(body_, bodyRect_, viewport, dpr, center, scale);
-    }
+    setBlend(Blend::Over);
+    if (previousBody_ && scene.bodyMix < 0.999) drawImage(previousBody_, previousBodyRect_, viewport, dpr, center, scale);
+    if (body_) drawImage(body_, bodyRect_, viewport, dpr, center, scale, std::clamp(scene.bodyMix, 0.0, 1.0));
 
     const auto& instances = scene.instances();
     if (!instances.empty()) {
@@ -277,12 +324,35 @@ void Renderer::render(const Scene& scene, QSizeF viewport, double dpr, QPointF c
     }
     glActiveTexture(GL_TEXTURE0);
     glBindTexture(GL_TEXTURE_2D, palette_);
-    for (const auto& batch : scene.batches()) {
+    const auto& batches = scene.batches();
+    const auto& texts = scene.texts();
+    const auto drawTexts = [&](int layer) {
+        bool bound = false;
+        for (const auto& text : texts) {
+            const bool here = layer < 0 ? text.layer < 0 || text.layer >= static_cast<int>(batches.size()) : text.layer == layer;
+            if (!here || text.text.isEmpty() || text.color.a <= 0.002f) continue;
+            if (!bound) {
+                setBlend(Blend::Over);
+                text_->bind();
+                setCommon(text_, viewport, dpr, center, scale);
+                text_->setUniformValue("uGlyphs", 0);
+                if (scene.hasLiquid) setLiquidUniforms(text_, scene, true);
+                glBindVertexArray(emptyVao_);
+                bound = true;
+            }
+            drawText(text, dpr);
+        }
+        if (bound) glBindTexture(GL_TEXTURE_2D, palette_);
+    };
+    for (std::size_t index = 0; index < batches.size(); ++index) {
+        const auto& batch = batches[index];
+        drawTexts(static_cast<int>(index));
         setBlend(batch.blend);
         if (batch.kind == Scene::Batch::Kind::Shapes) {
             if (batch.count == 0) continue;
             shapes_->bind();
             setCommon(shapes_, viewport, dpr, center, scale);
+            shapes_->setUniformValue("uClip", batch.clip, batch.feather, 0.0f, 0.0f);
             shapes_->setUniformValue("uPalette", 0);
             glBindVertexArray(instanceVao_);
             glBindBuffer(GL_ARRAY_BUFFER, instanceBuffer_);
@@ -292,41 +362,30 @@ void Renderer::render(const Scene& scene, QSizeF viewport, double dpr, QPointF c
                                       reinterpret_cast<const void*>(offset));
             }
             glDrawArraysInstanced(GL_TRIANGLES, 0, 6, batch.count);
+        } else if (batch.kind == Scene::Batch::Kind::Liquid) {
+            liquid_->bind();
+            setCommon(liquid_, viewport, dpr, center, scale);
+            setLiquidUniforms(liquid_, scene, false);
+            liquid_->setUniformValue("uMode", batch.mode);
+            liquid_->setUniformValue("uAlpha", batch.alpha);
+            glBindVertexArray(emptyVao_);
+            glDrawArrays(GL_TRIANGLES, 0, 6);
         } else if (batch.mode == 0) {
             const auto& f = scene.ledField;
             const QRectF rect(f.frame[0] - silkBox_ / 2, f.frame[1] - silkBox_ / 2, silkBox_, silkBox_);
-            drawImage(silkTexture_, rect, viewport, dpr, center, scale);
+            drawImage(silkTexture_, rect, viewport, dpr, center, scale, batch.alpha);
             glBindTexture(GL_TEXTURE_2D, palette_);
         } else {
             led_->bind();
             setCommon(led_, viewport, dpr, center, scale);
             setLedUniforms(scene, batch.mode);
+            const auto& f = scene.ledField;
+            led_->setUniformValue("uFrame", f.frame[0], f.frame[1], f.frame[2], f.frame[3] * batch.alpha);
             glBindVertexArray(emptyVao_);
             glDrawArrays(GL_TRIANGLES, 0, 6 * 48);
         }
     }
-
-    setBlend(Blend::Over);
-    text_->bind();
-    setCommon(text_, viewport, dpr, center, scale);
-    text_->setUniformValue("uGlyphs", 0);
-    glBindVertexArray(emptyVao_);
-    for (const auto& text : scene.texts()) {
-        if (text.text.isEmpty() || text.color.a <= 0.002f) continue;
-        TextTexture& t = textTexture(text, dpr);
-        const auto& m = t.metrics;
-        const double x = text.baselineCenter.x() - m.width / 2 - m.padding;
-        const double y = text.baselineCenter.y() - m.ascent - m.padding;
-        text_->setUniformValue("uRect", static_cast<float>(x), static_cast<float>(y), static_cast<float>(m.size.width()),
-                               static_cast<float>(m.size.height()));
-        text_->setUniformValue("uParams", static_cast<float>(text.shear), static_cast<float>(text.baselineCenter.y()),
-                               static_cast<float>(text.glowRadius), 0.0f);
-        text_->setUniformValue("uColor", text.color.r, text.color.g, text.color.b, text.color.a);
-        text_->setUniformValue("uGlow", text.glowColor.r, text.glowColor.g, text.glowColor.b,
-                               static_cast<float>(text.glowStrength));
-        glBindTexture(GL_TEXTURE_2D, t.id);
-        glDrawArrays(GL_TRIANGLES, 0, 6);
-    }
+    drawTexts(-1);
     glBindVertexArray(0);
 }
 

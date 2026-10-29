@@ -13,7 +13,7 @@ QColor q(const Rgba& c, double alpha = 1) { return QColor::fromRgbF(c.r, c.g, c.
 
 }  // namespace
 
-QImage renderBody(double s, double side, double dpr, const Tokens& t, bool blurBehind) {
+QImage renderBody(double s, double side, double dpr, const Tokens& t, bool blurBehind, StyleKind style) {
     QImage image(qMax(1, qCeil(side * dpr)), qMax(1, qCeil(side * dpr)), QImage::Format_RGBA8888_Premultiplied);
     image.setDevicePixelRatio(dpr);
     image.fill(Qt::transparent);
@@ -48,8 +48,17 @@ QImage renderBody(double s, double side, double dpr, const Tokens& t, bool blurB
     {
         QLinearGradient g(QPointF(c.x(), c.y() - r), QPointF(c.x(), c.y() + r));
         const double alpha = blurBehind ? t.bodyOpacity : 1.0;
-        g.setColorAt(0, q(t.bodyTop, alpha));
-        g.setColorAt(1, q(t.bodyBottom, alpha));
+        // DESIGN 2a: `liquid` and `reactor` darken (or cool) the body.
+        Rgba top = t.bodyTop, bottom = t.bodyBottom;
+        if (style == StyleKind::Liquid) {
+            top = t.dark ? Rgba::hex(0x181D2B) : Rgba::hex(0xFFFFFF);
+            bottom = t.dark ? Rgba::hex(0x07090D) : Rgba::hex(0xE4E8F0);
+        } else if (style == StyleKind::Reactor) {
+            if (t.dark) top = Rgba::hex(0x141824);
+            bottom = t.dark ? Rgba::hex(0x06070B) : Rgba::hex(0xE5E9F1);
+        }
+        g.setColorAt(0, q(top, alpha));
+        g.setColorAt(1, q(bottom, alpha));
         p.fillPath(disc, g);
     }
     // Soft inner shadow along the rim.
@@ -61,8 +70,17 @@ QImage renderBody(double s, double side, double dpr, const Tokens& t, bool blurB
         g.setColorAt(1, q(t.innerShadow, 1));
         p.fillPath(disc, g);
     }
-    // Lens highlight at the top left.
-    {
+    // `liquid` volume shading: clear to 75 % of the radius around a point up-left of the center, then darker.
+    if (style == StyleKind::Liquid) {
+        QRadialGradient g(QPointF(c.x() - 0.12 * s, c.y() - 0.16 * s), 0.5 * s);
+        const Rgba edge = t.dark ? Rgba::black(0.42f) : Rgba::hex(0x1E283C, 0.12f);
+        g.setColorAt(0, q(edge, 0));
+        g.setColorAt(0.75, q(edge, 0));
+        g.setColorAt(1, q(edge));
+        p.fillPath(disc, g);
+    }
+    // Lens highlight at the top left (not on `liquid` and `minimal`).
+    if (style == StyleKind::Led || style == StyleKind::Needle || style == StyleKind::Reactor) {
         QRadialGradient g(QPointF(c.x() - r + 0.3 * s, c.y() - r + 0.2 * s), 0.55 * s);
         g.setColorAt(0, q(t.lens));
         g.setColorAt(1, q(t.lens, 0));

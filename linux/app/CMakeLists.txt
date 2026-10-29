@@ -33,11 +33,18 @@ qt_add_executable(agent-speed
     src/orb/gauge.cpp
     src/orb/led_math.cpp
     src/orb/led_style.cpp
+    src/orb/liquid_style.cpp
+    src/orb/minimal_style.cpp
+    src/orb/needle_style.cpp
     src/orb/orb_window.cpp
+    src/orb/preview.cpp
+    src/orb/reactor_style.cpp
     src/orb/readout.cpp
     src/orb/renderer.cpp
     src/orb/scene.cpp
     src/orb/shaders.cpp
+    src/orb/shared_layers.cpp
+    src/orb/style.cpp
     src/orb/x11.cpp
     src/strings.cpp
     src/task_card.cpp
@@ -67,6 +74,7 @@ set(agent_speed_qml
     qml/EffortCapsule.qml
     qml/GeneralPage.qml
     qml/OrbPage.qml
+    qml/OrbStylePicker.qml
     qml/PillButton.qml
     qml/RedlineSlider.qml
     qml/Segmented.qml

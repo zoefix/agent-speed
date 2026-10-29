@@ -3,6 +3,7 @@
 #include <QColor>
 #include <QString>
 #include <functional>
+#include <optional>
 #include <vector>
 
 #include "orb/frame.hpp"
@@ -46,9 +47,69 @@ struct ReadoutContent {
     NetReadout net;
 };
 
+// Where a style places the readout (the frame table of DESIGN 2a, Shared foundation), fractions of S from the center.
+struct ReadoutLayout {
+    enum class Title { BelowUnit, BelowValue, Fixed };
+    double valueSize = 0.24, valueBaseline = 0.012, valueMaxWidth = 0.62;
+    double unitSize = 0.072;  // 0: no unit
+    double unitGap = 0.104;
+    Title title = Title::BelowUnit;
+    double titlePlace = 0.09;  // the gap below the unit or value, or the fixed baseline
+    double titleSize = 0.062, titleMaxWidth = 0.58;
+    double infoScale = 1, infoMaxWidth = 0.62;
+    std::optional<double> dots = 0.3785;
+    bool dotHalo = false;
+    double pill = -0.232;
+    bool titleCrossfades = false;
+    bool valueGlow = true;
+    bool valueMotion = true;  // the lean from overdrive and the redline jitter
+
+    double titleOffset() const;
+    static const ReadoutLayout led;
+};
+
+// Where a style puts the two-line readout (DESIGN 10), fractions of S from the center.
+struct LinePlacement {
+    double nearestBaseline = -0.245;  // the line nearest the value
+    bool below = false;               // below the value (`needle`, ↓ nearest), else above it (↑ nearest)
+    double size = 0.050;              // t = max(7 pt, size S)
+    double fit = 0.44;                // a line must fit this × S
+    bool recenters = true;            // the stack moves down while the block shows
+    std::optional<double> thinkingBaseline;
+    bool thinkingUnit = true;
+    std::optional<double> hubReach;  // `needle`: each line's bottom corners stay within this × S of the center
+
+    double textSize(double s) const { return std::max(7.0, size * s); }
+    static const LinePlacement led, reactor, needle, minimal;
+};
+
+// Colors that replace the tokens (the readout under the liquid surface); unset keeps the token.
+struct ReadoutPalette {
+    std::optional<Rgba> value, unit, title, lineNumber, lineSecondary;
+    Rgba shadow;
+    double shadowRadius = 0;  // points
+    bool valueGlow = true;
+};
+
+// One pass of the readout: `liquid` draws it twice, split at its surface.
+struct ReadoutPass {
+    ReadoutPalette palette;
+    int clip = 0;  // TextDraw::clip
+    bool pill = true;
+    bool dots = true;
+    bool linesYieldToPill = true;
+};
+
 using MeasureText = std::function<double(const TextDraw&)>;
 
-// Adds the value, unit, title (or hover line), agent dots and the new-peak pill.
-void buildReadout(Scene& scene, const Frame& frame, const ReadoutContent& content, const MeasureText& measure);
+// The readout stack's shift down while the two-line block shows above the value (DESIGN 10), eased with its fade.
+double readoutShift(const Frame& frame, const ReadoutLayout& layout, const LinePlacement& placement,
+                    const ReadoutContent& content, const MeasureText& measure);
+// Whether the two-line readout fits at this size (and would be drawn).
+bool linesFit(const Frame& frame, const LinePlacement& placement, const ReadoutContent& content, const MeasureText& measure);
+
+// Adds the value, unit, title (or hover line), agent dots, the new-peak pill and the two-line readout.
+void buildReadout(Scene& scene, const Frame& frame, const ReadoutContent& content, const MeasureText& measure,
+                  const ReadoutLayout& layout, const LinePlacement& placement, const ReadoutPass& pass = {});
 
 }  // namespace orb

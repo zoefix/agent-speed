@@ -8,11 +8,20 @@ namespace orb::shaders {
 
 namespace {
 
-// Points in, y down; uViewport = width, height (points), pixels per point, unused; uTransform = scale about (y, z).
+// Points in, y down; uViewport = width, height (points), pixels per point, unused; uTransform = scale about (y, z);
+// uClip = clip radius around (y, z) of uTransform (points, 0: none), soft edge (points, 0: antialiased).
 const char* kCommon = R"(#version 330 core
 uniform vec4 uViewport;
 uniform vec4 uTransform;
+uniform vec4 uClip;
 const float TAU = 6.28318530718;
+
+float clipCoverage(vec2 canvas) {
+    if (uClip.x <= 0.0) return 1.0;
+    float d = length(canvas - uTransform.yz) - uClip.x;
+    if (uClip.y > 0.0) return clamp(-d / uClip.y, 0.0, 1.0);
+    return clamp(0.5 - d * uViewport.z, 0.0, 1.0);
+}
 
 vec4 clipPosition(vec2 point) {
     vec2 center = uTransform.yz;
@@ -35,6 +44,7 @@ layout(location = 3) in vec4 iColor2;
 layout(location = 4) in vec4 iExtra;
 layout(location = 5) in vec4 iExtra2;
 out vec2 vLocal;
+out vec2 vCanvas;
 flat out vec4 vA;
 flat out vec4 vB;
 flat out vec4 vColor;
@@ -76,6 +86,8 @@ void main() {
     else if (shape < 2.5) extent = iB.x + iB.y + glow;
     else if (shape < 3.5) extent = iB.x * 0.5 + iB.y + glow;
     else if (shape < 4.5) extent = iExtra.w;
+    else if (shape > 6.5 && shape < 7.5) extent = max(iB.x, iB.y) + glow;
+    else if (shape > 7.5 && shape < 8.5) extent = max(iB.x, iB.y) + max(iExtra.z, iB.z) + glow;
     else extent = iB.x + iB.y + glow;
     extent += pad;
     vec2 corner = corners[gl_VertexID];
@@ -90,6 +102,7 @@ void main() {
         local = mix(box.xy - apad, box.zw + apad, corner * 0.5 + 0.5);
     }
     vLocal = local;
+    vCanvas = iA.xy + local;
     vA = iA;
     vB = iB;
     vColor = iColor;
@@ -103,6 +116,7 @@ void main() {
 const char* kShapeFragment = R"(
 uniform sampler2D uPalette;
 in vec2 vLocal;
+in vec2 vCanvas;
 flat in vec4 vA;
 flat in vec4 vB;
 flat in vec4 vColor;
@@ -113,8 +127,20 @@ out vec4 fragColor;
 
 vec3 palette(float n) { return texture(uPalette, vec2(clamp(n, 0.0, 1.0) * (255.0 / 256.0) + 0.5 / 256.0, 0.5)).rgb; }
 
+// iq's uneven capsule along +y: radius r1 at the origin, r2 at height h.
+float unevenCapsule(vec2 p, float r1, float r2, float h) {
+    p.x = abs(p.x);
+    float b = (r1 - r2) / max(h, 0.0001);
+    float a = sqrt(max(1.0 - b * b, 0.0));
+    float k = dot(p, vec2(-b, a));
+    if (k < 0.0) return length(p) - r1;
+    if (k > a * h) return length(p - vec2(0.0, h)) - r2;
+    return dot(p, vec2(a, b)) - r1;
+}
+
 void main() {
     vec2 p = vLocal;
+    float keep = clipCoverage(vCanvas);
     float shape = vA.w;
     float aa = 1.0 / uViewport.z;
     vec4 color = vColor;
@@ -130,7 +156,7 @@ void main() {
         d = length(p) - vB.x;
         if (vB.z > 0.0) {
             float t = clamp((length(p) - vB.z) / (vB.x - vB.z), 0.0, 1.0);
-            float alpha = color.a * t * t * (3.0 - 2.0 * t);
+            float alpha = color.a * t * t * (3.0 - 2.0 * t) * keep;
             if (alpha <= 0.0005) discard;
             fragColor = vec4(color.rgb * alpha, alpha);
             return;
@@ -150,7 +176,7 @@ void main() {
         float t = clamp((r - inner) / max(outer - inner, 0.0001), 0.0, 1.0);
         float falloff = exp(-t * t * 4.2) * (1.0 - t * t);
         float edge = clamp((r - inner) / aa + 0.5, 0.0, 1.0);
-        float alpha = color.a * falloff * edge * vExtra.x;
+        float alpha = color.a * falloff * edge * vExtra.x * keep;
         if (alpha <= 0.0005) discard;
         fragColor = vec4(color.rgb * alpha, alpha);
         return;
@@ -197,12 +223,26 @@ void main() {
         }
         color.a *= mix(vExtra2.w, 1.0, t);
         fill = 0.0;
+    } else if (shape < 7.5) {
+        // Ellipse with radii b.xy rotated by a.z (iq's approximation, exact enough near the edge).
+        vec2 q = rotate2(p, -vA.z);
+        vec2 radii = max(vB.xy, vec2(0.001));
+        float k1 = length(q / radii);
+        float k2 = length(q / (radii * radii));
+        d = k1 * (k1 - 1.0) / max(k2, 0.00001);
+    } else if (shape < 8.5) {
+        // Needle blade: pivot at the center, tip at b.x along a.z (half width extra.z -> extra.w), counterweight b.y
+        // behind (half width extra.z -> b.z).
+        vec2 q = rotate2(p, -vA.z);
+        float tip = unevenCapsule(vec2(q.y, q.x), vExtra.z, vExtra.w, vB.x);
+        float tail = unevenCapsule(vec2(q.y, -q.x), vExtra.z, vB.z, vB.y);
+        d = min(tip, tail);
     } else {
         // Flare: two crossed exponential lines.
         vec2 q = abs(rotate2(p, -vA.z));
         float v = exp(-q.x / max(vB.x, 0.0001) - q.y / max(vExtra.z, 0.0001))
                 + exp(-q.y / max(vB.y, 0.0001) - q.x / max(vExtra.w, 0.0001));
-        float alpha = min(1.0, color.a * v);
+        float alpha = min(1.0, color.a * v) * keep;
         if (alpha <= 0.0005) discard;
         fragColor = vec4(color.rgb * alpha, alpha);
         return;
@@ -227,7 +267,7 @@ void main() {
     } else if (vB.w < 0.0) {
         glow = exp(-max(d, 0.0) / -vB.w) * vExtra.y;
     }
-    float alpha = (core + glow * (1.0 - core)) * color.a;
+    float alpha = (core + glow * (1.0 - core)) * color.a * keep;
     if (alpha <= 0.0005) discard;
     fragColor = vec4(color.rgb * alpha, alpha);
 }
@@ -576,11 +616,45 @@ void main() {
 }
 )";
 
-// A text texture placed by its rect in points, sheared about a baseline, with a glow sampled around each pixel.
+// The liquid surface y(x) of the `liquid` style (DESIGN 2a.3), shared by its volume pass and the readout split.
+const char* kLiquidCommon = R"(
+uniform vec4 uLFrame;    // center x, center y, S, glass radius (points)
+uniform vec4 uLSurface;  // mean level y_L (points, y down), wave amplitude (points), chop amplitude (points), back wave on
+uniform vec4 uLPhases;   // phi1..phi4 (radians)
+uniform vec4 uLRipples[4];  // impact x (canvas), front 0.42 S tau, amplitude (points), active
+
+float liquidWaveY(float x, bool back) {
+    float s = uLFrame.z;
+    float xr = x - uLFrame.x;
+    float offset = back ? 1.7 : 0.0;
+    float a = uLSurface.y * (back ? 0.75 : 1.0);
+    float y = uLSurface.x - (back ? 0.008 * s : 0.0);
+    if (a > 0.0) {
+        y += a * (0.55 * sin(xr / (0.9 * s) * TAU + uLPhases.x + offset)
+                  + 0.30 * sin(xr / (0.47 * s) * TAU - uLPhases.y + offset * 1.3)
+                  + 0.15 * sin(xr / (0.23 * s) * TAU + uLPhases.z + offset * 0.7));
+    }
+    if (uLSurface.z > 0.0) {
+        y += uLSurface.z * sin(xr / (0.11 * s) * TAU + uLPhases.w + offset) * (0.7 + 0.3 * sin(xr / (0.05 * s) + uLPhases.w * 1.7));
+    }
+    for (int i = 0; i < 4; i++) {
+        vec4 ripple = uLRipples[i];
+        if (ripple.w <= 0.0) continue;
+        float u = abs(x - ripple.x) - ripple.y;
+        float k = u / (0.075 * s);
+        y -= ripple.z * exp(-k * k) * cos(TAU * u / (0.1 * s)) * (back ? 0.6 : 1.0);
+    }
+    return y;
+}
+)";
+
+// A text texture placed by its rect in points, sheared about a baseline, with a glow sampled around each pixel; clip
+// mode 2 keeps it above the liquid surface, 3 below it.
 const char* kTextVertex = R"(
 uniform vec4 uRect;    // x, y (top-left), width, height (points)
-uniform vec4 uParams;  // shear, shear pivot y, glow radius (points), unused
+uniform vec4 uParams;  // shear, shear pivot y, glow radius (points), clip mode
 out vec2 vUv;
+out vec2 vCanvas;
 const vec2 corners[6] = vec2[6](vec2(-1, -1), vec2(1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1), vec2(-1, 1));
 
 void main() {
@@ -588,6 +662,7 @@ void main() {
     vec2 point = uRect.xy + uv * uRect.zw;
     point.x += uParams.x * (uParams.y - point.y);
     vUv = uv;
+    vCanvas = point;
     gl_Position = clipPosition(point);
 }
 )";
@@ -599,9 +674,17 @@ uniform vec4 uParams;
 uniform vec4 uColor;   // straight alpha
 uniform vec4 uGlow;    // rgb, strength
 in vec2 vUv;
+in vec2 vCanvas;
 out vec4 fragColor;
 
 void main() {
+    float keep = 1.0;
+    if (uParams.w > 1.5) {
+        float surface = liquidWaveY(vCanvas.x, false);
+        float below = clamp((vCanvas.y - surface) * uViewport.z + 0.5, 0.0, 1.0);
+        keep = uParams.w > 2.5 ? below : 1.0 - below;
+        if (keep <= 0.0005) discard;
+    }
     float coverage = texture(uGlyphs, vUv).a;
     float textAlpha = coverage * uColor.a;
     float glowAlpha = 0.0;
@@ -624,8 +707,140 @@ void main() {
     float alpha = glowAlpha;
     rgb = uColor.rgb * textAlpha + rgb * (1.0 - textAlpha);
     alpha = textAlpha + alpha * (1.0 - textAlpha);
+    alpha *= keep;
     if (alpha <= 0.0005) discard;
-    fragColor = vec4(rgb, alpha);
+    fragColor = vec4(rgb * keep, alpha);
+}
+)";
+
+// The `liquid` volume (DESIGN 2a.3): light spill, back wave, body, spherical shade, inner glow, readout scrim, energy
+// currents and the new-peak gold band in one pass (mode 0), and the meniscus (mode 1), per pixel from y(x).
+const char* kLiquidVertex = R"(
+out vec2 vCanvas;
+const vec2 corners[6] = vec2[6](vec2(-1, -1), vec2(1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1), vec2(-1, 1));
+
+void main() {
+    vec2 point = uLFrame.xy + corners[gl_VertexID] * (uLFrame.w + 2.0);
+    vCanvas = point;
+    gl_Position = clipPosition(point);
+}
+)";
+
+const char* kLiquidFragment = R"(
+uniform vec4 uLLiquid;        // L (rgb), front alpha
+uniform vec4 uLDeep;          // darkened L, alpha at the bottom
+uniform vec4 uLBack;          // back wave color, alpha
+uniform vec4 uLSpill;         // spill color, alpha at the surface (0: none)
+uniform vec4 uLGlow;          // inner glow color, alpha at its center (0: none)
+uniform vec4 uLGlowGeom;      // center x, center y, radius, additive
+uniform vec4 uLShade;         // spherical shade color, alpha at the glass
+uniform vec4 uLCurrent;       // filament color, alpha (0: none)
+uniform vec4 uLCurrentGeom;   // unused, blur sigma (points), drift phase, additive
+uniform vec4 uLMeniscus;      // color, alpha
+uniform vec4 uLMeniscusGlow;  // color, alpha (0: none)
+uniform vec4 uLMeniscusGeom;  // width (points), glow sigma (points), additive, unused
+uniform vec4 uLGold;          // band center y, alpha, half height (points), additive
+uniform vec4 uLFlags;         // spill additive, scrim strength (0: none), body gradient top y, bottom y
+uniform int uMode;
+uniform float uAlpha;
+in vec2 vCanvas;
+out vec4 fragColor;
+
+void over(inout vec3 color, inout float alpha, vec3 rgb, float a) {
+    a = clamp(a, 0.0, 1.0);
+    color = rgb * a + color * (1.0 - a);
+    alpha = a + alpha * (1.0 - a);
+}
+
+// Light adds up on dark glass and blends normally on porcelain.
+void light(inout vec3 color, inout float alpha, vec3 rgb, float a, bool additive) {
+    if (additive) {
+        a = clamp(a, 0.0, 1.0);
+        color += rgb * a;
+        alpha = a + alpha * (1.0 - a);
+    } else {
+        over(color, alpha, rgb, a);
+    }
+}
+
+void main() {
+    vec2 p = vCanvas;
+    vec2 c = uLFrame.xy;
+    float s = uLFrame.z;
+    float radius = uLFrame.w;
+    float aa = 1.0 / uViewport.z;
+    float glass = clamp((radius - length(p - c)) / aa + 0.5, 0.0, 1.0);
+    if (glass <= 0.0) discard;
+    vec3 color = vec3(0.0);
+    float alpha = 0.0;
+    float ySurface = liquidWaveY(p.x, false);
+
+    if (uMode == 1) {
+        float slope = liquidWaveY(p.x + 0.5, false) - liquidWaveY(p.x - 0.5, false);
+        float d = abs(p.y - ySurface) / sqrt(1.0 + slope * slope);
+        float halfWidth = uLMeniscusGeom.x * 0.5;
+        if (uLMeniscusGlow.a > 0.0) {
+            float sigma = max(uLMeniscusGeom.y, 0.001);
+            float x = max(d - halfWidth, 0.0) / sigma;
+            light(color, alpha, uLMeniscusGlow.rgb, uLMeniscusGlow.a * exp(-0.5 * x * x), uLMeniscusGeom.z > 0.5);
+        }
+        float core = clamp((halfWidth - d) / aa + 0.5, 0.0, 1.0);
+        over(color, alpha, uLMeniscus.rgb, uLMeniscus.a * core);
+    } else {
+        float yLevel = uLSurface.x;
+        if (uLSpill.a > 0.0) {
+            float t = (p.y - (yLevel - 0.22 * s)) / (0.22 * s);
+            if (t >= 0.0 && t <= 1.0) light(color, alpha, uLSpill.rgb, uLSpill.a * t, uLFlags.x > 0.5);
+        }
+        if (uLSurface.w > 0.5) {
+            float yBack = liquidWaveY(p.x, true);
+            over(color, alpha, uLBack.rgb, uLBack.a * clamp((p.y - yBack) / aa + 0.5, 0.0, 1.0));
+        }
+        float cover = clamp((p.y - ySurface) / aa + 0.5, 0.0, 1.0);
+        if (cover > 0.0) {
+            float t = clamp((p.y - uLFlags.z) / max(uLFlags.w - uLFlags.z, 1.0), 0.0, 1.0);
+            over(color, alpha, mix(uLLiquid.rgb, uLDeep.rgb, t), mix(uLLiquid.a, uLDeep.a, t) * cover);
+            vec2 shadeCenter = c + vec2(-0.06, -0.08) * s;
+            float inner = 0.35 * radius;
+            float shade = clamp((length(p - shadeCenter) - inner) / max(radius - inner, 0.001), 0.0, 1.0);
+            over(color, alpha, uLShade.rgb, uLShade.a * shade * cover);
+            if (uLGlow.a > 0.0) {
+                float d = length(p - uLGlowGeom.xy) / max(uLGlowGeom.z, 0.001);
+                light(color, alpha, uLGlow.rgb, uLGlow.a * max(0.0, 1.0 - d) * cover, uLGlowGeom.w > 0.5);
+            }
+        }
+        if (uLFlags.y > 0.0) {
+            float k = length((p - (c + vec2(0.0, 0.1 * s))) / vec2(0.36 * s, 0.26 * s));
+            if (k < 1.0) {
+                float a = k < 0.55 ? mix(0.35, 0.30, k / 0.55) : mix(0.30, 0.0, (k - 0.55) / 0.45);
+                over(color, alpha, vec3(0.0), a * uLFlags.y);
+            }
+        }
+        if (uLCurrent.a > 0.0 && cover > 0.0) {
+            float bottom = c.y + radius;
+            float u = (p.x - (c.x - radius)) / (2.0 * radius);
+            float sigma = max(uLCurrentGeom.y, 0.001);
+            for (int k = 0; k < 3; k++) {
+                float depth = 0.25 + 0.25 * float(k);
+                float phase = uLCurrentGeom.z * (0.35 + 0.2 * float(k)) + 2.1 * float(k);
+                float y = yLevel + (bottom - yLevel) * depth + 0.03 * s * sin(u * 7.0 + phase) + 0.015 * s * sin(u * 13.0 - phase * 1.7);
+                float slope = (0.03 * s * 7.0 * cos(u * 7.0 + phase) + 0.015 * s * 13.0 * cos(u * 13.0 - phase * 1.7)) / (2.0 * radius);
+                float d = abs(p.y - y) / sqrt(1.0 + slope * slope);
+                float halfWidth = (0.018 - 0.004 * float(k)) * s * 0.5;
+                float profile = 1.0 - smoothstep(max(halfWidth - 1.5 * sigma, 0.0), halfWidth + 1.5 * sigma, d);
+                light(color, alpha, uLCurrent.rgb, uLCurrent.a * (1.0 - 0.25 * float(k)) * profile * cover, uLCurrentGeom.w > 0.5);
+            }
+        }
+        if (uLGold.y > 0.0) {
+            float d = abs(p.y - uLGold.x) / max(uLGold.z, 0.001);
+            if (d < 1.0) light(color, alpha, vec3(250.0, 204.0, 21.0) / 255.0, uLGold.y * (1.0 - d), uLGold.w > 0.5);
+        }
+    }
+    float k = glass * uAlpha;
+    color *= k;
+    alpha *= k;
+    if (alpha <= 0.0005 && max(color.r, max(color.g, color.b)) <= 0.0005) discard;
+    fragColor = vec4(color, alpha);
 }
 )";
 
@@ -644,10 +859,11 @@ void main() {
 
 const char* kImageFragment = R"(
 uniform sampler2D uImage;
+uniform float uAlpha;
 in vec2 vUv;
 out vec4 fragColor;
 
-void main() { fragColor = texture(uImage, vUv); }
+void main() { fragColor = texture(uImage, vUv) * uAlpha; }
 )";
 
 QByteArray join(const char* a, const char* b, const char* c = "") { return QByteArray(kCommon) + a + b + c; }
@@ -669,7 +885,9 @@ QByteArray shapeFragment() { return join(kShapeFragment, ""); }
 QByteArray ledVertex() { return join(kLedHeader, kLedVertex); }
 QByteArray ledFragment() { return QByteArray(kCommon) + kLedHeader + warpSeeds() + kLedFragment; }
 QByteArray textVertex() { return join(kTextVertex, ""); }
-QByteArray textFragment() { return join(kTextFragment, ""); }
+QByteArray textFragment() { return join(kLiquidCommon, kTextFragment); }
+QByteArray liquidVertex() { return join(kLiquidCommon, kLiquidVertex); }
+QByteArray liquidFragment() { return join(kLiquidCommon, kLiquidFragment); }
 QByteArray imageVertex() { return join(kImageVertex, ""); }
 QByteArray imageFragment() { return join(kImageFragment, ""); }
 
