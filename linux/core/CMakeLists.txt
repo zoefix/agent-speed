@@ -5,6 +5,7 @@ add_library(agentspeed_core STATIC
     src/claude_parser.cpp
     src/codex_parser.cpp
     src/dedupe.cpp
+    src/engine.cpp
     src/file_reader.cpp
     src/json.cpp
     src/line_splitter.cpp
