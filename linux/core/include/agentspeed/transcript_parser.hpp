@@ -49,6 +49,7 @@ protected:
     void setPhase(Phase phase, std::int64_t timestampMs, std::optional<std::int64_t> inFlightStartMs);
     void markChanged() { ++version_; }
     void setModes(const ExecutionModes& modes);
+    void setProject(const std::optional<std::string>& project);
     bool sourceDecided() const { return sourceDecided_; }
     Deduper& deduper() { return deduper_; }
 

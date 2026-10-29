@@ -49,6 +49,13 @@ void TranscriptParser::setModel(const std::optional<std::string>& model) {
     }
 }
 
+void TranscriptParser::setProject(const std::optional<std::string>& project) {
+    if (project != project_) {
+        project_ = project;
+        ++version_;
+    }
+}
+
 void TranscriptParser::setModes(const ExecutionModes& modes) {
     if (!(modes == modes_)) {
         modes_ = modes;

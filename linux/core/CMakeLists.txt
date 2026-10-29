@@ -10,6 +10,7 @@ add_library(agentspeed_core STATIC
     src/dsh_parser.cpp
     src/engine.cpp
     src/file_reader.cpp
+    src/gemini_parser.cpp
     src/json.cpp
     src/line_splitter.cpp
     src/model.cpp
@@ -19,6 +20,7 @@ add_library(agentspeed_core STATIC
     src/parents.cpp
     src/path_text.cpp
     src/rfc3339.cpp
+    src/text.cpp
     src/sqlite.cpp
     src/transcript_parser.cpp
     src/zstd_frames.cpp

@@ -9,6 +9,7 @@
 #include "agentspeed/codex_parser.hpp"
 #include "agentspeed/dsh_parser.hpp"
 #include "agentspeed/file_reader.hpp"
+#include "agentspeed/gemini_parser.hpp"
 #include "agentspeed/opencode.hpp"
 #include "agentspeed/parents.hpp"
 #include "fixture_support.hpp"
@@ -67,6 +68,7 @@ std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const s
     if (relative.rfind("codex/", 0) == 0) return std::make_unique<CodexParser>(agentId, deduper);
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
     if (relative.rfind("dsh/", 0) == 0) return std::make_unique<DshParser>(agentId, deduper);
+    if (relative.rfind("gemini/", 0) == 0) return std::make_unique<GeminiParser>(agentId, deduper);
     return nullptr;
 }
 
@@ -78,6 +80,16 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
     ASSERT_TRUE(expected.ok);
     Deduper deduper;
     int checked = 0;
+    // `traces` of every source: the phase after feeding a file up to and including a physical line.
+    std::map<std::string, std::vector<json::Value>> traces;
+    for (const auto& [section, value] : expected.root().members()) {
+        if (!value.isObject()) continue;
+        if (const auto list = value["traces"]; list.isArray()) {
+            for (const auto& t : list.elements()) {
+                if (t["afterLine"].valid()) traces[*t["file"].string()].push_back(t);
+            }
+        }
+    }
     std::vector<AgentLink> facts;
     std::map<std::string, std::string> wantParents;
     for (const auto& entry : expected.root()["order"].elements()) {
@@ -86,9 +98,27 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         auto parser = parserFor(relative, absolute, deduper);
         if (!parser) continue;
         Collector sink;
-        const auto read = readWholeFile(absolute, [&](std::string_view line) { parser->feed(line, sink); });
-        ASSERT_TRUE(read.ok) << relative;
-        parser->addMalformed(read.decodeErrors);
+        std::int64_t physical = 0;
+        auto check = [&] {
+            for (const auto& t : traces[relative]) {
+                if (*fixtures::optInt(t["afterLine"]) != physical) continue;
+                SCOPED_TRACE(relative + " after line " + std::to_string(physical));
+                EXPECT_EQ(phaseId(parser->phase()), *t["phase"].string());
+                EXPECT_EQ(parser->inFlightStartMs(), fixtures::optInt(t["inFlightStartMs"]));
+            }
+        };
+        const auto* gemini = dynamic_cast<GeminiParser*>(parser.get());
+        if (gemini && gemini->isDocument()) {
+            parser->feed(fixtures::readText(absolute), sink);
+        } else {
+            const auto read = readWholeFile(absolute, [&](std::string_view line) {
+                parser->feed(line, sink);
+                ++physical;
+                check();
+            });
+            ASSERT_TRUE(read.ok) << relative;
+            parser->addMalformed(read.decodeErrors);
+        }
 
         const auto want = expected.root()["files"][relative];
         SCOPED_TRACE(relative);
@@ -118,7 +148,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 11);
+    EXPECT_EQ(checked, 16);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
