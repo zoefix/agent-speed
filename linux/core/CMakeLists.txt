@@ -80,6 +80,7 @@ add_library(agentspeed_core STATIC
     src/tasks/results.cpp
     src/tasks/scripts.cpp
     src/tasks/shell_words.cpp
+    src/work_signals.cpp
     src/text.cpp
     src/sqlite.cpp
     src/transcript_parser.cpp
