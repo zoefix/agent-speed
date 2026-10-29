@@ -87,8 +87,9 @@ void Document::skipSpace(std::size_t& pos) const {
     }
 }
 
-bool Document::parse(std::string_view text) {
+bool Document::parse(std::string_view text, std::size_t maxDepth) {
     text_ = text;
+    maxDepth_ = maxDepth;
     nodes_.clear();
     if (text.size() >= std::numeric_limits<std::uint32_t>::max()) return false;
     std::size_t pos = 0;
@@ -192,7 +193,7 @@ bool Document::parseValue(std::size_t& pos, std::size_t depth) {
     if (pos >= text_.size()) return false;
     const char c = text_[pos];
     if (c == '{' || c == '[') {
-        if (depth >= kMaxDepth) return false;
+        if (depth >= maxDepth_) return false;
         const bool object = c == '{';
         const auto index = static_cast<std::uint32_t>(nodes_.size());
         Node container{object ? Type::Object : Type::Array};

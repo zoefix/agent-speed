@@ -58,6 +58,7 @@ struct ParsedResponse {
     bool fast = false;
     std::int64_t requestCount = 1;
     ExecutionModes modes;
+    bool operator==(const ParsedResponse&) const = default;
 };
 
 class ResponseSink {

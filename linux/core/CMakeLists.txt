@@ -13,8 +13,11 @@ add_library(agentspeed_core STATIC
     src/engine.cpp
     src/file_reader.cpp
     src/gemini_parser.cpp
+    src/grok_parser.cpp
+    src/harness.cpp
     src/hermes.cpp
     src/json.cpp
+    src/kimi_parser.cpp
     src/line_splitter.cpp
     src/model.cpp
     src/modes.cpp
@@ -31,6 +34,7 @@ add_library(agentspeed_core STATIC
     src/transcript_parser.cpp
     src/tz.cpp
     src/workbuddy_parser.cpp
+    src/zcode.cpp
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)

@@ -81,7 +81,7 @@ private:
 class Document {
 public:
     // Parses one complete JSON text. Returns false on any error (METRICS 4: the line is malformed).
-    bool parse(std::string_view text);
+    bool parse(std::string_view text, std::size_t maxDepth = kMaxDepth);
     Value root() const { return nodes_.empty() ? Value() : Value(this, 0); }
     std::string_view text() const { return text_; }
     const Node& node(std::uint32_t index) const { return nodes_[index]; }
@@ -97,6 +97,7 @@ private:
 
     std::string_view text_;
     std::vector<Node> nodes_;
+    std::size_t maxDepth_ = kMaxDepth;
 };
 
 // Decodes the inside of a JSON string literal (without the quotes). Lone surrogates become U+FFFD.
