@@ -9,29 +9,19 @@
 #include <QPainter>
 #include <QPainterPath>
 #include <QSystemTrayIcon>
+#include <algorithm>
+#include <cmath>
+
+#include "heat.hpp"
 
 #include "strings.hpp"
 
 namespace {
 
-// Heat bands: resting slate, then teal, mint, amber and coral as the speed climbs.
-int bandOf(double tokS) {
-    if (tokS < 0.5) return 0;
-    if (tokS < 60) return 1;
-    if (tokS < 150) return 2;
-    if (tokS < 300) return 3;
-    return 4;
-}
+// The icon color steps through the heat palette in 1/40 increments, so it is redrawn only when it visibly changes.
+constexpr int kHeatSteps = 40;
 
-QColor bandColor(int band) {
-    switch (band) {
-        case 1: return QColor(0x2D, 0xB8, 0xA4);
-        case 2: return QColor(0x22, 0xA8, 0x6B);
-        case 3: return QColor(0xD9, 0x8E, 0x1F);
-        case 4: return QColor(0xE5, 0x53, 0x3D);
-        default: return QColor(0x5B, 0x63, 0x70);
-    }
-}
+int bandOf(double tokS) { return tokS < 0.5 ? 0 : std::max(1, static_cast<int>(std::lround(heat::of(tokS) * kHeatSteps))); }
 
 QPixmap renderIcon(int size, const QString& text, int band) {
     QPixmap pixmap(size, size);
@@ -43,10 +33,11 @@ QPixmap renderIcon(int size, const QString& text, int band) {
     QPainterPath path;
     path.addRoundedRect(box, size * 0.22, size * 0.22);
     QLinearGradient fill(box.topLeft(), box.bottomLeft());
-    const QColor base = bandColor(band);
-    fill.setColorAt(0, base.lighter(118));
-    fill.setColorAt(1, base.darker(112));
+    const QColor base = heat::color(static_cast<double>(band) / kHeatSteps);
+    fill.setColorAt(0, base.lighter(112));
+    fill.setColorAt(1, base.darker(110));
     p.fillPath(path, fill);
+    const double luminance = 0.2126 * base.redF() + 0.7152 * base.greenF() + 0.0722 * base.blueF();
     QFont font = QGuiApplication::font();
     font.setWeight(QFont::Bold);
     font.setLetterSpacing(QFont::PercentageSpacing, 94);
@@ -57,7 +48,7 @@ QPixmap renderIcon(int size, const QString& text, int band) {
         if (QFontMetricsF(font).horizontalAdvance(text) <= maxWidth) break;
     }
     p.setFont(font);
-    p.setPen(Qt::white);
+    p.setPen(luminance > 0.62 ? QColor(0x1B, 0x1D, 0x22) : QColor(Qt::white));
     p.drawText(box, Qt::AlignCenter, text);
     return pixmap;
 }

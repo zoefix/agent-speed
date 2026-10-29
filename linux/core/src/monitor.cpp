@@ -314,6 +314,15 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) const 
     snap.todayRequests = today.requests;
     snap.todayAverage = today.average;
     snap.peakToday = std::max(today.peak, live.output);
+    const std::int64_t lastBucket = (nowMs / 1000) * 1000;
+    const std::int64_t firstBucket = lastBucket - 119'000;
+    const auto measured = engine::buckets(recent, firstBucket, lastBucket);
+    snap.history.reserve(120);
+    for (std::int64_t k = firstBucket; k <= lastBucket; k += 1000) {
+        const auto it = measured.find(k);
+        snap.history.push_back(it == measured.end() ? 0.0 : it->second);
+    }
+    snap.history.back() = std::max(snap.history.back(), live.output);
 
     const auto list = engine::agentList(recent, agents, nowMs);
     std::map<std::string, int> depth;

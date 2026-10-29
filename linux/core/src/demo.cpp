@@ -12,7 +12,11 @@ double wave(double seconds, double period, double phase) {
 
 }  // namespace
 
-Snapshot demoSnapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
+Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory);
+
+Snapshot demoSnapshot(std::int64_t nowMs, std::int64_t todayStartMs) { return demoAt(nowMs, todayStartMs, true); }
+
+Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory) {
     Snapshot snap;
     snap.nowMs = nowMs;
     snap.demo = true;
@@ -62,6 +66,10 @@ Snapshot demoSnapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
     snap.peakToday = 412.0;
     snap.sources.push_back({SourceKind::ClaudeCode, static_cast<std::int64_t>(secondsToday * 13.0), claude});
     snap.sources.push_back({SourceKind::Codex, static_cast<std::int64_t>(secondsToday * 8.0), codex});
+    if (withHistory) {
+        for (int k = 119; k >= 1; --k) snap.history.push_back(demoAt(nowMs - k * 1000LL, todayStartMs, false).liveOutput);
+        snap.history.push_back(snap.liveOutput);
+    }
     return snap;
 }
 

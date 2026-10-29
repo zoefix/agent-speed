@@ -7,6 +7,7 @@
 #include "agentspeed/demo.hpp"
 #include "agentspeed/monitor.hpp"
 #include "format.hpp"
+#include "heat.hpp"
 #include "strings.hpp"
 
 namespace {
@@ -18,6 +19,7 @@ qint64 localMidnightMs(qint64 nowMs) {
 
 QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) {
     QVariantMap map;
+    map.insert(QStringLiteral("nowMs"), static_cast<qint64>(snap.nowMs));
     map.insert(QStringLiteral("liveOutput"), snap.liveOutput);
     map.insert(QStringLiteral("liveText"), format::speed(snap.liveOutput));
     map.insert(QStringLiteral("compactText"), format::compactSpeed(snap.liveOutput));
@@ -27,6 +29,13 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
     map.insert(QStringLiteral("todayAverageText"),
                snap.todayAverage ? format::speed(*snap.todayAverage) : QStringLiteral("–"));
     map.insert(QStringLiteral("peakText"), format::speed(snap.peakToday));
+    map.insert(QStringLiteral("peak"), snap.peakToday);
+    map.insert(QStringLiteral("todayInputText"), format::tokens(snap.todayInput));
+    map.insert(QStringLiteral("heat"), heat::of(snap.liveOutput));
+    QVariantList history;
+    history.reserve(static_cast<qsizetype>(snap.history.size()));
+    for (double v : snap.history) history.push_back(v);
+    map.insert(QStringLiteral("history"), history);
     map.insert(QStringLiteral("generating"), snap.generating);
     map.insert(QStringLiteral("tools"), snap.tools);
     map.insert(QStringLiteral("demo"), snap.demo);
@@ -34,6 +43,7 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
     for (const auto& a : snap.agents) {
         const auto source = QString::fromUtf8(agentspeed::sourceId(a.source));
         QVariantMap row;
+        row.insert(QStringLiteral("id"), QString::fromStdString(a.id));
         row.insert(QStringLiteral("source"), source);
         row.insert(QStringLiteral("sourceName"), strings.t(QStringLiteral("source.") + source));
         row.insert(QStringLiteral("project"), a.project ? QString::fromStdString(*a.project) : QString());
@@ -52,7 +62,7 @@ QVariantMap toVariant(const agentspeed::Snapshot& snap, const Strings& strings) 
         QVariantMap row;
         row.insert(QStringLiteral("source"), source);
         row.insert(QStringLiteral("name"), strings.t(QStringLiteral("source.") + source));
-        row.insert(QStringLiteral("liveText"), format::speed(s.liveOutput));
+        row.insert(QStringLiteral("live"), s.liveOutput);
         row.insert(QStringLiteral("todayText"), format::tokens(s.todayOutput));
         sources.push_back(row);
     }

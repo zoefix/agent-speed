@@ -41,6 +41,8 @@ struct Snapshot {
     int tools = 0;
     std::vector<AgentRow> agents;
     std::vector<SourceRow> sources;
+    // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).
+    std::vector<double> history;
     bool demo = false;
 };
 

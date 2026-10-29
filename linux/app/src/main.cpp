@@ -3,14 +3,23 @@
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
+#include <QPalette>
 #include <QThread>
+#include <QTimer>
 
 #include "app_state.hpp"
+#include "flyout.hpp"
+#include "graphics.hpp"
 #include "monitor_worker.hpp"
 #include "strings.hpp"
 #include "tray_icon.hpp"
 
 int main(int argc, char* argv[]) {
+    // The flyout (and later the orbs) need global positions and keep-above, which Wayland does not give clients:
+    // run on XWayland whenever it is there.
+    if (qEnvironmentVariableIsEmpty("QT_QPA_PLATFORM") && !qEnvironmentVariableIsEmpty("DISPLAY")) {
+        qputenv("QT_QPA_PLATFORM", "xcb");
+    }
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Agent Speed"));
     QApplication::setApplicationVersion(QStringLiteral("1.5.0"));
@@ -18,9 +27,29 @@ int main(int argc, char* argv[]) {
     QGuiApplication::setDesktopFileName(QStringLiteral("agent-speed"));
     QApplication::setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
+    const bool softwareRendering = chooseGraphicsBackend();
 
     const bool demo = app.arguments().contains(QStringLiteral("--demo"));
     const bool hidden = app.arguments().contains(QStringLiteral("--hidden"));
+    // Development aid: --snapshot=<file.png> renders the dashboard (offscreen works too), saves it and quits;
+    // --snapshot-dark does the same with a dark palette.
+    QString snapshotPath;
+    bool snapshotDark = false;
+    for (const auto& arg : app.arguments()) {
+        if (arg.startsWith(QStringLiteral("--snapshot="))) snapshotPath = arg.mid(11);
+        if (arg.startsWith(QStringLiteral("--snapshot-dark="))) {
+            snapshotPath = arg.mid(16);
+            snapshotDark = true;
+        }
+    }
+    if (snapshotDark) {
+        QPalette dark;
+        dark.setColor(QPalette::Window, QColor(0x20, 0x22, 0x28));
+        dark.setColor(QPalette::WindowText, QColor(0xEC, 0xEF, 0xF4));
+        dark.setColor(QPalette::Base, QColor(0x17, 0x19, 0x1F));
+        dark.setColor(QPalette::Text, QColor(0xEC, 0xEF, 0xF4));
+        QGuiApplication::setPalette(dark);
+    }
     Strings strings;
     AppState state(demo);
 
@@ -33,15 +62,19 @@ int main(int argc, char* argv[]) {
     QObject::connect(worker, &MonitorWorker::snapshotReady, &state, &AppState::applySnapshot);
     QObject::connect(&state, &AppState::demoChanged, worker, &MonitorWorker::setDemo);
 
+    TrayIcon tray(strings, demo);
+
     QQmlApplicationEngine engine;
+    const bool popup = tray.available() || !snapshotPath.isEmpty();
+    engine.setInitialProperties({{QStringLiteral("flyout"), popup}});
     engine.rootContext()->setContextProperty(QStringLiteral("S"), &strings);
     engine.rootContext()->setContextProperty(QStringLiteral("appState"), &state);
     engine.rootContext()->setContextProperty(QStringLiteral("uiLanguage"), strings.language());
+    engine.rootContext()->setContextProperty(QStringLiteral("softwareRendering"), softwareRendering);
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
-
-    TrayIcon tray(strings, demo);
+    Flyout flyout(window, popup);
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
         const auto snap = state.snapshot();
         const auto live = snap.value(QStringLiteral("liveText")).toString();
@@ -53,17 +86,15 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::demoToggled, &state, &AppState::setDemo);
     QObject::connect(&state, &AppState::demoChanged, &tray, &TrayIcon::setDemo);
     QObject::connect(&tray, &TrayIcon::quitRequested, &app, &QApplication::quit);
-    QObject::connect(&tray, &TrayIcon::toggleDashboard, window, [window] {
-        if (window->isVisible()) {
-            window->hide();
-        } else {
-            window->show();
-            window->raise();
-            window->requestActivate();
-        }
-    });
+    QObject::connect(&tray, &TrayIcon::toggleDashboard, &flyout, &Flyout::toggle);
     // Without a tray (GNOME without the AppIndicator extension) the dashboard is the only way in.
-    if (!hidden || !tray.available()) window->show();
+    if (!hidden || !tray.available()) flyout.present();
+    if (!snapshotPath.isEmpty()) {
+        QTimer::singleShot(3000, &app, [&] {
+            window->grabWindow().save(snapshotPath);
+            QApplication::quit();
+        });
+    }
 
     thread.start();
     const int code = app.exec();
