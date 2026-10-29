@@ -1,8 +1,8 @@
-"""The live thinking cases of spec/fixtures/task-score-cases.json (METRICS 6.9, Live thinking).
+"""The live thinking cases of spec/fixtures/perf-score-cases.json (METRICS 6.9, Live thinking).
 
-Carried over unchanged from the retired intelligence cases: engine responses (with `reasoning`) and agents as
-engine-cases.json gives them; a query's `sources` restricts both to an orb's set. Each `want` holds the values those
-cases already checked by hand (liveThinking, thinkingShare); the window weight is new and computed.
+Carried over unchanged from the retired intelligence and task score cases: engine responses (with `reasoning`) and
+agents as engine-cases.json gives them; a query's `sources` restricts both to an orb's set. Each `want` holds the
+values written by hand (liveThinking, thinkingShare, and for the newer cases the window weight).
 """
 # flake8: noqa: E501
 
@@ -551,7 +551,7 @@ THINKING = {'windows': [{'name': 'a measured response: grade plus 20 × its thin
                                                            'liveThinking': 0.0,
                                                            'thinkingShare': 0.0}}}}]}]}
 
-# METRICS 6.9 Model sums (added for live reporting, METRICS 11.10): the same window restricted to one model. A response
+# METRICS 6.9 Model sums (for live reporting, METRICS 11.10): the same window restricted to one model. A response
 # counts for its own model and an in-flight estimate for the agent's current model; the sums of all models add up to
 # the set's. Expectations by hand.
 _GROUP = THINKING['groupWindows'][0]

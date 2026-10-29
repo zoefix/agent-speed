@@ -138,6 +138,7 @@ class Reader:
 
     def __init__(self, state):
         self.path = state.path
+        self.completions = state.completions
         self.actions = []
         self.calls = {}
         self.header_seen = False
@@ -262,6 +263,7 @@ class Reader:
         if action is None or action["resultMs"] is not None:
             return
         action["resultMs"], action["failed"] = t, failed
+        self.completions.append(("action", action))
 
 
 def openclaw_mirror(state, message):
