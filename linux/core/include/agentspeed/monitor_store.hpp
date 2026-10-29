@@ -10,6 +10,7 @@
 #include "agentspeed/monitor.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/pricing.hpp"
+#include "agentspeed/report_perf.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/tz.hpp"
 
@@ -24,6 +25,8 @@ public:
 
     explicit Store(const std::set<SourceKind>* enabled = nullptr) : enabled_(enabled) {}
     void setEnabled(const std::set<SourceKind>* enabled) { enabled_ = enabled; }
+    // METRICS 11.10 Counting: a response the report ledger counted is counted again when it first becomes measured.
+    void setPerfLedger(report::PerfLedger* ledger) { perfLedger_ = ledger; }
     // METRICS 9.3, 9.7: every response is priced with the table bound to its local date.
     void setPricing(std::shared_ptr<pricing::PriceBook> book, std::shared_ptr<const TimeZone> zone) {
         book_ = std::move(book);
@@ -54,7 +57,9 @@ public:
         e.model = r.model;
         e.startMs = r.startMs;
         e.endMs = r.endMs;
+        e.firstMs = r.firstMs;
         e.input = r.tokens.input;
+        e.cachedInput = r.tokens.cachedInput;
         e.output = r.tokens.output;
         e.reasoning = r.tokens.reasoning;
         e.final = r.final;
@@ -64,6 +69,10 @@ public:
             ledger_.count(r, e.costMicroUsd, reportModelId(r.model, r.provider));
         } else if (ledger_.counted(r.key)) {
             ledger_.grow(r, e.costMicroUsd, reportModelId(r.model, r.provider));
+        }
+        if (!slot.measured && e.final && engine::interval(e)) {
+            slot.measured = true;
+            if (perfLedger_ && ledger_.counted(r.key)) perfLedger_->response(r.agentId, {reportModelId(r.model, r.provider), r.source}, e);
         }
     }
 
@@ -120,6 +129,7 @@ private:
     struct Slot {
         ParsedResponse parsed;
         engine::Response engine;
+        bool measured = false;
     };
     const std::set<SourceKind>* enabled_;
     std::shared_ptr<pricing::PriceBook> book_;
@@ -128,6 +138,7 @@ private:
     std::vector<Completion> completions_;
     std::map<std::string, std::string> providers_;
     report::Ledger ledger_;
+    report::PerfLedger* perfLedger_ = nullptr;
     bool live_ = false;
     bool seeding_ = false;
     std::int64_t nowMs_ = 0;

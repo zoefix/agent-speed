@@ -1,5 +1,6 @@
 #include "agentspeed/history_store.hpp"
 
+#include <array>
 #include <filesystem>
 
 #include "agentspeed/json.hpp"
@@ -8,56 +9,25 @@ namespace agentspeed::history {
 
 namespace {
 
-constexpr std::pair<const char*, std::int64_t tasks::TaskCounts::*> kCountFields[] = {
-    {"actions", &tasks::TaskCounts::actions},         {"counted", &tasks::TaskCounts::counted},
-    {"edits", &tasks::TaskCounts::edits},             {"oscillations", &tasks::TaskCounts::oscillations},
-    {"loopActions", &tasks::TaskCounts::loopActions}, {"runs", &tasks::TaskCounts::runs},
-    {"failingRuns", &tasks::TaskCounts::failingRuns}, {"episodes", &tasks::TaskCounts::episodes},
-    {"recovered", &tasks::TaskCounts::recovered},     {"recoverAttempts", &tasks::TaskCounts::recoverAttempts},
-    {"fixAttempts", &tasks::TaskCounts::fixAttempts}, {"fixFailures", &tasks::TaskCounts::fixFailures}};
-
-std::string encodeCounts(const tasks::TaskCounts& counts) {
-    std::string out = "{";
-    for (const auto& [name, field] : kCountFields) {
-        if (out.size() > 1) out += ",";
-        out += "\"" + std::string(name) + "\":" + std::to_string(counts.*field);
-    }
-    return out + "}";
-}
-
-tasks::TaskCounts decodeCounts(std::string_view text) {
-    tasks::TaskCounts counts;
-    json::Document doc;
-    if (!doc.parse(text) || !doc.root().isObject()) return counts;
-    for (const auto& [name, field] : kCountFields) counts.*field = doc.root()[name].truncated().value_or(0);
-    return counts;
-}
-
-std::string encodeRows(const std::vector<std::vector<double>>& rows) {
+std::string encodeBins(const std::array<std::int64_t, perf::kBins>& bins) {
     std::string out = "[";
-    char buffer[32];
-    for (std::size_t i = 0; i < rows.size(); ++i) {
-        out += i ? ",[" : "[";
-        for (std::size_t k = 0; k < rows[i].size(); ++k) {
-            std::snprintf(buffer, sizeof buffer, "%.17g", rows[i][k]);
-            if (k) out += ",";
-            out += buffer;
-        }
-        out += "]";
+    for (std::size_t k = 0; k < bins.size(); ++k) {
+        if (k) out += ",";
+        out += std::to_string(bins[k]);
     }
     return out + "]";
 }
 
-std::vector<std::vector<double>> decodeRows(std::string_view text) {
-    std::vector<std::vector<double>> rows;
+std::array<std::int64_t, perf::kBins> decodeBins(std::string_view text) {
+    std::array<std::int64_t, perf::kBins> bins{};
     json::Document doc;
-    if (!doc.parse(text) || !doc.root().isArray()) return rows;
-    for (const auto& row : doc.root().elements()) {
-        std::vector<double> cells;
-        for (const auto& cell : row.elements()) cells.push_back(cell.number().value_or(0));
-        rows.push_back(std::move(cells));
+    if (!doc.parse(text) || !doc.root().isArray()) return bins;
+    std::size_t k = 0;
+    for (const auto& cell : doc.root().elements()) {
+        if (k >= bins.size()) break;
+        bins[k++] = cell.truncated().value_or(0);
     }
-    return rows;
+    return bins;
 }
 
 
@@ -111,13 +81,6 @@ std::vector<std::uint64_t> unpackHashes(std::string_view blob) {
 }
 
 }  // namespace
-
-bool StoredFile::hasIncompleteTask() const {
-    for (const auto& r : records) {
-        if (!r.complete) return true;
-    }
-    return false;
-}
 
 bool StoredFile::hasUnpriced() const {
     for (const auto& [key, day] : days) {
@@ -248,12 +211,15 @@ void Store::createSchema() {
     db_.execute("CREATE TABLE IF NOT EXISTS peaks(day TEXT PRIMARY KEY, peak REAL NOT NULL)");
     db_.execute("CREATE TABLE IF NOT EXISTS bindings(day TEXT PRIMARY KEY, version INTEGER NOT NULL)");
     db_.execute("CREATE TABLE IF NOT EXISTS price_tables(version INTEGER PRIMARY KEY, data BLOB NOT NULL)");
+    // METRICS 6.11 Store: the retired task score's records go; the performance records live in a side table.
+    db_.execute("DROP TABLE IF EXISTS task_records");
     db_.execute(
-        "CREATE TABLE IF NOT EXISTS task_records(file_id INTEGER NOT NULL, ordinal INTEGER NOT NULL, source TEXT NOT NULL, model TEXT,"
-        " effort TEXT, start_ms INTEGER NOT NULL, end_ms INTEGER NOT NULL, day TEXT NOT NULL, complete INTEGER NOT NULL,"
-        " state TEXT NOT NULL, score REAL, v REAL NOT NULL, c REAL NOT NULL, r REAL NOT NULL, e REAL NOT NULL, k REAL NOT NULL,"
-        " counts TEXT NOT NULL, first_pass_ms INTEGER, success INTEGER NOT NULL, stalled INTEGER NOT NULL, snapshots TEXT NOT NULL,"
-        " fix_rows TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (file_id, ordinal)) WITHOUT ROWID");
+        "CREATE TABLE IF NOT EXISTS perf_records(file_id INTEGER NOT NULL, day TEXT NOT NULL, source TEXT NOT NULL, model TEXT NOT NULL,"
+        " n INTEGER NOT NULL, output_sum INTEGER NOT NULL, duration_ms_sum INTEGER NOT NULL, latency_bins TEXT NOT NULL,"
+        " reason_n INTEGER NOT NULL, reason_output INTEGER NOT NULL, reason_duration_ms_sum INTEGER NOT NULL, cache_n INTEGER NOT NULL,"
+        " cache_input INTEGER NOT NULL, cache_cached INTEGER NOT NULL, tool_n INTEGER NOT NULL, tool_ln_sum REAL NOT NULL,"
+        " tool_failed INTEGER NOT NULL, active_ms INTEGER NOT NULL, version INTEGER NOT NULL,"
+        " PRIMARY KEY (file_id, day, source, model)) WITHOUT ROWID");
     db_.execute(
         "CREATE TABLE IF NOT EXISTS day_traffic(day TEXT, key TEXT, rx INTEGER, tx INTEGER, rx_tools INTEGER, tx_tools INTEGER,"
         " sampled_ms INTEGER, PRIMARY KEY (day, key)) WITHOUT ROWID");
@@ -320,33 +286,33 @@ std::map<std::string, StoredFile> Store::loadFiles() const {
         files[it->second].days[DayKey{days.getString(1).value_or(""), *source}] = *data;
     }
     auto records = db_.prepare(
-        "SELECT r.file_id, r.ordinal, r.source, r.model, r.effort, r.start_ms, r.end_ms, r.day, r.complete, r.state, r.score, r.v, r.c,"
-        " r.r, r.e, r.k, r.counts, r.first_pass_ms, r.success, r.stalled, r.snapshots, r.fix_rows FROM task_records r"
-        " JOIN files f ON f.id = r.file_id AND f.version = r.version ORDER BY r.file_id, r.ordinal");
+        "SELECT r.file_id, r.day, r.source, r.model, r.n, r.output_sum, r.duration_ms_sum, r.latency_bins, r.reason_n, r.reason_output,"
+        " r.reason_duration_ms_sum, r.cache_n, r.cache_input, r.cache_cached, r.tool_n, r.tool_ln_sum, r.tool_failed, r.active_ms"
+        " FROM perf_records r JOIN files f ON f.id = r.file_id AND f.version = r.version");
     while (records.step()) {
         const auto it = byId.find(records.getInt64(0));
         const auto source = sourceFromId(records.getText(2));
         if (it == byId.end() || !source) continue;
-        tasks::TaskRecord r;
-        r.agentId = it->second;
-        r.ordinal = records.getInt64(1);
-        r.source = *source;
-        r.model = records.getString(3);
-        r.effort = records.getString(4);
-        r.startMs = records.getInt64(5);
-        r.endMs = records.getInt64(6);
-        r.day = records.getString(7).value_or("");
-        r.complete = records.getInt64(8) != 0;
-        r.state = records.getString(9).value_or("");
-        if (!records.isNull(10)) r.score = records.getDouble(10);
-        r.dims = {records.getDouble(11), records.getDouble(12), records.getDouble(13), records.getDouble(14), records.getDouble(15)};
-        r.counts = decodeCounts(records.getText(16));
-        if (!records.isNull(17)) r.firstPassMs = records.getInt64(17);
-        r.success = records.getInt64(18) != 0;
-        r.stalled = records.getInt64(19) != 0;
-        r.snapshots = decodeRows(records.getText(20));
-        r.fixRows = decodeRows(records.getText(21));
-        files[it->second].records.push_back(std::move(r));
+        perf::DayRecord row;
+        row.day = records.getString(1).value_or("");
+        row.source = *source;
+        row.model = records.getString(3).value_or("");
+        auto& r = row.record;
+        r.n = records.getInt64(4);
+        r.outputSum = records.getInt64(5);
+        r.durationMsSum = records.getInt64(6);
+        r.latencyBins = decodeBins(records.getText(7));
+        r.reasonN = records.getInt64(8);
+        r.reasonOutput = records.getInt64(9);
+        r.reasonDurationMsSum = records.getInt64(10);
+        r.cacheN = records.getInt64(11);
+        r.cacheInput = records.getInt64(12);
+        r.cacheCached = records.getInt64(13);
+        r.toolN = records.getInt64(14);
+        r.toolLnSum = records.getDouble(15);
+        r.toolFailed = records.getInt64(16);
+        r.activeMs = records.getInt64(17);
+        files[it->second].perf.push_back(std::move(row));
     }
     return files;
 }
@@ -360,11 +326,12 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
             " version=excluded.version, keys=excluded.keys RETURNING id");
         auto clear = db_.prepare("DELETE FROM contributions WHERE file_id=?1");
         auto insert = db_.prepare("INSERT INTO contributions(file_id, day, source, data) VALUES(?1, ?2, ?3, ?4)");
-        auto clearRecords = db_.prepare("DELETE FROM task_records WHERE file_id=?1");
+        auto clearRecords = db_.prepare("DELETE FROM perf_records WHERE file_id=?1");
         auto insertRecord = db_.prepare(
-            "INSERT INTO task_records(file_id, ordinal, source, model, effort, start_ms, end_ms, day, complete, state, score, v, c, r, e, k,"
-            " counts, first_pass_ms, success, stalled, snapshots, fix_rows, version)"
-            " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19, ?20, ?21, ?22, ?23)");
+            "INSERT INTO perf_records(file_id, day, source, model, n, output_sum, duration_ms_sum, latency_bins, reason_n, reason_output,"
+            " reason_duration_ms_sum, cache_n, cache_input, cache_cached, tool_n, tool_ln_sum, tool_failed, active_ms, version)"
+            " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"
+            " ON CONFLICT(file_id, day, source, model) DO NOTHING");
         for (auto& [file, hashes] : files) {
             upsert.reset();
             upsert.bind(1, std::string_view(file->path)).bind(2, std::string_view(file->family)).bind(3, file->size).bind(4, file->modified);
@@ -383,23 +350,16 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
             clearRecords.reset();
             clearRecords.bind(1, file->id);
             clearRecords.step();
-            for (const auto& r : file->records) {
+            for (const auto& row : file->perf) {
+                const auto& r = row.record;
+                const auto bins = encodeBins(r.latencyBins);
                 insertRecord.reset();
-                insertRecord.bind(1, file->id).bind(2, r.ordinal).bind(3, sourceId(r.source));
-                r.model ? insertRecord.bind(4, std::string_view(*r.model)) : insertRecord.bindNull(4);
-                r.effort ? insertRecord.bind(5, std::string_view(*r.effort)) : insertRecord.bindNull(5);
-                insertRecord.bind(6, r.startMs).bind(7, r.endMs).bind(8, std::string_view(r.day)).bind(9, static_cast<std::int64_t>(r.complete));
-                insertRecord.bind(10, std::string_view(r.state));
-                r.score ? insertRecord.bind(11, *r.score) : insertRecord.bindNull(11);
-                insertRecord.bind(12, r.dims.V).bind(13, r.dims.C).bind(14, r.dims.R).bind(15, r.dims.E).bind(16, r.dims.K);
-                const auto counts = encodeCounts(r.counts);
-                const auto snapshots = encodeRows(r.snapshots);
-                const auto fixRows = encodeRows(r.fixRows);
-                insertRecord.bind(17, std::string_view(counts));
-                r.firstPassMs ? insertRecord.bind(18, *r.firstPassMs) : insertRecord.bindNull(18);
-                insertRecord.bind(19, static_cast<std::int64_t>(r.success)).bind(20, static_cast<std::int64_t>(r.stalled));
-                insertRecord.bind(21, std::string_view(snapshots)).bind(22, std::string_view(fixRows));
-                insertRecord.bind(23, static_cast<std::int64_t>(file->version));
+                insertRecord.bind(1, file->id).bind(2, std::string_view(row.day)).bind(3, sourceId(row.source)).bind(4, std::string_view(row.model));
+                insertRecord.bind(5, r.n).bind(6, r.outputSum).bind(7, r.durationMsSum).bind(8, std::string_view(bins));
+                insertRecord.bind(9, r.reasonN).bind(10, r.reasonOutput).bind(11, r.reasonDurationMsSum);
+                insertRecord.bind(12, r.cacheN).bind(13, r.cacheInput).bind(14, r.cacheCached);
+                insertRecord.bind(15, r.toolN).bind(16, r.toolLnSum).bind(17, r.toolFailed).bind(18, r.activeMs);
+                insertRecord.bind(19, static_cast<std::int64_t>(file->version));
                 insertRecord.step();
             }
         }
@@ -487,7 +447,7 @@ void Store::setMeta(const std::string& key, const std::string& value) {
 }
 
 void Store::clear() {
-    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "task_records", "day_traffic"}) {
+    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "perf_records", "day_traffic"}) {
         db_.execute(std::string("DELETE FROM ") + table);
     }
     db_.execute("DELETE FROM meta WHERE key<>'schema'");

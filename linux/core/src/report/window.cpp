@@ -20,14 +20,14 @@ const std::shared_ptr<const Counters>& zeroCounters() {
     return zero;
 }
 
-bool tasksOrUsageSince(const Counters& now, const Counters& before) { return !now.since(before).byModel().empty(); }
+bool usageSince(const Counters& now, const Counters& before) { return !now.since(before).byModel().empty(); }
 
-const TaskFacts& noTasks() {
-    static const TaskFacts empty;
+const PerfFacts& noPerf() {
+    static const PerfFacts empty;
     return empty;
 }
 
-const TaskFacts& tasksOf(const Sample& sample) { return sample.facts.tasks ? *sample.facts.tasks : noTasks(); }
+const PerfFacts& perfOf(const Sample& sample) { return sample.facts.perf ? *sample.facts.perf : noPerf(); }
 
 }  // namespace
 
@@ -89,9 +89,9 @@ bool Sample::working() const {
 
 Window::Window(const Sample& sample)
     : baseline_(sample.facts.counters), lastCounters_(sample.facts.counters), baselineEpoch_(sample.facts.epoch), lastEpoch_(sample.facts.epoch),
-      trafficBaseline_(sample.traffic.totals), lastTraffic_(sample.traffic.totals), taskBaseline_(tasksOf(sample).rows),
-      taskGeneration_(tasksOf(sample).generation), lastCompleted_(tasksOf(sample).completed), lastTaskGeneration_(tasksOf(sample).generation),
-      takenCompleted_(tasksOf(sample).completed) {}
+      trafficBaseline_(sample.traffic.totals), lastTraffic_(sample.traffic.totals), perfBaseline_(perfOf(sample).rows),
+      perfGeneration_(perfOf(sample).generation), lastCounted_(perfOf(sample).counted), lastPerfGeneration_(perfOf(sample).generation),
+      takenResponses_(perfOf(sample).responses), takenCalls_(perfOf(sample).calls) {}
 
 bool Window::hasTokenIncrement(const Sample& sample) const {
     return sample.facts.counters->hasTokensSince(sample.facts.epoch == lastEpoch_ ? *lastCounters_ : *zeroCounters());
@@ -100,9 +100,9 @@ bool Window::hasTokenIncrement(const Sample& sample) const {
 bool Window::hasIncrement(const Sample& sample, bool traffic) const {
     const auto& counters = sample.facts.counters;
     const bool usage = sample.facts.epoch != lastEpoch_ ? !counters->byModel().empty()
-                                                       : counters != lastCounters_ && tasksOrUsageSince(*counters, *lastCounters_);
-    const auto& tasks = tasksOf(sample);
-    const bool completed = tasks.generation != lastTaskGeneration_ ? tasks.completed > 0 : tasks.completed > lastCompleted_;
+                                                       : counters != lastCounters_ && usageSince(*counters, *lastCounters_);
+    const auto& perf = perfOf(sample);
+    const bool completed = perf.generation != lastPerfGeneration_ ? perf.counted > 0 : perf.counted > lastCounted_;
     return usage || completed || (traffic && !sample.traffic.agentBytes(lastTraffic_).empty());
 }
 
@@ -134,8 +134,8 @@ void Window::observe(const Sample& sample, bool peaks) {
     lastCounters_ = sample.facts.counters;
     lastEpoch_ = sample.facts.epoch;
     lastTraffic_ = sample.traffic.totals;
-    lastCompleted_ = tasksOf(sample).completed;
-    lastTaskGeneration_ = tasksOf(sample).generation;
+    lastCounted_ = perfOf(sample).counted;
+    lastPerfGeneration_ = perfOf(sample).generation;
 }
 
 WindowContent Window::content(const Sample& sample) const {
@@ -146,14 +146,14 @@ WindowContent Window::content(const Sample& sample) const {
     out.peak = {std::max(peak_.output, sample.live.output), std::max(peak_.total, sample.live.total)};
     out.peakCost = std::max(peakCost_, sample.liveCost);
     out.peakRate = larger(peakRate_, sample.traffic.status == TrafficStatus::Ok ? sample.traffic.rate : std::nullopt);
-    // Task rows since the previous build; discards leave them alone (METRICS 11.10 Task ledger).
-    const auto& tasks = tasksOf(sample);
-    for (const auto& [key, row] : *tasks.rows) {
-        TaskRow change = row;
-        if (tasks.generation == taskGeneration_ && taskBaseline_) {
-            if (const auto it = taskBaseline_->find(key); it != taskBaseline_->end()) change = row - it->second;
+    // Statistics rows since the previous build; discards leave them alone (METRICS 11.10 Statistics ledger).
+    const auto& perf = perfOf(sample);
+    for (const auto& [key, row] : *perf.rows) {
+        PerfRow change = row;
+        if (perf.generation == perfGeneration_ && perfBaseline_) {
+            if (const auto it = perfBaseline_->find(key); it != perfBaseline_->end()) change = row - it->second;
         }
-        if (!change.zero()) out.tasks[key] = change;
+        if (!change.zero()) out.perf[key] = change;
     }
     return out;
 }
@@ -162,9 +162,10 @@ WindowContent Window::take(const Sample& sample) {
     auto taken = content(sample);
     discard(sample, false);
     observe(sample, false);
-    taskBaseline_ = tasksOf(sample).rows;
-    taskGeneration_ = tasksOf(sample).generation;
-    takenCompleted_ = tasksOf(sample).completed;
+    perfBaseline_ = perfOf(sample).rows;
+    perfGeneration_ = perfOf(sample).generation;
+    takenResponses_ = perfOf(sample).responses;
+    takenCalls_ = perfOf(sample).calls;
     return taken;
 }
 

@@ -1,6 +1,7 @@
 #include "agentspeed/demo.hpp"
 
 #include <algorithm>
+#include <array>
 #include <cmath>
 #include <tuple>
 
@@ -26,55 +27,30 @@ double surge(double seconds) {
 
 constexpr double kResponsePeriods[] = {2.9, 3.7, 4.3};
 
-// A demo task that moves through the states on a 120-second loop, so every form of 智力 shows.
-AgentTask demoTask(double t, double offset, Phase phase, const char* suite) {
-    const double into = std::fmod(t + offset, 120.0);
-    AgentTask task;
-    tasks::TaskResult r;
-    r.counts.actions = 6 + static_cast<std::int64_t>(into / 6);
-    r.counts.counted = r.counts.actions;
-    r.counts.edits = 2;
-    r.ig = 0.82;
-    r.dims.E = 10 * std::min(1.0, static_cast<double>(r.counts.counted) / 8) * r.ig;
-    if (into < 25) {
-        r.state = "unverified";
-    } else if (into < 55) {
-        r.state = "failing";
-        r.dims.C = 15;
-        r.openFailure = tasks::OpenFailure{suite, "test", "demo", 3, 5, true, false};
-        r.counts.runs = 2;
-        r.counts.failingRuns = r.counts.fixAttempts = r.counts.episodes = 2;
-    } else if (into < 100) {
-        r.state = "passing";
-        r.dims = {40, 25, 7.5, r.dims.E, 10};
-        r.lastPass = tasks::LastPass{suite, "test", "demo", false};
-        r.counts.runs = 3;
-    } else {
-        r.state = "pending";
-        r.dims = {0, 25, 7.5, r.dims.E, 4};
-        r.vHeld = 40;
-        r.lastPass = tasks::LastPass{suite, "test", "demo", false};
-        r.counts.runs = 3;
+// A demo agent's performance score with every component the score card shows (METRICS 6.9): its measures drift
+// slowly, so the value moves like a real one; `n` below 10 marks it provisional.
+AgentPerf demoPerf(SourceKind source, Phase phase, double t, double offset, const std::array<double, 7>& measures, std::int64_t n) {
+    perf::Measures m;
+    for (std::size_t i = 0; i < measures.size(); ++i) {
+        if (measures[i] <= 0) continue;
+        const double drift = i == 0 ? 0.9 + 0.2 * wave(t, 97, offset) : i == 1 ? 1.1 - 0.2 * wave(t, 131, offset) : 1;
+        m.measure[i] = measures[i] * drift;
+        m.samples[i] = i <= 1 || i == 3 || i == 4 ? n : 12;
     }
-    const double score = r.dims.V + r.dims.C + r.dims.R + r.dims.E + r.dims.K;
-    r.score = score;
-    r.shown = tasks::roundHalfAway(score);
-    task.value.form = phase == Phase::Idle ? "resting" : "live";
-    task.value.score = score;
-    task.value.shown = r.shown;
-    task.value.state = r.state;
-    task.models = tasks::priorModels();
-    task.models.success.tasks = task.models.stall.tasks = 23;
-    task.models.fix.tasks = 9;
-    tasks::Predictions p;
-    p.success = r.state == "passing" ? 0.91 : r.state == "failing" ? 0.37 : 0.58;
-    p.stall = r.state == "failing" ? 0.19 : 0.08;
-    if (r.state == "failing") p.fix = 0.34;
-    task.predictions = p;
-    task.workSignals.failed = r.state == "failing" ? 2 : 0;
-    task.workSignals.novelty = 0.78;
-    task.task = r;
-    return task;
+    AgentPerf value;
+    auto& e = value.score;
+    const auto [components, score] = perf::combine(source, m);
+    e.components = components;
+    e.score = score;
+    e.shown = perf::roundHalfAway(*score);
+    e.form = phase == Phase::Idle ? perf::Form::Resting : perf::Form::Live;
+    e.provisional = n < perf::kProvisionalBelow;
+    e.n = n;
+    e.tools = m.measure[2] ? 12 : 0;
+    e.activeMs = 6 * 60'000;
+    perf::applyBaseline(e, *score / 1.08);
+    value.workSignals.novelty = 0.78;
+    return value;
 }
 
 }  // namespace
@@ -96,13 +72,20 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
         int depth;
         double base, swing, period, phase;
         Phase phaseKind;
+        std::array<double, 7> measures;  // T, L, N, R, H, U, S; 0: absent
+        std::int64_t samples;
     };
     const Spec specs[] = {
-        {"demo-nova", SourceKind::ClaudeCode, "nova", "claude-opus-5-5", 0, 110, 70, 11, 0.0, Phase::Generating},
-        {"demo-nova-sub", SourceKind::ClaudeCode, "nova", "claude-sonnet-5-5", 1, 60, 50, 7, 1.3, Phase::Generating},
-        {"demo-rocket", SourceKind::Codex, "rocket", "gpt-6.1-sol", 0, 85, 45, 13, 2.1, Phase::Generating},
-        {"demo-orbit", SourceKind::Codex, "orbit", "gpt-6.1-terra", 0, 0, 0, 1, 0, Phase::Tools},
-        {"demo-lumen", SourceKind::ClaudeCode, "lumen", "claude-haiku-5-5", 0, 0, 0, 1, 0, Phase::Idle},
+        {"demo-nova", SourceKind::ClaudeCode, "nova", "claude-opus-5-5", 0, 110, 70, 11, 0.0, Phase::Generating,
+         {72, 2300, 4.2, 26, 0.93, 310, 0.96}, 20},
+        {"demo-nova-sub", SourceKind::ClaudeCode, "nova", "claude-sonnet-5-5", 1, 60, 50, 7, 1.3, Phase::Generating,
+         {58, 3100, 3.1, 18, 0.9, 420, 0.92}, 7},
+        {"demo-rocket", SourceKind::Codex, "rocket", "gpt-6.1-sol", 0, 85, 45, 13, 2.1, Phase::Generating,
+         {41, 4200, 2.4, 15, 0.88, 650, 0.85}, 20},
+        {"demo-orbit", SourceKind::Codex, "orbit", "gpt-6.1-terra", 0, 0, 0, 1, 0, Phase::Tools,
+         {96, 1600, 5.6, 31, 0.95, 240, 0.97}, 16},
+        {"demo-lumen", SourceKind::ClaudeCode, "lumen", "claude-haiku-5-5", 0, 0, 0, 1, 0, Phase::Idle,
+         {130, 1200, 3.8, 0, 0.94, 280, 0.95}, 11},
     };
     double codex = 0, claude = 0;
     for (const auto& s : specs) {
@@ -122,17 +105,18 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
         if (row.phase == Phase::Tools) ++snap.tools;
         row.effort = s.depth == 0 ? (s.source == SourceKind::Codex ? "xhigh" : "high") : "medium";
         if (s.source == SourceKind::Codex) row.speed = "fast";
-        row.task = demoTask(t, s.period * 9 + s.phase * 13, row.phase, s.source == SourceKind::Codex ? "cargo test" : "pytest");
+        row.perf = demoPerf(s.source, row.phase, t, s.phase, s.measures, s.samples);
+        row.perf->score.model = s.model;
         row.liveThinking = row.liveOutput * 0.35;
         snap.agents.push_back(row);
     }
-    std::vector<tasks::ValuedAgent> valued;
-    for (const auto& a : snap.agents) valued.push_back({a.id, nowMs, a.task->value});
+    std::vector<perf::Valued> valued;
+    for (const auto& a : snap.agents) valued.push_back({a.id, nowMs, a.perf->score.form, a.perf->score.score});
     ScoreSet all;
-    all.value = tasks::highest(valued);
+    all.value = perf::highest(valued);
     for (const auto& a : snap.agents) {
-        if (all.value.agent && a.id == *all.value.agent) all.state = a.task->value.state;
-        if (all.value.form != "none" && a.task->value.form == all.value.form) ++all.scored;
+        if (all.value.agent && a.id == *all.value.agent) all.provisional = a.perf->score.provisional;
+        if (all.value.form != perf::Form::None && a.perf->score.form == all.value.form) ++all.scored;
         all.liveThinking += a.liveThinking;
         all.generating |= a.phase == Phase::Generating;
     }

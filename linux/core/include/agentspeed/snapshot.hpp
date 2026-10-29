@@ -7,19 +7,15 @@
 
 #include "agentspeed/model.hpp"
 #include "agentspeed/report_values.hpp"
-#include "agentspeed/task_events.hpp"
+#include "agentspeed/perf.hpp"
 #include "agentspeed/traffic_service.hpp"
 #include "agentspeed/work_signals.hpp"
 
 namespace agentspeed {
 
-// METRICS 6.9–6.11: an agent's current task, its score, predictions and work signals.
-struct AgentTask {
-    tasks::AgentValue value;
-    std::optional<tasks::TaskResult> task;
-    std::optional<std::int64_t> taskStartMs;
-    std::optional<tasks::Predictions> predictions;
-    tasks::Models models;
+// METRICS 6.9, 6.10: an agent's performance score with the facts of the score card, and its work signals.
+struct AgentPerf {
+    perf::Evaluation score;
     work::Signals workSignals;  // not `signals`: a Qt keyword in the app
 };
 
@@ -38,22 +34,29 @@ struct AgentRow {
     // EXECUTION-MODES: the effort and speed the row shows (mode tokens), nullopt when unknown.
     std::optional<std::string> effort;
     std::optional<std::string> speed;
-    // Scored sources only (METRICS 6.9).
-    std::optional<AgentTask> task;
+    // METRICS 6.9: every listed agent.
+    std::optional<AgentPerf> perf;
     // METRICS 6.9 Live thinking: this agent's reasoning tokens per second and share.
     double liveThinking = 0;
     double thinkingShare = 0;
 };
 
-// 智力 and 思考 of one set of sources (METRICS 6.9 Sets and groups, Live thinking): an orb, the tray, a board.
+// 性能 and 思考 of one set of sources (METRICS 6.9 Sets and groups, Live thinking): an orb, the tray, a board.
 struct ScoreSet {
     std::optional<std::vector<SourceKind>> sources;  // nullopt: every enabled source
-    tasks::Highest value;
-    std::int64_t scored = 0;                // N: the set's agents with a score in the value's form
-    std::optional<std::string> state;       // the supplying agent's state (proof mark: unverified, pending)
+    perf::Highest value;
+    std::int64_t scored = 0;   // N: the set's agents with a score in the value's form
+    bool provisional = false;  // the supplying agent's score is provisional (3 ≤ n < 10)
     double liveThinking = 0;
     double thinkingShare = 0;
     bool generating = false;                // an agent of the set is generating
+};
+
+// A board group's value (METRICS 6.9 Sets and groups): a root and its descendants in the agents list.
+struct ScoreGroup {
+    std::string root;
+    std::vector<std::string> members;
+    perf::Highest value;
 };
 
 // A responseCompleted event (METRICS 6.4): the first emission of a response key while running.
@@ -116,7 +119,7 @@ struct Snapshot {
     std::vector<double> peakSets;
     // One per requested set (Monitor::setScoreSets), then the board groups of the agents list.
     std::vector<ScoreSet> scoreSets;
-    std::vector<tasks::GroupValue> scoreGroups;
+    std::vector<ScoreGroup> scoreGroups;
     // METRICS 10: network traffic (this computer, sources, agents).
     traffic::View traffic;
     // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).

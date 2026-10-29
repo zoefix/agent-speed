@@ -260,6 +260,7 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
         created.model = line.model;
         created.startMs = pendingStartMs_;
         created.endMs = ts;
+        created.firstMs = ts;
         created.tokens = line.usage;
         created.final = line.stopReason != StopReason::Missing;
         created.fast = line.fast;
@@ -276,6 +277,7 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
     } else if (auto it = recent_.find(key); it != recent_.end()) {
         response = it->second;
         response.endMs = std::max(response.endMs, ts);
+        response.firstMs = std::min(response.firstMs.value_or(ts), ts);
         response.tokens = TokenCounts::max(response.tokens, line.usage);
         if (line.model) response.model = line.model;
         response.final = response.final || line.stopReason != StopReason::Missing;

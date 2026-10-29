@@ -70,7 +70,7 @@ struct AgentCounts {
     int generating = 0, tools = 0, active = 0;
 };
 
-struct TaskFacts;
+struct PerfFacts;
 
 // What each snapshot carries for live reporting (METRICS 11.2, 11.4).
 struct Facts {
@@ -78,7 +78,7 @@ struct Facts {
     std::map<ModelKey, int> generatingModels;
     std::shared_ptr<const Counters> counters = std::make_shared<Counters>();
     std::int64_t epoch = 0;  // the engine instance the counters belong to; a new monitor starts them over
-    std::shared_ptr<const TaskFacts> tasks;  // the taskScore extension (METRICS 11.10); null: nothing scored
+    std::shared_ptr<const PerfFacts> perf;  // the perfScore extension (METRICS 11.10); null: nothing scored
 };
 
 // The report ledger of METRICS 11.4: which responses count for live reporting and what each one already added.

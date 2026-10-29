@@ -20,7 +20,7 @@ Section: utils
 Priority: optional
 Architecture: $arch
 Installed-Size: $size
-Depends: libqt6core6t64 (>= 6.5) | libqt6core6 (>= 6.5), libqt6gui6t64 | libqt6gui6, libqt6network6t64 | libqt6network6, libqt6websockets6t64 | libqt6websockets6, libqt6opengl6t64 | libqt6opengl6, libqt6widgets6t64 | libqt6widgets6, libqt6qml6, libqt6quick6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-effects, qml6-module-qtcore, qml6-module-qtqml-workerscript, qt6-qpa-plugins, libzstd1, libsqlite3-0, libssl3t64 | libssl3, libpcre2-8-0, libxcb1, libxcb-shape0
+Depends: libqt6core6t64 (>= 6.5) | libqt6core6 (>= 6.5), libqt6gui6t64 | libqt6gui6, libqt6network6t64 | libqt6network6, libqt6websockets6t64 | libqt6websockets6, libqt6opengl6t64 | libqt6opengl6, libqt6widgets6t64 | libqt6widgets6, libqt6qml6, libqt6quick6, qml6-module-qtquick, qml6-module-qtquick-controls, qml6-module-qtquick-layouts, qml6-module-qtquick-window, qml6-module-qtquick-effects, qml6-module-qtcore, qml6-module-qtqml-workerscript, qt6-qpa-plugins, libzstd1, libsqlite3-0, libssl3t64 | libssl3, libxcb1, libxcb-shape0
 Maintainer: zoefix <zony1937@gmail.com>
 Homepage: https://github.com/zoefix/agent-speed
 Description: Live token speed of your AI coding agents

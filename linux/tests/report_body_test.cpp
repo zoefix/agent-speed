@@ -125,35 +125,43 @@ Built fromExample(const json::Value& report) {
     b.sample.facts = facts;
     b.sample.traffic = traffic;
 
-    // The task score's live values and rows (METRICS 11.10): one agent per model entry with its value, the entries' thinking.
-    TaskRows taskRows;
-    if (const auto top = report["taskScore"]; top.isObject()) {
-        b.options.extensions.taskScore = true;
-        auto tasks = std::make_shared<TaskFacts>();
-        tasks->thinking = num(top["thinkingTokS"]);
+    // The performance score's live values and rows (METRICS 11.10): one agent per model entry with its value, the entries'
+    // thinking; the retired taskScore carries the thinking only.
+    PerfRows perfRows;
+    const auto perfTop = report["perfScore"], legacyTop = report["taskScore"];
+    if (perfTop.isObject() || legacyTop.isObject()) {
+        const bool legacy = !perfTop.isObject();
+        (legacy ? b.options.extensions.taskScore : b.options.extensions.perfScore) = true;
+        auto perf = std::make_shared<PerfFacts>();
+        perf->thinking = num((legacy ? legacyTop : perfTop)["thinkingTokS"]);
         for (const auto& model : models) {
-            const auto value = model["taskScore"];
+            const auto value = model[legacy ? "taskScore" : "perfScore"];
             const auto id = *model["id"].string();
-            if (value["form"].equals("live") || value["form"].equals("resting")) {
-                tasks->agents.push_back({sourceOf(model["sources"].at(0)), id, *value["form"].string(), value["score"].number()});
+            for (const auto form : {perf::Form::Live, perf::Form::Resting}) {
+                if (value["form"].equals(perf::formId(form))) perf->agents.push_back({sourceOf(model["sources"].at(0)), id, form, value["score"].number()});
             }
-            tasks->modelThinking[id] = num(value["thinkingTokS"]);
-            for (const auto& row : model["taskStats"].elements()) {
-                TaskRow r;
-                r.completed = integer(row["completed"]);
-                r.scored = integer(row["scored"]);
-                r.scoreSum = integer(row["scoreSum"]);
-                for (std::uint32_t i = 0; i < 10; ++i) r.scoreBins[i] = integer(row["scoreBins"].at(i));
-                r.successes = integer(row["successes"]);
-                r.stalls = integer(row["stalls"]);
-                r.fixAttempts = integer(row["fixAttempts"]);
-                r.fixFailures = integer(row["fixFailures"]);
-                r.recovered = integer(row["recovered"]);
-                r.recoverAttempts = integer(row["recoverAttempts"]);
-                taskRows[{id, sourceOf(row["source"])}] += r;
+            perf->modelThinking[id] = num(value["thinkingTokS"]);
+            for (const auto& row : model["perfStats"].elements()) {
+                PerfRow r;
+                auto& rec = r.record;
+                rec.n = integer(row["n"]);
+                rec.outputSum = integer(row["outputSum"]);
+                rec.durationMsSum = integer(row["durationMsSum"]);
+                for (const auto& bin : row["latencyBins"].elements()) rec.latencyBins[static_cast<std::size_t>(integer(bin.at(0)))] += integer(bin.at(1));
+                rec.reasonN = integer(row["reasonN"]);
+                rec.reasonOutput = integer(row["reasonOutput"]);
+                rec.reasonDurationMsSum = integer(row["reasonDurationMsSum"]);
+                rec.cacheN = integer(row["cacheN"]);
+                rec.cacheInput = integer(row["cacheInput"]);
+                rec.cacheCached = integer(row["cacheCached"]);
+                rec.toolN = integer(row["toolN"]);
+                rec.toolLnSum = num(row["toolLnSum"]);
+                rec.toolFailed = integer(row["toolFailed"]);
+                rec.activeMs = integer(row["activeMs"]);
+                perfRows[{id, sourceOf(row["source"])}] += r;
             }
         }
-        b.sample.facts.tasks = tasks;
+        b.sample.facts.perf = perf;
     }
 
     Sample baseline;
@@ -164,7 +172,7 @@ Built fromExample(const json::Value& report) {
     b.content.peak = {num(report["peak"]["outputTokS"]), num(report["peak"]["totalTokS"])};
     b.content.peakCost = cost.isObject() ? num(cost["peakMicroUsdPerSecond"]) : 0;
     b.content.peakRate = peakRate;
-    b.content.tasks = taskRows;
+    b.content.perf = perfRows;
     return b;
 }
 
@@ -207,7 +215,8 @@ TEST_P(ReportExamples, AreRebuiltExactly) {
 
 INSTANTIATE_TEST_SUITE_P(Report, ReportExamples,
                          testing::Values("report-active.json", "report-idle.json", "report-leaving.json", "report-minimal.json", "report-websocket.json",
-                                         "report-taskscore.json", "report-taskscore-websocket.json"));
+                                         "report-perfscore.json", "report-perfscore-websocket.json", "report-taskscore.json",
+                                         "report-taskscore-websocket.json"));
 
 TEST(ReportBody, NumbersAreRoundedHalfAwayFromZero) {
     EXPECT_EQ(Json::number(0.25, 1), "0.3");

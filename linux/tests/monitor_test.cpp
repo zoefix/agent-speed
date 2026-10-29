@@ -89,25 +89,28 @@ TEST(Monitor, EverySourceIsReadFromItsRoot) {
     EXPECT_GT(monitor.trackedFiles(), 40u);
 }
 
-TEST(Monitor, ScoresTheTasksOfTheListedAgents) {
-    RootSettings s;
-    s.codex = fixturePath("tasks/codex/sessions");
-    s.claude = fixturePath("tasks/claude/projects");
-    s.droid = fixturePath("tasks/droid/.factory");
-    MonitorConfig config;
-    config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");
-    config.enabled = {SourceKind::Codex, SourceKind::ClaudeCode, SourceKind::ClaudeDesktop, SourceKind::Droid};
-    Monitor monitor(std::move(config));
+// METRICS 6.9: the Codex tool-call fixture has four measured responses and three tool calls with results.
+TEST(Monitor, ScoresTheListedAgentsWithThePerformanceScore) {
+    Monitor monitor(fixtureConfig({SourceKind::Codex}));
     monitor.setScoreSets({std::nullopt, std::vector<SourceKind>{SourceKind::Codex}});
-    constexpr std::int64_t kNow = 1793098800000;       // 2026-10-27T11:00:00Z, the task fixture's nowMs
-    constexpr std::int64_t kStart = 1793059200000;     // that day's start (UTC)
-    monitor.start(kNow, kStart);
-    const auto snap = monitor.snapshot(kNow, kStart);
-    const auto scored = std::count_if(snap.agents.begin(), snap.agents.end(), [](const AgentRow& a) { return a.task && a.task->value.score; });
-    EXPECT_GT(scored, 0);
+    constexpr std::int64_t kNow = 1792490897100 + 60'000;  // a minute after the fixture's last line
+    monitor.start(kNow, kDayStart);
+    const auto snap = monitor.snapshot(kNow, kDayStart);
+    const auto it = std::find_if(snap.agents.begin(), snap.agents.end(), [](const AgentRow& a) {
+        return a.id.find("rollout-2026-10-20T10-08-00-tools") != std::string::npos;
+    });
+    ASSERT_NE(it, snap.agents.end());
+    ASSERT_TRUE(it->perf);
+    const auto& value = it->perf->score;
+    ASSERT_TRUE(value.score.has_value());
+    EXPECT_EQ(value.n, 4);
+    EXPECT_TRUE(value.provisional);
+    EXPECT_TRUE(value.components[0].present);
+    EXPECT_EQ(value.model, std::optional<std::string>("gpt-6.1-sol"));
     ASSERT_EQ(snap.scoreSets.size(), 2u);
-    EXPECT_NE(snap.scoreSets[0].value.form, "none");
+    EXPECT_NE(snap.scoreSets[0].value.form, perf::Form::None);
     EXPECT_TRUE(snap.scoreSets[0].value.agent.has_value());
     EXPECT_GE(snap.scoreSets[0].scored, 1);
+    EXPECT_TRUE(snap.scoreSets[0].provisional);
     EXPECT_FALSE(snap.scoreGroups.empty());
 }

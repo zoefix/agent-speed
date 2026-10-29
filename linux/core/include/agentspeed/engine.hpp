@@ -18,7 +18,9 @@ struct Response {
     std::optional<std::string> model;
     std::optional<std::int64_t> startMs;
     std::int64_t endMs = 0;
+    std::optional<std::int64_t> firstMs;
     std::int64_t input = 0;
+    std::int64_t cachedInput = 0;
     std::int64_t output = 0;
     std::int64_t reasoning = 0;
     bool final = true;

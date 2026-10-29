@@ -57,7 +57,7 @@ struct DiscoveryProblem {
 // The body fetched from `service`'s discovery URL.
 std::optional<Discovery> parseDiscoveryBody(std::string_view body, const ServiceUrl& service, DiscoveryProblem* problem = nullptr);
 // What the preview assumes before a service's document is known: the API at the service URL, every section, the
-// protocol's defaults and the taskScore extension (DESIGN 11, Preview window).
+// protocol's defaults and the perfScore extension (DESIGN 11, Preview window).
 Discovery assumedDiscovery(const ServiceUrl& service, const std::string& name);
 // The document as the client understood it, for storage; it parses back to the same values.
 std::string discoveryJson(const Discovery& discovery);

@@ -285,7 +285,7 @@ Discovery assumedDiscovery(const ServiceUrl& service, const std::string& name) {
                                     {"versions", Json::array({Json::of(1)})},
                                     {"service", Json::object({{"name", Json::of(name)}, {"terms", Json::of(link)}, {"privacy", Json::of(link)}})},
                                     {"api", Json::of(service.text())},
-                                    {"extensions", Json::object({{"taskScore", Json::of(1)}})}})
+                                    {"extensions", Json::object({{"perfScore", Json::of(1)}})}})
                           .compact();
     json::Document doc;
     doc.parse(text);

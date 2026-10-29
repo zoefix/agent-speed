@@ -11,10 +11,10 @@
 #include "agentspeed/discovery.hpp"
 #include "agentspeed/engine.hpp"
 #include "agentspeed/locations.hpp"
-#include "agentspeed/report_task.hpp"
+#include "agentspeed/actions.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
-#include "agentspeed/task_tracker.hpp"
+#include "agentspeed/report_perf.hpp"
 #include "agentspeed/traffic_service.hpp"
 
 namespace agentspeed {
@@ -90,24 +90,22 @@ public:
     std::vector<ParsedResponse> responses() const;
     // A newer price table arrived: today's unpriced responses are priced again.
     void repriceToday();
-    // The prediction models of each scored source, calibrated on its task records (METRICS 6.11).
-    void setTaskModels(std::map<SourceKind, tasks::Models> models) {
-        taskModels_ = std::move(models);
-        ++taskModelsVersion_;
-    }
+    // 比平常 (METRICS 6.11 Baseline): the 14-day pooled score of each (source, raw model), as the history store last
+    // saved it.
+    void setPerfBaselines(std::map<std::pair<SourceKind, std::string>, double> baselines) { perfBaselines_ = std::move(baselines); }
     // METRICS 10: sampled on every poll while enabled.
     void setTrafficEnabled(bool enabled) { traffic_->setEnabled(enabled); }
     std::vector<traffic::HistoryRow> trafficToday(std::int64_t nowMs) const { return traffic_->todayRows(nowMs); }
     void restoreTraffic(const std::vector<traffic::HistoryRow>& rows) { traffic_->restore(rows); }
-    // METRICS 11.10 Watch: tasks that start while it is on are counted when they complete; `taken` is how many of this
-    // generation's completions the reports already took.
-    void setTaskWatch(bool on, std::int64_t taken) {
-        taskLedger_.setWatch(on);
-        taskLedger_.setTaken(taken);
+    // METRICS 11.10 Watch: completions read while it is on are counted; `responses` and `calls` are how many of this
+    // generation's the reports already took.
+    void setPerfWatch(bool on, std::int64_t responses, std::int64_t calls) {
+        perfLedger_.setWatch(on);
+        perfLedger_.setTaken(responses, calls);
     }
     // The engine instance live reporting's counters belong to (METRICS 11.4).
     std::int64_t epoch() const { return epoch_; }
-    // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
+    // The source sets whose 性能 and 思考 every snapshot computes (nullopt: every enabled source).
     void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
     // The source sets of the floating orbs whose peakToday_A every snapshot computes (nullopt: peakToday).
     void setPeakSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { peakSets_ = std::move(sets); }
@@ -125,7 +123,7 @@ private:
         std::size_t root = 0;
         std::unique_ptr<Tailer> tailer;
         std::unique_ptr<TranscriptParser> parser;
-        std::unique_ptr<tasks::TaskTracker> tasks;
+        std::unique_ptr<work::ActionReader> actions;
         std::int64_t knownLength = -1, knownWriteNs = 0;
         std::uint64_t pushedVersion = UINT64_MAX;
         bool unreadable = false, dirty = false;
@@ -191,38 +189,26 @@ private:
     std::unique_ptr<hermes::Source> hermes_;
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, std::uint64_t> openClawPushed_, hermesPushed_;
-    std::map<std::string, std::unique_ptr<tasks::TaskTracker>> windowTasks_;
+    std::map<std::string, std::unique_ptr<work::ActionReader>> windowActions_;
     std::unique_ptr<traffic::Service> traffic_ = std::make_unique<traffic::Service>();
     std::vector<traffic::AgentFacts> trafficAgents(std::int64_t nowMs);
-    std::map<SourceKind, tasks::Models> taskModels_;
-    std::uint64_t taskModelsVersion_ = 0;
+    std::map<std::pair<SourceKind, std::string>, double> perfBaselines_;
     std::vector<std::optional<std::vector<SourceKind>>> scoreSets_{std::nullopt};
     std::vector<std::optional<std::vector<SourceKind>>> peakSets_;
-    struct CachedTask {
-        std::uint64_t events = UINT64_MAX, models = UINT64_MAX;
-        Phase phase = Phase::Idle;
-        std::optional<std::string> parent;
-        bool future = false;  // an event after now: recomputed every tick until it is past
-        tasks::AgentRow row;
-    };
-    std::map<std::string, CachedTask> taskCache_;
-    const tasks::TaskTracker* trackerOf(const std::string& id) const;
-    void scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
-                    std::int64_t nowMs);
+    work::ActionReader* actionsOf(const std::string& id) const;
+    // An agent's reader: tool results read live are counted for live reporting (METRICS 11.10).
+    std::unique_ptr<work::ActionReader> makeActions(const std::string& id, SourceKind source);
+    void scoreAgents(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
+                     std::int64_t nowMs);
     bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
     const std::int64_t epoch_;
     std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
     std::uint64_t reportCountersVersion_ = 0;
     report::Facts reportFacts(std::int64_t nowMs, const Snapshot& snap);
-    void countTasks(std::int64_t nowMs);
-    struct TaskSeen {
-        std::uint64_t version = UINT64_MAX;
-        std::vector<std::int64_t> starts;
-    };
-    std::map<std::string, TaskSeen> taskSeen_;
-    report::TaskLedger taskLedger_;
-    std::shared_ptr<const report::TaskRows> taskRows_ = std::make_shared<report::TaskRows>();
-    std::uint64_t taskRowsVersion_ = 0;
+    std::int64_t clockMs_ = 0;
+    report::PerfLedger perfLedger_;
+    std::shared_ptr<const report::PerfRows> perfRows_ = std::make_shared<report::PerfRows>();
+    std::uint64_t perfRowsVersion_ = UINT64_MAX;
     engine::Thinking lastThinking_;
 };
 

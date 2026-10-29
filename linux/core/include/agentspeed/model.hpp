@@ -52,6 +52,8 @@ struct ParsedResponse {
     std::optional<std::string> model;
     std::optional<std::int64_t> startMs;
     std::int64_t endMs = 0;
+    // METRICS 3.3: when the first content was written (Claude and Codex only).
+    std::optional<std::int64_t> firstMs;
     TokenCounts tokens;
     bool final = true;
     std::optional<std::string> provider;

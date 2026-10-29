@@ -136,10 +136,10 @@ struct ModelEntry {
     Usage usage;
     int generating = 0;
     std::map<SourceKind, std::int64_t> harnessRequests;
-    bool usual = false;  // an entry of METRICS 11.3, not one only the task score adds
-    std::vector<const TaskAgent*> taskAgents;
+    bool usual = false;  // an entry of METRICS 11.3, not one only the performance score adds
+    std::vector<const PerfAgent*> perfAgents;
     double thinking = 0;  // unrounded model sums of the entry's raw models
-    std::map<SourceKind, TaskRow> taskRows;
+    std::map<SourceKind, PerfRow> perfRows;
     std::map<ModeKey, Usage> modes;
     void addMode(ModeKey key, const Usage& value) {
         key.modelId = id;
@@ -182,15 +182,17 @@ std::optional<Json> modesJson(const ModelEntry& entry) {
     return Json::array(std::move(rows));
 }
 
-const TaskFacts& noTaskFacts() {
-    static const TaskFacts empty;
+const PerfFacts& noPerfFacts() {
+    static const PerfFacts empty;
     return empty;
 }
+
+enum class ScoreExtension { None, Perf, Legacy };
 
 // One entry per model with any increment in the window (a late price included) or a generating agent, by output then id,
 // `other` last (REPORTING 6.6.4, METRICS 11.3, 11.7).
 std::vector<Json> modelEntries(const WindowContent& content, const Sample& sample, int maxModels, bool withCost, const Extensions& extensions,
-                               bool taskScore) {
+                               ScoreExtension score) {
     std::map<std::string, ModelEntry> byId;
     const auto entryOf = [&](const std::string& id) -> ModelEntry& {
         auto& entry = byId[id];
@@ -210,21 +212,24 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         entry.generating += count;
         entry.sources.insert(key.source);
     }
-    // METRICS 11.10 Membership: the models an agent is live with and the models with task rows get entries too.
-    const auto& tasks = sample.facts.tasks ? *sample.facts.tasks : noTaskFacts();
-    if (taskScore) {
+    // METRICS 11.10 Membership: the models an agent is live with and the models with statistics rows get entries too.
+    const bool perfScore = score == ScoreExtension::Perf;
+    const auto& perf = sample.facts.perf ? *sample.facts.perf : noPerfFacts();
+    if (perfScore) {
         for (auto& [_, entry] : byId) entry.usual = true;
-        for (const auto& agent : tasks.agents)
-            if (agent.form == "live") entryOf(agent.modelId).sources.insert(agent.source);
-        for (const auto& [key, row] : content.tasks) {
+        for (const auto& agent : perf.agents)
+            if (agent.form == perf::Form::Live) entryOf(agent.modelId).sources.insert(agent.source);
+        for (const auto& [key, row] : content.perf) {
             auto& entry = entryOf(key.modelId);
             entry.sources.insert(key.source);
-            entry.taskRows[key.source] += row;
+            entry.perfRows[key.source] += row;
         }
-        for (const auto& agent : tasks.agents)
-            if (const auto it = byId.find(agent.modelId); it != byId.end()) it->second.taskAgents.push_back(&agent);
+        for (const auto& agent : perf.agents)
+            if (const auto it = byId.find(agent.modelId); it != byId.end()) it->second.perfAgents.push_back(&agent);
+    }
+    if (score != ScoreExtension::None) {
         for (auto& [id, entry] : byId)
-            if (const auto it = tasks.modelThinking.find(id); it != tasks.modelThinking.end()) entry.thinking = it->second;
+            if (const auto it = perf.modelThinking.find(id); it != perf.modelThinking.end()) entry.thinking = it->second;
     }
     std::vector<ModelEntry> entries;
     for (auto& [_, entry] : byId) entries.push_back(std::move(entry));
@@ -239,10 +244,10 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
             other.generating += it->generating;
             other.sources.insert(it->sources.begin(), it->sources.end());
             for (const auto& [source, requests] : it->harnessRequests) other.harnessRequests[source] += requests;
-            other.usual = other.usual || it->usual || !taskScore;
-            other.taskAgents.insert(other.taskAgents.end(), it->taskAgents.begin(), it->taskAgents.end());
+            other.usual = other.usual || it->usual || !perfScore;
+            other.perfAgents.insert(other.perfAgents.end(), it->perfAgents.begin(), it->perfAgents.end());
             other.thinking += it->thinking;
-            for (const auto& [source, row] : it->taskRows) other.taskRows[source] += row;
+            for (const auto& [source, row] : it->perfRows) other.perfRows[source] += row;
             for (const auto& [mode, usage] : it->modes) other.addMode(mode, usage);
         }
         entries.resize(static_cast<std::size_t>(maxModels - 1));
@@ -263,7 +268,7 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         if (withCost) json.add("deltaMicroUsd", Json::of(entry.usage.costMicroUsd));
         std::int64_t harnessSum = 0;
         for (const auto& [_, requests] : entry.harnessRequests) harnessSum += requests;
-        const bool usual = !taskScore || entry.usual;
+        const bool usual = !perfScore || entry.usual;
         if (usual && extensions.modelHarnessRequests && entry.harnessRequests.size() <= 8 && harnessSum == entry.usage.requests) {
             std::vector<Json> rows;
             for (const auto& [source, requests] : entry.harnessRequests) {
@@ -274,12 +279,17 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         if (usual && extensions.executionModes) {
             if (auto modes = modesJson(entry)) json.add("modeUsage", std::move(*modes));
         }
-        if (taskScore) {
-            json.add("taskScore", taskValue(entry.taskAgents, entry.thinking));
+        if (perfScore) {
+            json.add("perfScore", perfValue(entry.perfAgents, entry.thinking));
             std::vector<Json> stats;
-            for (const auto kind : sourceOrder())
-                if (const auto it = entry.taskRows.find(kind); it != entry.taskRows.end()) stats.push_back(it->second.json(kind));
-            json.add("taskStats", Json::array(std::move(stats)));
+            for (const auto kind : sourceOrder()) {
+                const auto it = entry.perfRows.find(kind);
+                if (it != entry.perfRows.end() && !it->second.zero()) stats.push_back(it->second.json(kind));
+            }
+            json.add("perfStats", Json::array(std::move(stats)));
+        } else if (score == ScoreExtension::Legacy) {
+            json.add("taskScore", legacyValue(entry.thinking));
+            json.add("taskStats", Json::array({}));
         }
         out.push_back(std::move(json));
     }
@@ -433,15 +443,17 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
         json.add("traffic", trafficJson(sample.traffic, content.peakRate, bytes));
     }
     if (sections.contains(Section::Sources)) json.add("sources", Json::array(sourceEntries(content, sample, sections)));
-    const bool taskScore = options.taskScoreActive();
+    const auto score = options.perfScoreActive() ? ScoreExtension::Perf : options.legacyTaskScoreActive() ? ScoreExtension::Legacy : ScoreExtension::None;
     if (sections.contains(Section::Models) && options.maxModels > 0) {
-        json.add("models", Json::array(modelEntries(content, sample, options.maxModels, sections.contains(Section::Cost), options.extensions, taskScore)));
+        json.add("models", Json::array(modelEntries(content, sample, options.maxModels, sections.contains(Section::Cost), options.extensions, score)));
     }
-    if (taskScore) {
-        const auto& tasks = sample.facts.tasks ? *sample.facts.tasks : noTaskFacts();
-        std::vector<const TaskAgent*> all;
-        for (const auto& agent : tasks.agents) all.push_back(&agent);
-        json.add("taskScore", taskValue(all, tasks.thinking));
+    const auto& perf = sample.facts.perf ? *sample.facts.perf : noPerfFacts();
+    if (score == ScoreExtension::Perf) {
+        std::vector<const PerfAgent*> all;
+        for (const auto& agent : perf.agents) all.push_back(&agent);
+        json.add("perfScore", perfValue(all, perf.thinking));
+    } else if (score == ScoreExtension::Legacy) {
+        json.add("taskScore", legacyValue(perf.thinking));
     }
     if (options.stream) {
         const bool mixed = sections.contains(Section::Traffic) && sample.traffic.status == TrafficStatus::Ok;

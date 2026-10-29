@@ -65,6 +65,7 @@ void CodexParser::reset() {
     provider_.reset();
     pendingStartMs_.reset();
     streaming_ = false;
+    firstOutputMs_.reset();
     sawModernUsage_ = false;
     previousLegacyTotals_.reset();
     context_ = ExecutionModes();
@@ -97,6 +98,7 @@ void CodexParser::emitResponse(const std::string& key, const TokenCounts& tokens
     response.model = model();
     response.startMs = pendingStartMs_;
     response.endMs = ts;
+    if (streaming_) response.firstMs = firstOutputMs_;
     response.tokens = tokens;
     response.provider = provider_;
     response.modes = modes;
@@ -173,6 +175,7 @@ void CodexParser::handle(const json::Value& root, std::string_view text, Respons
     } else if (type.equals("response_item")) {
         const auto role = payload["role"];
         if (kind == "reasoning" || endsWith(kind, "_call") || (kind == "message" && role.equals("assistant"))) {
+            if (!streaming_) firstOutputMs_ = ts;
             streaming_ = true;
             setPhase(Phase::Generating, ts, pendingStartMs_ ? pendingStartMs_ : std::optional<std::int64_t>(ts));
         } else if (endsWith(kind, "_output") ||

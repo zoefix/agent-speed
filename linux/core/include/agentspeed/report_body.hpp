@@ -9,7 +9,7 @@
 
 #include "agentspeed/report_json.hpp"
 #include "agentspeed/report_scheduler.hpp"
-#include "agentspeed/report_task.hpp"
+#include "agentspeed/report_perf.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/snapshot.hpp"
 
@@ -43,7 +43,7 @@ struct Envelope {
 };
 
 struct Extensions {
-    bool taskScore = false, executionModes = false, modelHarnessRequests = false;
+    bool perfScore = false, taskScore = false, executionModes = false, modelHarnessRequests = false;
 };
 
 // A WebSocket body (METRICS 11.9): it ends with `realtime` and its message must fit too.
@@ -63,9 +63,10 @@ struct Options {
     Extensions extensions;
     std::optional<StreamBody> stream;
     bool modelsDroppedForSize = false;
-    bool taskScoreActive() const {
-        return extensions.taskScore && maxModels >= 1 && (modelsDroppedForSize || sections.contains(Section::Models));
-    }
+    bool modelsByConsent() const { return maxModels >= 1 && (modelsDroppedForSize || sections.contains(Section::Models)); }
+    // METRICS 11.10 Active, and the retired taskScore (thinking only) when the service advertises it but not perfScore.
+    bool perfScoreActive() const { return extensions.perfScore && modelsByConsent(); }
+    bool legacyTaskScoreActive() const { return !extensions.perfScore && extensions.taskScore && modelsByConsent(); }
 };
 
 struct Rate {
@@ -124,7 +125,7 @@ struct Sample {
 // peaks of the ticks inside it.
 struct WindowContent {
     Counters usage;
-    TaskRows tasks;  // the task ledger's rows a build takes (METRICS 11.10)
+    PerfRows perf;  // the statistics ledger's rows a build takes (METRICS 11.10)
     std::map<SourceKind, Bytes> agentBytes;
     Rate peak;
     double peakCost = 0;
@@ -148,8 +149,10 @@ public:
     WindowContent content(const Sample& sample) const;
     // Builds: the content, then an empty window starting at `sample`.
     WindowContent take(const Sample& sample);
-    // The completions of the current task generation the builds took (METRICS 11.10: the 1000 cap counts the rest).
-    std::int64_t takenCompleted() const { return takenCompleted_; }
+    // The responses and calls of the current statistics generation the builds took (METRICS 11.10: the caps count the
+    // rest).
+    std::int64_t takenResponses() const { return takenResponses_; }
+    std::int64_t takenCalls() const { return takenCalls_; }
 
 private:
     std::shared_ptr<const Counters> baseline_, lastCounters_;
@@ -158,11 +161,11 @@ private:
     Rate peak_;
     double peakCost_ = 0;
     std::optional<traffic::Rate> peakRate_;
-    std::shared_ptr<const TaskRows> taskBaseline_;
-    std::uint64_t taskGeneration_ = 0;
-    std::int64_t lastCompleted_ = 0;
-    std::uint64_t lastTaskGeneration_ = 0;
-    std::int64_t takenCompleted_ = 0;
+    std::shared_ptr<const PerfRows> perfBaseline_;
+    std::uint64_t perfGeneration_ = 0;
+    std::int64_t lastCounted_ = 0;
+    std::uint64_t lastPerfGeneration_ = 0;
+    std::int64_t takenResponses_ = 0, takenCalls_ = 0;
 };
 
 // The report title tracker (METRICS 11.2, REPORTING 6.4): the speed title level 0–13 of DESIGN 1 — entered at a

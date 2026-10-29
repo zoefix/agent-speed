@@ -5,6 +5,7 @@
 #include <memory>
 #include <vector>
 
+#include "agentspeed/actions.hpp"
 #include "agentspeed/antigravity.hpp"
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
@@ -59,6 +60,7 @@ void expectResponse(const ParsedResponse& got, const json::Value& r) {
     EXPECT_EQ(got.key, *r["key"].string());
     EXPECT_EQ(got.startMs, fixtures::optInt(r["startMs"]));
     EXPECT_EQ(got.endMs, *fixtures::optInt(r["endMs"]));
+    EXPECT_EQ(got.firstMs, fixtures::optInt(r["firstMs"]));
     EXPECT_EQ(got.tokens.input, *fixtures::optInt(r["input"]));
     EXPECT_EQ(got.tokens.cachedInput, *fixtures::optInt(r["cachedInput"]));
     EXPECT_EQ(got.tokens.cacheWriteInput, *fixtures::optInt(r["cacheWriteInput"]));
@@ -120,6 +122,9 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         const auto absolute = (fixtures::fixtureDir() / relative).string();
         auto parser = parserFor(relative, absolute, deduper);
         if (!parser) continue;
+        // METRICS 6.10: every action of the file, read with its parser.
+        work::ActionReader actions(absolute, 0);
+        parser->setLineObserver(&actions);
         Collector sink;
         std::int64_t physical = 0;
         auto check = [&] {
@@ -175,13 +180,29 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         const auto responses = want["responses"].elements();
         ASSERT_EQ(sink.order.size(), responses.size());
         for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
+        // `actions` is listed for the files that have them; a file without the key is not checked.
+        const auto wantActions = want["actions"].elements();
+        if (want["actions"].isArray()) {
+            ASSERT_EQ(actions.actions().size(), wantActions.size());
+        }
+        for (std::size_t i = 0; i < wantActions.size(); ++i) {
+            const auto& a = actions.actions()[i];
+            const auto w = wantActions[i];
+            SCOPED_TRACE("action " + std::to_string(i));
+            EXPECT_EQ(a.tool, *w["tool"].string());
+            EXPECT_EQ(a.digest, *w["digest"].string());
+            EXPECT_EQ(a.callMs, *w["callMs"].truncated());
+            EXPECT_EQ(a.resultMs, fixtures::optInt(w["resultMs"]));
+            EXPECT_EQ(a.failed, w["failed"].isBool() ? std::optional<bool>(w["failed"].isTrue()) : std::nullopt);
+            EXPECT_EQ(a.model, fixtures::optString(w["model"]));
+        }
         facts.push_back(parser->link());
         if (auto parent = fixtures::optString(want["parentFile"])) {
             wantParents[absolute] = (fixtures::fixtureDir() / *parent).string();
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 53);
+    EXPECT_EQ(checked, 56);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);

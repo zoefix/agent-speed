@@ -42,6 +42,7 @@ private:
     std::optional<std::string> provider_;
     std::optional<std::int64_t> pendingStartMs_;
     bool streaming_ = false;
+    std::optional<std::int64_t> firstOutputMs_;
     bool sawModernUsage_ = false;
     std::optional<Usage> previousLegacyTotals_;
     // Facts that apply from their time on (EXECUTION-MODES, Codex); also the agent's current facts.

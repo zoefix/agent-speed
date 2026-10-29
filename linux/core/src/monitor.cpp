@@ -57,6 +57,7 @@ Monitor::Monitor(MonitorConfig config)
     : config_(std::move(config)), environment_(processEnvironment()), home_(userHome(environment_)),
       store_(std::make_unique<Store>()), epoch_(nextEpoch()) {
     store_->setEnabled(&config_.enabled);
+    store_->setPerfLedger(&perfLedger_);
     if (!config_.prices) config_.prices = std::make_shared<pricing::PriceBook>();
     zone_ = localZone(environment_);
     store_->setPricing(config_.prices, zone_);
@@ -107,6 +108,7 @@ void Monitor::refreshAvailability() {
 }
 
 void Monitor::start(std::int64_t nowMs, std::int64_t todayStartMs) {
+    clockMs_ = nowMs;
     store_->setClock(nowMs);
     seedRoots(todayStartMs);
     seedSources(todayStartMs);
@@ -119,9 +121,9 @@ Monitor::Tracked& Monitor::track(std::size_t root, const std::string& path) {
     file->root = root;
     file->tailer = makeTailer(roots_[root].family, path);
     file->parser = makeParser(roots_[root].family, path, roots_[root].path, deduper_);
-    if (tasks::isScoredSource(file->parser->source())) {
-        file->tasks = std::make_unique<tasks::TaskTracker>(path, file->parser->source());
-        file->parser->setLineObserver(file->tasks.get());
+    if (work::hasActions(file->parser->source())) {
+        file->actions = makeActions(path, file->parser->source());
+        file->parser->setLineObserver(file->actions.get());
     }
     auto& ref = *file;
     files_[path] = std::move(file);
@@ -194,12 +196,12 @@ bool Monitor::readLive(Tracked& file, bool seeded) {
     const auto version = file.parser->version();
     const auto path = file.tailer->path();
     store_->setSeeding(seeded);
-    // Seeding composes tasks but adds no work-signal actions (METRICS 6.10 Storage).
-    if (file.tasks) file.tasks->setLive(!seeded);
+    // Seeded actions count for the performance score, not for the work signals (METRICS 6.10 Storage).
+    if (file.actions) file.actions->setSeeding(seeded);
     try {
         const auto result = file.tailer->read(*file.parser, *store_);
         store_->setSeeding(false);
-        if (file.tasks) file.tasks->setLive(true);
+        if (file.actions) file.actions->setSeeding(false);
         if (auto* whole = dynamic_cast<WholeFileTailer*>(file.tailer.get()); whole && whole->oversized()) partialHistory_ = true;
         if (auto* grok = dynamic_cast<GrokParser*>(file.parser.get()); grok && grok->pendingOverflow()) partialHistory_ = true;
         file.knownLength = result.length;
@@ -209,10 +211,12 @@ bool Monitor::readLive(Tracked& file, bool seeded) {
         return result.bytesRead > 0 || result.wasReset || file.parser->version() != version;
     } catch (const FileGone&) {
         store_->setSeeding(false);
+        if (file.actions) file.actions->setSeeding(false);
         remove(path);
         return true;
     } catch (const std::exception&) {
         store_->setSeeding(false);
+        if (file.actions) file.actions->setSeeding(false);
         file.unreadable = true;
         return false;
     }
@@ -307,6 +311,7 @@ std::optional<std::pair<std::int64_t, std::int64_t>> Monitor::stampOf(const Trac
 
 bool Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
     store_->setClock(nowMs);
+    clockMs_ = nowMs;
     bool changed = pollRecent(nowMs);
     changed = refreshSources(false, nowMs, todayStartMs) || changed;
     if (nowMs - lastRediscoveryMs_ >= kRediscoveryMs) {

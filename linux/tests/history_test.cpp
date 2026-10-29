@@ -63,6 +63,43 @@ SourceLocations locationsIn(const std::string& copy) {
     return l;
 }
 
+// METRICS 6.11 Reading: a day's record of a (source, model) is the sum over files; by day, source order, model bytes.
+std::vector<perf::DayRecord> summed(const std::vector<perf::DayRecord>& records) {
+    std::map<std::tuple<std::string, SourceKind, std::string>, perf::Record> sums;
+    for (const auto& r : records) sums[{r.day, r.source, r.model}].add(r.record);
+    std::vector<perf::DayRecord> out;
+    for (const auto& [key, record] : sums) out.push_back({std::get<0>(key), std::get<1>(key), std::get<2>(key), record});
+    return out;
+}
+
+void expectPerf(const std::vector<perf::DayRecord>& got, const json::Value& want) {
+    const auto rows = want.elements();
+    ASSERT_EQ(got.size(), rows.size());
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        const auto& g = got[i];
+        const auto& w = rows[i];
+        SCOPED_TRACE(*w["day"].string() + " " + *w["source"].string() + " " + *w["model"].string());
+        EXPECT_EQ(g.day, *w["day"].string());
+        EXPECT_EQ(sourceId(g.source), *w["source"].string());
+        EXPECT_EQ(g.model, *w["model"].string());
+        const auto& r = g.record;
+        EXPECT_EQ(r.n, *fixtures::optInt(w["n"]));
+        EXPECT_EQ(r.outputSum, *fixtures::optInt(w["outputSum"]));
+        EXPECT_EQ(r.durationMsSum, *fixtures::optInt(w["durationMsSum"]));
+        for (std::size_t k = 0; k < r.latencyBins.size(); ++k) EXPECT_EQ(r.latencyBins[k], *fixtures::optInt(w["latencyBins"].at(static_cast<std::uint32_t>(k)))) << k;
+        EXPECT_EQ(r.reasonN, *fixtures::optInt(w["reasonN"]));
+        EXPECT_EQ(r.reasonOutput, *fixtures::optInt(w["reasonOutput"]));
+        EXPECT_EQ(r.reasonDurationMsSum, *fixtures::optInt(w["reasonDurationMsSum"]));
+        EXPECT_EQ(r.cacheN, *fixtures::optInt(w["cacheN"]));
+        EXPECT_EQ(r.cacheInput, *fixtures::optInt(w["cacheInput"]));
+        EXPECT_EQ(r.cacheCached, *fixtures::optInt(w["cacheCached"]));
+        EXPECT_EQ(r.toolN, *fixtures::optInt(w["toolN"]));
+        EXPECT_NEAR(r.toolLnSum, *w["toolLnSum"].number(), 1e-9);
+        EXPECT_EQ(r.toolFailed, *fixtures::optInt(w["toolFailed"]));
+        EXPECT_EQ(r.activeMs, *fixtures::optInt(w["activeMs"]));
+    }
+}
+
 void expectOptional(const std::optional<std::int64_t>& got, const json::Value& want, const char* what) {
     SCOPED_TRACE(what);
     if (want.isNull()) {
@@ -150,7 +187,9 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
         }
     }
 
-    // Unchanged files are skipped, and a reopened store gives the same days.
+    expectPerf(summed(analyzer.perfRecords()), expected.root()["perf"]);
+
+    // Unchanged files are skipped, and a reopened store gives the same days and performance records.
     const auto again = analyzer.run(locationsIn(copy), enabled, TimeZone::utc(), "UTC");
     EXPECT_EQ(again.filesPlanned, 0);
     store.reset();
@@ -163,43 +202,6 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
         EXPECT_EQ(reread[i].totals.costMicroUsd, days[i].totals.costMicroUsd);
         EXPECT_EQ(reread[i].totals.agents, days[i].totals.agents);
     }
+    expectPerf(summed(second.perfRecords()), expected.root()["perf"]);
     fs::remove_all(temp);
-}
-
-TEST(History, TaskRecordsAreStoredAndReloaded) {
-    const auto temp = makeTemp();
-    fs::copy(fixtures::fixtureDir() / "tasks", temp / "tasks", fs::copy_options::recursive);
-    const auto copy = fsx::normalize((temp / "tasks").string());
-    SourceLocations l;
-    l.codexRoot = copy + "/codex/sessions";
-    l.claudeRoot = copy + "/claude/projects";
-    l.droidRoot = droid::defaultRoot(copy + "/droid");
-    const std::set<SourceKind> enabled = {SourceKind::Codex, SourceKind::ClaudeCode, SourceKind::ClaudeDesktop, SourceKind::Droid};
-    std::vector<tasks::TaskRecord> first;
-    {
-        auto store = Store::open((temp / "store" / "history.sqlite").string());
-        Analyzer analyzer(*store, std::make_shared<pricing::PriceBook>());
-        analyzer.run(l, enabled, TimeZone::utc(), "UTC");
-        first = analyzer.taskRecords();
-    }
-    ASSERT_GT(first.size(), 50u);
-    EXPECT_TRUE(std::any_of(first.begin(), first.end(), [](const tasks::TaskRecord& r) { return r.score && !r.snapshots.empty(); }));
-    auto store = Store::open((temp / "store" / "history.sqlite").string());
-    Analyzer reopened(*store, std::make_shared<pricing::PriceBook>());
-    const auto again = reopened.taskRecords();
-    ASSERT_EQ(again.size(), first.size());
-    for (std::size_t i = 0; i < first.size(); ++i) {
-        EXPECT_EQ(again[i].agentId, first[i].agentId);
-        EXPECT_EQ(again[i].ordinal, first[i].ordinal);
-        EXPECT_EQ(again[i].source, first[i].source);
-        EXPECT_EQ(again[i].model, first[i].model);
-        EXPECT_EQ(again[i].effort, first[i].effort);
-        EXPECT_EQ(again[i].day, first[i].day);
-        EXPECT_EQ(again[i].state, first[i].state);
-        EXPECT_EQ(again[i].score, first[i].score);
-        EXPECT_EQ(again[i].counts.fixFailures, first[i].counts.fixFailures);
-        EXPECT_EQ(again[i].snapshots, first[i].snapshots);
-        EXPECT_EQ(again[i].fixRows, first[i].fixRows);
-        EXPECT_EQ(again[i].firstPassMs, first[i].firstPassMs);
-    }
 }

@@ -1,7 +1,6 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
-pkg_check_modules(PCRE2 REQUIRED IMPORTED_TARGET libpcre2-8)
 pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
@@ -26,6 +25,7 @@ add_custom_command(
 add_library(agentspeed_core STATIC
     "${AGENTSPEED_PRICES_CPP}"
     "${AGENTSPEED_CURRENCIES_CPP}"
+    src/actions.cpp
     src/antigravity.cpp
     src/board.cpp
     src/claude_parser.cpp
@@ -60,6 +60,8 @@ add_library(agentspeed_core STATIC
     src/opencode.cpp
     src/parents.cpp
     src/path_text.cpp
+    src/perf.cpp
+    src/perf_history.cpp
     src/pi_parser.cpp
     src/price_book.cpp
     src/price_validator.cpp
@@ -71,8 +73,8 @@ add_library(agentspeed_core STATIC
     src/report/reply.cpp
     src/report/scheduler.cpp
     src/report/service.cpp
+    src/report/perf.cpp
     src/report/stream.cpp
-    src/report/task.cpp
     src/report/values.cpp
     src/report/window.cpp
     src/report/body.cpp
@@ -80,22 +82,6 @@ add_library(agentspeed_core STATIC
     src/report/usernames.cpp
     src/rfc3339.cpp
     src/tailer.cpp
-    src/tasks/code_mode.cpp
-    src/tasks/command.cpp
-    src/tasks/common.cpp
-    src/task_eval.cpp
-    src/task_events.cpp
-    src/task_model.cpp
-    src/task_score.cpp
-    src/task_tracker.cpp
-    src/tasks/edits.cpp
-    src/tasks/failures.cpp
-    src/tasks/pcre.cpp
-    src/tasks/recognizers.cpp
-    src/tasks/programs.cpp
-    src/tasks/results.cpp
-    src/tasks/scripts.cpp
-    src/tasks/shell_words.cpp
     src/traffic.cpp
     src/traffic_linux.cpp
     src/traffic_service.cpp
@@ -109,4 +95,4 @@ add_library(agentspeed_core STATIC
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)
-target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::PCRE2 PkgConfig::ICU)
+target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::ICU)

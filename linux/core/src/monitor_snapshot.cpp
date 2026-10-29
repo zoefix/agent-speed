@@ -21,68 +21,65 @@ constexpr std::int64_t kListHorizonMs = 600'000;
 
 }  // namespace
 
-const tasks::TaskTracker* Monitor::trackerOf(const std::string& id) const {
-    if (const auto it = files_.find(id); it != files_.end()) return it->second->tasks.get();
-    if (const auto it = windowTasks_.find(id); it != windowTasks_.end()) return it->second.get();
+work::ActionReader* Monitor::actionsOf(const std::string& id) const {
+    if (const auto it = files_.find(id); it != files_.end()) return it->second->actions.get();
+    if (const auto it = windowActions_.find(id); it != windowActions_.end()) return it->second.get();
     return nullptr;
 }
 
-// METRICS 6.9–6.11: the listed agents' task scores, predictions, work signals and thinking, then the score sets.
-void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
-                         std::int64_t nowMs) {
+std::unique_ptr<work::ActionReader> Monitor::makeActions(const std::string& id, SourceKind source) {
+    auto reader = std::make_unique<work::ActionReader>(id);
+    reader->setResultHandler([this, id, source](const work::Action& action) {
+        if (!config_.enabled.contains(source)) return;
+        const report::ModelKey key{store_->reportModelId(action.model, store_->providerOf(id)), source};
+        perfLedger_.call(id, key, action, clockMs_, action.seeded);
+    });
+    return reader;
+}
+
+// METRICS 6.9, 6.10: the listed agents' performance scores, work signals and thinking, then the sets and board groups.
+void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
+                          std::int64_t nowMs) {
     const auto thinking = engine::thinking(recent, agents, nowMs);
     lastThinking_ = thinking;
-    std::vector<tasks::AgentRow> rows;
-    std::set<std::string> present;
+    std::map<std::string, std::vector<const engine::Response*>> byAgent;
+    for (const auto& r : recent) byAgent[r.agentId].push_back(&r);
+    static const std::deque<work::Action> kNoActions;
+    std::map<std::string, perf::Valued> values;
     for (auto& row : snap.agents) {
         if (const auto it = thinking.perAgent.find(row.id); it != thinking.perAgent.end()) {
             row.liveThinking = it->second.liveThinking();
             row.thinkingShare = it->second.thinkingShare();
         }
-        const auto* tracker = trackerOf(row.id);
-        if (!tracker) continue;
-        present.insert(row.id);
         const auto& info = agents_.at(row.id);
-        const auto phase = tasks::effectivePhase(info.phase, info.lastLineMs, nowMs);
-        auto& cached = taskCache_[row.id];
-        const auto version = tracker->composer().version();
-        if (cached.events != version || cached.models != taskModelsVersion_ || cached.phase != phase || cached.parent != row.parentId ||
-            cached.future) {
-            const auto models = taskModels_.find(info.source);
-            const tasks::ScoredAgent scored{row.id, info.source, phase, info.lastLineMs, row.parentId, &tracker->composer().events()};
-            cached.row = tasks::agentRow(scored, nowMs, models == taskModels_.end() ? tasks::priorModels() : models->second);
-            cached.events = version;
-            cached.models = taskModelsVersion_;
-            cached.phase = phase;
-            cached.parent = row.parentId;
-            cached.future = false;
-            for (const auto& e : tracker->composer().events()) {
-                if (e.t > nowMs || (e.outcome && e.outcome->t && *e.outcome->t > nowMs)) cached.future = true;
-            }
+        const auto* reader = actionsOf(row.id);
+        const auto& actions = reader ? reader->actions() : kNoActions;
+        AgentPerf value;
+        value.score = perf::evaluate(info.source, info.phase, info.lastLineMs, byAgent[row.id], actions, nowMs);
+        if (value.score.score) {
+            const auto baseline = perfBaselines_.find({info.source, value.score.model.value_or("")});
+            perf::applyBaseline(value.score, baseline == perfBaselines_.end() ? std::nullopt : std::optional<double>(baseline->second));
         }
-        cached.row.agent.lastLineMs = info.lastLineMs;
-        row.task = AgentTask{cached.row.value,       cached.row.task,   cached.row.taskStartMs,
-                             cached.row.predictions, cached.row.models, work::signalsOf(tracker->actions().actions(), nowMs)};
-        rows.push_back(cached.row);
+        value.workSignals = work::signalsOf(actions, nowMs);
+        values[row.id] = {row.id, info.lastLineMs, value.score.form, value.score.score};
+        row.perf = std::move(value);
     }
-    std::erase_if(taskCache_, [&](const auto& entry) { return !present.contains(entry.first) && !agents_.contains(entry.first); });
 
-    const auto values = tasks::setValues(rows, nowMs, scoreSets_);
-    for (std::size_t i = 0; i < scoreSets_.size(); ++i) {
-        const auto& sources = scoreSets_[i];
-        const auto inSet = [&](SourceKind kind) {
-            return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end();
-        };
+    for (const auto& sources : scoreSets_) {
+        const auto inSet = [&](SourceKind kind) { return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end(); };
         ScoreSet set;
         set.sources = sources;
-        set.value = values.sets[i].value;
-        for (const auto& r : rows) {
-            if (!inSet(r.agent.source)) continue;
-            if (set.value.form != "none" && r.value.form == set.value.form) ++set.scored;
-            if (set.value.agent && r.agent.id == *set.value.agent) set.state = r.value.state;
-        }
+        std::vector<perf::Valued> members;
         for (const auto& a : snap.agents) {
-            if (inSet(a.source) && a.phase == Phase::Generating) set.generating = true;
+            if (!inSet(a.source)) continue;
+            members.push_back(values[a.id]);
+            if (a.phase == Phase::Generating) set.generating = true;
+        }
+        set.value = perf::highest(members);
+        for (const auto& a : snap.agents) {
+            if (!inSet(a.source) || !a.perf) continue;
+            if (set.value.form != perf::Form::None && a.perf->score.form == set.value.form) ++set.scored;
+            if (set.value.agent && a.id == *set.value.agent) set.provisional = a.perf->score.provisional;
         }
         engine::ThinkingWindow window = thinking.total;
         if (sources) {
@@ -100,73 +97,24 @@ void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& re
         set.thinkingShare = window.thinkingShare();
         snap.scoreSets.push_back(std::move(set));
     }
-    snap.scoreGroups = values.groups;
+
+    std::vector<engine::Agent> listed;
+    for (const auto& a : snap.agents) {
+        engine::Agent agent;
+        agent.id = a.id;
+        agent.source = a.source;
+        agent.parentId = a.parentId;
+        listed.push_back(std::move(agent));
+    }
+    for (const auto& [root, members] : engine::boardGroups(listed)) {
+        std::vector<perf::Valued> group;
+        for (const auto& id : members) group.push_back(values[id]);
+        snap.scoreGroups.push_back({root, members, perf::highest(group)});
+    }
 }
 
 // METRICS 11.2: agents of the 6.7 base set (staleness applied, no ancestor closure) per source, generating agents per
 // reported model id, and the report ledger (copied only after a change).
-// METRICS 11.10 Counting: a watched task is counted once, when a later task of its agent exists or its agent has been
-// quiet for 30 minutes, under the report id of its model and its agent's source.
-void Monitor::countTasks(std::int64_t nowMs) {
-    constexpr std::int64_t kCompleteIdleMs = 30 * 60'000;
-    const auto visit = [&](const std::string& id, const tasks::TaskTracker& tracker) {
-        const auto info = agents_.find(id);
-        if (info == agents_.end() || !config_.enabled.contains(info->second.source)) return;
-        auto& seen = taskSeen_[id];
-        const auto& composer = tracker.composer();
-        if (composer.version() != seen.version) {
-            seen.version = composer.version();
-            std::vector<std::int64_t> starts;
-            for (const auto& task : tasks::splitTasks(composer.events())) {
-                starts.push_back(task.startMs);
-                if (std::find(seen.starts.begin(), seen.starts.end(), task.startMs) == seen.starts.end())
-                    taskLedger_.start(id + "#" + std::to_string(task.startMs), task.startMs, nowMs);
-            }
-            seen.starts = std::move(starts);
-        }
-        const auto lastLine = info->second.lastLineMs.value_or(0);
-        std::vector<std::size_t> due;
-        for (std::size_t i = 0; i < seen.starts.size(); ++i) {
-            if (!taskLedger_.watched(id + "#" + std::to_string(seen.starts[i]))) continue;
-            if (i + 1 < seen.starts.size() || nowMs - lastLine >= kCompleteIdleMs) due.push_back(i);
-        }
-        if (due.empty()) return;
-        const auto records = tasks::taskRecords(composer.events(), nowMs, lastLine, composer.models());
-        for (const auto i : due) {
-            const auto start = seen.starts[i];
-            const auto record = std::find_if(records.begin(), records.end(), [&](const tasks::TaskRecord& r) { return r.startMs == start; });
-            std::optional<report::TaskRow> row;
-            std::string modelId = store_->reportModelId(std::nullopt, std::nullopt);
-            if (record != records.end()) {
-                report::TaskOutcome outcome;
-                outcome.actions = record->counts.actions;
-                outcome.score = record->score;
-                outcome.success = record->success;
-                outcome.stalled = record->stalled;
-                outcome.fixAttempts = record->counts.fixAttempts;
-                outcome.fixFailures = record->counts.fixFailures;
-                outcome.recovered = record->counts.recovered;
-                outcome.recoverAttempts = record->counts.recoverAttempts;
-                row = report::recordRow(outcome);
-                modelId = store_->reportModelId(record->model, store_->providerOf(id));
-            }
-            taskLedger_.complete(id + "#" + std::to_string(start), {modelId, info->second.source}, row);
-        }
-    };
-    for (const auto& [path, file] : files_)
-        if (file->tasks) visit(path, *file->tasks);
-    for (const auto& [id, tracker] : windowTasks_) visit(id, *tracker);
-    for (auto it = taskSeen_.begin(); it != taskSeen_.end();) {
-        if (agents_.contains(it->first)) {
-            ++it;
-            continue;
-        }
-        // An agent whose file went away: its tasks are unwatched.
-        for (const auto start : it->second.starts) taskLedger_.drop(it->first + "#" + std::to_string(start));
-        it = taskSeen_.erase(it);
-    }
-}
-
 report::Facts Monitor::reportFacts(std::int64_t nowMs, const Snapshot& snap) {
     report::Facts facts;
     for (const auto& [id, info] : agents_) {
@@ -191,23 +139,24 @@ report::Facts Monitor::reportFacts(std::int64_t nowMs, const Snapshot& snap) {
     facts.counters = reportCounters_;
     facts.epoch = epoch_;
     // METRICS 11.10: the agents list's values under their current model's report id, the thinking sums, the ledger.
-    auto tasks = std::make_shared<report::TaskFacts>();
+    auto perf = std::make_shared<report::PerfFacts>();
     for (const auto& row : snap.agents) {
-        if (!row.task || row.task->value.form == "none" || !row.task->value.score) continue;
-        tasks->agents.push_back({row.source, store_->reportModelId(row.model, store_->providerOf(row.id)), row.task->value.form, row.task->value.score});
+        if (!row.perf || !row.perf->score.score) continue;
+        perf->agents.push_back({row.source, store_->reportModelId(row.model, store_->providerOf(row.id)), row.perf->score.form, row.perf->score.score});
     }
-    tasks->thinking = lastThinking_.total.liveThinking();
+    perf->thinking = lastThinking_.total.liveThinking();
     for (const auto& [model, window] : lastThinking_.perModel)
-        tasks->modelThinking[store_->reportModelId(model.empty() ? std::nullopt : std::optional<std::string>(model), std::nullopt)] += window.liveThinking();
-    countTasks(nowMs);
-    if (taskLedger_.version() != taskRowsVersion_) {
-        taskRows_ = std::make_shared<const report::TaskRows>(taskLedger_.rows());
-        taskRowsVersion_ = taskLedger_.version();
+        perf->modelThinking[store_->reportModelId(model.empty() ? std::nullopt : std::optional<std::string>(model), std::nullopt)] += window.liveThinking();
+    if (perfLedger_.version() != perfRowsVersion_) {
+        perfRows_ = std::make_shared<const report::PerfRows>(perfLedger_.rows());
+        perfRowsVersion_ = perfLedger_.version();
     }
-    tasks->rows = taskRows_;
-    tasks->generation = taskLedger_.generation();
-    tasks->completed = taskLedger_.completed();
-    facts.tasks = tasks;
+    perf->rows = perfRows_;
+    perf->generation = perfLedger_.generation();
+    perf->responses = perfLedger_.responses();
+    perf->calls = perfLedger_.calls();
+    perf->counted = perf->responses + perf->calls;
+    facts.perf = perf;
     return facts;
 }
 
@@ -295,7 +244,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         snap.agents.push_back(std::move(row));
     }
 
-    scoreTasks(snap, recent, agents, nowMs);
+    scoreAgents(snap, recent, agents, nowMs);
     snap.traffic = traffic_->view(nowMs);
     snap.report = reportFacts(nowMs, snap);
 

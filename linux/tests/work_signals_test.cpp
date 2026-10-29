@@ -1,6 +1,6 @@
 #include <gtest/gtest.h>
 
-#include "agentspeed/task_events.hpp"
+#include "agentspeed/actions.hpp"
 #include "agentspeed/work_signals.hpp"
 #include "fixture_support.hpp"
 
@@ -13,14 +13,19 @@ TEST(WorkSignals, MatchTheReferenceCases) {
         const auto compact = fixtures::compactJson(c["input"]);
         json::Document doc;
         ASSERT_TRUE(doc.parse(compact));
-        EXPECT_EQ(tasks::inputDigest(doc.root()), *c["expect"].string()) << compact;
+        EXPECT_EQ(work::inputDigest(doc.root()), *c["expect"].string()) << compact;
     }
     for (const auto& c : cases.root()["signals"].elements()) {
         SCOPED_TRACE(*c["name"].string());
         std::deque<work::Action> actions;
         for (const auto& a : c["actions"].elements()) {
             const auto failed = a["failed"].isBool() ? std::optional<bool>(a["failed"].isTrue()) : std::nullopt;
-            actions.push_back({*a["at"].truncated(), *a["tool"].string(), *a["digest"].string(), failed, 0});
+            work::Action action;
+            action.callMs = *a["at"].truncated();
+            action.tool = *a["tool"].string();
+            action.digest = *a["digest"].string();
+            action.failed = failed;
+            actions.push_back(std::move(action));
         }
         const auto got = work::signalsOf(actions, *c["nowMs"].truncated());
         const auto w = c["expect"];
@@ -42,13 +47,13 @@ TEST(WorkSignals, MatchTheReferenceCases) {
             const auto compact = fixtures::compactJson(line.at(1));
             json::Document doc;
             ASSERT_TRUE(doc.parse(compact));
-            log.feed(formats.at(*c["format"].string()), doc.root(), *line.at(0).truncated());
+            log.record(work::toolEvents(formats.at(*c["format"].string()), doc.root()), *line.at(0).truncated(), std::nullopt);
         }
         const auto want = c["expect"].elements();
         ASSERT_EQ(log.actions().size(), want.size());
         for (std::size_t i = 0; i < want.size(); ++i) {
             const auto& a = log.actions()[i];
-            EXPECT_EQ(a.at, *want[i]["at"].truncated());
+            EXPECT_EQ(a.callMs, *want[i]["at"].truncated());
             EXPECT_EQ(a.tool, *want[i]["tool"].string());
             EXPECT_EQ(a.digest, *want[i]["digest"].string());
             EXPECT_EQ(a.failed, want[i]["failed"].isBool() ? std::optional<bool>(want[i]["failed"].isTrue()) : std::nullopt);

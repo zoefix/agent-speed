@@ -16,18 +16,16 @@ add_executable(agentspeed_tests
     money_test.cpp
     monitor_test.cpp
     parser_fixture_test.cpp
+    perf_score_test.cpp
     pricing_test.cpp
     report_body_test.cpp
+    report_perf_test.cpp
     report_profile_test.cpp
     report_scheduler_test.cpp
     report_service_test.cpp
     report_stream_test.cpp
-    report_task_test.cpp
     report_test.cpp
     rfc3339_test.cpp
-    task_e2e_test.cpp
-    task_parser_test.cpp
-    task_score_test.cpp
     traffic_test.cpp
     work_signals_test.cpp
 )
