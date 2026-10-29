@@ -1,0 +1,1446 @@
+<!doctype html>
+<html lang="zh-Hant">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Performance Score Prototype</title>
+<style>
+/* Performance score (性能) prototype: the visual reference of DESIGN §12 and every surface that shows 性能. */
+:root {
+  --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "PingFang TC",
+        "Microsoft JhengHei UI", system-ui, sans-serif;
+  --disp: "SF Pro Display", -apple-system, BlinkMacSystemFont, "Segoe UI Variable Display", "Segoe UI", "PingFang TC",
+        system-ui, sans-serif;
+  --mono: "SF Mono", ui-monospace, "Cascadia Mono", Consolas, monospace;
+  --spring: cubic-bezier(.2, .8, .2, 1);
+}
+html[lang="zh-Hans"] { --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "PingFang SC", "Microsoft YaHei UI", system-ui, sans-serif; }
+html[lang="ja"] { --ui: -apple-system, BlinkMacSystemFont, "SF Pro Text", "Segoe UI Variable Text", "Segoe UI", "Hiragino Sans", "Yu Gothic UI", system-ui, sans-serif; }
+
+* { box-sizing: border-box; }
+html, body { margin: 0; }
+body { font-family: var(--ui); background: #0c0d11; color: #e9eaf0; -webkit-font-smoothing: antialiased; }
+button { font: inherit; }
+.tnum { font-variant-numeric: tabular-nums; }
+
+/* ── Themes ───────────────────────────────────────────────────────────────────────────── */
+[data-theme="dark"] {
+  color-scheme: dark;
+  --desk: #121318;
+  --ink: rgba(255,255,255,.92); --ink-2: rgba(235,235,245,.64); --ink-3: rgba(235,235,245,.36);
+  --cap: rgba(235,235,245,.56);
+  --line: rgba(255,255,255,.09); --line-2: rgba(255,255,255,.14);
+  --fill: rgba(255,255,255,.055); --fill-2: rgba(255,255,255,.1);
+  --panel: #2b2b2e; --panel-line: rgba(255,255,255,.1);
+  --card-bg: rgba(38,38,42,.9); --card-line: rgba(255,255,255,.12);
+  --card-shadow: 0 22px 56px rgba(0,0,0,.55), 0 2px 10px rgba(0,0,0,.35);
+  --score: #93A4D6; --track: rgba(255,255,255,.09);
+  --pearl-a: #C7D2FE; --pearl-b: #F5D0FE; --pearl-c: #A5F3FC;
+  --mint-ink: #6EE7B7; --mint-bg: rgba(52,211,153,.14);
+  --amber: #F5A524;
+  --win: #1e1e20; --win-card: rgba(255,255,255,.045); --win-bar: #2a2a2d; --row-2: rgba(255,255,255,.03); --sel: rgba(120,140,200,.2);
+  --orb-g1: #1b1e29; --orb-g2: #08090d; --orb-rim: rgba(255,255,255,.14); --led-off: rgba(150,170,210,.13);
+  --orb-num: rgba(255,255,255,.78); --orb-unit: rgba(255,255,255,.5); --orb-value: #fff;
+  --bar-bg: rgba(28,28,30,.72); --bar-ink: rgba(255,255,255,.92); --bar-ink-2: rgba(255,255,255,.55);
+  --tb-bg: rgba(32,32,32,.86); --tb-ink: #fff; --tb-ink-2: rgba(255,255,255,.62);
+  --board-bg: rgba(16,18,28,.58); --board-line: rgba(255,255,255,.16);
+  --b-ink: rgba(244,246,252,.96); --b-ink-2: rgba(232,236,245,.66); --b-ink-3: rgba(226,230,242,.38); --b-line-2: rgba(255,255,255,.14);
+  --led: #EAF2FF; --mind: #CFE0FF; --unlit: rgba(140,170,255,.16); --ghost: rgba(160,190,255,.075); --n-ink-3: rgba(214,224,255,.36);
+  --slab-2: #12151D; --block: #1B1F2A; --block-ink: #E8ECF5; --t-ink: #F5F7FB; --t-line: rgba(255,255,255,.1);
+  --focus: #8fb2ff;
+}
+[data-theme="light"] {
+  color-scheme: light;
+  --desk: #e6e8ee;
+  --ink: rgba(0,0,0,.86); --ink-2: rgba(60,60,67,.76); --ink-3: rgba(60,60,67,.42);
+  --cap: rgba(60,60,67,.72);
+  --line: rgba(0,0,0,.08); --line-2: rgba(0,0,0,.12);
+  --fill: rgba(0,0,0,.04); --fill-2: rgba(0,0,0,.075);
+  --panel: #f0f0f2; --panel-line: rgba(0,0,0,.09);
+  --card-bg: rgba(251,251,253,.93); --card-line: rgba(0,0,0,.09);
+  --card-shadow: 0 22px 50px rgba(24,28,44,.2), 0 2px 8px rgba(24,28,44,.1);
+  --score: #4B5FA6; --track: rgba(0,0,0,.07);
+  --pearl-a: #6D7CF0; --pearl-b: #C05BD9; --pearl-c: #1AA3C4;
+  --mint-ink: #047857; --mint-bg: rgba(16,185,129,.12);
+  --amber: #B86E00;
+  --win: #f5f5f7; --win-card: rgba(0,0,0,.035); --win-bar: #ececee; --row-2: rgba(0,0,0,.025); --sel: rgba(60,90,180,.12);
+  --orb-g1: #ffffff; --orb-g2: #dfe3ec; --orb-rim: rgba(0,0,0,.1); --led-off: rgba(40,50,90,.12);
+  --orb-num: rgba(11,13,18,.76); --orb-unit: rgba(0,0,0,.5); --orb-value: #0b0d12;
+  --bar-bg: rgba(246,246,248,.78); --bar-ink: rgba(0,0,0,.86); --bar-ink-2: rgba(0,0,0,.5);
+  --tb-bg: rgba(243,243,243,.9); --tb-ink: #000; --tb-ink-2: rgba(0,0,0,.6);
+  --board-bg: rgba(255,255,255,.56); --board-line: rgba(0,0,0,.08);
+  --b-ink: rgba(17,20,30,.94); --b-ink-2: rgba(30,36,52,.66); --b-ink-3: rgba(30,36,52,.40); --b-line-2: rgba(0,0,0,.11);
+  --led: #141A33; --mind: #3D4F9A; --unlit: rgba(20,30,80,.14); --ghost: rgba(20,30,80,.06); --n-ink-3: rgba(10,13,24,.40);
+  --slab-2: #F1F3F7; --block: #E6E9F0; --block-ink: #1A1E28; --t-ink: #0E1118; --t-line: rgba(0,0,0,.1);
+  --focus: #2f5bd8;
+}
+[data-theme] { color: var(--ink); }
+/* Increase Contrast preview (DESIGN §12 Colors). */
+.hc [data-theme] { --ink-3: var(--ink-2); --cap: var(--ink-2); --track: color-mix(in srgb, var(--ink) 25%, transparent);
+  --pearl-a: var(--ink); --pearl-b: var(--ink); --pearl-c: var(--ink); --score: var(--ink); --b-ink-3: var(--b-ink-2); }
+
+/* ── Page chrome ──────────────────────────────────────────────────────────────────────── */
+.pg-top { position: sticky; top: 0; z-index: 50; display: flex; flex-wrap: wrap; align-items: center; gap: 10px 16px;
+  padding: 12px 24px; background: rgba(12,13,17,.8); border-bottom: 1px solid rgba(255,255,255,.08);
+  backdrop-filter: blur(18px) saturate(150%); -webkit-backdrop-filter: blur(18px) saturate(150%); }
+.pg-top h1 { margin: 0; font-size: 13.5px; font-weight: 650; letter-spacing: .01em; }
+.pg-top h1 small { display: block; margin-top: 2px; font-size: 11px; font-weight: 500; color: rgba(235,235,245,.5); }
+.pg-top .spacer { flex: 1; }
+.seg { display: inline-flex; gap: 1px; padding: 2px; border-radius: 9px; background: rgba(255,255,255,.06); }
+.seg button, .pg-btn { color: rgba(235,235,245,.72); background: none; border: 0; padding: 5px 10px; border-radius: 7px;
+  font-size: 12.5px; cursor: pointer; transition: background .15s, color .15s; white-space: nowrap; }
+.seg button:hover, .pg-btn:hover { color: #fff; }
+.seg button[aria-pressed="true"] { background: rgba(255,255,255,.14); color: #fff; }
+.pg-btn { border: 1px solid rgba(255,255,255,.12); }
+.pg-check { display: inline-flex; align-items: center; gap: 6px; font-size: 12.5px; color: rgba(235,235,245,.75); cursor: pointer; }
+.pg-top :focus-visible { outline: 2px solid #8fb2ff; outline-offset: 1px; }
+main { padding: 8px 24px 72px; }
+.sec { margin: 36px auto 0; max-width: 1400px; }
+.sec-head { display: flex; align-items: baseline; gap: 14px; margin: 0 4px 12px; flex-wrap: wrap; }
+.sec-head h2 { margin: 0; white-space: nowrap; font-size: 17px; font-weight: 650; letter-spacing: .01em; color: #f2f3f8; }
+.sec-head p { margin: 0; font-size: 12.5px; line-height: 1.5; color: rgba(235,235,245,.55); max-width: 940px; }
+.pair { display: grid; grid-template-columns: repeat(var(--cols, 2), minmax(0, 1fr)); gap: 16px; }
+.pair.one { --cols: 1; }
+body[data-view="dark"] .pair, body[data-view="light"] .pair { --cols: 1; }
+body[data-view="dark"] .theme-col[data-theme="light"], body[data-view="light"] .theme-col[data-theme="dark"] { display: none; }
+.theme-col { position: relative; border-radius: 18px; padding: 22px; background: var(--desk); overflow: hidden; min-width: 0; isolation: isolate; }
+.theme-col > .col-tag { position: absolute; top: 10px; right: 14px; font-size: 10.5px; font-weight: 600; letter-spacing: .08em;
+  text-transform: uppercase; color: var(--ink-3); }
+.wall { position: absolute; inset: 0; z-index: -1; pointer-events: none; }
+[data-theme="dark"] .wall { background: radial-gradient(700px 420px at 12% 18%, rgba(88,58,170,.30), transparent 62%),
+  radial-gradient(640px 400px at 88% 80%, rgba(18,120,140,.24), transparent 60%), var(--desk); }
+[data-theme="light"] .wall { background: radial-gradient(700px 420px at 12% 18%, rgba(160,140,255,.26), transparent 62%),
+  radial-gradient(640px 400px at 88% 80%, rgba(90,200,220,.22), transparent 60%), var(--desk); }
+.tag { font-size: 10.5px; font-weight: 650; letter-spacing: .07em; text-transform: uppercase; color: var(--ink-2); margin: 0 0 8px 2px; }
+.caption { font-size: 11.5px; color: var(--ink-2); text-align: center; margin-top: 8px; line-height: 1.4; }
+.caption b { color: var(--ink); font-weight: 600; }
+.vo { margin-top: 4px; font-size: 10.5px; line-height: 1.4; color: var(--cap); text-align: center; max-width: 100%; }
+.stack { display: flex; flex-wrap: wrap; gap: 20px 18px; align-items: flex-start; }
+
+/* ── Provisional mark: dotted = not settled yet ─────────────────────────────────────── */
+/* Dot d = max(1px, 0.1 × size), pitch 2.4 d, centred 0.22 × size under the baseline, the number's color at 70 %. */
+.pm { position: relative; display: inline-block; line-height: 1; }
+.pm::after { content: ""; position: absolute; left: 0; right: 0; --d: max(1px, .1em); top: calc(1.075em - var(--d) / 2);
+  height: var(--d); pointer-events: none; background: color-mix(in srgb, currentColor 70%, transparent);
+  -webkit-mask: radial-gradient(circle closest-side, #000 92%, transparent 100%) 0 0 / calc(var(--d) * 2.4) var(--d) space no-repeat;
+          mask: radial-gradient(circle closest-side, #000 92%, transparent 100%) 0 0 / calc(var(--d) * 2.4) var(--d) space no-repeat; }
+.hc .pm::after { background: currentColor; --d: calc(max(1px, .1em) + .5px); }
+
+/* ── Orb (led, the readout's reference style) ─────────────────────────────────────────── */
+.orb { position: relative; width: var(--S); height: var(--S); flex: none; }
+.orb svg { position: absolute; inset: 0; width: 100%; height: 100%; overflow: visible; }
+.orb .ln { position: absolute; left: 0; right: 0; text-align: center; line-height: 1; white-space: nowrap; }
+.orb .ln-perf { font-size: var(--p); }
+.orb .ln-think { font-size: var(--t); }
+.orb .glyph { font-size: .82em; font-weight: 600; color: var(--orb-unit); }
+.orb .ln-perf .glyph { margin-right: .2em; }
+.orb .ln-think .glyph { margin-right: .16em; }
+.orb .n { font-weight: 600; font-variant-numeric: tabular-nums; color: var(--orb-num); }
+.orb .is-pale .n, .orb .n.is-none { color: var(--orb-unit); }
+.orb .u { font-size: .82em; font-weight: 500; color: var(--orb-unit); margin-left: .16em; }
+.orb .val { font-family: var(--disp); font-weight: 700; color: var(--orb-value); font-variant-numeric: tabular-nums; letter-spacing: -.02em; }
+.orb .unit { font-weight: 500; color: var(--orb-unit); }
+.orb .ttl { font-weight: 650; letter-spacing: .04em; }
+.orb-tile { display: flex; flex-direction: column; align-items: center; width: 112px; }
+.orb-tile.hero { width: auto; }
+.hover-tip { display: inline-block; font-size: 12px; line-height: 1.45; padding: 7px 10px; border-radius: 6px;
+  background: var(--card-bg); border: 1px solid var(--card-line); box-shadow: var(--card-shadow); color: var(--ink); }
+.hover-tip .sub { color: var(--ink-2); font-size: 11px; }
+
+/* ── Menu bar and taskbar ─────────────────────────────────────────────────────────────── */
+.mbar { display: flex; align-items: center; justify-content: flex-end; gap: 14px; height: 24px; padding: 0 12px;
+  border-radius: 8px; background: var(--bar-bg); color: var(--bar-ink); font-size: 13px;
+  backdrop-filter: blur(20px) saturate(160%); -webkit-backdrop-filter: blur(20px) saturate(160%); box-shadow: inset 0 0 0 .5px var(--line); }
+.mbar .sys { color: var(--bar-ink); opacity: .9; font-size: 13px; font-weight: 500; display: inline-flex; }
+.item { display: inline-flex; align-items: center; height: 22px; padding: 0 6px; border-radius: 5px; }
+.item .v { font-size: 13px; font-weight: 500; font-variant-numeric: tabular-nums; margin-left: 4.5px; }
+.item .v.is-idle { color: var(--bar-ink-2); }
+.item .unit { font-size: 10px; color: var(--bar-ink-2); margin-left: 3px; }
+.rblock { display: grid; grid-template-columns: max-content max-content max-content; margin-left: 8px;
+  font-size: 9px; font-weight: 500; line-height: 10px; font-variant-numeric: tabular-nums; position: relative; }
+.rblock .row { display: contents; }
+.rblock .lb { grid-column: 1; color: var(--bar-ink-2); padding-right: 3px; }
+.rblock .nb { grid-column: 2; text-align: right; color: color-mix(in srgb, var(--bar-ink) 85%, transparent); }
+.rblock .ub { grid-column: 3; color: var(--bar-ink-2); padding-left: 2.5px; }
+.rblock .pm::after { top: calc(1.025em - var(--d) / 2); }
+.rblock .ghost { visibility: hidden; height: 0; overflow: hidden; line-height: 0; }
+.rblock.is-pale .r1 .nb, .rblock .nb.is-quiet { color: var(--bar-ink-2); }
+.rblock.single .r1 > * { transform: translateY(5px); }
+.rblock.single .r2 > * { visibility: hidden; }
+.tbar { display: flex; align-items: center; justify-content: flex-end; gap: 14px; height: 48px; padding: 0 12px;
+  border-radius: 10px; background: var(--tb-bg); color: var(--tb-ink); font-family: "Segoe UI Variable Text", "Segoe UI", var(--ui);
+  box-shadow: inset 0 1px 0 var(--line-2); }
+.tbar .item .v { font-size: 15px; font-weight: 600; }
+.tbar .item .unit { font-size: 11px; color: var(--tb-ink-2); }
+.tbar .rblock { font-size: 10px; line-height: 11px; }
+.tbar .rblock .lb, .tbar .rblock .ub { color: var(--tb-ink-2); }
+.tbar .rblock .ub { padding-left: 3px; }
+.tbar .rblock .nb { color: color-mix(in srgb, var(--tb-ink) 85%, transparent); }
+.tbar .rblock.is-pale .r1 .nb, .tbar .rblock .nb.is-quiet { color: var(--tb-ink-2); }
+.tbar .rblock.single .r1 > * { transform: translateY(5.5px); }
+.tbar .clock { text-align: right; font-size: 11.5px; line-height: 15px; }
+.tbar .tray { display: flex; gap: 12px; opacity: .85; }
+.bar-states { display: grid; grid-template-columns: repeat(auto-fill, minmax(196px, 1fr)); gap: 14px 14px; margin-top: 14px; }
+.bar-state { display: flex; flex-direction: column; align-items: center; gap: 6px; min-width: 0; }
+.bar-state .mbar, .bar-state .tbar { justify-content: center; width: 100%; padding: 0 6px; }
+.bar-state .tbar { height: 44px; }
+.bar-label { font-size: 11px; font-weight: 600; color: var(--ink-2); }
+
+/* ── Board (glass M) ──────────────────────────────────────────────────────────────────── */
+.board-wrap { display: flex; align-items: flex-start; gap: 14px; flex-wrap: wrap; }
+.board { position: relative; width: 340px; height: 340px; border-radius: 30px; flex: none; color: var(--b-ink);
+  background: var(--board-bg); border: 1px solid var(--board-line);
+  backdrop-filter: blur(26px) saturate(170%); -webkit-backdrop-filter: blur(26px) saturate(170%);
+  box-shadow: 0 0 0 .5px rgba(255,255,255,.06) inset, 0 1px 0 rgba(255,255,255,.18) inset, 0 24px 60px rgba(0,0,0,.35); }
+[data-theme="light"] .board { box-shadow: 0 1px 0 rgba(255,255,255,.9) inset, 0 20px 50px rgba(30,40,80,.18); }
+.board .hero { position: absolute; left: 16px; right: 16px; top: 14px; height: 86px; display: flex; gap: 8px; }
+.board .hero-l { flex: 1; min-width: 0; display: flex; flex-direction: column; justify-content: center; }
+.board .hero-v { font-family: var(--disp); font-size: 44px; font-weight: 700; letter-spacing: -.03em; line-height: 1; font-variant-numeric: tabular-nums; }
+.board .hero-v small { font-family: var(--ui); font-size: 12px; font-weight: 600; letter-spacing: 0; color: var(--b-ink-3); margin-left: 4px; }
+.board .hero-t { margin-top: 6px; font-size: 12.5px; font-weight: 650; letter-spacing: .03em; }
+.board .hero-c { margin-top: 3px; font-size: 10.5px; color: var(--b-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.board .strip { position: absolute; left: 16px; right: 16px; top: 100px; height: 16px; }
+.board .rank { position: absolute; left: 16px; right: 16px; top: 120px; }
+.board .caps { display: flex; align-items: center; height: 12px; font-size: 9px; font-weight: 600; letter-spacing: .06em; color: var(--b-ink-3); margin-bottom: 2px; }
+.board .caps .hair { flex: 1; height: 1px; background: var(--board-line); margin-right: 8px; }
+.board .caps .ci { width: 39px; text-align: right; }
+.board .caps .cv { width: 48px; text-align: right; margin-left: 8px; }
+.brow { position: relative; display: flex; align-items: center; height: 38px; gap: 8px; border-radius: 8px; padding: 0 2px; cursor: default; outline: none; }
+.brow:hover, .brow:focus-visible, .brow.is-open { background: var(--fill); }
+.brow:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.brow .rk { width: 16px; text-align: center; font-size: 11px; font-weight: 700; color: var(--b-ink-2); font-variant-numeric: tabular-nums; align-self: flex-start; margin-top: 7px; }
+.brow .bd { width: 8px; height: 8px; border-radius: 50%; flex: none; align-self: flex-start; margin-top: 9px; }
+.brow .nm { flex: 1; min-width: 0; display: flex; flex-direction: column; gap: 3px; }
+.brow .nm .l1 { display: flex; align-items: center; gap: 6px; min-width: 0; }
+.brow .nm b { font-size: 12.5px; font-weight: 650; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.brow .nm i { font-style: normal; font-size: 10.5px; color: var(--b-ink-3); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.brow .pf { width: 39px; flex: none; text-align: right; font-size: 13px; font-weight: 600; color: var(--b-ink-2); font-variant-numeric: tabular-nums; }
+.brow .pf.is-pale { color: var(--b-ink-3); font-weight: 500; }
+.brow .bv { width: 48px; flex: none; text-align: right; font-size: 14.5px; font-weight: 650; font-variant-numeric: tabular-nums; }
+.brow .bv.is-quiet { color: var(--b-ink-3); font-weight: 500; }
+.brow .share { position: absolute; left: 34px; bottom: 0; height: 1.5px; border-radius: 1px; opacity: .75; box-shadow: 0 0 6px currentColor; background: currentColor; }
+.board .more { height: 16px; display: flex; align-items: center; padding-left: 26px; font-size: 10.5px; color: var(--b-ink-3); font-variant-numeric: tabular-nums; }
+.board .foot { position: absolute; left: 16px; right: 16px; bottom: 13px; display: flex; justify-content: space-between;
+  font-size: 10.5px; color: var(--b-ink-3); font-variant-numeric: tabular-nums; }
+.board .foot b { color: var(--b-ink-2); font-weight: 600; }
+.capsule { display: inline-flex; align-items: center; gap: 4px; height: 16px; padding: 0 5px; border-radius: 9px; flex: none;
+  background: var(--fill); box-shadow: inset 0 0 0 .5px var(--line-2); }
+.capsule .meter { display: inline-flex; align-items: flex-end; gap: 1.5px; height: 8px; }
+.capsule .meter i { width: 2.5px; border-radius: .75px; background: var(--ink-3); opacity: .55; }
+.capsule .meter i.on { background: var(--ink-2); opacity: 1; }
+.capsule .w { font-size: 9.5px; font-weight: 500; color: var(--ink-2); }
+.capsule .bolt { color: var(--amber); display: inline-flex; }
+.dash .capsule { height: 18px; padding: 0 6px; gap: 5px; }
+.dash .capsule .w { font-size: 11px; }
+.dash .capsule .meter { height: 10px; }
+
+/* Glass sub-gauge (光環副錶), M. Vertical numbers from the sub-gauge's top (DESIGN 2c). */
+.sg { position: relative; width: 112px; height: 84px; flex: none; align-self: center; border-radius: 10px; cursor: default; outline: none; color: var(--b-ink); }
+.sg:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.sg svg { position: absolute; left: 23px; top: 0; width: 66px; height: 49px; overflow: visible; }
+.sg .lab { position: absolute; left: 0; right: 0; top: 14.8px; text-align: center; font-size: 8.5px; line-height: 1; font-weight: 600; letter-spacing: .1em; color: var(--b-ink-3); }
+.sg .num { position: absolute; left: 0; right: 0; top: 28.2px; text-align: center; font-family: var(--disp); font-size: 17px; line-height: 1;
+  font-weight: 650; letter-spacing: -.02em; font-variant-numeric: tabular-nums; color: var(--b-ink); }
+.sg .num.is-pale { color: var(--b-ink-3); }
+.sg .tbl { position: absolute; left: 0; right: 0; top: 52px; display: grid; justify-content: center;
+  grid-template-columns: max-content 7px max-content max-content; row-gap: 2px; font-size: 11px; line-height: 15px; }
+.sg .tbl .l { font-size: 8.5px; font-weight: 600; letter-spacing: .04em; color: var(--b-ink-3); padding-right: 4px; align-self: center; }
+.sg .tbl .n { font-weight: 600; text-align: right; font-variant-numeric: tabular-nums; min-width: 34px; }
+.sg .tbl .u { font-size: 8.5px; font-weight: 500; color: var(--b-ink-3); padding-left: 3px; align-self: center; }
+.sg .tbl .n.is-quiet { color: var(--b-ink-3); }
+.sg.no-t { height: 50px; }
+
+/* Neon sub-gauge (LED 副錶), M: the 性能 part only. */
+.ng { position: relative; width: 112px; height: 52px; color: var(--led); }
+.ng .lab { position: absolute; left: 0; right: 0; top: 0; text-align: center; font-size: 8.5px; line-height: 1; font-weight: 600; letter-spacing: .24em; color: var(--n-ink-3); }
+.ng .digits { position: absolute; left: 0; right: 0; top: 12.3px; text-align: center; font: 700 24px/1 var(--mono); letter-spacing: -.03em; font-variant-numeric: tabular-nums; }
+.ng .digits .gh { position: absolute; left: 0; right: 0; color: var(--ghost); }
+.ng .digits .lit { position: relative; }
+[data-theme="dark"] .ng .digits .lit { text-shadow: 0 0 4px rgba(150,190,255,.75), 0 0 12px rgba(120,160,255,.40); }
+.ng .digits .lit.is-pale { color: var(--n-ink-3); text-shadow: none; }
+.ng .meter { position: absolute; left: 19px; top: 41px; width: 74px; display: flex; gap: 2px; }
+.ng .meter i { flex: 1; height: 3px; border-radius: 1px; background: var(--unlit); }
+.ng .meter i.on { background: var(--mind); }
+[data-theme="dark"] .ng .meter i.on { box-shadow: 0 0 5px var(--mind); }
+.ng .meter.is-pale i.on { opacity: .35; box-shadow: none; }
+.ng .meter.is-prov i.on { background: none; box-shadow: inset 0 0 0 1px var(--mind); }
+
+/* Timing data box (資料盒), M: the 性能 row and the 思考 row. */
+.tg { width: 134px; border-radius: 5px; background: var(--slab-2); box-shadow: inset 0 0 0 1px var(--t-line); overflow: hidden; }
+.tg .r { display: flex; align-items: stretch; }
+.tg .r + .r { border-top: 1px solid var(--t-line); }
+.tg .tab { width: 32px; flex: none; display: grid; place-items: center; background: var(--block); font-size: 9px; font-weight: 700; letter-spacing: .06em; color: var(--b-ink-2); }
+.tg .r.big .tab { color: var(--block-ink); }
+.tg .v { flex: 1; display: flex; align-items: center; justify-content: flex-end; padding-right: 7px; gap: 3px; font-family: var(--mono); color: var(--t-ink); font-variant-numeric: tabular-nums; }
+.tg .r.big { height: 24px; } .tg .r.small { height: 17px; }
+.tg .r.big .v { font-size: 17px; font-weight: 800; letter-spacing: -.04em; }
+.tg .r.small .v { font-size: 11.5px; font-weight: 800; letter-spacing: -.03em; }
+.tg .v small { font-size: 8px; font-weight: 700; color: var(--b-ink-3); letter-spacing: 0; }
+.tg .v.is-pale { color: var(--b-ink-3); }
+.hero-grid { display: grid; grid-template-columns: 74px repeat(6, minmax(118px, 1fr)); gap: 10px 8px; align-items: center; }
+.hero-grid .hg-h { font-size: 10.5px; font-weight: 650; letter-spacing: .05em; color: var(--ink-2); text-align: center; text-transform: uppercase; }
+.hero-grid .hg-s { font-size: 10.5px; font-weight: 650; letter-spacing: .05em; color: var(--ink-2); text-transform: uppercase; }
+.hero-grid .cell { display: flex; justify-content: center; align-items: center; min-height: 60px; padding: 8px 0; border-radius: 14px; background: var(--board-bg); box-shadow: inset 0 0 0 1px var(--board-line); }
+.rows-demo { display: grid; grid-template-columns: repeat(auto-fill, minmax(300px, 1fr)); gap: 12px; }
+.rows-demo .rd { border-radius: 16px; padding: 10px 12px; background: var(--board-bg); box-shadow: inset 0 0 0 1px var(--board-line); color: var(--b-ink); }
+.rd .rd-t { font-size: 10px; font-weight: 650; letter-spacing: .08em; text-transform: uppercase; color: var(--b-ink-3); margin-bottom: 4px; }
+.rd .srow { display: flex; align-items: center; gap: 8px; height: 22px; padding-left: 26px; }
+.rd .srow .bd { width: 6px; height: 6px; border-radius: 50%; flex: none; }
+.rd .srow .nm { flex: 1; min-width: 0; font-size: 11px; font-weight: 600; color: var(--b-ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.rd .srow .pf { width: 33px; text-align: right; font-size: 10.5px; font-weight: 600; color: var(--b-ink-2); font-variant-numeric: tabular-nums; }
+.rd .srow .pf.is-pale { color: var(--b-ink-3); font-weight: 500; }
+.rd .srow .bv { width: 44px; text-align: right; font-size: 11px; font-weight: 600; color: var(--b-ink-2); font-variant-numeric: tabular-nums; }
+.rd.timing .pf, .rd.timing .bv { font-family: var(--mono); font-weight: 700; }
+.rd.timing .srow .pf { width: 34px; font-size: 10px; } .rd.timing .srow .bv { font-size: 10px; }
+.rd.neon .pf, .rd.neon .bv { font-family: var(--mono); }
+.rd.neon .srow .pf { width: 34px; font-size: 10px; color: color-mix(in srgb, var(--led) 78%, transparent); }
+[data-theme="dark"] .rd.neon .srow .pf:not(.is-pale) { text-shadow: 0 0 6px rgba(140,180,255,.45); }
+.rd.neon .srow .bv { font-size: 10px; color: var(--led); }
+
+/* ── Dashboard panel ──────────────────────────────────────────────────────────────────── */
+.dash-wrap { display: flex; align-items: flex-start; gap: 8px; justify-content: center; flex-wrap: wrap; }
+.card-slot { position: relative; width: 320px; flex: none; min-height: 120px; }
+.slot-hint { height: 120px; margin-top: 40px; border-radius: 12px; display: grid; place-items: center; padding: 16px; text-align: center;
+  font-size: 12px; color: var(--ink-3); border: 1px dashed var(--line-2); }
+.panel { width: 368px; flex: none; border-radius: 14px; padding: 18px 20px 16px; background: var(--panel);
+  box-shadow: inset 0 0 0 .5px var(--panel-line), 0 24px 60px rgba(0,0,0,.28); }
+.panel h3 { margin: 0; font-size: 13px; font-weight: 650; }
+.p-head { display: flex; align-items: baseline; height: 18px; margin-bottom: 6px; }
+.p-head .cap-i, .p-head .cap-v { font-size: 10.5px; font-weight: 500; color: var(--ink-2); text-align: right; }
+.p-head .cap-i { width: 35px; margin-left: auto; cursor: help; }
+.p-head .cap-v { width: 48px; margin-left: 6px; }
+.drow { position: relative; display: flex; align-items: center; height: 26px; border-radius: 6px; margin: 0 -6px; padding: 0 6px; cursor: default; outline: none; }
+.drow:hover, .drow.is-open { background: var(--fill); }
+.drow:focus-visible { box-shadow: 0 0 0 2px var(--focus); }
+.drow .badge { width: 16px; flex: none; display: flex; justify-content: center; align-items: center; }
+.drow .indent { flex: none; position: relative; width: 12px; }
+.drow .indent::before { content: ""; position: absolute; left: 7px; top: -9px; width: 6px; height: 13px;
+  border-left: 1px solid var(--ink-3); border-bottom: 1px solid var(--ink-3); border-bottom-left-radius: 4px; opacity: .8; }
+.drow .namebox { flex: 1; min-width: 0; display: flex; align-items: baseline; gap: 6px; margin-left: 8px; white-space: nowrap; overflow: hidden; }
+.drow .namebox b { font-size: 13px; font-weight: 600; overflow: hidden; text-overflow: ellipsis; flex: none; max-width: 70%; }
+.drow .namebox i { font-style: normal; font-size: 11.5px; color: var(--ink-2); overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.drow .loop { color: var(--amber); margin-right: 4px; flex: none; display: inline-flex; align-self: center; }
+.drow .capcol { flex: none; width: var(--capw, 0px); display: flex; margin-left: 8px; }
+.drow .pf { flex: none; width: 35px; margin-left: 8px; text-align: right; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; color: var(--ink); }
+.drow .pf.is-pale { color: var(--ink-3); }
+.drow .lv { flex: none; width: 48px; margin-left: 6px; text-align: right; font-size: 13px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.drow .lv.is-quiet { color: var(--ink-3); font-weight: 500; }
+.dots3 { display: inline-flex; gap: 2px; }
+.dots3 i { width: 3px; height: 3px; border-radius: 50%; background: currentColor; animation: shimmer 1.2s ease-in-out infinite; }
+.dots3 i:nth-child(2) { animation-delay: .15s; } .dots3 i:nth-child(3) { animation-delay: .3s; }
+@keyframes shimmer { 0%, 100% { opacity: .35; } 45% { opacity: 1; } }
+.static .dots3 i, .reduce .dots3 i { animation: none; opacity: .8; }
+.idle-dot { width: 6px; height: 6px; border-radius: 50%; background: var(--ink-3); }
+
+/* ── Score card (性能分析卡) ─────────────────────────────────────────────────────────── */
+.card { width: 320px; border-radius: 12px; padding: 14px; background: var(--card-bg); color: var(--ink);
+  border: .5px solid var(--card-line); box-shadow: var(--card-shadow); text-align: left;
+  backdrop-filter: blur(30px) saturate(180%); -webkit-backdrop-filter: blur(30px) saturate(180%); }
+.card-float { animation: card-in .15s ease-out both; }
+@keyframes card-in { from { opacity: 0; transform: translateX(var(--slide, 2px)); } to { opacity: 1; transform: none; } }
+.reduce .card-float { animation: fade-in .15s ease-out both; }
+.static .card-float { animation: none; }
+@keyframes fade-in { from { opacity: 0; } to { opacity: 1; } }
+.c-head { display: flex; align-items: center; gap: 7px; min-width: 0; }
+.c-head .dot { width: 7px; height: 7px; border-radius: 50%; flex: none; }
+.c-head b { font-size: 13px; font-weight: 650; flex: 1; min-width: 0; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+.c-meta { margin: 3px 0 0 14px; font-size: 11px; color: var(--ink-2); white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.chip { display: inline-flex; align-items: center; gap: 4px; height: 18px; padding: 0 7px; border-radius: 9px; flex: none;
+  font-size: 11px; font-weight: 600; letter-spacing: .01em; white-space: nowrap; font-variant-numeric: tabular-nums; }
+.chip svg { flex: none; }
+.chip-up { color: var(--mint-ink); background: var(--mint-bg); }
+.chip-flat { color: var(--ink-2); background: color-mix(in srgb, var(--ink) 6%, transparent); }
+.chip-dot { color: var(--ink-2); position: relative; padding-left: 6px; }
+.chip-dot::before { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 1px dotted color-mix(in srgb, var(--ink) 35%, transparent); }
+.hc .chip { box-shadow: inset 0 0 0 1px currentColor; }
+.c-score { margin-top: 12px; padding-top: 12px; border-top: .5px solid var(--line); }
+.c-eyebrow { font-size: 11px; color: var(--ink-2); margin-bottom: 3px; }
+.c-top { display: flex; align-items: center; justify-content: space-between; gap: 10px; }
+.c-big { font-family: var(--disp); font-size: 34px; line-height: 1; font-weight: 600; letter-spacing: -.02em; font-variant-numeric: tabular-nums; }
+.c-big.is-pale { color: var(--ink-2); }
+.c-big.is-none { color: var(--ink-3); font-weight: 500; }
+.c-big.pm::after { top: calc(1.04em - var(--d) / 2); }
+/* The log scale: gradient laid across the whole track, revealed up to f. */
+.scale { position: relative; margin-top: 10px; height: 6px; }
+.scale .trk { position: absolute; inset: 0; border-radius: 3px; background: var(--track); }
+.scale .fill { position: absolute; inset: 0; border-radius: 3px;
+  background: linear-gradient(90deg, var(--pearl-c), var(--pearl-a) 50%, var(--pearl-b));
+  clip-path: inset(0 calc(100% - var(--f, 0) * 100%) 0 0 round 3px); }
+.scale.is-pale .fill { opacity: .45; }
+.scale.is-prov .fill { -webkit-mask: radial-gradient(circle closest-side, #000 94%, transparent 100%) 0 50% / 13.2px 6px repeat-x;
+  mask: radial-gradient(circle closest-side, #000 94%, transparent 100%) 0 50% / 13.2px 6px repeat-x; }
+.scale .tk { position: absolute; top: -2px; width: 1px; height: 10px; margin-left: -.5px; background: color-mix(in srgb, var(--ink) 18%, transparent); }
+.scale .tk.ref { top: -4px; height: 14px; background: color-mix(in srgb, var(--ink) 45%, transparent); }
+.scale-lab { position: relative; height: 11px; margin-top: 4px; font-size: 9.5px; line-height: 11px; color: var(--ink-3); font-variant-numeric: tabular-nums; }
+.scale-lab span { position: absolute; transform: translateX(-50%); white-space: nowrap; }
+.scale-lab span.ref { color: var(--ink-2); font-weight: 600; }
+.scale-lab span.end { transform: translateX(-100%); }
+.c-sum { margin-top: 8px; font-size: 12px; line-height: 1.42; color: var(--ink-2); }
+.c-hint { margin-top: 4px; font-size: 11px; line-height: 1.4; color: var(--ink-3); }
+.comps { display: grid; grid-template-columns: minmax(0, 1fr) minmax(64px, max-content) 10px 44px 8px minmax(34px, max-content);
+  align-items: center; margin-top: 14px; }
+.comps .g-t { grid-column: 1 / -1; font-size: 11px; font-weight: 650; letter-spacing: .06em; color: var(--ink-3); margin: 0 0 7px; }
+html[lang="en"] .comps .g-t { text-transform: uppercase; font-size: 10.5px; }
+.comps .g-t + .lb { margin-top: 0; }
+.comps .g-t:not(:first-child) { margin-top: 14px; }
+.comps .lb { grid-column: 1; font-size: 12.5px; font-weight: 600; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; padding-right: 8px; }
+.comps .vl { grid-column: 2; text-align: right; font-size: 12px; font-weight: 500; font-variant-numeric: tabular-nums; white-space: nowrap; }
+.comps .vl.is-absent { font-size: 11.5px; color: var(--ink-3); }
+.comps .mm { grid-column: 4; }
+.comps .ss { grid-column: 6; text-align: right; font-size: 12px; font-weight: 600; font-variant-numeric: tabular-nums; }
+.comps .ss.is-absent { color: var(--ink-3); font-weight: 500; }
+.comps .ds { grid-column: 1 / -1; margin: 3px 0 9px; font-size: 10.5px; line-height: 1.38; color: var(--cap); }
+.comps .ds:last-child { margin-bottom: 0; }
+.mm { position: relative; height: 4px; border-radius: 2px; background: var(--track); }
+.mm i { position: absolute; left: 0; top: 0; bottom: 0; border-radius: 2px; background: var(--score); }
+.mm b { position: absolute; left: 50%; top: -2px; width: 1px; height: 8px; margin-left: -.5px; background: color-mix(in srgb, var(--ink) 35%, transparent); }
+.mm.dotted { background: radial-gradient(circle closest-side, color-mix(in srgb, var(--ink) 18%, transparent) 94%, transparent 100%) 0 50% / 8.8px 4px repeat-x; }
+.mm.dotted b { display: none; }
+.c-sigs { margin-top: 14px; }
+.c-sigs .g-t { font-size: 11px; font-weight: 650; letter-spacing: .06em; color: var(--ink-3); margin-bottom: 7px; }
+html[lang="en"] .c-sigs .g-t { text-transform: uppercase; font-size: 10.5px; }
+.sig { display: flex; gap: 7px; align-items: flex-start; font-size: 12px; line-height: 1.4; color: var(--ink-2); margin-top: 6px; }
+.sig:first-of-type { margin-top: 0; }
+.sig svg { flex: none; margin-top: 2px; }
+.sig.warn { color: var(--ink); } .sig.warn svg { color: var(--amber); }
+.c-facts { margin-top: 12px; padding-top: 9px; border-top: .5px solid var(--line); font-size: 11px; line-height: 1.5; color: var(--ink-2); }
+.c-foot { margin-top: 8px; font-size: 10.5px; line-height: 1.45; color: var(--cap); }
+.cards-grid { display: grid; grid-template-columns: repeat(auto-fill, 320px); gap: 18px 16px; justify-content: center; align-items: start; }
+.cards-grid figure { margin: 0; }
+.cards-grid figcaption { margin-bottom: 7px; font-size: 10.5px; font-weight: 650; letter-spacing: .07em; color: var(--ink-2); text-transform: uppercase; }
+
+/* ── Usage History: 性能表現 ─────────────────────────────────────────────────────────── */
+.hwin { border-radius: 12px; overflow: hidden; background: var(--win); box-shadow: inset 0 0 0 .5px var(--panel-line), 0 24px 70px rgba(0,0,0,.3); }
+.hbar { display: flex; align-items: center; gap: 12px; height: 46px; padding: 0 14px; background: var(--win-bar);
+  border-bottom: .5px solid var(--line-2); font-size: 12.5px; white-space: nowrap; overflow: hidden; }
+.lights { display: flex; gap: 8px; flex: none; }
+.lights i { width: 12px; height: 12px; border-radius: 50%; }
+.lights i:nth-child(1) { background: #ff5f57; } .lights i:nth-child(2) { background: #febc2e; } .lights i:nth-child(3) { background: #28c840; }
+.tb-pop { display: inline-flex; align-items: center; gap: 6px; height: 26px; padding: 0 9px; border-radius: 6px; background: var(--fill-2); color: var(--ink); }
+.tb-seg { display: inline-flex; padding: 2px; border-radius: 7px; background: var(--fill-2); margin: 0 auto; }
+.tb-seg span { padding: 3px 8px; border-radius: 5px; color: var(--ink-2); }
+.tb-seg span.on { background: var(--card-bg); color: var(--ink); box-shadow: 0 1px 2px rgba(0,0,0,.12); }
+.hwin.compact .tb-seg span { padding: 3px 5px; }
+.hbody { padding: 22px 24px 20px; }
+.hbody h1 { margin: 0; font-size: 22px; font-weight: 700; }
+.hbody .range { margin-top: 4px; font-size: 13px; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.hfoot { display: flex; justify-content: space-between; gap: 12px; padding: 10px 24px; border-top: .5px solid var(--line); font-size: 11.5px; color: var(--ink-2); }
+.hfoot .lock { display: inline-flex; gap: 5px; align-items: center; }
+.sdot { display: inline-block; width: 7px; height: 7px; border-radius: 50%; flex: none; }
+
+.pp { container: pp / inline-size; margin-top: 18px; border-radius: 14px; padding: 16px 18px 14px; background: var(--win-card); }
+.pp-head { display: flex; align-items: center; gap: 8px; }
+.pp-head h2 { margin: 0; font-size: 15px; font-weight: 650; }
+.info { display: inline-grid; place-items: center; width: 16px; height: 16px; border-radius: 50%; border: 1px solid var(--ink-3);
+  color: var(--ink-2); font-size: 10px; font-weight: 700; font-family: var(--disp); background: none; cursor: help; padding: 0; }
+.trend-t { display: flex; align-items: baseline; flex-wrap: wrap; gap: 4px 14px; margin-top: 12px; }
+.trend-t .tt { font-size: 12px; color: var(--ink-2); min-width: 0; }
+.trend-t .tt b { color: var(--ink); font-weight: 550; }
+.trend-t .legend { margin-left: auto; display: flex; gap: 14px; font-size: 11px; color: var(--ink-3); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.trend-t .legend span { display: inline-flex; align-items: center; gap: 5px; }
+.chart { display: block; width: 100%; height: 150px; margin-top: 8px; overflow: visible; }
+.chart .ax { font-size: 9.5px; fill: var(--ink-3); font-family: var(--ui); font-variant-numeric: tabular-nums; }
+.chart .ax.ref { fill: var(--ink-2); font-weight: 600; }
+.chart .grid { stroke: var(--line); stroke-width: 1; }
+.chart .ref { stroke: color-mix(in srgb, var(--ink) 35%, transparent); stroke-width: 1; }
+.pt-tip { position: absolute; pointer-events: none; padding: 7px 10px; border-radius: 8px; font-size: 11.5px; line-height: 1.45;
+  background: var(--card-bg); border: .5px solid var(--card-line); box-shadow: var(--card-shadow); white-space: nowrap; font-variant-numeric: tabular-nums; }
+.pt-tip b { font-size: 13px; }
+.ptbl { width: 100%; border-collapse: separate; border-spacing: 0; margin-top: 12px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.ptbl th { font-size: 11px; font-weight: 600; line-height: 1.25; color: var(--ink-2); text-align: right; padding: 6px 7px; vertical-align: bottom;
+  border-bottom: .5px solid var(--line-2); white-space: nowrap; }
+.ptbl th:first-child, .ptbl td:first-child { text-align: left; padding-left: 8px; }
+.ptbl th .sort { color: var(--ink-3); margin-left: 2px; }
+.ptbl td { text-align: right; padding: 0 7px; height: 30px; white-space: nowrap; }
+.ptbl tbody tr:nth-child(even) td { background: var(--row-2); }
+.ptbl tbody tr { cursor: default; }
+.ptbl tbody tr:hover td { background: var(--fill); }
+.ptbl tbody tr.sel td { background: var(--sel); }
+.ptbl tbody tr td:first-child { border-radius: 6px 0 0 6px; } .ptbl tbody tr td:last-child { border-radius: 0 6px 6px 0; }
+.ptbl tr.low td { color: var(--ink-2); }
+.ptbl .na { color: var(--ink-3); }
+.mcell { display: flex; align-items: center; gap: 7px; min-width: 0; max-width: 260px; }
+.mcell .id { font-size: 12.5px; font-weight: 550; overflow: hidden; text-overflow: ellipsis; min-width: 0; }
+.mcell .src { font-size: 11px; color: var(--ink-2); flex: none; }
+.tr.low .mcell .id { font-weight: 500; }
+.scell { display: inline-flex; align-items: center; gap: 8px; justify-content: flex-end; }
+.scell b { font-size: 13px; font-weight: 600; }
+.scell .mm { width: 36px; }
+.chip-sm { display: inline-flex; align-items: center; height: 16px; padding: 0 6px; font-size: 10px; font-weight: 600; border-radius: 8px; color: var(--ink-2); position: relative; flex: none; }
+.chip-sm::before { content: ""; position: absolute; inset: 0; border-radius: inherit; border: 1px dotted color-mix(in srgb, var(--ink) 40%, transparent); }
+.fp { display: inline-flex; align-items: flex-end; gap: 2px; height: 20px; position: relative; vertical-align: middle; }
+.fp i { width: 5px; height: 20px; border-radius: 1.5px; background: var(--track); position: relative; overflow: hidden; }
+.fp i::after { content: ""; position: absolute; left: 0; right: 0; bottom: 0; height: calc(var(--f) * 100%); background: var(--score); border-radius: 1.5px; }
+.fp i.na { background: none; }
+.fp i.na::after { height: 1px; background: none; border-top: 1px dotted var(--ink-3); }
+.fp::before { content: ""; position: absolute; left: -2px; right: -2px; top: 50%; border-top: 1px dashed color-mix(in srgb, var(--ink) 30%, transparent); z-index: 1; }
+.col-parts, .plist { display: none; }
+.pp-foot { margin-top: 12px; font-size: 11px; color: var(--cap); }
+@container pp (max-width: 859px) {
+  .col-comp { display: none; }
+  .col-parts { display: table-cell; }
+  .mcell { max-width: 220px; }
+}
+@container pp (max-width: 599px) {
+  .ptbl { display: none; }
+  .plist { display: block; margin-top: 10px; }
+  .chart { height: 120px; }
+  .trend-t .legend { margin-left: 0; }
+}
+.plist .pi { padding: 9px 8px; border-bottom: .5px solid var(--line); border-radius: 6px; cursor: default; }
+.plist .pi.sel { background: var(--sel); }
+.plist .l1 { display: flex; align-items: center; gap: 7px; font-size: 12.5px; }
+.plist .l1 .id { font-weight: 600; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; min-width: 0; }
+.plist .l1 .r { margin-left: auto; flex: none; }
+.plist .l2, .plist .l3 { margin-top: 3px; font-size: 11px; line-height: 1.45; color: var(--ink-2); font-variant-numeric: tabular-nums; }
+.plist .pi.low .l1 .id { color: var(--ink-2); font-weight: 500; }
+.pp-state { display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center; gap: 6px; padding: 26px 12px 20px; }
+.pp-state .gl { color: var(--ink-3); }
+.pp-state b { font-size: 13px; font-weight: 600; color: var(--ink-2); }
+.pp-state span { font-size: 11.5px; line-height: 1.45; color: var(--cap); max-width: 360px; }
+.skel { display: grid; gap: 10px; margin-top: 14px; }
+.skel i { display: block; height: 9px; border-radius: 4px; background: var(--fill-2); }
+.hist-variants { display: grid; gap: 22px; }
+.hist-row { display: flex; gap: 18px; flex-wrap: wrap; align-items: flex-start; }
+.states-row { display: grid; grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 14px; }
+.states-row .hwin .pp { margin-top: 0; }
+
+/* ── Scale reference ─────────────────────────────────────────────────────────────────── */
+.ruler { position: relative; height: 64px; margin: 8px 6px 0; }
+.ruler .zone { position: absolute; top: 18px; height: 10px; border-radius: 3px; }
+.ruler .zl { position: absolute; top: 0; font-size: 11px; font-weight: 600; color: var(--ink-2); transform: translateX(-50%); white-space: nowrap; }
+.ruler .tick { position: absolute; top: 32px; font-size: 10px; color: var(--ink-3); transform: translateX(-50%); font-variant-numeric: tabular-nums; }
+.ruler .tick.ref { color: var(--ink); font-weight: 650; }
+.ruler .bar { position: absolute; top: 14px; width: 1px; height: 18px; background: color-mix(in srgb, var(--ink) 30%, transparent); }
+.fmt { width: 100%; border-collapse: collapse; margin-top: 16px; font-size: 12px; font-variant-numeric: tabular-nums; }
+.fmt th, .fmt td { padding: 6px 10px; text-align: right; border-bottom: .5px solid var(--line); }
+.fmt th { font-size: 11px; font-weight: 600; color: var(--ink-2); }
+.fmt td:first-child, .fmt th:first-child { text-align: left; color: var(--ink-2); }
+.fmt td.c { font-family: var(--mono); }
+
+@media (prefers-reduced-motion: reduce) { .dots3 i { animation: none; } }
+@media (max-width: 760px) { main { padding: 8px 16px 48px; } .pg-top { padding: 10px 16px; } .theme-col { padding: 16px; } }
+</style>
+</head>
+<body data-view="both">
+<header class="pg-top">
+  <h1>性能 · 跑分<small>DESIGN §12 的視覺參考：懸浮窗、選單列 / 工作列、排行看板、儀表板、性能分析卡、用量歷史</small></h1>
+  <span class="spacer"></span>
+  <div class="seg" role="group" aria-label="Language">
+    <button data-lang="zh-Hant">繁中</button><button data-lang="zh-Hans">简中</button><button data-lang="en">EN</button><button data-lang="ja">日本語</button>
+  </div>
+  <div class="seg" role="group" aria-label="Theme">
+    <button data-view="both">兩者並排</button><button data-view="dark">深色</button><button data-view="light">淺色</button>
+  </div>
+  <label class="pg-check"><input type="checkbox" id="reduce"> 減少動態</label>
+  <label class="pg-check"><input type="checkbox" id="contrast"> 增強對比</label>
+  <button class="pg-btn" data-play="rise">新回應：變快</button>
+  <button class="pg-btn" data-play="drop">新回應：變慢</button>
+  <button class="pg-btn" data-play="reset">重設</button>
+</header>
+<main id="sections"></main>
+<pre id="errors" aria-hidden="true" style="position:fixed;bottom:0;left:0;margin:0;color:#ff6b6b;font-size:11px"></pre>
+<script>
+/* strings:begin */
+window.PS_STRINGS = {"unit.tokS":{"zh-Hant":"tok/s","zh-Hans":"tok/s","en":"tok/s","ja":"tok/s"},"title.walk":{"zh-Hant":"步行","zh-Hans":"步行","en":"WALKING","ja":"徒歩"},"title.sportsCar":{"zh-Hant":"跑車","zh-Hans":"跑车","en":"SPORTS CAR","ja":"スポーツカー"},"title.maglev":{"zh-Hant":"磁浮列車","zh-Hans":"磁悬浮列车","en":"MAGLEV","ja":"リニア"},"title.jetliner":{"zh-Hant":"噴射客機","zh-Hans":"喷气客机","en":"JETLINER","ja":"ジェット機"},"source.codex":{"zh-Hant":"Codex","zh-Hans":"Codex","en":"Codex","ja":"Codex"},"source.claudeCode":{"zh-Hant":"Claude Code","zh-Hans":"Claude Code","en":"Claude Code","ja":"Claude Code"},"source.claudeDesktop":{"zh-Hant":"Claude Desktop","zh-Hans":"Claude Desktop","en":"Claude Desktop","ja":"Claude Desktop"},"source.notFound":{"zh-Hant":"未偵測到","zh-Hans":"未检测到","en":"Not detected","ja":"未検出"},"source.disabled":{"zh-Hant":"已停用","zh-Hans":"已停用","en":"Off","ja":"オフ"},"source.sessions":{"zh-Hant":"找到 %d 個工作階段","zh-Hans":"找到 %d 个会话","en":"%d sessions found","ja":"%d 件のセッション"},"source.folderMissing":{"zh-Hant":"未找到資料夾","zh-Hans":"未找到文件夹","en":"Folder not found","ja":"フォルダが見つかりません"},"phase.generating":{"zh-Hant":"生成中","zh-Hans":"生成中","en":"Generating","ja":"生成中"},"phase.tools":{"zh-Hant":"執行工具","zh-Hans":"运行工具","en":"Running tools","ja":"ツール実行中"},"phase.idle":{"zh-Hant":"閒置","zh-Hans":"空闲","en":"Idle","ja":"待機中"},"agents.context":{"zh-Hant":"生成中 %d · 工具 %d","zh-Hans":"生成中 %d · 工具 %d","en":"%d generating · %d in tools","ja":"生成中 %d · ツール %d"},"dashboard.agents":{"zh-Hant":"Agent","zh-Hans":"Agent","en":"Agents","ja":"Agent"},"source.deepseek":{"zh-Hant":"DSH","zh-Hans":"DSH","en":"DSH","ja":"DSH"},"source.opencode":{"zh-Hant":"OpenCode","zh-Hans":"OpenCode","en":"OpenCode","ja":"OpenCode"},"source.gemini":{"zh-Hant":"Gemini CLI","zh-Hans":"Gemini CLI","en":"Gemini CLI","ja":"Gemini CLI"},"source.omp":{"zh-Hant":"omp","zh-Hans":"omp","en":"omp","ja":"omp"},"source.antigravity":{"zh-Hant":"Antigravity","zh-Hans":"Antigravity","en":"Antigravity","ja":"Antigravity"},"source.workbuddy":{"zh-Hant":"WorkBuddy","zh-Hans":"WorkBuddy","en":"WorkBuddy","ja":"WorkBuddy"},"source.workbuddyAi":{"zh-Hant":"WorkBuddy AI","zh-Hans":"WorkBuddy AI","en":"WorkBuddy AI","ja":"WorkBuddy AI"},"history.title":{"zh-Hant":"用量歷史","zh-Hans":"用量历史","en":"Usage History","ja":"使用履歴"},"history.allSources":{"zh-Hant":"全部來源","zh-Hans":"全部来源","en":"All Sources","ja":"すべてのソース"},"history.range.today":{"zh-Hant":"今天","zh-Hans":"今天","en":"Today","ja":"今日"},"history.range.yesterday":{"zh-Hant":"昨天","zh-Hans":"昨天","en":"Yesterday","ja":"昨日"},"history.range.7d":{"zh-Hant":"7 天","zh-Hans":"7 天","en":"7 days","ja":"7 日"},"history.range.30d":{"zh-Hant":"30 天","zh-Hans":"30 天","en":"30 days","ja":"30 日"},"history.range.90d":{"zh-Hant":"90 天","zh-Hans":"90 天","en":"90 days","ja":"90 日"},"history.range.year":{"zh-Hant":"今年","zh-Hans":"今年","en":"This year","ja":"今年"},"history.range.all":{"zh-Hant":"全部","zh-Hans":"全部","en":"All","ja":"すべて"},"history.range.custom":{"zh-Hant":"自訂…","zh-Hans":"自定义…","en":"Custom…","ja":"カスタム…"},"history.range.from":{"zh-Hant":"從","zh-Hans":"从","en":"From","ja":"開始"},"history.range.to":{"zh-Hant":"到","zh-Hans":"到","en":"To","ja":"終了"},"history.range.apply":{"zh-Hant":"套用","zh-Hans":"应用","en":"Apply","ja":"適用"},"history.analyzing":{"zh-Hant":"正在分析歷史紀錄… %d%%","zh-Hans":"正在分析历史记录… %d%%","en":"Analyzing history… %d%%","ja":"履歴を分析中… %d%%"},"history.export":{"zh-Hant":"匯出 CSV…","zh-Hans":"导出 CSV…","en":"Export CSV…","ja":"CSV を書き出す…"},"history.privacy":{"zh-Hant":"只保存每日彙總和各模型每天的性能統計，不含任何請求或對話內容。","zh-Hans":"只保存每日汇总和各模型每天的性能统计，不含任何请求或对话内容。","en":"Only daily totals and each model's daily performance figures are kept — never requests or conversation content.","ja":"保存するのは日別の集計とモデルごとの日別の性能統計だけで、リクエストや会話の内容は含みません。"},"history.privacy.short":{"zh-Hant":"只保存彙總數字","zh-Hans":"只保存汇总数字","en":"Totals only","ja":"集計のみ保存"},"list.separator":{"zh-Hant":"、","zh-Hans":"、","en":", ","ja":"、"},"cost.unitPerSecond":{"zh-Hant":"%@/s","zh-Hans":"%@/s","en":"%@/s","ja":"%@/s"},"cost.glyph":{"zh-Hant":"費用","zh-Hans":"费用","en":"Cost","ja":"費用"},"cost.noModelName":{"zh-Hant":"無模型中繼資料","zh-Hans":"无模型元数据","en":"No model metadata","ja":"モデルのメタデータなし"},"traffic.agent.tooltip":{"zh-Hant":"今天的網路流量：%@","zh-Hans":"今天的网络流量：%@","en":"Network traffic today: %@","ja":"今日の通信量：%@"},"orbs.traffic.intelligence":{"zh-Hant":"即時性能","zh-Hans":"实时性能","en":"Live Performance","ja":"リアルタイム性能"},"intel.glyph":{"zh-Hant":"性能","zh-Hans":"性能","en":"Perf","ja":"性能"},"intel.thinking.glyph":{"zh-Hant":"思考","zh-Hans":"思考","en":"TH","ja":"思考"},"a11y.orb.intel.only":{"zh-Hant":"性能 %@","zh-Hans":"性能 %@","en":"performance %@","ja":"性能 %@"},"a11y.orb.intel":{"zh-Hant":"性能 %@，思考每秒 %@ 個 token","zh-Hans":"性能 %@，思考每秒 %@ 个 token","en":"performance %@, thinking %@ tokens per second","ja":"性能 %@、思考 毎秒 %@ トークン"},"intel.none":{"zh-Hant":"性能：尚無分數","zh-Hans":"性能：暂无分数","en":"performance: no score yet","ja":"性能：スコアなし"},"agents.intel.hint":{"zh-Hant":"性能是 agent 近 30 分鐘的跑分，綜合輸出速度、首段延遲、思考速度、工具節奏與耗時、工具成功率和快取命中。1000 是參考水準，沒有上限，越高越快。虛線底表示樣本還少；淡色是閒置 agent 的分數。","zh-Hans":"性能是 agent 近 30 分钟的跑分，综合输出速度、首段延迟、思考速度、工具节奏与耗时、工具成功率和缓存命中。1000 是参考水平，没有上限，越高越快。虚线底表示样本还少；淡色是空闲 agent 的分数。","en":"Perf is a benchmark-style score of each agent's last 30 minutes: output speed, time to first content, thinking speed, tool pace and time, tool success and cache hits. 1000 is the reference level and there is no upper limit; higher is faster. A dotted underline means few samples so far; dimmed is an idle agent's score.","ja":"性能は各 agent の直近 30 分のベンチマーク的なスコアで、出力速度、最初の出力までの時間、思考速度、ツールのペースと所要時間、ツール成功率、キャッシュヒットをまとめたものです。1000 が基準で上限はなく、高いほど速いことを表します。点線の下線はまだサンプルが少ないこと、淡色は待機中の agent のスコアを表します。"},"a11y.agent.intel":{"zh-Hant":"性能 %@","zh-Hans":"性能 %@","en":"performance %@","ja":"性能 %@"},"work.looping":{"zh-Hant":"原地打轉：同一組動作已重複 %d 次，且有失敗","zh-Hans":"原地打转：同一组动作已重复 %d 次，且有失败","en":"Going in circles: the same actions repeated %d times, some failing","ja":"堂々巡り：同じ操作が %d 回繰り返され、失敗を含みます"},"work.repeating":{"zh-Hant":"重複同一組動作 %d 次（沒有失敗，可能在等待）","zh-Hans":"重复同一组动作 %d 次（没有失败，可能在等待）","en":"Repeating the same actions %d times (no failures, possibly waiting)","ja":"同じ操作を %d 回繰り返しています（失敗なし、待機中の可能性）"},"work.summary":{"zh-Hant":"新動作 %@ · 失敗 %d · 已修正 %d","zh-Hans":"新动作 %@ · 失败 %d · 已修正 %d","en":"New actions %@ · failed %d · recovered %d","ja":"新しい操作 %@・失敗 %d・修正済み %d"},"perf.tier.slow":{"zh-Hant":"偏慢","zh-Hans":"偏慢","en":"Slower","ja":"遅め"},"perf.tier.standard":{"zh-Hant":"標準","zh-Hans":"标准","en":"Standard","ja":"標準"},"perf.tier.fast":{"zh-Hant":"快","zh-Hans":"快","en":"Fast","ja":"速い"},"perf.tier.veryFast":{"zh-Hant":"極快","zh-Hans":"极快","en":"Very fast","ja":"非常に速い"},"perf.reference":{"zh-Hant":"參考水準","zh-Hans":"参考水平","en":"Reference","ja":"基準"},"perf.summary":{"zh-Hant":"%@ · 參考水準的 %@ 倍","zh-Hans":"%@ · 参考水平的 %@ 倍","en":"%@ · %@× the reference","ja":"%@ · 基準の %@ 倍"},"perf.summary.slowest":{"zh-Hant":"%@ · 參考水準的 %@ 倍 · 最慢的一環：%@","zh-Hans":"%@ · 参考水平的 %@ 倍 · 最慢的一环：%@","en":"%@ · %@× the reference · slowest part: %@","ja":"%@ · 基準の %@ 倍 · いちばん遅いのは%@"},"perf.summary.allAbove":{"zh-Hant":"%@ · 參考水準的 %@ 倍 · 每一項都高於參考","zh-Hans":"%@ · 参考水平的 %@ 倍 · 每一项都高于参考","en":"%@ · %@× the reference · every part above it","ja":"%@ · 基準の %@ 倍 · すべての項目が基準以上"},"perf.usual":{"zh-Hant":"比平常 %@","zh-Hans":"比平常 %@","en":"%@ vs usual","ja":"普段比 %@"},"perf.usual.none":{"zh-Hant":"尚無平常值","zh-Hans":"暂无平常值","en":"No usual yet","ja":"普段の値なし"},"perf.usual.hint":{"zh-Hant":"和這台電腦上 %@（%@）今天之前 14 天合併計算的 %@ 相比。","zh-Hans":"和这台电脑上 %@（%@）今天之前 14 天合并计算的 %@ 相比。","en":"Compared with %@ (%@) on this computer, pooled over the 14 days before today: %@.","ja":"このコンピューターでの %@（%@）の、今日より前の 14 日間をまとめた %@ と比べています。"},"perf.usual.none.hint":{"zh-Hant":"同一個來源與模型在這台電腦上，今天之前 14 天累積 %d 個有效計時請求後，才會有平常值。","zh-Hans":"同一个来源与模型在这台电脑上，今天之前 14 天累计 %d 个有效计时请求后，才会有平常值。","en":"A usual value appears once this source and model have %d timed requests on this computer in the 14 days before today.","ja":"このコンピューターで同じソースとモデルの計時できたリクエストが、今日より前の 14 日間に %d 件たまると普段の値が出ます。"},"perf.provisional":{"zh-Hant":"初步","zh-Hans":"初步","en":"Provisional","ja":"暫定"},"perf.provisional.hint":{"zh-Hant":"只有 %d 個有效計時請求，分數還不穩定；滿 %d 個後虛線就會消失。","zh-Hans":"只有 %d 个有效计时请求，分数还不稳定；满 %d 个后虚线就会消失。","en":"Only %d timed requests so far, so the score can still swing; the dotted line goes away at %d.","ja":"計時できたリクエストはまだ %d 件で、スコアは変動しやすい状態です。%d 件になると点線が消えます。"},"perf.status.none":{"zh-Hant":"近 30 分鐘只有 %d 個有效計時請求；至少要 %d 個才會評分。","zh-Hans":"近 30 分钟只有 %d 个有效计时请求；至少要 %d 个才会评分。","en":"Only %d timed requests in the last 30 minutes; a score needs at least %d.","ja":"直近 30 分の計時できたリクエストは %d 件です。スコアには %d 件以上が必要です。"},"perf.card.top":{"zh-Hant":"%d 個 agent 中最高","zh-Hans":"%d 个 agent 中最高","en":"Highest of %d agents","ja":"%d 個の agent で最高"},"perf.group.speed":{"zh-Hant":"速度","zh-Hans":"速度","en":"Speed","ja":"速度"},"perf.group.efficiency":{"zh-Hant":"效率","zh-Hans":"效率","en":"Efficiency","ja":"効率"},"perf.comp.throughput":{"zh-Hant":"輸出吞吐","zh-Hans":"输出吞吐","en":"Throughput","ja":"出力スループット"},"perf.comp.throughput.desc":{"zh-Hant":"回應期間平均每秒寫出的 token","zh-Hans":"响应期间平均每秒写出的 token","en":"Tokens written per second while responding","ja":"応答中に 1 秒あたりに書き出した token"},"perf.comp.latency":{"zh-Hant":"首段延遲 P50","zh-Hans":"首段延迟 P50","en":"Latency P50","ja":"初回出力 P50"},"perf.comp.latency.desc":{"zh-Hant":"送出請求後多久開始出現內容（中位數）","zh-Hans":"发出请求后多久开始出现内容（中位数）","en":"How soon content starts after a request (median)","ja":"リクエストから最初の出力までの時間（中央値）"},"perf.comp.reasoning":{"zh-Hant":"思考速度","zh-Hans":"思考速度","en":"Thinking speed","ja":"思考速度"},"perf.comp.reasoning.desc":{"zh-Hant":"回應期間平均每秒產生的推理 token","zh-Hans":"响应期间平均每秒产生的推理 token","en":"Reasoning tokens per second while responding","ja":"応答中に 1 秒あたりに生成した推論 token"},"perf.comp.pace":{"zh-Hant":"行動節奏","zh-Hans":"行动节奏","en":"Tool pace","ja":"行動ペース"},"perf.comp.pace.desc":{"zh-Hant":"每個活躍分鐘呼叫工具的次數","zh-Hans":"每个活跃分钟调用工具的次数","en":"Tool calls per active minute","ja":"アクティブな 1 分あたりのツール呼び出し回数"},"perf.comp.pace.count":{"zh-Hant":"共 %d 次工具呼叫","zh-Hans":"共 %d 次工具调用","en":"%d tool calls in all","ja":"合計 %d 回のツール呼び出し"},"perf.comp.toolTime":{"zh-Hant":"工具耗時","zh-Hans":"工具耗时","en":"Tool time","ja":"ツール所要時間"},"perf.comp.toolTime.desc":{"zh-Hant":"工具從呼叫到傳回結果的典型時間","zh-Hans":"工具从调用到返回结果的典型时间","en":"Typical time from a tool call to its result","ja":"ツールを呼び出してから結果が返るまでの標準的な時間"},"perf.comp.toolSuccess":{"zh-Hant":"工具成功率","zh-Hans":"工具成功率","en":"Tool success","ja":"ツール成功率"},"perf.comp.toolSuccess.desc":{"zh-Hant":"沒有回報錯誤的工具呼叫比例","zh-Hans":"没有返回错误的工具调用比例","en":"Share of tool calls that returned without an error","ja":"エラーなく返ったツール呼び出しの割合"},"perf.comp.cache":{"zh-Hant":"快取命中","zh-Hans":"缓存命中","en":"Cache hits","ja":"キャッシュヒット"},"perf.comp.cache.desc":{"zh-Hant":"輸入 token 中從快取讀取的比例","zh-Hans":"输入 token 中从缓存读取的比例","en":"Share of input tokens read from the cache","ja":"入力 token のうちキャッシュから読んだ割合"},"perf.reason.notRecorded":{"zh-Hant":"不記錄","zh-Hans":"不记录","en":"Not recorded","ja":"記録なし"},"perf.reason.notRecorded.hint":{"zh-Hant":"%@ 不記錄這項資料，所以不計入分數，也不會扣分。","zh-Hans":"%@ 不记录这项数据，所以不计入分数，也不会扣分。","en":"%@ doesn't record this, so it is left out of the score rather than counted against it.","ja":"%@ はこの項目を記録しないため、スコアから除外され、減点もされません。"},"perf.reason.fewSamples":{"zh-Hant":"樣本不足","zh-Hans":"样本不足","en":"Too few","ja":"サンプル不足"},"perf.reason.fewSamples.hint":{"zh-Hant":"資料不到 %d 筆，暫不計入分數。","zh-Hans":"数据不到 %d 条，暂不计入分数。","en":"Fewer than %d values, so it is left out for now.","ja":"データが %d 件未満のため、いまは除外しています。"},"perf.unit.ms":{"zh-Hant":"%@ 毫秒","zh-Hans":"%@ 毫秒","en":"%@ ms","ja":"%@ ミリ秒"},"perf.unit.s":{"zh-Hant":"%@ 秒","zh-Hans":"%@ 秒","en":"%@ s","ja":"%@ 秒"},"perf.unit.min":{"zh-Hant":"%@ 分鐘","zh-Hans":"%@ 分钟","en":"%@ min","ja":"%@ 分"},"perf.unit.perMin":{"zh-Hant":"%@ 次/分","zh-Hans":"%@ 次/分","en":"%@/min","ja":"%@ 回/分"},"perf.card.sample":{"zh-Hant":"有效計時請求 %d 個 · 近 30 分鐘","zh-Hans":"有效计时请求 %d 个 · 近 30 分钟","en":"%d timed requests · last 30 minutes","ja":"計時できたリクエスト %d 件 · 直近 30 分"},"perf.card.footnote":{"zh-Hant":"1000 是參考水準，沒有上限；參考值依開發者的實際紀錄校準，不是業界標準。只有在即時上報分享模型、且服務支援時，才會傳送分數和各模型的性能統計，供排名使用。","zh-Hans":"1000 是参考水平，没有上限；参考值依开发者的实际记录校准，不是业界标准。只有在实时上报分享模型、且服务支持时，才会发送分数和各模型的性能统计，供排名使用。","en":"1000 is the reference level, with no upper limit; the reference values were calibrated on the developer's own logs, not an industry standard. The score and per-model performance statistics are sent, for ranking, only by live reporting with model sharing on, to a service that supports them.","ja":"1000 が基準で、上限はありません。基準値は開発者の実際のログで調整したもので、業界標準ではありません。スコアとモデルごとの性能統計をランキング用に送るのは、ライブ送信でモデルを共有し、サービスが対応している場合だけです。"},"perf.signals.title":{"zh-Hant":"行為","zh-Hans":"行为","en":"Behavior","ja":"挙動"},"perf.tooltip.top":{"zh-Hant":"性能 %@ · 最高：%@","zh-Hans":"性能 %@ · 最高：%@","en":"Perf %@ · top: %@","ja":"性能 %@ · 最高：%@"},"perf.tooltip.note":{"zh-Hant":"1000 為參考水準，沒有上限","zh-Hans":"1000 为参考水平，没有上限","en":"1000 is the reference level; no upper limit","ja":"1000 が基準、上限なし"},"a11y.perf.provisional":{"zh-Hant":"%@，初步（樣本少）","zh-Hans":"%@，初步（样本少）","en":"%@, provisional (few samples)","ja":"%@、暫定（サンプルが少ない）"},"a11y.perf.idle":{"zh-Hant":"%@，閒置中","zh-Hans":"%@，空闲中","en":"%@, idle","ja":"%@、待機中"},"a11y.perf.top":{"zh-Hant":"%@，%d 個 agent 中最高","zh-Hans":"%@，%d 个 agent 中最高","en":"%@, the highest of %d agents","ja":"%@、%d 個の agent で最高"},"a11y.perf.card":{"zh-Hant":"性能分析詳情","zh-Hans":"性能分析详情","en":"Performance details","ja":"性能の詳細"},"a11y.perf.score":{"zh-Hant":"性能 %@，%@","zh-Hans":"性能 %@，%@","en":"performance %@, %@","ja":"性能 %@、%@"},"a11y.perf.usual.up":{"zh-Hant":"比平常高 %@","zh-Hans":"比平常高 %@","en":"%@ above usual","ja":"普段より %@ 高い"},"a11y.perf.usual.down":{"zh-Hant":"比平常低 %@","zh-Hans":"比平常低 %@","en":"%@ below usual","ja":"普段より %@ 低い"},"a11y.perf.usual.same":{"zh-Hant":"和平常一樣","zh-Hans":"和平常一样","en":"same as usual","ja":"普段と同じ"},"a11y.perf.comp":{"zh-Hant":"%@：%@，分數 %@","zh-Hans":"%@：%@，分数 %@","en":"%@: %@, score %@","ja":"%@：%@、スコア %@"},"a11y.perf.comp.absent":{"zh-Hant":"%@：%@","zh-Hans":"%@：%@","en":"%@: %@","ja":"%@：%@"},"settings.bar.intelligence":{"zh-Hant":"顯示性能","zh-Hans":"显示性能","en":"Show Perf","ja":"性能を表示"},"settings.bar.intelligence.hint":{"zh-Hant":"在數值旁顯示所有 agent 中最高的性能分數（1000 為參考水準，沒有上限）與每秒思考 token 數；沒有分數時顯示「–」。","zh-Hans":"在数值旁显示所有 agent 中最高的性能分数（1000 为参考水平，没有上限）与每秒思考 token 数；没有分数时显示“–”。","en":"Shows the highest performance score among all agents (1000 is the reference level, with no upper limit) and their thinking tokens per second next to the value, and – when there is no score.","ja":"数値の横に、すべての agent のうち最も高い性能スコア（1000 が基準、上限なし）と毎秒の思考トークン数を表示します。スコアがないときは「–」です。"},"privacy.perfScore":{"zh-Hant":"性能分數：Agent Speed 依回應的時間與 token 數，以及工具呼叫的開始與結束時間、是否出錯，計算每個 agent 的性能分數；用量歷史只保存各模型每天的彙總數字。只有在你開啟即時上報並保留模型分享、且服務支援時，才會把目前的分數和各模型的性能統計（輸出與耗時總和、首段延遲分布、思考、快取、工具呼叫的次數、耗時與失敗數、活躍時間）傳送給該服務，供排名與統計分析；從不傳送單一請求或工具呼叫的資料，也不含提示詞、指令、路徑或時間點。","zh-Hans":"性能分数：Agent Speed 依响应的时间与 token 数，以及工具调用的开始与结束时间、是否出错，计算每个 agent 的性能分数；用量历史只保存各模型每天的汇总数字。只有在你开启实时上报并保留模型分享、且服务支持时，才会把当前的分数和各模型的性能统计（输出与耗时总和、首段延迟分布、思考、缓存、工具调用的次数、耗时与失败数、活跃时间）发送给该服务，供排名与统计分析；从不发送单个请求或工具调用的数据，也不含提示词、命令、路径或时间点。","en":"Performance score: Agent Speed computes each agent's performance score from the timing and token counts of its responses and from when its tool calls start and finish and whether they fail; the usage history keeps only per-model daily totals of these figures. Only live reporting sends anything of it, when you turn it on, leave model sharing on and the service supports it: the current score and per-model performance statistics (sums of output and duration, the first-content latency distribution, thinking, cache, tool-call counts, time and failures, active time), for ranking and statistical analysis. It never sends anything about a single request or tool call, and no prompts, commands, paths or timestamps.","ja":"性能スコア：Agent Speed は、応答の時間と token 数、ツール呼び出しの開始・終了の時刻とエラーの有無から各 agent の性能スコアを計算し、使用履歴にはモデルごとの日別の合計だけを保存します。送信するのは、ライブ送信をオンにしてモデルの共有もオンのままにし、サービスが対応している場合だけで、内容は現在のスコアとモデルごとの性能統計（出力量と所要時間の合計、最初の出力までの時間の分布、思考、キャッシュ、ツール呼び出しの回数・所要時間・失敗数、アクティブ時間）です。ランキングと統計分析に使われます。個々のリクエストやツール呼び出しのデータ、プロンプト、コマンド、パス、時刻は送信しません。"},"report.section.models":{"zh-Hant":"使用中的模型","zh-Hans":"使用中的模型","en":"Models in use","ja":"使用中のモデル"},"report.section.models.perfScore":{"zh-Hant":"也會傳送性能分數、思考速度，以及各模型的性能統計（輸出與耗時總和、首段延遲分布、思考、快取、工具呼叫的次數、耗時與失敗數、活躍時間），供排名與統計分析。只有每個模型的彙總數字，從不傳送單一請求或工具呼叫的資料，也不含提示詞、指令、路徑或時間點。","zh-Hans":"也会发送性能分数、思考速度，以及各模型的性能统计（输出与耗时总和、首段延迟分布、思考、缓存、工具调用的次数、耗时与失败数、活跃时间），供排名与统计分析。只有每个模型的汇总数字，从不发送单个请求或工具调用的数据，也不含提示词、命令、路径或时间点。","en":"Also sends the performance score, thinking speed and per-model performance statistics (sums of output and duration, the first-content latency distribution, thinking, cache, tool-call counts, time and failures, active time) for ranking and statistical analysis. Only per-model totals: never anything about a single request or tool call, and no prompts, commands, paths or timestamps.","ja":"性能スコア、思考の速度、モデルごとの性能統計（出力量と所要時間の合計、最初の出力までの時間の分布、思考、キャッシュ、ツール呼び出しの回数・所要時間・失敗数、アクティブ時間）も、ランキングと統計分析のために送信します。送るのはモデルごとの合計だけで、個々のリクエストやツール呼び出しのデータ、プロンプト、コマンド、パス、時刻は含みません。"},"source.zcode":{"zh-Hant":"ZCode","zh-Hans":"ZCode","en":"ZCode","ja":"ZCode"},"source.kimi":{"zh-Hant":"Kimi Code CLI","zh-Hans":"Kimi Code CLI","en":"Kimi Code CLI","ja":"Kimi Code CLI"},"source.grokBuild":{"zh-Hant":"Grok Build","zh-Hans":"Grok Build","en":"Grok Build","ja":"Grok Build"},"source.pi":{"zh-Hant":"Pi","zh-Hans":"Pi","en":"Pi","ja":"Pi"},"source.openclaw":{"zh-Hant":"OpenClaw","zh-Hans":"OpenClaw","en":"OpenClaw","ja":"OpenClaw"},"source.hermes":{"zh-Hant":"Hermes Agent","zh-Hans":"Hermes Agent","en":"Hermes Agent","ja":"Hermes Agent"},"source.droid":{"zh-Hant":"Factory Droid","zh-Hans":"Factory Droid","en":"Factory Droid","ja":"Factory Droid"},"effort.tooltip":{"zh-Hant":"推理強度：%@","zh-Hans":"推理强度：%@","en":"Reasoning effort: %@","ja":"推論の強さ：%@"},"speed.tooltip":{"zh-Hant":"加速：%@","zh-Hans":"加速：%@","en":"Speed: %@","ja":"高速化：%@"},"speed.value.standard":{"zh-Hant":"標準","zh-Hans":"标准","en":"Standard","ja":"標準"},"speed.value.fast":{"zh-Hant":"Fast","zh-Hans":"Fast","en":"Fast","ja":"Fast"},"speed.value.ultrafast":{"zh-Hant":"Ultrafast","zh-Hans":"Ultrafast","en":"Ultrafast","ja":"Ultrafast"},"speed.value.highspeed":{"zh-Hant":"Highspeed","zh-Hans":"Highspeed","en":"Highspeed","ja":"Highspeed"},"history.perf.title":{"zh-Hant":"性能表現","zh-Hans":"性能表现","en":"Performance","ja":"性能"},"history.perf.info":{"zh-Hant":"性能是 Agent Speed 依回應與工具紀錄算出的跑分：1000 是參考水準，沒有上限，越高越快。這裡把所選期間每個來源與模型的紀錄合併後計算，至少要有 20 個有效計時請求才有分數；每日趨勢只畫有 20 個以上的日子。參考值依開發者的實際紀錄校準，不是業界標準。","zh-Hans":"性能是 Agent Speed 依响应与工具记录算出的跑分：1000 是参考水平，没有上限，越高越快。这里把所选期间每个来源与模型的记录合并后计算，至少要有 20 个有效计时请求才有分数；每日趋势只画有 20 个以上的日子。参考值依开发者的实际记录校准，不是业界标准。","en":"Performance is a benchmark-style score Agent Speed computes from response and tool records: 1000 is the reference level, there is no upper limit, and higher is faster. Here the records of each source and model are pooled over the selected range, and a score needs at least 20 timed requests; the daily trend shows only days with 20 or more. The reference values were calibrated on the developer's own logs, not an industry standard.","ja":"性能は、Agent Speed が応答とツールの記録から計算するベンチマーク的なスコアです。1000 が基準で上限はなく、高いほど速いことを表します。ここでは選んだ期間の記録をソースとモデルごとにまとめて計算し、スコアには計時できたリクエストが 20 件以上必要です。日ごとの推移には 20 件以上ある日だけを表示します。基準値は開発者の実際のログで調整したもので、業界標準ではありません。"},"history.perf.info.a11y":{"zh-Hant":"這些數字怎麼算","zh-Hans":"这些数字怎么算","en":"How these numbers are computed","ja":"数値の計算方法"},"history.perf.trend":{"zh-Hant":"每日趨勢 · %@","zh-Hans":"每日趋势 · %@","en":"Daily trend · %@","ja":"日ごとの推移 · %@"},"history.perf.trend.days":{"zh-Hant":"截至 %@ 的 14 天","zh-Hans":"截至 %@ 的 14 天","en":"14 days to %@","ja":"%@ までの 14 日間"},"history.perf.usual.line":{"zh-Hant":"平常 %@","zh-Hans":"平常 %@","en":"Usual %@","ja":"普段 %@"},"history.perf.usual.hint":{"zh-Hant":"同一個來源與模型在這台電腦上，今天之前 14 天合併計算的分數；面板與看板上的「比平常」就是和它相比。","zh-Hans":"同一个来源与模型在这台电脑上，今天之前 14 天合并计算的分数；面板与看板上的“比平常”就是和它相比。","en":"The pooled score of this source and model on this computer over the 14 days before today, which “vs usual” on the dashboard and boards compares with.","ja":"このコンピューターでの同じソースとモデルの、今日より前の 14 日間をまとめたスコアです。ダッシュボードやボードの「普段比」はこれと比べています。"},"history.perf.column.model":{"zh-Hant":"模型","zh-Hans":"模型","en":"Model","ja":"モデル"},"history.perf.column.score":{"zh-Hant":"性能","zh-Hans":"性能","en":"Perf","ja":"性能"},"history.perf.column.usual":{"zh-Hant":"平常","zh-Hans":"平常","en":"Usual","ja":"普段"},"history.perf.column.timed":{"zh-Hant":"計時請求","zh-Hans":"计时请求","en":"Timed","ja":"計時件数"},"history.perf.column.timed.full":{"zh-Hant":"有效計時請求","zh-Hans":"有效计时请求","en":"Timed requests","ja":"計時できたリクエスト"},"history.perf.column.parts":{"zh-Hant":"構成","zh-Hans":"构成","en":"Breakdown","ja":"内訳"},"history.perf.column.throughput":{"zh-Hant":"吞吐","zh-Hans":"吞吐","en":"Output","ja":"出力"},"history.perf.column.latency":{"zh-Hant":"首段延遲","zh-Hans":"首段延迟","en":"Latency","ja":"初回出力"},"history.perf.column.reasoning":{"zh-Hant":"思考","zh-Hans":"思考","en":"Thinking","ja":"思考"},"history.perf.column.pace":{"zh-Hant":"節奏","zh-Hans":"节奏","en":"Pace","ja":"ペース"},"history.perf.column.toolTime":{"zh-Hant":"工具耗時","zh-Hans":"工具耗时","en":"Tool time","ja":"ツール時間"},"history.perf.column.toolSuccess":{"zh-Hant":"工具成功","zh-Hans":"工具成功","en":"Tool OK","ja":"ツール成功"},"history.perf.column.cache":{"zh-Hant":"快取","zh-Hans":"缓存","en":"Cache","ja":"キャッシュ"},"history.perf.sample.low":{"zh-Hant":"樣本少","zh-Hans":"样本少","en":"Few samples","ja":"サンプル少"},"history.perf.sample.hint":{"zh-Hant":"只有 %d 個有效計時請求；至少要 %d 個才會算出分數。","zh-Hans":"只有 %d 个有效计时请求；至少要 %d 个才会算出分数。","en":"Only %d timed requests; a score needs at least %d.","ja":"計時できたリクエストは %d 件です。スコアには %d 件以上が必要です。"},"history.perf.requests":{"zh-Hant":"%d 個計時請求","zh-Hans":"%d 个计时请求","en":"%d timed","ja":"計時 %d 件"},"history.perf.empty":{"zh-Hant":"這段期間沒有有效計時的請求","zh-Hans":"这段期间没有有效计时的请求","en":"No timed requests in this period","ja":"この期間に計時できたリクエストはありません"},"history.perf.empty.hint":{"zh-Hant":"性能需要有計時資料的請求。這個版本分析之前紀錄就已刪除的日子，只有用量總計，沒有性能資料。","zh-Hans":"性能需要有计时数据的请求。这个版本分析之前记录就已删除的日子，只有用量总计，没有性能数据。","en":"Performance needs timed requests. Days whose logs were deleted before this version could analyze them keep their totals but have no performance data.","ja":"性能には計時できたリクエストが必要です。このバージョンが分析する前にログが削除された日は、合計だけが残り、性能のデータはありません。"},"history.perf.analyzing":{"zh-Hant":"正在重新分析過去的紀錄…","zh-Hans":"正在重新分析过去的记录…","en":"Re-analyzing past logs…","ja":"過去のログを再分析しています…"},"history.perf.footnote":{"zh-Hant":"每個來源與模型分開合併計算；每天至少要有 20 個有效計時請求才畫進趨勢。參考值依開發者的實際紀錄校準，不是業界標準。","zh-Hans":"每个来源与模型分开合并计算；每天至少要有 20 个有效计时请求才画进趋势。参考值依开发者的实际记录校准，不是业界标准。","en":"Each source and model is pooled on its own; a day needs 20 timed requests to appear in the trend. The reference values were calibrated on the developer's own logs, not an industry standard.","ja":"ソースとモデルごとにまとめて計算します。推移に表示するには 1 日に計時できたリクエストが 20 件必要です。基準値は開発者の実際のログで調整したもので、業界標準ではありません。"},"a11y.history.perf.chart":{"zh-Hant":"%@ 的每日性能：最低 %@，最高 %@，最近一天 %@","zh-Hans":"%@ 的每日性能：最低 %@，最高 %@，最近一天 %@","en":"Daily performance of %@: lowest %@, highest %@, latest %@","ja":"%@ の日ごとの性能：最低 %@、最高 %@、直近 %@"},"a11y.history.perf.chart.empty":{"zh-Hant":"%@ 的每日性能：這段期間沒有資料足夠的日子","zh-Hans":"%@ 的每日性能：这段期间没有数据足够的日子","en":"Daily performance of %@: no day in this period has enough data","ja":"%@ の日ごとの性能：この期間に十分なデータのある日はありません"},"a11y.history.perf.parts":{"zh-Hant":"構成：%@","zh-Hans":"构成：%@","en":"Breakdown: %@","ja":"内訳：%@"},"boards.subCount":{"zh-Hant":"%d 個子 agent","zh-Hans":"%d 个子 agent","en":"%d sub-agents","ja":"サブ agent %d 個"},"boards.moreSubs":{"zh-Hant":"+%d 個子 agent · %@","zh-Hans":"+%d 个子 agent · %@","en":"+%d sub-agents · %@","ja":"ほかのサブ agent %d 個 · %@"},"boards.moreGroups":{"zh-Hant":"還有 %d 個 agent · %@","zh-Hans":"还有 %d 个 agent · %@","en":"%d more agents · %@","ja":"ほか %d 個の agent · %@"},"boards.today":{"zh-Hant":"今日 %@","zh-Hans":"今日 %@","en":"Today %@","ja":"今日 %@"},"boards.peak":{"zh-Hant":"峰值 %@","zh-Hans":"峰值 %@","en":"Peak %@","ja":"ピーク %@"},"a11y.board":{"zh-Hant":"排行看板，%@：每秒 %@ 個 token，%@","zh-Hans":"排行看板，%@：每秒 %@ 个 token，%@","en":"Leaderboard, %@: %@ tokens per second, %@","ja":"ランキングボード、%@：毎秒 %@ トークン、%@"},"a11y.board.row":{"zh-Hant":"第 %d 名，%@，每秒 %@ 個 token","zh-Hans":"第 %d 名，%@，每秒 %@ 个 token","en":"Rank %d, %@, %@ tokens per second","ja":"%d 位、%@、毎秒 %@ トークン"},"a11y.board.newLeader":{"zh-Hant":"%@ 升上第一名","zh-Hans":"%@ 升到第一名","en":"%@ takes first place","ja":"%@ が首位になりました"},"boards.readouts.intel":{"zh-Hant":"性能","zh-Hans":"性能","en":"Performance","ja":"性能"},"boards.readouts.hint":{"zh-Hant":"性能是跑分式的速度分數，1000 為參考水準、沒有上限；費用按 API 公開價格估算（API 等值）。","zh-Hans":"性能是跑分式的速度分数，1000 为参考水平、没有上限；费用按 API 公开价格估算（API 等值）。","en":"Performance is a benchmark-style speed score: 1000 is the reference level, with no upper limit. Costs are estimated at API list prices (API-equivalent).","ja":"性能はベンチマーク的な速度スコアで、1000 が基準、上限はありません。費用は API の公開価格で推定しています（API 換算）。"},"a11y.board.thinking":{"zh-Hant":"思考每秒 %@ 個 token","zh-Hans":"思考每秒 %@ 个 token","en":"thinking %@ tokens per second","ja":"思考 毎秒 %@ トークン"},"a11y.board.cost":{"zh-Hant":"費用每秒 %@ %@（API 等值）","zh-Hans":"费用每秒 %@ %@（API 等值）","en":"cost %@ %@ per second (API-equivalent)","ja":"費用 毎秒 %@ %@（API 換算）"},"a11y.board.costUnknown":{"zh-Hant":"費用：價格未知","zh-Hans":"费用：价格未知","en":"cost: price unknown","ja":"費用：価格不明"}};
+/* strings:end */
+</script>
+<script>
+// Performance score prototype: renders every surface in both themes from DATA and PS_STRINGS (DESIGN §12, METRICS 6.9).
+(function () {
+  'use strict';
+
+  const S = window.PS_STRINGS;
+  const params = new URLSearchParams(location.search);
+  const ui = {
+    lang: params.get('lang') || 'zh-Hant',
+    view: params.get('theme') || 'both',
+    reduce: params.get('reduce') === '1' || matchMedia('(prefers-reduced-motion: reduce)').matches,
+    contrast: params.get('contrast') === '1',
+    isStatic: params.get('static') === '1',
+    only: params.get('section'),
+    scenario: 'base',
+    selected: {},
+  };
+
+  // ── i18n ──────────────────────────────────────────────────────────────────────────────
+  const esc = (s) => String(s).replace(/[&<>"']/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;' }[c]));
+  function raw(key) {
+    const e = S[key];
+    if (!e) return `⟨${key}⟩`;
+    return e[ui.lang] ?? e.en;
+  }
+  function t(key, ...args) {
+    let i = 0;
+    return raw(key).replace(/%(%|@|d)/g, (m, c) => (c === '%' ? '%' : String(args[i++])));
+  }
+
+  // ── Formatting (DESIGN §12 Number formats; METRICS 7) ─────────────────────────────────
+  const group = (v) => String(v).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+  function sig3(x) { return x < 9.995 ? x.toFixed(2) : x < 99.95 ? x.toFixed(1) : x.toFixed(0); }
+  function fmtCompact(v) {
+    v = Math.round(v);
+    if (v < 10000) return group(v);
+    let s = sig3(v / 1000);
+    if (parseFloat(s) >= 1000) return sig3(v / 1e6) + 'M';
+    return s + 'k';
+  }
+  const fmtFull = (v) => (Math.round(v) >= 100000 ? fmtCompact(v) : group(Math.round(v)));
+  const fmtForm = (v, form) => (form === 'compact' ? fmtCompact(v) : fmtFull(v));
+  function fmtSpeed(v) {
+    if (v === 0) return '0';
+    if (v < 10) return v.toFixed(1);
+    if (v < 1000) return String(Math.round(v));
+    if (v < 10000) return (v / 1000).toFixed(2) + 'k';
+    if (v < 100000) return (v / 1000).toFixed(1) + 'k';
+    return Math.round(v / 1000) + 'k';
+  }
+  function fmtDur(ms) {
+    if (ms < 999.5) return t('perf.unit.ms', Math.round(ms));
+    const s = ms / 1000;
+    if (s < 9.95) return t('perf.unit.s', s.toFixed(1));
+    if (s < 59.5) return t('perf.unit.s', Math.round(s));
+    const m = ms / 60000;
+    return t('perf.unit.min', m < 9.95 ? m.toFixed(1) : Math.round(m));
+  }
+  const fmtPace = (n) => t('perf.unit.perMin', n < 9.95 ? n.toFixed(1) : Math.round(n));
+  function fmtPct(x) { let p = Math.round(x * 100); if (x < 1 && p >= 100) p = 99; return p + '%'; }
+  function signedPct(r) {
+    const p = Math.round(r * 100);
+    return p > 0 ? `+${p}%` : p < 0 ? `−${-p}%` : '±0%';
+  }
+  const logF = (v) => (v == null ? 0 : Math.max(0, Math.min(1, Math.log2(v / 250) / 4)));
+
+  // ── The score (METRICS 6.9): weighted geometric mean of the present ratios ───────────
+  const clamp = (r) => Math.max(0.05, Math.min(20, r));
+  const COMPS = [
+    { id: 'T', key: 'throughput', group: 'speed', w: 0.30, ratio: (m) => Math.max(0.01, m / 50), fmt: (m) => `${fmtSpeed(m)} ${t('unit.tokS')}` },
+    { id: 'L', key: 'latency', group: 'speed', w: 0.20, ratio: (m) => clamp(5000 / Math.max(m, 250)), fmt: fmtDur },
+    { id: 'R', key: 'reasoning', group: 'speed', w: 0.10, ratio: (m) => clamp(m / 20), fmt: (m) => `${fmtSpeed(m)} ${t('unit.tokS')}` },
+    { id: 'N', key: 'pace', group: 'efficiency', w: 0.15, ratio: (m) => clamp(m / 3), fmt: fmtPace },
+    { id: 'U', key: 'toolTime', group: 'efficiency', w: 0.10, ratio: (m) => clamp(400 / m), fmt: fmtDur },
+    { id: 'S', key: 'toolSuccess', group: 'efficiency', w: 0.05, ratio: (m) => clamp(m / 0.95), fmt: fmtPct },
+    { id: 'H', key: 'cache', group: 'efficiency', w: 0.10, ratio: (m) => clamp(m / 0.95), fmt: fmtPct },
+  ];
+  function evaluate(measures) {
+    let sw = 0;
+    let sl = 0;
+    const parts = COMPS.map((c) => {
+      const m = measures[c.id];
+      if (m === 'nr' || m === 'few' || m == null) return { c, present: false, reason: m === 'few' ? 'fewSamples' : 'notRecorded' };
+      const r = c.ratio(m);
+      sw += c.w;
+      sl += c.w * Math.log(r);
+      return { c, present: true, m, r, sub: 1000 * r };
+    });
+    return { score: sw ? 1000 * Math.exp(sl / sw) : null, parts };
+  }
+
+  // ── Data: agents (METRICS 6.7 order) and history (METRICS 6.11) ──────────────────────
+  const SOURCES = {
+    codex: { key: 'source.codex', color: '#34D399' },
+    claudeCode: { key: 'source.claudeCode', color: '#FF8A65' },
+    opencode: { key: 'source.opencode', color: '#F4B13E' },
+    gemini: { key: 'source.gemini', color: '#34B8F0' },
+    pi: { key: 'source.pi', color: '#A855F7' },
+  };
+  const srcName = (id) => t(SOURCES[id].key);
+  const srcColor = (id) => SOURCES[id].color;
+  const NOW = 1761750000000;
+
+  const BASE = [
+    { id: 'nova', project: 'nova', source: 'claudeCode', model: 'claude-opus-5-5', effort: 'xhigh', level: 4, speed: 'fast',
+      tps: 162, phase: 'generating', depth: 0, subCount: 1, lastLineMs: NOW - 900, n: 20, C: 42, baseline: 1123,
+      measures: { T: 77, L: 5400, R: 'nr', N: 3.5, U: 292, S: 0.97, H: 0.99 },
+      signals: { novelty: 0.78, failed: 2, recovered: 2, actions: 31 } },
+    { id: 'nova-sub', project: 'nova', source: 'claudeCode', model: 'claude-sonnet-5-5', effort: 'medium', level: 2,
+      tps: 48, phase: 'generating', depth: 1, parent: 'nova', lastLineMs: NOW - 1300, n: 7, C: 9, baseline: 1290,
+      measures: { T: 58, L: 6100, R: 'nr', N: 2.4, U: 520, S: 0.89, H: 0.97 }, signals: { actions: 6 } },
+    { id: 'vega', project: 'vega', source: 'pi', model: 'gpt-6.1-mini', effort: 'high', level: 3,
+      tps: 41, phase: 'generating', depth: 0, lastLineMs: NOW - 1800, n: 14, C: 26, baseline: null,
+      measures: { T: 40, L: 'nr', R: 'nr', N: 4.2, U: 180, S: 1.0, H: 'few' }, signals: { novelty: 0.66, failed: 0, recovered: 0, actions: 14 } },
+    { id: 'rocket', project: 'rocket', source: 'codex', model: 'gpt-6.1', effort: 'xhigh', level: 4, speed: 'fast',
+      tps: 0, phase: 'tools', depth: 0, lastLineMs: NOW - 2400, n: 20, C: 37, baseline: 893,
+      measures: { T: 30, L: 7400, R: 20, N: 2.9, U: 442, S: 0.96, H: 0.995 },
+      signals: { looping: 4, novelty: 0.46, failed: 5, recovered: 1, actions: 23 } },
+    { id: 'orbit', project: 'orbit', source: 'claudeCode', model: 'claude-opus-5-5', effort: 'high', level: 3,
+      tps: 0, phase: 'idle', idle: true, depth: 0, lastLineMs: NOW - 240000, n: 20, C: 51, baseline: 1452,
+      measures: { T: 92, L: 3600, R: 'nr', N: 5.1, U: 160, S: 0.98, H: 0.99 }, signals: { novelty: 0.81, failed: 1, recovered: 1, actions: 40 } },
+    { id: 'lumen', project: 'lumen', source: 'gemini', model: 'gemini-3-pro', tps: 22, phase: 'generating', depth: 0,
+      lastLineMs: NOW - 3000, n: 2, C: 0, baseline: null, measures: {}, signals: {} },
+    { id: 'quasar', project: 'quasar', source: 'opencode', model: 'qwen4-coder-flash', tps: 640, phase: 'generating', depth: 0,
+      lastLineMs: NOW - 500, n: 20, C: 0, baseline: 11880, galleryOnly: true,
+      measures: { T: 642, L: 'nr', R: 'nr', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, signals: {} },
+  ];
+  const SCENARIOS = {
+    base: {},
+    rise: { nova: { measures: { T: 96, L: 3900, R: 'nr', N: 4.1, U: 240, S: 0.98, H: 0.99 }, tps: 214 } },
+    drop: { nova: { measures: { T: 52, L: 8800, R: 'nr', N: 2.6, U: 410, S: 0.93, H: 0.98 }, tps: 96 } },
+  };
+  function agents() {
+    const over = SCENARIOS[ui.scenario] || {};
+    return BASE.map((a) => {
+      const x = over[a.id] ? { ...a, ...over[a.id] } : a;
+      const ev = x.n >= 3 ? evaluate(x.measures) : { score: null, parts: [] };
+      const form = ev.score == null ? 'none' : x.idle ? 'resting' : 'live';
+      return { ...x, ...ev, form, prov: ev.score != null && x.n < 10, shown: ev.score == null ? null : Math.round(ev.score) };
+    });
+  }
+  const inSets = (list) => list.filter((a) => !a.galleryOnly);
+  // The highest live score, else the highest resting one, else none. Ties: latest lastLineMs, then smallest id.
+  function topOf(list) {
+    const scored = inSets(list).filter((a) => a.shown != null);
+    const live = scored.filter((a) => a.form === 'live');
+    const pool = live.length ? live : scored.filter((a) => a.form === 'resting');
+    if (!pool.length) return null;
+    const a = [...pool].sort((x, y) => y.score - x.score || y.lastLineMs - x.lastLineMs || (x.id < y.id ? -1 : 1))[0];
+    return { agent: a, v: a.shown, prov: a.prov, form: live.length ? 'live' : 'resting', n: pool.length };
+  }
+  const tierKey = (v) => (v < 700 ? 'slow' : v < 1300 ? 'standard' : v < 2000 ? 'fast' : 'veryFast');
+  function scoreWords(v, prov, form, n) {
+    let s = fmtFull(v);
+    if (prov) s = t('a11y.perf.provisional', s);
+    if (form === 'resting') s = t('a11y.perf.idle', s);
+    if (n >= 2) s = t('a11y.perf.top', s, n);
+    return s;
+  }
+
+  // History (METRICS 6.11): per (source, model) over the range, pooled; daily trend per row.
+  const HROWS = [
+    { source: 'claudeCode', model: 'claude-opus-5-5', n: 2412, usual: 1123, m: { T: 74, L: 5600, R: 'nr', N: 3.4, U: 301, S: 0.97, H: 0.99 }, seed: 3 },
+    { source: 'claudeCode', model: 'claude-sonnet-5-5', n: 386, usual: 1388, m: { T: 88, L: 4200, R: 'nr', N: 4.1, U: 240, S: 0.98, H: 0.98 }, seed: 7 },
+    { source: 'codex', model: 'gpt-6.1', n: 1630, usual: 812, m: { T: 31, L: 7300, R: 21, N: 2.9, U: 430, S: 0.96, H: 0.99 }, seed: 11 },
+    { source: 'codex', model: 'gpt-6.1-mini', n: 214, usual: null, m: { T: 52, L: 4100, R: 33, N: 3.6, U: 380, S: 0.95, H: 0.98 }, seed: 13 },
+    { source: 'pi', model: 'gpt-6.1-mini', n: 96, usual: null, m: { T: 41, L: 'nr', R: 'nr', N: 4.0, U: 190, S: 0.99, H: 'few' }, seed: 17 },
+    { source: 'gemini', model: 'gemini-3-pro', n: 12, usual: null, m: { T: 64, L: 'nr', R: 'nr', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, seed: 19 },
+  ].map((r) => {
+    const ev = evaluate(r.m);
+    return { ...r, ...ev, has: r.n >= 20, shown: r.n >= 20 ? Math.round(ev.score) : null, key: `${r.source}/${r.model}` };
+  });
+  const RANGE_DAYS = 30;
+  const RANGE_END = new Date(2026, 9, 29);
+  function rng(seed) { let x = seed * 9301 + 49297; return () => ((x = (x * 9301 + 49297) % 233280) / 233280); }
+  function dailyOf(row) {
+    const r = rng(row.seed);
+    return Array.from({ length: RANGE_DAYS }, (_, i) => {
+      const day = new Date(RANGE_END);
+      day.setDate(day.getDate() - (RANGE_DAYS - 1 - i));
+      const weekend = day.getDay() === 0 || day.getDay() === 6;
+      const n = Math.round((row.n / RANGE_DAYS) * (weekend ? 0.4 : 1.15) * (0.5 + r()));
+      const drift = 0.9 + 0.2 * (i / RANGE_DAYS) + 0.12 * Math.sin(i / 3.1 + row.seed);
+      const v = row.score * drift * (0.92 + 0.16 * r());
+      return { day, n, v: n >= 20 ? Math.round(v) : null };
+    });
+  }
+
+  // ── Icons ─────────────────────────────────────────────────────────────────────────────
+  const I = {
+    dots8: '<svg width="10" height="10" viewBox="0 0 10 10" aria-hidden="true"><circle cx="5" cy="5" r="4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-dasharray="0 3.14" stroke-linecap="round"/></svg>',
+    loop: '<svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2.2 5.2A3.9 3.9 0 0 1 9.3 3.4M9.8 6.8a3.9 3.9 0 0 1-7.1 1.8" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round"/><path d="M9.8 1.4v2.4H7.4M2.2 10.6V8.2h2.4" fill="none" stroke="currentColor" stroke-width="1.35" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    repeat: '<svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M2 5.5V5a2 2 0 0 1 2-2h6M8 1l2 2-2 2M10 6.5V7a2 2 0 0 1-2 2H2M4 11L2 9l2-2" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    list: '<svg width="13" height="13" viewBox="0 0 12 12" aria-hidden="true"><path d="M4.5 3h6M4.5 6h6M4.5 9h6" stroke="currentColor" stroke-width="1.2" stroke-linecap="round"/><circle cx="2" cy="3" r=".8" fill="currentColor"/><circle cx="2" cy="6" r=".8" fill="currentColor"/><circle cx="2" cy="9" r=".8" fill="currentColor"/></svg>',
+    hourglass: '<svg width="11" height="11" viewBox="0 0 11 11" aria-hidden="true"><path d="M2.5 1h6M2.5 10h6M3 1c0 3 5 3 5 4.5S3 7 3 10M8 1c0 3-5 3-5 4.5S8 7 8 10" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
+    bolt: '<svg width="8" height="10" viewBox="0 0 8 10" aria-hidden="true"><path d="M4.8 0L.6 5.6h2.8L2.6 10l4.8-6H4.5z" fill="currentColor"/></svg>',
+    chev: '<svg width="8" height="10" viewBox="0 0 8 10" aria-hidden="true"><path d="M1.5 3.5L4 1l2.5 2.5M1.5 6.5L4 9l2.5-2.5" fill="none" stroke="currentColor" stroke-width="1.2" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    lock: '<svg width="10" height="11" viewBox="0 0 10 11" aria-hidden="true"><rect x="1.5" y="4.6" width="7" height="5.6" rx="1.3" fill="none" stroke="currentColor" stroke-width="1.1"/><path d="M3 4.6V3.3a2 2 0 0 1 4 0v1.3" fill="none" stroke="currentColor" stroke-width="1.1"/></svg>',
+    wifi: '<svg width="16" height="12" viewBox="0 0 16 12" aria-hidden="true"><path d="M1 4.2a10.5 10.5 0 0 1 14 0M3.3 6.6a7.2 7.2 0 0 1 9.4 0M5.6 9a3.8 3.8 0 0 1 4.8 0" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round"/><circle cx="8" cy="10.8" r=".9" fill="currentColor"/></svg>',
+    battery: '<svg width="24" height="12" viewBox="0 0 24 12" aria-hidden="true"><rect x=".7" y=".7" width="20" height="10.6" rx="3" fill="none" stroke="currentColor" stroke-opacity=".5"/><rect x="2.4" y="2.4" width="13" height="7.2" rx="1.6" fill="currentColor"/><path d="M22.4 4v4" stroke="currentColor" stroke-opacity=".5" stroke-width="1.4" stroke-linecap="round"/></svg>',
+    speaker: '<svg width="14" height="12" viewBox="0 0 14 12" aria-hidden="true"><path d="M1 4.2h2.4L6.6 1.4v9.2L3.4 7.8H1z" fill="currentColor"/><path d="M8.6 3.6a3.4 3.4 0 0 1 0 4.8M10.4 1.8a6 6 0 0 1 0 8.4" fill="none" stroke="currentColor" stroke-width="1.1" stroke-linecap="round"/></svg>',
+    caret: '<svg width="10" height="6" viewBox="0 0 10 6" aria-hidden="true"><path d="M1 5l4-4 4 4" fill="none" stroke="currentColor" stroke-width="1.3" stroke-linecap="round" stroke-linejoin="round"/></svg>',
+    gaugeMuted: '<svg width="34" height="34" viewBox="0 0 34 34" aria-hidden="true"><path d="M7.2 26.8A13 13 0 1 1 26.8 26.8" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" opacity=".55"/><path d="M17 17l5-6" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"/><circle cx="17" cy="17" r="2.2" fill="currentColor"/></svg>',
+  };
+  const HEAT = [[0, '#7C8798'], [0.1, '#2DD4BF'], [0.3, '#38BDF8'], [0.48, '#818CF8'], [0.64, '#E879F9'], [0.78, '#FB7185'], [0.9, '#FB923C'], [1, '#FACC15']];
+  const hex = (c) => [1, 3, 5].map((i) => parseInt(c.slice(i, i + 2), 16));
+  function heatColor(h, darken = 0) {
+    h = Math.max(0, Math.min(1, h));
+    let k = 1;
+    while (k < HEAT.length - 1 && HEAT[k][0] < h) k++;
+    const [h0, c0] = HEAT[k - 1];
+    const [h1, c1] = HEAT[k];
+    const f = (h - h0) / (h1 - h0 || 1);
+    const a = hex(c0);
+    const b = hex(c1);
+    return `rgb(${a.map((v, i) => Math.round((v + (b[i] - v) * f) * (1 - darken))).join(',')})`;
+  }
+  function arcD(cx, cy, r, a0, a1) {
+    const rad = (a) => (a * Math.PI) / 180;
+    const p0 = [cx + r * Math.cos(rad(a0)), cy + r * Math.sin(rad(a0))];
+    const p1 = [cx + r * Math.cos(rad(a1)), cy + r * Math.sin(rad(a1))];
+    return `M${p0[0].toFixed(2)} ${p0[1].toFixed(2)}A${r} ${r} 0 ${a1 - a0 > 180 ? 1 : 0} 1 ${p1[0].toFixed(2)} ${p1[1].toFixed(2)}`;
+  }
+  function gaugeSVG(d, h, theme) {
+    const sw = 1.75;
+    const r = (d - sw) / 2;
+    const c = d / 2;
+    return `<svg width="${d}" height="${d}" viewBox="0 0 ${d} ${d}" aria-hidden="true" style="flex:none">` +
+      `<path d="${arcD(c, c, r, 135, 405)}" fill="none" stroke="currentColor" stroke-opacity=".25" stroke-width="${sw}" stroke-linecap="round"/>` +
+      (h > 0 ? `<path d="${arcD(c, c, r, 135, 135 + 270 * h)}" fill="none" stroke="${heatColor(h, theme === 'light' ? 0.18 : 0)}" stroke-width="${sw}" stroke-linecap="round"/>` : '') + '</svg>';
+  }
+
+  // ── Numbers: a score in its surface's form; data-k links counts and meters ────────────
+  function numHTML(v, { key = '', form = 'compact', prov = false, cls = '' } = {}) {
+    if (v == null) return `<span class="${cls} is-none" data-k="${key}">–</span>`;
+    return `<span class="${cls}${prov ? ' pm' : ''}" data-k="${key}" data-v="${v}" data-form="${form}">${fmtForm(v, form)}</span>`;
+  }
+
+  // ── Score card ────────────────────────────────────────────────────────────────────────
+  function usualChip(a) {
+    if (a.shown == null) return '';
+    if (!a.baseline) return `<span class="chip chip-dot">${esc(t('perf.usual.none'))}</span>`;
+    const p = Math.round((a.score / a.baseline - 1) * 100);
+    return `<span class="chip ${p > 0 ? 'chip-up' : 'chip-flat'}">${esc(t('perf.usual', signedPct(a.score / a.baseline - 1)))}</span>`;
+  }
+  function usualWords(a) {
+    if (!a.baseline) return t('perf.usual.none');
+    const p = Math.round((a.score / a.baseline - 1) * 100);
+    return p > 0 ? t('a11y.perf.usual.up', p + '%') : p < 0 ? t('a11y.perf.usual.down', -p + '%') : t('a11y.perf.usual.same');
+  }
+  function scaleHTML(v, { key = '', pale = false, prov = false } = {}) {
+    const f = logF(v);
+    const ticks = [[0.25, '500'], [0.5, '1000'], [0.75, '2000'], [1, '4000']];
+    return `<div class="scale${pale ? ' is-pale' : ''}${prov ? ' is-prov' : ''}" aria-hidden="true" data-mk="${key}" data-mt="scale" style="--f:${v == null ? 0 : f}">` +
+      `<div class="trk"></div>${v == null ? '' : '<div class="fill"></div>'}` +
+      `<i class="tk" style="left:25%"></i><i class="tk ref" style="left:50%"></i><i class="tk" style="left:75%"></i></div>` +
+      `<div class="scale-lab" aria-hidden="true">${ticks.map(([p, s]) => `<span class="${s === '1000' ? 'ref' : ''}${p === 1 ? ' end' : ''}" style="left:${p * 100}%">${s}</span>`).join('')}</div>`;
+  }
+  function summaryText(a) {
+    const v = a.shown;
+    const tier = t('perf.tier.' + tierKey(v));
+    const ratio = (v / 1000).toFixed(2);
+    const present = a.parts.filter((p) => p.present);
+    if (present.length < 2) return t('perf.summary', tier, ratio);
+    const low = present.reduce((m, p) => (p.sub < m.sub ? p : m), present[0]);
+    if (low.sub < 1000) return t('perf.summary.slowest', tier, ratio, t('perf.comp.' + low.c.key));
+    return t('perf.summary.allAbove', tier, ratio);
+  }
+  function compRows(a) {
+    const out = [];
+    const words = [];
+    ['speed', 'efficiency'].forEach((g) => {
+      out.push(`<div class="g-t">${esc(t('perf.group.' + g))}</div>`);
+      a.parts.filter((p) => p.c.group === g).forEach((p) => {
+        const label = t('perf.comp.' + p.c.key);
+        let desc = t('perf.comp.' + p.c.key + '.desc');
+        if (p.c.id === 'N' && p.present) desc += ' · ' + t('perf.comp.pace.count', a.C);
+        if (p.present) {
+          const val = p.c.fmt(p.m);
+          const f = logF(p.sub);
+          out.push(`<div class="lb">${esc(label)}</div><div class="vl">${esc(val)}</div>` +
+            `<div class="mm" aria-hidden="true"><i style="width:${(f * 100).toFixed(1)}%"></i><b></b></div>` +
+            `<div class="ss">${fmtFull(p.sub)}</div><div class="ds">${esc(desc)}</div>`);
+          words.push(t('a11y.perf.comp', label, val, fmtFull(p.sub)) + '，' + desc);
+        } else {
+          const reason = t('perf.reason.' + p.reason);
+          const hint = p.reason === 'notRecorded' ? t('perf.reason.notRecorded.hint', srcName(a.source)) : t('perf.reason.fewSamples.hint', 3);
+          out.push(`<div class="lb">${esc(label)}</div><div class="vl is-absent">${esc(reason)}</div>` +
+            `<div class="mm dotted" aria-hidden="true"><b></b></div><div class="ss is-absent">–</div><div class="ds">${esc(hint)}</div>`);
+          words.push(t('a11y.perf.comp.absent', label, reason) + '，' + hint);
+        }
+      });
+    });
+    return { html: `<div class="comps">${out.join('')}</div>`, words };
+  }
+  function signalsHTML(a) {
+    const s = a.signals || {};
+    const rows = [];
+    if (s.looping) rows.push(`<div class="sig warn">${I.loop}<span>${esc(t('work.looping', s.looping))}</span></div>`);
+    if (s.repeating) rows.push(`<div class="sig">${I.repeat}<span>${esc(t('work.repeating', s.repeating))}</span></div>`);
+    if (s.actions >= 8) rows.push(`<div class="sig">${I.list}<span>${esc(t('work.summary', Math.round(s.novelty * 100) + '%', s.failed, s.recovered))}</span></div>`);
+    return rows.length ? `<div class="c-sigs"><div class="g-t">${esc(t('perf.signals.title'))}</div>${rows.join('')}</div>` : '';
+  }
+  function cardHTML(a, o = {}) {
+    const meta = [a.model, srcName(a.source)].concat(o.group && a.subCount ? [t('boards.subCount', a.subCount)] : []).join(' · ');
+    const provChip = a.prov ? `<span class="chip chip-dot">${I.dots8}${esc(t('perf.provisional'))}</span>` : '';
+    const head = `<div class="c-head"><span class="dot" style="background:${srcColor(a.source)}"></span><b>${esc(a.project)}</b>${provChip}</div>` +
+      `<div class="c-meta">${esc(meta)}</div>`;
+    const eyebrow = [a.form === 'resting' ? t('phase.idle') : '', o.topN >= 2 ? t('perf.card.top', o.topN) : ''].filter(Boolean).join(' · ');
+    const key = `card-${o.key || a.id}`;
+    const facts = [t('perf.card.sample', a.n)];
+    if (a.effort) facts.push(t('effort.tooltip', a.effort));
+    if (a.speed) facts.push(t('speed.tooltip', t('speed.value.' + a.speed)));
+    const factsHTML = `<div class="c-facts">${facts.map(esc).join('<br>')}</div>`;
+    const foot = `<div class="c-foot">${esc(t('perf.card.footnote'))}</div>`;
+    if (a.shown == null) {
+      const words = [t('intel.none'), t('perf.status.none', a.n, 3)];
+      return `<div class="card" role="group" aria-label="${esc(a.project + '，' + t('a11y.perf.card'))}" aria-description="${esc(words.join('，'))}">${head}` +
+        `<div class="c-score"><div class="c-top"><span class="c-big is-none">–</span></div>${scaleHTML(null)}` +
+        `<div class="c-sum">${esc(t('perf.status.none', a.n, 3))}</div></div>${factsHTML}${foot}</div>`;
+    }
+    const big = numHTML(a.shown, { key, form: 'full', prov: a.prov, cls: `c-big${a.form === 'resting' ? ' is-pale' : ''}` });
+    const comps = compRows(a);
+    const sum = summaryText(a);
+    const words = [t('a11y.perf.score', scoreWords(a.shown, a.prov, a.form, o.topN || 0), t('perf.tier.' + tierKey(a.shown))), usualWords(a), sum]
+      .concat(a.prov ? [t('perf.provisional.hint', a.n, 10)] : []).concat(comps.words);
+    return `<div class="card" role="group" aria-label="${esc(a.project + '，' + t('a11y.perf.card'))}" aria-description="${esc(words.join('，'))}">${head}` +
+      `<div class="c-score">${eyebrow ? `<div class="c-eyebrow">${esc(eyebrow)}</div>` : ''}` +
+      `<div class="c-top">${big}${usualChip(a)}</div>${scaleHTML(a.shown, { key, pale: a.form === 'resting', prov: a.prov })}` +
+      `<div class="c-sum">${esc(sum)}</div>${a.prov ? `<div class="c-hint">${esc(t('perf.provisional.hint', a.n, 10))}</div>` : ''}</div>` +
+      comps.html + signalsHTML(a) + factsHTML + foot + '</div>';
+  }
+
+  // ── Orb (led) with the 性能 readout (DESIGN §10 Intelligence readout) ─────────────────
+  function orbHTML(o, theme, uid) {
+    const S0 = o.size;
+    const tt = Math.max(7, 0.05 * S0);
+    const p = 1.25 * tt;
+    const c = S0 / 2;
+    const single = !(o.think > 0) && o.v != null;
+    const nearest = c - 0.245 * S0 + 0.095 * S0;
+    const perfBase = single ? nearest : nearest - 1.32 * tt;
+    const top = (base, size) => (base - 0.842 * size).toFixed(2);
+    const r1 = 0.405 * S0;
+    const r2 = 0.445 * S0;
+    const lit = Math.round(o.heat * 36);
+    let segs = '';
+    let glow = '';
+    for (let i = 0; i < 36; i++) {
+      const a = ((135 + (i + 0.5) * 7.5) * Math.PI) / 180;
+      const on = i < lit;
+      const ln = `<line x1="${(c + r1 * Math.cos(a)).toFixed(2)}" y1="${(c + r1 * Math.sin(a)).toFixed(2)}" x2="${(c + r2 * Math.cos(a)).toFixed(2)}" y2="${(c + r2 * Math.sin(a)).toFixed(2)}" stroke="${on ? heatColor(i / 36, theme === 'light' ? 0.08 : 0) : 'var(--led-off)'}" stroke-width="${(0.026 * S0).toFixed(2)}" stroke-linecap="round"/>`;
+      segs += ln;
+      if (on && theme === 'dark') glow += ln;
+    }
+    const dots = (o.dots || []).map((col, i, arr) => `<circle cx="${(c - (arr.length * 7) / 2 + 3.5 + i * 7).toFixed(1)}" cy="${(0.875 * S0).toFixed(1)}" r="2" fill="${col}"/>`).join('');
+    const pale = o.form === 'resting';
+    const n = numHTML(o.v, { key: o.key, prov: o.prov, cls: 'n' });
+    const perf = `<div class="ln ln-perf${pale ? ' is-pale' : ''}" style="top:${top(perfBase, p)}px"><span class="glyph">${esc(t('intel.glyph'))}</span>${n}</div>`;
+    const think = single ? '' : `<div class="ln ln-think" style="top:${top(nearest, tt)}px"><span class="glyph">${esc(t('intel.thinking.glyph'))}</span>` +
+      `<span class="n${o.think > 0 ? '' : ' is-none'}">${o.think > 0 ? fmtSpeed(o.think) : '–'}</span><span class="u">${esc(t('unit.tokS'))}</span></div>`;
+    const words = o.v == null ? t('intel.none') : single ? t('a11y.orb.intel.only', scoreWords(o.v, o.prov, o.form, o.n))
+      : t('a11y.orb.intel', scoreWords(o.v, o.prov, o.form, o.n), fmtSpeed(o.think));
+    const title = heatColor(o.heat, theme === 'light' ? 0.25 : 0);
+    return `<div class="orb" role="img" aria-label="${esc(words)}" style="--S:${S0}px;--t:${tt}px;--p:${p}px">` +
+      `<svg viewBox="0 0 ${S0} ${S0}" aria-hidden="true"><defs>` +
+      `<radialGradient id="g-${uid}" cx="50%" cy="38%" r="62%"><stop offset="0" style="stop-color:var(--orb-g1)"/><stop offset="1" style="stop-color:var(--orb-g2)"/></radialGradient>` +
+      `<filter id="f-${uid}" x="-20%" y="-20%" width="140%" height="140%"><feGaussianBlur stdDeviation="${(0.018 * S0).toFixed(2)}"/></filter></defs>` +
+      `<circle cx="${c}" cy="${c}" r="${(0.485 * S0).toFixed(2)}" fill="url(#g-${uid})" stroke="var(--orb-rim)"/>` +
+      `<g filter="url(#f-${uid})" opacity=".85">${glow}</g>${segs}${dots}</svg>${perf}${think}` +
+      `<div class="ln val" style="top:${top(0.62 * S0, 0.25 * S0)}px;font-size:${(0.25 * S0).toFixed(1)}px">${o.tps ? fmtSpeed(o.tps) : '0'}</div>` +
+      `<div class="ln unit" style="top:${top(0.705 * S0, 0.068 * S0)}px;font-size:${(0.068 * S0).toFixed(1)}px">${esc(t('unit.tokS'))}</div>` +
+      `<div class="ln ttl" style="top:${top(0.79 * S0, 0.074 * S0)}px;font-size:${(0.074 * S0).toFixed(1)}px;color:${title}">${esc(t(o.title))}</div></div>`;
+  }
+  const READOUTS = [
+    { id: 'live', label: 'live', v: 1213, form: 'live', n: 4, think: 128 },
+    { id: 'prov', label: 'perf.provisional', v: 940, form: 'live', prov: true, n: 1, think: 64 },
+    { id: 'rest', label: 'phase.idle', v: 1604, form: 'resting', n: 1, think: 0 },
+    { id: 'high', label: '12,840', v: 12840, form: 'live', n: 2, think: 412 },
+    { id: 'none', label: 'intel.none', v: null, form: 'none', think: 0 },
+  ];
+  const stateLabel = (l) => (l === 'live' ? 'live' : l.includes('.') ? t(l) : l);
+  function orbSection(theme) {
+    const list = agents();
+    const top = topOf(list);
+    const think = 174;
+    const hero = orbHTML({ size: 148, tps: 707, heat: 0.62, title: 'title.jetliner', think, key: 'orb-hero',
+      v: top && top.v, prov: top && top.prov, form: top ? top.form : 'none', n: top ? top.n : 0,
+      dots: inSets(list).filter((a) => a.tps > 0).map((a) => srcColor(a.source)) }, theme, `hero-${theme}`);
+    const tip = top ? `<div class="hover-tip">${esc(t('perf.tooltip.top', fmtFull(top.v), top.agent.project))}<div class="sub">${esc(t('perf.tooltip.note'))}</div></div>` : '';
+    const words = top ? t('a11y.orb.intel', scoreWords(top.v, top.prov, top.form, top.n), fmtSpeed(think)) : t('intel.none');
+    const gallery = READOUTS.map((r) => {
+      const busy = r.form === 'live';
+      const html = orbHTML({ size: 112, tps: busy ? 236 : 0, heat: busy ? 0.3 : 0, title: busy ? 'title.sportsCar' : 'title.walk', think: r.think,
+        v: r.v, prov: r.prov, form: r.form, n: r.n, key: '', dots: busy ? ['#34D399', '#FF8A65'] : ['#7C8798'] }, theme, `${r.id}-${theme}`);
+      const w = r.v == null ? t('intel.none') : r.think > 0 ? t('a11y.orb.intel', scoreWords(r.v, r.prov, r.form, r.n), fmtSpeed(r.think))
+        : t('a11y.orb.intel.only', scoreWords(r.v, r.prov, r.form, r.n));
+      return `<div class="orb-tile">${html}<div class="caption"><b>${esc(stateLabel(r.label))}</b></div><div class="vo">${esc(w)}</div></div>`;
+    }).join('');
+    return `<div class="stack" style="align-items:center"><div class="orb-tile hero">${hero}</div>` +
+      `<div style="max-width:300px"><div class="tag">Windows tooltip</div>${tip}<div class="vo" style="text-align:left;margin-top:10px">${esc(words)}</div></div></div>` +
+      `<div class="tag" style="margin-top:22px">${esc(t('intel.glyph'))} · states · 112 pt</div><div class="stack" style="justify-content:space-between;gap:20px 8px">${gallery}</div>`;
+  }
+
+  // ── Menu bar and taskbar ─────────────────────────────────────────────────────────────
+  function rblockHTML(r, key) {
+    const single = r.v != null && !(r.think > 0);
+    const n = r.v == null ? '<span class="nb is-quiet">–</span>' : `<span class="nb">${numHTML(r.v, { key, prov: r.prov })}</span>`;
+    const think = r.v == null || !(r.think > 0) ? '–' : fmtSpeed(r.think);
+    return `<span class="rblock${r.form === 'resting' ? ' is-pale' : ''}${single ? ' single' : ''}" aria-hidden="true">` +
+      `<span class="row r1"><span class="lb">${esc(t('intel.glyph'))}</span>${n}<span class="ub"></span></span>` +
+      `<span class="row r2"><span class="lb">${esc(t('intel.thinking.glyph'))}</span><span class="nb${think === '–' ? ' is-quiet' : ''}">${think}</span><span class="ub">${esc(t('unit.tokS'))}</span></span>` +
+      `<span class="row"><span class="lb ghost">${esc(t('intel.glyph'))}</span><span class="nb ghost">8,888</span><span class="ub ghost">${esc(t('unit.tokS'))}</span></span>` +
+      `<span class="row"><span class="lb ghost">${esc(t('intel.thinking.glyph'))}</span><span class="nb ghost">8.88k</span><span class="ub ghost"></span></span></span>`;
+  }
+  function barWords(r) {
+    if (r.v == null) return t('intel.none');
+    const w = scoreWords(r.v, r.prov, r.form, r.n);
+    return r.think > 0 ? t('a11y.orb.intel', w, fmtSpeed(r.think)) : t('a11y.orb.intel.only', w);
+  }
+  function itemHTML(r, theme, kind, key) {
+    const tps = r.form === 'live' ? r.tps || 707 : 0;
+    return `<span class="item" role="img" aria-label="${esc(barWords(r))}">${gaugeSVG(kind === 'mac' ? 13 : 14, tps ? 0.62 : 0, theme)}` +
+      `<span class="v${tps ? '' : ' is-idle'}">${fmtSpeed(tps)}</span><span class="unit">${esc(t('unit.tokS'))}</span>${rblockHTML(r, key)}</span>`;
+  }
+  function barSection(theme) {
+    const top = topOf(agents());
+    const live = top ? { v: top.v, prov: top.prov, form: top.form, n: top.n, think: 174 } : { v: null, think: 0 };
+    const mac = `<div class="mbar">${itemHTML(live, theme, 'mac', 'bar-mac')}<span class="sys">${I.wifi}</span><span class="sys">${I.battery}</span><span class="sys tnum">15:42</span></div>`;
+    const win = `<div class="tbar">${itemHTML(live, theme, 'win', 'bar-win')}<span class="tray">${I.caret}${I.wifi}${I.speaker}</span><span class="clock tnum">15:42<br>2026/10/29</span></div>`;
+    const tip = top ? `<div class="hover-tip" style="margin-top:10px">707 tok/s · ${esc(barWords(live))}<div class="sub">${esc(t('perf.tooltip.top', fmtFull(top.v), top.agent.project))}</div></div>` : '';
+    const states = READOUTS.map((s) => ({ ...s, think: s.think || 0 }));
+    const grid = (kind) => states.map((s) => `<div class="bar-state"><div class="${kind === 'mac' ? 'mbar' : 'tbar'}">${itemHTML(s, theme, kind, '')}</div>` +
+      `<div class="bar-label">${esc(stateLabel(s.label))}</div>${kind === 'mac' ? `<div class="vo">${esc(barWords(s))}</div>` : ''}</div>`).join('');
+    return `<div class="tag">macOS</div>${mac}<div class="vo" style="text-align:left">${esc(barWords(live))}</div><div class="bar-states">${grid('mac')}</div>` +
+      `<div class="tag" style="margin-top:24px">Windows</div>${win}${tip}<div class="bar-states">${grid('win')}</div>`;
+  }
+
+  // ── Board (glass M), sub-gauges of every style and row cells ──────────────────────────
+  function capsuleHTML(a) {
+    if (!a.effort && !a.speed) return '';
+    const hs = [3.2, 4.4, 5.6, 6.8, 8];
+    const meter = a.level ? `<span class="meter">${hs.map((h, i) => `<i class="${i < a.level ? 'on' : ''}" style="height:${h}px"></i>`).join('')}</span>` : '';
+    return `<span class="capsule" aria-hidden="true">${meter}<span class="w">${esc(a.effort || '')}</span>${a.speed ? `<span class="bolt">${I.bolt}</span>` : ''}</span>`;
+  }
+  const ARC = { cx: 33, cy: 33, r: 29, sw: 3, tip: 2.3 };
+  function glassArc(v, { prov = false, pale = false, uid }) {
+    const { cx, cy, r, sw } = ARC;
+    const rin = r - sw / 2 - 1;
+    const tick = `<line x1="${cx}" y1="${(cy - rin).toFixed(2)}" x2="${cx}" y2="${(cy - rin + 3.3).toFixed(2)}" stroke="var(--b-ink-3)" stroke-width="1" stroke-linecap="round"/>`;
+    const track = `<path d="${arcD(cx, cy, r, 150, 390)}" fill="none" stroke="var(--b-line-2)" stroke-width="${sw}" stroke-linecap="round"/>`;
+    if (v == null) return track + tick;
+    return `${track}${tick}<g class="val" data-arc="${uid}" data-prov="${prov ? 1 : 0}" data-pale="${pale ? 1 : 0}" opacity="${pale ? 0.35 : 1}">${glassArcValue(logF(v), prov, pale, uid)}</g>`;
+  }
+  function glassArcValue(f, prov, pale, uid) {
+    const { cx, cy, r, sw, tip } = ARC;
+    if (f <= 0) return '';
+    const end = 150 + 240 * f;
+    const ang = (end * Math.PI) / 180;
+    const tx = cx + r * Math.cos(ang);
+    const ty = cy + r * Math.sin(ang);
+    const d = arcD(cx, cy, r, 150, end);
+    const dash = prov ? ` stroke-dasharray="0 ${2 * sw}"` : '';
+    const glow = pale || ui.contrast ? '' : `<path d="${d}" fill="none" stroke="var(--pearl-b)" stroke-opacity=".6" stroke-width="${sw}" stroke-linecap="round"${dash} filter="url(#sgf-${uid})"/>`;
+    const tipEl = prov ? `<circle cx="${tx.toFixed(2)}" cy="${ty.toFixed(2)}" r="${tip}" fill="none" stroke="var(--pearl-b)" stroke-width="${(0.4 * tip).toFixed(2)}"/>`
+      : `<circle cx="${tx.toFixed(2)}" cy="${ty.toFixed(2)}" r="${tip}" fill="#fff" stroke="var(--pearl-b)" stroke-width=".6"/>`;
+    return `${glow}<path d="${d}" fill="none" stroke="${ui.contrast ? 'var(--b-ink)' : `url(#sgg-${uid})`}" stroke-width="${sw}" stroke-linecap="round"${dash}/>${tipEl}`;
+  }
+  function glassSG(o, uid, { key = '', think = 174, cost = '0.024' } = {}) {
+    const pale = o.form === 'resting';
+    const words = o.v == null ? t('intel.none') : t('perf.tooltip.top', fmtFull(o.v), o.who || '');
+    return `<div class="sg${think === null ? ' no-t' : ''}" tabindex="0" data-card="${o.card || ''}" aria-label="${esc(words)}">` +
+      `<svg viewBox="0 0 66 49" aria-hidden="true"><defs><linearGradient id="sgg-${uid}" x1="0" y1="1" x2="1" y2="0">` +
+      '<stop offset="0" style="stop-color:var(--pearl-c)"/><stop offset=".5" style="stop-color:var(--pearl-a)"/><stop offset="1" style="stop-color:var(--pearl-b)"/></linearGradient>' +
+      `<filter id="sgf-${uid}" x="-30%" y="-30%" width="160%" height="160%"><feGaussianBlur stdDeviation="1.5"/></filter></defs>` +
+      `<g data-mk="${key}" data-mt="arc" data-uid="${uid}">${glassArc(o.v, { prov: o.prov, pale, uid })}</g></svg>` +
+      `<div class="lab">${esc(t('intel.glyph'))}</div>` +
+      `<div class="num${pale || o.v == null ? ' is-pale' : ''}">${numHTML(o.v, { key, prov: o.prov })}</div>` +
+      (think === null ? '' : `<div class="tbl"><span class="l">${esc(t('intel.thinking.glyph'))}</span><span></span><span class="n${think ? '' : ' is-quiet'}">${think ? fmtSpeed(think) : '–'}</span><span class="u">${esc(t('unit.tokS'))}</span>` +
+        `<span class="l">${esc(t('cost.glyph'))}</span><span></span><span class="n">${cost}</span><span class="u">US$/s</span></div>`) + '</div>';
+  }
+  function neonSG(o, key = '') {
+    const pale = o.form === 'resting';
+    const txt = o.v == null ? '–' : fmtFull(o.v);
+    const ghost = txt.replace(/\d/g, '8');
+    const lit = o.v == null ? 0 : Math.round(logF(o.v) * 12);
+    return `<div class="ng" aria-hidden="true"><div class="lab">${esc(t('intel.glyph').toUpperCase())}</div>` +
+      `<div class="digits">${o.v == null ? '' : `<span class="gh">${ghost}</span>`}<span class="lit${pale || o.v == null ? ' is-pale' : ''}">${o.v == null ? '–' : numHTML(o.v, { key, form: 'full', prov: o.prov })}</span></div>` +
+      `<div class="meter${pale ? ' is-pale' : ''}${o.prov ? ' is-prov' : ''}" data-mk="${key}" data-mt="neon">${Array.from({ length: 12 }, (_, i) => `<i class="${i < lit ? 'on' : ''}"></i>`).join('')}</div></div>`;
+  }
+  function timingSG(o, key = '') {
+    const pale = o.form === 'resting';
+    return `<div class="tg" aria-hidden="true"><div class="r big"><span class="tab">${esc(t('intel.glyph').toUpperCase())}</span>` +
+      `<span class="v${pale || o.v == null ? ' is-pale' : ''}">${o.v == null ? '–' : numHTML(o.v, { key, form: 'full', prov: o.prov })}</span></div>` +
+      `<div class="r small"><span class="tab">${esc(t('intel.thinking.glyph').toUpperCase())}</span><span class="v${o.think ? '' : ' is-pale'}">${o.think ? fmtSpeed(o.think) : '–'}<small>TOK/S</small></span></div></div>`;
+  }
+  function sparkPath(w, h) {
+    const pts = [];
+    for (let i = 0; i < 60; i++) {
+      const v = 0.52 + 0.22 * Math.sin(i / 6.5) + 0.12 * Math.sin(i / 2.1 + 1) + 0.06 * Math.sin(i * 1.7);
+      pts.push([(i / 59) * w, h - 1.5 - Math.max(0, Math.min(1, v)) * (h - 3)]);
+    }
+    return pts.map((p, i) => `${i ? 'L' : 'M'}${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('');
+  }
+  function boardGroups(list) {
+    const ls = inSets(list);
+    return ls.filter((a) => a.depth === 0).map((r) => {
+      const members = ls.filter((a) => a.id === r.id || a.parent === r.id);
+      return { root: r, members, tps: members.reduce((s, a) => s + a.tps, 0), top: topOf(members) };
+    }).sort((x, y) => y.tps - x.tps || y.root.lastLineMs - x.root.lastLineMs);
+  }
+  function boardSection(theme) {
+    const list = agents();
+    const top = topOf(list);
+    const uid = `b-${theme}`;
+    const total = 707;
+    const heat = heatColor(0.62, theme === 'light' ? 0.22 : 0);
+    const groups = boardGroups(list);
+    const shown = groups.slice(0, 4);
+    const rest = groups.slice(4);
+    const rows = shown.map((g, i) => {
+      const r = g.root;
+      const tp = g.top;
+      const pf = tp ? numHTML(tp.v, { key: `brow-${r.id}`, prov: tp.prov }) : '<span>–</span>';
+      const detail = [r.model, r.subCount ? t('boards.subCount', r.subCount) : ''].filter(Boolean).join(' · ');
+      const words = [t('a11y.board.row', i + 1, r.project, fmtSpeed(g.tps))];
+      if (tp) words.push(t('a11y.agent.intel', scoreWords(tp.v, tp.prov, tp.form, tp.n)));
+      return `<div class="brow" tabindex="0" data-card="group:${tp ? tp.agent.id : r.id}" data-area="board" aria-label="${esc(words.join('，'))}">` +
+        `<span class="rk">${i + 1}</span><span class="bd" style="background:${r.phase === 'idle' ? 'var(--b-ink-3)' : srcColor(r.source)}"></span>` +
+        `<span class="nm"><span class="l1"><b>${esc(r.project)}</b>${capsuleHTML(r)}</span><i>${esc(detail)}</i></span>` +
+        `<span class="pf${!tp || tp.form === 'resting' ? ' is-pale' : ''}">${pf}</span>` +
+        `<span class="bv${g.tps ? '' : ' is-quiet'}">${g.tps ? fmtSpeed(g.tps) : '–'}</span>` +
+        (g.tps ? `<span class="share" style="color:${srcColor(r.source)};width:${((g.tps / total) * 250).toFixed(0)}px"></span>` : '') + '</div>';
+    }).join('') + (rest.length ? `<div class="more">${esc(t('boards.moreGroups', rest.length, fmtSpeed(rest.reduce((s, g) => s + g.tps, 0))))}</div>` : '');
+    const hero = { v: top && top.v, prov: top && top.prov, form: top ? top.form : 'none', who: top ? top.agent.project : '', card: 'hero' };
+    const boardWords = [t('a11y.board', t('history.allSources'), fmtSpeed(total), t('title.jetliner')),
+      top ? t('a11y.orb.intel', scoreWords(top.v, top.prov, top.form, top.n), fmtSpeed(174)) : t('intel.none')].join('，');
+    const board = `<div class="board" role="list" aria-label="${esc(boardWords)}">` +
+      `<div class="hero"><div class="hero-l"><div class="hero-v">${total}<small>tok/s</small></div>` +
+      `<div class="hero-t" style="color:${heat}">${esc(t('title.jetliner'))}</div><div class="hero-c">${esc(t('agents.context', 3, 1))}</div></div>` +
+      `${glassSG(hero, uid, { key: 'board-hero' })}</div>` +
+      `<svg class="strip" viewBox="0 0 308 16" preserveAspectRatio="none" aria-hidden="true"><defs><linearGradient id="spf-${uid}" x1="0" y1="0" x2="0" y2="1">` +
+      `<stop offset="0" stop-color="${heat}" stop-opacity=".28"/><stop offset="1" stop-color="${heat}" stop-opacity="0"/></linearGradient></defs>` +
+      `<path d="${sparkPath(308, 16)}L308 16L0 16Z" fill="url(#spf-${uid})"/><path d="${sparkPath(308, 16)}" fill="none" stroke="${heat}" stroke-width="1.25"/></svg>` +
+      `<div class="rank"><div class="caps" aria-hidden="true"><span class="hair"></span><span class="ci">${esc(t('intel.glyph'))}</span><span class="cv">${esc(t('unit.tokS'))}</span></div>${rows}</div>` +
+      `<div class="foot"><span>${esc(t('boards.today', '128M'))} tok</span><b>US$42.15</b><span>${esc(t('boards.peak', '2.16k'))}</span></div></div>`;
+    // Every style's sub-gauge across the states (DESIGN 2c, §12 Log scale).
+    const HS = [
+      { label: 'live', v: 1213, form: 'live', think: 174 }, { label: 'perf.provisional', v: 940, form: 'live', prov: true, think: 64 },
+      { label: 'phase.idle', v: 1604, form: 'resting', think: 0 }, { label: '420', v: 420, form: 'live', think: 22 },
+      { label: '12,840', v: 12840, form: 'live', think: 412 }, { label: 'intel.none', v: null, form: 'none', think: 0 },
+    ];
+    const heroGrid = `<div class="hero-grid"><span></span>${HS.map((h) => `<span class="hg-h">${esc(stateLabel(h.label))}</span>`).join('')}` +
+      `<span class="hg-s">Glass</span>${HS.map((h, i) => `<div class="cell">${glassSG(h, `hg-${theme}-${i}`, { think: null })}</div>`).join('')}` +
+      `<span class="hg-s">Neon</span>${HS.map((h) => `<div class="cell">${neonSG(h)}</div>`).join('')}` +
+      `<span class="hg-s">Timing</span>${HS.map((h) => `<div class="cell">${timingSG(h)}</div>`).join('')}</div>`;
+    const RS = [
+      { name: 'nova · claude-opus-5-5', v: 1213, form: 'live', tps: 162 }, { name: 'nova · claude-sonnet-5-5', v: 940, form: 'live', prov: true, tps: 48 },
+      { name: 'orbit · claude-opus-5-5', v: 1604, form: 'resting', tps: 0 }, { name: 'quasar · qwen4-coder-flash', v: 12840, form: 'live', tps: 640 },
+      { name: 'lumen · gemini-3-pro', v: null, form: 'none', tps: 22 },
+    ];
+    const rowsDemo = `<div class="rows-demo">${['glass', 'timing', 'neon'].map((st) => `<div class="rd ${st}"><div class="rd-t">${st} · sub rows</div>${RS.map((r) =>
+      `<div class="srow"><span class="bd" style="background:${r.tps ? '#FF8A65' : 'var(--b-ink-3)'}"></span><span class="nm">${esc(r.name)}</span>` +
+      `<span class="pf${r.form !== 'live' ? ' is-pale' : ''}">${numHTML(r.v, { prov: r.prov })}</span><span class="bv">${r.tps ? fmtSpeed(r.tps) : '–'}</span></div>`).join('')}</div>`).join('')}</div>`;
+    return `<div class="board-wrap">${board}<div class="card-slot" data-area="board"></div></div>` +
+      `<div class="tag" style="margin-top:24px">Sub-gauge · M · log arc and meter (250 → 1000 half → 4000 full)</div>${heroGrid}` +
+      `<div class="tag" style="margin-top:22px">Row cells · compact form, 8,888 cells</div>${rowsDemo}`;
+  }
+
+  // ── Dashboard ────────────────────────────────────────────────────────────────────────
+  function badgeHTML(a) {
+    if (a.phase === 'generating') return `<span class="dots3" style="color:${srcColor(a.source)}"><i></i><i></i><i></i></span>`;
+    if (a.phase === 'tools') return `<span style="color:var(--ink-2);display:inline-flex">${I.hourglass}</span>`;
+    return '<span class="idle-dot"></span>';
+  }
+  function dashRow(a) {
+    const s = a.signals || {};
+    const loop = s.looping ? `<span class="loop">${I.loop}</span>` : '';
+    const pf = numHTML(a.shown, { key: `dash-${a.id}`, prov: a.prov });
+    let lv;
+    if (a.tps >= 0.05) lv = `<span class="lv">${fmtSpeed(a.tps)}</span>`;
+    else if (a.phase === 'tools') lv = `<span class="lv" style="color:var(--ink-2)">${I.hourglass}</span>`;
+    else lv = '<span class="lv is-quiet">–</span>';
+    const words = [a.project, a.model, a.tps >= 0.05 ? `${fmtSpeed(a.tps)} tok/s` : t('phase.' + a.phase)];
+    if (a.shown != null) words.push(t('a11y.agent.intel', scoreWords(a.shown, a.prov, a.form, 0)));
+    if (s.looping) words.push(t('work.looping', s.looping));
+    return `<div class="drow" tabindex="0" data-card="${a.id}" data-area="dashboard" aria-label="${esc(words.join('，'))}">` +
+      (a.depth ? '<span class="indent"></span>' : '') +
+      `<span class="badge">${badgeHTML(a)}</span><span class="namebox">${loop}<b>${esc(a.project)}</b><i>${esc(a.model)} · ${esc(srcName(a.source))}</i></span>` +
+      `<span class="capcol">${capsuleHTML(a)}</span><span class="pf${a.form !== 'live' ? ' is-pale' : ''}">${pf}</span>${lv}</div>`;
+  }
+  function dashboardSection() {
+    const list = inSets(agents());
+    return `<div class="dash-wrap"><div class="card-slot" data-area="dashboard"></div>` +
+      `<div class="panel dash" style="--capw:84px"><div class="p-head"><h3>${esc(t('dashboard.agents'))}</h3>` +
+      `<span class="cap-i" title="${esc(t('agents.intel.hint'))}">${esc(t('intel.glyph'))}</span><span class="cap-v">${esc(t('unit.tokS'))}</span></div>` +
+      `${list.map(dashRow).join('')}</div></div>` +
+      `<div class="vo" style="text-align:right;margin-top:12px">${esc(t('agents.intel.hint'))}</div>`;
+  }
+  function cardsSection() {
+    const list = agents();
+    const by = (id) => list.find((a) => a.id === id);
+    const top = topOf(list);
+    const items = [
+      ['live · Claude Code', by('nova'), {}], ['live · Codex · thinking', by('rocket'), {}],
+      ['absent components · Pi', by('vega'), {}], ['provisional', by('nova-sub'), {}],
+      ['resting', by('orbit'), {}], ['hero · highest of N', top.agent, { topN: top.n, key: 'hero' }],
+      ['12,840 · very fast', by('quasar'), {}], ['none', by('lumen'), {}],
+    ];
+    return `<div class="cards-grid">${items.map(([cap, a, o]) => `<figure><figcaption>${esc(cap)}</figcaption>${cardHTML(a, { key: 'g-' + (o.key || a.id), ...o })}</figure>`).join('')}</div>`;
+  }
+
+  // ── Usage History: 性能表現 ──────────────────────────────────────────────────────────
+  const HCOLS = ['throughput', 'latency', 'reasoning', 'pace', 'toolTime', 'toolSuccess', 'cache'];
+  const compOf = (row, key) => row.parts.find((p) => p.c.key === key);
+  function compCell(row, key) {
+    const p = compOf(row, key);
+    if (!p.present) {
+      const hint = p.reason === 'notRecorded' ? t('perf.reason.notRecorded.hint', srcName(row.source)) : t('perf.reason.fewSamples.hint', 3);
+      return `<td class="col-comp na" title="${esc(hint)}">–</td>`;
+    }
+    return `<td class="col-comp" title="${esc(t('perf.comp.' + key) + ' · ' + fmtFull(p.sub))}">${esc(p.c.fmt(p.m))}</td>`;
+  }
+  function partsCell(row) {
+    const words = row.parts.map((p) => `${t('perf.comp.' + p.c.key)} ${p.present ? fmtFull(p.sub) : '–'}`).join(t('list.separator'));
+    return `<td class="col-parts"><span class="fp" role="img" aria-label="${esc(t('a11y.history.perf.parts', words))}">${row.parts.map((p) =>
+      p.present ? `<i style="--f:${logF(p.sub).toFixed(3)}" title="${esc(t('perf.comp.' + p.c.key) + ' · ' + p.c.fmt(p.m) + ' · ' + fmtFull(p.sub))}"></i>` : '<i class="na"></i>').join('')}</span></td>`;
+  }
+  function meterHTML(v, w = 36) { return `<span class="mm" style="width:${w}px" aria-hidden="true"><i style="width:${(logF(v) * 100).toFixed(1)}%"></i><b></b></span>`; }
+  function sortRows(rows) { return [...rows].sort((a, b) => (b.has - a.has) || (a.has ? b.score - a.score : b.n - a.n) || (a.model < b.model ? -1 : 1)); }
+  function chartSVG(row, width, height, theme) {
+    const days = dailyOf(row);
+    const pts = days.filter((d) => d.v != null);
+    const maxV = Math.max(4000, ...pts.map((d) => d.v));
+    const topV = 250 * Math.pow(2, Math.ceil(Math.log2(maxV / 250)));
+    const padL = 34;
+    const padR = 8;
+    const padT = 8;
+    const padB = 18;
+    const W = width;
+    const H = height;
+    const y = (v) => padT + (1 - Math.log2(v / 250) / Math.log2(topV / 250)) * (H - padT - padB);
+    const x = (i) => padL + ((i + 0.5) / days.length) * (W - padL - padR);
+    const col = srcColor(row.source);
+    let grid = '';
+    for (let v = 500; v <= topV; v *= 2) {
+      grid += `<line class="${v === 1000 ? 'ref' : 'grid'}" x1="${padL}" x2="${W - padR}" y1="${y(v).toFixed(1)}" y2="${y(v).toFixed(1)}"/>` +
+        `<text class="ax${v === 1000 ? ' ref' : ''}" x="${padL - 6}" y="${(y(v) + 3).toFixed(1)}" text-anchor="end">${fmtFull(v)}</text>`;
+    }
+    const segs = [];
+    let cur = [];
+    days.forEach((d, i) => { if (d.v == null) { if (cur.length) segs.push(cur); cur = []; } else cur.push([x(i), y(d.v)]); });
+    if (cur.length) segs.push(cur);
+    const gid = `ag-${row.seed}-${theme}-${W}`;
+    const line = segs.filter((s) => s.length > 1).map((s) => `M${s.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('L')}`).join('');
+    const area = segs.filter((s) => s.length > 1).map((s) => `M${s[0][0].toFixed(1)} ${H - padB}L${s.map((p) => `${p[0].toFixed(1)} ${p[1].toFixed(1)}`).join('L')}L${s[s.length - 1][0].toFixed(1)} ${H - padB}Z`).join('');
+    const lastI = days.map((d) => d.v != null).lastIndexOf(true);
+    const dots = days.map((d, i) => (d.v == null ? '' : `<circle cx="${x(i).toFixed(1)}" cy="${y(d.v).toFixed(1)}" r="${i === lastI ? 3 : 2.25}" fill="${col}" stroke="var(--win)" stroke-width="1.5"/>`)).join('');
+    const usual = row.usual ? `<line x1="${padL}" x2="${W - padR}" y1="${y(row.usual).toFixed(1)}" y2="${y(row.usual).toFixed(1)}" stroke="${col}" stroke-opacity=".6" stroke-dasharray="4 3"/>` : '';
+    const months = days.map((d, i) => (d.day.getDate() === 1 ? `<line x1="${(x(i) - (W - padL - padR) / days.length / 2).toFixed(1)}" x2="${(x(i) - (W - padL - padR) / days.length / 2).toFixed(1)}" y1="${padT}" y2="${H - padB}" stroke="var(--line)"/>` +
+      `<text class="ax" x="${x(i).toFixed(1)}" y="${H - 4}">${d.day.getMonth() + 1}/1</text>` : '')).join('');
+    const nearMonth = days.slice(0, 5).some((d) => d.day.getDate() === 1);
+    const firstLab = (nearMonth ? '' : `<text class="ax" x="${x(0).toFixed(1)}" y="${H - 4}">${days[0].day.getMonth() + 1}/${days[0].day.getDate()}</text>`) +
+      `<text class="ax" x="${x(days.length - 1).toFixed(1)}" y="${H - 4}" text-anchor="end">${days[days.length - 1].day.getMonth() + 1}/${days[days.length - 1].day.getDate()}</text>`;
+    const vals = pts.map((d) => d.v);
+    const label = vals.length ? t('a11y.history.perf.chart', `${row.model} · ${srcName(row.source)}`, fmtFull(Math.min(...vals)), fmtFull(Math.max(...vals)), fmtFull(vals[vals.length - 1]))
+      : t('a11y.history.perf.chart.empty', `${row.model} · ${srcName(row.source)}`);
+    const empty = vals.length ? '' : `<text x="${(W + padL) / 2}" y="${H / 2}" text-anchor="middle" style="font-size:12px;fill:var(--ink-3)">${esc(label)}</text>`;
+    return `<svg class="chart" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none" style="height:${H}px" role="img" aria-label="${esc(label)}">` +
+      `<defs><linearGradient id="${gid}" x1="0" y1="0" x2="0" y2="1"><stop offset="0" stop-color="${col}" stop-opacity=".12"/><stop offset="1" stop-color="${col}" stop-opacity="0"/></linearGradient></defs>` +
+      `${grid}${months}${firstLab}<path d="${area}" fill="url(#${gid})"/><path d="${line}" fill="none" stroke="${col}" stroke-width="2" stroke-linejoin="round" stroke-linecap="round"/>${usual}${dots}${empty}</svg>`;
+  }
+  function ppHTML(mode, theme, width) {
+    const head = `<div class="pp-head"><h2>${esc(t('history.perf.title'))}</h2><button class="info" title="${esc(t('history.perf.info.a11y'))}" aria-label="${esc(t('history.perf.info.a11y'))}">i</button></div>`;
+    if (mode === 'empty') {
+      return `<div class="pp">${head}<div class="pp-state"><span class="gl">${I.gaugeMuted}</span><b>${esc(t('history.perf.empty'))}</b><span>${esc(t('history.perf.empty.hint'))}</span></div></div>`;
+    }
+    if (mode === 'analyzing') {
+      return `<div class="pp">${head}<div class="skel">${'<i></i>'.repeat(1)}<i style="height:90px;border-radius:8px"></i><i></i><i style="width:84%"></i><i style="width:92%"></i><i style="width:70%"></i></div>` +
+        `<div class="pp-state" style="padding:12px 0 2px"><span>${esc(t('history.perf.analyzing'))}</span></div></div>`;
+    }
+    const rows = sortRows(HROWS);
+    const selKey = ui.selected[theme + width] || [...rows].sort((a, b) => b.n - a.n)[0].key;
+    const sel = rows.find((r) => r.key === selKey) || rows[0];
+    const chartW = Math.max(300, width - 48 - 36);
+    const chartH = width >= 860 + 84 ? 150 : width >= 600 + 84 ? 132 : 120;
+    const legend = `<span class="legend"><span><svg width="12" height="2"><line x1="0" x2="12" y1="1" y2="1" stroke="currentColor" stroke-opacity=".7"/></svg>1000 ${esc(t('perf.reference'))}</span>` +
+      (sel.usual ? `<span><svg width="12" height="2"><line x1="0" x2="12" y1="1" y2="1" stroke="${srcColor(sel.source)}" stroke-dasharray="4 3"/></svg>${esc(t('history.perf.usual.line', fmtFull(sel.usual)))}</span>` : '') + '</span>';
+    const trend = `<div class="trend-t"><span class="tt">${esc(t('history.perf.trend', '')).replace(/\s*·\s*$/, ' · ')}<b>${esc(sel.model)}</b> · ${esc(srcName(sel.source))}</span>${legend}</div>` +
+      chartSVG(sel, chartW, chartH, theme);
+    const hdr = `<thead><tr><th>${esc(t('history.perf.column.model'))}</th><th title="${esc(t('history.perf.column.score'))}">${esc(t('history.perf.column.score'))}<span class="sort">▾</span></th>` +
+      `<th title="${esc(t('history.perf.usual.hint'))}">${esc(t('history.perf.column.usual'))}</th><th title="${esc(t('history.perf.column.timed.full'))}">${esc(t('history.perf.column.timed'))}</th>` +
+      HCOLS.map((k) => `<th class="col-comp" title="${esc(t('perf.comp.' + k) + ' — ' + t('perf.comp.' + k + '.desc'))}">${esc(t('history.perf.column.' + k))}</th>`).join('') +
+      `<th class="col-parts">${esc(t('history.perf.column.parts'))}</th></tr></thead>`;
+    const body = rows.map((r) => `<tr class="${r.has ? '' : 'low'}${r.key === sel.key ? ' sel' : ''}" data-sel="${r.key}" data-scope="${theme + width}">` +
+      `<td><span class="mcell"><span class="sdot" style="background:${srcColor(r.source)}"></span><span class="id">${esc(r.model)}</span><span class="src">${esc(srcName(r.source))}</span>` +
+      `${r.has ? '' : `<span class="chip-sm" title="${esc(t('history.perf.sample.hint', r.n, 20))}">${esc(t('history.perf.sample.low'))}</span>`}</span></td>` +
+      `<td>${r.has ? `<span class="scell"><b>${fmtFull(r.shown)}</b>${meterHTML(r.shown)}</span>` : `<span class="na" title="${esc(t('history.perf.sample.hint', r.n, 20))}">–</span>`}</td>` +
+      `<td${r.usual ? '' : ` class="na" title="${esc(t('perf.usual.none.hint', 20))}"`}>${r.usual ? `<span style="color:var(--ink-2)">${fmtFull(r.usual)}</span>` : '–'}</td>` +
+      `<td>${group(r.n)}</td>${HCOLS.map((k) => compCell(r, k)).join('')}${partsCell(r)}</tr>`).join('');
+    const list = rows.map((r) => {
+      const comps = r.parts.filter((p) => p.present).map((p) => `${t('history.perf.column.' + p.c.key)} ${p.c.fmt(p.m)}`).join(' · ');
+      const l2 = [srcName(r.source), t('history.perf.requests', group(r.n)), r.usual ? `${t('history.perf.column.usual')} ${fmtFull(r.usual)}` : ''].filter(Boolean).join(' · ');
+      return `<div class="pi${r.has ? '' : ' low'}${r.key === sel.key ? ' sel' : ''}" data-sel="${r.key}" data-scope="${theme + width}" tabindex="0">` +
+        `<div class="l1"><span class="sdot" style="background:${srcColor(r.source)}"></span><span class="id">${esc(r.model)}</span>` +
+        `${r.has ? '' : `<span class="chip-sm">${esc(t('history.perf.sample.low'))}</span>`}<span class="r">${r.has ? `<span class="scell"><b>${fmtFull(r.shown)}</b>${meterHTML(r.shown)}</span>` : '<span class="na">–</span>'}</span></div>` +
+        `<div class="l2">${esc(l2)}</div><div class="l3">${esc(comps)}</div></div>`;
+    }).join('');
+    return `<div class="pp" role="group" aria-label="${esc(t('history.perf.title'))}">${head}${trend}<table class="ptbl">${hdr}<tbody>${body}</tbody></table><div class="plist">${list}</div>` +
+      `<div class="pp-foot">${esc(t('history.perf.footnote'))}</div></div>`;
+  }
+  function hwinHTML(width, inner, narrow) {
+    const ranges = ['today', 'yesterday', '7d', '30d', '90d', 'year', 'all', 'custom'];
+    const seg = narrow ? `<span class="tb-pop" style="margin-left:auto">${esc(t('history.range.30d'))} ${I.chev}</span>`
+      : `<span class="tb-seg">${ranges.map((r) => `<span class="${r === '30d' ? 'on' : ''}">${esc(t('history.range.' + r))}</span>`).join('')}</span><span class="tb-pop">${esc(t('history.export'))}</span>`;
+    return `<div class="hwin${width < 800 && !narrow ? ' compact' : ''}" style="width:${width}px;max-width:100%"><div class="hbar"><span class="lights"><i></i><i></i><i></i></span>` +
+      `<span class="tb-pop"><span class="sdot" style="background:conic-gradient(#34D399 0 33%,#FF8A65 0 66%,#A855F7 0)"></span>${esc(t('history.allSources'))} ${I.chev}</span>${seg}</div>` +
+      `<div class="hbody"${narrow ? ' style="padding:18px 16px 16px"' : ''}><h1>${esc(t('history.title'))}</h1><div class="range">2026/9/30 – 10/29 · ${esc(t('history.range.30d'))}</div>${inner}</div>` +
+      `<div class="hfoot"><span></span><span class="lock">${I.lock}${esc(t(narrow ? 'history.privacy.short' : 'history.privacy'))}</span></div></div>`;
+  }
+  function historySection(theme) {
+    return '<div class="hist-variants">' +
+      `<div><div class="tag">Wide · 980</div>${hwinHTML(980, ppHTML('full', theme, 980))}</div>` +
+      `<div class="hist-row"><div><div class="tag">Medium · 740 (the window's minimum is 720)</div>${hwinHTML(740, ppHTML('full', theme, 740))}</div>` +
+      `<div style="flex:1;min-width:0;max-width:440px"><div class="tag">Narrow · 440</div>${hwinHTML(440, ppHTML('full', theme, 440), true)}</div></div>` +
+      `<div><div class="tag">States</div><div class="states-row"><div>${ppHTML('analyzing', theme, 600)}</div><div>${ppHTML('empty', theme, 600)}</div></div></div></div>`;
+  }
+
+  // ── Scale and formats reference ──────────────────────────────────────────────────────
+  function scaleSection() {
+    const zones = [[250, 700, 'slow'], [700, 1300, 'standard'], [1300, 2000, 'fast'], [2000, 4000, 'veryFast']];
+    const zcol = { slow: 'color-mix(in srgb, var(--ink) 10%, transparent)', standard: 'color-mix(in srgb, var(--pearl-c) 45%, transparent)',
+      fast: 'color-mix(in srgb, var(--pearl-a) 55%, transparent)', veryFast: 'color-mix(in srgb, var(--pearl-b) 60%, transparent)' };
+    const ruler = `<div class="ruler" aria-hidden="true">${zones.map(([a, b, k]) => `<div class="zone" style="left:calc(${logF(a) * 100}% + 1px);width:calc(${(logF(b) - logF(a)) * 100}% - 2px);background:${zcol[k]}"></div>` +
+      `<span class="zl" style="left:${((logF(a) + logF(b)) / 2) * 100}%">${esc(t('perf.tier.' + k))}</span>`).join('')}` +
+      [250, 500, 700, 1000, 1300, 2000, 4000].map((v) => `<i class="bar" style="left:${logF(v) * 100}%"></i><span class="tick${v === 1000 ? ' ref' : ''}" style="left:${logF(v) * 100}%">${fmtFull(v)}</span>`).join('') + '</div>';
+    const vals = [0, 986, 1286, 9999, 10000, 12840, 99949, 99960, 128400, 999500, 1284000];
+    const tbl = `<table class="fmt"><thead><tr><th>v</th><th>full</th><th>compact</th><th>f (log)</th><th>tier</th></tr></thead><tbody>${vals.map((v) =>
+      `<tr><td class="c">${v}</td><td class="c">${fmtFull(v)}</td><td class="c">${fmtCompact(v)}</td><td class="c">${logF(v).toFixed(3)}</td><td>${esc(t('perf.tier.' + tierKey(v)))}</td></tr>`).join('')}</tbody></table>`;
+    return ruler + tbl;
+  }
+
+  // ── Page assembly ─────────────────────────────────────────────────────────────────────
+  const SECTIONS = [
+    ['scale', '對數刻度與數字格式', 'f = clamp(log2(v / 250) / 4, 0, 1)：250 為空、1000 在正中、4000 以上全滿。tier 文字只用在卡片摘要。compact 在 10,000 以上取三位有效數字（k / M），格寬一律以 8,888 量測。', scaleSection, false],
+    ['orb', '懸浮窗讀數', '性能（compact）在上、思考在下；初步分數有虛線底；閒置淡色並在思考為 0 時收成一行；沒有分數時為「–」。上排的懸浮窗跟著「新回應」按鈕計數變化。', orbSection, false],
+    ['bar', '選單列 / 工作列', '固定寬度的兩行區塊：數字格以 8,888 與 8.88k 中較寬者量測，數值改變時就地替換、不計數。', barSection, false],
+    ['board', '排行看板', '光環副錶的弧線改為對數刻度，正上方的刻痕是參考水準 1000；數字以 compact 形式並縮小到 8,888 放得進弧內。霓虹與計時塔用完整數字。滑過列或副錶會顯示性能分析卡。', boardSection, true],
+    ['dashboard', '儀表板 · 性能欄', '性能欄寬 35 pt（8,888）；滑過或以鍵盤聚焦一列（空白鍵）會在面板旁顯示性能分析卡。', dashboardSection, true],
+    ['cards', '性能分析卡', '320 寬：大數字、比平常、對數刻度、摘要，以及速度與效率兩組分項（實測值、迷你刻度、分項分數、說明）。缺少的分項說明原因，從不顯示假的 0。', cardsSection, true],
+    ['history', '用量歷史 · 性能表現', '依來源與模型合併整段期間；點選一列即在上方顯示它的每日趨勢、參考線 1000 與平常線。寬版顯示每個分項，中版收成「構成」小圖，窄版變成清單。', historySection, true],
+  ];
+  function render() {
+    document.documentElement.lang = ui.lang;
+    document.body.dataset.view = ui.view;
+    document.body.classList.toggle('reduce', ui.reduce);
+    document.body.classList.toggle('static', ui.isStatic);
+    document.body.classList.toggle('hc', ui.contrast);
+    const prev = snapshot();
+    const html = SECTIONS.filter(([id]) => !ui.only || ui.only === id).map(([id, title, desc, fn, stack]) =>
+      `<section class="sec" id="sec-${id}"><div class="sec-head"><h2>${esc(title)}</h2><p>${esc(desc)}</p></div>` +
+      `<div class="pair${stack ? ' one' : ''}">${['dark', 'light'].map((th) => `<div class="theme-col" data-theme="${th}"><div class="wall"></div>` +
+        `<span class="col-tag">${th}</span>${fn(th)}</div>`).join('')}</div></section>`).join('');
+    document.getElementById('sections').innerHTML = html;
+    restoreCards();
+    animateFrom(prev);
+    bindHover();
+    bindHistory();
+    syncControls();
+  }
+
+  // ── Motion (DESIGN §12 Motion): count both ways, calmly; Reduce Motion crossfades ─────
+  const running = new Map();
+  function snapshot() {
+    const m = {};
+    document.querySelectorAll('[data-k][data-v]').forEach((el) => {
+      if (!el.dataset.k) return;
+      const k = el.closest('[data-theme]')?.dataset.theme + '|' + el.dataset.k;
+      m[k] = +(el.dataset.shown || el.dataset.v);
+    });
+    return m;
+  }
+  const easeOut = (x) => 1 - Math.pow(1 - x, 3);
+  function updateMeters(root, key, v) {
+    root.querySelectorAll(`[data-mk="${key}"]`).forEach((m) => {
+      const f = logF(v);
+      if (m.dataset.mt === 'scale') m.style.setProperty('--f', f.toFixed(4));
+      else if (m.dataset.mt === 'neon') m.querySelectorAll('i').forEach((i, n) => i.classList.toggle('on', n < Math.round(f * 12)));
+      else if (m.dataset.mt === 'arc') {
+        const g = m.querySelector('g.val');
+        if (g) g.innerHTML = glassArcValue(f, g.dataset.prov === '1', g.dataset.pale === '1', m.dataset.uid);
+      }
+    });
+  }
+  function animateFrom(prev) {
+    if (ui.isStatic) return;
+    document.querySelectorAll('[data-k][data-v]').forEach((el) => {
+      if (!el.dataset.k) return;
+      const theme = el.closest('[data-theme]');
+      const k = theme?.dataset.theme + '|' + el.dataset.k;
+      const from = prev[k];
+      const to = +el.dataset.v;
+      if (from == null || from === to) return;
+      if (ui.reduce) {
+        el.animate([{ opacity: 0 }, { opacity: 1 }], { duration: 150, easing: 'ease-out' });
+        return;
+      }
+      if (Math.abs(to - from) < Math.max(3, 0.01 * from)) return;
+      const dur = Math.min(0.7, Math.max(0.3, 0.3 + 0.35 * Math.abs(Math.log2(to / from)))) * 1000;
+      const form = el.dataset.form;
+      let t0 = null;
+      const step = (now) => {
+        if (t0 == null) t0 = now;
+        const x = Math.max(0, Math.min(1, (now - t0) / dur));
+        const v = Math.round(from + (to - from) * easeOut(x));
+        el.textContent = fmtForm(v, form);
+        el.dataset.shown = v;
+        updateMeters(theme, el.dataset.k, v);
+        if (x < 1) running.set(k, requestAnimationFrame(step));
+        else { delete el.dataset.shown; running.delete(k); }
+      };
+      el.textContent = fmtForm(from, form);
+      updateMeters(theme, el.dataset.k, from);
+      cancelAnimationFrame(running.get(k));
+      running.set(k, requestAnimationFrame(step));
+    });
+  }
+
+  // ── Hover cards (dashboard and board) ────────────────────────────────────────────────
+  let hoverTimer = 0;
+  let hideTimer = 0;
+  const openCards = {};
+  function cardFor(id) {
+    const list = agents();
+    if (id === 'hero') { const top = topOf(list); return top ? cardHTML(top.agent, { topN: top.n, key: 'hero-card' }) : ''; }
+    if (id.startsWith('group:')) { const a = list.find((x) => x.id === id.slice(6)); return a ? cardHTML(a, { key: 'open-' + a.id, group: true }) : ''; }
+    const a = list.find((x) => x.id === id);
+    return a ? cardHTML(a, { key: 'open-' + a.id }) : '';
+  }
+  function showCard(col, area, id, fresh) {
+    const slot = col.querySelector(`.card-slot[data-area="${area}"]`);
+    if (!slot) return;
+    openCards[col.dataset.theme + area] = id;
+    col.querySelectorAll(`[data-area="${area}"][data-card], .sg[data-card]`).forEach((r) => r.classList.toggle('is-open', r.dataset.card === id));
+    slot.innerHTML = `<div class="${fresh ? 'card-float' : ''}" style="--slide:${area === 'dashboard' ? '2px' : '-2px'}">${cardFor(id)}</div>`;
+  }
+  function restoreCards() {
+    document.querySelectorAll('.theme-col').forEach((col) => {
+      ['dashboard', 'board'].forEach((area) => {
+        const id = openCards[col.dataset.theme + area] || (area === 'dashboard' ? 'nova' : 'hero');
+        showCard(col, area, id, false);
+      });
+    });
+  }
+  function bindHover() {
+    document.querySelectorAll('[data-card]').forEach((row) => {
+      const col = row.closest('.theme-col');
+      const area = row.dataset.area || 'board';
+      if (!row.dataset.card) return;
+      const open = () => showCard(col, area, row.dataset.card, true);
+      row.addEventListener('mouseenter', () => {
+        clearTimeout(hideTimer);
+        clearTimeout(hoverTimer);
+        hoverTimer = setTimeout(open, area === 'dashboard' ? 450 : 350);
+      });
+      row.addEventListener('mouseleave', () => clearTimeout(hoverTimer));
+      row.addEventListener('focus', open);
+      row.addEventListener('keydown', (e) => { if (e.key === ' ') { e.preventDefault(); open(); } });
+    });
+  }
+  function bindHistory() {
+    document.querySelectorAll('[data-sel]').forEach((r) => {
+      const pick = () => { ui.selected[r.dataset.scope] = r.dataset.sel; render(); };
+      r.addEventListener('click', pick);
+      r.addEventListener('keydown', (e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); pick(); } });
+    });
+  }
+
+  // ── Controls ─────────────────────────────────────────────────────────────────────────
+  function syncControls() {
+    document.querySelectorAll('[data-lang]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.lang === ui.lang)));
+    document.querySelectorAll('.pg-top [data-view]').forEach((b) => b.setAttribute('aria-pressed', String(b.dataset.view === ui.view)));
+    document.getElementById('reduce').checked = ui.reduce;
+    document.getElementById('contrast').checked = ui.contrast;
+  }
+  document.querySelectorAll('[data-lang]').forEach((b) => b.addEventListener('click', () => { ui.lang = b.dataset.lang; render(); }));
+  document.querySelectorAll('.pg-top [data-view]').forEach((b) => b.addEventListener('click', () => { ui.view = b.dataset.view; render(); }));
+  document.getElementById('reduce').addEventListener('change', (e) => { ui.reduce = e.target.checked; render(); });
+  document.getElementById('contrast').addEventListener('change', (e) => { ui.contrast = e.target.checked; render(); });
+  document.querySelectorAll('[data-play]').forEach((b) => b.addEventListener('click', () => {
+    ui.scenario = b.dataset.play === 'reset' ? 'base' : b.dataset.play;
+    render();
+  }));
+  window.addEventListener('error', (e) => { document.getElementById('errors').textContent += e.message + '\n'; });
+  render();
+})();
+</script>
+</body>
+</html>
