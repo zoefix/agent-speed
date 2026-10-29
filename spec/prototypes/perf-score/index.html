@@ -651,31 +651,31 @@ window.PS_STRINGS = {"unit.tokS":{"zh-Hant":"tok/s","zh-Hans":"tok/s","en":"tok/
   const BASE = [
     { id: 'nova', project: 'nova', source: 'claudeCode', model: 'claude-opus-5-5', effort: 'xhigh', level: 4, speed: 'fast',
       tps: 162, phase: 'generating', depth: 0, subCount: 1, lastLineMs: NOW - 900, n: 20, C: 42, baseline: 1123,
-      measures: { T: 77, L: 5400, R: 'nr', N: 3.5, U: 292, S: 0.97, H: 0.99 },
+      measures: { T: 77, L: 5400, R: 41, N: 3.5, U: 292, S: 0.97, H: 0.99 },
       signals: { novelty: 0.78, failed: 2, recovered: 2, actions: 31 } },
     { id: 'nova-sub', project: 'nova', source: 'claudeCode', model: 'claude-sonnet-5-5', effort: 'medium', level: 2,
       tps: 48, phase: 'generating', depth: 1, parent: 'nova', lastLineMs: NOW - 1300, n: 7, C: 9, baseline: 1290,
-      measures: { T: 58, L: 6100, R: 'nr', N: 2.4, U: 520, S: 0.89, H: 0.97 }, signals: { actions: 6 } },
+      measures: { T: 58, L: 6100, R: 'few', N: 2.4, U: 520, S: 0.89, H: 0.97 }, signals: { actions: 6 } },
     { id: 'vega', project: 'vega', source: 'pi', model: 'gpt-6.1-mini', effort: 'high', level: 3,
       tps: 41, phase: 'generating', depth: 0, lastLineMs: NOW - 1800, n: 14, C: 26, baseline: null,
-      measures: { T: 40, L: 'nr', R: 'nr', N: 4.2, U: 180, S: 1.0, H: 'few' }, signals: { novelty: 0.66, failed: 0, recovered: 0, actions: 14 } },
+      measures: { T: 40, L: 'nr', R: 'few', N: 4.2, U: 180, S: 1.0, H: 'few' }, signals: { novelty: 0.66, failed: 0, recovered: 0, actions: 14 } },
     { id: 'rocket', project: 'rocket', source: 'codex', model: 'gpt-6.1', effort: 'xhigh', level: 4, speed: 'fast',
       tps: 0, phase: 'tools', depth: 0, lastLineMs: NOW - 2400, n: 20, C: 37, baseline: 893,
       measures: { T: 30, L: 7400, R: 20, N: 2.9, U: 442, S: 0.96, H: 0.995 },
       signals: { looping: 4, novelty: 0.46, failed: 5, recovered: 1, actions: 23 } },
     { id: 'orbit', project: 'orbit', source: 'claudeCode', model: 'claude-opus-5-5', effort: 'high', level: 3,
       tps: 0, phase: 'idle', idle: true, depth: 0, lastLineMs: NOW - 240000, n: 20, C: 51, baseline: 1452,
-      measures: { T: 92, L: 3600, R: 'nr', N: 5.1, U: 160, S: 0.98, H: 0.99 }, signals: { novelty: 0.81, failed: 1, recovered: 1, actions: 40 } },
+      measures: { T: 92, L: 3600, R: 44, N: 5.1, U: 160, S: 0.98, H: 0.99 }, signals: { novelty: 0.81, failed: 1, recovered: 1, actions: 40 } },
     { id: 'lumen', project: 'lumen', source: 'gemini', model: 'gemini-3-pro', tps: 22, phase: 'generating', depth: 0,
       lastLineMs: NOW - 3000, n: 2, C: 0, baseline: null, measures: {}, signals: {} },
     { id: 'quasar', project: 'quasar', source: 'opencode', model: 'qwen4-coder-flash', tps: 640, phase: 'generating', depth: 0,
       lastLineMs: NOW - 500, n: 20, C: 0, baseline: 11880, galleryOnly: true,
-      measures: { T: 642, L: 'nr', R: 'nr', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, signals: {} },
+      measures: { T: 642, L: 'nr', R: 'few', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, signals: {} },
   ];
   const SCENARIOS = {
     base: {},
-    rise: { nova: { measures: { T: 96, L: 3900, R: 'nr', N: 4.1, U: 240, S: 0.98, H: 0.99 }, tps: 214 } },
-    drop: { nova: { measures: { T: 52, L: 8800, R: 'nr', N: 2.6, U: 410, S: 0.93, H: 0.98 }, tps: 96 } },
+    rise: { nova: { measures: { T: 96, L: 3900, R: 47, N: 4.1, U: 240, S: 0.98, H: 0.99 }, tps: 214 } },
+    drop: { nova: { measures: { T: 52, L: 8800, R: 30, N: 2.6, U: 410, S: 0.93, H: 0.98 }, tps: 96 } },
   };
   function agents() {
     const over = SCENARIOS[ui.scenario] || {};
@@ -707,12 +707,12 @@ window.PS_STRINGS = {"unit.tokS":{"zh-Hant":"tok/s","zh-Hans":"tok/s","en":"tok/
 
   // History (METRICS 6.11): per (source, model) over the range, pooled; daily trend per row.
   const HROWS = [
-    { source: 'claudeCode', model: 'claude-opus-5-5', n: 2412, usual: 1123, m: { T: 74, L: 5600, R: 'nr', N: 3.4, U: 301, S: 0.97, H: 0.99 }, seed: 3 },
-    { source: 'claudeCode', model: 'claude-sonnet-5-5', n: 386, usual: 1388, m: { T: 88, L: 4200, R: 'nr', N: 4.1, U: 240, S: 0.98, H: 0.98 }, seed: 7 },
+    { source: 'claudeCode', model: 'claude-opus-5-5', n: 2412, usual: 1123, m: { T: 74, L: 5600, R: 42, N: 3.4, U: 301, S: 0.97, H: 0.99 }, seed: 3 },
+    { source: 'claudeCode', model: 'claude-sonnet-5-5', n: 386, usual: 1388, m: { T: 88, L: 4200, R: 39, N: 4.1, U: 240, S: 0.98, H: 0.98 }, seed: 7 },
     { source: 'codex', model: 'gpt-6.1', n: 1630, usual: 812, m: { T: 31, L: 7300, R: 21, N: 2.9, U: 430, S: 0.96, H: 0.99 }, seed: 11 },
     { source: 'codex', model: 'gpt-6.1-mini', n: 214, usual: null, m: { T: 52, L: 4100, R: 33, N: 3.6, U: 380, S: 0.95, H: 0.98 }, seed: 13 },
-    { source: 'pi', model: 'gpt-6.1-mini', n: 96, usual: null, m: { T: 41, L: 'nr', R: 'nr', N: 4.0, U: 190, S: 0.99, H: 'few' }, seed: 17 },
-    { source: 'gemini', model: 'gemini-3-pro', n: 12, usual: null, m: { T: 64, L: 'nr', R: 'nr', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, seed: 19 },
+    { source: 'pi', model: 'gpt-6.1-mini', n: 96, usual: null, m: { T: 41, L: 'nr', R: 'few', N: 4.0, U: 190, S: 0.99, H: 'few' }, seed: 17 },
+    { source: 'gemini', model: 'gemini-3-pro', n: 12, usual: null, m: { T: 64, L: 'nr', R: 'few', N: 'nr', U: 'nr', S: 'nr', H: 'few' }, seed: 19 },
   ].map((r) => {
     const ev = evaluate(r.m);
     return { ...r, ...ev, has: r.n >= 20, shown: r.n >= 20 ? Math.round(ev.score) : null, key: `${r.source}/${r.model}` };
