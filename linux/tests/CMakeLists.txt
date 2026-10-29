@@ -6,6 +6,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     json_test.cpp
+    parser_fixture_test.cpp
     rfc3339_test.cpp
 )
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)
