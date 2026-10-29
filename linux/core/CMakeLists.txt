@@ -21,6 +21,7 @@ add_library(agentspeed_core STATIC
     src/opencode.cpp
     src/parents.cpp
     src/path_text.cpp
+    src/pi_parser.cpp
     src/rfc3339.cpp
     src/text.cpp
     src/sqlite.cpp
