@@ -3,12 +3,12 @@ import AgentSpeedOrbModel
 import AppKit
 import SwiftUI
 
-/// `--board-frames DIR` with `AGENT_SPEED_BOARD_SCORES=1`: the boards' 智力 (DESIGN 2c Live metrics; DESIGN 12) offscreen
+/// `--board-frames DIR` with `AGENT_SPEED_BOARD_SCORES=1`: the boards' 性能 (DESIGN 2c Live metrics; DESIGN 12) offscreen
 /// — no windows, no screen capture. For each style: `scores-<style>-<theme>-<lang>[-contrast].png`, the sizes S, M and L
 /// (rows) in every scenario of `BoardScorePreviewData` (columns); `board-<style>-M-<scenario>-<theme>.png`, one board
-/// at 3× for detail; `detail-<style>[-<size>]-<theme>[-contrast].png`, the sub-gauge and the rows' 智力 column of every
+/// at 3× for detail; `detail-<style>[-<size>]-<theme>[-contrast].png`, the sub-gauge and the rows' 性能 column of every
 /// scenario at 4×; and `card-<style>-<target>-<theme>[-en].png`, the score card beside an M board where it opens
-/// (the hero's 智力, a group row, a sub row), on its solid surface (the material itself needs a real window). The
+/// (the hero's 性能, a group row, a sub row), on its solid surface (the material itself needs a real window). The
 /// effects layer is left out; the glass backdrop is its tint without the system blur.
 @MainActor
 enum BoardScorePreviews {
@@ -83,7 +83,7 @@ enum BoardScorePreviews {
         return canvas.image
     }
 
-    /// The sub-gauge (top) and the rows' 智力 column (bottom) of a board in every scenario, at 4×.
+    /// The sub-gauge (top) and the rows' 性能 column (bottom) of a board in every scenario, at 4×.
     private static func details(style: BoardStyle, size: BoardSize, dark: Bool, contrast: Bool, l10n: Localizer) -> CGImage? {
         let scenarios = BoardScorePreviewData.Scenario.allCases
         let scale: CGFloat = 4, side = CGFloat(size.side)
@@ -136,7 +136,7 @@ enum BoardScorePreviews {
     /// 2 pt larger (DESIGN 2c *The second line*), M and L, dark and light, every style: `centre-<style>-<size>-<theme>.png`
     /// (the board at 3×, a red hairline on each group row's centre line) and `centre-detail-<style>-<size>-<theme>.png`
     /// (the sub-gauge and the figures' columns of every scenario at 4×); `centre-timing-interval-<size>-<theme>[-en].png`
-    /// (timing's interval centred with the other figures) and `line2-neon-<size>-<lang>.png` (line 2 up to the 智力
+    /// (timing's interval centred with the other figures) and `line2-neon-<size>-<lang>.png` (line 2 up to the 性能
     /// column), at 3×.
     static func runCentre(into directory: URL) {
         let l10n = Localizer(preference: .zhHant)
@@ -290,7 +290,7 @@ enum BoardScorePreviews {
         struct Shot {
             var board: CGImage?
             var side: CGFloat
-            var model: TaskScoreCardModel
+            var model: PerfCardModel
             var top: CGFloat
         }
 
@@ -299,13 +299,13 @@ enum BoardScorePreviews {
         let dark: Bool
 
         var body: some View {
-            HStack(alignment: .top, spacing: TaskScoreCardPlacement.gap) {
+            HStack(alignment: .top, spacing: PerfCardPlacement.gap) {
                 if let board = shot.board {
                     Image(decorative: board, scale: 2)
                         .frame(width: shot.side, height: shot.side)
                 }
-                TaskScoreCardView(model: shot.model, l10n: l10n)
-                    .modifier(TaskScoreCardSolidSurface())
+                PerfCardView(model: shot.model, l10n: l10n)
+                    .modifier(PerfCardSolidSurface())
                     .shadow(color: .black.opacity(dark ? 0.5 : 0.16), radius: 18, y: 10)
                     .shadow(color: .black.opacity(dark ? 0.3 : 0.08), radius: 3, y: 1)
                     .padding(.top, shot.top)

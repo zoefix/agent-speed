@@ -62,7 +62,7 @@ final class OrbRuntime {
         updateBezel(unavailable: isPreviewing ? [] : reading.unavailable)
         trackPeak(snapshot: snapshot, set: set, isPreviewing: isPreviewing)
         if config.traffic == .intelligence {
-            lineQuiet.apply(score: TaskSetReading(score: reading.intelligence.score, agents: reading.agents),
+            lineQuiet.apply(score: PerfSetReading(score: reading.intelligence.score, agents: reading.agents),
                             thinking: reading.intelligence.thinking, generating: !reading.generatingSources.isEmpty, at: now)
             publishLines(.intelligence)
         }

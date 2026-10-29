@@ -171,22 +171,22 @@ enum PreviewData {
         (kind == .deepseek ? 2.4 : kind == .gemini ? 9 : 21, kind == .antigravity ? 0 : kind == .deepseek ? 0.7 : 1)
     }
 
-    /// A plausible task score for the preview models (METRICS 6.9); nil for a source without one.
+    /// A plausible performance score for the preview models (METRICS 6.9).
     static func previewScore(_ model: String?, source: SourceKind) -> Double? {
-        guard TaskScoring.scores(source), let model, !model.isEmpty else { return nil }
+        guard let model, !model.isEmpty else { return nil }
         let strong = ["opus", "fable", "gpt-6.1-sol", "gpt-5.5"].contains { model.contains($0) } && !model.contains("mini")
         let light = ["haiku", "flash", "mini"].contains { model.contains($0) }
-        return strong ? 88.75 : light ? 42.5 : 66.25
+        return strong ? 1286.4 : light ? 1742.6 : 948.2
     }
 
-    /// An agent's own sums (METRICS 6.9) for `output` tok/s with `thinkingShare` of it reasoning, and its task `score`
-    /// (live, or resting while `idle`).
-    static func intelligence(output: Double, score: Double?, id: String = "", idle: Bool = false, thinkingShare: Double,
-                             source: SourceKind, state: TaskState = .passing) -> IntelligenceSums {
+    /// An agent's own sums (METRICS 6.9) for `output` tok/s with `thinkingShare` of it reasoning, and its performance
+    /// `score` (live, or resting while `idle`).
+    static func intelligence(output: Double, score: Double?, id: String = "", idle: Bool = false, provisional: Bool = false,
+                             thinkingShare: Double, source: SourceKind) -> IntelligenceSums {
         var sums = IntelligenceSums()
         if let score {
-            let value = TaskAgentValue(form: idle ? .resting : .live, score: score, shown: taskRoundHalfAway(score), state: state)
-            sums.score = TaskSetValue(id: id, lastLineMs: nil, value: value)
+            sums.score = PerfSetValue(form: idle ? .resting : .live, score: score, agentId: id, lastLineMs: nil,
+                                      provisional: provisional)
         }
         guard output > 0 else { return sums }
         sums.output = output
@@ -195,37 +195,6 @@ enum PreviewData {
             sums.thinkingBase = output
         }
         return sums
-    }
-
-    /// A current task in `state` with `score` (METRICS 6.9), its dimensions split plausibly and the facts its state
-    /// carries, for the score card and the proof mark in previews.
-    static func task(_ state: TaskState, score: Double?) -> AgentTaskStatus {
-        var result = TaskResult(TaskEvaluation([], now: 0))
-        result.state = state
-        result.score = score
-        result.shown = score.map(taskRoundHalfAway)
-        let total = score ?? 0
-        let verify: Double = state == .passing ? min(40, total) : 0
-        let rest = max(0, total - verify)
-        let efficiency = min(10, rest * 0.25)
-        let converge = min(25, (rest - efficiency) * 0.6)
-        let recover = min(15, rest - efficiency - converge)
-        result.dims = TaskDimensions(v: verify, c: state == .unverified ? 0 : converge, r: state == .unverified ? 0 : recover,
-                                     e: state == .unverified ? total : efficiency,
-                                     k: max(0, rest - efficiency - converge - recover))
-        switch state {
-        case .passing:
-            result.lastPass = TaskLastPass(suite: "swift test", commandClass: .test, key: TaskDigest(value: 1), buildOnly: false)
-        case .pending:
-            result.vHeld = 40
-            result.lastPass = TaskLastPass(suite: "pytest", commandClass: .test, key: TaskDigest(value: 2), buildOnly: false)
-        case .failing:
-            result.openFailure = TaskOpenFailure(suite: "cargo test", commandClass: .test, key: TaskDigest(value: 3), errors: 3,
-                                                 peak: 9, counted: true, edited: false)
-        case .none, .unverified:
-            break
-        }
-        return AgentTaskStatus(taskStartMs: 0, result: result, predictions: nil, models: .prior)
     }
 
     /// DeepSeek not installed and Claude Desktop turned off: the dashboard hides the first and dims the second.

@@ -55,64 +55,46 @@ enum AgentIntelligencePreviews {
         PreviewSnapshot.writeHosted(view, dark: dark, to: url)
     }
 
-    /// Every form and placement of the column.
+    /// Every form and placement of the column: the prototype's agents (live, provisional, absent components, resting,
+    /// none), a compact `11.9k`, a long project name at rest and a model-less agent.
     static func snapshot() -> SpeedSnapshot {
         var snapshot = PreviewData.snapshot(speed: 420, redline: 2000, agents: .crowd(0))
         let now = snapshot.timestamp
-        snapshot.agents = [
-            agent("rocket", .codex, "agent-speed", "gpt-6.1-sol", .generating, 142, effort: "xhigh", index: 85.7, now: now),
-            agent("rocket-review", .codex, "agent-speed", "gpt-6.1-sol-mini", .generating, 64, parent: "rocket",
-                  effort: "high", tier: "fast", index: 41.2, state: .failing, now: now),
-            agent("rocket-scout", .codex, "agent-speed", "gpt-6.1-sol-mini", .generating, 38, parent: "rocket-review",
-                  effort: "ultracode", tier: "ultrafast", index: 100, now: now),
-            agent("atlas", .claudeCode, "intelligence-column-with-a-very-long-project-name", "claude-opus-5-5", .idle, 0,
-                  effort: "xhigh", index: 72.4, now: now.addingTimeInterval(-140)),
-            agent("halo", .gemini, "halo", nil, .generating, 0, now: now),
-            agent("quasar", .deepseek, "quasar", "deepseek-v4-pro", .generating, 51, effort: "high", now: now),
-            agent("nova", .claudeCode, "nova", "claude-sonnet-5-5", .generating, 22, effort: "medium", index: 8.6,
-                  state: .unverified, now: now),
-            agent("lumen", .claudeCode, "lumen", "claude-sonnet-5-5", .tools, 0, effort: "medium", index: 34.3,
-                  state: .pending, now: now.addingTimeInterval(-4)),
-        ]
+        var specs = PerfPreviewData.specs
+        var atlas = PerfPreviewData.spec("orbit")
+        atlas.id = "atlas"
+        atlas.project = "intelligence-column-with-a-very-long-project-name"
+        specs.append(atlas)
+        var halo = PerfPreviewData.spec("lumen")
+        halo.id = "halo"
+        halo.project = "halo"
+        halo.model = ""
+        specs.append(halo)
+        snapshot.agents = specs.map { spec in
+            var agent = PerfPreviewData.agent(spec, now: now)
+            if spec.model.isEmpty { agent.model = nil }
+            return agent
+        }
         snapshot.intelligence = snapshot.agents.reduce(into: IntelligenceSums()) { $0.add($1.intelligence) }
         return snapshot
     }
 
-    /// Live, resting, unverified and none on rows whose shown value is the same (74), so the digits of a form change
-    /// can be compared in place.
+    /// Live, resting, provisional and none on rows whose shown value is the same, so the digits of a form change can be
+    /// compared in place.
     static func steadySnapshot() -> SpeedSnapshot {
         var snapshot = PreviewData.snapshot(speed: 420, redline: 2000, agents: .crowd(0))
         let now = snapshot.timestamp
+        func steady(_ id: String, _ phase: AgentPhase, n: Int) -> AgentStatus {
+            var spec = PerfPreviewData.spec("nova")
+            (spec.id, spec.project, spec.phase, spec.n, spec.parent) = (id, "\(id)-1286", phase, n, nil)
+            return PerfPreviewData.agent(spec, now: now)
+        }
         snapshot.agents = [
-            agent("live", .claudeCode, "live-74", "claude-opus-5-5", .generating, 90, effort: "xhigh", index: 74, now: now),
-            agent("resting", .claudeCode, "resting-74", "claude-opus-5-5", .idle, 0, effort: "xhigh", index: 74, now: now),
-            agent("unproven", .claudeCode, "unverified-74", "claude-opus-5-5", .generating, 40, effort: "max", index: 74,
-                  state: .unverified, now: now),
-            agent("none", .claudeCode, "none", "claude-opus-5-5", .idle, 0, now: now),
+            steady("live", .generating, n: 20),
+            steady("resting", .idle, n: 20),
+            steady("provisional", .generating, n: 6),
+            steady("none", .idle, n: 2),
         ]
         return snapshot
-    }
-
-    private static func agent(_ id: String, _ source: SourceKind, _ project: String, _ model: String?, _ phase: AgentPhase,
-                              _ live: Double, parent: String? = nil, effort: String? = nil, tier: String? = nil,
-                              index: Double? = nil, state: TaskState = .passing, now: Date) -> AgentStatus {
-        var modes: [ExecutionModeFact] = []
-        if let effort, let fact = ExecutionModeFact(kind: .effort, rawValue: effort, evidence: .recorded, provider: nil, scope: .turn) {
-            modes.append(fact)
-        }
-        if let tier, let fact = ExecutionModeFact(kind: .serviceTier, rawValue: tier, evidence: .served, provider: "openai", scope: .response) {
-            modes.append(fact)
-        }
-        let share = source.recordsReasoningApart ? 0.3 : 0
-        let scored = TaskScoring.scores(source)
-        let score = scored ? index : nil
-        let sums = PreviewData.intelligence(output: live, score: score, id: "/preview/\(id).jsonl", idle: phase == .idle,
-                                            thinkingShare: share, source: source, state: state)
-        return AgentStatus(
-            id: "/preview/\(id).jsonl", source: source, project: project, model: model, phase: phase,
-            isSubagent: parent != nil, live: Rate(output: live, total: live * 26), recentSpeed: live > 0 ? live : nil,
-            lastActivity: now, parentId: parent.map { "/preview/\($0).jsonl" }, modes: ExecutionModes(modes),
-            intelligence: sums, task: scored ? PreviewData.task(score == nil ? .none : state, score: score) : nil
-        )
     }
 }

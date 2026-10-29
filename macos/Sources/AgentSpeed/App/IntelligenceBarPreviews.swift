@@ -4,9 +4,9 @@ import AppKit
 import SwiftUI
 
 /// `--render-previews` group `intelbar`: the menu bar item with the intelligence block (DESIGN 10, Menu bar and
-/// taskbar; DESIGN 12): every form and proof state of 智力 with 思考 shown, within its hold and hidden after it, and the
+/// taskbar; DESIGN 12): every form of 性能 and the provisional mark with 思考 shown, within its hold and hidden after it, and the
 /// widest numbers, in Chinese, English and Japanese on dark and light bars; with the money block and in value-only
-/// mode; with Increase Contrast; the item's own bitmap at 2× and 1× magnified to the pixel, so the proof mark's dots
+/// mode; with Increase Contrast; the item's own bitmap at 2× and 1× magnified to the pixel, so the provisional mark's dots
 /// can be checked; the intelligence block beside every network choice (`settings.bar.traffic` with the switch on, both
 /// blocks together); and 選單列 and 網路流量 with the switch on, measuring on and off. A red hairline marks the item's end, so a width change between rows shows at once.
 @MainActor
@@ -147,7 +147,7 @@ enum IntelligenceBarPreviews {
     }
 
     /// The block exactly as the menu bar gets it: the item's 2× bitmap, and the same item at 1×, cropped to the block
-    /// and magnified without smoothing (8× and 16×), one row per proof state.
+    /// and magnified without smoothing (8× and 16×), one row per provisional moment.
     private static func pixels(_ model: AppModel, dark: Bool) -> [NSImage] {
         let marked = [scenarios[3], scenarios[4], scenarios[5], scenarios[11]]
         var rows: [NSImage] = []

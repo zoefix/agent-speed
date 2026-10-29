@@ -2,125 +2,86 @@ import AgentSpeedCore
 import AgentSpeedOrbModel
 import Foundation
 
-/// Task scores for the boards' simulation and previews (METRICS 6.9): an agent's own value with a current task whose
-/// state, dimensions and facts fit it, so its rows, hero and score card read as the engine's would.
+/// Performance scores for the boards' simulation and previews (METRICS 6.9): an agent's own value with components that
+/// add up to it, so its rows, hero and score card read as the engine's would.
 @MainActor
 enum BoardScorePreviewData {
-    /// The board's 智力 in each form and proof state (DESIGN 12), for the previews.
+    /// The board's 性能 in each form (DESIGN 12), for the previews.
     enum Scenario: String, CaseIterable {
-        /// Live scores on most rows: passing, failing, a resting one, an unverified sub-agent, a pending one, none.
+        /// Live scores on most rows: a provisional sub-agent, a resting one, none.
         case live
         /// Every agent idle after work: resting scores, pale.
         case resting
         /// No agent has a score: `–`, an empty arc and meter.
         case none
-        /// The highest live score is unverified (the proof mark on the hero).
-        case unverified
-        /// The highest live score waits for a re-run (pending).
-        case pending
+        /// The highest live score is provisional (the provisional mark on the hero).
+        case provisional
+        /// The highest live score has five digits: compact on the rows, full on the hero.
+        case compact
     }
 
-    /// `agent` with its own task score: live while it works, resting while idle; nil leaves it without a score. A
-    /// source that records no tool calls has no task score at all (its card says so).
-    static func scored(_ agent: AgentStatus, score: Double?, state: TaskState, idle: Bool? = nil) -> AgentStatus {
+    /// `agent` with its own performance score: live while it works, resting while idle; nil leaves it with fewer than
+    /// three timed requests.
+    static func scored(_ agent: AgentStatus, score: Double?, provisional: Bool = false, idle: Bool? = nil) -> AgentStatus {
         var agent = agent
         let idle = idle ?? (agent.phase == .idle)
-        guard TaskScoring.scores(agent.source), let score else {
-            agent.task = TaskScoring.scores(agent.source) ? .empty : nil
+        guard let score else {
+            var none = PerfEvaluation.none(source: agent.source)
+            none.n = 2
+            agent.perf = none
             agent.intelligence.score = .empty
             return agent
         }
-        let task = task(score: score, state: state, idle: idle)
-        agent.task = task
-        agent.intelligence.score = TaskSetValue(id: agent.id, lastLineMs: Int64(agent.lastActivity.timeIntervalSince1970 * 1000),
-                                                value: task.value(idle: idle))
+        let evaluation = PerfPreviewData.evaluation(score: score, source: agent.source, model: agent.model ?? "",
+                                                    n: provisional ? 6 : 20, tools: 24, baseline: score * 0.94)
+        agent.perf = evaluation
+        agent.intelligence.score = PerfSetValue(form: idle ? .resting : .live, score: evaluation.score, agentId: agent.id,
+                                                lastLineMs: Int64(agent.lastActivity.timeIntervalSince1970 * 1000),
+                                                provisional: evaluation.provisional)
         return agent
     }
 
-    /// A current task scoring `score` in `state`: its dimensions add up to the score as METRICS 6.9 builds them (V only
-    /// once a check passed, its credit held while pending), with the facts and predictions of a task in progress.
-    static func task(score: Double, state: TaskState, idle: Bool) -> AgentTaskStatus {
-        var result = TaskResult(TaskEvaluation([TaskEvent](), now: nil))
-        result.state = state
-        result.score = score
-        result.shown = taskRoundHalfAway(score)
-        let buildOnly = state == .passing && score < 45
-        let verify: Double = switch state {
-        case .passing: buildOnly ? 20 : 40
-        case .none, .unverified, .failing, .pending: 0
-        }
-        // The rest spreads over C R E K by their maxima (E alone while nothing was verified).
-        let rest = max(0, score - verify)
-        if state == .unverified || state == .none {
-            result.dims = TaskDimensions(v: 0, c: 0, r: 0, e: min(10, rest), k: 0)
-        } else {
-            let share = min(1, rest / 60)
-            result.dims = TaskDimensions(v: verify, c: 25 * share, r: 15 * share, e: 10 * share, k: 10 * share)
-        }
-        let key = TaskDigest(value: 0)
-        switch state {
-        case .passing:
-            result.lastPass = TaskLastPass(suite: buildOnly ? nil : "swift test", commandClass: buildOnly ? .build : .test,
-                                           key: key, buildOnly: buildOnly)
-        case .pending:
-            result.vHeld = 40
-            result.lastPass = TaskLastPass(suite: "pytest", commandClass: .test, key: key, buildOnly: false)
-        case .failing:
-            result.openFailure = TaskOpenFailure(suite: "cargo test", commandClass: .test, key: key, errors: 3, peak: 9,
-                                                 counted: true, edited: false)
-        case .none, .unverified:
-            break
-        }
-        let success = min(0.97, max(0.05, score / 100 + (state == .failing ? -0.1 : 0.05)))
-        let predictions = idle ? nil : TaskPredictions(success: success, stall: max(0.01, (100 - score) / 260),
-                                                        fix: state == .failing ? 0.42 : nil,
-                                                        features: TaskSnapshotFeatures(passing: 0, failing: 0, conv: 0, ig: 0,
-                                                                                       loop: 0, osc: 0, size: 0),
-                                                        fixFeatures: nil)
-        return AgentTaskStatus(taskStartMs: 0, result: result, predictions: predictions, models: .prior)
-    }
-
-    /// `tick` with the scores of `scenario` on its agents, its groups and its hero's 智力 made again from them.
+    /// `tick` with the scores of `scenario` on its agents, its groups and its hero's 性能 made again from them.
     static func tick(_ tick: BoardTick, scenario: Scenario) -> BoardTick {
         var agents = tick.groups.flatMap(\.members)
         let roots = tick.groups.map(\.root.id)
-        func assign(_ id: String?, _ score: Double?, _ state: TaskState, idle: Bool? = nil) {
+        func assign(_ id: String?, _ score: Double?, provisional: Bool = false, idle: Bool? = nil) {
             guard let id, let index = agents.firstIndex(where: { $0.id == id }) else { return }
-            agents[index] = scored(agents[index], score: score, state: state, idle: idle)
+            agents[index] = scored(agents[index], score: score, provisional: provisional, idle: idle)
         }
         func root(_ index: Int) -> String? { index < roots.count ? roots[index] : nil }
         func sub(_ index: Int, _ sub: Int = 0) -> String? {
             index < tick.groups.count && sub < tick.groups[index].subs.count ? tick.groups[index].subs[sub].id : nil
         }
-        for agent in agents { assign(agent.id, nil, .none) }
+        for agent in agents { assign(agent.id, nil) }
         var idle = false
         switch scenario {
         case .live:
-            assign(root(0), 41.2, .failing)
-            assign(sub(0), 9.4, .unverified)
-            assign(sub(0, 1), 63, .passing)
-            assign(root(1), 85.7, .passing)
-            assign(sub(1), 30, .passing)
-            assign(root(2), 34.3, .pending)
-            assign(root(4), 72.4, .passing, idle: true)
+            assign(root(0), 1123.4)
+            assign(sub(0), 1048.2, provisional: true)
+            assign(sub(0, 1), 947)
+            assign(root(1), 1286.4)
+            assign(sub(1), 702)
+            assign(root(2), 893.3)
+            assign(root(4), 1452.4, idle: true)
         case .resting:
             idle = true
-            assign(root(0), 41.2, .failing)
-            assign(sub(0), 9.4, .unverified)
-            assign(root(1), 72.4, .passing)
-            assign(root(2), 34.3, .pending)
-            assign(root(4), 58, .passing)
+            assign(root(0), 1123.4)
+            assign(sub(0), 1048.2, provisional: true)
+            assign(root(1), 1452.4)
+            assign(root(2), 893.3)
+            assign(root(4), 760)
         case .none:
             break
-        case .unverified:
-            assign(root(0), 8.6, .unverified)
-            assign(sub(0), 6, .unverified)
-            assign(root(2), 72.4, .passing, idle: true)
-        case .pending:
-            assign(root(0), 41.2, .failing)
-            assign(root(1), 57.6, .pending)
-            assign(sub(1), 30, .passing)
-            assign(root(2), 34.3, .passing)
+        case .provisional:
+            assign(root(0), 860, provisional: true)
+            assign(root(1), 1048.2, provisional: true)
+            assign(root(2), 1452.4, idle: true)
+        case .compact:
+            assign(root(0), 1286.4)
+            assign(root(1), 12_840)
+            assign(sub(1), 702)
+            assign(root(2), 893.3)
         }
         if idle {
             agents = agents.map { agent in
@@ -130,9 +91,9 @@ enum BoardScorePreviewData {
                 agent.intelligence.output = 0
                 agent.intelligence.thinking = 0
                 agent.intelligence.thinkingBase = 0
-                if let task = agent.task, task.result?.score != nil {
-                    agent.intelligence.score = TaskSetValue(id: agent.id, lastLineMs: 0, value: task.value(idle: true))
-                    agent.task?.predictions = nil
+                if let perf = agent.perf, perf.score != nil {
+                    agent.intelligence.score = PerfSetValue(form: .resting, score: perf.score, agentId: agent.id,
+                                                            lastLineMs: 0, provisional: perf.provisional)
                 }
                 return agent
             }

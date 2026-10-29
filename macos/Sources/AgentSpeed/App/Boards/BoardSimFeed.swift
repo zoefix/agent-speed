@@ -233,9 +233,8 @@ enum BoardSimTick {
                                  isSubagent: agent.parentID != nil, live: Rate(output: agent.live, total: agent.live * 1.6),
                                  recentSpeed: nil, lastActivity: Date(timeIntervalSince1970: 1_800_000_000 + agent.lastActive),
                                  parentId: agent.parentID, modes: ExecutionModes(facts), intelligence: intelligence)
-        // A source without a task score keeps none; the others a passing task of the simulated score, so the board's
-        // score cards read as the engine's would.
+        // The simulated score with components that add up to it, so the board's score cards read as the engine's would.
         guard let score = agent.score else { return status }
-        return BoardScorePreviewData.scored(status, score: score, state: .passing)
+        return BoardScorePreviewData.scored(status, score: score)
     }
 }

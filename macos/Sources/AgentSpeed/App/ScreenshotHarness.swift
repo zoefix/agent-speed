@@ -33,7 +33,7 @@ enum ScreenshotHarness {
             if groups.contains("orbpane") { await OrbPaneHarness.run(model: model, into: directory) }
             if groups.contains("titles") { await TitlesPaneHarness.run(model: model, into: directory) }
             if groups.contains("history") { await captureHistory(model: model, into: directory) }
-            if groups.contains("taskcard") { await TaskScoreCardHarness.run(model: model, into: directory) }
+            if groups.contains("perfcard") { await PerfCardHarness.run(model: model, into: directory) }
             if groups.contains("update") { await captureUpdate(model: model, into: directory) }
             NSApp.appearance = nil
             NSApp.terminate(nil)

@@ -3,54 +3,42 @@ import AgentSpeedCore
 import AppKit
 import SwiftUI
 
-/// `--screenshots DIR` group `taskcard` (debug builds): the real card window on its material (Liquid Glass on macOS
-/// 26) over a wallpaper-like backdrop, light and dark, plus a climb captured mid count-up and a fall. Only the backdrop's
+/// `--screenshots DIR` group `perfcard` (debug builds): the real card window on its material (Liquid Glass on macOS
+/// 26) over a wallpaper-like backdrop, light and dark, plus a rise captured mid count and a fall. Only the backdrop's
 /// screen region is captured.
 @MainActor
-enum TaskScoreCardHarness {
+enum PerfCardHarness {
     static func run(model: AppModel, into directory: URL) async {
         let l10n = model.l10n
-        let cases = Dictionary(uniqueKeysWithValues: TaskScoreCardPreviewData.cases(l10n).map { ($0.name, $0.model) })
-        let panel = TaskScoreCardPanel(l10n: l10n)
+        let cases = Dictionary(uniqueKeysWithValues: PerfPreviewData.cards(l10n).map { ($0.name, $0.model) })
+        let panel = PerfCardPanel(l10n: l10n)
         guard let screen = NSScreen.main ?? NSScreen.screens.first else { return }
         let visible = screen.visibleFrame
         let region = CGRect(x: visible.midX - 300, y: visible.maxY - 860, width: 600, height: 840)
         // Stands in for the dashboard popover the card sits beside.
         let container = CGRect(x: region.midX + 20, y: region.maxY - 700, width: 260, height: 660)
+        let anchor = PerfCardAnchor(row: CGRect(x: container.minX, y: container.maxY - 120, width: container.width, height: 36),
+                                    container: container, visibleFrame: visible, side: .towardScreenCenter)
         for dark in [false, true] {
             NSApp.appearance = NSAppearance(named: dark ? .darkAqua : .aqua)
             let backdrop = Backdrop(frame: region, container: container, dark: dark)
             await ScreenshotHarness.bringForward()
-            for name in ["failing", "pending", "resting", "unverified"] {
+            for name in ["live", "thinking", "provisional", "resting", "none"] {
                 guard let card = cases[name] else { continue }
-                let anchor = TaskScoreCardAnchor(row: CGRect(x: container.minX, y: container.maxY - 120, width: container.width, height: 36),
-                                                 container: container, visibleFrame: visible, side: .towardScreenCenter)
                 panel.show(card, key: name, anchor: anchor, above: backdrop.window, reduceMotion: false, reduceTransparency: false)
                 try? await Task.sleep(for: .seconds(0.9))
-                capture(region, "taskcard-\(name)-\(dark ? "dark" : "light")", into: directory)
-                cache(panel, "taskcard-\(name)-\(dark ? "dark" : "light")", anchor: anchor, into: directory)
+                capture(region, "perfcard-\(name)-\(dark ? "dark" : "light")", into: directory)
+                cache(panel, "perfcard-\(name)-\(dark ? "dark" : "light")", anchor: anchor, into: directory)
                 panel.hide(animated: false)
             }
-            if !dark, var climbing = cases["failing"] {
-                // A test pass: 41 → 81 counts up over 0.78 s; frames early, mid-way and landed.
-                let anchor = TaskScoreCardAnchor(row: CGRect(x: container.minX, y: container.maxY - 120, width: container.width, height: 36),
-                                                 container: container, visibleFrame: visible, side: .towardScreenCenter)
-                panel.show(climbing, key: "climb", anchor: anchor, above: backdrop.window, reduceMotion: false, reduceTransparency: false)
+            if !dark, let live = cases["live"], let rise = rise(cases["live"]) {
+                // A rise of 30 %: the number counts up over about 0.4 s; frames early, mid-way and landed.
+                panel.show(live, key: "rise", anchor: anchor, above: backdrop.window, reduceMotion: false, reduceTransparency: false)
                 try? await Task.sleep(for: .seconds(0.8))
-                if case .scored(var score) = climbing.body {
-                    score.state = .passing
-                    score.score = 81.2
-                    score.dimensions = TaskScoreDimensions(verify: 40, converge: 17.4, recover: 9.3, efficiency: 6.8, complete: 7.7)
-                    score.openFailure = nil
-                    score.lastPass = TaskLastPassFacts(check: TaskCheckName(suite: "cargo test", kind: .test), buildOnly: false)
-                    score.signals = .none
-                    score.oscillations = 0
-                    climbing.body = .scored(score)
-                }
-                panel.update(climbing)
-                for (index, wait) in [0.12, 0.18, 0.8].enumerated() {
+                panel.update(rise)
+                for (index, wait) in [0.08, 0.14, 0.6].enumerated() {
                     try? await Task.sleep(for: .seconds(wait))
-                    capture(region, "taskcard-climb-\(index)", into: directory)
+                    capture(region, "perfcard-rise-\(index)", into: directory)
                 }
                 panel.hide(animated: false)
             }
@@ -59,18 +47,30 @@ enum TaskScoreCardHarness {
         NSApp.appearance = nil
     }
 
+    /// The live card with every component 30 % faster.
+    private static func rise(_ card: PerfCardModel?) -> PerfCardModel? {
+        guard var card, let shown = card.score.shown else { return nil }
+        let evaluation = PerfPreviewData.evaluation(score: Double(shown) * 1.3, source: card.score.source,
+                                                    model: card.header.model ?? "", n: card.score.n, tools: card.score.tools,
+                                                    baseline: card.score.baseline)
+        card.score.shown = evaluation.shown
+        card.score.components = evaluation.components
+        card.score.vsUsualPercent = evaluation.vsUsualPercent
+        return card
+    }
+
     /// Without Screen Recording permission `screencapture` fails; the window's own drawing (no material) and its frame
     /// against the expected placement still show that it fits its content and sits where DESIGN puts it.
-    private static func cache(_ panel: TaskScoreCardPanel, _ name: String, anchor: TaskScoreCardAnchor, into directory: URL) {
+    private static func cache(_ panel: PerfCardPanel, _ name: String, anchor: PerfCardAnchor, into directory: URL) {
         let window = panel.debugWindow
         guard let view = window.contentView, let rep = view.bitmapImageRepForCachingDisplay(in: view.bounds) else { return }
         view.cacheDisplay(in: view.bounds, to: rep)
         if let data = rep.representation(using: .png, properties: [:]) {
             try? data.write(to: directory.appendingPathComponent("window-\(name).png"))
         }
-        let expected = TaskScoreCardPlacement.place(size: window.frame.size, anchor: anchor).frame
-        let line = "\(name) frame \(window.frame) expected \(expected) level \(window.level.rawValue) alpha \(window.alphaValue) visible \(window.isVisible) occl \(window.occlusionState.rawValue) screen \(window.screen != nil) active \(NSApp.isActive) key \(window.isKeyWindow)\n"
-        let url = directory.appendingPathComponent("taskcard-frames.txt")
+        let expected = PerfCardPlacement.place(size: window.frame.size, anchor: anchor).frame
+        let line = "\(name) frame \(window.frame) expected \(expected) level \(window.level.rawValue) visible \(window.isVisible)\n"
+        let url = directory.appendingPathComponent("perfcard-frames.txt")
         if let handle = try? FileHandle(forWritingTo: url) {
             handle.seekToEndOfFile()
             handle.write(Data(line.utf8))
