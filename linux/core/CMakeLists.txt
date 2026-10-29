@@ -16,6 +16,7 @@ add_library(agentspeed_core STATIC
     src/model.cpp
     src/modes.cpp
     src/monitor.cpp
+    src/omp_parser.cpp
     src/opencode.cpp
     src/parents.cpp
     src/path_text.cpp
