@@ -11,8 +11,18 @@ add_custom_command(
     DEPENDS "${AGENTSPEED_PRICES}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake"
     VERBATIM)
 
+set(AGENTSPEED_CURRENCIES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/currencies.json")
+set(AGENTSPEED_CURRENCIES_CPP "${CMAKE_CURRENT_BINARY_DIR}/bundled_currencies.cpp")
+add_custom_command(
+    OUTPUT "${AGENTSPEED_CURRENCIES_CPP}"
+    COMMAND ${CMAKE_COMMAND} -DINPUT=${AGENTSPEED_CURRENCIES} -DOUTPUT=${AGENTSPEED_CURRENCIES_CPP}
+            -DNAMESPACE=agentspeed::money -DFUNCTION=bundledCurrenciesJson -P ${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake
+    DEPENDS "${AGENTSPEED_CURRENCIES}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake"
+    VERBATIM)
+
 add_library(agentspeed_core STATIC
     "${AGENTSPEED_PRICES_CPP}"
+    "${AGENTSPEED_CURRENCIES_CPP}"
     src/antigravity.cpp
     src/claude_parser.cpp
     src/codex_parser.cpp
@@ -34,6 +44,7 @@ add_library(agentspeed_core STATIC
     src/locations.cpp
     src/model.cpp
     src/modes.cpp
+    src/money.cpp
     src/monitor.cpp
     src/monitor_snapshot.cpp
     src/monitor_sources.cpp
