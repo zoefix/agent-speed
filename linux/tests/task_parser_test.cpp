@@ -13,7 +13,7 @@ std::optional<std::string> optCwd(const json::Value& c) { return fixtures::optSt
 SourceKind sourceOf(const json::Value& c) { return *sourceFromId(*c["source"].string()); }
 
 // The groups ported so far; a case of any other group is skipped.
-const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus"};
+const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification"};
 
 }  // namespace
 
@@ -45,6 +45,26 @@ TEST(TaskParsers, MatchTheReferenceCases) {
                 ASSERT_TRUE(status.has_value());
                 EXPECT_EQ(status->exitCode, fixtures::optInt(expect["exitCode"]));
                 EXPECT_EQ(status->failed, expect["failed"].isNull() ? std::nullopt : std::optional<bool>(expect["failed"].isTrue()));
+            }
+        }
+        if (group == "outcome") {
+            const auto o = tasks::outcome(sourceOf(c), c["result"], fixtures::optInt(c["t"]), fixtures::optString(c["tool"]), c["input"], optCwd(c));
+            EXPECT_EQ(o.exitCode, fixtures::optInt(expect["exitCode"]));
+            EXPECT_EQ(o.failed, expect["failed"].isNull() ? std::nullopt : std::optional<bool>(expect["failed"].isTrue()));
+            EXPECT_EQ(o.t, fixtures::optInt(expect["t"]));
+        } else if (group == "resultText") {
+            EXPECT_EQ(tasks::resultText(sourceOf(c), c["result"]), *expect.string());
+        } else if (group == "session") {
+            EXPECT_EQ(tasks::continuation(sourceOf(c), fixtures::optString(c["tool"]), c["input"]), fixtures::optString(expect["continuation"]));
+            EXPECT_EQ(tasks::runningSession(sourceOf(c), c["result"]), fixtures::optString(expect["running"]));
+        } else if (group == "notification") {
+            const auto n = tasks::notification(sourceOf(c), c["line"]);
+            if (expect.isNull()) {
+                EXPECT_FALSE(n.has_value());
+            } else {
+                ASSERT_TRUE(n.has_value());
+                EXPECT_EQ(n->session, *expect["session"].string());
+                EXPECT_EQ(n->exitCode, fixtures::optInt(expect["exitCode"]));
             }
         }
         ++checked;

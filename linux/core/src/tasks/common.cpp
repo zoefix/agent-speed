@@ -134,6 +134,93 @@ bool prefixMatch(std::string_view text, const char* pattern) {
     return std::regex_search(text.begin(), text.end(), compiled(pattern), std::regex_constants::match_continuous);
 }
 
+namespace {
+
+Groups groupsOf(const std::match_results<std::string_view::const_iterator>& m) {
+    Groups out;
+    for (std::size_t i = 0; i < m.size(); ++i) {
+        if (m[i].matched) {
+            out.emplace_back(m[i].str());
+        } else {
+            out.emplace_back(std::nullopt);
+        }
+    }
+    return out;
+}
+
+}  // namespace
+
+Groups fullGroups(std::string_view text, const char* pattern) {
+    std::match_results<std::string_view::const_iterator> m;
+    if (!std::regex_match(text.begin(), text.end(), m, compiled(pattern))) return {};
+    return groupsOf(m);
+}
+
+Groups prefixGroups(std::string_view text, const char* pattern) {
+    std::match_results<std::string_view::const_iterator> m;
+    if (!std::regex_search(text.begin(), text.end(), m, compiled(pattern), std::regex_constants::match_continuous)) return {};
+    return groupsOf(m);
+}
+
+Groups searchGroups(std::string_view text, const char* pattern) {
+    std::match_results<std::string_view::const_iterator> m;
+    if (!std::regex_search(text.begin(), text.end(), m, compiled(pattern))) return {};
+    return groupsOf(m);
+}
+
+std::optional<std::int64_t> jsonInt(const json::Value& value) {
+    if (!value.isNumber() || !value.isIntegerLiteral()) return std::nullopt;
+    const auto raw = value.raw();
+    const bool negative = startsWith(raw, "-");
+    const auto digits = lstrip(raw.substr(negative ? 1 : 0), "0");
+    if (digits.size() > 19) return std::nullopt;
+    if (digits.size() == 19 && digits > (negative ? std::string("9223372036854775808") : std::string("9223372036854775807"))) return std::nullopt;
+    return value.truncated();
+}
+
+std::unique_ptr<OwnedJson> leadingObject(std::string_view text) {
+    const auto stripped = lstrip(text, " \t\r\n");
+    if (!startsWith(stripped, "{")) return nullptr;
+    // The end of the first value: braces outside strings.
+    int depth = 0;
+    bool inString = false;
+    for (std::size_t i = 0; i < stripped.size(); ++i) {
+        const char c = stripped[i];
+        if (inString) {
+            if (c == '\\') {
+                ++i;
+            } else if (c == '"') {
+                inString = false;
+            }
+            continue;
+        }
+        if (c == '"') {
+            inString = true;
+        } else if (c == '{' || c == '[') {
+            ++depth;
+        } else if (c == '}' || c == ']') {
+            if (--depth == 0) {
+                auto owned = parseJson(stripped.substr(0, i + 1));
+                if (owned && owned->root().isObject()) return owned;
+                return nullptr;
+            }
+        }
+    }
+    return nullptr;
+}
+
+std::string blocksText(const json::Value& content) {
+    if (content.isString()) return *content.string();
+    if (!content.isArray()) return {};
+    Words parts;
+    for (const auto& b : content.elements()) {
+        if (!b.isObject()) continue;
+        const auto type = b["type"].string();
+        if (type && in(*type, {"text", "input_text", "output_text"}) && b["text"].isString()) parts.push_back(*b["text"].string());
+    }
+    return join(parts, "\n");
+}
+
 std::string familyOf(SourceKind source) {
     switch (source) {
         case SourceKind::ClaudeCode:

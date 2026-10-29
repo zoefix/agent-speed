@@ -44,12 +44,24 @@ std::vector<std::string> split(std::string_view text, char sep);
 std::string join(const Words& words, std::string_view sep);
 Words slice(const Words& words, std::size_t from, std::size_t to = std::string::npos);
 
+struct OwnedJson;
+
 std::string sha16(std::string_view text);
 std::optional<std::string> normCwd(const std::optional<std::string>& cwd);
 std::pair<std::string, bool> cwdRelative(const std::string& path, const std::optional<std::string>& cwd);
 std::int64_t num(std::string_view text);
 bool fullMatch(std::string_view text, const char* pattern);
 bool prefixMatch(std::string_view text, const char* pattern);
+// Capture groups (index 0: the whole match) of a full, prefix or first-anywhere match; empty when none.
+using Groups = std::vector<std::optional<std::string>>;
+Groups fullGroups(std::string_view text, const char* pattern);
+Groups prefixGroups(std::string_view text, const char* pattern);
+Groups searchGroups(std::string_view text, const char* pattern);
+// A JSON integer literal in the signed 64-bit range (never a boolean).
+std::optional<std::int64_t> jsonInt(const json::Value& value);
+// The JSON object that starts the text (after JSON whitespace), ignoring what follows it.
+std::unique_ptr<OwnedJson> leadingObject(std::string_view text);
+std::string blocksText(const json::Value& content);
 
 // The source family of the tool tables (claude, codex, omp, pi, openclaw, droid); empty for other sources.
 std::string familyOf(SourceKind source);
