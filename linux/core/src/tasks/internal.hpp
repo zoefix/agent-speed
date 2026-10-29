@@ -164,6 +164,8 @@ struct Choice {
 Choice choose(const std::vector<Segment>& segs, const std::optional<std::string>& cwd);
 CommandInfo commandInfoOf(const Parsed& parsed, const std::optional<std::string>& cwd);
 std::string shellKind(const Parsed& parsed, const std::optional<std::string>& cwd);
+// No output at all: nothing but whitespace, or Claude Code's placeholder for it.
+bool silent(const std::string& text);
 std::size_t skipUntilModule(const Words& words, Names valueOpts);
 
 }  // namespace agentspeed::tasks::detail

@@ -495,12 +495,12 @@ std::optional<StatusEcho> statusEcho(const Parsed& parsed, std::size_t k) {
     return std::nullopt;
 }
 
+}  // namespace
+
 bool silent(const std::string& text) {
     const auto stripped = strip(text, " \t\r\n");
     return stripped.empty() || stripped == "(Bash completed with no output)";
 }
-
-}  // namespace
 
 }  // namespace agentspeed::tasks::detail
 

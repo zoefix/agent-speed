@@ -13,7 +13,7 @@ std::optional<std::string> optCwd(const json::Value& c) { return fixtures::optSt
 SourceKind sourceOf(const json::Value& c) { return *sourceFromId(*c["source"].string()); }
 
 // The groups ported so far; a case of any other group is skipped.
-const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification", "codeScript", "codeItems", "edits"};
+const std::set<std::string> kPorted = {"actionKind", "command", "maskedStatus", "outcome", "resultText", "session", "notification", "codeScript", "codeItems", "edits", "failures"};
 
 }  // namespace
 
@@ -109,7 +109,21 @@ TEST(TaskParsers, MatchTheReferenceCases) {
                 EXPECT_EQ(hunks[i].newDigest, fixtures::optString(want[i]["new"]));
             }
         }
+        if (group == "failures") {
+            const auto command = fixtures::optString(c["command"]);
+            const auto info = tasks::commandInfo(command.value_or(""), optCwd(c));
+            const auto failed = c["failed"].isNull() ? std::nullopt : std::optional<bool>(c["failed"].isTrue());
+            const auto report = tasks::failures(info, *c["output"].string(), optCwd(c), failed);
+            std::vector<std::string> canonical, fingerprints;
+            for (const auto& v : expect["canonical"].elements()) canonical.push_back(*v.string());
+            for (const auto& v : expect["fingerprints"].elements()) fingerprints.push_back(*v.string());
+            EXPECT_EQ(report.canonical, canonical);
+            EXPECT_EQ(report.fingerprints, fingerprints);
+            EXPECT_EQ(report.failed, fixtures::optInt(expect["failedCount"]));
+            EXPECT_EQ(report.passed, fixtures::optInt(expect["passedCount"]));
+            EXPECT_EQ(report.framework, fixtures::optString(expect["framework"]));
+        }
         ++checked;
     }
-    EXPECT_GT(checked, 300);
+    EXPECT_GT(checked, 600);
 }

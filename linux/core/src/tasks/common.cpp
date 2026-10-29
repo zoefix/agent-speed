@@ -1,6 +1,7 @@
 #include <openssl/evp.h>
 
 #include <map>
+#include <mutex>
 #include <regex>
 #include <unordered_map>
 
@@ -118,7 +119,9 @@ std::int64_t num(std::string_view text) {
 namespace {
 
 const std::regex& compiled(const char* pattern) {
+    static std::mutex mutex;
     static std::unordered_map<const char*, std::regex> cache;
+    const std::lock_guard lock(mutex);
     auto it = cache.find(pattern);
     if (it == cache.end()) it = cache.emplace(pattern, std::regex(pattern, std::regex::ECMAScript)).first;
     return it->second;
