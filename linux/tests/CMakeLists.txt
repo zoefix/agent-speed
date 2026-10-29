@@ -17,6 +17,7 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     pricing_test.cpp
     report_body_test.cpp
+    report_profile_test.cpp
     report_scheduler_test.cpp
     report_service_test.cpp
     report_stream_test.cpp

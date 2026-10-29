@@ -65,6 +65,7 @@ add_library(agentspeed_core STATIC
     src/pricing.cpp
     src/report/crypto.cpp
     src/report/discovery.cpp
+    src/report/profile.cpp
     src/report/protocol.cpp
     src/report/reply.cpp
     src/report/scheduler.cpp
