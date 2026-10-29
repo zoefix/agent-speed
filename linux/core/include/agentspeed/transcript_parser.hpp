@@ -50,6 +50,12 @@ protected:
     void markChanged() { ++version_; }
     void setModes(const ExecutionModes& modes);
     void setProject(const std::optional<std::string>& project);
+    void clearModel() {
+        if (model_) {
+            model_.reset();
+            ++version_;
+        }
+    }
     bool sourceDecided() const { return sourceDecided_; }
     Deduper& deduper() { return deduper_; }
 

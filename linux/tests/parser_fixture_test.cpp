@@ -8,9 +8,11 @@
 #include "agentspeed/antigravity.hpp"
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
+#include "agentspeed/droid.hpp"
 #include "agentspeed/dsh_parser.hpp"
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/gemini_parser.hpp"
+#include "agentspeed/line_splitter.hpp"
 #include "agentspeed/omp_parser.hpp"
 #include "agentspeed/openclaw.hpp"
 #include "agentspeed/pi_parser.hpp"
@@ -84,6 +86,7 @@ std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const s
         return std::make_unique<WorkBuddyParser>(agentId, deduper, ai ? SourceKind::WorkBuddyAi : SourceKind::WorkBuddy, root);
     }
     if (relative.rfind("pi/", 0) == 0) return PiParser::forPath(agentId, deduper);
+    if (relative.rfind("droid/", 0) == 0) return std::make_unique<droid::Parser>(agentId, deduper);
     if (relative.rfind("omp/", 0) == 0) {
         // The folder `omp` plays ~/.omp: roots omp/agent/sessions and omp/profiles/*/agent/sessions.
         const auto cut = agentId.find("/agent/sessions/");
@@ -130,6 +133,16 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         const auto* gemini = dynamic_cast<GeminiParser*>(parser.get());
         if (gemini && gemini->isDocument()) {
             parser->feed(fixtures::readText(absolute), sink);
+        } else if (auto* droidParser = dynamic_cast<droid::Parser*>(parser.get())) {
+            // The history rule: the whole file from the start and one sidecar read (the `:session` rest is history's).
+            droidParser->beginRead(0);
+            LineSplitter lines;
+            lines.feedPositioned(fixtures::readText(absolute), 0, [&](std::string_view line, std::int64_t offset, std::int64_t length) {
+                droidParser->feedPositioned(line, offset, length);
+                ++physical;
+                check();
+            });
+            droidParser->applyCycle(droid::readSidecar(droid::sidecarOf(absolute)), sink);
         } else {
             const auto read = readWholeFile(absolute, [&](std::string_view line) {
                 parser->feed(line, sink);
@@ -168,7 +181,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 43);
+    EXPECT_EQ(checked, 53);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);

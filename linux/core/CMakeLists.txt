@@ -8,6 +8,7 @@ add_library(agentspeed_core STATIC
     src/codex_parser.cpp
     src/dedupe.cpp
     src/demo.cpp
+    src/droid.cpp
     src/dsh_parser.cpp
     src/engine.cpp
     src/file_reader.cpp

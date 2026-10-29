@@ -5,6 +5,7 @@ set(INSTALL_GTEST OFF CACHE BOOL "" FORCE)
 FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
+    droid_test.cpp
     engine_fixture_test.cpp
     hermes_test.cpp
     json_test.cpp

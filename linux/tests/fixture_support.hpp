@@ -1,6 +1,7 @@
 #pragma once
 
 #include <algorithm>
+#include <cstdio>
 #include <filesystem>
 #include <fstream>
 #include <optional>
@@ -39,6 +40,68 @@ inline std::optional<std::int64_t> optInt(const agentspeed::json::Value& v) {
 inline std::optional<std::string> optString(const agentspeed::json::Value& v) {
     if (!v.valid() || v.isNull()) return std::nullopt;
     return v.string();
+}
+
+// Python's json.dumps(value, ensure_ascii=False, separators=(",", ":")): the fixtures' compact lines.
+inline void appendCompact(std::string& out, const agentspeed::json::Value& v) {
+    using agentspeed::json::Type;
+    auto string = [&](const std::string& text) {
+        out += '"';
+        for (unsigned char c : text) {
+            switch (c) {
+                case '"': out += "\\\""; break;
+                case '\\': out += "\\\\"; break;
+                case '\n': out += "\\n"; break;
+                case '\r': out += "\\r"; break;
+                case '\t': out += "\\t"; break;
+                case '\b': out += "\\b"; break;
+                case '\f': out += "\\f"; break;
+                default:
+                    if (c < 0x20) {
+                        char buf[8];
+                        std::snprintf(buf, sizeof buf, "\\u%04x", c);
+                        out += buf;
+                    } else {
+                        out += static_cast<char>(c);
+                    }
+            }
+        }
+        out += '"';
+    };
+    switch (v.type()) {
+        case Type::Object: {
+            out += '{';
+            bool first = true;
+            for (const auto& [key, value] : v.members()) {
+                if (!first) out += ',';
+                first = false;
+                string(key);
+                out += ':';
+                appendCompact(out, value);
+            }
+            out += '}';
+            break;
+        }
+        case Type::Array: {
+            out += '[';
+            bool first = true;
+            for (const auto& item : v.elements()) {
+                if (!first) out += ',';
+                first = false;
+                appendCompact(out, item);
+            }
+            out += ']';
+            break;
+        }
+        case Type::String: string(*v.string()); break;
+        default: out += std::string(v.raw()); break;
+    }
+}
+
+inline std::string compactJson(const agentspeed::json::Value& v) {
+    std::string out;
+    appendCompact(out, v);
+    return out;
 }
 
 // Every file below a folder (relative paths), to check that reading created nothing.
