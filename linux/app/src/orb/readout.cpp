@@ -177,7 +177,57 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
                                         0.28 * value.pixelSize, heat.withAlpha(alpha), 1, Instance::glowSigma(sigma), 1),
                   Blend::Over);
     }
-    scene.add(value);
+    // The odometer: only the characters that changed roll, each clipped to its own cell, 0.92 × the value size in
+    // 0.24 s (up when rising); different lengths crossfade in 0.12 s.
+    const double sinceValue = f.time - c.valueChangedAt;
+    const bool rolling = c.rolls && layout.rolls && measure && pass.clip == 0 && sinceValue >= 0 && sinceValue < 0.24 &&
+                         !c.previousValue.isEmpty() && c.previousValue != value.text;
+    if (!rolling) {
+        scene.add(value);
+    } else if (c.previousValue.size() != value.text.size()) {
+        const double u = std::min(1.0, sinceValue / 0.12);
+        TextDraw before = value;
+        before.text = c.previousValue;
+        before.color = value.color.withAlpha(value.color.a * (1 - u));
+        before.glowStrength *= 1 - u;
+        TextDraw after = value;
+        after.color = value.color.withAlpha(value.color.a * u);
+        after.glowStrength *= u;
+        scene.add(before);
+        scene.add(after);
+    } else {
+        const double u = led::easeOut(sinceValue / 0.24);
+        const double travel = (c.rising ? 1 : -1) * 0.92 * value.pixelSize;
+        const QString text = value.text;
+        const double width = measure(value);
+        const double left = value.baselineCenter.x() - width / 2, baseline = value.baselineCenter.y();
+        const auto widthUpTo = [&](int n) {
+            if (n <= 0) return 0.0;
+            TextDraw part = value;
+            part.text = text.left(n);
+            return measure(part);
+        };
+        double x0 = 0;
+        for (int i = 0; i < text.size(); ++i) {
+            const double x1 = widthUpTo(i + 1);
+            TextDraw ch = value;
+            ch.text = text.mid(i, 1);
+            ch.baselineCenter = QPointF(left + (x0 + x1) / 2, baseline);
+            if (text.at(i) == c.previousValue.at(i)) {
+                scene.add(ch);
+            } else {
+                ch.clip = 1;
+                ch.clipRect = QRectF(left + x0 - 1, baseline - 1.05 * value.pixelSize, x1 - x0 + 2, 1.35 * value.pixelSize);
+                TextDraw old = ch;
+                old.text = c.previousValue.mid(i, 1);
+                old.baselineCenter.setY(baseline - travel * u);
+                ch.baselineCenter.setY(baseline + travel * (1 - u));
+                scene.add(old);
+                scene.add(ch);
+            }
+            x0 = x1;
+        }
+    }
     if (valueOnly) return;
 
     if (layout.unitSize > 0) {

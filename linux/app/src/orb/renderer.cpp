@@ -264,6 +264,10 @@ void Renderer::drawText(const TextDraw& text, double dpr) {
                            static_cast<float>(text.glowRadius), static_cast<float>(text.clip));
     text_->setUniformValue("uColor", text.color.r, text.color.g, text.color.b, text.color.a);
     text_->setUniformValue("uGlow", text.glowColor.r, text.glowColor.g, text.glowColor.b, static_cast<float>(text.glowStrength));
+    if (text.clip == 1) {
+        text_->setUniformValue("uClipRect", static_cast<float>(text.clipRect.left()), static_cast<float>(text.clipRect.top()),
+                               static_cast<float>(text.clipRect.right()), static_cast<float>(text.clipRect.bottom()));
+    }
     glBindTexture(GL_TEXTURE_2D, t.id);
     glDrawArrays(GL_TRIANGLES, 0, 6);
 }

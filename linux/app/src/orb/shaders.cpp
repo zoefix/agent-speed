@@ -673,12 +673,20 @@ uniform vec4 uRect;
 uniform vec4 uParams;
 uniform vec4 uColor;   // straight alpha
 uniform vec4 uGlow;    // rgb, strength
+uniform vec4 uClipRect;  // min x, min y, max x, max y (points), clip mode 1
 in vec2 vUv;
 in vec2 vCanvas;
 out vec4 fragColor;
 
 void main() {
     float keep = 1.0;
+    if (uParams.w > 0.5 && uParams.w < 1.5) {
+        vec2 lo = uClipRect.xy - vCanvas;
+        vec2 hi = vCanvas - uClipRect.zw;
+        float outside = max(max(lo.x, lo.y), max(hi.x, hi.y));
+        keep = clamp(0.5 - outside * uViewport.z, 0.0, 1.0);
+        if (keep <= 0.0005) discard;
+    }
     if (uParams.w > 1.5) {
         float surface = liquidWaveY(vCanvas.x, false);
         float below = clamp((vCanvas.y - surface) * uViewport.z + 0.5, 0.0, 1.0);

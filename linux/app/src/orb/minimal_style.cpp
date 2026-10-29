@@ -34,6 +34,7 @@ const ReadoutLayout& MinimalStyle::readoutLayout() const {
         l.dots = std::nullopt;
         l.pill = -0.25;
         l.titleCrossfades = true;
+        l.rolls = false;
         l.valueGlow = false;
         l.valueMotion = false;
         return l;

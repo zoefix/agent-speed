@@ -418,6 +418,13 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         info_ = fill(strings_.t(QStringLiteral("today.summary")),
                      {snap.value(QStringLiteral("todayOutputText")).toString(), QString::number(agents.size())});
     }
+    if (valueText_ != shownValue_) {
+        previousValue_ = shownValue_;
+        valueChangedAt_ = t;
+        valueRising_ = gauge_.value() >= shownNumber_;
+        shownValue_ = valueText_;
+        shownNumber_ = gauge_.value();
+    }
     if (t - labelAt_ >= 1) updateLabel();
     agents_.clear();
     QString key = valueText_;
@@ -528,7 +535,7 @@ Frame OrbWindow::makeFrame(double time, double dt) {
 
 int OrbWindow::desiredFps(double time, const Frame& f) const {
     const int transition = styleKind_ == StyleKind::Minimal ? 30 : 60;
-    if (time - peakStart_ < 2.0 || time - gauge_.tierChangedAt() < 0.5 || time - gauge_.titleChangedAt() < 0.45 ||
+    if (time - peakStart_ < 2.0 || time - gauge_.tierChangedAt() < 0.5 || time - gauge_.titleChangedAt() < 0.45 || time - valueChangedAt_ < 0.25 ||
         time - hoverChangedAt_ < 0.45 || styleMix(time) < 1) {
         return transition;
     }
@@ -644,6 +651,10 @@ void OrbWindow::renderFrame() {
     ReadoutContent content;
     content.value = valueText_;
     content.atLeast = atLeast_;
+    content.previousValue = previousValue_;
+    content.valueChangedAt = valueChangedAt_;
+    content.rising = valueRising_;
+    content.rolls = e.level > 0 && diameter_ >= 80;
     content.unit = unit_ == QLatin1String("cost") ? fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {costSymbol_}) : strings_.t(QStringLiteral("unit.tokS"));
     content.title = unavailable_.isEmpty() ? titleText(gauge_.title()) : strings_.t(QStringLiteral("source.") + unavailable_);
     content.previousTitle = titleText(gauge_.previousTitle());

@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QPointF>
+#include <QRectF>
 #include <QString>
 #include <array>
 #include <vector>
@@ -78,7 +79,8 @@ struct TextDraw {
     double glowStrength = 0;
     double glowRadius = 0;  // points
     double shear = 0;       // x offset per point above the baseline
-    int clip = 0;           // 2: above the liquid surface, 3: below it
+    int clip = 0;           // 1: inside clipRect, 2: above the liquid surface, 3: below it
+    QRectF clipRect;        // points (the odometer's character cell)
     int layer = -1;         // drawn before this batch; -1: above everything
 };
 

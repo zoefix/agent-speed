@@ -168,6 +168,11 @@ private:
     // Content from the latest snapshot.
     QString valueText_ = QStringLiteral("0");
     bool atLeast_ = false;  // a partly unpriced money value
+    // The odometer: the value on screen, the one it replaced, when, and whether it rose.
+    QString shownValue_, previousValue_;
+    double shownNumber_ = 0;
+    double valueChangedAt_ = -1e9;
+    bool valueRising_ = true;
     QString costSymbol_;
     QString info_;
     QString unavailable_;  // "", "disabled" or "notFound"

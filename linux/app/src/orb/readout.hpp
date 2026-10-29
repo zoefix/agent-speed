@@ -32,6 +32,11 @@ struct NetReadout {
 struct ReadoutContent {
     QString value;
     bool atLeast = false;  // a partly unpriced money value: a small ≥ before it (DESIGN 9)
+    // The odometer (DESIGN 2a, Shared foundation): the value it replaces, when, and whether it rose.
+    QString previousValue;
+    double valueChangedAt = -1e9;
+    bool rising = true;
+    bool rolls = false;  // the effects allow it (not Off, S ≥ 80)
     QString unit;
     QString title;          // the speed title, or the idle label
     QString previousTitle;  // the one sliding out
@@ -62,6 +67,7 @@ struct ReadoutLayout {
     bool dotHalo = false;
     double pill = -0.232;
     bool titleCrossfades = false;
+    bool rolls = true;  // the odometer (`minimal` never rolls)
     bool valueGlow = true;
     bool valueMotion = true;  // the lean from overdrive and the redline jitter
 
