@@ -32,6 +32,7 @@ std::optional<PromptLine> promptLine(SourceKind source, const json::Value& line)
 
 struct Event {
     enum class Type { Prompt, Action } type = Type::Action;
+    std::uint64_t serial = 0;  // the composer's identity of the event
     std::int64_t t = 0;
     bool continuation = false;
     std::string kind = "other";

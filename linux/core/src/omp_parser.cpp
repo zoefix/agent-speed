@@ -238,6 +238,7 @@ void OmpParser::probeHeader(ResponseSink& sink) {
         bool malformed = false;
         if (auto line = readLine(first, malformed); line && line->kind == Kind::Session) {
             apply(*line, sink);
+            observeText(first);
             return;
         }
     }
@@ -252,6 +253,7 @@ void OmpParser::feed(std::string_view text, ResponseSink& sink) {
         return;
     }
     apply(*line, sink);
+    observeText(text);
 }
 
 void OmpParser::apply(const Line& line, ResponseSink& sink) {

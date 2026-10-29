@@ -16,6 +16,7 @@ public:
 
 private:
     static constexpr std::size_t kMergeCacheCapacity = 64;
+    void handle(const json::Value& root, std::string_view text, ResponseSink& sink);
     void remember(const ParsedResponse& response);
     bool ultracode() const { return ultraSession_ || ultraTurn_; }
     void refreshModes();

@@ -58,6 +58,7 @@ public:
     const std::optional<std::string>& parentPath() const { return parentPath_; }
     std::optional<std::int64_t> headerMs() const { return headerMs_; }
     void probeHeader(ResponseSink& sink);
+    CopyFacts copyFacts() const override { return {headerMs_, std::nullopt, false}; }
 
 private:
     void apply(const pi::Line& line, ResponseSink& sink);

@@ -110,7 +110,11 @@ void CodexParser::feed(std::string_view text, ResponseSink& sink) {
         countMalformed();
         return;
     }
-    const auto root = doc.root();
+    handle(doc.root(), text, sink);
+    observe(doc.root(), text);
+}
+
+void CodexParser::handle(const json::Value& root, std::string_view text, ResponseSink& sink) {
     const auto tsValue = root["timestamp"];
     if (!tsValue.isString()) return;
     const auto parsedTs = parseTimestamp(*tsValue.string());

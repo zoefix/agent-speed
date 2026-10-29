@@ -32,7 +32,10 @@ public:
     }
     void feed(std::string_view line, ResponseSink& sink) override;
     void apply(const pi::Line& line, ResponseSink& sink);
+    // A valid row: applied, then shown to the line observer.
+    void applyEntry(const struct Entry& entry, ResponseSink& sink);
     void reset() override;
+    CopyFacts copyFacts() const override { return {headerMs_, std::nullopt, window_.mirrorsOnly()}; }
     AgentLink link() const override;
 
     const std::string& databasePath() const { return databasePath_; }
@@ -61,6 +64,7 @@ private:
 struct Entry {
     enum class Status { Valid, Malformed, Skipped } status = Status::Skipped;
     pi::Line line;
+    std::string text;
 };
 
 class Database {
@@ -83,7 +87,7 @@ public:
     std::int64_t rows(const std::string& sessionId, std::int64_t afterSeq,
                       const std::function<bool(std::int64_t, const Entry&)>& onRow);
     // The first entry of type `session`.
-    std::optional<pi::Line> header(const std::string& sessionId);
+    std::optional<Entry> header(const std::string& sessionId);
 
 private:
     Database(std::unique_ptr<sqlite::Connection> connection, bool immutable, const std::set<std::string>& tables);

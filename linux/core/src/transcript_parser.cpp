@@ -7,6 +7,12 @@ namespace agentspeed {
 TranscriptParser::TranscriptParser(std::string agentId, Deduper& deduper, SourceKind initialSource)
     : agentId_(std::move(agentId)), deduper_(deduper), initialSource_(initialSource), source_(initialSource) {}
 
+void TranscriptParser::observeText(std::string_view raw) {
+    if (!observer_ || json::isBlank(raw)) return;
+    json::Document doc;
+    if (doc.parse(raw) && doc.root().isObject()) observer_->onLine(*this, doc.root(), raw);
+}
+
 void TranscriptParser::reset() {
     source_ = initialSource_;
     sourceDecided_ = false;

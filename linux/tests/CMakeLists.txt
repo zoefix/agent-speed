@@ -17,6 +17,7 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     pricing_test.cpp
     rfc3339_test.cpp
+    task_e2e_test.cpp
     task_parser_test.cpp
     task_score_test.cpp
 )

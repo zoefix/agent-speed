@@ -256,4 +256,17 @@ std::optional<Notification> notification(SourceKind source, const json::Value& l
     return Notification{"claude:" + *task[1], num(m[1] ? *m[1] : *m[2])};
 }
 
+std::pair<bool, bool> shellCallState(SourceKind source, const std::optional<std::string>& tool, const json::Value& input,
+                                     const std::optional<std::string>& cwd) {
+    const auto text = commandText(source, tool, input);
+    if (!text) return {false, false};
+    std::unique_ptr<OwnedJson> holder;
+    const auto args = decodeArgs(input, holder);
+    const auto family = familyOf(source);
+    const bool flagged = args.valid() && ((family == "claude" && args["run_in_background"].isTrue()) ||
+                                          (family == "openclaw" && args["background"].isTrue()));
+    const auto info = commandInfo(*text, cwd);
+    return {flagged || info.background, info.masked};
+}
+
 }  // namespace agentspeed::tasks

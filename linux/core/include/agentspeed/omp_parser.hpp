@@ -21,6 +21,7 @@ public:
     std::optional<std::string> parentPath() const;
     // Reading from an offset > 0: applies the header among the file's first two lines (once).
     void probeHeader(ResponseSink& sink);
+    CopyFacts copyFacts() const override { return {headerMs_, std::nullopt, false}; }
 
     struct Line;
 

@@ -178,6 +178,7 @@ void PiParser::probeHeader(ResponseSink& sink) {
         bool malformed = false;
         if (auto line = pi::readLine(first, malformed); line && line->kind == pi::Kind::Session) {
             apply(*line, sink);
+            observeText(first);
             return;
         }
     }
@@ -192,6 +193,7 @@ void PiParser::feed(std::string_view text, ResponseSink& sink) {
         return;
     }
     apply(*line, sink);
+    observeText(text);
 }
 
 void PiParser::apply(const pi::Line& line, ResponseSink& sink) {

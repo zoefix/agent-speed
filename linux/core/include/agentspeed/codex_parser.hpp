@@ -22,7 +22,10 @@ public:
         std::int64_t input = 0, cached = 0, cacheWrite = 0, output = 0, reasoning = 0, totalTokens = 0;
     };
 
+    CopyFacts copyFacts() const override { return {fileCreatedMs_, subagentStartOrdinal_, false}; }
+
 private:
+    void handle(const json::Value& root, std::string_view text, ResponseSink& sink);
     void onInput(std::int64_t ts);
     void afterUsage(std::int64_t ts);
     void emitResponse(const std::string& key, const TokenCounts& tokens, std::int64_t ts, ResponseSink& sink,

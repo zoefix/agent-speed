@@ -43,6 +43,9 @@ struct Outcome {
 Outcome outcome(SourceKind source, const json::Value& result, std::optional<std::int64_t> t, const std::optional<std::string>& tool,
                 const json::Value& input, const std::optional<std::string>& cwd);
 std::string resultText(SourceKind source, const json::Value& result);
+// (background, masked) of a shell call: the input's own background flag or the command's (4.2).
+std::pair<bool, bool> shellCallState(SourceKind source, const std::optional<std::string>& tool, const json::Value& input,
+                                     const std::optional<std::string>& cwd);
 std::optional<std::string> continuation(SourceKind source, const std::optional<std::string>& tool, const json::Value& input);
 std::optional<std::string> runningSession(SourceKind source, const json::Value& result);
 

@@ -196,7 +196,12 @@ void ClaudeParser::feed(std::string_view text, ResponseSink& sink) {
         countMalformed();
         return;
     }
-    const Line line = read(doc.root(), text);
+    handle(doc.root(), text, sink);
+    observe(doc.root(), text);
+}
+
+void ClaudeParser::handle(const json::Value& root, std::string_view text, ResponseSink& sink) {
+    const Line line = read(root, text);
     if (!line.timestampMs) return;
     const std::int64_t ts = *line.timestampMs;
     touch(ts);

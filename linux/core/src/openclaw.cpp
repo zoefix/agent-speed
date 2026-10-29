@@ -35,6 +35,7 @@ Entry parse(std::string_view raw) {
     }
     entry.status = Entry::Status::Valid;
     entry.line = std::move(*line);
+    entry.text = std::string(raw);
     return entry;
 }
 
@@ -104,7 +105,12 @@ void Parser::feed(std::string_view text, ResponseSink& sink) {
         countMalformed();
         return;
     }
-    if (entry.status == Entry::Status::Valid) apply(entry.line, sink);
+    if (entry.status == Entry::Status::Valid) applyEntry(entry, sink);
+}
+
+void Parser::applyEntry(const Entry& entry, ResponseSink& sink) {
+    apply(entry.line, sink);
+    observeText(entry.text);
 }
 
 bool Parser::isMirror(const pi::Line& line) const {
@@ -323,11 +329,11 @@ std::int64_t Database::rows(const std::string& sessionId, std::int64_t afterSeq,
     return last;
 }
 
-std::optional<pi::Line> Database::header(const std::string& sessionId) {
-    std::optional<pi::Line> header;
+std::optional<Entry> Database::header(const std::string& sessionId) {
+    std::optional<Entry> header;
     rows(sessionId, INT64_MIN, [&](std::int64_t, const Entry& entry) {
         if (entry.status == Entry::Status::Valid && entry.line.kind == pi::Kind::Session) {
-            header = entry.line;
+            header = entry;
             return false;
         }
         return true;
@@ -364,7 +370,7 @@ std::optional<std::vector<std::unique_ptr<Parser>>> readAll(const std::string& p
             if (entry.status == Entry::Status::Malformed) {
                 parser->addMalformed(1);
             } else if (entry.status == Entry::Status::Valid) {
-                parser->apply(entry.line, sink);
+                parser->applyEntry(entry, sink);
             }
             if (afterRow) afterRow(*parser, seq);
             return true;
@@ -558,14 +564,14 @@ void Source::readRows(WindowState& state, Database& database, Update& update) {
     if (state.needsHeader) {
         // An older window read from its end: its header first, as omp does for a file read from an offset (4.7).
         state.needsHeader = false;
-        if (auto header = database.header(state.parser->sessionId())) state.parser->apply(*header, update);
+        if (auto header = database.header(state.parser->sessionId())) state.parser->applyEntry(*header, update);
     }
     const auto before = state.parser->version();
     state.lastSeq = database.rows(state.parser->sessionId(), state.lastSeq, [&](std::int64_t, const Entry& entry) {
         if (entry.status == Entry::Status::Malformed) {
             state.parser->addMalformed(1);
         } else if (entry.status == Entry::Status::Valid) {
-            state.parser->apply(entry.line, update);
+            state.parser->applyEntry(entry, update);
         }
         return true;
     });

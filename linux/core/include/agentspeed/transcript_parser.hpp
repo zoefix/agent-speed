@@ -6,11 +6,28 @@
 #include <string_view>
 
 #include "agentspeed/dedupe.hpp"
+#include "agentspeed/json.hpp"
 #include "agentspeed/model.hpp"
 #include "agentspeed/modes.hpp"
 #include "agentspeed/parents.hpp"
 
 namespace agentspeed {
+
+class TranscriptParser;
+
+// Sees every line that parsed as a JSON object, right after its parser handled it (METRICS 6.9 Composing the stream).
+class LineObserver {
+public:
+    virtual ~LineObserver() = default;
+    virtual void onLine(const TranscriptParser& parser, const json::Value& line, std::string_view raw) = 0;
+};
+
+// What the task composer needs to skip copied history like the parser does.
+struct CopyFacts {
+    std::optional<std::int64_t> createdMs;     // Codex: the session_meta time; omp, Pi, OpenClaw: the header time
+    std::optional<std::int64_t> startOrdinal;  // Codex: subagent_history_start_ordinal
+    bool mirrorWindow = false;                 // OpenClaw: a window that only mirrors delegated turns
+};
 
 // A per-file state machine fed complete lines in order (METRICS 4).
 class TranscriptParser {
@@ -38,8 +55,17 @@ public:
     virtual AgentLink link() const { return {agentId_, LinkKind::Path, std::nullopt, std::nullopt, std::nullopt, 0}; }
     // A reading error outside the parser (a zstd decoding error, METRICS 5.3) counts as malformed lines.
     void addMalformed(std::int64_t count) { malformedLines_ += count; }
+    virtual CopyFacts copyFacts() const { return {}; }
+    void setLineObserver(LineObserver* observer) { observer_ = observer; }
+    LineObserver* lineObserver() const { return observer_; }
+    const Deduper& dedupeSet() const { return deduper_; }
 
 protected:
+    void observe(const json::Value& line, std::string_view raw) {
+        if (observer_) observer_->onLine(*this, line, raw);
+    }
+    // Parses the line again for the observer (parsers that keep no document).
+    void observeText(std::string_view raw);
     void countMalformed() { ++malformedLines_; }
     void touch(std::int64_t timestampMs);
     void setProjectFromCwd(const std::optional<std::string>& cwd);
@@ -76,6 +102,7 @@ private:
     std::optional<std::int64_t> lastLineMs_;
     std::int64_t malformedLines_ = 0;
     std::uint64_t version_ = 0;
+    LineObserver* observer_ = nullptr;
 };
 
 }  // namespace agentspeed

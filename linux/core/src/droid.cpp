@@ -367,6 +367,7 @@ void Parser::feedPositioned(std::string_view text, std::int64_t offset, std::int
     }
     nextOffset_ = offset + length + 1;
     applyLine(readLine(text, offset, length));
+    observeText(text);
 }
 
 void Parser::applyLine(const Line& line) {
