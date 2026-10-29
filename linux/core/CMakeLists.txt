@@ -25,6 +25,8 @@ add_library(agentspeed_core STATIC
     src/model.cpp
     src/modes.cpp
     src/monitor.cpp
+    src/monitor_snapshot.cpp
+    src/monitor_sources.cpp
     src/omp_parser.cpp
     src/openclaw.cpp
     src/opencode.cpp
@@ -32,6 +34,7 @@ add_library(agentspeed_core STATIC
     src/path_text.cpp
     src/pi_parser.cpp
     src/rfc3339.cpp
+    src/tailer.cpp
     src/text.cpp
     src/sqlite.cpp
     src/transcript_parser.cpp

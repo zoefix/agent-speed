@@ -2,6 +2,7 @@
 
 #include <algorithm>
 #include <cmath>
+#include <tuple>
 
 namespace agentspeed {
 
@@ -79,8 +80,14 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
     snap.todayRequests = static_cast<std::int64_t>(secondsToday / 9.0);
     snap.todayAverage = 96.4;
     snap.peakToday = 412.0;
-    snap.sources.push_back({SourceKind::ClaudeCode, static_cast<std::int64_t>(secondsToday * 13.0), claude});
-    snap.sources.push_back({SourceKind::Codex, static_cast<std::int64_t>(secondsToday * 8.0), codex});
+    for (const auto& [kind, rate, live] : {std::tuple{SourceKind::ClaudeCode, 13.0, claude}, std::tuple{SourceKind::Codex, 8.0, codex}}) {
+        SourceRow row;
+        row.source = kind;
+        row.todayOutput = static_cast<std::int64_t>(secondsToday * rate);
+        row.liveOutput = live;
+        row.available = true;
+        snap.sources.push_back(row);
+    }
     if (withHistory) {
         for (int k = 119; k >= 1; --k) snap.history.push_back(demoAt(nowMs - k * 1000LL, todayStartMs, false).liveOutput);
         snap.history.push_back(snap.liveOutput);

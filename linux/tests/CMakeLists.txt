@@ -11,6 +11,7 @@ add_executable(agentspeed_tests
     harness_fixture_test.cpp
     hermes_test.cpp
     json_test.cpp
+    monitor_test.cpp
     parser_fixture_test.cpp
     rfc3339_test.cpp
 )
