@@ -77,17 +77,43 @@ public enum PerfHistory {
         return PerfPooled(chosen.map(\.record), source: source).score
     }
 
+    /// One day of a row's trend: its timed requests and pooled score, nil (a gap) below 20 timed requests.
+    public struct Point: Equatable, Sendable {
+        public var day: String
+        public var n: Int
+        public var score: Double?
+
+        public init(day: String, n: Int, score: Double?) {
+            self.day = day
+            self.n = n
+            self.score = score
+        }
+    }
+
     /// One row of 性能表現: the pooled values of a source and model over the range and its daily trend.
     public struct Row: Equatable, Sendable {
         public var source: SourceKind
         public var model: String
         public var pooled: PerfPooled
-        /// One point per day of the range: that day's pooled score, nil (a gap) below 20 timed requests.
-        public var trend: [(day: String, score: Double?)]
+        /// One point per day of the range.
+        public var trend: [Point]
+    }
 
-        public static func == (lhs: Row, rhs: Row) -> Bool {
-            lhs.source == rhs.source && lhs.model == rhs.model && lhs.pooled == rhs.pooled
-                && lhs.trend.map(\.day) == rhs.trend.map(\.day) && lhs.trend.map(\.score) == rhs.trend.map(\.score)
+    /// The daily points of `source` and the raw `model` over `[first, last]`.
+    public static func trend(_ records: [PerfDayRecord], source: SourceKind, model: String, first: String,
+                             last: String) -> [Point] {
+        var byDay: [String: [PerfRecord]] = [:]
+        for record in records where record.source == source && record.day >= first && record.day <= last
+            && record.model.utf8.elementsEqual(model.utf8) {
+            byDay[record.day, default: []].append(record.record)
+        }
+        return points(byDay, source: source, days: PerfDay.days(from: first, to: last))
+    }
+
+    private static func points(_ byDay: [String: [PerfRecord]], source: SourceKind, days: [String]) -> [Point] {
+        days.map { day in
+            let pooled = PerfPooled(byDay[day] ?? [], source: source)
+            return Point(day: day, n: pooled.n, score: pooled.score)
         }
     }
 
@@ -106,7 +132,7 @@ public enum PerfHistory {
             let part = groups[key] ?? []
             var byDay: [String: [PerfRecord]] = [:]
             for record in part { byDay[record.day, default: []].append(record.record) }
-            let trend = days.map { day in (day: day, score: PerfPooled(byDay[day] ?? [], source: key.source).score) }
+            let trend = points(byDay, source: key.source, days: days)
             return Row(source: key.source, model: key.model.text, pooled: PerfPooled(part.map(\.record), source: key.source),
                        trend: trend)
         }

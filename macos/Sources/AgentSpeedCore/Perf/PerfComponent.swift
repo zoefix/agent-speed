@@ -88,7 +88,7 @@ public enum PerfFormula {
     static func hasActions(_ source: SourceKind) -> Bool { actionSources.contains(source) }
 
     /// The components and the unrounded score from each component's measure (nil when absent) and samples.
-    static func combine(source: SourceKind, measures: [PerfComponentId: (measure: Double?, samples: Int)])
+    public static func combine(source: SourceKind, measures: [PerfComponentId: (measure: Double?, samples: Int)])
         -> (components: [PerfComponent], score: Double?) {
         var components: [PerfComponent] = []
         components.reserveCapacity(PerfComponentId.allCases.count)
