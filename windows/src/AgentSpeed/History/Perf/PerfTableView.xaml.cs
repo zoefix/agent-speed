@@ -98,7 +98,7 @@ internal sealed partial class PerfTableView : UserControl
 
         UpdateHeaders(model);
         SyncSelection();
-        if (Table.IsVisible && Table.ActualWidth > 0)
+        if (Table.Visibility == Visibility.Visible && Table.ActualWidth > 0)
         {
             Fit();
         }
@@ -228,7 +228,7 @@ internal sealed partial class PerfTableView : UserControl
     private void Fit()
     {
         var available = Table.ActualWidth;
-        if (_model is not { } model || _columns.Count == 0 || available <= 0 || !Table.IsVisible)
+        if (_model is not { } model || _columns.Count == 0 || available <= 0 || Table.Visibility != Visibility.Visible)
         {
             return;
         }

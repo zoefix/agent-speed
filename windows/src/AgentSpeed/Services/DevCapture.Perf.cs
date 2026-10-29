@@ -102,7 +102,7 @@ internal sealed partial class DevCapture
 
     private static FrameworkElement HistorySheet(Localizer loc, PerfCardAppearance appearance, List<PerfHistoryViewModel> models)
     {
-        var sheet = new StackPanel { Margin = new Thickness(24) };
+        var sheet = new StackPanel();
         var today = DateOnly.FromDateTime(DateTime.Today);
         var records = PerfCardSamples.Records(today);
         void Add(string caption, double width, IReadOnlyList<Core.Perf.PerfRecord> data, DateOnly first, bool analyzing = false)
@@ -137,6 +137,6 @@ internal sealed partial class DevCapture
         Add("ONE DAY", HistoryWidths[1], records, today);
         Add("EMPTY", HistoryWidths[1], [], today.AddDays(-6));
         Add("ANALYZING", HistoryWidths[1], [], today.AddDays(-6), analyzing: true);
-        return sheet;
+        return new Border { Padding = new Thickness(24), Child = sheet };
     }
 }

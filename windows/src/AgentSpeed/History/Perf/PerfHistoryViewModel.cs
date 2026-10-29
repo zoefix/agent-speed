@@ -300,7 +300,7 @@ internal sealed class PerfHistoryViewModel : ObservableObject, IDisposable
         EmptyText = _loc["history.perf.empty"];
         EmptyHint = _loc["history.perf.empty.hint"];
         CopyRow = _loc["win.history.copyRow"];
-        ReferenceLegend = PerfNumber.Grouped((long)PerfScale.Reference) + " " + _loc["perf.reference"];
+        ReferenceLegend = "1000 " + _loc["perf.reference"];
 
         var width = PerfHistoryLayout.WidthOf(_contentWidth);
         var headers = HeadersFor(width);
