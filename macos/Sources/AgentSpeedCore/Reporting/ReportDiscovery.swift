@@ -184,14 +184,14 @@ public struct ReportDiscovery: Equatable, Sendable, Codable {
     }
 
     /// What the preview assumes before a service's document is known (DESIGN 11, Preview window): the API at the
-    /// service URL, every section, the `taskScore` extension and the protocol's defaults. Never stored or confirmed;
+    /// service URL, every section, the `perfScore` extension and the protocol's defaults. Never stored or confirmed;
     /// the real document can only list fewer sections and advertise fewer extensions.
     public static func assumed(for service: ReportServiceURL, name: String) -> ReportDiscovery? {
         let link = "https://\(service.host)/"
         let document = ReportJSON.object([
             "protocol": .string(protocolName), "versions": .array([.int(supportedVersion)]),
             "service": .object(["name": .string(name), "terms": .string(link), "privacy": .string(link)]),
-            "api": .string(service.string), "extensions": .object(["taskScore": .int(1)]),
+            "api": .string(service.string), "extensions": .object(["perfScore": .int(1)]),
         ])
         return try? parse(document.compactData, service: service).get()
     }

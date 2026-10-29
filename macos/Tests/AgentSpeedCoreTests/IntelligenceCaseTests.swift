@@ -2,7 +2,7 @@ import Foundation
 import Testing
 @testable import AgentSpeedCore
 
-/// The `thinking` cases of `spec/fixtures/task-score-cases.json` (METRICS 6.9 *Live thinking*), as
+/// The `thinking` cases of `spec/fixtures/perf-score-cases.json` (METRICS 6.9 *Live thinking*), as
 /// `spec/tools/live_thinking.py` computes them. The engine's sums are per second of the 3-second window, so the
 /// fixture's `weight` (tokens in the window) is `IntelligenceSums.output × 3`.
 @Suite("Live thinking fixture cases")
@@ -10,7 +10,7 @@ struct IntelligenceCaseTests {
     static let windowSeconds = 3.0
 
     static func cases(_ group: String) -> [[String: Any]] {
-        let thinking = (try? Fixtures.json("task-score-cases.json"))?["thinking"] as? [String: Any]
+        let thinking = (try? Fixtures.json("perf-score-cases.json"))?["thinking"] as? [String: Any]
         return thinking?[group] as? [[String: Any]] ?? []
     }
 
@@ -106,10 +106,10 @@ struct IntelligenceCaseTests {
             for (model, values) in expected {
                 Self.expect(byModel[model] ?? .zero, values, "\(name) @ \(now) \(model)")
             }
-            let task = snapshot.report.task
-            EngineCaseTests.expectClose(task.models.values.reduce(0) { $0 + $1.thinking }, snapshot.intelligence.thinking,
+            let perf = snapshot.report.perf
+            EngineCaseTests.expectClose(perf.models.values.reduce(0) { $0 + $1.thinking }, snapshot.intelligence.thinking,
                                         "\(name) @ \(now) resolved ids add up")
-            EngineCaseTests.expectClose(task.thinking, snapshot.intelligence.thinking, "\(name) @ \(now) all sources")
+            EngineCaseTests.expectClose(perf.thinking, snapshot.intelligence.thinking, "\(name) @ \(now) all sources")
         }
     }
 

@@ -34,6 +34,18 @@ struct ClaudeParser: Sendable {
         state.malformedLines += 1
     }
 
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
+    }
+
     mutating func consume(
         _ extraction: LineExtraction<ClaudeLine>,
         tools: [ToolEvent] = [],
@@ -77,7 +89,7 @@ struct ClaudeParser: Sendable {
             state.setPhase(.generating, at: timestamp, inFlightStartMs: timestamp)
 
         case .user:
-            state.actions.record(tools, at: timestamp)
+            state.actions.recordResults(tools, at: timestamp)
             if line.isInterrupt || line.toolEndsTurn {
                 state.setPhase(.idle, at: timestamp)
                 pendingStartMs = nil
@@ -119,7 +131,6 @@ struct ClaudeParser: Sendable {
         let claim = deduper.claim(key, for: fileID)
         // Another file's message is copied history (METRICS 3.5): no response and no actions.
         guard claim != .otherFile else { return }
-        state.actions.record(tools, at: timestamp)
 
         let hasStopReason = line.stopReason != .none
         var lineModes = line.modes
@@ -127,6 +138,7 @@ struct ClaudeParser: Sendable {
         let record: ResponseRecord
         if claim == .sameFile, var existing = responses[key] {
             existing.endMs = max(existing.endMs, timestamp)
+            existing.firstMs = min(existing.firstMs ?? timestamp, timestamp)
             existing.usage = existing.usage.merged(with: line.usage)
             if let model = line.model { existing.model = model }
             existing.fast = existing.fast || line.fast
@@ -144,7 +156,8 @@ struct ClaudeParser: Sendable {
                 usage: line.usage,
                 isFinal: hasStopReason,
                 fast: line.fast,
-                modes: lineModes
+                modes: lineModes,
+                firstMs: timestamp
             )
             pendingStartMs = nil
             preciseStart = false
@@ -155,6 +168,8 @@ struct ClaudeParser: Sendable {
         lineEffort = line.effort ?? lineEffort
         state.modes = currentModes
         if let model = line.model { state.model = model }
+        // The calls of this message, with the model that issued them (METRICS 6.10).
+        state.actions.recordCalls(tools, at: timestamp, model: state.model)
 
         switch line.stopReason {
         case .toolUse:

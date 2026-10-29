@@ -36,8 +36,16 @@ struct SpeedEngine: Sendable {
     private var reportLedger = ReportLedger()
     /// The provider of each agent's latest response, for the model id of a generating agent (METRICS 11.2).
     private var agentProviders: [String: String] = [:]
-    /// Completed watched tasks for live reporting (METRICS 11.10), fed whatever reporting does.
-    private var taskCompletions = ReportTaskCompletionLog()
+    /// Completions counted for live reporting while its watch is on (METRICS 11.10 *Counting*).
+    private var perfCompletions = ReportPerfCompletionLog()
+    /// Live reporting's watch epoch; nil while the watch is off.
+    private var perfWatchEpoch: Int?
+    /// Counted keys that have become measured, each counted at most once (FIFO, like the report ledger's keys).
+    private var perfMeasuredKeys = Set<String>()
+    private var perfMeasuredOrder: [String] = []
+    /// The stored performance history and the baselines computed from it for one day (METRICS 6.11 *Baseline*).
+    private var perfHistory: [PerfDayRecord] = []
+    private var perfBaselines = PerfBaselineCache()
 
     init(pricing: PriceBook? = nil) {
         self.pricing = pricing
@@ -87,6 +95,7 @@ struct SpeedEngine: Sendable {
         } else if reportLedger.isCounted(record.key) {
             reportLedger.grow(record, modelId: reportModelId(of: record))
         }
+        countMeasuredForReport(record)
         let summary = Self.summary(of: record, project: project)
         if lastResponse.map({ summary.endedAt >= $0.endedAt }) ?? true {
             lastResponse = summary
@@ -141,9 +150,10 @@ struct SpeedEngine: Sendable {
         }
         previousPeakOutput = peak.output
 
-        let listing = agentList(nowMs: nowMs, window: window, references: references)
+        let listing = agentList(nowMs: nowMs, todayStartMs: todayStartMs, window: window, references: references,
+                                measured: measured)
         var report = reportFacts(nowMs: nowMs)
-        report.task = taskFacts(listing.agents, window: window, all: listing.intelligence)
+        report.perf = perfFacts(listing.agents, window: window, all: listing.intelligence)
 
         var subsetPeaks = [SourceSet: Double](minimumCapacity: subsets.count)
         for set in subsets {
@@ -229,18 +239,44 @@ struct SpeedEngine: Sendable {
         ).intelligenceByModel
     }
 
-    /// Counts a completed watched task (METRICS 11.10 *Counting*) under the resolved id of its model and its agent's
-    /// source; a task without actions adds nothing.
-    mutating func recordTaskCompletion(_ completion: TaskCompletion, agentId: String, source: SourceKind) {
-        guard let row = ReportTaskRow(completion.record) else { return }
-        let id = currentTable.reportModelId(model: completion.model, provider: agentProviders[agentId])
-        taskCompletions.append(epoch: completion.epoch, modelId: id, source: source, row: row)
+    // MARK: - Performance score reporting (METRICS 11.10)
+
+    /// Live reporting's watch: completions count in `epoch` from now on; nil turns it off.
+    mutating func setPerfWatch(_ epoch: Int?) {
+        perfWatchEpoch = epoch
     }
 
-    /// The task score of all enabled sources and of each resolved model id: the set value of the listed agents whose
-    /// current model resolves to it, and the model sums of the raw models that do (METRICS 11.10 *Body*).
-    private func taskFacts(_ listed: [EngineAgentStatus], window: LiveWindow, all: IntelligenceSums) -> ReportTaskFacts {
-        var facts = ReportTaskFacts(value: all.score, thinking: all.thinking, completions: taskCompletions)
+    /// A response the report ledger counted counts once, when it first becomes measured, with its values then.
+    private mutating func countMeasuredForReport(_ record: ResponseRecord) {
+        guard record.isMeasured, reportLedger.isCounted(record.key), !perfMeasuredKeys.contains(record.key) else { return }
+        perfMeasuredKeys.insert(record.key)
+        perfMeasuredOrder.append(record.key)
+        if perfMeasuredOrder.count > 2 * ReportLedger.maxCountedKeys {
+            for key in perfMeasuredOrder.prefix(ReportLedger.maxCountedKeys) { perfMeasuredKeys.remove(key) }
+            perfMeasuredOrder.removeFirst(ReportLedger.maxCountedKeys)
+        }
+        guard let epoch = perfWatchEpoch, let startMs = record.startMs else { return }
+        perfCompletions.append(
+            epoch: epoch, agentId: record.agentId, modelId: reportModelId(of: record), source: record.source,
+            kind: .response(startMs: startMs, endMs: record.endMs, firstMs: record.firstMs, output: record.usage.output,
+                            reasoning: record.usage.reasoning, input: record.usage.input,
+                            cachedInput: record.usage.cachedInput))
+    }
+
+    /// A tool call whose first result was read live counts under the resolved id of the model that issued it and its
+    /// agent's source.
+    mutating func recordToolCompletion(_ completion: ToolCompletion, agentId: String, source: SourceKind, nowMs: Int64) {
+        guard let epoch = perfWatchEpoch, ReportPerfScoreRule.countsCall(completion, nowMs: nowMs) else { return }
+        let id = currentTable.reportModelId(model: completion.model, provider: agentProviders[agentId])
+        perfCompletions.append(epoch: epoch, agentId: agentId, modelId: id, source: source,
+                               kind: .call(callMs: completion.callMs, resultMs: completion.resultMs,
+                                           failed: completion.failed))
+    }
+
+    /// The performance score of all enabled sources and of each resolved model id: the set value of the listed agents
+    /// whose current model resolves to it, and the model sums of the raw models that do (METRICS 11.10 *Body*).
+    private func perfFacts(_ listed: [EngineAgentStatus], window: LiveWindow, all: IntelligenceSums) -> ReportPerfFacts {
+        var facts = ReportPerfFacts(value: all.score, thinking: all.thinking, completions: perfCompletions)
         let table = currentTable
         var resolved: [LiveModelKey: String] = [:]
         func id(_ key: LiveModelKey) -> String {
@@ -250,14 +286,22 @@ struct SpeedEngine: Sendable {
             return id
         }
         for (key, sums) in window.intelligenceByModel where sums.thinking != 0 {
-            facts.models[id(key), default: ReportTaskModel()].thinking += sums.thinking
+            facts.models[id(key), default: ReportPerfModel()].thinking += sums.thinking
         }
         for row in listed where row.intelligence.score.form != .none {
             let modelId = id(LiveModelKey(model: row.agent.model, provider: agentProviders[row.agent.id]))
-            facts.models[modelId, default: ReportTaskModel()].value.merge(row.intelligence.score)
+            facts.models[modelId, default: ReportPerfModel()].value.merge(row.intelligence.score)
             if row.intelligence.score.form == .live { facts.models[modelId]?.liveSources.insert(row.agent.source) }
         }
         return facts
+    }
+
+    // MARK: - Performance history (METRICS 6.11)
+
+    /// The stored daily records, as the history store last saved them.
+    mutating func setPerfHistory(_ records: [PerfDayRecord]) {
+        perfHistory = records
+        perfBaselines = PerfBaselineCache()
     }
 
     // MARK: - Day and retention
@@ -363,24 +407,34 @@ struct SpeedEngine: Sendable {
 
     // MARK: - Agents list
 
-    /// The agents list (METRICS 6.7) with each agent's task score value, and the window's thinking sums with the highest
-    /// value of the listed agents, in total and per source (6.9 *Sets and groups*).
-    private func agentList(nowMs: Int64, window: LiveWindow, references: SpeedReferences)
+    /// The agents list (METRICS 6.7) with each agent's performance score, and the window's thinking sums with the
+    /// highest value of the listed agents, in total and per source (6.9 *Sets and groups*).
+    private mutating func agentList(nowMs: Int64, todayStartMs: Int64, window: LiveWindow, references: SpeedReferences,
+                                    measured: [TimedResponse])
         -> (agents: [EngineAgentStatus], intelligence: IntelligenceSums, sourceIntelligence: [SourceKind: IntelligenceSums]) {
+        var samples: [String: [ResponseRecord]] = [:]
+        for response in measured where response.endMs <= nowMs { samples[response.record.agentId, default: []].append(response.record) }
+        let today = dayLabeler.label(forMs: todayStartMs)
+        var baselines = perfBaselines
+        defer { perfBaselines = baselines }
+        let history = perfHistory
         func status(of agent: EngineAgent) -> EngineAgentStatus {
             let isFresh = agent.lastLineMs.map { nowMs - $0 <= Self.staleMs } ?? false
             let phase = isFresh ? agent.phase : .idle
             var intelligence = window.intelligenceByAgent[agent.id] ?? .zero
-            if let task = agent.task {
-                intelligence.score = TaskSetValue(id: agent.id, lastLineMs: agent.lastLineMs,
-                                                  value: task.value(idle: phase == .idle))
+            var perf = PerfEvaluation.evaluate(source: agent.source, responses: samples[agent.id] ?? [],
+                                               actions: agent.actions, nowMs: nowMs)
+            if perf.score != nil {
+                perf.baseline = baselines.baseline(history, source: agent.source, model: perf.model ?? "", today: today)
             }
+            intelligence.score = perf.value(agentId: agent.id, lastLineMs: agent.lastLineMs, idle: phase == .idle)
             return EngineAgentStatus(
                 agent: agent,
                 phase: phase,
                 live: window.byAgent[agent.id] ?? .zero,
                 recentSpeed: references.recent(for: agent.id)?.output,
                 intelligence: intelligence,
+                perf: perf,
                 signals: WorkSignals(agent.actions, nowMs: nowMs)
             )
         }

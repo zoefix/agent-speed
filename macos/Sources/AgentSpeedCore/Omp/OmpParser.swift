@@ -29,6 +29,18 @@ struct OmpParser: Sendable {
         state.malformedLines += 1
     }
 
+    mutating func takeToolCompletions() -> [ToolCompletion] {
+        state.actions.takeCompletions()
+    }
+
+    mutating func setSeeding(_ seeding: Bool) {
+        state.actions.marksSeeded = seeding
+    }
+
+    mutating func keepCompletionsOnly() {
+        state.actions.storesActions = false
+    }
+
     mutating func consume(
         _ extraction: LineExtraction<OmpLine>,
         tools: [ToolEvent] = [],
@@ -62,7 +74,7 @@ struct OmpParser: Sendable {
             guard headerSeen else { return }
             if let headerMs, timestamp < headerMs - Self.copiedHistoryMs { return }
             state.noteLine(at: timestamp)
-            state.actions.record(tools, at: timestamp)
+            state.actions.recordResults(tools, at: timestamp)
             state.modes = parentId.flatMap { branchModes[$0] } ?? .empty
             if case .modeChange(let tiers) = record {
                 state.modes = ExecutionModes(tiers.flatMap { provider, tier in
@@ -71,7 +83,7 @@ struct OmpParser: Sendable {
             }
             branchModes[id] = state.modes
             if branchModes.count > 16_384 { branchModes = [id: state.modes] }
-            consume(record, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            consume(record, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         }
     }
 
@@ -79,6 +91,7 @@ struct OmpParser: Sendable {
         _ record: OmpRecord,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
@@ -87,7 +100,7 @@ struct OmpParser: Sendable {
             state.setPhase(.generating, at: timestamp, inFlightStartMs: timestamp)
             pendingToolCalls.removeAll()
         case .assistant(let assistant):
-            consume(assistant, id: id, at: timestamp, deduper: &deduper, emit: emit)
+            consume(assistant, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         case .toolResult(let callId, let isFinalYield):
             if let callId { pendingToolCalls.remove(callId) }
             if isFinalYield {
@@ -112,11 +125,13 @@ struct OmpParser: Sendable {
         _ assistant: OmpAssistant,
         id: String,
         at timestamp: Int64,
+        tools: [ToolEvent],
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
         let key = "omp:\(id):\(assistant.startedMs ?? timestamp)"
         guard !deduper.isOwnedByOtherFile(key, for: fileID) else { return }
+        defer { state.actions.recordCalls(tools, at: timestamp, model: state.model) }
         let endMs: Int64
         if let started = assistant.startedMs, let duration = assistant.durationMs {
             let (sum, overflow) = started.addingReportingOverflow(duration)

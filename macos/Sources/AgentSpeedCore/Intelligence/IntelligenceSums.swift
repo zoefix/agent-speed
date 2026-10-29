@@ -1,7 +1,7 @@
 import Foundation
 
-/// What the 智力 readout of a set shows (METRICS 6.9): the highest task score of its agents (*Sets and groups*) and the
-/// live thinking sums (*Live thinking*), per second of the live window. The thinking sums are additive over sources
+/// What the 性能 readout of a set shows (METRICS 6.9): the highest performance score of its agents (*Sets and groups*)
+/// and the live thinking sums (*Live thinking*), per second of the live window. The thinking sums are additive over sources
 /// and agents; the score combines by the highest-score rule, so an orb or a group adds the values of its own sources or
 /// members (6.8).
 public struct IntelligenceSums: Equatable, Sendable {
@@ -11,9 +11,9 @@ public struct IntelligenceSums: Equatable, Sendable {
     public var thinking = 0.0
     /// Output tok/s of the sources that record reasoning apart from output (`Σ w'`).
     public var thinkingBase = 0.0
-    /// The highest task score of the set (live, else resting, else none), naming the agent that supplied it; an agent's
-    /// own sums carry its own value.
-    public var score = TaskSetValue.empty
+    /// The highest performance score of the set (live, else resting, else none), naming the agent that supplied it; an
+    /// agent's own sums carry its own value.
+    public var score = PerfSetValue.empty
 
     public init() {}
 

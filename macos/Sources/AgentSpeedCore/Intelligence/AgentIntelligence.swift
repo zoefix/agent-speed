@@ -1,21 +1,13 @@
 import Foundation
 
-/// One agent's, set's or group's 智力 (METRICS 6.9 *Values*), in exactly one form: live (the score of a task in progress),
-/// resting (the last task's final score while idle, shown pale) or none.
+/// One agent's, set's or group's 性能 (METRICS 6.9 *Values*), in exactly one form: live (the agent works), resting (idle,
+/// shown pale) or none.
 public enum AgentIntelligence: Equatable, Sendable {
     case live(Double)
     case resting(Double)
     case none
 
-    public init(_ value: TaskSetValue) {
-        switch (value.form, value.score) {
-        case (.live, let score?): self = .live(score)
-        case (.resting, let score?): self = .resting(score)
-        default: self = .none
-        }
-    }
-
-    public init(_ value: TaskAgentValue) {
+    public init(_ value: PerfSetValue) {
         switch (value.form, value.score) {
         case (.live, let score?): self = .live(score)
         case (.resting, let score?): self = .resting(score)
@@ -32,7 +24,7 @@ public enum AgentIntelligence: Equatable, Sendable {
     }
 
     /// As shown: an integer rounded half away from zero.
-    public var shown: Int? { value.map(taskRoundHalfAway) }
+    public var shown: Int? { value.map(perfRoundHalfAway) }
 
     public var isLive: Bool {
         if case .live = self { return true }

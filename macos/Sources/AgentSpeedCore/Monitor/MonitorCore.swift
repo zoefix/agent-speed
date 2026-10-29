@@ -28,8 +28,8 @@ final class MonitorCore: @unchecked Sendable {
     private let subsets: OSAllocatedUnfairLock<Set<SourceSet>>
 
     private var session: TranscriptSession?
-    /// The latest prediction coefficients (METRICS 6.11), applied to every session this core creates.
-    private var taskModels: [SourceKind: TaskModels] = [:]
+    /// The stored performance history (METRICS 6.11), applied to every session this core creates.
+    private var perfHistory: [PerfDayRecord] = []
     /// Live reporting's watch epoch (METRICS 11.10), applied to every session this core creates.
     private var reportWatch: Int?
     private var watcher: DirectoryWatcher?
@@ -76,19 +76,18 @@ final class MonitorCore: @unchecked Sendable {
 
     private var isCancelled: Bool { cancelled.withLock { $0 } }
 
-    /// Replaces the requested source sets from any thread; a running monitor publishes them promptly.
-    /// New prediction coefficients (METRICS 6.11): the agents' predictions are evaluated again.
-    func setTaskModels(_ models: [SourceKind: TaskModels]) {
+    /// The stored performance history (METRICS 6.11): the score card's baselines follow it.
+    func setPerfHistory(_ records: [PerfDayRecord]) {
         queue.async { [weak self] in
             guard let self else { return }
-            taskModels = models
+            perfHistory = records
             guard let session else { return }
-            session.setTaskModels(models)
+            session.setPerfHistory(records)
             if isLive { publish() }
         }
     }
 
-    /// Live reporting's watch (METRICS 11.10 *Watch*): the epoch new tasks are marked with, nil while it is off.
+    /// Live reporting's watch (METRICS 11.10 *Watch*): the epoch completions count in, nil while it is off.
     func setReportWatch(_ epoch: Int?) {
         queue.async { [weak self] in
             guard let self else { return }
@@ -113,7 +112,7 @@ final class MonitorCore: @unchecked Sendable {
         guard !isCancelled else { return }
         let session = TranscriptSession(configuration: configuration, pricing: pricing)
         session.wholeFileReads = { [weak self] job in self?.scheduleWholeFileRead(job) }
-        session.setTaskModels(taskModels)
+        session.setPerfHistory(perfHistory)
         session.setReportWatch(reportWatch)
         self.session = session
         guard session.hasAvailableRoot else {

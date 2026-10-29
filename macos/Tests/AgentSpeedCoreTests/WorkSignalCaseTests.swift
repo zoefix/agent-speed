@@ -24,9 +24,9 @@ struct WorkSignalCaseTests {
             let name = spec.string("name") ?? ""
             let actions = try #require(spec["actions"] as? [[String: Any]]).map { action in
                 ToolAction(
-                    atMs: try #require(action.int64("at")),
                     call: ToolCall(tool: try #require(action.string("tool")),
                                    digest: try #require(ToolDigest(hex: action.string("digest") ?? ""))),
+                    callMs: try #require(action.int64("at")),
                     failed: action["failed"] as? Bool
                 )
             }
@@ -62,9 +62,9 @@ struct WorkSignalCaseTests {
             }
             var log = ActionLog()
             for line in lines {
-                line.text.withUnsafeBytes { log.record(ToolEventExtractor.events(family, $0), at: line.atMs) }
+                line.text.withUnsafeBytes { log.record(ToolEventExtractor.events(family, $0), at: line.atMs, model: nil) }
             }
-            let got = log.actions.map { Row(at: $0.atMs, tool: $0.call.tool, digest: $0.call.digest.hex, failed: $0.failed) }
+            let got = log.actions.map { Row(at: $0.callMs, tool: $0.call.tool, digest: $0.call.digest.hex, failed: $0.failed) }
             let expected = try #require(spec["expect"] as? [[String: Any]]).map { action in
                 Row(at: action.int64("at") ?? 0, tool: action.string("tool") ?? "", digest: action.string("digest") ?? "",
                     failed: action["failed"] as? Bool)

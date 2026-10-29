@@ -121,13 +121,11 @@ public final class HistoryStore {
     public private(set) var state: HistoryState = .notLoaded
     /// Every stored day of every source, sorted by day then source.
     public private(set) var days: [DailyUsage] = []
-    /// The complete task records of the enabled scored sources (METRICS 6.11), without their feature rows: what
-    /// `taskComparison` compares.
-    public private(set) var taskRecords: [TaskRecord] = []
-    /// Each scored source's prediction coefficients from the last analysis (METRICS 6.11 *Calibration*).
-    public private(set) var taskModels: [SourceKind: TaskModels] = [:]
-    /// Called on the main actor whenever `taskModels` changes (the live monitor's predictions use them).
-    @ObservationIgnored public var taskModelsHandler: (@MainActor ([SourceKind: TaskModels]) -> Void)?
+    /// The stored performance records of the enabled sources (METRICS 6.11), per day, source and model: the History
+    /// window's 性能表現 and the score card's baselines.
+    public private(set) var perfRecords: [PerfDayRecord] = []
+    /// Called on the main actor whenever `perfRecords` changes (the live monitor's baselines use them).
+    @ObservationIgnored public var perfRecordsHandler: (@MainActor ([PerfDayRecord]) -> Void)?
 
     /// Called with whether the run shows its progress (`.analyzing`) regardless of its size.
     @ObservationIgnored public var refreshHandler: (@MainActor (_ showsProgress: Bool) -> Void)?
@@ -142,17 +140,21 @@ public final class HistoryStore {
         }
     }
 
-    public func publish(taskRecords: [TaskRecord], taskModels: [SourceKind: TaskModels]) {
-        self.taskRecords = taskRecords
-        guard taskModels != self.taskModels else { return }
-        self.taskModels = taskModels
-        taskModelsHandler?(taskModels)
+    public func publish(perfRecords: [PerfDayRecord]) {
+        guard perfRecords != self.perfRecords else { return }
+        self.perfRecords = perfRecords
+        perfRecordsHandler?(perfRecords)
     }
 
-    /// The Usage History window's task performance over [`first`, `last`] (`YYYY-MM-DD`), every scored source or only
-    /// `source` (METRICS 6.11 *Comparison*).
-    public func taskComparison(first: String, last: String, source: SourceKind? = nil) -> TaskComparison {
-        TaskComparison.compare(taskRecords, first: first, last: last, source: source)
+    /// The Usage History window's 性能表現 over [`first`, `last`] (`YYYY-MM-DD`), every source or only `source`
+    /// (METRICS 6.11 *History window*).
+    public func perfRange(first: String, last: String, source: SourceKind? = nil) -> [PerfHistory.Row] {
+        PerfHistory.range(perfRecords, first: first, last: last, source: source)
+    }
+
+    /// The 14-day baseline of a source and model before `today` (METRICS 6.11 *Baseline*).
+    public func perfBaseline(source: SourceKind, model: String, today: String) -> Double? {
+        PerfHistory.baseline(perfRecords, source: source, model: model, today: today)
     }
 
     /// Analyses new and changed logs now; a quiet refresh (`showsProgress: false`) only reports progress for a large

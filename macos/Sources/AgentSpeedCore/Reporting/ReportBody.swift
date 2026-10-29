@@ -93,8 +93,18 @@ public struct ReportOptions: Equatable, Sendable {
         self.messageLimit = messageLimit
     }
 
-    /// The `taskScore` extension is active (METRICS 11.10): advertised, with `models` sent by consent.
-    public var taskScoreActive: Bool { extensions.taskScore && sections.contains(.models) && maxModels >= 1 }
+    /// The `perfScore` extension is active (METRICS 11.10): advertised, with `models` sent by consent.
+    public var perfScoreActive: Bool { extensions.perfScore && sections.contains(.models) && maxModels >= 1 }
+
+    /// Only the retired `taskScore` is advertised: the report carries the thinking speed in its shape.
+    public var legacyTaskScoreActive: Bool {
+        !extensions.perfScore && extensions.taskScore && sections.contains(.models) && maxModels >= 1
+    }
+
+    /// Which score objects a report carries.
+    var scoreMode: ReportScoreMode {
+        perfScoreActive ? .perfScore : legacyTaskScoreActive ? .legacyTaskScore : .none
+    }
 
     /// The body is small enough to send: within `bodyLimit` and, over WebSocket, its message within `messageLimit`.
     func fits(_ body: Data) -> Bool {
@@ -104,6 +114,14 @@ public struct ReportOptions: Equatable, Sendable {
     }
 }
 
+/// Which score objects a report carries (METRICS 11.10 *Active*, *Legacy*).
+enum ReportScoreMode: Sendable {
+    case none
+    case perfScore
+    /// The retired `taskScore`: the thinking speed only.
+    case legacyTaskScore
+}
+
 /// The report body of REPORTING 6 from a window, the tick's values and the options (METRICS 11.2, 11.7).
 public enum ReportBody {
     public static let maxTokS = 1e9
@@ -111,7 +129,7 @@ public enum ReportBody {
     public static let maxWindowMs: Int64 = 900_000
 
     /// The body as sent: within `bodyLimit`, dropping the per-model breakdowns, then `models`, then `sources` when it
-    /// would not fit; the top-level `taskScore` always stays (METRICS 11.10 *Size*).
+    /// would not fit; the top-level `perfScore` (or legacy `taskScore`) always stays (METRICS 11.10 *Size*).
     public static func data(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
                             _ options: ReportOptions) -> Data {
         fitted(envelope, content, sample, options).data
@@ -121,18 +139,18 @@ public enum ReportBody {
     public static func fitted(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
                               _ options: ReportOptions) -> (json: ReportJSON, data: Data) {
         var options = options
-        let taskScore = options.taskScoreActive
-        var document = json(envelope, content, sample, options, taskScore: taskScore)
+        let scores = options.scoreMode
+        var document = json(envelope, content, sample, options, scores: scores)
         var data = document.compactData
         if !options.fits(data), options.extensions.modelHarnessRequests || options.extensions.executionModes {
             options.extensions.modelHarnessRequests = false
             options.extensions.executionModes = false
-            document = json(envelope, content, sample, options, taskScore: taskScore)
+            document = json(envelope, content, sample, options, scores: scores)
             data = document.compactData
         }
         for section in [ReportSection.models, .sources] where !options.fits(data) {
             options.sections.remove(section)
-            document = json(envelope, content, sample, options, taskScore: taskScore)
+            document = json(envelope, content, sample, options, scores: scores)
             data = document.compactData
         }
         return (document, data)
@@ -140,12 +158,12 @@ public enum ReportBody {
 
     public static func json(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
                             _ options: ReportOptions) -> ReportJSON {
-        json(envelope, content, sample, options, taskScore: options.taskScoreActive)
+        json(envelope, content, sample, options, scores: options.scoreMode)
     }
 
-    /// `taskScore`: the extension was active before the size rule, so the top-level object stays without `models`.
+    /// `scores`: the extension was active before the size rule, so the top-level object stays without `models`.
     static func json(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
-                     _ options: ReportOptions, taskScore: Bool) -> ReportJSON {
+                     _ options: ReportOptions, scores: ReportScoreMode) -> ReportJSON {
         let total = content.usage.total
         let agents = sample.facts.agents.values.reduce(into: ReportAgentCounts()) {
             $0.generating += $1.generating
@@ -196,14 +214,19 @@ public enum ReportBody {
             members.append(.init("sources", .array(sourceEntries(content, sample, sections: sections))))
         }
         if sections.contains(.models), options.maxModels > 0 {
-            let entries = modelEntries(content, sample, maxModels: options.maxModels, taskScore: taskScore)
+            let entries = modelEntries(content, sample, maxModels: options.maxModels, scores: scores)
             members.append(.init("models", .array(entries.map {
-                modelJSON($0, withCost: sections.contains(.cost), extensions: options.extensions, taskScore: taskScore)
+                modelJSON($0, withCost: sections.contains(.cost), extensions: options.extensions, scores: scores)
             })))
         }
-        if taskScore {
-            let task = sample.facts.task
-            members.append(.init("taskScore", ReportTaskScoreValue(task.value, thinking: task.thinking).json))
+        let perf = sample.facts.perf
+        switch scores {
+        case .perfScore:
+            members.append(.init("perfScore", ReportPerfScoreValue(perf.value, thinking: perf.thinking).json))
+        case .legacyTaskScore:
+            members.append(.init("taskScore", ReportPerfScoreValue.legacy(thinking: perf.thinking).json))
+        case .none:
+            break
         }
         if let realtime = envelope.realtime {
             let mixed = sections.contains(.traffic) && sample.traffic.status == .ok
@@ -297,19 +320,19 @@ public enum ReportBody {
         var generating = 0
         var usageBySource: [SourceKind: ReportUsage] = [:]
         var modes: [ReportModeGroup: ReportUsage] = [:]
-        /// The task score's set value, unrounded thinking and task rows (METRICS 11.10).
-        var taskValue = TaskSetValue.empty
+        /// The performance score's set value, unrounded thinking and statistics rows (METRICS 11.10).
+        var perfValue = PerfSetValue.empty
         var thinking = 0.0
-        var taskRows: [SourceKind: ReportTaskRow] = [:]
-        /// Listed only for the task score: zero usage, so no mode rows (METRICS 11.10 *Other extensions*).
-        var taskOnly = false
+        var perfRows: [SourceKind: PerfRecord] = [:]
+        /// Listed only for the performance score: zero usage, so no mode rows (METRICS 11.10 *Other extensions*).
+        var perfOnly = false
     }
 
     /// One entry per model with any increment in the window (a late price included) or a generating agent, by output
-    /// then id, `other` last (REPORTING 6.6.4, METRICS 11.3, 11.7); with `taskScore`, also every model an agent is live
-    /// with and every model with task rows (METRICS 11.10 *Membership*).
+    /// then id, `other` last (REPORTING 6.6.4, METRICS 11.3, 11.7); with `perfScore`, also every model an agent is live
+    /// with and every model with statistics rows (METRICS 11.10 *Membership*). The legacy `taskScore` adds no entry.
     private static func modelEntries(_ content: ReportWindowContent, _ sample: ReportSample, maxModels: Int,
-                                     taskScore: Bool) -> [ModelEntry] {
+                                     scores: ReportScoreMode) -> [ModelEntry] {
         var byId: [String: ModelEntry] = [:]
         for (key, value) in content.usage.byModel {
             byId[key.modelId, default: ModelEntry(id: key.modelId)].usage += value
@@ -324,18 +347,20 @@ public enum ReportBody {
             byId[key.modelId, default: ModelEntry(id: key.modelId)].generating += count
             byId[key.modelId]?.sources.insert(key.source)
         }
-        if taskScore {
-            let task = sample.facts.task
-            for (id, model) in task.models where !model.liveSources.isEmpty {
-                byId[id, default: ModelEntry(id: id, taskOnly: true)].sources.formUnion(model.liveSources)
+        let perf = sample.facts.perf
+        if scores == .perfScore {
+            for (id, model) in perf.models where !model.liveSources.isEmpty {
+                byId[id, default: ModelEntry(id: id, perfOnly: true)].sources.formUnion(model.liveSources)
             }
-            for (id, rows) in content.taskStats where !rows.isEmpty {
-                byId[id, default: ModelEntry(id: id, taskOnly: true)].sources.formUnion(rows.keys)
-                byId[id]?.taskRows = rows
+            for (id, rows) in content.perfStats where !rows.isEmpty {
+                byId[id, default: ModelEntry(id: id, perfOnly: true)].sources.formUnion(rows.keys)
+                byId[id]?.perfRows = rows
             }
+        }
+        if scores != .none {
             for id in byId.keys {
-                guard let model = task.models[id] else { continue }
-                byId[id]?.taskValue = model.value
+                guard let model = perf.models[id] else { continue }
+                byId[id]?.perfValue = model.value
                 byId[id]?.thinking = model.thinking
             }
         }
@@ -344,16 +369,16 @@ public enum ReportBody {
         }
         if entries.count > maxModels {
             var other = ModelEntry(id: ReportModelIds.other)
-            other.taskOnly = entries[(maxModels - 1)...].allSatisfy(\.taskOnly)
+            other.perfOnly = entries[(maxModels - 1)...].allSatisfy(\.perfOnly)
             for entry in entries[(maxModels - 1)...] {
                 other.usage += entry.usage
                 other.generating += entry.generating
                 other.sources.formUnion(entry.sources)
                 for (source, usage) in entry.usageBySource { other.usageBySource[source, default: .zero] += usage }
                 for (key, usage) in entry.modes { other.modes[key, default: .zero] += usage }
-                other.taskValue.merge(entry.taskValue)
+                other.perfValue.merge(entry.perfValue)
                 other.thinking += entry.thinking
-                for (source, row) in entry.taskRows { other.taskRows[source, default: ReportTaskRow()].add(row) }
+                for (source, row) in entry.perfRows { other.perfRows[source, default: PerfRecord()].add(row) }
             }
             entries = Array(entries.prefix(maxModels - 1)) + [other]
         }
@@ -361,7 +386,7 @@ public enum ReportBody {
     }
 
     private static func modelJSON(_ entry: ModelEntry, withCost: Bool, extensions: ReportExtensions,
-                                  taskScore: Bool) -> ReportJSON {
+                                  scores: ReportScoreMode) -> ReportJSON {
         var members: [ReportJSON.Member] = [
             .init("id", .string(entry.id)),
             .init("sources", .array(SourceKind.allCases.filter(entry.sources.contains).map { .string($0.rawValue) })),
@@ -375,29 +400,40 @@ public enum ReportBody {
         if extensions.modelHarnessRequests, let rows = ReportModelBreakdown.harness(entry.usageBySource, total: entry.usage) {
             members.append(.init("harnessRequests", rows))
         }
-        if extensions.executionModes, !entry.taskOnly,
+        if extensions.executionModes, !entry.perfOnly,
            let rows = ReportModelBreakdown.modes(entry.usageBySource, groups: entry.modes) {
             members.append(.init("modeUsage", rows))
         }
-        if taskScore {
-            members.append(.init("taskScore", ReportTaskScoreValue(entry.taskValue, thinking: entry.thinking).json))
-            let rows = SourceKind.allCases.compactMap { source in entry.taskRows[source].map { $0.json(source: source) } }
-            members.append(.init("taskStats", .array(rows)))
+        switch scores {
+        case .perfScore:
+            members.append(.init("perfScore", ReportPerfScoreValue(entry.perfValue, thinking: entry.thinking).json))
+            let rows = SourceKind.allCases.compactMap { source in entry.perfRows[source].map { $0.reportJSON(source: source) } }
+            members.append(.init("perfStats", .array(rows)))
+        case .legacyTaskScore:
+            members.append(.init("taskScore", ReportPerfScoreValue.legacy(thinking: entry.thinking).json))
+            members.append(.init("taskStats", .array([])))
+        case .none:
+            break
         }
         return .object(members)
     }
 
-    /// The `taskScore` objects the report would carry, rounded as sent, without the size rule; nil while the
-    /// extension is inactive (the changed rule of METRICS 11.10 *WebSocket*).
-    public static func taskScoreValues(_ content: ReportWindowContent, _ sample: ReportSample,
-                                       _ options: ReportOptions) -> ReportTaskScoreValues? {
-        guard options.taskScoreActive else { return nil }
-        let task = sample.facts.task
-        var entries: [String: ReportTaskScoreValue] = [:]
-        for entry in modelEntries(content, sample, maxModels: options.maxModels, taskScore: true) {
-            entries[entry.id] = ReportTaskScoreValue(entry.taskValue, thinking: entry.thinking)
+    /// The score objects the report would carry, rounded as sent, without the size rule; nil while neither extension
+    /// is active (the changed rule of METRICS 11.10 *WebSocket*, *Legacy*).
+    public static func perfScoreValues(_ content: ReportWindowContent, _ sample: ReportSample,
+                                       _ options: ReportOptions) -> ReportPerfScoreValues? {
+        let scores = options.scoreMode
+        guard scores != .none else { return nil }
+        let legacy = scores == .legacyTaskScore
+        let perf = sample.facts.perf
+        func value(_ score: PerfSetValue, _ thinking: Double) -> ReportPerfScoreValue {
+            legacy ? .legacy(thinking: thinking) : ReportPerfScoreValue(score, thinking: thinking)
         }
-        return ReportTaskScoreValues(top: ReportTaskScoreValue(task.value, thinking: task.thinking), entries: entries)
+        var entries: [String: ReportPerfScoreValue] = [:]
+        for entry in modelEntries(content, sample, maxModels: options.maxModels, scores: scores) {
+            entries[entry.id] = value(entry.perfValue, entry.thinking)
+        }
+        return ReportPerfScoreValues(top: value(perf.value, perf.thinking), entries: entries, legacy: legacy)
     }
 
     // MARK: - Values

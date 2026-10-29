@@ -3,6 +3,8 @@ import Foundation
 /// Result of a one-shot daily-history analysis.
 public struct HistoryScanReport: Sendable {
     public var days: [DailyUsage]
+    /// The performance records (METRICS 6.11) per day, source and model.
+    public var perf: [PerfDayRecord]
     public var filesDiscovered: Int
     public var filesAnalyzed: Int
     public var bytesAnalyzed: Int64
@@ -26,6 +28,7 @@ public enum HistoryScan {
         let report = try analyzer.run(configuration: configuration, options: HistoryAnalyzer.Options(timeZone: timeZone))
         return HistoryScanReport(
             days: analyzer.days(sources: configuration.enabledSources),
+            perf: try analyzer.perfRecords().filter { configuration.enabledSources.contains($0.source) },
             filesDiscovered: report.filesDiscovered,
             filesAnalyzed: report.filesAnalyzed,
             bytesAnalyzed: report.bytesAnalyzed,

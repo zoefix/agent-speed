@@ -48,9 +48,9 @@ struct OpenClawTests {
                 var order: [String] = []
                 var stopped = false
                 try database.rows(session: window.sessionId, after: .min, maxLineBytes: FileTailer.defaultMaxLineBytes,
-                                  readsTools: false) { row in
+                                  tools: .hashed) { row in
                     guard !stopped, let entry = row.entry else { return }
-                    parser.consume(entry, deduper: &deduper) { upsert in
+                    parser.consume(entry, tools: row.tools, deduper: &deduper) { upsert in
                         if latest[upsert.record.key] == nil { order.append(upsert.record.key) }
                         latest[upsert.record.key] = upsert.record
                     }

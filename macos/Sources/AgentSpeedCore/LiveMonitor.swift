@@ -11,8 +11,8 @@ public final class LiveMonitor {
     private let store: SpeedStore
     private var core: MonitorCore?
     private var mailbox: SnapshotMailbox?
-    /// The prediction coefficients from the history's calibration (METRICS 6.11), kept across restarts.
-    public private(set) var taskModels: [SourceKind: TaskModels] = [:]
+    /// The stored performance history (METRICS 6.11), kept across restarts: the score card's baselines.
+    public private(set) var perfHistory: [PerfDayRecord] = []
     /// Live reporting's watch epoch (METRICS 11.10), kept across restarts.
     public private(set) var reportWatch: Int?
 
@@ -34,22 +34,22 @@ public final class LiveMonitor {
         self.mailbox = mailbox
         self.core = core
         core.start()
-        if !taskModels.isEmpty { core.setTaskModels(taskModels) }
+        if !perfHistory.isEmpty { core.setPerfHistory(perfHistory) }
         if reportWatch != nil { core.setReportWatch(reportWatch) }
     }
 
-    /// Live reporting's watch (METRICS 11.10 *Watch*): tasks whose first event is read from now on are marked with
-    /// `epoch` and count when they complete; nil turns it off and unwatches every task.
+    /// Live reporting's watch (METRICS 11.10 *Watch*): completions read from now on count in `epoch`; nil turns it
+    /// off.
     public func setReportWatch(_ epoch: Int?) {
         guard epoch != reportWatch else { return }
         reportWatch = epoch
         core?.setReportWatch(epoch)
     }
 
-    /// New calibrations for the live predictions (METRICS 6.11).
-    public func setTaskModels(_ models: [SourceKind: TaskModels]) {
-        taskModels = models
-        core?.setTaskModels(models)
+    /// The history store's performance records, as it last saved them (METRICS 6.11 *Baseline*).
+    public func setPerfHistory(_ records: [PerfDayRecord]) {
+        perfHistory = records
+        core?.setPerfHistory(records)
     }
 
     public func stop() {
