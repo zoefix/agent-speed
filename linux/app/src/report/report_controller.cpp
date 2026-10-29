@@ -344,6 +344,7 @@ void ReportController::chooseService(int index) {
     // Switching services pauses the old one (its identity is kept) and starts a new run on the new one.
     if (enabled()) post(agentspeed::report::Event::Stop);
     endRun();
+    endStream();
     settings_.setCustom(custom);
     if (!custom) settings_.setService(QLatin1String(kPresets[index].url));
     problem_ = agentspeed::report::Problem::None;
@@ -368,6 +369,7 @@ void ReportController::commitCustomUrl() {
     if (service_ && *url == *service_ && settings_.custom()) return;
     if (enabled()) post(agentspeed::report::Event::Stop);
     endRun();
+    endStream();
     settings_.setCustom(true);
     settings_.setCustomUrl(qs(url->text()));
     customText_ = qs(url->text());
@@ -378,6 +380,12 @@ void ReportController::commitCustomUrl() {
 }
 
 void ReportController::retry() {
+    if (streamStop_ && (*streamStop_ == "mismatch" || *streamStop_ == "replaced")) {
+        streamStop_.reset();
+        if (stream_) applyStream(stream_->scheduler->retry(steadyMs()), lastSample_.get());
+        notify();
+        return;
+    }
     if (registrationFailure_ && identity_ && !identity_->registered && enabled()) {
         registrationFailure_.reset();
         finishInviteSetup();
@@ -407,6 +415,8 @@ void ReportController::setWebSocket(bool on) {
     if (!service_ || on == webSocket()) return;
     settings_.setHttp(originOf(), !on);
     endRun();
+    endStream();
+    streamStop_.reset();
     notify();
 }
 
@@ -515,6 +525,26 @@ QString ReportController::statusText() const {
         return fmt(QStringLiteral("report.status.rateLimited"), {QLocale().toString(QDateTime::fromMSecsSinceEpoch(rateLimitedUntilMs_).time(), QLocale::ShortFormat)});
     if (retryReason_) return t("report.status.retrying");
     if (discoveryStale() || !identity_ || !identity_->registered) return t("report.status.connecting");
+    if (usesWebSocket()) {
+        if (streamStop_) {
+            const auto& r = *streamStop_;
+            return t(r == "mismatch" ? "report.status.wsMismatch" : r == "replaced" ? "report.status.wsReplaced" : r == "nonce" ? "report.status.wsNonce"
+                     : r == "clientState" ? "report.status.wsClientState" : "report.status.wsIncompatible");
+        }
+        const auto when = [&](qint64 ms) {
+            const auto ago = std::max<qint64>(0, (now - ms) / 1000);
+            return ago < 60 ? fmt(QStringLiteral("time.secondsAgo"), {QString::number(ago)})
+                            : QLocale().toString(QDateTime::fromMSecsSinceEpoch(ms).time(), QLocale::ShortFormat);
+        };
+        const bool open = stream_ && stream_->scheduler->connection() == agentspeed::report::stream::Connection::Open;
+        const auto streamMode = stream_ ? stream_->scheduler->mode() : std::string("quiet");
+        if (open && lastDeliveryMs_ > 0 && streamMode != "quiet") return fmt(QStringLiteral("report.status.streaming"), {when(lastDeliveryMs_)});
+        if (stream_ && stream_->scheduler->failures() > 0)
+            return lastDeliveryMs_ > 0 ? fmt(QStringLiteral("report.status.wsReconnecting"), {when(lastDeliveryMs_)}) : t("report.status.wsReconnectingNever");
+        if (streamMode == "idle") return t("report.status.idle");
+        if (streamMode == "active") return t("report.status.connecting");
+        return lastDeliveryMs_ > 0 ? t("report.status.quiet") : t("report.status.never");
+    }
     const auto mode = run_ ? run_->scheduler->mode() : agentspeed::report::Mode::Quiet;
     if (mode == agentspeed::report::Mode::Active && lastDeliveryMs_ > 0) {
         const auto ago = std::max<qint64>(0, (now - lastDeliveryMs_) / 1000);
@@ -537,6 +567,14 @@ QString ReportController::statusLevel() const {
     if (paused()) return QStringLiteral("gray");
     if (rateLimitedUntilMs_ > QDateTime::currentMSecsSinceEpoch() || retryReason_) return QStringLiteral("amber");
     if (discoveryStale() || !identity_ || !identity_->registered) return QStringLiteral("amber");
+    if (usesWebSocket()) {
+        if (streamStop_) return QStringLiteral("red");
+        const bool open = stream_ && stream_->scheduler->connection() == agentspeed::report::stream::Connection::Open;
+        const auto streamMode = stream_ ? stream_->scheduler->mode() : std::string("quiet");
+        if (open && lastDeliveryMs_ > 0 && streamMode != "quiet") return QStringLiteral("green");
+        if ((stream_ && stream_->scheduler->failures() > 0) || streamMode == "active") return QStringLiteral("amber");
+        return QStringLiteral("gray");
+    }
     const auto mode = run_ ? run_->scheduler->mode() : agentspeed::report::Mode::Quiet;
     return mode == agentspeed::report::Mode::Active && lastDeliveryMs_ > 0 ? QStringLiteral("green") : QStringLiteral("gray");
 }
@@ -553,6 +591,7 @@ QString ReportController::rankText() const {
 }
 
 bool ReportController::showRetry() const {
+    if (enabled() && streamStop_ && (*streamStop_ == "mismatch" || *streamStop_ == "replaced")) return true;
     return enabled() && !fetching_ && ((inviteSetup_ && fetchFailure_) || registrationFailure_.has_value());
 }
 
@@ -615,7 +654,8 @@ QString ReportController::inviteUsername() const {
 }
 
 bool ReportController::indicatorAttention() const {
-    return enabled() && (problem_ != agentspeed::report::Problem::None || showReview() || (inviteSetup_ && fetchFailure_ && !fetching_));
+    return enabled() && (problem_ != agentspeed::report::Problem::None || showReview() || (inviteSetup_ && fetchFailure_ && !fetching_) ||
+                         (usesWebSocket() && streamStop_.has_value()));
 }
 
 QString ReportController::indicatorTip() const {

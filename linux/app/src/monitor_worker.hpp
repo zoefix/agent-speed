@@ -35,6 +35,8 @@ Q_DECLARE_METATYPE(TrafficRows)
 struct ReportTick {
     std::shared_ptr<const agentspeed::report::Sample> sample;
     qint64 monotonicMs = 0;
+    // METRICS 11.9 Observations: when the read that changed the engine before this tick began.
+    std::optional<qint64> observedMs;
 };
 Q_DECLARE_METATYPE(ReportTick)
 

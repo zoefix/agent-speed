@@ -23,7 +23,7 @@ void ReportController::onTick(const ReportTick& tick) {
     if (!tick.sample) return;
     lastSample_ = tick.sample;
     if (previewWindow_) previewWindow_->observe(*tick.sample);
-    tickRun(tick.sample, tick.monotonicMs);
+    tickRun(tick.sample, tick.monotonicMs, tick.observedMs);
 }
 
 // A user event (pause, resume, network, stop) is handled at once with the latest values.
@@ -55,7 +55,14 @@ void ReportController::endRun() {
     notify();
 }
 
-void ReportController::tickRun(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now) {
+void ReportController::tickRun(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now, std::optional<qint64> observed) {
+    // METRICS 11.9: the effective transport; a change of it stops the old run and starts a new one.
+    if (usesWebSocket()) {
+        endRun();
+        streamTick(sample, now, observed, false);
+        return;
+    }
+    endStream();
     startRunIfNeeded(sample);
     if (!run_) {
         pendingEvents_.clear();
@@ -228,12 +235,19 @@ void ReportController::react(const agentspeed::report::Reaction& reaction) {
 }
 
 void ReportController::quit(std::function<void()> done) {
-    if (!run_ || !enabled() || !lastSample_) {
+    if ((!run_ && !stream_) || !enabled() || !lastSample_) {
         done();
         return;
     }
     quitDone_ = std::move(done);
     post(agentspeed::report::Event::Stop);
+    if (stream_) {
+        // The leaving report is written; its answer or the 1 s limit ends the wait.
+        after(kQuitWaitMs, [this] {
+            if (quitDone_) std::exchange(quitDone_, {})();
+        });
+        return;
+    }
     if (!run_ || !run_->scheduler->busy()) {
         if (quitDone_) std::exchange(quitDone_, {})();
         return;

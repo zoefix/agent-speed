@@ -69,7 +69,8 @@ void simulate(const json::Value& item, std::vector<std::string>& log, std::uniqu
         if (e.value["type"].equals("tick")) tickTimes.insert(e.at);
     bool lastActive = false;
     const auto record = [&](const std::vector<stream::Action>& actions) {
-        for (const auto& a : actions) log.push_back(a.log());
+        for (const auto& a : actions)
+            if (a.kind != stream::Action::Kind::Discard) log.push_back(a.log());
     };
     const auto wakeUntil = [&](std::int64_t limit) {
         while (scheduler.wakeAt() && *scheduler.wakeAt() < limit) {

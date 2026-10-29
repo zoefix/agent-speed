@@ -3,6 +3,7 @@
 #include <QObject>
 #include <QTimer>
 #include <QVariantList>
+#include <array>
 #include <map>
 #include <memory>
 #include <optional>
@@ -12,10 +13,12 @@
 #include "agentspeed/report_body.hpp"
 #include "agentspeed/report_scheduler.hpp"
 #include "agentspeed/report_service.hpp"
+#include "agentspeed/report_stream.hpp"
 #include "monitor_worker.hpp"
 #include "report/report_http.hpp"
 #include "report/report_keys.hpp"
 #include "report/report_settings.hpp"
+#include "report/report_socket.hpp"
 
 class Preferences;
 class Strings;
@@ -75,6 +78,8 @@ class ReportController : public QObject {
     Q_PROPERTY(bool canPause READ canPause NOTIFY changed)
     Q_PROPERTY(bool showRetry READ showRetry NOTIFY changed)
     Q_PROPERTY(bool showReview READ showReview NOTIFY changed)
+    Q_PROPERTY(QString wsStats READ wsStats NOTIFY changed)
+    Q_PROPERTY(QString wsCounters READ wsCounters NOTIFY changed)
     // This device and other services.
     Q_PROPERTY(bool deviceVisible READ deviceVisible NOTIFY changed)
     Q_PROPERTY(QString deviceDetail READ deviceDetail NOTIFY changed)
@@ -168,6 +173,8 @@ public:
     bool canPause() const;
     bool showRetry() const;
     bool showReview() const;
+    QString wsStats() const;
+    QString wsCounters() const;
     bool deviceVisible() const;
     QString deviceDetail() const;
     QString profileUrl() const;
@@ -269,6 +276,16 @@ private:
         bool review = false, starting = false, offersTransfer = false;
         QString usernameError, apiKeyError, failure;
     };
+    // The WebSocket run (METRICS 11.9): its scheduler, window and the bodies awaiting an answer.
+    struct Stream {
+        QString id;
+        std::unique_ptr<agentspeed::report::stream::StreamScheduler> scheduler;
+        std::unique_ptr<agentspeed::report::Window> window;
+        agentspeed::report::TitleTracker title;
+        std::map<int, std::pair<std::string, std::string>> bodies;  // seq → body, its SHA-256
+        std::optional<std::array<double, 6>> lastBuilt;             // the live values of the last built report, rounded as sent
+        bool lastActive = false;
+    };
     struct Run {
         QString id;
         std::unique_ptr<agentspeed::report::Scheduler> scheduler;
@@ -321,7 +338,7 @@ private:
 
     // report_delivery.cpp: runs, ticks, reports and reactions.
     void post(agentspeed::report::Event event);
-    void tickRun(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now);
+    void tickRun(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now, std::optional<qint64> observed = std::nullopt);
     bool ready() const;
     void startRunIfNeeded(const std::shared_ptr<const agentspeed::report::Sample>& sample);
     void endRun();
@@ -332,6 +349,19 @@ private:
     void react(const agentspeed::report::Reaction& reaction);
     agentspeed::report::Options options(const agentspeed::report::Discovery& discovery, const std::set<agentspeed::report::Section>& switches) const;
     qint64 correctedMs() const;
+
+    // report_stream_run.cpp: the WebSocket transport.
+    bool usesWebSocket() const;
+    void streamTick(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now, std::optional<qint64> observed, bool wake);
+    void startStreamIfNeeded(const std::shared_ptr<const agentspeed::report::Sample>& sample, qint64 now);
+    void endStream();
+    void applyStream(const std::vector<agentspeed::report::stream::Action>& actions, const agentspeed::report::Sample* sample);
+    void streamConnect();
+    void streamWrite(int seq);
+    void streamReact(const std::string& name);
+    void streamStopped(const std::string& reason);
+    void onSocketMessage(const QByteArray& text, bool binary);
+    std::array<double, 6> sentLive(const agentspeed::report::Sample& sample) const;
 
     // report_preview.cpp.
     void refreshPreview();
@@ -352,6 +382,14 @@ private:
     QString apiKey_;
     std::optional<Draft> consent_;
     std::optional<Run> run_;
+    std::optional<Stream> stream_;
+    ReportSocket socket_;
+    QTimer wakeTimer_;
+    std::optional<std::string> streamStop_;
+    std::optional<std::int64_t> streamServerTime_;
+    agentspeed::report::stream::Counters streamCounters_;
+    std::vector<std::int64_t> streamLatency_;
+    std::optional<std::optional<agentspeed::report::StreamSettings>> pendingStreamSettings_;
     std::vector<agentspeed::report::Event> pendingEvents_;
     std::shared_ptr<const agentspeed::report::Sample> lastSample_;
     qint64 clockCorrectionSeconds_ = 0;

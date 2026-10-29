@@ -51,6 +51,7 @@ void ReportController::applyFetch(const agentspeed::report::ServiceUrl& service,
         if (!supportsThisClient(*discovery_)) problem_ = agentspeed::report::Problem::Upgrade;
         else if (problem_ == agentspeed::report::Problem::Upgrade) problem_ = agentspeed::report::Problem::None;
         if (run_) run_->scheduler->update(discovery_->limits);
+        if (stream_) applyStream(stream_->scheduler->settingsChanged(steadyMs(), discovery_->websocket), lastSample_.get());
         if (consent_ && consent_->service == service) {
             consent_->discovery = discovery_;
             if (settings_.username().isEmpty() && !(identity_ && identity_->registered)) consent_->username = defaultUsername();
@@ -65,6 +66,8 @@ void ReportController::applyFetch(const agentspeed::report::ServiceUrl& service,
             endRun();
         }
         if (enabled()) refreshTimer_.start(static_cast<int>(kHourMs));
+        // A failed refresh while the stream waits for refreshed settings stops it (METRICS 11.9, ready).
+        if (stream_ && stream_->scheduler->awaitingSettings()) applyStream(stream_->scheduler->settingsChanged(steadyMs(), std::nullopt), lastSample_.get());
         if (consent_ && consent_->service == service && !consent_->discovery) consent_->failure = fetchText(fetch.kind);
     }
     Q_UNUSED(userAction);
@@ -464,6 +467,7 @@ void ReportController::promotePendingKey() {
 
 void ReportController::endIdentity(bool deleteKeys) {
     endRun();
+    endStream();
     if (identity_) {
         if (deleteKeys) keys_.forget(identity_->deviceId);
         settings_.remove(identity_->origin);

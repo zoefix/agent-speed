@@ -63,12 +63,24 @@ void ReportController::refreshPreview() {
     envelope.titleLevel = run_ ? run_->title.level() : 0;
     auto opts = options(document, consent_ ? consent_->sections : switches());
     if (!known) opts.extensions.taskScore = true;
+    const bool ws = !consent_ && usesWebSocket();
+    if (ws) opts.stream = agentspeed::report::StreamBody{std::nullopt, document.websocket->maxMessageBytes};
     const auto built = agentspeed::report::fitted(envelope, content, sample, opts);
     previewBody_ = qs(built.json.pretty());
     previewCopy_ = previewBody_;
     previewRequest_.clear();
     if (known) {
-        if (const auto api = agentspeed::report::ServiceUrl::parseApi(known->api, service->loopbackHttp())) {
+        if (const auto api = agentspeed::report::ServiceUrl::parseApi(known->api, service->loopbackHttp()); api && ws) {
+            QStringList lines{QStringLiteral("GET ") + qs(agentspeed::report::websocketUrl(api->text())),
+                              QStringLiteral("User-Agent: ") + qs(client().userAgent()),
+                              QStringLiteral("Sec-WebSocket-Protocol: agent-speed-report.v1"),
+                              QStringLiteral("X-AgentSpeed-Device: ") + qs(envelope.deviceId),
+                              QStringLiteral("X-AgentSpeed-Timestamp: ") + QString::number(envelope.sentAtMs / 1000),
+                              QStringLiteral("X-AgentSpeed-Nonce: …"),
+                              QStringLiteral("X-AgentSpeed-Signature: …")};
+            if (!apiKey_.isEmpty()) lines.append(QStringLiteral("Authorization: Bearer ••••"));
+            previewRequest_ = lines.join(QLatin1Char('\n'));
+        } else if (api) {
             QStringList lines{QStringLiteral("POST ") + qs(api->endpoint("/v1/reports")),
                               QStringLiteral("User-Agent: ") + qs(client().userAgent()),
                               QStringLiteral("Accept: application/json"),
@@ -82,7 +94,9 @@ void ReportController::refreshPreview() {
         }
     }
     previewFooter_.clear();
-    if (run_) {
+    if (ws) {
+        previewFooter_ = t("report.preview.onChange");
+    } else if (run_) {
         if (const auto due = run_->scheduler->nextDueAt()) {
             previewFooter_ = fmt(QStringLiteral("report.preview.next"), {QString::number(std::max<qint64>(0, (*due - now + 999) / 1000))});
         }

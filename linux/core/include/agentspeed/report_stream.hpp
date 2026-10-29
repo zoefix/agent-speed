@@ -46,7 +46,9 @@ enum class Connection { Closed, Connecting, Opening, Open, Closing };
 const char* connectionName(Connection connection);
 
 struct Action {
-    enum class Kind { Connect, Abort, Close, Build, Write, Delivered, Dropped, Saturated, React, Stop, Backoff, Wait, Wake } kind;
+    // Discard empties the owner's window (value 1: the gap rule, keeping this tick's increments); it is not in the
+    // vectors' log.
+    enum class Kind { Connect, Abort, Close, Build, Write, Delivered, Dropped, Saturated, React, Stop, Backoff, Wait, Wake, Discard } kind;
     std::int64_t t = 0;
     int seq = 0;
     std::string text;  // activity (build), status (delivered), why (dropped), name (react), reason (stop)
@@ -109,7 +111,7 @@ private:
         std::int64_t written = 0;
     };
     void say(std::int64_t t, Action::Kind kind, int seq = 0, std::string text = {}, std::int64_t windowMs = 0, std::int64_t value = 0);
-    void discard(std::int64_t t);
+    void discard(std::int64_t t, bool keepingTick = false);
     void end(std::int64_t t, std::optional<Action::Kind> action);
     void failure(std::int64_t t);
     void wait(std::int64_t t, std::optional<std::int64_t> seconds);

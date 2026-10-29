@@ -72,7 +72,8 @@ public:
     // Startup: discovery and the backlog of files changed since todayStart − 15 min.
     void start(std::int64_t nowMs, std::int64_t todayStartMs);
     // Change detection (about once a second): recent files and the databases; a full rediscovery every 10 seconds.
-    void poll(std::int64_t nowMs, std::int64_t todayStartMs);
+    // True when a read changed the engine (an observation of METRICS 11.9).
+    bool poll(std::int64_t nowMs, std::int64_t todayStartMs);
     Snapshot snapshot(std::int64_t nowMs, std::int64_t todayStartMs);
     // responseCompleted events since the last call (METRICS 6.4); never the startup backlog.
     std::vector<Completion> takeCompletions();

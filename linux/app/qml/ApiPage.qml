@@ -458,6 +458,19 @@ SettingsPage {
                     }
                 }
                 Text {
+                    id: wsStatsLine
+                    visible: report.wsStats.length > 0
+                    text: report.wsStats
+                    color: Theme.ink3
+                    font.pixelSize: 11
+                    Layout.leftMargin: 16
+                    wrapMode: Text.Wrap
+                    Layout.fillWidth: true
+                    ToolTip.visible: statsHover.hovered
+                    ToolTip.text: report.wsCounters
+                    HoverHandler { id: statsHover }
+                }
+                Text {
                     visible: report.statusFootnote.length > 0
                     text: report.statusFootnote
                     color: Theme.ink3

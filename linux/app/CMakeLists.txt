@@ -1,4 +1,4 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network OpenGL Widgets Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network OpenGL WebSockets Widgets Qml Quick QuickControls2)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-shape)
 qt_standard_project_setup(REQUIRES 6.5)
@@ -22,6 +22,8 @@ qt_add_executable(agent-speed
     src/report/report_keys.cpp
     src/report/report_preview.cpp
     src/report/report_settings.cpp
+    src/report/report_socket.cpp
+    src/report/report_stream_run.cpp
     src/orb/body.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
@@ -113,7 +115,7 @@ qt_add_resources(agent-speed "strings"
 )
 
 target_link_libraries(agent-speed PRIVATE
-    agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
+    agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::WebSockets Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
 target_include_directories(agent-speed PRIVATE src)
 # The release version (a tag v1.6.0 builds 1.6.0); local builds keep the project's.
 set(AGENTSPEED_VERSION "${PROJECT_VERSION}" CACHE STRING "The version the app reports")

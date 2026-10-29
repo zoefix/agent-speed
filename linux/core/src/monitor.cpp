@@ -305,12 +305,12 @@ std::optional<std::pair<std::int64_t, std::int64_t>> Monitor::stampOf(const Trac
     return std::make_pair(s->length, writeNs);
 }
 
-void Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
+bool Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
     store_->setClock(nowMs);
-    pollRecent(nowMs);
-    refreshSources(false, nowMs, todayStartMs);
+    bool changed = pollRecent(nowMs);
+    changed = refreshSources(false, nowMs, todayStartMs) || changed;
     if (nowMs - lastRediscoveryMs_ >= kRediscoveryMs) {
-        rediscover(nowMs, todayStartMs);
+        changed = rediscover(nowMs, todayStartMs) || changed;
         lastRediscoveryMs_ = nowMs;
     }
     store_->prune(nowMs, todayStartMs);
@@ -318,6 +318,7 @@ void Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
         resolveParents();
         traffic_->tick(nowMs, trafficAgents(nowMs));
     }
+    return changed;
 }
 
 // METRICS 10.6: the agents with what per-agent attribution needs — their tree, transcript, working directory and when

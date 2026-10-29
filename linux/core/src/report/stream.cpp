@@ -279,6 +279,7 @@ std::string Action::log() const {
     case Kind::Backoff: return at + "backoff " + std::to_string(value);
     case Kind::Wait: return at + "wait " + std::to_string(value);
     case Kind::Wake: return at + "wake " + std::to_string(value);
+    case Kind::Discard: return at + "discard";
     }
     return at;
 }
@@ -307,9 +308,10 @@ void StreamScheduler::newRun(std::optional<std::int64_t> t) {
     lastActivity_.reset();
 }
 
-void StreamScheduler::discard(std::int64_t t) {
+void StreamScheduler::discard(std::int64_t t, bool keepingTick) {
     windowStart_ = t;
     observed_.reset();
+    say(t, Action::Kind::Discard, 0, {}, 0, keepingTick ? 1 : 0);
 }
 
 void StreamScheduler::end(std::int64_t t, std::optional<Action::Kind> action) {
@@ -389,7 +391,7 @@ std::vector<Action> StreamScheduler::tick(std::int64_t t, bool active, bool chan
         }
     }
     if (prevTick_ && t - *prevTick_ > kGapMs) {
-        discard(t);
+        discard(t, true);
         if (conn_ != Connection::Closed) end(t, Action::Kind::Abort);
     }
     prevTick_ = t;
