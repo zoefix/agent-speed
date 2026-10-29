@@ -58,6 +58,27 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
             shift = wanted * e;
         }
     }
+    // The network block, when the orb shows traffic instead: ↓ over ↑, the ↑ line nearest the value.
+    const auto& net = c.net;
+    bool network = false;
+    double cellNumber = 0, cellUnit = 0, arrowWidth = 0;
+    if (!intel && net.opacity > 0.01) {
+        cellNumber = widthOf(QStringLiteral("8.88"), ts, 600);
+        cellUnit = widthOf(QStringLiteral("MB/s"), 0.82 * ts, 500);
+        arrowWidth = widthOf(QStringLiteral("↓"), ts, 600);
+        const double lineWidth = arrowWidth + 0.16 * ts + cellNumber + 0.16 * ts + cellUnit;
+        network = lineWidth <= 0.44 * s;
+        if (network) {
+            const double nearest = -0.245 * s;
+            const double capTop = (kValueBaseline - 0.70 * kValueSize) * s;
+            const double blockTop = nearest - 1.32 * ts - 0.70 * ts;
+            const double titleBottom = (kValueBaseline + kUnitGap + kTitleGap + 0.22 * kTitleSize) * s;
+            const double dotsTop = kDots * s - 2 * f.unit;
+            const double wanted = std::min(std::max(0.0, (capTop - blockTop) / 2), std::max(0.0, dotsTop - 0.05 * s - titleBottom));
+            const double e = net.opacity * net.opacity * (3 - 2 * net.opacity);
+            shift = wanted * e;
+        }
+    }
     const double cy = dotsY + shift;
 
     // Value: tabular bold 0.24 S; from boost a heat glow, from overdrive a lean and a wider soft glow.
@@ -174,6 +195,45 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
         scene.add(label);
     }
 
+    if (network) {
+        double pill = 0;
+        if (f.effects.celebrate && f.peakAge >= 0 && f.peakAge < kPeakPill) pill = std::min({1.0, f.peakAge / 0.15, (kPeakPill - f.peakAge) / 0.15});
+        const double alpha = net.opacity * (1 - pill);
+        if (alpha > 0.01) {
+            const double lineWidth = arrowWidth + 0.16 * ts + cellNumber + 0.16 * ts + cellUnit;
+            const double left = std::round(cx - lineWidth / 2);
+            const double nearest = dotsY + shift - 0.245 * s;
+            const Rgba unitColor = f.tokens.secondaryText.withAlpha(f.tokens.secondaryText.a * alpha);
+            const Rgba numberColor = f.tokens.valueText.withAlpha(f.tokens.valueText.a * 0.8 * alpha);
+            const auto drawLine = [&](const QString& arrow, const QString& number, const QString& unitText, double baseline) {
+                TextDraw a;
+                a.text = arrow;
+                a.pixelSize = ts;
+                a.weight = 600;
+                a.color = unitColor;
+                a.baselineCenter = QPointF(left + arrowWidth / 2, baseline);
+                scene.add(a);
+                TextDraw n;
+                n.text = number;
+                n.pixelSize = ts;
+                n.weight = 600;
+                n.color = numberColor;
+                const double numberWidth = widthOf(number, ts, 600);
+                n.baselineCenter = QPointF(std::round(left + arrowWidth + 0.16 * ts + cellNumber - numberWidth / 2), baseline);
+                scene.add(n);
+                TextDraw u;
+                u.text = unitText;
+                u.pixelSize = 0.82 * ts;
+                u.weight = 500;
+                u.color = unitColor;
+                const double unitWidth = widthOf(unitText, 0.82 * ts, 500);
+                u.baselineCenter = QPointF(std::round(left + arrowWidth + 0.32 * ts + cellNumber + unitWidth / 2), baseline);
+                scene.add(u);
+            };
+            drawLine(QStringLiteral("↓"), net.downNumber, net.downUnit, nearest - 1.32 * ts);
+            drawLine(QStringLiteral("↑"), net.upNumber, net.upUnit, nearest);
+        }
+    }
     if (!intel) return;
     // The readout steps aside for the new-peak pill.
     double pill = 0;

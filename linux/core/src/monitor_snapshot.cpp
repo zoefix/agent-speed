@@ -184,6 +184,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
     }
 
     scoreTasks(snap, recent, agents, nowMs);
+    snap.traffic = traffic_->view(nowMs);
 
     for (const auto kind : MonitorConfig::allSources()) {
         SourceRow row;

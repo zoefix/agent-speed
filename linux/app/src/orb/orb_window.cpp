@@ -13,6 +13,7 @@
 #include <QRegularExpression>
 #include <QScreen>
 #include <QSettings>
+#include <tuple>
 #include <QStyleHints>
 #include <QSurfaceFormat>
 #include <QVariantAnimation>
@@ -162,8 +163,23 @@ void OrbWindow::applyShape() {
     x11::skipTaskbar(this);
 }
 
+// QOpenGLWindow cannot paint without a context (an offscreen platform, a missing driver) and crashes inside Qt when it
+// tries: the orb is only shown where a context can be made.
+bool OrbWindow::openGLAvailable() const {
+    static const bool available = [this] {
+        QOpenGLContext context;
+        context.setFormat(format());
+        return context.create();
+    }();
+    return available;
+}
+
 void OrbWindow::setOrbVisible(bool visible) {
     if (visible == isVisible()) return;
+    if (visible && !openGLAvailable()) {
+        qWarning("the floating orb needs OpenGL, which is not available here");
+        return;
+    }
     if (visible) {
         resumePending_ = true;
         show();
@@ -256,6 +272,8 @@ void OrbWindow::stepIntel(double time, double dt) {
     const double shown = zero && time - thinkingZeroSince_ >= 3 ? 0 : 1;
     thinkingOpacity_ = ramp(thinkingOpacity_, shown, dt, 0.25);
     glide_ = ramp(glide_, 1 - shown, dt, 0.3);
+    const double netTarget = netAvailable_ && time - netLastActive_ < 10 ? 1 : 0;
+    netOpacity_ = ramp(netOpacity_, netTarget, dt, netTarget > netOpacity_ ? 0.25 : 0.6);
 }
 
 IntelReadout OrbWindow::intelContent(double time) const {
@@ -290,16 +308,19 @@ bool OrbWindow::intelBusy(double time) const {
     const double target = enabled && time - intelLastActive_ < 10 ? 1 : 0;
     const bool zero = thinkingText_.isEmpty() || thinkingText_ == QLatin1String("0");
     const double shown = zero && thinkingZeroSince_ >= 0 && time - thinkingZeroSince_ >= 3 ? 0 : 1;
-    return std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 || std::abs(glide_ - (1 - shown)) > 0.001 ||
+    const double netTarget = netAvailable_ && time - netLastActive_ < 10 ? 1 : 0;
+    return std::abs(netOpacity_ - netTarget) > 0.001 || std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 ||
+           std::abs(glide_ - (1 - shown)) > 0.001 ||
            (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.2);
 }
 
 double OrbWindow::nextIntelWake(double time) const {
-    if (traffic_ != QLatin1String("intelligence")) return -1;
     double wake = -1;
     const auto consider = [&](double at) {
         if (at > time && (wake < 0 || at < wake)) wake = at;
     };
+    if (netOpacity_ > 0) consider(netLastActive_ + 10);
+    if (traffic_ != QLatin1String("intelligence")) return wake;
     if (intelOpacity_ > 0) consider(intelLastActive_ + 10);
     if (thinkingZeroSince_ >= 0 && thinkingOpacity_ > 0) consider(thinkingZeroSince_ + 3);
     return wake;
@@ -368,6 +389,19 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
     if (traffic_ == QLatin1String("intelligence")) {
         key += QString::number(intelForm_) + QString::number(shown) + (intelProof_ ? QStringLiteral("p") : QString()) + thinkingText_ +
                (intelGenerating_ ? QStringLiteral("g") : QString());
+    }
+    // The network readout: the orb's sources (every enabled source while there is one orb) or this computer.
+    const auto traffic = snap.value(QStringLiteral("traffic")).toMap();
+    const bool machine = traffic_ == QLatin1String("machine");
+    const bool network = traffic.value(QStringLiteral("enabled")).toBool() && (machine || traffic_ == QLatin1String("sources"));
+    netAvailable_ = network && (machine ? traffic.value(QStringLiteral("machine")).toBool() : traffic.value(QStringLiteral("agentsKnown")).toBool());
+    if (netAvailable_) {
+        const double rx = traffic.value(machine ? QStringLiteral("machineRx") : QStringLiteral("agentsRx")).toDouble();
+        const double tx = traffic.value(machine ? QStringLiteral("machineTx") : QStringLiteral("agentsTx")).toDouble();
+        netDown_ = traffic.value(machine ? QStringLiteral("machineRxText") : QStringLiteral("agentsRxText")).toString();
+        netUp_ = traffic.value(machine ? QStringLiteral("machineTxText") : QStringLiteral("agentsTxText")).toString();
+        if (rx + tx >= 1000) netLastActive_ = t;
+        key += netDown_ + netUp_;
     }
     const bool changed = key != contentKey_ || static_cast<int>(gauge_.tier()) != tierBefore ||
                          gauge_.title() != titleBefore || !gauge_.isSettled();
@@ -560,6 +594,13 @@ void OrbWindow::renderFrame() {
     if (!peak.contains(QLatin1String("PEAK"), Qt::CaseInsensitive)) peak += QStringLiteral(" NEW PEAK");
     content.peakLabel = peak;
     content.intel = intelContent(t);
+    const auto split = [](const QString& text) {
+        const auto at = text.indexOf(QChar(0x00A0));
+        return at < 0 ? std::make_pair(text, QString()) : std::make_pair(text.left(at), text.mid(at + 1));
+    };
+    content.net.opacity = netOpacity_;
+    std::tie(content.net.downNumber, content.net.downUnit) = split(netDown_);
+    std::tie(content.net.upNumber, content.net.upUnit) = split(netUp_);
     buildReadout(scene_, f, content, [this, dpr](const TextDraw& text) { return renderer_.measure(text, dpr).width; });
 
     renderer_.render(scene_, QSizeF(side(), side()), dpr, center());

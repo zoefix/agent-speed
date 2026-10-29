@@ -54,6 +54,8 @@ set(agent_speed_qml
     qml/TaskModelTable.qml
     qml/TaskSide.qml
     qml/TasksSection.qml
+    qml/TrafficPage.qml
+    qml/TrafficSection.qml
     qml/ToggleSwitch.qml
     qml/Format.js
     qml/Gauge.qml

@@ -27,6 +27,9 @@ class Preferences : public QObject {
     Q_PROPERTY(bool networkEnabled READ networkEnabled WRITE setNetworkEnabled NOTIFY networkEnabledChanged)
     Q_PROPERTY(bool syncPrices READ syncPrices WRITE setSyncPrices NOTIFY syncPricesChanged)
     Q_PROPERTY(bool autoCheckUpdates READ autoCheckUpdates WRITE setAutoCheckUpdates NOTIFY autoCheckUpdatesChanged)
+    Q_PROPERTY(bool trafficEnabled READ trafficEnabled WRITE setTrafficEnabled NOTIFY trafficChanged)
+    Q_PROPERTY(bool trafficIncludeTools READ trafficIncludeTools WRITE setTrafficIncludeTools NOTIFY trafficChanged)
+    Q_PROPERTY(QString trafficUnit READ trafficUnit WRITE setTrafficUnit NOTIFY trafficChanged)
 
 public:
     explicit Preferences(QObject* parent = nullptr);
@@ -63,6 +66,13 @@ public:
     void setSyncPrices(bool value);
     bool autoCheckUpdates() const;
     void setAutoCheckUpdates(bool value);
+    // DESIGN 10 Settings → 網路流量.
+    bool trafficEnabled() const;
+    void setTrafficEnabled(bool value);
+    bool trafficIncludeTools() const;
+    void setTrafficIncludeTools(bool value);
+    QString trafficUnit() const;
+    void setTrafficUnit(const QString& value);
 
     Q_INVOKABLE bool sourceEnabled(const QString& source) const;
     Q_INVOKABLE void setSourceEnabled(const QString& source, bool enabled);
@@ -90,6 +100,7 @@ signals:
     void sourcesChanged();
     void networkEnabledChanged();
     void syncPricesChanged();
+    void trafficChanged();
     void autoCheckUpdatesChanged();
 
 private:

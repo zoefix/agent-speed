@@ -254,6 +254,45 @@ void Store::createSchema() {
         " state TEXT NOT NULL, score REAL, v REAL NOT NULL, c REAL NOT NULL, r REAL NOT NULL, e REAL NOT NULL, k REAL NOT NULL,"
         " counts TEXT NOT NULL, first_pass_ms INTEGER, success INTEGER NOT NULL, stalled INTEGER NOT NULL, snapshots TEXT NOT NULL,"
         " fix_rows TEXT NOT NULL, version INTEGER NOT NULL, PRIMARY KEY (file_id, ordinal)) WITHOUT ROWID");
+    db_.execute(
+        "CREATE TABLE IF NOT EXISTS day_traffic(day TEXT, key TEXT, rx INTEGER, tx INTEGER, rx_tools INTEGER, tx_tools INTEGER,"
+        " sampled_ms INTEGER, PRIMARY KEY (day, key)) WITHOUT ROWID");
+}
+
+void Store::saveTraffic(const std::vector<traffic::HistoryRow>& rows) {
+    if (rows.empty()) return;
+    db_.execute("BEGIN IMMEDIATE");
+    try {
+        auto upsert = db_.prepare(
+            "INSERT INTO day_traffic(day, key, rx, tx, rx_tools, tx_tools, sampled_ms) VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7)"
+            " ON CONFLICT(day, key) DO UPDATE SET rx=excluded.rx, tx=excluded.tx, rx_tools=excluded.rx_tools,"
+            " tx_tools=excluded.tx_tools, sampled_ms=excluded.sampled_ms");
+        std::string first;
+        for (const auto& r : rows) {
+            upsert.reset();
+            upsert.bind(1, std::string_view(r.day)).bind(2, std::string_view(r.key));
+            upsert.bind(3, static_cast<std::int64_t>(r.rx)).bind(4, static_cast<std::int64_t>(r.tx));
+            upsert.bind(5, static_cast<std::int64_t>(r.rxTools)).bind(6, static_cast<std::int64_t>(r.txTools)).bind(7, r.sampledMs);
+            upsert.step();
+            if (first.empty() || r.day < first) first = r.day;
+        }
+        if (const auto since = meta("trafficSince"); !since || first < *since) setMeta("trafficSince", first);
+        db_.execute("COMMIT");
+    } catch (...) {
+        db_.execute("ROLLBACK");
+        throw;
+    }
+}
+
+std::vector<traffic::HistoryRow> Store::trafficRows() const {
+    std::vector<traffic::HistoryRow> out;
+    auto rows = db_.prepare("SELECT day, key, rx, tx, rx_tools, tx_tools, sampled_ms FROM day_traffic ORDER BY day, key");
+    while (rows.step()) {
+        out.push_back({rows.getString(0).value_or(""), rows.getString(1).value_or(""), static_cast<std::uint64_t>(rows.getInt64(2)),
+                       static_cast<std::uint64_t>(rows.getInt64(3)), static_cast<std::uint64_t>(rows.getInt64(4)),
+                       static_cast<std::uint64_t>(rows.getInt64(5)), rows.getInt64(6)});
+    }
+    return out;
 }
 
 std::map<std::string, StoredFile> Store::loadFiles() const {
@@ -448,7 +487,7 @@ void Store::setMeta(const std::string& key, const std::string& value) {
 }
 
 void Store::clear() {
-    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "task_records"}) {
+    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "task_records", "day_traffic"}) {
         db_.execute(std::string("DELETE FROM ") + table);
     }
     db_.execute("DELETE FROM meta WHERE key<>'schema'");

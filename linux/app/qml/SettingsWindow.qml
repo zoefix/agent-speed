@@ -18,6 +18,7 @@ Window {
         { glyph: "orb", key: "settings.orb" },
         { glyph: "sparkle", key: "settings.effects" },
         { glyph: "coin", key: "settings.cost" },
+        { glyph: "chart", key: "settings.traffic" },
         { glyph: "folder", key: "settings.sources" },
         { glyph: "info", key: "settings.about" }
     ]
@@ -138,6 +139,7 @@ Window {
             OrbPage {}
             EffectsPage {}
             CostPage {}
+            TrafficPage {}
             SourcesPage {}
             AboutPage {}
         }

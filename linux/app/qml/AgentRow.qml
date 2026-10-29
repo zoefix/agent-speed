@@ -22,6 +22,7 @@ Item {
     required property string iqForm
     required property bool iqProof
     required property bool looping
+    required property string trafficSuffix
     // Set by the list: the shared capsule column width and the 智力 cell width (DESIGN 4).
     property real capsuleColumn: 0
     property real iqWidth: 24
@@ -118,12 +119,25 @@ Item {
                 elide: Text.ElideRight
             }
         }
-        Text {
+        // The detail truncates first; the traffic suffix stays whole (DESIGN 4).
+        Row {
             width: parent.width
-            text: row.detail
-            color: Theme.ink2
-            font.pixelSize: 12
-            elide: Text.ElideRight
+            Text {
+                width: Math.min(implicitWidth, parent.width - suffix.width)
+                text: row.detail
+                color: Theme.ink2
+                font.pixelSize: 12
+                elide: Text.ElideRight
+            }
+            Text {
+                id: suffix
+                visible: row.trafficSuffix.length > 0
+                width: visible ? implicitWidth : 0
+                text: " · " + row.trafficSuffix
+                color: Theme.ink2
+                font.pixelSize: 12
+                font.features: Theme.tabular
+            }
         }
     }
 

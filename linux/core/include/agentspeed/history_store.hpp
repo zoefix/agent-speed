@@ -9,6 +9,7 @@
 #include "agentspeed/history.hpp"
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/task_score.hpp"
+#include "agentspeed/traffic.hpp"
 
 // The persistent daily history (METRICS 8): per-file identities, owned key hashes and per-day contributions, plus the
 // peaks observed live, the price bindings (9.7) and the table copies they reference.
@@ -47,6 +48,10 @@ public:
     std::map<std::string, int> priceBindings() const;
     std::map<int, std::string> priceTables() const;
     void savePriceBindings(const std::map<std::string, int>& bindings, const std::function<std::string(int)>& tableData);
+
+    // METRICS 10.9: today's traffic rows (upserted) and every stored row; `trafficSince` is the first day saved.
+    void saveTraffic(const std::vector<traffic::HistoryRow>& rows);
+    std::vector<traffic::HistoryRow> trafficRows() const;
 
     std::optional<std::string> meta(const std::string& key) const;
     void setMeta(const std::string& key, const std::string& value);

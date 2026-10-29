@@ -145,8 +145,10 @@ public:
     const ProcessTable& table() const { return table_; }
     const Buckets& machineBuckets() const { return machineBuckets_; }
     const std::map<SourceKind, Buckets>& sourceBuckets() const { return sourceBuckets_; }
-    // Restores today's totals saved earlier (a relaunch, 10.8).
-    void restoreDay(const std::string& date, const Day& day) { days_[date] = day; }
+    // Adds today's totals saved earlier (a relaunch, 10.8).
+    void restoreDay(const std::string& date, const Day& day);
+    // Exited processes leave the table.
+    void forget(const std::vector<Key>& keys) { table_.forget(keys); }
 
     struct Series {
         std::vector<std::array<std::int64_t, 3>> points;  // (t, rx, tx)

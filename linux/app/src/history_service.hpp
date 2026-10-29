@@ -12,6 +12,7 @@
 #include "agentspeed/history_analyzer.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/task_score.hpp"
+#include "monitor_worker.hpp"
 
 class QTimer;
 class Strings;
@@ -43,15 +44,20 @@ public slots:
     void analyze();
     void clear();
     void recordPeak(const QString& day, double peak);
+    void saveTraffic(TrafficRows rows);
 
 signals:
     // Rows of every day and source; `progress` < 0 when idle.
     void daysReady(const QVariantList& rows, qint64 updatedMs);
     void analyzing(bool running);
     void tasksReady(TaskRecords records, TaskModels models);
+    // Today's traffic saved by an earlier launch (METRICS 10.8), and every day's rows for the window.
+    void trafficRestored(TrafficRows rows);
+    void trafficReady(const QVariantList& rows, const QString& since);
 
 private:
     void publish();
+    void publishTraffic();
 
     std::shared_ptr<agentspeed::pricing::PriceBook> prices_;
     QString storePath_;
@@ -73,9 +79,13 @@ class HistoryModel : public QObject {
     Q_PROPERTY(bool analyzing READ analyzing NOTIFY analyzingChanged)
     Q_PROPERTY(qint64 updatedMs READ updatedMs NOTIFY rowsChanged)
     Q_PROPERTY(int tasksRevision READ tasksRevision NOTIFY tasksChanged)
+    Q_PROPERTY(QVariantList trafficRows READ trafficRows NOTIFY trafficChanged)
+    Q_PROPERTY(QString trafficSince READ trafficSince NOTIFY trafficChanged)
 public:
     explicit HistoryModel(const Strings* strings = nullptr, QObject* parent = nullptr) : QObject(parent), strings_(strings) {}
     int tasksRevision() const { return tasksRevision_; }
+    QVariantList trafficRows() const { return trafficRows_; }
+    QString trafficSince() const { return trafficSince_; }
     // DESIGN 3c task performance over [first, last] (days `YYYY-MM-DD`), every source or `source` alone.
     Q_INVOKABLE QVariantMap taskComparison(const QString& first, const QString& last, const QString& source) const;
     QVariantList rows() const { return rows_; }
@@ -92,11 +102,13 @@ public slots:
     void applyRows(const QVariantList& rows, qint64 updatedMs);
     void setAnalyzing(bool running);
     void applyTasks(TaskRecords records);
+    void applyTraffic(const QVariantList& rows, const QString& since);
 
 signals:
     void rowsChanged();
     void analyzingChanged();
     void tasksChanged();
+    void trafficChanged();
     void refreshRequested();
     void clearRequested();
 
@@ -106,5 +118,7 @@ private:
     qint64 updatedMs_ = 0;
     const Strings* strings_;
     TaskRecords tasks_;
+    QVariantList trafficRows_;
+    QString trafficSince_;
     int tasksRevision_ = 0;
 };

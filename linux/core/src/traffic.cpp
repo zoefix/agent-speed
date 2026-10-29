@@ -620,4 +620,21 @@ std::vector<HistoryRow> Engine::history() const {
     return rows;
 }
 
+void Engine::restoreDay(const std::string& date, const Day& saved) {
+    auto& day = days_[date];
+    day.machine.rx += saved.machine.rx;
+    day.machine.tx += saved.machine.tx;
+    day.machine.sampledMs += saved.machine.sampledMs;
+    day.processSampledMs += saved.processSampledMs;
+    for (const auto& [source, v] : saved.sources) {
+        auto& d = day.sources[source];
+        d.rxSelf += v.rxSelf;
+        d.txSelf += v.txSelf;
+        d.rxTools += v.rxTools;
+        d.txTools += v.txTools;
+        d.unassignedRx += v.unassignedRx;
+        d.unassignedTx += v.unassignedTx;
+    }
+}
+
 }  // namespace agentspeed::traffic

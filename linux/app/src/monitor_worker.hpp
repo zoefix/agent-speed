@@ -21,7 +21,13 @@ struct WorkerOptions {
     QStringList subscriptions;
     bool includeSubscriptions = false;
     QString language = QStringLiteral("en");
+    bool trafficEnabled = true;
+    bool trafficIncludeTools = true;
+    bool trafficBits = false;
 };
+
+using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
+Q_DECLARE_METATYPE(TrafficRows)
 
 // Runs the monitor off the UI thread and publishes one snapshot per engine tick (500 ms, METRICS 6).
 class MonitorWorker : public QObject {
@@ -36,6 +42,10 @@ public:
     void setTaskModels(std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models);
     // Thread-safe: the source sets whose 智力 and 思考 each snapshot carries (orbs, boards); the tray's set comes first.
     void setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets);
+    // Thread-safe: today's traffic saved before this launch (METRICS 10.8), added on the next tick.
+    void restoreTraffic(TrafficRows rows);
+    // Worker thread: today's traffic rows now.
+    TrafficRows trafficToday();
 
 public slots:
     void start();
@@ -43,6 +53,8 @@ public slots:
 
 signals:
     void snapshotReady(const QVariantMap& snapshot);
+    // Every 60 s: today's traffic for the history store (METRICS 10.9).
+    void trafficSave(TrafficRows rows);
 
 private:
     void tick();
@@ -50,6 +62,7 @@ private:
     void publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
                  qint64 todayStart);
     QVariantMap toVariant(const agentspeed::Snapshot& snap) const;
+    QVariantMap trafficVariant(const agentspeed::Snapshot& snap) const;
 
     const Strings* strings_;
     bool demo_;
@@ -60,6 +73,8 @@ private:
     std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models_;
     std::optional<std::vector<std::optional<std::vector<agentspeed::SourceKind>>>> pendingSets_;
     std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets_{std::nullopt};
+    std::optional<TrafficRows> pendingTraffic_;
+    qint64 lastTrafficSaveMs_ = 0;
     bool restartPending_ = false;
     std::unique_ptr<agentspeed::Monitor> monitor_;
     QTimer* timer_ = nullptr;

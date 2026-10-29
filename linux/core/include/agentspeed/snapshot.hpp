@@ -7,6 +7,7 @@
 
 #include "agentspeed/model.hpp"
 #include "agentspeed/task_events.hpp"
+#include "agentspeed/traffic_service.hpp"
 #include "agentspeed/work_signals.hpp"
 
 namespace agentspeed {
@@ -110,6 +111,8 @@ struct Snapshot {
     // One per requested set (Monitor::setScoreSets), then the board groups of the agents list.
     std::vector<ScoreSet> scoreSets;
     std::vector<tasks::GroupValue> scoreGroups;
+    // METRICS 10: network traffic (this computer, sources, agents).
+    traffic::View traffic;
     // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).
     std::vector<double> history;
     bool demo = false;

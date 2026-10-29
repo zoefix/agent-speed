@@ -85,6 +85,7 @@ private:
     double side() const { return 1.5 * diameter_; }
     QPointF center() const { return {side() / 2, side() / 2}; }
     bool insideDisc(QPointF local) const;
+    bool openGLAvailable() const;
     bool dark() const;
     led::Effects effects() const;
     Frame makeFrame(double time, double dt);
@@ -148,6 +149,11 @@ private:
     int countFrom_ = -1, countTo_ = -1;
     double countStart_ = -1e9, countDuration_ = 0;
     double numberFadeStart_ = -1e9;
+    // The network readout (DESIGN 10): the shown rates, the last time they reached 1 KB/s, and the fade.
+    QString netDown_, netUp_;
+    bool netAvailable_ = false;
+    double netLastActive_ = -1e9;
+    double netOpacity_ = 0;
 
     // Settings.
     double diameter_ = 148;

@@ -90,6 +90,14 @@ void Preferences::setNetworkEnabled(bool value) { store("network/enabled", value
 
 bool Preferences::syncPrices() const { return settings_.value(QStringLiteral("network/syncPrices"), true).toBool(); }
 void Preferences::setSyncPrices(bool value) { store("network/syncPrices", value, &Preferences::syncPricesChanged); }
+bool Preferences::trafficEnabled() const { return settings_.value(QStringLiteral("traffic/enabled"), true).toBool(); }
+void Preferences::setTrafficEnabled(bool value) { store("traffic/enabled", value, &Preferences::trafficChanged); }
+bool Preferences::trafficIncludeTools() const { return settings_.value(QStringLiteral("traffic/includeTools"), true).toBool(); }
+void Preferences::setTrafficIncludeTools(bool value) { store("traffic/includeTools", value, &Preferences::trafficChanged); }
+QString Preferences::trafficUnit() const {
+    return settings_.value(QStringLiteral("traffic/unit")).toString() == QLatin1String("bits") ? QStringLiteral("bits") : QStringLiteral("bytes");
+}
+void Preferences::setTrafficUnit(const QString& value) { store("traffic/unit", value, &Preferences::trafficChanged); }
 
 bool Preferences::autoCheckUpdates() const { return settings_.value(QStringLiteral("network/autoCheckUpdates"), true).toBool(); }
 void Preferences::setAutoCheckUpdates(bool value) { store("network/autoCheckUpdates", value, &Preferences::autoCheckUpdatesChanged); }

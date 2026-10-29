@@ -46,6 +46,15 @@ void MonitorWorker::setScoreSets(std::vector<std::optional<std::vector<agentspee
     pendingSets_ = std::move(sets);
 }
 
+void MonitorWorker::restoreTraffic(TrafficRows rows) {
+    std::lock_guard lock(optionsMutex_);
+    pendingTraffic_ = std::move(rows);
+}
+
+TrafficRows MonitorWorker::trafficToday() {
+    return monitor_ ? monitor_->trafficToday(QDateTime::currentMSecsSinceEpoch()) : TrafficRows{};
+}
+
 void MonitorWorker::start() {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     startMonitor(now);
@@ -57,7 +66,11 @@ void MonitorWorker::start() {
 }
 
 void MonitorWorker::startMonitor(qint64 now) {
+    // A restart (new folders, sources) keeps today's traffic measured so far.
+    const TrafficRows carried = monitor_ ? monitor_->trafficToday(now) : TrafficRows{};
     monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
+    monitor_->restoreTraffic(carried);
+    monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setTaskModels(models_);
     monitor_->setScoreSets(sets_);
     monitor_->start(now, localMidnightMs(now));
@@ -68,6 +81,75 @@ void MonitorWorker::setDemo(bool demo) {
     demo_ = demo;
     peakBefore_ = -1;
     tick();
+}
+
+// DESIGN 10: the traffic of this computer, of the enabled sources and of the agents, with display texts.
+QVariantMap MonitorWorker::trafficVariant(const agentspeed::Snapshot& snap) const {
+    namespace tr = agentspeed::traffic;
+    const auto& v = snap.traffic;
+    QVariantMap out;
+    out.insert(QStringLiteral("enabled"), v.enabled);
+    out.insert(QStringLiteral("available"), v.available);
+    out.insert(QStringLiteral("includeTools"), options_.trafficIncludeTools);
+    const bool bits = options_.trafficBits;
+    const auto rate = [&](double value) { return QString::fromStdString(tr::formatRate(value, bits)); };
+    const auto total = [](std::uint64_t value) { return QString::fromStdString(tr::formatTotal(static_cast<double>(value))); };
+    out.insert(QStringLiteral("machine"), v.machine.has_value());
+    out.insert(QStringLiteral("machineRx"), v.machine ? v.machine->rx : 0.0);
+    out.insert(QStringLiteral("machineTx"), v.machine ? v.machine->tx : 0.0);
+    out.insert(QStringLiteral("machineRxText"), v.machine ? rate(v.machine->rx) : QStringLiteral("–"));
+    out.insert(QStringLiteral("machineTxText"), v.machine ? rate(v.machine->tx) : QStringLiteral("–"));
+    QVariantList series;
+    for (const auto& [rx, tx] : v.machineSeries) series.push_back(QVariantList{rx, tx});
+    out.insert(QStringLiteral("series"), series);
+    // Sources: enabled ones with traffic today or now, by today's ↓ + ↑; tools per the setting.
+    struct Row {
+        QString source;
+        std::uint64_t rx, tx;
+        double liveRx, liveTx;
+    };
+    std::vector<Row> rows;
+    double agentsRx = 0, agentsTx = 0;
+    bool agentsKnown = false;
+    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Droid); ++k) {
+        const auto kind = static_cast<agentspeed::SourceKind>(k);
+        if (!options_.config.enabled.contains(kind)) continue;
+        Row row{QString::fromUtf8(agentspeed::sourceId(kind)), 0, 0, 0, 0};
+        if (const auto it = v.sourcesToday.find(kind); it != v.sourcesToday.end()) {
+            row.rx = it->second.rxSelf + (options_.trafficIncludeTools ? it->second.rxTools : 0);
+            row.tx = it->second.txSelf + (options_.trafficIncludeTools ? it->second.txTools : 0);
+        }
+        if (const auto it = v.sources.find(kind); it != v.sources.end()) {
+            const auto& r = options_.trafficIncludeTools ? it->second.withTools : it->second.selfOnly;
+            if (r) {
+                row.liveRx = r->rx;
+                row.liveTx = r->tx;
+                agentsRx += r->rx;
+                agentsTx += r->tx;
+                agentsKnown = true;
+            }
+        }
+        if (row.rx + row.tx > 0 || row.liveRx + row.liveTx > 0) rows.push_back(row);
+    }
+    std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) { return a.rx + a.tx > b.rx + b.tx; });
+    QVariantList sources;
+    for (const auto& r : rows) {
+        QVariantMap m;
+        m.insert(QStringLiteral("source"), r.source);
+        m.insert(QStringLiteral("name"), strings_->t(QStringLiteral("source.") + r.source));
+        m.insert(QStringLiteral("todayText"), task_card::fmt(*strings_, QStringLiteral("traffic.pair"), {total(r.rx), total(r.tx)}));
+        m.insert(QStringLiteral("liveRxText"), r.liveRx >= 500 ? rate(r.liveRx) : QStringLiteral("–"));
+        m.insert(QStringLiteral("liveTxText"), r.liveTx >= 500 ? rate(r.liveTx) : QStringLiteral("–"));
+        sources.push_back(m);
+    }
+    out.insert(QStringLiteral("sources"), sources);
+    // The orb readout: the agents' live rate (sources mode) and this computer's (machine mode).
+    out.insert(QStringLiteral("agentsKnown"), agentsKnown && v.available);
+    out.insert(QStringLiteral("agentsRx"), agentsRx);
+    out.insert(QStringLiteral("agentsTx"), agentsTx);
+    out.insert(QStringLiteral("agentsRxText"), rate(agentsRx));
+    out.insert(QStringLiteral("agentsTxText"), rate(agentsTx));
+    return out;
 }
 
 QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
@@ -124,7 +206,23 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("looping"), a.task && a.task->workSignals.looping.has_value());
         row.insert(QStringLiteral("liveThinking"), a.liveThinking);
         task_card::cell(a, row);
-        row.insert(QStringLiteral("card"), task_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source)));
+        auto card = task_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source));
+        // DESIGN 10: an agent tree with attributed traffic today shows its download after the detail line.
+        if (const auto it = snap.traffic.agentsToday.find(a.id); snap.traffic.enabled && it != snap.traffic.agentsToday.end()) {
+            const auto rx = it->second.rxSelf + (options_.trafficIncludeTools ? it->second.rxTools : 0);
+            const auto tx = it->second.txSelf + (options_.trafficIncludeTools ? it->second.txTools : 0);
+            if (rx + tx > 0) {
+                row.insert(QStringLiteral("trafficSuffix"),
+                           QStringLiteral("↓ ") + QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(rx))));
+                auto facts = card.value(QStringLiteral("facts")).toStringList();
+                facts << task_card::fmt(*strings_, QStringLiteral("traffic.agent.tooltip"),
+                                        {task_card::fmt(*strings_, QStringLiteral("traffic.pair"),
+                                                        {QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(rx))),
+                                                         QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(tx)))})});
+                card.insert(QStringLiteral("facts"), facts);
+            }
+        }
+        row.insert(QStringLiteral("card"), card);
         agents.push_back(row);
     }
     map.insert(QStringLiteral("agents"), agents);
@@ -150,6 +248,7 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         sets.push_back(value);
     }
     map.insert(QStringLiteral("scoreSets"), sets);
+    map.insert(QStringLiteral("traffic"), trafficVariant(snap));
 
     // DESIGN 9: money values sum the billable sources (9.4); a partly unpriced value carries `≥`.
     double liveCost = 0, knownWeight = 0, weight = 0;
@@ -207,6 +306,18 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
 void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
                             qint64 todayStart) {
     QVariantMap map = toVariant(snap);
+    // Development aid: AGENT_SPEED_TRAFFIC_DEBUG=1 prints the traffic view (byte counts only) once a second.
+    static const bool trafficDebug = qEnvironmentVariableIsSet("AGENT_SPEED_TRAFFIC_DEBUG");
+    static qint64 lastDebugSecond = 0;
+    if (trafficDebug && now / 1000 != lastDebugSecond) {
+        lastDebugSecond = now / 1000;
+        const auto& v = snap.traffic;
+        QString line = QStringLiteral("traffic machine=%1/%2").arg(v.machine ? v.machine->rx : -1).arg(v.machine ? v.machine->tx : -1);
+        for (const auto& [kind, day] : v.sourcesToday) {
+            line += QStringLiteral(" %1=%2+%3/%4+%5").arg(QString::fromUtf8(agentspeed::sourceId(kind))).arg(day.rxSelf).arg(day.rxTools).arg(day.txSelf).arg(day.txTools);
+        }
+        qInfo("%s", qPrintable(line));
+    }
     QVariantList events;
     for (const auto& c : completions) {
         QVariantMap event;
@@ -251,7 +362,12 @@ void MonitorWorker::tick() {
             pendingSets_.reset();
             if (monitor_) monitor_->setScoreSets(sets_);
         }
+        if (pendingTraffic_ && monitor_) {
+            monitor_->restoreTraffic(*pendingTraffic_);
+            pendingTraffic_.reset();
+        }
     }
+    if (monitor_) monitor_->setTrafficEnabled(options_.trafficEnabled);
     if (restart || (monitor_ && monitor_->restartRequested())) {
         startMonitor(now);
         peakBefore_ = -1;
@@ -261,6 +377,10 @@ void MonitorWorker::tick() {
     if (demo_) {
         publish(agentspeed::demoSnapshot(now, todayStart), agentspeed::demoCompletions(previous, now), now, todayStart);
         return;
+    }
+    if (monitor_ && now - lastTrafficSaveMs_ >= 60'000) {
+        if (lastTrafficSaveMs_ > 0) emit trafficSave(monitor_->trafficToday(now));
+        lastTrafficSaveMs_ = now;
     }
     std::vector<agentspeed::Completion> completions;
     if (now - lastPollMs_ >= 1000) {

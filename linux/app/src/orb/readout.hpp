@@ -21,6 +21,12 @@ struct IntelReadout {
     double glide = 0;            // 0: two lines; 1: the single-line position
 };
 
+// The network readout (DESIGN 10): download over upload, each arrow · number · unit in fixed cells.
+struct NetReadout {
+    double opacity = 0;  // the quiet rule's fade
+    QString downNumber, downUnit, upNumber, upUnit;
+};
+
 // What the readout shows this frame (DESIGN 2 layer 6).
 struct ReadoutContent {
     QString value;
@@ -37,6 +43,7 @@ struct ReadoutContent {
     std::vector<QColor> agents;  // one dot per generating agent
     QString peakLabel;
     IntelReadout intel;
+    NetReadout net;
 };
 
 using MeasureText = std::function<double(const TextDraw&)>;

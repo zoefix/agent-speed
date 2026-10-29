@@ -70,6 +70,9 @@ WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, cons
     options.subscriptions = prefs.subscriptions();
     options.includeSubscriptions = prefs.includeSubscriptions();
     options.language = strings.language();
+    options.trafficEnabled = prefs.trafficEnabled();
+    options.trafficIncludeTools = prefs.trafficIncludeTools();
+    options.trafficBits = prefs.trafficUnit() == QLatin1String("bits");
     return options;
 }
 
@@ -119,7 +122,8 @@ int main(int argc, char* argv[]) {
     auto* worker = new MonitorWorker(&strings, demo, optionsFrom(prefs, catalog, strings, prices));
     const auto pushOptions = [&](bool reconfigure) { worker->setOptions(optionsFrom(prefs, catalog, strings, prices), reconfigure); };
     QObject::connect(&prefs, &Preferences::sourcesChanged, &app, [=] { pushOptions(true); });
-    for (auto signal : {&Preferences::currencyChanged, &Preferences::subscriptionsChanged, &Preferences::includeSubscriptionsChanged}) {
+    for (auto signal : {&Preferences::currencyChanged, &Preferences::subscriptionsChanged, &Preferences::includeSubscriptionsChanged,
+                        &Preferences::trafficChanged}) {
         QObject::connect(&prefs, signal, &app, [=] { pushOptions(false); });
     }
     QObject::connect(&strings, &Strings::changed, &app, [=] { pushOptions(false); });
@@ -149,6 +153,12 @@ int main(int argc, char* argv[]) {
     QObject::connect(historyWorker, &HistoryWorker::daysReady, &historyModel, &HistoryModel::applyRows);
     QObject::connect(historyWorker, &HistoryWorker::analyzing, &historyModel, &HistoryModel::setAnalyzing);
     QObject::connect(historyWorker, &HistoryWorker::tasksReady, &historyModel, &HistoryModel::applyTasks);
+    qRegisterMetaType<TrafficRows>();
+    QObject::connect(worker, &MonitorWorker::trafficSave, historyWorker, &HistoryWorker::saveTraffic);
+    QObject::connect(
+        historyWorker, &HistoryWorker::trafficRestored, historyWorker, [worker](TrafficRows rows) { worker->restoreTraffic(std::move(rows)); },
+        Qt::DirectConnection);
+    QObject::connect(historyWorker, &HistoryWorker::trafficReady, &historyModel, &HistoryModel::applyTraffic);
     QObject::connect(
         historyWorker, &HistoryWorker::tasksReady, historyWorker, [worker](TaskRecords, TaskModels models) { worker->setTaskModels(std::move(models)); },
         Qt::DirectConnection);
@@ -345,6 +355,10 @@ int main(int argc, char* argv[]) {
     thread.start();
     historyThread.start();
     const int code = app.exec();
+    // Today's traffic is saved at quit (METRICS 10.9), before both threads stop.
+    TrafficRows lastTraffic;
+    QMetaObject::invokeMethod(worker, [&] { lastTraffic = worker->trafficToday(); }, Qt::BlockingQueuedConnection);
+    QMetaObject::invokeMethod(historyWorker, [&] { historyWorker->saveTraffic(lastTraffic); }, Qt::BlockingQueuedConnection);
     historyWorker->cancel();
     historyThread.quit();
     historyThread.wait();

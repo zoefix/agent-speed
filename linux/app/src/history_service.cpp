@@ -52,6 +52,15 @@ void HistoryWorker::start() {
         return;
     }
     publish();
+    try {
+        const auto today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+        TrafficRows saved;
+        for (const auto& r : store_->trafficRows()) {
+            if (r.day == today) saved.push_back(r);
+        }
+        emit trafficRestored(std::move(saved));
+    } catch (const std::exception&) {
+    }
     timer_ = new QTimer(this);
     timer_->setInterval(60 * 1000);
     connect(timer_, &QTimer::timeout, this, [this] {
@@ -98,6 +107,32 @@ void HistoryWorker::clear() {
 
 void HistoryWorker::recordPeak(const QString& day, double peak) {
     if (analyzer_ && analyzer_->recordPeaks({{day.toStdString(), peak}})) publish();
+}
+
+void HistoryWorker::saveTraffic(TrafficRows rows) {
+    if (!store_) return;
+    try {
+        store_->saveTraffic(rows);
+        publishTraffic();
+    } catch (const std::exception& error) {
+        qWarning("traffic history not saved: %s", error.what());
+    }
+}
+
+void HistoryWorker::publishTraffic() {
+    QVariantList rows;
+    for (const auto& r : store_->trafficRows()) {
+        QVariantMap row;
+        row.insert(QStringLiteral("date"), QString::fromStdString(r.day));
+        row.insert(QStringLiteral("key"), QString::fromStdString(r.key));
+        row.insert(QStringLiteral("rx"), static_cast<qint64>(r.rx));
+        row.insert(QStringLiteral("tx"), static_cast<qint64>(r.tx));
+        row.insert(QStringLiteral("rxTools"), static_cast<qint64>(r.rxTools));
+        row.insert(QStringLiteral("txTools"), static_cast<qint64>(r.txTools));
+        row.insert(QStringLiteral("sampledMs"), static_cast<qint64>(r.sampledMs));
+        rows.push_back(row);
+    }
+    emit trafficReady(rows, QString::fromStdString(store_->meta("trafficSince").value_or("")));
 }
 
 void HistoryWorker::publish() {
@@ -147,6 +182,7 @@ void HistoryWorker::publish() {
         if (!part.empty()) models[source] = agentspeed::tasks::calibrate(part);
     }
     emit tasksReady(std::move(records), std::move(models));
+    publishTraffic();
 }
 
 void HistoryModel::applyRows(const QVariantList& rows, qint64 updatedMs) {
@@ -226,6 +262,12 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
         out += fields.join(QLatin1Char(',')).toUtf8() + "\r\n";
     }
     return file.write(out) == out.size();
+}
+
+void HistoryModel::applyTraffic(const QVariantList& rows, const QString& since) {
+    trafficRows_ = rows;
+    trafficSince_ = since;
+    emit trafficChanged();
 }
 
 void HistoryModel::applyTasks(TaskRecords records) {

@@ -60,7 +60,8 @@ Window {
                 key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, phase: a.phase,
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
                 rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
-                bolts: a.bolts, iq: a.iq, iqForm: a.iqForm, iqProof: a.iqProof, looping: a.looping
+                bolts: a.bolts, iq: a.iq, iqForm: a.iqForm, iqProof: a.iqProof, looping: a.looping,
+                trafficSuffix: a.trafficSuffix || ""
             })
         }
         Sync.sync(agentModel, agents, "key")
@@ -514,6 +515,15 @@ Window {
                         font.weight: Font.Medium
                         font.features: Theme.tabular
                     }
+                }
+
+                Hairline { visible: (root.snap.traffic || {}).enabled === true }
+
+                // Network (DESIGN 10)
+                TrafficSection {
+                    visible: (root.snap.traffic || {}).enabled === true
+                    Layout.fillWidth: true
+                    traffic: root.snap.traffic || ({})
                 }
 
                 Hairline {}

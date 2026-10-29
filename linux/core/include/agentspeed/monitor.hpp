@@ -14,6 +14,7 @@
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/task_tracker.hpp"
+#include "agentspeed/traffic_service.hpp"
 
 namespace agentspeed {
 
@@ -92,6 +93,10 @@ public:
         taskModels_ = std::move(models);
         ++taskModelsVersion_;
     }
+    // METRICS 10: sampled on every poll while enabled.
+    void setTrafficEnabled(bool enabled) { traffic_->setEnabled(enabled); }
+    std::vector<traffic::HistoryRow> trafficToday(std::int64_t nowMs) const { return traffic_->todayRows(nowMs); }
+    void restoreTraffic(const std::vector<traffic::HistoryRow>& rows) { traffic_->restore(rows); }
     // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
     void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
 
@@ -175,6 +180,8 @@ private:
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, std::uint64_t> openClawPushed_, hermesPushed_;
     std::map<std::string, std::unique_ptr<tasks::TaskTracker>> windowTasks_;
+    std::unique_ptr<traffic::Service> traffic_ = std::make_unique<traffic::Service>();
+    std::vector<traffic::AgentFacts> trafficAgents(std::int64_t nowMs);
     std::map<SourceKind, tasks::Models> taskModels_;
     std::uint64_t taskModelsVersion_ = 0;
     std::vector<std::optional<std::vector<SourceKind>>> scoreSets_{std::nullopt};

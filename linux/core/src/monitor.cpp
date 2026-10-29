@@ -308,6 +308,31 @@ void Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
         lastRediscoveryMs_ = nowMs;
     }
     store_->prune(nowMs, todayStartMs);
+    if (traffic_->enabled()) {
+        resolveParents();
+        traffic_->tick(nowMs, trafficAgents(nowMs));
+    }
+}
+
+// METRICS 10.6: the agents with what per-agent attribution needs — their tree, transcript, working directory and when
+// they were active (a busy phase now, or their last line).
+std::vector<traffic::AgentFacts> Monitor::trafficAgents(std::int64_t nowMs) {
+    std::vector<traffic::AgentFacts> out;
+    for (const auto& [id, info] : agents_) {
+        traffic::AgentFacts f;
+        f.id = id;
+        f.source = info.source;
+        if (const auto parent = parents_.find(id); parent != parents_.end()) f.parent = parent->second;
+        if (const auto file = files_.find(id); file != files_.end()) {
+            f.transcript = id;
+            f.cwdPath = file->second->parser->cwdPath();
+        }
+        const bool stale = info.lastLineMs && nowMs - *info.lastLineMs > 300'000;
+        if (info.phase != Phase::Idle && !stale) f.active.emplace_back(nowMs, nowMs);
+        if (info.lastLineMs) f.active.emplace_back(*info.lastLineMs, *info.lastLineMs);
+        out.push_back(std::move(f));
+    }
+    return out;
 }
 
 bool Monitor::pollRecent(std::int64_t nowMs) {

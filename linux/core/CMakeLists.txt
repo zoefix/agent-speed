@@ -83,6 +83,7 @@ add_library(agentspeed_core STATIC
     src/tasks/shell_words.cpp
     src/traffic.cpp
     src/traffic_linux.cpp
+    src/traffic_service.cpp
     src/work_signals.cpp
     src/text.cpp
     src/sqlite.cpp
