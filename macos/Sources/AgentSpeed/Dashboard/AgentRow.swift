@@ -3,7 +3,7 @@ import AgentSpeedOrbModel
 import AppKit
 import SwiftUI
 
-/// One agent: phase badge, looping mark, project, source and model, effort capsule, task score, live speed. Its tooltip
+/// One agent: phase badge, looping mark, project, source and model, effort capsule, 性能, live speed. Its tooltip
 /// is the score card (DESIGN 12), which also reaches VoiceOver as the row's extra content and custom action.
 struct AgentRow: View {
     let model: AppModel
@@ -50,7 +50,7 @@ struct AgentRow: View {
         let projectLabel = agent.isSubagent ? "\(project), \(l10n("agents.subagent"))" : project
         let looping = AgentSignalText.looping(agent.signals, l10n)
         let reduceMotion = model.accessibility.reduceMotion
-        let score = TaskSetReading(agent: agent)
+        let score = PerfSetReading(agent: agent)
 
         HStack(spacing: Spacing.s) {
             PhaseBadge(
@@ -100,7 +100,7 @@ struct AgentRow: View {
                 }
                 HStack(alignment: .firstTextBaseline, spacing: AgentIntelligenceColumn.gap) {
                     AgentIntelligenceCell(reading: score, width: intelligenceWidth)
-                        .environment(\.taskReduceMotion, reduceMotion)
+                        .environment(\.perfReduceMotion, reduceMotion)
                     live
                 }
             }
@@ -110,7 +110,7 @@ struct AgentRow: View {
         .contentShape(Rectangle())
         .background(ScreenAnchor(box: anchor))
         .accessibilityElement(children: .ignore)
-        // The intelligence follows the live value; the label ends with the capsule's effort and speed lines (DESIGN 4).
+        // 性能 follows the live value; the label ends with the capsule's effort and speed lines (DESIGN 4).
         .accessibilityLabel(
             [projectLabel, looping, detail, received, live.accessibilityText,
              AgentSignalText.intelligenceAccessibility(score, l10n),
@@ -187,9 +187,9 @@ private struct ScoreCardTooltip: ViewModifier {
     func body(content: Content) -> some View {
         if let cards {
             let id = agent.id
-            let card = TaskScoreCardModel(agent: agent, facts: AgentRow.facts(of: agent, model: model))
-            content.taskScoreCard(cards.presenter, key: id, lines: TaskScoreCardText.accessibilityLines(card, model.l10n),
-                                  focused: focused, l10n: model.l10n) { [weak cards, anchor] in
+            let card = PerfCardModel(agent: agent, facts: AgentRow.facts(of: agent, model: model))
+            content.perfCard(cards.presenter, key: id, lines: PerfCardText.accessibilityLines(card, model.l10n),
+                             focused: focused, l10n: model.l10n) { [weak cards, anchor] in
                 cards?.request(agentId: id, row: anchor.view)
             }
         } else {

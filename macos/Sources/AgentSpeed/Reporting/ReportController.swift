@@ -123,10 +123,10 @@ final class ReportController {
     @ObservationIgnored var setupTimer: Timer?
     /// Used when the computer name leaves nothing valid; stable for the session.
     @ObservationIgnored let fallbackUsername = ReportUsername.random()
-    /// The task score's watch, completions and ledger (METRICS 11.10); never persisted.
-    @ObservationIgnored var taskTracker = ReportTaskTracker()
-    /// Hands the watch's epoch (nil: off) to the live monitor, which marks tasks with it.
-    @ObservationIgnored var taskWatchHandler: ((Int?) -> Void)?
+    /// The performance score's watch, completions and statistics ledger (METRICS 11.10); never persisted.
+    @ObservationIgnored var perfTracker = ReportPerfTracker()
+    /// Hands the watch's epoch (nil: off) to the live monitor, which counts completions in it.
+    @ObservationIgnored var perfWatchHandler: ((Int?) -> Void)?
 
     static let rotationAge: TimeInterval = 365 * 86_400
     static let refreshInterval: TimeInterval = 86_400

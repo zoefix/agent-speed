@@ -38,18 +38,22 @@ struct ReportSectionToggles: View {
     /// The service's document; nil while it is unknown (every switch stays usable).
     let discovery: ReportDiscovery?
 
-    /// `report.section.models.taskScore` under the models switch (DESIGN 11, What's sent): while the known document
-    /// lists `models` and advertises the `taskScore` extension, and before any document is known; the switch's own
-    /// state does not matter.
-    static func showsTaskScoreCaption(_ discovery: ReportDiscovery?) -> Bool {
-        guard let discovery else { return true }
-        return discovery.sections.contains(.models) && discovery.extensions?.taskScore == true
+    /// The caption under the models switch (DESIGN 11, What's sent): `report.section.models.perfScore` while the known
+    /// document lists `models` and advertises the `perfScore` extension, and before any document is known;
+    /// `report.section.models.thinking` while it advertises only the retired `taskScore`; none otherwise. The switch's
+    /// own state does not matter.
+    static func modelsCaptionKey(_ discovery: ReportDiscovery?) -> String? {
+        guard let discovery else { return "report.section.models.perfScore" }
+        guard discovery.sections.contains(.models) else { return nil }
+        if discovery.extensions?.perfScore == true { return "report.section.models.perfScore" }
+        if discovery.extensions?.taskScore == true { return "report.section.models.thinking" }
+        return nil
     }
 
     var body: some View {
         let l10n = model.l10n
         let trafficOn = model.settings.trafficEnabled
-        let taskScoreCaption = Self.showsTaskScoreCaption(discovery)
+        let modelsCaption = Self.modelsCaptionKey(discovery)
         ForEach(ReportSection.allCases, id: \.self) { section in
             let listed = discovery?.sections.contains(section) ?? true
             let isTraffic = section == .traffic
@@ -63,8 +67,8 @@ struct ReportSectionToggles: View {
                     RowTitle(l10n(section.titleKey))
                     if !listed {
                         Footnote(l10n("report.section.notAccepted"))
-                    } else if section == .models, taskScoreCaption {
-                        Footnote(l10n("report.section.models.taskScore"))
+                    } else if section == .models, let modelsCaption {
+                        Footnote(l10n(modelsCaption))
                     } else if isTraffic, !trafficOn {
                         Footnote(l10n("report.section.trafficOff"))
                     }

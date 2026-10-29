@@ -59,8 +59,8 @@ struct BoardKeyboardTests {
         let l10n = Localizer(preference: .zhHant)
         var agent = AgentStatus(id: "s", source: .claudeCode, project: "explore", model: "m", phase: .generating, isSubagent: true,
                                 live: Rate(output: 118, total: 118), recentSpeed: nil, lastActivity: Date(), parentId: "r")
-        agent = BoardScorePreviewData.scored(agent, score: 9.4, state: .unverified)
+        agent = BoardScorePreviewData.scored(agent, score: 1048.2, provisional: true)
         let label = BoardAccessibilityReporter.subRowLabel(agent, metric: .output, l10n: l10n)
-        #expect(label == "explore，子 agent，118 tok/s，智力 9，尚未驗證")
+        #expect(label == "explore，子 agent，118 tok/s，性能 1,048，初步（樣本少）")
     }
 }

@@ -7,7 +7,7 @@ import SwiftUI
 /// an aurora behind frosted rows and glowing share lines, timing position blocks under a heat rail, neon a lit tube
 /// and an LED bar. With the live metrics switched on (DESIGN 2c Live metrics) the hero's right side is the style's
 /// sub-gauge (glass a pearl arc over a strip, timing a data box over its bars, neon LED digits and a meter) and the
-/// rows show their 智力 column. Drawn once with Core Graphics paths; nothing animates.
+/// rows show their 性能 column. Drawn once with Core Graphics paths; nothing animates.
 struct BoardStyleThumbnail: View {
     let style: BoardStyle
     var size: CGFloat = 38

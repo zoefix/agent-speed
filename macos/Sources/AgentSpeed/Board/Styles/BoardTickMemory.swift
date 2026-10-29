@@ -13,11 +13,11 @@ struct BoardTickMemory {
     private(set) var value: Double?
     private var values: [String: Double] = [:]
     private var ranks: [String: Int] = [:]
-    /// The table readouts' texts (思考, 費用) the last fresh tick showed, for their rolls (智力 never rolls).
+    /// The table readouts' texts (思考, 費用) the last fresh tick showed, for their rolls (性能 never rolls).
     private var metrics: [String: String] = [:]
-    /// The rows' 智力 and the hero's on the last fresh tick (their crossfades and the hero's count-up).
+    /// The rows' 性能 and the hero's on the last fresh tick (their crossfades and the hero's count-up).
     private var scores: [String: BoardRowScore] = [:]
-    private(set) var heroScore: TaskSetReading?
+    private(set) var heroScore: PerfSetReading?
 
     mutating func begin(_ tick: BoardTick) {
         var hasher = Hasher()
@@ -29,7 +29,7 @@ struct BoardTickMemory {
         hasher.combine(tick.newPeak)
         hasher.combine(tick.metrics.intelligence.shown)
         hasher.combine(tick.metrics.intelligence.form)
-        hasher.combine(tick.metrics.intelligence.state)
+        hasher.combine(tick.metrics.intelligence.provisional)
         hasher.combine(tick.metrics.thinking)
         hasher.combine(tick.metrics.cost)
         let signature = hasher.finalize()
@@ -45,13 +45,13 @@ struct BoardTickMemory {
         fresh ? BoardValueChange(from: values[key], to: live) : .steady
     }
 
-    /// The row's 智力 on the last fresh tick, while this one is fresh (nil: nothing to change from).
+    /// The row's 性能 on the last fresh tick, while this one is fresh (nil: nothing to change from).
     func previousScore(_ key: String) -> BoardRowScore? {
         fresh ? scores[key] : nil
     }
 
-    /// The hero's 智力 on the last fresh tick, while this one is fresh.
-    var previousHeroScore: TaskSetReading? { fresh ? heroScore : nil }
+    /// The hero's 性能 on the last fresh tick, while this one is fresh.
+    var previousHeroScore: PerfSetReading? { fresh ? heroScore : nil }
 
     /// The group's previous rank when it moved.
     func rankChange(_ id: String, rank: Int) -> Int? {

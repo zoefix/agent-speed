@@ -3,9 +3,9 @@ import AgentSpeedOrbModel
 import AppKit
 
 /// One board on the desktop: its window, fed by its runtime (DESIGN 2c). Lays its content out once per tick and only
-/// while it can be seen (and on every frame of a 智力 count-up), plays the tick on the effects, and handles the pointer
+/// while it can be seen (and on every frame of a 性能 count-up), plays the tick on the effects, and handles the pointer
 /// — a click toggles a group's expansion; hovering a row lifts its tint and, after 0.35 s, shows its score card while
-/// `intelligence` is on (group and sub rows, and the hero's 智力) or a group's text tooltip while it is off — the
+/// `intelligence` is on (group and sub rows, and the hero's 性能) or a group's text tooltip while it is off — the
 /// keyboard (DESIGN 12 *Keyboard*: with keyboard navigation on, the score rows take focus with the system focus ring,
 /// Space shows the focused row's card, a focus move keeps it on the focused row, Esc closes it) and accessibility.
 @MainActor
@@ -54,9 +54,9 @@ final class BoardPresenter {
     private var tooltipTimer: Timer?
     private var tooltipGroup: String?
     /// The score card's window and timing, made on the first hover that needs them.
-    private var cards: TaskScoreCardPresenter?
+    private var cards: PerfCardPresenter?
     /// The card's window, closed with the board (AppKit keeps a window until it is closed).
-    private var cardPanel: TaskScoreCardPanel?
+    private var cardPanel: PerfCardPanel?
     private lazy var climbFrames = BoardClimbFrames(window: window.panel) { [weak self] in self?.climbFrame() }
     /// The score rows' keyboard focus; drawn while the board is key.
     private var focus = BoardKeyboardFocus()
@@ -184,7 +184,7 @@ final class BoardPresenter {
         refreshCard(tick)
     }
 
-    /// A count-up of the hero's 智力 lays the board out on every frame until it lands (only while it can be seen).
+    /// A count-up of the hero's 性能 lays the board out on every frame until it lands (only while it can be seen).
     private func scheduleClimb() {
         guard window.isRendering, !layoutStale, let until = builder.climbsUntil(after: Clock.now) else { return }
         climbFrames.run(until: until)
@@ -225,7 +225,7 @@ final class BoardPresenter {
         return layout.groupRows.first { $0.value.row.contains(point) }?.key
     }
 
-    /// The card's anchor under `point`: a group or sub row, or the hero's 智力, while `intelligence` is on; only a group
+    /// The card's anchor under `point`: a group or sub row, or the hero's 性能, while `intelligence` is on; only a group
     /// row (its text tooltip) while it is off.
     private func target(at point: CGPoint) -> Hover? {
         if let id = group(at: point) { return .row(id) }
@@ -311,28 +311,28 @@ final class BoardPresenter {
 
     // MARK: Score card
 
-    private func cardPresenter() -> TaskScoreCardPresenter {
+    private func cardPresenter() -> PerfCardPresenter {
         if let cards { return cards }
         let accessibility = model.accessibility
-        let panel = TaskScoreCardPanel(l10n: model.l10n)
+        let panel = PerfCardPanel(l10n: model.l10n)
         cardPanel = panel
-        let made = TaskScoreCardPresenter(display: panel, delay: TaskScoreCardPresenter.boardDelay) {
+        let made = PerfCardPresenter(display: panel, delay: PerfCardPresenter.boardDelay) {
             (accessibility.reduceMotion, accessibility.reduceTransparency)
         }
         cards = made
         return made
     }
 
-    private func provider(for hover: Hover) -> TaskScoreCardPresenter.Provider {
+    private func provider(for hover: Hover) -> PerfCardPresenter.Provider {
         { [weak self] in self?.cardRequest(hover) }
     }
 
     /// The card of `hover` beside the board on the side with more room, level with its row (the hero's: with its
-    /// 智力); nil when there is nothing to show (智力 off, the row gone, the hero's value none, the board hidden).
-    private func cardRequest(_ hover: Hover) -> TaskScoreCardRequest? {
+    /// 性能); nil when there is nothing to show (性能 off, the row gone, the hero's value none, the board hidden).
+    private func cardRequest(_ hover: Hover) -> PerfCardRequest? {
         guard let tick = runtime.tick, tick.metrics.readouts.intelligence, let layout, window.panel.isVisible else { return nil }
         let l10n = model.l10n
-        let model: TaskScoreCardModel?
+        let model: PerfCardModel?
         let rect: CGRect?
         switch hover {
         case .hero:
@@ -346,7 +346,7 @@ final class BoardPresenter {
         let board = window.panel.frame
         let row = CGRect(x: board.minX + rect.minX, y: board.maxY - rect.maxY, width: rect.width, height: rect.height)
         let visible = (window.panel.screen ?? NSScreen.main)?.visibleFrame ?? board
-        return TaskScoreCardRequest(model: model, anchor: TaskScoreCardAnchor(row: row, container: board, visibleFrame: visible,
+        return PerfCardRequest(model: model, anchor: PerfCardAnchor(row: row, container: board, visibleFrame: visible,
                                                                               side: .moreRoom),
                                     window: window.panel)
     }
@@ -359,7 +359,7 @@ final class BoardPresenter {
         cards.refresh()
     }
 
-    /// The row's custom action `a11y.task.card`: shows its card at once, or hides it when it shows (a board never takes
+    /// The row's custom action `a11y.perf.card`: shows its card at once, or hides it when it shows (a board never takes
     /// the keyboard focus, so Esc cannot reach it).
     private func toggleCard(_ key: String) {
         let cards = cardPresenter()

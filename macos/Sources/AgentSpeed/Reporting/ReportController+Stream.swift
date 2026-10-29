@@ -42,7 +42,7 @@ extension ReportController: ReportStreamSessionDelegate {
     // MARK: - Ticks
 
     /// One tick of the stream scheduler: a snapshot, a user event or (`wake`) a wake-up it asked for. `completed`: the
-    /// task ledger received a completion at this tick (METRICS 11.10 *WebSocket*).
+    /// statistics ledger received a completion at this tick (METRICS 11.10 *WebSocket*).
     func streamTick(_ sample: ReportSample, now: Int64, wake: Bool, completed: Bool = false) {
         startStreamIfNeeded(sample)
         let events = pendingEvents
@@ -54,7 +54,7 @@ extension ReportController: ReportStreamSessionDelegate {
         let active = wake ? stream.lastActive : working || stream.window.hasTokenIncrement(sample)
         let changed = !wake && (completed
             || stream.window.hasIncrement(sample, traffic: effectiveSections.contains(.traffic))
-            || ReportStreamValues(sample, taskScore: streamTaskScoreValues(stream.window, sample))
+            || ReportStreamValues(sample, perfScore: streamPerfScoreValues(stream.window, sample))
                 .changed(since: stream.lastBuilt))
         stream.lastActive = active
         stream.windowStarted = false
@@ -137,8 +137,8 @@ extension ReportController: ReportStreamSessionDelegate {
         var content = stream.window.take(sample)
         var options = options(for: document)
         options.messageLimit = session.scheduler.limits.maxMessageBytes
-        content.taskStats = takeTaskStats(options)
-        stream.lastBuilt = ReportStreamValues(sample, taskScore: ReportBody.taskScoreValues(content, sample, options))
+        content.perfStats = takePerfStats(options)
+        stream.lastBuilt = ReportStreamValues(sample, perfScore: ReportBody.perfScoreValues(content, sample, options))
         stream.windowStarted = true
         self.stream = stream
         let envelope = ReportEnvelope(
@@ -195,7 +195,7 @@ extension ReportController: ReportStreamSessionDelegate {
     func streamSessionWake(_ session: ReportStreamSession) {
         guard stream?.session === session else { return }
         let sample = lastSample
-        _ = beginTaskTick(sample)
+        _ = beginPerfTick(sample)
         streamTick(sample, now: ReportClock.monotonicMs, wake: true)
     }
 

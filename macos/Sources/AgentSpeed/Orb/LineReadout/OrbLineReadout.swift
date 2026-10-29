@@ -3,9 +3,9 @@ import AgentSpeedOrbModel
 import AppKit
 
 /// The orb's two-line readout (DESIGN 10, Floating orb readout and Intelligence readout). Network speed draws download
-/// over upload in fixed cells sharing their left edge, the block centered on the orb; the intelligence readout draws
-/// a larger `智力 86` line over a `思考 412 tok/s` line, each centred on the orb on its own, the score moving as DESIGN
-/// 12 *Motion* says and dotted while unproven. Other characters are replaced in place; the block fades by the quiet
+/// over upload in fixed cells sharing their left edge, the block centered on the orb; the performance readout draws
+/// a larger `性能 1,286` line over a `思考 412 tok/s` line, each centred on the orb on its own, the score moving as DESIGN
+/// 12 *Motion* says and dotted while provisional. Other characters are replaced in place; the block fades by the quiet
 /// rule and steps aside for the new-peak pill. Drawn from the shared glyph atlas, so drawing never allocates once the
 /// glyphs of a size exist.
 @MainActor
@@ -162,7 +162,7 @@ final class OrbLineReadout {
         }
     }
 
-    /// The intelligence line (`p = 1.25 t`) over the thinking line, each centred on the orb on its own. While the
+    /// The 性能 line (`p = 1.25 t`, `needle` 1.1 t) over the thinking line, each centred on the orb on its own. While the
     /// thinking rate reads 0 the thinking line fades out after its hold and the intelligence line glides onto the
     /// single-line position (DESIGN 10, Thinking hidden at zero).
     private func addIntelligence(thinking: String, line reading: OrbLineReading, into scene: inout OrbScene,
@@ -170,7 +170,7 @@ final class OrbLineReadout {
         let language = frame.content.language
         let glyphs = OrbLineGlyphs(language)
         let t = placement.textSize(diameter: frame.s)
-        let p = OrbLinePlacement.intelligenceScale * t
+        let p = placement.scoreScale * t
         let baselines = placement.intelligenceBaselines(center: frame.center.y + frame.readoutShift, diameter: frame.s,
                                                         single: single(reading, frame))
         let score = reading.scoreMotion.frame(at: frame.time, reduceMotion: frame.effects.reduceMotion)
@@ -183,10 +183,10 @@ final class OrbLineReadout {
                        baseline: baselines.thinking, frame, into: &scene, ink: thinkingInk)
     }
 
-    /// `glyph · gap · score` at `p`, centred by the score as drawn (DESIGN 10; DESIGN 12, *Values and forms*, *Proof
-    /// mark*, *Motion*): live in the number color, resting and `–` in the unit token's, crossfading between them; a
-    /// count-up draws its current integer, a fall or `–` ↔ a number crossfades in place; an unproven score sits on the
-    /// proof mark, which takes no width and fades with the state.
+    /// `glyph · gap · score` at `p`, centred by the score as drawn (DESIGN 10; DESIGN 12, *Values and forms*,
+    /// *Provisional mark*, *Motion*): live in the number color, resting and `–` in the unit token's, crossfading between
+    /// them; a count draws its current integer in the compact form, `–` ↔ a number crossfades in place; a provisional
+    /// score sits on the dotted mark, which takes no width and fades with the state.
     private func addScoreLine(_ glyph: String, score: OrbScoreMotion.Frame, size: CGFloat, baseline: CGFloat, _ frame: OrbFrame,
                               into scene: inout OrbScene, ink: Ink) {
         let scale = scene.backingScale
@@ -205,11 +205,12 @@ final class OrbLineReadout {
         addDigits(score.text, x: numberLeft, baseline: baseline, style: style, color: color, into: &scene, ink: ink.faded(score.alpha))
         // The mark belongs to a number: under `–` it fades out beneath the number leaving.
         let marked = score.text == OrbScoreMotion.absent ? score.outgoing.map { advance($0, style: style, scale: scale) } : width
-        let markInk = ink.faded(score.proof)
+        let markInk = ink.faded(score.provisional)
         guard let marked, markInk.alpha > 0.01 else { return }
         let contrast = frame.content.increaseContrast
-        guard let mark = OrbLineProofMark.shared.texture(width: marked, textSize: size, scale: scale, increasedContrast: contrast) else { return }
-        let top = OrbLineProofMark.top(baseline: baseline, textSize: size, scale: scale, increasedContrast: contrast)
+        guard let mark = OrbLineProvisionalMark.shared.texture(width: marked, textSize: size, scale: scale,
+                                                               increasedContrast: contrast) else { return }
+        let top = OrbLineProvisionalMark.top(baseline: baseline, textSize: size, scale: scale, increasedContrast: contrast)
         markInk.add(mark, x: snapped(numberLeft, scale), baseline: top, color: color, into: &scene)
     }
 

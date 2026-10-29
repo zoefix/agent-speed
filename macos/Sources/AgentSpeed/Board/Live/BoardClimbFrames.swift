@@ -1,7 +1,7 @@
 import AgentSpeedOrbModel
 import AppKit
 
-/// The frames of a 智力 count-up on a board (DESIGN 2c *Frame policy*: the roll class, 60 fps for its duration, at most
+/// The frames of a 性能 count-up on a board (DESIGN 2c *Frame policy*: the roll class, 60 fps for its duration, at most
 /// 0.8 s, only when the score rises by 3 or more): the shared frame clock asks for one layout per frame until the
 /// number lands, and nothing runs otherwise.
 @MainActor

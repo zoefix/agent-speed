@@ -2,7 +2,7 @@ import AgentSpeedCore
 import AgentSpeedOrbModel
 import SwiftUI
 
-/// The agent row's lines about how it works (DESIGN 4, Looping mark) and its task score's words (DESIGN 4, 智力
+/// The agent row's lines about how it works (DESIGN 4, Looping mark) and its performance score's words (DESIGN 4, 性能
 /// column). Descriptive only: they never change the row's order or value.
 @MainActor
 enum AgentSignalText {
@@ -22,10 +22,10 @@ enum AgentSignalText {
         return lines
     }
 
-    /// Read right after the live value (DESIGN 4, 智力 column): `a11y.agent.intel` with the score words of DESIGN 12
-    /// (`智力 86`, `智力 9，尚未驗證`, `智力 72，閒置中`); nothing while none.
-    static func intelligenceAccessibility(_ reading: TaskSetReading, _ l10n: Localizer) -> String? {
-        TaskScoreText.words(TaskScoreValue(reading), l10n).map { l10n("a11y.agent.intel", $0) }
+    /// Read right after the live value (DESIGN 4, 性能 column): `a11y.agent.intel` with the score words of DESIGN 12
+    /// (`性能 1,286`, `性能 912，初步（樣本少）`, `性能 1,540，閒置中`); nothing while none.
+    static func intelligenceAccessibility(_ reading: PerfSetReading, _ l10n: Localizer) -> String? {
+        PerfScoreText.words(reading, l10n).map { l10n("a11y.agent.intel", $0) }
     }
 
     /// A share as a whole percent, rounded half away from zero.

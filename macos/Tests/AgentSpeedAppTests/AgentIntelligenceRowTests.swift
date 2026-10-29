@@ -4,15 +4,15 @@ import Foundation
 import Testing
 @testable import AgentSpeed
 
-/// DESIGN 4, 智力 column: the fixed cell, the name room it takes, the row's score words and its score card for every
+/// DESIGN 4, 性能 column: the fixed cell, the name room it takes, the row's score words and its score card for every
 /// form (DESIGN 12).
 @Suite("Agent intelligence column")
 @MainActor
 struct AgentIntelligenceRowTests {
-    /// `score`: the agent's task score (METRICS 6.9), live while it generates, resting otherwise.
+    /// `score`: the agent's performance score (METRICS 6.9), live while it generates, resting otherwise; `n` timed
+    /// requests make it provisional below 10.
     static func agent(_ source: SourceKind = .claudeCode, model: String? = "claude-opus-5-5", score: Double?,
-                      output: Double = 0, thinkingShare: Double = 0, state: TaskState = .passing,
-                      task: AgentTaskStatus? = nil) -> AgentStatus {
+                      output: Double = 0, thinkingShare: Double = 0, n: Int = 20) -> AgentStatus {
         var sums = IntelligenceSums()
         if output > 0 {
             sums.output = output
@@ -21,26 +21,30 @@ struct AgentIntelligenceRowTests {
                 sums.thinkingBase = output
             }
         }
+        var perf: PerfEvaluation?
         if let score {
-            let value = TaskAgentValue(form: output > 0 ? .live : .resting, score: score, shown: taskRoundHalfAway(score),
-                                       state: state)
-            sums.score = TaskSetValue(id: "a", lastLineMs: nil, value: value)
+            let evaluation = PerfPreviewData.evaluation(score: score, source: source, model: model ?? "", n: n, tools: 12,
+                                                        baseline: 1100)
+            perf = evaluation
+            sums.score = PerfSetValue(form: output > 0 ? .live : .resting, score: evaluation.score, agentId: "a",
+                                      lastLineMs: nil, provisional: evaluation.provisional)
         }
         return AgentStatus(id: "a", source: source, project: "p", model: model, phase: output > 0 ? .generating : .idle,
                            isSubagent: false, live: Rate(output: output, total: output), recentSpeed: nil,
-                           lastActivity: Date(), intelligence: sums, task: task)
+                           lastActivity: Date(), intelligence: sums, perf: perf)
     }
 
     // MARK: Cell
 
-    @Test func cellIsAsWideAsTheWiderOf888AndTheCaption() {
-        // `888` in SF Pro 12 pt medium is 23.2 pt; 智力 at 10.5 pt is 20.9 pt.
-        for preference in [LanguagePreference.zhHant, .zhHans, .en, .ja] {
-            let caption = Localizer(preference: preference)("intel.glyph")
-            #expect(AgentIntelligenceColumn.width(caption: caption) == 24, "\(caption)")
+    @Test func cellIsAsWideAsTheWiderOfTheWidestCompactNumberAndTheCaption() {
+        // `8,888` in SF Pro 12 pt medium with tabular digits is wider than 性能 or Perf at 10.5 pt.
+        let widths = [LanguagePreference.zhHant, .zhHans, .en, .ja].map { preference in
+            AgentIntelligenceColumn.width(caption: Localizer(preference: preference)("intel.glyph"))
         }
+        #expect(Set(widths).count == 1, "\(widths)")
+        #expect(widths[0] == 35, "DESIGN 12, *Number formats*: `8,888` in SF Pro 12 pt medium is 34.5")
         // A caption wider than the digits sets the width.
-        #expect(AgentIntelligenceColumn.width(caption: "Intelligence") > 24)
+        #expect(AgentIntelligenceColumn.width(caption: "Performance score") > widths[0])
     }
 
     @Test func theNameBlockGivesWayToTheCellAndItsGap() {
@@ -64,77 +68,57 @@ struct AgentIntelligenceRowTests {
 
     @Test func rowsSayTheirScoreWordsAfterTheLiveValue() {
         let l10n = Localizer(preference: .zhHant)
-        let live = Self.agent(score: 92.5, output: 40, thinkingShare: 0.245)
-        #expect(TaskSetReading(agent: live).shown == 93)
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: live), l10n) == "智力 93")
-        let resting = Self.agent(score: 73.75)
-        #expect(TaskSetReading(agent: resting).isResting)
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: resting), l10n) == "智力 74，閒置中")
+        let live = Self.agent(score: 1286.4, output: 40, thinkingShare: 0.245)
+        #expect(PerfSetReading(agent: live).shown == 1286)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: live), l10n) == "性能 1,286")
+        let resting = Self.agent(score: 1452.5)
+        #expect(PerfSetReading(agent: resting).isResting)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: resting), l10n) == "性能 1,453，閒置中")
+        let compact = Self.agent(score: 12_840, output: 600)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: compact), l10n) == "性能 12,840",
+                "spoken in full form")
     }
 
-    @Test func unprovenScoresSayWhatWouldProveThem() {
-        let l10n = Localizer(preference: .zhHant)
-        let unverified = Self.agent(score: 9, output: 30, state: .unverified, task: Self.task(.unverified, 9))
-        #expect(TaskSetReading(agent: unverified).isUnproven)
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: unverified), l10n) == "智力 9，尚未驗證")
-        let pending = Self.agent(score: 34, state: .pending, task: Self.task(.pending, 34))
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: pending), Localizer(preference: .en))
-            == "intelligence 34, re-check pending, idle")
+    @Test func provisionalScoresSayFewSamples() {
+        let provisional = Self.agent(score: 1048.2, output: 30, n: 6)
+        #expect(PerfSetReading(agent: provisional).isProvisional)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: provisional), Localizer(preference: .zhHant))
+            == "性能 1,048，初步（樣本少）")
+        let resting = Self.agent(score: 934, n: 4)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: resting), Localizer(preference: .en))
+            == "performance 934, provisional (few samples), idle")
     }
 
     @Test func rowsWithoutAScoreSayNothing() {
         let l10n = Localizer(preference: .zhHant)
         let quiet = Self.agent(model: nil, score: nil)
-        #expect(TaskSetReading(agent: quiet) == .none)
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: quiet), l10n) == nil)
-        let deepseek = Self.agent(.deepseek, model: "deepseek-v4-pro", score: nil, output: 50)
-        #expect(AgentSignalText.intelligenceAccessibility(TaskSetReading(agent: deepseek), l10n) == nil)
+        #expect(PerfSetReading(agent: quiet) == .none)
+        #expect(AgentSignalText.intelligenceAccessibility(PerfSetReading(agent: quiet), l10n) == nil)
     }
 
     // MARK: Score card
 
-    static func task(_ state: TaskState, _ score: Double?) -> AgentTaskStatus {
-        var models = TaskModelFlags.prior
-        models.success = TaskModelFlag(calibrated: true, tasks: 120)
-        // An evaluation without events stands in for the shape; its facts are set below.
-        var result = TaskResult(TaskEvaluation([], now: 0))
-        result.state = state
-        result.score = score
-        result.shown = score.map(taskRoundHalfAway)
-        result.dims = TaskDimensions(v: state == .passing ? 40 : 0, c: 20, r: 11, e: (score ?? 0) - (state == .passing ? 71 : 31), k: 0)
-        if state == .pending {
-            result.vHeld = 40
-            result.lastPass = TaskLastPass(suite: "pytest", commandClass: .test, key: TaskDigest(value: 0), buildOnly: false)
-        }
-        if state == .failing {
-            result.openFailure = TaskOpenFailure(suite: nil, commandClass: .build, key: TaskDigest(value: 0), errors: 3, peak: 9,
-                                                 counted: true, edited: false)
-        }
-        return AgentTaskStatus(taskStartMs: 0, result: result, predictions: nil, models: models)
-    }
-
-    @Test func theCardMapsTheAgentsTask() {
-        let failing = Self.agent(score: 41, output: 30, state: .failing, task: Self.task(.failing, 41))
-        let card = TaskScoreCardModel(agent: failing, facts: ["推理強度：high"])
-        guard case .scored(let score) = card.body else {
-            Issue.record("a scored source has a scored card")
-            return
-        }
-        #expect(score.form == .live)
-        #expect(score.state == .failing)
-        #expect(score.shown == 41)
-        #expect(score.openFailure?.check == TaskCheckName(suite: nil, kind: .build))
-        #expect(TaskScoreCardText.status(score, Localizer(preference: .zhHant)).plain == "建置：還有 3 個錯誤（最多時 9 個）")
+    @Test func theCardMapsTheAgentsEvaluation() {
+        let live = Self.agent(score: 1286.4, output: 30, n: 20)
+        let card = PerfCardModel(agent: live, facts: ["推理強度：high"])
+        #expect(card.score.form == .live && card.score.shown == 1286 && !card.score.provisional)
+        #expect(card.score.n == 20 && card.score.tools == 12)
+        #expect(card.score.vsUsualPercent == 17, "1286.4 against 1100")
+        #expect(card.header.model == "claude-opus-5-5")
         #expect(card.facts == ["推理強度：high"])
-        let pending = TaskScoreCardModel(agent: Self.agent(score: 34, state: .pending, task: Self.task(.pending, 34)), facts: [])
-        #expect(pending.score?.form == .resting)
-        #expect(pending.score?.heldCredit == 40)
-        #expect(pending.score?.lastPass?.check.suite == "pytest")
+        #expect(PerfCardText.facts(card, Localizer(preference: .zhHant)).first == "有效計時請求 20 個 · 近 30 分鐘")
+        let resting = PerfCardModel(agent: Self.agent(score: 934, n: 6), facts: [])
+        #expect(resting.score.form == .resting && resting.score.provisional)
     }
 
-    @Test func aSourceWithoutScoresGetsTheUnsupportedCard() {
-        let deepseek = Self.agent(.deepseek, model: "deepseek-v4-pro", score: nil, output: 50)
-        #expect(TaskScoreCardModel(agent: deepseek, facts: []).body == .unsupported)
+    @Test func anAgentWithoutAScoreGetsTheNoneCard() {
+        var quiet = Self.agent(score: nil, output: 50)
+        var none = PerfEvaluation.none(source: .claudeCode)
+        none.n = 2
+        quiet.perf = none
+        let card = PerfCardModel(agent: quiet, facts: [])
+        #expect(card.score.form == .none && card.score.shown == nil && card.score.n == 2)
+        #expect(PerfCardText.summary(card.score, Localizer(preference: .zhHant)) == "近 30 分鐘只有 2 個有效計時請求；至少要 3 個才會評分。")
     }
 
     @Test func percentRoundsHalfAwayFromZero() {

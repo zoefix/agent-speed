@@ -4,9 +4,9 @@ import AgentSpeedOrbModel
 import AppKit
 
 /// VoiceOver for one board (DESIGN 2c Accessibility): the board is a list labelled `a11y.board` (its sources, value
-/// and title), each shown group row an item labelled `a11y.board.row` with its 智力 words, effort, speed and sub-agent
+/// and title), each shown group row an item labelled `a11y.board.row` with its 性能 words, effort, speed and sub-agent
 /// count. While `intelligence` is on, the sub rows are items too, and every row carries its score card as extra content
-/// (VoiceOver's "more content") and the custom action `a11y.task.card`, which shows the card (DESIGN 12). The row with
+/// (VoiceOver's "more content") and the custom action `a11y.perf.card`, which shows the card (DESIGN 12). The row with
 /// the keyboard focus is the focused element. Labels update at most once per second; a new leader is announced
 /// politely at most once per 10 s.
 @MainActor
@@ -17,7 +17,7 @@ final class BoardAccessibilityReporter {
     private var publishedAt: TimeInterval = -.infinity
     private var announcer = BoardAnnouncer()
     private var rows: [BoardRowAccessibilityElement] = []
-    /// The custom action `a11y.task.card` on a row (its key), or a press: shows its card, or hides it when it shows.
+    /// The custom action `a11y.perf.card` on a row (its key), or a press: shows its card, or hides it when it shows.
     var onCardAction: ((String) -> Void)?
     /// An assistive app focused a row (its key): the keyboard focus follows.
     var onFocus: ((String) -> Void)?
@@ -60,7 +60,7 @@ final class BoardAccessibilityReporter {
                              parent: NSView) -> [BoardRowAccessibilityElement] {
         let intelligence = tick.metrics.readouts.intelligence
         return tick.rows.compactMap { row -> BoardRowAccessibilityElement? in
-            let label: String, box: CGRect?, card: TaskScoreCardModel?
+            let label: String, box: CGRect?, card: PerfCardModel?
             switch row.kind {
             case .group(let index) where index < tick.groups.count:
                 let group = tick.groups[index]
@@ -89,7 +89,7 @@ final class BoardAccessibilityReporter {
             element.accessibilityCustomContent = Self.cardContent(card, l10n: l10n)
             let key = row.key
             element.onPress = { [weak self] in self?.onCardAction?(key) }
-            element.setAccessibilityCustomActions([NSAccessibilityCustomAction(name: l10n("a11y.task.card")) { [weak self] in
+            element.setAccessibilityCustomActions([NSAccessibilityCustomAction(name: l10n("a11y.perf.card")) { [weak self] in
                 MainActor.assumeIsolated { self?.onCardAction?(key) }
                 return true
             }])
@@ -112,12 +112,12 @@ final class BoardAccessibilityReporter {
     /// The focused row's element, for the host's focused element.
     var focusedElement: Any? { rows.first { $0.key == focusedKey && focusedKey != nil } }
 
-    /// A sub row in the group rows' style: `explore，子 agent，118 tok/s，智力 9，尚未驗證，推理強度 max`.
+    /// A sub row in the group rows' style: `explore，子 agent，118 tok/s，性能 9，尚未驗證，推理強度 max`.
     static func subRowLabel(_ agent: AgentStatus, metric: SpeedMetric, l10n: Localizer) -> String {
         let name = agent.project.isEmpty ? l10n(agent.source.titleKey) : agent.project
         var parts = [name, l10n("agents.subagent"),
                      l10n("mac.settings.speedValue", SpeedFormat.speed(max(0, agent.live.value(for: metric))))]
-        if let words = TaskScoreText.words(TaskScoreValue(TaskSetReading(agent: agent)), l10n) {
+        if let words = PerfScoreText.words(PerfSetReading(agent: agent), l10n) {
             parts.append(l10n("a11y.agent.intel", words))
         }
         let capsule = EffortCapsule(agent.modes)
@@ -126,20 +126,20 @@ final class BoardAccessibilityReporter {
     }
 
     /// The card's lines as a row's extra content, in the card's order (DESIGN 12 *Accessibility*).
-    static func cardContent(_ model: TaskScoreCardModel, l10n: Localizer) -> [AXCustomContent] {
-        let title = l10n("a11y.task.card")
-        return TaskScoreCardText.accessibilityLines(model, l10n).enumerated().map { index, line in
+    static func cardContent(_ model: PerfCardModel, l10n: Localizer) -> [AXCustomContent] {
+        let title = l10n("a11y.perf.card")
+        return PerfCardText.accessibilityLines(model, l10n).enumerated().map { index, line in
             let content = AXCustomContent(label: title, value: line)
             content.importance = index == 0 ? .high : .default
             return content
         }
     }
 
-    /// `第 1 名，tihu，每秒 7.88k 個 token，智力 86，3 個 agent 中最高，推理強度 xhigh，加速 Fast，100 個子 agent`: with 智力 on,
+    /// `第 1 名，tihu，每秒 7.88k 個 token，性能 86，3 個 agent 中最高，推理強度 xhigh，加速 Fast，100 個子 agent`: with 性能 on,
     /// its score words right after the speed (nothing for none). Rows name no cost (the board's label carries 費用).
     static func rowLabel(_ group: BoardGroup, rank: Int, l10n: Localizer, intelligence: Bool = false) -> String {
         var parts = [l10n("a11y.board.row", rank, project(of: group, l10n), SpeedFormat.speed(group.live))]
-        if intelligence, let words = TaskScoreText.words(TaskScoreValue(group.intelligenceReading), l10n) {
+        if intelligence, let words = PerfScoreText.words(group.intelligenceReading, l10n) {
             parts.append(l10n("a11y.agent.intel", words))
         }
         let capsule = EffortCapsule(group.root.modes)
@@ -149,15 +149,15 @@ final class BoardAccessibilityReporter {
     }
 
     /// The board label's live metrics words (DESIGN 2c Live metrics, *Accessibility*), in order: the intelligence form
-    /// with the score words (with 思考 while it shows), or 思考 alone, `intel.none` in place of the 智力 words while it is
+    /// with the score words (with 思考 while it shows), or 思考 alone, `intel.none` in place of the 性能 words while it is
     /// none; then the cost.
     static func metricWords(_ metrics: BoardMetricsTick, currency: String, l10n: Localizer) -> [String] {
         let readouts = metrics.readouts
         var words: [String] = []
         if readouts.intelligence {
-            // While 智力 is none, `intel.none` replaces only its words; a shown 思考 is still read.
+            // While 性能 is none, `intel.none` replaces only its words; a shown 思考 is still read.
             words.append(OrbAccessibilityReporter.intelligenceSentence(
-                TaskScoreValue(metrics.intelligence), thinking: metrics.showsThinking ? metrics.thinking : nil, l10n))
+                metrics.intelligence, thinking: metrics.showsThinking ? metrics.thinking : nil, l10n))
         } else if readouts.thinking {
             words.append(l10n("a11y.board.thinking", metrics.quiet ? "0" : metrics.thinking))
         }

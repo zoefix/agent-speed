@@ -66,15 +66,15 @@ struct BoardMoneyFormat {
 }
 
 /// The live metrics of one tick (DESIGN 2c Live metrics): the switches and the hero's values, formatted. The rows'
-/// 智力 comes from the groups themselves; nothing on a board shows a cost per group.
+/// 性能 comes from the groups themselves; nothing on a board shows a cost per group.
 struct BoardMetricsTick: Equatable {
     var readouts = BoardReadouts.none
-    /// 智力 over the board's agents `A` (METRICS 6.9 *Sets and groups*): the highest live score, else the highest resting
-    /// one, else none, with its supplier's state (the proof mark) and N.
-    var intelligence = TaskSetReading.none
+    /// 性能 over the board's agents `A` (METRICS 6.9 *Sets and groups*): the highest live score, else the highest resting
+    /// one, else none, with its supplier's provisional mark and N.
+    var intelligence = PerfSetReading.none
     /// 思考 (METRICS 7), `–` while there is no value.
     var thinking = "–"
-    /// Σ w = 0 over the board's agents: 思考 reads `–` (智力 keeps its own form, DESIGN 2c *Updates, motion and quiet*).
+    /// Σ w = 0 over the board's agents: 思考 reads `–` (性能 keeps its own form, DESIGN 2c *Updates, motion and quiet*).
     var quiet = true
     /// 思考 hidden at zero (after its 3 s hold).
     var thinkingHidden = false
@@ -89,7 +89,7 @@ struct BoardMetricsTick: Equatable {
     static func make(readouts: BoardReadouts, intelligence sums: IntelligenceSums, agents: [AgentStatus], cost: BoardMoney,
                      costUnit: String, thinkingHidden: Bool) -> BoardMetricsTick {
         let quiet = !(sums.output > 0)
-        return BoardMetricsTick(readouts: readouts, intelligence: TaskSetReading(score: sums.score, agents: agents),
+        return BoardMetricsTick(readouts: readouts, intelligence: PerfSetReading(score: sums.score, agents: agents),
                                 thinking: quiet ? "–" : SpeedFormat.speed(sums.thinking), quiet: quiet,
                                 thinkingHidden: thinkingHidden && readouts.thinkingMayHide, cost: cost, costUnit: costUnit)
     }

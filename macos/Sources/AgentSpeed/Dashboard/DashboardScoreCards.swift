@@ -2,20 +2,20 @@ import AgentSpeedCore
 import AppKit
 import SwiftUI
 
-/// The dashboard's score cards (DESIGN 4, 智力 column; DESIGN 12, *Score card*): an agent row's tooltip is its card,
+/// The dashboard's score cards (DESIGN 4, 性能 column; DESIGN 12, *Score card*): an agent row's tooltip is its card,
 /// shown beside the panel toward the screen's centre after 0.45 s, updated on every engine tick, gone with the panel.
 @MainActor
 final class DashboardScoreCards {
-    let presenter: TaskScoreCardPresenter
-    private let panel: TaskScoreCardPanel
+    let presenter: PerfCardPresenter
+    private let panel: PerfCardPanel
     private let model: AppModel
     private var loop: ObservationLoop?
 
     init(model: AppModel) {
         self.model = model
-        let panel = TaskScoreCardPanel(l10n: model.l10n)
+        let panel = PerfCardPanel(l10n: model.l10n)
         self.panel = panel
-        presenter = TaskScoreCardPresenter(display: panel, delay: TaskScoreCardPresenter.dashboardDelay) { [weak model] in
+        presenter = PerfCardPresenter(display: panel, delay: PerfCardPresenter.dashboardDelay) { [weak model] in
             (model?.accessibility.reduceMotion ?? false, model?.accessibility.reduceTransparency ?? false)
         }
         loop = ObservationLoop { [weak self] in
@@ -34,13 +34,13 @@ final class DashboardScoreCards {
     }
 
     /// The card of the agent `id` beside the window holding `row`, its top level with the row's top.
-    func request(agentId id: String, row: NSView?) -> TaskScoreCardRequest? {
+    func request(agentId id: String, row: NSView?) -> PerfCardRequest? {
         guard let row, let window = row.window,
               let agent = model.store.snapshot.agents.first(where: { $0.id == id }) else { return nil }
         let frame = window.convertToScreen(row.convert(row.bounds, to: nil))
         let visible = (window.screen ?? NSScreen.main)?.visibleFrame ?? window.frame
-        let card = TaskScoreCardModel(agent: agent, facts: AgentRow.facts(of: agent, model: model))
-        return TaskScoreCardRequest(model: card, anchor: TaskScoreCardAnchor(row: frame, container: window.frame,
+        let card = PerfCardModel(agent: agent, facts: AgentRow.facts(of: agent, model: model))
+        return PerfCardRequest(model: card, anchor: PerfCardAnchor(row: frame, container: window.frame,
                                                                              visibleFrame: visible,
                                                                              side: .towardScreenCenter),
                                     window: window)

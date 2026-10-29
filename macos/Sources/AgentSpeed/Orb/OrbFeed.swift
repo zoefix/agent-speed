@@ -30,7 +30,7 @@ final class OrbFeed {
     var unit: OrbUnit = .tokens
     /// The money readout while `unit` is `.cost`.
     var money: LiveMoney?
-    /// The two-line readout while it is on (DESIGN 10): network speed, or 智力 and 思考 of the orb's agents.
+    /// The two-line readout while it is on (DESIGN 10): network speed, or 性能 and 思考 of the orb's agents.
     var lines: OrbLines?
 
     @ObservationIgnored private var listeners: [UUID: @MainActor (OrbFeedEvent) -> Void] = [:]

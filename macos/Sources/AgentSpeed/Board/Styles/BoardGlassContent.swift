@@ -69,7 +69,7 @@ final class BoardGlassContent: BoardContentBuilding {
     }
 
     /// Two soft lobes of heat light behind the hero (`.aurora`, drifting on 19 s and 23 s while agents work), and the
-    /// rule above the rows or, with the 智力 column, the captions line in its place.
+    /// rule above the rows or, with the 性能 column, the captions line in its place.
     private func aurora(_ tick: BoardTick, geometry: BoardGeometry) -> [BoardContentItem] {
         let palette = self.palette, side = self.side
         var items: [BoardContentItem] = []

@@ -40,8 +40,8 @@ final class StatusItemRenderer {
                 let traffic = self.model.visibleTraffic
                 _ = (traffic.machineLive, traffic.sources, settings.trafficIncludeTools)
             }
-            // The intelligence block follows every engine tick (the score, its supplying agent's state for the proof
-            // mark) and the end of the thinking hold (DESIGN 10, 12).
+            // The intelligence block follows every engine tick (the score, its supplying agent's provisional mark) and
+            // the end of the thinking hold (DESIGN 10, 12).
             if settings.barIntelligence {
                 _ = (self.model.snapshot.intelligence, self.model.snapshot.agents, self.model.barThinking.hidden)
             }

@@ -5,8 +5,8 @@ import AppKit
 /// one right edge — right-aligned at the side inset and centred in the hero band. Each row is a cached piece of the box
 /// (its slab, tab, separator and its share of the outline), so 思考 hiding at zero closes the box like a drawer: the
 /// row fades in place while the rows around it glide together. A value too wide for its row widens the box to the left
-/// at once; it narrows 6 s after the last value that needed it. 智力 counts a rise up in its row; resting and `–` are
-/// drawn in `ink-3`, an unproven score with the dotted underline (DESIGN 12).
+/// at once; it narrows 6 s after the last value that needed it. 性能 counts in full form in its row; resting and `–` are
+/// drawn in `ink-3`, a provisional score with the dotted underline (DESIGN 12).
 @MainActor
 final class BoardTimingBox {
     let size: BoardSize
@@ -16,7 +16,7 @@ final class BoardTimingBox {
     private var boxWidth = BoardCellWidth()
     private var widthKey: [String] = []
     private var score = BoardHeroScore()
-    /// The 智力 row, where the hero's score card opens (board points); nil without 智力.
+    /// The 性能 row, where the hero's score card opens (board points); nil without 性能.
     private(set) var scoreArea: CGRect?
 
     /// When a running count-up lands (the board lays itself out on every frame until then).
@@ -139,10 +139,10 @@ final class BoardTimingBox {
                 let (shown, motion) = score.update(reading, previous: memory.previousHeroScore, fresh: memory.fresh,
                                                    now: frame.now, reduceMotion: frame.reduceMotion)
                 scoreArea = CGRect(x: left, y: rowTop, width: width, height: height)
-                let number = BoardScoreNumber(key: "box.intel.n", shown: shown, font: numberFont(main: true),
+                let number = BoardScoreNumber(key: "box.intel.n", shown: shown, form: .full, font: numberFont(main: true),
                                               color: reading.form == .live ? palette.ink : palette.quiet,
                                               anchor: .right(frame.right - CGFloat(metrics.boxRightPadding)), baseline: baseline,
-                                              unproven: reading.isUnproven, highContrast: palette.highContrast)
+                                              provisional: reading.isProvisional, highContrast: palette.highContrast)
                 items += number.items(fade: motion.numberFade)
                 continue
             }

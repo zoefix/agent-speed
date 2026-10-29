@@ -1,10 +1,12 @@
+import AgentSpeedCore
 import AgentSpeedOrbModel
 import AppKit
 
-/// Glass's sub-gauge, 光環副錶 (DESIGN 2c Live metrics): a pearl arc around 智力 over the 思考 / 費用 table, right-
-/// aligned at the side inset and centred in the hero band. The arc's end and its tip move by layer animation (a mask
-/// and a turn), so a new value redraws no arc. Resting draws the value arc and tip at 35 % without glow; an unproven
-/// score draws the arc as round dots and the tip as a hollow ring (DESIGN 12 *Proof mark*).
+/// Glass's sub-gauge, 光環副錶 (DESIGN 2c Live metrics): a pearl arc on the log scale around 性能 over the 思考 / 費用
+/// table, right-aligned at the side inset and centred in the hero band, with the reference 1000 ticked at the top. The
+/// arc's end and its tip move by layer animation (a mask and a turn), so a new value redraws no arc. Resting draws the
+/// value arc and tip at 35 % without glow; a provisional score draws the arc as round dots and the tip as a hollow ring
+/// (DESIGN 12 *Provisional mark*).
 @MainActor
 final class BoardGlassGauge {
     let size: BoardSize
@@ -15,10 +17,10 @@ final class BoardGlassGauge {
     private var tableKey: [String] = []
     private var numberCell = BoardCellWidth()
     private var score = BoardHeroScore()
-    /// The dial, where the hero's score card opens (board points); nil without 智力.
+    /// The dial, where the hero's score card opens (board points); nil without 性能.
     private(set) var scoreArea: CGRect?
 
-    /// When a running count-up lands (the board lays itself out on every frame until then).
+    /// When a running count lands (the board lays itself out on every frame until then).
     func climbsUntil(after now: TimeInterval) -> TimeInterval? { score.climbsUntil(after: now) }
 
     /// The arc runs from 150° (lower left) clockwise over the top to 30° (lower right), y down.
@@ -93,7 +95,7 @@ final class BoardGlassGauge {
         let reading = tick.intelligence
         let (shown, motion) = score.update(reading, previous: gauge.memory.previousHeroScore, fresh: gauge.memory.fresh,
                                            now: gauge.now, reduceMotion: gauge.reduceMotion)
-        let resting = reading.isResting, unproven = reading.isUnproven
+        let resting = reading.isResting, provisional = reading.isProvisional
         let diameter = CGFloat(metrics.dial)
         let radius = CGFloat(metrics.arcRadius), stroke = CGFloat(metrics.arcStroke), tip = CGFloat(metrics.tipRadius)
         let margin: CGFloat = 6
@@ -101,29 +103,38 @@ final class BoardGlassGauge {
         scoreArea = CGRect(x: center - diameter / 2, y: top, width: diameter, height: CGFloat(metrics.dialHeight))
         let local = CGPoint(x: diameter / 2 + margin, y: diameter / 2 + margin)
         let theme = AnyHashable([AnyHashable(palette.dark), AnyHashable(palette.highContrast), AnyHashable(size.rawValue)])
-        let look = AnyHashable([theme, AnyHashable(resting), AnyHashable(unproven)])
+        let look = AnyHashable([theme, AnyHashable(resting), AnyHashable(provisional)])
         func arc() -> CGPath {
             let path = CGMutablePath()
             path.addArc(center: local, radius: radius, startAngle: Self.arcStart, endAngle: Self.arcStart + Self.arcSweep, clockwise: false)
             return path
         }
+        // The reference tick: at the top of the sweep (f = 0.5), from 1 pt inside the track's inner edge 0.05 D toward the
+        // centre. It belongs to the track: always drawn, never animated.
+        let tickOuter = radius - stroke / 2 - 1
+        let tickInner = tickOuter - 0.05 * diameter
         var track = BoardContentItem(key: "gauge.track", frame: box, motion: .glide(fade: 0.25), revision: theme) { context, _ in
             context.setStrokeColor(palette.dialTrack.cgColor)
             context.setLineWidth(stroke)
             context.setLineCap(.round)
             context.addPath(arc())
             context.strokePath()
+            context.setStrokeColor((palette.highContrast ? palette.ink2 : palette.ink3).cgColor)
+            context.setLineWidth(1)
+            context.move(to: CGPoint(x: local.x, y: local.y - tickOuter))
+            context.addLine(to: CGPoint(x: local.x, y: local.y - tickInner))
+            context.strokePath()
         }
         track.group = .hero
 
-        // The proof mark's dots: dash 0, gap 2 × the stroke, from the start of the sweep.
+        // The provisional mark's dots: dash 0, gap 2 × the stroke, from the start of the sweep.
         let pitch = 2 * stroke
-        let ring = ProofMark.tipRing(at: .zero, lineWidth: stroke)
+        let ring = ProvisionalMark.tipRing(at: .zero, lineWidth: stroke)
         let dots = BoardContentItem.Sweep.Dots(pitch: pitch, radius: stroke / 2, clearance: ring.rect.width / 2 + 0.5 * stroke)
         let dialBox = CGRect(x: margin, y: margin, width: diameter, height: CGFloat(metrics.dialHeight))
         var value = BoardContentItem(key: "gauge.arc", frame: box, motion: .glide(fade: 0.25), revision: look) { context, _ in
             let outline: CGPath
-            if unproven {
+            if provisional {
                 let path = CGMutablePath()
                 var length: CGFloat = 0
                 while length <= Self.arcSweep * radius + 0.01 {
@@ -166,7 +177,7 @@ final class BoardGlassGauge {
         value.group = .hero
         let fraction = BoardIntelligenceScale.arc(shown)
         value.sweep = BoardContentItem.Sweep(center: local, radius: radius, width: stroke + 10, start: Self.arcStart,
-                                             sweep: Self.arcSweep, fraction: fraction, dots: unproven ? dots : nil)
+                                             sweep: Self.arcSweep, fraction: fraction, dots: provisional ? dots : nil)
         if let fade = motion.shapeFade { value.accents.append(.crossfade(fade)) }
         var items = [track, value]
 
@@ -182,18 +193,18 @@ final class BoardGlassGauge {
                     context.setAlpha(0.35)
                     context.beginTransparencyLayer(auxiliaryInfo: nil)
                 }
-                if unproven {
-                    // The hollow ring of an unproven score, in the gradient's last color (ink with Increase Contrast).
+                if provisional {
+                    // The hollow ring of a provisional score, in the gradient's last color (ink with Increase Contrast).
                     let color = palette.highContrast ? contrastInk : palette.pearl[2]
                     if glows {
-                        let ring = ProofMark.tipRing(at: start, lineWidth: stroke)
+                        let ring = ProvisionalMark.tipRing(at: start, lineWidth: stroke)
                         BoardGlow.fill(palette.pearl[2].opacity(0.6), blur: 3, in: context) {
                             $0.setLineWidth(ring.stroke)
                             $0.setStrokeColor(CGColor(gray: 1, alpha: 1))
                             $0.strokeEllipse(in: ring.rect.insetBy(dx: ring.stroke / 2, dy: ring.stroke / 2))
                         }
                     }
-                    ProofMark.drawTipRing(in: context, at: start, lineWidth: stroke, color: color.cgColor, hole: nil)
+                    ProvisionalMark.drawTipRing(in: context, at: start, lineWidth: stroke, color: color.cgColor, hole: nil)
                 } else {
                     let fill = palette.highContrast ? contrastInk : palette.dark ? RGBColor.white : palette.pearl[2]
                     if glows {
@@ -225,9 +236,9 @@ final class BoardGlassGauge {
 
         let numberFont = BoardFont(size: CGFloat(metrics.mainNumberSize), weight: NSFont.Weight(rawValue: 0.35), tracking: -0.02,
                                    tabular: true)
-        let number = BoardScoreNumber(key: "gauge.iq.n", shown: shown, font: numberFont,
+        let number = BoardScoreNumber(key: "gauge.iq.n", shown: shown, form: .compact, font: numberFont,
                                       color: reading.form == .live ? palette.ink : palette.quiet, anchor: .center(center),
-                                      baseline: top + CGFloat(metrics.mainNumberBaseline), unproven: unproven,
+                                      baseline: top + CGFloat(metrics.mainNumberBaseline), provisional: provisional,
                                       highContrast: palette.highContrast)
         items += number.items(fade: motion.numberFade)
         return items

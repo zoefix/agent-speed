@@ -71,7 +71,7 @@ final class StatusItemAccessibility {
             guard let rx = block.rx, let tx = block.tx else { return nil }
             return l10n("a11y.orb.traffic", TrafficText.spoken(rx), TrafficText.spoken(tx))
         }
-        // The tooltip names the agent that supplies 智力 on a line of its own (DESIGN 10, `task.tooltip.top`).
+        // The tooltip names the agent that supplies 性能 on a line of its own (DESIGN 10, `perf.tooltip.top`).
         let snapshot = model.snapshot
         let topAgent = intelligence == nil ? nil
             : StatusItemIntelligence.topAgent(snapshot.intelligence.score, agents: snapshot.agents, l10n: l10n)
