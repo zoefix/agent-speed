@@ -63,6 +63,10 @@ add_library(agentspeed_core STATIC
     src/price_book.cpp
     src/price_validator.cpp
     src/pricing.cpp
+    src/report/crypto.cpp
+    src/report/discovery.cpp
+    src/report/protocol.cpp
+    src/report/usernames.cpp
     src/rfc3339.cpp
     src/tailer.cpp
     src/tasks/code_mode.cpp
