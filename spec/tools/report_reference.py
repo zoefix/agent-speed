@@ -12,7 +12,8 @@ Standard library only. It implements:
 - the client report scheduler of METRICS 11.5 as a simulator (the WebSocket transport of METRICS 11.9 is in
   report_websocket.py);
 - what a client accepts from a discovery document (REPORTING 2.2, 3.2);
-- the taskScore extension's checks and its leaderboard merge, through report_task_score.py (METRICS 11.10);
+- the perfScore extension's checks and its pooled leaderboard, through report_perf_score.py (METRICS 11.10), and
+  the checks of the retired taskScore;
 - spec/fixtures/report-vectors.json: checked by default, regenerated with --write.
 
 The ECDSA code is for tests and local servers only: it is not constant time. Apps use CryptoKit or
@@ -542,9 +543,9 @@ def report_errors(report, schema: dict, *, strict: bool = True, sections: tuple 
     if errors or not strict:
         return errors
     errors += [path + ": " + reason for path, reason in report_extension_errors(report)]
-    from report_task_score import conformance, errors as task_score_errors
+    from report_perf_score import conformance, errors as perf_score_errors, legacy_errors
 
-    errors += [path + ": " + reason for path, reason in task_score_errors(report)]
+    errors += [path + ": " + reason for path, reason in perf_score_errors(report) + legacy_errors(report)]
     errors += conformance(report)
     live, peak, delta = report["live"], report["peak"], report["delta"]
     rates = [("live.outputTokS", live["outputTokS"]), ("live.totalTokS", live["totalTokS"]),
@@ -849,10 +850,10 @@ class ReferenceService:
         if websocket is not None:
             from report_websocket import DEFAULT_STREAM
             self.websocket = {**DEFAULT_STREAM, **websocket}
-        self.task_board = None
-        if "taskScore" in self.extensions:
-            from report_task_score import Board
-            self.task_board = Board()
+        self.perf_board = None
+        if "perfScore" in self.extensions:
+            from report_perf_score import Board
+            self.perf_board = Board()
         self.extension_state = None
         if self.extensions:
             from report_profile_reference import ProfileExtensions
@@ -916,10 +917,10 @@ class ReferenceService:
             return 200, {"Cache-Control": "max-age=3600"}, self.discovery()
         if self.extension_state and method == "GET" and route_path == self.api_path + "/public/users":
             return 200, {}, {"users": self.extension_state.public_users(now)}
-        if self.task_board and method == "GET" and route_path == self.api_path + "/public/models":
+        if self.perf_board and method == "GET" and route_path == self.api_path + "/public/models":
             online = [device_id for device_id, device in self.devices.items()
                       if any(device is d for d in self.online(now))]
-            return 200, {}, self.task_board.leaderboard(online)
+            return 200, {}, self.perf_board.leaderboard(online)
         if self.extension_state and method == "GET":
             asset = self.extension_state.public_avatar(route_path)
             if asset is not None:
@@ -1106,8 +1107,8 @@ class ReferenceService:
     def _delete(self, device_id):
         if self.extension_state:
             self.extension_state.delete_device(device_id)
-        if self.task_board:
-            self.task_board.forget(device_id)
+        if self.perf_board:
+            self.perf_board.forget(device_id)
         self._release(device_id)
         device = self.devices.pop(device_id)
         self.nonces = {k: v for k, v in self.nonces.items() if k[0] != device_id}
@@ -1122,16 +1123,18 @@ class ReferenceService:
             return self._error(422, "payload_invalid", "missing schema", field="/schema")
         if document["schema"] != 1:
             return self._error(400, "version_unsupported", supported=[1])
-        from report_task_score import errors as task_score_errors, strip as strip_task_score
+        from report_perf_score import errors as perf_score_errors, legacy_errors, strip as strip_scores
 
-        if not self.task_board:  # REPORTING-EXTENSIONS 9.7: an unadvertised extension's members are ignored
-            document = strip_task_score(document)
+        # REPORTING-EXTENSIONS 9.7: an unadvertised extension's members are ignored
+        document = strip_scores(document, keep=[name for name in ("perfScore", "taskScore") if name in self.extensions])
         errors = schema_errors(document, self.schema["$defs"]["report"], self.schema)
         if errors:
             return self._error(422, "payload_invalid", errors[0], field=json_pointer(errors[0]))
         extension_errors = report_extension_errors(document, self.extensions)
-        if self.task_board:
-            extension_errors += task_score_errors(document)
+        if self.perf_board:
+            extension_errors += perf_score_errors(document)
+        if "taskScore" in self.extensions:
+            extension_errors += legacy_errors(document)
         if extension_errors:
             field, reason = extension_errors[0]
             return self._error(422, "payload_invalid", reason, field=field)
@@ -1164,8 +1167,8 @@ class ReferenceService:
         device.update(last=document, lastAt=now, online=document["activity"] != "leaving")
         if self.extension_state:
             self.extension_state.record_report(device_id, document, now)
-        if self.task_board:
-            self.task_board.record(device_id, document)
+        if self.perf_board:
+            self.perf_board.record(device_id, document)
         self.log(report_line(document))
         return 200, {}, {"status": "accepted"}
 
@@ -1188,12 +1191,12 @@ def report_line(report: dict) -> str:
         parts.append(f"+US${cost['deltaMicroUsd'] / 1e6:.6f}")
     if traffic.get("status") == "ok" and traffic.get("rxBytesPerSecond") is not None:
         parts.append(f"down {traffic['rxBytesPerSecond'] / 1000:.1f} KB/s")
-    task_score = report.get("taskScore")
-    if task_score:
-        score = "-" if task_score["score"] is None else task_score["score"]
-        completed = sum(row["completed"] for m in report.get("models", []) for row in m.get("taskStats", []))
-        parts.append(f"IQ {score} {task_score['form']}  think {task_score['thinkingTokS']:.1f} tok/s  "
-                     f"+{completed} tasks")
+    perf_score = report.get("perfScore")
+    if perf_score:
+        score = "-" if perf_score["score"] is None else perf_score["score"]
+        rows = [row for m in report.get("models", []) for row in m.get("perfStats", [])]
+        parts.append(f"perf {score} {perf_score['form']}  think {perf_score['thinkingTokS']:.1f} tok/s  "
+                     f"+{sum(r['n'] for r in rows)} responses +{sum(r['toolN'] for r in rows)} tool calls")
     return "  ".join(parts)
 
 
@@ -1396,7 +1399,7 @@ def _registration(device_id: str, username: str, pub, platform: str = "macOS", t
 
 
 def build_vectors() -> dict:
-    from report_task_score import build_vectors as build_task_score_vectors
+    from report_perf_score import build_vectors as build_perf_score_vectors
     from report_websocket import build_websocket_vectors
 
     keys = _keys()
@@ -1516,7 +1519,7 @@ def build_vectors() -> dict:
         "scheduler": SCHEDULER_CASES,
         "discovery": DISCOVERY_CASES,
         "websocket": build_websocket_vectors(keys),
-        "taskScore": build_task_score_vectors(),
+        "perfScore": build_perf_score_vectors(),
     }
 
 
@@ -1663,64 +1666,80 @@ def build_server_cases(d1, d2, d3, p1, p2, p3, examples) -> list:
                  "(policy: transfer allowed)", "config": {**base, "apiKey": "required", "apiKeys": [key_a, key_b]},
          "steps": keyed},
         {"name": "body size limit; unknown fields are ignored", "config": base, "steps": size},
-    ] + _task_score_server_cases(d1, p1, examples, base)
+    ] + _perf_score_server_cases(d1, p1, examples, base)
 
 
-def _task_score_body(examples, change=None, **changes) -> bytes:
-    report = json.loads(_report_body({"report-active": examples["report-taskscore"]}, **changes))
+def _perf_score_body(examples, change=None, name="report-perfscore", **changes) -> bytes:
+    report = json.loads(_report_body({"report-active": examples[name]}, **changes))
     if change:
         change(report)
     return compact_json(report)
 
 
-def _task_score_server_cases(d1, p1, examples, base) -> list:
-    """REPORTING-EXTENSIONS 9.7: a service that advertises taskScore checks it; one that does not ignores it."""
+def _perf_score_server_cases(d1, p1, examples, base) -> list:
+    """REPORTING-EXTENSIONS 9.7: a service that advertises perfScore checks it; one that does not ignores it; one
+    that still advertises only the retired taskScore accepts the thinking-only form."""
     reports, t = f"{API_BASE}/v1/reports", T0
     register = _step(t, d1, "POST", f"{API_BASE}/v1/devices", DEVICE_ID, _registration(DEVICE_ID, "zoe-mbp", p1),
-                     "ts0", {"status": 201, "result": "created"})
-    valid = _task_score_body(examples)
+                     "ps0", {"status": 201, "result": "created"})
+    valid = _perf_score_body(examples)
 
     def flood(report):
-        report["models"][0]["taskStats"][0].update(completed=1000)
+        report["models"][0]["perfStats"][0].update(n=100_001, durationMsSum=100_001 * 1000)
+
+    def row(report):
+        return report["models"][0]["perfStats"][0]
     advertised = [
         register,
-        _step(t, d1, "POST", reports, DEVICE_ID, valid, "ts1", {"status": 200, "result": "accepted"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, valid, "ts2", {"status": 200, "result": "duplicate"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(
-            examples, lambda r: r["models"][0]["taskStats"][0].update(stalls=1)), "ts3",
-              {"status": 409, "code": "seq_conflict"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(
-            examples, lambda r: r["taskScore"].update(form="none"), **{"run.seq": 43}), "ts4",
-              {"status": 422, "code": "payload_invalid", "field": "/taskScore/score"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(
-            examples, lambda r: r["models"][0]["taskStats"][0].update(source="codex"), **{"run.seq": 44}), "ts5",
-              {"status": 422, "code": "payload_invalid", "field": "/models/0/taskStats/0/source"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(examples, flood, **{"run.seq": 45}), "ts6",
-              {"status": 422, "code": "payload_invalid", "field": "/models"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(
-            examples, lambda r: r["models"][0]["taskStats"][0]["scoreBins"].pop(), **{"run.seq": 46}), "ts7",
-              {"status": 422, "code": "payload_invalid", "field": "/models/0/taskStats/0/scoreBins"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _report_body(examples, **{"run.seq": 47}), "ts8",
+        _step(t, d1, "POST", reports, DEVICE_ID, valid, "ps1", {"status": 200, "result": "accepted"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, valid, "ps2", {"status": 200, "result": "duplicate"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(
+            examples, lambda r: row(r).update(toolFailed=1)), "ps3", {"status": 409, "code": "seq_conflict"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(
+            examples, lambda r: r["perfScore"].update(form="none"), **{"run.seq": 43}), "ps4",
+              {"status": 422, "code": "payload_invalid", "field": "/perfScore/score"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(
+            examples, lambda r: row(r).update(source="codex"), **{"run.seq": 44}), "ps5",
+              {"status": 422, "code": "payload_invalid", "field": "/models/0/perfStats/0/source"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(examples, flood, **{"run.seq": 45}), "ps6",
+              {"status": 422, "code": "payload_invalid", "field": "/models/0/perfStats/0/n"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(
+            examples, lambda r: row(r).update(cacheCached=900_000), **{"run.seq": 46}), "ps7",
+              {"status": 422, "code": "payload_invalid", "field": "/models/0/perfStats/0/cacheCached"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _report_body(examples, **{"run.seq": 47}), "ps8",
               {"status": 200, "result": "accepted"}),
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(examples, **{"run.seq": 43}), "ts9",
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(examples, **{"run.seq": 43}), "ps9",
               {"status": 200, "result": "accepted"}),
     ]
 
     def garbage(report):
-        report["taskScore"] = {"score": 500, "form": "great"}
-        report["models"][0]["taskStats"] = [{"source": "codex", "completed": -1}]
+        report["perfScore"] = {"score": -5, "form": "great"}
+        report["models"][0]["perfStats"] = [{"source": "codex", "n": -1}]
     ignored = [
         register,
-        _step(t, d1, "POST", reports, DEVICE_ID, _task_score_body(examples, garbage), "tsi1",
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(examples, garbage), "psi1",
+              {"status": 200, "result": "accepted"}),
+    ]
+    legacy = [
+        register,
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(examples, name="report-taskscore"), "pl1",
+              {"status": 200, "result": "accepted"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(
+            examples, lambda r: r["taskScore"].update(score=0), name="report-taskscore", **{"run.seq": 43}), "pl2",
+              {"status": 422, "code": "payload_invalid", "field": "/taskScore/score"}),
+        _step(t, d1, "POST", reports, DEVICE_ID, _perf_score_body(examples, garbage, **{"run.seq": 44}), "pl3",
               {"status": 200, "result": "accepted"}),
     ]
     return [
-        {"name": "taskScore advertised: valid bodies are accepted, a retry is a duplicate, a changed body is a "
-                 "seq_conflict, broken task fields are 422 payload_invalid and use up no sequence number, a body "
-                 "without the extension is accepted", "config": {**base, "extensions": {"taskScore": 1}},
+        {"name": "perfScore advertised: valid bodies are accepted, a retry is a duplicate, a changed body is a "
+                 "seq_conflict, broken score fields are 422 payload_invalid and use up no sequence number, a body "
+                 "without the extension is accepted", "config": {**base, "extensions": {"perfScore": 1}},
          "steps": advertised},
-        {"name": "taskScore not advertised: its members are ignored, whatever they hold", "config": base,
+        {"name": "perfScore not advertised: its members are ignored, whatever they hold", "config": base,
          "steps": ignored},
+        {"name": "only the retired taskScore advertised: the thinking-only form is accepted, its old rules still "
+                 "apply, perfScore members are ignored", "config": {**base, "extensions": {"taskScore": 1}},
+         "steps": legacy},
     ]
 
 
@@ -2089,9 +2108,9 @@ def check_vectors(vectors: dict, verbose: bool) -> list[str]:
     from report_websocket import check_websocket_vectors
 
     failures += check_websocket_vectors(vectors["websocket"], vectors["keys"])
-    from report_task_score import check_vectors as check_task_score_vectors
+    from report_perf_score import check_vectors as check_perf_score_vectors
 
-    failures += check_task_score_vectors(vectors["taskScore"])
+    failures += check_perf_score_vectors(vectors["perfScore"])
     return failures
 
 
@@ -2234,19 +2253,20 @@ def run_client(args) -> int:
         return 1
     username = payload.get("username", username)
     run_id = str(uuid.uuid4())
-    from report_task_score import active as task_score_active
+    from report_perf_score import extension_sent
 
-    with_task_score = task_score_active(discovery)
-    template = load_examples()["report-taskscore" if with_task_score else "report-active"]
+    sent = extension_sent(discovery)
+    template = load_examples()[{"perfScore": "report-perfscore", "taskScore": "report-taskscore"}.get(
+        sent, "report-active")]
     accepted = set(discovery["sections"]) & set(DEFAULT_SECTIONS)
     for seq in range(1, args.reports + 1):
         report = copy.deepcopy(template)
         for section in SECTIONS:
             if section not in accepted:
                 report.pop(section, None)
-        if with_task_score and seq > 1:  # task statistics are increments: the example's tasks are sent once
+        if sent == "perfScore" and seq > 1:  # statistics are increments: the example's rows are sent once
             for model in report["models"]:
-                model["taskStats"] = []
+                model["perfStats"] = []
         report.update(deviceId=device_id, username=username, run={"id": run_id, "seq": seq},
                       sentAt=format_instant(int(time.time() * 1000)))
         report["activity"] = "leaving" if seq == args.reports and args.leave else "active"
@@ -2294,13 +2314,13 @@ def main() -> int:
     if args.command == "client":
         return run_client(args)
     if args.write:
-        from report_task_score import hand_check
+        from report_perf_score import hand_check
 
         problems = hand_check()
         if problems:
             for problem in problems:
                 print(f"FAIL {problem}", file=sys.stderr)
-            raise SystemExit("hand-written taskScore expectations differ from the reference; nothing written")
+            raise SystemExit("hand-written perfScore expectations differ from the reference; nothing written")
         vectors = build_vectors()
         VECTORS_PATH.write_text(json.dumps(vectors, ensure_ascii=False, indent=1) + "\n", encoding="utf-8")
         print(f"wrote {VECTORS_PATH.relative_to(SPEC.parent)}")
@@ -2313,10 +2333,10 @@ def main() -> int:
         print(f"FAIL {failure}", file=sys.stderr)
     counts = (len(vectors["verify"]), len(vectors["server"]), len(vectors["scheduler"]), len(vectors["discovery"]),
               len(vectors["websocket"]["scheduler"]), len(vectors["websocket"]["messages"]),
-              sum(len(items) for key, items in vectors["taskScore"].items() if key != "_comment"))
+              sum(len(items) for key, items in vectors["perfScore"].items() if key not in ("_comment", "edges")))
     print(f"{'FAILED' if failures else 'ok'}: {len(failures)} failures; {counts[0]} signature cases, "
           f"{counts[1]} server cases, {counts[2]} scheduler cases, {counts[3]} discovery cases, "
-          f"{counts[4]} WebSocket scheduler and {counts[5]} message cases, {counts[6]} taskScore cases; "
+          f"{counts[4]} WebSocket scheduler and {counts[5]} message cases, {counts[6]} perfScore cases; "
           f"{cross_check(vectors)}")
     return 1 if failures else 0
 

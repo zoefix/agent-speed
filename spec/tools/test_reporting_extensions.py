@@ -12,7 +12,7 @@ import zlib
 
 import execution_modes_reference as modes
 import report_reference as ref
-import report_task_score as task_score
+import report_perf_score as perf_score
 from report_profile_reference import PNG_MAGIC, sanitize_avatar
 
 
@@ -269,23 +269,23 @@ class ProfileTests(unittest.TestCase):
         self.assertEqual(ref.report_errors(document, self.service.schema), [])
 
 
-class TaskScoreTests(unittest.TestCase):
-    """REPORTING-EXTENSIONS 9 / METRICS 11.10: the taskScore extension on the reference service."""
+class PerfScoreTests(unittest.TestCase):
+    """REPORTING-EXTENSIONS 9 / METRICS 11.10: the perfScore extension on the reference service."""
 
     def setUp(self):
         self.now = 1792656931.0
         self.ids = ["11111111-1111-4111-8111-111111111111", "22222222-2222-4222-8222-222222222222"]
-        self.keys = [ref.test_private_key("task-score-device-" + str(i)) for i in range(2)]
-        self.names = ["TaskMac", "TaskWin"]
+        self.keys = [ref.test_private_key("perf-score-device-" + str(i)) for i in range(2)]
+        self.names = ["PerfMac", "PerfWin"]
 
-    def service(self, advertised=True):
+    def service(self, extensions=("perfScore",)):
         service = ref.ReferenceService(authority="127.0.0.1:18789",
-                                       extensions={"taskScore": 1} if advertised else None)
+                                       extensions={name: 1 for name in extensions} or None)
         for i in range(2):
             self.assertEqual(self.call(service, i, "POST", "/v1/devices", {
                 "schema": 1, "deviceId": self.ids[i], "username": self.names[i],
                 "publicKey": ref.jwk(ref.public_key(self.keys[i])),
-                "client": {"app": "AgentSpeed", "version": "1.5.0", "platform": "macOS", "osMajor": 27}})[0], 201)
+                "client": {"app": "AgentSpeed", "version": "1.6.0", "platform": "macOS", "osMajor": 27}})[0], 201)
         return service
 
     def call(self, service, index, method, path, document=None):
@@ -295,8 +295,8 @@ class TaskScoreTests(unittest.TestCase):
                                      body, timestamp=int(self.now))
         return service.handle(method, path, headers, body, now=self.now)
 
-    def report(self, index, seq, run="c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f"):
-        document = copy.deepcopy(ref.load_examples()["report-taskscore"])
+    def report(self, index, seq, run="c3d4e5f6-a7b8-4c9d-8e0f-1a2b3c4d5e6f", example="report-perfscore"):
+        document = copy.deepcopy(ref.load_examples()[example])
         document.update(deviceId=self.ids[index], username=self.names[index], run={"id": run, "seq": seq},
                         sentAt=ref.format_instant(int((self.now + 5) * 1000)))
         return document
@@ -308,61 +308,73 @@ class TaskScoreTests(unittest.TestCase):
 
     def test_stored_vectors_pass(self):
         vectors = json.loads(ref.VECTORS_PATH.read_text(encoding="utf-8"))
-        self.assertEqual(task_score.check_vectors(vectors["taskScore"]), [])
-        self.assertEqual(task_score.hand_check(), [])
+        self.assertEqual(perf_score.check_vectors(vectors["perfScore"]), [])
+        self.assertEqual(perf_score.hand_check(), [])
 
-    def test_increments_count_once_and_live_values_follow_the_latest_report(self):
+    def test_rows_count_once_pool_across_devices_and_live_values_follow_the_latest_report(self):
         service = self.service()
         first = self.report(0, 1)
         self.assertEqual(self.call(service, 0, "POST", "/v1/reports", first)[2]["status"], "accepted")
         self.assertEqual(self.call(service, 0, "POST", "/v1/reports", first)[2]["status"], "duplicate")
         rows, payload = self.models(service)
-        self.assertEqual(rows["claude-opus-5-5"]["stats"]["completed"], 2)
-        self.assertEqual(rows["claude-opus-5-5"]["stats"]["scoreSum"], 141)
-        self.assertEqual(payload["live"], {"score": 92, "form": "live", "thinkingTokS": 38.6})
-        second = self.report(0, 2)
-        for model in second["models"]:
-            model["taskStats"] = []
-        second["taskScore"] = {"score": 92, "form": "resting", "thinkingTokS": 0.0}
-        self.assertEqual(self.call(service, 0, "POST", "/v1/reports", second)[2]["status"], "accepted")
+        self.assertEqual((rows["claude-opus-5-5"]["n"], rows["claude-opus-5-5"]["tools"]), (3, 4))
+        self.assertIsNone(rows["claude-opus-5-5"]["score"])          # 3 responses: below the 20 a score needs
+        self.assertEqual(payload["live"], {"score": 1286, "form": "live", "thinkingTokS": 38.6})
+        for seq in range(2, 8):
+            self.assertEqual(self.call(service, 0, "POST", "/v1/reports", self.report(0, seq))[2]["status"],
+                             "accepted")
         other = self.report(1, 1, run="d4e5f6a7-b8c9-4d0e-8f1a-2b3c4d5e6f70")
         self.assertEqual(self.call(service, 1, "POST", "/v1/reports", other)[2]["status"], "accepted")
         rows, payload = self.models(service)
-        self.assertEqual(rows["claude-opus-5-5"]["stats"]["completed"], 4)
-        self.assertEqual(rows["claude-opus-5-5"]["successRate"], 0.5)
-        self.assertEqual(rows["claude-sonnet-5-5"]["stats"]["fixFailures"], 8)
+        opus = rows["claude-opus-5-5"]
+        self.assertEqual((opus["n"], opus["tools"], opus["ranked"]), (24, 32, True))
+        # 8 rows of 3 responses, 1400 tokens in 3.3 s each: T = 11 200 / 26.4 s.
+        self.assertAlmostEqual(opus["components"]["T"]["measure"], 11200 / 26.4)
+        self.assertAlmostEqual(opus["score"], perf_score.pooled([row for _ in range(8) for row in
+                                                                 first["models"][0]["perfStats"]])["score"])
         self.assertEqual(payload["live"]["form"], "live")
-        self.assertEqual(payload["live"]["thinkingTokS"], 38.6)
         self.assertEqual(self.call(service, 1, "DELETE", "/v1/devices/" + self.ids[1])[0], 200)
         rows, _ = self.models(service)
-        self.assertEqual(rows["claude-opus-5-5"]["stats"]["completed"], 2)
+        self.assertEqual(rows["claude-opus-5-5"]["n"], 21)
 
-    def test_broken_task_fields_are_rejected_without_using_the_sequence(self):
+    def test_broken_rows_are_rejected_without_using_the_sequence(self):
         service = self.service()
         document = self.report(0, 7)
-        document["models"][0]["taskStats"][0]["successes"] = 3
+        document["models"][0]["perfStats"][0]["toolFailed"] = 5
         status, _, payload = self.call(service, 0, "POST", "/v1/reports", document)
         self.assertEqual((status, payload["error"]["code"], payload["error"]["field"]),
-                         (422, "payload_invalid", "/models/0/taskStats/0/successes"))
+                         (422, "payload_invalid", "/models/0/perfStats/0/toolFailed"))
         self.assertNotIn((self.ids[0], document["run"]["id"], 7), service.seqs)
-        document["models"][0]["taskStats"][0]["successes"] = 1
+        document["models"][0]["perfStats"][0]["toolFailed"] = 0
         self.assertEqual(self.call(service, 0, "POST", "/v1/reports", document)[2]["status"], "accepted")
 
     def test_unadvertised_service_ignores_the_members(self):
-        service = self.service(advertised=False)
+        service = self.service(extensions=())
         document = self.report(0, 1)
-        document["taskScore"] = {"score": "high"}
-        document["models"][0]["taskStats"] = "many"
+        document["perfScore"] = {"score": "high"}
+        document["models"][0]["perfStats"] = "many"
         self.assertEqual(self.call(service, 0, "POST", "/v1/reports", document)[2]["status"], "accepted")
         self.assertEqual(service.handle("GET", "/public/models", {}, b"", now=self.now)[0], 404)
-        self.assertEqual(modes.supported(service.discovery().get("extensions"), "taskScore"), False)
+        self.assertEqual(modes.supported(service.discovery().get("extensions"), "perfScore"), False)
+
+    def test_legacy_task_score_service_accepts_the_thinking_only_form(self):
+        service = self.service(extensions=("taskScore",))
+        legacy = self.report(0, 1, example="report-taskscore")
+        self.assertEqual(legacy["taskScore"]["score"], None)
+        self.assertEqual(self.call(service, 0, "POST", "/v1/reports", legacy)[2]["status"], "accepted")
+        mixed = self.report(0, 2)
+        mixed["perfScore"] = {"score": "ignored"}
+        self.assertEqual(self.call(service, 0, "POST", "/v1/reports", mixed)[2]["status"], "accepted")
 
     def test_discovery_advertises_exactly_the_integer_one(self):
-        self.assertEqual(self.service().discovery()["extensions"], {"taskScore": 1})
+        self.assertEqual(self.service().discovery()["extensions"], {"perfScore": 1})
         parsed = ref.parse_discovery(self.service().discovery("http"),
                                      "http://127.0.0.1:18789/.well-known/agent-speed-report")
-        self.assertTrue(task_score.active(parsed))
-        self.assertFalse(task_score.active(parsed, models_switch=False))
+        self.assertTrue(perf_score.active(parsed))
+        self.assertFalse(perf_score.active(parsed, models_switch=False))
+        both = ref.parse_discovery(self.service(("perfScore", "taskScore")).discovery("http"),
+                                   "http://127.0.0.1:18789/.well-known/agent-speed-report")
+        self.assertEqual(perf_score.extension_sent(both), "perfScore")
 
     def test_public_models_do_not_expose_device_ids(self):
         service = self.service()

@@ -210,8 +210,9 @@ METRICS 11; Settings, consent and storage of keys are DESIGN 11. Differences fro
 ### Optional profile and report extensions
 
 `spec/REPORTING-EXTENSIONS.md` defines independently advertised model/Harness counts, execution-mode metadata, the
-task score (METRICS 11.10), avatars and approved one-time device pairing. Model breakdowns and the task score require
-the existing models sharing switch and add no request: they ride in the periodic reports.
+performance score with its statistics (METRICS 11.10), avatars and approved one-time device pairing. Model breakdowns
+and the performance score require the existing models sharing switch and add no request: they ride in the periodic
+reports.
 Profile requests use the same confirmed API host, signature, redirect policy and master network switch; they
 are explicit actions available for an already registered device even when periodic reporting is paused.
 Opening the profile surface may fetch the signed profile and current avatar. Pairing polls only while its
