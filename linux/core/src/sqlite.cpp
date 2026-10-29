@@ -1,6 +1,7 @@
 #include "agentspeed/sqlite.hpp"
 
 #include <sqlite3.h>
+#include <sys/stat.h>
 
 #include <cstdio>
 #include <cstring>
@@ -52,6 +53,10 @@ void Statement::reset() {
     sqlite3_reset(stmt_);
     sqlite3_clear_bindings(stmt_);
 }
+
+int Statement::columnType(int column) const { return sqlite3_column_type(stmt_, column); }
+
+double Statement::getDouble(int column) const { return sqlite3_column_double(stmt_, column); }
 
 bool Statement::isNull(int column) const { return sqlite3_column_type(stmt_, column) == SQLITE_NULL; }
 
@@ -137,6 +142,20 @@ bool Connection::hasTables(std::initializer_list<std::string_view> names) const 
     }
     sql += ")";
     return scalarInt64(sql) == static_cast<std::int64_t>(names.size());
+}
+
+std::optional<DatabaseStamp> stampOf(const std::string& databasePath) {
+    struct stat db {};
+    if (stat(databasePath.c_str(), &db) != 0) return std::nullopt;
+    DatabaseStamp stamp;
+    stamp.databaseLength = static_cast<std::int64_t>(db.st_size);
+    stamp.databaseWriteNs = static_cast<std::int64_t>(db.st_mtim.tv_sec) * 1'000'000'000 + db.st_mtim.tv_nsec;
+    struct stat wal {};
+    if (stat((databasePath + "-wal").c_str(), &wal) == 0) {
+        stamp.walLength = static_cast<std::int64_t>(wal.st_size);
+        stamp.walWriteNs = static_cast<std::int64_t>(wal.st_mtim.tv_sec) * 1'000'000'000 + wal.st_mtim.tv_nsec;
+    }
+    return stamp;
 }
 
 bool isClosedWalDatabase(const std::string& path) {

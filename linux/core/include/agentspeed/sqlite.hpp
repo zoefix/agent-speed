@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <cstdint>
 #include <memory>
 #include <optional>
@@ -48,6 +49,9 @@ public:
     std::int64_t getInt64(int column) const;
     std::optional<std::int64_t> getNullableInt64(int column) const;
     bool isNull(int column) const;
+    // SQLITE_INTEGER 1, SQLITE_FLOAT 2, SQLITE_TEXT 3, SQLITE_BLOB 4, SQLITE_NULL 5.
+    int columnType(int column) const;
+    double getDouble(int column) const;
 
 private:
     sqlite3* db_;
@@ -73,6 +77,16 @@ private:
     sqlite3* db_;
     std::string path_;
 };
+
+// A database and its `-wal`: any change of either file changes the stamp.
+struct DatabaseStamp {
+    std::int64_t databaseLength = 0, databaseWriteNs = 0, walLength = 0, walWriteNs = 0;
+    std::int64_t length() const { return databaseLength + walLength; }
+    // The newer of the two: the time used for the reading order.
+    std::int64_t lastWriteNs() const { return std::max(databaseWriteNs, walWriteNs); }
+    bool operator==(const DatabaseStamp&) const = default;
+};
+std::optional<DatabaseStamp> stampOf(const std::string& databasePath);
 
 // The header says WAL (bytes 18 and 19 are both 2) and no `-wal` file exists: the writer closed it cleanly, and a
 // `mode=ro` open could create `-wal` and `-shm` files next to it.

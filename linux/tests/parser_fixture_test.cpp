@@ -12,6 +12,7 @@
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/gemini_parser.hpp"
 #include "agentspeed/omp_parser.hpp"
+#include "agentspeed/openclaw.hpp"
 #include "agentspeed/pi_parser.hpp"
 #include "agentspeed/workbuddy_parser.hpp"
 #include "agentspeed/opencode.hpp"
@@ -69,7 +70,10 @@ void expectResponse(const ParsedResponse& got, const json::Value& r) {
 }
 
 std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const std::string& agentId, Deduper& deduper) {
-    if (relative.rfind("codex/", 0) == 0) return std::make_unique<CodexParser>(agentId, deduper);
+    // OpenClaw's agent-scoped Codex homes are Codex roots (METRICS 2).
+    if (relative.rfind("codex/", 0) == 0 || relative.find("/codex-home/sessions/") != std::string::npos) {
+        return std::make_unique<CodexParser>(agentId, deduper);
+    }
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
     if (relative.rfind("dsh/", 0) == 0) return std::make_unique<DshParser>(agentId, deduper);
     if (relative.rfind("gemini/", 0) == 0) return std::make_unique<GeminiParser>(agentId, deduper);
@@ -164,7 +168,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 42);
+    EXPECT_EQ(checked, 43);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
@@ -267,4 +271,56 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
     for (const auto& [id, parent] : parent_links::resolve(databaseLinks)) gotDatabaseParents[id] = parent;
     EXPECT_EQ(gotDatabaseParents, wantDatabaseParents);
     EXPECT_EQ(fixtures::listFiles(antigravityDir), antigravityBefore);
+
+    // Then the OpenClaw agent databases, one agent per transcript window; reading must not create any file.
+    const auto openclawDir = fixtures::fixtureDir() / "openclaw";
+    const auto openclawBefore = fixtures::listFiles(openclawDir);
+    std::map<std::string, std::vector<json::Value>> windowTraces;
+    for (const auto& t : expected.root()["openclaw"]["traces"].elements()) {
+        windowTraces[*t["database"].string() + "#" + *t["window"].string()].push_back(t);
+    }
+    const auto prefix = fixtures::fixtureDir().string() + "/";
+    for (const auto& entry : expected.root()["openclaw"]["dbOrder"].elements()) {
+        const std::string relative = *entry.string();
+        SCOPED_TRACE(relative);
+        const auto want = expected.root()["openclaw"]["databases"][relative];
+        std::map<std::string, Collector> sinks;
+        auto parsers = openclaw::readAll(
+            prefix + relative, deduper, [&](openclaw::Parser& p) -> ResponseSink& { return sinks[p.agentId()]; },
+            [&](openclaw::Parser& p, std::int64_t seq) {
+                for (const auto& t : windowTraces[p.agentId().substr(prefix.size())]) {
+                    if (*fixtures::optInt(t["afterSeq"]) != seq) continue;
+                    SCOPED_TRACE(p.agentId() + " after seq " + std::to_string(seq));
+                    EXPECT_EQ(phaseId(p.phase()), *t["phase"].string());
+                    EXPECT_EQ(p.inFlightStartMs(), fixtures::optInt(t["inFlightStartMs"]));
+                }
+            });
+        if (want["unsupported"].isTrue()) {
+            EXPECT_FALSE(parsers.has_value());
+            continue;
+        }
+        ASSERT_TRUE(parsers.has_value());
+        ASSERT_EQ(parsers->size(), want.members().size());
+        for (const auto& parser : *parsers) {
+            const std::string id = parser->agentId().substr(prefix.size());
+            SCOPED_TRACE(id);
+            const auto agent = want[id];
+            ASSERT_TRUE(agent.valid());
+            EXPECT_EQ(sourceId(parser->source()), *agent["source"].string());
+            EXPECT_EQ(parser->project(), fixtures::optString(agent["project"]));
+            EXPECT_EQ(parser->model(), fixtures::optString(agent["model"]));
+            EXPECT_EQ(parser->isSubagent(), agent["isSubagent"].isTrue());
+            const auto parent = parser->parentId() ? std::optional<std::string>(parser->parentId()->substr(prefix.size())) : std::nullopt;
+            EXPECT_EQ(parent, fixtures::optString(agent["parentId"]));
+            EXPECT_EQ(phaseId(parser->phase()), *agent["phase"].string());
+            EXPECT_EQ(parser->inFlightStartMs(), fixtures::optInt(agent["inFlightStartMs"]));
+            EXPECT_EQ(parser->lastLineMs(), fixtures::optInt(agent["lastLineMs"]));
+            EXPECT_EQ(parser->malformedLines(), *fixtures::optInt(agent["malformedLines"]));
+            auto& sink = sinks[parser->agentId()];
+            const auto responses = agent["responses"].elements();
+            ASSERT_EQ(sink.order.size(), responses.size());
+            for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
+        }
+    }
+    EXPECT_EQ(fixtures::listFiles(openclawDir), openclawBefore);
 }
