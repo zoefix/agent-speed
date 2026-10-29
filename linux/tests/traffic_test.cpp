@@ -3,6 +3,9 @@
 #include <ctime>
 
 #include "agentspeed/traffic.hpp"
+#include "agentspeed/traffic_linux.hpp"
+
+#include <unistd.h>
 #include "fixture_support.hpp"
 
 using namespace agentspeed;
@@ -205,4 +208,21 @@ TEST(Traffic, MatchesTheReferenceCases) {
             }
         }
     }
+}
+
+// The Linux samplers read this machine: they must run without privileges and give sane values.
+TEST(TrafficSampler, ReadsThisMachine) {
+    const auto interfaces = sampler::machineCounters();
+    for (const auto& [name, value] : interfaces) EXPECT_FALSE(name.empty());
+    sampler::ProcessReader reader;
+    const auto processes = reader.read();
+    ASSERT_FALSE(processes.empty());
+    const auto self = std::find_if(processes.begin(), processes.end(), [](const Process& p) { return p.pid == ::getpid(); });
+    ASSERT_NE(self, processes.end());
+    EXPECT_FALSE(self->exe.empty());
+    bool ok = false;
+    sampler::tcpSockets(ok);
+    sampler::SocketCounters counters("test");
+    const auto first = counters.sample({{self->pid, self->start}});
+    EXPECT_EQ(first.stream, "test");
 }
