@@ -8,10 +8,12 @@ add_library(agentspeed_core STATIC
     src/codex_parser.cpp
     src/dedupe.cpp
     src/demo.cpp
+    src/discovery.cpp
     src/droid.cpp
     src/dsh_parser.cpp
     src/engine.cpp
     src/file_reader.cpp
+    src/fs_util.cpp
     src/gemini_parser.cpp
     src/grok_parser.cpp
     src/harness.cpp
@@ -19,6 +21,7 @@ add_library(agentspeed_core STATIC
     src/json.cpp
     src/kimi_parser.cpp
     src/line_splitter.cpp
+    src/locations.cpp
     src/model.cpp
     src/modes.cpp
     src/monitor.cpp
