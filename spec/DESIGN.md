@@ -3829,8 +3829,8 @@ the engine tick with the row; its number and scale follow *Motion*; component va
      the card only: they never color anything and never drive heat, tiers, titles, peaks or celebrations.
    - Provisional: `perf.provisional.hint` with n and 10 under the summary (11 pt, tertiary).
    - None: the summary is replaced by `perf.status.none` with n and 3, and the component groups are left out.
-3. **Components**, two groups 14 apart, each under its title (11 pt semibold, tertiary; tracking 0.06 em; Latin
-   upper-case): `perf.group.speed` — throughput, latency, thinking; `perf.group.efficiency` — tool pace, tool time,
+3. **Components**, two groups 14 apart, each under its title (11 pt semibold, tertiary, tracking 0.06 em; Latin
+   upper-case at 10.5 pt): `perf.group.speed` — throughput, latency, thinking; `perf.group.efficiency` — tool pace, tool time,
    tool success, cache hits (METRICS 6.9 components T, L, R and N, U, S, H). Rows 9 apart, each a four-column line and
    a meaning:
    - Line 1: the label (`perf.comp.throughput`, `.latency`, `.reasoning`, `.pace`, `.toolTime`, `.toolSuccess`,
@@ -3849,7 +3849,7 @@ the engine tick with the row; its number and scale follow *Motion*; component va
      `.desc`; tool pace appends ` · ` and `perf.comp.pace.count` with `|C|`.
    - **Absent** components (METRICS 6.9 presence): the value column shows `perf.reason.notRecorded` (the source
      never records it) or `perf.reason.fewSamples` (too few values in the window) in 11.5 pt tertiary, the meter is
-     a dotted track without fill (round dots of its height on a 2.2 × pitch, in the track color doubled), the
+     a dotted track without fill (round dots of its height on a 2.2 × pitch, the label color at 18 %), the
      sub-score is a tertiary `–`, and the meaning line says why instead: `perf.reason.notRecorded.hint` with the
      source's name or `perf.reason.fewSamples.hint` with 3. Never a fake `0`.
 4. **行為** (`perf.signals.title`), when it has a line — METRICS 6.10 work signals, unchanged: `work.looping` with
@@ -3936,11 +3936,11 @@ Then the chart, as wide as the section and 150 tall (medium 132, narrow 120):
   left (9.5 pt, tertiary, tabular, full form); the 1000 line in the label color at 35 %, 1 pt.
 - The series: the selected row's pooled score of each day with at least 20 timed requests (METRICS 6.11; fewer → a
   gap that breaks the line), a 2 pt line in the row's source color with round joins, over an area from the line down
-  to the bottom in the source color from 14 % to 0; a 4.5 pt dot on each day (a 1.5 pt ring in the chart's
+  to the bottom in the source color from 12 % to 0; a 4.5 pt dot on each day (a 1.5 pt ring in the chart's
   background), the latest day 6 pt. A day alone between gaps is its dot only.
 - The usual line: the row's baseline (METRICS 6.11, the 14 days before today) as a 1 pt dashed line (4 · 3) in the
-  source color at 60 %, labelled `history.perf.usual.line` at its right end (11 pt, the source color, on the card's
-  background); none without a baseline.
+  source color at 60 %, named by the legend only (a label on the line would sit on the latest days' dots); none
+  without a baseline.
 - Hover (or the keyboard arrows while the chart has focus) shows a crosshair and a tooltip card: the date with
   weekday, the score (full form), `history.perf.requests` and the day's tier word; a gap day shows
   `history.perf.sample.hint` with its count and 20.
@@ -3961,8 +3961,9 @@ copy row as text). Columns, wide layout:
 - Default sort: score descending (rows without a score after, by timed requests descending), then the model id; the
   window remembers the sort. A row without a score shows its values in secondary.
 - **Selection** picks the chart's series: click a row (or move with the arrow keys); the selected row has the system's
-  unemphasized selection fill. Default: the first row of the current sort; the choice is kept per `(source, model)`
-  while the window is open and falls back to the first row when it leaves the range.
+  unemphasized selection fill. Default: the row with the most timed requests (the fullest trend; ties in the table's
+  order); the choice is kept per `(source, model)` while the window is open and falls back to the default when it
+  leaves the range.
 
 **Widths** (the section's content width): **wide** from 860 — as above. **Medium** 600–860 (the window's minimum 720
 lands here): the seven component columns become one `history.perf.column.parts` column (64): seven bars, one per
