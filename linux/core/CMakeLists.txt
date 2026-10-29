@@ -27,6 +27,7 @@ add_library(agentspeed_core STATIC
     "${AGENTSPEED_PRICES_CPP}"
     "${AGENTSPEED_CURRENCIES_CPP}"
     src/antigravity.cpp
+    src/board.cpp
     src/claude_parser.cpp
     src/codex_parser.cpp
     src/dedupe.cpp
