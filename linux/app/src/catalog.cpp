@@ -2,6 +2,7 @@
 
 #include <QCollator>
 #include <QCoreApplication>
+#include <QDateTime>
 #include <QDesktopServices>
 #include <QFileDialog>
 #include <QLocale>
@@ -72,7 +73,16 @@ QString Catalog::currencyLabel(const QString& code) const {
     return code + QStringLiteral(" · ") + strings_.t(QStringLiteral("currency.") + code);
 }
 
+void Catalog::setAcceptedRates(const QString& provider, std::int64_t dateMs, std::map<std::string, agentspeed::money::Decimal> rates) {
+    provider_ = provider;
+    ratesDateMs_ = dateMs;
+    rates_ = std::move(rates);
+    ++revision_;
+    emit changed();
+}
+
 QString Catalog::rateFor(const QString& code) const {
+    if (const auto it = rates_.find(code.toStdString()); it != rates_.end()) return QString::fromStdString(it->second.text());
     const auto& rates = agentspeed::money::CurrencyTable::bundled().fallbackRates().rates;
     const auto it = rates.find(code.toStdString());
     return it == rates.end() ? QStringLiteral("1") : QString::fromStdString(it->second.text());
@@ -81,6 +91,16 @@ QString Catalog::rateFor(const QString& code) const {
 QString Catalog::rateStatus(const QString& code) const {
     if (code == QStringLiteral("USD")) return {};
     const auto& table = agentspeed::money::CurrencyTable::bundled();
+    if (const auto it = rates_.find(code.toStdString()); it != rates_.end()) {
+        // `US$1 = NT$32.55 · 2026/10/22 · open.er-api.com`
+        const auto language = strings_.language().toStdString();
+        const auto& usd = table.currencyOrUsd("USD");
+        const auto& target = table.currencyOrUsd(code.toStdString());
+        const auto date = QDateTime::fromMSecsSinceEpoch(ratesDateMs_).toUTC().toString(QStringLiteral("yyyy/MM/dd"));
+        return fill(strings_.t(QStringLiteral("rates.status")),
+                    {QString::fromStdString(usd.symbolFor(language)) + QStringLiteral("1"),
+                     QString::fromStdString(target.symbolFor(language) + agentspeed::money::significant(it->second)), date, provider_});
+    }
     return fill(strings_.t(QStringLiteral("rates.fallback")), {displayDate(table.fallbackRates().date)});
 }
 

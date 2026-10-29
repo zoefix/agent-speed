@@ -57,6 +57,11 @@ QPixmap renderIcon(int size, const QString& text, int band) {
 
 TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     : QObject(parent), tray_(new QSystemTrayIcon(this)), menu_(new QMenu()), strings_(strings) {
+    update_ = menu_->addAction(QString());
+    update_->setVisible(false);
+    connect(update_, &QAction::triggered, this, &TrayIcon::updateRequested);
+    updateSeparator_ = menu_->addSeparator();
+    updateSeparator_->setVisible(false);
     open_ = menu_->addAction(QString());
     connect(open_, &QAction::triggered, this, &TrayIcon::toggleDashboard);
     orb_ = menu_->addAction(QString());
@@ -77,6 +82,9 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     connect(quit_, &QAction::triggered, this, &TrayIcon::quitRequested);
     retranslate();
     tray_->setContextMenu(menu_);
+    connect(tray_, &QSystemTrayIcon::messageClicked, this, [this] {
+        if (!updateVersion_.isEmpty()) emit updateRequested();
+    });
     connect(tray_, &QSystemTrayIcon::activated, this, [this](QSystemTrayIcon::ActivationReason reason) {
         if (reason == QSystemTrayIcon::Trigger || reason == QSystemTrayIcon::DoubleClick) emit toggleDashboard();
     });
@@ -96,6 +104,18 @@ void TrayIcon::retranslate() {
     history_->setText(strings_.t(QStringLiteral("history.open")));
     settings_->setText(strings_.t(QStringLiteral("menu.settings")));
     quit_->setText(strings_.t(QStringLiteral("menu.quit")));
+    update_->setText(strings_.t(QStringLiteral("update.menu")).replace(QStringLiteral("%@"), updateVersion_));
+}
+
+void TrayIcon::setUpdate(const QString& version) {
+    updateVersion_ = version;
+    update_->setVisible(!version.isEmpty());
+    updateSeparator_->setVisible(!version.isEmpty());
+    retranslate();
+}
+
+void TrayIcon::notify(const QString& title, const QString& body) {
+    if (QSystemTrayIcon::supportsMessages()) tray_->showMessage(title, body, QSystemTrayIcon::Information, 8000);
 }
 
 TrayIcon::~TrayIcon() { delete menu_; }

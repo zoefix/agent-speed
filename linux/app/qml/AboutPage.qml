@@ -72,12 +72,23 @@ SettingsPage {
             }
         }
         SettingsRow {
-            label: S.tr2(S.rev, "update.check")
-            caption: S.tr2(S.rev, "settings.about.update")
+            label: Format.fill(S.tr2(S.rev, "update.current"), [catalog.version])
+            caption: network.updateLine
+            PillButton {
+                enabled: prefs.networkEnabled && network.updateState !== "checking"
+                text: network.updateState === "available" ? Format.fill(S.tr2(S.rev, "update.menu"), [network.availableVersion])
+                                                         : S.tr2(S.rev, "update.check")
+                accent: network.updateState === "available"
+                onClicked: network.updateState === "available" ? network.showUpdate() : network.checkUpdates()
+            }
+        }
+        SettingsRow {
+            label: S.tr2(S.rev, "update.auto")
+            caption: S.tr2(S.rev, "update.auto.hint")
             divider: false
             ToggleSwitch {
                 enabled: prefs.networkEnabled
-                label: S.tr2(S.rev, "update.check")
+                label: S.tr2(S.rev, "update.auto")
                 checked: prefs.autoCheckUpdates
                 onToggled: (on) => prefs.autoCheckUpdates = on
             }

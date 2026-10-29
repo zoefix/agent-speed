@@ -22,6 +22,9 @@ public slots:
     void setOrbVisible(bool visible);
     void setClickThrough(bool on);
     void retranslate();
+    // UPDATES 4: a top item while an update is available (empty: none).
+    void setUpdate(const QString& version);
+    void notify(const QString& title, const QString& body);
 
 signals:
     void toggleDashboard();
@@ -31,6 +34,7 @@ signals:
     void historyRequested();
     void orbToggled(bool visible);
     void clickThroughToggled(bool on);
+    void updateRequested();
 
 private:
     QSystemTrayIcon* tray_;
@@ -42,6 +46,9 @@ private:
     QAction* demo_;
     QAction* orb_;
     QAction* clickThrough_;
+    QAction* update_;
+    QAction* updateSeparator_;
+    QString updateVersion_;
     const Strings& strings_;
     QString lastText_;
     int lastBand_ = -1;

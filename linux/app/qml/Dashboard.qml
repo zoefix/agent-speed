@@ -564,6 +564,24 @@ Window {
                             font.weight: Font.DemiBold
                         }
                     }
+                    // UPDATES 4: a compact pill that opens the update window.
+                    Rectangle {
+                        visible: network.updateState === "available"
+                        radius: height / 2
+                        color: Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, Theme.dark ? 0.18 : 0.12)
+                        implicitHeight: 18
+                        implicitWidth: updateLabel.implicitWidth + 14
+                        Text {
+                            id: updateLabel
+                            anchors.centerIn: parent
+                            text: S.tr2(S.rev, "update.available.short").replace("%@", network.availableVersion)
+                            color: Theme.accent
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                        }
+                        TapHandler { onTapped: { root.dismissed(); network.showUpdate() } }
+                        HoverHandler { cursorShape: Qt.PointingHandCursor }
+                    }
                     Item { Layout.fillWidth: true }
                     IconButton {
                         glyph: "chart"

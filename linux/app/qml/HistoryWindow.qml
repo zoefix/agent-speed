@@ -26,7 +26,7 @@ Window {
     property string range: "30d"
     readonly property string today: H.iso(new Date())
     readonly property string currency: prefs.currency
-    readonly property string rate: S.rev >= 0 ? catalog.rateFor(currency) : "1"
+    readonly property string rate: S.rev >= 0 && catalog.revision >= 0 ? catalog.rateFor(currency) : "1"
     readonly property var rows: history.rows
 
     readonly property string firstDate: rows.length > 0 ? rows[0].date : today

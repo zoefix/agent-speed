@@ -17,6 +17,7 @@
 #include "history_service.hpp"
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
+#include "network_service.hpp"
 #include "orb/orb_window.hpp"
 #include "preferences.hpp"
 #include "strings.hpp"
@@ -198,6 +199,14 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
     engine.rootContext()->setContextProperty(QStringLiteral("history"), &historyModel);
+    // NETWORK 1–4 and UPDATES: price sync, exchange rates and the update check, under the master switch.
+    NetworkService network(prefs, strings, catalog, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
+    engine.rootContext()->setContextProperty(QStringLiteral("network"), &network);
+    QObject::connect(&network, &NetworkService::tableAdded, &app, [&] {
+        worker->requestReprice();
+        QMetaObject::invokeMethod(historyWorker, "analyze", Qt::QueuedConnection);
+    });
+    QObject::connect(&catalog, &Catalog::changed, &app, [=] { pushOptions(false); });
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
@@ -230,6 +239,29 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::historyRequested, &app, [&] { openHistory(QString()); });
     QObject::connect(&state, &AppState::historyRequested, &app, [&](const QString& source) { openHistory(source); });
     QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
+    // The update window (UPDATES 4), from the tray item, the notification, the dashboard pill or Settings.
+    QQmlComponent updateComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("UpdateWindow"));
+    QQuickWindow* updateWindow = nullptr;
+    const auto openUpdate = [&] {
+        if (!updateWindow) {
+            updateWindow = qobject_cast<QQuickWindow*>(updateComponent.create(engine.rootContext()));
+            if (!updateWindow) {
+                qWarning() << updateComponent.errorString();
+                return;
+            }
+        }
+        updateWindow->show();
+        updateWindow->raise();
+        updateWindow->requestActivate();
+    };
+    QObject::connect(&network, &NetworkService::updateWindowRequested, &app, openUpdate);
+    QObject::connect(&tray, &TrayIcon::updateRequested, &app, openUpdate);
+    QObject::connect(&network, &NetworkService::updateChanged, &tray, [&] {
+        tray.setUpdate(network.updateState() == QLatin1String("available") ? network.availableVersion() : QString());
+    });
+    QObject::connect(&network, &NetworkService::updateFound, &tray, [&](const QString& version) {
+        tray.notify(task_card::fmt(strings, QStringLiteral("update.available.title"), {version}), strings.t(QStringLiteral("update.notification.body")));
+    });
     Flyout flyout(window, popup);
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
         const auto snap = state.snapshot();
@@ -263,8 +295,17 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::orbToggled, &orbWindow, &orb::OrbWindow::setOrbVisible);
     QObject::connect(&tray, &TrayIcon::clickThroughToggled, &orbWindow, &orb::OrbWindow::setClickThrough);
     tray.setClickThrough(orbWindow.clickThrough());
+
     tray.setOrbVisible(false);
     const auto arguments = app.arguments();
+    network.start();
+    // After a one-click update the new instance says so once (UPDATES 4).
+    if (const auto at = arguments.indexOf(QStringLiteral("--after-update")); at >= 0) {
+        QTimer::singleShot(1500, &tray, [&] {
+            tray.notify(strings.t(QStringLiteral("app.name")),
+                        task_card::fmt(strings, QStringLiteral("update.done"), {QCoreApplication::applicationVersion()}));
+        });
+    }
     const bool offscreenShot = !snapshotPath.isEmpty() ||
                                std::any_of(arguments.begin(), arguments.end(),
                                            [](const QString& a) {

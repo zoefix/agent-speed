@@ -1,4 +1,4 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui OpenGL Widgets Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network OpenGL Widgets Qml Quick QuickControls2)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-shape)
 qt_standard_project_setup(REQUIRES 6.5)
@@ -12,6 +12,7 @@ qt_add_executable(agent-speed
     src/graphics.cpp
     src/heat.cpp
     src/monitor_worker.cpp
+    src/network_service.cpp
     src/catalog.cpp
     src/preferences.cpp
     src/orb/body.cpp
@@ -56,6 +57,7 @@ set(agent_speed_qml
     qml/TasksSection.qml
     qml/TrafficPage.qml
     qml/TrafficSection.qml
+    qml/UpdateWindow.qml
     qml/ToggleSwitch.qml
     qml/Format.js
     qml/Gauge.qml
@@ -97,7 +99,7 @@ qt_add_resources(agent-speed "strings"
 )
 
 target_link_libraries(agent-speed PRIVATE
-    agentspeed_core Qt6::Core Qt6::Gui Qt6::OpenGL Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
+    agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
 target_include_directories(agent-speed PRIVATE src)
 
 install(TARGETS agent-speed RUNTIME DESTINATION bin)

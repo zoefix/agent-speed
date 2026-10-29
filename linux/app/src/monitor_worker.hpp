@@ -44,6 +44,8 @@ public:
     void setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets);
     // Thread-safe: today's traffic saved before this launch (METRICS 10.8), added on the next tick.
     void restoreTraffic(TrafficRows rows);
+    // Thread-safe: a newer price table arrived; today's unpriced responses are priced again on the next tick.
+    void requestReprice();
     // Worker thread: today's traffic rows now.
     TrafficRows trafficToday();
 
@@ -74,6 +76,7 @@ private:
     std::optional<std::vector<std::optional<std::vector<agentspeed::SourceKind>>>> pendingSets_;
     std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets_{std::nullopt};
     std::optional<TrafficRows> pendingTraffic_;
+    bool pendingReprice_ = false;
     qint64 lastTrafficSaveMs_ = 0;
     bool restartPending_ = false;
     std::unique_ptr<agentspeed::Monitor> monitor_;

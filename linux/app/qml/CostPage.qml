@@ -28,10 +28,19 @@ SettingsPage {
         footnote: S.tr2(S.rev, "cost.apiEquivalent.hint")
         SettingsRow {
             label: S.tr2(S.rev, "settings.currency")
-            caption: S.rev >= 0 ? catalog.rateStatus(prefs.currency) : ""
+            caption: S.rev >= 0 && catalog.revision >= 0 ? network.rateLine + (network.rateAttribution ? "\n" + S.tr2(S.rev, "rates.attribution") : "") : ""
             CurrencyPicker {
                 value: prefs.currency
                 onActivated: (code) => prefs.currency = code
+            }
+        }
+        SettingsRow {
+            visible: prefs.currency !== "USD"
+            label: S.tr2(S.rev, "rates.refresh")
+            PillButton {
+                enabled: prefs.networkEnabled && !network.rateRefreshing
+                text: network.rateRefreshing ? S.tr2(S.rev, "rates.refreshing") : S.tr2(S.rev, "rates.refresh")
+                onClicked: network.refreshRates()
             }
         }
         SettingsRow {
@@ -82,7 +91,12 @@ SettingsPage {
         title: S.tr2(S.rev, "prices.title")
         SettingsRow {
             label: S.rev >= 0 && appState.snapshot.priceVersion >= 0 ? catalog.priceStatus() : ""
-            caption: S.tr2(S.rev, "prices.never")
+            caption: network.priceResult.length > 0 ? network.priceResult : network.priceLine
+            PillButton {
+                enabled: prefs.networkEnabled && !network.priceChecking
+                text: network.priceChecking ? S.tr2(S.rev, "prices.checking") : S.tr2(S.rev, "prices.check")
+                onClicked: network.checkPrices()
+            }
         }
         SettingsRow {
             label: S.tr2(S.rev, "prices.autoSync")

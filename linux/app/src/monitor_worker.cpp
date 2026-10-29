@@ -46,6 +46,11 @@ void MonitorWorker::setScoreSets(std::vector<std::optional<std::vector<agentspee
     pendingSets_ = std::move(sets);
 }
 
+void MonitorWorker::requestReprice() {
+    std::lock_guard lock(optionsMutex_);
+    pendingReprice_ = true;
+}
+
 void MonitorWorker::restoreTraffic(TrafficRows rows) {
     std::lock_guard lock(optionsMutex_);
     pendingTraffic_ = std::move(rows);
@@ -361,6 +366,10 @@ void MonitorWorker::tick() {
             sets_ = std::move(*pendingSets_);
             pendingSets_.reset();
             if (monitor_) monitor_->setScoreSets(sets_);
+        }
+        if (pendingReprice_ && monitor_) {
+            monitor_->repriceToday();
+            pendingReprice_ = false;
         }
         if (pendingTraffic_ && monitor_) {
             monitor_->restoreTraffic(*pendingTraffic_);
