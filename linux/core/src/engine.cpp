@@ -315,6 +315,15 @@ TodayStats todayStats(const std::vector<Response>& responses, std::int64_t today
     return stats;
 }
 
+double setPeak(const std::vector<Response>& responses, const std::vector<SourceKind>& sources, std::int64_t todayStart,
+               std::int64_t now) {
+    std::vector<Response> subset;
+    for (const auto& r : responses) {
+        if (r.endMs >= todayStart && std::find(sources.begin(), sources.end(), r.source) != sources.end()) subset.push_back(r);
+    }
+    return todayStats(subset, todayStart, now).peak;
+}
+
 void ThinkingWindow::add(SourceKind source, double w, double r) {
     weight += w;
     if (source != SourceKind::Deepseek) {

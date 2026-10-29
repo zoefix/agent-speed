@@ -2,6 +2,7 @@
 
 #include <QObject>
 #include <QString>
+#include <QVariantList>
 
 class QAction;
 class QMenu;
@@ -19,8 +20,9 @@ public:
 public slots:
     void update(double liveOutput, const QString& compactText, const QString& tooltip);
     void setDemo(bool demo);
-    void setOrbVisible(bool visible);
-    void setClickThrough(bool on);
+    // DESIGN 2b Master switch: one show / hide item; with one orb its click-through, with several a submenu per orb
+    // (colour dots + name) with Show, Click-through and the orb's settings. `orbs`: the orb manager's list.
+    void setOrbs(bool shown, const QVariantList& orbs);
     void retranslate();
     // UPDATES 4: a top item while an update is available (empty: none).
     void setUpdate(const QString& version);
@@ -38,7 +40,8 @@ signals:
     void settingsRequested();
     void historyRequested();
     void orbToggled(bool visible);
-    void clickThroughToggled(bool on);
+    void orbEdit(const QString& id, const QString& key, const QVariant& value);
+    void orbSettings(const QString& id);
     void updateRequested();
     void reportPause(int hours);
     void reportResume();
@@ -57,6 +60,10 @@ private:
     QAction* demo_;
     QAction* orb_;
     QAction* clickThrough_;
+    QMenu* orbsMenu_ = nullptr;
+    QAction* orbsItem_ = nullptr;
+    QString singleOrb_;
+    int orbCount_ = 1;
     QAction* update_;
     QAction* updateSeparator_;
     QMenu* reportMenu_ = nullptr;

@@ -112,6 +112,8 @@ struct Snapshot {
     int tools = 0;
     std::vector<AgentRow> agents;
     std::vector<SourceRow> sources;
+    // METRICS 6.8 peakToday_A of each requested set (Monitor::setPeakSets), with its live value.
+    std::vector<double> peakSets;
     // One per requested set (Monitor::setScoreSets), then the board groups of the agents list.
     std::vector<ScoreSet> scoreSets;
     std::vector<tasks::GroupValue> scoreGroups;

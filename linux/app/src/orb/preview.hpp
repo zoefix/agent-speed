@@ -21,6 +21,11 @@ class PreviewItem : public QQuickPaintedItem {
     Q_PROPERTY(double offset READ offset WRITE setOffset NOTIFY offsetChanged)
     Q_PROPERTY(bool dark READ dark WRITE setDark NOTIFY darkChanged)
     Q_PROPERTY(bool running READ running WRITE setRunning NOTIFY runningChanged)
+    // A live thumbnail (the orb list): the orb's own value and redline instead of the loop; < 0: the loop.
+    Q_PROPERTY(double liveValue READ liveValue WRITE setLiveValue NOTIFY liveChanged)
+    Q_PROPERTY(QString valueText READ valueText WRITE setValueText NOTIFY liveChanged)
+    Q_PROPERTY(double redline READ redline WRITE setRedline NOTIFY liveChanged)
+    Q_PROPERTY(int fps READ fps WRITE setFps NOTIFY liveChanged)
 
 public:
     explicit PreviewItem(QQuickItem* parent = nullptr);
@@ -39,6 +44,14 @@ public:
     void setDark(bool dark);
     bool running() const { return running_; }
     void setRunning(bool running);
+    double liveValue() const { return liveValue_; }
+    void setLiveValue(double value);
+    QString valueText() const { return valueText_; }
+    void setValueText(const QString& text);
+    double redline() const { return redline_; }
+    void setRedline(double redline);
+    int fps() const { return fps_; }
+    void setFps(int fps);
 
     void paint(QPainter* painter) override;
 
@@ -48,6 +61,7 @@ signals:
     void offsetChanged();
     void darkChanged();
     void runningChanged();
+    void liveChanged();
 
 protected:
     void itemChange(ItemChange change, const ItemChangeData& value) override;
@@ -65,7 +79,11 @@ private:
     bool running_ = true;
     bool fresh_ = true;
     double last_ = -1;
-    double redline_ = 0, activity_ = 0;
+    double redlineAmount_ = 0, activity_ = 0;
+    double liveValue_ = -1;
+    QString valueText_;
+    double redline_ = 400;
+    int fps_ = 24;
     QTimer timer_;
     QImage frame_;
 };

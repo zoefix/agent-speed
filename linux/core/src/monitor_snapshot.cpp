@@ -337,6 +337,21 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         }
         snap.sources.push_back(std::move(row));
     }
+    // METRICS 6.8: only enabled sources count; the live value of the set joins its peak.
+    for (const auto& set : peakSets_) {
+        if (!set) {
+            snap.peakSets.push_back(snap.peakToday);
+            continue;
+        }
+        std::vector<SourceKind> enabled;
+        double setLive = 0;
+        for (const auto& row : snap.sources) {
+            if (!row.enabled || std::find(set->begin(), set->end(), row.source) == set->end()) continue;
+            enabled.push_back(row.source);
+            setLive += row.liveOutput;
+        }
+        snap.peakSets.push_back(std::max(engine::setPeak(responses, enabled, todayStartMs, nowMs), setLive));
+    }
 
     snap.warnings.partialHistory = partialHistory_;
     std::int64_t malformed = removedMalformed_;

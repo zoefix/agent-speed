@@ -31,6 +31,7 @@ struct NetReadout {
 // What the readout shows this frame (DESIGN 2 layer 6).
 struct ReadoutContent {
     QString value;
+    bool atLeast = false;  // a partly unpriced money value: a small ≥ before it (DESIGN 9)
     QString unit;
     QString title;          // the speed title, or the idle label
     QString previousTitle;  // the one sliding out

@@ -8,14 +8,14 @@ SettingsPage {
         SettingsRow {
             label: S.tr2(S.rev, "settings.effects.intensity")
             Segmented {
-                value: orb.effectsLevel
+                value: orbs.effectsLevel
                 options: [
                     { value: 0, label: S.tr2(S.rev, "effects.off") },
                     { value: 1, label: S.tr2(S.rev, "effects.soft") },
                     { value: 2, label: S.tr2(S.rev, "effects.standard") },
                     { value: 3, label: S.tr2(S.rev, "effects.max") }
                 ]
-                onActivated: (v) => orb.effectsLevel = v
+                onActivated: (v) => orbs.effectsLevel = v
             }
         }
         SettingsRow {

@@ -208,6 +208,29 @@ Canvas {
             ctx.lineWidth = 1.8
             ctx.beginPath(); ctx.moveTo(4.5, 4.5); ctx.lineTo(11.5, 11.5); ctx.moveTo(11.5, 4.5); ctx.lineTo(4.5, 11.5); ctx.stroke()
             break
+        case "eyeOff":
+            ctx.lineWidth = 1.3
+            ctx.beginPath()
+            ctx.moveTo(1.8, 8); ctx.bezierCurveTo(4, 3.8, 12, 3.8, 14.2, 8)
+            ctx.bezierCurveTo(12, 12.2, 4, 12.2, 1.8, 8)
+            ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(3, 13); ctx.lineTo(13, 3); ctx.stroke()
+            break
+        case "plus":
+            ctx.lineWidth = 1.6
+            ctx.beginPath(); ctx.moveTo(8, 3.5); ctx.lineTo(8, 12.5); ctx.moveTo(3.5, 8); ctx.lineTo(12.5, 8); ctx.stroke()
+            break
+        case "minus":
+            ctx.lineWidth = 1.6
+            ctx.beginPath(); ctx.moveTo(3.5, 8); ctx.lineTo(12.5, 8); ctx.stroke()
+            break
+        case "copy":
+            ctx.lineWidth = 1.3
+            ctx.beginPath(); ctx.roundedRect(5.5, 5.5, 8, 8, 1.8, 1.8); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(3.5, 10.5); ctx.lineTo(3.2, 10.5); ctx.arcTo(2.5, 10.5, 2.5, 9.8, 0.7)
+            ctx.lineTo(2.5, 3.2); ctx.arcTo(2.5, 2.5, 3.2, 2.5, 0.7); ctx.lineTo(9.8, 2.5); ctx.arcTo(10.5, 2.5, 10.5, 3.2, 0.7)
+            ctx.lineTo(10.5, 3.5); ctx.stroke()
+            break
         case "gauge":
             ctx.lineWidth = 1.4
             ctx.beginPath(); ctx.arc(8, 9, 6, Math.PI * 0.8, Math.PI * 2.2, false); ctx.stroke()

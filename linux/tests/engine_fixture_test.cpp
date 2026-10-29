@@ -69,7 +69,7 @@ std::vector<T> filtered(const std::vector<T>& items, const std::set<SourceKind>&
 TEST(EngineFixtures, MatchTheReference) {
     fixtures::JsonFile file(fixtures::fixtureDir() / "engine-cases.json");
     ASSERT_TRUE(file.ok);
-    int queries = 0;
+    int queries = 0, setPeaks = 0;
     for (const auto& c : file.root()["cases"].elements()) {
         SCOPED_TRACE(*c["name"].string());
         const auto responses = responsesOf(c["responses"]);
@@ -111,6 +111,9 @@ TEST(EngineFixtures, MatchTheReference) {
                 }
                 if (sub["peakTodayOutput"].valid()) {
                     EXPECT_NEAR(todayStats(resp, todayStart, now).peak, *sub["peakTodayOutput"].number(), kTolerance);
+                    EXPECT_NEAR(setPeak(responses, std::vector<SourceKind>(chosen.begin(), chosen.end()), todayStart, now),
+                                *sub["peakTodayOutput"].number(), kTolerance);
+                    ++setPeaks;
                 }
                 if (sub["liveCost"].valid()) {
                     EXPECT_NEAR(liveCost(resp, ags, now).microUsdPerSecond, *sub["liveCost"].number(), kTolerance);
@@ -133,4 +136,5 @@ TEST(EngineFixtures, MatchTheReference) {
         }
     }
     EXPECT_EQ(queries, 31);
+    EXPECT_GT(setPeaks, 0);
 }

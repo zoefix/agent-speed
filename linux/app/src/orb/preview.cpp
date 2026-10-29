@@ -138,10 +138,37 @@ void PreviewItem::setRunning(bool running) {
     updateTimer();
 }
 
+void PreviewItem::setLiveValue(double value) {
+    if (value == liveValue_) return;
+    liveValue_ = value;
+    emit liveChanged();
+    if (!timer_.isActive()) tick();
+}
+
+void PreviewItem::setValueText(const QString& text) {
+    if (text == valueText_) return;
+    valueText_ = text;
+    emit liveChanged();
+}
+
+void PreviewItem::setRedline(double redline) {
+    if (redline == redline_ || redline <= 0) return;
+    redline_ = redline;
+    emit liveChanged();
+}
+
+void PreviewItem::setFps(int fps) {
+    fps = std::clamp(fps, 1, 24);
+    if (fps == fps_) return;
+    fps_ = fps;
+    timer_.setInterval(1000 / fps_);
+    emit liveChanged();
+}
+
 void PreviewItem::itemChange(ItemChange change, const ItemChangeData& value) {
     QQuickPaintedItem::itemChange(change, value);
     if (change == ItemVisibleHasChanged || change == ItemSceneChange) {
-        updateTimer();
+        QTimer::singleShot(0, this, &PreviewItem::updateTimer);
         if (change == ItemSceneChange && value.window) {
             connect(value.window, &QWindow::visibleChanged, this, &PreviewItem::updateTimer, Qt::UniqueConnection);
         }
@@ -172,19 +199,20 @@ void PreviewItem::tick() {
     last_ = t;
 
     // Cruise → redline → cruise every 8 s; a still frame at the redline when not running.
+    const double redline = liveValue_ >= 0 ? redline_ : kRedline;
     const double u = running_ ? std::fmod(t + offset_, kLoop) / kLoop : 0.5;
-    const double value = kRedline * (0.3 + 0.85 * (0.5 - 0.5 * std::cos(2 * kPi * u)));
-    gauge_.setRedline(kRedline);
+    const double value = liveValue_ >= 0 ? liveValue_ : redline * (0.3 + 0.85 * (0.5 - 0.5 * std::cos(2 * kPi * u)));
+    gauge_.setRedline(redline);
     gauge_.update(value, t);
     if (resumed) gauge_.settle();
     gauge_.step(t);
     const Tier tier = gauge_.tier();
     const auto ease = [dt](double& v, double target, double tau) { v += (target - v) * (1 - std::exp(-dt / tau)); };
     if (resumed) {
-        redline_ = tier == Tier::Redline ? 1 : 0;
+        redlineAmount_ = tier == Tier::Redline ? 1 : 0;
         activity_ = tier != Tier::Idle ? 1 : 0;
     }
-    ease(redline_, tier == Tier::Redline ? 1 : 0, 0.2);
+    ease(redlineAmount_, tier == Tier::Redline ? 1 : 0, 0.2);
     ease(activity_, tier != Tier::Idle ? 1 : 0, 0.18);
 
     const double s = diameter_, side = 1.5 * s;
@@ -200,11 +228,11 @@ void PreviewItem::tick() {
     f.heat = gauge_.heat();
     f.displayHeat = f.heat;
     f.overdrive = gauge_.overdrive();
-    f.rawHeat = heat::of(gauge_.value(), kRedline);
-    f.rawOverdrive = std::clamp((gauge_.value() - kRedline) / kRedline, 0.0, 1.0);
+    f.rawHeat = heat::of(gauge_.value(), redline);
+    f.rawOverdrive = std::clamp((gauge_.value() - redline) / redline, 0.0, 1.0);
     f.tier = tier;
-    f.redline = kRedline;
-    f.redlineAmount = redline_;
+    f.redline = redline;
+    f.redlineAmount = redlineAmount_;
     f.activity = activity_;
     f.small = s < 120;
     f.resumed = resumed;
@@ -212,7 +240,7 @@ void PreviewItem::tick() {
     f.unitText = unitText();
 
     ReadoutContent content;
-    content.value = QString::number(qRound(gauge_.value()));
+    content.value = liveValue_ >= 0 && !valueText_.isEmpty() ? valueText_ : QString::number(qRound(gauge_.value()));
     // At 64 pt the 7 pt title floor would crowd the unit, so a preview shows the value and the unit.
     content.unit = unitText();
 

@@ -5,6 +5,7 @@
 #include <QPointer>
 #include <QTimer>
 #include <QVariantMap>
+#include <functional>
 #include <memory>
 #include <vector>
 
@@ -18,63 +19,63 @@ class QVariantAnimation;
 class Strings;
 
 class TitleThemes;
+struct OrbConfig;
 
 namespace orb {
 
-// The floating orb (DESIGN 2): a frameless, transparent, always-on-top window 1.5 S square with one of the five
-// instruments of DESIGN 2a, drawn with OpenGL only while something moves (DESIGN 2a, Frame policy).
+// Another orb's disc on the desktop (global points), for snapping.
+struct Disc {
+    QPointF center;
+    double radius = 0;
+};
+
+// One floating orb (DESIGN 2, 2b): a frameless, transparent, always-on-top window 1.5 S square with one of the five
+// instruments of DESIGN 2a, drawn with OpenGL only while something moves (DESIGN 2a, Frame policy). Its settings come
+// from the orb manager; edits from its own controls go back as requests.
 class OrbWindow : public QOpenGLWindow {
     Q_OBJECT
-    Q_PROPERTY(bool orbVisible READ isVisible WRITE setOrbVisible NOTIFY orbVisibilityChanged)
-    Q_PROPERTY(bool clickThrough READ clickThrough WRITE setClickThrough NOTIFY clickThroughChanged)
-    Q_PROPERTY(double diameter READ diameter WRITE setDiameter NOTIFY diameterChanged)
-    Q_PROPERTY(int effectsLevel READ effectsLevel WRITE setEffectsLevel NOTIFY effectsLevelChanged)
-    Q_PROPERTY(bool alwaysOnTop READ alwaysOnTop WRITE setAlwaysOnTop NOTIFY alwaysOnTopChanged)
-    // DESIGN 2b `traffic`: what the two-line readout shows — sources, machine, intelligence or off.
-    Q_PROPERTY(QString traffic READ traffic WRITE setTraffic NOTIFY trafficChanged)
-    // DESIGN 2a: led, needle, liquid, reactor or minimal.
-    Q_PROPERTY(QString style READ style WRITE setStyle NOTIFY styleChanged)
-    Q_PROPERTY(double minimumDiameter READ minimumDiameter NOTIFY styleChanged)
 public:
-    explicit OrbWindow(const Strings& strings);
-    // DESIGN 1 Title themes: the orb names its levels with the selected theme.
-    void setTitles(const ::TitleThemes* titles);
+    OrbWindow(const Strings& strings, const QString& id);
     ~OrbWindow() override;
+    // DESIGN 1 Title themes: the orb names its levels with its theme (the General one by default).
+    void setTitles(const ::TitleThemes* titles);
 
-    bool clickThrough() const { return clickThrough_; }
+    QString id() const { return id_; }
+    // This orb's settings with what the manager resolves for it: its name and the redline of the current metric.
+    void apply(const OrbConfig& config, const QString& name, int redline);
+    void setEffectsLevel(int level);
+    // The master switch and the orb's own visibility together.
+    void setShown(bool shown);
+    // Settings highlight (DESIGN 2b Identity at a glance): an accent ring outside the disc.
+    void setHighlighted(bool on);
+    // The other orbs' discs, for orb-to-orb snapping and alignment.
+    void setNeighbors(std::function<std::vector<Disc>()> neighbors) { neighbors_ = std::move(neighbors); }
+    void placeAt(QPointF globalCenter);
+
     double diameter() const { return diameter_; }
-    int effectsLevel() const { return effectsLevel_; }
-    bool alwaysOnTop() const { return alwaysOnTop_; }
-    QString traffic() const { return traffic_; }
+    QPointF discCenter() const { return QPointF(position()) + center(); }
+    bool clickThrough() const { return clickThrough_; }
+    bool hovered() const { return hovered_; }
+    bool dragging() const { return dragging_; }
+    double hoverScale() const { return 1 + 0.03 * hover_.value; }
     QString style() const { return styleKey(styleKind_); }
-    double minimumDiameter() const { return styleKind_ == StyleKind::Minimal ? 64 : 96; }
     // Development aid: draw the dark (smoked glass) look whatever the system appearance.
     void forceDark(bool on) { forcedDark_ = on; }
-    void restore();
     // Development aid: renders the current frame offscreen.
     QImage snapshot();
 
 public slots:
+    // This orb's values of an engine tick (OrbViews: counted over its sources).
     void applySnapshot(const QVariantMap& snapshot);
-    void setOrbVisible(bool visible);
-    void setClickThrough(bool on);
-    void setDiameter(double diameter);
-    void setEffectsLevel(int level);
-    void setAlwaysOnTop(bool on);
-    void setTraffic(const QString& traffic);
-    void setStyle(const QString& style);
 
 signals:
-    void trafficChanged();
-    void styleChanged();
     void dashboardRequested();
-    void orbVisibilityChanged(bool visible);
-    void clickThroughChanged(bool on);
-    void diameterChanged();
-    void effectsLevelChanged();
-    void alwaysOnTopChanged();
-    void quitRequested();
-    void settingsRequested();
+    void menuRequested(const QString& id, QPoint global);
+    void editRequested(const QString& id, const QString& key, const QVariant& value);
+    // A drag ended and the disc settled.
+    void moved(const QString& id);
+    void hoverChanged(const QString& id, bool hovered);
+    void dragChanged(const QString& id, bool dragging);
 
 protected:
     void initializeGL() override;
@@ -113,17 +114,25 @@ private:
     void setHovered(bool hovered);
     void applyFlags();
     void applyShape();
-    void snapToEdges();
-    void savePosition();
-    void showMenu(QPoint global);
+    void applyOpacity();
+    void setStyle(const QString& style);
+    void setDiameter(double diameter);
+    QPointF snapped(QPointF center, bool release) const;
+    void settle();
     QString titleText(int index) const;
+    void addBezel(Scene& scene, const Frame& frame) const;
+    void addHighlight(Scene& scene, const Frame& frame) const;
+    bool onUnit(QPointF local) const;
+    void updateLabel();
     const ::TitleThemes* titles_ = nullptr;
+    std::function<std::vector<Disc>()> neighbors_;
     void stepIntel(double time, double dt);
     IntelReadout intelContent(double time) const;
     bool intelBusy(double time) const;
     double nextIntelWake(double time) const;
 
     const Strings& strings_;
+    QString id_;
     Renderer renderer_;
     Scene scene_;
     StyleKind styleKind_ = StyleKind::Led;
@@ -153,7 +162,14 @@ private:
 
     // Content from the latest snapshot.
     QString valueText_ = QStringLiteral("0");
+    bool atLeast_ = false;  // a partly unpriced money value
+    QString costSymbol_;
     QString info_;
+    QString unavailable_;  // "", "disabled" or "notFound"
+    QStringList unavailableSources_;
+    double lastActive_ = -1e9;  // the last tick with a live value (fade when idle)
+    QString labelText_;
+    double labelAt_ = -1e9;
     std::vector<QColor> agents_;
     QString contentKey_;
 
@@ -186,10 +202,23 @@ private:
     bool clickThrough_ = false;
     bool blur_ = false;
     bool forcedDark_ = false;
+    bool shown_ = false;
+    double opacity_ = 1;
+    bool fadeWhenIdle_ = false;
+    bool idleFaded_ = false;
+    QStringList sources_;  // empty: all sources
+    QString unit_ = QStringLiteral("tokens");
+    QString theme_;
+    QString name_;
+    bool highlighted_ = false;
+    double highlight_ = 0;
+    QTimer unitTimer_;  // a single click on the unit waits out the double-click interval
 
-    // Dragging.
+    // Dragging: the disc follows the pointer, pulled toward a touching position near another orb.
     bool dragging_ = false;
     bool moved_ = false;
+    bool pressOnUnit_ = false;
+    double pressAt_ = 0;
     QPointF pressGlobal_;
     QPoint pressPosition_;
     QPointer<QVariantAnimation> snap_;

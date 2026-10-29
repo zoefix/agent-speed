@@ -83,6 +83,9 @@ struct TodayStats {
     std::int64_t unpricedRequests = 0;
 };
 TodayStats todayStats(const std::vector<Response>& responses, std::int64_t todayStart, std::int64_t now);
+// METRICS 6.8 peakToday_A: today's peak of the 3-bucket trailing average over the responses of `sources` only.
+double setPeak(const std::vector<Response>& responses, const std::vector<SourceKind>& sources, std::int64_t todayStart,
+               std::int64_t now);
 
 // METRICS 6.9 Live thinking: the weighted sums of the generating output tokens of the 3-second window and their
 // reasoning part, for the whole set, per agent and per raw model ("" when unknown).

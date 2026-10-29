@@ -22,6 +22,7 @@
 #include "monitor_worker.hpp"
 #include "network_service.hpp"
 #include "orb/orb_window.hpp"
+#include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
 #include "preferences.hpp"
 #include "report/report_controller.hpp"
@@ -92,6 +93,7 @@ std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
 }
 
 const BoardStore* gBoards = nullptr;
+const OrbsStore* gOrbs = nullptr;
 
 WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, const Strings& strings,
                           const std::shared_ptr<agentspeed::pricing::PriceBook>& prices) {
@@ -109,6 +111,7 @@ WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, cons
     options.redline = prefs.redline();
     options.totalMetric = prefs.metric() == QLatin1String("total");
     options.boards = boardSpecs(gBoards);
+    if (gOrbs) options.orbs = orbSpecs(*gOrbs);
     return options;
 }
 
@@ -152,6 +155,8 @@ int main(int argc, char* argv[]) {
     AppState state(demo);
     BoardStore boardStore;
     gBoards = &boardStore;
+    OrbsStore orbStore;
+    gOrbs = &orbStore;
     auto prices = std::make_shared<agentspeed::pricing::PriceBook>();
     Catalog catalog(strings, prices);
 
@@ -225,7 +230,7 @@ int main(int argc, char* argv[]) {
     TitleThemes themes(strings, prefs);
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
-    orb::OrbWindow orbWindow(strings);
+    OrbManager orbs(strings, prefs, orbStore);
     orb::PreviewItem::setUnit(strings.t(QStringLiteral("unit.tokS")));
     qmlRegisterType<orb::PreviewItem>("AgentSpeed.Orb", 1, 0, "OrbPreview");
 
@@ -237,10 +242,10 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("softwareRendering"), softwareRendering);
     engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
-    engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
+    engine.rootContext()->setContextProperty(QStringLiteral("orbs"), &orbs);
     engine.rootContext()->setContextProperty(QStringLiteral("themes"), &themes);
     engine.rootContext()->setContextProperty(QStringLiteral("boardStore"), &boardStore);
-    orbWindow.setTitles(&themes);
+    orbs.setTitles(&themes);
     engine.rootContext()->setContextProperty(QStringLiteral("history"), &historyModel);
     // NETWORK 1–4 and UPDATES: price sync, exchange rates and the update check, under the master switch.
     NetworkService network(prefs, strings, catalog, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
@@ -379,17 +384,22 @@ int main(int argc, char* argv[]) {
     QObject::connect(&boardStore, &BoardStore::changed, &tray, syncBoardMenu);
     syncBoardMenu();
 
-    QObject::connect(&state, &AppState::snapshotChanged, &orbWindow, [&] { orbWindow.applySnapshot(state.snapshot()); });
-    QObject::connect(&orbWindow, &orb::OrbWindow::dashboardRequested, &flyout, &Flyout::toggle);
-    QObject::connect(&orbWindow, &orb::OrbWindow::quitRequested, &app, quitApp);
-    QObject::connect(&orbWindow, &orb::OrbWindow::settingsRequested, &app, [&] { openSettings(1); });
-    QObject::connect(&orbWindow, &orb::OrbWindow::orbVisibilityChanged, &tray, &TrayIcon::setOrbVisible);
-    QObject::connect(&orbWindow, &orb::OrbWindow::clickThroughChanged, &tray, &TrayIcon::setClickThrough);
-    QObject::connect(&tray, &TrayIcon::orbToggled, &orbWindow, &orb::OrbWindow::setOrbVisible);
-    QObject::connect(&tray, &TrayIcon::clickThroughToggled, &orbWindow, &orb::OrbWindow::setClickThrough);
-    tray.setClickThrough(orbWindow.clickThrough());
-
-    tray.setOrbVisible(false);
+    // DESIGN 2b: the orbs, each fed its own values of every snapshot.
+    QObject::connect(&state, &AppState::snapshotChanged, &orbs, [&] { orbs.applySnapshot(state.snapshot()); });
+    QObject::connect(&orbs, &OrbManager::specsChanged, &app, [=] { pushOptions(false); });
+    QObject::connect(&orbs, &OrbManager::dashboardRequested, &flyout, &Flyout::toggle);
+    QObject::connect(&orbs, &OrbManager::quitRequested, &app, quitApp);
+    QObject::connect(&orbs, &OrbManager::settingsRequested, &app, [&] { openSettings(1); });
+    const auto syncOrbMenu = [&] { tray.setOrbs(orbs.shown(), orbs.list()); };
+    QObject::connect(&orbs, &OrbManager::listChanged, &tray, syncOrbMenu);
+    QObject::connect(&orbs, &OrbManager::shownChanged, &tray, syncOrbMenu);
+    QObject::connect(&tray, &TrayIcon::orbToggled, &orbs, &OrbManager::setShown);
+    QObject::connect(&tray, &TrayIcon::orbEdit, &orbs, &OrbManager::set);
+    QObject::connect(&tray, &TrayIcon::orbSettings, &app, [&](const QString& id) {
+        orbs.select(id);
+        openSettings(1);
+    });
+    syncOrbMenu();
     const auto arguments = app.arguments();
     network.start();
     report.start();
@@ -411,12 +421,24 @@ int main(int argc, char* argv[]) {
                                                       a.startsWith(QStringLiteral("--history-snapshot=")) ||
                                                       a.startsWith(QStringLiteral("--card-snapshot="));
                                            });
-    if (!offscreenShot) orbWindow.restore();
-    // Development aid: --orb-traffic=<mode> sets the orb's readout (sources, machine, intelligence, off);
+    if (!offscreenShot) orbs.start();
+    // Development aid: --orb-traffic=<mode> sets the first orb's readout (sources, machine, intelligence, off);
     // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal).
     for (const auto& arg : arguments) {
-        if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbWindow.setTraffic(arg.mid(14));
-        if (arg.startsWith(QStringLiteral("--orb-style="))) orbWindow.setStyle(arg.mid(12));
+        if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("traffic"), arg.mid(14));
+        if (arg.startsWith(QStringLiteral("--orb-style="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), arg.mid(12));
+        // --orb-do=<add|duplicate|split|merge|undo> runs that action on the first orb after 3 s.
+        if (arg.startsWith(QStringLiteral("--orb-do="))) {
+            const QString action = arg.mid(9);
+            QTimer::singleShot(3000, &orbs, [&orbs, &orbStore, action] {
+                const QString id = orbStore.orbs().front().id;
+                if (action == QLatin1String("add")) orbs.add(id);
+                else if (action == QLatin1String("duplicate")) orbs.duplicate(id);
+                else if (action == QLatin1String("split")) orbs.split(id);
+                else if (action == QLatin1String("merge")) orbs.merge(id);
+                else if (action == QLatin1String("undo")) orbs.undo();
+            });
+        }
     }
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
     QString orbShots;
@@ -426,9 +448,9 @@ int main(int argc, char* argv[]) {
     int orbShot = 0;
     QTimer orbShotTimer;
     if (!orbShots.isEmpty()) {
-        orbWindow.forceDark(app.arguments().contains(QStringLiteral("--orb-dark")));
+        orbs.forceDark(app.arguments().contains(QStringLiteral("--orb-dark")));
         QObject::connect(&orbShotTimer, &QTimer::timeout, &app, [&] {
-            orbWindow.snapshot().save(orbShots + QStringLiteral("-%1.png").arg(orbShot, 2, 10, QLatin1Char('0')));
+            if (auto* first = orbs.first()) first->snapshot().save(orbShots + QStringLiteral("-%1.png").arg(orbShot, 2, 10, QLatin1Char('0')));
             if (++orbShot >= 16) QApplication::quit();
         });
         orbShotTimer.start(4000);

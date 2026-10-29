@@ -141,7 +141,21 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
     value.weight = 700;
     value.pixelSize = fitted(measure, value, layout.valueMaxWidth * s, 0.4);
     const QPointF jitter = layout.valueMotion ? c.jitter : QPointF();
-    value.baselineCenter = QPointF(cx + jitter.x(), cy + layout.valueBaseline * s + jitter.y());
+    // A partly unpriced money value: ≥ at 60 % of the value's size in the secondary color, part of its width.
+    double prefixWidth = 0;
+    TextDraw prefix;
+    if (c.atLeast) {
+        prefix.text = QStringLiteral("≥");
+        prefix.pixelSize = 0.6 * value.pixelSize;
+        prefix.weight = 600;
+        prefixWidth = measure ? measure(prefix) + 0.04 * value.pixelSize : 0.4 * value.pixelSize;
+        const double valueWidth = measure ? measure(value) : 0.6 * value.pixelSize * static_cast<double>(value.text.size());
+        prefix.baselineCenter = QPointF(cx + jitter.x() - (valueWidth + prefixWidth) / 2 + prefixWidth / 2, cy + layout.valueBaseline * s + jitter.y());
+        prefix.color = palette.unit.value_or(f.tokens.secondaryText);
+        prefix.clip = pass.clip;
+        scene.add(prefix);
+    }
+    value.baselineCenter = QPointF(cx + jitter.x() + prefixWidth / 2, cy + layout.valueBaseline * s + jitter.y());
     value.color = palette.value.value_or(idle ? f.tokens.idleValueText : f.tokens.valueText);
     value.clip = pass.clip;
     const Rgba heat = f.tokens.heat(std::max(f.heat, 0.2));

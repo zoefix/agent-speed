@@ -8,6 +8,7 @@
 #include <QMenu>
 #include <QPainter>
 #include <QPainterPath>
+#include <QPixmap>
 #include <QSystemTrayIcon>
 #include <algorithm>
 #include <cmath>
@@ -68,7 +69,10 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     connect(orb_, &QAction::triggered, this, [this] { emit orbToggled(orb_->data().toBool() == false); });
     clickThrough_ = menu_->addAction(QString());
     clickThrough_->setCheckable(true);
-    connect(clickThrough_, &QAction::toggled, this, &TrayIcon::clickThroughToggled);
+    connect(clickThrough_, &QAction::triggered, this, [this](bool on) { emit orbEdit(singleOrb_, QStringLiteral("clickThrough"), on); });
+    orbsMenu_ = new QMenu(menu_);
+    orbsItem_ = menu_->addMenu(orbsMenu_);
+    orbsItem_->setVisible(false);
     demo_ = menu_->addAction(QString());
     demo_->setCheckable(true);
     demo_->setChecked(demo);
@@ -112,8 +116,11 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
 
 void TrayIcon::retranslate() {
     open_->setText(strings_.t(QStringLiteral("menu.dashboard")));
-    orb_->setText(strings_.t(orb_->data().toBool() ? QStringLiteral("menu.hideOrb") : QStringLiteral("menu.showOrb")));
+    const bool several = orbCount_ > 1;
+    orb_->setText(strings_.t(orb_->data().toBool() ? (several ? QStringLiteral("menu.hideOrbs") : QStringLiteral("menu.hideOrb"))
+                                                   : (several ? QStringLiteral("menu.showOrbs") : QStringLiteral("menu.showOrb"))));
     clickThrough_->setText(strings_.t(QStringLiteral("menu.clickThrough")));
+    orbsItem_->setText(strings_.t(QStringLiteral("settings.orb")));
     const auto language = strings_.language();
     demo_->setText(language == QStringLiteral("zh-Hans") ? QStringLiteral("演示模式")
                    : language.startsWith(QStringLiteral("zh")) ? QStringLiteral("示範模式")
@@ -163,13 +170,47 @@ TrayIcon::~TrayIcon() { delete menu_; }
 
 bool TrayIcon::available() const { return QSystemTrayIcon::isSystemTrayAvailable(); }
 
-void TrayIcon::setOrbVisible(bool visible) {
-    orb_->setData(visible);
-    orb_->setText(strings_.t(visible ? QStringLiteral("menu.hideOrb") : QStringLiteral("menu.showOrb")));
-}
-
-void TrayIcon::setClickThrough(bool on) {
-    if (clickThrough_->isChecked() != on) clickThrough_->setChecked(on);
+void TrayIcon::setOrbs(bool shown, const QVariantList& orbs) {
+    orbCount_ = std::max(1, static_cast<int>(orbs.size()));
+    orb_->setData(shown);
+    const bool several = orbs.size() > 1;
+    clickThrough_->setVisible(!several);
+    orbsItem_->setVisible(several);
+    if (!several && !orbs.isEmpty()) {
+        const auto o = orbs.front().toMap();
+        singleOrb_ = o.value(QStringLiteral("id")).toString();
+        clickThrough_->setChecked(o.value(QStringLiteral("clickThrough")).toBool());
+    }
+    orbsMenu_->clear();
+    for (const auto& item : orbs) {
+        const auto o = item.toMap();
+        const QString id = o.value(QStringLiteral("id")).toString();
+        auto* sub = orbsMenu_->addMenu(o.value(QStringLiteral("name")).toString());
+        // The orb's colour dots as the submenu's icon.
+        const auto colors = o.value(QStringLiteral("colors")).toList();
+        QPixmap dots(qMax(1, static_cast<int>(std::min<qsizetype>(3, colors.size()))) * 7 + 5, 12);
+        dots.fill(Qt::transparent);
+        {
+            QPainter p(&dots);
+            p.setRenderHint(QPainter::Antialiasing);
+            p.setPen(Qt::NoPen);
+            for (int i = static_cast<int>(std::min<qsizetype>(3, colors.size())) - 1; i >= 0; --i) {
+                p.setBrush(colors[i].value<QColor>());
+                p.drawEllipse(QRectF(1 + i * 7, 2, 8, 8));
+            }
+        }
+        sub->setIcon(QIcon(dots));
+        auto* show = sub->addAction(strings_.t(QStringLiteral("orbs.visible")));
+        show->setCheckable(true);
+        show->setChecked(o.value(QStringLiteral("visible")).toBool());
+        connect(show, &QAction::triggered, this, [this, id](bool on) { emit orbEdit(id, QStringLiteral("visible"), on); });
+        auto* through = sub->addAction(strings_.t(QStringLiteral("menu.clickThrough")));
+        through->setCheckable(true);
+        through->setChecked(o.value(QStringLiteral("clickThrough")).toBool());
+        connect(through, &QAction::triggered, this, [this, id](bool on) { emit orbEdit(id, QStringLiteral("clickThrough"), on); });
+        sub->addAction(strings_.t(QStringLiteral("menu.orb.settings")), this, [this, id] { emit orbSettings(id); });
+    }
+    retranslate();
 }
 
 void TrayIcon::setDemo(bool demo) {

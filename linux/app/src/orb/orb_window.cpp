@@ -23,8 +23,10 @@
 #include <cmath>
 
 #include "heat.hpp"
+#include "source_colors.hpp"
 #include "orb/body.hpp"
 #include "orb/x11.hpp"
+#include "orbs/orbs_store.hpp"
 #include "strings.hpp"
 
 namespace orb {
@@ -39,20 +41,6 @@ constexpr const char* kTitleKeys[Gauge::kTitles] = {
     "title.walk",       "title.bicycle", "title.ebike",   "title.motorcycle", "title.car",
     "title.sportsCar",  "title.bulletTrain", "title.raceCar", "title.maglev",  "title.jetliner",
     "title.fighterJet", "title.hypersonic",  "title.rocket"};
-
-QColor sourceColor(const QString& id) {
-    static const QHash<QString, QRgb> colors = {
-        {QStringLiteral("codex"), 0x34D399},     {QStringLiteral("claudeCode"), 0xFF8A65},
-        {QStringLiteral("claudeDesktop"), 0xB39DFF}, {QStringLiteral("deepseek"), 0x4D6BFE},
-        {QStringLiteral("opencode"), 0xF4B13E},  {QStringLiteral("gemini"), 0x34B8F0},
-        {QStringLiteral("omp"), 0x84CC16},       {QStringLiteral("antigravity"), 0xEC4899},
-        {QStringLiteral("workbuddy"), 0x11A68B}, {QStringLiteral("workbuddyAi"), 0x007AB4},
-        {QStringLiteral("zcode"), 0x466BFF},     {QStringLiteral("kimi"), 0xE16F8A},
-        {QStringLiteral("grokBuild"), 0x8290A6}, {QStringLiteral("pi"), 0xA855F7},
-        {QStringLiteral("openclaw"), 0xDE2E1F},  {QStringLiteral("hermes"), 0xB8860B},
-        {QStringLiteral("droid"), 0x9E5F46}};
-    return QColor(colors.value(id, 0x7C8798));
-}
 
 QString fill(QString text, const QStringList& args) {
     for (const auto& arg : args) {
@@ -74,7 +62,7 @@ void OrbWindow::Envelope::step(double target, double dt, double timeConstant) {
     if (std::abs(target - value) < 0.0005) value = target;
 }
 
-OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), strings_(strings) {
+OrbWindow::OrbWindow(const Strings& strings, const QString& id) : QOpenGLWindow(NoPartialUpdate), strings_(strings), id_(id) {
     QSurfaceFormat format;
     format.setRenderableType(QSurfaceFormat::OpenGL);
     format.setVersion(3, 3);
@@ -85,20 +73,6 @@ OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), s
     setFormat(format);
     setTitle(strings.t(QStringLiteral("app.name")));
     clock_.start();
-
-    QSettings settings;
-    settings.beginGroup(QStringLiteral("orb"));
-    styleKind_ = styleFromKey(settings.value(QStringLiteral("style")).toString());
-    diameter_ = std::clamp(settings.value(QStringLiteral("size"), 148.0).toDouble(), minimumDiameter(), 240.0);
-    effectsLevel_ = std::clamp(settings.value(QStringLiteral("effects"), 2).toInt(), 0, 3);
-    alwaysOnTop_ = settings.value(QStringLiteral("alwaysOnTop"), true).toBool();
-    clickThrough_ = settings.value(QStringLiteral("clickThrough"), false).toBool();
-    // Absent (older builds) → sources; unknown → off (DESIGN 2b).
-    traffic_ = settings.value(QStringLiteral("traffic"), QStringLiteral("sources")).toString();
-    if (traffic_ != QLatin1String("sources") && traffic_ != QLatin1String("machine") && traffic_ != QLatin1String("intelligence")) {
-        traffic_ = QStringLiteral("off");
-    }
-    settings.endGroup();
     style_ = Style::make(styleKind_);
     blur_ = x11::blurSupported();
     applyFlags();
@@ -108,6 +82,10 @@ OrbWindow::OrbWindow(const Strings& strings) : QOpenGLWindow(NoPartialUpdate), s
     connect(&frameTimer_, &QTimer::timeout, this, [this] { update(); });
     wakeTimer_.setSingleShot(true);
     connect(&wakeTimer_, &QTimer::timeout, this, [this] { requestFrame(); });
+    unitTimer_.setSingleShot(true);
+    connect(&unitTimer_, &QTimer::timeout, this, [this] {
+        emit editRequested(id_, QStringLiteral("unit"), unit_ == QLatin1String("cost") ? QStringLiteral("tokens") : QStringLiteral("cost"));
+    });
     connect(QGuiApplication::styleHints(), &QStyleHints::colorSchemeChanged, this, [this] {
         bodyDirty_ = true;
         requestFrame();
@@ -122,18 +100,7 @@ OrbWindow::~OrbWindow() {
     }
 }
 
-void OrbWindow::restore() {
-    QSettings settings;
-    const QPointF saved = settings.value(QStringLiteral("orb/center")).toPointF();
-    const bool valid = settings.contains(QStringLiteral("orb/center")) && QGuiApplication::screenAt(saved.toPoint());
-    QPointF discCenter = saved;
-    if (!valid) {
-        const QRect avail = QGuiApplication::primaryScreen()->availableGeometry();
-        discCenter = QPointF(avail.right() + 1 - kSnapMargin - diameter_ / 2, avail.top() + avail.height() * 0.32);
-    }
-    setPosition((discCenter - center()).toPoint());
-    if (settings.value(QStringLiteral("orb/visible"), true).toBool()) setOrbVisible(true);
-}
+void OrbWindow::placeAt(QPointF globalCenter) { setPosition((globalCenter - center()).toPoint()); }
 
 bool OrbWindow::dark() const {
     if (forcedDark_) return true;
@@ -179,7 +146,8 @@ bool OrbWindow::openGLAvailable() const {
     return available;
 }
 
-void OrbWindow::setOrbVisible(bool visible) {
+void OrbWindow::setShown(bool visible) {
+    shown_ = visible;
     if (visible == isVisible()) return;
     if (visible && !openGLAvailable()) {
         qWarning("the floating orb needs OpenGL, which is not available here");
@@ -194,52 +162,69 @@ void OrbWindow::setOrbVisible(bool visible) {
         frameTimer_.stop();
         wakeTimer_.stop();
     }
-    QSettings().setValue(QStringLiteral("orb/visible"), visible);
-    emit orbVisibilityChanged(visible);
 }
 
-void OrbWindow::setClickThrough(bool on) {
-    if (on == clickThrough_) return;
-    clickThrough_ = on;
-    QSettings().setValue(QStringLiteral("orb/clickThrough"), on);
-    applyFlags();
-    emit clickThroughChanged(on);
+void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline) {
+    name_ = name;
+    setStyle(config.style);
+    setDiameter(config.size);
+    if (config.alwaysOnTop != alwaysOnTop_ || config.clickThrough != clickThrough_) {
+        alwaysOnTop_ = config.alwaysOnTop;
+        clickThrough_ = config.clickThrough;
+        applyFlags();
+    }
+    opacity_ = config.opacity;
+    fadeWhenIdle_ = config.fadeWhenIdle;
+    if (!fadeWhenIdle_) idleFaded_ = false;
+    const QStringList sources = config.sources.value_or(QStringList());
+    const QString theme = config.titleTheme.value_or(QString());
+    const bool changed = sources != sources_ || config.unit != unit_ || theme != theme_ || config.traffic != traffic_ ||
+                         std::abs(gauge_.redline() - redline) > 0.5;
+    sources_ = sources;
+    unit_ = config.unit;
+    theme_ = theme;
+    traffic_ = config.traffic;
+    gauge_.setRedline(redline);
+    applyOpacity();
+    updateLabel();
+    if (changed) requestFrame();
+}
+
+void OrbWindow::setHighlighted(bool on) {
+    if (on == highlighted_) return;
+    highlighted_ = on;
+    requestFrame();
+}
+
+// The orb's opacity, × 55 % while every source is unavailable, × 45 % after 60 s idle when it fades (DESIGN 2, 2b).
+void OrbWindow::applyOpacity() {
+    double opacity = opacity_ * (unavailable_.isEmpty() ? 1.0 : 0.55);
+    if (idleFaded_ && !hovered_) opacity *= 0.45;
+    if (std::abs(QWindow::opacity() - opacity) > 0.005) setOpacity(opacity);
 }
 
 void OrbWindow::setDiameter(double diameter) {
-    diameter = std::clamp(diameter, minimumDiameter(), 240.0);
+    diameter = std::clamp(diameter, styleKind_ == StyleKind::Minimal ? 64.0 : 96.0, 240.0);
     if (std::abs(diameter - diameter_) < 0.01) return;
     const QPointF discCenter = QPointF(position()) + center();
     diameter_ = diameter;
     resize(qCeil(side()), qCeil(side()));
     setPosition((discCenter - center()).toPoint());
     bodyDirty_ = true;
-    QSettings().setValue(QStringLiteral("orb/size"), diameter);
     applyShape();
     requestFrame();
-    emit diameterChanged();
 }
 
 void OrbWindow::setEffectsLevel(int level) {
     level = std::clamp(level, 0, 3);
     if (level == effectsLevel_) return;
     effectsLevel_ = level;
-    QSettings().setValue(QStringLiteral("orb/effects"), level);
     requestFrame();
-    emit effectsLevelChanged();
-}
-
-void OrbWindow::setAlwaysOnTop(bool on) {
-    if (on == alwaysOnTop_) return;
-    alwaysOnTop_ = on;
-    QSettings().setValue(QStringLiteral("orb/alwaysOnTop"), on);
-    applyFlags();
-    emit alwaysOnTopChanged();
 }
 
 QString OrbWindow::titleText(int index) const {
     if (titles_) {
-        const auto text = titles_->title(index < 0 || index >= Gauge::kTitles ? 0 : index + 1);
+        const auto text = titles_->title(index < 0 || index >= Gauge::kTitles ? 0 : index + 1, theme_);
         // Latin is upper-case on the orb when the app speaks English (custom text as typed otherwise).
         return strings_.language() == QLatin1String("en") ? text.toUpper() : text;
     }
@@ -265,25 +250,13 @@ void OrbWindow::setStyle(const QString& key) {
     bodyDirty_ = true;
     bodyCrossfade_ = true;
     resumeStyle_ = true;
-    QSettings().setValue(QStringLiteral("orb/style"), styleKey(kind));
-    emit styleChanged();
-    if (diameter_ < minimumDiameter()) {
-        setDiameter(minimumDiameter());
-    }
+    if (kind != StyleKind::Minimal && diameter_ < 96) setDiameter(96);
     requestFrame();
 }
 
 double OrbWindow::styleMix(double time) const {
     if (!outgoing_) return 1;
     return std::clamp((time - styleChangedAt_) / kStyleFade, 0.0, 1.0);
-}
-
-void OrbWindow::setTraffic(const QString& traffic) {
-    if (traffic == traffic_) return;
-    traffic_ = traffic;
-    QSettings().setValue(QStringLiteral("orb/traffic"), traffic);
-    emit trafficChanged();
-    requestFrame();
 }
 
 namespace {
@@ -371,7 +344,23 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
     const double t = now();
     const int tierBefore = static_cast<int>(gauge_.tier());
     const int titleBefore = gauge_.title();
-    gauge_.update(snap.value(QStringLiteral("liveOutput")).toDouble(), t);
+    // Every source unavailable (DESIGN 2b): the instrument rests, the value reads – and the title explains.
+    const QString unavailable = snap.value(QStringLiteral("unavailable")).toString();
+    const bool dimChanged = unavailable != unavailable_;
+    unavailable_ = unavailable;
+    unavailableSources_.clear();
+    for (const auto& item : snap.value(QStringLiteral("sourceStates")).toList()) {
+        const auto row = item.toMap();
+        if (!row.value(QStringLiteral("status")).toString().isEmpty()) unavailableSources_.push_back(row.value(QStringLiteral("source")).toString());
+    }
+    gauge_.update(unavailable_.isEmpty() ? snap.value(QStringLiteral("liveOutput")).toDouble() : 0.0, t);
+    // Fade when idle: after 60 s without a live value, back at once on activity.
+    if (gauge_.tier() != Tier::Idle || lastActive_ < -1e8) lastActive_ = t;
+    const bool faded = fadeWhenIdle_ && gauge_.tier() == Tier::Idle && t - lastActive_ >= 60;
+    if (faded != idleFaded_ || dimChanged) {
+        idleFaded_ = faded;
+        applyOpacity();
+    }
     const auto e = effects();
     bool events = false;
     for (const auto& item : snap.value(QStringLiteral("completions")).toList()) {
@@ -394,10 +383,42 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         style_->celebrate(t);
         events = true;
     }
-    valueText_ = snap.value(QStringLiteral("liveText")).toString();
     const auto agents = snap.value(QStringLiteral("agents")).toList();
-    info_ = fill(strings_.t(QStringLiteral("today.summary")),
-                 {snap.value(QStringLiteral("todayOutputText")).toString(), QString::number(agents.size())});
+    atLeast_ = false;
+    if (!unavailable_.isEmpty()) {
+        valueText_ = QStringLiteral("–");
+        info_.clear();
+    } else if (unit_ == QLatin1String("cost")) {
+        // DESIGN 9 Orb: the live cost rate of the orb's sources; – when nothing is priced, 0 for subscriptions only.
+        const bool unknown = snap.value(QStringLiteral("costUnknown")).toBool();
+        const bool subscriptions = snap.value(QStringLiteral("costSubscriptionOnly")).toBool();
+        valueText_ = unknown ? QStringLiteral("–") : subscriptions ? QStringLiteral("0") : snap.value(QStringLiteral("costNumber")).toString();
+        atLeast_ = !unknown && !subscriptions && snap.value(QStringLiteral("costPartial")).toBool() && valueText_ != QLatin1String("0");
+        if (subscriptions) {
+            info_ = strings_.t(QStringLiteral("cost.subscriptionOnly"));
+        } else if (unknown) {
+            // Up to two model names of the orb's agents, then +n.
+            QStringList models;
+            for (const auto& a : agents) {
+                const QString model = a.toMap().value(QStringLiteral("model")).toString();
+                if (!model.isEmpty() && !models.contains(model)) models.push_back(model);
+            }
+            QString names = models.mid(0, 2).join(strings_.t(QStringLiteral("list.separator")));
+            if (models.size() > 2) names += QStringLiteral(" +%1").arg(models.size() - 2);
+            info_ = fill(strings_.t(QStringLiteral("cost.unknownModels")), {names});
+        } else if (atLeast_) {
+            info_ = strings_.t(QStringLiteral("cost.partial"));
+        } else {
+            info_ = fill(strings_.t(QStringLiteral("cost.today.summary")),
+                         {snap.value(QStringLiteral("costTodayText")).toString(), QString::number(agents.size())});
+        }
+        costSymbol_ = snap.value(QStringLiteral("costSymbol")).toString();
+    } else {
+        valueText_ = snap.value(QStringLiteral("liveText")).toString();
+        info_ = fill(strings_.t(QStringLiteral("today.summary")),
+                     {snap.value(QStringLiteral("todayOutputText")).toString(), QString::number(agents.size())});
+    }
+    if (t - labelAt_ >= 1) updateLabel();
     agents_.clear();
     QString key = valueText_;
     for (const auto& a : agents) {
@@ -407,7 +428,7 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         agents_.push_back(sourceColor(source));
         key += source;
     }
-    key += QString::number(static_cast<int>(gauge_.tier())) + QString::number(gauge_.title());
+    key += QString::number(static_cast<int>(gauge_.tier())) + QString::number(gauge_.title()) + unavailable_ + unavailableSources_.join(QLatin1Char(','));
     // 智力 and 思考 of the orb's agents: the first score set (every enabled source while there is one orb).
     const auto sets = snap.value(QStringLiteral("scoreSets")).toList();
     const auto set = sets.isEmpty() ? QVariantMap() : sets.front().toMap();
@@ -458,7 +479,7 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
 
 std::optional<double> OrbWindow::signOfLife(double time) const {
     const double duration = style_->signOfLifeDuration();
-    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || duration <= 0) return std::nullopt;
+    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || duration <= 0 || !unavailable_.isEmpty()) return std::nullopt;
     const double cycleStart = std::floor(time / 6) * 6;
     if (cycleStart < gauge_.tierChangedAt() + 2) return std::nullopt;
     const double u = (time - cycleStart) / duration;
@@ -467,7 +488,7 @@ std::optional<double> OrbWindow::signOfLife(double time) const {
 }
 
 double OrbWindow::nextSignOfLife(double time) const {
-    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || style_->signOfLifeDuration() <= 0) return -1;
+    if (gauge_.tier() != Tier::Idle || !effects().idleSweep || style_->signOfLifeDuration() <= 0 || !unavailable_.isEmpty()) return -1;
     double start = (std::floor(time / 6) + 1) * 6;
     while (start < gauge_.tierChangedAt() + 2) start += 6;
     return start;
@@ -516,7 +537,8 @@ int OrbWindow::desiredFps(double time, const Frame& f) const {
                            activity_.settled(active ? 1 : 0) && valueGlow_.settled(f.tier >= Tier::Boost ? 1 : 0) &&
                            skew_.settled(f.tier >= Tier::Overdrive && f.effects.skew ? 1 : 0);
     const bool waves = !wavePulses_.empty() && time - wavePulses_.back().start < shared::kPulseDuration && style_->sharedWave();
-    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_->isBusy(f) || intelBusy(time) || waves;
+    const bool fading = std::abs(highlight_ - (highlighted_ ? 1.0 : 0.0)) > 0.01;
+    const bool motion = !gauge_.isSettled() || !envelopes || flare_.value > 0.02 || style_->isBusy(f) || intelBusy(time) || waves || fading;
     if (effectsLevel_ == 0) return motion ? 30 : 0;
     int fps = style_->ambientFps(f);
     if (motion || f.signOfLife) fps = std::max(fps, 30);
@@ -621,8 +643,9 @@ void OrbWindow::renderFrame() {
 
     ReadoutContent content;
     content.value = valueText_;
-    content.unit = strings_.t(QStringLiteral("unit.tokS"));
-    content.title = titleText(gauge_.title());
+    content.atLeast = atLeast_;
+    content.unit = unit_ == QLatin1String("cost") ? fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {costSymbol_}) : strings_.t(QStringLiteral("unit.tokS"));
+    content.title = unavailable_.isEmpty() ? titleText(gauge_.title()) : strings_.t(QStringLiteral("source.") + unavailable_);
     content.previousTitle = titleText(gauge_.previousTitle());
     content.titleChangedAt = gauge_.titleChangedAt();
     content.titleHeat = f.heat;
@@ -668,6 +691,9 @@ void OrbWindow::renderFrame() {
     resumeStyle_ = false;
     drawStyle(*style_, in, content, measure);
     scene_.alphaScale = 1;
+    addBezel(scene_, f);
+    highlight_ = highlighted_ ? std::min(1.0, highlight_ + dt / 0.15) : std::max(0.0, highlight_ - dt / 0.15);
+    addHighlight(scene_, f);
 
     renderer_.render(scene_, QSizeF(side(), side()), dpr, center());
     schedule();
@@ -712,7 +738,27 @@ void OrbWindow::setHovered(bool hovered) {
     hovered_ = hovered;
     hoverChangedAt_ = now();
     setCursor(hovered ? Qt::OpenHandCursor : Qt::ArrowCursor);
+    applyOpacity();
+    emit hoverChanged(id_, hovered);
     requestFrame();
+}
+
+// The unit line (the value in `minimal`), grown to at least 44 × 20 pt: a single click toggles tok/s and money.
+bool OrbWindow::onUnit(QPointF local) const {
+    const auto& layout = style_->readoutLayout();
+    const double s = diameter_;
+    const QPointF c = center();
+    QRectF area;
+    if (layout.unitSize > 0) {
+        const double size = std::max(7.0, layout.unitSize * s);
+        const double baseline = c.y() + (layout.valueBaseline + layout.unitGap) * s;
+        area = QRectF(c.x() - std::max(22.0, 0.14 * s), baseline - 0.75 * size - std::max(0.0, (20 - size) / 2), 2 * std::max(22.0, 0.14 * s),
+                      std::max(20.0, size));
+    } else {
+        const double size = layout.valueSize * s;
+        area = QRectF(c.x() - 0.25 * s, c.y() + layout.valueBaseline * s - 0.75 * size, 0.5 * s, size);
+    }
+    return area.contains(local) && insideDisc(local);
 }
 
 void OrbWindow::mousePressEvent(QMouseEvent* event) {
@@ -721,128 +767,170 @@ void OrbWindow::mousePressEvent(QMouseEvent* event) {
         return;
     }
     if (event->button() == Qt::RightButton) {
-        showMenu(event->globalPosition().toPoint());
+        emit menuRequested(id_, event->globalPosition().toPoint());
         return;
     }
     if (event->button() != Qt::LeftButton) return;
     if (snap_) snap_->stop();
     dragging_ = true;
     moved_ = false;
+    pressOnUnit_ = onUnit(event->position());
     pressGlobal_ = event->globalPosition();
     pressPosition_ = position();
+    pressAt_ = now();
     setCursor(Qt::ClosedHandCursor);
 }
 
 void OrbWindow::mouseMoveEvent(QMouseEvent* event) {
     if (!dragging_) {
-        setHovered(insideDisc(event->position()));
+        const bool inside = insideDisc(event->position());
+        setHovered(inside);
+        if (inside) setCursor(onUnit(event->position()) ? Qt::PointingHandCursor : Qt::OpenHandCursor);
         return;
     }
     const QPointF delta = event->globalPosition() - pressGlobal_;
-    if (!moved_ && std::hypot(delta.x(), delta.y()) < 3) return;
-    moved_ = true;
-    setPosition(pressPosition_ + delta.toPoint());
+    if (!moved_ && std::hypot(delta.x(), delta.y()) < 4) return;
+    if (!moved_) {
+        moved_ = true;
+        emit dragChanged(id_, true);
+    }
+    // Within 16 pt of a touching position beside another orb the disc is pulled in (DESIGN 2b Orb to orb).
+    const QPointF raw = QPointF(pressPosition_ + delta.toPoint()) + center();
+    setPosition((snapped(raw, false) - center()).toPoint());
 }
 
 void OrbWindow::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton || !dragging_) return;
     dragging_ = false;
     setCursor(hovered_ ? Qt::OpenHandCursor : Qt::ArrowCursor);
-    if (moved_) snapToEdges();
+    if (moved_) {
+        emit dragChanged(id_, false);
+        settle();
+    } else if (pressOnUnit_ && now() - pressAt_ < 0.5) {
+        unitTimer_.start(QGuiApplication::styleHints()->mouseDoubleClickInterval());
+    }
 }
 
 void OrbWindow::mouseDoubleClickEvent(QMouseEvent* event) {
+    unitTimer_.stop();
     if (event->button() == Qt::LeftButton && insideDisc(event->position())) emit dashboardRequested();
 }
 
-void OrbWindow::snapToEdges() {
-    QPointF c = QPointF(position()) + center();
+// DESIGN 2b Creating, placing and snapping: screen edges first (released within 24 pt, a 12 pt margin), then touching
+// another orb at a 12 pt gap (pulled in within 16 pt, pushed out of an overlap on release), then alignment of centers
+// (within 8 pt, discs within 64 pt), which never pulls a disc off an edge it is docked to.
+QPointF OrbWindow::snapped(QPointF c, bool release) const {
+    const double r = diameter_ / 2;
     QScreen* target = QGuiApplication::screenAt(c.toPoint());
     if (!target) target = screen();
     const QRectF avail = target->availableGeometry();
-    const double r = diameter_ / 2;
-    if (c.x() - r - avail.left() < kSnapReach) c.setX(avail.left() + kSnapMargin + r);
-    if (avail.right() + 1 - (c.x() + r) < kSnapReach) c.setX(avail.right() + 1 - kSnapMargin - r);
-    if (c.y() - r - avail.top() < kSnapReach) c.setY(avail.top() + kSnapMargin + r);
-    if (avail.bottom() + 1 - (c.y() + r) < kSnapReach) c.setY(avail.bottom() + 1 - kSnapMargin - r);
-    const QPoint goal = (c - center()).toPoint();
-    if (goal == position()) {
-        savePosition();
+    bool dockX = false, dockY = false;
+    if (release) {
+        if (c.x() - r - avail.left() < kSnapReach) c.setX(avail.left() + kSnapMargin + r), dockX = true;
+        if (avail.right() + 1 - (c.x() + r) < kSnapReach) c.setX(avail.right() + 1 - kSnapMargin - r), dockX = true;
+        if (c.y() - r - avail.top() < kSnapReach) c.setY(avail.top() + kSnapMargin + r), dockY = true;
+        if (avail.bottom() + 1 - (c.y() + r) < kSnapReach) c.setY(avail.bottom() + 1 - kSnapMargin - r), dockY = true;
+    }
+    const auto others = neighbors_ ? neighbors_() : std::vector<Disc>{};
+    for (const auto& other : others) {
+        QPointF v = c - other.center;
+        double distance = std::hypot(v.x(), v.y());
+        const double want = r + other.radius + kSnapMargin;
+        if (std::abs(distance - want) >= 16 && !(release && distance < want)) continue;
+        if (distance < 0.01) v = QPointF(1, 0), distance = 1;
+        QPointF touch = other.center + v / distance * want;
+        // Docked to an edge: keep that coordinate and touch along the other axis.
+        if (dockX || dockY) {
+            const double dx = dockX ? c.x() - other.center.x() : 0, dy = dockY ? c.y() - other.center.y() : 0;
+            if (dockX && std::abs(dx) < want) touch = QPointF(c.x(), other.center.y() + std::copysign(std::sqrt(want * want - dx * dx), v.y() == 0 ? 1.0 : v.y()));
+            else if (dockY && std::abs(dy) < want) touch = QPointF(other.center.x() + std::copysign(std::sqrt(want * want - dy * dy), v.x() == 0 ? 1.0 : v.x()), c.y());
+            else continue;
+        }
+        c = touch;
+        break;
+    }
+    for (const auto& other : others) {
+        const double gap = std::hypot(c.x() - other.center.x(), c.y() - other.center.y()) - r - other.radius;
+        if (gap > 64) continue;
+        if (!dockX && std::abs(c.x() - other.center.x()) < 8) c.setX(other.center.x());
+        if (!dockY && std::abs(c.y() - other.center.y()) < 8) c.setY(other.center.y());
+    }
+    if (release) {
+        // Never off-screen.
+        c.setX(std::clamp(c.x(), avail.left() + r, std::max(avail.left() + r, avail.right() + 1 - r)));
+        c.setY(std::clamp(c.y(), avail.top() + r, std::max(avail.top() + r, avail.bottom() + 1 - r)));
+    }
+    return c;
+}
+
+// Release springs into place (≈ 0.35 s), then the manager records the position.
+void OrbWindow::settle() {
+    const QPointF goal = snapped(discCenter(), true);
+    const QPoint target = (goal - center()).toPoint();
+    if (target == position()) {
+        emit moved(id_);
         return;
     }
     auto* animation = new QVariantAnimation(this);
     animation->setStartValue(position());
-    animation->setEndValue(goal);
+    animation->setEndValue(target);
     animation->setDuration(360);
     animation->setEasingCurve(QEasingCurve::OutBack);
     connect(animation, &QVariantAnimation::valueChanged, this, [this](const QVariant& v) { setPosition(v.toPoint()); });
-    connect(animation, &QVariantAnimation::finished, this, [this] { savePosition(); });
+    connect(animation, &QVariantAnimation::finished, this, [this] { emit moved(id_); });
     snap_ = animation;
     animation->start(QAbstractAnimation::DeleteWhenStopped);
 }
 
-void OrbWindow::savePosition() { QSettings().setValue(QStringLiteral("orb/center"), QPointF(position()) + center()); }
+// DESIGN 2b Source bezel: a subset orb's rim in equal arcs of its source colors from 12 o'clock with 4° gaps, dashed
+// for an unavailable source.
+void OrbWindow::addBezel(Scene& scene, const Frame& f) const {
+    if (sources_.isEmpty()) return;
+    const double width = std::max(1.0, 0.0105 * f.s);
+    const double radius = f.s / 2 - width / 2;
+    const int count = static_cast<int>(sources_.size());
+    const double gap = count > 1 ? 4.0 : 0.0;
+    const double span = 360.0 / count;
+    const Rgba unlit = f.tokens.unlitSegment.opacity(2.5);
+    for (int i = 0; i < count; ++i) {
+        const double start = -90 + span * i + gap / 2;
+        const double sweep = span - gap;
+        if (!unavailableSources_.contains(sources_[i])) {
+            const Rgba tint = Rgba::from(sourceColor(sources_[i]));
+            const Rgba color = f.dark ? tint.withAlpha(0.85) : tint.darkened(0.1).withAlpha(0.9);
+            scene.add(Instance::bandArc(f.center, radius, width, start, sweep, color, color), Blend::Over);
+            continue;
+        }
+        const double degreesPerPoint = 180 / (kPi * radius);
+        const double on = width * 1.2 * degreesPerPoint, period = width * 2.6 * degreesPerPoint;
+        for (double a = start; a < start + sweep; a += period) {
+            scene.add(Instance::bandArc(f.center, radius, width, a, std::min(on, start + sweep - a), unlit, unlit), Blend::Over);
+        }
+    }
+}
 
-void OrbWindow::showMenu(QPoint global) {
-    auto* menu = new QMenu();
-    menu->setAttribute(Qt::WA_DeleteOnClose);
-    menu->addAction(strings_.t(QStringLiteral("menu.dashboard")), this, &OrbWindow::dashboardRequested);
-    menu->addSeparator();
+// The Settings highlight: a 2 pt accent ring 4 pt outside the disc at 60 %, fading in over 0.15 s.
+void OrbWindow::addHighlight(Scene& scene, const Frame& f) const {
+    if (highlight_ <= 0.01) return;
+    const Rgba accent = f.dark ? Rgba::hex(0x5B8CFF) : Rgba::hex(0x2F6BFF);
+    scene.add(Instance::ring(f.center, f.s / 2 + 5, 2, accent.withAlpha(0.6 * highlight_)), Blend::Over);
+}
 
-    auto* size = menu->addMenu(strings_.t(QStringLiteral("menu.size")));
-    auto* sizes = new QActionGroup(size);
-    const char* sizeKeys[] = {"menu.size.small", "menu.size.medium", "menu.size.large"};
-    for (int i = 0; i < 3; ++i) {
-        auto* action = size->addAction(strings_.t(QString::fromLatin1(sizeKeys[i])));
-        action->setCheckable(true);
-        action->setChecked(std::abs(diameter_ - kSizes[i]) < 0.5);
-        sizes->addAction(action);
-        const double d = kSizes[i];
-        connect(action, &QAction::triggered, this, [this, d] { setDiameter(d); });
+// DESIGN 2b Accessibility: the orb's label, at most once a second, as its window title.
+void OrbWindow::updateLabel() {
+    QString label;
+    const QString title = titleText(gauge_.title());
+    if (!unavailable_.isEmpty()) {
+        label = fill(strings_.t(QStringLiteral("a11y.orb.unavailable")), {name_});
+    } else if (name_.isEmpty()) {
+        label = fill(strings_.t(QStringLiteral("a11y.orb")), {valueText_, title});
+    } else {
+        label = fill(strings_.t(QStringLiteral("a11y.orb.named")), {name_, valueText_, title});
     }
-    auto* styleMenu = menu->addMenu(strings_.t(QStringLiteral("orbs.style")));
-    auto* styles = new QActionGroup(styleMenu);
-    for (const auto kind : kStyles) {
-        const QString key = styleKey(kind);
-        auto* action = styleMenu->addAction(strings_.t(QStringLiteral("style.") + key));
-        action->setCheckable(true);
-        action->setChecked(kind == styleKind_);
-        styles->addAction(action);
-        connect(action, &QAction::triggered, this, [this, key] { setStyle(key); });
-    }
-    auto* fx = menu->addMenu(strings_.t(QStringLiteral("menu.effects")));
-    auto* levels = new QActionGroup(fx);
-    const char* levelKeys[] = {"effects.off", "effects.soft", "effects.standard", "effects.max"};
-    for (int i = 0; i < 4; ++i) {
-        auto* action = fx->addAction(strings_.t(QString::fromLatin1(levelKeys[i])));
-        action->setCheckable(true);
-        action->setChecked(effectsLevel_ == i);
-        levels->addAction(action);
-        connect(action, &QAction::triggered, this, [this, i] { setEffectsLevel(i); });
-    }
-    auto* traffic = menu->addMenu(strings_.t(QStringLiteral("orbs.traffic")));
-    auto* modes = new QActionGroup(traffic);
-    for (const char* mode : {"sources", "machine", "intelligence", "off"}) {
-        const auto value = QString::fromLatin1(mode);
-        auto* action = traffic->addAction(strings_.t(QStringLiteral("orbs.traffic.") + value));
-        action->setCheckable(true);
-        action->setChecked(traffic_ == value);
-        modes->addAction(action);
-        connect(action, &QAction::triggered, this, [this, value] { setTraffic(value); });
-    }
-    auto* top = menu->addAction(strings_.t(QStringLiteral("menu.alwaysOnTop")));
-    top->setCheckable(true);
-    top->setChecked(alwaysOnTop_);
-    connect(top, &QAction::toggled, this, &OrbWindow::setAlwaysOnTop);
-    auto* through = menu->addAction(strings_.t(QStringLiteral("menu.clickThrough")));
-    through->setCheckable(true);
-    through->setChecked(clickThrough_);
-    connect(through, &QAction::toggled, this, &OrbWindow::setClickThrough);
-    menu->addSeparator();
-    menu->addAction(strings_.t(QStringLiteral("menu.orb.hide")), this, [this] { setOrbVisible(false); });
-    menu->addAction(strings_.t(QStringLiteral("menu.settings")), this, &OrbWindow::settingsRequested);
-    menu->addAction(strings_.t(QStringLiteral("menu.quit")), this, &OrbWindow::quitRequested);
-    menu->popup(global);
+    if (label == labelText_) return;
+    labelText_ = label;
+    labelAt_ = now();
+    setTitle(label);
 }
 
 }  // namespace orb

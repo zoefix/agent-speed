@@ -46,6 +46,10 @@ qt_add_executable(agent-speed
     src/orb/shared_layers.cpp
     src/orb/style.cpp
     src/orb/x11.cpp
+    src/orbs/name_plate.cpp
+    src/orbs/orb_manager.cpp
+    src/orbs/orb_views.cpp
+    src/orbs/orbs_store.cpp
     src/strings.cpp
     src/task_card.cpp
     src/title_themes.cpp

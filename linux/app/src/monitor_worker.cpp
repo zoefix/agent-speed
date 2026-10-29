@@ -79,6 +79,7 @@ void MonitorWorker::startMonitor(qint64 now) {
     monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setTaskModels(models_);
     monitor_->setScoreSets(allSets());
+    monitor_->setPeakSets(orbSets());
     monitor_->start(now, localMidnightMs(now));
     lastPollMs_ = now;
 }
@@ -359,6 +360,20 @@ void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<
     }
     peakBefore_ = std::max({peakBefore_, snap.peakToday, snap.liveOutput});
     map.insert(QStringLiteral("newPeak"), newPeak);
+    if (!options_.orbs.empty()) {
+        OrbContext context;
+        context.currency = options_.currency;
+        context.rate = options_.rate;
+        context.language = options_.language;
+        context.subscriptions = options_.subscriptions;
+        context.includeSubscriptions = options_.includeSubscriptions;
+        context.totalMetric = options_.totalMetric;
+        context.trafficIncludeTools = options_.trafficIncludeTools;
+        context.trafficBits = options_.trafficBits;
+        context.nowMs = now;
+        context.todayStartMs = todayStart;
+        map.insert(QStringLiteral("orbs"), orbs_.compute(snap, options_.orbs, context, map, sets_.size() + options_.boards.size()));
+    }
     emit snapshotReady(map);
 }
 
@@ -394,9 +409,11 @@ void MonitorWorker::tick() {
         }
     }
     if (monitor_) monitor_->setTrafficEnabled(options_.trafficEnabled);
-    if (monitor_ && options_.boards != appliedBoards_) {
+    if (monitor_ && (options_.boards != appliedBoards_ || options_.orbs != appliedOrbs_)) {
         appliedBoards_ = options_.boards;
+        appliedOrbs_ = options_.orbs;
         monitor_->setScoreSets(allSets());
+        monitor_->setPeakSets(orbSets());
     }
     {
         std::lock_guard lock(optionsMutex_);
@@ -439,5 +456,12 @@ void MonitorWorker::setReportWatch(bool on, qint64 taken) {
 std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::allSets() const {
     auto sets = sets_;
     for (const auto& board : options_.boards) sets.push_back(board.sources);
+    for (const auto& orb : options_.orbs) sets.push_back(orb.sources);
+    return sets;
+}
+
+std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::orbSets() const {
+    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets;
+    for (const auto& orb : options_.orbs) sets.push_back(orb.sources);
     return sets;
 }

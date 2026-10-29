@@ -109,6 +109,8 @@ public:
     std::int64_t epoch() const { return epoch_; }
     // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
     void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
+    // The source sets of the floating orbs whose peakToday_A every snapshot computes (nullopt: peakToday).
+    void setPeakSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { peakSets_ = std::move(sets); }
 
 private:
     struct Root {
@@ -195,6 +197,7 @@ private:
     std::map<SourceKind, tasks::Models> taskModels_;
     std::uint64_t taskModelsVersion_ = 0;
     std::vector<std::optional<std::vector<SourceKind>>> scoreSets_{std::nullopt};
+    std::vector<std::optional<std::vector<SourceKind>>> peakSets_;
     struct CachedTask {
         std::uint64_t events = UINT64_MAX, models = UINT64_MAX;
         Phase phase = Phase::Idle;
