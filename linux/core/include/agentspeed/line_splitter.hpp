@@ -18,12 +18,15 @@ public:
     void reset();
     bool hasPartial() const { return !partial_.empty() || skipping_; }
     std::int64_t oversizedLines() const { return oversized_; }
+    // Drops the bytes up to and including the next '\n' (reading started inside a line).
+    void alignToNextLine() { align_ = true; }
 
 private:
     void deliver(std::string_view line, const LineHandler& onLine);
 
     std::string partial_;
     bool skipping_ = false;
+    bool align_ = false;
     std::int64_t oversized_ = 0;
 };
 

@@ -6,6 +6,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     engine_fixture_test.cpp
+    hermes_test.cpp
     json_test.cpp
     parser_fixture_test.cpp
     rfc3339_test.cpp

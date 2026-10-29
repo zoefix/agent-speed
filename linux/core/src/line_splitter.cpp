@@ -12,6 +12,12 @@ void LineSplitter::deliver(std::string_view line, const LineHandler& onLine) {
 }
 
 void LineSplitter::feed(std::string_view data, const LineHandler& onLine) {
+    if (align_) {
+        const auto newline = data.find('\n');
+        if (newline == std::string_view::npos) return;
+        data.remove_prefix(newline + 1);
+        align_ = false;
+    }
     while (!data.empty()) {
         const auto newline = data.find('\n');
         if (newline == std::string_view::npos) {
@@ -47,6 +53,7 @@ void LineSplitter::feed(std::string_view data, const LineHandler& onLine) {
 void LineSplitter::reset() {
     partial_.clear();
     skipping_ = false;
+    align_ = false;
 }
 
 }  // namespace agentspeed
