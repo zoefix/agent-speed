@@ -20,6 +20,13 @@ struct AgentRow {
     bool subagent = false;
 };
 
+// A responseCompleted event (METRICS 6.4): the first emission of a response key while running.
+struct Completion {
+    SourceKind source = SourceKind::Codex;
+    std::int64_t output = 0;
+    std::optional<double> speed;
+};
+
 struct SourceRow {
     SourceKind source = SourceKind::Codex;
     std::int64_t todayOutput = 0;

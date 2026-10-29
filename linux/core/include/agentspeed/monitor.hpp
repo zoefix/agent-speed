@@ -34,6 +34,8 @@ public:
     // Change detection (call about once a second); rediscovers every 10 seconds.
     void poll(std::int64_t nowMs, std::int64_t todayStartMs);
     Snapshot snapshot(std::int64_t nowMs, std::int64_t todayStartMs) const;
+    // responseCompleted events since the last call (METRICS 6.4); never the startup backlog.
+    std::vector<Completion> takeCompletions();
 
     std::size_t trackedFiles() const { return files_.size(); }
 

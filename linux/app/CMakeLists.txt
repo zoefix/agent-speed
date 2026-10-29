@@ -1,4 +1,6 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Widgets Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui OpenGL Widgets Qml Quick QuickControls2)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-shape)
 qt_standard_project_setup(REQUIRES 6.5)
 
 qt_add_executable(agent-speed
@@ -9,6 +11,17 @@ qt_add_executable(agent-speed
     src/graphics.cpp
     src/heat.cpp
     src/monitor_worker.cpp
+    src/orb/body.cpp
+    src/orb/color.cpp
+    src/orb/gauge.cpp
+    src/orb/led_math.cpp
+    src/orb/led_style.cpp
+    src/orb/orb_window.cpp
+    src/orb/readout.cpp
+    src/orb/renderer.cpp
+    src/orb/scene.cpp
+    src/orb/shaders.cpp
+    src/orb/x11.cpp
     src/strings.cpp
     src/tray_icon.cpp
 )
@@ -50,7 +63,8 @@ qt_add_resources(agent-speed "strings"
 )
 
 target_link_libraries(agent-speed PRIVATE
-    agentspeed_core Qt6::Core Qt6::Gui Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2)
+    agentspeed_core Qt6::Core Qt6::Gui Qt6::OpenGL Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
+target_include_directories(agent-speed PRIVATE src)
 
 install(TARGETS agent-speed RUNTIME DESTINATION bin)
 install(FILES packaging/agent-speed.desktop DESTINATION share/applications)

@@ -56,9 +56,14 @@ QPixmap renderIcon(int size, const QString& text, int band) {
 }  // namespace
 
 TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
-    : QObject(parent), tray_(new QSystemTrayIcon(this)), menu_(new QMenu()) {
+    : QObject(parent), tray_(new QSystemTrayIcon(this)), menu_(new QMenu()), strings_(strings) {
     auto* open = menu_->addAction(strings.t(QStringLiteral("menu.dashboard")));
     connect(open, &QAction::triggered, this, &TrayIcon::toggleDashboard);
+    orb_ = menu_->addAction(strings.t(QStringLiteral("menu.showOrb")));
+    connect(orb_, &QAction::triggered, this, [this] { emit orbToggled(orb_->data().toBool() == false); });
+    clickThrough_ = menu_->addAction(strings.t(QStringLiteral("menu.clickThrough")));
+    clickThrough_->setCheckable(true);
+    connect(clickThrough_, &QAction::toggled, this, &TrayIcon::clickThroughToggled);
     demo_ = menu_->addAction(strings.language().startsWith(QStringLiteral("zh")) ? QStringLiteral("示範模式")
                              : strings.language() == QStringLiteral("ja")      ? QStringLiteral("デモモード")
                                                                                 : QStringLiteral("Demo Mode"));
@@ -79,6 +84,15 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
 TrayIcon::~TrayIcon() { delete menu_; }
 
 bool TrayIcon::available() const { return QSystemTrayIcon::isSystemTrayAvailable(); }
+
+void TrayIcon::setOrbVisible(bool visible) {
+    orb_->setData(visible);
+    orb_->setText(strings_.t(visible ? QStringLiteral("menu.hideOrb") : QStringLiteral("menu.showOrb")));
+}
+
+void TrayIcon::setClickThrough(bool on) {
+    if (clickThrough_->isChecked() != on) clickThrough_->setChecked(on);
+}
 
 void TrayIcon::setDemo(bool demo) {
     if (demo_->isChecked() != demo) demo_->setChecked(demo);

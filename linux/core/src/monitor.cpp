@@ -6,6 +6,7 @@
 #include <cstdlib>
 #include <fstream>
 #include <set>
+#include <utility>
 
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
@@ -86,7 +87,17 @@ struct Monitor::Tracked {
 class Monitor::Store : public ResponseSink {
 public:
     void onResponse(const ParsedResponse& r, bool) override {
-        engine::Response& e = byKey_[r.key];
+        const auto [slot, inserted] = byKey_.try_emplace(r.key);
+        if (inserted && live_ && r.endMs >= nowMs_ - kCompletionWindowMs) {
+            Completion c;
+            c.source = r.source;
+            c.output = r.tokens.output;
+            if (r.startMs && r.endMs > *r.startMs) {
+                c.speed = static_cast<double>(r.tokens.output) * 1000.0 / static_cast<double>(r.endMs - *r.startMs);
+            }
+            completions_.push_back(c);
+        }
+        engine::Response& e = slot->second;
         e.key = r.key;
         e.agentId = r.agentId;
         e.source = r.source;
@@ -98,6 +109,10 @@ public:
         e.final = r.final;
         e.requestCount = r.requestCount;
     }
+    void goLive() { live_ = true; }
+    void setClock(std::int64_t nowMs) { nowMs_ = nowMs; }
+    std::vector<Completion> takeCompletions() { return std::exchange(completions_, {}); }
+
     void prune(std::int64_t keepFromMs) {
         for (auto it = byKey_.begin(); it != byKey_.end();) {
             it = it->second.endMs < keepFromMs ? byKey_.erase(it) : std::next(it);
@@ -111,7 +126,11 @@ public:
     }
 
 private:
+    static constexpr std::int64_t kCompletionWindowMs = 120'000;
     std::map<std::string, engine::Response> byKey_;
+    std::vector<Completion> completions_;
+    bool live_ = false;
+    std::int64_t nowMs_ = 0;
 };
 
 Monitor::Monitor(MonitorConfig config) : config_(std::move(config)), store_(std::make_unique<Store>()) {}
@@ -120,7 +139,10 @@ Monitor::~Monitor() = default;
 void Monitor::start(std::int64_t nowMs, std::int64_t todayStartMs) {
     discover(nowMs, todayStartMs, true);
     lastDiscoveryMs_ = nowMs;
+    store_->goLive();
 }
+
+std::vector<Completion> Monitor::takeCompletions() { return store_->takeCompletions(); }
 
 void Monitor::track(const fs::path& path, SourceKind family, std::int64_t todayStartMs, bool startup) {
     const auto stat = statFile(path);
@@ -234,6 +256,7 @@ void Monitor::readWhole(Tracked& file) {
 }
 
 void Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
+    store_->setClock(nowMs);
     for (auto& [_, file] : files_) {
         if (nowMs - file->lastChangeMs > kHotWindowMs && nowMs - lastDiscoveryMs_ < kRediscoveryMs) continue;
         const auto st = statFile(file->path);

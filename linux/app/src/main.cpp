@@ -11,6 +11,7 @@
 #include "flyout.hpp"
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
+#include "orb/orb_window.hpp"
 #include "strings.hpp"
 #include "tray_icon.hpp"
 
@@ -87,6 +88,33 @@ int main(int argc, char* argv[]) {
     QObject::connect(&state, &AppState::demoChanged, &tray, &TrayIcon::setDemo);
     QObject::connect(&tray, &TrayIcon::quitRequested, &app, &QApplication::quit);
     QObject::connect(&tray, &TrayIcon::toggleDashboard, &flyout, &Flyout::toggle);
+
+    orb::OrbWindow orbWindow(strings);
+    QObject::connect(&state, &AppState::snapshotChanged, &orbWindow, [&] { orbWindow.applySnapshot(state.snapshot()); });
+    QObject::connect(&orbWindow, &orb::OrbWindow::dashboardRequested, &flyout, &Flyout::toggle);
+    QObject::connect(&orbWindow, &orb::OrbWindow::quitRequested, &app, &QApplication::quit);
+    QObject::connect(&orbWindow, &orb::OrbWindow::orbVisibilityChanged, &tray, &TrayIcon::setOrbVisible);
+    QObject::connect(&orbWindow, &orb::OrbWindow::clickThroughChanged, &tray, &TrayIcon::setClickThrough);
+    QObject::connect(&tray, &TrayIcon::orbToggled, &orbWindow, &orb::OrbWindow::setOrbVisible);
+    QObject::connect(&tray, &TrayIcon::clickThroughToggled, &orbWindow, &orb::OrbWindow::setClickThrough);
+    tray.setClickThrough(orbWindow.clickThrough());
+    tray.setOrbVisible(false);
+    if (snapshotPath.isEmpty()) orbWindow.restore();
+    // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
+    QString orbShots;
+    for (const auto& arg : app.arguments()) {
+        if (arg.startsWith(QStringLiteral("--orb-snapshots="))) orbShots = arg.mid(16);
+    }
+    int orbShot = 0;
+    QTimer orbShotTimer;
+    if (!orbShots.isEmpty()) {
+        orbWindow.forceDark(app.arguments().contains(QStringLiteral("--orb-dark")));
+        QObject::connect(&orbShotTimer, &QTimer::timeout, &app, [&] {
+            orbWindow.snapshot().save(orbShots + QStringLiteral("-%1.png").arg(orbShot, 2, 10, QLatin1Char('0')));
+            if (++orbShot >= 16) QApplication::quit();
+        });
+        orbShotTimer.start(4000);
+    }
     // Without a tray (GNOME without the AppIndicator extension) the dashboard is the only way in.
     if (!hidden || !tray.available()) flyout.present();
     if (!snapshotPath.isEmpty()) {

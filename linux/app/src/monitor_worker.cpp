@@ -3,6 +3,7 @@
 #include <QDateTime>
 #include <QTimer>
 #include <QVariantList>
+#include <algorithm>
 
 #include "agentspeed/demo.hpp"
 #include "agentspeed/monitor.hpp"
@@ -89,19 +90,49 @@ void MonitorWorker::start() {
 
 void MonitorWorker::setDemo(bool demo) {
     demo_ = demo;
+    peakBefore_ = -1;
     tick();
+}
+
+void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions,
+                            qint64 now, qint64 todayStart) {
+    QVariantMap map = toVariant(snap, *strings_);
+    QVariantList events;
+    for (const auto& c : completions) {
+        QVariantMap event;
+        event.insert(QStringLiteral("source"), QString::fromUtf8(agentspeed::sourceId(c.source)));
+        event.insert(QStringLiteral("output"), static_cast<qint64>(c.output));
+        event.insert(QStringLiteral("speed"), c.speed ? *c.speed : -1.0);
+        events.push_back(event);
+    }
+    map.insert(QStringLiteral("completions"), events);
+    bool newPeak = false;
+    if (peakBefore_ < 0 || peakDay_ != todayStart) {
+        peakBefore_ = snap.peakToday;
+        peakDay_ = todayStart;
+    } else if (snap.liveOutput >= 20 && snap.liveOutput >= peakBefore_ + 1 && now - lastPeakEventMs_ >= 60'000) {
+        newPeak = true;
+        lastPeakEventMs_ = now;
+    }
+    peakBefore_ = std::max({peakBefore_, snap.peakToday, snap.liveOutput});
+    map.insert(QStringLiteral("newPeak"), newPeak);
+    emit snapshotReady(map);
 }
 
 void MonitorWorker::tick() {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     const qint64 todayStart = localMidnightMs(now);
+    const qint64 previous = lastTickMs_;
+    lastTickMs_ = now;
     if (demo_) {
-        emit snapshotReady(toVariant(agentspeed::demoSnapshot(now, todayStart), *strings_));
+        publish(agentspeed::demoSnapshot(now, todayStart), agentspeed::demoCompletions(previous, now), now, todayStart);
         return;
     }
+    std::vector<agentspeed::Completion> completions;
     if (now - lastPollMs_ >= 1000) {
         monitor_->poll(now, todayStart);
         lastPollMs_ = now;
+        completions = monitor_->takeCompletions();
     }
-    emit snapshotReady(toVariant(monitor_->snapshot(now, todayStart), *strings_));
+    publish(monitor_->snapshot(now, todayStart), completions, now, todayStart);
 }
