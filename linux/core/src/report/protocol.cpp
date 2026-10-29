@@ -75,7 +75,7 @@ std::string authorityOf(std::string_view url) {
     std::string out(host);
     std::transform(out.begin(), out.end(), out.begin(), [](unsigned char c) { return static_cast<char>(std::tolower(c)); });
     if (out.find(':') != std::string::npos) out = "[" + out + "]";
-    const std::string_view fallback = parts.scheme == "https" ? "443" : parts.scheme == "http" ? "80" : "";
+    const std::string_view fallback = parts.scheme == "https" || parts.scheme == "wss" ? "443" : parts.scheme == "http" || parts.scheme == "ws" ? "80" : "";
     std::string_view digits = port;
     while (digits.size() > 1 && digits.front() == '0') digits.remove_prefix(1);
     if (!digits.empty() && digits != fallback) out += ":" + std::string(digits);
