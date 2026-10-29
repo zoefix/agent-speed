@@ -162,6 +162,7 @@ body[data-view="dark"] .theme-col[data-theme="light"], body[data-view="light"] .
 .rblock .lb { grid-column: 1; color: var(--bar-ink-2); padding-right: 3px; }
 .rblock .nb { grid-column: 2; text-align: right; color: color-mix(in srgb, var(--bar-ink) 85%, transparent); }
 .rblock .ub { grid-column: 3; color: var(--bar-ink-2); padding-left: 2.5px; }
+.rblock .r1 .nb { grid-column: 2 / 4; }
 .rblock .pm::after { top: calc(1.025em - var(--d) / 2); }
 .rblock .ghost { visibility: hidden; height: 0; overflow: hidden; line-height: 0; }
 .rblock.is-pale .r1 .nb, .rblock .nb.is-quiet { color: var(--bar-ink-2); }
@@ -955,7 +956,7 @@ window.PS_STRINGS = {"unit.tokS":{"zh-Hant":"tok/s","zh-Hans":"tok/s","en":"tok/
     const n = r.v == null ? '<span class="nb is-quiet">–</span>' : `<span class="nb">${numHTML(r.v, { key, prov: r.prov })}</span>`;
     const think = r.v == null || !(r.think > 0) ? '–' : fmtSpeed(r.think);
     return `<span class="rblock${r.form === 'resting' ? ' is-pale' : ''}${single ? ' single' : ''}" aria-hidden="true">` +
-      `<span class="row r1"><span class="lb">${esc(t('intel.glyph'))}</span>${n}<span class="ub"></span></span>` +
+      `<span class="row r1"><span class="lb">${esc(t('intel.glyph'))}</span>${n}</span>` +
       `<span class="row r2"><span class="lb">${esc(t('intel.thinking.glyph'))}</span><span class="nb${think === '–' ? ' is-quiet' : ''}">${think}</span><span class="ub">${esc(t('unit.tokS'))}</span></span>` +
       `<span class="row"><span class="lb ghost">${esc(t('intel.glyph'))}</span><span class="nb ghost">8,888</span><span class="ub ghost">${esc(t('unit.tokS'))}</span></span>` +
       `<span class="row"><span class="lb ghost">${esc(t('intel.thinking.glyph'))}</span><span class="nb ghost">8.88k</span><span class="ub ghost"></span></span></span>`;

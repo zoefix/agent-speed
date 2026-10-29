@@ -15,6 +15,9 @@ public readonly record struct BarIntelligenceCells(double Label, double Number, 
 
     /// <summary>The block's width without the gap before it.</summary>
     public double Width => Label + LabelGap + Number + UnitGap + Unit;
+
+    /// <summary>Where line 1's score ends: the unit-less score ends with line 2's unit, on the block's right edge.</summary>
+    public double ScoreRight => Width;
 }
 
 /// <summary>One dot of the provisional mark, its box on the device pixel grid (DIP).</summary>
@@ -40,9 +43,9 @@ public enum BarIntelligenceInk
 /// The taskbar 性能 block (DESIGN 10, Menu bar and taskbar): after the value, the money block and the network block,
 /// <c>性能 1,286</c> over <c>思考 128 tok/s</c>. 性能 is the highest performance score among the agents of all enabled
 /// sources, live before resting (DESIGN 12; METRICS 6.9), in compact form: live in the label color at 85 %, resting and
-/// <c>–</c> in the secondary color, on the dotted provisional mark while provisional. Labels sit in a column, both numbers
-/// right-aligned in one cell as wide as the wider of <c>8.88k</c> and <c>8,888</c>, so the block's width depends on the
-/// language only. It never hides while chosen: with nothing generated in the window the thinking number reads <c>–</c> and
+/// <c>–</c> in the secondary color, on the dotted provisional mark while provisional. Labels sit in a column, the thinking rate
+/// right-aligned in one cell as wide as the wider of <c>8.88k</c> and <c>8,888</c> with its unit after it, and the score
+/// ending where that unit ends, so both lines share the right edge and the block's width depends on the language only. It never hides while chosen: with nothing generated in the window the thinking number reads <c>–</c> and
 /// <c>tok/s</c> stays, while 性能 keeps its own form. Once the thinking
 /// rate has read 0 for 3 s under a score, line 1 stands alone, centred in the same cells. Every change replaces characters
 /// in place, a drop included: the widget is one image. It needs neither network measuring nor the helper.

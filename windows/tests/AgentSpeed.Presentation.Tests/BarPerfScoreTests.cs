@@ -119,6 +119,14 @@ public class BarPerfScoreTests
         Assert.Equal(cells.Label + 3 + cells.Number + 3 + cells.Unit, cells.Width);
     }
 
+    [Fact]
+    public void TheScoreEndsWhereTheThinkingUnitEnds()
+    {
+        // DESIGN 10: line 1 has no unit, so its score shares the block's right edge with line 2's tok/s.
+        var cells = BarIntelligenceBlock.Of(IntelligenceSums.Zero, ZhHant).Cells(text => text.Length * 7, number => number.Length * 6);
+        Assert.Equal(cells.Label + 3 + cells.Number + 3 + cells.Unit, cells.ScoreRight);
+    }
+
     [Theory]
     [InlineData(1.0)]
     [InlineData(1.25)]
