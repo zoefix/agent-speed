@@ -367,6 +367,20 @@ public sealed class BoardGauge
 
     private static bool IsDash(ReadOnlySpan<char> text) => text.SequenceEqual(BoardHeroReadouts.Dash);
 
+    // A plain loop: MemoryExtensions.ContainsAnyInRange allocates on every call here, and frames must allocate nothing.
+    private static bool HasDigit(ReadOnlySpan<char> text)
+    {
+        foreach (var c in text)
+        {
+            if (char.IsAsciiDigit(c))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
+
     private static void ScoreText(BoardDrawList list, IBoardLayers layers, BoardStyle style, BoardGaugePalette palette, ReadOnlySpan<char> text, double live,
         double proof, double x, int align, double baseline, double size, double tracking, double alpha)
     {
@@ -403,7 +417,7 @@ public sealed class BoardGauge
     {
         Span<char> eights = stackalloc char[BoardHeroScore.MaxLength];
         eights = eights[.._score.Format(eights, now, compact: false)];
-        if (ghost.A <= 0 || !eights.ContainsAnyInRange('0', '9'))
+        if (ghost.A <= 0 || !HasDigit(eights))
         {
             return;
         }
