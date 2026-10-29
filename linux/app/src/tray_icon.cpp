@@ -69,6 +69,8 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     demo_->setChecked(demo);
     connect(demo_, &QAction::toggled, this, &TrayIcon::demoToggled);
     menu_->addSeparator();
+    history_ = menu_->addAction(QString());
+    connect(history_, &QAction::triggered, this, &TrayIcon::historyRequested);
     settings_ = menu_->addAction(QString());
     connect(settings_, &QAction::triggered, this, &TrayIcon::settingsRequested);
     quit_ = menu_->addAction(QString());
@@ -91,6 +93,7 @@ void TrayIcon::retranslate() {
                    : language.startsWith(QStringLiteral("zh")) ? QStringLiteral("示範模式")
                    : language == QStringLiteral("ja")           ? QStringLiteral("デモモード")
                                                                 : QStringLiteral("Demo Mode"));
+    history_->setText(strings_.t(QStringLiteral("history.open")));
     settings_->setText(strings_.t(QStringLiteral("menu.settings")));
     quit_->setText(strings_.t(QStringLiteral("menu.quit")));
 }

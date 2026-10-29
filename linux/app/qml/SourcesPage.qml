@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "Format.js" as Format
 import "Sync.js" as Sync
@@ -33,6 +34,59 @@ SettingsPage {
         function onSnapshotChanged() { page.refresh() }
     }
     Component.onCompleted: refresh()
+
+    RowLayout {
+        Layout.fillWidth: true
+        spacing: 8
+        PillButton {
+            text: S.tr2(S.rev, "history.open")
+            onClicked: appState.historyRequested("")
+        }
+        PillButton {
+            text: S.tr2(S.rev, "history.clear")
+            onClicked: confirmClear.open()
+        }
+        Item { Layout.fillWidth: true }
+    }
+
+    Popup {
+        id: confirmClear
+        parent: Overlay.overlay
+        anchors.centerIn: parent
+        width: 380
+        modal: true
+        padding: 20
+        background: Rectangle {
+            radius: 12
+            color: Theme.dark ? "#22252C" : "#FFFFFF"
+            border.width: 1
+            border.color: Theme.border
+        }
+        contentItem: ColumnLayout {
+            spacing: 16
+            Text {
+                Layout.fillWidth: true
+                text: S.tr2(S.rev, "history.clear.confirm")
+                color: Theme.ink
+                font.pixelSize: 13
+                lineHeight: 1.3
+                wrapMode: Text.Wrap
+            }
+            RowLayout {
+                Layout.alignment: Qt.AlignRight
+                spacing: 8
+                PillButton { text: S.tr2(S.rev, "history.cancel"); onClicked: confirmClear.close() }
+                PillButton {
+                    text: S.tr2(S.rev, "history.clear.action")
+                    accent: true
+                    onClicked: {
+                        history.clearRequested()
+                        confirmClear.close()
+                    }
+                }
+            }
+        }
+    }
 
     SettingsGroup {
         Repeater {

@@ -25,6 +25,7 @@ Window {
 
     signal dismissed()
     signal settingsRequested()
+    signal historyRequested()
     readonly property bool moneyLive: prefs.liveUnit === "cost"
     readonly property bool bothUnits: prefs.liveUnit === "both"
 
@@ -440,6 +441,14 @@ Window {
                         }
                     }
                     Item { Layout.fillWidth: true }
+                    IconButton {
+                        glyph: "chart"
+                        label: S.tr2(S.rev, "history.open")
+                        onClicked: {
+                            root.dismissed()
+                            root.historyRequested()
+                        }
+                    }
                     IconButton {
                         glyph: "gear"
                         label: S.tr2(S.rev, "menu.settings")

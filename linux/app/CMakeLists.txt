@@ -7,6 +7,7 @@ qt_add_executable(agent-speed
     src/main.cpp
     src/app_state.cpp
     src/flyout.cpp
+    src/history_service.cpp
     src/format.cpp
     src/graphics.cpp
     src/heat.cpp
@@ -46,12 +47,16 @@ set(agent_speed_qml
     qml/SettingsRow.qml
     qml/SettingsWindow.qml
     qml/SourcesPage.qml
+    qml/SummaryCard.qml
     qml/ToggleSwitch.qml
     qml/Format.js
     qml/Gauge.qml
     qml/Glyph.qml
     qml/Hairline.qml
     qml/Heat.js
+    qml/History.js
+    qml/HistoryChart.qml
+    qml/HistoryWindow.qml
     qml/IconButton.qml
     qml/LiveChart.qml
     qml/LiveSlot.qml

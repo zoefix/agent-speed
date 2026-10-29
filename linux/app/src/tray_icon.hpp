@@ -28,6 +28,7 @@ signals:
     void demoToggled(bool demo);
     void quitRequested();
     void settingsRequested();
+    void historyRequested();
     void orbToggled(bool visible);
     void clickThroughToggled(bool on);
 
@@ -36,6 +37,7 @@ private:
     QMenu* menu_;
     QAction* open_;
     QAction* settings_;
+    QAction* history_;
     QAction* quit_;
     QAction* demo_;
     QAction* orb_;

@@ -1,6 +1,7 @@
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlComponent>
+#include <QStandardPaths>
 #include <QQmlContext>
 #include <QQuickStyle>
 #include <QQuickWindow>
@@ -13,6 +14,7 @@
 #include "app_state.hpp"
 #include "catalog.hpp"
 #include "flyout.hpp"
+#include "history_service.hpp"
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
 #include "orb/orb_window.hpp"
@@ -126,6 +128,43 @@ int main(int argc, char* argv[]) {
     QObject::connect(worker, &MonitorWorker::snapshotReady, &state, &AppState::applySnapshot);
     QObject::connect(&state, &AppState::demoChanged, worker, &MonitorWorker::setDemo);
 
+    // The daily history (METRICS 8) on its own thread, sharing the price book with the monitor.
+    HistoryModel historyModel;
+    QThread historyThread;
+    historyThread.setObjectName(QStringLiteral("history"));
+    auto* historyWorker = new HistoryWorker(
+        prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation) + QStringLiteral("/history.sqlite"));
+    historyWorker->moveToThread(&historyThread);
+    const auto pushHistoryScope = [&] {
+        const auto config = prefs.monitorConfig();
+        historyWorker->setScope(config.locations, config.enabled);
+    };
+    pushHistoryScope();
+    QObject::connect(&prefs, &Preferences::sourcesChanged, &app, pushHistoryScope);
+    QObject::connect(&historyThread, &QThread::started, historyWorker, &HistoryWorker::start);
+    QObject::connect(&historyThread, &QThread::finished, historyWorker, &QObject::deleteLater);
+    QObject::connect(historyWorker, &HistoryWorker::daysReady, &historyModel, &HistoryModel::applyRows);
+    QObject::connect(historyWorker, &HistoryWorker::analyzing, &historyModel, &HistoryModel::setAnalyzing);
+    QObject::connect(&historyModel, &HistoryModel::refreshRequested, historyWorker, &HistoryWorker::analyze);
+    QObject::connect(&historyModel, &HistoryModel::clearRequested, historyWorker, &HistoryWorker::clear);
+    // Peaks are stored only for days observed live (METRICS 8).
+    double recordedPeak = 0;
+    QString recordedDay;
+    QObject::connect(&state, &AppState::snapshotChanged, &app, [&] {
+        const auto snap = state.snapshot();
+        if (snap.value(QStringLiteral("demo")).toBool()) return;
+        const auto day = QDate::currentDate().toString(Qt::ISODate);
+        const double peak = snap.value(QStringLiteral("peak")).toDouble();
+        if (day != recordedDay) {
+            recordedDay = day;
+            recordedPeak = 0;
+        }
+        if (peak > recordedPeak + 0.5) {
+            recordedPeak = peak;
+            QMetaObject::invokeMethod(historyWorker, "recordPeak", Qt::QueuedConnection, Q_ARG(QString, day), Q_ARG(double, peak));
+        }
+    });
+
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
     orb::OrbWindow orbWindow(strings);
@@ -139,6 +178,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orb"), &orbWindow);
+    engine.rootContext()->setContextProperty(QStringLiteral("history"), &historyModel);
     engine.loadFromModule(QStringLiteral("AgentSpeed"), QStringLiteral("Dashboard"));
     if (engine.rootObjects().isEmpty()) return 1;
     auto* window = qobject_cast<QQuickWindow*>(engine.rootObjects().constFirst());
@@ -155,6 +195,21 @@ int main(int argc, char* argv[]) {
         QMetaObject::invokeMethod(settingsWindow, "present", Q_ARG(QVariant, page));
     };
     QObject::connect(window, SIGNAL(settingsRequested()), &tray, SIGNAL(settingsRequested()));
+    QQmlComponent historyComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("HistoryWindow"));
+    QObject* historyWindow = nullptr;
+    const auto openHistory = [&](const QString& source) {
+        if (!historyWindow) {
+            historyWindow = historyComponent.create(engine.rootContext());
+            if (!historyWindow) {
+                qWarning() << historyComponent.errorString();
+                return;
+            }
+        }
+        QMetaObject::invokeMethod(historyWindow, "present", Q_ARG(QVariant, source));
+    };
+    QObject::connect(window, SIGNAL(historyRequested()), &tray, SIGNAL(historyRequested()));
+    QObject::connect(&tray, &TrayIcon::historyRequested, &app, [&] { openHistory(QString()); });
+    QObject::connect(&state, &AppState::historyRequested, &app, [&](const QString& source) { openHistory(source); });
     QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
     Flyout flyout(window, popup);
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
@@ -183,7 +238,10 @@ int main(int argc, char* argv[]) {
     const auto arguments = app.arguments();
     const bool offscreenShot = !snapshotPath.isEmpty() ||
                                std::any_of(arguments.begin(), arguments.end(),
-                                           [](const QString& a) { return a.startsWith(QStringLiteral("--settings-snapshot=")); });
+                                           [](const QString& a) {
+                                               return a.startsWith(QStringLiteral("--settings-snapshot=")) ||
+                                                      a.startsWith(QStringLiteral("--history-snapshot="));
+                                           });
     if (!offscreenShot) orbWindow.restore();
     // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
     QString orbShots;
@@ -202,14 +260,26 @@ int main(int argc, char* argv[]) {
     }
     // Without a tray (GNOME without the AppIndicator extension) the dashboard is the only way in.
     if (!hidden || !tray.available()) flyout.present();
-    // Development aid: --settings[=page] opens the settings window; --settings-snapshot=<file.png> saves it and quits.
-    QString settingsShot;
+    // Development aid: --settings[=page] opens the settings window; --settings-snapshot=<file.png> saves it and quits;
+    // --history[=source] opens the history window, --history-snapshot=<file.png> saves it after the first analysis.
+    QString settingsShot, historyShot;
     for (const auto& arg : app.arguments()) {
-        if (arg.startsWith(QStringLiteral("--settings-snapshot="))) {
+        if (arg.startsWith(QStringLiteral("--history-snapshot="))) {
+            historyShot = arg.mid(19);
+        } else if (arg.startsWith(QStringLiteral("--history"))) {
+            openHistory(arg.contains(QLatin1Char('=')) ? arg.section(QLatin1Char('='), 1) : QString());
+        } else if (arg.startsWith(QStringLiteral("--settings-snapshot="))) {
             settingsShot = arg.mid(20);
         } else if (arg.startsWith(QStringLiteral("--settings"))) {
             openSettings(arg.contains(QLatin1Char('=')) ? arg.section(QLatin1Char('='), 1).toInt() : 0);
         }
+    }
+    if (!historyShot.isEmpty()) {
+        if (!historyWindow) openHistory(QString());
+        QTimer::singleShot(12000, &app, [&] {
+            if (auto* quick = qobject_cast<QQuickWindow*>(historyWindow)) quick->grabWindow().save(historyShot);
+            QApplication::quit();
+        });
     }
     if (!settingsShot.isEmpty()) {
         if (!settingsWindow) openSettings(0);
@@ -226,7 +296,11 @@ int main(int argc, char* argv[]) {
     }
 
     thread.start();
+    historyThread.start();
     const int code = app.exec();
+    historyWorker->cancel();
+    historyThread.quit();
+    historyThread.wait();
     thread.quit();
     thread.wait();
     return code;

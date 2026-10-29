@@ -134,6 +134,15 @@ Canvas {
             ctx.beginPath(); ctx.arc(8, 8.4, 5, -Math.PI * 0.9, Math.PI * 0.75, false); ctx.stroke()
             ctx.beginPath(); ctx.moveTo(2.4, 2.8); ctx.lineTo(3.2, 6.2); ctx.lineTo(6.5, 5.2); ctx.stroke()
             break
+        case "chart":
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.moveTo(3, 13.5); ctx.lineTo(3, 9)
+            ctx.moveTo(6.5, 13.5); ctx.lineTo(6.5, 5.5)
+            ctx.moveTo(10, 13.5); ctx.lineTo(10, 8)
+            ctx.moveTo(13.5, 13.5); ctx.lineTo(13.5, 3)
+            ctx.stroke()
+            break
         case "gauge":
             ctx.lineWidth = 1.4
             ctx.beginPath(); ctx.arc(8, 9, 6, Math.PI * 0.8, Math.PI * 2.2, false); ctx.stroke()

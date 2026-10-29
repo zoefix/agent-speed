@@ -19,6 +19,7 @@ public slots:
 
 signals:
     void snapshotChanged();
+    void historyRequested(const QString& source);
     void demoChanged(bool demo);
 
 private:
