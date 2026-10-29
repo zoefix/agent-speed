@@ -51,6 +51,19 @@ Item {
     readonly property string numFont: style === "glass" ? Qt.application.font.family : "monospace"
     readonly property color led: dark ? "#EAF2FF" : "#141A33"
 
+    // Clips a canvas over the pane to its rounded corners (an Item's clip is rectangular).
+    function clipToPane(ctx, w, h) {
+        var r = radius
+        ctx.beginPath()
+        ctx.moveTo(r, 0)
+        ctx.arcTo(w, 0, w, h, r)
+        ctx.arcTo(w, h, 0, h, r)
+        ctx.arcTo(0, h, 0, 0, r)
+        ctx.arcTo(0, 0, w, 0, r)
+        ctx.closePath()
+        ctx.clip()
+    }
+
     function titleText(level) {
         themes.rev
         var t = themes.title(level)
@@ -114,6 +127,7 @@ Item {
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.reset()
+                board.clipToPane(ctx, width, height)
                 ctx.strokeStyle = board.dark ? "rgba(120,150,255,0.05)" : "rgba(20,30,80,0.04)"
                 ctx.lineWidth = 1
                 for (var x = 0.5; x < width; x += 22) { ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, height); ctx.stroke() }
@@ -138,6 +152,7 @@ Item {
             onPaint: {
                 var ctx = getContext("2d")
                 ctx.reset()
+                board.clipToPane(ctx, width, height)
                 var h = board.heat
                 var count = Math.round((20 + 70 * Math.min(1, (h - 0.2) / 0.8)) * (board.effects === "max" ? 1.5 : 1))
                 var speed = 0.15 + 0.6 * h
@@ -161,6 +176,7 @@ Item {
         Rectangle {
             visible: board.style === "neon"
             anchors.fill: parent
+            radius: board.radius
             gradient: Gradient {
                 orientation: Gradient.Horizontal
                 GradientStop { position: 0.5; color: "transparent" }
@@ -168,14 +184,38 @@ Item {
             }
             opacity: 0.8
         }
-        Rectangle {
+        // Timing: the heat rail, teal → indigo → rose → gold with its glow, stretched to the heat and clipped to the
+        // rounded top corners.
+        Canvas {
             visible: board.style === "timing"
-            x: 0
-            y: 0
             width: parent.width
-            height: 3
-            color: board.heatColor
-            opacity: 0.35 + 0.65 * board.heat
+            height: 3 + 16
+            property real stretch: board.heat
+            Behavior on stretch { NumberAnimation { duration: 600; easing.type: Easing.OutCubic } }
+            readonly property bool dark: board.dark
+            onStretchChanged: requestPaint()
+            onDarkChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onVisibleChanged: if (visible) requestPaint()
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                var len = width * Math.max(0, Math.min(1, stretch))
+                if (len < 0.5) return
+                board.clipToPane(ctx, width, board.side)
+                ctx.fillStyle = board.line
+                ctx.fillRect(0, 0, len, 3)
+                var g = ctx.createLinearGradient(0, 0, len, 0)
+                g.addColorStop(0, "#2DD4BF")
+                g.addColorStop(0.4, "#818CF8")
+                g.addColorStop(0.75, "#FB7185")
+                g.addColorStop(1, "#FACC15")
+                var glow = Heat.color(Math.max(0.1, board.heat))
+                ctx.shadowColor = Qt.rgba(glow.r, glow.g, glow.b, 0.7)
+                ctx.shadowBlur = 10
+                ctx.fillStyle = g
+                ctx.fillRect(0, 0, len, 3)
+            }
         }
 
         // ---- Hero
@@ -1003,15 +1043,30 @@ Item {
                 NumberAnimation { to: 0.45 + board.heat * 0.55; duration: Math.max(500, 1600 - board.heat * 1100); easing.type: Easing.InOutSine }
             }
         }
-        // Glass: the top highlight of the pane.
-        Rectangle {
+        // Glass: the top highlight of the pane, following the rounded corners and fading down their curve.
+        Canvas {
             visible: board.style === "glass"
-            x: 1
-            y: 1
-            width: parent.width - 2
-            height: 1
-            radius: 1
-            color: board.dark ? Qt.rgba(1, 1, 1, 0.22) : Qt.rgba(1, 1, 1, 0.9)
+            anchors.fill: parent
+            readonly property bool dark: board.dark
+            onDarkChanged: requestPaint()
+            onWidthChanged: requestPaint()
+            onVisibleChanged: if (visible) requestPaint()
+            onPaint: {
+                var ctx = getContext("2d")
+                ctx.reset()
+                var w = width, r = board.radius, inset = 1.5, alpha = board.dark ? 0.22 : 0.9
+                var g = ctx.createLinearGradient(0, inset, 0, r)
+                g.addColorStop(0, Qt.rgba(1, 1, 1, alpha))
+                g.addColorStop(1, Qt.rgba(1, 1, 1, 0))
+                ctx.strokeStyle = g
+                ctx.lineWidth = 1
+                ctx.beginPath()
+                ctx.moveTo(inset, r)
+                ctx.arcTo(inset, inset, r, inset, r - inset)
+                ctx.lineTo(w - r, inset)
+                ctx.arcTo(w - inset, inset, w - inset, r, r - inset)
+                ctx.stroke()
+            }
         }
     }
 
