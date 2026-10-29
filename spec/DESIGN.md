@@ -1523,7 +1523,7 @@ are sized for the switched-on rows. With `intelligence` off, glass and neon show
 and timing's box starts with 思考 at the small row height; with only `intelligence`, the dial (glass), the digits and
 meter (neon) or the 性能 row (timing) remain.
 
-**Thinking hidden at zero** (section 10, *Intelligence readout*; user's choice, 2026-10-28). While `thinking` and at
+**Thinking hidden at zero** (section 10, *Performance readout*; user's choice, 2026-10-28). While `thinking` and at
 least one other hero readout are on, 思考 shows only while its displayed value is above zero. When the board has a
 value (`Σ w > 0`, METRICS 6.9, *Live thinking*) and the shown 思考 reads zero (`0`, or `0.0` below 0.05 tok/s) for 3 s, it fades out in place
 (0.25 s) while what is below it glides up and the sub-gauge glides to its new centred place (smoothstep, 0.3 s); a
@@ -2917,7 +2917,7 @@ METRICS 10; the optional Windows helper is `spec/WINDOWS-SERVICE.md`.
 Each orb has a `traffic` setting (2b data model) that picks what its two-line readout shows: `"sources"` — the
 traffic of the orb's own sources, like everything else an orb shows (2b), with tools per `includeTools` —
 `"machine"` — the whole computer, for a desktop network meter — `"intelligence"` — 性能, the highest performance score
-of the orb's own agents, with their thinking rate (*Intelligence readout*, below; section 12) — or `"off"`. **Default `"sources"`** for new orbs and for orbs migrated from earlier versions: the readout appears
+of the orb's own agents, with their thinking rate (*Performance readout*, below; section 12) — or `"off"`. **Default `"sources"`** for new orbs and for orbs migrated from earlier versions: the readout appears
 only while those agents use the network, so an idle orb looks exactly as before. Prototyped (2026-10-22) for every
 style in both appearances at 112, 148 and 196 pt.
 
@@ -2980,7 +2980,7 @@ bottom edge (pretty but unreadable without hovering).
 - **Accessibility**: while the readout is visible the orb's label adds `a11y.orb.traffic` (`下載每秒 12.4 MB，上傳每秒
   186 KB`), within the label's 1-second update limit.
 
-### Intelligence readout
+### Performance readout
 
 With `traffic` = `"intelligence"` the same two lines show 性能 — the highest performance score among the orb's
 agents (METRICS 6.9; section 12) — and the thinking rate of those agents (6.9, *Live thinking*: a total,
@@ -3081,7 +3081,7 @@ with the values.
   Windows tooltip add `a11y.orb.traffic`.
 - **Intelligence** (`settings.bar.intelligence` on; user's choices, 2026-10-28 and 2026-10-29): 性能 — the highest performance score among the agents of
   all enabled sources (METRICS 6.9; section 12) — and their thinking rate, with the orb readout's words
-  and number formats (*Intelligence readout*) at the bar's one size:
+  and number formats (*Performance readout*) at the bar's one size:
 
   | Line | Label cell (left-aligned) | Number cell (right-aligned) | Unit cell |
   | --- | --- | --- | --- |
