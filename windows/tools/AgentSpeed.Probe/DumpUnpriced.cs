@@ -32,7 +32,7 @@ internal static class DumpUnpriced
         }
         else
         {
-            var (report, days, _) = HistoryRun.Analyze(options, table, zone);
+            var (report, days, _, _) = HistoryRun.Analyze(options, table, zone);
             parts = [.. days.Select(UnpricedPart.Of)];
             Console.Error.WriteLine($"history: analysed {report.FilesAnalyzed} files and {report.SessionsAnalyzed} OpenCode sessions " +
                 $"in {report.ElapsedMs} ms; {days.Count} rows");

@@ -24,7 +24,6 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         DatabasePath = databasePath;
         Window = window;
         RestoreWindowState();
-        EnableTasks(new global::AgentSpeed.Core.Tasks.PiFamilyTaskReader(SourceKind.OpenClaw), SourceKind.OpenClaw);
     }
 
     public string DatabasePath { get; }
@@ -72,27 +71,9 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         _headerSeen = false;
         HeaderMs = null;
         RestoreWindowState();
-        OnFileStart();
     }
 
     public override void Apply(in PiLine line, IResponseSink sink)
-    {
-        ApplyLine(in line, sink);
-        if (line.TaskTracked)
-        {
-            ComposeTask(line.Task, line.TimestampMs!.Value, line.Role == PiRole.Assistant && IsMirror(in line));
-        }
-    }
-
-    /// <summary>METRICS 4.14 <i>Mirrors</i>: a delegated turn mirrored into the transcript adds no actions (6.9).</summary>
-    private bool IsMirror(in PiLine line)
-    {
-        var provider = line.Call.Provider ?? string.Empty;
-        return line.Mirrored || (line.Call.ApiIsCli && provider == "claude-cli")
-            || provider.StartsWith("acp-", StringComparison.Ordinal) || Window.MirrorsOnly;
-    }
-
-    private void ApplyLine(in PiLine line, IResponseSink sink)
     {
         if (line.Status == LineStatus.Malformed)
         {
@@ -153,12 +134,7 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         }
     }
 
-    protected override PiLine Extract(ReadOnlySpan<byte> line)
-    {
-        var parsed = PiLineReader.Read(line);
-        PiTaskFacts.Read(TaskReader, line, ref parsed);
-        return parsed;
-    }
+    protected override PiLine Extract(ReadOnlySpan<byte> line) => PiLineReader.Read(line);
 
     private void ApplyHeader(in PiLine line)
     {
@@ -185,8 +161,6 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
             return;
         }
 
-        // Tool calls and results as Pi (METRICS 6.10): what the window's transcript says, mirrors included.
-        RecordTools(in line.Tools, ts);
         var call = line.Call;
         if (!call.IsGuardedMessage)
         {
@@ -203,6 +177,12 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
             var timed = !Window.Delegated && !call.ApiIsCli && !failed;
             Emit(key, timed ? line.StartedMs : null, ts, call.Tokens with { Reasoning = call.ReasoningTokens }, call.Model, call.Provider, sink);
             SetModel(call.Model);
+        }
+
+        // METRICS 4.14 Mirrors: a delegated turn mirrored into the transcript adds no actions (6.10).
+        if (!mirror)
+        {
+            RecordTools(in line.Tools, ts);
         }
 
         if (Window.Delegated)

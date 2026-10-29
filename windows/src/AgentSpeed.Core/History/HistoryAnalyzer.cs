@@ -5,6 +5,7 @@ using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.OpenCode;
 using AgentSpeed.Core.Parsing;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Pricing;
 
 namespace AgentSpeed.Core.History;
@@ -27,9 +28,6 @@ internal sealed record HistoryOptions
     /// days are labeled in. Fixtures and <c>--utc</c> dumps label days in UTC but read wall times in a local zone.
     /// </summary>
     public TimeZoneInfo? HermesZone { get; init; }
-
-    /// <summary>The wall clock in Unix milliseconds, read once per run (METRICS 6.11 <i>Store</i>); tests inject their own.</summary>
-    public Func<long> NowMs { get; init; } = static () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 }
 
 internal readonly record struct HistoryProgress(int FilesDone, int FilesTotal, long BytesDone, long BytesTotal)
@@ -61,9 +59,10 @@ internal sealed partial class HistoryAnalyzer
     /// 2: measured output and time per model (METRICS 8). 3: cost (METRICS 9.7). 4: execution modes. 5: reasoning effort
     /// and speed breakdowns (EXECUTION-MODES). 6: the copied prefix of paginated Codex sub-agents (METRICS 3.5). 7: the
     /// unpriced facts of the side table <c>contribution_unpriced</c> (METRICS 9.10).
-    /// 8: the task records of the side table <c>task_records</c> (METRICS 6.11).
+    /// 8: the task records of the retired task score. 9: the performance records of the side table <c>perf_records</c>, with
+    /// each response's first-content time and each tool call's result time and model (METRICS 6.11).
     /// </summary>
-    public const int AnalysisVersion = 8;
+    public const int AnalysisVersion = 9;
 
     private const string OpenCodeFamily = "opencode";
     private const string ZoneMeta = "timeZone";
@@ -91,7 +90,6 @@ internal sealed partial class HistoryAnalyzer
         Pricing = pricing ?? new PriceBook();
         _entries = store.LoadFiles(PathComparer);
         _peaks = store.Peaks();
-        Calibration = Calibrate();
         var repaired = Pricing.Restore(store.PriceBindings(), store.PriceTables());
         if (repaired.Count > 0)
         {
@@ -199,7 +197,6 @@ internal sealed partial class HistoryAnalyzer
         Action<HistoryProgress>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
-        _analysisMs = _options.NowMs();
         var zoneId = zone.Id;
         var zoneChanged = _entries.Count > 0 && !string.Equals(_store.Meta(ZoneMeta), zoneId, StringComparison.Ordinal);
         var priceVersion = Pricing.CurrentVersion.ToString(CultureInfo.InvariantCulture);
@@ -274,7 +271,6 @@ internal sealed partial class HistoryAnalyzer
 
             if (!cancelled)
             {
-                Calibration = Calibrate();
                 _store.SetMeta(ZoneMeta, zoneId);
                 _store.SetMeta(PriceVersionMeta, priceVersion);
                 if (plan.HermesZone is { } hermesZone)
@@ -344,8 +340,7 @@ internal sealed partial class HistoryAnalyzer
                 if (previous is not null && !zoneChanged && previous.Version == _options.Version
                     && string.Equals(previous.Family, familyName, StringComparison.Ordinal)
                     && previous.Size == file.Length && previous.Modified == modified
-                    && !(repricing && previous.HasUnpriced)
-                    && !(previous.HasIncompleteTasks && IsQuiet(file.LastWriteUtc)))
+                    && !(repricing && previous.HasUnpriced))
                 {
                     continue;
                 }
@@ -482,7 +477,7 @@ internal sealed partial class HistoryAnalyzer
             }
 
             state = state with { FilesDone = state.FilesDone + 1, BytesDone = state.BytesDone + file.Size };
-            var sink = new LatestResponses(merge: file.Family == RootFamily.Claude);
+            var sink = new LatestResponses(merge: file.Family == RootFamily.Claude, prepared.Parser.Completions);
             var applied = false;
             if (prepared is { Error: null, Batch: { } batch })
             {
@@ -538,7 +533,7 @@ internal sealed partial class HistoryAnalyzer
                 Modified = file.Identity ?? result.LastWriteUtc.Ticks,
                 Version = _options.Version,
                 Days = DayAggregate.Contributions(sink.Items.Values, prepared.Parser.Source, labeler, Pricing),
-                TaskRecords = RecordsOf(prepared.Parser, labeler),
+                PerfRecords = PerfRecordsOf(prepared.Parser.Completions, sink.Items, prepared.Parser.AgentId, prepared.Parser.Source, labeler),
             };
             _entries[file.Path] = entry;
             pending.Add((entry, owned));
@@ -590,6 +585,7 @@ internal sealed partial class HistoryAnalyzer
             }
 
             var latest = new Dictionary<string, ParsedResponse>(StringComparer.Ordinal);
+            var completions = new PerfCompletionLog();
             foreach (var row in rows)
             {
                 if (OpenCodeRules.Response(row, session.Info) is not { } response)
@@ -600,6 +596,7 @@ internal sealed partial class HistoryAnalyzer
                 if (ledger.TryClaim(row.Id, agentId, out var owner) || string.Equals(owner, agentId, StringComparison.Ordinal))
                 {
                     latest[row.Id] = response;
+                    completions.Upsert(response);
                 }
             }
 
@@ -612,6 +609,7 @@ internal sealed partial class HistoryAnalyzer
                 Modified = session.ModifiedMs,
                 Version = _options.Version,
                 Days = DayAggregate.Contributions(latest.Values, SourceKind.OpenCode, labeler, Pricing),
+                PerfRecords = PerfRecordsOf(completions, latest, agentId, SourceKind.OpenCode, labeler),
             };
             _entries[agentId] = entry;
             pending.Add((entry, ledger.FinishFile()));
@@ -669,8 +667,11 @@ internal sealed partial class HistoryAnalyzer
         public bool OpenCodeFailed { get; set; }
     }
 
-    /// <summary>The latest version of every response of one file; Claude repeats merge like the parser does (4.1).</summary>
-    private sealed class LatestResponses(bool merge) : IResponseSink
+    /// <summary>
+    /// The latest version of every response of one file; Claude repeats merge like the parser does (4.1). Each upsert is
+    /// noted in <paramref name="completions"/>, which logs when a response first becomes measured (METRICS 6.11).
+    /// </summary>
+    private sealed class LatestResponses(bool merge, PerfCompletionLog? completions = null) : IResponseSink
     {
         public Dictionary<string, ParsedResponse> Items { get; } = new(StringComparer.Ordinal);
 
@@ -683,6 +684,7 @@ internal sealed partial class HistoryAnalyzer
                     EndMs = Math.Max(previous.EndMs, response.EndMs),
                     Tokens = TokenCounts.Max(previous.Tokens, response.Tokens),
                     Model = response.Model ?? previous.Model,
+                    FirstMs = previous.FirstMs is { } first && response.FirstMs is { } next ? Math.Min(first, next) : previous.FirstMs ?? response.FirstMs,
                     Final = previous.Final || response.Final,
                     Fast = previous.Fast || response.Fast,
                     Modes = previous.Modes.Merge(response.Modes),
@@ -690,6 +692,7 @@ internal sealed partial class HistoryAnalyzer
             }
 
             Items[response.Key] = response;
+            completions?.Upsert(response);
         }
     }
 }

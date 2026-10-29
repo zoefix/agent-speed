@@ -26,7 +26,7 @@ public sealed class DemoDriver : IDisposable
 
     /// <summary>Every demo agent's grade: a flagship model at high effort.</summary>
     /// <summary>Demo task scores by agent position: a passing task, an unverified one, one that reads without a score yet.</summary>
-    private static readonly double?[] DemoScores = [92.5, 8.75, null, 61.25];
+    private static readonly double?[] DemoScores = [1286.4, 742.25, null, 2140.75];
 
     private readonly SpeedHub _hub;
     private readonly object _gate = new();
@@ -196,12 +196,11 @@ public sealed class DemoDriver : IDisposable
             var active = index < generating;
             var share = active ? speed * agent.Weight / activeWeight : 0;
             var phase = active ? AgentPhase.Generating : speed > 0.5 ? AgentPhase.Tools : AgentPhase.Idle;
-            var task = DemoTask(index, phase);
+            var score = DemoScore(agent.Id, index, phase);
             return new AgentStatus(agent.Id, agent.Source, agent.Project, agent.Model, phase, agent.IsSubagent,
                 new Rate(share, share * 24), active ? share : null, now, agent.IsSubagent ? "demo-nova" : null)
             {
-                Intelligence = new Intelligence.AgentIntelligence(
-                    DemoIntelligence(share) with { Score = Tasks.TaskSetValue.Of(agent.Id, 0, task) }, Tasks.TaskSetValue.Of(agent.Id, 0, task), task.State),
+                Intelligence = new Intelligence.AgentIntelligence(DemoIntelligence(share) with { Score = score }, score),
             };
         }).ToList();
 
@@ -216,7 +215,7 @@ public sealed class DemoDriver : IDisposable
             {
                 Intelligence = DemoIntelligence(live) with
                 {
-                    Score = agents.Where(a => a.Source == kind).Aggregate(Tasks.TaskSetValue.None, (best, a) => Tasks.TaskSetValue.Merge(best, a.Intelligence.Score)),
+                    Score = agents.Where(a => a.Source == kind).Aggregate(Perf.PerfSetValue.None, (best, a) => Perf.PerfSetValue.Merge(best, a.Intelligence.Score)),
                 },
             };
         }).ToList();
@@ -246,16 +245,15 @@ public sealed class DemoDriver : IDisposable
         return Intelligence.IntelligenceSums.Zero.Add(SourceKind.ClaudeCode, window, window * 0.4);
     }
 
-    private static Tasks.TaskValue DemoTask(int index, AgentPhase phase)
+    private static Perf.PerfSetValue DemoScore(string agentId, int index, AgentPhase phase)
     {
         if (DemoScores[index % DemoScores.Length] is not { } score)
         {
-            return new Tasks.TaskValue(Tasks.TaskValueForm.None, null, null, Tasks.TaskState.None);
+            return Perf.PerfSetValue.None;
         }
 
-        var state = score >= 50 ? Tasks.TaskState.Passing : Tasks.TaskState.Unverified;
-        var form = phase == AgentPhase.Idle ? Tasks.TaskValueForm.Resting : Tasks.TaskValueForm.Live;
-        return new Tasks.TaskValue(form, score, Tasks.TaskRounding.HalfAwayFromZero(score), state);
+        var form = phase == AgentPhase.Idle ? Perf.PerfForm.Resting : Perf.PerfForm.Live;
+        return new Perf.PerfSetValue(form, score, agentId);
     }
 
     private sealed record FakeAgent(

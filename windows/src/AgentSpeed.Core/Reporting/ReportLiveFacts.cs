@@ -45,19 +45,19 @@ public sealed class ReportCounters
 {
     private readonly Dictionary<ReportModelKey, ReportUsage> _byModel;
     private readonly Dictionary<ReportModeKey, ReportUsage> _byMode;
-    private readonly Dictionary<ReportModelKey, ReportTaskRow> _tasks;
+    private readonly Dictionary<ReportModelKey, Perf.PerfSums> _perf;
 
     public ReportCounters()
-        : this(new Dictionary<ReportModelKey, ReportUsage>(), new Dictionary<ReportModeKey, ReportUsage>(), new Dictionary<ReportModelKey, ReportTaskRow>())
+        : this(new Dictionary<ReportModelKey, ReportUsage>(), new Dictionary<ReportModeKey, ReportUsage>(), new Dictionary<ReportModelKey, Perf.PerfSums>())
     {
     }
 
     private ReportCounters(Dictionary<ReportModelKey, ReportUsage> byModel, Dictionary<ReportModeKey, ReportUsage> byMode,
-        Dictionary<ReportModelKey, ReportTaskRow> tasks)
+        Dictionary<ReportModelKey, Perf.PerfSums> perf)
     {
         _byModel = byModel;
         _byMode = byMode;
-        _tasks = tasks;
+        _perf = perf;
     }
 
     public static ReportCounters Zero { get; } = new();
@@ -66,18 +66,21 @@ public sealed class ReportCounters
     public IReadOnlyDictionary<ReportModeKey, ReportUsage> ByMode => _byMode;
 
     /// <summary>
-    /// The task ledger's rows counted in the current watch generation (METRICS 11.10), cumulative per model and source; a new
-    /// generation (the watch turned on again after a break) starts them over.
+    /// The statistics ledger's rows counted in the current watch generation (METRICS 11.10), cumulative per model and source;
+    /// a new generation (the watch turned on again after a break) starts them over.
     /// </summary>
-    public IReadOnlyDictionary<ReportModelKey, ReportTaskRow> TaskRows => _tasks;
+    public IReadOnlyDictionary<ReportModelKey, Perf.PerfSums> PerfRows => _perf;
 
-    /// <summary>The watch generation <see cref="TaskRows"/> belong to (0 before the watch was ever on).</summary>
-    public long TaskGeneration { get; private set; }
+    /// <summary>The watch generation <see cref="PerfRows"/> belong to (0 before the watch was ever on).</summary>
+    public long PerfGeneration { get; private set; }
 
-    /// <summary>Completed tasks counted in <see cref="TaskRows"/>.</summary>
-    public long TaskCompleted { get; private set; }
+    /// <summary>Σ <c>n</c> of <see cref="PerfRows"/>.</summary>
+    public long PerfResponses { get; private set; }
 
-    /// <summary>Changes with every non-zero <see cref="Add"/> and every task change, so an owner copies only after a change.</summary>
+    /// <summary>Σ <c>toolN</c> of <see cref="PerfRows"/>.</summary>
+    public long PerfCalls { get; private set; }
+
+    /// <summary>Changes with every non-zero <see cref="Add"/> and every statistics change, so an owner copies only after a change.</summary>
     public long Version { get; private set; }
 
     public ReportUsage Total
@@ -113,7 +116,7 @@ public sealed class ReportCounters
             var change = value - baseline._byMode.GetValueOrDefault(key);
             if (!change.IsZero) modes[key] = change;
         }
-        return new ReportCounters(delta, modes, new Dictionary<ReportModelKey, ReportTaskRow>());
+        return new ReportCounters(delta, modes, new Dictionary<ReportModelKey, Perf.PerfSums>());
     }
 
     /// <summary>Whether any token field differs from <paramref name="baseline"/>.</summary>
@@ -145,35 +148,54 @@ public sealed class ReportCounters
         }
     }
 
-    /// <summary>Adds a counted task's row (METRICS 11.10, Counting).</summary>
-    public void AddTask(ReportModelKey key, ReportTaskRow row)
+    /// <summary>The row of <paramref name="key"/> a counted completion adds to (METRICS 11.10, Counting).</summary>
+    internal Perf.PerfSums PerfRow(ReportModelKey key)
     {
-        ArgumentNullException.ThrowIfNull(row);
-        _tasks[key] = _tasks.GetValueOrDefault(key, ReportTaskRow.Zero) + row;
-        TaskCompleted += row.Completed;
+        if (!_perf.TryGetValue(key, out var row))
+        {
+            _perf[key] = row = new Perf.PerfSums();
+        }
+
+        return row;
+    }
+
+    /// <summary>Notes that a completion was added to <see cref="PerfRows"/>.</summary>
+    internal void CountedPerf(bool response)
+    {
+        if (response)
+        {
+            PerfResponses++;
+        }
+        else
+        {
+            PerfCalls++;
+        }
+
         Version++;
     }
 
     /// <summary>Starts the rows of watch generation <paramref name="generation"/> over; the rows of another are never sent.</summary>
-    public void StartTaskGeneration(long generation)
+    public void StartPerfGeneration(long generation)
     {
-        if (generation == TaskGeneration)
+        if (generation == PerfGeneration)
         {
             return;
         }
 
-        _tasks.Clear();
-        TaskCompleted = 0;
-        TaskGeneration = generation;
+        _perf.Clear();
+        PerfResponses = 0;
+        PerfCalls = 0;
+        PerfGeneration = generation;
         Version++;
     }
 
     /// <summary>An immutable copy, for a snapshot.</summary>
     public ReportCounters Copy() => new(new Dictionary<ReportModelKey, ReportUsage>(_byModel), new Dictionary<ReportModeKey, ReportUsage>(_byMode),
-        new Dictionary<ReportModelKey, ReportTaskRow>(_tasks))
+        _perf.ToDictionary(p => p.Key, p => p.Value.Clone()))
     {
-        TaskGeneration = TaskGeneration,
-        TaskCompleted = TaskCompleted,
+        PerfGeneration = PerfGeneration,
+        PerfResponses = PerfResponses,
+        PerfCalls = PerfCalls,
     };
 }
 
@@ -195,8 +217,8 @@ public sealed record ReportLiveFacts(
     public static ReportLiveFacts Empty { get; } = new(
         new Dictionary<SourceKind, ReportAgentCounts>(), new Dictionary<ReportModelKey, int>(), ReportCounters.Zero);
 
-    /// <summary>The task score's live values (METRICS 11.10): agents with a score and the thinking speeds.</summary>
-    public ReportTaskFacts Tasks { get; init; } = ReportTaskFacts.Empty;
+    /// <summary>The performance score's live values (METRICS 11.10): agents with a score and the thinking speeds.</summary>
+    public ReportPerfFacts Perf { get; init; } = ReportPerfFacts.Empty;
 }
 
 /// <summary>The reserved model ids of REPORTING 6.6.4.</summary>

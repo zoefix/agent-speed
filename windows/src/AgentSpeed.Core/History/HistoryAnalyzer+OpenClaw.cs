@@ -40,8 +40,7 @@ internal sealed partial class HistoryAnalyzer
             var previous = _entries.GetValueOrDefault(path);
             if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == OpenClawDatabaseFamily
                 && previous.Size == stamp.Length && previous.Modified == stamp.LastWriteUtc.Ticks
-                && !(repricing && windows.Exists(w => w.HasUnpriced))
-                && !(windows.Exists(w => w.HasIncompleteTasks) && IsQuiet(stamp.LastWriteUtc)))
+                && !(repricing && windows.Exists(w => w.HasUnpriced)))
             {
                 continue;
             }
@@ -88,7 +87,7 @@ internal sealed partial class HistoryAnalyzer
                 parsers = OpenClawSource.ReadAll(
                     database.Path,
                     ledger,
-                    parser => sinks[parser] = new LatestResponses(merge: false),
+                    parser => sinks[parser] = new LatestResponses(merge: false, parser.Completions),
                     parser =>
                     {
                         var previous = database.Windows.Find(w => w.Path == parser.AgentId);
@@ -101,7 +100,7 @@ internal sealed partial class HistoryAnalyzer
                             Modified = database.Stamp.LastWriteUtc.Ticks,
                             Version = _options.Version,
                             Days = DayAggregate.Contributions(sinks[parser].Items.Values, SourceKind.OpenClaw, labeler, Pricing),
-                            TaskRecords = RecordsOf(parser, labeler),
+                            PerfRecords = PerfRecordsOf(parser.Completions, sinks[parser].Items, parser.AgentId, SourceKind.OpenClaw, labeler),
                         };
                         _entries[parser.AgentId] = entry;
                         pending.Add((entry, ledger.FinishFile()));

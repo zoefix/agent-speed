@@ -1,5 +1,6 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.History;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Pricing;
 
 namespace AgentSpeed.Probe;
@@ -10,7 +11,9 @@ namespace AgentSpeed.Probe;
 /// </summary>
 internal static class HistoryRun
 {
-    public static (HistoryReport Report, List<DailyUsage> Days, long StoreBytes) Analyze(ProbeOptions options, PriceTable table, TimeZoneInfo zone)
+    /// <returns>The run, the days and the performance records summed per day, source and model (METRICS 6.11), as stored.</returns>
+    public static (HistoryReport Report, List<DailyUsage> Days, List<PerfRecord> Perf, long StoreBytes) Analyze(
+        ProbeOptions options, PriceTable table, TimeZoneInfo zone)
     {
         var temporary = options.StorePath is null
             ? Path.Combine(Path.GetTempPath(), "agentspeed-probe-" + Guid.NewGuid().ToString("N"))
@@ -27,16 +30,19 @@ internal static class HistoryRun
             }
 
             List<DailyUsage> days;
+            List<PerfRecord> perf;
             using (var store = HistoryStore.Open(storePath))
             {
-                days = new HistoryAnalyzer(store, tuning, new PriceBook([table])).Days();
+                var analyzer = new HistoryAnalyzer(store, tuning, new PriceBook([table]));
+                days = analyzer.Days();
+                perf = Summed(analyzer.PerfRecords());
             }
 
             var storeBytes = new[] { "", "-wal", "-shm" }
                 .Select(suffix => new FileInfo(storePath + suffix))
                 .Where(f => f.Exists)
                 .Sum(f => f.Length);
-            return (report, days, storeBytes);
+            return (report, days, perf, storeBytes);
         }
         finally
         {
@@ -45,6 +51,26 @@ internal static class HistoryRun
                 Directory.Delete(temporary, recursive: true);
             }
         }
+    }
+
+    /// <summary>One record per day, source and model: the files' records added up (latency bins per bucket).</summary>
+    private static List<PerfRecord> Summed(IReadOnlyList<PerfRecord> records)
+    {
+        var sums = new Dictionary<PerfRecordKey, PerfSums>();
+        foreach (var record in records)
+        {
+            var key = new PerfRecordKey(record.Day, record.Source, record.Model);
+            if (!sums.TryGetValue(key, out var total))
+            {
+                sums[key] = total = new PerfSums();
+            }
+
+            total.Add(record.Sums);
+        }
+
+        var summed = sums.Select(p => new PerfRecord(p.Key.Day, p.Key.Source, p.Key.Model, p.Value)).ToList();
+        summed.Sort(PerfRecord.Compare);
+        return summed;
     }
 
     private static HistoryOptions Tuning()

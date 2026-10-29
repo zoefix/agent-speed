@@ -25,7 +25,6 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
     {
         _pathIsSubagent = PathText.HasDirectoryComponent(agentId, "subagents");
         SetSubagent(_pathIsSubagent);
-        EnableTasks(new global::AgentSpeed.Core.Tasks.ClaudeTaskReader(), SourceKind.ClaudeCode);
     }
 
     public override void Reset()
@@ -43,17 +42,6 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
     }
 
     public override void Apply(in ClaudeLine line, IResponseSink sink)
-    {
-        ApplyLine(in line, sink);
-        if (line.TaskTracked)
-        {
-            var assistant = global::AgentSpeed.Core.Tasks.ClaudeTaskReader.IsDecidingAssistant(in line);
-            ComposeTask(line.Task, line.TimestampMs, assistant: assistant,
-                dedupeKey: assistant ? global::AgentSpeed.Core.Tasks.ClaudeTaskReader.DedupeKey(in line) : null);
-        }
-    }
-
-    private void ApplyLine(in ClaudeLine line, IResponseSink sink)
     {
         if (line.Status == LineStatus.Malformed)
         {
@@ -111,12 +99,7 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
         }
     }
 
-    protected override ClaudeLine Extract(ReadOnlySpan<byte> line)
-    {
-        var parsed = ClaudeLineReader.Read(line);
-        (TaskReader as global::AgentSpeed.Core.Tasks.ClaudeTaskReader)?.Read(line, ref parsed);
-        return parsed;
-    }
+    protected override ClaudeLine Extract(ReadOnlySpan<byte> line) => ClaudeLineReader.Read(line);
 
     private void ApplyAssistant(in ClaudeLine line, long ts, IResponseSink sink)
     {
@@ -145,6 +128,7 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
                 EndMs = Math.Max(previous.EndMs, ts),
                 Tokens = TokenCounts.Max(previous.Tokens, line.Usage),
                 Model = line.Model ?? previous.Model,
+                FirstMs = Math.Min(previous.FirstMs ?? ts, ts),
                 Final = previous.Final || line.StopReason != StopReasonKind.Missing,
                 Fast = previous.Fast || line.Fast,
                 Modes = previous.Modes.Merge(lineModes),
@@ -159,8 +143,8 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
         }
 
         Remember(response);
-        RecordTools(in line.Tools, ts);
         SetModel(response.Model);
+        RecordTools(in line.Tools, ts);
         _latestModes = response.Modes;
         _lineEffort = recorded ?? _lineEffort;
         RefreshModes();
@@ -185,7 +169,7 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
     {
         var response = new ParsedResponse(
             key, Source, AgentId, line.Model, _pendingStartMs, ts, line.Usage, line.StopReason != StopReasonKind.Missing,
-            Fast: line.Fast) { Modes = modes };
+            Fast: line.Fast) { Modes = modes, FirstMs = ts };
         _pendingStartMs = null;
         _preciseStart = false;
         return response;

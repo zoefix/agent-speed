@@ -8,12 +8,12 @@ namespace AgentSpeed.Core.Tests;
 
 /// <summary>
 /// The live thinking line (METRICS 6.9 <i>Live thinking</i>) against the <c>thinking</c> section of
-/// <c>spec/fixtures/task-score-cases.json</c>: the window sums of a set, of every agent and of every board group.
+/// <c>spec/fixtures/perf-score-cases.json</c>: the window sums of a set, of every agent and of every board group.
 /// </summary>
 public sealed class ThinkingCaseTests
 {
     private static readonly Lazy<JsonElement> Section = new(() =>
-        JsonDocument.Parse(File.ReadAllBytes(FixtureLocator.PathOf("task-score-cases.json"))).RootElement.GetProperty("thinking"));
+        JsonDocument.Parse(File.ReadAllBytes(FixtureLocator.PathOf("perf-score-cases.json"))).RootElement.GetProperty("thinking"));
 
     public static TheoryData<string> WindowNames() => Names("windows");
 
@@ -135,7 +135,7 @@ public sealed class ThinkingCaseTests
             }
 
             // Reporting adds the raw models that resolve to one report id (METRICS 11.3).
-            var reported = frame.Report.Tasks;
+            var reported = frame.Report.Perf;
             EngineCaseTests.AssertClose(set.LiveThinking, reported.Thinking, at + " reported thinking");
             EngineCaseTests.AssertClose(set.LiveThinking, reported.ModelThinking.Values.Sum(), at + " reported model thinking");
         }

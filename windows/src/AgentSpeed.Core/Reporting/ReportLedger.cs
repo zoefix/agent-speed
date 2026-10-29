@@ -69,33 +69,6 @@ internal sealed class ReportLedger
         Counters.Add(usage, new ReportModelKey(modelId, response.Source), reported.Modes);
     }
 
-    /// <summary>The task ledger follows the watch: a new generation starts its rows over (METRICS 11.10, Break).</summary>
-    public void FollowTaskWatch(ReportTaskWatch watch) => Counters.StartTaskGeneration(watch.Generation);
-
-    /// <summary>
-    /// Counts a completed task marked in <paramref name="generation"/> (METRICS 11.10, Counting): its row goes under
-    /// <paramref name="key"/> while that generation is on, unless 1000 completions already wait for a report (then it is
-    /// dropped, not deferred). A task without actions (<paramref name="row"/> null) adds nothing. True when counted.
-    /// </summary>
-    public bool CountTask(ReportModelKey key, ReportTaskRow? row, long generation, ReportTaskWatch watch, long epoch)
-    {
-        ArgumentNullException.ThrowIfNull(watch);
-        FollowTaskWatch(watch);
-        if (row is null || !watch.Counts(generation))
-        {
-            return false;
-        }
-
-        var taken = watch.TakenEpoch == epoch ? watch.Taken : 0;
-        if (Counters.TaskCompleted - taken >= ReportTaskWatch.MaxCompleted)
-        {
-            return false;
-        }
-
-        Counters.AddTask(key, row);
-        return true;
-    }
-
     /// <summary>Forgets counted keys whose response left the engine's retention (by its latest end).</summary>
     public void Prune(long cutoffMs)
     {

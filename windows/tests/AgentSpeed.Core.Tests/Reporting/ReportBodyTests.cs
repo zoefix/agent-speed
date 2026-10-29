@@ -77,26 +77,43 @@ public sealed class ReportBodyTests
         return (content, sample);
     }
 
-    /// <summary>Task score facts and rows for <see cref="BusySample"/>: live, resting and none agents, a model only a row lists.</summary>
-    private static (ReportWindowContent Content, ReportSample Sample) WithTasks(ReportWindowContent content, ReportSample sample)
+    /// <summary>Performance score facts and rows for <see cref="BusySample"/>: live, resting and none agents, a model only a row lists.</summary>
+    private static (ReportWindowContent Content, ReportSample Sample) WithPerf(ReportWindowContent content, ReportSample sample)
     {
-        var agents = new List<ReportTaskAgent>
+        var agents = new List<ReportPerfAgent>
         {
-            new(SourceKind.ClaudeCode, "claude-opus-5-5", AgentSpeed.Core.Tasks.TaskValueForm.Live, 88.5),
-            new(SourceKind.ClaudeCode, "claude-opus-5-5", AgentSpeed.Core.Tasks.TaskValueForm.Resting, 97),
-            new(SourceKind.Codex, "gpt-5.5", AgentSpeed.Core.Tasks.TaskValueForm.Resting, 41.25),
-            new(SourceKind.Pi, "kimi-k3", AgentSpeed.Core.Tasks.TaskValueForm.Live, 12),
-            new(SourceKind.Codex, "model-3", AgentSpeed.Core.Tasks.TaskValueForm.Live, 60),
+            new(SourceKind.ClaudeCode, "claude-opus-5-5", AgentSpeed.Core.Perf.PerfForm.Live, 1288.5),
+            new(SourceKind.ClaudeCode, "claude-opus-5-5", AgentSpeed.Core.Perf.PerfForm.Resting, 2097),
+            new(SourceKind.Codex, "gpt-5.5", AgentSpeed.Core.Perf.PerfForm.Resting, 741.25),
+            new(SourceKind.Pi, "kimi-k3", AgentSpeed.Core.Perf.PerfForm.Live, 612),
+            new(SourceKind.Codex, "model-3", AgentSpeed.Core.Perf.PerfForm.Live, 12_840),
         };
         var thinking = new Dictionary<string, double>(StringComparer.Ordinal) { ["claude-opus-5-5"] = 12.04, ["gpt-5.5"] = 3.33, ["model-2"] = 0.04 };
-        var rows = new Dictionary<ReportModelKey, ReportTaskRow>
+        static AgentSpeed.Core.Perf.PerfSums Row(SourceKind source, int responses, int calls)
         {
-            [new("claude-opus-5-5", SourceKind.ClaudeCode)] = ReportTaskRow.Of(new ReportTaskRecord(4, 93.75, true, false, 2, 0, 1, 2))!,
-            [new("claude-sonnet-5-5", SourceKind.ClaudeDesktop)] = ReportTaskRow.Of(new ReportTaskRecord(9, 23, false, true, 4, 4, 0, 0))!,
-            [new("model-4", SourceKind.Codex)] = ReportTaskRow.Of(new ReportTaskRecord(1, null, false, false, 0, 0, 0, 0))!,
+            var row = new AgentSpeed.Core.Perf.PerfSums();
+            for (var i = 0; i < responses; i++)
+            {
+                row.AddResponse(source, 400 + i, 120, 9000, 8800, 6000 + i * 10, 2400 + i * 100);
+            }
+
+            for (var i = 0; i < calls; i++)
+            {
+                row.AddCall(300 + i * 70, failed: i == 2);
+            }
+
+            row.ActiveMs = responses * 6000 + calls * 200;
+            return row;
+        }
+
+        var rows = new Dictionary<ReportModelKey, AgentSpeed.Core.Perf.PerfSums>
+        {
+            [new("claude-opus-5-5", SourceKind.ClaudeCode)] = Row(SourceKind.ClaudeCode, 4, 5),
+            [new("claude-sonnet-5-5", SourceKind.ClaudeDesktop)] = Row(SourceKind.ClaudeDesktop, 9, 3),
+            [new("model-4", SourceKind.Codex)] = Row(SourceKind.Codex, 0, 1),
         };
-        var facts = sample.Facts with { Tasks = new ReportTaskFacts(agents, 15.41, thinking) };
-        return (content with { Tasks = rows }, sample with { Facts = facts });
+        var facts = sample.Facts with { Perf = new ReportPerfFacts(agents, 15.41, thinking) };
+        return (content with { Perf = rows }, sample with { Facts = facts });
     }
 
     private static JsonElement Parse(byte[] data) => JsonDocument.Parse(data).RootElement;
@@ -309,6 +326,8 @@ public sealed class ReportBodyTests
     [InlineData("report-websocket.json")]
     [InlineData("report-taskscore.json")]
     [InlineData("report-taskscore-websocket.json")]
+    [InlineData("report-perfscore.json")]
+    [InlineData("report-perfscore-websocket.json")]
     public void ExamplesAreRebuiltExactly(string name)
     {
         var example = JsonDocument.Parse(ReportSpec.Example(name)).RootElement;
@@ -317,7 +336,7 @@ public sealed class ReportBodyTests
         var difference = Difference(example, built, "$");
         Assert.True(difference is null, $"{name}: {difference}");
 
-        // Members in the example's order: taskScore after models, realtime last (METRICS 11.9, 11.10).
+        // Members in the example's order: perfScore (or the legacy taskScore) after models, realtime last (METRICS 11.9, 11.10).
         Assert.Equal(example.EnumerateObject().Select(p => p.Name), built.EnumerateObject().Select(p => p.Name));
         foreach (var (want, got) in example.TryGetProperty("models", out var models) ? models.EnumerateArray().Zip(built.GetProperty("models").EnumerateArray()) : [])
         {
@@ -345,10 +364,11 @@ public sealed class ReportBodyTests
         var sections = ReportSections.All.Where(s => report.TryGetProperty(ReportSections.Name(s), out _)).ToHashSet();
         var hasCost = report.TryGetProperty("cost", out var cost);
         var hasTaskScore = report.TryGetProperty("taskScore", out var taskScore);
+        var hasPerfScore = report.TryGetProperty("perfScore", out var perfScore);
         var options = new ReportOptions(sections, 16, 16_384, title.Text("metric") == "total" ? SpeedMetric.Total : SpeedMetric.Output,
             title.GetProperty("redline").GetDouble(), hasCost ? cost.GetProperty("priceVersion").GetInt32() : 1)
         {
-            Extensions = new ReportExtensions(TaskScore: hasTaskScore),
+            Extensions = new ReportExtensions(TaskScore: hasTaskScore, PerfScore: hasPerfScore),
             Stream = report.TryGetProperty("realtime", out var realtime)
                 ? new ReportStreamBody(realtime.GetProperty("observationAgeMs") is { ValueKind: JsonValueKind.Number } age ? age.GetInt64() : null, 65_536)
                 : null,
@@ -442,30 +462,33 @@ public sealed class ReportBodyTests
             trafficSample = ReportTrafficSample.Off;
         }
 
-        // The task score's live values and rows (METRICS 11.10): one agent per model entry with its value, the entries' thinking.
-        var taskAgents = new List<ReportTaskAgent>();
+        // The score extension's live values and rows (METRICS 11.10): one agent per model entry with its value, the entries'
+        // thinking; the retired taskScore carries the thinking speed only.
+        var perfAgents = new List<ReportPerfAgent>();
         var modelThinking = new Dictionary<string, double>(StringComparer.Ordinal);
-        var taskRows = new Dictionary<ReportModelKey, ReportTaskRow>();
-        foreach (var model in hasTaskScore ? models : [])
+        var perfRows = new Dictionary<ReportModelKey, AgentSpeed.Core.Perf.PerfSums>();
+        var scoreKey = hasPerfScore ? "perfScore" : "taskScore";
+        foreach (var model in hasPerfScore || hasTaskScore ? models : [])
         {
-            var value = model.GetProperty("taskScore");
+            var value = model.GetProperty(scoreKey);
             if (value.Text("form") is "live" or "resting")
             {
-                taskAgents.Add(new ReportTaskAgent(Source(model.GetProperty("sources")[0].GetString()!), model.Text("id"),
-                    value.Text("form") == "live" ? AgentSpeed.Core.Tasks.TaskValueForm.Live : AgentSpeed.Core.Tasks.TaskValueForm.Resting,
-                    value.GetProperty("score").GetDouble()));
+                perfAgents.Add(new ReportPerfAgent(Source(model.GetProperty("sources")[0].GetString()!), model.Text("id"),
+                    ReportPerfScoreTests.Form(value.Text("form")), value.GetProperty("score").GetDouble()));
             }
 
             modelThinking[model.Text("id")] = value.GetProperty("thinkingTokS").GetDouble();
-            foreach (var row in model.GetProperty("taskStats").EnumerateArray())
+            foreach (var row in hasPerfScore ? model.GetProperty("perfStats").EnumerateArray() : Enumerable.Empty<JsonElement>())
             {
-                taskRows[new ReportModelKey(model.Text("id"), Source(row.Text("source")))] = ReportTaskScoreTests.ParseRow(row);
+                perfRows[new ReportModelKey(model.Text("id"), Source(row.Text("source")))] = ReportPerfScoreTests.ParseRow(row);
             }
         }
 
         var facts = new ReportLiveFacts(agents, generating, counters, 2)
         {
-            Tasks = hasTaskScore ? new ReportTaskFacts(taskAgents, taskScore.GetProperty("thinkingTokS").GetDouble(), modelThinking) : ReportTaskFacts.Empty,
+            Perf = hasPerfScore || hasTaskScore
+                ? new ReportPerfFacts(perfAgents, (hasPerfScore ? perfScore : taskScore).GetProperty("thinkingTokS").GetDouble(), modelThinking)
+                : ReportPerfFacts.Empty,
         };
         var sample = new ReportSample(
             new Rate(output, live.GetProperty("totalTokS").GetDouble()), live.GetProperty("estimatedShare").GetDouble(),
@@ -496,7 +519,7 @@ public sealed class ReportBodyTests
             Peak = new Rate(peak.GetProperty("outputTokS").GetDouble(), peak.GetProperty("totalTokS").GetDouble()),
             PeakCost = hasCost ? cost.GetProperty("peakMicroUsdPerSecond").GetDouble() : 0,
             PeakRate = peakRate,
-            Tasks = taskRows,
+            Perf = perfRows,
         };
         return (envelope, content, sample, options);
     }
@@ -609,20 +632,23 @@ public sealed class ReportBodyTests
             bodies.Add(ReportBody.Data(Envelope, late, lateSample, Everything with { Sections = sections.ToHashSet() }));
         }
 
-        // The task score extension (METRICS 11.10): live values, membership, the merged other entry and the size rule.
+        // The score extensions (METRICS 11.10): live values, membership, the merged other entry and the size rule, and the
+        // retired taskScore's thinking-only form.
         foreach (var models in new[] { 3, 9, 16 })
         {
             var (busy, busySample) = BusySample(models);
-            var (tasks, tasksSample) = WithTasks(busy, busySample);
+            var (perf, perfSample) = WithPerf(busy, busySample);
             foreach (var sections in new[] { ReportSections.All.ToArray(), [ReportSection.Models], [ReportSection.Sources] })
             {
                 foreach (var limit in new[] { 16_384, 2_000 })
                 {
-                    bodies.Add(ReportBody.Data(Envelope, tasks, tasksSample, Everything with
+                    foreach (var extensions in new[] { new ReportExtensions(true, true, PerfScore: true), new ReportExtensions(true, true, TaskScore: true) })
                     {
-                        Sections = sections.ToHashSet(), MaxModels = models == 9 ? 4 : 16, BodyLimit = limit,
-                        Extensions = new ReportExtensions(true, true, TaskScore: true),
-                    }));
+                        bodies.Add(ReportBody.Data(Envelope, perf, perfSample, Everything with
+                        {
+                            Sections = sections.ToHashSet(), MaxModels = models == 9 ? 4 : 16, BodyLimit = limit, Extensions = extensions,
+                        }));
+                    }
                 }
             }
         }
