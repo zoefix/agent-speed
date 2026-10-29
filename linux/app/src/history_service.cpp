@@ -10,6 +10,8 @@
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/tz.hpp"
+#include "strings.hpp"
+#include "task_card.hpp"
 
 namespace {
 
@@ -133,6 +135,18 @@ void HistoryWorker::publish() {
         rows.push_back(row);
     }
     emit daysReady(rows, QDateTime::currentMSecsSinceEpoch());
+    auto records = std::make_shared<std::vector<agentspeed::tasks::TaskRecord>>(analyzer_->taskRecords());
+    TaskModels models;
+    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Droid); ++k) {
+        const auto source = static_cast<agentspeed::SourceKind>(k);
+        if (!agentspeed::tasks::isScoredSource(source)) continue;
+        std::vector<agentspeed::tasks::TaskRecord> part;
+        for (const auto& r : *records) {
+            if (r.source == source) part.push_back(r);
+        }
+        if (!part.empty()) models[source] = agentspeed::tasks::calibrate(part);
+    }
+    emit tasksReady(std::move(records), std::move(models));
 }
 
 void HistoryModel::applyRows(const QVariantList& rows, qint64 updatedMs) {
@@ -212,4 +226,121 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
         out += fields.join(QLatin1Char(',')).toUtf8() + "\r\n";
     }
     return file.write(out) == out.size();
+}
+
+void HistoryModel::applyTasks(TaskRecords records) {
+    tasks_ = std::move(records);
+    ++tasksRevision_;
+    emit tasksChanged();
+}
+
+namespace {
+
+QString durationText(const Strings& s, double ms) {
+    const auto seconds = agentspeed::tasks::roundHalfAway(ms / 1000);
+    if (seconds < 60) return task_card::fmt(s, QStringLiteral("time.seconds"), {static_cast<qlonglong>(seconds)});
+    const auto minutes = agentspeed::tasks::roundHalfAway(ms / 60'000);
+    if (minutes < 60) return task_card::fmt(s, QStringLiteral("time.minutes"), {static_cast<qlonglong>(minutes)});
+    const auto hours = minutes / 60, rest = minutes % 60;
+    if (rest == 0) return task_card::fmt(s, QStringLiteral("time.hours"), {static_cast<qlonglong>(hours)});
+    return task_card::fmt(s, QStringLiteral("time.hoursMinutes"), {static_cast<qlonglong>(hours), static_cast<qlonglong>(rest)});
+}
+
+QString percentText(double rate) { return QString::number(agentspeed::tasks::roundHalfAway(rate * 100)) + QLatin1Char('%'); }
+
+QVariant number(const std::optional<double>& v) { return v ? QVariant(*v) : QVariant(); }
+
+// The figures of one aggregate (a source side or a model row), with the texts the window shows.
+QVariantMap figures(const Strings& s, const agentspeed::tasks::Aggregate& a) {
+    QVariantMap out;
+    out.insert(QStringLiteral("tasks"), static_cast<qlonglong>(a.tasks));
+    out.insert(QStringLiteral("scored"), static_cast<qlonglong>(a.scoredTasks));
+    out.insert(QStringLiteral("low"), a.scoredTasks < 10);
+    out.insert(QStringLiteral("median"), number(a.medianScore));
+    out.insert(QStringLiteral("medianText"), a.medianShown ? QString::number(*a.medianShown) : QStringLiteral("–"));
+    out.insert(QStringLiteral("q1"), number(a.lowerQuartile));
+    out.insert(QStringLiteral("q3"), number(a.upperQuartile));
+    QVariantList bins;
+    for (const auto b : a.histogram) bins.push_back(static_cast<qlonglong>(b));
+    out.insert(QStringLiteral("histogram"), bins);
+    int medianBin = -1;
+    if (a.medianScore) {
+        medianBin = 0;
+        for (const double edge : {10, 20, 30, 40, 50, 60, 70, 80, 90}) medianBin += *a.medianScore >= edge ? 1 : 0;
+    }
+    out.insert(QStringLiteral("medianBin"), medianBin);
+    out.insert(QStringLiteral("countsText"), task_card::fmt(s, QStringLiteral("history.tasks.counts"),
+                                                             {static_cast<qlonglong>(a.scoredTasks), static_cast<qlonglong>(a.tasks)}));
+    const auto metric = [&](const QString& key, const std::optional<double>& value, const QString& text, const QString& tooltip, bool lowerBetter) {
+        QVariantMap m;
+        m.insert(QStringLiteral("key"), key);
+        m.insert(QStringLiteral("label"), s.t(QStringLiteral("history.tasks.metric.") + key));
+        m.insert(QStringLiteral("hint"), s.t(QStringLiteral("history.tasks.metric.") + key + QStringLiteral(".hint")));
+        m.insert(QStringLiteral("value"), number(value));
+        m.insert(QStringLiteral("text"), value ? text : QStringLiteral("–"));
+        m.insert(QStringLiteral("tooltip"), tooltip);
+        m.insert(QStringLiteral("lowerBetter"), lowerBetter);
+        return m;
+    };
+    QVariantList metrics;
+    metrics.push_back(metric(QStringLiteral("success"), a.successRate, a.successRate ? percentText(*a.successRate) : QString(),
+                             task_card::fmt(s, QStringLiteral("history.tasks.rate.scored"),
+                                            {static_cast<qlonglong>(a.successes), static_cast<qlonglong>(a.scoredTasks)}),
+                             false));
+    metrics.push_back(metric(QStringLiteral("stall"), a.stallRate, a.stallRate ? percentText(*a.stallRate) : QString(),
+                             task_card::fmt(s, QStringLiteral("history.tasks.rate.tasks"),
+                                            {static_cast<qlonglong>(a.stalls), static_cast<qlonglong>(a.tasks)}),
+                             true));
+    metrics.push_back(metric(QStringLiteral("fixFail"), a.fixFailureRate, a.fixFailureRate ? percentText(*a.fixFailureRate) : QString(),
+                             task_card::fmt(s, QStringLiteral("history.tasks.rate.fixes"),
+                                            {static_cast<qlonglong>(a.fixFailures), static_cast<qlonglong>(a.fixAttempts)}),
+                             true));
+    metrics.push_back(metric(QStringLiteral("attempts"), a.recoverAttempts,
+                             a.recoverAttempts ? task_card::fmt(s, QStringLiteral("history.tasks.attempts"), {QString::number(*a.recoverAttempts, 'f', 1)})
+                                               : QString(),
+                             a.recoverAttempts ? QString() : s.t(QStringLiteral("history.tasks.noValue.attempts")), true));
+    metrics.push_back(metric(QStringLiteral("firstPass"), a.timeToFirstPassMs,
+                             a.timeToFirstPassMs ? durationText(s, *a.timeToFirstPassMs) : QString(),
+                             a.timeToFirstPassMs ? QString() : s.t(QStringLiteral("history.tasks.noValue.firstPass")), true));
+    out.insert(QStringLiteral("metrics"), metrics);
+    return out;
+}
+
+}  // namespace
+
+QVariantMap HistoryModel::taskComparison(const QString& first, const QString& last, const QString& source) const {
+    QVariantMap out;
+    if (!tasks_ || !strings_) {
+        out.insert(QStringLiteral("sources"), QVariantList());
+        out.insert(QStringLiteral("byModel"), QVariantList());
+        return out;
+    }
+    const auto only = source.isEmpty() ? std::nullopt : agentspeed::sourceFromId(source.toStdString());
+    const auto result = agentspeed::tasks::compare(*tasks_, first.toStdString(), last.toStdString(), only);
+    QVariantList sources;
+    for (const auto& row : result.bySource) {
+        auto side = figures(*strings_, row.aggregate);
+        const auto id = QString::fromUtf8(agentspeed::sourceId(row.source));
+        side.insert(QStringLiteral("source"), id);
+        side.insert(QStringLiteral("name"), strings_->t(QStringLiteral("source.") + id));
+        sources.push_back(side);
+    }
+    QVariantList models;
+    for (const auto& row : result.byModel) {
+        auto m = figures(*strings_, row.aggregate);
+        m.insert(QStringLiteral("model"), QString::fromStdString(row.model));
+        m.insert(QStringLiteral("name"), row.model.empty() ? strings_->t(QStringLiteral("cost.noModelName")) : QString::fromStdString(row.model));
+        QStringList ids, names;
+        for (const auto kind : row.sources) {
+            const auto id = QString::fromUtf8(agentspeed::sourceId(kind));
+            ids << id;
+            names << strings_->t(QStringLiteral("source.") + id);
+        }
+        m.insert(QStringLiteral("sources"), ids);
+        m.insert(QStringLiteral("sourcesText"), task_card::fmt(*strings_, QStringLiteral("history.tasks.model.sources"), {names.join(QStringLiteral(", "))}));
+        models.push_back(m);
+    }
+    out.insert(QStringLiteral("sources"), sources);
+    out.insert(QStringLiteral("byModel"), models);
+    return out;
 }

@@ -32,6 +32,10 @@ public:
 
     // Thread-safe. A changed monitor configuration restarts the monitor.
     void setOptions(WorkerOptions options, bool reconfigure);
+    // Thread-safe: the prediction models calibrated on the history (METRICS 6.11), applied on the next tick.
+    void setTaskModels(std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models);
+    // Thread-safe: the source sets whose 智力 and 思考 each snapshot carries (orbs, boards); the tray's set comes first.
+    void setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets);
 
 public slots:
     void start();
@@ -52,6 +56,10 @@ private:
     WorkerOptions options_;
     std::mutex optionsMutex_;
     std::optional<WorkerOptions> pending_;
+    std::optional<std::map<agentspeed::SourceKind, agentspeed::tasks::Models>> pendingModels_;
+    std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models_;
+    std::optional<std::vector<std::optional<std::vector<agentspeed::SourceKind>>>> pendingSets_;
+    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets_{std::nullopt};
     bool restartPending_ = false;
     std::unique_ptr<agentspeed::Monitor> monitor_;
     QTimer* timer_ = nullptr;

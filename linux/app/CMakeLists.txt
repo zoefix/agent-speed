@@ -50,6 +50,10 @@ set(agent_speed_qml
     qml/SettingsWindow.qml
     qml/SourcesPage.qml
     qml/SummaryCard.qml
+    qml/TaskBar.qml
+    qml/TaskModelTable.qml
+    qml/TaskSide.qml
+    qml/TasksSection.qml
     qml/ToggleSwitch.qml
     qml/Format.js
     qml/Gauge.qml

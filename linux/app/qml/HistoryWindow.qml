@@ -136,289 +136,313 @@ Window {
             font.features: Theme.tabular
         }
 
-        // Summary
-        RowLayout {
-            Layout.fillWidth: true
-            spacing: 12
-            readonly property var outputs: win.chartSeries.map(function(d) { return d.output })
-            SummaryCard {
-                title: S.tr2(S.rev, "history.summary.output")
-                value: H.compact(win.total.output)
-                deltaText: H.delta(win.total.output, win.previousTotal.output)
-                deltaGood: win.total.output >= win.previousTotal.output
-                detail: win.total.best ? Format.fill(S.tr2(S.rev, "history.summary.bestDay"), [win.total.best.date.substr(5).replace("-", "/")]) : ""
-                series: parent.outputs
-                tone: win.source === "all" ? Theme.accent : Theme.sourceColor(win.source)
-            }
-            SummaryCard {
-                title: width < 170 ? S.tr2(S.rev, "history.summary.input.short") : S.tr2(S.rev, "history.summary.input")
-                value: H.compact(win.total.input)
-                deltaText: H.delta(win.total.input, win.previousTotal.input)
-                deltaGood: true
-                series: win.chartSeries.map(function(d) { return d.input })
-                tone: Theme.ink2
-            }
-            SummaryCard {
-                title: S.tr2(S.rev, "history.summary.requests")
-                value: H.grouped(win.total.requests)
-                deltaText: H.delta(win.total.requests, win.previousTotal.requests)
-                deltaGood: true
-                detail: Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [win.total.activeDays])
-                series: win.chartSeries.map(function(d) { return d.requests })
-                tone: Theme.ink2
-            }
-            SummaryCard {
-                readonly property real avg: H.speed(win.total.measuredOutput, win.total.measuredMs)
-                title: S.tr2(S.rev, "history.summary.speed")
-                value: avg >= 0 ? Format.speed(avg) : "–"
-                unit: avg >= 0 ? "tok/s" : ""
-                deltaText: H.delta(avg, H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs))
-                deltaGood: avg >= H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs)
-                series: win.chartSeries.map(function(d) { return Math.max(0, H.speed(d.measuredOutput, d.measuredMs)) })
-                tone: Theme.ink2
-            }
-            SummaryCard {
-                title: S.tr2(S.rev, "history.summary.cost")
-                value: win.total.hasCost ? (win.total.unpriced > 0 ? "≥" : "") + win.money(win.total.cost) : "–"
-                detail: win.total.unpriced > 0 ? Format.fill(S.tr2(S.rev, "history.unpricedDay"), [win.total.unpriced])
-                        : win.total.activeDays > 0 && win.total.hasCost
-                          ? Format.fill(S.tr2(S.rev, "history.summary.costPerDay"), [win.money(win.total.cost / Math.max(1, H.dayCount(win.span[0], win.span[1])))]) : ""
-                series: win.chartSeries.map(function(d) { return d.cost || 0 })
-                tone: Theme.ink2
-            }
-        }
-
-        // Chart, or the single day's breakdown
-        Rectangle {
-            Layout.fillWidth: true
-            Layout.preferredHeight: 280
-            radius: 12
-            color: Theme.card
-            border.width: 1
-            border.color: Theme.border
-            Text {
-                x: 16
-                y: 12
-                text: win.singleDay ? (win.source === "all" ? S.tr2(S.rev, "history.chart.bySource") : S.tr2(S.rev, "history.chart.byModel"))
-                                    : S.tr2(S.rev, "history.chart.output")
-                color: Theme.ink2
-                font.pixelSize: 12
-                font.weight: Font.DemiBold
-            }
-            HistoryChart {
-                visible: !win.singleDay && win.dayList.length > 0
-                anchors.fill: parent
-                anchors.topMargin: 34
-                anchors.margins: 10
-                series: win.chartSeries
-                source: win.source
-                today: win.today
-                sourceOrder: {
-                    var totals = win.total.bySource
-                    return Object.keys(totals).sort(function(a, b) { return totals[b] - totals[a] })
-                }
-                onPicked: (date) => table.highlight(date)
-            }
-            Column {
-                visible: win.singleDay && win.dayList.length > 0
-                anchors.fill: parent
-                anchors.topMargin: 40
-                anchors.leftMargin: 16
-                anchors.rightMargin: 16
-                spacing: 8
-                Repeater {
-                    model: {
-                        var t = win.total
-                        var list = []
-                        if (win.source === "all") {
-                            for (var s in t.bySource) list.push({ name: S.tr2(S.rev, "source." + s), color: Theme.sourceColor(s), output: t.bySource[s] })
-                        } else {
-                            for (var m in t.models) list.push({ name: m, color: Theme.sourceColor(win.source), output: t.models[m].output })
-                        }
-                        list.sort(function(a, b) { return b.output - a.output })
-                        return list.slice(0, 8)
-                    }
-                    RowLayout {
-                        required property var modelData
-                        width: parent.width
-                        spacing: 10
-                        Text {
-                            Layout.preferredWidth: 150
-                            text: modelData.name
-                            color: Theme.ink
-                            font.pixelSize: 12
-                            elide: Text.ElideRight
-                        }
-                        Rectangle {
-                            Layout.fillWidth: true
-                            Layout.preferredHeight: 14
-                            radius: 4
-                            color: Theme.field
-                            Rectangle {
-                                width: parent.width * (win.total.output > 0 ? modelData.output / win.total.output : 0)
-                                height: parent.height
-                                radius: 4
-                                color: modelData.color
-                                Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
-                            }
-                        }
-                        Text {
-                            Layout.preferredWidth: 110
-                            horizontalAlignment: Text.AlignRight
-                            text: H.compact(modelData.output) + " · " + (win.total.output > 0 ? Math.round(modelData.output / win.total.output * 100) : 0) + "%"
-                            color: Theme.ink2
-                            font.pixelSize: 12
-                            font.features: Theme.tabular
-                        }
-                    }
-                }
-            }
-            Column {
-                visible: win.dayList.length === 0
-                anchors.centerIn: parent
-                spacing: 8
-                Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "gauge"; width: 28; height: 28; color: Theme.ink3 }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: S.tr2(S.rev, "history.empty")
-                    color: Theme.ink2
-                    font.pixelSize: 14
-                    font.weight: Font.Medium
-                }
-                Text {
-                    anchors.horizontalCenter: parent.horizontalCenter
-                    text: S.tr2(S.rev, "history.empty.hint")
-                    color: Theme.ink3
-                    font.pixelSize: 12
-                }
-            }
-        }
-
-        // Daily table
-        Rectangle {
+        // Summary, chart, task performance and the daily table scroll together.
+        Flickable {
+            id: page
             Layout.fillWidth: true
             Layout.fillHeight: true
-            radius: 12
-            color: Theme.card
-            border.width: 1
-            border.color: Theme.border
+            contentWidth: width
+            contentHeight: body.implicitHeight
+            boundsBehavior: Flickable.StopAtBounds
             clip: true
-            readonly property var columns: [
-                { key: "date", title: S.tr2(S.rev, "history.table.date"), width: 1.4, align: Text.AlignLeft },
-                { key: "requests", title: S.tr2(S.rev, "history.table.requests"), width: 0.8 },
-                { key: "output", title: S.tr2(S.rev, "history.table.output"), width: 0.9 },
-                { key: "input", title: S.tr2(S.rev, "history.table.input"), width: 1.1 },
-                { key: "cost", title: S.tr2(S.rev, "history.table.cost"), width: 0.9 },
-                { key: "cacheHit", title: S.tr2(S.rev, "history.table.cacheHit"), width: 0.8 },
-                { key: "speed", title: S.tr2(S.rev, "history.table.speed"), width: 0.9 },
-                { key: "peak", title: S.tr2(S.rev, "history.table.peak"), width: 0.8 },
-                { key: "agents", title: S.tr2(S.rev, "history.table.agents"), width: 0.6 },
-                { key: "models", title: S.tr2(S.rev, "history.table.models"), width: 1.8, align: Text.AlignLeft }
-            ]
-            readonly property real unit: (width - 32) / columns.reduce(function(a, c) { return a + c.width }, 0)
-
-            function cell(day, key) {
-                switch (key) {
-                case "date":
-                    var label = day.date === win.today ? S.tr2(S.rev, "history.today")
-                              : day.date === H.iso(H.addDays(new Date(), -1)) ? S.tr2(S.rev, "history.yesterday") : day.date.replace(/-/g, "/")
-                    return label + "  " + H.parse(day.date).toLocaleDateString(Qt.locale(S.language === "en" ? "en_US" : S.language.replace("-", "_")), "ddd")
-                case "requests": return H.grouped(day.requests)
-                case "output": return H.compact(day.output)
-                case "input": return H.compact(day.input)
-                case "cost": return day.hasCost ? (day.unpriced > 0 ? "≥" : "") + win.money(day.cost) : "–"
-                case "cacheHit": return day.input > 0 ? Math.round(day.cachedInput / day.input * 100) + "%" : "–"
-                case "speed": var sp = H.speed(day.measuredOutput, day.measuredMs); return sp >= 0 ? Format.speed(sp) : S.tr2(S.rev, "history.noSpeed")
-                case "peak": return day.peak ? Format.speed(day.peak) : "–"
-                case "agents": return String(day.agents)
-                case "models":
-                    var list = Object.keys(day.models).map(function(k) { return day.models[k] }).sort(function(a, b) { return b.output - a.output })
-                    var names = list.slice(0, 2).map(function(m) { return m.name })
-                    return names.join(", ") + (list.length > 2 ? " +" + (list.length - 2) : "")
+            ScrollBar.vertical: ScrollBar { policy: page.contentHeight > page.height ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+            ColumnLayout {
+                id: body
+                width: page.width
+                spacing: 18
+            // Summary
+            RowLayout {
+                Layout.fillWidth: true
+                spacing: 12
+                readonly property var outputs: win.chartSeries.map(function(d) { return d.output })
+                SummaryCard {
+                    title: S.tr2(S.rev, "history.summary.output")
+                    value: H.compact(win.total.output)
+                    deltaText: H.delta(win.total.output, win.previousTotal.output)
+                    deltaGood: win.total.output >= win.previousTotal.output
+                    detail: win.total.best ? Format.fill(S.tr2(S.rev, "history.summary.bestDay"), [win.total.best.date.substr(5).replace("-", "/")]) : ""
+                    series: parent.outputs
+                    tone: win.source === "all" ? Theme.accent : Theme.sourceColor(win.source)
                 }
-                return ""
-            }
-
-            Row {
-                id: headerRow
-                x: 16
-                y: 10
-                height: 26
-                Repeater {
-                    model: parent.parent.columns
-                    Text {
-                        required property var modelData
-                        width: modelData.width * headerRow.parent.unit
-                        height: headerRow.height
-                        verticalAlignment: Text.AlignVCenter
-                        horizontalAlignment: modelData.align === undefined ? Text.AlignRight : modelData.align
-                        rightPadding: modelData.align === undefined ? 10 : 0
-                        text: modelData.title
-                        color: Theme.ink3
-                        font.pixelSize: 11
-                        font.weight: Font.DemiBold
-                        elide: Text.ElideRight
-                    }
+                SummaryCard {
+                    title: width < 170 ? S.tr2(S.rev, "history.summary.input.short") : S.tr2(S.rev, "history.summary.input")
+                    value: H.compact(win.total.input)
+                    deltaText: H.delta(win.total.input, win.previousTotal.input)
+                    deltaGood: true
+                    series: win.chartSeries.map(function(d) { return d.input })
+                    tone: Theme.ink2
+                }
+                SummaryCard {
+                    title: S.tr2(S.rev, "history.summary.requests")
+                    value: H.grouped(win.total.requests)
+                    deltaText: H.delta(win.total.requests, win.previousTotal.requests)
+                    deltaGood: true
+                    detail: Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [win.total.activeDays])
+                    series: win.chartSeries.map(function(d) { return d.requests })
+                    tone: Theme.ink2
+                }
+                SummaryCard {
+                    readonly property real avg: H.speed(win.total.measuredOutput, win.total.measuredMs)
+                    title: S.tr2(S.rev, "history.summary.speed")
+                    value: avg >= 0 ? Format.speed(avg) : "–"
+                    unit: avg >= 0 ? "tok/s" : ""
+                    deltaText: H.delta(avg, H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs))
+                    deltaGood: avg >= H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs)
+                    series: win.chartSeries.map(function(d) { return Math.max(0, H.speed(d.measuredOutput, d.measuredMs)) })
+                    tone: Theme.ink2
+                }
+                SummaryCard {
+                    title: S.tr2(S.rev, "history.summary.cost")
+                    value: win.total.hasCost ? (win.total.unpriced > 0 ? "≥" : "") + win.money(win.total.cost) : "–"
+                    detail: win.total.unpriced > 0 ? Format.fill(S.tr2(S.rev, "history.unpricedDay"), [win.total.unpriced])
+                            : win.total.activeDays > 0 && win.total.hasCost
+                              ? Format.fill(S.tr2(S.rev, "history.summary.costPerDay"), [win.money(win.total.cost / Math.max(1, H.dayCount(win.span[0], win.span[1])))]) : ""
+                    series: win.chartSeries.map(function(d) { return d.cost || 0 })
+                    tone: Theme.ink2
                 }
             }
+
+            // Chart, or the single day's breakdown
             Rectangle {
-                anchors.top: headerRow.bottom
-                anchors.left: parent.left
-                anchors.right: parent.right
-                height: 1
-                color: Theme.hairline
-            }
-            ListView {
-                id: table
-                anchors.top: headerRow.bottom
-                anchors.topMargin: 2
-                anchors.left: parent.left
-                anchors.right: parent.right
-                anchors.bottom: parent.bottom
-                anchors.bottomMargin: 6
-                clip: true
-                boundsBehavior: Flickable.StopAtBounds
-                model: win.dayList.slice().reverse()
-                property string flash: ""
-                function highlight(date) {
-                    for (var i = 0; i < count; ++i) if (model[i].date === date) { positionViewAtIndex(i, ListView.Center); break }
-                    flash = date
-                    flashTimer.restart()
+                Layout.fillWidth: true
+                Layout.preferredHeight: 280
+                radius: 12
+                color: Theme.card
+                border.width: 1
+                border.color: Theme.border
+                Text {
+                    x: 16
+                    y: 12
+                    text: win.singleDay ? (win.source === "all" ? S.tr2(S.rev, "history.chart.bySource") : S.tr2(S.rev, "history.chart.byModel"))
+                                        : S.tr2(S.rev, "history.chart.output")
+                    color: Theme.ink2
+                    font.pixelSize: 12
+                    font.weight: Font.DemiBold
                 }
-                Timer { id: flashTimer; interval: 1200; onTriggered: table.flash = "" }
-                ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
-                delegate: Rectangle {
-                    id: rowItem
-                    required property var modelData
-                    required property int index
-                    width: table.width
-                    height: 32
-                    color: table.flash === modelData.date ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
-                           : rowArea.containsMouse ? Theme.hover : index % 2 === 1 ? Qt.rgba(0, 0, 0, Theme.dark ? 0.08 : 0.018) : "transparent"
-                    Behavior on color { ColorAnimation { duration: 200 } }
-                    Row {
-                        x: 16
-                        height: parent.height
-                        Repeater {
-                            model: table.parent.columns
+                HistoryChart {
+                    visible: !win.singleDay && win.dayList.length > 0
+                    anchors.fill: parent
+                    anchors.topMargin: 34
+                    anchors.margins: 10
+                    series: win.chartSeries
+                    source: win.source
+                    today: win.today
+                    sourceOrder: {
+                        var totals = win.total.bySource
+                        return Object.keys(totals).sort(function(a, b) { return totals[b] - totals[a] })
+                    }
+                    onPicked: (date) => table.highlight(date)
+                }
+                Column {
+                    visible: win.singleDay && win.dayList.length > 0
+                    anchors.fill: parent
+                    anchors.topMargin: 40
+                    anchors.leftMargin: 16
+                    anchors.rightMargin: 16
+                    spacing: 8
+                    Repeater {
+                        model: {
+                            var t = win.total
+                            var list = []
+                            if (win.source === "all") {
+                                for (var s in t.bySource) list.push({ name: S.tr2(S.rev, "source." + s), color: Theme.sourceColor(s), output: t.bySource[s] })
+                            } else {
+                                for (var m in t.models) list.push({ name: m, color: Theme.sourceColor(win.source), output: t.models[m].output })
+                            }
+                            list.sort(function(a, b) { return b.output - a.output })
+                            return list.slice(0, 8)
+                        }
+                        RowLayout {
+                            required property var modelData
+                            width: parent.width
+                            spacing: 10
                             Text {
-                                required property var modelData
-                                width: modelData.width * table.parent.unit
-                                height: rowItem.height
-                                verticalAlignment: Text.AlignVCenter
-                                horizontalAlignment: modelData.align === undefined ? Text.AlignRight : modelData.align
-                                rightPadding: modelData.align === undefined ? 10 : 0
-                                text: table.parent.cell(rowItem.modelData, modelData.key)
-                                color: modelData.key === "date" ? Theme.ink : modelData.key === "models" ? Theme.ink2 : Theme.ink
+                                Layout.preferredWidth: 150
+                                text: modelData.name
+                                color: Theme.ink
+                                font.pixelSize: 12
+                                elide: Text.ElideRight
+                            }
+                            Rectangle {
+                                Layout.fillWidth: true
+                                Layout.preferredHeight: 14
+                                radius: 4
+                                color: Theme.field
+                                Rectangle {
+                                    width: parent.width * (win.total.output > 0 ? modelData.output / win.total.output : 0)
+                                    height: parent.height
+                                    radius: 4
+                                    color: modelData.color
+                                    Behavior on width { NumberAnimation { duration: 350; easing.type: Easing.OutCubic } }
+                                }
+                            }
+                            Text {
+                                Layout.preferredWidth: 110
+                                horizontalAlignment: Text.AlignRight
+                                text: H.compact(modelData.output) + " · " + (win.total.output > 0 ? Math.round(modelData.output / win.total.output * 100) : 0) + "%"
+                                color: Theme.ink2
                                 font.pixelSize: 12
                                 font.features: Theme.tabular
-                                font.weight: modelData.key === "date" ? Font.Medium : Font.Normal
-                                elide: Text.ElideRight
                             }
                         }
                     }
-                    MouseArea { id: rowArea; anchors.fill: parent; hoverEnabled: true }
                 }
+                Column {
+                    visible: win.dayList.length === 0
+                    anchors.centerIn: parent
+                    spacing: 8
+                    Glyph { anchors.horizontalCenter: parent.horizontalCenter; name: "gauge"; width: 28; height: 28; color: Theme.ink3 }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: S.tr2(S.rev, "history.empty")
+                        color: Theme.ink2
+                        font.pixelSize: 14
+                        font.weight: Font.Medium
+                    }
+                    Text {
+                        anchors.horizontalCenter: parent.horizontalCenter
+                        text: S.tr2(S.rev, "history.empty.hint")
+                        color: Theme.ink3
+                        font.pixelSize: 12
+                    }
+                }
+            }
+
+            // Task performance (DESIGN 3c)
+            TasksSection {
+                Layout.fillWidth: true
+                first: win.span[0]
+                last: win.span[1]
+                source: win.source
+            }
+
+            // Daily table
+            Rectangle {
+                Layout.fillWidth: true
+                Layout.preferredHeight: Math.max(240, Math.min(52 + win.dayList.length * 30, page.height - 24))
+                radius: 12
+                color: Theme.card
+                border.width: 1
+                border.color: Theme.border
+                clip: true
+                readonly property var columns: [
+                    { key: "date", title: S.tr2(S.rev, "history.table.date"), width: 1.4, align: Text.AlignLeft },
+                    { key: "requests", title: S.tr2(S.rev, "history.table.requests"), width: 0.8 },
+                    { key: "output", title: S.tr2(S.rev, "history.table.output"), width: 0.9 },
+                    { key: "input", title: S.tr2(S.rev, "history.table.input"), width: 1.1 },
+                    { key: "cost", title: S.tr2(S.rev, "history.table.cost"), width: 0.9 },
+                    { key: "cacheHit", title: S.tr2(S.rev, "history.table.cacheHit"), width: 0.8 },
+                    { key: "speed", title: S.tr2(S.rev, "history.table.speed"), width: 0.9 },
+                    { key: "peak", title: S.tr2(S.rev, "history.table.peak"), width: 0.8 },
+                    { key: "agents", title: S.tr2(S.rev, "history.table.agents"), width: 0.6 },
+                    { key: "models", title: S.tr2(S.rev, "history.table.models"), width: 1.8, align: Text.AlignLeft }
+                ]
+                readonly property real unit: (width - 32) / columns.reduce(function(a, c) { return a + c.width }, 0)
+
+                function cell(day, key) {
+                    switch (key) {
+                    case "date":
+                        var label = day.date === win.today ? S.tr2(S.rev, "history.today")
+                                  : day.date === H.iso(H.addDays(new Date(), -1)) ? S.tr2(S.rev, "history.yesterday") : day.date.replace(/-/g, "/")
+                        return label + "  " + H.parse(day.date).toLocaleDateString(Qt.locale(S.language === "en" ? "en_US" : S.language.replace("-", "_")), "ddd")
+                    case "requests": return H.grouped(day.requests)
+                    case "output": return H.compact(day.output)
+                    case "input": return H.compact(day.input)
+                    case "cost": return day.hasCost ? (day.unpriced > 0 ? "≥" : "") + win.money(day.cost) : "–"
+                    case "cacheHit": return day.input > 0 ? Math.round(day.cachedInput / day.input * 100) + "%" : "–"
+                    case "speed": var sp = H.speed(day.measuredOutput, day.measuredMs); return sp >= 0 ? Format.speed(sp) : S.tr2(S.rev, "history.noSpeed")
+                    case "peak": return day.peak ? Format.speed(day.peak) : "–"
+                    case "agents": return String(day.agents)
+                    case "models":
+                        var list = Object.keys(day.models).map(function(k) { return day.models[k] }).sort(function(a, b) { return b.output - a.output })
+                        var names = list.slice(0, 2).map(function(m) { return m.name })
+                        return names.join(", ") + (list.length > 2 ? " +" + (list.length - 2) : "")
+                    }
+                    return ""
+                }
+
+                Row {
+                    id: headerRow
+                    x: 16
+                    y: 10
+                    height: 26
+                    Repeater {
+                        model: parent.parent.columns
+                        Text {
+                            required property var modelData
+                            width: modelData.width * headerRow.parent.unit
+                            height: headerRow.height
+                            verticalAlignment: Text.AlignVCenter
+                            horizontalAlignment: modelData.align === undefined ? Text.AlignRight : modelData.align
+                            rightPadding: modelData.align === undefined ? 10 : 0
+                            text: modelData.title
+                            color: Theme.ink3
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            elide: Text.ElideRight
+                        }
+                    }
+                }
+                Rectangle {
+                    anchors.top: headerRow.bottom
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    height: 1
+                    color: Theme.hairline
+                }
+                ListView {
+                    id: table
+                    anchors.top: headerRow.bottom
+                    anchors.topMargin: 2
+                    anchors.left: parent.left
+                    anchors.right: parent.right
+                    anchors.bottom: parent.bottom
+                    anchors.bottomMargin: 6
+                    clip: true
+                    boundsBehavior: Flickable.StopAtBounds
+                    model: win.dayList.slice().reverse()
+                    property string flash: ""
+                    function highlight(date) {
+                        for (var i = 0; i < count; ++i) if (model[i].date === date) { positionViewAtIndex(i, ListView.Center); break }
+                        flash = date
+                        flashTimer.restart()
+                    }
+                    Timer { id: flashTimer; interval: 1200; onTriggered: table.flash = "" }
+                    ScrollBar.vertical: ScrollBar { policy: ScrollBar.AsNeeded }
+                    delegate: Rectangle {
+                        id: rowItem
+                        required property var modelData
+                        required property int index
+                        width: table.width
+                        height: 32
+                        color: table.flash === modelData.date ? Qt.rgba(Theme.accent.r, Theme.accent.g, Theme.accent.b, 0.14)
+                               : rowArea.containsMouse ? Theme.hover : index % 2 === 1 ? Qt.rgba(0, 0, 0, Theme.dark ? 0.08 : 0.018) : "transparent"
+                        Behavior on color { ColorAnimation { duration: 200 } }
+                        Row {
+                            x: 16
+                            height: parent.height
+                            Repeater {
+                                model: table.parent.columns
+                                Text {
+                                    required property var modelData
+                                    width: modelData.width * table.parent.unit
+                                    height: rowItem.height
+                                    verticalAlignment: Text.AlignVCenter
+                                    horizontalAlignment: modelData.align === undefined ? Text.AlignRight : modelData.align
+                                    rightPadding: modelData.align === undefined ? 10 : 0
+                                    text: table.parent.cell(rowItem.modelData, modelData.key)
+                                    color: modelData.key === "date" ? Theme.ink : modelData.key === "models" ? Theme.ink2 : Theme.ink
+                                    font.pixelSize: 12
+                                    font.features: Theme.tabular
+                                    font.weight: modelData.key === "date" ? Font.Medium : Font.Normal
+                                    elide: Text.ElideRight
+                                }
+                            }
+                        }
+                        MouseArea { id: rowArea; anchors.fill: parent; hoverEnabled: true }
+                    }
+                }
+            }
             }
         }
 

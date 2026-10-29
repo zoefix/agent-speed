@@ -129,7 +129,9 @@ int main(int argc, char* argv[]) {
     QObject::connect(&state, &AppState::demoChanged, worker, &MonitorWorker::setDemo);
 
     // The daily history (METRICS 8) on its own thread, sharing the price book with the monitor.
-    HistoryModel historyModel;
+    qRegisterMetaType<TaskRecords>();
+    qRegisterMetaType<TaskModels>();
+    HistoryModel historyModel(&strings);
     QThread historyThread;
     historyThread.setObjectName(QStringLiteral("history"));
     auto* historyWorker = new HistoryWorker(
@@ -145,6 +147,10 @@ int main(int argc, char* argv[]) {
     QObject::connect(&historyThread, &QThread::finished, historyWorker, &QObject::deleteLater);
     QObject::connect(historyWorker, &HistoryWorker::daysReady, &historyModel, &HistoryModel::applyRows);
     QObject::connect(historyWorker, &HistoryWorker::analyzing, &historyModel, &HistoryModel::setAnalyzing);
+    QObject::connect(historyWorker, &HistoryWorker::tasksReady, &historyModel, &HistoryModel::applyTasks);
+    QObject::connect(
+        historyWorker, &HistoryWorker::tasksReady, historyWorker, [worker](TaskRecords, TaskModels models) { worker->setTaskModels(std::move(models)); },
+        Qt::DirectConnection);
     QObject::connect(&historyModel, &HistoryModel::refreshRequested, historyWorker, &HistoryWorker::analyze);
     QObject::connect(&historyModel, &HistoryModel::clearRequested, historyWorker, &HistoryWorker::clear);
     // Peaks are stored only for days observed live (METRICS 8).
@@ -278,7 +284,14 @@ int main(int argc, char* argv[]) {
     if (!historyShot.isEmpty()) {
         if (!historyWindow) openHistory(QString());
         QTimer::singleShot(12000, &app, [&] {
-            if (auto* quick = qobject_cast<QQuickWindow*>(historyWindow)) quick->grabWindow().save(historyShot);
+            if (auto* quick = qobject_cast<QQuickWindow*>(historyWindow)) {
+                // AGENT_SPEED_SHOT_HEIGHT renders a taller window, so the sections below the fold are in the image.
+                if (const int tall = qEnvironmentVariableIntValue("AGENT_SPEED_SHOT_HEIGHT"); tall > 0) {
+                    quick->resize(quick->width(), tall);
+                    QCoreApplication::processEvents();
+                }
+                quick->grabWindow().save(historyShot);
+            }
             QApplication::quit();
         });
     }

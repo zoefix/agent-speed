@@ -36,6 +36,16 @@ void MonitorWorker::setOptions(WorkerOptions options, bool reconfigure) {
     restartPending_ |= reconfigure;
 }
 
+void MonitorWorker::setTaskModels(std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models) {
+    std::lock_guard lock(optionsMutex_);
+    pendingModels_ = std::move(models);
+}
+
+void MonitorWorker::setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets) {
+    std::lock_guard lock(optionsMutex_);
+    pendingSets_ = std::move(sets);
+}
+
 void MonitorWorker::start() {
     const qint64 now = QDateTime::currentMSecsSinceEpoch();
     startMonitor(now);
@@ -48,6 +58,8 @@ void MonitorWorker::start() {
 
 void MonitorWorker::startMonitor(qint64 now) {
     monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
+    monitor_->setTaskModels(models_);
+    monitor_->setScoreSets(sets_);
     monitor_->start(now, localMidnightMs(now));
     lastPollMs_ = now;
 }
@@ -228,6 +240,16 @@ void MonitorWorker::tick() {
             pending_.reset();
             restart = restartPending_;
             restartPending_ = false;
+        }
+        if (pendingModels_) {
+            models_ = std::move(*pendingModels_);
+            pendingModels_.reset();
+            if (monitor_) monitor_->setTaskModels(models_);
+        }
+        if (pendingSets_) {
+            sets_ = std::move(*pendingSets_);
+            pendingSets_.reset();
+            if (monitor_) monitor_->setScoreSets(sets_);
         }
     }
     if (restart || (monitor_ && monitor_->restartRequested())) {
