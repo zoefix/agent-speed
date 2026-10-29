@@ -101,6 +101,9 @@ qt_add_resources(agent-speed "strings"
 target_link_libraries(agent-speed PRIVATE
     agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
 target_include_directories(agent-speed PRIVATE src)
+# The release version (a tag v1.6.0 builds 1.6.0); local builds keep the project's.
+set(AGENTSPEED_VERSION "${PROJECT_VERSION}" CACHE STRING "The version the app reports")
+target_compile_definitions(agent-speed PRIVATE AGENTSPEED_VERSION="${AGENTSPEED_VERSION}")
 
 install(TARGETS agent-speed RUNTIME DESTINATION bin)
 install(FILES packaging/agent-speed.desktop DESTINATION share/applications)

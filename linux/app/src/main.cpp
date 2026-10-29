@@ -87,7 +87,7 @@ int main(int argc, char* argv[]) {
     }
     QApplication app(argc, argv);
     QApplication::setApplicationName(QStringLiteral("Agent Speed"));
-    QApplication::setApplicationVersion(QStringLiteral("1.5.0"));
+    QApplication::setApplicationVersion(QStringLiteral(AGENTSPEED_VERSION));
     QApplication::setOrganizationName(QStringLiteral("zoefix"));
     QGuiApplication::setDesktopFileName(QStringLiteral("agent-speed"));
     QApplication::setQuitOnLastWindowClosed(false);
