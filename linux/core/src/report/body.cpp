@@ -136,11 +136,21 @@ struct ModelEntry {
     Usage usage;
     int generating = 0;
     std::map<SourceKind, std::int64_t> harnessRequests;
+    bool usual = false;  // an entry of METRICS 11.3, not one only the task score adds
+    std::vector<const TaskAgent*> taskAgents;
+    double thinking = 0;  // unrounded model sums of the entry's raw models
+    std::map<SourceKind, TaskRow> taskRows;
 };
+
+const TaskFacts& noTaskFacts() {
+    static const TaskFacts empty;
+    return empty;
+}
 
 // One entry per model with any increment in the window (a late price included) or a generating agent, by output then id,
 // `other` last (REPORTING 6.6.4, METRICS 11.3, 11.7).
-std::vector<Json> modelEntries(const WindowContent& content, const Sample& sample, int maxModels, bool withCost, const Extensions& extensions) {
+std::vector<Json> modelEntries(const WindowContent& content, const Sample& sample, int maxModels, bool withCost, const Extensions& extensions,
+                               bool taskScore) {
     std::map<std::string, ModelEntry> byId;
     const auto entryOf = [&](const std::string& id) -> ModelEntry& {
         auto& entry = byId[id];
@@ -159,18 +169,39 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         entry.generating += count;
         entry.sources.insert(key.source);
     }
+    // METRICS 11.10 Membership: the models an agent is live with and the models with task rows get entries too.
+    const auto& tasks = sample.facts.tasks ? *sample.facts.tasks : noTaskFacts();
+    if (taskScore) {
+        for (auto& [_, entry] : byId) entry.usual = true;
+        for (const auto& agent : tasks.agents)
+            if (agent.form == "live") entryOf(agent.modelId).sources.insert(agent.source);
+        for (const auto& [key, row] : content.tasks) {
+            auto& entry = entryOf(key.modelId);
+            entry.sources.insert(key.source);
+            entry.taskRows[key.source] += row;
+        }
+        for (const auto& agent : tasks.agents)
+            if (const auto it = byId.find(agent.modelId); it != byId.end()) it->second.taskAgents.push_back(&agent);
+        for (auto& [id, entry] : byId)
+            if (const auto it = tasks.modelThinking.find(id); it != tasks.modelThinking.end()) entry.thinking = it->second;
+    }
     std::vector<ModelEntry> entries;
     for (auto& [_, entry] : byId) entries.push_back(std::move(entry));
     std::stable_sort(entries.begin(), entries.end(), [](const ModelEntry& a, const ModelEntry& b) {
         return a.usage.output != b.usage.output ? a.usage.output > b.usage.output : a.id < b.id;
     });
     if (static_cast<int>(entries.size()) > maxModels) {
-        ModelEntry other{"other", {}, {}, 0, {}};
+        ModelEntry other;
+        other.id = "other";
         for (auto it = entries.begin() + (maxModels - 1); it != entries.end(); ++it) {
             other.usage += it->usage;
             other.generating += it->generating;
             other.sources.insert(it->sources.begin(), it->sources.end());
             for (const auto& [source, requests] : it->harnessRequests) other.harnessRequests[source] += requests;
+            other.usual = other.usual || it->usual || !taskScore;
+            other.taskAgents.insert(other.taskAgents.end(), it->taskAgents.begin(), it->taskAgents.end());
+            other.thinking += it->thinking;
+            for (const auto& [source, row] : it->taskRows) other.taskRows[source] += row;
         }
         entries.resize(static_cast<std::size_t>(maxModels - 1));
         entries.push_back(std::move(other));
@@ -190,12 +221,20 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
         if (withCost) json.add("deltaMicroUsd", Json::of(entry.usage.costMicroUsd));
         std::int64_t harnessSum = 0;
         for (const auto& [_, requests] : entry.harnessRequests) harnessSum += requests;
-        if (extensions.modelHarnessRequests && entry.harnessRequests.size() <= 8 && harnessSum == entry.usage.requests) {
+        const bool usual = !taskScore || entry.usual;
+        if (usual && extensions.modelHarnessRequests && entry.harnessRequests.size() <= 8 && harnessSum == entry.usage.requests) {
             std::vector<Json> rows;
             for (const auto& [source, requests] : entry.harnessRequests) {
                 if (requests > 0) rows.push_back(Json::object({{"source", Json::of(sourceId(source))}, {"requests", Json::of(requests)}}));
             }
             json.add("harnessRequests", Json::array(std::move(rows)));
+        }
+        if (taskScore) {
+            json.add("taskScore", taskValue(entry.taskAgents, entry.thinking));
+            std::vector<Json> stats;
+            for (const auto kind : sourceOrder())
+                if (const auto it = entry.taskRows.find(kind); it != entry.taskRows.end()) stats.push_back(it->second.json(kind));
+            json.add("taskStats", Json::array(std::move(stats)));
         }
         out.push_back(std::move(json));
     }
@@ -349,8 +388,15 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
         json.add("traffic", trafficJson(sample.traffic, content.peakRate, bytes));
     }
     if (sections.contains(Section::Sources)) json.add("sources", Json::array(sourceEntries(content, sample, sections)));
+    const bool taskScore = options.taskScoreActive();
     if (sections.contains(Section::Models) && options.maxModels > 0) {
-        json.add("models", Json::array(modelEntries(content, sample, options.maxModels, sections.contains(Section::Cost), options.extensions)));
+        json.add("models", Json::array(modelEntries(content, sample, options.maxModels, sections.contains(Section::Cost), options.extensions, taskScore)));
+    }
+    if (taskScore) {
+        const auto& tasks = sample.facts.tasks ? *sample.facts.tasks : noTaskFacts();
+        std::vector<const TaskAgent*> all;
+        for (const auto& agent : tasks.agents) all.push_back(&agent);
+        json.add("taskScore", taskValue(all, tasks.thinking));
     }
     if (options.stream) {
         const bool mixed = sections.contains(Section::Traffic) && sample.traffic.status == TrafficStatus::Ok;

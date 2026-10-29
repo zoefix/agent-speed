@@ -70,6 +70,7 @@ add_library(agentspeed_core STATIC
     src/report/scheduler.cpp
     src/report/service.cpp
     src/report/stream.cpp
+    src/report/task.cpp
     src/report/values.cpp
     src/report/window.cpp
     src/report/body.cpp

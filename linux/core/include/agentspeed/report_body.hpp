@@ -9,6 +9,7 @@
 
 #include "agentspeed/report_json.hpp"
 #include "agentspeed/report_scheduler.hpp"
+#include "agentspeed/report_task.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/snapshot.hpp"
 
@@ -123,6 +124,7 @@ struct Sample {
 // peaks of the ticks inside it.
 struct WindowContent {
     Counters usage;
+    TaskRows tasks;  // the task ledger's rows a build takes (METRICS 11.10)
     std::map<SourceKind, Bytes> agentBytes;
     Rate peak;
     double peakCost = 0;
@@ -154,6 +156,10 @@ private:
     Rate peak_;
     double peakCost_ = 0;
     std::optional<traffic::Rate> peakRate_;
+    std::shared_ptr<const TaskRows> taskBaseline_;
+    std::uint64_t taskGeneration_ = 0;
+    std::int64_t lastCompleted_ = 0;
+    std::uint64_t lastTaskGeneration_ = 0;
 };
 
 // The report title tracker (METRICS 11.2, REPORTING 6.4): the speed title level 0–13 of DESIGN 1 — entered at a

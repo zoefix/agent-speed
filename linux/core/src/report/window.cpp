@@ -22,6 +22,13 @@ const std::shared_ptr<const Counters>& zeroCounters() {
 
 bool tasksOrUsageSince(const Counters& now, const Counters& before) { return !now.since(before).byModel().empty(); }
 
+const TaskFacts& noTasks() {
+    static const TaskFacts empty;
+    return empty;
+}
+
+const TaskFacts& tasksOf(const Sample& sample) { return sample.facts.tasks ? *sample.facts.tasks : noTasks(); }
+
 }  // namespace
 
 TrafficSample TrafficSample::from(const traffic::View& view, bool includeTools, const std::set<SourceKind>& enabled, std::int64_t epoch) {
@@ -82,7 +89,8 @@ bool Sample::working() const {
 
 Window::Window(const Sample& sample)
     : baseline_(sample.facts.counters), lastCounters_(sample.facts.counters), baselineEpoch_(sample.facts.epoch), lastEpoch_(sample.facts.epoch),
-      trafficBaseline_(sample.traffic.totals), lastTraffic_(sample.traffic.totals) {}
+      trafficBaseline_(sample.traffic.totals), lastTraffic_(sample.traffic.totals), taskBaseline_(tasksOf(sample).rows),
+      taskGeneration_(tasksOf(sample).generation), lastCompleted_(tasksOf(sample).completed), lastTaskGeneration_(tasksOf(sample).generation) {}
 
 bool Window::hasTokenIncrement(const Sample& sample) const {
     return sample.facts.counters->hasTokensSince(sample.facts.epoch == lastEpoch_ ? *lastCounters_ : *zeroCounters());
@@ -92,7 +100,9 @@ bool Window::hasIncrement(const Sample& sample, bool traffic) const {
     const auto& counters = sample.facts.counters;
     const bool usage = sample.facts.epoch != lastEpoch_ ? !counters->byModel().empty()
                                                        : counters != lastCounters_ && tasksOrUsageSince(*counters, *lastCounters_);
-    return usage || (traffic && !sample.traffic.agentBytes(lastTraffic_).empty());
+    const auto& tasks = tasksOf(sample);
+    const bool completed = tasks.generation != lastTaskGeneration_ ? tasks.completed > 0 : tasks.completed > lastCompleted_;
+    return usage || completed || (traffic && !sample.traffic.agentBytes(lastTraffic_).empty());
 }
 
 void Window::discard(const Sample& sample, bool keepingTick) {
@@ -123,6 +133,8 @@ void Window::observe(const Sample& sample, bool peaks) {
     lastCounters_ = sample.facts.counters;
     lastEpoch_ = sample.facts.epoch;
     lastTraffic_ = sample.traffic.totals;
+    lastCompleted_ = tasksOf(sample).completed;
+    lastTaskGeneration_ = tasksOf(sample).generation;
 }
 
 WindowContent Window::content(const Sample& sample) const {
@@ -133,6 +145,15 @@ WindowContent Window::content(const Sample& sample) const {
     out.peak = {std::max(peak_.output, sample.live.output), std::max(peak_.total, sample.live.total)};
     out.peakCost = std::max(peakCost_, sample.liveCost);
     out.peakRate = larger(peakRate_, sample.traffic.status == TrafficStatus::Ok ? sample.traffic.rate : std::nullopt);
+    // Task rows since the previous build; discards leave them alone (METRICS 11.10 Task ledger).
+    const auto& tasks = tasksOf(sample);
+    for (const auto& [key, row] : *tasks.rows) {
+        TaskRow change = row;
+        if (tasks.generation == taskGeneration_ && taskBaseline_) {
+            if (const auto it = taskBaseline_->find(key); it != taskBaseline_->end()) change = row - it->second;
+        }
+        if (!change.zero()) out.tasks[key] = change;
+    }
     return out;
 }
 
@@ -140,6 +161,8 @@ WindowContent Window::take(const Sample& sample) {
     auto taken = content(sample);
     discard(sample, false);
     observe(sample, false);
+    taskBaseline_ = tasksOf(sample).rows;
+    taskGeneration_ = tasksOf(sample).generation;
     return taken;
 }
 

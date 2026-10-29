@@ -20,6 +20,7 @@ add_executable(agentspeed_tests
     report_scheduler_test.cpp
     report_service_test.cpp
     report_stream_test.cpp
+    report_task_test.cpp
     report_test.cpp
     rfc3339_test.cpp
     task_e2e_test.cpp

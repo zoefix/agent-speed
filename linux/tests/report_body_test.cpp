@@ -125,6 +125,37 @@ Built fromExample(const json::Value& report) {
     b.sample.facts = facts;
     b.sample.traffic = traffic;
 
+    // The task score's live values and rows (METRICS 11.10): one agent per model entry with its value, the entries' thinking.
+    TaskRows taskRows;
+    if (const auto top = report["taskScore"]; top.isObject()) {
+        b.options.extensions.taskScore = true;
+        auto tasks = std::make_shared<TaskFacts>();
+        tasks->thinking = num(top["thinkingTokS"]);
+        for (const auto& model : models) {
+            const auto value = model["taskScore"];
+            const auto id = *model["id"].string();
+            if (value["form"].equals("live") || value["form"].equals("resting")) {
+                tasks->agents.push_back({sourceOf(model["sources"].at(0)), id, *value["form"].string(), value["score"].number()});
+            }
+            tasks->modelThinking[id] = num(value["thinkingTokS"]);
+            for (const auto& row : model["taskStats"].elements()) {
+                TaskRow r;
+                r.completed = integer(row["completed"]);
+                r.scored = integer(row["scored"]);
+                r.scoreSum = integer(row["scoreSum"]);
+                for (std::uint32_t i = 0; i < 10; ++i) r.scoreBins[i] = integer(row["scoreBins"].at(i));
+                r.successes = integer(row["successes"]);
+                r.stalls = integer(row["stalls"]);
+                r.fixAttempts = integer(row["fixAttempts"]);
+                r.fixFailures = integer(row["fixFailures"]);
+                r.recovered = integer(row["recovered"]);
+                r.recoverAttempts = integer(row["recoverAttempts"]);
+                taskRows[{id, sourceOf(row["source"])}] += r;
+            }
+        }
+        b.sample.facts.tasks = tasks;
+    }
+
     Sample baseline;
     baseline.facts.epoch = 2;
     baseline.traffic = traffic;
@@ -133,6 +164,7 @@ Built fromExample(const json::Value& report) {
     b.content.peak = {num(report["peak"]["outputTokS"]), num(report["peak"]["totalTokS"])};
     b.content.peakCost = cost.isObject() ? num(cost["peakMicroUsdPerSecond"]) : 0;
     b.content.peakRate = peakRate;
+    b.content.tasks = taskRows;
     return b;
 }
 
@@ -174,7 +206,8 @@ TEST_P(ReportExamples, AreRebuiltExactly) {
 }
 
 INSTANTIATE_TEST_SUITE_P(Report, ReportExamples,
-                         testing::Values("report-active.json", "report-idle.json", "report-leaving.json", "report-minimal.json", "report-websocket.json"));
+                         testing::Values("report-active.json", "report-idle.json", "report-leaving.json", "report-minimal.json", "report-websocket.json",
+                                         "report-taskscore.json", "report-taskscore-websocket.json"));
 
 TEST(ReportBody, NumbersAreRoundedHalfAwayFromZero) {
     EXPECT_EQ(Json::number(0.25, 1), "0.3");
