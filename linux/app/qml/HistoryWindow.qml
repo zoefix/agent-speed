@@ -352,8 +352,8 @@ Window {
                 }
             }
 
-            // Task performance (DESIGN 3c)
-            TasksSection {
+            // Performance (DESIGN 12, 性能表現)
+            PerfSection {
                 Layout.fillWidth: true
                 first: win.span[0]
                 last: win.span[1]

@@ -25,6 +25,10 @@ QtObject {
 
     // Task score (DESIGN 12): the score ink, its track and the state chips.
     readonly property color scoreInk: dark ? "#93A4D6" : "#4B5FA6"
+    // DESIGN 12 Score card: the scale's pearl gradient (the board glass arc's colors), pearl-c → pearl-a → pearl-b.
+    readonly property color pearlC: dark ? "#A5F3FC" : "#1AA3C4"
+    readonly property color pearlA: dark ? "#C7D2FE" : "#6D7CF0"
+    readonly property color pearlB: dark ? "#F5D0FE" : "#C05BD9"
     readonly property color track: dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.075)
     readonly property color passInk: dark ? "#6EE7B7" : "#047857"
     readonly property color passFill: dark ? Qt.rgba(0.204, 0.827, 0.6, 0.14) : Qt.rgba(0.063, 0.725, 0.506, 0.12)

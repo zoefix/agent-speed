@@ -1,6 +1,7 @@
 import QtQuick
 
-// DESIGN 12 proof mark: a dotted underline under an unverified or pending score. It takes no layout room.
+// DESIGN 12 provisional mark: a dotted underline under a score from fewer than 10 timed requests. It takes no layout
+// room.
 Item {
     id: dots
     property real textWidth: 0

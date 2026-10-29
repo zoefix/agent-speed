@@ -1,17 +1,21 @@
 #include "history_service.hpp"
 
+#include <QDate>
 #include <QDateTime>
 #include <QFile>
 #include <QFileDialog>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QTimeZone>
+#include <cmath>
+#include <tuple>
 
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/tz.hpp"
+#include "format.hpp"
+#include "perf_card.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 
 namespace {
 
@@ -170,18 +174,19 @@ void HistoryWorker::publish() {
         rows.push_back(row);
     }
     emit daysReady(rows, QDateTime::currentMSecsSinceEpoch());
-    auto records = std::make_shared<std::vector<agentspeed::tasks::TaskRecord>>(analyzer_->taskRecords());
-    TaskModels models;
-    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Droid); ++k) {
-        const auto source = static_cast<agentspeed::SourceKind>(k);
-        if (!agentspeed::tasks::isScoredSource(source)) continue;
-        std::vector<agentspeed::tasks::TaskRecord> part;
-        for (const auto& r : *records) {
-            if (r.source == source) part.push_back(r);
-        }
-        if (!part.empty()) models[source] = agentspeed::tasks::calibrate(part);
+    // METRICS 6.11 Reading: a day's record of a (source, model) is the sum over files.
+    std::map<std::tuple<std::string, agentspeed::SourceKind, std::string>, agentspeed::perf::Record> sums;
+    for (const auto& r : analyzer_->perfRecords()) sums[{r.day, r.source, r.model}].add(r.record);
+    auto records = std::make_shared<std::vector<agentspeed::perf::DayRecord>>();
+    for (const auto& [key, record] : sums) records->push_back({std::get<0>(key), std::get<1>(key), std::get<2>(key), record});
+    const auto today = QDate::currentDate().toString(Qt::ISODate).toStdString();
+    PerfBaselines baselines;
+    for (const auto& r : *records) {
+        const auto key = std::make_pair(r.source, r.model);
+        if (baselines.contains(key)) continue;
+        if (const auto value = agentspeed::perf::baseline(*records, r.source, r.model, today)) baselines[key] = *value;
     }
-    emit tasksReady(std::move(records), std::move(models));
+    emit perfReady(std::move(records), std::move(baselines));
     publishTraffic();
 }
 
@@ -201,7 +206,7 @@ QString HistoryModel::money(qint64 microUsd, const QString& currency, const QStr
     using namespace agentspeed::money;
     const auto& c = CurrencyTable::bundled().currencyOrUsd(currency.toStdString());
     const auto r = Decimal::parse(rate.toStdString()).value_or(Decimal(1));
-    return QString::fromStdString(format(amount(microUsd, r), c, language.toStdString(), Form::Amount).text);
+    return QString::fromStdString(agentspeed::money::format(amount(microUsd, r), c, language.toStdString(), Form::Amount).text);
 }
 
 QString HistoryModel::chooseCsvPath(const QString& suggestedName) const {
@@ -318,119 +323,104 @@ void HistoryModel::applyTraffic(const QVariantList& rows, const QString& since) 
     emit trafficChanged();
 }
 
-void HistoryModel::applyTasks(TaskRecords records) {
-    tasks_ = std::move(records);
-    ++tasksRevision_;
-    emit tasksChanged();
+void HistoryModel::applyPerf(PerfRecords records, PerfBaselines baselines) {
+    perf_ = std::move(records);
+    baselines_ = std::move(baselines);
+    ++perfRevision_;
+    emit perfChanged();
 }
 
-namespace {
-
-QString durationText(const Strings& s, double ms) {
-    const auto seconds = agentspeed::tasks::roundHalfAway(ms / 1000);
-    if (seconds < 60) return task_card::fmt(s, QStringLiteral("time.seconds"), {static_cast<qlonglong>(seconds)});
-    const auto minutes = agentspeed::tasks::roundHalfAway(ms / 60'000);
-    if (minutes < 60) return task_card::fmt(s, QStringLiteral("time.minutes"), {static_cast<qlonglong>(minutes)});
-    const auto hours = minutes / 60, rest = minutes % 60;
-    if (rest == 0) return task_card::fmt(s, QStringLiteral("time.hours"), {static_cast<qlonglong>(hours)});
-    return task_card::fmt(s, QStringLiteral("time.hoursMinutes"), {static_cast<qlonglong>(hours), static_cast<qlonglong>(rest)});
-}
-
-QString percentText(double rate) { return QString::number(agentspeed::tasks::roundHalfAway(rate * 100)) + QLatin1Char('%'); }
-
-QVariant number(const std::optional<double>& v) { return v ? QVariant(*v) : QVariant(); }
-
-// The figures of one aggregate (a source side or a model row), with the texts the window shows.
-QVariantMap figures(const Strings& s, const agentspeed::tasks::Aggregate& a) {
+QVariantMap HistoryModel::perfSection(const QString& first, const QString& last, const QString& source) const {
     QVariantMap out;
-    out.insert(QStringLiteral("tasks"), static_cast<qlonglong>(a.tasks));
-    out.insert(QStringLiteral("scored"), static_cast<qlonglong>(a.scoredTasks));
-    out.insert(QStringLiteral("low"), a.scoredTasks < 10);
-    out.insert(QStringLiteral("median"), number(a.medianScore));
-    out.insert(QStringLiteral("medianText"), a.medianShown ? QString::number(*a.medianShown) : QStringLiteral("–"));
-    out.insert(QStringLiteral("q1"), number(a.lowerQuartile));
-    out.insert(QStringLiteral("q3"), number(a.upperQuartile));
-    QVariantList bins;
-    for (const auto b : a.histogram) bins.push_back(static_cast<qlonglong>(b));
-    out.insert(QStringLiteral("histogram"), bins);
-    int medianBin = -1;
-    if (a.medianScore) {
-        medianBin = 0;
-        for (const double edge : {10, 20, 30, 40, 50, 60, 70, 80, 90}) medianBin += *a.medianScore >= edge ? 1 : 0;
-    }
-    out.insert(QStringLiteral("medianBin"), medianBin);
-    out.insert(QStringLiteral("countsText"), task_card::fmt(s, QStringLiteral("history.tasks.counts"),
-                                                             {static_cast<qlonglong>(a.scoredTasks), static_cast<qlonglong>(a.tasks)}));
-    const auto metric = [&](const QString& key, const std::optional<double>& value, const QString& text, const QString& tooltip, bool lowerBetter) {
-        QVariantMap m;
-        m.insert(QStringLiteral("key"), key);
-        m.insert(QStringLiteral("label"), s.t(QStringLiteral("history.tasks.metric.") + key));
-        m.insert(QStringLiteral("hint"), s.t(QStringLiteral("history.tasks.metric.") + key + QStringLiteral(".hint")));
-        m.insert(QStringLiteral("value"), number(value));
-        m.insert(QStringLiteral("text"), value ? text : QStringLiteral("–"));
-        m.insert(QStringLiteral("tooltip"), tooltip);
-        m.insert(QStringLiteral("lowerBetter"), lowerBetter);
-        return m;
-    };
-    QVariantList metrics;
-    metrics.push_back(metric(QStringLiteral("success"), a.successRate, a.successRate ? percentText(*a.successRate) : QString(),
-                             task_card::fmt(s, QStringLiteral("history.tasks.rate.scored"),
-                                            {static_cast<qlonglong>(a.successes), static_cast<qlonglong>(a.scoredTasks)}),
-                             false));
-    metrics.push_back(metric(QStringLiteral("stall"), a.stallRate, a.stallRate ? percentText(*a.stallRate) : QString(),
-                             task_card::fmt(s, QStringLiteral("history.tasks.rate.tasks"),
-                                            {static_cast<qlonglong>(a.stalls), static_cast<qlonglong>(a.tasks)}),
-                             true));
-    metrics.push_back(metric(QStringLiteral("fixFail"), a.fixFailureRate, a.fixFailureRate ? percentText(*a.fixFailureRate) : QString(),
-                             task_card::fmt(s, QStringLiteral("history.tasks.rate.fixes"),
-                                            {static_cast<qlonglong>(a.fixFailures), static_cast<qlonglong>(a.fixAttempts)}),
-                             true));
-    metrics.push_back(metric(QStringLiteral("attempts"), a.recoverAttempts,
-                             a.recoverAttempts ? task_card::fmt(s, QStringLiteral("history.tasks.attempts"), {QString::number(*a.recoverAttempts, 'f', 1)})
-                                               : QString(),
-                             a.recoverAttempts ? QString() : s.t(QStringLiteral("history.tasks.noValue.attempts")), true));
-    metrics.push_back(metric(QStringLiteral("firstPass"), a.timeToFirstPassMs,
-                             a.timeToFirstPassMs ? durationText(s, *a.timeToFirstPassMs) : QString(),
-                             a.timeToFirstPassMs ? QString() : s.t(QStringLiteral("history.tasks.noValue.firstPass")), true));
-    out.insert(QStringLiteral("metrics"), metrics);
-    return out;
-}
-
-}  // namespace
-
-QVariantMap HistoryModel::taskComparison(const QString& first, const QString& last, const QString& source) const {
-    QVariantMap out;
-    if (!tasks_ || !strings_) {
-        out.insert(QStringLiteral("sources"), QVariantList());
-        out.insert(QStringLiteral("byModel"), QVariantList());
-        return out;
-    }
+    QVariantList rows;
+    out.insert(QStringLiteral("rows"), rows);
+    out.insert(QStringLiteral("ready"), perf_ != nullptr);
+    if (!perf_ || !strings_ || first.isEmpty() || last.isEmpty()) return out;
+    const auto& s = *strings_;
     const auto only = source.isEmpty() ? std::nullopt : agentspeed::sourceFromId(source.toStdString());
-    const auto result = agentspeed::tasks::compare(*tasks_, first.toStdString(), last.toStdString(), only);
-    QVariantList sources;
-    for (const auto& row : result.bySource) {
-        auto side = figures(*strings_, row.aggregate);
+    const auto firstDay = first.toStdString(), lastDay = last.toStdString();
+    // A single-day range shows the 14 days ending on that day (DESIGN 12 Trend).
+    const bool single = firstDay == lastDay;
+    const auto trendFirst = single ? agentspeed::perf::dayMinus(lastDay, 13) : firstDay;
+    const auto pooledRows = agentspeed::perf::rangeValues(*perf_, firstDay, lastDay, only);
+    const auto trendRows = single ? agentspeed::perf::rangeValues(*perf_, trendFirst, lastDay, only) : pooledRows;
+    for (const auto& row : pooledRows) {
+        QVariantMap m;
         const auto id = QString::fromUtf8(agentspeed::sourceId(row.source));
-        side.insert(QStringLiteral("source"), id);
-        side.insert(QStringLiteral("name"), strings_->t(QStringLiteral("source.") + id));
-        sources.push_back(side);
-    }
-    QVariantList models;
-    for (const auto& row : result.byModel) {
-        auto m = figures(*strings_, row.aggregate);
+        const auto& p = row.pooled;
+        m.insert(QStringLiteral("source"), id);
+        m.insert(QStringLiteral("sourceName"), s.t(QStringLiteral("source.") + id));
         m.insert(QStringLiteral("model"), QString::fromStdString(row.model));
-        m.insert(QStringLiteral("name"), row.model.empty() ? strings_->t(QStringLiteral("cost.noModelName")) : QString::fromStdString(row.model));
-        QStringList ids, names;
-        for (const auto kind : row.sources) {
-            const auto id = QString::fromUtf8(agentspeed::sourceId(kind));
-            ids << id;
-            names << strings_->t(QStringLiteral("source.") + id);
+        m.insert(QStringLiteral("modelName"), row.model.empty() ? s.t(QStringLiteral("cost.noModelName")) : QString::fromStdString(row.model));
+        m.insert(QStringLiteral("key"), id + QLatin1Char('\n') + QString::fromStdString(row.model));
+        m.insert(QStringLiteral("n"), static_cast<qlonglong>(p.n));
+        m.insert(QStringLiteral("nText"), format::perfFull(p.n));
+        m.insert(QStringLiteral("score"), p.shown ? static_cast<qlonglong>(*p.shown) : -1);
+        m.insert(QStringLiteral("scoreText"), p.shown ? format::perfFull(*p.shown) : QStringLiteral("–"));
+        m.insert(QStringLiteral("f"), p.shown ? format::perfScale(static_cast<double>(*p.shown)) : 0.0);
+        m.insert(QStringLiteral("sampleHint"), s.fmt(QStringLiteral("history.perf.sample.hint"),
+                                                     {static_cast<qlonglong>(p.n), static_cast<qlonglong>(agentspeed::perf::kPooledMinN)}));
+        const auto base = baselines_.find({row.source, row.model});
+        const bool hasBase = base != baselines_.end();
+        m.insert(QStringLiteral("usual"), hasBase ? base->second : QVariant());
+        m.insert(QStringLiteral("usualText"), hasBase ? format::perfFull(static_cast<std::int64_t>(std::floor(base->second + 0.5))) : QStringLiteral("–"));
+        m.insert(QStringLiteral("usualHint"), hasBase ? s.t(QStringLiteral("history.perf.usual.hint"))
+                                                      : s.fmt(QStringLiteral("perf.usual.none.hint"), {static_cast<qlonglong>(agentspeed::perf::kPooledMinN)}));
+        QVariantList parts;
+        QStringList present;
+        for (const auto& c : perf_card::kCardOrder) {
+            const auto& comp = p.components[static_cast<std::size_t>(c.id)];
+            QVariantMap part;
+            part.insert(QStringLiteral("key"), QString::fromLatin1(c.key));
+            part.insert(QStringLiteral("column"), s.t(QStringLiteral("history.perf.column.") + c.key));
+            part.insert(QStringLiteral("name"), s.t(QStringLiteral("perf.comp.") + c.key));
+            part.insert(QStringLiteral("desc"), s.t(QStringLiteral("perf.comp.") + c.key + QStringLiteral(".desc")));
+            part.insert(QStringLiteral("present"), comp.present);
+            if (comp.present) {
+                const auto value = perf_card::measureText(s, c.id, *comp.measure);
+                part.insert(QStringLiteral("value"), value);
+                part.insert(QStringLiteral("sub"), format::perfFull(static_cast<std::int64_t>(std::floor(*comp.subScore + 0.5))));
+                part.insert(QStringLiteral("f"), format::perfScale(*comp.subScore));
+                present << s.t(QStringLiteral("history.perf.column.") + c.key) + QLatin1Char(' ') + value;
+            } else {
+                const bool notRecorded = comp.reason == agentspeed::perf::Reason::NotRecorded;
+                part.insert(QStringLiteral("value"), QStringLiteral("–"));
+                part.insert(QStringLiteral("sub"), QStringLiteral("–"));
+                part.insert(QStringLiteral("f"), 0.0);
+                part.insert(QStringLiteral("hint"), notRecorded ? s.fmt(QStringLiteral("perf.reason.notRecorded.hint"), {s.t(QStringLiteral("source.") + id)})
+                                                                : s.fmt(QStringLiteral("perf.reason.fewSamples.hint"),
+                                                                        {static_cast<qlonglong>(agentspeed::perf::kMinSamples)}));
+            }
+            parts.push_back(part);
         }
-        m.insert(QStringLiteral("sources"), ids);
-        m.insert(QStringLiteral("sourcesText"), task_card::fmt(*strings_, QStringLiteral("history.tasks.model.sources"), {names.join(QStringLiteral(", "))}));
-        models.push_back(m);
+        m.insert(QStringLiteral("parts"), parts);
+        m.insert(QStringLiteral("partsText"), present.join(QStringLiteral(" · ")));
+        // The daily trend: each day's pooled score, a gap below 20 timed requests.
+        QVariantList trend;
+        for (const auto& t : trendRows) {
+            if (t.source != row.source || t.model != row.model) continue;
+            for (const auto& [day, score] : t.trend) {
+                std::int64_t n = 0;
+                for (const auto& r : *perf_) {
+                    if (r.day == day && r.source == row.source && r.model == row.model) n += r.record.n;
+                }
+                QVariantMap point;
+                point.insert(QStringLiteral("day"), QString::fromStdString(day));
+                point.insert(QStringLiteral("score"), score ? QVariant(*score) : QVariant());
+                const auto shown = score ? static_cast<std::int64_t>(std::floor(*score + 0.5)) : 0;
+                point.insert(QStringLiteral("text"), score ? format::perfFull(shown) : QStringLiteral("–"));
+                point.insert(QStringLiteral("tier"), score ? perf_card::tierWord(s, shown) : QString());
+                point.insert(QStringLiteral("n"), static_cast<qlonglong>(n));
+                point.insert(QStringLiteral("requests"), s.fmt(QStringLiteral("history.perf.requests"), {static_cast<qlonglong>(n)}));
+                point.insert(QStringLiteral("hint"), s.fmt(QStringLiteral("history.perf.sample.hint"),
+                                                           {static_cast<qlonglong>(n), static_cast<qlonglong>(agentspeed::perf::kPooledMinN)}));
+                trend.push_back(point);
+            }
+        }
+        m.insert(QStringLiteral("trend"), trend);
+        rows.push_back(m);
     }
-    out.insert(QStringLiteral("sources"), sources);
-    out.insert(QStringLiteral("byModel"), models);
+    out.insert(QStringLiteral("rows"), rows);
+    out.insert(QStringLiteral("single"), single);
     return out;
 }

@@ -55,11 +55,13 @@ AgentPerf demoPerf(SourceKind source, Phase phase, double t, double offset, cons
 
 }  // namespace
 
-Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory);
+Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory, const std::vector<std::optional<std::vector<SourceKind>>>& sets);
 
-Snapshot demoSnapshot(std::int64_t nowMs, std::int64_t todayStartMs) { return demoAt(nowMs, todayStartMs, true); }
+Snapshot demoSnapshot(std::int64_t nowMs, std::int64_t todayStartMs, const std::vector<std::optional<std::vector<SourceKind>>>& sets) {
+    return demoAt(nowMs, todayStartMs, true, sets);
+}
 
-Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory) {
+Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory, const std::vector<std::optional<std::vector<SourceKind>>>& sets) {
     Snapshot snap;
     snap.nowMs = nowMs;
     snap.demo = true;
@@ -110,18 +112,25 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
         row.liveThinking = row.liveOutput * 0.35;
         snap.agents.push_back(row);
     }
-    std::vector<perf::Valued> valued;
-    for (const auto& a : snap.agents) valued.push_back({a.id, nowMs, a.perf->score.form, a.perf->score.score});
-    ScoreSet all;
-    all.value = perf::highest(valued);
-    for (const auto& a : snap.agents) {
-        if (all.value.agent && a.id == *all.value.agent) all.provisional = a.perf->score.provisional;
-        if (all.value.form != perf::Form::None && a.perf->score.form == all.value.form) ++all.scored;
-        all.liveThinking += a.liveThinking;
-        all.generating |= a.phase == Phase::Generating;
+    for (const auto& sources : sets) {
+        const auto inSet = [&](SourceKind kind) { return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end(); };
+        std::vector<perf::Valued> valued;
+        for (const auto& a : snap.agents) {
+            if (inSet(a.source)) valued.push_back({a.id, nowMs, a.perf->score.form, a.perf->score.score});
+        }
+        ScoreSet set;
+        set.sources = sources;
+        set.value = perf::highest(valued);
+        for (const auto& a : snap.agents) {
+            if (!inSet(a.source)) continue;
+            if (set.value.agent && a.id == *set.value.agent) set.provisional = a.perf->score.provisional;
+            if (set.value.form != perf::Form::None && a.perf->score.form == set.value.form) ++set.scored;
+            set.liveThinking += a.liveThinking;
+            set.generating |= a.phase == Phase::Generating;
+        }
+        set.thinkingShare = set.liveThinking > 0 ? 0.35 : 0;
+        snap.scoreSets.push_back(std::move(set));
     }
-    all.thinkingShare = 0.35;
-    snap.scoreSets.push_back(all);
     snap.liveOutput = codex + claude;
     snap.liveTotal = snap.liveOutput * 18.5;
     snap.estimatedShare = 0.12;
@@ -140,7 +149,7 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
         snap.sources.push_back(row);
     }
     if (withHistory) {
-        for (int k = 119; k >= 1; --k) snap.history.push_back(demoAt(nowMs - k * 1000LL, todayStartMs, false).liveOutput);
+        for (int k = 119; k >= 1; --k) snap.history.push_back(demoAt(nowMs - k * 1000LL, todayStartMs, false, {}).liveOutput);
         snap.history.push_back(snap.liveOutput);
         for (double v : snap.history) snap.peakToday = std::max(snap.peakToday, v);
     }
@@ -150,7 +159,7 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory)
 std::vector<Completion> demoCompletions(std::int64_t fromMs, std::int64_t toMs) {
     std::vector<Completion> out;
     if (toMs <= fromMs || toMs - fromMs > 10'000) return out;
-    const Snapshot now = demoAt(toMs, 0, false);
+    const Snapshot now = demoAt(toMs, 0, false, {});
     for (std::size_t i = 0; i < 3; ++i) {
         const double period = kResponsePeriods[i];
         const auto before = std::floor(static_cast<double>(fromMs) / 1000.0 / period);

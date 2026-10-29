@@ -10,8 +10,8 @@
 #include "agentspeed/money.hpp"
 #include "format.hpp"
 #include "heat.hpp"
+#include "perf_card.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 
 namespace {
 
@@ -37,9 +37,9 @@ void MonitorWorker::setOptions(WorkerOptions options, bool reconfigure) {
     restartPending_ |= reconfigure;
 }
 
-void MonitorWorker::setTaskModels(std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models) {
+void MonitorWorker::setPerfBaselines(std::map<std::pair<agentspeed::SourceKind, std::string>, double> baselines) {
     std::lock_guard lock(optionsMutex_);
-    pendingModels_ = std::move(models);
+    pendingBaselines_ = std::move(baselines);
 }
 
 void MonitorWorker::setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets) {
@@ -77,7 +77,7 @@ void MonitorWorker::startMonitor(qint64 now) {
     monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
     monitor_->restoreTraffic(carried);
     monitor_->setTrafficEnabled(options_.trafficEnabled);
-    monitor_->setTaskModels(models_);
+    monitor_->setPerfBaselines(baselines_);
     monitor_->setScoreSets(allSets());
     monitor_->setPeakSets(orbSets());
     monitor_->start(now, localMidnightMs(now));
@@ -144,7 +144,7 @@ QVariantMap MonitorWorker::trafficVariant(const agentspeed::Snapshot& snap) cons
         QVariantMap m;
         m.insert(QStringLiteral("source"), r.source);
         m.insert(QStringLiteral("name"), strings_->t(QStringLiteral("source.") + r.source));
-        m.insert(QStringLiteral("todayText"), task_card::fmt(*strings_, QStringLiteral("traffic.pair"), {total(r.rx), total(r.tx)}));
+        m.insert(QStringLiteral("todayText"), strings_->fmt(QStringLiteral("traffic.pair"), {total(r.rx), total(r.tx)}));
         m.insert(QStringLiteral("liveRxText"), r.liveRx >= 500 ? rate(r.liveRx) : QStringLiteral("–"));
         m.insert(QStringLiteral("liveTxText"), r.liveTx >= 500 ? rate(r.liveTx) : QStringLiteral("–"));
         sources.push_back(m);
@@ -210,10 +210,10 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("effortLevel"), level ? *level : -1);
         row.insert(QStringLiteral("effortTop"), a.effort && agentspeed::effort_speed::isTopRung(*a.effort));
         row.insert(QStringLiteral("bolts"), a.speed ? agentspeed::effort_speed::bolts(*a.speed) : 0);
-        row.insert(QStringLiteral("looping"), a.task && a.task->workSignals.looping.has_value());
+        row.insert(QStringLiteral("looping"), a.perf && a.perf->workSignals.looping.has_value());
         row.insert(QStringLiteral("liveThinking"), a.liveThinking);
-        task_card::cell(a, row);
-        auto card = task_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source));
+        perf_card::cell(a, *strings_, row);
+        auto card = perf_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source));
         // DESIGN 10: an agent tree with attributed traffic today shows its download after the detail line.
         if (const auto it = snap.traffic.agentsToday.find(a.id); snap.traffic.enabled && it != snap.traffic.agentsToday.end()) {
             const auto rx = it->second.rxSelf + (options_.trafficIncludeTools ? it->second.rxTools : 0);
@@ -222,8 +222,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
                 row.insert(QStringLiteral("trafficSuffix"),
                            QStringLiteral("↓ ") + QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(rx))));
                 auto facts = card.value(QStringLiteral("facts")).toStringList();
-                facts << task_card::fmt(*strings_, QStringLiteral("traffic.agent.tooltip"),
-                                        {task_card::fmt(*strings_, QStringLiteral("traffic.pair"),
+                facts << strings_->fmt(QStringLiteral("traffic.agent.tooltip"),
+                                        {strings_->fmt(QStringLiteral("traffic.pair"),
                                                         {QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(rx))),
                                                          QString::fromStdString(agentspeed::traffic::formatTotal(static_cast<double>(tx)))})});
                 card.insert(QStringLiteral("facts"), facts);
@@ -234,16 +234,20 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     }
     map.insert(QStringLiteral("agents"), agents);
 
-    // 智力 and 思考 of every requested source set (DESIGN 10, 12); the first is every enabled source.
+    // 性能 and 思考 of every requested source set (DESIGN 10, 12); the first is every enabled source.
     QVariantList sets;
     for (const auto& set : snap.scoreSets) {
         QVariantMap value;
-        value.insert(QStringLiteral("form"), QString::fromStdString(set.value.form));
-        value.insert(QStringLiteral("shown"), set.value.shown ? static_cast<int>(*set.value.shown) : -1);
+        value.insert(QStringLiteral("form"), QString::fromUtf8(agentspeed::perf::formId(set.value.form)));
+        value.insert(QStringLiteral("shown"), set.value.shown ? static_cast<qlonglong>(*set.value.shown) : -1);
+        value.insert(QStringLiteral("text"), set.value.shown ? format::perfCompact(*set.value.shown) : QStringLiteral("–"));
+        value.insert(QStringLiteral("fullText"), set.value.shown ? format::perfFull(*set.value.shown) : QStringLiteral("–"));
         value.insert(QStringLiteral("agent"), set.value.agent ? QString::fromStdString(*set.value.agent) : QString());
         value.insert(QStringLiteral("scored"), static_cast<int>(set.scored));
-        const auto state = set.state.value_or("");
-        value.insert(QStringLiteral("proof"), set.value.shown && (state == "unverified" || state == "pending"));
+        value.insert(QStringLiteral("provisional"), set.value.shown && set.provisional);
+        value.insert(QStringLiteral("words"), set.value.shown ? perf_card::scoreWords(*strings_, *set.value.shown, set.provisional,
+                                                                                         set.value.form == agentspeed::perf::Form::Resting, set.scored)
+                                                              : QString());
         value.insert(QStringLiteral("liveThinking"), set.liveThinking);
         value.insert(QStringLiteral("thinkingText"), format::speed(set.liveThinking));
         value.insert(QStringLiteral("generating"), set.generating);
@@ -389,10 +393,10 @@ void MonitorWorker::tick() {
             restart = restartPending_;
             restartPending_ = false;
         }
-        if (pendingModels_) {
-            models_ = std::move(*pendingModels_);
-            pendingModels_.reset();
-            if (monitor_) monitor_->setTaskModels(models_);
+        if (pendingBaselines_) {
+            baselines_ = std::move(*pendingBaselines_);
+            pendingBaselines_.reset();
+            if (monitor_) monitor_->setPerfBaselines(baselines_);
         }
         if (pendingSets_) {
             sets_ = std::move(*pendingSets_);
@@ -417,7 +421,7 @@ void MonitorWorker::tick() {
     }
     {
         std::lock_guard lock(optionsMutex_);
-        if (monitor_) monitor_->setTaskWatch(watchOn_, watchTaken_);
+        if (monitor_) monitor_->setPerfWatch(watchOn_, watchResponses_, watchCalls_);
     }
     if (restart || (monitor_ && monitor_->restartRequested())) {
         startMonitor(now);
@@ -426,7 +430,7 @@ void MonitorWorker::tick() {
     const qint64 previous = lastTickMs_;
     lastTickMs_ = now;
     if (demo_) {
-        publish(agentspeed::demoSnapshot(now, todayStart), agentspeed::demoCompletions(previous, now), now, todayStart);
+        publish(agentspeed::demoSnapshot(now, todayStart, allSets()), agentspeed::demoCompletions(previous, now), now, todayStart);
         return;
     }
     if (monitor_ && now - lastTrafficSaveMs_ >= 60'000) {
@@ -447,10 +451,11 @@ void MonitorWorker::tick() {
     emit reportTick({std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs(), observed});
 }
 
-void MonitorWorker::setReportWatch(bool on, qint64 taken) {
+void MonitorWorker::setReportWatch(bool on, qint64 responses, qint64 calls) {
     std::lock_guard lock(optionsMutex_);
     watchOn_ = on;
-    watchTaken_ = taken;
+    watchResponses_ = responses;
+    watchCalls_ = calls;
 }
 
 std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::allSets() const {

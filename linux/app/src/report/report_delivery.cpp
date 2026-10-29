@@ -24,36 +24,42 @@ void ReportController::onTick(const ReportTick& tick) {
     lastSample_ = tick.sample;
     if (previewWindow_) previewWindow_->observe(*tick.sample);
     tickRun(tick.sample, tick.monotonicMs, tick.observedMs);
-    updateTaskWatch();
+    updatePerfWatch();
 }
 
-void ReportController::updateTaskWatch() {
+void ReportController::updatePerfWatch() {
     if (!watchSink_) return;
     bool on = enabled() && networkEnabled() && !paused() && problem_ == agentspeed::report::Problem::None && !streamStop_ && identity_ &&
-              identity_->registered && identity_->pin && discovery_ && !needsReview() && options(*discovery_, switches()).taskScoreActive();
-    qint64 taken = 0;
-    if (run_) taken = run_->window->takenCompleted();
-    else if (stream_) taken = stream_->window->takenCompleted();
-    else on = false;
-    const auto state = std::make_pair(on, on ? taken : 0);
+              identity_->registered && identity_->pin && discovery_ && !needsReview() && options(*discovery_, switches()).perfScoreActive();
+    const agentspeed::report::Window* window = run_ ? run_->window.get() : stream_ ? stream_->window.get() : nullptr;
+    if (!window) on = false;
+    const auto state = std::make_tuple(on, on ? window->takenResponses() : 0, on ? window->takenCalls() : 0);
     if (sentWatch_ == state) return;
     sentWatch_ = state;
-    watchSink_(state.first, state.second);
+    watchSink_(std::get<0>(state), std::get<1>(state), std::get<2>(state));
 }
 
-std::string ReportController::taskSignature(const agentspeed::report::Sample& sample) const {
-    if (!sample.facts.tasks || !discovery_ || !options(*discovery_, switches()).taskScoreActive()) return {};
-    const auto& tasks = *sample.facts.tasks;
-    std::vector<const agentspeed::report::TaskAgent*> all;
-    std::map<std::string, std::vector<const agentspeed::report::TaskAgent*>> byModel;
-    for (const auto& agent : tasks.agents) {
+// METRICS 11.10 WebSocket: the perfScore (or retired taskScore) objects a report would carry, as sent.
+std::string ReportController::scoreSignature(const agentspeed::report::Sample& sample) const {
+    if (!sample.facts.perf || !discovery_) return {};
+    const auto opts = options(*discovery_, switches());
+    const bool legacy = opts.legacyTaskScoreActive();
+    if (!opts.perfScoreActive() && !legacy) return {};
+    const auto& perf = *sample.facts.perf;
+    std::vector<const agentspeed::report::PerfAgent*> all;
+    std::map<std::string, std::vector<const agentspeed::report::PerfAgent*>> byModel;
+    for (const auto& agent : perf.agents) {
         all.push_back(&agent);
         byModel[agent.modelId].push_back(&agent);
     }
-    auto signature = agentspeed::report::taskValue(all, tasks.thinking).compact();
+    for (const auto& [id, _] : perf.modelThinking) byModel[id];
+    const auto value = [&](const std::vector<const agentspeed::report::PerfAgent*>& agents, double thinking) {
+        return (legacy ? agentspeed::report::legacyValue(thinking) : agentspeed::report::perfValue(agents, thinking)).compact();
+    };
+    auto signature = value(all, perf.thinking);
     for (const auto& [id, agents] : byModel) {
-        const auto it = tasks.modelThinking.find(id);
-        signature += id + agentspeed::report::taskValue(agents, it == tasks.modelThinking.end() ? 0 : it->second).compact();
+        const auto it = perf.modelThinking.find(id);
+        signature += id + value(agents, it == perf.modelThinking.end() ? 0 : it->second);
     }
     return signature;
 }
@@ -149,6 +155,7 @@ agentspeed::report::Options ReportController::options(const agentspeed::report::
         options.priceVersion = prices_->boundVersion(today).value_or(prices_->currentVersion());
     }
     options.extensions.modelHarnessRequests = discovery.has("modelHarnessRequests");
+    options.extensions.perfScore = discovery.has("perfScore");
     options.extensions.taskScore = discovery.has("taskScore");
     options.extensions.executionModes = discovery.has("executionModes");
     return options;

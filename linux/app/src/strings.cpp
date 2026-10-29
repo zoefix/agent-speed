@@ -52,4 +52,28 @@ void Strings::load() {
 
 QString Strings::t(const QString& key) const { return table_.value(key, key); }
 
+QString Strings::fmt(const QString& key, const QVariantList& args) const {
+    const auto pattern = t(key);
+    QString out;
+    int next = 0;
+    for (int i = 0; i < pattern.size(); ++i) {
+        if (pattern[i] == QLatin1Char('%') && i + 1 < pattern.size()) {
+            const auto c = pattern[i + 1];
+            if (c == QLatin1Char('%')) {
+                out += QLatin1Char('%');
+                ++i;
+                continue;
+            }
+            if (c == QLatin1Char('@') || c == QLatin1Char('d')) {
+                out += next < args.size() ? args[next].toString() : QString();
+                ++next;
+                ++i;
+                continue;
+            }
+        }
+        out += pattern[i];
+    }
+    return out;
+}
+
 QString Strings::tr2(int, const QString& key) const { return t(key); }

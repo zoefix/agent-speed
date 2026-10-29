@@ -64,6 +64,70 @@ Item {
         ctx.clip()
     }
 
+    // DESIGN 12 Number formats: a row's 性能 cell is measured with `8,888` in its font (two-line group rows at 13).
+    FontMetrics { id: perfOneLine; font.family: board.numFont; font.pixelSize: 11; font.weight: Font.Medium }
+    FontMetrics { id: perfTwoLine; font.family: board.numFont; font.pixelSize: 13; font.weight: Font.Medium }
+    function perfColumn(twoLine) { return Math.ceil((twoLine ? perfTwoLine : perfOneLine).advanceWidth("8,888")) }
+
+    // DESIGN 12 Score card: the tooltip of a group or sub row while 性能 is on, and of the hero's 性能 (its supplying
+    // agent). 0.35 s of hover shows it beside the board on the side with more room; it hides 0.15 s after the pointer
+    // leaves; another row switches at once.
+    ScoreCard { id: boardCard; visible: false }
+    property string cardKey: ""
+    property Item cardItem: null
+    Timer { id: cardShow; interval: 350; onTriggered: board.showCard() }
+    Timer { id: cardHide; interval: 150; onTriggered: { boardCard.visible = false; board.cardKey = "" } }
+    function cardInfo(key) {
+        if (key === "hero") return board.view.heroCard || null
+        const groups = board.view.groups || []
+        for (let i = 0; i < groups.length; ++i) {
+            if (groups[i].id === key) return groups[i].card || null
+            const subs = groups[i].subs || []
+            for (let j = 0; j < subs.length; ++j)
+                if (groups[i].id + "/" + subs[j].id === key) return subs[j].card || null
+        }
+        return null
+    }
+    function cardHover(item, key, hovered) {
+        if (hovered) {
+            cardItem = item
+            cardKey = key
+            cardHide.stop()
+            if (boardCard.visible) showCard()
+            else cardShow.restart()
+        } else if (cardKey === key) {
+            cardShow.stop()
+            if (boardCard.visible) cardHide.restart()
+            else cardKey = ""
+        }
+    }
+    function showCard() {
+        const info = cardInfo(cardKey)
+        const win = board.Window.window
+        if (!info || !cardItem || !win) return
+        const changed = boardCard.info !== info && boardCard.info.project !== info.project
+        boardCard.info = info
+        const origin = board.mapToGlobal(0, 0)
+        const rowTop = cardItem.mapToGlobal(0, 0).y
+        const scr = win.screen
+        boardCard.availableHeight = scr ? scr.desktopAvailableHeight : 10000
+        const room = scr ? scr.virtualX + scr.width - (origin.x + board.width) : 1000
+        const left = scr ? origin.x - scr.virtualX : 0
+        boardCard.x = room >= left ? origin.x + board.width + 8 - boardCard.pad : origin.x - 8 - 320 - boardCard.pad
+        let y = rowTop - boardCard.pad
+        if (scr) y = Math.max(scr.virtualY + 8 - boardCard.pad, Math.min(y, scr.virtualY + scr.desktopAvailableHeight - 8 - boardCard.height + boardCard.pad))
+        boardCard.y = y
+        boardCard.visible = true
+        if (changed) boardCard.fit()
+    }
+    // The open card updates with the engine tick (see onViewChanged below).
+    function refreshCard() {
+        if (!boardCard.visible) return
+        const info = cardInfo(cardKey)
+        if (info) boardCard.info = info
+        else boardCard.visible = false
+    }
+
     function titleText(level) {
         themes.rev
         var t = themes.title(level)
@@ -397,7 +461,7 @@ Item {
                 height: hero.height * 0.55
             }
 
-            // ---- Sub-gauge (智力 · 思考 · 費用), right-aligned in the hero.
+            // ---- Sub-gauge (性能 · 思考 · 費用), right-aligned in the hero.
             Column {
                 id: subGauge
                 visible: board.metrics
@@ -407,9 +471,32 @@ Item {
                 width: Math.max(board.size === "S" ? 92 : board.size === "L" ? 128 : 112, table.implicitWidth)
                 spacing: 3
                 readonly property var intel: board.view.intel || ({ shown: -1, form: "none" })
-                // Glass: the pearl arc around 智力. Neon: LED digits and a 12-segment meter. Timing: the 智力 row.
+                // DESIGN 12 Motion: the shown integer counts to each new value; the arc's end and the meter follow it.
+                property real shownValue: intel.shown === undefined ? -1 : intel.shown
+                readonly property real target: intel.shown === undefined ? -1 : intel.shown
+                onTargetChanged: {
+                    const from = Math.round(shownValue)
+                    if (Format.perfCounts(from, target)) {
+                        heroCount.stop()
+                        heroCount.from = from
+                        heroCount.to = target
+                        heroCount.duration = Format.perfCountMs(from, target)
+                        heroCount.start()
+                    } else {
+                        heroCount.stop()
+                        shownValue = target
+                    }
+                }
+                NumberAnimation { id: heroCount; target: subGauge; property: "shownValue"; easing.type: Easing.OutCubic }
+                readonly property bool scored: shownValue >= 0
+                readonly property bool provisional: intel.provisional === true
+                // Glass's dial shows the compact form; neon and timing the full form.
+                readonly property string shownText: scored ? (board.style === "glass" ? Format.perfCompact(Math.round(shownValue)) : Format.perfFull(Math.round(shownValue))) : "–"
+                readonly property real shownScale: scored ? Format.perfScale(shownValue) : 0
+                // Glass: the pearl arc around 性能. Neon: LED digits and a 12-segment meter. Timing: the 性能 row.
                 Item {
                     visible: board.showIntel
+                    HoverHandler { onHoveredChanged: board.cardHover(parent, "hero", hovered) }
                     width: parent.width
                     height: board.style === "glass" ? (board.size === "S" ? 54 : board.size === "L" ? 74 : 66) * 0.742
                           : board.style === "neon" ? neonIntel.implicitHeight + 2 : (board.size === "S" ? 21 : board.size === "L" ? 27 : 24)
@@ -420,8 +507,10 @@ Item {
                         width: d
                         height: d * 0.742
                         anchors.horizontalCenter: parent.horizontalCenter
-                        readonly property real fraction: subGauge.intel.shown >= 0 ? subGauge.intel.shown / 100 : 0
+                        readonly property real fraction: subGauge.shownScale
+                        readonly property bool dotted: subGauge.provisional
                         onFractionChanged: requestPaint()
+                        onDottedChanged: requestPaint()
                         onVisibleChanged: requestPaint()
                         onPaint: {
                             var ctx = getContext("2d")
@@ -433,23 +522,31 @@ Item {
                             ctx.beginPath()
                             ctx.arc(cx, cy, r, Math.PI * 150 / 180, Math.PI * 390 / 180, false)
                             ctx.stroke()
-                            if (subGauge.intel.shown <= 0) return
+                            if (!subGauge.scored) return
                             var g = ctx.createLinearGradient(0, height, width, 0)
                             g.addColorStop(0, board.dark ? "#A5F3FC" : "#1AA3C4")
                             g.addColorStop(0.5, board.dark ? "#C7D2FE" : "#6D7CF0")
                             g.addColorStop(1, board.dark ? "#F5D0FE" : "#C05BD9")
                             ctx.strokeStyle = g
                             ctx.globalAlpha = subGauge.intel.form === "resting" ? 0.35 : 1
-                            if (subGauge.intel.proof) ctx.setLineDash([0, 2 * ctx.lineWidth])
+                            // A provisional arc: round dots (dash 0, gap 2 × the stroke) with a hollow tip ring.
+                            if (dotted) ctx.setLineDash([0, 2 * ctx.lineWidth])
                             ctx.beginPath()
                             var end = Math.PI * (150 + 240 * fraction) / 180
                             ctx.arc(cx, cy, r, Math.PI * 150 / 180, end, false)
                             ctx.stroke()
                             ctx.setLineDash([])
-                            ctx.fillStyle = board.dark ? "white" : (board.dark ? "#F5D0FE" : "#C05BD9")
+                            var tip = board.dark ? "white" : "#C05BD9"
                             ctx.beginPath()
                             ctx.arc(cx + r * Math.cos(end), cy + r * Math.sin(end), 0.035 * d, 0, Math.PI * 2)
-                            ctx.fill()
+                            if (dotted) {
+                                ctx.strokeStyle = tip
+                                ctx.lineWidth = 1
+                                ctx.stroke()
+                            } else {
+                                ctx.fillStyle = tip
+                                ctx.fill()
+                            }
                         }
                     }
                     Column {
@@ -467,34 +564,47 @@ Item {
                             font.letterSpacing: 1
                         }
                         Text {
+                            id: heroNumber
                             anchors.horizontalCenter: parent.horizontalCenter
-                            text: subGauge.intel.shown >= 0 ? subGauge.intel.shown : "–"
-                            color: subGauge.intel.shown >= 0 && subGauge.intel.form === "live" ? (board.style === "neon" ? board.led : board.ink) : board.ink3
+                            text: subGauge.shownText
+                            color: subGauge.scored && subGauge.intel.form === "live" ? (board.style === "neon" ? board.led : board.ink) : board.ink3
                             font.pixelSize: Math.round(board.style === "neon" ? (board.size === "S" ? 21 : board.size === "L" ? 28 : 24) : (board.size === "S" ? 16 : board.size === "L" ? 21 : 19))
                             font.weight: board.style === "neon" ? Font.Bold : Font.DemiBold
                             font.family: board.numFont
                             font.features: Theme.tabular
-                            font.underline: subGauge.intel.proof === true
+                            Behavior on color { ColorAnimation { duration: 200 } }
+                            ProvisionalDots {
+                                y: heroNumber.baselineOffset + 0.22 * heroNumber.font.pixelSize - height / 2
+                                textWidth: heroNumber.advance.width > 0 ? heroNumber.advance.width : heroNumber.implicitWidth
+                                pixelSize: heroNumber.font.pixelSize
+                                color: heroNumber.color
+                                shown: subGauge.provisional && subGauge.scored
+                            }
                         }
                         Row {
                             visible: board.style === "neon"
                             anchors.horizontalCenter: parent.horizontalCenter
                             spacing: 2
-                            readonly property int lit: subGauge.intel.shown >= 0 ? Math.round(subGauge.intel.shown * 12 / 100) : 0
+                            readonly property int lit: Math.round(subGauge.shownScale * 12)
                             Repeater {
                                 model: 12
                                 Rectangle {
                                     required property int index
+                                    readonly property bool on: index < parent.lit
+                                    readonly property color segment: board.dark ? "#CFE0FF" : "#3D4F9A"
                                     width: ((board.size === "S" ? 62 : board.size === "L" ? 84 : 74) - 22) / 12
                                     height: 3
                                     radius: 1
-                                    color: index < parent.lit ? (board.dark ? "#CFE0FF" : "#3D4F9A") : board.unlit
-                                    opacity: index < parent.lit && subGauge.intel.form === "resting" ? 0.35 : 1
+                                    // A provisional meter's lit segments are hollow (a 1 pt inner stroke).
+                                    color: on ? (subGauge.provisional ? "transparent" : segment) : board.unlit
+                                    border.width: on && subGauge.provisional ? 1 : 0
+                                    border.color: segment
+                                    opacity: on && subGauge.intel.form === "resting" ? 0.35 : 1
                                 }
                             }
                         }
                     }
-                    // Timing: the 智力 tab of the data box.
+                    // Timing: the 性能 tab of the data box.
                     Rectangle {
                         visible: board.style === "timing"
                         anchors.fill: parent
@@ -517,15 +627,23 @@ Item {
                             }
                         }
                         Text {
+                            id: timingNumber
                             anchors.right: parent.right
                             anchors.rightMargin: 7
                             anchors.verticalCenter: parent.verticalCenter
-                            text: subGauge.intel.shown >= 0 ? subGauge.intel.shown : "–"
-                            color: subGauge.intel.shown >= 0 && subGauge.intel.form === "live" ? board.ink : board.ink3
+                            text: subGauge.shownText
+                            color: subGauge.scored && subGauge.intel.form === "live" ? board.ink : board.ink3
                             font.pixelSize: Math.round(board.size === "S" ? 15 : board.size === "L" ? 19 : 17)
                             font.weight: Font.Black
                             font.family: "monospace"
-                            font.underline: subGauge.intel.proof === true
+                            font.features: Theme.tabular
+                            ProvisionalDots {
+                                y: timingNumber.baselineOffset + 0.22 * timingNumber.font.pixelSize - height / 2
+                                textWidth: timingNumber.advance.width > 0 ? timingNumber.advance.width : timingNumber.implicitWidth
+                                pixelSize: timingNumber.font.pixelSize
+                                color: timingNumber.color
+                                shown: subGauge.provisional && subGauge.scored
+                            }
                         }
                     }
                 }
@@ -712,7 +830,7 @@ Item {
                 return out
             }
 
-            // The captions line over the 智力 and value columns.
+            // The captions line over the 性能 and value columns.
             Item {
                 visible: board.showIntel
                 width: parent.width
@@ -740,7 +858,7 @@ Item {
                     anchors.left: parent.left
                     anchors.leftMargin: 6
                     anchors.right: parent.right
-                    anchors.rightMargin: 6 + 44 + 8 + 30
+                    anchors.rightMargin: 6 + 44 + 8 + board.perfColumn(false) + 6
                     anchors.verticalCenter: parent.verticalCenter
                     height: 1
                     color: board.line
@@ -794,7 +912,10 @@ Item {
                             GradientStop { position: 0.75; color: "transparent" }
                         }
                     }
-                    HoverHandler { id: rowHover }
+                    HoverHandler {
+                        id: rowHover
+                        onHoveredChanged: if (board.showIntel && rowItem.kind !== "more") board.cardHover(rowItem, rowItem.key, hovered)
+                    }
                     Rectangle {
                         anchors.fill: parent
                         radius: 9
@@ -894,17 +1015,18 @@ Item {
                         bolts: rowItem.row.bolts || 0
                         showWord: board.size !== "S" && !(board.style === "timing" && board.size !== "L" && board.showIntel)
                     }
-                    IqCell {
+                    PerfCell {
                         id: intelCell
                         visible: board.showIntel && modelData.kind !== "more"
-                        width: visible ? (board.size === "S" ? 20 : board.size === "L" ? 24 : 22) : 0
+                        width: visible ? board.perfColumn(rowItem.group && board.twoLines) : 0
                         anchors.right: valueText.left
                         anchors.rightMargin: 8
                         anchors.verticalCenter: parent.verticalCenter
                         value: rowItem.row.intel ? rowItem.row.intel.shown : -1
                         form: rowItem.row.intel ? rowItem.row.intel.form : "none"
-                        proof: rowItem.row.intel ? rowItem.row.intel.proof : false
+                        provisional: rowItem.row.intel ? rowItem.row.intel.provisional === true : false
                         pixelSize: rowItem.group && board.twoLines ? 13 : rowItem.group ? 11 : 10.5
+                        family: board.numFont
                     }
                     Text {
                         id: valueText
@@ -975,7 +1097,7 @@ Item {
                         acceptedButtons: Qt.RightButton
                         onTapped: contextMenu.popup()
                     }
-                    ToolTip.visible: rowHover.hovered && rowItem.group
+                    ToolTip.visible: rowHover.hovered && rowItem.group && !board.showIntel
                     ToolTip.delay: 350
                     ToolTip.text: rowItem.group ? [rowItem.row.project, rowItem.row.model, rowItem.row.valueText + " " + S.tr2(S.rev, "unit.tokS")].filter(x => x).join("\n") : ""
                     Accessible.role: Accessible.ListItem
@@ -1176,6 +1298,7 @@ Item {
     // Events of each engine tick: a punch on a sharp rise, the new-peak celebration, overtakes and a new leader.
     property real lastLive: -1
     onViewChanged: {
+        refreshCard()
         const live = view.live || 0
         if (lastLive >= 0 && live > lastLive * 1.08 + 20 && board.effects !== "off") {
             punchAnimation.restart()

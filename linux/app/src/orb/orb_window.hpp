@@ -143,6 +143,7 @@ private:
     std::function<std::vector<Disc>()> neighbors_;
     void stepIntel(double time, double dt);
     IntelReadout intelContent(double time) const;
+    qint64 countedValue(double time, qint64 value) const;
     bool intelBusy(double time) const;
     double nextIntelWake(double time) const;
 
@@ -196,9 +197,10 @@ private:
 
     // The intelligence readout (DESIGN 10, 12): the orb's set from the snapshot, and its fades.
     int intelForm_ = 0;  // 0 none, 1 live, 2 resting
-    int intelShown_ = -1;
-    int intelLast_ = -1;  // kept through the quiet fade
-    bool intelProof_ = false;
+    qint64 intelShown_ = -1;
+    qint64 intelLast_ = -1;  // kept through the quiet fade
+    bool intelProvisional_ = false;
+    QString intelWords_;  // the score words (DESIGN 12 Accessibility)
     bool intelGenerating_ = false;
     QString thinkingText_;
     double intelLastActive_ = -1e9;
@@ -206,7 +208,7 @@ private:
     double thinkingZeroSince_ = -1;
     double thinkingOpacity_ = 1;
     double glide_ = 0;
-    int countFrom_ = -1, countTo_ = -1;
+    qint64 countFrom_ = -1, countTo_ = -1;
     double countStart_ = -1e9, countDuration_ = 0;
     double numberFadeStart_ = -1e9;
     // The network readout (DESIGN 10): the shown rates, the last time they reached 1 KB/s, and the fade.

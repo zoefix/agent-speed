@@ -31,7 +31,6 @@
 #include "preferences.hpp"
 #include "report/report_controller.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 #include "title_themes.hpp"
 #include "tray_icon.hpp"
 
@@ -148,8 +147,8 @@ int main(int argc, char* argv[]) {
     QObject::connect(&state, &AppState::demoChanged, worker, &MonitorWorker::setDemo);
 
     // The daily history (METRICS 8) on its own thread, sharing the price book with the monitor.
-    qRegisterMetaType<TaskRecords>();
-    qRegisterMetaType<TaskModels>();
+    qRegisterMetaType<PerfRecords>();
+    qRegisterMetaType<PerfBaselines>();
     HistoryModel historyModel(&strings);
     historyModel.setDisabledSources(prefs.disabledSources());
     QObject::connect(&prefs, &Preferences::sourcesChanged, &historyModel, [&] { historyModel.setDisabledSources(prefs.disabledSources()); });
@@ -168,7 +167,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&historyThread, &QThread::finished, historyWorker, &QObject::deleteLater);
     QObject::connect(historyWorker, &HistoryWorker::daysReady, &historyModel, &HistoryModel::applyRows);
     QObject::connect(historyWorker, &HistoryWorker::analyzing, &historyModel, &HistoryModel::setAnalyzing);
-    QObject::connect(historyWorker, &HistoryWorker::tasksReady, &historyModel, &HistoryModel::applyTasks);
+    QObject::connect(historyWorker, &HistoryWorker::perfReady, &historyModel, &HistoryModel::applyPerf);
     qRegisterMetaType<TrafficRows>();
     QObject::connect(worker, &MonitorWorker::trafficSave, historyWorker, &HistoryWorker::saveTraffic);
     QObject::connect(
@@ -176,8 +175,8 @@ int main(int argc, char* argv[]) {
         Qt::DirectConnection);
     QObject::connect(historyWorker, &HistoryWorker::trafficReady, &historyModel, &HistoryModel::applyTraffic);
     QObject::connect(
-        historyWorker, &HistoryWorker::tasksReady, historyWorker, [worker](TaskRecords, TaskModels models) { worker->setTaskModels(std::move(models)); },
-        Qt::DirectConnection);
+        historyWorker, &HistoryWorker::perfReady, historyWorker,
+        [worker](PerfRecords, PerfBaselines baselines) { worker->setPerfBaselines(std::move(baselines)); }, Qt::DirectConnection);
     QObject::connect(&historyModel, &HistoryModel::refreshRequested, historyWorker, &HistoryWorker::analyze);
     QObject::connect(&historyModel, &HistoryModel::clearRequested, historyWorker, &HistoryWorker::clear);
     // Peaks are stored only for days observed live (METRICS 8).
@@ -233,7 +232,7 @@ int main(int argc, char* argv[]) {
     ReportController report(prefs, strings, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
     engine.rootContext()->setContextProperty(QStringLiteral("report"), &report);
     QObject::connect(worker, &MonitorWorker::reportTick, &report, &ReportController::onTick);
-    report.setWatchSink([worker](bool on, qint64 taken) { worker->setReportWatch(on, taken); });
+    report.setWatchSink([worker](bool on, qint64 responses, qint64 calls) { worker->setReportWatch(on, responses, calls); });
     // DESIGN 2c: the boards, their windows fed by every snapshot.
     BoardWindows boardWindows(boardStore, engine);
     engine.rootContext()->setContextProperty(QStringLiteral("boardWindows"), &boardWindows);
@@ -322,7 +321,7 @@ int main(int argc, char* argv[]) {
         tray.setUpdate(network.updateState() == QLatin1String("available") ? network.availableVersion() : QString());
     });
     QObject::connect(&network, &NetworkService::updateFound, &tray, [&](const QString& version) {
-        tray.notify(task_card::fmt(strings, QStringLiteral("update.available.title"), {version}), strings.t(QStringLiteral("update.notification.body")));
+        tray.notify(strings.fmt(QStringLiteral("update.available.title"), {version}), strings.t(QStringLiteral("update.notification.body")));
     });
     Flyout flyout(window, popup);
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
@@ -330,14 +329,14 @@ int main(int argc, char* argv[]) {
         const auto live = snap.value(QStringLiteral("liveText")).toString();
         QString tip = strings.t(QStringLiteral("app.name")) + QStringLiteral(" — ") + live + QLatin1Char(' ') +
                       strings.t(QStringLiteral("unit.tokS"));
-        // DESIGN 10: the taskbar tooltip adds the highest 智力 and the project that supplies it, then the caption.
+        // DESIGN 10: the taskbar tooltip adds the highest 性能 and the project that supplies it, then the note.
         const auto sets = snap.value(QStringLiteral("scoreSets")).toList();
         if (!sets.isEmpty()) {
             const auto top = sets.front().toMap();
-            if (const int shown = top.value(QStringLiteral("shown"), -1).toInt(); shown >= 0) {
-                tip += QLatin1Char('\n') + task_card::fmt(strings, QStringLiteral("task.tooltip.top"),
-                                                          {QString::number(shown), top.value(QStringLiteral("project")).toString()});
-                tip += QLatin1Char('\n') + strings.t(QStringLiteral("intel.disclaimer"));
+            if (top.value(QStringLiteral("shown"), -1).toLongLong() >= 0) {
+                tip += QLatin1Char('\n') + strings.fmt(QStringLiteral("perf.tooltip.top"),
+                                                       {top.value(QStringLiteral("fullText")).toString(), top.value(QStringLiteral("project")).toString()});
+                tip += QLatin1Char('\n') + strings.t(QStringLiteral("perf.tooltip.note"));
             }
         }
         tray.update(snap.value(QStringLiteral("liveOutput")).toDouble(), snap.value(QStringLiteral("compactText")).toString(),
@@ -384,7 +383,7 @@ int main(int argc, char* argv[]) {
     if (const auto at = arguments.indexOf(QStringLiteral("--after-update")); at >= 0) {
         QTimer::singleShot(1500, &tray, [&] {
             tray.notify(strings.t(QStringLiteral("app.name")),
-                        task_card::fmt(strings, QStringLiteral("update.done"), {QCoreApplication::applicationVersion()}));
+                        strings.fmt(QStringLiteral("update.done"), {QCoreApplication::applicationVersion()}));
         });
     }
     const bool offscreenShot = !snapshotPath.isEmpty() ||
@@ -396,10 +395,11 @@ int main(int argc, char* argv[]) {
                                            });
     if (!offscreenShot) orbs.start();
     // Development aid: --orb-traffic=<mode> sets the first orb's readout (sources, machine, intelligence, off);
-    // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal).
+    // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal); --orb-size=<pt> its diameter.
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("traffic"), arg.mid(14));
         if (arg.startsWith(QStringLiteral("--orb-style="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), arg.mid(12));
+        if (arg.startsWith(QStringLiteral("--orb-size="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("size"), arg.mid(11).toInt());
         // --orb-do=<add|duplicate|split|merge|undo> runs that action on the first orb after 3 s.
         if (arg.startsWith(QStringLiteral("--orb-do="))) {
             const QString action = arg.mid(9);

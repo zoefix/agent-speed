@@ -1,6 +1,6 @@
 import QtQuick
 
-// One agent: phase badge, project over "model · source", effort capsule, 智力 and the live value; sub-agents indent 12
+// One agent: phase badge, project over "model · source", effort capsule, 性能 and the live value; sub-agents indent 12
 // with connectors (DESIGN 4).
 Item {
     id: row
@@ -18,17 +18,20 @@ Item {
     required property int effortLevel
     required property bool effortTop
     required property int bolts
-    required property int iq
-    required property string iqForm
-    required property bool iqProof
+    required property real perf
+    required property string perfForm
+    required property bool perfProvisional
+    required property string perfA11y
     required property bool looping
     required property string trafficSuffix
-    // Set by the list: the shared capsule column width and the 智力 cell width (DESIGN 4).
+    // Set by the list: the shared capsule column width and the 性能 cell width (DESIGN 4, 12).
     property real capsuleColumn: 0
-    property real iqWidth: 24
+    property real perfWidth: 35
     property bool capsuleWords: true
     signal hoverChanged(bool hovered)
     implicitHeight: 40
+    Accessible.role: Accessible.ListItem
+    Accessible.name: project + ", " + detail + ", " + perfA11y
 
     readonly property real indent: depth * 12
     readonly property real railX: (depth - 1) * 12 + 7.5
@@ -143,7 +146,7 @@ Item {
 
     Item {
         id: capsuleSlot
-        anchors.right: iqCell.left
+        anchors.right: perfCell.left
         anchors.rightMargin: row.capsuleColumn > 0 ? 8 : 6
         anchors.verticalCenter: parent.verticalCenter
         width: row.capsuleColumn
@@ -160,15 +163,15 @@ Item {
         }
     }
 
-    IqCell {
-        id: iqCell
+    PerfCell {
+        id: perfCell
         anchors.right: slot.left
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
-        width: row.iqWidth
-        value: row.iq
-        form: row.iqForm
-        proof: row.iqProof
+        width: row.perfWidth
+        value: row.perf
+        form: row.perfForm
+        provisional: row.perfProvisional
     }
 
     LiveSlot {

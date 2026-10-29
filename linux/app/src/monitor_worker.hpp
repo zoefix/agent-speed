@@ -60,14 +60,15 @@ public:
 
     // Thread-safe. A changed monitor configuration restarts the monitor.
     void setOptions(WorkerOptions options, bool reconfigure);
-    // Thread-safe: the prediction models calibrated on the history (METRICS 6.11), applied on the next tick.
-    void setTaskModels(std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models);
-    // Thread-safe: the source sets whose 智力 and 思考 each snapshot carries (orbs, boards); the tray's set comes first.
+    // Thread-safe: 比平常's baselines from the history store (METRICS 6.11), applied on the next tick.
+    void setPerfBaselines(std::map<std::pair<agentspeed::SourceKind, std::string>, double> baselines);
+    // Thread-safe: the source sets whose 性能 and 思考 each snapshot carries (orbs, boards); the tray's set comes first.
     void setScoreSets(std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets);
     // Thread-safe: today's traffic saved before this launch (METRICS 10.8), added on the next tick.
     void restoreTraffic(TrafficRows rows);
-    // Thread-safe: the task watch of live reporting (METRICS 11.10), applied on the next tick and to a new monitor.
-    void setReportWatch(bool on, qint64 taken);
+    // Thread-safe: the statistics watch of live reporting (METRICS 11.10), applied on the next tick and to a new
+    // monitor, with the responses and calls the reports took.
+    void setReportWatch(bool on, qint64 responses, qint64 calls);
     // Thread-safe: a newer price table arrived; today's unpriced responses are priced again on the next tick.
     void requestReprice();
     // Worker thread: today's traffic rows now.
@@ -97,14 +98,14 @@ private:
     WorkerOptions options_;
     std::mutex optionsMutex_;
     std::optional<WorkerOptions> pending_;
-    std::optional<std::map<agentspeed::SourceKind, agentspeed::tasks::Models>> pendingModels_;
-    std::map<agentspeed::SourceKind, agentspeed::tasks::Models> models_;
+    std::optional<std::map<std::pair<agentspeed::SourceKind, std::string>, double>> pendingBaselines_;
+    std::map<std::pair<agentspeed::SourceKind, std::string>, double> baselines_;
     std::optional<std::vector<std::optional<std::vector<agentspeed::SourceKind>>>> pendingSets_;
     std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets_{std::nullopt};
     std::optional<TrafficRows> pendingTraffic_;
     bool pendingReprice_ = false;
     bool watchOn_ = false;
-    qint64 watchTaken_ = 0;
+    qint64 watchResponses_ = 0, watchCalls_ = 0;
     qint64 lastTrafficSaveMs_ = 0;
     bool restartPending_ = false;
     std::unique_ptr<agentspeed::Monitor> monitor_;

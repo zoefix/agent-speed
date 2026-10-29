@@ -62,7 +62,7 @@ void ReportController::refreshPreview() {
     envelope.activity = mode == agentspeed::report::Mode::Idle ? agentspeed::report::Activity::Idle : agentspeed::report::Activity::Active;
     envelope.titleLevel = run_ ? run_->title.level() : 0;
     auto opts = options(document, consent_ ? consent_->sections : switches());
-    if (!known) opts.extensions.taskScore = true;
+    if (!known) opts.extensions.perfScore = true;
     const bool ws = !consent_ && usesWebSocket();
     if (ws) opts.stream = agentspeed::report::StreamBody{std::nullopt, document.websocket->maxMessageBytes};
     const auto built = agentspeed::report::fitted(envelope, content, sample, opts);

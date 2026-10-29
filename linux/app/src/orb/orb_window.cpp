@@ -23,6 +23,7 @@
 #include <cmath>
 
 #include "appearance.hpp"
+#include "format.hpp"
 #include "heat.hpp"
 #include "source_colors.hpp"
 #include "orb/body.hpp"
@@ -288,6 +289,14 @@ void OrbWindow::stepIntel(double time, double dt) {
     netOpacity_ = ramp(netOpacity_, netTarget, dt, netTarget > netOpacity_ ? 0.25 : 0.6);
 }
 
+// The 性能 integer on screen at `time`: the count's intermediate value while one runs (easeOutCubic).
+qint64 OrbWindow::countedValue(double time, qint64 value) const {
+    const double into = time - countStart_;
+    if (value < 0 || countTo_ != value || into < 0 || into >= countDuration_) return value;
+    const double u = into / countDuration_;
+    return countFrom_ + std::llround(static_cast<double>(countTo_ - countFrom_) * (1 - std::pow(1 - u, 3)));
+}
+
 IntelReadout OrbWindow::intelContent(double time) const {
     IntelReadout in;
     in.opacity = intelOpacity_;
@@ -297,21 +306,17 @@ IntelReadout OrbWindow::intelContent(double time) const {
     in.unit = strings_.t(QStringLiteral("unit.tokS"));
     in.thinkingOpacity = thinkingOpacity_;
     in.glide = smoothstep(glide_);
-    int value = intelShown_;
+    qint64 value = intelShown_;
     in.form = intelForm_;
     if (value < 0 && intelLast_ >= 0 && intelOpacity_ > 0 && traffic_ == QLatin1String("intelligence") && time - intelLastActive_ >= 10) {
         value = intelLast_;  // the quiet fade keeps the last score
         in.form = 2;
     }
-    const double into = time - countStart_;
-    if (value >= 0 && countTo_ == value && into >= 0 && into < countDuration_) {
-        const double u = into / countDuration_;
-        value = countFrom_ + static_cast<int>(std::lround((countTo_ - countFrom_) * (1 - std::pow(1 - u, 3))));
-    }
-    in.number = value >= 0 ? QString::number(value) : QStringLiteral("–");
-    in.proof = intelProof_ && value >= 0;
+    value = countedValue(time, value);
+    in.number = value >= 0 ? format::perfCompact(value) : QStringLiteral("–");
+    in.provisional = intelProvisional_ && value >= 0;
     const double fade = time - numberFadeStart_;
-    in.numberAlpha = fade >= 0 && fade < 0.2 ? 0.25 + 0.75 * fade / 0.2 : 1;
+    in.numberAlpha = fade >= 0 && fade < 0.15 ? fade / 0.15 : 1;
     return in;
 }
 
@@ -323,7 +328,7 @@ bool OrbWindow::intelBusy(double time) const {
     const double netTarget = netAvailable_ && time - netLastActive_ < 10 ? 1 : 0;
     return std::abs(netOpacity_ - netTarget) > 0.001 || std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 ||
            std::abs(glide_ - (1 - shown)) > 0.001 ||
-           (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.2);
+           (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.15);
 }
 
 double OrbWindow::nextIntelWake(double time) const {
@@ -434,29 +439,34 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         key += source;
     }
     key += QString::number(static_cast<int>(gauge_.tier())) + QString::number(gauge_.title()) + unavailable_ + unavailableSources_.join(QLatin1Char(','));
-    // 智力 and 思考 of the orb's agents: the first score set (every enabled source while there is one orb).
+    // 性能 and 思考 of the orb's agents: the first score set (every enabled source while there is one orb).
     const auto sets = snap.value(QStringLiteral("scoreSets")).toList();
     const auto set = sets.isEmpty() ? QVariantMap() : sets.front().toMap();
     const auto form = set.value(QStringLiteral("form")).toString();
     intelForm_ = form == QLatin1String("live") ? 1 : form == QLatin1String("resting") ? 2 : 0;
-    const int shown = set.value(QStringLiteral("shown"), -1).toInt();
+    const qint64 shown = set.value(QStringLiteral("shown"), -1).toLongLong();
     if (shown != intelShown_) {
-        if (shown >= 0 && intelShown_ >= 0 && shown - intelShown_ >= 3) {
-            countFrom_ = intelShown_;
+        // DESIGN 12 Motion: a change by at least 1 % and 3 counts, up or down, from the value on screen; none ↔ a value
+        // crossfades.
+        const auto onScreen = countedValue(t, intelShown_);
+        if (shown >= 0 && onScreen >= 0 && std::llabs(shown - onScreen) >= std::max<qint64>(3, (onScreen + 99) / 100)) {
+            countFrom_ = onScreen;
             countTo_ = shown;
             countStart_ = t;
-            countDuration_ = std::min(0.8, 0.3 + 0.012 * (shown - intelShown_));
-        } else if (shown >= 0 && intelShown_ >= 0 && shown < intelShown_) {
+            const double ratio = std::abs(std::log2(static_cast<double>(std::max<qint64>(shown, 1)) / static_cast<double>(std::max<qint64>(onScreen, 1))));
+            countDuration_ = std::clamp(0.3 + 0.35 * ratio, 0.3, 0.7);
+        } else if ((shown >= 0) != (intelShown_ >= 0)) {
             numberFadeStart_ = t;
         }
         intelShown_ = shown;
     }
     if (shown >= 0) intelLast_ = shown;
-    intelProof_ = set.value(QStringLiteral("proof")).toBool();
+    intelProvisional_ = set.value(QStringLiteral("provisional")).toBool();
+    intelWords_ = set.value(QStringLiteral("words")).toString();
     intelGenerating_ = set.value(QStringLiteral("generating")).toBool();
     thinkingText_ = set.value(QStringLiteral("thinkingText")).toString();
     if (traffic_ == QLatin1String("intelligence")) {
-        key += QString::number(intelForm_) + QString::number(shown) + (intelProof_ ? QStringLiteral("p") : QString()) + thinkingText_ +
+        key += QString::number(intelForm_) + QString::number(shown) + (intelProvisional_ ? QStringLiteral("p") : QString()) + thinkingText_ +
                (intelGenerating_ ? QStringLiteral("g") : QString());
     }
     // The network readout: the orb's sources (every enabled source while there is one orb) or this computer.
@@ -968,6 +978,23 @@ void OrbWindow::updateLabel() {
         label = fill(strings_.t(QStringLiteral("a11y.orb")), {valueText_, title});
     } else {
         label = fill(strings_.t(QStringLiteral("a11y.orb.named")), {name_, valueText_, title});
+    }
+    // DESIGN 10 Accessibility: while the performance readout is visible, its words join the label.
+    if (unavailable_.isEmpty() && traffic_ == QLatin1String("intelligence") && intelOpacity_ > 0.5) {
+        const bool thinking = thinkingOpacity_ > 0.5;
+        QString sentence;
+        if (intelShown_ >= 0 && !intelWords_.isEmpty()) {
+            sentence = thinking ? strings_.fmt(QStringLiteral("a11y.orb.intel"), {intelWords_, thinkingText_})
+                                : strings_.fmt(QStringLiteral("a11y.orb.intel.only"), {intelWords_});
+        } else if (thinking) {
+            const QString marker(QChar(0xE000));
+            sentence = strings_.fmt(QStringLiteral("a11y.orb.intel"), {marker, thinkingText_})
+                           .replace(strings_.fmt(QStringLiteral("a11y.orb.intel.only"), {marker}), strings_.t(QStringLiteral("intel.none")));
+        } else {
+            sentence = strings_.t(QStringLiteral("intel.none"));
+        }
+        const auto language = strings_.language();
+        label += (language == QLatin1String("ja") ? QStringLiteral("、") : language == QLatin1String("en") ? QStringLiteral(", ") : QStringLiteral("，")) + sentence;
     }
     if (label == labelText_) return;
     labelText_ = label;

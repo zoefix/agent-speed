@@ -13,7 +13,6 @@
 
 #include "preferences.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 
 namespace {
 
@@ -141,7 +140,7 @@ void TitleThemes::createFrom(const QString& id) {
     set.titles = source >= 0 ? custom_[static_cast<std::size_t>(source)].titles : QStringList(kLevels, QString());
     set.idle = source >= 0 ? custom_[static_cast<std::size_t>(source)].idle : QString();
     QVariantList args{sourceName};
-    const auto base = task_card::fmt(strings_, QStringLiteral("titles.custom.copyName"), args);
+    const auto base = strings_.fmt(QStringLiteral("titles.custom.copyName"), args);
     set.name = base;
     for (int n = 2; std::any_of(custom_.begin(), custom_.end(), [&](const Custom& c) { return c.name == set.name; }); ++n)
         set.name = base + QLatin1Char(' ') + QString::number(n);
@@ -249,7 +248,8 @@ QString TitleThemes::cleaned(const QString& input, bool* hadEmoji) const {
         if (category == QChar::Other_Control) continue;
         if (space) out += QLatin1Char(' ');
         space = false;
-        out += QString::fromUcs4(&c, 1);
+        const auto codePoint = static_cast<char32_t>(c);
+        out += QString::fromUcs4(&codePoint, 1);
     }
     QTextBoundaryFinder graphemes(QTextBoundaryFinder::Grapheme, out);
     int count = 0;

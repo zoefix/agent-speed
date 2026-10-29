@@ -27,7 +27,6 @@
 #include "catalog.hpp"
 #include "preferences.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 
 namespace {
 
@@ -86,7 +85,6 @@ std::optional<Version> parseVersion(const QString& text) {
     return Version{m.captured(1).toInt(), m.captured(2).toInt(), m.captured(3).toInt(), !m.captured(4).isEmpty()};
 }
 
-QString hostOf(const QString& url) { return QUrl(url).host(); }
 
 QString shortDate(qint64 ms) { return QDateTime::fromMSecsSinceEpoch(ms).toString(QStringLiteral("yyyy/MM/dd HH:mm")); }
 
@@ -278,13 +276,13 @@ void NetworkService::tryPriceUrl(int index, bool manual, bool changed) {
         savePriceState(state);
         prices_->add(table);
         emit tableAdded();
-        finishPrices(true, manual, task_card::fmt(strings_, QStringLiteral("prices.updatedTo"), {table->version()}));
+        finishPrices(true, manual, strings_.fmt(QStringLiteral("prices.updatedTo"), {table->version()}));
     });
 }
 
 void NetworkService::finishPrices(bool ok, bool manual, const QString& message) {
     priceChecking_ = false;
-    priceResult_ = manual ? (ok ? message : task_card::fmt(strings_, QStringLiteral("prices.failed"), {message})) : QString();
+    priceResult_ = manual ? (ok ? message : strings_.fmt(QStringLiteral("prices.failed"), {message})) : QString();
     emit pricesChanged();
 }
 
@@ -293,7 +291,7 @@ QString NetworkService::priceLine() const {
     if (priceChecking_) return strings_.t(QStringLiteral("prices.checking"));
     const auto last = static_cast<qint64>(priceState().value(QStringLiteral("lastSuccessMs")).toDouble());
     if (last <= 0) return strings_.t(QStringLiteral("prices.never"));
-    return task_card::fmt(strings_, QStringLiteral("prices.lastSync"), {shortDate(last)});
+    return strings_.fmt(QStringLiteral("prices.lastSync"), {shortDate(last)});
 }
 
 // ---- Rates (NETWORK 4)
@@ -403,7 +401,7 @@ void NetworkService::acceptRates(const QString& provider, const QString& url, st
 
 void NetworkService::finishRates(bool ok, bool manual, const QString& message) {
     rateRefreshing_ = false;
-    rateError_ = ok || !manual ? QString() : task_card::fmt(strings_, QStringLiteral("rates.failed"), {message});
+    rateError_ = ok || !manual ? QString() : strings_.fmt(QStringLiteral("rates.failed"), {message});
     emit ratesChanged();
 }
 
@@ -587,14 +585,14 @@ void NetworkService::installUpdate() {
 QString NetworkService::updateLine() const {
     if (!prefs_.networkEnabled()) return strings_.t(QStringLiteral("settings.network.offHint"));
     if (updateState_ == QLatin1String("checking")) return strings_.t(QStringLiteral("update.checking"));
-    if (updateState_ == QLatin1String("available")) return task_card::fmt(strings_, QStringLiteral("update.available.short"), {release_.version});
-    if (updateState_ == QLatin1String("failed")) return task_card::fmt(strings_, QStringLiteral("update.failed"), {updateError_});
+    if (updateState_ == QLatin1String("available")) return strings_.fmt(QStringLiteral("update.available.short"), {release_.version});
+    if (updateState_ == QLatin1String("failed")) return strings_.fmt(QStringLiteral("update.failed"), {updateError_});
     if (updateState_ == QLatin1String("downloading")) {
-        return task_card::fmt(strings_, QStringLiteral("update.downloading"), {QString::number(qRound(progress_ * 100)) + QLatin1Char('%')});
+        return strings_.fmt(QStringLiteral("update.downloading"), {QString::number(qRound(progress_ * 100)) + QLatin1Char('%')});
     }
     if (updateState_ == QLatin1String("verifying")) return strings_.t(QStringLiteral("update.verifying"));
     if (updateState_ == QLatin1String("installing")) return strings_.t(QStringLiteral("update.installing"));
     const auto last = QSettings().value(QStringLiteral("update/lastCheckMs"), 0).toLongLong();
     if (updateState_ == QLatin1String("upToDate")) return strings_.t(QStringLiteral("update.upToDate"));
-    return last > 0 ? task_card::fmt(strings_, QStringLiteral("update.lastChecked"), {shortDate(last)}) : QString();
+    return last > 0 ? strings_.fmt(QStringLiteral("update.lastChecked"), {shortDate(last)}) : QString();
 }

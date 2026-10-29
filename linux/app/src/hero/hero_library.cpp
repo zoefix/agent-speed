@@ -319,10 +319,10 @@ Library* load() {
         out.y1 = y1;
         for (const auto& ev : v.value(QStringLiteral("emitters")).toArray()) {
             const auto e = ev.toObject();
-            const auto kind = emitterOf(e.value(QStringLiteral("type")).toString());
-            if (!kind) continue;
+            const auto emitterKind = emitterOf(e.value(QStringLiteral("type")).toString());
+            if (!emitterKind) continue;
             Emitter em;
-            em.kind = *kind;
+            em.kind = *emitterKind;
             em.at = point(e.value(QStringLiteral("at")));
             em.dir = point(e.value(QStringLiteral("dir")));
             em.count = e.value(QStringLiteral("count")).toInt(0);
@@ -356,9 +356,9 @@ Library* load() {
 
 QPointF Vehicle::headingVector() const { return heading ? QPointF(std::cos(*heading), std::sin(*heading)) : QPointF(1, 0); }
 
-const Emitter* Vehicle::emitter(EmitterKind kind) const {
+const Emitter* Vehicle::emitter(EmitterKind wanted) const {
     for (const auto& e : emitters) {
-        if (e.kind == kind) return &e;
+        if (e.kind == wanted) return &e;
     }
     return nullptr;
 }

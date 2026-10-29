@@ -8,6 +8,7 @@
 #include <memory>
 #include <optional>
 #include <set>
+#include <tuple>
 #include <vector>
 
 #include "agentspeed/report_body.hpp"
@@ -69,7 +70,7 @@ class ReportController : public QObject {
     Q_PROPERTY(QString apiKeyUrl READ apiKeyUrl NOTIFY changed)
     // What's sent.
     Q_PROPERTY(QVariantList sections READ sections NOTIFY changed)
-    Q_PROPERTY(bool taskScoreCaption READ taskScoreCaption NOTIFY changed)
+    Q_PROPERTY(bool scoreCaption READ scoreCaption NOTIFY changed)
     // Status.
     Q_PROPERTY(QString statusText READ statusText NOTIFY changed)
     Q_PROPERTY(QString statusLevel READ statusLevel NOTIFY changed)
@@ -180,7 +181,7 @@ public:
     QString apiKeyMasked() const;
     QString apiKeyUrl() const;
     QVariantList sections() const;
-    bool taskScoreCaption() const;
+    bool scoreCaption() const;
     QString statusText() const;
     QString statusLevel() const;
     QString statusFootnote() const;
@@ -300,8 +301,8 @@ public:
     // Development aid: reports to a local reference server (loopback http only, spec/tools/report_server.py) without
     // the consent clicks, and logs the status. Returns false for any other URL.
     bool startSelfTest(const QString& url);
-    // Where the task watch goes (the monitor worker).
-    void setWatchSink(std::function<void(bool, qint64)> sink) { watchSink_ = std::move(sink); }
+    // Where the statistics watch goes (the monitor worker): on, and the responses and calls the reports took.
+    void setWatchSink(std::function<void(bool, qint64, qint64)> sink) { watchSink_ = std::move(sink); }
     // The preview body with its keys in `keyColor` (DESIGN 11: keys secondary, values in the label color).
     Q_INVOKABLE QString previewRich(const QString& keyColor) const;
 
@@ -334,7 +335,7 @@ private:
         agentspeed::report::TitleTracker title;
         std::map<int, std::pair<std::string, std::string>> bodies;  // seq → body, its SHA-256
         std::optional<std::array<double, 6>> lastBuilt;             // the live values of the last built report, rounded as sent
-        std::string lastTaskScores;                                  // its taskScore objects (METRICS 11.10 WebSocket)
+        std::string lastScores;                                      // its perfScore objects (METRICS 11.10 WebSocket)
         bool lastActive = false;
     };
     struct Run {
@@ -415,8 +416,8 @@ private:
     std::array<double, 6> sentLive(const agentspeed::report::Sample& sample) const;
 
     // METRICS 11.10 Watch, sent to the engine when it changes.
-    void updateTaskWatch();
-    std::string taskSignature(const agentspeed::report::Sample& sample) const;
+    void updatePerfWatch();
+    std::string scoreSignature(const agentspeed::report::Sample& sample) const;
 
     // report_profile_ui.cpp.
     void profileCall(const QByteArray& method, const std::string& path, const std::string& body, const char* contentType,
@@ -452,8 +453,8 @@ private:
     agentspeed::report::stream::Counters streamCounters_;
     std::vector<std::int64_t> streamLatency_;
     std::optional<std::optional<agentspeed::report::StreamSettings>> pendingStreamSettings_;
-    std::function<void(bool, qint64)> watchSink_;
-    std::optional<std::pair<bool, qint64>> sentWatch_;
+    std::function<void(bool, qint64, qint64)> watchSink_;
+    std::optional<std::tuple<bool, qint64, qint64>> sentWatch_;
     std::vector<agentspeed::report::Event> pendingEvents_;
     std::shared_ptr<const agentspeed::report::Sample> lastSample_;
     qint64 clockCorrectionSeconds_ = 0;

@@ -87,7 +87,7 @@ struct Vehicle {
 
     QPointF center() const { return {(x0 + x1) / 2, (y0 + y1) / 2}; }
     QPointF headingVector() const;
-    const Emitter* emitter(EmitterKind kind) const;
+    const Emitter* emitter(EmitterKind wanted) const;
 };
 
 struct SceneryParams {

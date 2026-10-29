@@ -10,13 +10,13 @@
 
 namespace orb {
 
-// The intelligence readout (DESIGN 10): 智力 over 思考, above the value.
+// The performance readout (DESIGN 10): 性能 over 思考, above the value.
 struct IntelReadout {
     double opacity = 0;  // the quiet rule's fade
     QString glyph, number;
     int form = 0;  // 0 none, 1 live, 2 resting
-    bool proof = false;
-    double numberAlpha = 1;  // a fall crossfades the digits
+    bool provisional = false;
+    double numberAlpha = 1;  // none ↔ a value crossfades the digits
     QString thinkingGlyph, thinking, unit;
     double thinkingOpacity = 1;  // hidden at zero
     double glide = 0;            // 0: two lines; 1: the single-line position

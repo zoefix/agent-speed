@@ -3,6 +3,8 @@
 #include <algorithm>
 #include <cmath>
 
+#include "format.hpp"
+
 namespace orb {
 
 namespace {
@@ -44,7 +46,7 @@ Lines fitting(const Frame& f, const LinePlacement& placement, const ReadoutConte
     Lines lines;
     const double s = f.s, t = placement.textSize(s), p = kIntelScale * t;
     if (c.intel.opacity > 0.01) {
-        const double intel = widthOf(measure, c.intel.glyph, kUnitScale * p, 600) + kIntelGap * p + widthOf(measure, QStringLiteral("888"), p, 600);
+        const double intel = widthOf(measure, c.intel.glyph, kUnitScale * p, 600) + kIntelGap * p + widthOf(measure, QString::fromLatin1(format::kPerfMeasureText), p, 600);
         const double think = widthOf(measure, c.intel.thinkingGlyph, kUnitScale * t, 600) + kGap * t + widthOf(measure, QStringLiteral("8.88"), t, 600) +
                              (placement.thinkingUnit ? kGap * t + widthOf(measure, c.intel.unit, kUnitScale * t, 500) : 0);
         lines.intel = std::max(intel, think) <= placement.fit * s;
@@ -428,8 +430,8 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
     auto number = text(in.number, ps, 600, numberColor, 0);
     number.draw.color = number.draw.color.withAlpha(number.draw.color.a * in.numberAlpha);
     const auto drawn = line({text(in.glyph, kUnitScale * ps, 600, lineSecondary, kIntelGap * ps), number}, intelBaseline, alpha);
-    if (in.proof && drawn.size() == 2) {
-        // The proof mark: a dotted underline under the digits, 0.22 p below the baseline, no glow.
+    if (in.provisional && drawn.size() == 2) {
+        // The provisional mark: a dotted underline under the digits, 0.22 p below the baseline, no glow.
         const double w = drawn[1].width, left = drawn[1].draw.baselineCenter.x();
         const double d = std::max(1.0, 0.1 * ps);
         const int n = std::max(2, static_cast<int>(std::floor((w - d) / (2.4 * d))) + 1);

@@ -11,17 +11,18 @@
 
 #include "agentspeed/history_analyzer.hpp"
 #include "agentspeed/locations.hpp"
-#include "agentspeed/task_score.hpp"
+#include "agentspeed/perf_history.hpp"
 #include "monitor_worker.hpp"
 
 class QTimer;
 class Strings;
 
-// The task records of the history (METRICS 6.11) and the prediction models calibrated on them, per source.
-using TaskRecords = std::shared_ptr<const std::vector<agentspeed::tasks::TaskRecord>>;
-using TaskModels = std::map<agentspeed::SourceKind, agentspeed::tasks::Models>;
-Q_DECLARE_METATYPE(TaskRecords)
-Q_DECLARE_METATYPE(TaskModels)
+// The performance records of the history (METRICS 6.11), summed over files per day, source and raw model, and the
+// 14-day baselines of every (source, raw model) as of today.
+using PerfRecords = std::shared_ptr<const std::vector<agentspeed::perf::DayRecord>>;
+using PerfBaselines = std::map<std::pair<agentspeed::SourceKind, std::string>, double>;
+Q_DECLARE_METATYPE(PerfRecords)
+Q_DECLARE_METATYPE(PerfBaselines)
 
 namespace agentspeed::pricing {
 class PriceBook;
@@ -50,7 +51,7 @@ signals:
     // Rows of every day and source; `progress` < 0 when idle.
     void daysReady(const QVariantList& rows, qint64 updatedMs);
     void analyzing(bool running);
-    void tasksReady(TaskRecords records, TaskModels models);
+    void perfReady(PerfRecords records, PerfBaselines baselines);
     // Today's traffic saved by an earlier launch (METRICS 10.8), and every day's rows for the window.
     void trafficRestored(TrafficRows rows);
     void trafficReady(const QVariantList& rows, const QString& since);
@@ -78,16 +79,17 @@ class HistoryModel : public QObject {
     Q_PROPERTY(QVariantList rows READ rows NOTIFY rowsChanged)
     Q_PROPERTY(bool analyzing READ analyzing NOTIFY analyzingChanged)
     Q_PROPERTY(qint64 updatedMs READ updatedMs NOTIFY rowsChanged)
-    Q_PROPERTY(int tasksRevision READ tasksRevision NOTIFY tasksChanged)
+    Q_PROPERTY(int perfRevision READ perfRevision NOTIFY perfChanged)
     Q_PROPERTY(QVariantList trafficRows READ trafficRows NOTIFY trafficChanged)
     Q_PROPERTY(QString trafficSince READ trafficSince NOTIFY trafficChanged)
 public:
     explicit HistoryModel(const Strings* strings = nullptr, QObject* parent = nullptr) : QObject(parent), strings_(strings) {}
-    int tasksRevision() const { return tasksRevision_; }
+    int perfRevision() const { return perfRevision_; }
     QVariantList trafficRows() const { return trafficRows_; }
     QString trafficSince() const { return trafficSince_; }
-    // DESIGN 3c task performance over [first, last] (days `YYYY-MM-DD`), every source or `source` alone.
-    Q_INVOKABLE QVariantMap taskComparison(const QString& first, const QString& last, const QString& source) const;
+    // DESIGN 12 性能表現 over [first, last] (days `YYYY-MM-DD`), every source or `source` alone: one row per (source,
+    // model) with its pooled values, baseline and daily trend.
+    Q_INVOKABLE QVariantMap perfSection(const QString& first, const QString& last, const QString& source) const;
     // DESIGN 10: a day's traffic of a source ("all": the enabled sources), tools per the setting.
     Q_INVOKABLE QVariantMap trafficOf(const QString& date, const QString& source, bool includeTools) const;
     void setDisabledSources(const QStringList& sources) { disabled_ = sources; }
@@ -106,13 +108,13 @@ public:
 public slots:
     void applyRows(const QVariantList& rows, qint64 updatedMs);
     void setAnalyzing(bool running);
-    void applyTasks(TaskRecords records);
+    void applyPerf(PerfRecords records, PerfBaselines baselines);
     void applyTraffic(const QVariantList& rows, const QString& since);
 
 signals:
     void rowsChanged();
     void analyzingChanged();
-    void tasksChanged();
+    void perfChanged();
     void trafficChanged();
     void refreshRequested();
     void clearRequested();
@@ -122,7 +124,8 @@ private:
     bool analyzing_ = false;
     qint64 updatedMs_ = 0;
     const Strings* strings_;
-    TaskRecords tasks_;
+    PerfRecords perf_;
+    PerfBaselines baselines_;
     QVariantList trafficRows_;
     QString trafficSince_;
     QStringList disabled_;
@@ -130,5 +133,5 @@ private:
         qint64 rx = 0, tx = 0, rxTools = 0, txTools = 0;
     };
     TrafficSums trafficSums(const QString& date, const QString& source) const;
-    int tasksRevision_ = 0;
+    int perfRevision_ = 0;
 };

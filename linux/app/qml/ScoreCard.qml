@@ -1,15 +1,16 @@
 import QtQuick
 import QtQuick.Effects
 import QtQuick.Layouts
+import "Format.js" as Format
 
-// DESIGN 12 score card: the breakdown behind an agent's 智力, shown beside the dashboard while its row is hovered. It
-// never takes focus and lets the pointer through, like a tooltip.
+// DESIGN 12 score card (性能分析卡): the breakdown behind an agent's 性能, shown beside the dashboard or a board while
+// its row is hovered. It never takes focus and lets the pointer through, like a tooltip.
 Window {
     id: card
     property var info: ({})
     property real availableHeight: 10000
     readonly property int pad: 18
-    // Fit: a card taller than the screen drops the dimension meanings first, then the footnote. Decided when the card
+    // Fit: a card taller than the screen drops the components' meanings first, then the footnote. Decided when the card
     // opens (fit()), so the layout never feeds back into itself.
     property bool dropDesc: false
     property bool dropFootnote: false
@@ -21,24 +22,37 @@ Window {
             Qt.callLater(function() { if (content.implicitHeight + 28 > availableHeight - 16) dropFootnote = true })
         })
     }
-    readonly property bool supported: info.supported === true
+    readonly property bool scored: (info.shown || -1) >= 0
+    readonly property var usual: info.usual || ({})
 
     flags: Qt.ToolTip | Qt.FramelessWindowHint | Qt.WindowTransparentForInput | Qt.WindowDoesNotAcceptFocus | Qt.NoDropShadowWindowHint
     color: "transparent"
-    width: 300 + pad * 2
+    width: 320 + pad * 2
     height: Math.ceil(surface.height) + pad * 2
 
-    function chipColor(state) { return state === "passing" ? Theme.passInk : state === "failing" ? Theme.failInk : Theme.ink2 }
-    function chipFill(state) { return state === "passing" ? Theme.passFill : state === "failing" ? Theme.failFill : "transparent" }
-    function chipGlyph(state) {
-        return state === "passing" ? "checkCircle" : state === "failing" ? "alertCircle" : state === "pending" ? "clock" : state === "unverified" ? "dotRing" : ""
+    // The shown number counts to each new value (DESIGN 12 Motion); the scale follows it.
+    property real shownValue: info.shown === undefined ? -1 : info.shown
+    property real target: info.shown === undefined ? -1 : info.shown
+    onTargetChanged: {
+        const from = Math.round(shownValue)
+        if (visible && Format.perfCounts(from, target)) {
+            count.stop()
+            count.from = from
+            count.to = target
+            count.duration = Format.perfCountMs(from, target)
+            count.start()
+        } else {
+            count.stop()
+            shownValue = target
+        }
     }
+    NumberAnimation { id: count; target: card; property: "shownValue"; easing.type: Easing.OutCubic }
 
     Item {
         id: holder
         x: card.pad
         y: card.pad
-        width: 300
+        width: 320
         height: surface.height
         opacity: card.visible ? 1 : 0
         Behavior on opacity { NumberAnimation { duration: 150 } }
@@ -63,7 +77,7 @@ Window {
         }
         Rectangle {
             id: surface
-            width: 300
+            width: 320
             height: content.implicitHeight + 28
             radius: 12
             color: Theme.cardFill
@@ -74,10 +88,10 @@ Window {
                 id: content
                 x: 14
                 y: 14
-                width: 272
+                width: 292
                 spacing: 0
 
-                // 1. Header: source dot, project, state chip; model · source.
+                // 1. Header: source dot, project, the provisional chip; model · source.
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 7
@@ -96,32 +110,39 @@ Window {
                         elide: Text.ElideRight
                     }
                     Item {
-                        visible: card.supported
+                        visible: card.info.provisional === true
                         Layout.preferredHeight: 18
-                        Layout.preferredWidth: chipRow.implicitWidth + 13
-                        Rectangle {
+                        Layout.preferredWidth: provisionalRow.implicitWidth + 14
+                        Canvas {
                             anchors.fill: parent
-                            radius: 9
-                            color: card.chipFill(card.info.state)
-                            border.width: card.info.state === "passing" || card.info.state === "failing" ? 0 : 1
-                            border.color: Qt.rgba(Theme.ink2.r, Theme.ink2.g, Theme.ink2.b, 0.35)
+                            onPaint: card.dottedOutline(getContext("2d"), width, height)
+                            Component.onCompleted: requestPaint()
                         }
                         Row {
-                            id: chipRow
+                            id: provisionalRow
                             anchors.centerIn: parent
                             spacing: 4
-                            Glyph {
-                                visible: name.length > 0
+                            Canvas {
                                 anchors.verticalCenter: parent.verticalCenter
                                 width: 10
                                 height: 10
-                                name: card.chipGlyph(card.info.state)
-                                color: card.chipColor(card.info.state)
+                                onPaint: {
+                                    const ctx = getContext("2d")
+                                    ctx.reset()
+                                    ctx.fillStyle = Theme.ink2
+                                    for (let k = 0; k < 8; ++k) {
+                                        const a = k * Math.PI / 4
+                                        ctx.beginPath()
+                                        ctx.arc(5 + 3.6 * Math.cos(a), 5 + 3.6 * Math.sin(a), 0.9, 0, 2 * Math.PI)
+                                        ctx.fill()
+                                    }
+                                }
+                                Component.onCompleted: requestPaint()
                             }
                             Text {
                                 anchors.verticalCenter: parent.verticalCenter
-                                text: card.info.chip || ""
-                                color: card.chipColor(card.info.state)
+                                text: card.info.provisionalChip || ""
+                                color: Theme.ink2
                                 font.pixelSize: 11
                                 font.weight: Font.DemiBold
                             }
@@ -138,67 +159,149 @@ Window {
                     elide: Text.ElideRight
                 }
 
-                // A source without scores.
-                Rectangle { visible: !card.supported; Layout.fillWidth: true; Layout.topMargin: 12; height: 1; color: Theme.hairline }
+                // 2. Score: eyebrow, the number with the usual chip, the scale, the summary.
+                Rectangle { Layout.fillWidth: true; Layout.topMargin: 12; height: 1; color: Theme.hairline }
                 Text {
-                    visible: !card.supported
-                    Layout.fillWidth: true
-                    Layout.topMargin: 12
-                    text: card.info.unsupported || ""
-                    color: Theme.ink2
-                    font.pixelSize: 12
-                    lineHeight: 1.3
-                    wrapMode: Text.WordWrap
-                }
-
-                // 2. Score: eyebrow, the number over /100, the status line and the composition bar.
-                Rectangle { visible: card.supported; Layout.fillWidth: true; Layout.topMargin: 12; height: 1; color: Theme.hairline }
-                Text {
-                    visible: card.supported && (card.info.eyebrow || "").length > 0
+                    visible: (card.info.eyebrow || "").length > 0
                     Layout.topMargin: 12
                     text: card.info.eyebrow || ""
                     color: Theme.ink2
                     font.pixelSize: 11
-                    font.weight: Font.DemiBold
                 }
                 Item {
-                    visible: card.supported
                     Layout.fillWidth: true
                     Layout.topMargin: (card.info.eyebrow || "").length > 0 ? 2 : 12
                     implicitHeight: big.implicitHeight
                     Text {
                         id: big
-                        text: card.info.number || "–"
-                        color: card.info.number === "–" ? Theme.ink3 : card.info.form === "resting" ? Theme.ink2 : Theme.ink
+                        text: card.shownValue >= 0 ? Format.perfFull(Math.round(card.shownValue)) : "–"
+                        color: !card.scored ? Theme.ink3 : card.info.form === "resting" ? Theme.ink2 : Theme.ink
                         font.pixelSize: 34
-                        font.weight: card.info.number === "–" ? Font.Medium : Font.DemiBold
-                        font.letterSpacing: -0.6
+                        font.weight: card.scored ? Font.DemiBold : Font.Medium
+                        font.letterSpacing: -0.68
                         font.features: Theme.tabular
                     }
-                    Text {
-                        anchors.left: big.right
-                        anchors.leftMargin: 3
-                        anchors.baseline: big.baseline
-                        text: "/100"
-                        color: Theme.ink3
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        font.features: Theme.tabular
-                    }
-                    ProofDots {
+                    ProvisionalDots {
                         x: 0
                         y: big.baselineOffset + 0.22 * 34 - height / 2
                         textWidth: big.advance.width > 0 ? big.advance.width : big.implicitWidth
                         pixelSize: 34
                         color: big.color
-                        shown: card.info.proof === true
+                        shown: card.info.provisional === true
+                    }
+                    Item {
+                        id: usualChip
+                        visible: card.scored && (card.usual.text || "").length > 0
+                        anchors.right: parent.right
+                        // Centred on the digits' cap height.
+                        y: big.baselineOffset - 0.35 * 34 - height / 2
+                        height: 18
+                        width: usualText.implicitWidth + 14
+                        Rectangle {
+                            anchors.fill: parent
+                            radius: 9
+                            visible: card.usual.kind !== "none"
+                            color: card.usual.kind === "up" ? Theme.passFill : Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, 0.06)
+                        }
+                        Canvas {
+                            anchors.fill: parent
+                            visible: card.usual.kind === "none"
+                            onPaint: card.dottedOutline(getContext("2d"), width, height)
+                            onVisibleChanged: requestPaint()
+                        }
+                        Text {
+                            id: usualText
+                            anchors.centerIn: parent
+                            text: card.usual.text || ""
+                            color: card.usual.kind === "up" ? Theme.passInk : Theme.ink2
+                            font.pixelSize: 11
+                            font.weight: Font.DemiBold
+                            font.features: Theme.tabular
+                        }
+                    }
+                }
+                // The scale: the log scale over the content width, 500 · 1000 · 2000 ticks, the pearl gradient fill.
+                Item {
+                    id: scale
+                    Layout.fillWidth: true
+                    Layout.topMargin: 10
+                    implicitHeight: 6 + 4 + labels.implicitHeight
+                    readonly property real f: card.shownValue >= 0 ? Format.perfScale(card.shownValue) : 0
+                    Rectangle { id: track; width: parent.width; height: 6; radius: 3; color: Theme.track }
+                    Rectangle {
+                        visible: card.scored && card.info.provisional !== true && scale.f > 0
+                        width: Math.max(6, scale.f * track.width)
+                        height: 6
+                        radius: 3
+                        clip: true
+                        opacity: card.info.form === "resting" ? 0.45 : 1
+                        Rectangle {
+                            width: track.width
+                            height: 6
+                            gradient: Gradient {
+                                orientation: Gradient.Horizontal
+                                GradientStop { position: 0; color: Theme.pearlC }
+                                GradientStop { position: 0.5; color: Theme.pearlA }
+                                GradientStop { position: 1; color: Theme.pearlB }
+                            }
+                        }
+                    }
+                    // A provisional fill: round dots of its height on a 2.2 × pitch.
+                    Repeater {
+                        model: card.scored && card.info.provisional === true ? Math.max(1, Math.floor((scale.f * track.width - 6) / 13.2) + 1) : 0
+                        Rectangle {
+                            required property int index
+                            x: index * 13.2
+                            width: 6
+                            height: 6
+                            radius: 3
+                            opacity: card.info.form === "resting" ? 0.45 : 1
+                            color: index * 13.2 / track.width < 0.5 ? Theme.pearlC : Theme.pearlA
+                        }
+                    }
+                    Repeater {
+                        model: [500, 1000, 2000]
+                        Rectangle {
+                            required property int modelData
+                            x: Math.round(Format.perfScale(modelData) * track.width)
+                            y: modelData === 1000 ? -4 : -2
+                            width: 1
+                            height: modelData === 1000 ? 14 : 10
+                            color: Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, modelData === 1000 ? 0.45 : 0.18)
+                        }
+                    }
+                    Item {
+                        id: labels
+                        y: 10
+                        width: parent.width
+                        implicitHeight: tick1000.implicitHeight
+                        Repeater {
+                            model: [500, 1000, 2000]
+                            Text {
+                                id: label
+                                required property int modelData
+                                x: Math.round(Format.perfScale(modelData) * track.width - implicitWidth / 2)
+                                text: String(modelData)
+                                color: modelData === 1000 ? Theme.ink2 : Theme.ink3
+                                font.pixelSize: 9
+                                font.weight: modelData === 1000 ? Font.DemiBold : Font.Normal
+                                font.features: Theme.tabular
+                            }
+                        }
+                        Text {
+                            id: tick1000
+                            anchors.right: parent.right
+                            text: "4000"
+                            color: Theme.ink3
+                            font.pixelSize: 9
+                            font.features: Theme.tabular
+                        }
                     }
                 }
                 Text {
-                    visible: card.supported
                     Layout.fillWidth: true
-                    Layout.topMargin: 6
-                    text: card.info.status || ""
+                    Layout.topMargin: 8
+                    text: card.info.summary || ""
                     color: Theme.ink2
                     font.pixelSize: 12
                     lineHeight: 1.25
@@ -206,227 +309,120 @@ Window {
                     maximumLineCount: 2
                     elide: Text.ElideRight
                 }
-                Item {
-                    id: comp
-                    visible: card.supported
-                    Layout.fillWidth: true
-                    Layout.topMargin: 10
-                    implicitHeight: 6
-                    readonly property var parts: card.info.comp || []
-                    Rectangle { anchors.fill: parent; radius: 3; color: Theme.track }
-                    Row {
-                        anchors.fill: parent
-                        spacing: 0
-                        Repeater {
-                            model: comp.parts
-                            Item {
-                                required property var modelData
-                                required property int index
-                                readonly property real span: Math.max(modelData.value, modelData.ghost) / 100 * comp.width
-                                width: span > 0 ? span + (index < 4 ? 2 : 0) : 0
-                                height: 6
-                                Rectangle {
-                                    visible: parent.modelData.value > 0
-                                    width: parent.modelData.value / 100 * comp.width
-                                    height: 6
-                                    radius: 1
-                                    color: Theme.scoreInk
-                                }
-                                ProofDots {
-                                    visible: parent.modelData.ghost > 0 && parent.modelData.value === 0
-                                    anchors.verticalCenter: parent.verticalCenter
-                                    textWidth: parent.span
-                                    pixelSize: 26
-                                    color: Theme.scoreInk
-                                    shown: true
-                                }
-                            }
-                        }
-                    }
-                }
-
-                // 3. 評分構成: five dimensions.
                 Text {
-                    visible: card.supported
-                    Layout.topMargin: 14
-                    Layout.bottomMargin: 8
-                    text: (card.info.dimsTitle || "").toUpperCase()
+                    visible: (card.info.provisionalHint || "").length > 0
+                    Layout.fillWidth: true
+                    Layout.topMargin: 4
+                    text: card.info.provisionalHint || ""
                     color: Theme.ink3
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 0.6
-                }
-                Repeater {
-                    model: card.supported ? (card.info.dims || []) : []
-                    ColumnLayout {
-                        id: dimRow
-                        required property var modelData
-                        required property int index
-                        Layout.fillWidth: true
-                        Layout.topMargin: index > 0 ? 9 : 0
-                        spacing: 0
-                        readonly property string mode: modelData.mode
-                        RowLayout {
-                            Layout.fillWidth: true
-                            spacing: 8
-                            Text {
-                                Layout.fillWidth: true
-                                text: dimRow.modelData.label
-                                color: Theme.ink
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                elide: Text.ElideRight
-                            }
-                            Text {
-                                visible: dimRow.mode === "value"
-                                textFormat: Text.StyledText
-                                text: dimRow.modelData.value + " <font color='" + Theme.ink3 + "'>/ " + dimRow.modelData.max + "</font>"
-                                color: Theme.ink
-                                font.pixelSize: 12
-                                font.weight: Font.DemiBold
-                                font.features: Theme.tabular
-                            }
-                            Text {
-                                visible: dimRow.mode === "none"
-                                text: "–"
-                                color: Theme.ink3
-                                font.pixelSize: 12
-                            }
-                            Text {
-                                visible: dimRow.mode === "unverified" || dimRow.mode === "pending"
-                                text: dimRow.modelData.note
-                                color: dimRow.mode === "pending" ? Theme.ink2 : Theme.ink3
-                                font.pixelSize: 11
-                                font.weight: Font.Medium
-                            }
-                        }
-                        Item {
-                            Layout.fillWidth: true
-                            Layout.topMargin: 5
-                            implicitHeight: 4
-                            Rectangle {
-                                anchors.fill: parent
-                                radius: 2
-                                color: dimRow.mode === "value" || dimRow.mode === "none" ? Theme.track : "transparent"
-                            }
-                            ProofDots {
-                                visible: dimRow.mode === "unverified" || (dimRow.mode === "pending")
-                                anchors.verticalCenter: parent.verticalCenter
-                                textWidth: dimRow.mode === "pending" ? parent.width * dimRow.modelData.ghost : parent.width
-                                pixelSize: 30
-                                color: dimRow.mode === "pending" ? Theme.scoreInk : Theme.ink3
-                                shown: true
-                            }
-                            Rectangle {
-                                visible: dimRow.mode === "value" && dimRow.modelData.value > 0
-                                width: parent.width * Math.min(1, dimRow.modelData.value / dimRow.modelData.max)
-                                height: 4
-                                radius: 2
-                                color: Theme.scoreInk
-                            }
-                        }
-                        Text {
-                            visible: !card.dropDesc
-                            Layout.fillWidth: true
-                            Layout.topMargin: 4
-                            text: dimRow.modelData.desc
-                            color: Theme.caption
-                            font.pixelSize: 11
-                            lineHeight: 1.2
-                            wrapMode: Text.WordWrap
-                        }
-                    }
-                }
-
-                // 4. 預測, only while the agent is live with a score.
-                Text {
-                    visible: card.supported && (card.info.predict || []).length > 0
-                    Layout.topMargin: 14
-                    Layout.bottomMargin: 8
-                    text: (card.info.predictTitle || "").toUpperCase()
-                    color: Theme.ink3
-                    font.pixelSize: 11
-                    font.weight: Font.DemiBold
-                    font.letterSpacing: 0.6
-                }
-                RowLayout {
-                    visible: card.supported && (card.info.predict || []).length > 0
-                    Layout.fillWidth: true
-                    spacing: 8
-                    Repeater {
-                        model: card.supported ? (card.info.predict || []) : []
-                        Rectangle {
-                            required property var modelData
-                            Layout.fillWidth: true
-                            Layout.preferredWidth: 1
-                            implicitHeight: cellColumn.implicitHeight + 16
-                            radius: 8
-                            color: Theme.cellFill
-                            Column {
-                                id: cellColumn
-                                x: 9
-                                y: 8
-                                width: parent.width - 16
-                                spacing: 2
-                                Text {
-                                    text: parent.parent.modelData.pct
-                                    color: Theme.ink
-                                    font.pixelSize: 17
-                                    font.weight: Font.DemiBold
-                                    font.features: Theme.tabular
-                                }
-                                Text {
-                                    width: parent.width
-                                    text: parent.parent.modelData.label
-                                    color: Theme.ink2
-                                    font.pixelSize: 11
-                                    elide: Text.ElideRight
-                                }
-                                Text {
-                                    width: parent.width
-                                    text: parent.parent.modelData.flag
-                                    color: Theme.ink3
-                                    font.pixelSize: 10
-                                    font.features: Theme.tabular
-                                    elide: Text.ElideRight
-                                }
-                            }
-                        }
-                    }
-                }
-                Text {
-                    visible: card.supported && (card.info.predict || []).length > 0
-                    Layout.fillWidth: true
-                    Layout.topMargin: 7
-                    text: card.info.predictNote || ""
-                    color: Theme.caption
                     font.pixelSize: 11
                     lineHeight: 1.2
                     wrapMode: Text.WordWrap
                 }
 
-                // 5. 行為.
+                // 3. Components: 速度 and 效率, each row label · value · mini meter · sub-score, then its meaning.
+                Repeater {
+                    model: card.info.groups || []
+                    ColumnLayout {
+                        id: group
+                        required property var modelData
+                        required property int index
+                        Layout.fillWidth: true
+                        Layout.topMargin: 14
+                        spacing: 0
+                        Text {
+                            Layout.bottomMargin: 8
+                            text: S.language === "en" ? group.modelData.title.toUpperCase() : group.modelData.title
+                            color: Theme.ink3
+                            font.pixelSize: S.language === "en" ? 10 : 11
+                            font.weight: Font.DemiBold
+                            font.letterSpacing: 0.66
+                        }
+                        Repeater {
+                            model: group.modelData.rows
+                            ColumnLayout {
+                                id: compRow
+                                required property var modelData
+                                required property int index
+                                Layout.fillWidth: true
+                                Layout.topMargin: index > 0 ? 9 : 0
+                                spacing: 0
+                                RowLayout {
+                                    Layout.fillWidth: true
+                                    spacing: 0
+                                    Text {
+                                        Layout.fillWidth: true
+                                        text: compRow.modelData.label
+                                        color: Theme.ink
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                        elide: Text.ElideRight
+                                    }
+                                    Text {
+                                        Layout.preferredWidth: Math.max(64, card.valueColumn)
+                                        horizontalAlignment: Text.AlignRight
+                                        text: compRow.modelData.value
+                                        color: compRow.modelData.present ? Theme.ink : Theme.ink3
+                                        font.pixelSize: compRow.modelData.present ? 12 : 11.5
+                                        font.weight: compRow.modelData.present ? Font.Medium : Font.Normal
+                                        font.features: Theme.tabular
+                                    }
+                                    PerfMeter {
+                                        Layout.leftMargin: 10
+                                        Layout.preferredWidth: 44
+                                        Layout.preferredHeight: 4
+                                        tickHeight: 8
+                                        f: compRow.modelData.f
+                                        present: compRow.modelData.present
+                                    }
+                                    Text {
+                                        Layout.leftMargin: 8
+                                        Layout.preferredWidth: Math.max(34, card.subColumn)
+                                        horizontalAlignment: Text.AlignRight
+                                        text: compRow.modelData.sub
+                                        color: compRow.modelData.present ? Theme.ink : Theme.ink3
+                                        font.pixelSize: 12
+                                        font.weight: Font.DemiBold
+                                        font.features: Theme.tabular
+                                    }
+                                }
+                                Text {
+                                    visible: !card.dropDesc
+                                    Layout.fillWidth: true
+                                    Layout.topMargin: 3
+                                    text: compRow.modelData.desc
+                                    color: Theme.caption
+                                    font.pixelSize: 10
+                                    lineHeight: 1.2
+                                    wrapMode: Text.WordWrap
+                                }
+                            }
+                        }
+                    }
+                }
+
+                // 4. 行為.
                 Text {
-                    visible: card.supported && (card.info.signals || []).length > 0
+                    visible: (card.info.signals || []).length > 0
                     Layout.topMargin: 14
                     Layout.bottomMargin: 8
-                    text: (card.info.signalsTitle || "").toUpperCase()
+                    text: S.language === "en" ? (card.info.signalsTitle || "").toUpperCase() : (card.info.signalsTitle || "")
                     color: Theme.ink3
                     font.pixelSize: 11
                     font.weight: Font.DemiBold
-                    font.letterSpacing: 0.6
+                    font.letterSpacing: 0.66
                 }
                 Repeater {
-                    model: card.supported ? (card.info.signals || []) : []
+                    model: card.info.signals || []
                     RowLayout {
                         required property var modelData
                         required property int index
                         Layout.fillWidth: true
                         Layout.topMargin: index > 0 ? 6 : 0
-                        spacing: 7
+                        spacing: 6
                         Glyph {
                             Layout.alignment: Qt.AlignTop
-                            Layout.topMargin: 2
+                            Layout.topMargin: 1
                             Layout.preferredWidth: 13
                             Layout.preferredHeight: 13
                             name: parent.modelData.warn ? "loop" : "sparkle"
@@ -443,7 +439,7 @@ Window {
                     }
                 }
 
-                // 6. Facts and 7. the footnote.
+                // 5. Facts and 6. the footnote.
                 Rectangle {
                     visible: (card.info.facts || []).length > 0
                     Layout.fillWidth: true
@@ -465,16 +461,44 @@ Window {
                     }
                 }
                 Text {
-                    visible: card.supported && !card.dropFootnote
+                    visible: !card.dropFootnote
                     Layout.fillWidth: true
                     Layout.topMargin: 10
                     text: card.info.footnote || ""
                     color: Theme.caption
-                    font.pixelSize: 11
+                    font.pixelSize: 10
                     lineHeight: 1.25
                     wrapMode: Text.WordWrap
                 }
             }
         }
+    }
+
+    // The component columns are as wide as the widest value and sub-score shown.
+    FontMetrics { id: valueMetrics; font.pixelSize: 12; font.weight: Font.Medium }
+    FontMetrics { id: subMetrics; font.pixelSize: 12; font.weight: Font.DemiBold }
+    readonly property real valueColumn: widest(valueMetrics, "value")
+    readonly property real subColumn: widest(subMetrics, "sub")
+    function widest(metrics, field) {
+        let w = 0
+        const groups = info.groups || []
+        for (let g = 0; g < groups.length; ++g)
+            for (let r = 0; r < groups[g].rows.length; ++r) w = Math.max(w, metrics.advanceWidth(groups[g].rows[r][field]))
+        return Math.ceil(w)
+    }
+    // A 1 pt dotted outline of the label color at 35 % around a fully rounded chip.
+    function dottedOutline(ctx, w, h) {
+        ctx.reset()
+        ctx.strokeStyle = Qt.rgba(Theme.ink.r, Theme.ink.g, Theme.ink.b, 0.35)
+        ctx.lineWidth = 1
+        ctx.setLineDash([1, 2])
+        const r = (h - 1) / 2
+        ctx.beginPath()
+        ctx.moveTo(0.5 + r, 0.5)
+        ctx.lineTo(w - 0.5 - r, 0.5)
+        ctx.arc(w - 0.5 - r, h / 2, r, -Math.PI / 2, Math.PI / 2)
+        ctx.lineTo(0.5 + r, h - 0.5)
+        ctx.arc(0.5 + r, h / 2, r, Math.PI / 2, 3 * Math.PI / 2)
+        ctx.stroke()
     }
 }

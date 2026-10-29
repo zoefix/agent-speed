@@ -55,7 +55,7 @@ SettingsPage {
                 // DESIGN 11: while reporting is on, no sentence claims that nothing is sent.
                 text: S.tr2(S.rev, report.reporting ? "privacy.statement.report" : "privacy.statement") + "\n\n"
                       + S.tr2(S.rev, report.reporting ? "privacy.traffic.report" : "privacy.traffic") + "\n\n"
-                      + S.tr2(S.rev, "privacy.report") + "\n\n" + S.tr2(S.rev, "privacy.taskScore")
+                      + S.tr2(S.rev, "privacy.report") + "\n\n" + S.tr2(S.rev, "privacy.perfScore")
                 color: Theme.ink2
                 font.pixelSize: 12
                 lineHeight: 1.3

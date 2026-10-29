@@ -61,11 +61,12 @@ Window {
                 key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, phase: a.phase,
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
                 rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
-                bolts: a.bolts, iq: a.iq, iqForm: a.iqForm, iqProof: a.iqProof, looping: a.looping,
+                bolts: a.bolts, perf: a.perf, perfForm: a.perfForm, perfProvisional: a.perfProvisional, perfA11y: a.perfA11y || "", looping: a.looping,
                 trafficSuffix: a.trafficSuffix || ""
             })
         }
         Sync.sync(agentModel, agents, "key")
+        measurePerf(shown)
         // The capsule column is as wide as the widest capsule among the visible rows (DESIGN 4).
         var widest = 0, deepest = 0
         for (var c = 0; c < shown.length; ++c) {
@@ -73,7 +74,7 @@ Window {
             deepest = Math.max(deepest, shown[c].depth)
         }
         // The name block keeps 72 px at the deepest indent, or every capsule drops its word.
-        var room = 328 - deepest * 12 - 16 - 10 - 10 - iqCellWidth - 6 - 52 - (widest > 0 ? 8 : 0)
+        var room = 328 - deepest * 12 - 16 - 10 - 10 - perfCellWidth - 6 - 52 - (widest > 0 ? 8 : 0)
         capsuleWords = room - widest >= 72
         if (!capsuleWords) {
             widest = 0
@@ -90,9 +91,23 @@ Window {
     property real capsuleColumn: 0
     property bool capsuleWords: true
     FontMetrics { id: capsuleMetrics; font.pixelSize: 11; font.weight: Font.Medium }
-    FontMetrics { id: iqMetrics; font.pixelSize: 12; font.weight: Font.Medium }
+    FontMetrics { id: perfMetrics; font.pixelSize: 12; font.weight: Font.Medium }
     FontMetrics { id: captionMetrics; font.pixelSize: 11; font.weight: Font.Medium }
-    readonly property real iqCellWidth: Math.ceil(Math.max(iqMetrics.advanceWidth("888"), captionMetrics.advanceWidth(S.tr2(S.rev, "intel.glyph"))))
+    // DESIGN 12 Number formats: the cell is measured with `8,888`; a wider text (1.28M) widens it at once and it narrows
+    // 6 s after the last value that needed it.
+    property real perfWide: 0
+    readonly property real perfCellWidth: Math.ceil(Math.max(perfMetrics.advanceWidth("8,888"), captionMetrics.advanceWidth(S.tr2(S.rev, "intel.glyph")), perfWide))
+    Timer { id: perfNarrow; interval: 6000; onTriggered: root.perfWide = 0 }
+    function measurePerf(agents) {
+        var widest = 0
+        for (var i = 0; i < agents.length; ++i) {
+            if (agents[i].perf >= 0) widest = Math.max(widest, perfMetrics.advanceWidth(agents[i].perfText || ""))
+        }
+        if (widest > perfMetrics.advanceWidth("8,888")) {
+            perfWide = Math.max(perfWide, widest)
+            perfNarrow.restart()
+        }
+    }
 
     function capsuleWidth(a, withWord) {
         var parts = []
@@ -140,7 +155,7 @@ Window {
         var scr = root.screen
         scoreCard.availableHeight = scr ? scr.desktopAvailableHeight : 10000
         var towardLeft = !scr || (root.x + root.width / 2 > scr.virtualX + scr.width / 2)
-        scoreCard.x = towardLeft ? root.x + frame.x - 8 - 300 - scoreCard.pad : root.x + frame.x + frame.width + 8 - scoreCard.pad
+        scoreCard.x = towardLeft ? root.x + frame.x - 8 - 320 - scoreCard.pad : root.x + frame.x + frame.width + 8 - scoreCard.pad
         var y = root.y + top - scoreCard.pad
         if (scr) {
             var minY = scr.virtualY + 8 - scoreCard.pad
@@ -407,7 +422,7 @@ Window {
                     trailing: agentModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
                     secondary: agentModel.count > 0 ? S.tr2(S.rev, "intel.glyph") : ""
                     secondaryTip: S.tr2(S.rev, "agents.intel.hint")
-                    // The 智力 caption's right edge sits on the 智力 column's: the live slot (52) and the 6 px gap.
+                    // The 性能 caption's right edge sits on the 性能 column's: the live slot (52) and the 6 px gap.
                     secondaryEdge: 58
                 }
                 RowLayout {
@@ -439,7 +454,7 @@ Window {
                         width: agentList.width
                         capsuleColumn: root.capsuleColumn
                         capsuleWords: root.capsuleWords
-                        iqWidth: root.iqCellWidth
+                        perfWidth: root.perfCellWidth
                         onHoverChanged: hovered => root.rowHover(key, this, hovered)
                     }
                     add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }

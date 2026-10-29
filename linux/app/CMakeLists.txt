@@ -58,7 +58,7 @@ qt_add_executable(agent-speed
     src/orbs/orb_views.cpp
     src/orbs/orbs_store.cpp
     src/strings.cpp
-    src/task_card.cpp
+    src/perf_card.cpp
     src/title_themes.cpp
     src/tray_icon.cpp
 )
@@ -96,11 +96,7 @@ set(agent_speed_qml
     qml/SettingsWindow.qml
     qml/SourcesPage.qml
     qml/SummaryCard.qml
-    qml/TaskBar.qml
     qml/TitleThemesGroup.qml
-    qml/TaskModelTable.qml
-    qml/TaskSide.qml
-    qml/TasksSection.qml
     qml/TrafficPage.qml
     qml/TrafficSection.qml
     qml/UpdateWindow.qml
@@ -114,11 +110,14 @@ set(agent_speed_qml
     qml/HistoryChart.qml
     qml/HistoryWindow.qml
     qml/IconButton.qml
-    qml/IqCell.qml
+    qml/PerfCell.qml
+    qml/PerfMeter.qml
+    qml/PerfSection.qml
+    qml/PerfTrend.qml
     qml/LiveChart.qml
     qml/LiveSlot.qml
     qml/PhaseBadge.qml
-    qml/ProofDots.qml
+    qml/ProvisionalDots.qml
     qml/ScoreCard.qml
     qml/SectionHeader.qml
     qml/SourceRow.qml

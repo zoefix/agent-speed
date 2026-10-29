@@ -10,7 +10,6 @@
 
 #include "preferences.hpp"
 #include "strings.hpp"
-#include "task_card.hpp"
 
 namespace {
 
@@ -143,7 +142,7 @@ QString ReportController::t(const char* key) const { return strings_.t(QLatin1St
 QString ReportController::fmt(const QString& key, const QStringList& args) const {
     QVariantList list;
     for (const auto& a : args) list.append(a);
-    return task_card::fmt(strings_, key, list);
+    return strings_.fmt(key, list);
 }
 
 QString ReportController::usernameMessage(const std::optional<std::string>& reason, const agentspeed::report::UsernameRules& rules) const {
@@ -206,7 +205,8 @@ QVariantList ReportController::sectionRows(const std::set<agentspeed::report::Se
         QString note;
         if (!accepted) note = t("report.section.notAccepted");
         else if (trafficOff) note = t("report.section.trafficOff");
-        else if (section == agentspeed::report::Section::Models && (!discovery || discovery->has("taskScore"))) note = t("report.section.models.taskScore");
+        else if (section == agentspeed::report::Section::Models && (!discovery || discovery->has("perfScore"))) note = t("report.section.models.perfScore");
+        else if (section == agentspeed::report::Section::Models && discovery->has("taskScore")) note = t("report.section.models.thinking");
         rows.append(QVariantMap{{QStringLiteral("key"), name},
                                 {QStringLiteral("label"), strings_.t(QStringLiteral("report.section.") + name)},
                                 {QStringLiteral("on"), accepted && on.contains(section)},
@@ -467,7 +467,7 @@ void ReportController::clearApiKey() {
 
 QVariantList ReportController::sections() const { return sectionRows(switches(), discovery_); }
 
-bool ReportController::taskScoreCaption() const { return !discovery_ || discovery_->has("taskScore"); }
+bool ReportController::scoreCaption() const { return !discovery_ || discovery_->has("perfScore") || discovery_->has("taskScore"); }
 
 void ReportController::setSection(const QString& key, bool on) {
     if (const auto section = agentspeed::report::sectionFromName(sv(key))) settings_.setSection(*section, on);
