@@ -119,6 +119,7 @@ Composer::Composer(std::string path, SourceKind source) : path_(std::move(path))
 Composer::~Composer() = default;
 
 void Composer::reset() {
+    ++version_;
     cwd_.reset();
     events_.clear();
     models_.clear();
@@ -126,12 +127,14 @@ void Composer::reset() {
     sessions_.clear();
     pending_.reset();
     headerSeen_ = false;
+    duplicate_ = false;
     stats_ = {};
 }
 
 void Composer::onLine(const TranscriptParser& parser, const json::Value& line, std::string_view) {
     std::optional<std::int64_t> t;
     source_ = parser.source();
+    duplicate_ = false;
     switch (source_) {
         case SourceKind::ClaudeCode:
         case SourceKind::ClaudeDesktop:
@@ -303,6 +306,7 @@ void Composer::lineKind(const PromptLine& found, std::int64_t t) {
 }
 
 void Composer::prompt(std::int64_t t, bool continuation) {
+    ++version_;
     Event e;
     e.type = Event::Type::Prompt;
     e.serial = nextSerial_++;
@@ -313,11 +317,13 @@ void Composer::prompt(std::int64_t t, bool continuation) {
 }
 
 void Composer::assistant(bool duplicate) {
+    duplicate_ = duplicate;
     if (pending_ && duplicate) withdraw();
     pending_.reset();
 }
 
 void Composer::withdraw() {
+    ++version_;
     const auto serial = pending_->second;
     const auto it = std::find_if(events_.rbegin(), events_.rend(), [&](const Event& e) { return e.serial == serial; });
     if (it != events_.rend()) events_.erase(std::next(it).base());
@@ -357,6 +363,7 @@ void Composer::script(const json::Value& callId, std::int64_t t, const CodeScrip
 }
 
 Composer::Call Composer::action(std::int64_t t, const std::string& tool, std::shared_ptr<Held> value, const std::string& digest) {
+    ++version_;
     const auto input = value->root();
     Event e;
     e.type = Event::Type::Action;
@@ -413,6 +420,7 @@ void Composer::result(const json::Value& callId, const json::Value& result, std:
 }
 
 void Composer::answer(Call& c, const json::Value& result, std::int64_t t) {
+    ++version_;
     c.answered = true;
     ++stats_.results;
     const auto input = c.value ? c.value->root() : json::Value();
@@ -445,6 +453,7 @@ void Composer::finish(const std::string& key, const Outcome& out, const std::opt
     if (text) running.texts.push_back(*text);
     if (!out.exitCode || !out.failed) return;
     const Outcome final{out.exitCode, running.masked ? std::nullopt : out.failed, t};
+    ++version_;
     if (auto* e = find(running.serial)) {
         e->outcome = final;
         if (running.info) {

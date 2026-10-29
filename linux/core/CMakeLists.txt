@@ -72,6 +72,7 @@ add_library(agentspeed_core STATIC
     src/task_events.cpp
     src/task_model.cpp
     src/task_score.cpp
+    src/task_tracker.cpp
     src/tasks/edits.cpp
     src/tasks/failures.cpp
     src/tasks/pcre.cpp

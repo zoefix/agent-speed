@@ -120,6 +120,8 @@ public:
     Update seed(std::int64_t todayStartMs);
     Update refresh(bool discover = false);
     std::vector<Parser*> parsers() const;
+    // Gives every new window parser its line observer (the task tracker of a scored source).
+    void setObserverFactory(std::function<LineObserver*(Parser&)> factory) { observerFactory_ = std::move(factory); }
     bool unsupported() const;
     std::int64_t malformedLines() const;
     bool isTracked(const std::string& databasePath) const { return databases_.contains(databasePath); }
@@ -148,6 +150,7 @@ private:
     std::vector<std::pair<std::string, sqlite::DatabaseStamp>> discovered();
 
     std::function<std::vector<std::string>()> discover_;
+    std::function<LineObserver*(Parser&)> observerFactory_;
     Deduper& deduper_;
     std::map<std::string, Tracked> databases_;
     std::int64_t removedMalformedLines_ = 0;

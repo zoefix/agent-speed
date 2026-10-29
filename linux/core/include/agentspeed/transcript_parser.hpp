@@ -20,6 +20,8 @@ class LineObserver {
 public:
     virtual ~LineObserver() = default;
     virtual void onLine(const TranscriptParser& parser, const json::Value& line, std::string_view raw) = 0;
+    // The parser starts over (a rewritten or truncated file).
+    virtual void onReset(const TranscriptParser&) {}
 };
 
 // What the task composer needs to skip copied history like the parser does.

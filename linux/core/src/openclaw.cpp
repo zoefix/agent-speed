@@ -523,6 +523,7 @@ void Source::readWindows(Tracked& tracked, Database& database, Update& update) {
         if (it == tracked.windows.end()) {
             WindowState state;
             state.parser = std::make_unique<Parser>(tracked.path, window, deduper_);
+            if (observerFactory_) state.parser->setLineObserver(observerFactory_(*state.parser));
             state.generation = generation;
             state.updatedMs = window.updatedMs;
             auto& stored = tracked.windows[window.sessionId] = std::move(state);

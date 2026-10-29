@@ -6,8 +6,20 @@
 #include <vector>
 
 #include "agentspeed/model.hpp"
+#include "agentspeed/task_events.hpp"
+#include "agentspeed/work_signals.hpp"
 
 namespace agentspeed {
+
+// METRICS 6.9–6.11: an agent's current task, its score, predictions and work signals.
+struct AgentTask {
+    tasks::AgentValue value;
+    std::optional<tasks::TaskResult> task;
+    std::optional<std::int64_t> taskStartMs;
+    std::optional<tasks::Predictions> predictions;
+    tasks::Models models;
+    work::Signals signals;
+};
 
 struct AgentRow {
     std::string id;
@@ -23,6 +35,22 @@ struct AgentRow {
     // EXECUTION-MODES: the effort and speed the row shows (mode tokens), nullopt when unknown.
     std::optional<std::string> effort;
     std::optional<std::string> speed;
+    // Scored sources only (METRICS 6.9).
+    std::optional<AgentTask> task;
+    // METRICS 6.9 Live thinking: this agent's reasoning tokens per second and share.
+    double liveThinking = 0;
+    double thinkingShare = 0;
+};
+
+// 智力 and 思考 of one set of sources (METRICS 6.9 Sets and groups, Live thinking): an orb, the tray, a board.
+struct ScoreSet {
+    std::optional<std::vector<SourceKind>> sources;  // nullopt: every enabled source
+    tasks::Highest value;
+    std::int64_t scored = 0;                // N: the set's agents with a score in the value's form
+    std::optional<std::string> state;       // the supplying agent's state (proof mark: unverified, pending)
+    double liveThinking = 0;
+    double thinkingShare = 0;
+    bool generating = false;                // an agent of the set is generating
 };
 
 // A responseCompleted event (METRICS 6.4): the first emission of a response key while running.
@@ -79,6 +107,9 @@ struct Snapshot {
     int tools = 0;
     std::vector<AgentRow> agents;
     std::vector<SourceRow> sources;
+    // One per requested set (Monitor::setScoreSets), then the board groups of the agents list.
+    std::vector<ScoreSet> scoreSets;
+    std::vector<tasks::GroupValue> scoreGroups;
     // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).
     std::vector<double> history;
     bool demo = false;

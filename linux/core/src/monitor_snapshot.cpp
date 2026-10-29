@@ -1,4 +1,5 @@
 #include <algorithm>
+#include <set>
 
 #include "agentspeed/antigravity.hpp"
 #include "agentspeed/engine.hpp"
@@ -18,6 +19,87 @@ namespace {
 constexpr std::int64_t kStaleGeneratingMs = 300'000;
 
 }  // namespace
+
+const tasks::TaskTracker* Monitor::trackerOf(const std::string& id) const {
+    if (const auto it = files_.find(id); it != files_.end()) return it->second->tasks.get();
+    if (const auto it = windowTasks_.find(id); it != windowTasks_.end()) return it->second.get();
+    return nullptr;
+}
+
+// METRICS 6.9–6.11: the listed agents' task scores, predictions, work signals and thinking, then the score sets.
+void Monitor::scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
+                         std::int64_t nowMs) {
+    const auto thinking = engine::thinking(recent, agents, nowMs);
+    std::vector<tasks::AgentRow> rows;
+    std::set<std::string> present;
+    for (auto& row : snap.agents) {
+        if (const auto it = thinking.perAgent.find(row.id); it != thinking.perAgent.end()) {
+            row.liveThinking = it->second.liveThinking();
+            row.thinkingShare = it->second.thinkingShare();
+        }
+        const auto* tracker = trackerOf(row.id);
+        if (!tracker) continue;
+        present.insert(row.id);
+        const auto& info = agents_.at(row.id);
+        const auto phase = tasks::effectivePhase(info.phase, info.lastLineMs, nowMs);
+        auto& cached = taskCache_[row.id];
+        const auto version = tracker->composer().version();
+        if (cached.events != version || cached.models != taskModelsVersion_ || cached.phase != phase || cached.parent != row.parentId ||
+            cached.future) {
+            const auto models = taskModels_.find(info.source);
+            const tasks::ScoredAgent scored{row.id, info.source, phase, info.lastLineMs, row.parentId, &tracker->composer().events()};
+            cached.row = tasks::agentRow(scored, nowMs, models == taskModels_.end() ? tasks::priorModels() : models->second);
+            cached.events = version;
+            cached.models = taskModelsVersion_;
+            cached.phase = phase;
+            cached.parent = row.parentId;
+            cached.future = false;
+            for (const auto& e : tracker->composer().events()) {
+                if (e.t > nowMs || (e.outcome && e.outcome->t && *e.outcome->t > nowMs)) cached.future = true;
+            }
+        }
+        cached.row.agent.lastLineMs = info.lastLineMs;
+        row.task = AgentTask{cached.row.value,       cached.row.task,   cached.row.taskStartMs,
+                             cached.row.predictions, cached.row.models, work::signals(tracker->actions().actions(), nowMs)};
+        rows.push_back(cached.row);
+    }
+    std::erase_if(taskCache_, [&](const auto& entry) { return !present.contains(entry.first) && !agents_.contains(entry.first); });
+
+    const auto values = tasks::setValues(rows, nowMs, scoreSets_);
+    for (std::size_t i = 0; i < scoreSets_.size(); ++i) {
+        const auto& sources = scoreSets_[i];
+        const auto inSet = [&](SourceKind kind) {
+            return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end();
+        };
+        ScoreSet set;
+        set.sources = sources;
+        set.value = values.sets[i].value;
+        for (const auto& r : rows) {
+            if (!inSet(r.agent.source)) continue;
+            if (set.value.form != "none" && r.value.form == set.value.form) ++set.scored;
+            if (set.value.agent && r.agent.id == *set.value.agent) set.state = r.value.state;
+        }
+        for (const auto& a : snap.agents) {
+            if (inSet(a.source) && a.phase == Phase::Generating) set.generating = true;
+        }
+        engine::ThinkingWindow window = thinking.total;
+        if (sources) {
+            std::vector<engine::Response> ownResponses;
+            std::vector<engine::Agent> ownAgents;
+            for (const auto& r : recent) {
+                if (inSet(r.source)) ownResponses.push_back(r);
+            }
+            for (const auto& a : agents) {
+                if (inSet(a.source)) ownAgents.push_back(a);
+            }
+            window = engine::thinking(ownResponses, ownAgents, nowMs).total;
+        }
+        set.liveThinking = window.liveThinking();
+        set.thinkingShare = window.thinkingShare();
+        snap.scoreSets.push_back(std::move(set));
+    }
+    snap.scoreGroups = values.groups;
+}
 
 Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
     resolveParents();
@@ -100,6 +182,8 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         if (row.phase == Phase::Tools) ++snap.tools;
         snap.agents.push_back(std::move(row));
     }
+
+    scoreTasks(snap, recent, agents, nowMs);
 
     for (const auto kind : MonitorConfig::allSources()) {
         SourceRow row;

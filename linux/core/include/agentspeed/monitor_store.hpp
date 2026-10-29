@@ -54,6 +54,7 @@ public:
         e.endMs = r.endMs;
         e.input = r.tokens.input;
         e.output = r.tokens.output;
+        e.reasoning = r.tokens.reasoning;
         e.final = r.final;
         e.requestCount = r.requestCount;
         e.costMicroUsd = book_ ? book_->cost(r, localDate(r.endMs)) : std::nullopt;

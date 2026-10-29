@@ -14,6 +14,7 @@ void TranscriptParser::observeText(std::string_view raw) {
 }
 
 void TranscriptParser::reset() {
+    if (observer_) observer_->onReset(*this);
     source_ = initialSource_;
     sourceDecided_ = false;
     project_.reset();

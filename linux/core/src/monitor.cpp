@@ -113,6 +113,10 @@ Monitor::Tracked& Monitor::track(std::size_t root, const std::string& path) {
     file->root = root;
     file->tailer = makeTailer(roots_[root].family, path);
     file->parser = makeParser(roots_[root].family, path, roots_[root].path, deduper_);
+    if (tasks::isScoredSource(file->parser->source())) {
+        file->tasks = std::make_unique<tasks::TaskTracker>(path, file->parser->source());
+        file->parser->setLineObserver(file->tasks.get());
+    }
     auto& ref = *file;
     files_[path] = std::move(file);
     return ref;
@@ -184,9 +188,12 @@ bool Monitor::readLive(Tracked& file, bool seeded) {
     const auto version = file.parser->version();
     const auto path = file.tailer->path();
     store_->setSeeding(seeded);
+    // Seeding composes tasks but adds no work-signal actions (METRICS 6.10 Storage).
+    if (file.tasks) file.tasks->setLive(!seeded);
     try {
         const auto result = file.tailer->read(*file.parser, *store_);
         store_->setSeeding(false);
+        if (file.tasks) file.tasks->setLive(true);
         if (auto* whole = dynamic_cast<WholeFileTailer*>(file.tailer.get()); whole && whole->oversized()) partialHistory_ = true;
         if (auto* grok = dynamic_cast<GrokParser*>(file.parser.get()); grok && grok->pendingOverflow()) partialHistory_ = true;
         file.knownLength = result.length;

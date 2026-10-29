@@ -33,6 +33,10 @@ public:
     const std::vector<ModelSpan>& models() const { return models_; }
     const ComposerStats& stats() const { return stats_; }
     const std::string& path() const { return path_; }
+    // The last line was an assistant line whose key another file owns (METRICS 4.1 step 2, 4.7 step 2).
+    bool lastDuplicate() const { return duplicate_; }
+    // Changes whenever an event is added, withdrawn or completed.
+    std::uint64_t version() const { return version_; }
 
     struct Held;
 
@@ -86,7 +90,9 @@ private:
     std::map<std::string, Running> sessions_;
     std::optional<std::pair<std::string, std::uint64_t>> pending_;  // (prompt or command, event serial)
     bool headerSeen_ = false;
+    bool duplicate_ = false;
     std::uint64_t nextSerial_ = 1;
+    std::uint64_t version_ = 0;
     ComposerStats stats_;
 };
 

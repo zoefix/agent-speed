@@ -43,6 +43,12 @@ void Monitor::initSources() {
                 return paths::openClawDatabases(roots);
             },
             deduper_);
+        openClaw_->setObserverFactory([this](openclaw::Parser& parser) -> LineObserver* {
+            auto& tracker = windowTasks_[parser.agentId()];
+            tracker = std::make_unique<tasks::TaskTracker>(parser.agentId(), SourceKind::OpenClaw);
+            tracker->setLive(openClawSeeded_);
+            return tracker.get();
+        });
     }
     if (config_.enabled.contains(SourceKind::Hermes) && !l.hermesRoot.empty()) {
         hermes_ = std::make_unique<hermes::Source>(l.hermesRoot, l.hermesChosen, deduper_, zone_);
@@ -62,6 +68,7 @@ void Monitor::seedSources(std::int64_t todayStartMs) {
     if (openClaw_ && !openClawSeeded_) {
         applyOpenClaw(openClaw_->seed(todayStartMs), true);
         openClawSeeded_ = true;
+        for (auto& [id, tracker] : windowTasks_) tracker->setLive(true);
     }
     if (hermes_ && !hermesSeeded_) {
         applyHermes(hermes_->seed(todayStartMs), true);
@@ -134,6 +141,7 @@ bool Monitor::applyZCode(const zcode::Update& update, bool seeded) {
 bool Monitor::applyOpenClaw(const openclaw::Update& update, bool seeded) {
     for (const auto& id : update.removed) {
         openClawPushed_.erase(id);
+        windowTasks_.erase(id);
         removeAgent(id);
     }
     for (auto* parser : openClaw_->parsers()) {

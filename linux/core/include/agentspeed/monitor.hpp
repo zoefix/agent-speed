@@ -9,9 +9,11 @@
 
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/discovery.hpp"
+#include "agentspeed/engine.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
+#include "agentspeed/task_tracker.hpp"
 
 namespace agentspeed {
 
@@ -85,6 +87,13 @@ public:
     std::vector<ParsedResponse> responses() const;
     // A newer price table arrived: today's unpriced responses are priced again.
     void repriceToday();
+    // The prediction models of each scored source, calibrated on its task records (METRICS 6.11).
+    void setTaskModels(std::map<SourceKind, tasks::Models> models) {
+        taskModels_ = std::move(models);
+        ++taskModelsVersion_;
+    }
+    // The source sets whose 智力 and 思考 every snapshot computes (nullopt: every enabled source).
+    void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
 
 private:
     struct Root {
@@ -99,6 +108,7 @@ private:
         std::size_t root = 0;
         std::unique_ptr<Tailer> tailer;
         std::unique_ptr<TranscriptParser> parser;
+        std::unique_ptr<tasks::TaskTracker> tasks;
         std::int64_t knownLength = -1, knownWriteNs = 0;
         std::uint64_t pushedVersion = UINT64_MAX;
         bool unreadable = false, dirty = false;
@@ -164,6 +174,21 @@ private:
     std::unique_ptr<hermes::Source> hermes_;
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, std::uint64_t> openClawPushed_, hermesPushed_;
+    std::map<std::string, std::unique_ptr<tasks::TaskTracker>> windowTasks_;
+    std::map<SourceKind, tasks::Models> taskModels_;
+    std::uint64_t taskModelsVersion_ = 0;
+    std::vector<std::optional<std::vector<SourceKind>>> scoreSets_{std::nullopt};
+    struct CachedTask {
+        std::uint64_t events = UINT64_MAX, models = UINT64_MAX;
+        Phase phase = Phase::Idle;
+        std::optional<std::string> parent;
+        bool future = false;  // an event after now: recomputed every tick until it is past
+        tasks::AgentRow row;
+    };
+    std::map<std::string, CachedTask> taskCache_;
+    const tasks::TaskTracker* trackerOf(const std::string& id) const;
+    void scoreTasks(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
+                    std::int64_t nowMs);
     bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
 };
 
