@@ -9,11 +9,13 @@ add_executable(agentspeed_tests
     discovery_test.cpp
     droid_test.cpp
     engine_fixture_test.cpp
+    execution_modes_test.cpp
     harness_fixture_test.cpp
     hermes_test.cpp
     history_test.cpp
     json_test.cpp
     money_test.cpp
+    model_attribution_test.cpp
     monitor_test.cpp
     parser_fixture_test.cpp
     perf_score_test.cpp
@@ -27,6 +29,7 @@ add_executable(agentspeed_tests
     report_test.cpp
     rfc3339_test.cpp
     traffic_test.cpp
+    unpriced_test.cpp
     work_signals_test.cpp
 )
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)

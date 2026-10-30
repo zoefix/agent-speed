@@ -1,5 +1,8 @@
 #include "agentspeed/history.hpp"
 
+#include <algorithm>
+#include <cstdio>
+
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/pricing.hpp"
 #include "agentspeed/tz.hpp"
@@ -108,6 +111,19 @@ void DayAggregate::add(const ParsedResponse& r, std::optional<std::int64_t> cost
     } else {
         unfinalized += r.requestCount;
     }
+    const auto measured = r.final ? measuredDuration(r) : std::nullopt;
+    for (const auto kind : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing, ModeKind::Workflow,
+                            ModeKind::Effort, ModeKind::Speed}) {
+        const auto a = r.modes.attribute(kind);
+        if (!a.known()) continue;
+        auto& m = modes[ModeKey{r.model.value_or(""), kind, a.mode, a.evidence, a.provider}];
+        m.requests += r.requestCount;
+        m.output += r.tokens.output;
+        if (measured) {
+            m.measuredOutput += r.tokens.output;
+            m.measuredMs += *measured;
+        }
+    }
 }
 
 void DayAggregate::merge(const DayAggregate& other) {
@@ -123,6 +139,13 @@ void DayAggregate::merge(const DayAggregate& other) {
     unfinalized += other.unfinalized;
     agents += other.agents;
     for (const auto& [fact, n] : other.unpriced) unpriced[fact] += n;
+    for (const auto& [key, usage] : other.modes) {
+        auto& m = modes[key];
+        m.requests += usage.requests;
+        m.output += usage.output;
+        m.measuredOutput += usage.measuredOutput;
+        m.measuredMs += usage.measuredMs;
+    }
     for (const auto& [name, usage] : other.models) {
         auto it = models.find(name);
         if (it == models.end()) {
@@ -136,6 +159,110 @@ void DayAggregate::merge(const DayAggregate& other) {
         known.measuredOutput += usage.measuredOutput;
         known.measuredMs += usage.measuredMs;
     }
+}
+
+namespace {
+
+constexpr ModeKind kModeKinds[] = {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing,
+                                   ModeKind::Workflow, ModeKind::Effort, ModeKind::Speed};
+
+std::string modeId(const ModeKey& k) {
+    return std::to_string(k.model.size()) + ":" + k.model + "/" + std::string(modeKindName(k.kind)) + "/" + k.provider.value_or("") + "/" + k.mode + "/" +
+           k.evidence;
+}
+
+std::string csvField(const std::string& raw) {
+    auto value = raw;
+    if (!value.empty() && std::string_view("=+-@\t\r").find(value.front()) != std::string_view::npos) value = "'" + value;
+    if (value.find_first_of(",\"\r\n") == std::string::npos) return value;
+    std::string out = "\"";
+    for (const char c : value) out += c == '"' ? std::string("\"\"") : std::string(1, c);
+    return out + "\"";
+}
+
+}  // namespace
+
+std::vector<ModeRow> modeBreakdown(const DayAggregate& day) {
+    // The models, with what no model row explains on the model-less row.
+    std::map<std::string, ModeTotals> base;
+    ModeTotals rest{day.requests, day.output, day.measuredOutput, day.measuredMs};
+    for (const auto& [name, m] : day.models) {
+        base[name] = {m.requests, m.output, m.measuredOutput, m.measuredMs};
+        rest.requests -= m.requests;
+        rest.output -= m.output;
+        rest.measuredOutput -= m.measuredOutput;
+        rest.measuredMs -= m.measuredMs;
+    }
+    rest = {std::max<std::int64_t>(0, rest.requests), std::max<std::int64_t>(0, rest.output), std::max<std::int64_t>(0, rest.measuredOutput),
+            std::max<std::int64_t>(0, rest.measuredMs)};
+    if (rest.requests > 0 || rest.output > 0 || rest.measuredMs > 0) {
+        auto& empty = base[""];
+        empty.requests += rest.requests;
+        empty.output += rest.output;
+        empty.measuredOutput += rest.measuredOutput;
+        empty.measuredMs += rest.measuredMs;
+    }
+    std::vector<ModeRow> out;
+    for (const auto kind : kModeKinds) {
+        for (const auto& [model, totals] : base) {
+            std::vector<ModeRow> parts;
+            for (const auto& [key, usage] : day.modes) {
+                if (key.model == model && key.kind == kind) parts.push_back({key, usage});
+            }
+            auto left = totals;
+            bool complete = true;
+            for (const auto& p : parts) {
+                const auto& u = p.totals;
+                if (u.requests < 0 || u.output < 0 || u.measuredOutput < 0 || u.measuredMs < 0 || u.requests > left.requests || u.output > left.output ||
+                    u.measuredOutput > left.measuredOutput || u.measuredMs > left.measuredMs) {
+                    complete = false;
+                    break;
+                }
+                left.requests -= u.requests;
+                left.output -= u.output;
+                left.measuredOutput -= u.measuredOutput;
+                left.measuredMs -= u.measuredMs;
+            }
+            if (complete) {
+                out.insert(out.end(), parts.begin(), parts.end());
+            } else {
+                left = totals;
+            }
+            if (left.requests > 0 || left.output > 0 || left.measuredOutput > 0 || left.measuredMs > 0) {
+                out.push_back({ModeKey{model, kind, "unknown", "unknown", std::nullopt}, left});
+            }
+        }
+    }
+    std::sort(out.begin(), out.end(), [](const ModeRow& a, const ModeRow& b) { return modeId(a.key) < modeId(b.key); });
+    return out;
+}
+
+std::string modeCsv(const std::vector<ModeCsvDay>& days) {
+    std::string out = "\xEF\xBB\xBF";
+    out += "date,source,model,kind,mode,evidence,provider,requests,output_tokens,measured_output_tokens,measured_ms,avg_speed_tok_s\r\n";
+    auto sorted = days;
+    std::sort(sorted.begin(), sorted.end(), [](const ModeCsvDay& a, const ModeCsvDay& b) {
+        return std::make_pair(a.day, a.source) < std::make_pair(b.day, b.source);
+    });
+    for (const auto& d : sorted) {
+        if (!d.totals) continue;
+        for (const auto& row : modeBreakdown(*d.totals)) {
+            const auto& k = row.key;
+            const auto& t = row.totals;
+            std::string speed;
+            if (t.measuredMs > 0) {
+                char buffer[64];
+                std::snprintf(buffer, sizeof buffer, "%.1f", static_cast<double>(t.measuredOutput) / (static_cast<double>(t.measuredMs) / 1000));
+                speed = buffer;
+            }
+            const std::vector<std::string> fields = {d.day, std::string(sourceId(d.source)), k.model, std::string(modeKindName(k.kind)), k.mode, k.evidence,
+                                                     k.provider.value_or(""), std::to_string(t.requests), std::to_string(t.output),
+                                                     std::to_string(t.measuredOutput), std::to_string(t.measuredMs), speed};
+            for (std::size_t i = 0; i < fields.size(); ++i) out += (i ? "," : "") + csvField(fields[i]);
+            out += "\r\n";
+        }
+    }
+    return out;
 }
 
 std::optional<std::string> DayLabeler::label(std::int64_t unixMs) const {

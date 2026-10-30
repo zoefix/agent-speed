@@ -90,6 +90,7 @@ add_library(agentspeed_core STATIC
     src/sqlite.cpp
     src/transcript_parser.cpp
     src/tz.cpp
+    src/unpriced.cpp
     src/workbuddy_parser.cpp
     src/zcode.cpp
     src/zstd_frames.cpp

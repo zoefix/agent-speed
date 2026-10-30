@@ -140,6 +140,28 @@ std::string encode(const DayAggregate& d) {
         out += fact.noDate ? "true," : "false,";
         out += std::to_string(n) + "]";
     }
+    out += "],\"modes\":[";
+    first = true;
+    for (const auto& [key, m] : d.modes) {
+        if (!first) out += ',';
+        first = false;
+        out += '[';
+        appendString(out, key.model);
+        out += ',';
+        appendString(out, std::string(modeKindName(key.kind)));
+        out += ',';
+        appendString(out, key.mode);
+        out += ',';
+        appendString(out, key.evidence);
+        out += ',';
+        if (key.provider) {
+            appendString(out, *key.provider);
+        } else {
+            out += "null";
+        }
+        out += "," + std::to_string(m.requests) + "," + std::to_string(m.output) + "," + std::to_string(m.measuredOutput) + "," +
+               std::to_string(m.measuredMs) + "]";
+    }
     out += "]}";
     return out;
 }
@@ -178,6 +200,20 @@ std::optional<DayAggregate> decode(std::string_view text) {
         fact.fast = f.at(2).isTrue();
         fact.noDate = f.at(3).isTrue();
         d.unpriced[fact] = f.at(4).truncated().value_or(0);
+    }
+    // Aggregates stored before the mode breakdown have none: their usage stays unknown.
+    for (const auto& m : r["modes"].elements()) {
+        std::optional<ModeKind> kind;
+        for (const auto k : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing, ModeKind::Workflow,
+                             ModeKind::Effort, ModeKind::Speed}) {
+            if (m.at(1).equals(modeKindName(k))) kind = k;
+        }
+        if (!kind || !m.at(2).string() || !m.at(3).string()) continue;
+        auto& t = d.modes[ModeKey{m.at(0).string().value_or(""), *kind, *m.at(2).string(), *m.at(3).string(), m.at(4).string()}];
+        t.requests = m.at(5).truncated().value_or(0);
+        t.output = m.at(6).truncated().value_or(0);
+        t.measuredOutput = m.at(7).truncated().value_or(0);
+        t.measuredMs = m.at(8).truncated().value_or(0);
     }
     return d;
 }

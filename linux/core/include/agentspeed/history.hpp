@@ -47,6 +47,19 @@ struct ModelTotals {
     std::optional<std::int64_t> costMicroUsd, unpricedRequests;
 };
 
+// EXECUTION-MODES Local aggregates and history: a model's usage under one attributed mode of one kind (effort and the
+// derived speed included). Every response adds once per kind it has a known value of; the unknown bucket is the rest.
+struct ModeKey {
+    std::string model;
+    ModeKind kind = ModeKind::ServiceTier;
+    std::string mode, evidence;
+    std::optional<std::string> provider;
+    auto operator<=>(const ModeKey&) const = default;
+};
+struct ModeTotals {
+    std::int64_t requests = 0, output = 0, measuredOutput = 0, measuredMs = 0;
+};
+
 struct DayAggregate {
     std::int64_t requests = 0, input = 0, cachedInput = 0, cacheWriteInput = 0, output = 0, reasoning = 0;
     std::int64_t measuredOutput = 0, measuredMs = 0, unfinalized = 0;
@@ -55,10 +68,26 @@ struct DayAggregate {
     std::optional<std::int64_t> costMicroUsd, unpricedRequests;
     std::map<std::string, ModelTotals> models;
     std::map<UnpricedFact, std::int64_t> unpriced;
+    std::map<ModeKey, ModeTotals> modes;
 
     void add(const ParsedResponse& response, std::optional<std::int64_t> cost);
     void merge(const DayAggregate& other);
 };
+
+// EXECUTION-MODES: a day's usage per model and kind — the known modes and, for each kind, the unknown bucket filled
+// from the ordinary model totals, so every kind adds up to the day. Ordered as the mode CSV writes them.
+struct ModeRow {
+    ModeKey key;
+    ModeTotals totals;
+};
+std::vector<ModeRow> modeBreakdown(const DayAggregate& day);
+// The mode CSV of EXECUTION-MODES over (day, source, aggregate) rows: UTF-8 with a BOM, CRLF line ends.
+struct ModeCsvDay {
+    std::string day;
+    SourceKind source = SourceKind::Codex;
+    const DayAggregate* totals = nullptr;
+};
+std::string modeCsv(const std::vector<ModeCsvDay>& days);
 
 // The local calendar day of an instant; nullopt outside 0001-01-03 … 9999-12-29 (METRICS 8).
 class DayLabeler {

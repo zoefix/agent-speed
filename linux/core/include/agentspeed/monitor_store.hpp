@@ -13,6 +13,7 @@
 #include "agentspeed/report_perf.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/tz.hpp"
+#include "agentspeed/unpriced.hpp"
 
 namespace agentspeed {
 
@@ -115,6 +116,16 @@ public:
         std::vector<engine::Response> out;
         out.reserve(byKey_.size());
         for (const auto& [_, s] : byKey_) out.push_back(s.engine);
+        return out;
+    }
+
+    // METRICS 9.10 Live: today's responses with their cost (a response without a date belongs to today).
+    std::vector<unpriced::LiveResponse> today(std::int64_t todayStartMs) const {
+        std::vector<unpriced::LiveResponse> out;
+        for (const auto& [_, s] : byKey_) {
+            if (s.parsed.endMs < todayStartMs) continue;
+            out.push_back({s.parsed.source, s.parsed.model, s.parsed.provider, s.parsed.fast, s.parsed.endMs, s.parsed.requestCount, s.engine.costMicroUsd});
+        }
         return out;
     }
 

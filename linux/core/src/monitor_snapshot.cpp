@@ -302,6 +302,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         snap.peakSets.push_back(std::max(engine::setPeak(responses, enabled, todayStartMs, nowMs), setLive));
     }
 
+    snap.unpricedToday = unpriced::liveParts(store_->today(todayStartMs), store_->localDate(nowMs));
     snap.warnings.partialHistory = partialHistory_;
     std::int64_t malformed = removedMalformed_;
     int unreadable = 0;

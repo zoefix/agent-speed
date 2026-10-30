@@ -188,6 +188,21 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
     }
 
     expectPerf(summed(analyzer.perfRecords()), expected.root()["perf"]);
+    // EXECUTION-MODES history: every kind's rows (the unknown bucket included) add up to the day's totals.
+    std::int64_t knownEffort = 0;
+    for (const auto& d : days) {
+        std::map<ModeKind, std::int64_t> requests, output;
+        for (const auto& row : modeBreakdown(d.totals)) {
+            requests[row.key.kind] += row.totals.requests;
+            output[row.key.kind] += row.totals.output;
+            if (row.key.kind == ModeKind::Effort && row.key.mode != "unknown") knownEffort += row.totals.requests;
+        }
+        for (const auto& [kind, n] : requests) {
+            EXPECT_EQ(n, d.totals.requests) << d.key.day << " " << modeKindName(kind);
+            EXPECT_EQ(output[kind], d.totals.output) << d.key.day << " " << modeKindName(kind);
+        }
+    }
+    EXPECT_GT(knownEffort, 0);
 
     // Unchanged files are skipped, and a reopened store gives the same days and performance records.
     const auto again = analyzer.run(locationsIn(copy), enabled, TimeZone::utc(), "UTC");
@@ -203,5 +218,6 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
         EXPECT_EQ(reread[i].totals.agents, days[i].totals.agents);
     }
     expectPerf(summed(second.perfRecords()), expected.root()["perf"]);
+    for (std::size_t i = 0; i < days.size(); ++i) EXPECT_EQ(reread[i].totals.modes.size(), days[i].totals.modes.size()) << days[i].key.day;
     fs::remove_all(temp);
 }

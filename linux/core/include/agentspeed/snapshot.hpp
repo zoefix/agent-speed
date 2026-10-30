@@ -9,6 +9,7 @@
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/perf.hpp"
 #include "agentspeed/traffic_service.hpp"
+#include "agentspeed/unpriced.hpp"
 #include "agentspeed/work_signals.hpp"
 
 namespace agentspeed {
@@ -124,6 +125,8 @@ struct Snapshot {
     traffic::View traffic;
     // Output tok/s of the last 120 one-second buckets, oldest first; the last one is the live value (METRICS 6.5).
     std::vector<double> history;
+    // METRICS 9.10 Live: today's unpriced facts, one part per source with today's responses.
+    std::vector<unpriced::Part> unpricedToday;
     // METRICS 11.2, 11.4: what live reporting takes from this tick.
     report::Facts report;
     bool demo = false;
