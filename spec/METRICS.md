@@ -502,6 +502,9 @@ not read).
 - Derived from the Gemini CLI source (v0.66, evidence in `spec/research/gemini-cli.md`); not yet verified against real
   session files.
 
+Reasoning effort and speed: Gemini CLI records neither (EXECUTION-MODES); only a configured effort is read, from
+`<home>/.gemini/settings.json`.
+
 ### 4.7 omp (oh-my-pi)
 
 omp (`can1357/oh-my-pi`, MIT) is a fork of pi (`badlogic/pi-mono`) with its own JSONL session files. Upstream pi
@@ -559,8 +562,9 @@ Every line is one JSON object, classified by `type`:
    `pythonExecution`, `fileMention`, `custom`, `hookMessage`) only updates `lastLineMs`.
 4. `model_usage` — a side model call.
 5. `custom` with `customType == "session_exit"` — the omp process ended.
-6. anything else (`model_change`, `thinking_level_change`, `compaction`, `branch_summary`, `custom_message`, other
-   `custom`, `label`, …) — only `lastLineMs`.
+6. anything else (`model_change`, `thinking_level_change`, `service_tier_change`, `compaction`, `branch_summary`,
+   `custom_message`, other `custom`, `label`, …) — only `lastLineMs`; the two selections also set the entry's branch
+   context (EXECUTION-MODES).
 
 Lines before the header are ignored. Entries other than the header without a string `id` (version-1 files from before
 2026) or without a parseable `timestamp` are ignored entirely. When reading a file starts at an offset greater than 0
@@ -776,10 +780,10 @@ Fields used (all others are ignored):
 | Message (column) | Fields (number) |
 | --- | --- |
 | `CortexStepMetadata` (`steps.metadata`) | `created_at` 1, `viewable_at` 6, `finished_generating_at` 7, `completed_at` 8, `model_usage` 9, `last_completed_chunk_at` 22, `started_at` 32 (all `Timestamp` except 9) |
-| `ModelUsageStats` | `input_tokens` 2, `output_tokens` 3, `cache_read_tokens` 5, `message_id` 7 (string), `thinking_output_tokens` 9, `response_output_tokens` 10, `response_id` 11 (string) |
+| `ModelUsageStats` | `input_tokens` 2, `output_tokens` 3, `cache_read_tokens` 5, `message_id` 7 (string), `thinking_output_tokens` 9, `response_output_tokens` 10, `response_id` 11 (string), `service_tier` 13 (string) |
 | `CortexStepGeneratorMetadata` (`gen_metadata.data`) | `chat_model` 1, `step_indices` 2 (repeated uint32) |
 | `ChatModelMetadata` | `response_model` 19 (string), `model_display_name` 21 (string) |
-| `ExecutorMetadata` (`executor_metadata.data`) | `termination_reason` 1 (enum), `last_step_idx` 3 (int32), `cascade_config` 10 → `planner_config` 1 → `model_name` 28 (string) |
+| `ExecutorMetadata` (`executor_metadata.data`) | `termination_reason` 1 (enum), `last_step_idx` 3 (int32), `cascade_config` 10 → `planner_config` 1 → `model_name` 28 (string) and `completion_config_override` 56 → `thinking_level` 19 (int32) |
 | `CortexTrajectoryMetadata` (`trajectory_metadata_blob.data`) | `workspaces` 1 (repeated) → `workspace_folder_absolute_uri` 1 (string); `created_at` 2; `parent_conversation_id` 5 (string); `workspace_uris` 7 (repeated string); `subagent_spec` 8; `nesting_depth` 17 (int32) |
 
 Column enums: `step_type` 14 = `USER_INPUT`, 15 = `PLANNER_RESPONSE`; every other value is a tool or system step (for
@@ -872,6 +876,9 @@ thinking (`output_tokens == thinking_output_tokens + response_output_tokens` on 
   they are) before splitting on `/` and `\`; `file:///c%3A/Users/dev/projects/orbit` gives `orbit`.
 - `isSubagent` = `parent_conversation_id` non-empty, or `nesting_depth > 0`, or `subagent_spec` present.
 - `lastLineMs` = the latest valid timestamp among the processed rows' metadata and `createdMs`.
+- Effort and speed: from the same rows (EXECUTION-MODES), resolved from the rows read so far, so a later read can
+  update a response (4.4) like its model. Outside the stores only one key of `<folder of the store>/config/config.json`
+  is read, `userSettings.vertexServiceTier`, as a configured value.
 
 #### Deduplication and copied history
 
@@ -897,6 +904,8 @@ thinking (`output_tokens == thinking_output_tokens + response_output_tokens` on 
   the Python SDK runtime contribute nothing.
 - Derived from public reverse-engineering projects and the protobuf descriptors of agy 1.0.10 – 1.4.4 (evidence in
   `spec/research/antigravity.md`); not yet verified against real conversation databases.
+- Whether the executor row is written only when a run ends is unknown; if it is, a response's effort from the model
+  name appears when its run ends. On a fork, whether copied executor rows keep their ranges is unverified.
 
 ### 4.9 WorkBuddy
 
@@ -933,8 +942,9 @@ tolerant: unknown line types and fields are ignored, and a timestamp may be a nu
   relative to the root is exactly `<slug>/<file>` or `<slug>/<dir>/subagents/<file>`, where neither `<slug>` nor
   `<dir>` starts with `.` and `<slug>` is not `cloud`. Nothing else is a transcript: `<session>.meta.json` and legacy
   `agent-<id>.meta.json`, `<session>/tool-results/`, `<session>/subagents/workflows/**/journal.jsonl`, and everything
-  outside `projects` (`traces/`, `logs/`, `sessions/`, `usage-data/`, `app/`, `models.json`, `settings.json`,
-  `workbuddy.db`) is never opened.
+  outside `projects` (`traces/`, `logs/`, `sessions/`, `usage-data/`, `app/`, `models.json`) is never opened. Two
+  files of the data folder are read for one value each, never for usage (*Metadata*): `workbuddy.db` and
+  `settings.json`.
 - `cloud/` holds mirrors of conversations that ran on Tencent's servers, rebuilt from the service: every record of a
   request shares one timestamp, usage is per request and the files are rewritten when they are reconciled. They are not
   read; cloud conversations are out of scope like Claude Desktop chats (section 2), and DESIGN 5 says so.
@@ -1067,6 +1077,13 @@ hits are often only in `rawUsage`). `totalTokens`, `requests`, `credit` and the 
 - `isSubagent` = the file's path relative to the root is `<slug>/<dir>/subagents/<file>` (the folder structure only;
   a `subagents` folder above the root does not count). Parent: 6.7.
 - `lastLineMs` = the latest valid timestamp of any line, including lines ignored by deduplication.
+- Effort (EXECUTION-MODES, *Current values*): no line records one, so a response has no effort fact. The agent's
+  current effort is `<data folder>/workbuddy.db`, `SELECT thought_level FROM sessions WHERE id = ?` with the transcript's
+  file name without `.jsonl`: a regular file (a symlink is not followed), opened read-only with the rules of 4.5, in a
+  short read, closed right after it, and only when the file changed since the last read (checked at rediscovery,
+  section 5); a file, table, column or row that is missing, or a NULL, gives nothing. Both editions, the same schema from migration `0008_add_session_thought_level` on.
+  Only these two columns are ever selected: the database also holds titles and usage. Sub-agents have no row. The
+  configured value is `reasoningEffort` of `<data folder>/settings.json`.
 
 #### Deduplication and copied history
 
@@ -1099,6 +1116,9 @@ hits are often only in `rawUsage`). `totalTokens`, `requests`, `credit` and the 
   abort (no final message, no error notice) does the same.
 - Calls without transcript lines are not counted: prompt enhancement, titles and replays run in a runtime without
   session persistence. Cloud conversations are not counted.
+- That `sessions.id` is the transcript's name is inferred from `--session-id`; if it is wrong, the session-current
+  effort never matches. `thought_level` is what the user selected: the CLI still clamps it to the model's levels, and
+  `alwaysThinkingEnabled: false` turns thinking off without changing either value.
 
 ### 4.10 ZCode
 
@@ -1113,6 +1133,10 @@ responses. Input is `input_tokens` (already includes cache); cache read/write an
 not extra input/output. All numeric normalization follows 3.2. Startup includes calls that started before midnight
 but completed today. The latest native user/assistant message and pending tool parts supply in-flight phase when
 usage is not written until completion. Reading never creates or migrates the upstream database.
+
+Effort and speed (EXECUTION-MODES) come from `model_usage.variant` (a misnamed column: the reasoning level, CLI 0.15+),
+`provider_id`, `model_id` and `query_source`, and from `metadata.highspeed` of the user message
+`parent_user_message_id` names. `variant` and `parent_user_message_id` may be absent, which gives no fact.
 
 ### 4.11 Kimi Code CLI
 
@@ -1133,11 +1157,16 @@ updates that key instead of counting another request. The shared deduper also ex
 `llm.request.time` is the pending start. Where it is absent, first-token latency plus stream duration can reconstruct
 the interval; it includes time to first token. Streaming partial messages do not count as completed responses.
 Turn, tool and request events drive the existing phase state machine; all speed calculations remain sections 3 and 6.
+Effort comes from `llm.request.thinkingEffort` and from `profile.bind` and `config.update` (EXECUTION-MODES); the model
+variant from the exact model ids. `~/.kimi-code/config.toml` is not read.
 
 ### 4.12 Grok Build
 
 Discover only `sessions/<encoded-cwd>/<sessionId>/updates.jsonl`. Native `summary.json` supplies the working directory,
-current model, session kind and parent relationship. The persisted JSONL envelope is
+current model, session kind, parent relationship and `reasoning_effort`, the session's current effort
+(EXECUTION-MODES, *Current values*: it attributes no response). `chat_history.jsonl`, whose assistant lines echo the
+effort a Responses API call used, is never read: it holds the conversation, has no timestamps to match batches with,
+and is a cache that Grok rebuilds without that field. The persisted JSONL envelope is
 `{timestamp: <Unix seconds>, method, params: {sessionId, update, _meta}}`; prefer
 `params._meta.agentTimestampMs` over the second-resolution envelope time.
 When the native summary is not readable yet, activity can be tracked but numeric batches wait for metadata so a
@@ -1171,8 +1200,9 @@ missing-number rules nor pricing formula. The upstream file does not preserve ea
 batch's API duration is represented as one interval ending at its completion. Intra-batch concurrency cannot be
 reconstructed; independent sessions still add through the normal engine. API-equivalent cost is calculated by the
 existing price book on the native model batch, so tier selection and rounding can differ from individual-call bills.
-Evidence and executable checks: `spec/research/harnesses.md`, `spec/tools/harness_reference.py`, and
-`spec/fixtures/harness-expected.json`.
+A child session folds its tokens into its parent's batch, so a parent's effort does not describe every call of a batch;
+the ledger's rule (EXECUTION-MODES) can report the parent's value for them. Evidence and executable checks:
+`spec/research/harnesses.md`, `spec/tools/harness_reference.py`, and `spec/fixtures/harness-expected.json`.
 
 ### 4.13 Pi (Pi Coding Agent)
 
@@ -1249,8 +1279,9 @@ section 2, or in the user's own Codex home), and an ACP agent's under its own so
   any other folder is a state folder; a file named `openclaw-agent.sqlite` is used directly.
 - **Opening**: read-only, exactly like OpenCode (4.5): `mode=ro`, busy timeout 2 s, `immutable=1` when the header says
   WAL and no `-wal` file exists, short read transactions; reading never creates a file. Only the tables
-  `session_windows`, `session_nodes`, `transcript_events` and `transcript_rewrite_watermarks` are read: the same
-  database holds OpenClaw's credentials (`auth_profile_*`) and memory, which are never selected. A database without
+  `session_windows`, `session_nodes`, `transcript_events` and `transcript_rewrite_watermarks` are read, and of
+  `trajectory_runtime_events` the rows of *Trajectory rows*: the same database holds OpenClaw's credentials
+  (`auth_profile_*`) and memory, which are never selected. A database without
   `session_windows` or `transcript_events` (agent schema 1 of 2026.5–2026.7, which held no sessions) contributes
   nothing and is reported as unsupported (warning `unsupportedFormat`).
 
@@ -1300,9 +1331,48 @@ assistant steps 1–5, tokens, metadata (`project` = basename of the header `cwd
   whole turn, written when the turn ended.
 - **Phase**: an embedded window follows the 4.7 phase table. A delegated window stays `idle` (its turns run in another
   program, whose own log shows their live state when Agent Speed reads it).
-- **Effort and speed**: none (EXECUTION-MODES). `thinking_level_change` entries are written when a session starts and
-  when a level is selected explicitly, not for a level a single message asks for, so they are not used.
+- **Effort and speed**: from *Trajectory rows* (EXECUTION-MODES). `thinking_level_change` entries are written when a
+  session starts and when a level is selected explicitly, not for a level a single message asks for, so they are not
+  used, and neither is `session_nodes.entry_json`.
 - **Actions** (6.10): tool calls and results as Pi; a mirror's calls add none.
+
+#### Trajectory rows
+
+Each attempt of a run writes `session.started` and then `trace.metadata` to `trajectory_runtime_events`, whose other
+rows (`prompt.submitted`, `context.compiled`, `model.completed`, …) hold the conversation and are never read. The
+table is optional: a database without it gives no facts. One query, per window, selects the rows in SQL (user's
+decision, 2026-10-30), with `?1` the window and `?2` the highest `seq` read so far (`-1` at first):
+
+```sql
+SELECT e.seq, e.created_at, e.event_json, e.event_payload, e.event_codec, e.event_utf8_bytes
+FROM trajectory_runtime_events e
+WHERE e.session_id = ?1 AND e.seq > ?2 AND (
+  (e.event_codec IS NULL AND length(e.event_json) <= 262144
+    AND instr(e.event_json, '"type":"trace.metadata"') > 0)
+  OR (e.event_codec = 'br' AND e.event_utf8_bytes <= 262144 AND length(e.event_payload) <= 262144
+    AND EXISTS (SELECT 1 FROM trajectory_runtime_events p
+                WHERE p.session_id = e.session_id AND p.seq = e.seq - 1 AND p.event_codec IS NULL
+                  AND instr(p.event_json, '"type":"session.started"') > 0)))
+ORDER BY e.seq
+```
+
+A database from 2026.8 has no `event_codec`, `event_payload` or `event_utf8_bytes` (and no compressed rows): that query
+keeps the first arm without the column. Compressed rows have an empty `event_json`, so nothing in them can be matched
+in SQL; the row right after a plain `session.started` is `trace.metadata` by construction. A `session.started` of 1 KiB
+or more is compressed itself, and the `trace.metadata` after it is then not selected: that attempt is unknown.
+`fixtures/parser-expected.json` lists in `openclaw.traceSeqs` the rows this query may return.
+
+- **Decoding**: a row with `event_codec` NULL is `event_json`. A row with `br` is a Brotli stream (RFC 7932), decoded
+  with at most `event_utf8_bytes` (1 … 262 144) of output and in memory only; it counts only when the output has
+  exactly that length. Then the text must be UTF-8 and a JSON object whose top-level `type` is `trace.metadata`.
+  Anything else is ignored and is not a malformed line, and nothing of it is kept.
+- **Kept**: `created_at`, `data.model.thinkLevel` and `data.model.fastMode`; everything else of the row is discarded at
+  once, the redacted configuration, skills and system prompt report included. A row without `data.model` is kept
+  without facts. The facts and how they reach responses are EXECUTION-MODES.
+- **Reading**: in the transaction that reads the window's transcript rows, before them; every row of a window at its
+  first read. A row read later than the responses it covers updates them (4.4): OpenClaw buffers a recorder's rows
+  until 32 are waiting or the attempt ends, so a row is often newer in the database than the attempt's first answers.
+  A rewritten window (below) reads its rows again. Live reports keep what they froze.
 
 Startup and reading (section 5): an agent database takes part in the startup order with the modification time of
 the newer of `openclaw-agent.sqlite` and its `-wal`; within a database the windows are read in `created_at` order, ties
@@ -1341,6 +1411,10 @@ one "file" per database for discovery statistics.
   provider bill.
 - Windows that OpenClaw's maintenance prunes (`session.maintenance.pruneAfter`, default 30 days) or moves to cold
   archive files are not read again; a history rebuild (section 8) cannot recover them.
+- Trajectory rows expire sooner than transcripts: at most 10 MiB per window, 14 days and 512 MiB per database. A
+  rebuild leaves older responses with an unknown effort. `OPENCLAW_TRAJECTORY=0` turns the rows off. An attempt can
+  make several model calls and `trace.metadata` describes the attempt, so a `/think` inside one is not seen; while an
+  attempt's rows are still buffered, its responses show the previous attempt's value as current.
 - Derived from the OpenClaw source (2026.10.7, evidence in `spec/research/openclaw.md`); not yet verified against real
   databases.
 
@@ -1348,10 +1422,10 @@ one "file" per database for discovery statistics.
 
 Hermes Agent (`NousResearch/hermes-agent`, MIT; Python, the AI agent, not the JavaScript engine of the same name) runs
 as a CLI and TUI, a desktop app, a messaging gateway, cron jobs and an ACP agent. It keeps no transcript with usage:
-its sessions database (`state.db`) has only cumulative per-session counters, and Agent Speed never opens it, not even
-read-only (a foreign reader defers Hermes's database maintenance). The source is Hermes's log, `logs/agent.log`, which
-has one line per model API call of the agent loop with that call's tokens and duration, tagged with the session id;
-besides the logs only one key of each profile's `config.yaml` is read (Codex runtime, below). Evidence:
+its sessions database (`state.db`) has only cumulative per-session counters. The source is Hermes's log,
+`logs/agent.log`, which has one line per model API call of the agent loop with that call's tokens and duration, tagged
+with the session id; besides the logs only three keys of each profile's `config.yaml` (Codex runtime and *Effort and
+speed*, below) and one value of `state.db` (*Effort and speed*) are read. Evidence:
 `spec/research/hermes.md`; fixtures: `spec/tools/hermes_fixtures.py` (`spec/fixtures/hermes`). Out of scope: Hermes on
 another computer (remote gateways, SSH backends), inside WSL, and homes inside containers that this computer does not
 see as folders.
@@ -1372,8 +1446,8 @@ see as folders.
 - **Files**: regular files (never symlinks) directly in a log folder named exactly `agent.log` or `agent.log.<n>`
   (`<n>` one or more ASCII digits): the live log and its rotated copies. No other log is read: `errors.log` repeats
   the warnings, `gateway.log` and `gui.log` exclude the agent loop, `install.log`, lock files and compressed copies do
-  not match. Outside the log folders only `config.yaml` is read (Codex runtime, below); `state.db`, `sessions/`,
-  `.env` and `auth.json` are never opened.
+  not match. Outside the log folders only `config.yaml` and `state.db` are read (below); `sessions/`, `.env` and
+  `auth.json` are never opened.
 - **Log sets**: each log folder is one *log set* with one parser state, shared by its files, in which every session
   id is one agent: agent id = the log folder's absolute path + `#` + the session id (empty for lines without one).
 
@@ -1479,6 +1553,31 @@ from its first record line of the four kinds.
   its parent.
 - Effort and speed facts (EXECUTION-MODES): none; the log records neither.
 
+#### Effort and speed
+
+The log has no effort and no tier per request, so a response stays unknown. An agent's current values come from two
+files of the log folder's parent, the same folder `config.yaml` is found in (no file for a log folder of another name;
+EXECUTION-MODES, *Current values*):
+
+- **`state.db`** (user's decision, 2026-10-30; it replaces the rule that it is never opened): a regular file (a symlink
+  is not followed), opened read-only with the rules of 4.5, so no `-wal` or `-shm` is ever created, for one short query
+  per session id and closed right after it
+  (Hermes defers its database maintenance while a foreign process holds the file, so no connection is kept):
+  `SELECT CASE WHEN length(model_config) <= 65536 THEN model_config END FROM sessions WHERE id = ?`. It runs only when
+  `state.db` or its `-wal` changed since the last read, at rediscovery (section 5), so at most once per 10 seconds. A
+  file, table, column or row that is missing, a NULL, or text that is not a JSON object gives nothing. Of the object
+  only `reasoning_config` is taken: an object with `enabled: false` is `off`; else its `effort` string; anything else
+  nothing. The rest of the row and every other table (`messages`, `system_prompt`) are never selected.
+- **`config.yaml`**: the scalars `reasoning_effort` and `service_tier` of a top-level `agent` block, read in the same
+  pass, from the same bytes and with the same line rules as `openai_runtime` below, as configured values. A line that
+  has indentation 0 ends the block and opens one when it matches
+  `^(agent|"agent"|'agent')[ \t]*:([ \t]+(#.*)?)?$`. A key line matches
+  `^(reasoning_effort|"reasoning_effort"|'reasoning_effort'|service_tier|"service_tier"|'service_tier')[ \t]*:(|[ \t].*)$`;
+  its value is the plain scalar when the text after the colon matches
+  `^[ \t]+("[ \t]*([A-Za-z0-9._:-]+)[ \t]*"|'[ \t]*([A-Za-z0-9._:-]+)[ \t]*'|([A-Za-z0-9._:-]+))([ \t]+#.*)?[ \t]*$`,
+  else none. The last key line of each key decides. This is no YAML parser: flow mappings, block scalars, deeper keys
+  (`agent.reasoning_overrides`) and other blocks (`delegation`) are not recognized.
+
 #### Codex runtime
 
 Hermes can hand whole turns to Codex (`codex app-server`, Codex's own agent loop, started by Hermes with Hermes's
@@ -1573,10 +1672,14 @@ trims and lowercases the value; the `/codex-runtime` command writes `codex_app_s
   the provider `moa`, so these responses are unpriced (9.2).
 - Rotation deletes old lines (default 5 MB × 3 backups): daily history keeps what was read before (section 8), and
   lines rotated away before the first read are lost. With `logging.level` above `INFO` nothing is logged.
+- `reasoning_config` is a session's starting value for the CLI (written with the row) and its latest for the TUI;
+  gateway overrides (`/reasoning --session`) stay in memory. `service_tier` in the same cell is not read: its effect is
+  bounded windows and per-provider rules that a stored word cannot show. Log lines that name a `reasoning_config` carry
+  no session and are not used; neither are request dumps, which hold conversations.
 - A log written in another time zone (a container with `TZ=UTC` writing into this computer's Hermes home) is
   misplaced by the difference.
-- Derived from the Hermes source (main `9b904dcc22c2`, after v0.22.5; evidence in `spec/research/hermes.md`); not yet
-  verified against real logs. Verification target (checked by hand, outside the app): per session, the sums of
+- Derived from the Hermes source (main `9b904dcc22c2`, after v0.22.5; `model_config` from `2d2808ee`; evidence in
+  `spec/research/hermes.md`); not yet verified against real logs. Verification target (checked by hand, outside the app): per session, the sums of
   `input` and `output` equal `state.db`'s `sessions` counters (`input_tokens + cache_read_tokens +
   cache_write_tokens`, `output_tokens`) for sessions without Codex-runtime turns, and each response's
   `endMs − startMs` equals Hermes's own `latency`.
@@ -1751,7 +1854,8 @@ the same day (9.6) until the next launch seeds the session by the history rule.
 - The phase follows the table: a call is in flight from the user line or summary that preceded it, `tools` lasts from
   a call that asked for tools until their results are written, and `idle` follows a call without tools and a turn
   outcome. The sidecar never changes the phase.
-- Effort (EXECUTION-MODES): each call's `reasoningEffort`; no speed facts.
+- Effort and speed (EXECUTION-MODES): each call's `reasoningEffort`, and a tier from exact `modelId`s of Factory's
+  catalog. The session's `settings.json` keeps its `reasoningEffort` unread, like `~/.factory/settings.json`.
 - Actions (6.10: work signals, the performance score) come from its tool calls, which the transcript records in Anthropic's shape
   (`tool_use` blocks in assistant messages, `tool_result` blocks in the next user message); a Task worker's
   `callingToolUseId` is the parent's `Task` call.
@@ -2372,7 +2476,8 @@ logs (4.15) are cached by file identity instead of path: a rotation renames a lo
 contributions and keys under its new name, and the oldest log, which rotation deletes, keeps its contributions like any
 deleted file. Daily totals are the sums over files. The history store is versioned: a parser change bumps the version
 and triggers a full recomputation that keeps previously stored days for which no logs exist any more (analysis version
-9: the performance records of 6.11, with `firstMs` (3.3) and the action times (6.10), and the retired task records
+10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses, EXECUTION-MODES; 9: the
+performance records of 6.11, with `firstMs` (3.3) and the action times (6.10), and the retired task records
 dropped; 8: the task records of the retired task score; 7: the unpriced facts of 9.10; 6: the Codex ordinal rule of
 3.5). "Clear history"
 (settings) deletes the store and recomputes from the current logs.
@@ -3234,7 +3339,9 @@ cost then; `unpricedRequests` never decreases (REPORTING 6.6.1). Counted keys ar
 engine's retention (6.1, by its latest `endMs`), at most 65 536 (FIFO); a change after that is not reported.
 
 **Attribution.** Each increment also goes to the response's source and to the resolved model id (11.3) of the
-response's model at that moment.
+response's model at that moment. The mode attributions are frozen when a key is counted (EXECUTION-MODES, *Report
+extension*); a response with an unknown effort freezes the agent's current effort when its evidence is `selected` or
+better (EXECUTION-MODES, *Current values*, Ledger), and a configured value never.
 
 **Traffic.** Every sample delta of 10.4 adds to the ledger at its sample time — per source `self` and `tools`; the
 machine series (10.2) is never reported — except deltas of a sample whose interval is longer than 15 s (10.4.5 gap: those bytes are older than the

@@ -89,10 +89,12 @@ That line is the source (METRICS 4.15). Everything else Hermes stores about usag
   reasoning, cost, `api_call_count`), `cwd`, `parent_session_id`, `source`; `session_model_usage` is cumulative per
   session, model, billing route and task, with `first_seen` / `last_seen`. Messages carry no usage. No per-request
   usage or timing. Hermes defers its structural maintenance (VACUUM, generation swaps) while any foreign process holds
-  the database or its WAL (`hermes_state_holders.py`), so Agent Speed never opens it, not even read-only (user
-  decision, 2026-10-28): no project names and no sub-agent parents.
+  the database or its WAL (`hermes_state_holders.py`), so for a long time Agent Speed never opened it (user decision,
+  2026-10-28). Since 2026-10-30 it reads one value there, `sessions.model_config.reasoning_config`, in short reads
+  (METRICS 4.15): still no project names and no sub-agent parents.
 - **Effort**: `agent.reasoning_effort` (config) and `/reasoning` choose it; the log mentions it only when a fallback or
-  model switch re-resolves it. No per-request record: no effort rule.
+  model switch re-resolves it, without a session id. No per-request record, so no response has an effort; the session
+  value and the config value give the agent's current one (EXECUTION-MODES, *Current values*).
 - **Double counting**: Hermes's model calls exist only here. Turns run by the Codex app-server runtime
   (`model.openai_runtime: codex_app_server`, providers `openai` / `openai-codex`) are Codex's own (its rollouts under
   `CODEX_HOME`, default `~/.codex`) and write no API-call line; see "Codex runtime switch" below. ACP-backed providers (`copilot-acp`, `kiro-acp`,

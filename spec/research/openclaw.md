@@ -83,7 +83,8 @@ log has the per-request records, so those mirrors must not be counted again (MET
 - **Effort**: `thinking_level_change` entries (levels `off`, `minimal`, `low`, `medium`, `high`, `xhigh`,
   `adaptive`, `max`, `ultra`) are written when a session is first created and when the level is selected explicitly;
   a per-message level directive does not write one, so the entry can disagree with the level a request used. Not
-  used (no effort rule).
+  used: effort comes from the `trace.metadata` rows of `trajectory_runtime_events` (`src/trajectory/metadata.ts`
+  333–337; METRICS 4.14), one per attempt, stored with Brotli from 1 KiB (`src/trajectory/runtime-payload.ts`).
 - **Process**: Node.js 24.22.1+/26.12.1+ or Bun. npm and pnpm installs run `node …/openclaw/openclaw.mjs` (the
   package's `bin`), which may respawn itself with the same script; services run `openclaw.mjs`, `dist/entry.js` or
   `dist/entry.mjs` of the package. Standalone builds are one executable named `openclaw`. The Gateway — the process
