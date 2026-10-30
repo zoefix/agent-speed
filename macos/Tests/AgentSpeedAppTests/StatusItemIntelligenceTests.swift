@@ -261,14 +261,38 @@ struct StatusItemIntelligenceTests {
                 let baseline = Int(plain.baselines(height: 22).intelligence * 2)
                 let expectedRows = Set(baseline + 2..<baseline + (increasedContrast ? 5 : 4))
                 #expect(changed.rows == expectedRows, "\(plain.intelligence.number) \(increasedContrast)")
-                // Within the number's advance, which ends on the cell's right edge.
+                // Within the number's advance, which ends where line 2's unit ends, on the block's right edge.
                 let columns = try #require(changed.columns)
                 let numberWidth = (plain.intelligence.number as NSString).size(withAttributes: [.font: StatusItemIntelligence.font]).width
                 let unitStart = Int((plain.width - Self.textWidth(plain.unit) - StatusItemIntelligence.unitGap) * 2)
-                #expect(columns.upperBound < unitStart)
+                #expect(columns.upperBound > unitStart)
+                #expect(columns.upperBound < Int(ceil(plain.width * 2)))
                 #expect(Double(columns.upperBound - columns.lowerBound + 1) <= Double(numberWidth * 2) + 1)
                 #expect(Double(columns.upperBound - columns.lowerBound + 1) >= Double(numberWidth * 2) - 2)
             }
+        }
+    }
+
+    @Test func theScoreEndsWhereTheThinkingUnitEnds() {
+        // DESIGN 10: line 1 has no unit, so the score shares the block's right edge with line 2's tok/s. Scores end in
+        // a wide glyph: a tabular `1` keeps its advance but inks narrower, as in every tabular column.
+        for score in [948.0, 1948, 12_840] {
+            let block = StatusItemIntelligence(Self.sums(score: score, thinking: 68), l10n: Localizer(preference: .zhHant),
+                                               thinkingHidden: false)
+            let bytes = Self.pixels(block)
+            let width = Int(ceil(block.width * 2))
+            let baselines = block.baselines(height: 22)
+            func rightmostInk(_ baseline: CGFloat) -> Int {
+                let rows = Int((baseline - StatusItemIntelligence.font.capHeight) * 2)..<Int(baseline * 2)
+                var right = -1
+                for row in rows {
+                    for column in 0..<width where bytes[(row * width + column) * 4 + 3] > 40 { right = max(right, column) }
+                }
+                return right
+            }
+            let line1 = rightmostInk(baselines.intelligence), line2 = rightmostInk(baselines.thinking)
+            // 2× pixels: the last digit's and the `s`'s side bearings differ by well under a point.
+            #expect(abs(line1 - line2) <= 2, "\(block.intelligence.number): \(line1) vs \(line2)")
         }
     }
 
@@ -284,9 +308,10 @@ struct StatusItemIntelligenceTests {
         let width = Int(ceil(block.width * 2))
         let row = Int(block.baselines(height: 22).intelligence * 2) + 2
         // Each dot covers two whole columns in both of its rows; the strongest pixel is the number's color (white at
-        // 85 %) at 70 %, less the dot's anti-aliased corners. The label's ink also reaches below the baseline.
-        let numberRight = Int((block.width - Self.textWidth(block.unit) - StatusItemIntelligence.unitGap) * 2)
-        let cell = (numberRight - Int(block.cell * 2))..<numberRight
+        // 85 %) at 70 %, less the dot's anti-aliased corners. The label's ink also reaches below the baseline, so only
+        // the number's span is read: from the number cell's start to the block's right edge, where the score ends.
+        let numberLeft = Int((block.width - Self.textWidth(block.unit) - StatusItemIntelligence.unitGap - block.cell) * 2)
+        let cell = numberLeft..<width
         let alphas = cell.map { bytes[(row * width + $0) * 4 + 3] }
         let lit = alphas.enumerated().filter { $0.element > 0 }.map(\.offset)
         let runs = lit.reduce(into: [[Int]]()) { runs, column in

@@ -16,7 +16,7 @@ public sealed class ProfileEndToEndTests
         var client = new ReportClientInfo("1.3.0", "Windows", 11);
         var api = new ReportApi(transport, client.UserAgent);
         var discovery = Assert.IsType<ReportDiscoveryOutcome.Document>(await api.DiscoverAsync(server.Service)).Discovery;
-        Assert.Equal(new ReportExtensions(true, true, true, true, TaskScore: true, PerfScore: true), discovery.Extensions);
+        Assert.Equal(new ReportExtensions(true, true, true, true, TaskScore: true, PerfScore: true, ExecutionModesVersion: 2), discovery.Extensions);
         using var firstKey = new SoftwareReportSigner();
         using var secondKey = new SoftwareReportSigner();
         using var thirdKey = new SoftwareReportSigner();

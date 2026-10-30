@@ -6,9 +6,9 @@ import AppKit
 /// `性能 1,286` over `思考 128 tok/s` for every enabled source, in the traffic block's 9 pt tabular text. 性能 is the
 /// highest performance score of all their agents in compact form (DESIGN 12, METRICS 6.9 *Sets and groups*): live in
 /// the label color at 85 %, resting and `–` in the secondary color, with the provisional mark under a provisional score.
-/// Labels sit left-aligned in a cell as wide as the wider label, both numbers end on one edge of a shared cell as wide
-/// as the wider of `8.88k` and `8,888`, and only the thinking line carries the unit, so the block's width depends on
-/// the language alone. The block stays while nothing is generated, like a system meter: a block that came and went
+/// Labels sit left-aligned in a cell as wide as the wider label; the thinking number ends on the right edge of a cell as
+/// wide as the wider of `8.88k` and `8,888`, followed by its unit, and the score, which has no unit, ends where that
+/// unit ends, so both lines share the block's right edge. The block's width depends on the language alone. The block stays while nothing is generated, like a system meter: a block that came and went
 /// would shift every item to its left. Once the thinking rate has read 0 for 3 s under a score only `性能 1,286` is
 /// drawn, centred in the block, in the same cells. Every change replaces characters in their cells: a status item
 /// stays still. It needs neither network measuring nor any helper.
@@ -107,8 +107,10 @@ struct StatusItemIntelligence: Equatable {
         let baselines = baselines(height: height)
         let left = x + Self.gap
         let numberRight = left + labelWidth + Self.labelGap + cell
-        let lines = [(intelligence, baselines.intelligence, String?.none), (thinking, baselines.thinking, unit)]
-        for (line, baseline, unit) in lines.prefix(alone ? 1 : 2) {
+        let blockRight = numberRight + Self.unitGap + (unit as NSString).size(withAttributes: [.font: font]).width
+        let lines = [(intelligence, baselines.intelligence, String?.none, blockRight),
+                     (thinking, baselines.thinking, unit, numberRight)]
+        for (line, baseline, unit, right) in lines.prefix(alone ? 1 : 2) {
             func draw(_ text: String, at x: CGFloat, color: RGBColor) {
                 NSAttributedString(string: text, attributes: [.font: font, .foregroundColor: color.nsColor])
                     .draw(at: CGPoint(x: x, y: baseline - font.ascender))
@@ -118,9 +120,9 @@ struct StatusItemIntelligence: Equatable {
             // Increase Contrast: a live value takes the full label color, so live and resting differ by more than the
             // pale level (DESIGN 12, *Platform details*).
             let color = line.dim ? palette.secondary : palette.increasedContrast ? palette.primary : palette.primary.opacity(0.85)
-            draw(line.number, at: numberRight - numberWidth, color: color)
+            draw(line.number, at: right - numberWidth, color: color)
             if line.provisional {
-                Self.drawProvisionalMark(x: numberRight - numberWidth, width: numberWidth, baseline: baseline, color: color,
+                Self.drawProvisionalMark(x: right - numberWidth, width: numberWidth, baseline: baseline, color: color,
                                          increasedContrast: palette.increasedContrast)
             }
             if let unit { draw(unit, at: numberRight + Self.unitGap, color: palette.secondary) }

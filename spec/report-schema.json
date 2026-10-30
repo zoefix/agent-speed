@@ -969,8 +969,10 @@
             "accelerator",
             "modelVariant",
             "routing",
-            "workflow"
-          ]
+            "workflow",
+            "effort"
+          ],
+          "description": "effort only with executionModes version 2 (EXECUTION-MODES, Report extension); effort rows have no provider"
         },
         "mode": {
           "type": "string",

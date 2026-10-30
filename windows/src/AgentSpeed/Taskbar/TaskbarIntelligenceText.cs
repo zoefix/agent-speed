@@ -9,8 +9,9 @@ namespace AgentSpeed.Taskbar;
 
 /// <summary>
 /// Draws the taskbar 性能 block (DESIGN 10, Menu bar and taskbar): <c>性能 1,286</c> over <c>思考 128 tok/s</c> in 10 px
-/// medium tabular text, labels left-aligned in a column, both numbers right-aligned in one cell as wide as the wider of
-/// <c>8.88k</c> and <c>8,888</c>, the unit after the second. A live score and a thinking rate in the label color at 85 %;
+/// medium tabular text, labels left-aligned in a column, the thinking rate right-aligned in a cell as wide as the wider of
+/// <c>8.88k</c> and <c>8,888</c> with the unit after it, and the score ending where that unit ends, so both lines share
+/// the block's right edge. A live score and a thinking rate in the label color at 85 %;
 /// labels, the unit, a resting score, <c>–</c> and a zero rate in the secondary color. High contrast follows the orb readout
 /// for every part (<see cref="BarIntelligenceBlock.InkOf"/>): live numbers in the text color, everything else in the
 /// gray-text color. A provisional score sits on the dotted provisional mark (DESIGN 12). With the thinking line hidden at
@@ -57,13 +58,14 @@ internal sealed class TaskbarIntelligenceText
         var cells = Cells(block);
         var left = x + Gap;
         var numberRight = left + cells.Label + BarIntelligenceCells.LabelGap + cells.Number;
+        var scoreRight = left + cells.ScoreRight;
         var capHeight = (_face.CapsHeight > 0 ? _face.CapsHeight : 0.7) * TextSize;
         var first = Snap(block.FirstBaseline(centerY, capHeight, Pitch), scale);
-        DrawLine(dc, block.Label, block.Index, block.IndexDim, null, left, numberRight, first, scale);
+        DrawLine(dc, block.Label, block.Index, block.IndexDim, null, left, scoreRight, first, scale);
         if (block.Provisional)
         {
             var width = Tabular(block.Index, Role(block.IndexDim));
-            ProvisionalMark(dc, block.ProvisionalDots(numberRight - width, width, first, TextSize, scale, highContrast), block.IndexDim);
+            ProvisionalMark(dc, block.ProvisionalDots(scoreRight - width, width, first, TextSize, scale, highContrast), block.IndexDim);
         }
 
         if (!block.ThinkingHidden)

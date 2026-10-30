@@ -2,7 +2,12 @@ import Foundation
 
 public struct ReportExtensions: Equatable, Codable, Sendable {
     public var modelHarnessRequests: Bool
-    public var executionModes: Bool
+    /// The negotiated execution-modes version: 0 (not advertised), 1, or 2 (adds the reasoning effort).
+    public var executionModesVersion: Int
+    public var executionModes: Bool {
+        get { executionModesVersion > 0 }
+        set { executionModesVersion = newValue ? max(executionModesVersion, 1) : 0 }
+    }
     public var profileAvatar: Bool
     public var sharedIdentity: Bool
     /// The WebSocket transport (METRICS 11.9); usable only with a valid `websocket` object.
@@ -15,20 +20,25 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
     public var perfScore: Bool
     public static let none = ReportExtensions()
 
-    public init(modelHarnessRequests: Bool = false, executionModes: Bool = false,
+    public init(modelHarnessRequests: Bool = false, executionModes: Bool = false, executionModesVersion: Int? = nil,
                 profileAvatar: Bool = false, sharedIdentity: Bool = false, reportWebSocket: Bool = false,
                 taskScore: Bool = false, perfScore: Bool = false) {
-        self.modelHarnessRequests = modelHarnessRequests; self.executionModes = executionModes
+        self.modelHarnessRequests = modelHarnessRequests
+        self.executionModesVersion = executionModesVersion.map { Self.modeVersions.contains($0) ? $0 : 0 } ?? (executionModes ? 1 : 0)
         self.profileAvatar = profileAvatar; self.sharedIdentity = sharedIdentity
         self.reportWebSocket = reportWebSocket; self.taskScore = taskScore; self.perfScore = perfScore
     }
 
+    /// The execution-modes versions this client knows; any other number is not advertised.
+    static let modeVersions: ClosedRange<Int> = 1...2
+
     init(_ value: JSONValue?) {
-        func supported(_ key: String) -> Bool {
-            guard let literal = value?[key]?.literal else { return false }
-            return literal.isInteger && literal.int64 == 1
+        func version(_ key: String) -> Int {
+            guard let literal = value?[key]?.literal, literal.isInteger, let number = literal.int64 else { return 0 }
+            return number == 1 || (key == "executionModes" && Self.modeVersions.contains(Int(number))) ? Int(number) : 0
         }
-        self.init(modelHarnessRequests: supported("modelHarnessRequests"), executionModes: supported("executionModes"),
+        func supported(_ key: String) -> Bool { version(key) == 1 }
+        self.init(modelHarnessRequests: supported("modelHarnessRequests"), executionModesVersion: version("executionModes"),
                   profileAvatar: supported("profileAvatar"), sharedIdentity: supported("sharedIdentity"),
                   reportWebSocket: supported("reportWebSocket"), taskScore: supported("taskScore"),
                   perfScore: supported("perfScore"))
@@ -40,7 +50,8 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
         func supported(_ key: CodingKeys) -> Bool { (try? c.decode(Int.self, forKey: key)) == 1 }
-        self.init(modelHarnessRequests: supported(.modelHarnessRequests), executionModes: supported(.executionModes),
+        let modes = (try? c.decode(Int.self, forKey: .executionModes)) ?? 0
+        self.init(modelHarnessRequests: supported(.modelHarnessRequests), executionModesVersion: modes,
                   profileAvatar: supported(.profileAvatar), sharedIdentity: supported(.sharedIdentity),
                   reportWebSocket: supported(.reportWebSocket), taskScore: supported(.taskScore),
                   perfScore: supported(.perfScore))
@@ -48,7 +59,7 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
         if modelHarnessRequests { try c.encode(1, forKey: .modelHarnessRequests) }
-        if executionModes { try c.encode(1, forKey: .executionModes) }
+        if executionModes { try c.encode(executionModesVersion, forKey: .executionModes) }
         if profileAvatar { try c.encode(1, forKey: .profileAvatar) }
         if sharedIdentity { try c.encode(1, forKey: .sharedIdentity) }
         if reportWebSocket { try c.encode(1, forKey: .reportWebSocket) }
@@ -78,9 +89,14 @@ enum ReportModelBreakdown {
         return .array(rows.map { .object(["source": .string($0.key.rawValue), "requests": .int($0.value.requests)]) })
     }
 
-    static func modes(_ sources: [SourceKind: ReportUsage], groups: [ReportModeGroup: ReportUsage]) -> ReportJSON? {
+    /// `models[].modeUsage` of one model (EXECUTION-MODES, *Report extension*): every kind of `version` that is observed,
+    /// plus `serviceTier` and (version 2) `effort`, complete per source with an unknown bucket. Over 64 rows, version 2
+    /// leaves `effort` out first; nil when the breakdown still does not fit or cannot be complete.
+    static func modes(_ sources: [SourceKind: ReportUsage], groups: [ReportModeGroup: ReportUsage], version: Int = 1) -> ReportJSON? {
+        let reported = ExecutionModeKind.reported(version: version)
+        guard !reported.isEmpty else { return nil }
         let observed = Set(groups.filter { !$0.key.attribution.isUnknown }.map { $0.key.attribution.kind })
-        let kinds = observed.union([.serviceTier]).intersection(ExecutionModeKind.reported)
+        let kinds = observed.union([.serviceTier, .effort]).intersection(reported)
         var complete: [ReportModeGroup: ReportUsage] = [:]
         for kind in kinds {
             for (source, total) in sources {
@@ -97,7 +113,9 @@ enum ReportModelBreakdown {
             }
         }
         let rows = complete.filter { relevant($0.value) }.sorted { $0.key.order < $1.key.order }
-        guard rows.count <= 64 else { return nil }
+        guard rows.count <= 64 else {
+            return version == 2 ? modes(sources, groups: groups.filter { $0.key.attribution.kind != .effort }, version: 1) : nil
+        }
         return .array(rows.map { key, usage in
             var row: [ReportJSON.Member] = [
                 .init("source", .string(key.source.rawValue)), .init("kind", .string(key.attribution.kind.rawValue)),

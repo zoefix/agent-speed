@@ -3085,13 +3085,16 @@ with the values.
 
   | Line | Label cell (left-aligned) | Number cell (right-aligned) | Unit cell |
   | --- | --- | --- | --- |
-  | 1 | `intel.glyph` (性能 / 性能 / Perf / 性能) | the score in compact form (section 12) | empty |
+  | 1 | `intel.glyph` (性能 / 性能 / Perf / 性能) | the score in compact form (section 12), right-aligned over the number and unit cells | (taken by the score) |
   | 2 | `intel.thinking.glyph` (思考 / 思考 / TH / 思考) | `liveThinking` (METRICS 6.9, *Live thinking*), formatted as METRICS 7 | `tok/s` |
 
   - Cells, left to right: the label cell, as wide as the wider of the two labels in the current language; 3 pt / 3 px;
     one number cell shared by both lines, as wide as the wider of `8.88k` (the widest METRICS 7 form below 1 M tok/s)
     and `8,888` (the widest compact score, section 12; 1 pt wider in SF Pro 9 pt); 2.5 pt / 3 px; the unit cell
-    (`tok/s`). Line 1 leaves its unit cell empty, so both numbers end on one edge, as in the money block. The block's
+    (`tok/s`). Line 1 has no unit: its score is right-aligned over the number cell, the 2.5 pt / 3 px gap and the unit
+    cell, so it ends where line 2's `tok/s` ends and both lines share the block's right edge (user's choice,
+    2026-10-29: a score that stopped one unit short of the thinking line read as misaligned). The provisional mark
+    follows the score. The block's
     width depends on the language only: in SF Pro 9 pt, with every cell rounded up to a whole point, 74.5 pt in
     Chinese and Japanese and 75.5 pt in English (the label cell holds `Perf`), plus the 8 pt gap (73.5 / 68.5 with
     智力 / IQ). A text wider than its cell (thinking at 1 M tok/s or more) widens the cell at once and narrows it

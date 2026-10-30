@@ -138,7 +138,8 @@ public sealed class ReportCounters
         if (!usage.IsZero)
         {
             _byModel[key] = _byModel.GetValueOrDefault(key) + usage;
-            foreach (var kind in ExecutionModes.ReportKinds)
+            // The newest version's kinds: the ledger freezes them all, and a report sends those its service negotiated.
+            foreach (var kind in ExecutionModes.ReportKindsOf(2))
             {
                 var mode = (modes ?? ExecutionModes.Empty).Attribute(kind);
                 var modeKey = new ReportModeKey(key.ModelId, key.Source, kind, mode.Mode, mode.Evidence, mode.Provider);

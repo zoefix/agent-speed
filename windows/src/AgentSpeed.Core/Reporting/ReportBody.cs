@@ -484,7 +484,7 @@ public static class ReportBody
                 && entry.HarnessRequests.Values.All(IsSafeCount) && entry.HarnessRequests.Values.Sum() == entry.Usage.Requests)
                 members.Add(("harnessRequests", ReportJson.Array(entry.HarnessRequests.OrderBy(p => p.Key)
                     .Where(p => p.Value > 0).Select(p => ReportJson.Object(("source", ReportJson.Of(SourceId(p.Key))), ("requests", ReportJson.Of(p.Value)))))));
-            if (usual && extensions.ExecutionModes && ModesJson(entry) is { } modes) members.Add(("modeUsage", modes));
+            if (usual && extensions.ExecutionModes && ModesJson(entry, extensions.ModesVersion) is { } modes) members.Add(("modeUsage", modes));
             if (perfScore)
             {
                 members.Add(("perfScore", ReportPerfValue.Of(entry.PerfAgents, entry.Thinking).Json));
@@ -562,35 +562,36 @@ public static class ReportBody
 
     private static bool IsSafeCount(long value) => value is >= 0 and <= 9_007_199_254_740_991;
 
-    private static ReportJson? ModesJson(ModelEntry entry)
+    /// <summary>
+    /// The entry's mode rows under the negotiated <paramref name="version"/>: each source's totals are its service-tier
+    /// attributions summed (the counters hold every kind for every response), the known attributions are the groups.
+    /// </summary>
+    private static ReportJson? ModesJson(ModelEntry entry, int version)
     {
-        if (entry.Modes.Count > 64 || !IsSafeCount(entry.Usage.Requests) || !IsSafeCount(entry.Usage.Output)
-            || !IsSafeCount(entry.Usage.MeasuredOutput) || !IsSafeCount(entry.Usage.MeasuredMs)) return null;
-        if (entry.Modes.Count == 0 && (entry.Usage.Requests > 0 || entry.Usage.Output > 0 || entry.Usage.MeasuredOutput > 0 || entry.Usage.MeasuredMs > 0)) return null;
-        foreach (var group in entry.Modes.GroupBy(p => p.Key.Kind))
+        var sources = new Dictionary<SourceKind, ReportUsage>();
+        var groups = new Dictionary<ReportModeRows.Group, ReportUsage>();
+        foreach (var (key, usage) in entry.Modes)
         {
-            var sum = group.Aggregate(ReportUsage.Zero, (total, p) => total + p.Value);
-            if ((sum.Requests, sum.Output, sum.MeasuredOutput, sum.MeasuredMs)
-                != (entry.Usage.Requests, entry.Usage.Output, entry.Usage.MeasuredOutput, entry.Usage.MeasuredMs)) return null;
-        }
-        var rows = new List<ReportJson>();
-        foreach (var (key, usage) in entry.Modes.OrderBy(p => p.Key.Source).ThenBy(p => p.Key.Kind)
-            .ThenBy(p => p.Key.Mode, StringComparer.Ordinal).ThenBy(p => p.Key.Evidence, StringComparer.Ordinal).ThenBy(p => p.Key.Provider, StringComparer.Ordinal))
-        {
-            if (!entry.Sources.Contains(key.Source) || !ExecutionModes.IsReportKind(key.Kind) || !ExecutionModes.IsIdentifier(key.Mode, 64)
-                || key.Evidence is not ("served" or "recorded" or "selected" or "unknown")
-                || ((key.Mode == "unknown") != (key.Evidence == "unknown"))
-                || (key.Provider is not null && !ExecutionModes.IsIdentifier(key.Provider, 32))
-                || !IsSafeCount(usage.Requests) || !IsSafeCount(usage.Output) || !IsSafeCount(usage.MeasuredOutput) || !IsSafeCount(usage.MeasuredMs)) return null;
-            var members = new List<(string, ReportJson)>
+            if (key.Kind == ExecutionModeKind.ServiceTier)
             {
-                ("source", ReportJson.Of(SourceId(key.Source))), ("kind", ReportJson.Of(ExecutionModes.Name(key.Kind))),
-                ("mode", ReportJson.Of(key.Mode)), ("evidence", ReportJson.Of(key.Evidence)), ("requests", ReportJson.Of(usage.Requests)),
-                ("output", ReportJson.Of(usage.Output)), ("measuredOutput", ReportJson.Of(usage.MeasuredOutput)), ("measuredMs", ReportJson.Of(usage.MeasuredMs)),
-            };
-            if (key.Provider is { } provider) members.Insert(1, ("provider", ReportJson.Of(provider)));
-            rows.Add(ReportJson.Object(members));
+                sources[key.Source] = sources.GetValueOrDefault(key.Source) + usage;
+            }
+
+            if (key.Mode != "unknown")
+            {
+                var group = new ReportModeRows.Group(key.Source, key.Kind, key.Mode, key.Evidence, key.Provider);
+                groups[group] = groups.GetValueOrDefault(group) + usage;
+            }
         }
-        return ReportJson.Array(rows);
+
+        var total = sources.Values.Aggregate(ReportUsage.Zero, (sum, usage) => sum + usage);
+        if (sources.Keys.Any(source => !entry.Sources.Contains(source))
+            || (total.Requests, total.Output, total.MeasuredOutput, total.MeasuredMs)
+            != (entry.Usage.Requests, entry.Usage.Output, entry.Usage.MeasuredOutput, entry.Usage.MeasuredMs))
+        {
+            return null;
+        }
+
+        return ReportModeRows.Build(sources, groups, version) is { } rows ? ReportModeRows.Json(rows) : null;
     }
 }

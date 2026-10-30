@@ -38,9 +38,19 @@ public sealed class ExecutionModes : IEquatable<ExecutionModes>
     private readonly ExecutionModeFact[] _facts;
     public static ExecutionModes Empty { get; } = new([]);
 
-    /// <summary>The kinds of report extension version 1; <c>effort</c> and <c>speed</c> stay local.</summary>
+    /// <summary>The kinds of report extension version 1; version 2 adds <c>effort</c>. <c>speed</c> stays local.</summary>
     public static IReadOnlyList<ExecutionModeKind> ReportKinds { get; } = Array.AsReadOnly(
         [ExecutionModeKind.ServiceTier, ExecutionModeKind.Accelerator, ExecutionModeKind.ModelVariant, ExecutionModeKind.Routing, ExecutionModeKind.Workflow]);
+
+    private static readonly IReadOnlyList<ExecutionModeKind> ReportKindsWithEffort = Array.AsReadOnly([.. ReportKinds, ExecutionModeKind.Effort]);
+
+    /// <summary>The kinds a report carries under the negotiated extension <paramref name="version"/>; none for an unknown one.</summary>
+    public static IReadOnlyList<ExecutionModeKind> ReportKindsOf(int version) => version switch
+    {
+        1 => ReportKinds,
+        2 => ReportKindsWithEffort,
+        _ => [],
+    };
 
     /// <summary>Every independent breakdown of the history, the mode CSV and today's totals.</summary>
     public static IReadOnlyList<ExecutionModeKind> BreakdownKinds { get; } = Array.AsReadOnly(Enum.GetValues<ExecutionModeKind>());
@@ -92,7 +102,8 @@ public sealed class ExecutionModes : IEquatable<ExecutionModes>
     }
 
     public static bool IsFactKind(ExecutionModeKind kind) => Enum.IsDefined(kind) && kind != ExecutionModeKind.Speed;
-    public static bool IsReportKind(ExecutionModeKind kind) => kind is >= ExecutionModeKind.ServiceTier and <= ExecutionModeKind.Workflow;
+    /// <summary>A kind some report version carries (version 2 adds <c>effort</c>); <c>speed</c> never.</summary>
+    public static bool IsReportKind(ExecutionModeKind kind) => kind is >= ExecutionModeKind.ServiceTier and <= ExecutionModeKind.Effort;
     public static bool IsIdentifier(string? value, int max) => value is { Length: > 0 } && value.Length <= max
         && char.IsAsciiLetterOrDigit(value[0]) && value.All(c => char.IsAsciiLetterOrDigit(c) || c is '.' or '_' or ':' or '-');
     public static string Name(ExecutionModeKind value) => value switch

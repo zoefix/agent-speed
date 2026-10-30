@@ -9,8 +9,12 @@ from collections import defaultdict
 from pathlib import Path
 
 KINDS = ("serviceTier", "accelerator", "modelVariant", "routing", "workflow")
-# `effort` is a fact kind and `speed` a derived breakdown; both stay local and are never reported (report kinds: KINDS).
-LOCAL_KINDS = ("effort", "speed")
+# The kinds each version of the report extension carries: version 2 adds the reasoning effort. `speed` is a derived
+# breakdown and stays local (its facts are the serviceTier, accelerator and modelVariant rows).
+REPORT_KINDS = {1: KINDS, 2: (*KINDS, "effort")}
+LOCAL_KINDS = ("speed",)
+VERSIONS = {"executionModes": (1, 2)}
+MAX_ROWS = 64
 EFFORT_UNRESOLVED = ("auto", "default", "inherit", "inherited", "unknown")
 EFFORT_LEVELS = {"off": 0, "minimal": 1, "low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5, "ultra": 5,
                  "ultracode": 5}
@@ -32,9 +36,16 @@ def identifier(value, limit=64):
     return isinstance(value, str) and 0 < len(value) <= limit and TOKEN.fullmatch(value) is not None
 
 
+def version(extensions, name, *, models_enabled=True):
+    """The negotiated version of an extension: an exact JSON integer the client knows, else 0 (not active)."""
+    if not models_enabled or not isinstance(extensions, dict):
+        return 0
+    value = extensions.get(name)
+    return value if type(value) is int and value in VERSIONS.get(name, (1,)) else 0
+
+
 def supported(extensions, name, *, models_enabled=True):
-    return (models_enabled and isinstance(extensions, dict) and type(extensions.get(name)) is int
-            and extensions[name] == 1)
+    return version(extensions, name, models_enabled=models_enabled) > 0
 
 
 def normalize(adapter, raw, provider=None, evidence="served", scope="response"):
@@ -125,6 +136,7 @@ def put(facts, fact):
 def model_extension_errors(model, *, extensions=None, pointer="/models/0"):
     errors = []
     enabled = lambda name: extensions is None or supported(extensions, name)
+    kinds = REPORT_KINDS[2 if extensions is None else max(1, version(extensions, "executionModes"))]
     if "harnessRequests" in model and enabled("modelHarnessRequests"):
         rows = model["harnessRequests"]
         path = pointer + "/harnessRequests"
@@ -167,9 +179,11 @@ def model_extension_errors(model, *, extensions=None, pointer="/models/0"):
         if not isinstance(source, str) or source not in model.get("sources", []):
             errors.append((p + "/source", "source does not belong to the model"))
             valid_key = False
-        if kind not in KINDS:
+        if kind not in kinds:
             errors.append((p + "/kind", "unknown kind"))
             valid_key = False
+        if kind == "effort" and "provider" in row:
+            errors.append((p + "/provider", "effort rows have no provider"))
         if not identifier(mode) or ("provider" in row and not identifier(provider, 32)):
             errors.append((p, "invalid mode or provider identifier"))
             valid_key = False
@@ -187,7 +201,7 @@ def model_extension_errors(model, *, extensions=None, pointer="/models/0"):
             value = row[field]
             if type(value) is not int or not 0 <= value <= MAX_INTEGER:
                 errors.append((p + "/" + field, "expected a nonnegative safe integer"))
-            elif kind in KINDS:
+            elif kind in kinds:
                 sums[kind][field] += value
         if (type(row["measuredOutput"]) is int and type(row["output"]) is int
                 and row["measuredOutput"] > row["output"]):
@@ -197,6 +211,51 @@ def model_extension_errors(model, *, extensions=None, pointer="/models/0"):
             if totals[field] != model.get(field):
                 errors.append((path, kind + "." + field + " does not equal the model total"))
     return errors
+
+
+def _row_order(row):
+    return "/".join((row["source"], row["kind"], row.get("provider", ""), row["mode"], row["evidence"]))
+
+
+def _valid_attribution(group):
+    if not identifier(group["mode"]) or ("provider" in group and not identifier(group["provider"], 32)):
+        return False
+    if group["mode"] == "unknown":
+        return group["evidence"] == "unknown" and "provider" not in group
+    return group["evidence"] in ("served", "recorded", "selected")
+
+
+def mode_rows(sources, groups, extension_version):
+    """The client's `models[].modeUsage` for one model (EXECUTION-MODES, *Report extension*): `sources` maps each source
+    to the model's totals in the report, `groups` are the frozen attributions' usage (known modes only). Every kind of
+    the version that is observed, plus `serviceTier` and (version 2) `effort`, is complete per source with an unknown
+    bucket. More than 64 rows: version 2 drops `effort` first; still too many, or any group that does not fit its
+    source's total or carries an unsafe identifier, and the field is omitted (None)."""
+    if extension_version not in REPORT_KINDS:
+        return None
+    report_kinds = REPORT_KINDS[extension_version]
+    observed = {g["kind"] for g in groups if g["mode"] != "unknown"}
+    kinds = [k for k in report_kinds if k in observed or k in ("serviceTier", "effort")]
+    complete = {}
+    for kind in kinds:
+        for source, total in sources.items():
+            remaining = dict(total)
+            for group in (g for g in groups if g["source"] == source and g["kind"] == kind):
+                part = {field: group[field] for field in FIELDS}
+                if not _valid_attribution(group) or any(not 0 <= part[f] <= min(remaining[f], MAX_INTEGER) for f in FIELDS):
+                    return None
+                remaining = {f: remaining[f] - part[f] for f in FIELDS}
+                key = (source, kind, group.get("provider"), group["mode"], group["evidence"])
+                complete[key] = {f: complete.get(key, {}).get(f, 0) + part[f] for f in FIELDS}
+            if any(remaining.values()):
+                key = (source, kind, None, "unknown", "unknown")
+                complete[key] = {f: complete.get(key, {}).get(f, 0) + remaining[f] for f in FIELDS}
+    rows = [{"source": k[0], "kind": k[1], **({"provider": k[2]} if k[2] is not None else {}), "mode": k[3],
+             "evidence": k[4], **v} for k, v in complete.items() if any(v.values())]
+    rows.sort(key=_row_order)
+    if len(rows) > MAX_ROWS:
+        return mode_rows(sources, [g for g in groups if g["kind"] != "effort"], 1) if extension_version == 2 else None
+    return rows
 
 
 def report_extension_errors(report, extensions=None):
@@ -217,6 +276,15 @@ def check_fixtures():
         count += 1
     for case in data["capabilities"]:
         assert supported(case["extensions"], "executionModes", models_enabled=case["modelsEnabled"]) == case["expected"]
+        assert version(case["extensions"], "executionModes", models_enabled=case["modelsEnabled"]) == case["version"]
+        count += 1
+    for case in data["reportRows"]:
+        actual = mode_rows(case["sources"], case["groups"], case["version"])
+        assert actual == case["expected"], (case["id"], actual)
+        if actual is not None:
+            model = {"sources": list(case["sources"]), **{f: sum(t[f] for t in case["sources"].values()) for f in FIELDS},
+                     "modeUsage": actual}
+            assert model_extension_errors(model, extensions={"executionModes": case["version"]}) == [], case["id"]
         count += 1
     for case in data["speed"]:
         assert speed_attribution(case["facts"]) == case["expected"], case["id"]

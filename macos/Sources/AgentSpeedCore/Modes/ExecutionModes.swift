@@ -5,8 +5,17 @@ import Foundation
 public enum ExecutionModeKind: String, CaseIterable, Codable, Sendable {
     case serviceTier, accelerator, modelVariant, routing, workflow, effort, speed
 
-    /// The kinds of report extension version 1; `effort` and `speed` stay local.
+    /// The kinds of report extension version 1; version 2 adds `effort`. `speed` stays local.
     public static let reported: [ExecutionModeKind] = [.serviceTier, .accelerator, .modelVariant, .routing, .workflow]
+
+    /// The kinds a report carries under the negotiated extension `version` (EXECUTION-MODES, *Report extension*).
+    public static func reported(version: Int) -> [ExecutionModeKind] {
+        switch version {
+        case 1: reported
+        case 2: reported + [.effort]
+        default: []
+        }
+    }
 
     public var isFactKind: Bool { self != .speed }
 }
@@ -129,9 +138,10 @@ public struct ExecutionModes: Equatable, Hashable, Codable, Sendable {
         return ExecutionModeAttribution(kind: .speed)
     }
 
-    /// Known attributions of the report extension's kinds.
+    /// Known attributions of the newest report extension's kinds: the ledger freezes them all, and a report sends those
+    /// of the version its service negotiated.
     public var reportedAttributions: [ExecutionModeAttribution] {
-        ExecutionModeKind.reported.map { attribution(for: $0) }.filter { !$0.isUnknown }
+        ExecutionModeKind.reported(version: 2).map { attribution(for: $0) }.filter { !$0.isUnknown }
     }
 
     /// Known attributions of every local breakdown, `effort` and `speed` included.

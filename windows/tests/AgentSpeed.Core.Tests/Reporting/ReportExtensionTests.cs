@@ -24,9 +24,45 @@ public sealed class ReportExtensionTests
         Assert.NotNull(discovery);
         var models = value.GetProperty("modelsEnabled").GetBoolean();
         Assert.Equal(value.GetProperty("expected").GetBoolean(), discovery.Extensions.ExecutionModes && models);
+        Assert.Equal(value.GetProperty("version").GetInt32(), models ? discovery.Extensions.ModesVersion : 0);
         var roundtrip = ReportDiscovery.Parse(discovery.ToJson().ToCompactBytes(), service, out _);
         Assert.Equal(discovery.Extensions, roundtrip!.Extensions);
         Assert.NotEmpty(id);
+    }
+
+    public static IEnumerable<object[]> ReportRows()
+    {
+        using var document = JsonDocument.Parse(File.ReadAllBytes(FixtureLocator.PathOf("execution-mode-cases.json")));
+        return document.RootElement.GetProperty("reportRows").EnumerateArray().Select(c => new object[] { c.GetProperty("id").GetString()!, c.Clone() }).ToArray();
+    }
+
+    [Theory]
+    [MemberData(nameof(ReportRows))]
+    public void SharedRowsFollowTheNegotiatedVersion(string id, JsonElement value)
+    {
+        static ReportUsage Usage(JsonElement item) => new(Requests: item.GetProperty("requests").GetInt64(), Output: item.GetProperty("output").GetInt64(),
+            MeasuredOutput: item.GetProperty("measuredOutput").GetInt64(), MeasuredMs: item.GetProperty("measuredMs").GetInt64());
+        static SourceKind Source(string name) => Enum.GetValues<SourceKind>().Single(s => ReportBody.SourceId(s) == name);
+        var sources = value.GetProperty("sources").EnumerateObject().ToDictionary(p => Source(p.Name), p => Usage(p.Value));
+        var groups = new Dictionary<ReportModeRows.Group, ReportUsage>();
+        foreach (var item in value.GetProperty("groups").EnumerateArray())
+        {
+            var kind = Enum.GetValues<ExecutionModeKind>().Single(k => k != ExecutionModeKind.Speed && ExecutionModes.Name(k) == item.GetProperty("kind").GetString());
+            var key = new ReportModeRows.Group(Source(item.GetProperty("source").GetString()!), kind, item.GetProperty("mode").GetString()!,
+                item.GetProperty("evidence").GetString()!, item.TryGetProperty("provider", out var provider) ? provider.GetString() : null);
+            groups[key] = groups.GetValueOrDefault(key) + Usage(item);
+        }
+
+        var rows = ReportModeRows.Build(sources, groups, value.GetProperty("version").GetInt32());
+        var expected = value.GetProperty("expected");
+        if (expected.ValueKind == JsonValueKind.Null)
+        {
+            Assert.Null(rows);
+            return;
+        }
+
+        Assert.NotNull(rows);
+        Assert.True(JsonNode.DeepEquals(JsonNode.Parse(expected.GetRawText()), JsonNode.Parse(ReportModeRows.Json(rows).ToCompactString())), id);
     }
 
     [Fact]
@@ -43,15 +79,20 @@ public sealed class ReportExtensionTests
         var delta = ledger.Counters.Since(baseline);
         Assert.Equal((0L, 90L, 100L, 3000L), Numbers(delta.Total));
         Assert.DoesNotContain(delta.ByMode, p => !ExecutionModes.IsReportKind(p.Key.Kind));
-        foreach (var kind in ExecutionModes.ReportKinds)
+        // The ledger freezes every kind of the newest version, the effort included.
+        foreach (var kind in ExecutionModes.ReportKindsOf(2))
         {
             var row = Assert.Single(delta.ByMode, p => p.Key.Kind == kind);
             Assert.Equal(("unknown", "unknown"), (row.Key.Mode, row.Key.Evidence));
             Assert.Equal(Numbers(delta.Total), Numbers(row.Value));
         }
+        // Version 1 sends the service tier, the one kind always complete, and nothing a service cannot use.
         var model = Model(ledger.Counters, new(true, true));
         Assert.Equal(1, model.GetProperty("requests").GetInt64());
-        Assert.Equal(ExecutionModes.ReportKinds.Count, model.GetProperty("modeUsage").GetArrayLength());
+        var mode = Assert.Single(model.GetProperty("modeUsage").EnumerateArray());
+        Assert.Equal(("serviceTier", "unknown"), (mode.GetProperty("kind").GetString(), mode.GetProperty("mode").GetString()));
+        var two = Model(ledger.Counters, new(true, true, ExecutionModesVersion: 2));
+        Assert.Equal(["effort", "serviceTier"], two.GetProperty("modeUsage").EnumerateArray().Select(r => r.GetProperty("kind").GetString()));
         Assert.Equal("claudeCode", Assert.Single(model.GetProperty("harnessRequests").EnumerateArray()).GetProperty("source").GetString());
     }
 

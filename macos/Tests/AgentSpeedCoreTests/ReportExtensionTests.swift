@@ -9,15 +9,58 @@ struct ReportExtensionTests {
         for item in try #require(root["capabilities"] as? [[String: Any]]) {
             let data = try JSONSerialization.data(withJSONObject: try #require(item["extensions"]))
             let caps = ReportExtensions(try JSONParser.parse(data))
-            #expect((caps.executionModes && (item["modelsEnabled"] as? Bool == true)) == (item["expected"] as? Bool == true))
+            let enabled = item["modelsEnabled"] as? Bool == true
+            #expect((caps.executionModes && enabled) == (item["expected"] as? Bool == true))
+            #expect((enabled ? caps.executionModesVersion : 0) == item.int("version"), "\(item.string("id") ?? "")")
         }
-        for raw in ["true", "null", "1.0", "1e0", "2", "\"1\""] {
+        for raw in ["true", "null", "1.0", "1e0", "3", "\"1\""] {
             let value = try JSONParser.parse(Data("{\"executionModes\":\(raw),\"profileAvatar\":\(raw)}".utf8))
             #expect(ReportExtensions(value) == .none)
         }
-        let caps = ReportExtensions(modelHarnessRequests: true, executionModes: true, profileAvatar: true, sharedIdentity: true)
-        let bytes = try JSONEncoder().encode(caps)
-        #expect(try JSONDecoder().decode(ReportExtensions.self, from: bytes) == caps)
+        // Version 2 is the execution modes' own: other extensions know only 1.
+        let two = ReportExtensions(try JSONParser.parse(Data("{\"executionModes\":2,\"profileAvatar\":2}".utf8)))
+        #expect(two.executionModesVersion == 2 && !two.profileAvatar)
+        for version in [1, 2] {
+            let caps = ReportExtensions(modelHarnessRequests: true, executionModesVersion: version, profileAvatar: true,
+                                        sharedIdentity: true)
+            let bytes = try JSONEncoder().encode(caps)
+            #expect(try JSONDecoder().decode(ReportExtensions.self, from: bytes) == caps)
+            #expect(String(decoding: bytes, as: UTF8.self).contains("\"executionModes\":\(version)"))
+        }
+    }
+
+    @Test func sharedRowsFollowTheNegotiatedVersion() throws {
+        let root = try Fixtures.json("execution-mode-cases.json")
+        func usage(_ item: [String: Any]) -> ReportUsage {
+            ReportUsage(requests: Int64(item.int("requests")), output: Int64(item.int("output")),
+                        measuredOutput: Int64(item.int("measuredOutput")), measuredMs: Int64(item.int("measuredMs")))
+        }
+        for item in try #require(root["reportRows"] as? [[String: Any]]) {
+            let id = item.string("id") ?? ""
+            var sources: [SourceKind: ReportUsage] = [:]
+            for (name, total) in try #require(item["sources"] as? [String: [String: Any]]) {
+                sources[try #require(SourceKind(rawValue: name))] = usage(total)
+            }
+            var groups: [ReportModeGroup: ReportUsage] = [:]
+            for group in try #require(item["groups"] as? [[String: Any]]) {
+                let attribution = ExecutionModeAttribution(
+                    kind: try #require(ExecutionModeKind(rawValue: group.string("kind") ?? "")), mode: group.string("mode") ?? "",
+                    evidence: group.string("evidence") ?? "", provider: group.string("provider"))
+                groups[ReportModeGroup(source: try #require(SourceKind(rawValue: group.string("source") ?? "")),
+                                       attribution: attribution), default: .zero] += usage(group)
+            }
+            let actual = ReportModelBreakdown.modes(sources, groups: groups, version: item.int("version"))
+            guard let expected = item["expected"] as? [[String: Any]] else {
+                #expect(actual == nil, "\(id)")
+                continue
+            }
+            let json = try #require(actual, "\(id)")
+            let rows = try #require(try JSONSerialization.jsonObject(with: json.compactData) as? [[String: Any]])
+            #expect(rows.count == expected.count, "\(id)")
+            for (row, want) in zip(rows, expected) {
+                #expect(NSDictionary(dictionary: row).isEqual(to: want), "\(id): \(row) != \(want)")
+            }
+        }
     }
 
     @Test func lateMetadataStaysInOriginalReportAttribution() throws {
@@ -40,24 +83,27 @@ struct ReportExtensionTests {
         #expect(response.modes.attribution(for: .serviceTier).mode == "fast")
     }
 
-    @Test func effortAndSpeedAreNeverReported() throws {
+    @Test func effortIsReportedOnlyWithVersionTwoAndSpeedNever() throws {
         var ledger = ReportLedger()
         var response = ReportLedgerTests.record("effort", start: ReportLedgerTests.base - 1000, end: ReportLedgerTests.base,
                                                output: 50, final: true)
         response.modes = ExecutionModeAdapters.claude("fast")
         response.modes.insert(try #require(ExecutionModeAdapters.effort("ultracode", evidence: .recorded, scope: .request)))
         ledger.count(response, modelId: "m")
-        #expect(ledger.counters.byMode.keys.map(\.attribution.kind) == [.serviceTier])
+        // The ledger freezes the effort with the service tier, whatever the service negotiates later.
+        #expect(Set(ledger.counters.byMode.keys.map(\.attribution.kind)) == [.serviceTier, .effort])
         var groups = ledger.counters.byMode.reduce(into: [ReportModeGroup: ReportUsage]()) {
             $0[ReportModeGroup(source: $1.key.model.source, attribution: $1.key.attribution)] = $1.value
         }
-        for kind in [ExecutionModeKind.effort, .speed] {
-            groups[ReportModeGroup(source: .claudeCode, attribution: .init(kind: kind, mode: "max", evidence: "recorded"))] =
-                ledger.counters.total
+        groups[ReportModeGroup(source: .claudeCode, attribution: .init(kind: .speed, mode: "fast", evidence: "served"))] =
+            ledger.counters.total
+        func kinds(_ version: Int) throws -> [String: String] {
+            let rows = try #require(ReportModelBreakdown.modes([.claudeCode: ledger.counters.total], groups: groups, version: version))
+            let decoded = try #require(try JSONSerialization.jsonObject(with: rows.compactData) as? [[String: Any]])
+            return Dictionary(uniqueKeysWithValues: decoded.compactMap { row in row.string("kind").map { ($0, row.string("mode") ?? "") } })
         }
-        let rows = try #require(ReportModelBreakdown.modes([.claudeCode: ledger.counters.total], groups: groups))
-        let decoded = try #require(try JSONSerialization.jsonObject(with: rows.compactData) as? [[String: Any]])
-        #expect(Set(decoded.compactMap { $0.string("kind") }) == ["serviceTier"])
+        #expect(try kinds(1) == ["serviceTier": "fast"])
+        #expect(try kinds(2) == ["serviceTier": "fast", "effort": "ultracode"])
     }
 
     @Test func completeNativeAndUnknownBreakdownsPreserveOriginalModelIDs() throws {
