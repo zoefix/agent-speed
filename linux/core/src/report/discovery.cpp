@@ -92,10 +92,17 @@ bool loopbackHttp(std::string_view url) {
     return loopbackAuthority(rest.substr(0, rest.find(U'/')));
 }
 
-bool supported(const json::Value& extensions, std::string_view name) {
+// The advertised version of an extension: an exact JSON integer this client knows (executionModes 1 or 2, others 1),
+// else 0.
+int versionOf(const json::Value& extensions, std::string_view name) {
     const auto value = extensions.isObject() ? extensions[name] : json::Value();
-    return value.isNumber() && value.raw() == "1";
+    if (!value.isNumber()) return 0;
+    if (value.raw() == "1") return 1;
+    if (name == "executionModes" && value.raw() == "2") return 2;
+    return 0;
 }
+
+bool supported(const json::Value& extensions, std::string_view name) { return versionOf(extensions, name) > 0; }
 
 std::optional<StreamSettings> streamSettings(const json::Value& document) {
     if (!supported(document["extensions"], "reportWebSocket")) return std::nullopt;
@@ -202,7 +209,7 @@ Discovery parse(const json::Value& document, std::string_view fetchedFrom) {
     for (const auto* name : kSections)
         if (!sections.valid() || std::find(named.begin(), named.end(), name) != named.end()) result.sections.emplace_back(name);
     for (const auto* name : kExtensions)
-        if (supported(document["extensions"], name)) result.extensions[name] = 1;
+        if (const auto version = versionOf(document["extensions"], name)) result.extensions[name] = version;
     result.websocket = streamSettings(document);
     return result;
 }

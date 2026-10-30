@@ -3,6 +3,7 @@
 #include <ctime>
 
 #include "agentspeed/report_body.hpp"
+#include "agentspeed/report_mode_rows.hpp"
 
 namespace agentspeed::report {
 
@@ -147,39 +148,41 @@ struct ModelEntry {
     }
 };
 
-bool safeCount(std::int64_t v) { return v >= 0 && v <= 9'007'199'254'740'991; }
-
-// REPORTING-EXTENSIONS 3: the per-mode breakdown, or nullopt when it cannot be sent whole (sums, sizes, identifiers).
-std::optional<Json> modesJson(const ModelEntry& entry) {
-    const auto& u = entry.usage;
-    if (entry.modes.size() > 64 || !safeCount(u.requests) || !safeCount(u.output) || !safeCount(u.measuredOutput) || !safeCount(u.measuredMs))
-        return std::nullopt;
-    if (entry.modes.empty() && (u.requests > 0 || u.output > 0 || u.measuredOutput > 0 || u.measuredMs > 0)) return std::nullopt;
-    std::map<ModeKind, Usage> sums;
-    for (const auto& [key, usage] : entry.modes) sums[key.kind] += usage;
-    for (const auto& [_, sum] : sums) {
-        if (sum.requests != u.requests || sum.output != u.output || sum.measuredOutput != u.measuredOutput || sum.measuredMs != u.measuredMs)
-            return std::nullopt;
-    }
-    std::vector<Json> rows;
+// EXECUTION-MODES Report extension: the entry's mode rows under the negotiated `version`. Each source's totals are its
+// service-tier attributions summed (the counters hold every kind for every response); the known attributions are the
+// groups. nullopt when the breakdown cannot be sent whole.
+std::optional<Json> modesJson(const ModelEntry& entry, int version) {
+    std::map<SourceKind, mode_rows::Counts> sources;
+    std::map<mode_rows::Group, mode_rows::Counts> groups;
+    mode_rows::Counts total;
     for (const auto& [key, usage] : entry.modes) {
-        const bool evidenceOk = key.evidence == "served" || key.evidence == "recorded" || key.evidence == "selected" || key.evidence == "unknown";
-        if (!entry.sources.contains(key.source) || !ExecutionModes::isReportKind(key.kind) || !ExecutionModes::isIdentifier(key.mode, 64) || !evidenceOk ||
-            ((key.mode == "unknown") != (key.evidence == "unknown")) || (key.provider && !ExecutionModes::isIdentifier(*key.provider, 32)) ||
-            !safeCount(usage.requests) || !safeCount(usage.output) || !safeCount(usage.measuredOutput) || !safeCount(usage.measuredMs))
-            return std::nullopt;
-        auto row = Json::object({{"source", Json::of(sourceId(key.source))}});
-        if (key.provider) row.add("provider", Json::of(*key.provider));
-        row.add("kind", Json::of(modeKindName(key.kind)));
-        row.add("mode", Json::of(key.mode));
-        row.add("evidence", Json::of(key.evidence));
-        row.add("requests", Json::of(usage.requests));
-        row.add("output", Json::of(usage.output));
-        row.add("measuredOutput", Json::of(usage.measuredOutput));
-        row.add("measuredMs", Json::of(usage.measuredMs));
-        rows.push_back(std::move(row));
+        const mode_rows::Counts counts{usage.requests, usage.output, usage.measuredOutput, usage.measuredMs};
+        if (key.kind == ModeKind::ServiceTier) {
+            sources[key.source] += counts;
+            total += counts;
+        }
+        if (key.mode != "unknown") groups[{key.source, key.kind, key.mode, key.evidence, key.provider}] += counts;
     }
-    return Json::array(std::move(rows));
+    for (const auto& [source, _] : sources)
+        if (!entry.sources.contains(source)) return std::nullopt;
+    const auto& u = entry.usage;
+    if (total != mode_rows::Counts{u.requests, u.output, u.measuredOutput, u.measuredMs}) return std::nullopt;
+    const auto rows = mode_rows::build(sources, groups, version);
+    if (!rows) return std::nullopt;
+    std::vector<Json> out;
+    for (const auto& row : *rows) {
+        auto json = Json::object({{"source", Json::of(sourceId(row.key.source))}});
+        if (row.key.provider) json.add("provider", Json::of(*row.key.provider));
+        json.add("kind", Json::of(modeKindName(row.key.kind)));
+        json.add("mode", Json::of(row.key.mode));
+        json.add("evidence", Json::of(row.key.evidence));
+        json.add("requests", Json::of(row.counts.requests));
+        json.add("output", Json::of(row.counts.output));
+        json.add("measuredOutput", Json::of(row.counts.measuredOutput));
+        json.add("measuredMs", Json::of(row.counts.measuredMs));
+        out.push_back(std::move(json));
+    }
+    return Json::array(std::move(out));
 }
 
 const PerfFacts& noPerfFacts() {
@@ -277,7 +280,7 @@ std::vector<Json> modelEntries(const WindowContent& content, const Sample& sampl
             json.add("harnessRequests", Json::array(std::move(rows)));
         }
         if (usual && extensions.executionModes) {
-            if (auto modes = modesJson(entry)) json.add("modeUsage", std::move(*modes));
+            if (auto modes = modesJson(entry, extensions.executionModesVersion)) json.add("modeUsage", std::move(*modes));
         }
         if (perfScore) {
             json.add("perfScore", perfValue(entry.perfAgents, entry.thinking));

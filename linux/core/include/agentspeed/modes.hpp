@@ -62,7 +62,8 @@ public:
 
     static bool isIdentifier(std::string_view value, std::size_t max);
     static bool isFactKind(ModeKind kind) { return kind != ModeKind::Speed; }
-    static bool isReportKind(ModeKind kind) { return kind <= ModeKind::Workflow; }
+    // A kind some report version carries (version 2 adds `effort`); `speed` never.
+    static bool isReportKind(ModeKind kind) { return kind != ModeKind::Speed; }
 
 private:
     ModeAttribution attributeSpeed() const;

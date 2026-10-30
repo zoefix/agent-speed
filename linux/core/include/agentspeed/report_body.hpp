@@ -44,6 +44,8 @@ struct Envelope {
 
 struct Extensions {
     bool perfScore = false, taskScore = false, executionModes = false, modelHarnessRequests = false;
+    // The negotiated execution-modes version while `executionModes` is on: 1, or 2, which adds the reasoning effort.
+    int executionModesVersion = 1;
 };
 
 // A WebSocket body (METRICS 11.9): it ends with `realtime` and its message must fit too.

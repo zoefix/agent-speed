@@ -317,6 +317,33 @@ TEST(ReportBody, ModeUsageKeepsEveryKindWhole) {
     }
     EXPECT_EQ(tierRows, 2);  // fast (served by openai) and the unknown bucket
     EXPECT_EQ(tierRequests, 3);
-    EXPECT_EQ(model.find("modeUsage")->items().size(), 6U);  // 2 tier rows and one unknown row for each other kind
+    EXPECT_EQ(model.find("modeUsage")->items().size(), 2U);  // kinds without an observed mode are left out (serviceTier stays)
     EXPECT_EQ(model.find("harnessRequests")->compact(), R"([{"source":"codex","requests":3}])");
+}
+
+// EXECUTION-MODES Report extension version 2: the effort rows (no provider) beside the service tiers; version 1 leaves
+// them out although the ledger froze them.
+TEST(ReportBody, ModeUsageAddsTheEffortWithVersion2) {
+    Sample sample;
+    auto counters = std::make_shared<Counters>();
+    const ExecutionModes modes({*ModeFact::create(ModeKind::ServiceTier, std::string("priority"), ModeEvidence::Served, std::string("openai")),
+                                *native::effort(std::string("xhigh"), ModeEvidence::Recorded, ModeScope::Turn)});
+    counters->add({2, 300, 0, 0, 0, 0, 300, 1000, 0, 0}, {"gpt-5.5", SourceKind::Codex}, &modes);
+    counters->add({1, 100, 0, 0, 0, 0, 100, 500, 0, 0}, {"gpt-5.5", SourceKind::Codex}, nullptr);
+    sample.facts.counters = counters;
+    const auto content = Window(Sample{}).content(sample);
+    Options options;
+    options.sections = {Section::Models};
+    options.extensions.executionModes = true;
+    const auto kinds = [&](int version) {
+        options.extensions.executionModesVersion = version;
+        const auto json = body(linuxEnvelope(), content, sample, options);
+        std::string out;
+        for (const auto& row : json.find("models")->items().at(0).find("modeUsage")->items()) {
+            out += row.find("kind")->compact() + ":" + row.find("mode")->compact() + (row.find("provider") ? "+p" : "") + " ";
+        }
+        return out;
+    };
+    EXPECT_EQ(kinds(1), R"("serviceTier":"unknown" "serviceTier":"fast"+p )");
+    EXPECT_EQ(kinds(2), R"("effort":"unknown" "effort":"xhigh" "serviceTier":"unknown" "serviceTier":"fast"+p )");
 }

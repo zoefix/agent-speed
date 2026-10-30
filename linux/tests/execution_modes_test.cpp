@@ -5,6 +5,7 @@
 
 #include "agentspeed/modes.hpp"
 #include "agentspeed/report.hpp"
+#include "agentspeed/report_mode_rows.hpp"
 #include "fixture_support.hpp"
 
 using namespace agentspeed;
@@ -142,7 +143,47 @@ TEST_F(ExecutionModeCases, Capability) {
         const auto discovery = report::parseDiscovery(doc.root(), "https://e.com/.well-known/agent-speed-report");
         ASSERT_TRUE(discovery);
         EXPECT_EQ(discovery->has("executionModes") && c["modelsEnabled"].isTrue(), c["expected"].isTrue());
+        const int version = discovery->has("executionModes") && c["modelsEnabled"].isTrue() ? discovery->extensions.at("executionModes") : 0;
+        EXPECT_EQ(version, *c["version"].truncated());
     }
+}
+
+TEST_F(ExecutionModeCases, ReportRows) {
+    const auto countsOf = [](const json::Value& v) {
+        return report::mode_rows::Counts{*v["requests"].truncated(), *v["output"].truncated(), *v["measuredOutput"].truncated(),
+                                         *v["measuredMs"].truncated()};
+    };
+    int checked = 0;
+    for (const auto& c : section("reportRows").elements()) {
+        SCOPED_TRACE(*c["id"].string());
+        std::map<SourceKind, report::mode_rows::Counts> sources;
+        for (const auto& [id, total] : c["sources"].members()) sources[*sourceFromId(std::string(id))] = countsOf(total);
+        std::map<report::mode_rows::Group, report::mode_rows::Counts> groups;
+        for (const auto& g : c["groups"].elements()) {
+            const report::mode_rows::Group key{*sourceFromId(*g["source"].string()), *kindOf(*g["kind"].string()), *g["mode"].string(),
+                                               *g["evidence"].string(), fixtures::optString(g["provider"])};
+            groups[key] += countsOf(g);
+        }
+        const auto rows = report::mode_rows::build(sources, groups, static_cast<int>(*c["version"].truncated()));
+        if (c["expected"].isNull()) {
+            EXPECT_FALSE(rows.has_value());
+        } else {
+            ASSERT_TRUE(rows.has_value());
+            const auto want = c["expected"].elements();
+            ASSERT_EQ(rows->size(), want.size());
+            for (std::size_t i = 0; i < want.size(); ++i) {
+                const auto& got = (*rows)[i];
+                EXPECT_EQ(sourceId(got.key.source), *want[i]["source"].string());
+                EXPECT_EQ(modeKindName(got.key.kind), *want[i]["kind"].string());
+                EXPECT_EQ(got.key.provider, fixtures::optString(want[i]["provider"]));
+                EXPECT_EQ(got.key.mode, *want[i]["mode"].string());
+                EXPECT_EQ(got.key.evidence, *want[i]["evidence"].string());
+                EXPECT_EQ(got.counts, countsOf(want[i]));
+            }
+        }
+        ++checked;
+    }
+    EXPECT_GE(checked, 9);
 }
 
 TEST_F(ExecutionModeCases, EffortMeterBoltsAndOrder) {

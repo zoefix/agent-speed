@@ -158,6 +158,7 @@ agentspeed::report::Options ReportController::options(const agentspeed::report::
     options.extensions.perfScore = discovery.has("perfScore");
     options.extensions.taskScore = discovery.has("taskScore");
     options.extensions.executionModes = discovery.has("executionModes");
+    options.extensions.executionModesVersion = discovery.has("executionModes") ? discovery.extensions.at("executionModes") : 1;
     return options;
 }
 

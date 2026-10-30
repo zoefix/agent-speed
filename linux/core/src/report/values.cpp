@@ -61,7 +61,9 @@ void Counters::add(const Usage& usage, const ModelKey& key, const ExecutionModes
     if (usage.zero()) return;
     byModel_[key] += usage;
     static const ExecutionModes none;
-    for (const auto kind : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing, ModeKind::Workflow}) {
+    // The newest version's kinds, the effort included: the ledger freezes them all and a report sends those its service
+    // negotiated (EXECUTION-MODES, Report extension).
+    for (const auto kind : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant, ModeKind::Routing, ModeKind::Workflow, ModeKind::Effort}) {
         const auto mode = (modes ? *modes : none).attribute(kind);
         byMode_[{key.modelId, key.source, kind, mode.mode, mode.evidence, mode.provider}] += usage;
     }
