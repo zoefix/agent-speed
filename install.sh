@@ -198,7 +198,7 @@ install_linux() {
         printf 'Exec="%s"\nIcon=%s\nTerminal=false\nCategories=Utility;Monitor;Development;\nStartupNotify=false\n' \
             "$(desktop_quote "$target")" "$icon"
     } >"$data/applications/agent-speed.desktop"
-    command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$data/applications" >/dev/null 2>&1 || true
+    refresh_menu "$data/applications"
 
     done_line "$T_DONE${version:+ $version} → $target"
     [ -d /opt/agent-speed ] && hint "$T_DEB_PRESENT"
@@ -242,7 +242,7 @@ uninstall_linux() {
     done
     if [ -f "$data/applications/agent-speed.desktop" ]; then
         rm -f "$data/applications/agent-speed.desktop"
-        command -v update-desktop-database >/dev/null 2>&1 && update-desktop-database "$data/applications" >/dev/null 2>&1 || true
+        refresh_menu "$data/applications"
     fi
     if [ "$purge" -eq 1 ]; then
         rm -f "$config/zoefix/Agent Speed.conf" "$config/autostart/agent-speed.desktop"
@@ -256,6 +256,12 @@ uninstall_linux() {
     fi
     [ -d /opt/agent-speed ] && hint "$T_DEB_PRESENT"
     return 0
+}
+
+refresh_menu() {
+    if command -v update-desktop-database >/dev/null 2>&1; then
+        update-desktop-database "$1" >/dev/null 2>&1 || true
+    fi
 }
 
 linux_dest() { echo "${XDG_DATA_HOME:-$HOME/.local/share}/agent-speed"; }
