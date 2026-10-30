@@ -26,6 +26,28 @@ Window {
 
     signal dismissed()
     signal settingsRequested()
+    signal sourcesRequested()
+    readonly property bool loading: root.snap.nowMs === undefined
+    readonly property bool noSources: {
+        if (loading || root.snap.demo === true) return false
+        const sources = root.snap.sources || []
+        for (let i = 0; i < sources.length; ++i) if (sources[i].enabled && sources[i].available) return false
+        return true
+    }
+    readonly property bool showContent: !loading && !noSources
+    // DESIGN 4: what could not be read fully — known limits with an info mark, read failures with a warning mark.
+    readonly property var warningLines: {
+        const w = root.snap.warnings || {}
+        const out = []
+        if (w.partialHistory) out.push({ text: S.tr2(S.rev, "warning.partialHistory"), alert: false })
+        if ((w.unreadableFiles || 0) > 0) out.push({ text: Format.fill(S.tr2(S.rev, "warning.unreadable"), [w.unreadableFiles]), alert: true })
+        if ((w.malformedLines || 0) > 0) out.push({ text: Format.fill(S.tr2(S.rev, "warning.malformed"), [w.malformedLines]), alert: true })
+        if ((w.unfinalized || 0) > 0) out.push({ text: Format.fill(S.tr2(S.rev, "warning.unfinalized"), [w.unfinalized]), alert: false })
+        const unsupported = w.unsupported || []
+        for (let i = 0; i < unsupported.length; ++i)
+            out.push({ text: Format.fill(S.tr2(S.rev, "warning.unsupportedFormat"), [S.tr2(S.rev, "source." + unsupported[i])]), alert: true })
+        return out
+    }
     signal historyRequested()
     readonly property bool moneyLive: prefs.liveUnit === "cost"
     readonly property bool bothUnits: prefs.liveUnit === "both"
@@ -370,202 +392,371 @@ Window {
                     }
                 }
 
-                Hairline {}
-
-                // Live chart
-                SectionHeader {
-                    text: S.tr2(S.rev, "dashboard.live")
-                    trailing: (root.snap.estimatedShare || 0) > 0 ? S.tr2(S.rev, "chart.estimated") : ""
-                }
-                LiveChart {
+                // DESIGN 4 states: the first read of today's logs, and no history folder for any enabled source.
+                ColumnLayout {
+                    visible: !root.showContent
                     Layout.fillWidth: true
-                    Layout.preferredHeight: 96
-                    values: root.snap.history || []
-                    peak: root.snap.peak || 0
-                    peakCaption: S.tr2(S.rev, "today.peak")
-                    unit: S.tr2(S.rev, "unit.tokS")
-                }
-
-                Hairline {}
-
-                // Sources
-                SectionHeader {
-                    text: S.tr2(S.rev, "dashboard.sources")
-                    trailing: sourceModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
-                }
-                Text {
-                    visible: sourceModel.count === 0
-                    Layout.fillWidth: true
-                    text: S.tr2(S.rev, "dashboard.sources.empty")
-                    color: Theme.ink2
-                    font.pixelSize: 13
-                    wrapMode: Text.Wrap
-                }
-                ListView {
-                    id: sourceList
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: contentHeight
-                    visible: sourceModel.count > 0
-                    interactive: false
-                    model: sourceModel
-                    delegate: SourceRow { width: sourceList.width }
-                    add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
-                    remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
-                    displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
-                }
-
-                Hairline {}
-
-                // Agents
-                SectionHeader {
-                    text: S.tr2(S.rev, "dashboard.agents")
-                    trailing: agentModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
-                    secondary: agentModel.count > 0 ? S.tr2(S.rev, "intel.glyph") : ""
-                    secondaryTip: S.tr2(S.rev, "agents.intel.hint")
-                    // The 性能 caption's right edge sits on the 性能 column's: the live slot (52) and the 6 px gap.
-                    secondaryEdge: 58
-                }
-                RowLayout {
-                    visible: agentModel.count === 0
-                    Layout.fillWidth: true
-                    Layout.topMargin: 2
-                    Layout.bottomMargin: 2
-                    spacing: 8
-                    Glyph { name: "gauge"; color: Theme.ink3; Layout.preferredWidth: 16; Layout.preferredHeight: 16 }
+                    Layout.topMargin: 28
+                    Layout.bottomMargin: 28
+                    spacing: 10
+                    Glyph {
+                        Layout.alignment: Qt.AlignHCenter
+                        Layout.preferredWidth: 44
+                        Layout.preferredHeight: 44
+                        name: "gauge"
+                        color: root.loading ? Heat.color(0.18) : Theme.ink3
+                        Accessible.ignored: true
+                    }
                     Text {
                         Layout.fillWidth: true
-                        text: S.tr2(S.rev, "agents.empty")
+                        horizontalAlignment: Text.AlignHCenter
+                        text: S.tr2(S.rev, root.loading ? "state.loading" : "state.noSources")
                         color: Theme.ink2
                         font.pixelSize: 13
-                        elide: Text.ElideRight
+                        wrapMode: Text.WordWrap
                     }
-                }
-                ListView {
-                    id: agentList
-                    Layout.fillWidth: true
-                    Layout.preferredHeight: Math.min(contentHeight, 12 * 40)
-                    visible: agentModel.count > 0
-                    interactive: contentHeight > height
-                    boundsBehavior: Flickable.StopAtBounds
-                    clip: interactive
-                    model: agentModel
-                    ScrollBar.vertical: ScrollBar { policy: agentList.interactive ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
-                    delegate: AgentRow {
-                        width: agentList.width
-                        capsuleColumn: root.capsuleColumn
-                        capsuleWords: root.capsuleWords
-                        perfWidth: root.perfCellWidth
-                        onHoverChanged: hovered => root.rowHover(key, this, hovered)
-                    }
-                    add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
-                    remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
-                    displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
-                }
-                Item {
-                    id: disclosure
-                    readonly property int total: (root.snap.agents || []).length
-                    visible: total > root.collapsedRows
-                    Layout.fillWidth: true
-                    implicitHeight: 30
-                    Rectangle {
-                        anchors.fill: parent
-                        anchors.leftMargin: -6
-                        anchors.rightMargin: -6
-                        radius: 7
-                        color: disclosureArea.containsMouse ? Theme.hover : "transparent"
-                    }
-                    Row {
-                        anchors.verticalCenter: parent.verticalCenter
-                        spacing: 6
-                        Glyph {
-                            anchors.verticalCenter: parent.verticalCenter
-                            width: 12
-                            height: 12
-                            name: "chevron"
-                            color: Theme.ink2
-                            rotation: dashboardState.agentsExpanded ? 180 : 0
-                            Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                    PillButton {
+                        visible: !root.loading
+                        Layout.alignment: Qt.AlignHCenter
+                        text: S.tr2(S.rev, "menu.settings")
+                        onClicked: {
+                            root.dismissed()
+                            root.sourcesRequested()
                         }
+                    }
+                }
+
+                ColumnLayout {
+                    visible: root.showContent
+                    Layout.fillWidth: true
+                    spacing: 0
+
+                    Hairline {}
+
+                    // Live chart
+                    SectionHeader {
+                        text: S.tr2(S.rev, "dashboard.live")
+                        trailing: (root.snap.estimatedShare || 0) > 0 ? S.tr2(S.rev, "chart.estimated") : ""
+                    }
+                    LiveChart {
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: 96
+                        values: root.snap.history || []
+                        peak: root.snap.peak || 0
+                        peakCaption: S.tr2(S.rev, "today.peak")
+                        unit: S.tr2(S.rev, "unit.tokS")
+                    }
+
+                    Hairline {}
+
+                    // Sources
+                    SectionHeader {
+                        text: S.tr2(S.rev, "dashboard.sources")
+                        trailing: sourceModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
+                    }
+                    Text {
+                        visible: sourceModel.count === 0
+                        Layout.fillWidth: true
+                        text: S.tr2(S.rev, "dashboard.sources.empty")
+                        color: Theme.ink2
+                        font.pixelSize: 13
+                        wrapMode: Text.Wrap
+                    }
+                    ListView {
+                        id: sourceList
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: contentHeight
+                        visible: sourceModel.count > 0
+                        interactive: false
+                        model: sourceModel
+                        delegate: SourceRow { width: sourceList.width }
+                        add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
+                        remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
+                        displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
+                    }
+
+                    Hairline {}
+
+                    // Agents
+                    SectionHeader {
+                        text: S.tr2(S.rev, "dashboard.agents")
+                        trailing: agentModel.count > 0 ? S.tr2(S.rev, "unit.tokS") : ""
+                        secondary: agentModel.count > 0 ? S.tr2(S.rev, "intel.glyph") : ""
+                        secondaryTip: S.tr2(S.rev, "agents.intel.hint")
+                        // The 性能 caption's right edge sits on the 性能 column's: the live slot (52) and the 6 px gap.
+                        secondaryEdge: 58
+                    }
+                    RowLayout {
+                        visible: agentModel.count === 0
+                        Layout.fillWidth: true
+                        Layout.topMargin: 2
+                        Layout.bottomMargin: 2
+                        spacing: 8
+                        Glyph { name: "gauge"; color: Theme.ink3; Layout.preferredWidth: 16; Layout.preferredHeight: 16 }
                         Text {
+                            Layout.fillWidth: true
+                            text: S.tr2(S.rev, "agents.empty")
+                            color: Theme.ink2
+                            font.pixelSize: 13
+                            elide: Text.ElideRight
+                        }
+                    }
+                    ListView {
+                        id: agentList
+                        Layout.fillWidth: true
+                        Layout.preferredHeight: Math.min(contentHeight, 12 * 40)
+                        visible: agentModel.count > 0
+                        interactive: contentHeight > height
+                        boundsBehavior: Flickable.StopAtBounds
+                        clip: interactive
+                        model: agentModel
+                        ScrollBar.vertical: ScrollBar { policy: agentList.interactive ? ScrollBar.AsNeeded : ScrollBar.AlwaysOff }
+                        delegate: AgentRow {
+                            width: agentList.width
+                            capsuleColumn: root.capsuleColumn
+                            capsuleWords: root.capsuleWords
+                            perfWidth: root.perfCellWidth
+                            onHoverChanged: hovered => root.rowHover(key, this, hovered)
+                        }
+                        add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
+                        remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
+                        displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
+                    }
+                    Item {
+                        id: disclosure
+                        readonly property int total: (root.snap.agents || []).length
+                        visible: total > root.collapsedRows
+                        Layout.fillWidth: true
+                        implicitHeight: 30
+                        Rectangle {
+                            anchors.fill: parent
+                            anchors.leftMargin: -6
+                            anchors.rightMargin: -6
+                            radius: 7
+                            color: disclosureArea.containsMouse ? Theme.hover : "transparent"
+                        }
+                        Row {
                             anchors.verticalCenter: parent.verticalCenter
-                            text: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
-                                                       : Format.fill(S.tr2(S.rev, "agents.expand"), [disclosure.total - root.collapsedRows])
+                            spacing: 6
+                            Glyph {
+                                anchors.verticalCenter: parent.verticalCenter
+                                width: 12
+                                height: 12
+                                name: "chevron"
+                                color: Theme.ink2
+                                rotation: dashboardState.agentsExpanded ? 180 : 0
+                                Behavior on rotation { NumberAnimation { duration: 200; easing.type: Easing.OutCubic } }
+                            }
+                            Text {
+                                anchors.verticalCenter: parent.verticalCenter
+                                text: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                                                           : Format.fill(S.tr2(S.rev, "agents.expand"), [disclosure.total - root.collapsedRows])
+                                color: Theme.ink2
+                                font.pixelSize: 12
+                                font.weight: Font.Medium
+                            }
+                        }
+                        MouseArea {
+                            id: disclosureArea
+                            anchors.fill: parent
+                            hoverEnabled: true
+                            cursorShape: Qt.PointingHandCursor
+                            onClicked: {
+                                dashboardState.agentsExpanded = !dashboardState.agentsExpanded
+                                root.applySnapshot()
+                            }
+                        }
+                        Accessible.role: Accessible.Button
+                        Accessible.name: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
+                                                              : Format.fill(S.tr2(S.rev, "agents.expand.a11y"), [disclosure.total])
+                    }
+
+                    Hairline {}
+
+                    // Today
+                    SectionHeader { text: S.tr2(S.rev, "dashboard.today") }
+                    GridLayout {
+                        Layout.fillWidth: true
+                        columns: 2
+                        columnSpacing: 16
+                        rowSpacing: 12
+                        StatCell { caption: S.tr2(S.rev, "today.output"); value: root.snap.todayOutputText || "0" }
+                        StatCell { caption: S.tr2(S.rev, "today.input"); value: root.snap.todayInputText || "0" }
+                        StatCell { caption: S.tr2(S.rev, "today.requests"); value: root.snap.todayRequestsText || "0" }
+                        StatCell {
+                            caption: S.tr2(S.rev, "today.average")
+                            value: root.snap.todayAverageText || "–"
+                            unit: root.snap.todayAverageText && root.snap.todayAverageText !== "–" ? S.tr2(S.rev, "unit.tokS") : ""
+                        }
+                    }
+                    // DESIGN 9 Today: the cost row under the grid, with its ⓘ breakdown.
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 12
+                        spacing: 6
+                        Text {
+                            text: S.tr2(S.rev, "today.cost")
                             color: Theme.ink2
                             font.pixelSize: 12
+                        }
+                        Text {
+                            Layout.fillWidth: true
+                            text: S.tr2(S.rev, "cost.apiEquivalent")
+                            color: Theme.ink3
+                            font.pixelSize: 11
+                            elide: Text.ElideRight
+                        }
+                        Text {
+                            text: root.snap.costTodayText || "–"
+                            color: Theme.ink
+                            font.pixelSize: 13
+                            font.weight: Font.DemiBold
+                            font.features: Theme.tabular
+                        }
+                        IconButton {
+                            id: costInfoButton
+                            glyph: "info"
+                            label: S.tr2(S.rev, "today.cost")
+                            implicitWidth: 22
+                            implicitHeight: 22
+                            onClicked: costInfo.open()
+                            Popup {
+                                id: costInfo
+                                x: costInfoButton.width - width
+                                y: costInfoButton.height + 4
+                                width: 280
+                                padding: 14
+                                background: Rectangle { radius: 10; color: Theme.cardFill; border.width: 1; border.color: Theme.cardLine }
+                                readonly property var rows: {
+                                    const sources = (root.snap.sources || []).filter(s => s.enabled && (s.todayCost || 0) > 0 && (!s.subscribed || prefs.includeSubscriptions))
+                                    return sources.sort((a, b) => b.todayCost - a.todayCost)
+                                }
+                                readonly property real total: rows.reduce((sum, s) => sum + s.todayCost, 0)
+                                contentItem: Column {
+                                    spacing: 6
+                                    Repeater {
+                                        model: costInfo.rows
+                                        Column {
+                                            required property var modelData
+                                            width: 252
+                                            spacing: 3
+                                            Row {
+                                                width: parent.width
+                                                spacing: 6
+                                                Rectangle { anchors.verticalCenter: parent.verticalCenter; width: 7; height: 7; radius: 3.5; color: Theme.sourceColor(parent.parent.modelData.source) }
+                                                Text { width: parent.width - 13 - costText.width - 6; text: parent.parent.modelData.name; color: Theme.ink; font.pixelSize: 12; elide: Text.ElideRight }
+                                                Text { id: costText; text: parent.parent.modelData.todayCostText; color: Theme.ink; font.pixelSize: 12; font.weight: Font.Medium; font.features: Theme.tabular }
+                                            }
+                                            Rectangle {
+                                                x: 13
+                                                width: parent.width - 13
+                                                height: 3
+                                                radius: 1.5
+                                                color: Theme.track
+                                                Rectangle {
+                                                    width: costInfo.total > 0 ? parent.width * parent.parent.modelData.todayCost / costInfo.total : 0
+                                                    height: 3
+                                                    radius: 1.5
+                                                    color: Theme.sourceColor(parent.parent.modelData.source)
+                                                }
+                                            }
+                                        }
+                                    }
+                                    Text {
+                                        visible: (root.snap.costUnpriced || 0) > 0
+                                        width: 252
+                                        text: Format.fill(S.tr2(S.rev, "cost.unpriced"), [root.snap.costUnpriced || 0])
+                                        color: Theme.ink2
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Text {
+                                        readonly property var excluded: (root.snap.sources || []).filter(s => s.enabled && s.subscribed && !prefs.includeSubscriptions).map(s => s.name)
+                                        visible: excluded.length > 0
+                                        width: 252
+                                        text: Format.fill(S.tr2(S.rev, "cost.subscriptionExcluded"), [excluded.join(S.tr2(S.rev, "list.separator"))])
+                                        color: Theme.ink2
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                    }
+                                    Text {
+                                        readonly property string status: S.rev >= 0 && prefs.currency !== "USD" ? catalog.rateStatus(prefs.currency) : ""
+                                        visible: status.length > 0
+                                        width: 252
+                                        text: status
+                                        color: Theme.ink3
+                                        font.pixelSize: 11
+                                        wrapMode: Text.WordWrap
+                                    }
+                                }
+                            }
+                        }
+                    }
+                    RowLayout {
+                        Layout.fillWidth: true
+                        Layout.topMargin: 12
+                        spacing: 8
+                        Rectangle {
+                            readonly property color tone: Heat.color(Heat.heatOf(root.snap.peak || 0, 2000))
+                            Layout.preferredWidth: 8
+                            Layout.preferredHeight: 8
+                            radius: 4
+                            color: tone
+                        }
+                        Text {
+                            text: S.tr2(S.rev, "today.peak")
+                            color: Theme.ink2
+                            font.pixelSize: 12
+                        }
+                        Item { Layout.fillWidth: true }
+                        Text {
+                            text: (root.snap.peakText || "0") + " " + S.tr2(S.rev, "unit.tokS")
+                            color: Theme.ink
+                            font.pixelSize: 13
                             font.weight: Font.Medium
+                            font.features: Theme.tabular
                         }
                     }
-                    MouseArea {
-                        id: disclosureArea
-                        anchors.fill: parent
-                        hoverEnabled: true
-                        cursorShape: Qt.PointingHandCursor
-                        onClicked: {
-                            dashboardState.agentsExpanded = !dashboardState.agentsExpanded
-                            root.applySnapshot()
+
+                    Hairline { visible: (root.snap.traffic || {}).enabled === true }
+
+                    // Network (DESIGN 10)
+                    TrafficSection {
+                        visible: (root.snap.traffic || {}).enabled === true
+                        Layout.fillWidth: true
+                        traffic: root.snap.traffic || ({})
+                    }
+
+                }
+
+                // DESIGN 4: notes about history that could not be read fully.
+                Column {
+                    visible: root.showContent && root.warningLines.length > 0
+                    Layout.fillWidth: true
+                    Layout.topMargin: 10
+                    spacing: 4
+                    Repeater {
+                        model: root.warningLines
+                        Row {
+                            required property var modelData
+                            width: parent.width
+                            spacing: 5
+                            Glyph {
+                                y: 2
+                                width: 10
+                                height: 10
+                                name: parent.modelData.alert ? "alertCircle" : "info"
+                                color: Theme.ink2
+                            }
+                            Text {
+                                width: parent.width - 15
+                                text: parent.modelData.text
+                                color: Theme.ink2
+                                font.pixelSize: 11
+                                wrapMode: Text.WordWrap
+                            }
                         }
                     }
-                    Accessible.role: Accessible.Button
-                    Accessible.name: dashboardState.agentsExpanded ? S.tr2(S.rev, "agents.collapse")
-                                                          : Format.fill(S.tr2(S.rev, "agents.expand.a11y"), [disclosure.total])
-                }
-
-                Hairline {}
-
-                // Today
-                SectionHeader { text: S.tr2(S.rev, "dashboard.today") }
-                GridLayout {
-                    Layout.fillWidth: true
-                    columns: 2
-                    columnSpacing: 16
-                    rowSpacing: 12
-                    StatCell { caption: S.tr2(S.rev, "today.output"); value: root.snap.todayOutputText || "0" }
-                    StatCell { caption: S.tr2(S.rev, "today.input"); value: root.snap.todayInputText || "0" }
-                    StatCell { caption: S.tr2(S.rev, "today.requests"); value: root.snap.todayRequestsText || "0" }
-                    StatCell {
-                        caption: S.tr2(S.rev, "today.average")
-                        value: root.snap.todayAverageText || "–"
-                        unit: root.snap.todayAverageText && root.snap.todayAverageText !== "–" ? S.tr2(S.rev, "unit.tokS") : ""
-                    }
-                    StatCell {
-                        Layout.columnSpan: 2
-                        caption: S.tr2(S.rev, "today.cost") + " · " + S.tr2(S.rev, "cost.apiEquivalent")
-                        value: root.snap.costTodayText || "–"
-                    }
-                }
-                RowLayout {
-                    Layout.fillWidth: true
-                    Layout.topMargin: 12
-                    spacing: 8
-                    Rectangle {
-                        readonly property color tone: Heat.color(Heat.heatOf(root.snap.peak || 0, 2000))
-                        Layout.preferredWidth: 8
-                        Layout.preferredHeight: 8
-                        radius: 4
-                        color: tone
-                    }
-                    Text {
-                        text: S.tr2(S.rev, "today.peak")
-                        color: Theme.ink2
-                        font.pixelSize: 12
-                    }
-                    Item { Layout.fillWidth: true }
-                    Text {
-                        text: (root.snap.peakText || "0") + " " + S.tr2(S.rev, "unit.tokS")
-                        color: Theme.ink
-                        font.pixelSize: 13
-                        font.weight: Font.Medium
-                        font.features: Theme.tabular
-                    }
-                }
-
-                Hairline { visible: (root.snap.traffic || {}).enabled === true }
-
-                // Network (DESIGN 10)
-                TrafficSection {
-                    visible: (root.snap.traffic || {}).enabled === true
-                    Layout.fillWidth: true
-                    traffic: root.snap.traffic || ({})
                 }
 
                 Hairline {}

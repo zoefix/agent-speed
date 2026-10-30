@@ -5,9 +5,12 @@
 #include <QTimer>
 #include <QVariantList>
 #include <algorithm>
+#include <set>
 
 #include "agentspeed/demo.hpp"
 #include "agentspeed/money.hpp"
+#include "agentspeed/price_book.hpp"
+#include "agentspeed/unpriced.hpp"
 #include "format.hpp"
 #include "heat.hpp"
 #include "perf_card.hpp"
@@ -280,6 +283,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         const auto cost = agentspeed::money::format(agentspeed::money::amount(s.todayCostMicroUsd, rate), currency, language, Form::Amount);
         row.insert(QStringLiteral("todayCostText"), QString::fromStdString(cost.text));
         row.insert(QStringLiteral("unpriced"), static_cast<qint64>(s.unpricedRequests));
+        row.insert(QStringLiteral("todayCost"), static_cast<qint64>(s.todayCostMicroUsd));
+        row.insert(QStringLiteral("todayRequests"), static_cast<qint64>(s.todayRequests));
         row.insert(QStringLiteral("subscribed"), options_.subscriptions.contains(source));
         sources.push_back(row);
         if (!s.enabled || !billable(s.source)) continue;
@@ -303,8 +308,35 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     map.insert(QStringLiteral("costUnpriced"), static_cast<qint64>(unpriced));
     map.insert(QStringLiteral("liveCostMicroUsd"), liveCost);
     map.insert(QStringLiteral("priceVersion"), snap.priceVersion);
+    // DESIGN 9 Settings → Cost: today's unpriced models by reason (METRICS 9.10 Live), one item per model and reason.
+    if (!snap.unpricedToday.empty()) {
+        const auto table = options_.config.prices ? options_.config.prices->current() : agentspeed::pricing::PriceBook::bundled();
+        const auto today = snap.unpricedToday.front().day;
+        std::map<std::pair<std::string, agentspeed::unpriced::Reason>, std::int64_t> items;
+        for (const auto& group : agentspeed::unpriced::aggregate(snap.unpricedToday, *table, today, today)) {
+            for (const auto& row : group.rows) items[{row.model, row.reason}] += row.requests;
+        }
+        std::vector<std::pair<std::pair<std::string, agentspeed::unpriced::Reason>, std::int64_t>> ordered(items.begin(), items.end());
+        std::stable_sort(ordered.begin(), ordered.end(), [](const auto& a, const auto& b) {
+            if (a.second != b.second) return a.second > b.second;
+            return a.first.first < b.first.first;
+        });
+        QStringList list, hints;
+        std::set<agentspeed::unpriced::Reason> seen;
+        for (const auto& [key, n] : ordered) {
+            const auto reason = QStringLiteral("cost.reason.") + QString::fromUtf8(agentspeed::unpriced::reasonId(key.second));
+            const auto model = key.first.empty() ? strings_->t(QStringLiteral("cost.noModelName")) : QString::fromStdString(key.first);
+            list << strings_->fmt(QStringLiteral("prices.unknownToday.item"), {model, strings_->t(reason)});
+            if (seen.insert(key.second).second) hints << strings_->t(reason + QStringLiteral(".hint"));
+        }
+        if (!list.isEmpty()) {
+            map.insert(QStringLiteral("unknownToday"), strings_->fmt(QStringLiteral("prices.unknownToday"), {list.join(strings_->t(QStringLiteral("list.separator")))}));
+            map.insert(QStringLiteral("unknownTodayHint"), hints.join(QLatin1Char('\n')));
+        }
+    }
     QVariantMap warnings;
     warnings.insert(QStringLiteral("partialHistory"), snap.warnings.partialHistory);
+    warnings.insert(QStringLiteral("unfinalized"), static_cast<qint64>(snap.warnings.unfinalized));
     warnings.insert(QStringLiteral("unreadableFiles"), snap.warnings.unreadableFiles);
     warnings.insert(QStringLiteral("malformedLines"), static_cast<qint64>(snap.warnings.malformedLines));
     QStringList unsupported;

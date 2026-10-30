@@ -110,6 +110,8 @@ QString Catalog::priceStatus() const {
                 {QString::number(table->version()), displayDate(table->updated()), QString::number(table->models().size())});
 }
 
+bool Catalog::pricesBundled() const { return prices_->current()->version() == agentspeed::pricing::PriceBook::bundled()->version(); }
+
 QString Catalog::chooseFolder(const QString& title, const QString& start) const {
     return QFileDialog::getExistingDirectory(nullptr, title, start, QFileDialog::ShowDirsOnly | QFileDialog::DontResolveSymlinks);
 }

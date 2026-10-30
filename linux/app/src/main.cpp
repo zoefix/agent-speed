@@ -38,6 +38,7 @@ namespace {
 
 // The settings pane between 網路流量 and 資料來源 (DESIGN 11).
 constexpr int kApiPage = 5;
+constexpr int kSourcesPage = 6;
 
 
 std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
@@ -254,6 +255,7 @@ int main(int argc, char* argv[]) {
         QMetaObject::invokeMethod(settingsWindow, "present", Q_ARG(QVariant, page));
     };
     QObject::connect(window, SIGNAL(settingsRequested()), &tray, SIGNAL(settingsRequested()));
+    QObject::connect(window, SIGNAL(sourcesRequested()), &tray, SIGNAL(sourcesRequested()));
     QQmlComponent historyComponent(&engine, QStringLiteral("AgentSpeed"), QStringLiteral("HistoryWindow"));
     QObject* historyWindow = nullptr;
     const auto openHistory = [&](const QString& source) {
@@ -270,6 +272,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&tray, &TrayIcon::historyRequested, &app, [&] { openHistory(QString()); });
     QObject::connect(&state, &AppState::historyRequested, &app, [&](const QString& source) { openHistory(source); });
     QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
+    QObject::connect(&tray, &TrayIcon::sourcesRequested, &app, [&] { openSettings(kSourcesPage); });
     QObject::connect(&report, &ReportController::settingsRequested, &app, [&] { openSettings(kApiPage); });
     QObject::connect(&tray, &TrayIcon::reportSettings, &app, [&] { openSettings(kApiPage); });
     QObject::connect(&tray, &TrayIcon::reportPause, &report, &ReportController::pause);

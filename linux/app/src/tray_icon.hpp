@@ -38,6 +38,7 @@ signals:
     void demoToggled(bool demo);
     void quitRequested();
     void settingsRequested();
+    void sourcesRequested();
     void historyRequested();
     void orbToggled(bool visible);
     void orbEdit(const QString& id, const QString& key, const QVariant& value);

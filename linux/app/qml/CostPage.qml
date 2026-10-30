@@ -1,4 +1,5 @@
 import QtQuick
+import QtQuick.Controls
 import QtQuick.Layouts
 import "Format.js" as Format
 import "Sync.js" as Sync
@@ -90,12 +91,39 @@ SettingsPage {
     SettingsGroup {
         title: S.tr2(S.rev, "prices.title")
         SettingsRow {
-            label: S.rev >= 0 && appState.snapshot.priceVersion >= 0 ? catalog.priceStatus() : ""
+            label: S.rev >= 0 && appState.snapshot.priceVersion >= 0
+                   ? catalog.priceStatus() + (catalog.pricesBundled() ? " · " + S.tr2(S.rev, "prices.bundled") : "") : ""
             caption: network.priceResult.length > 0 ? network.priceResult : network.priceLine
+            LinkButton {
+                text: S.tr2(S.rev, "prices.viewSource") + " ↗"
+                onClicked: catalog.openUrl("https://github.com/zoefix/agent-speed/blob/main/spec/assets/prices.json")
+            }
             PillButton {
                 enabled: prefs.networkEnabled && !network.priceChecking
                 text: network.priceChecking ? S.tr2(S.rev, "prices.checking") : S.tr2(S.rev, "prices.check")
                 onClicked: network.checkPrices()
+            }
+        }
+        // METRICS 9.10 Live: today's models without a price, selectable so the user can report them.
+        Item {
+            visible: (appState.snapshot.unknownToday || "").length > 0
+            Layout.fillWidth: true
+            implicitHeight: unknownText.implicitHeight + 16
+            TextEdit {
+                id: unknownText
+                x: 14
+                y: 8
+                width: parent.width - 28
+                readOnly: true
+                selectByMouse: true
+                wrapMode: Text.Wrap
+                text: appState.snapshot.unknownToday || ""
+                color: Theme.ink2
+                font.pixelSize: 12
+                HoverHandler { id: unknownHover }
+                ToolTip.visible: unknownHover.hovered
+                ToolTip.delay: 600
+                ToolTip.text: appState.snapshot.unknownTodayHint || ""
             }
         }
         SettingsRow {

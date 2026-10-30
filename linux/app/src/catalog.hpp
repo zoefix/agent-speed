@@ -30,6 +30,8 @@ public:
     Q_INVOKABLE QString rateFor(const QString& code) const;
     Q_INVOKABLE QString rateStatus(const QString& code) const;
     Q_INVOKABLE QString priceStatus() const;
+    // The bundled table is the current one (`prices.bundled`).
+    Q_INVOKABLE bool pricesBundled() const;
     Q_INVOKABLE QString chooseFolder(const QString& title, const QString& start) const;
     Q_INVOKABLE QString chooseFileOrFolder(const QString& title, const QString& start) const;
     Q_INVOKABLE void openUrl(const QString& url) const;
