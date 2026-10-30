@@ -1,0 +1,3 @@
+{"type":"metadata","protocol_version":"1.4","created_at":1792497660000}
+{"type":"config.update","time":1792497660001,"agentId":"main","environmentDisclosure":{"cwd":"/projects/nova"},"thinkingLevel":"xhigh"}
+{"type":"context.append_loop_event","time":1792497662000,"agentId":"main","event":{"type":"step.end","uuid":"step-old","messageId":"k-old","turnId":"1","step":1,"finishReason":"completed","usage":{"inputOther":40,"output":30,"inputCacheRead":0,"inputCacheCreation":0},"llmFirstTokenLatencyMs":300,"llmStreamDurationMs":1700}}

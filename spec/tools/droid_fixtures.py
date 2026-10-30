@@ -37,6 +37,7 @@ G = "a7b6c9d8-6bc4-4a70-9d34-8f9a0b1c2d36"  # forge: no sidecar
 H = "b8c7dae9-7cd5-4b81-8e45-9a0b1c2d3e47"  # forge: a sidecar without counters (droid before 0.123)
 I = "c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58"  # quasar: counters but no call
 J = "dae9fc0b-9ef7-4da3-8a67-1c2d3e4f5a69"  # root: legacy layout, malformed sidecar
+L = "ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70"  # forge: Factory's tier variants of a model
 FIELDS = ("inputTokens", "cacheCreationTokens", "cacheReadTokens", "outputTokens", "thinkingTokens")
 OPUS, SONNET_DATED, GPT = "claude-opus-5-5", "claude-sonnet-4-5-20250929", "gpt-5.5"
 BYOK = "custom:GPT-5.5-[OpenAI-BYOK]-0"  # the user's own model (BYOK), priced by its name (METRICS 9.2 custom)
@@ -443,6 +444,32 @@ def write_fixtures(out_dir):
         source="droid", project="quasar", model=OPUS, isSubagent=False, parentFile=None, phase="idle",
         inFlightStartMs=None, lastLineMs=ms("15:00:00.010", NEXT_DAY), malformedLines=0, responses=[],
         effort=None, speed=None, responseModes={})
+
+    # ---- L: Factory's tier variants are catalog entries, so the message's model id is the record of the tier;
+    # `glm-5.2-fast` is another model and the last call replaces the context's tier.
+    l_calls = ["l1-m1", "l1-m2", "l1-m3", "l1-m4", "l1-m5"]
+    l_models = ["claude-opus-5-5-fast", "gpt-6-astra-ultrafast", "glm-5.2-fast", "gpt-5.6-terra-flex", "gpt-5.5-fast"]
+    l_efforts = ["high", "xhigh", "high", "low", "medium"]
+    l_lines = [start(L, "/Users/dev/projects/forge", "Tiers")]
+    l_span = {}
+    for index, (call, model, effort) in enumerate(zip(l_calls, l_models, l_efforts)):
+        asked, answered = ms("16:00:0%d.000" % (2 * index), NEXT_DAY), ms("16:00:0%d.500" % (2 * index), NEXT_DAY)
+        l_span[call] = (asked, answered)
+        l_lines += [user("tl%d" % index, asked, [text("Step %d" % index)]),
+                    assistant(call, answered, [text("Done.")], model, effort)]
+    l_usage = counters(5000, 0, 0, 500, 0)
+    l_rel, lt = session(FORGE, L, l_lines + [outcome("tl4")], sidecar("gpt-5.5-fast", l_usage),
+                        ms("12:02:09.500", NEXT_DAY))
+    l_shares = allocate(l_usage, l_calls, lt.weights)
+    l_speeds = [dict(mode("fast"), provider="anthropic"), dict(mode("ultrafast"), provider="openai"), None,
+                dict(mode("flex"), provider="openai"), dict(mode("fast"), provider="openai")]
+    files[l_rel] = dict(
+        source="droid", project="forge", model="gpt-5.5-fast", isSubagent=False, parentFile=None, phase="idle",
+        inFlightStartMs=None, lastLineMs=l_span["l1-m5"][1], malformedLines=0,
+        responses=[resp("droid:" + c, l_span[c][0], l_span[c][1], l_shares[c], m) for c, m in zip(l_calls, l_models)],
+        effort=mode("medium"), speed=dict(mode("fast"), provider="openai"),
+        responseModes={"droid:" + c: {"effort": mode(e), "speed": v}
+                       for c, e, v in zip(l_calls, l_efforts, l_speeds)})
 
     # ---- Discovery decoys: none of these is a session.
     head = encode(start(A, "/Users/dev/projects/forge", "decoy")) + "\n"

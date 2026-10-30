@@ -45,6 +45,7 @@ NESTED = "E4D3C2B1-A0F9-4E8D-B7C6-A5F4E3D2C1B0"
 IMAGE = "7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f"
 IDE_SUB = "2c4e6a8b-0d1f-4a3c-9e5b-7d9f1b3d5f7a"
 CANCELLED = "6d8f0a2c-4e6b-4d8f-a0c2-e4f6a8b0c2d4"
+TIERS = "b3c4d5e6-f708-4192-a3b4-c5d6e7f8a9b0"
 
 
 def conv(store, conversation):
@@ -55,6 +56,7 @@ MAIN_DB, SUB_DB, UNSUPPORTED_DB = conv("antigravity-cli", MAIN), conv("antigravi
 INFLIGHT_DB, BROWSER_DB, FORK_DB = conv("antigravity", INFLIGHT), conv("antigravity", BROWSER), conv("antigravity", FORK)
 NESTED_DB, IMAGE_DB, COPY_DB = conv("antigravity-ide", NESTED), conv("antigravity-ide", IMAGE), conv("antigravity-ide", MAIN)
 IDE_SUB_DB, CANCELLED_DB = conv("antigravity-ide", IDE_SUB), conv("antigravity", CANCELLED)
+TIERS_DB = conv("antigravity-cli", TIERS)
 BACKUP_DB = conv("antigravity-backup", MAIN)
 
 
@@ -128,12 +130,13 @@ def duration(field, millis):
     return pb_msg(field, pb_int(1, millis // 1000), pb_int(2, (millis % 1000) * 1_000_000))
 
 
-def usage(inp=0, out=0, cache=0, thinking=0, response=0, response_id=None, message_id=None):
-    """ModelUsageStats with the unknown fields a real row carries (model enum, provider, response header)."""
+def usage(inp=0, out=0, cache=0, thinking=0, response=0, response_id=None, message_id=None, tier=""):
+    """ModelUsageStats with the unknown fields a real row carries (model enum, provider, response header). Every row
+    audited so far leaves `service_tier` (13) empty, so only the rows of `tiers_conversation` carry one."""
     return b"".join([
         pb_int(1, 1026), pb_int(2, inp), pb_int(3, out), pb_int(5, cache), pb_int(6, 24), pb_str(7, message_id or ""),
         pb_msg(8, pb_str(1, "sessionID"), pb_str(2, "f00dfeed")), pb_int(9, thinking), pb_int(10, response),
-        pb_str(11, response_id or ""), pb_str(13, "standard"),
+        pb_str(11, response_id or ""), pb_str(13, tier),
     ])
 
 
@@ -188,9 +191,10 @@ def generation(steps, response_model=None, display=None, packed=True, ttft=700, 
     return pb_msg(1, chat) + indices + pb_str(4, "exec-7f21")
 
 
-def executor(reason, last_step, model_name):
-    """ExecutorMetadata: termination_reason 1, last_step_idx 3, cascade_config 10 -> planner_config 1 -> model_name 28."""
-    planner = pb_int(1, 1026) + pb_str(28, model_name)
+def executor(reason, last_step, model_name, thinking=0):
+    """ExecutorMetadata: termination_reason 1, last_step_idx 3, cascade_config 10 -> planner_config 1 -> model_name 28
+    and, for pass-through effort, completion_config_override 56 -> thinking_level 19."""
+    planner = pb_int(1, 1026) + pb_str(28, model_name) + (pb_msg(56, pb_int(19, thinking)) if thinking else b"")
     return b"".join([pb_int(1, reason), pb_int(2, 4), key(3, 0) + varint(last_step), pb_str(9, "exec-7f21"),
                      pb_msg(10, pb_msg(1, planner))])
 
@@ -263,10 +267,22 @@ def resp(key_, start, end, inp, cached, out, reasoning, model):
             "final": True}
 
 
-def expect(project, model, sub, parent, phase, in_flight, last, malformed, responses):
+def attributed(value, evidence, provider=None):
+    return dict({"mode": value, "evidence": evidence}, **({"provider": provider} if provider else {}))
+
+
+CONFIGURED_TIER = attributed("fast", "configured", "google")  # config/config.json: vertexServiceTier = priority
+
+
+def expect(project, model, sub, parent, phase, in_flight, last, malformed, responses, effort=None,
+           speed=CONFIGURED_TIER, response_modes=None):
+    """`response_modes` lists the responses with a known effort or speed: (effort, speed) per key."""
+    known = response_modes or {}
     return {"source": "antigravity", "project": project, "model": model, "isSubagent": sub, "parentFile": parent,
             "phase": phase, "inFlightStartMs": None if in_flight is None else ms(in_flight), "lastLineMs": ms(last),
-            "malformedLines": malformed, "responses": responses}
+            "malformedLines": malformed, "responses": responses, "effort": effort, "speed": speed,
+            "responseModes": {r["key"]: dict(zip(("effort", "speed"), known.get(r["key"], (None, None))))
+                              for r in responses}}
 
 
 # ---------------------------------------------------------------------------- conversations
@@ -432,6 +448,38 @@ def cancelled_conversation():
     return c
 
 
+def tiers_conversation():
+    """CLI: every way a response gets its effort and speed. The executor names the run's model; a generation's display
+    name beats it; a generation that answered with another model stops it."""
+    c = Conversation(TIERS, SOURCE_CLI, trajectory("09:59:00.000", uris=["file:///Users/dev/projects/tiers"]))
+
+    def planner(start, end, token, tier=""):
+        return meta(start, finished=end, completed=end, model_usage=usage(1000, 100, 0, 0, 100, token, tier=tier))
+
+    c.step(USER_INPUT, DONE, meta("09:59:01.000", completed="09:59:01.010", source=4))                  # 0
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:01.100", "09:59:02.100", "resp-ag-tier-1", "priority"))  # 1
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:03.100", "09:59:04.100", "resp-ag-tier-2", "standard"))  # 2
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:05.100", "09:59:06.100", "resp-ag-tier-3", "flex"))   # 3
+    c.step(USER_INPUT, DONE, meta("09:59:10.000", completed="09:59:10.010", source=4))                  # 4
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:10.100", "09:59:11.100", "resp-ag-tier-5"))           # 5
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:12.100", "09:59:13.100", "resp-ag-tier-6"))           # 6
+    c.step(USER_INPUT, DONE, meta("09:59:20.000", completed="09:59:20.010", source=4))                  # 7
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:20.100", "09:59:21.100", "resp-ag-tier-8"))           # 8
+    c.step(USER_INPUT, DONE, meta("09:59:30.000", completed="09:59:30.010", source=4))                  # 9
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:30.100", "09:59:31.100", "resp-ag-tier-10"))          # 10
+    c.step(USER_INPUT, DONE, meta("09:59:40.000", completed="09:59:40.010", source=4))                  # 11
+    c.step(PLANNER_RESPONSE, DONE, planner("09:59:40.100", "09:59:41.100", "resp-ag-tier-12", "priority"))  # 12
+    c.generations = [
+        (generation([1], "gemini-3.1-pro", "Gemini 3.1 Pro (High)"), None),
+        (generation([2], "gemini-3.7-flash"), None),
+        (generation([3], "gemini-3.7-flash-exp-b"), None),
+        (generation([5], "gemini-3.1-flash-lite"), None),
+    ]
+    c.executors = [executor(4, 3, "gemini-3.7-flash-high"), executor(4, 6, "gemini-3.7-flash-low"),
+                   executor(4, 8, "gemini-3.1-pro", thinking=3), executor(4, 10, "gemini-3.5-flash-extra-low")]
+    return c
+
+
 def write_fixtures(out_dir):
     base = os.path.join(out_dir, "antigravity")
     if os.path.exists(base):
@@ -451,6 +499,9 @@ def write_fixtures(out_dir):
     image_conversation().write(p(IMAGE_DB))
     ide_sub_conversation().write(p(IDE_SUB_DB))
     cancelled_conversation().write(p(CANCELLED_DB))
+    tiers_conversation().write(p(TIERS_DB))
+    with open(p("antigravity/config/config.json"), "w", encoding="utf-8", newline="\n") as f:
+        json.dump({"userSettings": {"remoteControlHostname": "dev-mac", "vertexServiceTier": "priority"}}, f, indent=2)
     tiny_db(p(UNSUPPORTED_DB), "PRAGMA journal_mode=WAL; PRAGMA user_version=1;"
             "CREATE TABLE trajectory_meta(trajectory_id TEXT,cascade_id TEXT,trajectory_type INTEGER,source INTEGER);"
             "CREATE TABLE trajectory_metadata_blob(id TEXT,data BLOB);"
@@ -480,7 +531,7 @@ def write_fixtures(out_dir):
         (SUB_DB, "09:00:14.000"), (MAIN_DB, "09:01:41.000"), (UNSUPPORTED_DB, "09:02:00.000"),
         (INFLIGHT_DB, "09:10:32.000"), (BROWSER_DB, "09:20:03.000"), (FORK_DB, "09:31:01.000"),
         (NESTED_DB, "09:40:01.000"), (IMAGE_DB, "09:50:05.000"), (COPY_DB, "09:55:00.000"),
-        (IDE_SUB_DB, "09:57:03.000"), (CANCELLED_DB, "09:58:06.000"))}
+        (IDE_SUB_DB, "09:57:03.000"), (CANCELLED_DB, "09:58:06.000"), (TIERS_DB, "09:59:42.000"))}
     for rel, when in mtimes.items():
         os.utime(p(rel), (when / 1000, when / 1000))
     os.utime(p(BACKUP_DB), (ms("09:56:00.000") / 1000,) * 2)
@@ -492,7 +543,7 @@ def write_fixtures(out_dir):
             resp("resp-ag-main-2", "09:00:06.020", "09:00:08.020", 13900, 12400, 210, 90, "gemini-3.1-pro-high-exp-b"),
             resp("resp-ag-main-3", "09:00:08.110", "09:00:11.110", 16000, 14000, 350, 200, "Gemini 3.1 Pro (High)"),
             resp("resp-ag-main-4", "09:01:30.050", "09:01:39.050", 16900, 16000, 1200, 400, "gemini-3.1-pro"),
-        ]),
+        ], response_modes={"resp-ag-main-%d" % n: (attributed("high", "recorded"), None) for n in (1, 2, 3)}),
         SUB_DB: expect("star map", "gemini-3.1-flash", True, MAIN_DB, "tools", None, "09:00:13.520", 0, [
             resp("resp-ag-sub-1", "09:00:11.450", "09:00:13.450", 5000, 0, 150, 100, "gemini-3.1-flash"),
         ]),
@@ -523,6 +574,24 @@ def write_fixtures(out_dir):
         CANCELLED_DB: expect("nebula", "gemini-3.1-flash", False, None, "idle", None, "09:58:05.010", 0, [
             resp("resp-ag-cancel-1", "09:58:00.150", "09:58:01.150", 800, 0, 50, 0, "gemini-3.1-flash"),
         ]),
+        TIERS_DB: expect("tiers", "gemini-3.5-flash-extra-low", False, None, "idle", None, "09:59:41.100", 0, [
+            resp("resp-ag-tier-1", "09:59:01.100", "09:59:02.100", 1000, 0, 100, 0, "gemini-3.1-pro"),
+            resp("resp-ag-tier-2", "09:59:03.100", "09:59:04.100", 1000, 0, 100, 0, "gemini-3.7-flash"),
+            resp("resp-ag-tier-3", "09:59:05.100", "09:59:06.100", 1000, 0, 100, 0, "gemini-3.7-flash-exp-b"),
+            resp("resp-ag-tier-5", "09:59:10.100", "09:59:11.100", 1000, 0, 100, 0, "gemini-3.1-flash-lite"),
+            resp("resp-ag-tier-6", "09:59:12.100", "09:59:13.100", 1000, 0, 100, 0, "gemini-3.7-flash-low"),
+            resp("resp-ag-tier-8", "09:59:20.100", "09:59:21.100", 1000, 0, 100, 0, "gemini-3.1-pro"),
+            resp("resp-ag-tier-10", "09:59:30.100", "09:59:31.100", 1000, 0, 100, 0, "gemini-3.5-flash-extra-low"),
+            resp("resp-ag-tier-12", "09:59:40.100", "09:59:41.100", 1000, 0, 100, 0, None),
+        ], speed=attributed("fast", "served", "google"), response_modes={
+            "resp-ag-tier-1": (attributed("high", "recorded"), attributed("fast", "served", "google")),
+            "resp-ag-tier-2": (attributed("high", "recorded"), attributed("standard", "served", "google")),
+            "resp-ag-tier-3": (attributed("high", "recorded"), attributed("flex", "served", "google")),
+            "resp-ag-tier-6": (attributed("low", "recorded"), None),
+            "resp-ag-tier-8": (attributed("high", "recorded"), None),
+            "resp-ag-tier-10": (attributed("extra-low", "recorded"), None),
+            "resp-ag-tier-12": (None, attributed("fast", "served", "google")),
+        }),
     }
     return {
         "_comment": "Antigravity databases are processed in `order` after the files of the top-level `order`, with the "

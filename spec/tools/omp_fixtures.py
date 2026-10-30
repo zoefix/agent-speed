@@ -640,6 +640,67 @@ def write_fixtures(out_dir):
     trace(fresh_rel, 2, "idle")
     mtimes[fresh_rel] = ms("00:10:01.000", NEXT_DAY)
 
+    # ---- Effort and speed: selections live on the journal branch, a message's own record beats them for that message.
+    branch_created = ms("11:30:00.000")
+    branch_rel = "%s/-projects-branch/%s" % (SESSIONS, session_name(branch_created, uuid7(branch_created, 14)))
+    b = Session("b4a7")
+    b.title("Effort and tiers", branch_created)                                                    # 1
+    b.header(branch_created, uuid7(branch_created, 14), HOME + "/projects/branch")                 # 2
+    b.entry("service_tier_change", ms("11:30:00.010"),
+            serviceTier={"openai": "priority", "anthropic": "standard", "mistral": "priority"})    # 3
+    b.entry("thinking_level_change", ms("11:30:00.011"), thinkingLevel="high", configured="high")  # 4
+    b.user(ms("11:30:01.000"), "One")                                                              # 5
+    b1 = b.assistant(ms("11:30:03.000"), GPT, [text("One.")], usage(100, 50, 0, 0), "stop", ms("11:30:01.005"),
+                     duration=1500, serviceTier="default")                                         # 6
+    b.user(ms("11:30:04.000"), "Two")                                                              # 7
+    b2 = b.assistant(ms("11:30:06.000"), OPUS, [text("Two.")], usage(110, 60, 0, 0), "stop", ms("11:30:04.005"),
+                     duration=1500, requestControls={"effort": {"topLevel": "high", "tail": "max"}})  # 8
+    b.user(ms("11:30:07.000"), "Three")                                                            # 9
+    b3 = b.assistant(ms("11:30:09.000"), OPUS, [text("Three.")], usage(120, 70, 0, 0), "stop", ms("11:30:07.005"),
+                     duration=1500, requestControls={"effort": {"topLevel": "low", "tail": None}})  # 10
+    b.entry("thinking_level_change", ms("11:30:09.500"), thinkingLevel=None)                       # 11
+    b.user(ms("11:30:10.000"), "Four")                                                             # 12
+    b4 = b.assistant(ms("11:30:12.000"), GPT, [text("Four.")], usage(130, 80, 0, 0), "stop", ms("11:30:10.005"),
+                     duration=1500, requestControls={"effort": {"topLevel": None, "tail": None}})  # 13
+    b.last_id = b2                                                                                  # a branch from line 8
+    b.user(ms("11:31:00.000"), "Five, from the second answer")                                     # 14
+    b5 = b.model_usage(ms("11:31:00.500"), "auto-thinking", GPT_MINI, usage(40, 5, 0, 0))          # 15
+    b6 = b.assistant(ms("11:31:02.000"), OPUS, [text("Five.")], usage(140, 90, 0, 0), "stop", ms("11:31:00.505"),
+                     duration=1400)                                                                # 16
+    b.write(p(branch_rel))
+
+    def attributed(value, evidence, provider=None):
+        return dict({"mode": value, "evidence": evidence}, **({"provider": provider} if provider else {}))
+
+    high, opus_standard = attributed("high", "selected"), attributed("standard", "selected", "anthropic")
+    selected_fast = attributed("fast", "selected", "openai")
+    files[branch_rel] = dict(
+        source="omp", project="branch", model="claude-opus-5-5", isSubagent=False, parentFile=None,
+        phase="idle", inFlightStartMs=None, lastLineMs=ms("11:31:02.000"), malformedLines=0,
+        responses=[
+            resp(key(b1, ms("11:30:01.005")), ms("11:30:01.005"), ms("11:30:02.505"), 100, 0, 0, 50, 0, "gpt-5.5"),
+            resp(key(b2, ms("11:30:04.005")), ms("11:30:04.005"), ms("11:30:05.505"), 110, 0, 0, 60, 0,
+                 "claude-opus-5-5"),
+            resp(key(b3, ms("11:30:07.005")), ms("11:30:07.005"), ms("11:30:08.505"), 120, 0, 0, 70, 0,
+                 "claude-opus-5-5"),
+            resp(key(b4, ms("11:30:10.005")), ms("11:30:10.005"), ms("11:30:11.505"), 130, 0, 0, 80, 0, "gpt-5.5"),
+            resp(key(b5, ms("11:31:00.500")), None, ms("11:31:00.500"), 40, 0, 0, 5, 0, "gpt-5.5-mini"),
+            resp(key(b6, ms("11:31:00.505")), ms("11:31:00.505"), ms("11:31:01.905"), 140, 0, 0, 90, 0,
+                 "claude-opus-5-5"),
+        ],
+        effort=high, speed=opus_standard,
+        responseModes={
+            key(b1, ms("11:30:01.005")): dict(effort=high, speed=attributed("standard", "recorded", "openai")),
+            key(b2, ms("11:30:04.005")): dict(effort=attributed("max", "recorded"), speed=opus_standard),
+            key(b3, ms("11:30:07.005")): dict(effort=attributed("low", "recorded"), speed=opus_standard),
+            key(b4, ms("11:30:10.005")): dict(effort=None, speed=selected_fast),
+            key(b5, ms("11:31:00.500")): dict(effort=None, speed=selected_fast),
+            key(b6, ms("11:31:00.505")): dict(effort=high, speed=opus_standard),
+        })
+    trace(branch_rel, 13, "idle")
+    trace(branch_rel, 14, "generating", ms("11:31:00.000"))
+    mtimes[branch_rel] = ms("00:20:01.000", NEXT_DAY)
+
     # ---- Discovery decoys: none of these is a session file.
     head = "".join(json.dumps(r, separators=(",", ":")) + "\n" for r in m.lines[:5])
     decoys = {
@@ -666,6 +727,15 @@ def write_fixtures(out_dir):
                        lastLineMs=ms("11:21:00.000"),
                        responseKeys=[key(ia1, ms("11:20:30.006")), key(imu, ms("11:20:35.400"))])]
 
+    # The first two sessions select a level once; a side call runs at its own, unrecorded level.
+    for rel, level, side in ((legacy_rel, "medium", ()), (main_rel, "high", (key(mu1, ms("10:50:11.300")),))):
+        chosen = attributed(level, "selected")
+        files[rel].update(effort=chosen, speed=None, responseModes={
+            r["key"]: dict(effort=None if r["key"] in side else chosen, speed=None) for r in files[rel]["responses"]})
+    for expected in files.values():
+        expected.setdefault("effort", None)
+        expected.setdefault("speed", None)
+        expected.setdefault("responseModes", {r["key"]: dict(effort=None, speed=None) for r in expected["responses"]})
     order = sorted(mtimes, key=lambda rel: (mtimes[rel], rel))
     for rel in order:
         os.utime(p(rel), (mtimes[rel] / 1000, mtimes[rel] / 1000))

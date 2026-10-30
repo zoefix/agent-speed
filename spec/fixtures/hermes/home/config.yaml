@@ -2,3 +2,12 @@ logging:
   level: INFO
   max_size_mb: 5
   backup_count: 3
+agent:
+  max_turns: 90
+  # reasoning_effort: low
+  reasoning_effort: "medium"  # new sessions start here
+  service_tier: fast
+  reasoning_overrides:
+    reasoning_effort: max
+delegation:
+  reasoning_effort: low

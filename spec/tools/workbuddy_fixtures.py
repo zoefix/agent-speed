@@ -14,8 +14,11 @@ by hand, independently of reference.py.
 import hashlib
 import json
 import os
+import sqlite3
 import sys
 from datetime import datetime, timezone
+
+from antigravity_fixtures import close_cleanly
 
 DAY = "2026-10-21"
 CN = "workbuddy/.workbuddy"
@@ -224,6 +227,27 @@ def attach(pd, fields, use, raw_use):
         if write:
             derived["cache_creation_input_tokens"] = write
     fields["message"] = {"usage": derived}
+
+
+def write_app_database(path, thought_levels):
+    """`<data>/workbuddy.db` as the app keeps it (WAL, closed cleanly), reduced to what surrounds the one column read;
+    `thought_levels` None writes the schema from before migration 0008."""
+    for stale in (path, path + "-wal", path + "-shm"):
+        if os.path.exists(stale):
+            os.remove(stale)
+    os.makedirs(os.path.dirname(path), exist_ok=True)
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA journal_mode=WAL")
+    level = ", thought_level TEXT" if thought_levels is not None else ""
+    db.execute("CREATE TABLE sessions (id TEXT PRIMARY KEY, cwd TEXT NOT NULL, user_id TEXT NOT NULL, title TEXT, "
+               "created_at INTEGER NOT NULL, updated_at INTEGER NOT NULL%s)" % level)
+    db.execute("CREATE TABLE session_context_usage (session_id TEXT, payload TEXT)")
+    db.execute("INSERT INTO session_context_usage VALUES ('(fixture)', '(never read)')")
+    for session, value in (thought_levels or {}).items():
+        db.execute("INSERT INTO sessions (id, cwd, user_id, title, created_at, updated_at, thought_level) "
+                   "VALUES (?, '/projects', 'user', '(title, never read)', 1, 1, ?)", (session, value))
+    db.commit()
+    close_cleanly(db, path)
 
 
 def resp(source_model, key, start, end, inp, cached, write, out, reasoning, provider=None):
@@ -643,8 +667,8 @@ def write_fixtures(out_dir):
         "%s/traces/4242/%s.jsonl" % (CN, uid("trace")): usage_line,
         "%s/sessions/4242.json" % CN: '{"pid":4242}\n',
         "%s/models.json" % CN: '{"models":[]}\n',
-        "%s/settings.json" % CN: "{}\n",
-        "%s/workbuddy.db" % CN: "",
+        "%s/settings.json" % CN: json.dumps({"reasoningEffort": "medium", "alwaysThinkingEnabled": True,
+                                             "env": {"NOTE": "the rest of this file is never read"}}) + "\n",
         "%s/logs/main.log" % CN: "(log)\n",
         "%s/projects/%s/%s/subagents/nested/agent-deep.jsonl" % (INTL, ORBIT_SLUG, d_id): usage_line,
         "%s/app/Local Storage/leveldb/LOG" % INTL: "(log)\n",
@@ -653,6 +677,19 @@ def write_fixtures(out_dir):
     for rel, content in decoys.items():
         with open(p(rel), "w", encoding="utf-8", newline="\n") as fh:
             fh.write(content)
+
+    # The app's own session settings: the current selection of a session, never a response's. Sessions that selected
+    # nothing, and sub-agents (which have no row), show the settings file's value as configured; the international
+    # edition has neither a thought_level column nor a settings file.
+    write_app_database(p("%s/workbuddy.db" % CN), {a_id: "high", b_id: "disabled", f_id: "enabled"})
+    write_app_database(p("%s/workbuddy.db" % INTL), None)
+    selected = {a_rel: "high", b_rel: "off", f_rel: "on"}
+    for rel, expected in files.items():
+        value = selected.get(rel)
+        expected.update(effort=dict(mode=value, evidence="selected") if value else
+                        dict(mode="medium", evidence="configured") if rel.startswith(CN + "/") else None,
+                        speed=None,
+                        responseModes={r["key"]: dict(effort=None, speed=None) for r in expected["responses"]})
 
     order = sorted(mtimes, key=lambda rel: (mtimes[rel], rel))
     for rel in order:

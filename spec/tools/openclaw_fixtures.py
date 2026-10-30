@@ -50,6 +50,9 @@ CREATE TABLE transcript_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, 
   PRIMARY KEY (session_id, seq)) STRICT;
 CREATE TABLE transcript_rewrite_watermarks (session_id TEXT NOT NULL PRIMARY KEY, generation TEXT NOT NULL,
   updated_at INTEGER NOT NULL) STRICT;
+CREATE TABLE trajectory_runtime_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, run_id TEXT,
+  event_json TEXT NOT NULL, created_at INTEGER NOT NULL, event_utf8_bytes INTEGER, event_payload BLOB, event_codec TEXT,
+  PRIMARY KEY (session_id, seq)) STRICT;
 CREATE TABLE auth_profile_store (store_key TEXT NOT NULL PRIMARY KEY, value_json TEXT NOT NULL) STRICT;
 """
 
@@ -66,6 +69,8 @@ CREATE TABLE transcript_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, 
   created_at INTEGER NOT NULL, PRIMARY KEY (session_id, seq)) STRICT;
 CREATE TABLE transcript_rewrite_watermarks (session_id TEXT NOT NULL PRIMARY KEY, generation TEXT NOT NULL,
   updated_at INTEGER NOT NULL) STRICT;
+CREATE TABLE trajectory_runtime_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, run_id TEXT,
+  event_json TEXT NOT NULL, created_at INTEGER NOT NULL, PRIMARY KEY (session_id, seq)) STRICT;
 """
 
 SCHEMA_2026_7 = """
@@ -105,6 +110,16 @@ def zstd(raw):
     return out.stdout
 
 
+def brotli_stream(raw):
+    """Compressed as OpenClaw's trajectory writer does: quality 3, text mode, a 256 KiB window."""
+    try:
+        import brotli
+    except ImportError:
+        return subprocess.run(["brotli", "-q", "3", "-w", "18", "-c"], input=raw, capture_output=True,
+                              check=True).stdout
+    return brotli.compress(raw, mode=brotli.MODE_TEXT, quality=3, lgwin=18)
+
+
 class Window:
     """The rows of one transcript window. Entry ids are a 4-character prefix and a counter."""
 
@@ -114,6 +129,7 @@ class Window:
         self.harness, self.acp, self.spawned_by, self.parent_key, self.reason = harness, acp, spawned_by, \
             parent_key, reason
         self.rows, self.count, self.last_id, self.updated = [], 0, None, created
+        self.events = []
         self.raw({"type": "session", "version": version, "id": session_id, "timestamp": iso(created), "cwd": cwd},
                  created)
 
@@ -168,6 +184,39 @@ class Window:
             self.raw(row, ms("13:20:00.001"))
             self.last_id = row["id"]
 
+    def event(self, kind, when, run, data, compress=False, payload=None, size=None):
+        """A row of trajectory_runtime_events with the recorder's envelope: plain JSON, a Brotli stream of it, or a
+        literal `payload` with the declared `size`."""
+        line = json.dumps({"traceSchema": "openclaw-trajectory", "schemaVersion": 1, "traceId": self.session_id,
+                           "source": "runtime", "type": kind, "ts": iso(when), "seq": len(self.events) + 1,
+                           "sourceSeq": len(self.events) + 1, "sessionId": self.session_id, "sessionKey": self.key,
+                           "runId": run, "workspaceDir": WORKSPACE, "data": data},
+                          separators=(",", ":"), ensure_ascii=False).encode("utf-8")
+        if payload is not None:
+            self.events.append((run, "", when, size, payload, "br"))
+        elif compress:
+            assert len(line) >= 1024
+            self.events.append((run, "", when, len(line), brotli_stream(line), "br"))
+        else:
+            assert len(line) < 1024 or self.plain_only
+            self.events.append((run, line.decode("utf-8"), when, len(line), None, None))
+        return len(self.events)
+
+    plain_only = False
+
+    def attempt(self, when, run, think, fast=False, compress=True, model=True):
+        """What one attempt writes first: `session.started`, then `trace.metadata` with the run's redacted snapshot."""
+        self.event("session.started", when, run, {"trigger": "user", "toolCount": 41, "clientToolCount": 0})
+        data = {"harness": {"type": "openclaw"}}
+        if model:
+            data["model"] = {"provider": "anthropic", "name": "claude-opus-5-5", "api": "anthropic-messages",
+                             "fastMode": fast, "thinkLevel": think, "reasoningLevel": "off"}
+        else:
+            data.update(truncated=True, reason="trajectory-event-size-limit", droppedFields=["harness", "model"])
+        if compress or self.plain_only:
+            data["config"] = {"redacted": {"note": "(redacted configuration) " * 60}}
+        return self.event("trace.metadata", when + 1, run, data, compress)
+
 
 def write_database(path, schema, windows, journal_wal):
     for stale in (path, path + "-wal", path + "-shm"):
@@ -191,6 +240,13 @@ def write_database(path, schema, windows, journal_wal):
         db.execute("INSERT INTO session_nodes VALUES (?,?,?,?,?,?)",
                    (w.key, w.session_id, json.dumps({"sessionId": w.session_id}), w.updated, w.parent_key,
                     w.spawned_by))
+        for index, (run, line, created, size, payload, codec) in enumerate(w.events, start=1):
+            if zstd_columns:
+                db.execute("INSERT INTO trajectory_runtime_events VALUES (?,?,?,?,?,?,?,?)",
+                           (w.session_id, index, run, line, created, size, payload, codec))
+            else:
+                db.execute("INSERT INTO trajectory_runtime_events VALUES (?,?,?,?,?)",
+                           (w.session_id, index, run, line, created))
         for index, (event_json, created, blob, size) in enumerate(w.rows, start=1):
             if zstd_columns:
                 db.execute("INSERT INTO transcript_events (session_id, seq, event_json, created_at, event_zstd, "
@@ -221,6 +277,17 @@ def key(entry_id, stamp):
     return "openclaw:%s:%d" % (entry_id, stamp)
 
 
+def attributed(value, evidence):
+    return {"mode": value, "evidence": evidence}
+
+
+def recorded(value):
+    return attributed(value, "recorded")
+
+
+FAST = attributed("fast", "selected")
+
+
 def no_modes(responses):
     return dict(effort=None, speed=None, responseModes={r["key"]: {"effort": None, "speed": None} for r in responses})
 
@@ -237,8 +304,12 @@ def write_fixtures(out_dir):
 
     databases, traces, mtimes = {MAIN_DB: {}, OPS_DB: {}, LEGACY_DB: {"unsupported": True}}, [], {}
 
-    def expect(db_rel, window, **kw):
-        kw.update(no_modes(kw["responses"]))
+    def expect(db_rel, window, modes=None, effort=None, speed=None, **kw):
+        """`modes`: (effort, speed) per position in `responses`, for the responses that have one."""
+        block = no_modes(kw["responses"])
+        for index, (known_effort, known_speed) in (modes or {}).items():
+            block["responseModes"][kw["responses"][index]["key"]] = {"effort": known_effort, "speed": known_speed}
+        kw.update(block, effort=effort, speed=speed)
         databases[db_rel][agent(db_rel, window)] = dict(source="openclaw", **kw)
 
     def trace(db_rel, window, seq, phase, in_flight=None):
@@ -289,6 +360,28 @@ def write_fixtures(out_dir):
     w1.raw('{"type":"message","id":', ms("13:05:30.000"))                                                 # 22 bad JSON
     w1.raw(None, ms("13:05:31.000"), blob=b"\x28\xb5\x2f\xfd\x00broken frame", size=2000)              # 23 bad zstd
     w1.user(ms("13:06:00.000"), "Next: the dispatcher")                                                   # 24
+    # Its attempts. The trace row sits right after `session.started`; the rows with the conversation are never read.
+    conversation = {"finalPromptText": "Split the queue from the dispatcher. " * 60}
+    t1 = w1.attempt(ms("13:00:04.000"), "run-1", "high")                                                  # 1, 2
+    w1.event("prompt.submitted", ms("13:00:05.000"), "run-1", conversation, compress=True)                # 3
+    w1.event("model.completed", ms("13:00:17.000"), "run-1", dict(conversation, messagesSnapshot=[]), compress=True)  # 4
+    w1.event("session.ended", ms("13:00:17.100"), "run-1", {"status": "success"})                          # 5
+    t2 = w1.attempt(ms("13:01:00.000"), "run-2", "xhigh", fast=True)                                      # 6, 7
+    w1.event("prompt.submitted", ms("13:01:00.002"), "run-2", conversation, compress=True)                # 8
+    t3 = w1.attempt(ms("13:03:00.000"), "run-3", "adaptive", compress=False)                              # 9, 10
+    t4 = w1.attempt(ms("13:05:00.000"), "run-4", None, compress=False, model=False)                       # 11, 12
+    t5 = w1.attempt(ms("13:05:59.000"), "run-5", "max", fast=True)                                        # 13, 14
+    w1.event("session.started", ms("13:06:00.100"), "run-6", {"trigger": "user"})                         # 15
+    t6 = w1.event("trace.metadata", ms("13:06:00.101"), "run-6", {}, payload=b"\x1b\xff not a brotli stream", size=64)  # 16
+    w1.event("session.started", ms("13:06:00.200"), "run-7", {"trigger": "user"})                         # 17
+    good = brotli_stream(b'{"type":"trace.metadata","data":{"model":{"thinkLevel":"low"}}}')
+    t7 = w1.event("trace.metadata", ms("13:06:00.201"), "run-7", {}, payload=good, size=9)                # 18 wrong size
+    w1.event("session.started", ms("13:06:00.300"), "run-8", {"trigger": "user"})                         # 19
+    t8 = w1.event("context.compiled", ms("13:06:00.301"), "run-8", conversation, compress=True)           # 20 not a trace
+    w1.event("session.started", ms("13:06:00.400"), "run-9", {"trigger": "user"})                         # 21
+    whole = brotli_stream(json.dumps({"type": "trace.metadata", "pad": "x" * 2000}).encode("utf-8"))
+    t9 = w1.event("trace.metadata", ms("13:06:00.401"), "run-9", {}, payload=whole[:len(whole) // 2], size=2030)  # 22 cut
+    trace_rows = {w1.session_id: [t1, t2, t3, t4, t5, t6, t7, t8, t9]}
     w1_responses = [
         resp(key(a1, ms("13:00:05.010")), ms("13:00:05.010"), ms("13:00:11.300"), 18003, 0, 18000, 420, 0,
              "claude-opus-5-5", "anthropic", cache_write_1h=18000),
@@ -303,7 +396,9 @@ def write_fixtures(out_dir):
     ]
     expect(MAIN_DB, w1, project="workspace", model="gemini-3-pro", isSubagent=False, parentId=None,
            phase="generating", inFlightStartMs=ms("13:06:00.000"), lastLineMs=ms("13:06:00.000"), malformedLines=2,
-           responses=w1_responses)
+           responses=w1_responses, effort=recorded("max"), speed=FAST,
+           modes={0: (recorded("high"), None), 1: (recorded("high"), None), 2: (recorded("xhigh"), FAST),
+                  3: (recorded("adaptive"), None)})
     for seq, phase, in_flight in ((4, "idle", None), (5, "generating", ms("13:00:05.000")), (6, "tools", None),
                                   (7, "tools", None), (8, "generating", ms("13:00:12.400")), (9, "idle", None),
                                   (11, "tools", None), (12, "generating", ms("13:01:03.000")), (13, "idle", None),
@@ -319,9 +414,11 @@ def write_fixtures(out_dir):
                          "stop", ms("13:00:20.106"))                                                      # 3
     w2_responses = [resp(key(r1, ms("13:00:20.106")), ms("13:00:20.106"), ms("13:00:29.300"), 2400, 0, 0, 310, 0,
                          "claude-sonnet-5-5", "anthropic")]
+    trace_rows[w2.session_id] = [w2.attempt(ms("13:00:19.900"), "run-s", "ultra", fast=True, compress=False)]
     expect(MAIN_DB, w2, project="workspace", model="claude-sonnet-5-5", isSubagent=True,
            parentId=agent(MAIN_DB, w1), phase="idle", inFlightStartMs=None, lastLineMs=ms("13:00:29.300"),
-           malformedLines=0, responses=w2_responses)
+           malformedLines=0, responses=w2_responses, effort=recorded("ultra"), speed=FAST,
+           modes={0: (recorded("ultra"), FAST)})
 
     # ---- A Codex app-server turn: the mirror counts nothing (the rollout below has the requests).
     w4 = Window("0f1c2d3e-0004-4a00-8000-00000000c004", "agent:main:codex1", ms("13:10:00.000"), WORKSPACE, "c3d2",
@@ -355,8 +452,10 @@ def write_fixtures(out_dir):
                          [text("It uses tsdown.")], usage(800, 120, 2000, 0), "stop", ms("13:16:20.000"))  # 3
     w6_responses = [resp(key(k1, ms("13:16:20.000")), None, ms("13:16:25.000"), 2800, 2000, 0, 120, 0, "gpt-5.5",
                          "github-copilot")]
+    trace_rows[w6.session_id] = [w6.attempt(ms("13:16:00.050"), "run-k", "off")]
     expect(MAIN_DB, w6, project="workspace", model="gpt-5.5", isSubagent=False, parentId=None, phase="idle",
-           inFlightStartMs=None, lastLineMs=ms("13:16:25.000"), malformedLines=0, responses=w6_responses)
+           inFlightStartMs=None, lastLineMs=ms("13:16:25.000"), malformedLines=0, responses=w6_responses,
+           effort=recorded("off"), modes={0: (recorded("off"), None)})
     trace(MAIN_DB, w6, 2, "idle")
 
     # ---- A fork from the dashboard: a fresh header, then copies of w1's rows 5-9 (copied history).
@@ -391,8 +490,15 @@ def write_fixtures(out_dir):
         resp(key(o2, ms("13:30:06.436")), ms("13:30:06.436"), ms("13:30:09.560"), 5400, 5100, 0, 410, 0, "gpt-5.5",
              "openai"),
     ]
+    # 2026.8.1 keeps every event as plain text: a nested `type` is selected too, and dropped once it is parsed.
+    v1.plain_only = True
+    p1 = v1.attempt(ms("13:30:01.000"), "run-o1", "minimal", compress=False)                              # 1, 2
+    v1.event("prompt.submitted", ms("13:30:02.000"), "run-o1", {"finalPromptText": "Rename Orbit " * 200})  # 3
+    p2 = v1.attempt(ms("13:30:06.420"), "run-o2", "medium", compress=False)                               # 4, 5
+    p3 = v1.event("tool.result", ms("13:30:06.425"), "run-o2", {"result": {"type": "trace.metadata"}})    # 6
     expect(OPS_DB, v1, project="relay", model="gpt-5.5", isSubagent=False, parentId=None, phase="idle",
-           inFlightStartMs=None, lastLineMs=ms("13:30:20.000"), malformedLines=0, responses=v1_responses)
+           inFlightStartMs=None, lastLineMs=ms("13:30:20.000"), malformedLines=0, responses=v1_responses,
+           effort=recorded("medium"), modes={0: (recorded("minimal"), None), 1: (recorded("medium"), None)})
     trace(OPS_DB, v1, 3, "tools")
     trace(OPS_DB, v1, 4, "generating", ms("13:30:06.430"))
 
@@ -461,6 +567,7 @@ def write_fixtures(out_dir):
                         "openai", first=ms("13:10:05.000")),
                    resp("resp-oc-2", ms("13:10:30.000"), ms("13:10:39.900"), 12500, 12000, 0, 210, 0, "gpt-5.5",
                         "openai", first=ms("13:10:39.000"))])}
+    files[rollout_rel].update(no_modes(files[rollout_rel]["responses"]))
 
     # ---- Discovery decoys: none of these is an agent database.
     decoys = [
@@ -485,7 +592,9 @@ def write_fixtures(out_dir):
     return {
         "_comment": "OpenClaw: the folder `openclaw` plays the home folder; its state folders are .openclaw and the "
                     "profile .openclaw-work. Databases are read in `dbOrder` after the files of `order` with the same "
-                    "dedupe set; windows in created_at order. Reading must not create any file.",
+                    "dedupe set; windows in created_at order. Reading must not create any file. `traceSeqs` lists, "
+                    "per database and window, the `seq` of every row the query on trajectory_runtime_events may "
+                    "return, in order: no other row of that table is read.",
         "order": [rollout_rel],
         "files": files,
         "mtimes": mtimes,
@@ -493,6 +602,7 @@ def write_fixtures(out_dir):
         "databases": databases,
         "discover": sorted([MAIN_DB, OPS_DB, LEGACY_DB]),
         "codexDiscover": [rollout_rel],
+        "traceSeqs": {MAIN_DB: trace_rows, OPS_DB: {v1.session_id: [p1, p2, p3]}},
         "traces": traces,
     }
 

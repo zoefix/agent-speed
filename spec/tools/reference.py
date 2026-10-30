@@ -12,6 +12,7 @@
                                                  [--source ID] [--prices PATH] [...]
 
 The dump format matches the `--dump-today` output of both platform probes. Conversation content is never printed.
+Needs `zstd` and `brotli` on the PATH (the Python module brotli 1.2+ replaces the second).
 `--dump-today` ends with one `perf` row per seeded agent with a sample response and a `perfSets` row (METRICS 6.9,
 evaluated at `--now` or the capture time); `--dump-history` ends with one `perf` row per day, source and model (the
 history records of METRICS 6.11).
@@ -69,6 +70,9 @@ AG_TOKEN_MAX = 10_000_000
 AG_OPEN = {1, 2, 8, 9, 11}
 AG_FAILED = {6, 7, 12}
 AG_NAME = re.compile(r"^[0-9A-Fa-f]{8}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{4}-[0-9A-Fa-f]{12}\.db$")
+AG_THINKING = {1: "low", 2: "medium", 3: "high"}
+AG_SERVED_SUFFIX = "-exp-b"
+CONFIG_MAX = 1 << 20
 
 
 def days_from_civil(y, m, d):
@@ -195,6 +199,8 @@ class FileState:
         # reasoning effort and speed (EXECUTION-MODES): context facts, each response's facts, Claude's ultracode
         self.facts = []
         self.response_facts = {}
+        self.session_facts = []  # a session-current fact: the agent's current effort only, never a response's
+        self.configured_facts = []  # a value only a config file holds: shown as configured, attributed to nothing
         self.latest_key = None
         self.line_effort = None
         self.ultra_session = False
@@ -226,6 +232,8 @@ class FileState:
         # omp
         self.header_seen = False
         self.pending_calls = set()
+        self.omp_branch = {}
+        self.omp_family = None
         if source == "omp":
             self.source_decided = True
             rel = os.path.relpath(path, root) if root else path
@@ -233,9 +241,10 @@ class FileState:
         if source == "pi":
             self.source_decided = True
             self.is_subagent = pi_parent_file(path) is not None
-        # openclaw (METRICS 4.14): the window's runtime decides delegated turns
+        # openclaw (METRICS 4.14): the window's runtime decides delegated turns; its trace.metadata rows give the modes
         self.oc_delegated = False
         self.oc_mirror_window = False
+        self.oc_traces = []
         if source == "openclaw":
             self.source_decided = True
         # factory droid (METRICS 4.16): parent links, open calls, the counters' high-water mark and unallocated growth
@@ -910,6 +919,8 @@ def opencode_facts(d, provider):
 
 
 def agent_facts(state):
+    if state.source == "omp" and state.omp_family is not None:
+        return [f for f in state.facts if f["kind"] != "serviceTier" or f.get("provider") == state.omp_family]
     return claude_agent_facts(state) if state.source in ("claudeCode", "claudeDesktop") else state.facts
 
 
@@ -919,8 +930,15 @@ def mode_view(facts):
     return (None if effort["mode"] == "unknown" else effort, None if speed["mode"] == "unknown" else speed)
 
 
+def current_view(state):
+    """The agent's current (effort, speed): its facts, then a session-current fact, then a configured value."""
+    views = [modes.current_attribution(kind, agent_facts(state), state.session_facts, state.configured_facts)
+             for kind in ("effort", "speed")]
+    return tuple(None if view["mode"] == "unknown" else view for view in views)
+
+
 def mode_fields(state):
-    effort, speed = mode_view(agent_facts(state))
+    effort, speed = current_view(state)
     by_key = {}
     for key in state.responses:
         e, s = mode_view(state.response_facts.get(key, []))
@@ -1226,6 +1244,7 @@ def omp_line(state, obj, dedupe):
     if ts is None or (state.file_created is not None and ts < state.file_created - OMP_COPY_MS):
         return
     omp_touch(state, ts)
+    omp_branch_facts(state, obj, kind)
     if kind == "message" and isinstance(obj.get("message"), dict):
         msg = obj["message"]
         role = msg.get("role")
@@ -1248,9 +1267,42 @@ def omp_line(state, obj, dedupe):
             return
         dedupe.claim(key, state.path)
         emit(state, key, None, ts, omp_tokens(obj["usage"]), obj["model"], provider=obj["provider"] or None)
+        state.response_facts[key] = omp_tiers(state.facts, obj["provider"])
     elif kind == "custom" and obj.get("customType") == "session_exit":
         state.phase, state.in_flight = "idle", None
         state.pending_calls.clear()
+
+
+def omp_branch_facts(state, obj, kind):
+    """The context of this entry: its parent's on the journal branch, changed by a selection (EXECUTION-MODES)."""
+    parent = obj.get("parentId")
+    state.facts = list(state.omp_branch.get(parent, [])) if isinstance(parent, str) else []
+    if kind == "service_tier_change":
+        tiers = obj.get("serviceTier") if isinstance(obj.get("serviceTier"), dict) else {}
+        state.facts = [f for f in state.facts if f["kind"] != "serviceTier"]
+        for family in ("anthropic", "google", "openai"):
+            state.facts = modes.put(state.facts, modes.normalize("ompTier", tiers.get(family), family, "selected",
+                                                                 "session"))
+    elif kind == "thinking_level_change" and "thinkingLevel" in obj:
+        state.facts = [f for f in state.facts if f["kind"] != "effort"]
+        state.facts = modes.put(state.facts, modes.normalize("effort", obj["thinkingLevel"], None, "selected",
+                                                             "session"))
+    state.omp_branch[obj["id"]] = state.facts
+
+
+def omp_tiers(facts, provider):
+    family = modes.OMP_FAMILIES.get(provider)
+    return [f for f in facts if f["kind"] == "serviceTier" and f.get("provider") == family]
+
+
+def omp_message_facts(msg):
+    """What the message itself records: its tier and, for per-message Anthropic effort, `tail ?? topLevel`."""
+    controls = msg.get("requestControls") if isinstance(msg.get("requestControls"), dict) else {}
+    effort = controls.get("effort") if isinstance(controls.get("effort"), dict) else {}
+    level = effort["tail"] if isinstance(effort.get("tail"), str) else effort.get("topLevel")
+    facts = [modes.normalize("ompTier", msg.get("serviceTier"), msg.get("provider"), "recorded", "response"),
+             modes.normalize("effort", level, None, "recorded", "request")]
+    return [f for f in facts if f is not None]
 
 
 def omp_assistant(state, entry, msg, ts, dedupe):
@@ -1273,6 +1325,13 @@ def omp_assistant(state, entry, msg, ts, dedupe):
         emit(state, key, None if stop in ("error", "aborted") else started, end, omp_tokens(msg["usage"]),
              msg["model"], provider=msg["provider"] or None)
         state.model = msg["model"]
+        state.omp_family = modes.OMP_FAMILIES.get(msg["provider"])
+        recorded = omp_message_facts(msg)
+        snapshot = omp_tiers(state.facts, msg["provider"]) + [f for f in state.facts if f["kind"] == "effort"]
+        for fact in recorded:
+            snapshot = modes.put(snapshot, fact)
+            state.facts = modes.put(state.facts, fact)
+        state.response_facts[key] = snapshot
     content = msg.get("content") if isinstance(msg.get("content"), list) else []
     calls = {b["id"] for b in content if isinstance(b, dict) and b.get("type") == "toolCall"
              and isinstance(b.get("id"), str)}
@@ -1520,6 +1579,14 @@ OC_EMBEDDED = ("", "openclaw", "pi", "auto", "default")
 OC_STOPS = ("stop", "length", "toolUse", "error", "aborted")
 OC_FAILED = ("error", "aborted")
 OC_EVENT_MAX = 4 * 1024 * 1024
+OC_TRACE_MAX = 262_144
+OC_TRACE_PLAIN = ("SELECT e.created_at, e.event_json, %s FROM trajectory_runtime_events e WHERE e.session_id = ? AND ("
+                  "(%s length(e.event_json) <= 262144 AND instr(e.event_json, '\"type\":\"trace.metadata\"') > 0)%s) "
+                  "ORDER BY e.seq")
+OC_TRACE_BROTLI = (" OR (e.event_codec = 'br' AND e.event_utf8_bytes <= 262144 AND length(e.event_payload) <= 262144 "
+                   "AND EXISTS (SELECT 1 FROM trajectory_runtime_events p WHERE p.session_id = e.session_id "
+                   "AND p.seq = e.seq - 1 AND p.event_codec IS NULL "
+                   "AND instr(p.event_json, '\"type\":\"session.started\"') > 0))")
 
 
 def openclaw_state_dirs(env=None, home=None):
@@ -1579,6 +1646,83 @@ def openclaw_tokens(usage):
                 reasoning=num(usage.get("reasoningTokens")))
 
 
+def brotli_cli(data, size):
+    """The `brotli` command, stopped as soon as it has written more than `size` bytes."""
+    with tempfile.NamedTemporaryFile() as stream:
+        stream.write(data)
+        stream.flush()
+        process = subprocess.Popen(["brotli", "-d", "-c", stream.name], stdout=subprocess.PIPE,
+                                   stderr=subprocess.DEVNULL)
+        out = process.stdout.read(size + 1)
+        if len(out) > size:
+            process.kill()
+        process.stdout.close()
+        return out if process.wait() == 0 and len(out) == size else None
+
+
+def brotli_decode(data, size):
+    """A Brotli stream decoded to exactly `size` bytes (METRICS 4.14), else None; output past `size` is never produced
+    in full, so a small stream cannot expand without limit. The `brotli` module (1.2+), else its command."""
+    try:
+        import brotli
+        decoder = brotli.Decompressor()
+        out = decoder.process(data, output_buffer_limit=size + 1)
+    except (ImportError, TypeError):
+        return brotli_cli(data, size)
+    except brotli.error:
+        return None
+    try:
+        while len(out) <= size and not decoder.is_finished():
+            more = decoder.process(b"", output_buffer_limit=size + 1 - len(out))
+            if not more:  # a truncated stream: nothing more will come
+                return None
+            out += more
+    except brotli.error:
+        return None
+    return out if len(out) == size and decoder.is_finished() else None
+
+
+def openclaw_trace_sql(columns):
+    """The one query on trajectory_runtime_events: only trace.metadata rows, or None without that table's columns."""
+    if not {"session_id", "seq", "event_json", "created_at"} <= columns:
+        return None
+    if {"event_payload", "event_codec", "event_utf8_bytes"} <= columns:
+        return OC_TRACE_PLAIN % ("e.event_payload, e.event_codec, e.event_utf8_bytes", "e.event_codec IS NULL AND",
+                                 OC_TRACE_BROTLI)
+    return OC_TRACE_PLAIN % ("NULL, NULL, NULL", "", "")
+
+
+def openclaw_trace(row):
+    """(created_at, facts) of a selected row, or None when it does not decode or is no trace.metadata event. Rows that
+    lost `data.model` to OpenClaw's size limit have no facts but still end the previous row's reach."""
+    created, text, payload, codec, size = row
+    if codec is None:
+        raw = text.encode("utf-8", "surrogatepass") if isinstance(text, str) else None
+    elif codec == "br" and isinstance(payload, bytes) and isinstance(size, int) and 0 < size <= OC_TRACE_MAX:
+        raw = brotli_decode(payload, size)
+    else:
+        raw = None
+    if raw is None or not isinstance(created, int):
+        return None
+    try:
+        obj = loads(raw)
+    except (ValueError, UnicodeDecodeError, RecursionError):
+        return None
+    if not isinstance(obj, dict) or obj.get("type") != "trace.metadata":
+        return None
+    data = obj.get("data") if isinstance(obj.get("data"), dict) else {}
+    model = data.get("model") if isinstance(data.get("model"), dict) else {}
+    facts = modes.put([], modes.normalize("effort", model.get("thinkLevel"), None, "recorded", "turn"))
+    if model.get("fastMode") is True:
+        facts = modes.put(facts, modes.normalize("serviceTier", "fast", None, "selected", "turn"))
+    return created, facts
+
+
+def openclaw_trace_facts(state, at):
+    """The facts of the window's latest trace.metadata row at or before `at`."""
+    return next((facts for created, facts in reversed(state.oc_traces) if created <= at), [])
+
+
 def openclaw_entry(state, obj, dedupe):
     """One transcript entry of an OpenClaw window (METRICS 4.14: the Pi rules of 4.7 and 4.13 with its differences)."""
     kind = obj.get("type")
@@ -1633,7 +1777,7 @@ def openclaw_assistant(state, entry, msg, ts, dedupe):
         dedupe.claim(key, state.path)
         emit(state, key, started if timed else None, ts, openclaw_tokens(usage), msg["model"],
              provider=msg["provider"] or None)
-        state.response_facts[key] = []
+        state.response_facts[key] = openclaw_trace_facts(state, started if started is not None else ts)
         state.model = msg["model"]
     if state.oc_delegated:
         return
@@ -1704,6 +1848,7 @@ def openclaw_states(db_path, dedupe, stop_at=None):
         current = dict(db.execute("select session_key, current_session_id from session_nodes")) \
             if "session_nodes" in tables else {}
         zstd_cols = "event_zstd, event_utf8_bytes" if {"event_zstd", "event_utf8_bytes"} <= ecols else "null, null"
+        trace_sql = openclaw_trace_sql({r[1] for r in db.execute("pragma table_info(trajectory_runtime_events)")})
         states, parent_of = [], {}
         for sid, _created, spawned, harness, acp in windows:
             st = FileState("%s#%s" % (db_path, sid), "openclaw")
@@ -1713,6 +1858,9 @@ def openclaw_states(db_path, dedupe, stop_at=None):
             st.is_subagent = isinstance(spawned, str) and spawned != ""
             parent_of[st.path] = current.get(spawned) if st.is_subagent else None
             states.append(st)
+            if trace_sql:
+                st.oc_traces = [t for t in map(openclaw_trace, db.execute(trace_sql, (sid,))) if t is not None]
+                st.facts = st.oc_traces[-1][1] if st.oc_traces else []
             for seq, text, blob, size in db.execute("select seq, event_json, %s from transcript_events "
                                                     "where session_id = ? order by seq" % zstd_cols, (sid,)):
                 entry = openclaw_event(st, text, blob, size, with_raw=True)
@@ -1750,6 +1898,12 @@ HERMES_LOGGERS = ("agent.turn_context", "agent.conversation_loop")
 HERMES_CONFIG_MAX = 1 << 20
 HERMES_MODEL_HEADER = re.compile(r"(?:model|\"model\"|'model')[ \t]*:(?:[ \t]+(?:#.*)?)?")
 HERMES_RUNTIME_KEY = re.compile(r"(?:openai_runtime|\"openai_runtime\"|'openai_runtime')[ \t]*:(|[ \t].*)")
+HERMES_AGENT_HEADER = re.compile(r"(?:agent|\"agent\"|'agent')[ \t]*:(?:[ \t]+(?:#.*)?)?")
+HERMES_AGENT_KEY = re.compile(r"(?:(reasoning_effort|service_tier)|\"(reasoning_effort|service_tier)\""
+                              r"|'(reasoning_effort|service_tier)')[ \t]*:(|[ \t].*)")
+HERMES_SCALAR = re.compile(r"[ \t]+(?:\"[ \t]*([A-Za-z0-9._:-]+)[ \t]*\"|'[ \t]*([A-Za-z0-9._:-]+)[ \t]*'"
+                           r"|([A-Za-z0-9._:-]+))(?:[ \t]+#.*)?[ \t]*")
+HERMES_SESSION_SQL = "SELECT CASE WHEN length(model_config) <= 65536 THEN model_config END FROM sessions WHERE id = ?"
 HERMES_CODEX_VALUE = re.compile(r"[ \t]+(?:\"[ \t]*codex_app_server[ \t]*\"|'[ \t]*codex_app_server[ \t]*'|codex_app_server)"
                                 r"(?:[ \t]+#.*)?[ \t]*", re.I | re.A)
 
@@ -1844,6 +1998,59 @@ def hermes_codex_runtime(text):
             if key:
                 codex = HERMES_CODEX_VALUE.fullmatch(key.group(1)) is not None
     return codex
+
+
+def hermes_agent_scalars(text):
+    """The scalars `reasoning_effort` and `service_tier` of a top-level `agent` block (METRICS 4.15), read like the
+    Codex runtime key: the last key line of each decides, and anything but one plain scalar gives None."""
+    if text.startswith("\ufeff"):
+        text = text[1:]
+    found, in_agent, indent = {}, False, None
+    for line in text.split("\n"):
+        if line.endswith("\r"):
+            line = line[:-1]
+        rest = line.lstrip(" \t")
+        if not rest or rest.startswith("#"):
+            continue
+        body = line.lstrip(" ")
+        depth = len(line) - len(body)
+        if depth == 0:
+            in_agent, indent = HERMES_AGENT_HEADER.fullmatch(line) is not None, None
+            continue
+        if not in_agent:
+            continue
+        if indent is None:
+            indent = depth
+        key = HERMES_AGENT_KEY.fullmatch(body) if depth == indent else None
+        if key:
+            value = HERMES_SCALAR.fullmatch(key.group(4))
+            found[key.group(1) or key.group(2) or key.group(3)] = next(filter(None, value.groups()), None) if value \
+                else None
+    return found
+
+
+def hermes_configured(path):
+    """Configured facts of a profile's config.yaml: its effort and service tier (EXECUTION-MODES)."""
+    text = config_text(path, follow=True)
+    scalars = hermes_agent_scalars(text) if text is not None else {}
+    facts = [modes.normalize("hermesEffort", scalars.get("reasoning_effort"), None, "configured", "configuration"),
+             modes.normalize("hermesServiceTier", scalars.get("service_tier"), None, "configured", "configuration")]
+    return [f for f in facts if f is not None]
+
+
+def hermes_session_fact(db_path, session_id):
+    """The session-current effort of `state.db` (METRICS 4.15): `model_config.reasoning_config` of one session row."""
+    row = sqlite_one(db_path, HERMES_SESSION_SQL, session_id)
+    try:
+        config = loads(row[0]) if row and isinstance(row[0], str) else None
+    except (ValueError, RecursionError):
+        return []
+    reasoning = config.get("reasoning_config") if isinstance(config, dict) else None
+    if not isinstance(reasoning, dict):
+        return []
+    raw = "disabled" if reasoning.get("enabled") is False else reasoning.get("effort")
+    fact = modes.normalize("effort", raw, None, "selected", "session")
+    return [fact] if fact else []
 
 
 def hermes_lines(path, start_offset=0, max_lines=None):
@@ -2237,10 +2444,10 @@ def droid_call(state, obj, msg, ts, dedupe, offset, length):
     dedupe.claim(key, state.path)
     state.droid_seen.add(key)
     model_id = msg.get("modelId").strip() if isinstance(msg.get("modelId"), str) and msg["modelId"].strip() else None
-    effort = msg.get("reasoningEffort")
-    state.facts = [f for f in state.facts if f["kind"] != "effort"]
-    if isinstance(effort, str):
-        state.facts = modes.put(state.facts, modes.normalize("effort", effort, None, "recorded", "request"))
+    state.facts = [f for f in state.facts if f["kind"] not in ("effort", "serviceTier")]
+    state.facts = modes.put(state.facts, modes.normalize("effort", msg.get("reasoningEffort"), None, "recorded",
+                                                         "request"))
+    state.facts = modes.put(state.facts, modes.normalize("droidModel", model_id, None, "recorded", "request"))
     start = state.droid_compaction if state.droid_compaction is not None else state.droid_read_from
     state.droid_open.append(dict(key=key, start=state.pending, end=ts, model_id=model_id, facts=list(state.facts),
                                  w_in=min(DROID_CONTEXT_BASE + offset - start, DROID_WEIGHT_MAX),
@@ -2551,6 +2758,23 @@ def workbuddy_line(state, obj, dedupe):
             state.phase, state.in_flight = "idle", None
 
 
+WB_THOUGHT_SQL = "SELECT thought_level FROM sessions WHERE id = ?"
+
+
+def workbuddy_session_fact(db_path, session_id):
+    """The session-current effort of `workbuddy.db` (METRICS 4.9): `sessions.thought_level` of the transcript's id."""
+    row = sqlite_one(db_path, WB_THOUGHT_SQL, session_id)
+    fact = modes.normalize("effort", row[0], None, "selected", "session") if row else None
+    return [fact] if fact else []
+
+
+def workbuddy_configured(path):
+    """Configured effort of `<data>/settings.json`: its `reasoningEffort` and nothing else (the file holds more)."""
+    doc = config_json(path)
+    fact = modes.normalize("effort", doc.get("reasoningEffort"), None, "configured", "configuration")
+    return [fact] if fact else []
+
+
 def workbuddy_roots(home=None, settings=None):
     """(source, projects folder) of both editions (METRICS 2, 4.9); a setting names the data root or `projects`."""
     home = home or os.path.expanduser("~")
@@ -2711,6 +2935,101 @@ def sqlite_readonly(db_path):
     return db
 
 
+def sqlite_one(db_path, sql, value):
+    """One row of a query on another program's database, read-only, closed at once; None when the file, the table or
+    the column is missing (the session-current stores of EXECUTION-MODES)."""
+    if not os.path.isfile(db_path) or os.path.islink(db_path):
+        return None
+    try:
+        db = sqlite_readonly(db_path)
+        try:
+            return db.execute(sql, (value,)).fetchone()
+        finally:
+            db.close()
+    except (OSError, sqlite3.DatabaseError):
+        return None
+
+
+def config_text(path, follow=False):
+    """A config file's text, UTF-8 with replacement: None when it is no regular file or larger than 1 MiB."""
+    if not path or not os.path.isfile(path) or (os.path.islink(path) and not follow) \
+            or os.path.getsize(path) > CONFIG_MAX:
+        return None
+    with open(path, "rb") as f:
+        return f.read(CONFIG_MAX).decode("utf-8", errors="replace")
+
+
+def config_json(path):
+    """The object of a JSON config file (one leading U+FEFF removed), else {}."""
+    text = config_text(path)
+    try:
+        doc = loads(text[1:] if text.startswith("\ufeff") else text) if text is not None else {}
+    except (ValueError, RecursionError):
+        return {}
+    return doc if isinstance(doc, dict) else {}
+
+
+def codex_configured(path):
+    """A literal root `service_tier` of the Codex home's config.toml (EXECUTION-MODES): anything ambiguous is nothing."""
+    text = config_text(path)
+    tier, declared = None, False
+    for raw in (text or "").splitlines():
+        line = raw.strip()
+        if not line or line.startswith("#"):
+            continue
+        if '"""' in line or "'''" in line:
+            return []
+        if line.startswith("["):
+            break
+        name, equals, value = line.partition("=")
+        if not equals or name.strip() != "service_tier":
+            continue
+        if declared:
+            return []
+        declared = True
+        value = value.strip()
+        end = value.find(value[0], 1) if value[:1] in ('"', "'") else -1
+        tail = value[end + 1:].strip() if end > 0 else "x"
+        if tail and not tail.startswith("#"):
+            return []
+        tier = value[1:end]
+    fact = modes.normalize("serviceTier", tier, "openai", "configured", "configuration")
+    return [fact] if fact else []
+
+
+def gemini_configured(path, model):
+    """The configured effort of `settings.json` for one model: the last override whose `match` is exactly that model
+    and that names a thinking level, or a budget of 0 (EXECUTION-MODES)."""
+    configs = config_json(path).get("modelConfigs")
+    configs = configs if isinstance(configs, dict) else {}
+    chosen = None
+    for name in ("overrides", "customOverrides"):
+        entries = configs.get(name) if isinstance(configs.get(name), list) else []
+        for entry in (e for e in entries if isinstance(e, dict)):
+            if entry.get("match") != {"model": model}:
+                continue
+            node = entry
+            for step in ("modelConfig", "generateContentConfig", "thinkingConfig"):
+                node = node.get(step) if isinstance(node, dict) else None
+            if not isinstance(node, dict):
+                continue
+            budget = node.get("thinkingBudget")
+            if isinstance(node.get("thinkingLevel"), str):
+                chosen = node["thinkingLevel"]
+            elif budget == 0 and not isinstance(budget, bool):
+                chosen = "off"
+    fact = modes.normalize("effort", chosen, None, "configured", "configuration")
+    return [fact] if fact else []
+
+
+def antigravity_configured(path):
+    """Configured tier of `~/.gemini/config/config.json`: `userSettings.vertexServiceTier` and nothing else."""
+    settings = config_json(path).get("userSettings")
+    tier = settings.get("vertexServiceTier") if isinstance(settings, dict) else None
+    fact = modes.normalize("serviceTier", tier, "google", "configured", "configuration")
+    return [fact] if fact else []
+
+
 def ag_rows(db, sql):
     try:
         return db.execute(sql).fetchall()
@@ -2743,13 +3062,16 @@ def ag_trajectory(data):
 def ag_generation(data):
     fields = pb_fields(data)
     chat = pb_msg(fields, 1) or []
-    return dict(steps=set(pb_repeated_uint(fields, 2)), model=pb_str(chat, 19) or pb_str(chat, 21) or None)
+    return dict(steps=set(pb_repeated_uint(fields, 2)), model=pb_str(chat, 19) or pb_str(chat, 21) or None,
+                response=pb_str(chat, 19) or None, label=pb_str(chat, 21) or None)
 
 
 def ag_executor(data):
     fields = pb_fields(data)
     planner = pb_msg(pb_msg(fields, 10) or [], 1) or []
-    return dict(reason=pb_signed(fields, 1), last=pb_signed(fields, 3), model=pb_str(planner, 28) or None)
+    override = pb_msg(planner, 56) or []
+    return dict(reason=pb_signed(fields, 1), last=pb_signed(fields, 3), model=pb_str(planner, 28) or None,
+                thinking=AG_THINKING.get(pb_signed(override, 19)))
 
 
 AG_TIMES = (("created", 1), ("viewable", 6), ("finished", 7), ("completed", 8), ("chunk", 22), ("started", 32))
@@ -2765,8 +3087,35 @@ def ag_step(data):
         if any(v > AG_TOKEN_MAX for v in tokens.values()):
             raise ValueError("implausible token count")
         tokens["key"] = pb_str(use, 11) or pb_str(use, 7) or None
+        tokens["tier"] = pb_str(use, 13) or None
     step["usage"] = None if use is None else tokens
     return step
+
+
+def ag_covering(execs, idx):
+    covering = sorted((e for e in execs if e["last"] >= idx), key=lambda e: (e["last"], e["idx"]))
+    return covering[0] if covering else None
+
+
+def ag_effort(generation, executor):
+    """The response's effort fact (EXECUTION-MODES): the generation's display name, else its executor's model suffix
+    or pass-through level, when the executor ran the model the generation answered with."""
+    word = modes.antigravity_label_effort(generation["label"]) if generation and generation["label"] else None
+    if word:
+        return modes.normalize("effort", word, None, "recorded", "request")
+    if executor is None or not executor["model"]:
+        return None
+    split = modes.antigravity_model_effort(executor["model"])
+    answered = generation["response"] if generation else None
+    answered = answered[:-len(AG_SERVED_SUFFIX)] if answered and answered.endswith(AG_SERVED_SUFFIX) else answered
+    if answered and answered not in (executor["model"], split[0] if split else None):
+        return None
+    return modes.normalize("effort", split[1] if split else executor["thinking"], None, "recorded", "turn")
+
+
+def ag_facts(generation, executor, use):
+    facts = modes.put([], ag_effort(generation, executor))
+    return modes.put(facts, modes.normalize("serviceTier", use["tier"], "google", "served", "response"))
 
 
 def antigravity_state(db_path, dedupe):
@@ -2795,12 +3144,15 @@ def antigravity_state(db_path, dedupe):
                         "ORDER BY idx, rowid" % AG_BLOB_MAX))
                  for e in [ag_decode(st, blob, ag_executor)] if e]
 
+        def generation_of(idx):
+            return next((g for g in gens if idx in g["steps"]), None)
+
         def model_for(idx):
-            generation = next((g for g in gens if idx in g["steps"]), None)
+            generation = generation_of(idx)
             if generation and generation["model"]:
                 return generation["model"]
-            covering = sorted((e for e in execs if e["last"] >= idx), key=lambda e: (e["last"], e["idx"]))
-            return covering[0]["model"] if covering else None
+            covering = ag_covering(execs, idx)
+            return covering["model"] if covering else None
 
         times = [created] if created is not None else []
         latest = None
@@ -2838,6 +3190,7 @@ def antigravity_state(db_path, dedupe):
             output = use["output"] or use["thinking"] + use["response"]
             emit(st, key, start, end, dict(input=use["input"] + use["cache"], cachedInput=use["cache"],
                                            cacheWriteInput=0, output=output, reasoning=use["thinking"]), models[key])
+            st.response_facts[key] = st.facts = ag_facts(generation_of(idx), ag_covering(execs, idx), use)
             if models[key]:
                 st.model = models[key]
         st.last_line = max(times) if times else None
@@ -3234,11 +3587,14 @@ def check_fixtures():
     dedupe = Deduper()
     failures = []
     states = []
+    tree = lambda: sorted(os.path.relpath(os.path.join(d, n), root) for d, _, ns in os.walk(root) for n in ns)  # noqa: E731
+    files_before = tree()
     for rel in expected["order"]:
         exp = expected["files"][rel]
         state = fixture_state(root, rel)
         process_file(state, dedupe)
         states.append(state)
+        fixture_context(root, state)
         got = dict(source=state.source, project=state.project, model=state.model, isSubagent=state.is_subagent,
                    phase=state.phase, inFlightStartMs=state.in_flight, lastLineMs=state.last_line,
                    malformedLines=state.malformed, responses=list(state.responses.values()),
@@ -3378,6 +3734,9 @@ def check_fixtures():
     failures += ["harnesses: " + e for e in harnesses.check_fixtures(root)]
     attribution = json.load(open(os.path.join(root, "model-attribution-cases.json"), encoding="utf-8"))
     failures += ["model attribution: " + e for e in check_model_attribution(attribution)]
+    created = sorted(set(tree()) - set(files_before))
+    if created:
+        failures.append("reading the fixtures created files: %r" % created)
     if failures:
         print("\n".join(failures))
         sys.exit(1)
@@ -3535,7 +3894,18 @@ def check_omp_roots():
 def hermes_agent_view(state):
     return dict(source=state.source, project=state.project, model=state.model, isSubagent=state.is_subagent,
                 parentId=None, phase=state.phase, inFlightStartMs=state.in_flight, lastLineMs=state.last_line,
-                responses=list(state.responses.values()))
+                responses=list(state.responses.values()), **mode_fields(state))
+
+
+def hermes_context(hs):
+    """The session-current and configured facts of a log set's agents: `state.db` and `config.yaml` of its profile."""
+    path = hermes_config_path(hs.folder)
+    if path is None:
+        return
+    configured = hermes_configured(path)
+    for sid, state in hs.agents.items():
+        state.configured_facts = configured
+        state.session_facts = hermes_session_fact(os.path.join(os.path.dirname(path), "state.db"), sid)
 
 
 def check_hermes(root, hm, dedupe):
@@ -3560,6 +3930,7 @@ def check_hermes(root, hm, dedupe):
         if hs is None:
             failures.append("hermes %s: log set not read" % rel_folder)
             continue
+        hermes_context(hs)
         if hs.malformed != exp["malformedLines"]:
             failures.append("hermes %s: malformedLines expected %r got %r" % (rel_folder, exp["malformedLines"],
                                                                             hs.malformed))
@@ -3607,6 +3978,11 @@ def check_hermes(root, hm, dedupe):
             failures.append("hermes config.yaml %r: codexRuntime expected %r got %r" % (case["name"],
                                                                                       case["codexRuntime"], got))
     failures += check_hermes_codex_runtime(hm["codexRuntime"])
+    for case in hm["agentConfigs"]:
+        got = hermes_agent_scalars(case["text"])
+        want = {k: v for k, v in case.items() if k not in ("name", "text")}
+        if got != want:
+            failures.append("hermes config.yaml %r: agent scalars expected %r got %r" % (case["name"], want, got))
     return failures
 
 
@@ -3718,9 +4094,10 @@ def check_antigravity(root, ag, dedupe):
             failures.append("%s: expected unsupported" % rel)
             continue
         states.append(st)
+        fixture_context(root, st)
         got = dict(source=st.source, project=st.project, model=st.model, isSubagent=st.is_subagent,
                    phase=st.phase, inFlightStartMs=st.in_flight, lastLineMs=st.last_line, malformedLines=st.malformed,
-                   responses=list(st.responses.values()))
+                   responses=list(st.responses.values()), **mode_fields(st))
         for k, v in exp.items():
             if k != "parentFile" and got[k] != v:
                 failures.append("%s: %s expected %r got %r" % (rel, k, v, got[k]))
@@ -3776,6 +4153,15 @@ def check_openclaw(root, oc, dedupe):
             for k, v in exp.items():
                 if got[k] != v:
                     failures.append("%s: %s expected %r got %r" % (rel(st.path), k, v, got[k]))
+    for db_rel, windows in oc["traceSeqs"].items():
+        db = sqlite_readonly(os.path.join(root, *db_rel.split("/")))
+        sql = openclaw_trace_sql({r[1] for r in db.execute("pragma table_info(trajectory_runtime_events)")})
+        for window, want in windows.items():
+            got = [row[0] for row in db.execute(sql.replace("e.created_at, ", "e.seq, ", 1), (window,))]
+            if got != want:
+                failures.append("%s#%s: rows selected from the trajectory table: expected %r got %r" % (
+                    db_rel, window, want, got))
+        db.close()
     for t in oc["traces"]:
         trace_dedupe = Deduper()
         for db_rel in oc["dbOrder"]:
@@ -3981,6 +4367,22 @@ def fixture_hermes_dirs(root):
     return hermes_log_folders(os.path.join(root, "hermes", "home"))
 
 
+def fixture_context(root, state):
+    """The session-current and configured facts of a fixture agent, from the homes the fixture folders play."""
+    if state.source == "codex":
+        state.configured_facts = codex_configured(os.path.join(state.path.split(os.sep + "sessions" + os.sep)[0],
+                                                               "config.toml"))
+    elif state.source == "gemini":
+        state.configured_facts = gemini_configured(os.path.join(root, "gemini", "settings.json"), state.model)
+    elif state.source == "antigravity":
+        state.configured_facts = antigravity_configured(os.path.join(root, "antigravity", "config", "config.json"))
+    elif state.source in WB_FOLDERS:
+        data = os.path.join(root, "workbuddy", WB_FOLDERS[state.source])
+        state.configured_facts = workbuddy_configured(os.path.join(data, "settings.json"))
+        state.session_facts = workbuddy_session_fact(os.path.join(data, "workbuddy.db"),
+                                                     os.path.basename(state.path)[:-len(".jsonl")])
+
+
 def fixture_state(root, rel):
     path = os.path.join(root, rel)
     source = fixture_source(rel)
@@ -4165,10 +4567,12 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
                                             + [("requestCount", 1),
                                                ("costMicroUsd", index.price(r) if has_day(r["endMs"]) else None),
                                                ("effort", None), ("speed", None)]))
-    for source, agent, record in harnesses.collect(zcode_root, kimi_root, grok_root):
+    harness_modes = {}
+    for source, agent, record in harnesses.collect(zcode_root, kimi_root, grok_root, harness_modes):
         if record["endMs"] >= today_start:
             rows.append(dict(record, source=source, agentId=agent,
-                             costMicroUsd=index.price(record) if has_day(record["endMs"]) else None))
+                             costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
+                             **harness_modes[record["key"]]))
     rows.sort(key=lambda r: (r["endMs"], r["key"]))
     return rows, read_files, read_bytes
 

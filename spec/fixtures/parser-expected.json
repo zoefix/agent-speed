@@ -1,5 +1,5 @@
 {
-  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones.",
+  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Every agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the files the fixture folders play: codex/config.toml, gemini/settings.json, antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
   "order": [
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl",
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-20-subagent.jsonl",
@@ -32,6 +32,7 @@
     "omp/agent/sessions/-projects-nova/2026-10-20T11-20-00-000Z_01a1590a-2700-7d6a-923e-00062e2ac0ea.jsonl",
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-20T23-58-00-000Z_01a15bc0-1f40-705b-9411-0006cc623a9b.jsonl",
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-21T00-10-00-000Z_01a15bcb-1bc0-734c-95e4-00076a99b44c.jsonl",
+    "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl",
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/ef76e24d-06dd-4094-a4aa-63bd6f8faf05.jsonl",
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2/subagents/agent-66bc0cda-451f-4616-a37d-d44361673dd1.jsonl",
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2.jsonl",
@@ -56,7 +57,8 @@
     "droid/.factory/sessions/-Users-dev-projects-forge/b2e1d4c3-1c7f-4d2b-8e8f-3a4b5c6d7e81.jsonl",
     "droid/.factory/sessions/-Users-dev-projects-forge/a1f0c3d2-0b6e-4c1a-9d7e-2f3a4b5c6d70.jsonl",
     "droid/.factory/sessions/-Users-dev-projects-forge/a7b6c9d8-6bc4-4a70-9d34-8f9a0b1c2d36.jsonl",
-    "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl"
+    "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl",
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl"
   ],
   "files": {
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl": {
@@ -205,7 +207,11 @@
         "mode": "max",
         "evidence": "recorded"
       },
-      "speed": null,
+      "speed": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      },
       "responseModes": {
         "resp-3": {
           "effort": {
@@ -270,7 +276,23 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      },
+      "responseModes": {
+        "codex-legacy:thread-legacy:20213": {
+          "effort": null,
+          "speed": null
+        },
+        "codex-legacy:thread-legacy:41000": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-01-20-compressed.jsonl.zst": {
       "source": "codex",
@@ -315,7 +337,23 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      },
+      "responseModes": {
+        "resp-z1": {
+          "effort": null,
+          "speed": null
+        },
+        "resp-z2": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-01-40-paginated.jsonl": {
       "source": "codex",
@@ -375,7 +413,11 @@
         "mode": "medium",
         "evidence": "recorded"
       },
-      "speed": null,
+      "speed": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      },
       "responseModes": {
         "resp-p1": {
           "effort": {
@@ -719,7 +761,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "dss-1": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "claude/projects/-Users-dev-projects-vega/s-vega.jsonl": {
       "source": "claudeCode",
@@ -806,7 +856,23 @@
           "failed": false,
           "model": "claude-opus-5-5"
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "msg_R1": {
+          "effort": null,
+          "speed": null
+        },
+        "msg_R2": {
+          "effort": null,
+          "speed": null
+        },
+        "msg_R3": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "claude/projects/-Users-dev-projects-vega/s-fork.jsonl": {
       "source": "claudeCode",
@@ -845,7 +911,15 @@
           "failed": false,
           "model": "claude-opus-5-5"
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "msg_F1": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-08-00-tools.jsonl": {
       "source": "codex",
@@ -948,7 +1022,31 @@
           "failed": null,
           "model": "gpt-6.1-sol"
         }
-      ]
+      ],
+      "effort": null,
+      "speed": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      },
+      "responseModes": {
+        "resp-t1": {
+          "effort": null,
+          "speed": null
+        },
+        "resp-t2": {
+          "effort": null,
+          "speed": null
+        },
+        "resp-t3": {
+          "effort": null,
+          "speed": null
+        },
+        "resp-t4": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "gemini/tmp/nova/chats/session-2026-10-20T10-20-1e9c0a77.json": {
       "source": "gemini",
@@ -993,7 +1091,19 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "c0c0c0c0-0000-4000-8000-000000000002": {
+          "effort": null,
+          "speed": null
+        },
+        "c0c0c0c0-0000-4000-8000-000000000003": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "gemini/tmp/orbit/chats/session-2026-10-20T10-30-7f3a2b10.jsonl": {
       "source": "gemini",
@@ -1054,7 +1164,26 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "a0a0a0a0-0000-4000-8000-000000000002": {
+          "effort": null,
+          "speed": null
+        },
+        "a0a0a0a0-0000-4000-8000-000000000004": {
+          "effort": null,
+          "speed": null
+        },
+        "a0a0a0a0-0000-4000-8000-000000000008": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "gemini/tmp/orbit/chats/7f3a2b10-5c1d-4e2f-9a3b-0c4d5e6f7a8b/0b8e6d2c-3f4a-4b5c-8d6e-7f8091a2b3c4.jsonl": {
       "source": "gemini",
@@ -1083,7 +1212,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "b0b0b0b0-0000-4000-8000-000000000002": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "gemini/tmp/orbit/chats/7f3a2b10-5c1d-4e2f-9a3b-0c4d5e6f7a8b/5d4c3b2a-1f0e-4d9c-8b7a-695847362514.jsonl": {
       "source": "gemini",
@@ -1112,7 +1249,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "e0e0e0e0-0000-4000-8000-000000000002": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "gemini/tmp/nova/chats/session-2026-10-20T10-20-1e9c0a77.jsonl": {
       "source": "gemini",
@@ -1157,7 +1302,22 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "off",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "d0d0d0d0-0000-4000-8000-000000000004": {
+          "effort": null,
+          "speed": null
+        },
+        "d0d0d0d0-0000-4000-8000-000000000006": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-legacy-tool/2026-10-20T10-46-00-000Z_01a158eb-0640-72f1-81d3-00009e3779b1.jsonl": {
       "source": "omp",
@@ -1202,7 +1362,28 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "medium",
+        "evidence": "selected"
+      },
+      "speed": null,
+      "responseModes": {
+        "omp:1e9a0004:1792493165006": {
+          "effort": {
+            "mode": "medium",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:1e9a0006:1792493170205": {
+          "effort": {
+            "mode": "medium",
+            "evidence": "selected"
+          },
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-comet/2026-10-20T10-48-00-000Z_01a158ec-db00-75e2-83a6-00013c6ef362.jsonl": {
       "source": "omp",
@@ -1247,7 +1428,19 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:c0e70003:1792493282005": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:c0e70005:1792493288436": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T10-50-00-000Z_01a158ee-afc0-7bc4-874c-000278dde6c4/ScanCallSites/VerifyImports.jsonl": {
       "source": "omp",
@@ -1292,7 +1485,19 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:9e570003:1792493425604": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:9e570005:1792493428004": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T10-50-00-000Z_01a158ee-afc0-7bc4-874c-000278dde6c4/ScanCallSites.jsonl": {
       "source": "omp",
@@ -1369,7 +1574,27 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:5ca10003:1792493416705": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:5ca10006:1792493420305": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:5ca10008:1792493423205": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:5ca1000a:1792493441004": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T10-50-00-000Z_01a158ee-afc0-7bc4-874c-000278dde6c4.jsonl": {
       "source": "omp",
@@ -1542,7 +1767,81 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "selected"
+      },
+      "speed": null,
+      "responseModes": {
+        "omp:c0de0004:1792493405006": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de0005:1792493411300": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:c0de0009:1792493412405": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de000c:1792493444004": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de000d:1792493446530": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de0012:1792493520006": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de0015:1792493540005": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de0017:1792493580006": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de001c:1792493890006": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        },
+        "omp:c0de001e:1792493896004": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T11-00-00-000Z_01a158f7-d780-7497-8cc5-0004538453d7/ScanCallSites.jsonl": {
       "source": "omp",
@@ -1554,7 +1853,10 @@
       "inFlightStartMs": null,
       "lastLineMs": 1792493443100,
       "malformedLines": 0,
-      "responses": []
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T11-00-00-000Z_01a158f7-d780-7497-8cc5-0004538453d7/ScanCallSites/VerifyImports.jsonl": {
       "source": "omp",
@@ -1566,7 +1868,10 @@
       "inFlightStartMs": null,
       "lastLineMs": 1792493429800,
       "malformedLines": 0,
-      "responses": []
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T11-00-00-000Z_01a158f7-d780-7497-8cc5-0004538453d7.jsonl": {
       "source": "omp",
@@ -1595,7 +1900,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:f04c0002:1792494005006": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-pulsar/2026-10-20T11-10-00-000Z_01a15900-ff40-7788-8e98-0004f1bbcd88.jsonl": {
       "source": "omp",
@@ -1624,7 +1937,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:b4a70004:1792494612310": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/agent/sessions/-projects-nova/2026-10-20T11-20-00-000Z_01a1590a-2700-7d6a-923e-00062e2ac0ea.jsonl": {
       "source": "omp",
@@ -1669,7 +1990,19 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:1a900002:1792495230006": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:1a900003:1792495235400": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-20T23-58-00-000Z_01a15bc0-1f40-705b-9411-0006cc623a9b.jsonl": {
       "source": "omp",
@@ -1746,7 +2079,27 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "omp:0b170003:1792540790004": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:0b170005:1792540799905": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:0b170008:1792540810100": {
+          "effort": null,
+          "speed": null
+        },
+        "omp:0b170009:1792540810205": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-21T00-10-00-000Z_01a15bcb-1bc0-734c-95e4-00076a99b44c.jsonl": {
       "source": "omp",
@@ -1758,7 +2111,190 @@
       "inFlightStartMs": null,
       "lastLineMs": 1792541400000,
       "malformedLines": 0,
-      "responses": []
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
+    },
+    "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl": {
+      "source": "omp",
+      "project": "branch",
+      "model": "claude-opus-5-5",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792495862000,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "omp:b4a70004:1792495801005",
+          "startMs": 1792495801005,
+          "endMs": 1792495802505,
+          "firstMs": null,
+          "input": 100,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 50,
+          "reasoning": 0,
+          "model": "gpt-5.5",
+          "provider": "openai",
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "omp:b4a70006:1792495804005",
+          "startMs": 1792495804005,
+          "endMs": 1792495805505,
+          "firstMs": null,
+          "input": 110,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 60,
+          "reasoning": 0,
+          "model": "claude-opus-5-5",
+          "provider": "anthropic",
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "omp:b4a70008:1792495807005",
+          "startMs": 1792495807005,
+          "endMs": 1792495808505,
+          "firstMs": null,
+          "input": 120,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 70,
+          "reasoning": 0,
+          "model": "claude-opus-5-5",
+          "provider": "anthropic",
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "omp:b4a7000b:1792495810005",
+          "startMs": 1792495810005,
+          "endMs": 1792495811505,
+          "firstMs": null,
+          "input": 130,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 80,
+          "reasoning": 0,
+          "model": "gpt-5.5",
+          "provider": "openai",
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "omp:b4a7000d:1792495860500",
+          "startMs": null,
+          "endMs": 1792495860500,
+          "firstMs": null,
+          "input": 40,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 5,
+          "reasoning": 0,
+          "model": "gpt-5.5-mini",
+          "provider": "openai",
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "omp:b4a7000e:1792495860505",
+          "startMs": 1792495860505,
+          "endMs": 1792495861905,
+          "firstMs": null,
+          "input": 140,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 90,
+          "reasoning": 0,
+          "model": "claude-opus-5-5",
+          "provider": "anthropic",
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "selected"
+      },
+      "speed": {
+        "mode": "standard",
+        "evidence": "selected",
+        "provider": "anthropic"
+      },
+      "responseModes": {
+        "omp:b4a70004:1792495801005": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": {
+            "mode": "standard",
+            "evidence": "recorded",
+            "provider": "openai"
+          }
+        },
+        "omp:b4a70006:1792495804005": {
+          "effort": {
+            "mode": "max",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "standard",
+            "evidence": "selected",
+            "provider": "anthropic"
+          }
+        },
+        "omp:b4a70008:1792495807005": {
+          "effort": {
+            "mode": "low",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "standard",
+            "evidence": "selected",
+            "provider": "anthropic"
+          }
+        },
+        "omp:b4a7000b:1792495810005": {
+          "effort": null,
+          "speed": {
+            "mode": "fast",
+            "evidence": "selected",
+            "provider": "openai"
+          }
+        },
+        "omp:b4a7000d:1792495860500": {
+          "effort": null,
+          "speed": {
+            "mode": "fast",
+            "evidence": "selected",
+            "provider": "openai"
+          }
+        },
+        "omp:b4a7000e:1792495860505": {
+          "effort": {
+            "mode": "high",
+            "evidence": "selected"
+          },
+          "speed": {
+            "mode": "standard",
+            "evidence": "selected",
+            "provider": "anthropic"
+          }
+        }
+      }
     },
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/ef76e24d-06dd-4094-a4aa-63bd6f8faf05.jsonl": {
       "source": "workbuddy",
@@ -1819,7 +2355,26 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "off",
+        "evidence": "selected"
+      },
+      "speed": null,
+      "responseModes": {
+        "edbab45572c72a5d9440b40bcc0500c0": {
+          "effort": null,
+          "speed": null
+        },
+        "fbfba2e45c2045dc5cab22a5afe83d9d": {
+          "effort": null,
+          "speed": null
+        },
+        "7a6f150b83091ce20c89368641f9a137": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2/subagents/agent-66bc0cda-451f-4616-a37d-d44361673dd1.jsonl": {
       "source": "workbuddy",
@@ -1864,7 +2419,22 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "medium",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "8ddf878039b70767c4a5bcf4f0c4f65e": {
+          "effort": null,
+          "speed": null
+        },
+        "fac989447cad2edbc89fbcba70003b36": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2.jsonl": {
       "source": "workbuddy",
@@ -2053,7 +2623,58 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "selected"
+      },
+      "speed": null,
+      "responseModes": {
+        "8a8bb7cd343aa2ad99b7d762030857a2": {
+          "effort": null,
+          "speed": null
+        },
+        "693a9fdd4c2fd0700968fba0d07ff3c0": {
+          "effort": null,
+          "speed": null
+        },
+        "9d607a663f3e9b0a90c3c8d4426640dc": {
+          "effort": null,
+          "speed": null
+        },
+        "894f782a148b33af1e39a0efed952d69": {
+          "effort": null,
+          "speed": null
+        },
+        "32cfe6c19200b67afb7c3d0e1c43eadb": {
+          "effort": null,
+          "speed": null
+        },
+        "c692562238d8c12c32434c50b96d56ae": {
+          "effort": null,
+          "speed": null
+        },
+        "68c42382c8b93fc29c2fcb6a444aeda5": {
+          "effort": null,
+          "speed": null
+        },
+        "3d1e97d18e692ca5484d1abfe617b6c1": {
+          "effort": null,
+          "speed": null
+        },
+        "48881d728a96516e0e886c09603e7eee": {
+          "effort": null,
+          "speed": null
+        },
+        "11340131feec68e7ca463f960f0f341c": {
+          "effort": null,
+          "speed": null
+        },
+        "ed20a959d410ccd843d9e1dfcee04228": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/99aa739a-ed94-446a-a6e0-be45f96cc697.jsonl": {
       "source": "workbuddy",
@@ -2082,7 +2703,18 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": {
+        "mode": "on",
+        "evidence": "selected"
+      },
+      "speed": null,
+      "responseModes": {
+        "bd19836ddb62c11c55ab251ccaca5645": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy-ai/projects/C-Users-dev-projects-orbit/7321aebd-eedd-4d8c-a034-7b74b0ca1dd1.jsonl": {
       "source": "workbuddyAi",
@@ -2175,7 +2807,31 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "9948c645c094247794f4c7acdbeb2bb6": {
+          "effort": null,
+          "speed": null
+        },
+        "b25b0651e4b6e887e5194135d3692631": {
+          "effort": null,
+          "speed": null
+        },
+        "e53125275854402400f74fd6ab3f7659": {
+          "effort": null,
+          "speed": null
+        },
+        "ae11976937537e4c1206237dea035331": {
+          "effort": null,
+          "speed": null
+        },
+        "b9884d9c846186c2a5426d7f46393de8": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy-ai/projects/C-Users-dev-projects-orbit/bec52a4b-a049-4377-a53e-fa03a3357f35.jsonl": {
       "source": "workbuddyAi",
@@ -2204,7 +2860,15 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "cd3dc8b6cffb41e4163dcbd857ca87da": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "workbuddy/.workbuddy-ai/projects/C-Users-dev-projects-orbit/2c8fcaaa-da17-4eb8-ae37-c3acb6e1f7e9.jsonl": {
       "source": "workbuddyAi",
@@ -2216,7 +2880,10 @@
       "inFlightStartMs": 1792581630000,
       "lastLineMs": 9223372036854775807,
       "malformedLines": 0,
-      "responses": []
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
     },
     "workbuddy/.workbuddy-ai/projects/C-Users-dev-projects-orbit/8debac5b-f3d2-49ef-aeac-395674228a83.jsonl": {
       "source": "workbuddyAi",
@@ -2325,7 +2992,35 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "6dbf9ac2da09ee1d3debf5a51873ec6d": {
+          "effort": null,
+          "speed": null
+        },
+        "8e683187a00e5d462a4aeee69e9d3d9c": {
+          "effort": null,
+          "speed": null
+        },
+        "1414c9756505ddfb8ba0a3b6fc9d691f": {
+          "effort": null,
+          "speed": null
+        },
+        "bf947d200d7b021b18d38437f3bc1940": {
+          "effort": null,
+          "speed": null
+        },
+        "f4fe292eb01627a0219872d44a305ec5": {
+          "effort": null,
+          "speed": null
+        },
+        "9d1c815ede9bca71c14a44593b1dcc53": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "pi/agent/sessions/--Users-dev-projects-halo--/2026-10-20T12-00-00-000Z_01a1592e-c600-7b2f-b88d-001328b7bc6f.jsonl": {
       "source": "pi",
@@ -2723,7 +3418,19 @@
           "fast": false,
           "final": true
         }
-      ]
+      ],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "resp-oc-1": {
+          "effort": null,
+          "speed": null
+        },
+        "resp-oc-2": {
+          "effort": null,
+          "speed": null
+        }
+      }
     },
     "droid/.factory/sessions/dae9fc0b-9ef7-4da3-8a67-1c2d3e4f5a69.jsonl": {
       "source": "droid",
@@ -3203,6 +3910,161 @@
       "effort": null,
       "speed": null,
       "responseModes": {}
+    },
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl": {
+      "source": "droid",
+      "project": "forge",
+      "model": "gpt-5.5-fast",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792598408500,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "droid:l1-m1",
+          "startMs": 1792598400000,
+          "endMs": 1792598400500,
+          "firstMs": null,
+          "model": "claude-opus-5-5-fast",
+          "provider": null,
+          "fast": false,
+          "final": true,
+          "input": 989,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 101,
+          "reasoning": 0
+        },
+        {
+          "key": "droid:l1-m2",
+          "startMs": 1792598402000,
+          "endMs": 1792598402500,
+          "firstMs": null,
+          "model": "gpt-6-astra-ultrafast",
+          "provider": null,
+          "fast": false,
+          "final": true,
+          "input": 994,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 102,
+          "reasoning": 0
+        },
+        {
+          "key": "droid:l1-m3",
+          "startMs": 1792598404000,
+          "endMs": 1792598404500,
+          "firstMs": null,
+          "model": "glm-5.2-fast",
+          "provider": null,
+          "fast": false,
+          "final": true,
+          "input": 1000,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 98,
+          "reasoning": 0
+        },
+        {
+          "key": "droid:l1-m4",
+          "startMs": 1792598406000,
+          "endMs": 1792598406500,
+          "firstMs": null,
+          "model": "gpt-5.6-terra-flex",
+          "provider": null,
+          "fast": false,
+          "final": true,
+          "input": 1006,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 100,
+          "reasoning": 0
+        },
+        {
+          "key": "droid:l1-m5",
+          "startMs": 1792598408000,
+          "endMs": 1792598408500,
+          "firstMs": null,
+          "model": "gpt-5.5-fast",
+          "provider": null,
+          "fast": false,
+          "final": true,
+          "input": 1011,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 99,
+          "reasoning": 0
+        }
+      ],
+      "effort": {
+        "mode": "medium",
+        "evidence": "recorded"
+      },
+      "speed": {
+        "mode": "fast",
+        "evidence": "recorded",
+        "provider": "openai"
+      },
+      "responseModes": {
+        "droid:l1-m1": {
+          "effort": {
+            "mode": "high",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "fast",
+            "evidence": "recorded",
+            "provider": "anthropic"
+          }
+        },
+        "droid:l1-m2": {
+          "effort": {
+            "mode": "xhigh",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "ultrafast",
+            "evidence": "recorded",
+            "provider": "openai"
+          }
+        },
+        "droid:l1-m3": {
+          "effort": {
+            "mode": "high",
+            "evidence": "recorded"
+          },
+          "speed": null
+        },
+        "droid:l1-m4": {
+          "effort": {
+            "mode": "low",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "flex",
+            "evidence": "recorded",
+            "provider": "openai"
+          }
+        },
+        "droid:l1-m5": {
+          "effort": {
+            "mode": "medium",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "fast",
+            "evidence": "recorded",
+            "provider": "openai"
+          }
+        }
+      }
     }
   },
   "mtimes": {
@@ -3237,6 +4099,7 @@
     "omp/agent/sessions/-projects-nova/2026-10-20T11-20-00-000Z_01a1590a-2700-7d6a-923e-00062e2ac0ea.jsonl": 1792495261000,
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-20T23-58-00-000Z_01a15bc0-1f40-705b-9411-0006cc623a9b.jsonl": 1792540815000,
     "omp/profiles/work/agent/sessions/-projects-orbit/2026-10-21T00-10-00-000Z_01a15bcb-1bc0-734c-95e4-00076a99b44c.jsonl": 1792541401000,
+    "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl": 1792542001000,
     "antigravity/antigravity-cli/conversations/9b1e7d42-6c5a-4f3e-8d2b-1a0f9e8d7c6b.db": 1792573214000,
     "antigravity/antigravity-cli/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db": 1792573301000,
     "antigravity/antigravity-cli/conversations/0d4f6e8a-2b1c-4d3e-9f5a-6b7c8d9e0f1a.db": 1792573320000,
@@ -3248,6 +4111,7 @@
     "antigravity/antigravity-ide/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db": 1792576500000,
     "antigravity/antigravity-ide/conversations/2c4e6a8b-0d1f-4a3c-9e5b-7d9f1b3d5f7a.db": 1792576623000,
     "antigravity/antigravity/conversations/6d8f0a2c-4e6b-4d8f-a0c2-e4f6a8b0c2d4.db": 1792576686000,
+    "antigravity/antigravity-cli/conversations/b3c4d5e6-f708-4192-a3b4-c5d6e7f8a9b0.db": 1792576782000,
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2.jsonl": 1792577232000,
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/b09191b3-a788-47e6-a104-a4e92743fae2/subagents/agent-66bc0cda-451f-4616-a37d-d44361673dd1.jsonl": 1792577110000,
     "workbuddy/.workbuddy/projects/Users-dev-projects-atlas/ef76e24d-06dd-4094-a4aa-63bd6f8faf05.jsonl": 1792576891000,
@@ -3288,7 +4152,9 @@
     "droid/.factory/sessions/-Users-dev-projects-forge/a1f0c3d2-0b6e-4c1a-9d7e-2f3a4b5c6d70.jsonl": 1792584127000,
     "droid/.factory/sessions/-Users-dev-projects-forge/a7b6c9d8-6bc4-4a70-9d34-8f9a0b1c2d36.jsonl": 1792584128000,
     "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.settings.json": 1792584128500,
-    "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl": 1792584129000
+    "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl": 1792584129000,
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.settings.json": 1792584129000,
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl": 1792584129500
   },
   "opencode": {
     "database": "opencode/opencode.db",
@@ -3585,6 +4451,7 @@
   },
   "omp": {
     "discover": [
+      "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl",
       "omp/agent/sessions/-projects-comet/2026-10-20T10-48-00-000Z_01a158ec-db00-75e2-83a6-00013c6ef362.jsonl",
       "omp/agent/sessions/-projects-legacy-tool/2026-10-20T10-46-00-000Z_01a158eb-0640-72f1-81d3-00009e3779b1.jsonl",
       "omp/agent/sessions/-projects-nova/2026-10-20T11-20-00-000Z_01a1590a-2700-7d6a-923e-00062e2ac0ea.jsonl",
@@ -4066,6 +4933,18 @@
         "afterLine": 2,
         "phase": "idle",
         "inFlightStartMs": null
+      },
+      {
+        "file": "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl",
+        "afterLine": 13,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "omp/agent/sessions/-projects-branch/2026-10-20T11-30-00-000Z_01a15913-4ec0-792e-998a-0008a708a7ae.jsonl",
+        "afterLine": 14,
+        "phase": "generating",
+        "inFlightStartMs": 1792495860000
       }
     ],
     "tailReads": [
@@ -4095,12 +4974,14 @@
       "antigravity/antigravity-ide/conversations/7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f.db",
       "antigravity/antigravity-ide/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db",
       "antigravity/antigravity-ide/conversations/2c4e6a8b-0d1f-4a3c-9e5b-7d9f1b3d5f7a.db",
-      "antigravity/antigravity/conversations/6d8f0a2c-4e6b-4d8f-a0c2-e4f6a8b0c2d4.db"
+      "antigravity/antigravity/conversations/6d8f0a2c-4e6b-4d8f-a0c2-e4f6a8b0c2d4.db",
+      "antigravity/antigravity-cli/conversations/b3c4d5e6-f708-4192-a3b4-c5d6e7f8a9b0.db"
     ],
     "discover": [
       "antigravity/antigravity-cli/conversations/0d4f6e8a-2b1c-4d3e-9f5a-6b7c8d9e0f1a.db",
       "antigravity/antigravity-cli/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db",
       "antigravity/antigravity-cli/conversations/9b1e7d42-6c5a-4f3e-8d2b-1a0f9e8d7c6b.db",
+      "antigravity/antigravity-cli/conversations/b3c4d5e6-f708-4192-a3b4-c5d6e7f8a9b0.db",
       "antigravity/antigravity-ide/conversations/2c4e6a8b-0d1f-4a3c-9e5b-7d9f1b3d5f7a.db",
       "antigravity/antigravity-ide/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db",
       "antigravity/antigravity-ide/conversations/7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f.db",
@@ -4186,7 +5067,40 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-main-1": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-main-2": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-main-3": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-main-4": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity-cli/conversations/9b1e7d42-6c5a-4f3e-8d2b-1a0f9e8d7c6b.db": {
         "source": "antigravity",
@@ -4215,7 +5129,19 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-sub-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity-cli/conversations/0d4f6e8a-2b1c-4d3e-9f5a-6b7c8d9e0f1a.db": {
         "unsupported": true
@@ -4327,7 +5253,39 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "msg-ag-orbit-1": {
+            "effort": null,
+            "speed": null
+          },
+          "resp-ag-orbit-2": {
+            "effort": null,
+            "speed": null
+          },
+          "resp-ag-orbit-3": {
+            "effort": null,
+            "speed": null
+          },
+          "antigravity:5e2d1c0b-9a8f-4e7d-8c6b-5a4f3e2d1c0b:6": {
+            "effort": null,
+            "speed": null
+          },
+          "resp-ag-orbit-5": {
+            "effort": null,
+            "speed": null
+          },
+          "resp-ag-orbit-6": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity/conversations/c7a9e1f3-5b2d-4c6e-8a0b-2d4f6a8c0e1f.db": {
         "source": "antigravity",
@@ -4356,7 +5314,19 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-browser-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity/conversations/a1b2c3d4-e5f6-4a7b-8c9d-0e1f2a3b4c5d.db": {
         "source": "antigravity",
@@ -4385,7 +5355,19 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-fork-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity-ide/conversations/E4D3C2B1-A0F9-4E8D-B7C6-A5F4E3D2C1B0.db": {
         "source": "antigravity",
@@ -4397,7 +5379,14 @@
         "inFlightStartMs": 1792575600100,
         "lastLineMs": 1792575600500,
         "malformedLines": 0,
-        "responses": []
+        "responses": [],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {}
       },
       "antigravity/antigravity-ide/conversations/7c8d9e0f-1a2b-4c3d-9e4f-5a6b7c8d9e0f.db": {
         "source": "antigravity",
@@ -4426,7 +5415,19 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-image-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity-ide/conversations/3f6c2a10-8b4d-4e5f-9a1b-2c3d4e5f6a7b.db": {
         "source": "antigravity",
@@ -4438,7 +5439,14 @@
         "inFlightStartMs": null,
         "lastLineMs": 1792573300000,
         "malformedLines": 0,
-        "responses": []
+        "responses": [],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {}
       },
       "antigravity/antigravity-ide/conversations/2c4e6a8b-0d1f-4a3c-9e5b-7d9f1b3d5f7a.db": {
         "source": "antigravity",
@@ -4467,7 +5475,19 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-idesub-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       "antigravity/antigravity/conversations/6d8f0a2c-4e6b-4d8f-a0c2-e4f6a8b0c2d4.db": {
         "source": "antigravity",
@@ -4496,7 +5516,234 @@
             "fast": false,
             "final": true
           }
-        ]
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "configured",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-cancel-1": {
+            "effort": null,
+            "speed": null
+          }
+        }
+      },
+      "antigravity/antigravity-cli/conversations/b3c4d5e6-f708-4192-a3b4-c5d6e7f8a9b0.db": {
+        "source": "antigravity",
+        "project": "tiers",
+        "model": "gemini-3.5-flash-extra-low",
+        "isSubagent": false,
+        "parentFile": null,
+        "phase": "idle",
+        "inFlightStartMs": null,
+        "lastLineMs": 1792576781100,
+        "malformedLines": 0,
+        "responses": [
+          {
+            "key": "resp-ag-tier-1",
+            "startMs": 1792576741100,
+            "endMs": 1792576742100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.1-pro",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-2",
+            "startMs": 1792576743100,
+            "endMs": 1792576744100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.7-flash",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-3",
+            "startMs": 1792576745100,
+            "endMs": 1792576746100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.7-flash-exp-b",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-5",
+            "startMs": 1792576750100,
+            "endMs": 1792576751100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.1-flash-lite",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-6",
+            "startMs": 1792576752100,
+            "endMs": 1792576753100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.7-flash-low",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-8",
+            "startMs": 1792576760100,
+            "endMs": 1792576761100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.1-pro",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-10",
+            "startMs": 1792576770100,
+            "endMs": 1792576771100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": "gemini-3.5-flash-extra-low",
+            "provider": null,
+            "fast": false,
+            "final": true
+          },
+          {
+            "key": "resp-ag-tier-12",
+            "startMs": 1792576780100,
+            "endMs": 1792576781100,
+            "firstMs": null,
+            "input": 1000,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 100,
+            "reasoning": 0,
+            "model": null,
+            "provider": null,
+            "fast": false,
+            "final": true
+          }
+        ],
+        "effort": null,
+        "speed": {
+          "mode": "fast",
+          "evidence": "served",
+          "provider": "google"
+        },
+        "responseModes": {
+          "resp-ag-tier-1": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "served",
+              "provider": "google"
+            }
+          },
+          "resp-ag-tier-2": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "standard",
+              "evidence": "served",
+              "provider": "google"
+            }
+          },
+          "resp-ag-tier-3": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "flex",
+              "evidence": "served",
+              "provider": "google"
+            }
+          },
+          "resp-ag-tier-5": {
+            "effort": null,
+            "speed": null
+          },
+          "resp-ag-tier-6": {
+            "effort": {
+              "mode": "low",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-tier-8": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-tier-10": {
+            "effort": {
+              "mode": "extra-low",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "resp-ag-tier-12": {
+            "effort": null,
+            "speed": {
+              "mode": "fast",
+              "evidence": "served",
+              "provider": "google"
+            }
+          }
+        }
       }
     }
   },
@@ -5324,23 +6571,44 @@
               "final": true
             }
           ],
-          "effort": null,
-          "speed": null,
+          "effort": {
+            "mode": "max",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "fast",
+            "evidence": "selected"
+          },
           "responseModes": {
             "openclaw:a1f00005:1792501205010": {
-              "effort": null,
+              "effort": {
+                "mode": "high",
+                "evidence": "recorded"
+              },
               "speed": null
             },
             "openclaw:a1f00008:1792501212405": {
-              "effort": null,
+              "effort": {
+                "mode": "high",
+                "evidence": "recorded"
+              },
               "speed": null
             },
             "openclaw:a1f0000c:1792501260006": {
-              "effort": null,
-              "speed": null
+              "effort": {
+                "mode": "xhigh",
+                "evidence": "recorded"
+              },
+              "speed": {
+                "mode": "fast",
+                "evidence": "selected"
+              }
             },
             "openclaw:a1f00010:1792501380006": {
-              "effort": null,
+              "effort": {
+                "mode": "adaptive",
+                "evidence": "recorded"
+              },
               "speed": null
             },
             "openclaw:a1f00014:1792501520000": {
@@ -5377,12 +6645,24 @@
               "final": true
             }
           ],
-          "effort": null,
-          "speed": null,
+          "effort": {
+            "mode": "ultra",
+            "evidence": "recorded"
+          },
+          "speed": {
+            "mode": "fast",
+            "evidence": "selected"
+          },
           "responseModes": {
             "openclaw:b2e10002:1792501220106": {
-              "effort": null,
-              "speed": null
+              "effort": {
+                "mode": "ultra",
+                "evidence": "recorded"
+              },
+              "speed": {
+                "mode": "fast",
+                "evidence": "selected"
+              }
             }
           }
         },
@@ -5444,11 +6724,17 @@
               "final": true
             }
           ],
-          "effort": null,
+          "effort": {
+            "mode": "off",
+            "evidence": "recorded"
+          },
           "speed": null,
           "responseModes": {
             "openclaw:e5b40002:1792502180000": {
-              "effort": null,
+              "effort": {
+                "mode": "off",
+                "evidence": "recorded"
+              },
               "speed": null
             }
           }
@@ -5536,15 +6822,24 @@
               "final": true
             }
           ],
-          "effort": null,
+          "effort": {
+            "mode": "medium",
+            "evidence": "recorded"
+          },
           "speed": null,
           "responseModes": {
             "openclaw:a7f60002:1792503002005": {
-              "effort": null,
+              "effort": {
+                "mode": "minimal",
+                "evidence": "recorded"
+              },
               "speed": null
             },
             "openclaw:a7f60004:1792503006436": {
-              "effort": null,
+              "effort": {
+                "mode": "medium",
+                "evidence": "recorded"
+              },
               "speed": null
             }
           }
@@ -5582,6 +6877,34 @@
       },
       "openclaw/.openclaw/agents/legacy/agent/openclaw-agent.sqlite": {
         "unsupported": true
+      }
+    },
+    "traceSeqs": {
+      "openclaw/.openclaw/agents/main/agent/openclaw-agent.sqlite": {
+        "0f1c2d3e-0001-4a00-8000-00000000c001": [
+          2,
+          7,
+          10,
+          12,
+          14,
+          16,
+          18,
+          20,
+          22
+        ],
+        "0f1c2d3e-0002-4a00-8000-00000000c002": [
+          2
+        ],
+        "0f1c2d3e-0006-4a00-8000-00000000c006": [
+          2
+        ]
+      },
+      "openclaw/.openclaw-work/agents/ops/agent/openclaw-agent.sqlite": {
+        "6a7b8c9d-0001-4b00-9000-00000000d001": [
+          2,
+          5,
+          6
+        ]
       }
     },
     "traces": [
@@ -5714,7 +7037,7 @@
     ]
   },
   "hermes": {
-    "_comment": "Hermes Agent (METRICS 4.15). `home` plays the Hermes home; `discover` lists the log files of its log folders. Feed the files of `order` (modification times `mtimes`) to one parser state per log folder, with wall times in `timeZone`, and the shared dedupe set; `sets` gives, per log folder, its malformed API-call lines and one agent per session id (the empty id is the agent of lines without a session tag; agent id = absolute folder path + '#' + id), in the order agents first appear. `traces` give one session's phase after feeding a file up to and including physical line `afterLine`, after the files before it in `order`. `wallTimes` convert a record line's timestamp in a zone (null: not a record line). `homes` resolve the Hermes home from an environment. `rotation` replays a log folder with real renames: `append` writes `lines` (each followed by a newline) or raw `text` to a file and sets its modification time, `rename` and `delete` change files, `read` reads every file of the folder from the offset its identity reached and checks every response key emitted so far and the listed agents. `runtimeConfigs` give config.yaml texts and whether they select the Codex runtime. `codexRuntime` replays a Hermes home (folder `home`, with the profile `p`): `write` sets a file's text (`size`: padded with `#` to that many bytes) and modification time, `remove` deletes it, `append` works like the rotation's, and `read` checks the config.yaml of every log folder, then reads its new lines, and checks each listed log folder's switch, every response key emitted so far and the listed agents.",
+    "_comment": "Hermes Agent (METRICS 4.15). `home` plays the Hermes home; `discover` lists the log files of its log folders. Feed the files of `order` (modification times `mtimes`) to one parser state per log folder, with wall times in `timeZone`, and the shared dedupe set; `sets` gives, per log folder, its malformed API-call lines and one agent per session id (the empty id is the agent of lines without a session tag; agent id = absolute folder path + '#' + id), in the order agents first appear. `traces` give one session's phase after feeding a file up to and including physical line `afterLine`, after the files before it in `order`. `wallTimes` convert a record line's timestamp in a zone (null: not a record line). `homes` resolve the Hermes home from an environment. `rotation` replays a log folder with real renames: `append` writes `lines` (each followed by a newline) or raw `text` to a file and sets its modification time, `rename` and `delete` change files, `read` reads every file of the folder from the offset its identity reached and checks every response key emitted so far and the listed agents. `runtimeConfigs` give config.yaml texts and whether they select the Codex runtime; `agentConfigs` give texts and the two scalars of their `agent` block (EXECUTION-MODES). `home` also holds `state.db`, whose sessions give the agents' session-current effort. `codexRuntime` replays a Hermes home (folder `home`, with the profile `p`): `write` sets a file's text (`size`: padded with `#` to that many bytes) and modification time, `remove` deletes it, `append` works like the rotation's, and `read` checks the config.yaml of every log folder, then reads its new lines, and checks each listed log folder's switch, every response key emitted so far and the listed agents.",
     "home": "hermes/home",
     "timeZone": "America/Los_Angeles",
     "discover": [
@@ -5813,7 +7136,33 @@
                 "fast": false,
                 "final": true
               }
-            ]
+            ],
+            "effort": {
+              "mode": "high",
+              "evidence": "selected"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "configured"
+            },
+            "responseModes": {
+              "hermes:20261020_045958_a1b2c3:1:2026-10-20 05:00:04,321": {
+                "effort": null,
+                "speed": null
+              },
+              "hermes:20261020_045958_a1b2c3:2:2026-10-20 05:00:09,512": {
+                "effort": null,
+                "speed": null
+              },
+              "hermes:20261020_045958_a1b2c3:4:2026-10-20 05:01:20,250": {
+                "effort": null,
+                "speed": null
+              },
+              "hermes:20261020_045958_a1b2c3:1:2026-10-20 05:03:05,500": {
+                "effort": null,
+                "speed": null
+              }
+            }
           },
           "20261020_050019_5d6e7f": {
             "source": "hermes",
@@ -5841,7 +7190,21 @@
                 "fast": false,
                 "final": true
               }
-            ]
+            ],
+            "effort": {
+              "mode": "off",
+              "evidence": "selected"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "configured"
+            },
+            "responseModes": {
+              "hermes:20261020_050019_5d6e7f:1:2026-10-20 05:00:26,789": {
+                "effort": null,
+                "speed": null
+              }
+            }
           },
           "20261020_050455_9f8e7d6c": {
             "source": "hermes",
@@ -5885,7 +7248,25 @@
                 "fast": false,
                 "final": true
               }
-            ]
+            ],
+            "effort": {
+              "mode": "medium",
+              "evidence": "configured"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "configured"
+            },
+            "responseModes": {
+              "hermes:20261020_050455_9f8e7d6c:1:2026-10-20 05:05:08,000": {
+                "effort": null,
+                "speed": null
+              },
+              "hermes:20261020_050455_9f8e7d6c:2:2026-10-20 05:05:12,345": {
+                "effort": null,
+                "speed": null
+              }
+            }
           },
           "3f6c1d2e-8a4b-4c5d-9e0f-1a2b3c4d5e6f": {
             "source": "hermes",
@@ -5896,7 +7277,16 @@
             "phase": "generating",
             "inFlightStartMs": 1792497963000,
             "lastLineMs": 1792497963000,
-            "responses": []
+            "responses": [],
+            "effort": {
+              "mode": "medium",
+              "evidence": "configured"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "configured"
+            },
+            "responseModes": {}
           },
           "": {
             "source": "hermes",
@@ -5924,7 +7314,21 @@
                 "fast": false,
                 "final": true
               }
-            ]
+            ],
+            "effort": {
+              "mode": "medium",
+              "evidence": "configured"
+            },
+            "speed": {
+              "mode": "fast",
+              "evidence": "configured"
+            },
+            "responseModes": {
+              "hermes::5:2026-10-20 05:07:00,000": {
+                "effort": null,
+                "speed": null
+              }
+            }
           }
         }
       },
@@ -5973,7 +7377,19 @@
                 "fast": false,
                 "final": true
               }
-            ]
+            ],
+            "effort": null,
+            "speed": null,
+            "responseModes": {
+              "hermes:cron_3f2a1b0c9d8e_20261020_051000:1:2026-10-20 05:10:03,210": {
+                "effort": null,
+                "speed": null
+              },
+              "hermes:cron_3f2a1b0c9d8e_20261020_051000:1:2026-10-20 17:10:04,000": {
+                "effort": null,
+                "speed": null
+              }
+            }
           }
         }
       }
@@ -6985,7 +8401,71 @@
           }
         }
       ]
-    }
+    },
+    "agentConfigs": [
+      {
+        "name": "block",
+        "text": "agent:\n  reasoning_effort: high\n  service_tier: fast\n",
+        "reasoning_effort": "high",
+        "service_tier": "fast"
+      },
+      {
+        "name": "quotes and comments",
+        "text": "agent:\n  reasoning_effort: \"medium\"  # default\n  service_tier: 'priority'\n",
+        "reasoning_effort": "medium",
+        "service_tier": "priority"
+      },
+      {
+        "name": "quoted keys",
+        "text": "\"agent\":\n  'service_tier': ultra\n",
+        "service_tier": "ultra"
+      },
+      {
+        "name": "the last key line decides",
+        "text": "agent:\n  reasoning_effort: low\n  reasoning_effort: max\n",
+        "reasoning_effort": "max"
+      },
+      {
+        "name": "byte order mark and CRLF",
+        "text": "﻿agent:\r\n  service_tier: ultra\r\n",
+        "service_tier": "ultra"
+      },
+      {
+        "name": "deeper keys are not the block's",
+        "text": "agent:\n  reasoning_overrides:\n    reasoning_effort: max\n"
+      },
+      {
+        "name": "other blocks",
+        "text": "delegation:\n  reasoning_effort: low\n"
+      },
+      {
+        "name": "root keys",
+        "text": "reasoning_effort: high\nservice_tier: fast\n"
+      },
+      {
+        "name": "flow mapping",
+        "text": "agent: {reasoning_effort: high}\n"
+      },
+      {
+        "name": "a tab ends the block",
+        "text": "agent:\n\treasoning_effort: high\n"
+      },
+      {
+        "name": "not a scalar",
+        "text": "agent:\n  reasoning_effort: {effort: high}\n",
+        "reasoning_effort": null
+      },
+      {
+        "name": "empty value",
+        "text": "agent:\n  service_tier:\n",
+        "service_tier": null
+      },
+      {
+        "name": "two words",
+        "text": "agent:\n  service_tier: very fast\n",
+        "service_tier": null
+      }
+    ]
   },
   "droid": {
     "_comment": "Factory Droid (METRICS 4.16). The folder `droid` plays the home folder; `discover` lists the sessions discovery finds under droid/.factory/sessions. Its sessions are in `order` and `files` (each read from the start: the history rule); the history analysis also emits the own counters of a session without calls (I) as `droid:<session id>:session`. `roots`: create the folders `make` in a scratch folder, resolve the setting (null: the automatic root of the scratch folder as home) and compare with `expected` (relative). `sidecars`: a sidecar's text (`size`: padded with spaces to that many bytes) and whether it is readable, its counters and session model (`encoding`: the text's bytes in that encoding instead of UTF-8). `allocations`: the largest-remainder split of `total` by `weights`. `live`: scripted read cycles in a scratch home (see its _comment). `history`: scripted history analyses in a scratch home (see its _comment).",
@@ -6996,6 +8476,7 @@
       "droid/.factory/sessions/-Users-dev-projects-forge/a7b6c9d8-6bc4-4a70-9d34-8f9a0b1c2d36.jsonl",
       "droid/.factory/sessions/-Users-dev-projects-forge/b2e1d4c3-1c7f-4d2b-8e8f-3a4b5c6d7e81.jsonl",
       "droid/.factory/sessions/-Users-dev-projects-forge/b8c7dae9-7cd5-4b81-8e45-9a0b1c2d3e47.jsonl",
+      "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl",
       "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl",
       "droid/.factory/sessions/-Users-dev-projects-quasar/d4e3f6a5-3e91-4f4d-8a01-5c6d7e8f9a03.jsonl",
       "droid/.factory/sessions/-Users-dev-projects-quasar/e5f4a7b6-4fa2-4a5e-9b12-6d7e8f9a0b14.jsonl",

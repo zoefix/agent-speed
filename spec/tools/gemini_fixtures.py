@@ -117,6 +117,25 @@ def write_fixtures(out_dir):
         f.write(ORBIT_ROOT_MARKER)
     with open(p("gemini/projects.json"), "w", encoding="utf-8") as f:
         json.dump({"projects": {NOVA_ROOT: "nova", ORBIT_ROOT_MARKER: "orbit"}}, f, indent=2)
+    # The user's settings: only an override whose match is exactly the agent's model is its configured effort.
+    def override(match, thinking):
+        return {"match": match, "modelConfig": {"generateContentConfig": thinking}}
+    with open(p("gemini/settings.json"), "w", encoding="utf-8") as f:
+        json.dump({"security": {"auth": {"selectedType": "oauth-personal"}}, "modelConfigs": {
+            "overrides": [
+                override({"model": "gemini-3-pro-preview"}, {"thinkingConfig": {"thinkingLevel": "LOW"}}),
+                override({"model": "gemini-3-pro-preview", "overrideScope": "codebaseInvestigator"},
+                         {"thinkingConfig": {"thinkingLevel": "MINIMAL"}}),
+                override({"overrideScope": "core"}, {"thinkingConfig": {"thinkingLevel": "MEDIUM"}}),
+            ],
+            "customOverrides": [
+                override({"model": "gemini-3-pro-preview"}, {"thinkingConfig": {"thinkingLevel": "HIGH"}}),
+                override({"model": "gemini-3-pro-preview"}, {"temperature": 0.2}),
+                override({"model": "gemini-3-flash-preview"},
+                         {"thinkingConfig": {"thinkingLevel": "THINKING_LEVEL_UNSPECIFIED"}}),
+                override({"model": "gemini-2.5-flash"}, {"thinkingConfig": {"thinkingBudget": 0}}),
+                override({"model": "gemini-2.5-pro"}, {"thinkingConfig": {"thinkingBudget": 4096}}),
+            ]}}, f, indent=2)
     # Decoys that must not be discovered.
     with open(p("gemini/tmp/orbit/checkpoint-release.json"), "w", encoding="utf-8") as f:
         json.dump([{"role": "user", "parts": [{"text": "saved chat"}]}], f)
@@ -302,6 +321,12 @@ def write_fixtures(out_dir):
                 resp(d_g4, "10:40:06.520", "10:40:09.000", 9300, 9000, 150, 0, "gemini-2.5-flash"),
             ]),
     }
+
+    configured = {MAIN_JSONL: "high", MIGRATED_JSONL: "off"}
+    for rel, expected in files.items():
+        level = configured.get(rel)
+        expected.update(effort=dict(mode=level, evidence="configured") if level else None, speed=None,
+                        responseModes={r["key"]: dict(effort=None, speed=None) for r in expected["responses"]})
 
     def trace(rel, line, phase, in_flight=None):
         return dict(file=rel, afterLine=line, phase=phase, inFlightStartMs=None if in_flight is None else ms(in_flight))

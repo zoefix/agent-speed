@@ -18,8 +18,8 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v5
-      - name: Install zstd
-        run: command -v zstd || (sudo apt-get update && sudo apt-get install -y zstd)
+      - name: Install zstd and brotli
+        run: (command -v zstd && command -v brotli) || (sudo apt-get update && sudo apt-get install -y zstd brotli)
       - name: Check fixtures with the reference implementation
         run: python3 spec/tools/reference.py --check-fixtures
       - name: Check reporting and profile contracts

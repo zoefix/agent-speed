@@ -54,12 +54,128 @@
             "output": 150,
             "reasoning": 0,
             "model": "glm-5.3",
+            "provider": "account:zai-highspeed-card",
+            "final": true,
+            "fast": false,
+            "requestCount": 1
+          },
+          {
+            "key": "zcode:z-r4",
+            "startMs": 1792497619000,
+            "endMs": 1792497619500,
+            "firstMs": null,
+            "input": 2100,
+            "cachedInput": 1000,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 160,
+            "reasoning": 0,
+            "model": "glm-5.3",
+            "provider": "zai",
+            "final": true,
+            "fast": false,
+            "requestCount": 1
+          },
+          {
+            "key": "zcode:z-r5",
+            "startMs": 1792497620000,
+            "endMs": 1792497620400,
+            "firstMs": null,
+            "input": 2200,
+            "cachedInput": 1000,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 170,
+            "reasoning": 0,
+            "model": "glm-5.3",
+            "provider": "account:zai-highspeed-card",
+            "final": true,
+            "fast": false,
+            "requestCount": 1
+          },
+          {
+            "key": "zcode:z-compact",
+            "startMs": 1792497620500,
+            "endMs": 1792497620900,
+            "firstMs": null,
+            "input": 300,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 40,
+            "reasoning": 0,
+            "model": "glm-5.3",
             "provider": "zai",
             "final": true,
             "fast": false,
             "requestCount": 1
           }
-        ]
+        ],
+        "effort": {
+          "mode": "medium",
+          "evidence": "recorded"
+        },
+        "speed": {
+          "mode": "highspeed",
+          "evidence": "selected",
+          "provider": "zcode"
+        },
+        "responseModes": {
+          "zcode:z-r1": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "zcode:z-title": {
+            "effort": {
+              "mode": "off",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "zcode:z-r2": {
+            "effort": {
+              "mode": "off",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "highspeed",
+              "evidence": "recorded",
+              "provider": "zcode"
+            }
+          },
+          "zcode:z-r4": {
+            "effort": {
+              "mode": "on",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "standard",
+              "evidence": "recorded",
+              "provider": "zcode"
+            }
+          },
+          "zcode:z-r5": {
+            "effort": {
+              "mode": "medium",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "highspeed",
+              "evidence": "selected",
+              "provider": "zcode"
+            }
+          },
+          "zcode:z-compact": {
+            "effort": {
+              "mode": "low",
+              "evidence": "recorded"
+            },
+            "speed": null
+          }
+        }
       },
       {
         "id": "sess-z-sub",
@@ -77,19 +193,84 @@
             "cacheWrite1hInput": 0,
             "output": 90,
             "reasoning": 10,
+            "model": "GLM-5.1-Highspeed",
+            "provider": "zai",
+            "final": true,
+            "fast": false,
+            "requestCount": 1
+          }
+        ],
+        "effort": {
+          "mode": "xhigh",
+          "evidence": "recorded"
+        },
+        "speed": {
+          "mode": "highspeed",
+          "evidence": "selected",
+          "provider": "zcode"
+        },
+        "responseModes": {
+          "zcode:z-r3": {
+            "effort": {
+              "mode": "xhigh",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "highspeed",
+              "evidence": "selected",
+              "provider": "zcode"
+            }
+          }
+        }
+      },
+      {
+        "id": "sess-z-running",
+        "project": "quasar",
+        "parentId": null,
+        "responses": [],
+        "effort": {
+          "mode": "max",
+          "evidence": "recorded"
+        },
+        "speed": null,
+        "responseModes": {}
+      }
+    ]
+  },
+  "zcodeWithoutVariant": {
+    "database": "zcode-old/cli/db/db.sqlite",
+    "sessions": [
+      {
+        "id": "sess-z-old",
+        "project": "quasar",
+        "parentId": null,
+        "responses": [
+          {
+            "key": "zcode:z-old",
+            "startMs": 1792497601000,
+            "endMs": 1792497602000,
+            "firstMs": null,
+            "input": 100,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 20,
+            "reasoning": 0,
             "model": "glm-5.3",
             "provider": "zai",
             "final": true,
             "fast": false,
             "requestCount": 1
           }
-        ]
-      },
-      {
-        "id": "sess-z-running",
-        "project": "quasar",
-        "parentId": null,
-        "responses": []
+        ],
+        "effort": null,
+        "speed": null,
+        "responseModes": {
+          "zcode:z-old": {
+            "effort": null,
+            "speed": null
+          }
+        }
       }
     ]
   },
@@ -130,7 +311,7 @@
             "cacheWrite1hInput": 0,
             "output": 120,
             "reasoning": 0,
-            "model": "kimi-k2.5",
+            "model": "kimi-for-coding-highspeed",
             "provider": "moonshot",
             "final": true,
             "fast": false,
@@ -153,7 +334,36 @@
             "fast": false,
             "requestCount": 1
           }
-        ]
+        ],
+        "effort": {
+          "mode": "low",
+          "evidence": "selected"
+        },
+        "speed": null,
+        "responseModes": {
+          "kimi:k-m1": {
+            "effort": {
+              "mode": "high",
+              "evidence": "recorded"
+            },
+            "speed": null
+          },
+          "kimi:k-m2": {
+            "effort": {
+              "mode": "on",
+              "evidence": "recorded"
+            },
+            "speed": {
+              "mode": "highspeed",
+              "evidence": "selected",
+              "provider": "kimi"
+            }
+          },
+          "kimi:k-m3": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       {
         "path": "kimi/sessions/wd_nova_0123456789ab/sess-kimi/agents/agent-0/wire.jsonl",
@@ -178,14 +388,73 @@
             "fast": false,
             "requestCount": 1
           }
-        ]
+        ],
+        "effort": {
+          "mode": "off",
+          "evidence": "recorded"
+        },
+        "speed": null,
+        "responseModes": {
+          "kimi:k-child": {
+            "effort": {
+              "mode": "off",
+              "evidence": "recorded"
+            },
+            "speed": null
+          }
+        }
       },
       {
         "path": "kimi/sessions/wd_nova_0123456789ab/sess-kimi-copy/agents/main/wire.jsonl",
         "project": "nova",
         "isSubagent": false,
         "parentFile": null,
-        "responses": []
+        "responses": [],
+        "effort": {
+          "mode": "low",
+          "evidence": "selected"
+        },
+        "speed": null,
+        "responseModes": {}
+      },
+      {
+        "path": "kimi/sessions/wd_nova_0123456789ab/sess-kimi-old/agents/main/wire.jsonl",
+        "project": "nova",
+        "isSubagent": false,
+        "parentFile": null,
+        "responses": [
+          {
+            "key": "kimi:k-old",
+            "startMs": 1792497660000,
+            "endMs": 1792497662000,
+            "firstMs": null,
+            "input": 40,
+            "cachedInput": 0,
+            "cacheWriteInput": 0,
+            "cacheWrite1hInput": 0,
+            "output": 30,
+            "reasoning": 0,
+            "model": null,
+            "provider": null,
+            "final": true,
+            "fast": false,
+            "requestCount": 1
+          }
+        ],
+        "effort": {
+          "mode": "xhigh",
+          "evidence": "selected"
+        },
+        "speed": null,
+        "responseModes": {
+          "kimi:k-old": {
+            "effort": {
+              "mode": "xhigh",
+              "evidence": "selected"
+            },
+            "speed": null
+          }
+        }
       }
     ]
   },
@@ -249,21 +518,49 @@
             "fast": false,
             "requestCount": 1
           }
-        ]
+        ],
+        "effort": {
+          "mode": "high",
+          "evidence": "selected"
+        },
+        "speed": null,
+        "responseModes": {
+          "grok:g-p1:grok-4.5": {
+            "effort": null,
+            "speed": null
+          },
+          "grok:g-p2:grok-4.5": {
+            "effort": null,
+            "speed": null
+          },
+          "grok:g-p2:grok-4.6": {
+            "effort": null,
+            "speed": null
+          }
+        }
       },
       {
         "path": "grok/sessions/%2Fprojects%2Fcomet/g-child/updates.jsonl",
         "project": "comet",
         "isSubagent": true,
         "parentFile": "grok/sessions/%2Fprojects%2Fcomet/g-main/updates.jsonl",
-        "responses": []
+        "responses": [],
+        "effort": {
+          "mode": "off",
+          "evidence": "selected"
+        },
+        "speed": null,
+        "responseModes": {}
       },
       {
         "path": "grok/sessions/%2Fprojects%2Fcomet/g-copy/updates.jsonl",
         "project": "comet",
         "isSubagent": false,
         "parentFile": "grok/sessions/%2Fprojects%2Fcomet/g-main/updates.jsonl",
-        "responses": []
+        "responses": [],
+        "effort": null,
+        "speed": null,
+        "responseModes": {}
       }
     ]
   }

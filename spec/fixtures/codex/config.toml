@@ -1,0 +1,5 @@
+model = "gpt-6.1-sol"
+service_tier = "priority"  # the default of new threads
+
+[profiles.batch]
+service_tier = "flex"

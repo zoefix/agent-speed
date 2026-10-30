@@ -88,9 +88,20 @@ order = []
 
 
 def expect(rel, **kw):
+    """Unknown effort and speed unless stated; a Codex agent without a tier shows the home's configured one."""
     order.append(rel)
+    kw.setdefault("effort", None)
+    if kw.get("speed") is None:
+        kw["speed"] = mode("fast", "configured", "openai") if rel.startswith("codex/") else None
+    kw.setdefault("responseModes", {r["key"]: {"effort": None, "speed": None} for r in kw["responses"]})
     files[rel] = kw
 
+
+# --- The Codex home's configuration: a declared default, shown as configured, never a response's mode ------------
+os.makedirs(os.path.join(ROOT, "codex"), exist_ok=True)
+with open(os.path.join(ROOT, "codex", "config.toml"), "w", encoding="utf-8", newline="\n") as f:
+    f.write('model = "gpt-6.1-sol"\nservice_tier = "priority"  # the default of new threads\n\n'
+            '[profiles.batch]\nservice_tier = "flex"\n')
 
 # --- Codex, modern format -----------------------------------------------------
 rel = "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl"
@@ -872,7 +883,11 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                            "any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one "
                            "parser state per log folder) but their modification times are in `mtimes`. Factory "
                            "Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, "
-                           "whose modification time is in `mtimes` too) and its `traces` work like the omp ones.",
+                           "whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Every "
+                           "agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the "
+                           "files the fixture folders play: codex/config.toml, gemini/settings.json, "
+                           "antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and "
+                           "hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
                "order": order, "files": files, "mtimes": mtimes,
                "opencode": {"database": opencode_rel, "agents": opencode_expected},
                "gemini": {"discover": gemini["discover"], "traces": gemini["traces"]},
@@ -883,7 +898,7 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                "pi": {"discover": pi["discover"], "traces": pi["traces"]},
                "openclaw": {"dbOrder": openclaw["dbOrder"], "discover": openclaw["discover"],
                             "codexDiscover": openclaw["codexDiscover"], "databases": openclaw["databases"],
-                            "traces": openclaw["traces"]},
+                            "traceSeqs": openclaw["traceSeqs"], "traces": openclaw["traces"]},
                "hermes": hermes,
                "droid": dict(droid["droid"], traces=traces_droid)},
               f, indent=2, ensure_ascii=False)

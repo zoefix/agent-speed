@@ -1,0 +1,12 @@
+{"type":"session_start","id":"ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70","title":"Tiers","owner":"dev","version":2,"cwd":"/Users/dev/projects/forge","hostId":"host-7f3a"}
+{"type":"message","id":"tl0","timestamp":"2026-10-21T16:00:00.000Z","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Step 0"}]}}
+{"type":"message","timestamp":"2026-10-21T16:00:00.500Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"modelId":"claude-opus-5-5-fast","reasoningEffort":"high"},"id":"l1-m1"}
+{"type":"message","id":"tl1","timestamp":"2026-10-21T16:00:02.000Z","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Step 1"}]}}
+{"type":"message","timestamp":"2026-10-21T16:00:02.500Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"modelId":"gpt-6-astra-ultrafast","reasoningEffort":"xhigh"},"id":"l1-m2"}
+{"type":"message","id":"tl2","timestamp":"2026-10-21T16:00:04.000Z","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Step 2"}]}}
+{"type":"message","timestamp":"2026-10-21T16:00:04.500Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"modelId":"glm-5.2-fast","reasoningEffort":"high"},"id":"l1-m3"}
+{"type":"message","id":"tl3","timestamp":"2026-10-21T16:00:06.000Z","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Step 3"}]}}
+{"type":"message","timestamp":"2026-10-21T16:00:06.500Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"modelId":"gpt-5.6-terra-flex","reasoningEffort":"low"},"id":"l1-m4"}
+{"type":"message","id":"tl4","timestamp":"2026-10-21T16:00:08.000Z","parentId":null,"message":{"role":"user","content":[{"type":"text","text":"Step 4"}]}}
+{"type":"message","timestamp":"2026-10-21T16:00:08.500Z","parentId":null,"message":{"role":"assistant","content":[{"type":"text","text":"Done."}],"modelId":"gpt-5.5-fast","reasoningEffort":"medium"},"id":"l1-m5"}
+{"type":"agent_turn_outcome","turnId":"tl4","reason":"completed","resultKind":"text"}

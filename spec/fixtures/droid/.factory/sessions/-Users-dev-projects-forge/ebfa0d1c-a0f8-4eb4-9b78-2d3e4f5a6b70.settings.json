@@ -1,0 +1,29 @@
+{
+  "model": "gpt-5.5-fast",
+  "reasoningEffort": "high",
+  "interactionMode": "auto",
+  "autonomyLevel": "medium",
+  "assistantActiveTimeMs": 61000,
+  "tokenUsage": {
+    "inputTokens": 5000,
+    "outputTokens": 500,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 0,
+    "thinkingTokens": 0,
+    "factoryCredits": 0
+  },
+  "inclusiveTokenUsage": {
+    "inputTokens": 5000,
+    "outputTokens": 500,
+    "cacheCreationTokens": 0,
+    "cacheReadTokens": 0,
+    "thinkingTokens": 0,
+    "factoryCredits": 0
+  },
+  "childInclusiveTokenUsageBySessionId": {},
+  "lastCallTokenUsage": {
+    "inputTokens": 10,
+    "outputTokens": 5,
+    "cacheReadTokens": 0
+  }
+}

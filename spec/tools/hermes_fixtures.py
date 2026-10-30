@@ -14,8 +14,10 @@ independently of reference.py: every UTC time below is the local time plus seven
 """
 import json
 import os
+import sqlite3
 import sys
 
+from antigravity_fixtures import close_cleanly
 from omp_fixtures import NEXT_DAY, ms
 
 ZONE = "America/Los_Angeles"
@@ -66,9 +68,49 @@ def key(sid, n, clock, day="2026-10-20"):
     return "hermes:%s:%d:%s" % (sid, n, stamp(clock, day))
 
 
-def agent(model, sub, phase, in_flight, last, responses):
+def agent(model, sub, phase, in_flight, last, responses, effort=None, speed=None):
     return {"source": "hermes", "project": None, "model": model, "isSubagent": sub, "parentId": None,
-            "phase": phase, "inFlightStartMs": in_flight, "lastLineMs": last, "responses": responses}
+            "phase": phase, "inFlightStartMs": in_flight, "lastLineMs": last, "responses": responses, "effort": effort,
+            "speed": speed, "responseModes": {r["key"]: {"effort": None, "speed": None} for r in responses}}
+
+
+CONFIG = """logging:
+  level: INFO
+  max_size_mb: 5
+  backup_count: 3
+agent:
+  max_turns: 90
+  # reasoning_effort: low
+  reasoning_effort: "medium"  # new sessions start here
+  service_tier: fast
+  reasoning_overrides:
+    reasoning_effort: max
+delegation:
+  reasoning_effort: low
+"""
+
+STATE_SCHEMA = """
+CREATE TABLE sessions (id TEXT PRIMARY KEY, source TEXT NOT NULL, model TEXT, model_config TEXT, system_prompt TEXT,
+  started_at REAL NOT NULL, input_tokens INTEGER DEFAULT 0, output_tokens INTEGER DEFAULT 0);
+CREATE TABLE messages (id INTEGER PRIMARY KEY, session_id TEXT NOT NULL, role TEXT NOT NULL, content TEXT);
+"""
+
+
+def write_state_db(path, sessions):
+    """`state.db` (WAL, closed cleanly), reduced: only `sessions.model_config` is ever read."""
+    for stale in (path, path + "-wal", path + "-shm"):
+        if os.path.exists(stale):
+            os.remove(stale)
+    db = sqlite3.connect(path)
+    db.execute("PRAGMA journal_mode=WAL")
+    db.executescript(STATE_SCHEMA)
+    for sid, config in sessions.items():
+        db.execute("INSERT INTO sessions (id, source, model_config, system_prompt, started_at) VALUES (?,?,?,?,?)",
+                   (sid, "cli", config, "(system prompt, never read)", 1.0))
+        db.execute("INSERT INTO messages (session_id, role, content) VALUES (?, 'user', '(conversation, never read)')",
+                   (sid,))
+    db.commit()
+    close_cleanly(db, path)
 
 
 def write_lines(path, lines, endings=None):
@@ -201,12 +243,24 @@ def write_fixtures(out_dir):
         LOGS + "/archive/agent.log": api,
         "hermes/home/profiles/.deleted/gone/logs/agent.log": api,
         "hermes/home/profiles/empty/config.yaml": "model:\n  default: hermes-4-405b\n",
-        "hermes/home/config.yaml": "logging:\n  level: INFO\n  max_size_mb: 5\n  backup_count: 3\n",
+        "hermes/home/config.yaml": CONFIG,
+        "hermes/home/profiles/work/config.yaml": "agent: {reasoning_effort: high, service_tier: fast}\n",
     }
     for rel, content in decoys.items():
         os.makedirs(os.path.dirname(p(rel)), exist_ok=True)
         with open(p(rel), "w", encoding="utf-8", newline="\n") as fh:
             fh.write(content)
+
+    # The sessions of the default profile: A selected a level, S turned reasoning off, G has none (and a service tier
+    # that is not read), U's cell is not JSON. The profile `work` has no database.
+    write_state_db(p("hermes/home/state.db"), {
+        A: json.dumps({"max_iterations": 90, "reasoning_config": {"enabled": True, "effort": "high"},
+                       "max_tokens": None}),
+        S: json.dumps({"max_iterations": 90, "reasoning_config": {"enabled": False}, "max_tokens": None}),
+        G: json.dumps({"reasoning_config": None, "service_tier": "priority"}),
+        U: "not json"})
+    medium = {"mode": "medium", "evidence": "configured"}
+    fast = {"mode": "fast", "evidence": "configured"}
 
     a = agent(OPUS, False, "idle", None, ms("12:03:05.600"), [
         resp(key(A, 1, "05:00:04,321"), ms("12:00:00.021"), ms("12:00:04.321"), 18003, 0, 18000, 420, OPUS,
@@ -216,21 +270,21 @@ def write_fixtures(out_dir):
         resp(key(A, 4, "05:01:20,250"), None, ms("12:01:20.250"), 19100, 18600, 0, 300, OPUS, "openrouter"),
         resp(key(A, 1, "05:03:05,500"), ms("12:03:00.000"), ms("12:03:05.500"), 2000, 1800, 0, 150, OPUS,
              "openrouter"),
-    ])
+    ], {"mode": "high", "evidence": "selected"}, fast)
     s = agent("gpt-5.5", True, "idle", None, ms("12:00:41.000"), [
         resp(key(S, 1, "05:00:26,789"), ms("12:00:20.089"), ms("12:00:26.789"), 5400, 5100, 0, 410, "gpt-5.5",
              "openai-codex"),
-    ])
+    ], {"mode": "off", "evidence": "selected"}, fast)
     g = agent("hermes-4-405b", False, "idle", None, ms("12:05:12.400"), [
         resp(key(G, 1, "05:05:08,000"), ms("12:05:00.000"), ms("12:05:08.000"), 9000, 0, 0, 0, "hermes-4-405b",
              "nous"),
         resp(key(G, 2, "05:05:12,345"), ms("12:05:12.045"), ms("12:05:12.345"), 9100, 8960, 0, 120,
              "hermes-4-405b", "nous"),
-    ])
-    u = agent("claude-sonnet-5-5", False, "generating", ms("12:06:03.000"), ms("12:06:03.000"), [])
+    ], medium, fast)
+    u = agent("claude-sonnet-5-5", False, "generating", ms("12:06:03.000"), ms("12:06:03.000"), [], medium, fast)
     side = agent(OPUS, False, "idle", None, ms("12:07:00.000"), [
         resp(key("", 5, "05:07:00,000"), ms("12:06:58.800"), ms("12:07:00.000"), 700, 0, 0, 40, OPUS, None),
-    ])
+    ], medium, fast)
     w = agent("claude-sonnet-5-5", False, "idle", None, ms("00:10:04.020", NEXT_DAY), [
         resp(key(W, 1, "05:10:03,210"), ms("12:10:00.010"), ms("12:10:03.210"), 3000, 0, 0, 210,
              "claude-sonnet-5-5", "anthropic"),
@@ -256,7 +310,9 @@ def write_fixtures(out_dir):
                     "followed by a newline) or raw `text` to a file and sets its modification time, `rename` and "
                     "`delete` change files, `read` reads every file of the folder from the offset its identity "
                     "reached and checks every response key emitted so far and the listed agents. `runtimeConfigs` "
-                    "give config.yaml texts and whether they select the Codex runtime. `codexRuntime` replays a "
+                    "give config.yaml texts and whether they select the Codex runtime; `agentConfigs` give texts and the "
+                    "two scalars of their `agent` block (EXECUTION-MODES). `home` also holds `state.db`, whose "
+                    "sessions give the agents' session-current effort. `codexRuntime` replays a "
                     "Hermes home (folder `home`, with the profile `p`): `write` sets a file's text (`size`: padded "
                     "with `#` to that many bytes) and modification time, `remove` deletes it, `append` works like "
                     "the rotation's, and `read` checks the config.yaml of every log folder, then reads its new "
@@ -277,7 +333,33 @@ def write_fixtures(out_dir):
         "rotation": rotation(),
         "runtimeConfigs": runtime_configs(),
         "codexRuntime": codex_runtime(),
+        "agentConfigs": agent_configs(),
     }
+
+
+def agent_configs():
+    """config.yaml texts and the two scalars of their `agent` block (null: the key is there, without one plain scalar)."""
+    def case(name, text, **scalars):
+        return dict({"name": name, "text": text}, **scalars)
+
+    return [
+        case("block", "agent:\n  reasoning_effort: high\n  service_tier: fast\n", reasoning_effort="high",
+             service_tier="fast"),
+        case("quotes and comments", "agent:\n  reasoning_effort: \"medium\"  # default\n  service_tier: 'priority'\n",
+             reasoning_effort="medium", service_tier="priority"),
+        case("quoted keys", "\"agent\":\n  'service_tier': ultra\n", service_tier="ultra"),
+        case("the last key line decides", "agent:\n  reasoning_effort: low\n  reasoning_effort: max\n",
+             reasoning_effort="max"),
+        case("byte order mark and CRLF", "\ufeffagent:\r\n  service_tier: ultra\r\n", service_tier="ultra"),
+        case("deeper keys are not the block's", "agent:\n  reasoning_overrides:\n    reasoning_effort: max\n"),
+        case("other blocks", "delegation:\n  reasoning_effort: low\n"),
+        case("root keys", "reasoning_effort: high\nservice_tier: fast\n"),
+        case("flow mapping", "agent: {reasoning_effort: high}\n"),
+        case("a tab ends the block", "agent:\n\treasoning_effort: high\n"),
+        case("not a scalar", "agent:\n  reasoning_effort: {effort: high}\n", reasoning_effort=None),
+        case("empty value", "agent:\n  service_tier:\n", service_tier=None),
+        case("two words", "agent:\n  service_tier: very fast\n", service_tier=None),
+    ]
 
 
 def wall_times():

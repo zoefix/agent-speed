@@ -1,0 +1,108 @@
+{
+  "security": {
+    "auth": {
+      "selectedType": "oauth-personal"
+    }
+  },
+  "modelConfigs": {
+    "overrides": [
+      {
+        "match": {
+          "model": "gemini-3-pro-preview"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingLevel": "LOW"
+            }
+          }
+        }
+      },
+      {
+        "match": {
+          "model": "gemini-3-pro-preview",
+          "overrideScope": "codebaseInvestigator"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingLevel": "MINIMAL"
+            }
+          }
+        }
+      },
+      {
+        "match": {
+          "overrideScope": "core"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingLevel": "MEDIUM"
+            }
+          }
+        }
+      }
+    ],
+    "customOverrides": [
+      {
+        "match": {
+          "model": "gemini-3-pro-preview"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingLevel": "HIGH"
+            }
+          }
+        }
+      },
+      {
+        "match": {
+          "model": "gemini-3-pro-preview"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "temperature": 0.2
+          }
+        }
+      },
+      {
+        "match": {
+          "model": "gemini-3-flash-preview"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingLevel": "THINKING_LEVEL_UNSPECIFIED"
+            }
+          }
+        }
+      },
+      {
+        "match": {
+          "model": "gemini-2.5-flash"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingBudget": 0
+            }
+          }
+        }
+      },
+      {
+        "match": {
+          "model": "gemini-2.5-pro"
+        },
+        "modelConfig": {
+          "generateContentConfig": {
+            "thinkingConfig": {
+              "thinkingBudget": 4096
+            }
+          }
+        }
+      }
+    ]
+  }
+}
