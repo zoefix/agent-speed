@@ -373,9 +373,10 @@ public sealed class ReportDiscovery
             sections = [.. ReportSections.All];
         }
 
-        var extensions = new ReportExtensions(root.Extension("modelHarnessRequests"), root.Extension("executionModes"), root.Extension("profileAvatar"),
+        var modes = root.ExtensionVersion("executionModes", ReportExtensions.NewestModesVersion);
+        var extensions = new ReportExtensions(root.Extension("modelHarnessRequests"), modes > 0, root.Extension("profileAvatar"),
             root.Extension("sharedIdentity"), root.Extension(ReportWebSocketProtocol.Extension), root.Extension(ReportExtensions.TaskScoreName),
-            root.Extension(ReportExtensions.PerfScoreName));
+            root.Extension(ReportExtensions.PerfScoreName), ExecutionModesVersion: Math.Max(modes, 1));
         return new ReportDiscovery
         {
             Versions = versions,
@@ -408,9 +409,14 @@ public sealed class ReportDiscovery
     /// <summary>One object of the document. A present field of the wrong type is an error, a fraction where an integer is expected included.</summary>
     private sealed class Fields(JsonElement element, string path)
     {
-        public bool Extension(string name) => element.TryGetProperty("extensions", out var extensions)
+        public bool Extension(string name) => ExtensionVersion(name, 1) == 1;
+
+        /// <summary>The advertised version of an extension when it is an exact integer from 1 to <paramref name="newest"/>, else 0.</summary>
+        public int ExtensionVersion(string name, int newest) => element.TryGetProperty("extensions", out var extensions)
             && extensions.ValueKind == JsonValueKind.Object && extensions.TryGetProperty(name, out var value)
-            && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var version) && version == 1;
+            && value.ValueKind == JsonValueKind.Number && value.TryGetInt32(out var version) && version >= 1 && version <= newest
+            ? version
+            : 0;
 
         private string Field(string key) => path.Length == 0 ? key : $"{path}.{key}";
 
