@@ -12,7 +12,12 @@ struct OmpParser: Sendable {
     private var headerSeen = false
     private var headerMs: Int64?
     private var pendingToolCalls: Set<String> = []
+    /// Each entry's context by id: a branch sees only its own selections (EXECUTION-MODES, omp).
     private var branchModes: [String: ExecutionModes] = [:]
+    /// The latest entry's context, plus what the latest message recorded.
+    private var context: ExecutionModes = .empty
+    /// The tier family of the latest response.
+    private var family: String?
 
     /// `root` is the sessions root the file was found under.
     init(agentId: String, fileID: FileID, root: String?) {
@@ -75,16 +80,43 @@ struct OmpParser: Sendable {
             if let headerMs, timestamp < headerMs - Self.copiedHistoryMs { return }
             state.noteLine(at: timestamp)
             state.actions.recordResults(tools, at: timestamp)
-            state.modes = parentId.flatMap { branchModes[$0] } ?? .empty
-            if case .modeChange(let tiers) = record {
-                state.modes = ExecutionModes(tiers.flatMap { provider, tier in
-                    ExecutionModeAdapters.omp(tier, provider: provider, evidence: .selected, scope: .session).facts
-                })
-            }
-            branchModes[id] = state.modes
-            if branchModes.count > 16_384 { branchModes = [id: state.modes] }
+            context = parentId.flatMap { branchModes[$0] } ?? .empty
+            applySelection(record)
+            branchModes[id] = context
+            if branchModes.count > 16_384 { branchModes = [id: context] }
+            updateCurrentModes()
             consume(record, id: id, at: timestamp, tools: tools, deduper: &deduper, emit: emit)
         }
+    }
+
+    private mutating func applySelection(_ record: OmpRecord) {
+        switch record {
+        case .tierChange(let tiers):
+            let selected = ["anthropic", "google", "openai"].compactMap { family in
+                ExecutionModeAdapters.ompTier(tiers[family], provider: family, evidence: .selected, scope: .session)
+            }
+            context = ExecutionModes(context.facts.filter { $0.kind != .serviceTier } + selected)
+        case .thinkingChange(let level):
+            let selected = ExecutionModeAdapters.effort(level, evidence: .selected, scope: .session)
+            context = ExecutionModes(context.facts.filter { $0.kind != .effort } + [selected].compactMap { $0 })
+        default:
+            break
+        }
+    }
+
+    /// The context, its tier facts limited to the family of the latest response.
+    private mutating func updateCurrentModes() {
+        guard let family else {
+            state.modes = context
+            return
+        }
+        state.modes = ExecutionModes(context.facts.filter { $0.kind != .serviceTier || $0.provider == family })
+    }
+
+    /// The context's tiers of `call`'s family.
+    private func tiers(of call: OmpCall) -> [ExecutionModeFact] {
+        guard let family = ExecutionModeAdapters.ompFamily(call.provider) else { return [] }
+        return context.facts.filter { $0.kind == .serviceTier && $0.provider == family }
     }
 
     private mutating func consume(
@@ -112,11 +144,13 @@ struct OmpParser: Sendable {
         case .modelUsage(let call):
             let key = "omp:\(id):\(timestamp)"
             guard !deduper.isOwnedByOtherFile(key, for: fileID), call.hasUsage else { return }
-            emitResponse(key: key, startMs: nil, endMs: timestamp, call: call, deduper: &deduper, emit: emit)
+            // A side call runs at its own, unrecorded level.
+            emitResponse(key: key, startMs: nil, endMs: timestamp, call: call, modes: ExecutionModes(tiers(of: call)),
+                         deduper: &deduper, emit: emit)
         case .sessionExit:
             state.setPhase(.idle, at: timestamp)
             pendingToolCalls.removeAll()
-        case .other, .modeChange:
+        case .other, .tierChange, .thinkingChange:
             break
         }
     }
@@ -142,9 +176,14 @@ struct OmpParser: Sendable {
         if assistant.call.hasUsage {
             // Failed and interrupted requests count in totals only.
             let startMs = assistant.stop.isFailure ? nil : assistant.startedMs
-            emitResponse(key: key, startMs: startMs, endMs: endMs, call: assistant.call, deduper: &deduper, emit: emit)
+            let modes = ExecutionModes(tiers(of: assistant.call) + context.facts.filter { $0.kind == .effort })
+                .merging(assistant.call.modes)
+            emitResponse(key: key, startMs: startMs, endMs: endMs, call: assistant.call, modes: modes, deduper: &deduper, emit: emit)
             state.model = assistant.call.model
-            state.modes = state.modes.merging(assistant.call.modes)
+            family = ExecutionModeAdapters.ompFamily(assistant.call.provider)
+            // What a message records stays out of the branch.
+            context = context.merging(assistant.call.modes)
+            updateCurrentModes()
         }
         let continues = assistant.stop == .toolUse || assistant.stop == .stop || assistant.stop == .length
         if assistant.stop.isFailure {
@@ -166,13 +205,13 @@ struct OmpParser: Sendable {
         startMs: Int64?,
         endMs: Int64,
         call: OmpCall,
+        modes: ExecutionModes,
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
         let claim = deduper.claim(key, for: fileID)
         let record = ResponseRecord(key: key, source: .omp, agentId: agentId, model: call.model, startMs: startMs,
-                                    endMs: endMs, usage: call.tokens, isFinal: true, provider: call.provider,
-                                    modes: ExecutionModes(state.modes.facts.filter { $0.provider == ExecutionModeAdapters.ompProvider(call.provider) }).merging(call.modes))
+                                    endMs: endMs, usage: call.tokens, isFinal: true, provider: call.provider, modes: modes)
         // A repeat in the same file (a rewrite read again) is an update (METRICS 4.4).
         emit(ResponseUpsert(record: record, isCompletion: claim == .new))
     }

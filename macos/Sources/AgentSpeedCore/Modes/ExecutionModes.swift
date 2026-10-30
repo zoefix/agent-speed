@@ -23,6 +23,9 @@ public enum ExecutionModeKind: String, CaseIterable, Codable, Sendable {
 public enum ExecutionModeEvidence: String, Codable, Sendable {
     case configured, selected, recorded, served
 
+    /// What a response or an agent's own facts may be attributed from: a configured value never counts.
+    static let attributable: Set<ExecutionModeEvidence> = [.selected, .recorded, .served]
+
     var rank: Int {
         switch self { case .configured: 0; case .selected: 1; case .recorded: 2; case .served: 3 }
     }
@@ -114,8 +117,13 @@ public struct ExecutionModes: Equatable, Hashable, Codable, Sendable {
     public func merging(_ other: ExecutionModes) -> ExecutionModes { ExecutionModes(facts + other.facts) }
 
     public func attribution(for kind: ExecutionModeKind) -> ExecutionModeAttribution {
-        guard kind.isFactKind else { return speed }
-        let candidates = facts.filter { $0.kind == kind && $0.evidence != .configured }
+        attribution(for: kind, among: ExecutionModeEvidence.attributable)
+    }
+
+    /// Served first, then recorded, then selected, among `evidence`; a tie that disagrees is unknown.
+    func attribution(for kind: ExecutionModeKind, among evidence: Set<ExecutionModeEvidence>) -> ExecutionModeAttribution {
+        guard kind.isFactKind else { return speed(among: evidence) }
+        let candidates = facts.filter { $0.kind == kind && evidence.contains($0.evidence) }
         guard let best = candidates.max(by: {
             ($0.evidence.rank, $0.scope.rank) < ($1.evidence.rank, $1.scope.rank)
         }), best.isResolved else { return ExecutionModeAttribution(kind: kind) }
@@ -127,9 +135,9 @@ public struct ExecutionModes: Equatable, Hashable, Codable, Sendable {
     }
 
     /// The service tier when resolved, else the accelerator, else a `highspeed` model variant.
-    private var speed: ExecutionModeAttribution {
+    private func speed(among evidence: Set<ExecutionModeEvidence>) -> ExecutionModeAttribution {
         for kind in [ExecutionModeKind.serviceTier, .accelerator, .modelVariant] {
-            let result = attribution(for: kind)
+            let result = attribution(for: kind, among: evidence)
             if !result.isUnknown, kind != .modelVariant || result.mode == "highspeed" {
                 return ExecutionModeAttribution(kind: .speed, mode: result.mode, evidence: result.evidence,
                                                 provider: result.provider)

@@ -49,7 +49,10 @@ enum OmpRecord: Equatable, Sendable {
     case modelUsage(OmpCall)
     /// `custom` with `customType == "session_exit"`.
     case sessionExit
-    case modeChange([String: String])
+    /// `service_tier_change`: the tier of each family it names.
+    case tierChange([String: String])
+    /// `thinking_level_change` with a `thinkingLevel` member; nil when it is not a string.
+    case thinkingChange(String?)
     /// Anything else, including calls that fail the guard: only `lastLineMs`.
     case other
 }
@@ -73,7 +76,7 @@ enum OmpLine: Equatable, Sendable {
 /// Decodes omp session lines. Conversation content is skipped (only validated). Repeated members resolve like
 /// Python's `json.loads`: the last one wins.
 enum OmpLineExtractor {
-    private static let types: [StaticString] = ["title", "session", "message", "model_usage", "custom", "service_tier_change"]
+    private static let types: [StaticString] = ["title", "session", "message", "model_usage", "custom", "service_tier_change", "thinking_level_change"]
     private static let roles: [StaticString] = ["user", "developer", "assistant", "toolResult"]
     private static let stopReasons: [StaticString] = ["aborted", "error", "stop", "toolUse", "length"]
 
@@ -112,6 +115,8 @@ enum OmpLineExtractor {
         var hasApi = false
         var usage: Usage?
         var serviceTier: String?
+        /// `requestControls.effort` of a message: `tail`, else `topLevel`.
+        var effort: String?
 
         func call() -> OmpCall? {
             guard let model, hasProvider, hasApi, let usage else { return nil }
@@ -123,8 +128,10 @@ enum OmpLineExtractor {
                 reasoning: usage.reasoning
             )
             let hasUsage = usage.input > 0 || usage.output > 0 || usage.cacheRead > 0 || usage.cacheWrite > 0
+            let recorded = [ExecutionModeAdapters.ompTier(serviceTier, provider: provider, evidence: .recorded, scope: .response),
+                            ExecutionModeAdapters.effort(effort, evidence: .recorded, scope: .request)]
             return OmpCall(model: model, provider: provider, tokens: tokens, hasUsage: hasUsage,
-                           modes: ExecutionModeAdapters.omp(serviceTier, provider: provider, evidence: .recorded, scope: .response))
+                           modes: ExecutionModes(recorded.compactMap { $0 }))
         }
     }
 
@@ -184,6 +191,8 @@ enum OmpLineExtractor {
         var id: String?
         var parentId: String?
         var tiers: [String: String] = [:]
+        var hasThinkingLevel = false
+        var thinkingLevel: String?
         var timestampMs: Int64?
         var cwd: String?
         var message: MessageMembers?
@@ -204,7 +213,8 @@ enum OmpLineExtractor {
             case 2: message?.record() ?? .other
             case 3: call.call().map(OmpRecord.modelUsage) ?? .other
             case 4: isSessionExit ? .sessionExit : .other
-            case 5: .modeChange(tiers)
+            case 5: .tierChange(tiers)
+            case 6: hasThinkingLevel ? .thinkingChange(thinkingLevel) : .other
             default: .other
             }
             return .entry(id: id, timestampMs: timestampMs, record: record, parentId: parentId)
@@ -231,6 +241,9 @@ enum OmpLineExtractor {
                     if let family { top.tiers[family] = try scanner.readString() }
                     else { try scanner.skipValue() }
                 }
+            } else if scanner.key(key, is: "thinkingLevel") {
+                top.hasThinkingLevel = true
+                top.thinkingLevel = try scanner.readString()
             } else if scanner.key(key, is: "timestamp") {
                 top.timestampMs = try scanner.readTimestamp()
             } else if scanner.key(key, is: "cwd") {
@@ -270,6 +283,8 @@ enum OmpLineExtractor {
                 message.isYield = try scanner.readStringMatch(["yield"]) == 0
             } else if scanner.key(key, is: "isError") {
                 message.isErrorTrue = try scanner.readBool() == true
+            } else if scanner.key(key, is: "requestControls") {
+                message.call.effort = try scanRequestEffort(&scanner)
             } else if try !scanCallMember(key, &scanner, into: &message.call) {
                 try scanner.skipValue()
             }
@@ -321,6 +336,31 @@ enum OmpLineExtractor {
             }
         }
         return usage
+    }
+
+    /// `requestControls.effort`: `tail` when it is a string, else `topLevel` (null is the API's default).
+    private static func scanRequestEffort(_ scanner: inout JSONScanner) throws(JSONScanError) -> String? {
+        guard try scanner.beginObjectIfPresent() else { return nil }
+        var tail: String?
+        var topLevel: String?
+        while let key = try scanner.nextMember() {
+            guard scanner.key(key, is: "effort") else {
+                try scanner.skipValue()
+                continue
+            }
+            (tail, topLevel) = (nil, nil)
+            guard try scanner.beginObjectIfPresent() else { continue }
+            while let level = try scanner.nextMember() {
+                if scanner.key(level, is: "tail") {
+                    tail = try scanner.readString()
+                } else if scanner.key(level, is: "topLevel") {
+                    topLevel = try scanner.readString()
+                } else {
+                    try scanner.skipValue()
+                }
+            }
+        }
+        return tail ?? topLevel
     }
 
     private static func scanPausesTurn(_ scanner: inout JSONScanner) throws(JSONScanError) -> Bool {
