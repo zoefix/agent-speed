@@ -11,6 +11,7 @@
 #include "agentspeed/history.hpp"
 #include "agentspeed/history_store.hpp"
 #include "agentspeed/locations.hpp"
+#include "agentspeed/unpriced.hpp"
 
 namespace agentspeed::pricing {
 class PriceBook;
@@ -39,15 +40,19 @@ public:
 
     Analyzer(Store& store, std::shared_ptr<pricing::PriceBook> prices, std::shared_ptr<const TimeZone> hermesZone = nullptr);
 
-    // `zoneId` names the zone the days are labelled in; a change re-analyses everything.
+    // `zoneId` names the zone the days are labelled in; a change re-analyses everything. `progress` hears the files
+    // analysed so far and the files planned.
     Report run(const SourceLocations& locations, const std::set<SourceKind>& enabled, std::shared_ptr<const TimeZone> zone,
-               const std::string& zoneId, const std::function<bool()>& cancelled = {});
+               const std::string& zoneId, const std::function<bool()>& cancelled = {},
+               const std::function<void(int, int)>& progress = {});
     // Day rows, by day then source id; live peaks raise the stored ones.
     std::vector<DailyUsage> days(const std::set<SourceKind>* sources = nullptr, const std::map<std::string, double>* livePeaks = nullptr) const;
     bool recordPeaks(const std::map<std::string, double>& peaks);
     // Every stored performance record (METRICS 6.11): per file, day, source and raw model; a day's record of a
     // (source, model) is the sum over files.
     std::vector<perf::DayRecord> perfRecords(const std::set<SourceKind>* sources = nullptr) const;
+    // METRICS 9.10 Reading: the unpriced facts of every stored contribution, merged per (day, source).
+    std::vector<unpriced::Part> unpricedParts(const std::set<SourceKind>* sources = nullptr) const;
     void clear();
     pricing::PriceBook& prices() { return *prices_; }
 
@@ -72,6 +77,7 @@ private:
     void analyzeHermes(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
+    void advance(Report& report);
     bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const;
     const StoredFile* previousOf(const std::string& path) const;
     StoredFile& keep(StoredFile file, std::vector<std::uint64_t> owned);
@@ -84,6 +90,7 @@ private:
     std::map<std::string, double> peaks_;
     std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>> pending_;
     bool repricing_ = false;
+    std::function<void(int, int)> progress_;
 };
 
 }  // namespace agentspeed::history

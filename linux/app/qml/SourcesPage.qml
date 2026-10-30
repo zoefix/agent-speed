@@ -66,7 +66,8 @@ SettingsPage {
             spacing: 16
             Text {
                 Layout.fillWidth: true
-                text: S.tr2(S.rev, "history.clear.confirm")
+                // DESIGN 10: traffic history is cleared too and cannot be rebuilt from logs.
+                text: S.tr2(S.rev, "history.clear.confirm") + (history.trafficSince.length > 0 ? "\n\n" + S.tr2(S.rev, "history.clear.traffic") : "")
                 color: Theme.ink
                 font.pixelSize: 13
                 lineHeight: 1.3

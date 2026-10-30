@@ -24,6 +24,14 @@ using PerfBaselines = std::map<std::pair<agentspeed::SourceKind, std::string>, d
 Q_DECLARE_METATYPE(PerfRecords)
 Q_DECLARE_METATYPE(PerfBaselines)
 
+// The stored aggregates behind the day rows: their mode breakdowns (EXECUTION-MODES) and unpriced facts (METRICS 9.10).
+struct HistoryDetail {
+    std::vector<agentspeed::history::DailyUsage> days;
+    std::vector<agentspeed::unpriced::Part> unpriced;
+};
+using HistoryDetails = std::shared_ptr<const HistoryDetail>;
+Q_DECLARE_METATYPE(HistoryDetails)
+
 namespace agentspeed::pricing {
 class PriceBook;
 }
@@ -51,6 +59,9 @@ signals:
     // Rows of every day and source; `progress` < 0 when idle.
     void daysReady(const QVariantList& rows, qint64 updatedMs);
     void analyzing(bool running);
+    // Files analysed so far of the files planned, while an analysis runs.
+    void progress(int done, int total);
+    void detailsReady(HistoryDetails details);
     void perfReady(PerfRecords records, PerfBaselines baselines);
     // Today's traffic saved by an earlier launch (METRICS 10.8), and every day's rows for the window.
     void trafficRestored(TrafficRows rows);
@@ -82,8 +93,24 @@ class HistoryModel : public QObject {
     Q_PROPERTY(int perfRevision READ perfRevision NOTIFY perfChanged)
     Q_PROPERTY(QVariantList trafficRows READ trafficRows NOTIFY trafficChanged)
     Q_PROPERTY(QString trafficSince READ trafficSince NOTIFY trafficChanged)
+    Q_PROPERTY(int filesDone READ filesDone NOTIFY progressChanged)
+    Q_PROPERTY(int filesTotal READ filesTotal NOTIFY progressChanged)
+    Q_PROPERTY(int detailRevision READ detailRevision NOTIFY detailsChanged)
 public:
     explicit HistoryModel(const Strings* strings = nullptr, QObject* parent = nullptr) : QObject(parent), strings_(strings) {}
+    void setPrices(std::shared_ptr<agentspeed::pricing::PriceBook> prices) { prices_ = std::move(prices); }
+    int filesDone() const { return filesDone_; }
+    int filesTotal() const { return filesTotal_; }
+    int detailRevision() const { return detailRevision_; }
+    // DESIGN 4b 3b: one row per value of `kind` (effort | speed) over [first, last] for a source or all, in display
+    // order with the unknown bucket last; each row carries its top three models.
+    Q_INVOKABLE QVariantMap modeSection(const QString& first, const QString& last, const QString& source, const QString& kind) const;
+    // The mode CSV of EXECUTION-MODES for the same days; returns false when the file cannot be written.
+    Q_INVOKABLE bool exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source) const;
+    // DESIGN 9 Unknown prices: the groups of METRICS 9.10 under the current price table, and the text to copy.
+    Q_INVOKABLE QVariantMap unpricedView(const QString& first, const QString& last, const QString& source, const QStringList& excluded,
+                                         const QString& view) const;
+    Q_INVOKABLE bool copyText(const QString& text) const;
     int perfRevision() const { return perfRevision_; }
     QVariantList trafficRows() const { return trafficRows_; }
     QString trafficSince() const { return trafficSince_; }
@@ -110,12 +137,16 @@ public slots:
     void setAnalyzing(bool running);
     void applyPerf(PerfRecords records, PerfBaselines baselines);
     void applyTraffic(const QVariantList& rows, const QString& since);
+    void applyProgress(int done, int total);
+    void applyDetails(HistoryDetails details);
 
 signals:
     void rowsChanged();
     void analyzingChanged();
     void perfChanged();
     void trafficChanged();
+    void progressChanged();
+    void detailsChanged();
     void refreshRequested();
     void clearRequested();
 
@@ -134,4 +165,8 @@ private:
     };
     TrafficSums trafficSums(const QString& date, const QString& source) const;
     int perfRevision_ = 0;
+    std::shared_ptr<agentspeed::pricing::PriceBook> prices_;
+    HistoryDetails details_;
+    int detailRevision_ = 0;
+    int filesDone_ = 0, filesTotal_ = 0;
 };

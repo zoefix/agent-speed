@@ -1,13 +1,18 @@
 #include "history_service.hpp"
 
+#include <QClipboard>
 #include <QDate>
 #include <QDateTime>
+#include <QElapsedTimer>
 #include <QFile>
 #include <QFileDialog>
+#include <QGuiApplication>
 #include <QStandardPaths>
 #include <QTimer>
 #include <QTimeZone>
+#include <algorithm>
 #include <cmath>
+#include <sys/utsname.h>
 #include <tuple>
 
 #include "agentspeed/money.hpp"
@@ -33,6 +38,23 @@ QString csvField(const QString& value) {
 }
 
 QString oneDecimal(double value) { return QString::number(value, 'f', 1); }
+
+std::optional<agentspeed::SourceKind> sourceOf(const QString& id) {
+    if (id.isEmpty() || id == QLatin1String("all")) return std::nullopt;
+    return agentspeed::sourceFromId(id.toStdString());
+}
+
+bool inView(const agentspeed::history::DailyUsage& day, const std::string& first, const std::string& last,
+            std::optional<agentspeed::SourceKind> source) {
+    return day.key.day >= first && day.key.day <= last && (!source || day.key.source == *source);
+}
+
+// The app line of the copied diagnostics (METRICS 9.10 Text) names Linux and its kernel's major version.
+agentspeed::unpriced::App appLine() {
+    utsname name{};
+    const int major = uname(&name) == 0 ? std::clamp(std::atoi(name.release), 1, 99) : 1;
+    return {AGENTSPEED_VERSION, "linux", "linux-" + std::to_string(major)};
+}
 
 }  // namespace
 
@@ -94,7 +116,14 @@ void HistoryWorker::analyze() {
     try {
         const auto environment = agentspeed::processEnvironment();
         const auto zoneId = QString::fromUtf8(QTimeZone::systemTimeZoneId()).toStdString();
-        analyzer_->run(locations, enabled, agentspeed::localZone(environment), zoneId, [this] { return cancelled_.load(); });
+        QElapsedTimer sinceProgress;
+        sinceProgress.start();
+        const auto onProgress = [&](int done, int total) {
+            if (done != 0 && done != total && sinceProgress.elapsed() < 150) return;
+            sinceProgress.restart();
+            emit progress(done, total);
+        };
+        analyzer_->run(locations, enabled, agentspeed::localZone(environment), zoneId, [this] { return cancelled_.load(); }, onProgress);
     } catch (const std::exception& error) {
         qWarning("history analysis failed: %s", error.what());
     }
@@ -141,7 +170,10 @@ void HistoryWorker::publishTraffic() {
 
 void HistoryWorker::publish() {
     QVariantList rows;
-    for (const auto& day : analyzer_->days()) {
+    auto details = std::make_shared<HistoryDetail>();
+    details->days = analyzer_->days();
+    details->unpriced = analyzer_->unpricedParts();
+    for (const auto& day : details->days) {
         const auto& t = day.totals;
         QVariantMap row;
         row.insert(QStringLiteral("date"), QString::fromStdString(day.key.day));
@@ -174,6 +206,7 @@ void HistoryWorker::publish() {
         rows.push_back(row);
     }
     emit daysReady(rows, QDateTime::currentMSecsSinceEpoch());
+    emit detailsReady(std::move(details));
     // METRICS 6.11 Reading: a day's record of a (source, model) is the sum over files.
     std::map<std::tuple<std::string, agentspeed::SourceKind, std::string>, agentspeed::perf::Record> sums;
     for (const auto& r : analyzer_->perfRecords()) sums[{r.day, r.source, r.model}].add(r.record);
@@ -321,6 +354,162 @@ void HistoryModel::applyTraffic(const QVariantList& rows, const QString& since) 
     trafficRows_ = rows;
     trafficSince_ = since;
     emit trafficChanged();
+}
+
+void HistoryModel::applyProgress(int done, int total) {
+    filesDone_ = done;
+    filesTotal_ = total;
+    emit progressChanged();
+}
+
+void HistoryModel::applyDetails(HistoryDetails details) {
+    details_ = std::move(details);
+    ++detailRevision_;
+    emit detailsChanged();
+}
+
+QVariantMap HistoryModel::modeSection(const QString& first, const QString& last, const QString& source, const QString& kindName) const {
+    using namespace agentspeed;
+    QVariantMap out;
+    QVariantList rows;
+    const auto kind = kindName == QLatin1String("speed") ? ModeKind::Speed : ModeKind::Effort;
+    const auto only = sourceOf(source);
+    const auto from = first.toStdString(), to = last.toStdString();
+    struct Sum {
+        history::ModeTotals totals;
+        std::map<std::string, std::int64_t> models;
+    };
+    std::map<std::string, Sum> byMode;
+    std::int64_t output = 0;
+    if (details_) {
+        for (const auto& day : details_->days) {
+            if (!inView(day, from, to, only)) continue;
+            for (const auto& row : history::modeBreakdown(day.totals)) {
+                if (row.key.kind != kind) continue;
+                auto& sum = byMode[row.key.mode];
+                sum.totals.requests += row.totals.requests;
+                sum.totals.output += row.totals.output;
+                sum.totals.measuredOutput += row.totals.measuredOutput;
+                sum.totals.measuredMs += row.totals.measuredMs;
+                sum.models[row.key.model] += row.totals.output;
+                output += row.totals.output;
+            }
+        }
+    }
+    std::vector<std::string> order;
+    for (const auto& [mode, sum] : byMode) {
+        if (mode != "unknown" && sum.totals.requests + sum.totals.output > 0) order.push_back(mode);
+    }
+    std::stable_sort(order.begin(), order.end(), [&](const std::string& a, const std::string& b) { return effort_speed::less(kind, a, b); });
+    const bool known = !order.empty();
+    order.push_back("unknown");
+    for (const auto& mode : order) {
+        const auto& sum = byMode[mode];
+        QVariantMap row;
+        row.insert(QStringLiteral("mode"), QString::fromStdString(mode));
+        row.insert(QStringLiteral("unknown"), mode == "unknown");
+        row.insert(QStringLiteral("requests"), static_cast<qint64>(sum.totals.requests));
+        row.insert(QStringLiteral("output"), static_cast<qint64>(sum.totals.output));
+        row.insert(QStringLiteral("speed"), sum.totals.measuredMs > 0 ? static_cast<double>(sum.totals.measuredOutput) * 1000.0 / static_cast<double>(sum.totals.measuredMs) : -1.0);
+        row.insert(QStringLiteral("share"), output > 0 ? static_cast<double>(sum.totals.output) / static_cast<double>(output) : 0.0);
+        const auto level = kind == ModeKind::Effort ? effort_speed::level(mode) : std::nullopt;
+        row.insert(QStringLiteral("level"), level ? *level : -1);
+        row.insert(QStringLiteral("top"), kind == ModeKind::Effort && effort_speed::isTopRung(mode));
+        row.insert(QStringLiteral("bolts"), kind == ModeKind::Speed ? effort_speed::bolts(mode) : 0);
+        std::vector<std::pair<std::string, std::int64_t>> models(sum.models.begin(), sum.models.end());
+        std::stable_sort(models.begin(), models.end(), [](const auto& a, const auto& b) { return a.second > b.second; });
+        QVariantList top;
+        for (std::size_t i = 0; i < std::min<std::size_t>(3, models.size()); ++i) {
+            if (models[i].second <= 0) break;
+            QVariantMap m;
+            m.insert(QStringLiteral("name"), QString::fromStdString(models[i].first));
+            m.insert(QStringLiteral("share"), sum.totals.output > 0 ? static_cast<double>(models[i].second) / static_cast<double>(sum.totals.output) : 0.0);
+            top.push_back(m);
+        }
+        row.insert(QStringLiteral("models"), top);
+        rows.push_back(row);
+    }
+    out.insert(QStringLiteral("rows"), rows);
+    out.insert(QStringLiteral("known"), known);
+    return out;
+}
+
+bool HistoryModel::exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source) const {
+    if (path.isEmpty() || !details_) return false;
+    const auto only = sourceOf(source);
+    const auto from = first.toStdString(), to = last.toStdString();
+    std::vector<agentspeed::history::ModeCsvDay> days;
+    for (const auto& day : details_->days) {
+        if (inView(day, from, to, only)) days.push_back({day.key.day, day.key.source, &day.totals});
+    }
+    QFile file(path);
+    if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
+    const auto text = agentspeed::history::modeCsv(days);
+    return file.write(text.data(), static_cast<qint64>(text.size())) == static_cast<qint64>(text.size());
+}
+
+QVariantMap HistoryModel::unpricedView(const QString& first, const QString& last, const QString& source, const QStringList& excludedIds,
+                                       const QString& view) const {
+    using namespace agentspeed;
+    QVariantMap out;
+    QVariantList groups;
+    std::int64_t count = 0, pricedNow = 0;
+    const auto table = prices_ ? prices_->current() : nullptr;
+    if (details_ && table && !first.isEmpty() && !last.isEmpty()) {
+        const auto only = sourceOf(source);
+        std::set<SourceKind> excluded;
+        for (const auto& id : excludedIds) {
+            if (const auto kind = sourceFromId(id.toStdString())) excluded.insert(*kind);
+        }
+        const auto from = first.toStdString(), to = last.toStdString();
+        const auto found = unpriced::aggregate(details_->unpriced, *table, from, to, only, excluded);
+        for (const auto& g : found) {
+            count += g.unpriced;
+            pricedNow += g.pricedNow;
+            if (g.rows.empty()) continue;
+            QVariantMap group;
+            group.insert(QStringLiteral("source"), QString::fromUtf8(sourceId(g.source)));
+            std::int64_t requests = 0, moreRequests = 0;
+            QVariantList rows;
+            for (std::size_t i = 0; i < g.rows.size(); ++i) {
+                const auto& r = g.rows[i];
+                requests += r.requests;
+                if (i >= 20) {
+                    moreRequests += r.requests;
+                    continue;
+                }
+                QVariantMap row;
+                row.insert(QStringLiteral("model"), QString::fromStdString(r.model));
+                row.insert(QStringLiteral("reason"), QString::fromUtf8(unpriced::reasonId(r.reason)));
+                row.insert(QStringLiteral("provider"), r.provider ? QString::fromStdString(*r.provider) : QString());
+                row.insert(QStringLiteral("fast"), r.fast);
+                row.insert(QStringLiteral("canonical"), r.canonical && *r.canonical != r.model ? QString::fromStdString(*r.canonical) : QString());
+                row.insert(QStringLiteral("rule"), r.rule ? QString::fromStdString(*r.rule) : QString());
+                row.insert(QStringLiteral("requests"), static_cast<qint64>(r.requests));
+                row.insert(QStringLiteral("first"), QString::fromStdString(r.first));
+                row.insert(QStringLiteral("last"), QString::fromStdString(r.last));
+                rows.push_back(row);
+            }
+            group.insert(QStringLiteral("requests"), static_cast<qint64>(requests));
+            group.insert(QStringLiteral("rows"), rows);
+            group.insert(QStringLiteral("more"), static_cast<int>(g.rows.size() > 20 ? g.rows.size() - 20 : 0));
+            group.insert(QStringLiteral("moreRequests"), static_cast<qint64>(moreRequests));
+            groups.push_back(group);
+        }
+        out.insert(QStringLiteral("text"),
+                   QString::fromStdString(unpriced::render(found, appLine(), *table, view.toStdString(), from, to, only, excluded)));
+    }
+    out.insert(QStringLiteral("groups"), groups);
+    out.insert(QStringLiteral("count"), static_cast<qint64>(count));
+    out.insert(QStringLiteral("pricedNow"), static_cast<qint64>(pricedNow));
+    return out;
+}
+
+bool HistoryModel::copyText(const QString& text) const {
+    auto* clipboard = QGuiApplication::clipboard();
+    if (!clipboard) return false;
+    clipboard->setText(text);
+    return clipboard->text() == text;
 }
 
 void HistoryModel::applyPerf(PerfRecords records, PerfBaselines baselines) {

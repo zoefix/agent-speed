@@ -113,6 +113,8 @@ set(agent_speed_qml
     qml/PerfCell.qml
     qml/PerfMeter.qml
     qml/PerfSection.qml
+    qml/ModeSection.qml
+    qml/UnpricedPopup.qml
     qml/PerfTrend.qml
     qml/LiveChart.qml
     qml/LiveSlot.qml

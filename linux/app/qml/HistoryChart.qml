@@ -35,6 +35,22 @@ Item {
     onTrafficChanged: canvas.requestPaint()
     onWidthChanged: canvas.requestPaint()
     onHoverChanged: canvas.requestPaint()
+    readonly property int rev: S.rev
+    onRevChanged: canvas.requestPaint()
+
+    // The tooltip's date with its weekday (`history.weekdayDate`).
+    function titleOf(date) {
+        var locale = Qt.locale(S.language === "en" ? "en_US" : S.language.replace("-", "_"))
+        var weekday = H.parse(date).toLocaleDateString(locale, "ddd")
+        return Format.fill(S.tr2(S.rev, "history.weekdayDate"), [date.replace(/-/g, "/"), weekday])
+    }
+    // The day's top three models by the chart's metric, with their share and cost.
+    function topModels(day) {
+        var list = Object.keys(day.models).map(function(k) { return day.models[k] })
+        var total = list.reduce(function(a, m) { return a + m.output }, 0)
+        list.sort(function(a, b) { return b.output - a.output })
+        return list.slice(0, 3).map(function(m) { return { name: m.name, share: total > 0 ? m.output / total : 0 } })
+    }
 
     Canvas {
         id: canvas
@@ -193,6 +209,7 @@ Item {
                     ctx.textAlign = "right"
                     ctx.fillStyle = Theme.ink3
                     ctx.fillText(Format.speed(maxSpeed) + " tok/s", width - 2, plotTop + 18)
+                    ctx.fillText(S.tr2(S.rev, "history.chart.speed"), width - 2, plotTop + 31)
                 }
             }
             if (chart.hover >= 0 && chart.hover < s.length) {
@@ -222,7 +239,7 @@ Item {
         id: tip
         readonly property var day: chart.hover >= 0 && chart.hover < chart.series.length ? chart.series[chart.hover] : null
         visible: day !== null
-        width: 210
+        width: 236
         height: tipColumn.implicitHeight + 20
         radius: 10
         color: Theme.dark ? "#22252C" : "#FFFFFF"
@@ -242,7 +259,7 @@ Item {
             width: parent.width - 20
             spacing: 3
             Text {
-                text: tip.day ? tip.day.date + (tip.day.date === chart.today ? " · " + S.tr2(S.rev, "history.inProgress") : "") : ""
+                text: tip.day ? chart.titleOf(tip.day.date) + (tip.day.date === chart.today ? " · " + S.tr2(S.rev, "history.inProgress") : "") : ""
                 color: Theme.ink
                 font.pixelSize: 12
                 font.weight: Font.DemiBold
@@ -263,7 +280,7 @@ Item {
                     [S.tr2(S.rev, "history.table.requests"), H.grouped(tip.day.requests)],
                     [S.tr2(S.rev, "history.table.speed"), H.speed(tip.day.measuredOutput, tip.day.measuredMs) >= 0
                         ? Format.speed(H.speed(tip.day.measuredOutput, tip.day.measuredMs)) + " tok/s" : S.tr2(S.rev, "history.noSpeed")]
-                ]
+                ].concat(chart.source === "all" && tip.day.peak ? [[S.tr2(S.rev, "history.table.peak"), Format.speed(tip.day.peak) + " tok/s"]] : [])
                 Row {
                     required property var modelData
                     width: tipColumn.width
@@ -275,6 +292,70 @@ Item {
                         color: Theme.ink
                         font.pixelSize: 11
                         font.features: Theme.tabular
+                    }
+                }
+            }
+            // Notes: unpriced and unfinalized requests, a partially recorded traffic day.
+            Repeater {
+                model: !tip.day ? [] : (function() {
+                    var notes = []
+                    if (chart.metric === "traffic") {
+                        var t = chart.traffic[tip.day.date]
+                        if (t && chart.trafficSince.length > 0 && tip.day.date >= chart.trafficSince && H.trafficPartial(t, tip.day.date, chart.today))
+                            notes.push(Format.fill(S.tr2(S.rev, "history.traffic.partial"), [H.duration(H.recordedMs(t), function(k) { return S.tr2(S.rev, k) })]))
+                        return notes
+                    }
+                    if (tip.day.unpriced > 0) notes.push(Format.fill(S.tr2(S.rev, "history.unpricedDay"), [tip.day.unpriced]))
+                    if (tip.day.unfinalized > 0) notes.push(Format.fill(S.tr2(S.rev, "history.unfinalized"), [tip.day.unfinalized]))
+                    return notes
+                })()
+                Text {
+                    required property string modelData
+                    width: tipColumn.width
+                    text: modelData
+                    color: Theme.ink3
+                    font.pixelSize: 11
+                    wrapMode: Text.WordWrap
+                }
+            }
+            // The top three models with share bars.
+            Item { width: 1; height: 3; visible: topList.count > 0 }
+            Repeater {
+                id: topList
+                model: tip.day && chart.metric !== "traffic" ? chart.topModels(tip.day) : []
+                Row {
+                    required property var modelData
+                    width: tipColumn.width
+                    spacing: 6
+                    Text {
+                        width: parent.width - 86
+                        text: modelData.name
+                        color: Theme.ink2
+                        font.pixelSize: 11
+                        elide: Text.ElideMiddle
+                        anchors.verticalCenter: parent.verticalCenter
+                    }
+                    Rectangle {
+                        width: 46
+                        height: 4
+                        radius: 2
+                        color: Theme.track
+                        anchors.verticalCenter: parent.verticalCenter
+                        Rectangle {
+                            width: parent.width * modelData.share
+                            height: parent.height
+                            radius: 2
+                            color: chart.source === "all" ? Theme.ink2 : Theme.sourceColor(chart.source)
+                        }
+                    }
+                    Text {
+                        width: 28
+                        horizontalAlignment: Text.AlignRight
+                        text: Math.round(modelData.share * 100) + "%"
+                        color: Theme.ink2
+                        font.pixelSize: 11
+                        font.features: Theme.tabular
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                 }
             }

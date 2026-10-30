@@ -16,14 +16,26 @@ Window {
     color: Theme.panel
 
     Settings {
+        id: remembered
         category: "history"
         property alias range: win.range
         property alias windowWidth: win.width
         property alias windowHeight: win.height
+        property alias customFirst: win.customFirst
+        property alias customLast: win.customLast
+        property var includeSubscriptions: null
     }
 
     property string source: "all"
     property string range: "30d"
+    // DESIGN 4b: 自訂 keeps its own dates.
+    property string customFirst: ""
+    property string customLast: ""
+    // DESIGN 9 Subscriptions: the window's own choice, initially the setting.
+    readonly property bool includeSubscriptions: remembered.includeSubscriptions === null || remembered.includeSubscriptions === undefined
+                                                 ? prefs.includeSubscriptions : remembered.includeSubscriptions === true
+    readonly property var subscribed: prefs.subscriptions
+    readonly property var excluded: includeSubscriptions ? [] : subscribed
     // DESIGN 9 / 10 Usage history: the chart shows output, cost or traffic.
     property string metric: "output"
     readonly property var trafficDays: H.trafficByDate(history.trafficRows, source, span[0], span[1], prefs.disabledSources, prefs.trafficIncludeTools)
@@ -39,13 +51,27 @@ Window {
     onSourceChanged: openOnTraffic()
     onRangeChanged: openOnTraffic()
     Component.onCompleted: {
-        // Development aids: --history-metric=<output|cost|traffic>, --history-range=<today|…|all>.
+        // Development aids: --history-metric=<output|cost|traffic>, --history-range=<today|…|all>, --history-popover (the
+        // unknown-prices popover), --history-hover (the chart's tooltip on the day before today).
         for (var i = 0; i < Qt.application.arguments.length; ++i) {
             var arg = Qt.application.arguments[i]
             if (arg.indexOf("--history-metric=") === 0) metric = arg.substr(17)
             if (arg.indexOf("--history-range=") === 0) range = arg.substr(16)
+            if (arg === "--history-popover") devPopover = true
+            if (arg === "--history-hover") devHover = true
         }
         openOnTraffic()
+    }
+    property bool devPopover: false
+    property bool devHover: false
+    Timer {
+        interval: 300
+        repeat: true
+        running: win.devPopover || win.devHover
+        onTriggered: {
+            if (win.devPopover && win.total.unpriced > 0) { unpricedPopup.open(); win.devPopover = false }
+            if (win.devHover && win.chartSeries.length > 1) { dailyChart.hover = win.chartSeries.length - 2; win.devHover = false }
+        }
     }
     readonly property string today: H.iso(new Date())
     readonly property string currency: prefs.currency
@@ -53,15 +79,20 @@ Window {
     readonly property var rows: history.rows
 
     readonly property string firstDate: rows.length > 0 ? rows[0].date : today
-    readonly property var span: H.bounds(range, firstDate)
-    readonly property var dayList: H.days(rows, source, span[0], span[1], history.trafficRows, prefs.disabledSources, prefs.trafficIncludeTools)
+    readonly property var span: range === "custom" && customFirst.length > 0 && customLast.length > 0 ? [customFirst, customLast] : H.bounds(range, firstDate)
+    readonly property var dayList: H.days(rows, source, span[0], span[1], history.trafficRows, prefs.disabledSources, prefs.trafficIncludeTools, excluded)
     readonly property var total: H.totals(dayList)
     readonly property var previousSpan: {
         var n = H.dayCount(span[0], span[1])
         var end = H.addDays(H.parse(span[0]), -1)
         return [H.iso(H.addDays(end, -(n - 1))), H.iso(end)]
     }
-    readonly property var previousTotal: H.totals(H.days(rows, source, previousSpan[0], previousSpan[1]))
+    readonly property var previousTotal: H.totals(H.days(rows, source, previousSpan[0], previousSpan[1], [], [], false, excluded))
+    // DESIGN 4b Summary: the change against the previous period (the day before for a single day).
+    function versus(now, before) {
+        const change = H.delta(now, before)
+        return change.length > 0 ? Format.fill(S.tr2(S.rev, singleDay ? "history.summary.vsPreviousDay" : "history.summary.vsPrevious"), [change]) : ""
+    }
     readonly property bool singleDay: span[0] === span[1]
     readonly property var sourcesWithHistory: {
         var seen = {}
@@ -120,7 +151,8 @@ Window {
                     var list = [{ value: "all", label: S.tr2(S.rev, "history.allSources") }]
                     for (var i = 0; i < win.sourcesWithHistory.length; ++i) {
                         var s = win.sourcesWithHistory[i]
-                        list.push({ value: s, label: S.tr2(S.rev, "source." + s) })
+                        list.push({ value: s, label: S.tr2(S.rev, "source." + s)
+                                           + (win.subscribed.indexOf(s) >= 0 ? "  · " + S.tr2(S.rev, "cost.subscription.tag") : "") })
                     }
                     return list
                 }
@@ -136,9 +168,88 @@ Window {
                     { value: "30d", label: S.tr2(S.rev, "history.range.30d") },
                     { value: "90d", label: S.tr2(S.rev, "history.range.90d") },
                     { value: "year", label: S.tr2(S.rev, "history.range.year") },
-                    { value: "all", label: S.tr2(S.rev, "history.range.all") }
+                    { value: "all", label: S.tr2(S.rev, "history.range.all") },
+                    { value: "custom", label: S.tr2(S.rev, "history.range.custom") }
                 ]
-                onActivated: (v) => win.range = v
+                onActivated: (v) => {
+                    if (v === "custom") customRange.openWith(win.span)
+                    else win.range = v
+                }
+                // 自訂: two dates clamped to the data, the end never before the start, and 套用.
+                Popup {
+                    id: customRange
+                    y: parent.height + 6
+                    x: parent.width - width
+                    width: 260
+                    padding: 14
+                    background: Rectangle { radius: 10; color: Theme.cardFill; border.width: 1; border.color: Theme.cardLine }
+                    property string fromText: ""
+                    property string toText: ""
+                    function openWith(span) {
+                        fromText = span[0]
+                        toText = span[1]
+                        open()
+                    }
+                    function valid(text) { return /^\d{4}-\d{2}-\d{2}$/.test(text) && !isNaN(H.parse(text).getTime()) && H.iso(H.parse(text)) === text }
+                    readonly property bool ok: valid(fromText) && valid(toText)
+                    function apply() {
+                        if (!ok) return
+                        var first = fromText < win.firstDate ? win.firstDate : fromText
+                        var last = toText > win.today ? win.today : toText
+                        if (last < first) last = first
+                        win.customFirst = first
+                        win.customLast = last
+                        win.range = "custom"
+                        close()
+                    }
+                    contentItem: GridLayout {
+                        columns: 2
+                        columnSpacing: 10
+                        rowSpacing: 8
+                        Text { text: S.tr2(S.rev, "history.range.from"); color: Theme.ink2; font.pixelSize: 12 }
+                        FieldInput {
+                            id: fromField
+                            Layout.fillWidth: true
+                            placeholder: "YYYY-MM-DD"
+                            accessibleName: S.tr2(S.rev, "history.range.from")
+                            text: customRange.fromText
+                            onEdited: (t) => customRange.fromText = t
+                            onCommitted: (t) => { customRange.fromText = t; if (focused) customRange.apply() }
+                        }
+                        Text { text: S.tr2(S.rev, "history.range.to"); color: Theme.ink2; font.pixelSize: 12 }
+                        FieldInput {
+                            id: toField
+                            Layout.fillWidth: true
+                            placeholder: "YYYY-MM-DD"
+                            accessibleName: S.tr2(S.rev, "history.range.to")
+                            text: customRange.toText
+                            onEdited: (t) => customRange.toText = t
+                            onCommitted: (t) => { customRange.toText = t; if (focused) customRange.apply() }
+                        }
+                        Item { Layout.preferredWidth: 1 }
+                        PillButton {
+                            Layout.alignment: Qt.AlignRight
+                            accent: true
+                            enabled: customRange.ok
+                            text: S.tr2(S.rev, "history.range.apply")
+                            onClicked: customRange.apply()
+                        }
+                    }
+                }
+            }
+            // DESIGN 9 Subscriptions: shown while a source is marked.
+            ToggleSwitch {
+                visible: win.subscribed.length > 0
+                label: S.tr2(S.rev, "history.includeSubscriptions")
+                checked: win.includeSubscriptions
+                onToggled: (on) => remembered.includeSubscriptions = on
+            }
+            Text {
+                visible: win.subscribed.length > 0
+                text: S.tr2(S.rev, "history.includeSubscriptions")
+                color: Theme.ink2
+                font.pixelSize: 12
+                TapHandler { onTapped: remembered.includeSubscriptions = !win.includeSubscriptions }
             }
             Item { Layout.fillWidth: true }
             PillButton {
@@ -181,7 +292,7 @@ Window {
                 SummaryCard {
                     title: S.tr2(S.rev, "history.summary.output")
                     value: H.compact(win.total.output)
-                    deltaText: H.delta(win.total.output, win.previousTotal.output)
+                    deltaText: win.versus(win.total.output, win.previousTotal.output)
                     deltaGood: win.total.output >= win.previousTotal.output
                     detail: win.total.best ? Format.fill(S.tr2(S.rev, "history.summary.bestDay"), [win.total.best.date.substr(5).replace("-", "/")]) : ""
                     series: parent.outputs
@@ -190,7 +301,7 @@ Window {
                 SummaryCard {
                     title: width < 170 ? S.tr2(S.rev, "history.summary.input.short") : S.tr2(S.rev, "history.summary.input")
                     value: H.compact(win.total.input)
-                    deltaText: H.delta(win.total.input, win.previousTotal.input)
+                    deltaText: win.versus(win.total.input, win.previousTotal.input)
                     deltaGood: true
                     series: win.chartSeries.map(function(d) { return d.input })
                     tone: Theme.ink2
@@ -198,7 +309,7 @@ Window {
                 SummaryCard {
                     title: S.tr2(S.rev, "history.summary.requests")
                     value: H.grouped(win.total.requests)
-                    deltaText: H.delta(win.total.requests, win.previousTotal.requests)
+                    deltaText: win.versus(win.total.requests, win.previousTotal.requests)
                     deltaGood: true
                     detail: Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [win.total.activeDays])
                     series: win.chartSeries.map(function(d) { return d.requests })
@@ -209,13 +320,18 @@ Window {
                     title: S.tr2(S.rev, "history.summary.speed")
                     value: avg >= 0 ? Format.speed(avg) : "–"
                     unit: avg >= 0 ? "tok/s" : ""
-                    deltaText: H.delta(avg, H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs))
+                    deltaText: win.versus(avg, H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs))
                     deltaGood: avg >= H.speed(win.previousTotal.measuredOutput, win.previousTotal.measuredMs)
                     series: win.chartSeries.map(function(d) { return Math.max(0, H.speed(d.measuredOutput, d.measuredMs)) })
                     tone: Theme.ink2
                 }
                 SummaryCard {
-                    title: S.tr2(S.rev, "history.summary.cost")
+                    // A subscription source chosen directly shows its API-equivalent cost; a day's cost never changes.
+                    title: win.source !== "all" && win.subscribed.indexOf(win.source) >= 0 ? S.tr2(S.rev, "history.summary.costApi") : S.tr2(S.rev, "history.summary.cost")
+                    HoverHandler { id: costCardHover }
+                    ToolTip.visible: costCardHover.hovered
+                    ToolTip.delay: 600
+                    ToolTip.text: S.tr2(S.rev, "history.costFrozen")
                     value: win.total.hasCost ? (win.total.unpriced > 0 ? "≥" : "") + win.money(win.total.cost) : "–"
                     detail: win.total.unpriced > 0 ? Format.fill(S.tr2(S.rev, "history.unpricedDay"), [win.total.unpriced])
                             : win.total.activeDays > 0 && win.total.hasCost
@@ -258,6 +374,7 @@ Window {
                     onActivated: (v) => win.metric = v
                 }
                 HistoryChart {
+                    id: dailyChart
                     visible: !win.singleDay && win.dayList.length > 0
                     anchors.fill: parent
                     anchors.topMargin: 34
@@ -352,6 +469,14 @@ Window {
                 }
             }
 
+            // Effort and speed (DESIGN 4b, 3b)
+            ModeSection {
+                Layout.fillWidth: true
+                first: win.span[0]
+                last: win.span[1]
+                source: win.source
+            }
+
             // Performance (DESIGN 12, 性能表現)
             PerfSection {
                 Layout.fillWidth: true
@@ -405,6 +530,20 @@ Window {
                         var list = Object.keys(day.models).map(function(k) { return day.models[k] }).sort(function(a, b) { return b.output - a.output })
                         var names = list.slice(0, 2).map(function(m) { return m.name })
                         return names.join(", ") + (list.length > 2 ? " +" + (list.length - 2) : "")
+                    }
+                    return ""
+                }
+                // Cell tooltips: unpriced or missing cost data, traffic not yet recorded or partial.
+                function hint(day, key) {
+                    if (key === "cost") {
+                        if (!day.hasCost && day.requests > 0) return S.tr2(S.rev, "history.costUnavailable")
+                        return day.unpriced > 0 ? Format.fill(S.tr2(S.rev, "history.unpricedDay"), [day.unpriced]) : ""
+                    }
+                    if (key === "traffic") {
+                        if (history.trafficSince.length === 0 || day.date < history.trafficSince) return S.tr2(S.rev, "history.traffic.notRecorded")
+                        var t = win.trafficDays[day.date]
+                        if (H.trafficPartial(t, day.date, win.today))
+                            return Format.fill(S.tr2(S.rev, "history.traffic.partial"), [H.duration(H.recordedMs(t), function(k) { return S.tr2(S.rev, k) })])
                     }
                     return ""
                 }
@@ -484,6 +623,11 @@ Window {
                                     font.features: Theme.tabular
                                     font.weight: modelData.key === "date" ? Font.Medium : Font.Normal
                                     elide: Text.ElideRight
+                                    readonly property string hint: table.parent.hint(rowItem.modelData, modelData.key)
+                                    HoverHandler { id: cellHover; enabled: parent.hint.length > 0 }
+                                    ToolTip.visible: cellHover.hovered && hint.length > 0
+                                    ToolTip.delay: 500
+                                    ToolTip.text: hint
                                 }
                             }
                         }
@@ -496,8 +640,11 @@ Window {
 
         // Footer
         RowLayout {
+            id: footer
             Layout.fillWidth: true
             spacing: 10
+            readonly property bool counted: history.analyzing && history.filesTotal > 0
+            readonly property real fraction: counted ? Math.min(1, history.filesDone / history.filesTotal) : 0
             Rectangle {
                 visible: history.analyzing
                 Layout.preferredWidth: 80
@@ -506,30 +653,85 @@ Window {
                 color: Theme.field
                 clip: true
                 Rectangle {
+                    visible: !footer.counted
                     width: parent.width * 0.35
                     height: parent.height
                     radius: 1.5
                     color: Theme.accent
                     SequentialAnimation on x {
-                        running: history.analyzing
+                        running: history.analyzing && !footer.counted
                         loops: Animation.Infinite
                         NumberAnimation { from: -28; to: 80; duration: 1100; easing.type: Easing.InOutQuad }
                     }
                 }
+                Rectangle {
+                    visible: footer.counted
+                    width: parent.width * footer.fraction
+                    height: parent.height
+                    radius: 1.5
+                    color: Theme.accent
+                    Behavior on width { NumberAnimation { duration: 220; easing.type: Easing.OutCubic } }
+                }
             }
             Text {
-                text: history.analyzing ? Format.fill(S.tr2(S.rev, "history.analyzing"), [""]).replace(" %", "").replace("%", "").trim()
-                                        : history.updatedMs > 0 ? Format.fill(S.tr2(S.rev, "history.updated"), [new Date(history.updatedMs).toLocaleTimeString(Qt.locale(), "HH:mm")]) : ""
+                text: history.analyzing
+                      ? (footer.counted ? Format.fill(S.tr2(S.rev, "history.analyzing"), [Math.floor(footer.fraction * 100)]).replace("%%", "%") + "  ·  "
+                                          + Format.fill(S.tr2(S.rev, "history.analyzingFiles"), [H.grouped(history.filesDone), H.grouped(history.filesTotal)])
+                                        : Format.fill(S.tr2(S.rev, "history.analyzing"), [""]).replace(" %%", "").replace("%%", "").replace(" %", "").replace("%", "").trim())
+                      : history.updatedMs > 0 ? Format.fill(S.tr2(S.rev, "history.updated"), [new Date(history.updatedMs).toLocaleTimeString(Qt.locale(), "HH:mm")]) : ""
+                color: Theme.ink3
+                font.pixelSize: 11
+                font.features: Theme.tabular
+            }
+            // DESIGN 10: the range reaches back before traffic was recorded.
+            Text {
+                visible: history.trafficSince.length > 0 && win.span[0] < history.trafficSince
+                text: "·  " + Format.fill(S.tr2(S.rev, "history.traffic.since"), [history.trafficSince.replace(/-/g, "/")])
                 color: Theme.ink3
                 font.pixelSize: 11
             }
+            // DESIGN 9 Unknown prices: the notice and its popover.
+            Text {
+                visible: win.total.unpriced > 0
+                text: "·  " + Format.fill(S.tr2(S.rev, "history.unpricedNotice"), [H.grouped(win.total.unpriced)])
+                color: Theme.ink2
+                font.pixelSize: 11
+            }
+            LinkButton {
+                id: unpricedLink
+                visible: win.total.unpriced > 0
+                text: S.tr2(S.rev, "history.unpricedNotice.show")
+                onClicked: unpricedPopup.opened ? unpricedPopup.close() : unpricedPopup.open()
+                UnpricedPopup {
+                    id: unpricedPopup
+                    y: -height - 8
+                    x: Math.min(0, win.width - 48 - width - unpricedLink.mapToItem(win.contentItem, 0, 0).x)
+                    first: win.span[0]
+                    last: win.span[1]
+                    source: win.source
+                    excluded: win.excluded
+                    view: win.range
+                    onClosed: unpricedLink.forceActiveFocus()
+                }
+            }
             Item { Layout.fillWidth: true }
             Text {
-                text: width < 300 ? S.tr2(S.rev, "history.privacy.short") : S.tr2(S.rev, "history.privacy")
+                visible: win.currency !== "USD"
+                text: Format.fill(S.tr2(S.rev, "rates.historyNote"), [catalog.revision >= 0 ? catalog.ratesDate() : ""]) + "  ·"
+                color: Theme.ink3
+                font.pixelSize: 11
+            }
+            Text {
+                id: privacy
+                text: footer.width - x < 300 ? S.tr2(S.rev, "history.privacy.short") : S.tr2(S.rev, "history.privacy")
                 color: Theme.ink3
                 font.pixelSize: 11
                 elide: Text.ElideRight
                 Layout.maximumWidth: 520
+                HoverHandler { id: privacyHover }
+                ToolTip.visible: privacyHover.hovered && text !== S.tr2(S.rev, "history.privacy")
+                ToolTip.text: S.tr2(S.rev, "history.privacy")
+                Accessible.name: S.tr2(S.rev, "history.privacy")
             }
         }
     }

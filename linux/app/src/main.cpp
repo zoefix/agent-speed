@@ -150,7 +150,9 @@ int main(int argc, char* argv[]) {
     // The daily history (METRICS 8) on its own thread, sharing the price book with the monitor.
     qRegisterMetaType<PerfRecords>();
     qRegisterMetaType<PerfBaselines>();
+    qRegisterMetaType<HistoryDetails>();
     HistoryModel historyModel(&strings);
+    historyModel.setPrices(prices);
     historyModel.setDisabledSources(prefs.disabledSources());
     QObject::connect(&prefs, &Preferences::sourcesChanged, &historyModel, [&] { historyModel.setDisabledSources(prefs.disabledSources()); });
     QThread historyThread;
@@ -169,6 +171,8 @@ int main(int argc, char* argv[]) {
     QObject::connect(historyWorker, &HistoryWorker::daysReady, &historyModel, &HistoryModel::applyRows);
     QObject::connect(historyWorker, &HistoryWorker::analyzing, &historyModel, &HistoryModel::setAnalyzing);
     QObject::connect(historyWorker, &HistoryWorker::perfReady, &historyModel, &HistoryModel::applyPerf);
+    QObject::connect(historyWorker, &HistoryWorker::progress, &historyModel, &HistoryModel::applyProgress);
+    QObject::connect(historyWorker, &HistoryWorker::detailsReady, &historyModel, &HistoryModel::applyDetails);
     qRegisterMetaType<TrafficRows>();
     QObject::connect(worker, &MonitorWorker::trafficSave, historyWorker, &HistoryWorker::saveTraffic);
     QObject::connect(

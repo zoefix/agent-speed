@@ -29,6 +29,8 @@ public:
     // Units per US dollar for the display currency (the bundled rates until a fetch is accepted, NETWORK 4).
     Q_INVOKABLE QString rateFor(const QString& code) const;
     Q_INVOKABLE QString rateStatus(const QString& code) const;
+    // The date of the rates in use (accepted or bundled), for `rates.historyNote`.
+    Q_INVOKABLE QString ratesDate() const;
     Q_INVOKABLE QString priceStatus() const;
     // The bundled table is the current one (`prices.bundled`).
     Q_INVOKABLE bool pricesBundled() const;

@@ -30,8 +30,9 @@ function emptyDay(date) {
 }
 
 // Per-day totals between `from` and `to` (inclusive), for one source or all. A day with agent traffic of the selection
-// is a day with data even without token usage (DESIGN 10).
-function days(rows, source, from, to, traffic, disabled, includeTools) {
+// is a day with data even without token usage (DESIGN 10). Sources in `excluded` (subscriptions, DESIGN 9) keep their
+// tokens but add no cost.
+function days(rows, source, from, to, traffic, disabled, includeTools, excluded) {
     var byDate = {}
     var off = {}
     for (var o = 0; o < (disabled || []).length; ++o) off[disabled[o]] = true
@@ -49,11 +50,12 @@ function days(rows, source, from, to, traffic, disabled, includeTools) {
         d.requests += r.requests; d.input += r.input; d.cachedInput += r.cachedInput; d.cacheWriteInput += r.cacheWriteInput
         d.output += r.output; d.reasoning += r.reasoning; d.measuredOutput += r.measuredOutput; d.measuredMs += r.measuredMs
         d.unfinalized += r.unfinalized; d.agents += r.agents
-        if (r.cost !== undefined && r.cost !== null) { d.cost = (d.cost || 0) + r.cost; d.hasCost = true }
-        if (r.unpriced) d.unpriced += r.unpriced
+        const free = source === "all" && excluded && excluded.indexOf(r.source) >= 0
+        if (!free && r.cost !== undefined && r.cost !== null) { d.cost = (d.cost || 0) + r.cost; d.hasCost = true }
+        if (!free && r.unpriced) d.unpriced += r.unpriced
         if (source === "all" && r.peak !== undefined && r.peak !== null) d.peak = Math.max(d.peak || 0, r.peak)
         d.bySource[r.source] = (d.bySource[r.source] || 0) + r.output
-        if (r.cost !== undefined && r.cost !== null) {
+        if (!free && r.cost !== undefined && r.cost !== null) {
             if (!d.costBySource) d.costBySource = {}
             d.costBySource[r.source] = (d.costBySource[r.source] || 0) + r.cost
         }
@@ -118,8 +120,9 @@ function trafficByDate(traffic, source, from, to, disabled, includeTools) {
     for (var k = 0; k < (traffic || []).length; ++k) {
         var t = traffic[k]
         if (t.date < from || t.date > to) continue
-        var d = out[t.date] || (out[t.date] = { rx: 0, tx: 0, rxTools: 0, txTools: 0, machineRx: 0, machineTx: 0, bySource: {} })
-        if (t.key === "machine") { d.machineRx += t.rx; d.machineTx += t.tx; continue }
+        var d = out[t.date] || (out[t.date] = { rx: 0, tx: 0, rxTools: 0, txTools: 0, machineRx: 0, machineTx: 0, bySource: {}, sampledMs: 0, machineSampledMs: -1 })
+        if (t.key === "machine") { d.machineRx += t.rx; d.machineTx += t.tx; d.machineSampledMs = t.sampledMs || 0; continue }
+        d.sampledMs = Math.max(d.sampledMs, t.sampledMs || 0)
         if (off[t.key] || (source !== "all" && t.key !== source)) continue
         var rx = t.rx + (includeTools ? t.rxTools : 0), tx = t.tx + (includeTools ? t.txTools : 0)
         d.rx += rx; d.tx += tx; d.rxTools += t.rxTools; d.txTools += t.txTools
@@ -127,4 +130,27 @@ function trafficByDate(traffic, source, from, to, disabled, includeTools) {
         s.rx += rx; s.tx += tx
     }
     return out
+}
+
+// DESIGN 10: whole minutes (at least one) as `time.minutes`, `time.hours` or `time.hoursMinutes`.
+function duration(ms, tr) {
+    var minutes = Math.floor(Math.max(ms, 60000) / 60000)
+    if (minutes < 60) return fill(tr("time.minutes"), [minutes])
+    var rest = minutes % 60
+    return rest === 0 ? fill(tr("time.hours"), [minutes / 60]) : fill(tr("time.hoursMinutes"), [Math.floor(minutes / 60), rest])
+}
+
+// A day's traffic is partial when the recorded time falls more than two minutes short of the day so far.
+function trafficPartial(day, date, todayIso) {
+    if (!day) return false
+    var recorded = day.machineSampledMs >= 0 ? day.machineSampledMs : day.sampledMs
+    var elapsed = date === todayIso ? (Date.now() - parse(date).getTime()) / 1000 : 86400
+    return recorded / 1000 < elapsed - 120
+}
+
+function recordedMs(day) { return day.machineSampledMs >= 0 ? day.machineSampledMs : day.sampledMs }
+
+function fill(text, args) {
+    var i = 0
+    return text.replace(/%[@d]/g, function() { return args[i] !== undefined ? args[i++] : "" })
 }

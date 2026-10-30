@@ -229,6 +229,33 @@ std::vector<perf::DayRecord> Analyzer::perfRecords(const std::set<SourceKind>* s
     return out;
 }
 
+std::vector<unpriced::Part> Analyzer::unpricedParts(const std::set<SourceKind>* sources) const {
+    std::vector<unpriced::Part> parts;
+    for (const auto& [path, entry] : entries_) {
+        for (const auto& [key, day] : entry.days) {
+            if (sources && !sources->contains(key.source)) continue;
+            unpriced::Stored stored;
+            stored.fileVersion = entry.version;
+            stored.requests = day.requests;
+            stored.unpriced = day.unpricedRequests;
+            for (const auto& [model, totals] : day.models) {
+                if (totals.unpricedRequests && *totals.unpricedRequests > 0) stored.models[model] = *totals.unpricedRequests;
+            }
+            for (const auto& [fact, n] : day.unpriced) stored.side.push_back({fact.model, fact.provider, fact.fast, n, entry.version});
+            auto part = unpriced::readPart(stored);
+            part.day = key.day;
+            part.source = key.source;
+            parts.push_back(std::move(part));
+        }
+    }
+    return unpriced::mergeParts(parts);
+}
+
+void Analyzer::advance(Report& report) {
+    ++report.filesAnalyzed;
+    if (progress_) progress_(report.filesAnalyzed, report.filesPlanned);
+}
+
 StoredFile& Analyzer::keep(StoredFile file, std::vector<std::uint64_t> owned) {
     if (const auto* previous = previousOf(file.path)) file.id = previous->id;
     auto& stored = entries_[file.path] = std::move(file);
@@ -244,7 +271,7 @@ void Analyzer::flush(std::vector<std::pair<StoredFile*, std::vector<std::uint64_
 }
 
 Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind>& enabled, std::shared_ptr<const TimeZone> zone,
-                     const std::string& zoneId, const std::function<bool()>& cancelled) {
+                     const std::string& zoneId, const std::function<bool()>& cancelled, const std::function<void(int, int)>& progress) {
     Report report;
     const bool zoneChanged = !entries_.empty() && store_.meta("timeZone") != zoneId;
     const auto priceVersion = std::to_string(prices_->currentVersion());
@@ -257,6 +284,12 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
     planOpenCode(locations, enabled, zoneChanged, zoneId, work, report);
     report.filesPlanned = static_cast<int>(work.files.size() + work.openClaw.size() + work.hermes.size()) + (work.zcode ? 1 : 0) +
                           (work.openCode ? 1 : 0);
+    progress_ = progress;
+    struct Reset {
+        std::function<void(int, int)>& progress;
+        ~Reset() { progress = nullptr; }
+    } reset{progress_};
+    if (progress_) progress_(0, report.filesPlanned);
 
     KeyLedger ledger;
     store_.loadKeys(ledger, work.replaced);
@@ -359,7 +392,7 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.days = contributionsOf(sink.items(), parser->source(), labeler, *prices_);
         entry.perf = sink.perfRecords(parser->agentId(), parser->source(), labeler);
         keep(std::move(entry), ledger.finish(parser->agentId()));
-        ++report.filesAnalyzed;
+        advance(report);
         report.bytesAnalyzed += result.length;
         if (pending_.size() >= 256) flush(pending_);
     }
@@ -496,7 +529,7 @@ void Analyzer::analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.days = contributionsOf(responses, SourceKind::ZCode, labeler, *prices_);
         entry.perf = emittedRecords(responses, SourceKind::ZCode, labeler);
         keep(std::move(entry), ledger.finish(id));
-        ++report.filesAnalyzed;
+        advance(report);
     }
 }
 
@@ -559,7 +592,7 @@ void Analyzer::analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& 
                 if (sink != sinks.end()) entry.perf = sink->second->perfRecords(parser->agentId(), SourceKind::OpenClaw, labeler);
                 keep(std::move(entry), owned[parser->agentId()]);
             }
-            ++report.filesAnalyzed;
+            advance(report);
             report.bytesAnalyzed += database.stamp.length();
         }
         StoredFile marker;
@@ -661,7 +694,7 @@ void Analyzer::analyzeHermes(Work& work, KeyLedger& ledger, const DayLabeler& la
             entry.version = kVersion;
             keep(std::move(entry), {});
         }
-        ++report.filesAnalyzed;
+        advance(report);
         report.bytesAnalyzed += size;
     }
 }

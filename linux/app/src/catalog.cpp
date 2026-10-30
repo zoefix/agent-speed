@@ -104,6 +104,11 @@ QString Catalog::rateStatus(const QString& code) const {
     return fill(strings_.t(QStringLiteral("rates.fallback")), {displayDate(table.fallbackRates().date)});
 }
 
+QString Catalog::ratesDate() const {
+    if (!rates_.empty()) return QDateTime::fromMSecsSinceEpoch(ratesDateMs_).toUTC().toString(QStringLiteral("yyyy/MM/dd"));
+    return displayDate(agentspeed::money::CurrencyTable::bundled().fallbackRates().date);
+}
+
 QString Catalog::priceStatus() const {
     const auto table = prices_->current();
     return fill(strings_.t(QStringLiteral("prices.status")),
