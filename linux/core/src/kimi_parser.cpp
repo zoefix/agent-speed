@@ -16,7 +16,9 @@ std::string parentOf(const std::string& path) {
 
 struct KimiParser::Line {
     enum class Status { Blank, Malformed, Valid } status = Status::Blank;
-    std::optional<std::string> type, agent, model, cwd, provider, role, responseId;
+    std::optional<std::string> type, agent, model, cwd, provider, role, responseId, thinkingEffort, thinkingLevel;
+    // The line names a model, even an empty one (EXECUTION-MODES, Kimi Code CLI).
+    bool namesModel = false;
     std::optional<std::int64_t> timeMs, durationMs, firstTokenMs, streamMs;
     std::optional<TokenCounts> usage;
     bool toolCalls = false, partial = false;
@@ -39,6 +41,9 @@ struct KimiParser::Line {
         result.model = root["modelAlias"].nonEmptyString();
         if (!result.model) result.model = root["model"].nonEmptyString();
         result.provider = root["provider"].nonEmptyString();
+        result.namesModel = root["model"].valid();
+        result.thinkingEffort = root["thinkingEffort"].nonEmptyString();
+        result.thinkingLevel = root["thinkingLevel"].nonEmptyString();
         auto message = root["message"];
         const auto meta = message["meta"];
         if (message["message"].isObject()) message = message["message"];
@@ -71,6 +76,7 @@ struct KimiParser::Line {
             auto model = meta["model"]["model"].nonEmptyString();
             if (!model) model = message["model"].nonEmptyString();
             if (model) result.model = model;
+            result.namesModel = result.namesModel || meta["model"]["model"].valid();
             if (auto provider = meta["model"]["provider"].nonEmptyString()) result.provider = provider;
             const auto calls = message["toolCalls"];
             result.toolCalls = calls.isArray() && calls.size() > 0;
@@ -92,6 +98,7 @@ void KimiParser::reset() {
     requestStart_.reset();
     requestId_.reset();
     provider_.reset();
+    contextModes_ = ExecutionModes();
     restoreMetadata();
 }
 
@@ -111,8 +118,8 @@ void KimiParser::feed(std::string_view text, ResponseSink& sink) {
     const auto time = *line.timeMs;
     touch(time);
     const auto& type = line.type;
+    applyModes(line);
     if (type == "llm.request") {
-        setModes(native::kimiModel(model()));
         requestStart_ = time;
         requestId_ = line.responseId;
         setPhase(Phase::Generating, time, time);
@@ -120,7 +127,6 @@ void KimiParser::feed(std::string_view text, ResponseSink& sink) {
         if (!requestStart_) requestStart_ = time;
         setPhase(Phase::Generating, time, requestStart_);
     } else if (type == "turn.prompt" || type == "turn.started") {
-        setModes(native::kimiModel(model()));
         setPhase(Phase::Generating, time, time);
     } else if (type == "step.end") {
         complete(line, time, sink);
@@ -140,6 +146,26 @@ void KimiParser::feed(std::string_view text, ResponseSink& sink) {
         requestStart_.reset();
         setPhase(Phase::Idle, time, std::nullopt);
     }
+}
+
+// A named model replaces the variant. A selection replaces the effort when it names one; every `llm.request` replaces
+// it, or clears it without one.
+void KimiParser::applyModes(const Line& line) {
+    const auto replace = [&](ModeKind kind, const std::optional<ModeFact>& fact) {
+        contextModes_ = contextModes_.without([kind](const ModeFact& f) { return f.kind == kind; }).with(fact);
+    };
+    if (line.namesModel) {
+        const auto variant = native::kimiModel(line.model);
+        replace(ModeKind::ModelVariant, variant.empty() ? std::nullopt : std::optional<ModeFact>(variant.facts().front()));
+    }
+    if (line.type == "profile.bind" || line.type == "config.update") {
+        auto token = line.thinkingEffort;
+        if (!token && line.type == "config.update") token = line.thinkingLevel;
+        if (token) replace(ModeKind::Effort, native::effort(token, ModeEvidence::Selected, ModeScope::Session));
+    } else if (line.type == "llm.request") {
+        replace(ModeKind::Effort, native::effort(line.thinkingEffort, ModeEvidence::Recorded, ModeScope::Request));
+    }
+    setModes(contextModes_);
 }
 
 void KimiParser::complete(const Line& line, std::int64_t time, ResponseSink& sink) {
@@ -172,8 +198,7 @@ void KimiParser::complete(const Line& line, std::int64_t time, ResponseSink& sin
         response.endMs = end;
         response.tokens = *line.usage;
         response.provider = provider_;
-        response.modes = native::kimiModel(model());
-        setModes(response.modes);
+        response.modes = timed != responses_.end() ? timed->second.modes : contextModes_;
         std::string owner;
         const bool completion = deduper().tryClaim(key, agentId(), &owner);
         if (completion || owner == agentId()) {

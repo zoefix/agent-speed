@@ -57,10 +57,20 @@ ExecutionModes modesOf(const json::Value& list) {
 std::optional<ModeFact> normalize(std::string_view adapter, const std::optional<std::string>& raw, const std::optional<std::string>& provider,
                                   ModeEvidence evidence, ModeScope scope) {
     if (provider && !ExecutionModes::isIdentifier(*provider, 32)) return std::nullopt;
+    const auto first = [](const ExecutionModes& modes) {
+        return modes.empty() ? std::nullopt : std::optional<ModeFact>(modes.facts().front());
+    };
     if (adapter == "serviceTier") {
-        if (provider && *provider != "openai" && *provider != "openai-codex" && *provider != "azure") return std::nullopt;
+        if (provider == "anthropic") return std::nullopt;
+        if (provider == "google") return first(native::googleTier(raw, evidence, scope));
         return ModeFact::create(ModeKind::ServiceTier, raw, evidence, provider, scope);
     }
+    if (adapter == "zcodeModel") return first(native::zcodeModel(raw, evidence, scope));
+    if (adapter == "zcodeProvider") return first(native::zcodeProvider(raw, evidence, scope));
+    if (adapter == "droidModel") return first(native::droidModel(raw, evidence, scope));
+    if (adapter == "ompTier") return first(native::ompTier(raw, provider, evidence, scope));
+    if (adapter == "hermesEffort") return first(native::hermesEffort(raw, evidence, scope));
+    if (adapter == "hermesServiceTier") return first(native::hermesServiceTier(raw, evidence, scope));
     if (adapter == "claudeSpeed") return ModeFact::create(ModeKind::ServiceTier, raw, evidence, provider, scope);
     if (adapter == "kimiModel") {
         const auto modes = native::kimiModel(raw);
@@ -129,6 +139,46 @@ TEST_F(ExecutionModeCases, Attribution) {
         EXPECT_EQ(got.mode, *c["expected"]["mode"].string());
         EXPECT_EQ(got.evidence, *c["expected"]["evidence"].string());
         EXPECT_EQ(got.provider, fixtures::optString(c["expected"]["provider"]));
+    }
+}
+
+TEST_F(ExecutionModeCases, Current) {
+    for (const auto& c : section("current").elements()) {
+        SCOPED_TRACE(*c["id"].string());
+        const auto got = effort_speed::current(*kindOf(*c["kind"].string()), modesOf(c["facts"]), modesOf(c["session"]), modesOf(c["configured"]));
+        EXPECT_EQ(got.mode, *c["expected"]["mode"].string());
+        EXPECT_EQ(got.evidence, *c["expected"]["evidence"].string());
+        EXPECT_EQ(got.provider, fixtures::optString(c["expected"]["provider"]));
+    }
+}
+
+TEST_F(ExecutionModeCases, Ledger) {
+    const auto attribution = [](const json::Value& v) {
+        return ModeAttribution{ModeKind::Effort, *v["mode"].string(), *v["evidence"].string(), std::nullopt};
+    };
+    for (const auto& c : section("ledger").elements()) {
+        SCOPED_TRACE(*c["id"].string());
+        const auto got = effort_speed::ledgerEffort(attribution(c["response"]), attribution(c["current"]));
+        EXPECT_EQ(got.mode, *c["expected"]["mode"].string());
+        EXPECT_EQ(got.evidence, *c["expected"]["evidence"].string());
+    }
+}
+
+TEST_F(ExecutionModeCases, AntigravityEffort) {
+    for (const auto& c : section("antigravityEffort").elements()) {
+        SCOPED_TRACE(*c["id"].string());
+        if (c["model"].valid()) {
+            const auto got = native::antigravityModelEffort(*c["model"].string());
+            if (c["expected"].isNull()) {
+                EXPECT_FALSE(got.has_value());
+                continue;
+            }
+            ASSERT_TRUE(got.has_value());
+            EXPECT_EQ(got->first, *c["expected"].elements()[0].string());
+            EXPECT_EQ(got->second, *c["expected"].elements()[1].string());
+        } else {
+            EXPECT_EQ(native::antigravityLabelEffort(*c["label"].string()), fixtures::optString(c["expected"]));
+        }
     }
 }
 

@@ -4,6 +4,7 @@
 #include <optional>
 #include <string>
 #include <string_view>
+#include <utility>
 #include <vector>
 
 // Execution modes (spec/EXECUTION-MODES.md): facts about service tier, accelerator, model variant, routing, workflow
@@ -54,7 +55,9 @@ public:
     ExecutionModes with(const std::optional<ModeFact>& fact) const;
     ExecutionModes without(const std::function<bool(const ModeFact&)>& match) const;
     ExecutionModes without(ModeEvidence evidence) const;
-    ModeAttribution attribute(ModeKind kind) const;
+    // The attribution among facts of the given evidence; facts that tie on evidence and scope and disagree give unknown.
+    ModeAttribution attribute(ModeKind kind, ModeEvidence lowest = ModeEvidence::Selected,
+                              ModeEvidence highest = ModeEvidence::Served) const;
 
     const std::vector<ModeFact>& facts() const { return facts_; }
     bool empty() const { return facts_.empty(); }
@@ -66,7 +69,7 @@ public:
     static bool isReportKind(ModeKind kind) { return kind != ModeKind::Speed; }
 
 private:
-    ModeAttribution attributeSpeed() const;
+    ModeAttribution attributeSpeed(ModeEvidence lowest, ModeEvidence highest) const;
     std::vector<ModeFact> facts_;
 };
 
@@ -87,12 +90,30 @@ std::optional<ModeFact> effort(const std::optional<std::string>& raw, ModeEviden
 ExecutionModes workflow(const std::optional<std::string>& workflow);
 ExecutionModes ompTier(const std::optional<std::string>& tier, std::optional<std::string> provider, ModeEvidence evidence,
                        ModeScope scope);
+// The tier family of an omp provider id.
+std::optional<std::string> ompFamily(const std::optional<std::string>& provider);
+ExecutionModes googleTier(const std::optional<std::string>& tier, ModeEvidence evidence, ModeScope scope);
+// Exact catalog ids only (EXECUTION-MODES, ZCode and Factory Droid).
+ExecutionModes zcodeModel(const std::optional<std::string>& model, ModeEvidence evidence, ModeScope scope);
+ExecutionModes zcodeProvider(const std::optional<std::string>& account, ModeEvidence evidence, ModeScope scope);
+ExecutionModes droidModel(const std::optional<std::string>& model, ModeEvidence evidence, ModeScope scope);
+ExecutionModes hermesEffort(const std::optional<std::string>& raw, ModeEvidence evidence, ModeScope scope);
+ExecutionModes hermesServiceTier(const std::optional<std::string>& raw, ModeEvidence evidence, ModeScope scope);
+// (base model, effort token) of an Antigravity catalog id with exactly one effort suffix.
+std::optional<std::pair<std::string, std::string>> antigravityModelEffort(std::string_view model);
+// The effort word of a display name such as `Gemini 3.1 Pro (High)`.
+std::optional<std::string> antigravityLabelEffort(std::string_view label);
 }  // namespace native
 
 // The two values agents show: levels, bolts and display order.
 namespace effort_speed {
 std::optional<ModeAttribution> effort(const ExecutionModes& modes);
 std::optional<ModeAttribution> speed(const ExecutionModes& modes);
+// An agent's current value: its own facts, then a session-current fact, then a configured value.
+ModeAttribution current(ModeKind kind, const ExecutionModes& own, const ExecutionModes& session = {},
+                        const ExecutionModes& configured = {});
+// The effort the report ledger freezes when it first counts a live response.
+ModeAttribution ledgerEffort(const ModeAttribution& frozen, const ModeAttribution& current);
 // Meter level 0–5; nullopt for a token without a level.
 std::optional<int> level(std::string_view effort);
 bool isTopRung(std::string_view effort);

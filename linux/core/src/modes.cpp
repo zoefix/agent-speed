@@ -50,6 +50,7 @@ std::optional<ModeFact> ModeFact::create(ModeKind kind, const std::optional<std:
         if (value == "default") value = "standard";
         else if (value == "priority") value = "fast";
     }
+    if (kind == ModeKind::ServiceTier && provider == "google" && value == "priority") value = "fast";
     return ModeFact{kind, value, *raw, evidence, std::move(provider), scope};
 }
 
@@ -125,23 +126,30 @@ ExecutionModes ExecutionModes::without(ModeEvidence evidence) const {
     return without([evidence](const ModeFact& f) { return f.evidence == evidence; });
 }
 
-ModeAttribution ExecutionModes::attribute(ModeKind kind) const {
-    if (kind == ModeKind::Speed) return attributeSpeed();
+ModeAttribution ExecutionModes::attribute(ModeKind kind, ModeEvidence lowest, ModeEvidence highest) const {
+    if (kind == ModeKind::Speed) return attributeSpeed(lowest, highest);
+    const auto eligible = [&](const ModeFact& f) { return f.kind == kind && f.evidence >= lowest && f.evidence <= highest; };
     const ModeFact* best = nullptr;
     for (const auto& f : facts_) {
-        if (f.kind != kind || f.evidence == ModeEvidence::Configured) continue;
+        if (!eligible(f)) continue;
         if (!best || f.evidence > best->evidence || (f.evidence == best->evidence && f.scope > best->scope)) best = &f;
     }
     if (!best || best->value == "unknown" || best->value == "none" || best->value == "auto" || best->value == "inherit" ||
         best->value == "inherited") {
         return ModeAttribution::unknown(kind);
     }
+    for (const auto& f : facts_) {
+        if (eligible(f) && f.evidence == best->evidence && f.scope == best->scope &&
+            (f.value != best->value || f.provider != best->provider)) {
+            return ModeAttribution::unknown(kind);
+        }
+    }
     return {kind, best->value, std::string(modeEvidenceName(best->evidence)), best->provider};
 }
 
-ModeAttribution ExecutionModes::attributeSpeed() const {
+ModeAttribution ExecutionModes::attributeSpeed(ModeEvidence lowest, ModeEvidence highest) const {
     for (ModeKind kind : {ModeKind::ServiceTier, ModeKind::Accelerator, ModeKind::ModelVariant}) {
-        ModeAttribution value = attribute(kind);
+        ModeAttribution value = attribute(kind, lowest, highest);
         if (value.known() && (kind != ModeKind::ModelVariant || value.mode == "highspeed")) {
             value.kind = ModeKind::Speed;
             return value;
@@ -213,8 +221,11 @@ std::optional<ModeFact> effort(const std::optional<std::string>& raw, ModeEviden
     auto fact = ModeFact::create(ModeKind::Effort, raw, evidence, std::nullopt, scope);
     if (!fact) return std::nullopt;
     const auto& v = fact->value;
-    if (v == "auto" || v == "default" || v == "inherit" || v == "inherited" || v == "unknown") return std::nullopt;
-    if (v == "none") fact->value = "off";
+    if (v == "auto" || v == "default" || v == "inherit" || v == "inherited" || v == "unknown" || v == "thinking_level_unspecified") {
+        return std::nullopt;
+    }
+    if (v == "none" || v == "disabled") fact->value = "off";
+    else if (v == "enabled") fact->value = "on";
     return fact;
 }
 
@@ -223,13 +234,106 @@ ExecutionModes workflow(const std::optional<std::string>& workflow) {
     return ExecutionModes::of(ModeFact::create(ModeKind::Workflow, workflow, ModeEvidence::Selected, std::nullopt, ModeScope::Turn));
 }
 
+std::optional<std::string> ompFamily(const std::optional<std::string>& provider) {
+    static const std::map<std::string, std::string, std::less<>> kFamilies = {
+        {"anthropic", "anthropic"}, {"openai", "openai"}, {"openai-codex", "openai"}, {"azure", "openai"},
+        {"azure-openai-responses", "openai"}, {"google", "google"}, {"google-gemini-cli", "google"},
+        {"google-antigravity", "google"}, {"google-vertex", "google"}};
+    if (!provider) return std::nullopt;
+    const auto family = kFamilies.find(lower(*provider));
+    if (family == kFamilies.end()) return std::nullopt;
+    return family->second;
+}
+
 ExecutionModes ompTier(const std::optional<std::string>& tier, std::optional<std::string> provider, ModeEvidence evidence,
                        ModeScope scope) {
-    if (provider == "openai-codex") provider = "openai";
-    auto fact = ModeFact::create(ModeKind::ServiceTier, tier, evidence, provider, scope);
-    if (fact && provider == "anthropic" && tier == "priority") fact->value = "fast";
-    if (fact && tier == "none") fact->value = "standard";
+    const auto family = ompFamily(provider);
+    if (!family) return {};
+    auto fact = ModeFact::create(ModeKind::ServiceTier, tier, evidence, family, scope);
+    if (fact && fact->value == "priority") fact->value = "fast";
     return ExecutionModes::of(fact);
+}
+
+ExecutionModes googleTier(const std::optional<std::string>& tier, ModeEvidence evidence, ModeScope scope) {
+    auto fact = ModeFact::create(ModeKind::ServiceTier, tier, evidence, std::string("google"), scope);
+    if (fact && fact->value == "unspecified") return {};
+    return ExecutionModes::of(fact);
+}
+
+ExecutionModes zcodeModel(const std::optional<std::string>& model, ModeEvidence evidence, ModeScope scope) {
+    static const std::array<std::string_view, 7> kModels = {
+        "GLM-5.1-Highspeed", "MiniMax-M2.7-highspeed", "MiniMax-M2.5-highspeed", "kimi-k2.7-code-highspeed",
+        "kimi-for-coding-highspeed", "kimi-k3.1-pro-highspeed", "k3.1-pro-highspeed"};
+    if (!model || std::find(kModels.begin(), kModels.end(), *model) == kModels.end()) return {};
+    return ExecutionModes::of(ModeFact{ModeKind::ModelVariant, "highspeed", *model, evidence, std::string("zcode"), scope});
+}
+
+ExecutionModes zcodeProvider(const std::optional<std::string>& account, ModeEvidence evidence, ModeScope scope) {
+    if (account != "account:zai-highspeed-card" && account != "account:bigmodel-highspeed-card") return {};
+    return ExecutionModes::of(ModeFact{ModeKind::Accelerator, "highspeed", *account, evidence, std::string("zcode"), scope});
+}
+
+ExecutionModes droidModel(const std::optional<std::string>& model, ModeEvidence evidence, ModeScope scope) {
+    struct Tier {
+        std::string_view id, tier, provider;
+    };
+    static constexpr std::array<Tier, 20> kTiers = {{
+        {"claude-opus-4-6-fast", "fast", "anthropic"}, {"claude-opus-4-7-fast", "fast", "anthropic"},
+        {"claude-opus-4-8-fast", "fast", "anthropic"}, {"claude-opus-5-fast", "fast", "anthropic"},
+        {"claude-opus-5-5-fast", "fast", "anthropic"}, {"gpt-5.3-codex-fast", "fast", "openai"},
+        {"gpt-5.4-fast", "fast", "openai"}, {"gpt-5.4-mini-fast", "fast", "openai"}, {"gpt-5.5-fast", "fast", "openai"},
+        {"gpt-5.6-fast", "fast", "openai"}, {"gpt-5.6-sol-fast", "fast", "openai"}, {"gpt-6-sol-fast", "fast", "openai"},
+        {"gpt-6-luna-fast", "fast", "openai"}, {"gpt-6-astra-ultrafast", "ultrafast", "openai"},
+        {"gpt-6.1-sol-ultrafast", "ultrafast", "openai"}, {"gpt-5.6-terra-flex", "flex", "openai"},
+        {"gpt-5.6-luna-flex", "flex", "openai"}, {"gpt-6-sol-flex", "flex", "openai"}, {"gpt-6-astra-flex", "flex", "openai"},
+        {"gpt-6-luna-flex", "flex", "openai"},
+    }};
+    if (!model) return {};
+    for (const auto& t : kTiers) {
+        if (t.id == *model) {
+            return ExecutionModes::of(
+                ModeFact{ModeKind::ServiceTier, std::string(t.tier), *model, evidence, std::string(t.provider), scope});
+        }
+    }
+    return {};
+}
+
+ExecutionModes hermesEffort(const std::optional<std::string>& raw, ModeEvidence evidence, ModeScope scope) {
+    if (!raw || !ExecutionModes::isIdentifier(*raw, 64)) return {};
+    const auto token = lower(*raw);
+    const bool off = token == "none" || token == "false" || token == "disabled";
+    if (!off && token != "minimal" && token != "low" && token != "medium" && token != "high" && token != "xhigh" &&
+        token != "max" && token != "ultra") {
+        return {};
+    }
+    return ExecutionModes::of(ModeFact{ModeKind::Effort, off ? "off" : token, *raw, evidence, std::nullopt, scope});
+}
+
+ExecutionModes hermesServiceTier(const std::optional<std::string>& raw, ModeEvidence evidence, ModeScope scope) {
+    static const std::map<std::string, std::string, std::less<>> kTiers = {
+        {"fast", "fast"}, {"priority", "fast"}, {"ultrafast", "ultrafast"}, {"ultra", "ultrafast"}, {"normal", "standard"},
+        {"default", "standard"}, {"standard", "standard"}, {"off", "standard"}, {"none", "standard"}};
+    if (!raw || !ExecutionModes::isIdentifier(*raw, 64)) return {};
+    const auto tier = kTiers.find(lower(*raw));
+    if (tier == kTiers.end()) return {};
+    return ExecutionModes::of(ModeFact{ModeKind::ServiceTier, tier->second, *raw, evidence, std::nullopt, scope});
+}
+
+std::optional<std::pair<std::string, std::string>> antigravityModelEffort(std::string_view model) {
+    for (std::string_view suffix : {"-extra-low", "-low", "-medium", "-high", "-max"}) {
+        if (model.size() > suffix.size() && model.substr(model.size() - suffix.size()) == suffix) {
+            return std::pair{std::string(model.substr(0, model.size() - suffix.size())), std::string(suffix.substr(1))};
+        }
+    }
+    return std::nullopt;
+}
+
+std::optional<std::string> antigravityLabelEffort(std::string_view label) {
+    for (std::string_view word : {"Low", "Medium", "High", "Max"}) {
+        const std::string tail = " (" + std::string(word) + ")";
+        if (label.size() > tail.size() && label.substr(label.size() - tail.size()) == tail) return std::string(word);
+    }
+    return std::nullopt;
 }
 
 }  // namespace native
@@ -256,6 +360,19 @@ std::size_t rank(const std::array<std::string_view, N>& order, std::string_view 
 std::optional<ModeAttribution> effort(const ExecutionModes& modes) {
     auto a = modes.attribute(ModeKind::Effort);
     return a.known() ? std::optional<ModeAttribution>(a) : std::nullopt;
+}
+
+ModeAttribution current(ModeKind kind, const ExecutionModes& own, const ExecutionModes& session,
+                        const ExecutionModes& configured) {
+    if (auto value = own.attribute(kind); value.known()) return value;
+    if (auto value = session.attribute(kind, ModeEvidence::Selected, ModeEvidence::Selected); value.known()) return value;
+    if (auto value = configured.attribute(kind, ModeEvidence::Configured, ModeEvidence::Configured); value.known()) return value;
+    return ModeAttribution::unknown(kind);
+}
+
+ModeAttribution ledgerEffort(const ModeAttribution& frozen, const ModeAttribution& current) {
+    if (frozen.known() || !current.known() || current.evidence == "configured") return frozen;
+    return {ModeKind::Effort, current.mode, current.evidence, std::nullopt};
 }
 
 std::optional<ModeAttribution> speed(const ExecutionModes& modes) {

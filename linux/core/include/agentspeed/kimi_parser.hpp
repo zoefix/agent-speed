@@ -20,10 +20,12 @@ public:
 
 private:
     struct Line;
+    void applyModes(const Line& line);
     void complete(const Line& line, std::int64_t time, ResponseSink& sink);
     void restoreMetadata();
 
     std::map<std::string, ParsedResponse> responses_;
+    ExecutionModes contextModes_;
     std::string localAgent_, sessionFolder_;
     std::optional<std::int64_t> requestStart_, createdMs_;
     std::optional<std::string> requestId_, provider_, parentPath_;

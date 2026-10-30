@@ -13,7 +13,7 @@ namespace {
 
 constexpr std::int64_t kCopiedHistoryMs = 2000;
 
-enum class Kind { Other, Title, Session, Message, ModelUsage, SessionExit, ServiceTierChange };
+enum class Kind { Other, Title, Session, Message, ModelUsage, SessionExit, ServiceTierChange, ThinkingLevelChange };
 enum class Role { Other, User, Developer, Assistant, ToolResult };
 enum class Stop { Aborted, Error, Stop, ToolUse, Length, Other };
 
@@ -36,11 +36,12 @@ struct OmpParser::Line {
     Kind kind = Kind::Other;
     std::optional<std::string> id, parentId, cwd;
     std::optional<ExecutionModes> selectedModes;
+    std::optional<std::string> thinkingLevel;
     std::optional<std::int64_t> timestampMs;
     Role role = Role::Other;
     // The call fields (assistant message or model_usage entry).
     bool guarded = false, hasUsage = false, disabledPriority = false;
-    std::optional<std::string> model, provider, serviceTier;
+    std::optional<std::string> model, provider, serviceTier, effort;
     TokenCounts tokens;
     std::optional<std::int64_t> startedMs, durationMs, completedAtMs;
     Stop stop = Stop::Aborted;
@@ -62,6 +63,11 @@ void readCall(const json::Value& o, Line& line, std::optional<std::string>* topT
     const bool hasProvider = provider.isString();
     line.provider = hasProvider && !provider.raw().empty() ? provider.string() : std::nullopt;
     if (const auto tier = o["serviceTier"]; tier.valid() && !topTier) line.serviceTier = tier.nonEmptyString();
+    // `tail`, else `topLevel`; null is the API's default.
+    if (const auto effort = o["requestControls"]["effort"]; effort.isObject()) {
+        line.effort = effort["tail"].isString() ? effort["tail"].string() : std::nullopt;
+        if (!line.effort && effort["topLevel"].isString()) line.effort = effort["topLevel"].string();
+    }
     if (const auto disabled = o["disabledFeatures"]; disabled.isArray()) {
         for (const auto& f : disabled.elements()) {
             if (f.equals("priority")) line.disabledPriority = true;
@@ -97,11 +103,12 @@ std::optional<Line> readLine(std::string_view text, bool& malformed) {
     const auto root = doc.root();
     Line line;
     const auto type = root["type"];
-    enum class Type { Other, Title, Session, Message, ModelUsage, Custom, ServiceTierChange } t = Type::Other;
+    enum class Type { Other, Title, Session, Message, ModelUsage, Custom, ServiceTierChange, ThinkingLevelChange } t = Type::Other;
     if (type.equals("message")) t = Type::Message;
     else if (type.equals("session")) t = Type::Session;
     else if (type.equals("title")) t = Type::Title;
     else if (type.equals("service_tier_change")) t = Type::ServiceTierChange;
+    else if (type.equals("thinking_level_change") && root["thinkingLevel"].valid()) t = Type::ThinkingLevelChange;
     else if (type.equals("model_usage")) t = Type::ModelUsage;
     else if (type.equals("custom")) t = Type::Custom;
     const auto id = root["id"];
@@ -134,6 +141,10 @@ std::optional<Line> readLine(std::string_view text, bool& malformed) {
         case Type::Message: line.kind = hasMessage ? Kind::Message : Kind::Other; break;
         case Type::ModelUsage: line.kind = Kind::ModelUsage; break;
         case Type::ServiceTierChange: line.kind = Kind::ServiceTierChange; break;
+        case Type::ThinkingLevelChange:
+            line.kind = Kind::ThinkingLevelChange;
+            line.thinkingLevel = root["thinkingLevel"].isString() ? root["thinkingLevel"].string() : std::nullopt;
+            break;
         case Type::Custom: line.kind = sessionExit ? Kind::SessionExit : Kind::Other; break;
         case Type::Other: line.kind = Kind::Other; break;
     }
@@ -220,7 +231,8 @@ void OmpParser::reset() {
     pendingToolCalls_.clear();
     responses_.clear();
     modeBranches_.clear();
-    branchModes_ = ExecutionModes();
+    context_ = ExecutionModes();
+    family_.reset();
     headerSeen_ = false;
     headerProbed_ = false;
     headerMs_.reset();
@@ -272,16 +284,16 @@ void OmpParser::apply(const Line& line, ResponseSink& sink) {
     }
     const std::int64_t ts = *line.timestampMs;
     touch(ts);
+    context_ = line.parentId && modeBranches_.contains(*line.parentId) ? modeBranches_[*line.parentId] : ExecutionModes();
     if (line.selectedModes) {
-        branchModes_ = *line.selectedModes;
-    } else if (line.parentId && modeBranches_.contains(*line.parentId)) {
-        branchModes_ = modeBranches_[*line.parentId];
-    } else {
-        branchModes_ = ExecutionModes();
+        context_ = context_.without([](const ModeFact& f) { return f.kind == ModeKind::ServiceTier; }).merge(*line.selectedModes);
+    } else if (line.kind == Kind::ThinkingLevelChange) {
+        context_ = context_.without([](const ModeFact& f) { return f.kind == ModeKind::Effort; })
+                       .with(native::effort(line.thinkingLevel, ModeEvidence::Selected, ModeScope::Session));
     }
     if (modeBranches_.size() >= 65536) modeBranches_.clear();
-    modeBranches_[*line.id] = branchModes_;
-    setModes(branchModes_);
+    modeBranches_[*line.id] = context_;
+    updateCurrentModes();
     switch (line.kind) {
         case Kind::Message:
             switch (line.role) {
@@ -310,7 +322,8 @@ void OmpParser::apply(const Line& line, ResponseSink& sink) {
             if (!line.guarded) break;
             const std::string key = "omp:" + *line.id + ":" + std::to_string(ts);
             if (auto owner = deduper().owner(key); owner && *owner != agentId()) break;
-            if (line.hasUsage) emitResponse(key, std::nullopt, ts, line, sink);
+            // A side call runs at its own, unrecorded level.
+            if (line.hasUsage) emitResponse(key, std::nullopt, ts, line, tiersOf(line), sink);
             break;
         }
         case Kind::SessionExit:
@@ -334,7 +347,19 @@ void OmpParser::applyAssistant(const Line& line, std::int64_t ts, ResponseSink& 
         end = *line.completedAtMs;
     }
     if (line.hasUsage) {
-        emitResponse(key, failed ? std::nullopt : line.startedMs, end, line, sink);
+        ExecutionModes recorded = ExecutionModes::of(native::effort(line.effort, ModeEvidence::Recorded, ModeScope::Request));
+        if (!line.disabledPriority) {
+            recorded = recorded.merge(native::ompTier(line.serviceTier, line.provider, ModeEvidence::Recorded, ModeScope::Response));
+        }
+        ExecutionModes modes = tiersOf(line);
+        for (const auto& f : context_.facts()) {
+            if (f.kind == ModeKind::Effort) modes = modes.with(f);
+        }
+        emitResponse(key, failed ? std::nullopt : line.startedMs, end, line, modes.merge(recorded), sink);
+        // What a message records stays out of the branch.
+        family_ = native::ompFamily(line.provider);
+        context_ = context_.merge(recorded);
+        updateCurrentModes();
         setModel(line.model);
     }
     if (failed) {
@@ -352,16 +377,25 @@ void OmpParser::applyAssistant(const Line& line, std::int64_t ts, ResponseSink& 
     }
 }
 
-void OmpParser::emitResponse(const std::string& key, std::optional<std::int64_t> startMs, std::int64_t endMs,
-                             const Line& line, ResponseSink& sink) {
-    const bool completion = deduper().tryClaim(key, agentId());
-    const std::optional<std::string> family = line.provider == "openai-codex" ? std::optional<std::string>("openai") : line.provider;
-    std::vector<ModeFact> selected;
-    for (const auto& f : branchModes_.facts()) {
-        if (f.provider == family) selected.push_back(f);
+// The context's tiers of the call's family.
+ExecutionModes OmpParser::tiersOf(const Line& line) const {
+    const auto family = native::ompFamily(line.provider);
+    if (!family) return {};
+    return context_.without([&](const ModeFact& f) { return f.kind != ModeKind::ServiceTier || f.provider != family; });
+}
+
+// The context, its tiers limited to the family of the latest response.
+void OmpParser::updateCurrentModes() {
+    if (!family_) {
+        setModes(context_);
+        return;
     }
-    const ExecutionModes recorded =
-        line.disabledPriority ? ExecutionModes() : native::ompTier(line.serviceTier, family, ModeEvidence::Recorded, ModeScope::Response);
+    setModes(context_.without([&](const ModeFact& f) { return f.kind == ModeKind::ServiceTier && f.provider != family_; }));
+}
+
+void OmpParser::emitResponse(const std::string& key, std::optional<std::int64_t> startMs, std::int64_t endMs,
+                             const Line& line, const ExecutionModes& modes, ResponseSink& sink) {
+    const bool completion = deduper().tryClaim(key, agentId());
     ParsedResponse r;
     r.key = key;
     r.source = SourceKind::Omp;
@@ -371,8 +405,7 @@ void OmpParser::emitResponse(const std::string& key, std::optional<std::int64_t>
     r.endMs = endMs;
     r.tokens = line.tokens;
     r.provider = line.provider;
-    r.modes = ExecutionModes(selected).merge(recorded);
-    setModes(r.modes);
+    r.modes = modes;
     if (auto previous = responses_.find(key); previous != responses_.end()) {
         const auto& p = previous->second;
         if (p.startMs == r.startMs && p.endMs == r.endMs && p.tokens == r.tokens && p.model == r.model &&

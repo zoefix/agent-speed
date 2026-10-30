@@ -28,14 +28,19 @@ public:
 private:
     void apply(const Line& line, ResponseSink& sink);
     void applyAssistant(const Line& line, std::int64_t ts, ResponseSink& sink);
-    void emitResponse(const std::string& key, std::optional<std::int64_t> startMs, std::int64_t endMs, const Line& line,
+    ExecutionModes tiersOf(const Line& line) const;
+    void updateCurrentModes();
+    void emitResponse(const std::string& key, std::optional<std::int64_t> startMs, std::int64_t endMs, const Line& line, const ExecutionModes& modes,
                       ResponseSink& sink);
 
     bool pathIsSubagent_;
     std::set<std::string> pendingToolCalls_;
     std::map<std::string, ParsedResponse> responses_;
     std::map<std::string, ExecutionModes> modeBranches_;
-    ExecutionModes branchModes_;
+    // The latest entry's context, plus what the latest message recorded.
+    ExecutionModes context_;
+    // The tier family of the latest response.
+    std::optional<std::string> family_;
     bool headerSeen_ = false;
     bool headerProbed_ = false;
     std::optional<std::int64_t> headerMs_;
