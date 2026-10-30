@@ -92,6 +92,8 @@ jobs:
           }
       - name: Test traffic helper
         run: dotnet test windows/tests/AgentSpeed.TrafficHelper.Tests -c Release
+      - name: Test Windows layout
+        run: dotnet test windows/tests/AgentSpeed.Windows.Tests -c Release
       - name: Publish
         shell: pwsh
         run: ./windows/scripts/publish.ps1

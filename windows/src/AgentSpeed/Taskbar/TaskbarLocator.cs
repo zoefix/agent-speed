@@ -3,7 +3,8 @@ using AgentSpeed.Presentation.Layout;
 
 namespace AgentSpeed.Taskbar;
 
-internal readonly record struct TaskbarGeometry(nint Taskbar, nint Tray, RECT TaskbarRect, RECT TrayRect, uint Dpi, bool Vertical)
+internal readonly record struct TaskbarGeometry(nint Taskbar, nint Tray, RECT TaskbarRect, RECT TrayRect, uint Dpi, bool Vertical,
+    RECT TrafficMonitorRect = default)
 {
     public double Scale => Dpi / 96.0;
 }
@@ -36,14 +37,37 @@ internal static class TaskbarLocator
             dpi = 96;
         }
 
-        return new TaskbarGeometry(taskbar, trayWindow, bar, tray, dpi, bar.Height > bar.Width);
+        return new TaskbarGeometry(taskbar, trayWindow, bar, tray, dpi, bar.Height > bar.Width,
+            FindTrafficMonitor(taskbar));
+    }
+
+    private static RECT FindTrafficMonitor(nint parent)
+    {
+        var monitor = User32.FindWindowEx(parent, 0, "#32770", "TrafficMonitorTaskbarWindow");
+        if (monitor != 0 && User32.IsWindowVisible(monitor) && User32.GetWindowRect(monitor, out var rect) && !rect.IsEmpty)
+        {
+            return rect;
+        }
+
+        // Windows 10 上的监控窗口可能嵌套在任务栏子窗口中。
+        for (var child = User32.FindWindowEx(parent, 0, null, null); child != 0;
+            child = User32.FindWindowEx(parent, child, null, null))
+        {
+            var nested = FindTrafficMonitor(child);
+            if (!nested.IsEmpty)
+            {
+                return nested;
+            }
+        }
+
+        return default;
     }
 
     /// <summary>Widget rectangle in screen coordinates, <paramref name="offset"/> physical pixels from the default spot.</summary>
     public static RECT? WidgetRect(TaskbarGeometry geometry, int length, double offset)
     {
         var (bar, tray, gap) = Layout(geometry);
-        var rect = PlacementMath.TaskbarWidget(bar, tray, length, gap, geometry.Vertical, offset);
+        var rect = PlacementMath.TaskbarWidget(bar, tray, length, gap, geometry.Vertical, offset, ToRect(geometry.TrafficMonitorRect));
         if (rect is not { } r)
         {
             return null;
@@ -56,7 +80,7 @@ internal static class TaskbarLocator
     public static double? WidgetOffset(TaskbarGeometry geometry, int length, double offset)
     {
         var (bar, tray, gap) = Layout(geometry);
-        return PlacementMath.TaskbarWidgetOffset(bar, tray, length, gap, geometry.Vertical, offset);
+        return PlacementMath.TaskbarWidgetOffset(bar, tray, length, gap, geometry.Vertical, offset, ToRect(geometry.TrafficMonitorRect));
     }
 
     /// <summary>True when the taskbar is slid off-screen (auto-hide) on its monitor.</summary>
