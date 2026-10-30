@@ -246,8 +246,8 @@ uninstall_linux() {
     fi
     if [ "$purge" -eq 1 ]; then
         rm -f "$config/zoefix/Agent Speed.conf" "$config/autostart/agent-speed.desktop"
-        rm -rf "$data/zoefix/Agent Speed"
-        rmdir "$config/zoefix" "$data/zoefix" 2>/dev/null || true
+        rm -rf "$data/zoefix/Agent Speed" "${XDG_CACHE_HOME:-$HOME/.cache}/zoefix/Agent Speed"
+        rmdir "$config/zoefix" "$data/zoefix" "${XDG_CACHE_HOME:-$HOME/.cache}/zoefix" 2>/dev/null || true
     fi
     if [ "$removed" -eq 1 ]; then
         done_line "$T_UNINSTALLED"
