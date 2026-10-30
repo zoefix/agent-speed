@@ -23,7 +23,6 @@ ASSET="AgentSpeed-macOS.zip"
 CHECKSUMS="SHA256SUMS.txt"
 MIN_MACOS_MAJOR=14
 MIN_GLIBC="2.35"
-LINUX_PROCESS="agent-speed"
 
 main() {
     setup_text
@@ -284,18 +283,24 @@ check_glibc() {
     }' || fail "$need ($found)"
 }
 
-# Stops only an instance started from `$1`: the AppImage runtime exports APPIMAGE with its own path.
+# Stops only instances started from `$1`. The running app is not named after itself (the AppImage's AppRun becomes it),
+# so it is found by its binary inside the mounted AppImage and by the APPIMAGE path the runtime exports, which the
+# programs it opens, such as a browser, inherit too.
 quit_linux() {
-    for pid in $(pgrep -x "$LINUX_PROCESS" 2>/dev/null); do
-        if tr '\0' '\n' <"/proc/$pid/environ" 2>/dev/null | grep -qxF "APPIMAGE=$1"; then
-            kill -TERM "$pid" 2>/dev/null || true
-            i=0
-            while kill -0 "$pid" 2>/dev/null && [ $i -lt 20 ]; do
-                sleep 0.25
-                i=$((i + 1))
-            done
-            kill -KILL "$pid" 2>/dev/null || true
-        fi
+    for dir in /proc/[0-9]*; do
+        case "$(readlink "$dir/exe" 2>/dev/null)" in
+            */usr/bin/agent-speed) ;;
+            *) continue ;;
+        esac
+        tr '\0' '\n' <"$dir/environ" 2>/dev/null | grep -qxF "APPIMAGE=$1" || continue
+        pid="${dir#/proc/}"
+        kill -TERM "$pid" 2>/dev/null || true
+        i=0
+        while kill -0 "$pid" 2>/dev/null && [ $i -lt 20 ]; do
+            sleep 0.25
+            i=$((i + 1))
+        done
+        kill -KILL "$pid" 2>/dev/null || true
     done
 }
 
