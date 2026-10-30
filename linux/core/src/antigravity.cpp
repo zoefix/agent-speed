@@ -243,6 +243,7 @@ Step decodeStep(std::string_view blob) {
         u.response = static_cast<std::int64_t>(response);
         u.key = nonEmpty(stats->string(11));
         if (!u.key) u.key = nonEmpty(stats->string(7));
+        u.tier = nonEmpty(stats->string(13));
         s.usage = u;
     }
     return s;
@@ -253,8 +254,9 @@ Generation decodeGeneration(std::int64_t idx, std::string_view blob) {
     Generation g;
     g.idx = idx;
     if (const auto chat = m.message(1)) {
-        g.model = nonEmpty(chat->string(19));
-        if (!g.model) g.model = nonEmpty(chat->string(21));
+        g.responseModel = nonEmpty(chat->string(19));
+        g.label = nonEmpty(chat->string(21));
+        g.model = g.responseModel ? g.responseModel : g.label;
     }
     for (auto v : m.repeatedUint(2)) g.stepIndices.insert(v);
     return g;
@@ -265,7 +267,17 @@ Executor decodeExecutor(std::int64_t idx, std::string_view blob) {
     Executor e;
     e.idx = idx;
     if (const auto cascade = m.message(10)) {
-        if (const auto planner = cascade->message(1)) e.model = nonEmpty(planner->string(28));
+        if (const auto planner = cascade->message(1)) {
+            e.model = nonEmpty(planner->string(28));
+            if (const auto override = planner->message(56)) {
+                switch (override->integer(19)) {
+                    case 1: e.thinking = "low"; break;
+                    case 2: e.thinking = "medium"; break;
+                    case 3: e.thinking = "high"; break;
+                    default: break;
+                }
+            }
+        }
     }
     e.terminationReason = m.integer(1);
     e.lastStepIdx = m.integer(3);
@@ -415,16 +427,21 @@ void Parser::applyStep(const StepRow& row, ResponseSink& sink) {
     r.startMs = start;
     r.endMs = *end;
     r.tokens = step.usage->tokens();
-    emitResponse(r, row.idx, completion, sink);
+    r.modes = modesFor(row.idx, *step.usage);
+    emitResponse(r, row.idx, *step.usage, completion, sink);
 }
 
-std::optional<std::string> Parser::modelFor(std::int64_t idx) const {
+// The lowest generation listing the step.
+const Generation* Parser::generationOf(std::int64_t idx) const {
+    if (idx < 0) return nullptr;
     for (const auto& [_, g] : generations_) {
-        if (idx >= 0 && g.stepIndices.contains(static_cast<std::uint64_t>(idx))) {
-            if (g.model) return g.model;
-            break;
-        }
+        if (g.stepIndices.contains(static_cast<std::uint64_t>(idx))) return &g;
     }
+    return nullptr;
+}
+
+// The executor run with the smallest `last_step_idx >=` the step (ties: lowest idx).
+const Executor* Parser::executorCovering(std::int64_t idx) const {
     const Executor* covering = nullptr;
     for (const auto& [_, e] : executors_) {
         if (e.lastStepIdx >= idx && (!covering || e.lastStepIdx < covering->lastStepIdx ||
@@ -432,7 +449,35 @@ std::optional<std::string> Parser::modelFor(std::int64_t idx) const {
             covering = &e;
         }
     }
+    return covering;
+}
+
+std::optional<std::string> Parser::modelFor(std::int64_t idx) const {
+    if (const auto* g = generationOf(idx); g && g->model) return g->model;
+    const auto* covering = executorCovering(idx);
     return covering ? covering->model : std::nullopt;
+}
+
+// The display name first; else the executor's suffix or pass-through level, unless another model answered
+// (EXECUTION-MODES, Antigravity).
+ExecutionModes Parser::modesFor(std::int64_t idx, const Usage& usage) const {
+    const auto* generation = generationOf(idx);
+    const auto* executor = executorCovering(idx);
+    auto modes = native::googleTier(usage.tier, ModeEvidence::Served, ModeScope::Response);
+    if (generation && generation->label) {
+        if (const auto word = native::antigravityLabelEffort(*generation->label)) {
+            return modes.with(native::effort(word, ModeEvidence::Recorded, ModeScope::Request));
+        }
+    }
+    if (!executor || !executor->model) return modes;
+    const auto split = native::antigravityModelEffort(*executor->model);
+    if (generation && generation->responseModel) {
+        std::string answered = *generation->responseModel;
+        constexpr std::string_view kServedVariant = "-exp-b";
+        if (answered.ends_with(kServedVariant)) answered.resize(answered.size() - kServedVariant.size());
+        if (answered != *executor->model && (!split || answered != split->first)) return modes;
+    }
+    return modes.with(native::effort(split ? std::optional<std::string>(split->second) : executor->thinking, ModeEvidence::Recorded, ModeScope::Turn));
 }
 
 void Parser::resolveModels(ResponseSink& sink) {
@@ -440,31 +485,37 @@ void Parser::resolveModels(ResponseSink& sink) {
     for (const auto& [_, e] : responses_) all.push_back(e);
     for (const auto& e : all) {
         const auto model = modelFor(e.idx);
-        if (model != e.response.model) {
+        const auto modes = modesFor(e.idx, e.usage);
+        if (model != e.response.model || modes != e.response.modes) {
             ParsedResponse updated = e.response;
             updated.model = model;
-            emitResponse(updated, e.idx, false, sink);
+            updated.modes = modes;
+            emitResponse(updated, e.idx, e.usage, false, sink);
         }
     }
 }
 
-void Parser::emitResponse(const ParsedResponse& r, std::int64_t idx, bool completion, ResponseSink& sink) {
+void Parser::emitResponse(const ParsedResponse& r, std::int64_t idx, const Usage& usage, bool completion, ResponseSink& sink) {
     if (auto it = responses_.find(r.key); it != responses_.end()) {
         const auto& p = it->second.response;
-        if (it->second.idx == idx && p.startMs == r.startMs && p.endMs == r.endMs && p.tokens == r.tokens && p.model == r.model) {
+        if (it->second.idx == idx && p.startMs == r.startMs && p.endMs == r.endMs && p.tokens == r.tokens && p.model == r.model &&
+            p.modes == r.modes) {
             return;
         }
     }
-    responses_[r.key] = {r, idx};
+    responses_[r.key] = {r, idx, usage};
     sink.onResponse(r, completion);
 }
 
 void Parser::updateAgentModel() {
     const Emitted* best = nullptr;
+    const Emitted* latest = nullptr;
     for (const auto& [_, e] : responses_) {
         if (e.response.model && (!best || e.idx > best->idx)) best = &e;
+        if (!latest || e.idx > latest->idx) latest = &e;
     }
     if (best) setModel(best->response.model);
+    setModes(latest ? latest->response.modes : ExecutionModes());
 }
 
 void Parser::updatePhase() {

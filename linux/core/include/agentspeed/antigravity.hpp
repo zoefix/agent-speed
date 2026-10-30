@@ -21,6 +21,8 @@ struct FormatError : std::runtime_error {
 struct Usage {
     std::int64_t input = 0, output = 0, cacheRead = 0, thinking = 0, response = 0;
     std::optional<std::string> key;
+    // `service_tier` (13) when non-empty.
+    std::optional<std::string> tier;
     bool hasTokens() const { return input > 0 || output > 0 || cacheRead > 0 || thinking > 0 || response > 0; }
     TokenCounts tokens() const;
 };
@@ -38,6 +40,8 @@ struct StepRow {
 };
 
 struct Generation {
+    // `chat_model.response_model` and `chat_model.model_display_name`.
+    std::optional<std::string> responseModel, label;
     std::int64_t idx = 0;
     std::set<std::uint64_t> stepIndices;
     std::optional<std::string> model;
@@ -46,6 +50,8 @@ struct Generation {
 struct Executor {
     std::int64_t idx = 0, terminationReason = 0, lastStepIdx = 0;
     std::optional<std::string> model;
+    // The token of `planner_config.completion_config_override.thinking_level`, the API-key path.
+    std::optional<std::string> thinking;
 };
 
 struct Trajectory {
@@ -92,11 +98,15 @@ private:
     struct Emitted {
         ParsedResponse response;
         std::int64_t idx;
+        Usage usage;
     };
     void applyStep(const StepRow& row, ResponseSink& sink);
     std::optional<std::string> modelFor(std::int64_t idx) const;
+    const Generation* generationOf(std::int64_t idx) const;
+    const Executor* executorCovering(std::int64_t idx) const;
+    ExecutionModes modesFor(std::int64_t idx, const Usage& usage) const;
     void resolveModels(ResponseSink& sink);
-    void emitResponse(const ParsedResponse& response, std::int64_t idx, bool completion, ResponseSink& sink);
+    void emitResponse(const ParsedResponse& response, std::int64_t idx, const Usage& usage, bool completion, ResponseSink& sink);
     void updateAgentModel();
     void updatePhase();
 

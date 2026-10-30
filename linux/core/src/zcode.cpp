@@ -1,5 +1,6 @@
 #include "agentspeed/zcode.hpp"
 
+#include <sqlite3.h>
 #include <sys/stat.h>
 
 #include <algorithm>
@@ -36,26 +37,29 @@ std::optional<std::int64_t> valid(std::int64_t value) { return harness::validTim
 
 }  // namespace
 
-ExecutionModes modesOf(std::string_view data, const std::optional<std::string>& provider) {
-    if (data.empty()) return {};
+// The speed facts of a row: its exact model, its card provider and the card of the user message it answers.
+ExecutionModes speedModes(std::string_view data, const std::optional<std::string>& provider, const std::optional<std::string>& model,
+                          std::int64_t startedMs) {
+    auto modes = native::zcodeModel(model, ModeEvidence::Selected, ModeScope::Request);
+    bool mock = false;
+    std::optional<std::int64_t> fallback;
     json::Document document;
-    if (!document.parse(data, 64)) return {};
-    const auto highspeed = document.root()["metadata"]["highspeed"];
-    if (!highspeed.isObject()) return {};
-    const auto schema = highspeed["schemaVersion"];
-    if (!schema.isNumber() || !schema.isIntegerLiteral() || schema.raw() != "1") return {};
-    const auto p = highspeed["provider"].string(), m = highspeed["model"].string();
-    if (!p || !m || !ExecutionModes::isIdentifier(*p, 64) || !ExecutionModes::isIdentifier(*m, 64)) return {};
-    auto modes = ExecutionModes::of(ModeFact::create(ModeKind::Accelerator, std::string("highspeed"), ModeEvidence::Selected,
-                                                     std::nullopt, ModeScope::Turn));
-    const bool mock = highspeed["cardId"].startsWith("hsc_mock_");
-    if (!mock && provider && !provider->empty() && ExecutionModes::isIdentifier(*provider, 64)) {
-        if (auto recorded = ModeFact::create(ModeKind::Accelerator, provider, ModeEvidence::Recorded, std::string("zcode"),
-                                             ModeScope::Request)) {
-            const bool card = *provider == "account:zai-highspeed-card" || *provider == "account:bigmodel-highspeed-card";
-            recorded->value = card ? "highspeed" : "standard";
-            modes = modes.merge(ExecutionModes::of(recorded));
+    if (!data.empty() && document.parse(data, 64) && document.root()["role"].equals("user")) {
+        const auto highspeed = document.root()["metadata"]["highspeed"];
+        const auto schema = highspeed["schemaVersion"];
+        const auto card = highspeed["cardId"].nonEmptyString();
+        if (schema.isNumber() && schema.isIntegerLiteral() && schema.raw() == "1" && card && highspeed["model"].nonEmptyString()) {
+            modes = modes.with(ModeFact{ModeKind::Accelerator, "highspeed", "highspeed", ModeEvidence::Selected, std::string("zcode"), ModeScope::Turn});
+            mock = card->starts_with("hsc_mock_");
+            if (const auto at = highspeed["fallbackAt"]; at.isNumber() && at.isIntegerLiteral()) fallback = at.count();
         }
+    }
+    if (mock) return modes;
+    if (const auto routed = native::zcodeProvider(provider, ModeEvidence::Recorded, ModeScope::Request); !routed.empty()) {
+        return modes.merge(routed);
+    }
+    if (fallback && startedMs >= *fallback) {
+        modes = modes.with(ModeFact{ModeKind::Accelerator, "standard", "fallback", ModeEvidence::Recorded, std::string("zcode"), ModeScope::Request});
     }
     return modes;
 }
@@ -91,13 +95,17 @@ std::vector<Row> Database::read(std::int64_t sinceMs) const {
     const bool hasModes = hasColumns(*connection_, "model_usage", {"parent_user_message_id"}) &&
                           hasColumns(*connection_, "message", {"id", "session_id", "data"});
     const std::string modeColumn = hasModes ? ", CASE WHEN length(CAST(m.data AS BLOB))<=1048576 THEN m.data END" : ", NULL";
+    const auto usageColumn = [&](const std::string& name) {
+        return hasColumns(*connection_, "model_usage", {name}) ? ",u." + name : std::string(",NULL");
+    };
     const std::string modeJoin =
         hasModes ? " LEFT JOIN message m ON m.id=u.parent_user_message_id AND m.session_id=u.session_id " : " ";
     auto rows = connection_->prepare(
         "SELECT u.id,u.session_id,s.parent_id,s.directory,s.time_created,u.model_id,u.provider_id,u.status,"
         "u.started_at,u.completed_at,u.duration_ms,u.input_tokens,u.output_tokens,u.reasoning_tokens,"
         "u.cache_creation_input_tokens,u.cache_read_input_tokens,s.time_updated" +
-        modeColumn + " FROM model_usage u LEFT JOIN session s ON s.id=u.session_id " + modeJoin +
+        modeColumn + usageColumn("variant") + usageColumn("query_source") +
+        " FROM model_usage u LEFT JOIN session s ON s.id=u.session_id " + modeJoin +
         " WHERE coalesce(u.completed_at,u.started_at)>=? ORDER BY u.started_at,u.id");
     rows.bind(1, sinceMs);
     std::vector<Row> result;
@@ -123,7 +131,12 @@ std::vector<Row> Database::read(std::int64_t sinceMs) const {
         row.tokens.cacheWriteInput = std::min(input, clampTokens(rows.getInt64(14)));
         row.tokens.output = output;
         row.tokens.reasoning = std::min(output, clampTokens(rows.getInt64(13)));
-        row.modes = modesOf(rows.getText(17), row.provider);
+        row.modes = speedModes(rows.getText(17), row.provider, row.model, row.startedMs.value_or(0));
+        if (rows.columnType(18) == SQLITE_TEXT) {
+            row.modes = row.modes.with(native::effort(rows.getString(18), ModeEvidence::Recorded, ModeScope::Request));
+        }
+        const auto querySource = rows.getString(19);
+        row.auxiliary = querySource == "compact" || querySource == "session_title" || querySource == "goal_completion_verification";
         result.push_back(std::move(row));
     }
     return result;
@@ -168,8 +181,6 @@ std::vector<Agent> Database::readAgents(std::int64_t sinceMs) const {
         if (phase == Phase::Generating) agent.startMs = created;
         agent.lastMs = std::max(valid(rows.getInt64(8)).value_or(0),
                                 std::max(valid(rows.getInt64(3)).value_or(0), completed.value_or(created)));
-        agent.modes = modesOf(data, std::nullopt);
-        agent.modeContext = role == "user";
         result.push_back(std::move(agent));
     }
     return result;
@@ -239,6 +250,7 @@ Update Source::refresh(bool force) {
     if (!stamp || replaced) {
         for (const auto& [id, agent] : agents_) update.removed.push_back(id);
         agents_.clear();
+        currentRows_.clear();
         stamp_.reset();
         lastReadMs_.reset();
     }
@@ -281,7 +293,17 @@ Update Source::refresh(bool force) {
             agent.phase = running ? Phase::Generating : Phase::Idle;
             if (running) agent.startMs = latest->startedMs;
             agent.lastMs = last;
-            agent.modes = latest->modes;
+            // The latest row that is not a title, compaction or verification call.
+            if (const auto known = agents_.find(agent.id); known != agents_.end()) agent.modes = known->second.modes;
+            for (const auto* row : group) {
+                if (row->auxiliary) continue;
+                const std::pair<std::int64_t, std::string> order{row->startedMs.value_or(0), row->id};
+                auto& current = currentRows_[agent.id];
+                if (!current || *current <= order) {
+                    current = order;
+                    agent.modes = row->modes;
+                }
+            }
             if (const auto known = agents_.find(agent.id); known == agents_.end() || known->second != agent) {
                 agents_[agent.id] = agent;
                 update.agents.push_back(agent);
@@ -301,7 +323,7 @@ Update Source::refresh(bool force) {
             if (const auto known = agents_.find(agent.id); known != agents_.end()) {
                 if (agent.lastMs < known->second.lastMs) continue;
                 if (!agent.model) agent.model = known->second.model;
-                if (!agent.modeContext && agent.modes.empty()) agent.modes = known->second.modes;
+                agent.modes = known->second.modes;
                 if (agent == known->second) continue;
             }
             agents_[agent.id] = agent;

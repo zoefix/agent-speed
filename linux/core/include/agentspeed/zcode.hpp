@@ -16,7 +16,8 @@
 // METRICS 4.10: ZCode's SQLite database (`model_usage` rows per request, `session` and `message` for agents).
 namespace agentspeed::zcode {
 
-ExecutionModes modesOf(std::string_view data, const std::optional<std::string>& provider);
+ExecutionModes speedModes(std::string_view data, const std::optional<std::string>& provider, const std::optional<std::string>& model,
+                          std::int64_t startedMs);
 
 struct Row {
     std::string id, sessionId;
@@ -27,6 +28,8 @@ struct Row {
     std::optional<std::int64_t> startedMs, completedMs, durationMs;
     TokenCounts tokens;
     ExecutionModes modes;
+    // A title, compaction or verification call, which runs at the catalog's lowest level.
+    bool auxiliary = false;
 
     std::string agentId(const std::string& databasePath) const { return databasePath + "#" + sessionId; }
     std::optional<ParsedResponse> response(const std::string& databasePath) const;
@@ -41,7 +44,6 @@ struct Agent {
     std::optional<std::int64_t> startMs;
     std::int64_t lastMs = 0;
     ExecutionModes modes;
-    bool modeContext = false;
     bool operator==(const Agent&) const = default;
 };
 
@@ -103,6 +105,8 @@ private:
     Deduper& deduper_;
     std::map<std::string, ParsedResponse> emitted_;
     std::map<std::string, Agent> agents_;
+    // The row each session's current facts come from.
+    std::map<std::string, std::optional<std::pair<std::int64_t, std::string>>> currentRows_;
     std::optional<sqlite::DatabaseStamp> stamp_;
     std::optional<Identity> identity_;
     std::optional<std::string> lastPath_;

@@ -417,7 +417,9 @@ void Parser::applyCall(const Line& line, std::int64_t ts) {
     if (seen_.contains(key)) return;
     deduper().tryClaim(key, agentId());
     seen_.insert(key);
-    context_ = ExecutionModes::of(native::effort(line.effort, ModeEvidence::Recorded, ModeScope::Request));
+    // Each call replaces (or clears) the effort and tier; its response keeps a snapshot of the context.
+    context_ = ExecutionModes::of(native::effort(line.effort, ModeEvidence::Recorded, ModeScope::Request))
+                   .merge(native::droidModel(line.modelId, ModeEvidence::Recorded, ModeScope::Request));
     setModes(context_);
     const std::int64_t start = compactionOffset_.value_or(readFrom_);
     open_.push_back({key, pendingStartMs_, ts, line.modelId, context_,

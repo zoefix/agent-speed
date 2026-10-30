@@ -89,7 +89,7 @@ TEST(Discovery, OpenClawFindsAgentDatabasesAndTheirCodexHomes) {
 }
 
 TEST(Discovery, HarnessesFindKimiAgentsAndGrokSessions) {
-    EXPECT_EQ(discovery::enumerate(root() + "/kimi/sessions", RootFamily::Kimi).size(), 3u);
+    EXPECT_EQ(discovery::enumerate(root() + "/kimi/sessions", RootFamily::Kimi).size(), 4u);
     EXPECT_EQ(discovery::enumerate(root() + "/grok/sessions", RootFamily::GrokBuild).size(), 3u);
 }
 
