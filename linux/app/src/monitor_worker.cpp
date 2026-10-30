@@ -213,6 +213,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("effortLevel"), level ? *level : -1);
         row.insert(QStringLiteral("effortTop"), a.effort && agentspeed::effort_speed::isTopRung(*a.effort));
         row.insert(QStringLiteral("bolts"), a.speed ? agentspeed::effort_speed::bolts(*a.speed) : 0);
+        row.insert(QStringLiteral("effortConfigured"), a.effortConfigured);
+        row.insert(QStringLiteral("speedConfigured"), a.speedConfigured);
         row.insert(QStringLiteral("looping"), a.perf && a.perf->workSignals.looping.has_value());
         row.insert(QStringLiteral("liveThinking"), a.liveThinking);
         // The row's status as accessibility reads it: the phase, and for an idle agent how long ago it last wrote.

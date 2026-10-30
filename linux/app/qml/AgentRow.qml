@@ -17,6 +17,9 @@ Item {
     required property string effort
     required property int effortLevel
     required property bool effortTop
+    required property bool effortConfigured
+    required property bool speedConfigured
+    required property string modesA11y
     required property int bolts
     required property real perf
     required property string perfForm
@@ -36,7 +39,7 @@ Item {
     readonly property string separator: S.language === "ja" ? "、" : S.language === "en" ? ", " : "，"
     Accessible.role: Accessible.ListItem
     Accessible.name: [depth > 0 ? project + separator + S.tr2(S.rev, "agents.subagent") : project, detail, status,
-                      live >= 0.05 ? liveText + " " + S.tr2(S.rev, "unit.tokS") : "", perf >= 0 ? perfA11y : ""]
+                      live >= 0.05 ? liveText + " " + S.tr2(S.rev, "unit.tokS") : "", perf >= 0 ? perfA11y : "", modesA11y]
                      .filter(function(t) { return t.length > 0 }).join(separator)
     Accessible.description: S.tr2(S.rev, "a11y.perf.card")
     Accessible.onPressAction: cardRequested()
@@ -172,6 +175,9 @@ Item {
             topRung: row.effortTop
             bolts: row.bolts
             showWord: row.capsuleWords
+            effortConfigured: row.effortConfigured
+            speedConfigured: row.speedConfigured
+            mark: S.tr2(S.rev, "mode.configured.mark")
         }
     }
 

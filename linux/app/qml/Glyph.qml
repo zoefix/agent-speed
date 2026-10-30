@@ -126,6 +126,13 @@ Canvas {
             ctx.lineTo(13, 6.6); ctx.lineTo(8.6, 6.6); ctx.closePath()
             ctx.fill()
             break
+        case "boltOutline":
+            ctx.lineWidth = 1.5
+            ctx.beginPath()
+            ctx.moveTo(9.4, 1); ctx.lineTo(3, 9.2); ctx.lineTo(7.4, 9.2); ctx.lineTo(6.4, 15)
+            ctx.lineTo(13, 6.6); ctx.lineTo(8.6, 6.6); ctx.closePath()
+            ctx.stroke()
+            break
         case "loop":
             ctx.lineWidth = 1.5
             ctx.beginPath(); ctx.arc(8, 8, 5.2, Math.PI * 1.08, Math.PI * 1.92, false); ctx.stroke()

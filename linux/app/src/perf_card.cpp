@@ -22,6 +22,20 @@ constexpr Spec kEfficiency[] = {{Id::N, "pace"}, {Id::U, "toolTime"}, {Id::S, "t
 
 std::int64_t whole(double value) { return static_cast<std::int64_t>(std::floor(value + 0.5)); }
 
+// The effort and speed lines, each spelled as its token (unrecorded when missing), a configured value as configured.
+QStringList modeLines(const agentspeed::AgentRow& row, const Strings& s) {
+    if (!row.effort && !row.speed) return {};
+    const auto unrecorded = s.t(QStringLiteral("modes.unrecorded"));
+    const auto speedValue = [&](const std::string& v) {
+        return v == "standard" || v == "fast" || v == "ultrafast" || v == "highspeed" ? s.t(QStringLiteral("speed.value.") + QString::fromStdString(v))
+                                                                                     : QString::fromStdString(v);
+    };
+    return {s.fmt(row.effortConfigured ? QStringLiteral("effort.tooltip.configured") : QStringLiteral("effort.tooltip"),
+                  {row.effort ? QString::fromStdString(*row.effort) : unrecorded}),
+            s.fmt(row.speedConfigured ? QStringLiteral("speed.tooltip.configured") : QStringLiteral("speed.tooltip"),
+                  {row.speed ? speedValue(*row.speed) : unrecorded})};
+}
+
 }  // namespace
 
 QString measureText(const Strings& s, Id id, double m) {
@@ -69,6 +83,7 @@ QString scoreWords(const Strings& s, std::int64_t shown, bool provisional, bool 
 }
 
 void cell(const agentspeed::AgentRow& row, const Strings& s, QVariantMap& out) {
+    out.insert(QStringLiteral("modesA11y"), modeLines(row, s).join(s.language() == QLatin1String("en") ? QStringLiteral(", ") : QStringLiteral("，")));
     const auto* e = row.perf ? &row.perf->score : nullptr;
     const bool scored = e && e->shown;
     out.insert(QStringLiteral("perf"), scored ? static_cast<qlonglong>(*e->shown) : -1);
@@ -225,17 +240,11 @@ QVariantMap card(const agentspeed::AgentRow& row, const Strings& s, const QStrin
 
     QStringList facts;
     if (scored) facts << s.fmt(QStringLiteral("perf.card.sample"), {static_cast<qlonglong>(e.n)});
-    // Effort and speed, each spelled as its token (unrecorded when missing), and the top rung's explanation.
-    if (row.effort || row.speed) {
-        const auto speedValue = [&](const std::string& v) {
-            return v == "standard" || v == "fast" || v == "ultrafast" || v == "highspeed" ? s.t(QStringLiteral("speed.value.") + QString::fromStdString(v))
-                                                                                         : QString::fromStdString(v);
-        };
-        facts << s.fmt(QStringLiteral("effort.tooltip"), {row.effort ? QString::fromStdString(*row.effort) : s.t(QStringLiteral("modes.unrecorded"))});
-        facts << s.fmt(QStringLiteral("speed.tooltip"), {row.speed ? speedValue(*row.speed) : s.t(QStringLiteral("modes.unrecorded"))});
-        if (row.effort == "ultra") facts << s.t(QStringLiteral("effort.ultra.detail"));
-        if (row.effort == "ultracode") facts << s.t(QStringLiteral("effort.ultracode.detail"));
-    }
+    // Effort and speed, a real top rung's explanation, and the note that says what a configured value is.
+    facts << modeLines(row, s);
+    if (!row.effortConfigured && row.effort == "ultra") facts << s.t(QStringLiteral("effort.ultra.detail"));
+    if (!row.effortConfigured && row.effort == "ultracode") facts << s.t(QStringLiteral("effort.ultracode.detail"));
+    if (row.effortConfigured || row.speedConfigured) facts << s.t(QStringLiteral("modes.configured.note"));
     card.insert(QStringLiteral("facts"), facts);
     a11y << facts;
     const auto footnote = s.t(QStringLiteral("perf.card.footnote"));

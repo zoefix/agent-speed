@@ -83,6 +83,7 @@ Window {
                 key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, phase: a.phase,
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
                 rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
+                effortConfigured: a.effortConfigured, speedConfigured: a.speedConfigured, modesA11y: a.modesA11y || "",
                 bolts: a.bolts, perf: a.perf, perfForm: a.perfForm, perfProvisional: a.perfProvisional, perfA11y: a.perfA11y || "", looping: a.looping,
                 trafficSuffix: a.trafficSuffix || "", status: a.status || "", liveText: a.liveText || "0"
             })
@@ -113,6 +114,7 @@ Window {
     property real capsuleColumn: 0
     property bool capsuleWords: true
     FontMetrics { id: capsuleMetrics; font.pixelSize: 11; font.weight: Font.Medium }
+    FontMetrics { id: capsuleMarkMetrics; font.pixelSize: 10; font.weight: Font.Medium }
     FontMetrics { id: perfMetrics; font.pixelSize: 12; font.weight: Font.Medium }
     FontMetrics { id: captionMetrics; font.pixelSize: 11; font.weight: Font.Medium }
     // DESIGN 12 Number formats: the cell is measured with `8,888`; a wider text (1.28M) widens it at once and it narrows
@@ -134,7 +136,10 @@ Window {
     function capsuleWidth(a, withWord) {
         var parts = []
         if (a.effortLevel >= 0) parts.push(18.5)
-        if (withWord && a.effort) parts.push(capsuleMetrics.advanceWidth(a.effort.toLowerCase()))
+        var wordShown = a.effort && (withWord || (a.effortLevel < 0 && a.bolts === 0))
+        if (wordShown) parts.push(capsuleMetrics.advanceWidth(a.effort.toLowerCase()))
+        var configuredForm = (!a.effort || a.effortConfigured) && (a.bolts === 0 || a.speedConfigured)
+        if (wordShown && configuredForm) parts.push(capsuleMarkMetrics.advanceWidth(S.tr2(S.rev, "mode.configured.mark")))
         if (a.bolts > 0) parts.push(a.bolts > 1 ? 15 : 9)
         if (parts.length === 0) return 0
         var sum = 12 + 5 * (parts.length - 1)

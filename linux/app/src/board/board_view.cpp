@@ -60,6 +60,8 @@ void capsule(const AgentRow& a, QVariantMap& row) {
     row.insert(QStringLiteral("effortLevel"), level ? *level : -1);
     row.insert(QStringLiteral("effortTop"), a.effort && agentspeed::effort_speed::isTopRung(*a.effort));
     row.insert(QStringLiteral("bolts"), a.speed ? agentspeed::effort_speed::bolts(*a.speed) : 0);
+    row.insert(QStringLiteral("effortConfigured"), a.effortConfigured);
+    row.insert(QStringLiteral("speedConfigured"), a.speedConfigured);
 }
 
 }  // namespace

@@ -1221,6 +1221,11 @@ Item {
                         topRung: rowItem.row.effortTop || false
                         bolts: rowItem.row.bolts || 0
                         showWord: board.size !== "S" && !(board.style === "timing" && board.size !== "L" && board.showIntel)
+                        effortConfigured: rowItem.row.effortConfigured || false
+                        speedConfigured: rowItem.row.speedConfigured || false
+                        mark: S.tr2(S.rev, "mode.configured.mark")
+                        configuredInk: board.ink3
+                        configuredLine: board.line
                     }
                     PerfCell {
                         id: intelCell
