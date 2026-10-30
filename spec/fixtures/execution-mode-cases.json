@@ -629,6 +629,568 @@
         "evidence": "selected",
         "scope": "session"
       }
+    },
+    {
+      "id": "effort-disabled-is-off",
+      "adapter": "effort",
+      "rawValue": "disabled",
+      "evidence": "selected",
+      "scope": "session",
+      "expected": {
+        "kind": "effort",
+        "value": "off",
+        "rawValue": "disabled",
+        "evidence": "selected",
+        "scope": "session"
+      }
+    },
+    {
+      "id": "effort-enabled-is-on",
+      "adapter": "effort",
+      "rawValue": "enabled",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "effort",
+        "value": "on",
+        "rawValue": "enabled",
+        "evidence": "recorded",
+        "scope": "request"
+      }
+    },
+    {
+      "id": "effort-on-stays",
+      "adapter": "effort",
+      "rawValue": "on",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "effort",
+        "value": "on",
+        "rawValue": "on",
+        "evidence": "recorded",
+        "scope": "request"
+      }
+    },
+    {
+      "id": "effort-adaptive-stays",
+      "adapter": "effort",
+      "rawValue": "adaptive",
+      "evidence": "recorded",
+      "scope": "turn",
+      "expected": {
+        "kind": "effort",
+        "value": "adaptive",
+        "rawValue": "adaptive",
+        "evidence": "recorded",
+        "scope": "turn"
+      }
+    },
+    {
+      "id": "effort-extra-low-stays",
+      "adapter": "effort",
+      "rawValue": "extra-low",
+      "evidence": "recorded",
+      "scope": "turn",
+      "expected": {
+        "kind": "effort",
+        "value": "extra-low",
+        "rawValue": "extra-low",
+        "evidence": "recorded",
+        "scope": "turn"
+      }
+    },
+    {
+      "id": "effort-gemini-level-lowered",
+      "adapter": "effort",
+      "rawValue": "HIGH",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "high",
+        "rawValue": "HIGH",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "effort-gemini-unspecified",
+      "adapter": "effort",
+      "rawValue": "THINKING_LEVEL_UNSPECIFIED",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
+    },
+    {
+      "id": "google-priority-is-fast",
+      "adapter": "serviceTier",
+      "rawValue": "priority",
+      "provider": "google",
+      "evidence": "served",
+      "scope": "response",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "priority",
+        "evidence": "served",
+        "scope": "response",
+        "provider": "google"
+      }
+    },
+    {
+      "id": "google-standard",
+      "adapter": "serviceTier",
+      "rawValue": "standard",
+      "provider": "google",
+      "evidence": "served",
+      "scope": "response",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "standard",
+        "rawValue": "standard",
+        "evidence": "served",
+        "scope": "response",
+        "provider": "google"
+      }
+    },
+    {
+      "id": "google-flex-stays",
+      "adapter": "serviceTier",
+      "rawValue": "flex",
+      "provider": "google",
+      "evidence": "served",
+      "scope": "response",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "flex",
+        "rawValue": "flex",
+        "evidence": "served",
+        "scope": "response",
+        "provider": "google"
+      }
+    },
+    {
+      "id": "google-unspecified",
+      "adapter": "serviceTier",
+      "rawValue": "unspecified",
+      "provider": "google",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
+    },
+    {
+      "id": "zcode-glm-highspeed",
+      "adapter": "zcodeModel",
+      "rawValue": "GLM-5.1-Highspeed",
+      "provider": "zcode",
+      "evidence": "selected",
+      "scope": "request",
+      "expected": {
+        "kind": "modelVariant",
+        "value": "highspeed",
+        "rawValue": "GLM-5.1-Highspeed",
+        "evidence": "selected",
+        "scope": "request",
+        "provider": "zcode"
+      }
+    },
+    {
+      "id": "zcode-model-case-matters",
+      "adapter": "zcodeModel",
+      "rawValue": "glm-5.1-highspeed",
+      "provider": "zcode",
+      "evidence": "selected",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "zcode-model-no-prefix-match",
+      "adapter": "zcodeModel",
+      "rawValue": "GLM-5.1-Highspeed-x",
+      "provider": "zcode",
+      "evidence": "selected",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "zcode-card-zai",
+      "adapter": "zcodeProvider",
+      "rawValue": "account:zai-highspeed-card",
+      "provider": "zcode",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "accelerator",
+        "value": "highspeed",
+        "rawValue": "account:zai-highspeed-card",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "zcode"
+      }
+    },
+    {
+      "id": "zcode-card-bigmodel",
+      "adapter": "zcodeProvider",
+      "rawValue": "account:bigmodel-highspeed-card",
+      "provider": "zcode",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "accelerator",
+        "value": "highspeed",
+        "rawValue": "account:bigmodel-highspeed-card",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "zcode"
+      }
+    },
+    {
+      "id": "zcode-plain-account",
+      "adapter": "zcodeProvider",
+      "rawValue": "account:zai",
+      "provider": "zcode",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "droid-opus-fast",
+      "adapter": "droidModel",
+      "rawValue": "claude-opus-5-5-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "claude-opus-5-5-fast",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "anthropic"
+      }
+    },
+    {
+      "id": "droid-gpt-fast",
+      "adapter": "droidModel",
+      "rawValue": "gpt-5.4-mini-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "gpt-5.4-mini-fast",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "droid-alias-fast",
+      "adapter": "droidModel",
+      "rawValue": "gpt-5.6-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "gpt-5.6-fast",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "droid-ultrafast",
+      "adapter": "droidModel",
+      "rawValue": "gpt-6.1-sol-ultrafast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "ultrafast",
+        "rawValue": "gpt-6.1-sol-ultrafast",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "droid-flex",
+      "adapter": "droidModel",
+      "rawValue": "gpt-5.6-terra-flex",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "flex",
+        "rawValue": "gpt-5.6-terra-flex",
+        "evidence": "recorded",
+        "scope": "request",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "droid-glm-fast-is-a-model",
+      "adapter": "droidModel",
+      "rawValue": "glm-5.2-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "droid-router-is-not-a-tier",
+      "adapter": "droidModel",
+      "rawValue": "auto-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "droid-custom-is-not-a-tier",
+      "adapter": "droidModel",
+      "rawValue": "custom:gpt-5.5-fast-1",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "droid-no-suffix-match",
+      "adapter": "droidModel",
+      "rawValue": "claude-sonnet-5-5-fast",
+      "evidence": "recorded",
+      "scope": "request",
+      "expected": null
+    },
+    {
+      "id": "omp-anthropic-priority",
+      "adapter": "ompTier",
+      "rawValue": "priority",
+      "provider": "anthropic",
+      "evidence": "selected",
+      "scope": "session",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "priority",
+        "evidence": "selected",
+        "scope": "session",
+        "provider": "anthropic"
+      }
+    },
+    {
+      "id": "omp-openai-default",
+      "adapter": "ompTier",
+      "rawValue": "default",
+      "provider": "openai",
+      "evidence": "selected",
+      "scope": "session",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "standard",
+        "rawValue": "default",
+        "evidence": "selected",
+        "scope": "session",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "omp-codex-ultrafast",
+      "adapter": "ompTier",
+      "rawValue": "ultrafast",
+      "provider": "openai-codex",
+      "evidence": "recorded",
+      "scope": "response",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "ultrafast",
+        "rawValue": "ultrafast",
+        "evidence": "recorded",
+        "scope": "response",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "omp-google-priority",
+      "adapter": "ompTier",
+      "rawValue": "priority",
+      "provider": "google-vertex",
+      "evidence": "recorded",
+      "scope": "response",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "priority",
+        "evidence": "recorded",
+        "scope": "response",
+        "provider": "google"
+      }
+    },
+    {
+      "id": "omp-other-provider",
+      "adapter": "ompTier",
+      "rawValue": "priority",
+      "provider": "openrouter",
+      "evidence": "recorded",
+      "scope": "response",
+      "expected": null
+    },
+    {
+      "id": "hermes-effort-high",
+      "adapter": "hermesEffort",
+      "rawValue": "high",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "high",
+        "rawValue": "high",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-effort-ultra",
+      "adapter": "hermesEffort",
+      "rawValue": "ultra",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "ultra",
+        "rawValue": "ultra",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-effort-none",
+      "adapter": "hermesEffort",
+      "rawValue": "none",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "off",
+        "rawValue": "none",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-effort-false",
+      "adapter": "hermesEffort",
+      "rawValue": "false",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "off",
+        "rawValue": "false",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-effort-disabled",
+      "adapter": "hermesEffort",
+      "rawValue": "disabled",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "effort",
+        "value": "off",
+        "rawValue": "disabled",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-effort-typo",
+      "adapter": "hermesEffort",
+      "rawValue": "hgih",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
+    },
+    {
+      "id": "hermes-tier-fast",
+      "adapter": "hermesServiceTier",
+      "rawValue": "fast",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "fast",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-tier-priority",
+      "adapter": "hermesServiceTier",
+      "rawValue": "priority",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "fast",
+        "rawValue": "priority",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-tier-ultra",
+      "adapter": "hermesServiceTier",
+      "rawValue": "ultra",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "ultrafast",
+        "rawValue": "ultra",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-tier-normal",
+      "adapter": "hermesServiceTier",
+      "rawValue": "normal",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": {
+        "kind": "serviceTier",
+        "value": "standard",
+        "rawValue": "normal",
+        "evidence": "configured",
+        "scope": "configuration"
+      }
+    },
+    {
+      "id": "hermes-tier-auto-is-a-window",
+      "adapter": "hermesServiceTier",
+      "rawValue": "auto",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
+    },
+    {
+      "id": "hermes-tier-cold-is-a-window",
+      "adapter": "hermesServiceTier",
+      "rawValue": "cold",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
+    },
+    {
+      "id": "hermes-tier-yaml-on",
+      "adapter": "hermesServiceTier",
+      "rawValue": "on",
+      "evidence": "configured",
+      "scope": "configuration",
+      "expected": null
     }
   ],
   "attribution": [
@@ -897,6 +1459,67 @@
         "mode": "off",
         "evidence": "recorded"
       }
+    },
+    {
+      "id": "tied-facts-that-disagree-are-unknown",
+      "kind": "serviceTier",
+      "facts": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "fast",
+          "evidence": "selected",
+          "scope": "session",
+          "provider": "openai"
+        },
+        {
+          "kind": "serviceTier",
+          "value": "standard",
+          "rawValue": "standard",
+          "evidence": "selected",
+          "scope": "session",
+          "provider": "anthropic"
+        }
+      ],
+      "expected": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      }
+    },
+    {
+      "id": "a-stronger-fact-breaks-the-tie",
+      "kind": "serviceTier",
+      "facts": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "fast",
+          "evidence": "selected",
+          "scope": "session",
+          "provider": "openai"
+        },
+        {
+          "kind": "serviceTier",
+          "value": "standard",
+          "rawValue": "standard",
+          "evidence": "selected",
+          "scope": "session",
+          "provider": "anthropic"
+        },
+        {
+          "kind": "serviceTier",
+          "value": "flex",
+          "rawValue": "flex",
+          "evidence": "recorded",
+          "scope": "response",
+          "provider": "openai"
+        }
+      ],
+      "expected": {
+        "mode": "flex",
+        "evidence": "recorded",
+        "provider": "openai"
+      }
     }
   ],
   "capabilities": [
@@ -1155,6 +1778,24 @@
         "mode": "unknown",
         "evidence": "unknown"
       }
+    },
+    {
+      "id": "droid-fast-is-a-tier",
+      "facts": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "gpt-5.5-fast",
+          "evidence": "recorded",
+          "scope": "request",
+          "provider": "openai"
+        }
+      ],
+      "expected": {
+        "mode": "fast",
+        "evidence": "recorded",
+        "provider": "openai"
+      }
     }
   ],
   "effortDisplay": [
@@ -1227,6 +1868,20 @@
         "level": null,
         "top": false
       }
+    },
+    {
+      "value": "on",
+      "expected": {
+        "level": null,
+        "top": false
+      }
+    },
+    {
+      "value": "adaptive",
+      "expected": {
+        "level": null,
+        "top": false
+      }
     }
   ],
   "speedBolts": [
@@ -1247,11 +1902,11 @@
       "bolts": 2
     },
     {
-      "value": "flex",
+      "value": "scale",
       "bolts": 0
     },
     {
-      "value": "scale",
+      "value": "flex",
       "bolts": 0
     }
   ],
@@ -3610,6 +4265,451 @@
         }
       },
       "groups": [],
+      "expected": null
+    }
+  ],
+  "current": [
+    {
+      "id": "own-fact-first",
+      "kind": "effort",
+      "facts": [
+        {
+          "kind": "effort",
+          "value": "high",
+          "rawValue": "high",
+          "evidence": "recorded",
+          "scope": "request"
+        }
+      ],
+      "session": [
+        {
+          "kind": "effort",
+          "value": "medium",
+          "rawValue": "medium",
+          "evidence": "selected",
+          "scope": "session"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "high",
+        "evidence": "recorded"
+      }
+    },
+    {
+      "id": "session-before-configured",
+      "kind": "effort",
+      "facts": [],
+      "session": [
+        {
+          "kind": "effort",
+          "value": "medium",
+          "rawValue": "medium",
+          "evidence": "selected",
+          "scope": "session"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "medium",
+        "evidence": "selected"
+      }
+    },
+    {
+      "id": "configured-last",
+      "kind": "effort",
+      "facts": [],
+      "session": [],
+      "configured": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "low",
+        "evidence": "configured"
+      }
+    },
+    {
+      "id": "nothing",
+      "kind": "effort",
+      "facts": [],
+      "expected": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      }
+    },
+    {
+      "id": "unresolved-falls-through",
+      "kind": "effort",
+      "facts": [
+        {
+          "kind": "effort",
+          "value": "auto",
+          "rawValue": "auto",
+          "evidence": "selected",
+          "scope": "session"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "low",
+        "evidence": "configured"
+      }
+    },
+    {
+      "id": "off-is-known",
+      "kind": "effort",
+      "facts": [],
+      "session": [
+        {
+          "kind": "effort",
+          "value": "off",
+          "rawValue": "disabled",
+          "evidence": "selected",
+          "scope": "session"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "off",
+        "evidence": "selected"
+      }
+    },
+    {
+      "id": "a-configured-fact-among-own-facts-does-not-count",
+      "kind": "effort",
+      "facts": [
+        {
+          "kind": "effort",
+          "value": "low",
+          "rawValue": "low",
+          "evidence": "configured",
+          "scope": "configuration"
+        }
+      ],
+      "expected": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      }
+    },
+    {
+      "id": "configured-speed",
+      "kind": "speed",
+      "facts": [],
+      "configured": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "priority",
+          "evidence": "configured",
+          "scope": "configuration",
+          "provider": "openai"
+        }
+      ],
+      "expected": {
+        "mode": "fast",
+        "evidence": "configured",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "own-standard-beats-configured-fast",
+      "kind": "speed",
+      "facts": [
+        {
+          "kind": "serviceTier",
+          "value": "standard",
+          "rawValue": "default",
+          "evidence": "selected",
+          "scope": "session",
+          "provider": "openai"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "priority",
+          "evidence": "configured",
+          "scope": "configuration",
+          "provider": "openai"
+        }
+      ],
+      "expected": {
+        "mode": "standard",
+        "evidence": "selected",
+        "provider": "openai"
+      }
+    },
+    {
+      "id": "accelerator-beats-configured-tier",
+      "kind": "speed",
+      "facts": [
+        {
+          "kind": "accelerator",
+          "value": "highspeed",
+          "rawValue": "highspeed",
+          "evidence": "recorded",
+          "scope": "request",
+          "provider": "zcode"
+        }
+      ],
+      "configured": [
+        {
+          "kind": "serviceTier",
+          "value": "fast",
+          "rawValue": "priority",
+          "evidence": "configured",
+          "scope": "configuration",
+          "provider": "openai"
+        }
+      ],
+      "expected": {
+        "mode": "highspeed",
+        "evidence": "recorded",
+        "provider": "zcode"
+      }
+    }
+  ],
+  "ledger": [
+    {
+      "id": "known-stays",
+      "response": {
+        "mode": "high",
+        "evidence": "recorded"
+      },
+      "current": {
+        "mode": "low",
+        "evidence": "selected"
+      },
+      "expected": {
+        "mode": "high",
+        "evidence": "recorded"
+      }
+    },
+    {
+      "id": "unknown-takes-selected",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "medium",
+        "evidence": "selected"
+      },
+      "expected": {
+        "mode": "medium",
+        "evidence": "selected"
+      }
+    },
+    {
+      "id": "unknown-takes-recorded",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "xhigh",
+        "evidence": "recorded"
+      },
+      "expected": {
+        "mode": "xhigh",
+        "evidence": "recorded"
+      }
+    },
+    {
+      "id": "unknown-takes-served",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "max",
+        "evidence": "served"
+      },
+      "expected": {
+        "mode": "max",
+        "evidence": "served"
+      }
+    },
+    {
+      "id": "configured-is-never-reported",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "high",
+        "evidence": "configured"
+      },
+      "expected": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      }
+    },
+    {
+      "id": "unknown-stays-unknown",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "expected": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      }
+    },
+    {
+      "id": "provider-is-dropped",
+      "response": {
+        "mode": "unknown",
+        "evidence": "unknown"
+      },
+      "current": {
+        "mode": "high",
+        "evidence": "selected",
+        "provider": "x"
+      },
+      "expected": {
+        "mode": "high",
+        "evidence": "selected"
+      }
+    }
+  ],
+  "antigravityEffort": [
+    {
+      "id": "flash-high",
+      "model": "gemini-3.7-flash-high",
+      "expected": [
+        "gemini-3.7-flash",
+        "high"
+      ]
+    },
+    {
+      "id": "pro-low",
+      "model": "gemini-3.1-pro-low",
+      "expected": [
+        "gemini-3.1-pro",
+        "low"
+      ]
+    },
+    {
+      "id": "flash-medium",
+      "model": "gemini-3.8-flash-medium",
+      "expected": [
+        "gemini-3.8-flash",
+        "medium"
+      ]
+    },
+    {
+      "id": "claude-max",
+      "model": "claude-opus-5-5-max",
+      "expected": [
+        "claude-opus-5-5",
+        "max"
+      ]
+    },
+    {
+      "id": "extra-low-before-low",
+      "model": "gemini-3.5-flash-extra-low",
+      "expected": [
+        "gemini-3.5-flash",
+        "extra-low"
+      ]
+    },
+    {
+      "id": "no-suffix",
+      "model": "gemini-3.1-pro",
+      "expected": null
+    },
+    {
+      "id": "routing-label",
+      "model": "gemini-3.8-flash-tiered",
+      "expected": null
+    },
+    {
+      "id": "not-a-whole-word",
+      "model": "gemini-3.7-flash-highest",
+      "expected": null
+    },
+    {
+      "id": "serving-variant-hides-it",
+      "model": "gemini-3.1-pro-high-exp-b",
+      "expected": null
+    },
+    {
+      "id": "only-a-suffix",
+      "model": "-high",
+      "expected": null
+    },
+    {
+      "id": "label-high",
+      "label": "Gemini 3.1 Pro (High)",
+      "expected": "High"
+    },
+    {
+      "id": "label-max",
+      "label": "Claude Opus 5.5 (Max)",
+      "expected": "Max"
+    },
+    {
+      "id": "label-without-effort",
+      "label": "Gemini 3.1 Flash Lite",
+      "expected": null
+    },
+    {
+      "id": "label-case-matters",
+      "label": "Gemini 3.1 Pro (high)",
+      "expected": null
+    },
+    {
+      "id": "label-trailing-space",
+      "label": "Gemini 3.1 Pro (High) ",
+      "expected": null
+    },
+    {
+      "id": "label-only-the-word",
+      "label": "(High)",
       "expected": null
     }
   ]

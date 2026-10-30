@@ -15,7 +15,8 @@ REPORT_KINDS = {1: KINDS, 2: (*KINDS, "effort")}
 LOCAL_KINDS = ("speed",)
 VERSIONS = {"executionModes": (1, 2)}
 MAX_ROWS = 64
-EFFORT_UNRESOLVED = ("auto", "default", "inherit", "inherited", "unknown")
+EFFORT_UNRESOLVED = ("auto", "default", "inherit", "inherited", "unknown", "thinking_level_unspecified")
+EFFORT_ALIASES = {"none": "off", "disabled": "off", "enabled": "on"}
 EFFORT_LEVELS = {"off": 0, "minimal": 1, "low": 1, "medium": 2, "high": 3, "xhigh": 4, "max": 5, "ultra": 5,
                  "ultracode": 5}
 EFFORT_TOP = ("ultra", "ultracode")
@@ -30,6 +31,32 @@ EXTENSIONS = ("modelHarnessRequests", "executionModes", "profileAvatar", "shared
               "perfScore")
 MAX_INTEGER = 9007199254740991
 TOKEN = re.compile(r"^[A-Za-z0-9][A-Za-z0-9._:-]*$", re.ASCII)
+GOOGLE_TIERS = {"priority": "fast"}
+# Factory's catalog entries that change the request's tier (EXECUTION-MODES, Factory Droid). `glm-5.2-fast` is a model
+# of its own and `auto-fast` a router: neither is listed.
+DROID_TIERS = {
+    **{m: ("fast", "anthropic") for m in ("claude-opus-4-6-fast", "claude-opus-4-7-fast", "claude-opus-4-8-fast",
+                                          "claude-opus-5-fast", "claude-opus-5-5-fast")},
+    **{m: ("fast", "openai") for m in ("gpt-5.3-codex-fast", "gpt-5.4-fast", "gpt-5.4-mini-fast", "gpt-5.5-fast",
+                                       "gpt-5.6-fast", "gpt-5.6-sol-fast", "gpt-6-sol-fast", "gpt-6-luna-fast")},
+    **{m: ("ultrafast", "openai") for m in ("gpt-6-astra-ultrafast", "gpt-6.1-sol-ultrafast")},
+    **{m: ("flex", "openai") for m in ("gpt-5.6-terra-flex", "gpt-5.6-luna-flex", "gpt-6-sol-flex", "gpt-6-astra-flex",
+                                       "gpt-6-luna-flex")},
+}
+ZCODE_HIGHSPEED_MODELS = ("GLM-5.1-Highspeed", "MiniMax-M2.7-highspeed", "MiniMax-M2.5-highspeed",
+                          "kimi-k2.7-code-highspeed", "kimi-for-coding-highspeed", "kimi-k3.1-pro-highspeed",
+                          "k3.1-pro-highspeed")
+ZCODE_HIGHSPEED_PROVIDERS = ("account:zai-highspeed-card", "account:bigmodel-highspeed-card")
+HERMES_EFFORTS = ("minimal", "low", "medium", "high", "xhigh", "max", "ultra")
+HERMES_OFF = ("none", "false", "disabled")
+HERMES_TIERS = {"fast": "fast", "priority": "fast", "ultrafast": "ultrafast", "ultra": "ultrafast",
+                "normal": "standard", "default": "standard", "standard": "standard", "off": "standard",
+                "none": "standard"}
+OMP_FAMILIES = {"anthropic": "anthropic", "openai": "openai", "openai-codex": "openai", "azure": "openai",
+                "azure-openai-responses": "openai", "google": "google", "google-gemini-cli": "google",
+                "google-antigravity": "google", "google-vertex": "google"}
+AG_EFFORT_SUFFIXES = ("-extra-low", "-low", "-medium", "-high", "-max")
+AG_LABEL = re.compile(r".+ \((Low|Medium|High|Max)\)", re.S)
 
 
 def identifier(value, limit=64):
@@ -56,16 +83,44 @@ def normalize(adapter, raw, provider=None, evidence="served", scope="response"):
     token = raw.lower()
     namespace = provider.lower() if provider else None
     if adapter == "serviceTier":
-        if namespace == "anthropic":
+        if namespace == "anthropic" or (namespace == "google" and token == "unspecified"):
             return None
         kind = "serviceTier"
-        value = {"default": "standard", "priority": "fast"}.get(token, token) if namespace == "openai" else token
+        value = {"default": "standard", "priority": "fast"}.get(token, token) if namespace == "openai" \
+            else GOOGLE_TIERS.get(token, token) if namespace == "google" else token
     elif adapter == "claudeSpeed":
         kind, value = "serviceTier", token
     elif adapter == "kimiModel":
         if raw not in ("k3.1-pro-highspeed", "kimi-for-coding-highspeed"):
             return None
         kind, value = "modelVariant", "highspeed"
+    elif adapter == "zcodeModel":
+        if raw not in ZCODE_HIGHSPEED_MODELS:
+            return None
+        kind, value = "modelVariant", "highspeed"
+    elif adapter == "zcodeProvider":
+        if raw not in ZCODE_HIGHSPEED_PROVIDERS:
+            return None
+        kind, value = "accelerator", "highspeed"
+    elif adapter == "droidModel":
+        if raw not in DROID_TIERS:
+            return None
+        kind, (value, namespace) = "serviceTier", DROID_TIERS[raw]
+    elif adapter == "ompTier":
+        family = OMP_FAMILIES.get(namespace)
+        if family is None:
+            return None
+        namespace, kind = family, "serviceTier"
+        value = {"default": "standard", "priority": "fast"}.get(token, token) if family == "openai" \
+            else "fast" if token == "priority" else token
+    elif adapter == "hermesEffort":
+        if token not in (*HERMES_OFF, *HERMES_EFFORTS):
+            return None
+        kind, value = "effort", "off" if token in HERMES_OFF else token
+    elif adapter == "hermesServiceTier":
+        if token not in HERMES_TIERS:
+            return None
+        kind, value = "serviceTier", HERMES_TIERS[token]
     elif adapter == "routing":
         slots = {"fast-model": "fast", "balanced-model": "balanced", "deep-model": "deep", "auto": "auto"}
         if raw not in slots:
@@ -78,7 +133,7 @@ def normalize(adapter, raw, provider=None, evidence="served", scope="response"):
     elif adapter == "effort":
         if token in EFFORT_UNRESOLVED:
             return None
-        kind, value = "effort", "off" if token == "none" else token
+        kind, value = "effort", EFFORT_ALIASES.get(token, token)
     else:
         return None
     result = {"kind": kind, "value": value, "rawValue": raw, "evidence": evidence, "scope": scope}
@@ -87,14 +142,17 @@ def normalize(adapter, raw, provider=None, evidence="served", scope="response"):
     return result
 
 
-def attribution(facts, kind):
+def attribution(facts, kind, evidence=EVIDENCE[1:]):
     eligible = [(index, fact) for index, fact in enumerate(facts)
-                if fact.get("kind") == kind and fact.get("evidence") in EVIDENCE[1:]]
+                if fact.get("kind") == kind and fact.get("evidence") in evidence]
     if not eligible:
         return {"mode": "unknown", "evidence": "unknown"}
     _, chosen = max(eligible, key=lambda pair: (EVIDENCE.index(pair[1]["evidence"]),
                                                SCOPES.index(pair[1].get("scope", "request")), pair[0]))
-    if chosen["value"] in ("auto", "inherit", "inherited", "unknown", "none"):
+    tied = [fact for _, fact in eligible if (fact["evidence"], fact.get("scope", "request"))
+            == (chosen["evidence"], chosen.get("scope", "request"))]
+    if chosen["value"] in ("auto", "inherit", "inherited", "unknown", "none") or any(
+            (fact["value"], fact.get("provider")) != (chosen["value"], chosen.get("provider")) for fact in tied):
         return {"mode": "unknown", "evidence": "unknown"}
     result = {"mode": chosen["value"], "evidence": chosen["evidence"]}
     if chosen.get("provider"):
@@ -102,17 +160,48 @@ def attribution(facts, kind):
     return result
 
 
-def speed_attribution(facts):
+def speed_attribution(facts, evidence=EVIDENCE[1:]):
     """The derived `speed` breakdown: service tier, else accelerator, else a highspeed model variant."""
     for kind in ("serviceTier", "accelerator", "modelVariant"):
-        result = attribution(facts, kind)
+        result = attribution(facts, kind, evidence)
         if result["mode"] != "unknown" and (kind != "modelVariant" or result["mode"] == "highspeed"):
             return result
     return dict(UNKNOWN)
 
 
-def local_attribution(facts, kind):
-    return speed_attribution(facts) if kind == "speed" else attribution(facts, kind)
+def local_attribution(facts, kind, evidence=EVIDENCE[1:]):
+    return speed_attribution(facts, evidence) if kind == "speed" else attribution(facts, kind, evidence)
+
+
+def current_attribution(kind, facts, session_facts=(), configured_facts=()):
+    """An agent's current effort or speed: its own facts, then a session-current fact, then a configured value."""
+    for candidates, evidence in ((facts, EVIDENCE[1:]), (session_facts, ("selected",)),
+                                 (configured_facts, ("configured",))):
+        result = local_attribution(list(candidates), kind, evidence)
+        if result["mode"] != "unknown":
+            return result
+    return dict(UNKNOWN)
+
+
+def ledger_effort(frozen, current):
+    """The effort the report ledger freezes when it first counts a live response (EXECUTION-MODES, Current values)."""
+    if frozen["mode"] != "unknown" or current["evidence"] not in EVIDENCE[1:]:
+        return frozen
+    return {"mode": current["mode"], "evidence": current["evidence"]}
+
+
+def antigravity_model_effort(model):
+    """(base model, effort token) of a catalog id that ends in exactly one effort suffix, else None."""
+    for suffix in AG_EFFORT_SUFFIXES:
+        if model.endswith(suffix) and len(model) > len(suffix):
+            return model[:-len(suffix)], suffix[1:]
+    return None
+
+
+def antigravity_label_effort(label):
+    """The effort word of a display name such as `Gemini 3.1 Pro (High)`, else None."""
+    match = AG_LABEL.fullmatch(label)
+    return match.group(1) if match else None
 
 
 def effort_display(value):
@@ -297,6 +386,17 @@ def check_fixtures():
         count += 1
     for case in data["displayOrder"]:
         assert display_order(case["kind"], case["values"]) == case["expected"], case["id"]
+        count += 1
+    for case in data["current"]:
+        actual = current_attribution(case["kind"], case["facts"], case.get("session", []), case.get("configured", []))
+        assert actual == case["expected"], (case["id"], actual)
+        count += 1
+    for case in data["ledger"]:
+        assert ledger_effort(case["response"], case["current"]) == case["expected"], case["id"]
+        count += 1
+    for case in data["antigravityEffort"]:
+        actual = antigravity_model_effort(case["model"]) if "model" in case else antigravity_label_effort(case["label"])
+        assert (list(actual) if isinstance(actual, tuple) else actual) == case["expected"], case["id"]
         count += 1
     return count
 

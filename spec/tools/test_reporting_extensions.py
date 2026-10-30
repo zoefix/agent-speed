@@ -27,7 +27,7 @@ def png(metadata=False):
 
 class ContractTests(unittest.TestCase):
     def test_shared_mode_vectors(self):
-        self.assertEqual(modes.check_fixtures(), 109)
+        self.assertEqual(modes.check_fixtures(), 191)
 
     def test_modes_and_harness_must_conserve_parent_totals(self):
         model = {"sources": ["codex", "opencode"], "requests": 3, "output": 30, "measuredOutput": 20,
