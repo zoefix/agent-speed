@@ -21,7 +21,7 @@ struct BoardRowModel: Hashable {
     var idle = false
     var phase: AgentPhase = .idle
     var sources: [SourceKind] = []
-    var modes: ExecutionModes?
+    var capsule: EffortCapsule?
     /// Share of `live_A` in 1/200 steps (glass and neon underline).
     var share = 0
     /// The row's own heat in 1/100 steps (value color and underline).
@@ -99,7 +99,7 @@ enum BoardRowModels {
                     : BoardContentRules.interval(ahead: groups[index - 1].live, live: group.live)
                 var model = BoardRowModel(kind: .group(rank: index + 1), name: name(root), detail: detail, value: text, idle: idle,
                                           phase: group.generating > 0 ? .generating : root.phase, sources: [root.source],
-                                          modes: root.modes, share: share(group.live), heat: heat(group.live), interval: interval)
+                                          capsule: EffortCapsule(root.current, l10n), share: share(group.live), heat: heat(group.live), interval: interval)
                 intel(group.intelligenceReading, into: &model)
                 model.twoLine = twoLine
                 return model
@@ -111,7 +111,7 @@ enum BoardRowModels {
                 // A sub-agent's model is shown only when it differs from its root's.
                 let model = agent.model.flatMap { $0.isEmpty || $0 == root.model ? nil : $0 } ?? ""
                 var row = BoardRowModel(kind: .sub, name: name(agent), detail: model, value: text, idle: idle, phase: agent.phase,
-                                        sources: [agent.source], modes: agent.modes, share: share(live), heat: heat(live))
+                                        sources: [agent.source], capsule: EffortCapsule(agent.current, l10n), share: share(live), heat: heat(live))
                 intel(PerfSetReading(agent: agent), into: &row)
                 return row
             case .moreSubs(let index, let count, let live):
@@ -138,6 +138,6 @@ enum BoardRowModels {
 
     /// The shared capsule column: as wide as the widest capsule among the rows, 0 when none shows.
     static func capsuleColumn(_ rows: [BoardRowModel], compact: Bool, capsules: BoardCapsuleDrawing) -> CGFloat {
-        rows.compactMap { row in row.modes.flatMap { capsules.capsuleSize(for: $0, compact: compact)?.width } }.max() ?? 0
+        rows.compactMap { row in row.capsule.flatMap { capsules.capsuleSize(for: $0, compact: compact)?.width } }.max() ?? 0
     }
 }

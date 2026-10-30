@@ -120,7 +120,7 @@ final class BoardAccessibilityReporter {
         if let words = PerfScoreText.words(PerfSetReading(agent: agent), l10n) {
             parts.append(l10n("a11y.agent.intel", words))
         }
-        let capsule = EffortCapsule(agent.modes)
+        let capsule = EffortCapsule(agent.current)
         if capsule.effort != nil || capsule.speed != nil { parts.append(capsule.accessibilityText(l10n)) }
         return join(parts, l10n)
     }
@@ -142,7 +142,7 @@ final class BoardAccessibilityReporter {
         if intelligence, let words = PerfScoreText.words(group.intelligenceReading, l10n) {
             parts.append(l10n("a11y.agent.intel", words))
         }
-        let capsule = EffortCapsule(group.root.modes)
+        let capsule = EffortCapsule(group.root.current)
         if capsule.effort != nil || capsule.speed != nil { parts.append(capsule.accessibilityText(l10n)) }
         if !group.subs.isEmpty { parts.append(l10n("boards.subCount", group.subs.count)) }
         return join(parts, l10n)

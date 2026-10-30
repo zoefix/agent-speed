@@ -269,9 +269,10 @@ struct BoardListRows {
             }
         }
 
-        if column > 0, let modes = model.modes {
+        if column > 0, let capsule = model.capsule {
             let capsuleMid = line1 != nil ? 12 : midY
-            capsules.drawCapsule(for: modes, compact: compact, dark: palette.dark, highContrast: palette.highContrast, width: column,
+            capsules.drawCapsule(capsule, compact: compact, dark: palette.dark, highContrast: palette.highContrast,
+                                 tint: EffortCapsuleTint(ink: palette.ink3.color, line: palette.line.color), width: column,
                                  in: context, at: CGPoint(x: capsuleX, y: capsuleMid - EffortCapsule.height / 2))
         }
     }

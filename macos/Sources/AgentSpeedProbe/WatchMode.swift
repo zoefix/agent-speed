@@ -42,6 +42,8 @@ enum WatchMode {
             if !agent.modes.facts.isEmpty, let bytes = try? JSONEncoder().encode(agent.modes), let json = String(data: bytes, encoding: .utf8) {
                 item.add("modes", raw: json)
             }
+            item.add("effort", raw: DumpToday.attribution(agent.current.effort))
+            item.add("speed", raw: DumpToday.attribution(agent.current.speed))
             return item.text
         }
         line.add("agents", raw: JSONLine.array(agents))

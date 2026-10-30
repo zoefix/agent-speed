@@ -15,7 +15,7 @@ struct EffortMeter: View {
         let glows = tone == .topRung && !palette.increasedContrast
 
         ZStack(alignment: .bottomLeading) {
-            unlitBars(palette.unlit)
+            unlitBars(tone == .configured ? palette.configuredUnlit : palette.unlit)
             if glows {
                 litBars(palette)
                     .blur(radius: 1.5)

@@ -51,10 +51,8 @@ enum BoardScoreCards {
     /// The effort and speed lines of section 4 for what is recorded (as the prototype's card), then a top rung's
     /// explanation.
     private static func modeLines(_ agent: AgentStatus, _ l10n: Localizer) -> [String] {
-        let capsule = EffortCapsule(agent.modes)
-        var lines: [String] = []
-        if let effort = capsule.effort { lines.append(l10n("effort.tooltip", effort)) }
-        if let speed = capsule.speed { lines.append(l10n("speed.tooltip", EffortCapsule.speedValue(speed, l10n))) }
+        let capsule = EffortCapsule(agent.current)
+        let lines = [capsule.effortLine(l10n), capsule.speedLine(l10n)].compactMap { $0 }
         guard !lines.isEmpty else { return [] }
         return lines + capsule.tooltipLines(l10n).dropFirst(2)
     }

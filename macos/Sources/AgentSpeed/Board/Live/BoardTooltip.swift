@@ -15,7 +15,7 @@ enum BoardTooltip {
         let source = l10n(root.source.titleKey)
         var lines = [(root.project.isEmpty ? source : root.project) + " · " + source]
         if let model = root.model, !model.isEmpty { lines.append(model) }
-        let capsule = EffortCapsule(root.modes)
+        let capsule = EffortCapsule(root.current)
         if capsule.effort != nil || capsule.speed != nil { lines += capsule.tooltipLines(l10n) }
         let speed = SpeedFormat.speed(group.live)
         lines.append(group.subs.isEmpty ? l10n("mac.boards.tooltip.speed", speed)
