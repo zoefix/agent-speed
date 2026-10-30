@@ -106,6 +106,8 @@ Claude Desktop 普通聊天对话不会保存在本机，因此无法统计；Wo
 
 网络流量：Agent Speed 只在本机计算各程序收发的字节数，从不读取内容、网址或连接对象；只有在你开启实时上报（见下文）时，才会把 agent 的字节数发送给你选择的服务。在 Windows 上，要显示各 agent 的流量需要安装可选的辅助服务；它以权限受限的“本地服务”账户运行，只统计每个程序的字节数，安装和卸载各需要一次管理员确认（[详细说明](spec/WINDOWS-SERVICE.md)）。
 
+推理强度与加速：大多数 agent 会把这两项写进上面的记录。其他情况下，Agent Speed 会以只读方式多读几个字段，绝不读取对话内容。三个数据库：OpenClaw 的 `trajectory_runtime_events`（只取 `trace.metadata` 行，由查询条件筛选，其中也只保留 think level 与 fast mode；压缩的行只在内存中解开，用完即丢）、WorkBuddy 的 `workbuddy.db`（只读 `sessions.id` 与 `sessions.thought_level`）、Hermes Agent 的 `state.db`（只读该会话的 `model_config.reasoning_config`）。打开这些文件时不会创建 `-wal` 或 `-shm`，Hermes 的数据库也只会短暂打开。配置文件各读一项：Codex `config.toml`（`service_tier`）、Gemini CLI `~/.gemini/settings.json`（匹配该 agent 模型的 override 中的 `thinkingLevel` 或 `thinkingBudget`）、Antigravity `~/.gemini/config/config.json`（`vertexServiceTier`）、WorkBuddy `settings.json`（`reasoningEffort`）、Hermes Agent `config.yaml`（`agent.reasoning_effort`、`agent.service_tier`）。只存在于配置文件的值会加上“配置值”标记，因为 agent 不一定实际使用它；这类值不会计入历史或统计，也不会上报。哪里都没有记录的值就保持未知，绝不猜测。
+
 性能分数：Agent Speed 依响应的时间与 token 数，以及工具调用的开始与结束时间、是否出错，计算每个 agent 的性能分数，从不依据提示词、命令或文件的内容；用量历史只保存各模型每天的汇总数字。只有在你开启实时上报、保留模型分享，而且服务支持时，才会把当前的分数和各模型的性能统计（输出与耗时总和、首段延迟分布、思考、缓存、工具调用的次数、耗时与失败数，以及活跃时间）发送给该服务，供排名与统计分析；从不发送单个请求或工具调用的数据，也不含提示词、命令、路径或时间点。
 
 实时上报（可选，默认关闭；面板会询问一次）：为某个 API（例如公开排行榜服务，像是内置的 Codex Radar 速蹬天梯 `deng.codexradar.com`）开启后，Agent Speed 会把你的实时速度、最近几秒用掉的 token 数，以及你保留的项目——以美元计的 API 等值费用、agent 的网络流量、使用中的模型（服务支持时，含各模型的性能分数、性能统计和思考速度）、各工具的明细——连同你选择的用户名（默认是电脑名称，一键即可换成随机名称）发送给该服务。agent 工作时每隔几秒上报一次，空闲时停止。它从不发送对话内容、提示词、命令或命令输出、文件／文件夹／项目名称或用量历史，上报失败的数据也不会补发。每条上报都用只保存在你电脑上的密钥签名；服务能确认数据来自同一台设备，但无法确认数字是否准确。可以在设置中暂停、关闭，或要求服务忘记你的设备。
