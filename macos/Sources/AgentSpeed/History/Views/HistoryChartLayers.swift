@@ -168,6 +168,11 @@ struct ChartPointerLayer: View {
 
     @State private var tooltipHeight: CGFloat = 180
 
+    /// The overlay's own space, in which `frame` (the plot) is measured. Pointer locations are read in it and made
+    /// plot-relative by hand: the local space of a view after `.offset` differs between macOS versions (on macOS 27 it
+    /// still includes the offset), which put the hovered day one y-axis width to the right (issue #42).
+    private static let space = "historyChartOverlay"
+
     var body: some View {
         ZStack(alignment: .topLeading) {
             TodayMarker(chart: chart, proxy: proxy, frame: frame, geometry: geometry, l10n: l10n, dark: dark)
@@ -176,26 +181,28 @@ struct ChartPointerLayer: View {
                 .fill(.clear)
                 .contentShape(Rectangle())
                 .frame(width: max(frame.width, 0), height: max(frame.height, 0))
-                .offset(x: frame.minX, y: frame.minY)
-                .onContinuousHover { phase in
+                .onContinuousHover(coordinateSpace: .named(Self.space)) { phase in
                     switch phase {
-                    case .active(let location): interaction.hover(day(atX: location.x), from: .chart)
+                    case .active(let location): interaction.hover(day(atX: location.x - frame.minX), from: .chart)
                     case .ended: interaction.hover(nil, from: .chart)
                     }
                 }
-                .onTapGesture { location in
-                    guard let day = day(atX: location.x), chart.days[day] != nil else { return }
+                .onTapGesture(coordinateSpace: .named(Self.space)) { location in
+                    guard let day = day(atX: location.x - frame.minX), chart.days[day] != nil else { return }
                     interaction.revealInTable(day)
                 }
+                .offset(x: frame.minX, y: frame.minY)
             tooltip
         }
         .frame(maxWidth: .infinity, maxHeight: .infinity, alignment: .topLeading)
+        .coordinateSpace(.named(Self.space))
     }
 
     static func centerX(_ day: DayKey, proxy: ChartProxy) -> CGFloat? {
         proxy.position(forX: day.date(in: HistoryDates.calendar).addingTimeInterval(12 * 3600))
     }
 
+    /// The day at `x`, measured from the plot's leading edge.
     private func day(atX x: CGFloat) -> DayKey? {
         guard let date: Date = proxy.value(atX: x) else { return nil }
         let day = DayKey(date, calendar: HistoryDates.calendar)
