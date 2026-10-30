@@ -1205,7 +1205,8 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
 
 1. Header (disabled): the orb's colour dots and name, followed directly by the separator. The menu shows no effort
    capsule or mode row (user's choice, 2026-10-28); agents' effort and speed stay on the dashboard's agent rows
-   (section 4, Agents), boards and history. The orb's hover info line never mentions modes either.
+   (section 4, Agents), boards and history. The orb's hover info line never mentions modes either, and a configured
+   value (section 4, *Configured capsule*) is no exception: an orb looks the same whether or not one exists.
 2. `orbs.style` ▸ the five style names, check on the current one.
 3. `orbs.sources` ▸ `orbs.sources.all`, separator, every source in source order with its colour dot and a check when
    tracked; unavailable ones show their status in secondary text and stay selectable. Unchecking the last tracked source
@@ -1321,7 +1322,8 @@ All three styles show the same content; the style decides its look (Styles, belo
    group is a root agent and all its descendants (a sub-agent whose parent is not listed is its own root). Group speed
    = the sum of its members' live values. Groups are ranked (Ranking stability, below); each group row shows the rank,
    the root's phase badge in its source color (section 4), its project, model and `boards.subCount` when it has
-   sub-agents, the root's effort capsule (section 4, Agents), the group speed, and its share of `live_A` (glass and neon:
+   sub-agents, the root's effort capsule (section 4, Agents; a configured value in its configured form), the group
+   speed, and its share of `live_A` (glass and neon:
    a glowing underline from the name to the value; timing: the interval to the group above, `boards.leader` on the first).
    Under a group, its fastest generating sub-agents (smaller rows with their own capsule and value), then
    `boards.moreSubs` (`+97 個子 agent · 8.6k`) for the rest. When groups do not fit, the last line is
@@ -1580,7 +1582,9 @@ while `intelligence` is on:
 - The cell is at least as wide as `8,888` in its font and as the caption (the widths above, macOS fonts: it was 20–26
   wide for `888`); it never truncates, and the name block gives
   way (the detail first). Timing drops the capsule's word below L while the column shows (meter and bolts stay; the
-  word stays in the tooltip); S drops it in every style, as before.
+  word stays in the tooltip); S drops it in every style, as before. A configured capsule (section 4) keeps its form
+  in every style with the table's colors: `ink-3` for its bars, word and mark, `line` for its dashed stroke, and no
+  glow in neon. Its mark drops with its word.
 - Captions line: at the top of the ranking, 12 tall (timing 14), the first row 2 under it; `intel.glyph` right-aligned
   over the 性能 cells and `unit.tokS` over the values (timing also `boards.gap` over the interval column, except at
   S), all `ink-3`; a 1 pt `line` hairline from the rank column to the end of the capsule column, centred on the line
@@ -1858,7 +1862,8 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    takes no space. A capsule appears when the effort is known or the speed has bolts; nothing is drawn for unknown values or for
    a standard speed, and there is never a "not provided" label. When the column would leave the project name less
    than 72 pt (the room left after every trailing column, the 性能 column included), every capsule drops its
-   word (meter and bolts stay; the word stays in the tooltip).
+   word (meter and bolts stay; the word stays in the tooltip). The values are the current ones of EXECUTION-MODES,
+   *Current values*: a session-current value is drawn like any other, a configured one as below.
    - Capsule: height 18, fully rounded, fill label 5.5 % (dark 7 %), 0.5 pt stroke label 8 %; 6 pt horizontal padding,
      5 pt between its parts: meter, word, bolts.
    - Meter: five bars 2.5 pt wide with heights 4 / 5.5 / 7 / 8.5 / 10 pt, 1.5 pt apart, corner radius 0.75, bottoms
@@ -1875,11 +1880,31 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
      bolts pop in (scale 0.6 → 1, 0.3 s spring) and fade out in 0.15 s. Reduce Motion: crossfades only.
    - Increase Contrast / Windows high contrast: no fill, a 1 pt stroke in the text color; lit bars, word and top rung
      in the text color, unlit bars in the disabled-text color, bolts in the highlight color; no glow or shimmer.
+   - **Configured capsule**: a value only a config file holds (evidence `configured`, EXECUTION-MODES), which the agent
+     may not be using. It keeps the capsule's column, height, padding and part sizes, so nothing on the row moves when
+     a real value replaces it, and it reads as a note beside a measurement: quiet, never a warning.
+     - Capsule: no fill, a 0.75 pt dashed stroke (dash 3, gap 2.5, round caps) in label 22 % (dark 26 %).
+     - Meter: lit bars in the tertiary label color, unlit bars label 10 % (dark 12 %), for every level: `max` and the
+       top rung get no heat, gradient, glow or shimmer, since nothing confirms them.
+     - Word: the token, 11 pt medium, tertiary color.
+     - Mark: `mode.configured.mark` (設定值) right after the word, 5 pt gap, 9.5 pt medium, tertiary color. It drops
+       with the word (72 pt rule, boards); the dashed stroke then carries the difference and the tooltip the words.
+     - Bolts: the outline symbol `bolt` / the same Segoe glyph, 9 pt, tertiary color, never amber.
+     - Parts run meter, word, mark, bolts, so the meter and bolt alignment of the column holds.
+     - A capsule with one real value and one configured value (a recorded effort with a configured tier) stays the
+       solid capsule: the real part as usual, the configured part in the tertiary color above and no mark, since the
+       mark would not say which part it means. The tooltip does.
+     - Changes: a real value arriving crossfades the form, stroke, colors and mark together in 0.2 s (Reduce Motion
+       the same; it is an opacity change); bars do not refill and bolts do not pop.
+     - Increase Contrast / Windows high contrast: the same dashes at 1 pt in the text color, bars, word, mark and bolts
+       in the text color, unlit bars in the disabled-text color.
    - Tooltip (the capsule's; the row's score card carries the same lines in its facts block): `effort.tooltip` and
      `speed.tooltip` lines, each value spelled as its token (speed
      tokens through `speed.value.*` when one exists), `modes.unrecorded` for an unknown one; a top rung adds
-     `effort.ultra.detail` or `effort.ultracode.detail`. Accessibility: the row's combined label ends with the same
-     two lines joined by `，` / `, `.
+     `effort.ultra.detail` or `effort.ultracode.detail`. A configured value uses `effort.tooltip.configured` or
+     `speed.tooltip.configured` instead, a top rung adds no detail, and one `modes.configured.note` follows the lines.
+     Accessibility: the row's combined label ends with the same
+     two lines joined by `，` / `, `, so a configured value is announced as configured; the note is not read out.
    **性能 column** — every row, root or sub-agent, shows the agent's performance score (METRICS 6.9; section 12)
    between the effort capsule column and the live value (user's choice, 2026-10-28; 性能 replaced 智力 in it,
    2026-10-29):
@@ -1975,7 +2000,8 @@ Layout, top to bottom, 24 pt outer padding, 20 pt section spacing:
    a two-segment control (`effort.label` / `speed.label`, remembered) and the trailing `mode.exportCsv` button (the
    mode CSV of EXECUTION-MODES, every kind including `effort` and `speed`). One row per value over the selected range
    and source, summing models, providers and evidence, in the display order of EXECUTION-MODES with the unknown bucket
-   (`modes.unrecorded`, tertiary text) last, so the rows always add up to the range's totals. Each row: the leading
+   (`modes.unrecorded`, tertiary text) last, so the rows always add up to the range's totals. Configured and
+   session-current values never appear here: a response without its own value counts as unknown. Each row: the leading
    glyph (the meter of the effort capsule; for speed its bolts, a hollow 6 pt ring for `standard` and tokens without
    bolts), the token, a share-of-output bar (effort: neutral up to `xhigh`, heat 0.82 for `max`, the top-rung gradient
    for `ultra` / `ultracode`; speed: amber for bolts, neutral otherwise; unknown: label 12 %), then requests, output
@@ -3246,8 +3272,9 @@ Agent Speed can share its live numbers with an API the user picks — for exampl
 Radar. The protocol and everything a service sees are `spec/REPORTING.md`; how each value is computed and when a
 report is sent are METRICS 11. Strings are `report.*` in `spec/strings.json`.
 
-Agents show their reasoning effort and speed as the effort capsule (section 4); evidence categories stay internal and
-missing values stay unknown. See `spec/EXECUTION-MODES.md`. The optional profile controls in Settings → API
+Agents show their reasoning effort and speed as the effort capsule (section 4); evidence categories stay internal,
+except that a configured value has its own form, and missing values stay unknown. A configured value is never
+reported. See `spec/EXECUTION-MODES.md`. The optional profile controls in Settings → API
 provide avatar preview/upload/removal and approved one-time device pairing when the service advertises support
 (`spec/REPORTING-EXTENSIONS.md`). Explicit profile actions follow the network master switch; periodic sharing
 does not upload images or create identities. Existing measurement formulas and orb styles remain unchanged.
@@ -3863,8 +3890,8 @@ the engine tick with the row; its number and scale follow *Motion*; component va
    the amber loop glyph of section 4, `work.repeating` (secondary glyph), `work.summary` (at least 8 recent actions).
    12 pt text, 13 pt glyphs, 6 pt apart. They describe behaviour and never change the score.
 5. **Facts** (11 pt, secondary): `perf.card.sample` with n first, then the row's former tooltip lines in their order —
-   dashboard: `effort.tooltip`, `speed.tooltip`, a top rung's detail, `traffic.agent.tooltip`; boards: group speed and
-   its sub-agents' share, today's output (2c).
+   dashboard: `effort.tooltip`, `speed.tooltip` (`.configured` and `modes.configured.note` for a configured value), a
+   top rung's detail, `traffic.agent.tooltip`; boards: group speed and its sub-agents' share, today's output (2c).
 6. **Footnote**: `perf.card.footnote` (10.5 pt, caption color): 1000 is the reference with no upper limit, the
    calibration note, and that the score and per-model performance statistics are reported, for ranking, only with
    the models switch to a service that supports them.

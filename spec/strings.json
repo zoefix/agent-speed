@@ -5520,6 +5520,12 @@
     "en": "The configuration default; it does not confirm the mode used by each task.",
     "ja": "設定ファイルの既定値です。各タスクで実際に使用されたモードを示すものではありません。"
   },
+  "mode.configured.mark": {
+    "zh-Hant": "設定值",
+    "zh-Hans": "配置值",
+    "en": "config",
+    "ja": "設定値"
+  },
   "mode.history": {
     "zh-Hant": "依執行模式",
     "zh-Hans": "按执行模式",
@@ -5544,6 +5550,12 @@
     "en": "Reasoning effort: %@",
     "ja": "推論の強さ：%@"
   },
+  "effort.tooltip.configured": {
+    "zh-Hant": "推理強度：%@（設定值）",
+    "zh-Hans": "推理强度：%@（配置值）",
+    "en": "Reasoning effort: %@ (configured)",
+    "ja": "推論の強さ：%@（設定値）"
+  },
   "effort.ultra.detail": {
     "zh-Hant": "ultra：最大推理，並自動分派子任務",
     "zh-Hans": "ultra：最大推理，并自动分派子任务",
@@ -5567,6 +5579,12 @@
     "zh-Hans": "加速：%@",
     "en": "Speed: %@",
     "ja": "高速化：%@"
+  },
+  "speed.tooltip.configured": {
+    "zh-Hant": "加速：%@（設定值）",
+    "zh-Hans": "加速：%@（配置值）",
+    "en": "Speed: %@ (configured)",
+    "ja": "高速化：%@（設定値）"
   },
   "speed.value.standard": {
     "zh-Hant": "標準",
@@ -5597,6 +5615,12 @@
     "zh-Hans": "未记录",
     "en": "Not recorded",
     "ja": "記録なし"
+  },
+  "modes.configured.note": {
+    "zh-Hant": "這是設定檔裡的值，agent 不一定實際用它；不會計入歷史、統計，也不會上報。",
+    "zh-Hans": "这是配置文件里的值，agent 不一定实际使用它；不会计入历史、统计，也不会上报。",
+    "en": "From a config file; the agent may not be using it. It never counts in history or statistics and is never reported.",
+    "ja": "設定ファイルの値です。agent が実際に使っているとは限りません。履歴や統計には含まれず、送信もされません。"
   },
   "modes.history.title": {
     "zh-Hant": "推理強度與加速",
