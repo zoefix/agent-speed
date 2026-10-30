@@ -33,6 +33,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 That's it. The installer downloads the latest release from GitHub, verifies its SHA-256 checksum, installs it and starts it. Run the same command again to update.
 
+**Linux** (x86_64 and arm64; glibc 2.35 or later, such as Ubuntu 22.04 or Debian 12) — download from the [latest release](https://github.com/zoefix/agent-speed/releases/latest) and check it against `SHA256SUMS-Linux-<arch>.txt`. The AppImage runs as is and updates itself from inside the app; the `.deb` installs to `/opt/agent-speed`:
+
+```sh
+chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
+sudo apt install ./agent-speed_*_amd64.deb
+```
+
+The tray icon needs a StatusNotifierItem host: KDE Plasma has one; on GNOME, enable the AppIndicator extension (built into Ubuntu).
+
 <details>
 <summary>Uninstall</summary>
 
@@ -61,7 +70,7 @@ Add `--purge` / `-Purge` to remove settings as well. On Windows you can also uni
 - **Live reporting (opt-in)** — off by default; if you like, share your live numbers with an API you pick, such as the [Codex Radar](https://codexradar.com/) speed ladder, under a username you choose. Never conversation content, files or project names — see [Privacy](#privacy).
 - **Execution modes** — show confirmed Standard / Fast / Ultrafast modes and native accelerator, model-variant or routing choices across supported agents, with defaults and unknown values kept distinct. History has a separate mode CSV; measurement formulas stay the same.
 - **Profile and devices (optional API extension)** — preview, change or remove an avatar, and link devices through an approved one-time code. Your receiver must support the [new API schema](spec/report-schema.json); each device keeps its own key and unlinking preserves accounted history.
-- **Native everywhere** — SwiftUI + AppKit on macOS, WPF with Fluent/Mica on Windows. Light, dark or automatic theme. English, 繁體中文, 简体中文, 日本語.
+- **Native everywhere** — SwiftUI + AppKit on macOS, WPF with Fluent/Mica on Windows, Qt 6 on Linux. Light, dark or automatic theme. English, 繁體中文, 简体中文, 日本語.
 - **Humane** — effects intensity from *Off* to *Max*, respects Reduce Motion and high contrast, click-through mode, magnetic edges, remembers its place on every display, launches at login.
 - **Always current** — checks GitHub Releases in the background and updates with one click, verified by SHA-256.
 
@@ -99,7 +108,7 @@ Grok Build supplies native per-turn model batches: token counts, API duration an
 
 **Speed = output tokens ÷ the real time the model spent on them** — from the moment the request was sent until the response finished, including time to first token. Parallel agents add up. While a response is still streaming, it is estimated from that agent's recent measured speed and corrected with the measured value the instant it completes. Optionally you can switch to *total throughput* (input + output).
 
-The full, testable specification lives in [`spec/METRICS.md`](spec/METRICS.md). Both apps are verified against the same fixtures and an independent [reference implementation](spec/tools/reference.py).
+The full, testable specification lives in [`spec/METRICS.md`](spec/METRICS.md). All three apps are verified against the same fixtures and an independent [reference implementation](spec/tools/reference.py).
 
 Ordinary Claude Desktop chat conversations are not stored on your computer, so they cannot be measured; WorkBuddy conversations that run in the cloud are not counted either.
 
@@ -139,12 +148,23 @@ dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ```
 </details>
 
+<details>
+<summary>Linux (CMake, g++ 12+; the app needs Qt 6.8 with Qt WebSockets)</summary>
+
+```sh
+cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
+cmake --build build && ctest --test-dir build
+linux/packaging/package.sh build dist 1.6.0   # → AppImage and .deb
+```
+</details>
+
 ## Project layout
 
 ```
 spec/       measurement + design specification, shared fixtures, reference implementation
 macos/      Swift package: AgentSpeedCore (engine) and AgentSpeed (SwiftUI app)
 windows/    .NET solution: AgentSpeed.Core (engine), AgentSpeed.Presentation, AgentSpeed (WPF app)
+linux/      C++ core and Qt 6 (QML) app, AppImage and .deb packaging
 assets/     icon artwork
 install.sh  install.ps1
 ```

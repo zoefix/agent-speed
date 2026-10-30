@@ -28,6 +28,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 これだけです。インストーラーが GitHub から最新版をダウンロードし、SHA-256 チェックサムを検証してインストール・起動します。同じコマンドを再実行すると更新できます。
 
+**Linux**（x86_64 と arm64。glibc 2.35 以降、Ubuntu 22.04 や Debian 12 以降など）——[最新リリース](https://github.com/zoefix/agent-speed/releases/latest)からダウンロードし、`SHA256SUMS-Linux-<arch>.txt` で確認してください。AppImage はそのまま実行でき、アプリ内から更新できます。`.deb` は `/opt/agent-speed` にインストールされます：
+
+```sh
+chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
+sudo apt install ./agent-speed_*_amd64.deb
+```
+
+トレイアイコンには StatusNotifierItem が必要です。KDE Plasma は標準対応、GNOME では AppIndicator 拡張を有効にしてください（Ubuntu は標準搭載）。
+
 <details>
 <summary>アンインストール</summary>
 
@@ -56,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 - **ライブ送信（任意）**——初期設定はオフ。参加したいときは、選んだユーザー名で、[Codex Radar](https://codexradar.com/) のスピードランキングなど好きな API にライブの数値を共有できます。会話の内容、ファイル、プロジェクト名は一切送りません。詳しくは[プライバシー](#プライバシー)へ。
 - **実行モード**——信頼できる記録から Standard／Fast／Ultrafast や各 agent のアクセラレーター、モデルバリアント、ルーティングを表示。既定値と不明を区別し、履歴は専用 CSV に出力できます。速度の計算式は変わりません。
 - **アバターと複数デバイス（任意の API 拡張）**——アバターのプレビュー・変更・削除と、既存デバイスの承認が必要なワンタイムコードによる連携。各デバイスの鍵は独立し、連携解除後も計上済みの履歴は残ります。受信サービスには[拡張 API のスキーマ](spec/report-schema.json)の対応が必要です。
-- **完全ネイティブ**——macOS は SwiftUI + AppKit、Windows は WPF と Fluent／Mica。ライト・ダーク・自動テーマ。English、繁體中文、简体中文、日本語。
+- **完全ネイティブ**——macOS は SwiftUI + AppKit、Windows は WPF と Fluent／Mica、Linux は Qt 6。ライト・ダーク・自動テーマ。English、繁體中文、简体中文、日本語。
 - **人にやさしい**——エフェクトの強さは「オフ」から「全開」まで。「視差効果を減らす」やハイコントラストに対応し、クリック透過、画面端へのスナップ、ディスプレイごとの位置記憶、ログイン時の自動起動を備えています。
 - **常に最新**——バックグラウンドで GitHub Releases を確認し、ワンクリックでアップデート。SHA-256 で検証します。
 
@@ -94,7 +103,7 @@ Grok Build のターン別・モデル別バッチに保存されたトークン
 
 **速度＝出力トークン ÷ モデルが実際にそれらに費やした時間**——リクエスト送信から応答完了まで、最初のトークンを待つ時間を含みます。複数の agent は合算されます。ストリーミング中の応答はその agent の最近の実測速度で推定し、完了した瞬間に実測値で補正します。「総スループット」（入力＋出力）にも切り替えられます。
 
-テスト可能な完全な仕様は [`spec/METRICS.md`](spec/METRICS.md) にあります。両プラットフォームのアプリは同じテストデータと独立した[リファレンス実装](spec/tools/reference.py)で相互検証されています。
+テスト可能な完全な仕様は [`spec/METRICS.md`](spec/METRICS.md) にあります。3 つのプラットフォームのアプリはすべて同じテストデータと独立した[リファレンス実装](spec/tools/reference.py)で相互検証されています。
 
 Claude Desktop の通常のチャット会話はローカルに保存されないため、計測できません。WorkBuddy でクラウド実行された会話も集計されません。
 
@@ -131,6 +140,16 @@ swift test
 dotnet test windows/tests/AgentSpeed.Core.Tests
 dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ./windows/scripts/publish.sh    # → dist/AgentSpeed-Windows-{x64,arm64}.zip
+```
+</details>
+
+<details>
+<summary>Linux（CMake、g++ 12 以降。アプリには Qt WebSockets を含む Qt 6.8 が必要）</summary>
+
+```sh
+cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
+cmake --build build && ctest --test-dir build
+linux/packaging/package.sh build dist 1.6.0   # → AppImage と .deb
 ```
 </details>
 

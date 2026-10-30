@@ -28,6 +28,15 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 就這樣。安裝程式會從 GitHub 下載最新版本、驗證 SHA-256 校驗碼、安裝並啟動。之後重新執行同一行指令即可更新。
 
+**Linux**（x86_64 與 arm64；需要 glibc 2.35 以上，例如 Ubuntu 22.04、Debian 12 或更新）——從[最新版本](https://github.com/zoefix/agent-speed/releases/latest)下載，並用 `SHA256SUMS-Linux-<arch>.txt` 核對。AppImage 直接就能執行，也能在 App 內更新；`.deb` 會安裝到 `/opt/agent-speed`：
+
+```sh
+chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
+sudo apt install ./agent-speed_*_amd64.deb
+```
+
+托盤圖示需要 StatusNotifierItem：KDE Plasma 已內建；GNOME 請開啟 AppIndicator 擴充（Ubuntu 已內建）。
+
 <details>
 <summary>解除安裝</summary>
 
@@ -56,7 +65,7 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 - **即時上報（選用）**——預設關閉；想參與的話，可以用你取的使用者名稱，把即時數字分享給你選的 API，例如 [Codex Radar](https://codexradar.com/) 的速蹬天梯。從不傳送對話內容、檔案或專案名稱，詳見[隱私](#隱私)。
 - **執行模式**——依可靠紀錄顯示 Standard／Fast／Ultrafast，以及各 agent 的加速卡、模型變體或路由選擇，分清設定預設與未知；歷史可另行匯出模式 CSV，沿用既有測速公式。
 - **頭像與多設備（選用 API 擴充）**——預覽、更換、移除頭像，以一次性配對碼經原設備核准後合併身分；每台設備保留自己的金鑰，解除不影響已入帳歷史。接收端須支援[新版 API 結構](spec/report-schema.json)。
-- **全原生**——macOS 使用 SwiftUI + AppKit，Windows 使用 WPF 與 Fluent／Mica。淺色、深色、自動主題；繁體中文、简体中文、English、日本語。
+- **全原生**——macOS 使用 SwiftUI + AppKit，Windows 使用 WPF 與 Fluent／Mica，Linux 使用 Qt 6。淺色、深色、自動主題；繁體中文、简体中文、English、日本語。
 - **人性化**——特效強度從「關閉」到「熱血全開」，遵循「減少動態效果」與高對比設定，支援滑鼠穿透、邊緣磁吸、記住每個螢幕上的位置、登入時自動啟動。
 - **永遠最新**——背景檢查 GitHub Releases，有新版一鍵更新，並以 SHA-256 驗證。
 
@@ -94,7 +103,7 @@ Grok Build 提供每回合、每模型的原生批次紀錄：Token、API 耗時
 
 **速度＝輸出 token ÷ 模型實際花在這些 token 上的時間**——從送出請求到回應完成，含等待第一個字。多個 agent 平行時會加總。回應還在進行中時，先以該 agent 近期的實測速度估算，完成的瞬間立即以實測值校正。也可以切換成「總吞吐量」（輸入＋輸出）。
 
-完整且可測試的規格見 [`spec/METRICS.md`](spec/METRICS.md)。兩個平台的程式都以同一份測試資料，以及一份獨立的[參考實作](spec/tools/reference.py)交叉驗證。
+完整且可測試的規格見 [`spec/METRICS.md`](spec/METRICS.md)。三個平台的程式都以同一份測試資料，以及一份獨立的[參考實作](spec/tools/reference.py)交叉驗證。
 
 Claude Desktop 一般聊天對話不會存在本機，因此無法統計；WorkBuddy 在雲端執行的對話也不會計入。
 
@@ -131,6 +140,16 @@ swift test
 dotnet test windows/tests/AgentSpeed.Core.Tests
 dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ./windows/scripts/publish.sh    # → dist/AgentSpeed-Windows-{x64,arm64}.zip
+```
+</details>
+
+<details>
+<summary>Linux（CMake、g++ 12 以上；App 需要含 Qt WebSockets 的 Qt 6.8）</summary>
+
+```sh
+cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
+cmake --build build && ctest --test-dir build
+linux/packaging/package.sh build dist 1.6.0   # → AppImage 與 .deb
 ```
 </details>
 
