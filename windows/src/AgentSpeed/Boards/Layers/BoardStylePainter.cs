@@ -115,6 +115,9 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
 
     protected abstract BoardCapsuleLook CapsuleLook(BoardScene scene, bool sub);
 
+    /// <summary><c>mode.configured.mark</c> for a style's look.</summary>
+    protected string ConfiguredMark => Loc["mode.configured.mark"];
+
     /// <summary>The hero number's text style, without tracking (the scene spaces the glyphs by <c>BoardHeroLayout.Tracking</c>).</summary>
     protected abstract BoardTextStyle NumberStyle(BoardScene scene);
 
@@ -201,6 +204,7 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
                 var more = row.Entry.Kind is BoardEntryKind.MoreSubs or BoardEntryKind.MoreGroups ? MoreText(row.Entry, row.Live) : string.Empty;
                 return new BoardLayerSpec(width, scene.RowHeight(row.Entry), string.Join('|', theme, "b", row.Entry.Kind, row.Entry.Rank, row.Entry.TwoLine,
                     content.Name, content.Detail, content.Source, content.Capsule.Effort, content.Capsule.Speed,
+                    content.Capsule.EffortConfigured, content.Capsule.SpeedConfigured,
                     content.Column.ToString("0.#", CultureInfo.InvariantCulture), content.Interval, more, BodyKey(content)), MeterX(content, (float)columns));
             }
 
@@ -903,7 +907,7 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
         var palette = scene.Palette;
         var agent = entry.Kind == BoardEntryKind.Group ? entry.Group.Root : entry.Agent;
         var capsule = agent is null || entry.Kind is BoardEntryKind.MoreSubs or BoardEntryKind.MoreGroups ? new EffortCapsule(null, null)
-            : EffortCapsule.Of(agent.Modes);
+            : EffortCapsule.Of(agent);
         string name;
         var detail = string.Empty;
         var phase = AgentPhase.Idle;
@@ -961,13 +965,13 @@ internal abstract class BoardStylePainter : IBoardLayerPainter, IDisposable
                 BoardEntryKind.Sub => entry.Agent,
                 _ => null,
             };
-            if (agent is null || agent.Modes.IsEmpty)
+            if (agent is null || (agent.Modes.IsEmpty && agent.SessionModes.IsEmpty && agent.ConfiguredModes.IsEmpty))
             {
                 continue;
             }
 
             Capsule.Look = CapsuleLook(scene, entry.Kind == BoardEntryKind.Sub);
-            width = Math.Max(width, Capsule.Measure(EffortCapsule.Of(agent.Modes)));
+            width = Math.Max(width, Capsule.Measure(EffortCapsule.Of(agent)));
         }
 
         return MathF.Ceiling(width);

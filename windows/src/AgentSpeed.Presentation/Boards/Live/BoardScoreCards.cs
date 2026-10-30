@@ -99,7 +99,7 @@ public static class BoardScoreCards
     {
         ArgumentNullException.ThrowIfNull(agent);
         ArgumentNullException.ThrowIfNull(loc);
-        var capsule = EffortCapsule.Of(agent.Modes);
+        var capsule = EffortCapsule.Of(agent);
         return capsule.IsKnown ? [.. capsule.TooltipLines(loc), speed] : [speed];
     }
 

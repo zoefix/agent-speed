@@ -28,7 +28,7 @@ internal sealed class EffortMeter : Grid
     private readonly TranslateTransform _band = new();
     private int _level;
     private bool _shimmering;
-    private string? _effort;
+    private Capsule _capsule = new(null, null);
     private CapsuleBrushes _brushes;
     private bool _reduceMotion;
     private bool _shimmerAllowed;
@@ -73,12 +73,11 @@ internal sealed class EffortMeter : Grid
 
     /// <param name="animate">Bars fill or empty in turn (crossfade only with <paramref name="reduceMotion"/>).</param>
     /// <param name="shimmer">Effects are on: the top rung may shimmer.</param>
-    public void Show(string? effort, CapsuleBrushes brushes, bool animate, bool reduceMotion, bool shimmer)
+    public void Show(Capsule capsule, CapsuleBrushes brushes, bool animate, bool reduceMotion, bool shimmer)
     {
-        var capsule = new Capsule(effort, null);
         var level = capsule.Level ?? 0;
-        var restyle = effort != _effort || brushes != _brushes;
-        _effort = effort;
+        var restyle = capsule.Effort != _capsule.Effort || capsule.Tone != _capsule.Tone || capsule.IsConfigured != _capsule.IsConfigured || brushes != _brushes;
+        _capsule = capsule;
         _brushes = brushes;
         _reduceMotion = reduceMotion;
         _shimmerAllowed = shimmer;
@@ -86,14 +85,14 @@ internal sealed class EffortMeter : Grid
         {
             for (var i = 0; i < 5; i++)
             {
-                _unlit[i].Fill = brushes.Unlit;
+                _unlit[i].Fill = capsule.IsConfigured ? brushes.ConfiguredUnlit : brushes.Unlit;
                 if (brushes.LitBar(capsule.Tone, Capsule.BarHeights[i]) is { } fill)
                 {
                     _lit[i].Fill = fill;
                 }
                 else
                 {
-                    _lit[i].SetResourceReference(Shape.FillProperty, CapsuleBrushes.SecondaryKey);
+                    _lit[i].SetResourceReference(Shape.FillProperty, CapsuleBrushes.TextKey(capsule.Tone));
                 }
             }
 
@@ -130,7 +129,7 @@ internal sealed class EffortMeter : Grid
 
     private void UpdateShimmer()
     {
-        var run = new Capsule(_effort, null).IsTopRung && _shimmerAllowed && !_reduceMotion && !_brushes.HighContrast && IsVisible;
+        var run = _capsule.IsTopRung && _shimmerAllowed && !_reduceMotion && !_brushes.HighContrast && IsVisible;
         if (run == _shimmering)
         {
             return;

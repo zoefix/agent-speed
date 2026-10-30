@@ -10,6 +10,9 @@ internal readonly record struct CapsuleBrushes(bool Dark, bool HighContrast)
 {
     public const string SecondaryKey = "TextFillColorSecondaryBrush";
 
+    /// <summary>Everything a configured value draws: quiet, like a note beside a measurement.</summary>
+    public const string TertiaryKey = "TextFillColorTertiaryBrush";
+
     /// <summary>The label color (black or white) at <paramref name="opacity"/>.</summary>
     public Brush Label(double opacity) => MediaColors.Frozen((Dark ? Colors.White : Colors.Black) with { A = (byte)Math.Round(255 * opacity) });
 
@@ -19,13 +22,26 @@ internal readonly record struct CapsuleBrushes(bool Dark, bool HighContrast)
 
     public double StrokeThickness => HighContrast ? 1 : 0.5;
 
+    /// <summary>The configured form's dashed stroke; the same dashes at 1 DIP in high contrast.</summary>
+    public Brush DashedStroke => HighContrast ? SystemColors.WindowTextBrush : Label(EffortCapsulePalette.ConfiguredStrokeOpacity(Dark));
+
+    public double DashedThickness => HighContrast ? 1 : EffortCapsule.DashedStroke;
+
     public Brush Unlit => HighContrast ? SystemColors.GrayTextBrush : Label(EffortCapsulePalette.UnlitOpacity(Dark));
+
+    public Brush ConfiguredUnlit => HighContrast ? SystemColors.GrayTextBrush : Label(EffortCapsulePalette.ConfiguredUnlitOpacity(Dark));
 
     public Brush Bolt => HighContrast ? SystemColors.HighlightBrush : EffortCapsulePalette.Bolt(Dark).ToBrush();
 
     public Brush Heat(double heat) => EffortCapsulePalette.Heat(heat, Dark).ToBrush();
 
-    /// <summary>A lit bar; null for <see cref="EffortTone.Neutral"/>, which takes the secondary text resource.</summary>
+    /// <summary>The configured bolts in high contrast; null otherwise, for the tertiary text resource: never amber.</summary>
+    public Brush? ConfiguredBolt => HighContrast ? SystemColors.WindowTextBrush : null;
+
+    /// <summary>The text resource a tone's parts take where it has no brush of its own.</summary>
+    public static string TextKey(EffortTone tone) => tone == EffortTone.Configured ? TertiaryKey : SecondaryKey;
+
+    /// <summary>A lit bar; null for the neutral and configured tones, which take a text resource (<see cref="TextKey"/>).</summary>
     public Brush? LitBar(EffortTone tone, double barHeight)
     {
         if (HighContrast)
@@ -45,7 +61,7 @@ internal readonly record struct CapsuleBrushes(bool Dark, bool HighContrast)
         }
     }
 
-    /// <summary>The word; null for <see cref="EffortTone.Neutral"/> (secondary text resource).</summary>
+    /// <summary>The word; null for the neutral and configured tones (<see cref="TextKey"/>).</summary>
     public Brush? Word(EffortTone tone)
     {
         if (HighContrast)

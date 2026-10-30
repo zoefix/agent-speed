@@ -106,6 +106,112 @@ public sealed class EffortCapsuleTests
     }
 
     [Fact]
+    public void AnAgentsCurrentValuesReachTheCapsuleWithTheirForm()
+    {
+        var recorded = Modes("high", null);
+        var session = ExecutionModes.Of(ExecutionModeNative.Effort("medium", ExecutionModeEvidence.Selected, ExecutionModeScope.Session));
+        var effort = ExecutionModes.Of(ExecutionModeNative.Effort("max", ExecutionModeEvidence.Configured, ExecutionModeScope.Configuration));
+        var tier = ExecutionModeNative.OpenAiTier("priority", ExecutionModeEvidence.Configured, ExecutionModeScope.Configuration);
+        var configured = effort.Merge(tier);
+
+        Assert.Equal(new EffortCapsule("high", "fast", SpeedConfigured: true), EffortCapsule.Of(Agent() with { Modes = recorded, ConfiguredModes = configured }));
+        Assert.Equal(new EffortCapsule("medium", "fast", SpeedConfigured: true), EffortCapsule.Of(Agent() with { SessionModes = session, ConfiguredModes = configured }));
+        Assert.Equal(new EffortCapsule("max", "fast", true, true), EffortCapsule.Of(Agent() with { ConfiguredModes = configured }));
+        Assert.Equal(new EffortCapsule(null, null), EffortCapsule.Of(Agent()));
+    }
+
+    [Fact]
+    public void OnlyACapsuleOfConfiguredValuesTakesTheDashedForm()
+    {
+        Assert.True(new EffortCapsule("high", null, EffortConfigured: true).IsConfigured);
+        Assert.True(new EffortCapsule(null, "fast", SpeedConfigured: true).IsConfigured);
+        Assert.True(new EffortCapsule("high", "fast", true, true).IsConfigured);
+        Assert.False(new EffortCapsule("high", "fast", EffortConfigured: true).IsConfigured);
+        Assert.False(new EffortCapsule("high", "standard", SpeedConfigured: true).IsConfigured);
+        Assert.False(new EffortCapsule("high", null).IsConfigured);
+        Assert.False(new EffortCapsule(null, null).IsConfigured);
+    }
+
+    [Theory]
+    [InlineData("max")]
+    [InlineData("ultra")]
+    [InlineData("ultracode")]
+    public void NothingConfirmsAConfiguredTopSoItGetsNoHeatOrShimmer(string effort)
+    {
+        var capsule = new EffortCapsule(effort, null, EffortConfigured: true);
+        Assert.Equal(EffortTone.Configured, capsule.Tone);
+        Assert.False(capsule.IsTopRung);
+        Assert.Equal(5, capsule.Level);
+        Assert.Single(capsule.TooltipLines(En), l => l == En["modes.configured.note"]);
+        Assert.DoesNotContain(capsule.TooltipLines(En), l => l == En["effort.ultra.detail"] || l == En["effort.ultracode.detail"]);
+    }
+
+    [Fact]
+    public void TheMarkFollowsTheWordAndDropsWithIt()
+    {
+        var capsule = new EffortCapsule("xhigh", null, EffortConfigured: true);
+        Assert.True(capsule.ShowsMark(compact: false));
+        Assert.False(capsule.ShowsMark(compact: true));
+        Assert.False(new EffortCapsule("xhigh", "fast", EffortConfigured: true).ShowsMark(compact: false));
+        Assert.False(new EffortCapsule(null, "fast", SpeedConfigured: true).ShowsMark(compact: false));
+        Assert.Equal(12 + 18.5 + 5 + 30 + 5 + 21, capsule.Width(compact: false, Word, 20.5));
+        Assert.Equal(12 + 18.5, capsule.Width(compact: true, Word, 20.5));
+        Assert.Equal(12 + 18.5 + 5 + 30, new EffortCapsule("xhigh", null).Width(compact: false, Word, 20.5));
+        Assert.Equal(12 + 18.5 + 5 + 30 + 5 + 21 + 5 + 9, new EffortCapsule("xhigh", "fast", true, true).Width(compact: false, Word, 20.5));
+
+        var full = 12 + 18.5 + 5 + 30 + 5 + 21;
+        var column = EffortCapsuleColumn.For([capsule, new("low", null)], nameRoom: 72 + full + 8, Word, 20.5);
+        Assert.Equal(new EffortCapsuleColumn(full, Compact: false), column);
+        Assert.True(EffortCapsuleColumn.For([capsule], nameRoom: 72 + full + 7, Word, 20.5).Compact);
+    }
+
+    [Fact]
+    public void AConfiguredValueSaysSoAndOneNoteFollowsTheLines()
+    {
+        Assert.Equal(["Reasoning effort: high (configured)", "Speed: Not recorded", En["modes.configured.note"]],
+            new EffortCapsule("high", null, EffortConfigured: true).TooltipLines(En));
+        Assert.Equal(["Reasoning effort: low", "Speed: Fast (configured)", En["modes.configured.note"]],
+            new EffortCapsule("low", "fast", SpeedConfigured: true).TooltipLines(En));
+        Assert.Equal(["Reasoning effort: max (configured)", "Speed: Ultrafast (configured)", En["modes.configured.note"]],
+            new EffortCapsule("max", "ultrafast", true, true).TooltipLines(En));
+        Assert.Equal(["Reasoning effort: ultra", "Speed: Fast (configured)", En["effort.ultra.detail"], En["modes.configured.note"]],
+            new EffortCapsule("ultra", "fast", SpeedConfigured: true).TooltipLines(En));
+    }
+
+    [Fact]
+    public void TheRowsWordsAnnounceAConfiguredValueWithoutTheNote()
+    {
+        var capsule = new EffortCapsule("high", "fast", true, true);
+        Assert.Equal("Reasoning effort: high (configured), Speed: Fast (configured)", capsule.AccessibilityText(En));
+        var zh = new Localizer(Localizer.LoadEmbeddedTable(), LanguageCodes.ZhHant);
+        Assert.Equal("推理強度：high（設定值），加速：Fast（設定值）", capsule.AccessibilityText(zh));
+    }
+
+    [Theory]
+    [InlineData(LanguageCodes.ZhHant, "設定值")]
+    [InlineData(LanguageCodes.ZhHans, "配置值")]
+    [InlineData(LanguageCodes.En, "config")]
+    [InlineData(LanguageCodes.Ja, "設定値")]
+    public void TheMarkExistsInEveryLanguage(string language, string mark)
+    {
+        var loc = new Localizer(Localizer.LoadEmbeddedTable(), language);
+        Assert.Equal(mark, loc["mode.configured.mark"]);
+        Assert.False(string.IsNullOrWhiteSpace(loc["modes.configured.note"]));
+    }
+
+    [Fact]
+    public void TheNoteStaysOnTheCardAndOutOfWhatTheRowSays()
+    {
+        var lines = new EffortCapsule("high", null, EffortConfigured: true).TooltipLines(En);
+        var card = AgentSpeed.Presentation.Perf.PerfCard.Build(new AgentSpeed.Presentation.Perf.PerfCardSubject(SourceKind.Codex, "p", "m", null, lines), En);
+        Assert.Contains(En["modes.configured.note"], card.Facts);
+        Assert.DoesNotContain(En["modes.configured.note"], card.Description, StringComparison.Ordinal);
+        Assert.Contains("Reasoning effort: high (configured)", card.Description, StringComparison.Ordinal);
+    }
+
+    private static AgentStatus Agent() => new("a", SourceKind.Codex, "p", "m", AgentPhase.Idle, false, default, null, DateTimeOffset.UnixEpoch);
+
+    [Fact]
     public void AccessibilityJoinsTheTwoLinesPerLanguage()
     {
         var capsule = new EffortCapsule("ultracode", "fast");

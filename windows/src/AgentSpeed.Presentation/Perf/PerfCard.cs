@@ -128,6 +128,9 @@ public sealed record PerfCard(
         var meta = MetaLine(evaluation.Model ?? subject.Model, sourceName, subject.SubAgents, loc);
         var facts = new List<string> { loc.Format("perf.card.sample", evaluation.N) };
         facts.AddRange(subject.FactLines?.Where(l => !string.IsNullOrWhiteSpace(l)) ?? []);
+
+        // The configured note is on the card; the row's words already say "configured" (DESIGN 4, Tooltip).
+        var spokenFacts = facts.Where(l => l != loc["modes.configured.note"]);
         var footnote = loc["perf.card.footnote"];
         var signals = SignalLines(subject.Work ?? WorkSignals.None, loc);
         var shown = evaluation.Shown;
@@ -139,7 +142,7 @@ public sealed record PerfCard(
             description.Add(loc["intel.none"]);
             description.Add(none);
             description.AddRange(signals.Select(s => s.Text));
-            description.AddRange(facts);
+            description.AddRange(spokenFacts);
             description.Add(footnote);
             return new PerfCard(subject.Source, subject.Project, meta, false, loc["perf.provisional"], null, PerfNumber.Dash, null,
                 PerfNumberTone.None, null, none, string.Empty, [], loc["perf.signals.title"], signals, facts, footnote,
@@ -171,7 +174,7 @@ public sealed record PerfCard(
         }
 
         description.AddRange(signals.Select(s => s.Text));
-        description.AddRange(facts);
+        description.AddRange(spokenFacts);
         description.Add(footnote);
         return new PerfCard(
             subject.Source,

@@ -18,14 +18,15 @@ public readonly record struct EffortCapsuleColumn(double Width, bool Compact)
 
     /// <param name="nameRoom">The narrowest row's name width without any column (its deepest indent taken off).</param>
     /// <param name="wordWidth">Measures a word at 11 DIP medium.</param>
-    public static EffortCapsuleColumn For(IEnumerable<EffortCapsule> capsules, double nameRoom, Func<string, double> wordWidth)
+    /// <param name="markWidth">The configured mark at 9.5 DIP medium.</param>
+    public static EffortCapsuleColumn For(IEnumerable<EffortCapsule> capsules, double nameRoom, Func<string, double> wordWidth, double markWidth = 0)
     {
         ArgumentNullException.ThrowIfNull(capsules);
         var list = capsules.ToArray();
-        var full = new EffortCapsuleColumn(ColumnWidth(list, compact: false, wordWidth), Compact: false);
-        return nameRoom - full.Footprint >= MinimumName ? full : new(ColumnWidth(list, compact: true, wordWidth), Compact: true);
+        var full = new EffortCapsuleColumn(ColumnWidth(list, compact: false, wordWidth, markWidth), Compact: false);
+        return nameRoom - full.Footprint >= MinimumName ? full : new(ColumnWidth(list, compact: true, wordWidth, markWidth), Compact: true);
     }
 
-    public static double ColumnWidth(IEnumerable<EffortCapsule> capsules, bool compact, Func<string, double> wordWidth) =>
-        capsules.Select(c => c.Width(compact, wordWidth)).DefaultIfEmpty(0).Max();
+    public static double ColumnWidth(IEnumerable<EffortCapsule> capsules, bool compact, Func<string, double> wordWidth, double markWidth = 0) =>
+        capsules.Select(c => c.Width(compact, wordWidth, markWidth)).DefaultIfEmpty(0).Max();
 }

@@ -41,7 +41,7 @@ internal sealed class GlassBoardPainter : BoardStylePainter
 
     protected override BoardCapsuleLook CapsuleLook(BoardScene scene, bool sub) =>
         new(sub ? 8 : 9, sub ? 5 : 6, 5, 0.5f, new BoardTextStyle(BoardFont.Ui, 11, (FontWeight)560), false, 3, 2, scene.Size == BoardSize.S,
-            scene.Palette);
+            scene.Palette, ConfiguredMark);
 
     protected override BoardTextStyle NumberStyle(BoardScene scene) => new(BoardFont.Display, (float)scene.Metrics.ValueSize, FontWeight.Bold);
 

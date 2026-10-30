@@ -25,6 +25,25 @@ internal static class BoardPaint
         context.FillRoundedRectangle(new RoundedRectangle(new RawRectF(x, y, x + width, y + height), radius, radius), brush);
     }
 
+    /// <summary>A rounded rectangle's stroke in round-capped dashes of <paramref name="dash"/> and <paramref name="gap"/> points.</summary>
+    public static void DashRound(ID2D1DeviceContext context, float x, float y, float width, float height, float radius, Rgba color,
+        float thickness, float dash, float gap)
+    {
+        if (width <= 0 || height <= 0 || color.A <= 0)
+        {
+            return;
+        }
+
+        using var brush = Brush(context, color);
+        using var factory = context.Factory;
+        using var style = factory.CreateStrokeStyle(
+            new StrokeStyleProperties { DashStyle = DashStyle.Custom, DashCap = CapStyle.Round, StartCap = CapStyle.Round, EndCap = CapStyle.Round, LineJoin = LineJoin.Round },
+            [dash / thickness, gap / thickness]);
+        var inset = thickness / 2;
+        context.DrawRoundedRectangle(new RoundedRectangle(new RawRectF(x + inset, y + inset, x + width - inset, y + height - inset),
+            Math.Max(0, radius - inset), Math.Max(0, radius - inset)), brush, thickness, style);
+    }
+
     public static void StrokeRound(ID2D1DeviceContext context, float x, float y, float width, float height, float radius, Rgba color,
         float thickness)
     {

@@ -66,7 +66,7 @@ internal sealed class ModeGlyph : Grid
         _ring.Visibility = glyph is { Effort: null, Speed: not null } && !bolts ? Visibility.Visible : Visibility.Collapsed;
         if (meter)
         {
-            _meter.Show(glyph!.Effort, appearance.Brushes, animate, appearance.ReduceMotion, appearance.Shimmers);
+            _meter.Show(glyph!, appearance.Brushes, animate, appearance.ReduceMotion, appearance.Shimmers);
         }
 
         _bolts.Visibility = bolts ? Visibility.Visible : Visibility.Collapsed;

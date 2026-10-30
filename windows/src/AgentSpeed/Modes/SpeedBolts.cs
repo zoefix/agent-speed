@@ -44,11 +44,23 @@ internal sealed class SpeedBolts : StackPanel
         }
     }
 
-    public void Show(int count, CapsuleBrushes brushes, bool animate, bool reduceMotion)
+    /// <param name="configured">A configured speed: the same glyph in the tertiary color, never amber.</param>
+    public void Show(int count, CapsuleBrushes brushes, bool animate, bool reduceMotion, bool configured = false)
     {
         foreach (var glyph in _glyphs)
         {
-            glyph.Foreground = brushes.Bolt;
+            if (!configured)
+            {
+                glyph.Foreground = brushes.Bolt;
+            }
+            else if (brushes.ConfiguredBolt is { } contrast)
+            {
+                glyph.Foreground = contrast;
+            }
+            else
+            {
+                glyph.SetResourceReference(TextBlock.ForegroundProperty, CapsuleBrushes.TertiaryKey);
+            }
         }
 
         var previous = _count;

@@ -28,6 +28,9 @@ public readonly record struct ExecutionModeAttribution(ExecutionModeKind Kind, s
 {
     public bool IsKnown => Mode != "unknown";
 
+    /// <summary>A value only a config file holds (EXECUTION-MODES, Current values): shown with its own form, reported never.</summary>
+    public bool IsConfigured => Evidence == "configured";
+
     public static ExecutionModeAttribution Unknown(ExecutionModeKind kind) => new(kind, "unknown", "unknown", null);
 }
 
@@ -99,7 +102,7 @@ public sealed class ExecutionModes : IEquatable<ExecutionModes>
     /// the agent's current one when that is <c>selected</c> or better, without a provider.
     /// </summary>
     public static ExecutionModeAttribution LedgerEffort(ExecutionModeAttribution response, ExecutionModeAttribution current) =>
-        response.IsKnown || !current.IsKnown || current.Evidence == Name(ExecutionModeEvidence.Configured) ? response : current with { Provider = null };
+        response.IsKnown || !current.IsKnown || current.IsConfigured ? response : current with { Provider = null };
 
     /// <summary>These facts as the ledger freezes them: an unknown effort takes <see cref="LedgerEffort"/>.</summary>
     public ExecutionModes WithLedgerEffort(ExecutionModeAttribution current)

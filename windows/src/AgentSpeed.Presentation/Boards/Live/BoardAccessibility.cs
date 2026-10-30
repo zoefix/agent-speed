@@ -79,7 +79,7 @@ public static class BoardAccessibility
             parts.Add(readout.Spoken);
         }
 
-        var capsule = EffortCapsule.Of(group.Root.Modes);
+        var capsule = EffortCapsule.Of(group.Root);
         if (capsule.IsKnown)
         {
             parts.Add(capsule.AccessibilityText(loc));
