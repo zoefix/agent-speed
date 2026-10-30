@@ -18,6 +18,8 @@ struct GrokUsage {
 struct GrokMetadata {
     std::optional<std::string> id, cwd, model, parent, kind;
     std::optional<std::int64_t> createdMs;
+    // `reasoning_effort`, the session's latest value (session-current, EXECUTION-MODES).
+    std::optional<std::string> effort;
     // `<session folder>/summary.json` (≤ 1 MiB).
     static std::optional<GrokMetadata> read(const std::string& folder);
 };

@@ -1,5 +1,7 @@
 #pragma once
 
+#include <gtest/gtest.h>
+
 #include <algorithm>
 #include <cstdio>
 #include <filesystem>
@@ -10,6 +12,7 @@
 #include <vector>
 
 #include "agentspeed/json.hpp"
+#include "agentspeed/modes.hpp"
 
 namespace fixtures {
 
@@ -114,6 +117,35 @@ inline std::vector<std::string> listFiles(const std::filesystem::path& root) {
     }
     std::sort(out.begin(), out.end());
     return out;
+}
+
+// A missing key is not checked; null means unknown.
+inline void expectMode(const std::optional<agentspeed::ModeAttribution>& got, const agentspeed::json::Value& want, const char* what) {
+    SCOPED_TRACE(what);
+    if (!want.valid()) return;
+    if (want.isNull()) {
+        EXPECT_FALSE(got.has_value()) << (got ? got->mode : "");
+        return;
+    }
+    ASSERT_TRUE(got.has_value());
+    EXPECT_EQ(got->mode, *want["mode"].string());
+    EXPECT_EQ(got->evidence, *want["evidence"].string());
+    EXPECT_EQ(got->provider, optString(want["provider"]));
+}
+
+// A response's values.
+inline void expectModes(const agentspeed::ExecutionModes& modes, const agentspeed::json::Value& want) {
+    expectMode(agentspeed::effort_speed::effort(modes), want["effort"], "effort");
+    expectMode(agentspeed::effort_speed::speed(modes), want["speed"], "speed");
+}
+
+// An agent's current values (EXECUTION-MODES, Current values).
+inline void expectCurrent(const agentspeed::ExecutionModes& own, const agentspeed::ExecutionModes& session,
+                          const agentspeed::ExecutionModes& configured, const agentspeed::json::Value& want) {
+    using namespace agentspeed;
+    const auto known = [](const ModeAttribution& a) { return a.known() ? std::optional<ModeAttribution>(a) : std::nullopt; };
+    expectMode(known(effort_speed::current(ModeKind::Effort, own, session, configured)), want["effort"], "effort");
+    expectMode(known(effort_speed::current(ModeKind::Speed, own, session, configured)), want["speed"], "speed");
 }
 
 }  // namespace fixtures

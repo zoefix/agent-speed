@@ -308,6 +308,18 @@ std::string antigravityDatabaseOf(const std::string& path) {
     return fsx::endsWithNoCase(path, ".db-wal") ? path.substr(0, path.size() - 4) : path;
 }
 
+std::string antigravityConfigOf(const std::string& conversations) {
+    const auto store = fsx::parentOf(normalizeRoot(conversations));
+    return fsx::join(fsx::parentOf(store), "config/config.json");
+}
+
+std::string geminiSettingsOf(const std::vector<std::string>& roots, const Environment& environment, const std::string& home) {
+    if (roots.empty()) return fsx::join(environment("GEMINI_CLI_HOME").value_or(home), ".gemini/settings.json");
+    const auto folder = normalizeRoot(roots.front());
+    const bool isTmp = folder == "tmp" || (folder.size() > 4 && folder.compare(folder.size() - 4, 4, "/tmp") == 0);
+    return fsx::join(isTmp ? fsx::parentOf(folder) : folder, "settings.json");
+}
+
 }  // namespace paths
 
 std::string SourceLocations::defaultRoot(SourceKind source, const Environment& environment, const std::string& home) {

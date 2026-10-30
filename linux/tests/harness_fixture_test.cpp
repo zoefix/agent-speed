@@ -1,5 +1,6 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
 #include <map>
 
 #include "agentspeed/file_reader.hpp"
@@ -58,6 +59,43 @@ std::optional<std::string> fixturePath(const json::Value& relative) {
     return (fixtures::fixtureDir() / *relative.string()).string();
 }
 
+void expectModes(const ExecutionModes& own, const ExecutionModes& session, const std::vector<ParsedResponse>& responses, const json::Value& want) {
+    fixtures::expectCurrent(own, session, {}, want);
+    const auto modes = want["responseModes"];
+    if (!modes.isObject()) return;
+    for (const auto& [key, value] : modes.members()) {
+        SCOPED_TRACE(key);
+        const auto it = std::find_if(responses.begin(), responses.end(), [&](const ParsedResponse& r) { return r.key == key; });
+        ASSERT_NE(it, responses.end());
+        fixtures::expectModes(it->modes, value);
+    }
+}
+
+void expectZCodeSessions(const json::Value& section) {
+    const auto path = *fixturePath(section["database"]);
+    Deduper deduper;
+    zcode::Source source(path, deduper);
+    const auto update = source.seed(0);
+    const auto agents = source.agents();
+    for (const auto& session : section["sessions"].elements()) {
+        const auto id = path + "#" + *session["id"].string();
+        SCOPED_TRACE(id);
+        const auto agent = std::find_if(agents.begin(), agents.end(), [&](const zcode::Agent& a) { return a.id == id; });
+        ASSERT_NE(agent, agents.end());
+        std::map<std::string, ParsedResponse> latest;
+        std::vector<std::string> order;
+        for (const auto& [response, completion] : update.responses) {
+            if (response.agentId != id) continue;
+            if (!latest.contains(response.key)) order.push_back(response.key);
+            latest[response.key] = response;
+        }
+        std::vector<ParsedResponse> responses;
+        for (const auto& key : order) responses.push_back(latest[key]);
+        expectResponses(session["responses"], responses);
+        expectModes(agent->modes, {}, responses, session);
+    }
+}
+
 template <typename Parser, typename Before>
 void replayFiles(const json::Value& section, bool checkCompletions, Before before) {
     Deduper deduper;
@@ -70,6 +108,7 @@ void replayFiles(const json::Value& section, bool checkCompletions, Before befor
         const auto read = readWholeFile(path, [&](std::string_view line) { parser.feed(line, sink); });
         ASSERT_TRUE(read.ok);
         expectResponses(file["responses"], sink.latest());
+        expectModes(parser.modes(), parser.sessionModes(), sink.latest(), file);
         EXPECT_EQ(parser.project(), fixtures::optString(file["project"]));
         EXPECT_EQ(parser.isSubagent(), file["isSubagent"].isTrue());
         EXPECT_EQ(parser.parentPath(), fixturePath(file["parentFile"]));
@@ -117,10 +156,22 @@ TEST(HarnessFixtures, ZCodeSourceSeedsAgentsWithParents) {
     const auto update = source.seed(0);
     EXPECT_FALSE(source.unsupported());
     EXPECT_FALSE(source.unreadable());
-    EXPECT_EQ(update.responses.size(), 4u);
+    EXPECT_EQ(update.responses.size(), 7u);
     const auto agents = source.agents();
     EXPECT_TRUE(std::any_of(agents.begin(), agents.end(), [](const zcode::Agent& a) { return a.parentSessionId.has_value(); }));
     EXPECT_FALSE(source.refresh().changed());
+}
+
+TEST(HarnessFixtures, ZCodeSessionsCarryTheirModes) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "harness-expected.json");
+    ASSERT_TRUE(expected.ok);
+    expectZCodeSessions(expected.root()["zcode"]);
+}
+
+TEST(HarnessFixtures, ZCodeWithoutVariantOrParentColumnsStillAttributes) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "harness-expected.json");
+    ASSERT_TRUE(expected.ok);
+    expectZCodeSessions(expected.root()["zcodeWithoutVariant"]);
 }
 
 TEST(HarnessFixtures, KimiWireVariantsAndForkMirrorsShareOneRequestIdentity) {

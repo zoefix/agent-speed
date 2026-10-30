@@ -12,6 +12,7 @@
 #include "agentspeed/engine.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/actions.hpp"
+#include "agentspeed/mode_context.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/report_perf.hpp"
@@ -60,6 +61,8 @@ struct AgentInfo {
     Phase phase = Phase::Idle;
     std::optional<std::int64_t> inFlightStartMs, lastLineMs;
     ExecutionModes modes;
+    // A session-current fact and configured values (EXECUTION-MODES, Current values).
+    ExecutionModes sessionModes, configuredModes;
 };
 
 // Discovers every enabled source, reads it as METRICS 5 says and keeps what the engine needs. Single-threaded.
@@ -146,6 +149,11 @@ private:
     void remove(const std::string& path);
     void pushAgent(Tracked& file);
     void pushInfo(AgentInfo info, const AgentLink& link);
+    // The parser's session-current fact, or the stores', and the agent's configured values.
+    void fillContext(AgentInfo& info, const Tracked& file) const;
+    // Checks the config files and `workbuddy.db`; agents take what changed.
+    bool refreshModeContext();
+    ModeAttribution currentEffort(const std::string& agentId) const;
     void removeAgent(const std::string& id);
     bool pollRecent(std::int64_t nowMs);
     bool rediscover(std::int64_t nowMs, std::int64_t todayStartMs);
@@ -177,6 +185,7 @@ private:
     std::map<std::string, AgentInfo> agents_;
     std::map<std::string, AgentLink> links_;
     std::map<std::string, std::string> parents_;
+    ModeContext modeContext_;
     bool linksChanged_ = false;
     bool partialHistory_ = false;
     bool restartRequested_ = false;

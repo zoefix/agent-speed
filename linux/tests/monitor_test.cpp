@@ -50,10 +50,10 @@ TEST(Monitor, HarnessesReachTheLiveMonitor) {
     const auto now = kDayStart + 30'000'000;
     monitor.start(now, kDayStart);
     const auto snap = monitor.snapshot(now, kDayStart);
-    EXPECT_EQ(snap.todayRequests, 12);
-    EXPECT_EQ(snap.todayOutput, 1475);
+    EXPECT_EQ(snap.todayRequests, 16);
+    EXPECT_EQ(snap.todayOutput, 1875);
     EXPECT_EQ(monitor.sessionCount(SourceKind::ZCode, kDayStart), 2);
-    EXPECT_EQ(monitor.sessionCount(SourceKind::Kimi, kDayStart), 2);
+    EXPECT_EQ(monitor.sessionCount(SourceKind::Kimi, kDayStart), 3);
     const auto subagentWithParent = [&](SourceKind kind) {
         for (const auto& [id, agent] : monitor.agents()) {
             if (agent.source == kind && agent.isSubagent && monitor.parentOf(id)) return true;

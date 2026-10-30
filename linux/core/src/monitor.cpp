@@ -32,6 +32,12 @@ constexpr std::int64_t kDatabaseReadIntervalMs = 500;
 
 std::int64_t msOf(std::int64_t ns) { return ns / 1'000'000; }
 
+// A WorkBuddy session's id is its transcript's name.
+std::string sessionIdOf(const std::string& path) {
+    const auto name = path.substr(path.find_last_of('/') + 1);
+    return name.substr(0, name.find_last_of('.'));
+}
+
 std::int64_t nextEpoch() {
     static std::atomic<std::int64_t> next{0};
     return ++next;
@@ -61,6 +67,10 @@ Monitor::Monitor(MonitorConfig config)
     if (!config_.prices) config_.prices = std::make_shared<pricing::PriceBook>();
     zone_ = localZone(environment_);
     store_->setPricing(config_.prices, zone_);
+    store_->setCurrentEffort([this](const std::string& agentId) { return currentEffort(agentId); });
+    if (familyEnabled(RootFamily::Gemini)) {
+        modeContext_.setGeminiSettings(paths::geminiSettingsOf(config_.locations.geminiRoots, environment_, home_));
+    }
     for (const auto& [family, path] : config_.locations.fileRoots()) addRoot(family, path);
     initSources();
     refreshAvailability();
@@ -100,6 +110,7 @@ void Monitor::addRoot(RootFamily family, const std::string& path) {
                              ? paths::workBuddyDataFolderOf(path)
                              : path;
     root.enabled = familyEnabled(family);
+    if (root.enabled) modeContext_.addRoot(family, path);
     roots_.push_back(std::move(root));
 }
 
@@ -110,8 +121,10 @@ void Monitor::refreshAvailability() {
 void Monitor::start(std::int64_t nowMs, std::int64_t todayStartMs) {
     clockMs_ = nowMs;
     store_->setClock(nowMs);
+    modeContext_.refresh();
     seedRoots(todayStartMs);
     seedSources(todayStartMs);
+    refreshModeContext();
     lastRediscoveryMs_ = nowMs;
     store_->goLive();
 }
@@ -274,7 +287,43 @@ void Monitor::pushAgent(Tracked& file) {
     info.inFlightStartMs = parser.inFlightStartMs();
     info.lastLineMs = parser.lastLineMs();
     info.modes = parser.modes();
+    fillContext(info, file);
     pushInfo(std::move(info), parser.link());
+}
+
+void Monitor::fillContext(AgentInfo& info, const Tracked& file) const {
+    const auto& root = roots_[file.root];
+    const auto& parser = *file.parser;
+    info.configuredModes = modeContext_.configured(root.family, root.path, parser.model());
+    info.sessionModes = parser.sessionModes();
+    if (root.family == RootFamily::WorkBuddy || root.family == RootFamily::WorkBuddyAi) {
+        info.sessionModes = modeContext_.session(root.path, sessionIdOf(file.tailer->path()));
+    }
+}
+
+bool Monitor::refreshModeContext() {
+    std::map<std::string, std::set<std::string>> sessions;
+    for (const auto& [path, file] : files_) {
+        const auto& root = roots_[file->root];
+        if (root.family != RootFamily::WorkBuddy && root.family != RootFamily::WorkBuddyAi) continue;
+        if (file->parser->lastLineMs() && !file->parser->isSubagent()) sessions[root.path].insert(sessionIdOf(path));
+    }
+    if (!modeContext_.refresh(sessions)) return false;
+    for (const auto& [path, file] : files_) {
+        if (const auto agent = agents_.find(file->parser->agentId()); agent != agents_.end()) fillContext(agent->second, *file);
+    }
+    return true;
+}
+
+ModeAttribution Monitor::currentEffort(const std::string& agentId) const {
+    AgentInfo info;
+    if (const auto file = files_.find(agentId); file != files_.end()) {
+        info.modes = file->second->parser->modes();
+        fillContext(info, *file->second);
+    } else if (const auto agent = agents_.find(agentId); agent != agents_.end()) {
+        info = agent->second;
+    }
+    return effort_speed::current(ModeKind::Effort, info.modes, info.sessionModes, info.configuredModes);
 }
 
 void Monitor::resolveParents() {
@@ -407,7 +456,7 @@ bool Monitor::rediscover(std::int64_t nowMs, std::int64_t todayStartMs) {
             changed = true;
         }
     }
-    return changed;
+    return refreshModeContext() || changed;
 }
 
 void Monitor::addNewOmpRoots() {

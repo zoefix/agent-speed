@@ -237,8 +237,14 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         row.subagent = info.isSubagent;
         row.parentId = self.parentId;
         row.lastLineMs = info.lastLineMs;
-        if (const auto effort = effort_speed::effort(info.modes)) row.effort = effort->mode;
-        if (const auto speed = effort_speed::speed(info.modes)) row.speed = speed->mode;
+        if (const auto effort = effort_speed::current(ModeKind::Effort, info.modes, info.sessionModes, info.configuredModes); effort.known()) {
+            row.effort = effort.mode;
+            row.effortConfigured = effort.evidence == "configured";
+        }
+        if (const auto speed = effort_speed::current(ModeKind::Speed, info.modes, info.sessionModes, info.configuredModes); speed.known()) {
+            row.speed = speed.mode;
+            row.speedConfigured = speed.evidence == "configured";
+        }
         if (row.phase == Phase::Generating) ++snap.generating;
         if (row.phase == Phase::Tools) ++snap.tools;
         snap.agents.push_back(std::move(row));

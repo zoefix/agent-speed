@@ -89,8 +89,10 @@ public:
     const Counters& counters() const { return counters_; }
     std::size_t countedKeys() const { return counted_.size(); }
     bool counted(const std::string& key) const { return counted_.contains(key); }
-    // Counts a response at its first live emission (a key already counted grows instead).
-    void count(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd, const std::string& modelId);
+    // Counts a response at its first live emission (a key already counted grows instead). `currentEffort` is the agent's
+    // current effort at that moment, which a response without one of its own freezes (EXECUTION-MODES, Ledger).
+    void count(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd, const std::string& modelId,
+               const std::optional<ModeAttribution>& currentEffort = std::nullopt);
     // Growth of a counted response (an upsert or a re-pricing): each field adds what exceeds what it already added.
     void grow(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd, const std::string& modelId);
     // Forgets counted keys whose response left the engine's retention (by its latest end).

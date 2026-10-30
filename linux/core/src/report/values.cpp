@@ -94,12 +94,22 @@ Ledger::Reported Ledger::valuesOf(const ParsedResponse& response, std::optional<
     return out;
 }
 
-void Ledger::count(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd, const std::string& modelId) {
+void Ledger::count(const ParsedResponse& response, std::optional<std::int64_t> costMicroUsd, const std::string& modelId,
+                   const std::optional<ModeAttribution>& currentEffort) {
     if (counted_.contains(response.key)) {
         grow(response, costMicroUsd, modelId);
         return;
     }
-    const auto values = valuesOf(response, costMicroUsd);
+    auto values = valuesOf(response, costMicroUsd);
+    if (currentEffort) {
+        const auto own = values.modes.attribute(ModeKind::Effort);
+        const auto frozen = effort_speed::ledgerEffort(own, *currentEffort);
+        if (frozen != own) {
+            const auto evidence = frozen.evidence == "selected" ? ModeEvidence::Selected
+                                  : frozen.evidence == "recorded" ? ModeEvidence::Recorded : ModeEvidence::Served;
+            values.modes = values.modes.with(ModeFact{ModeKind::Effort, frozen.mode, frozen.mode, evidence, std::nullopt, ModeScope::Session});
+        }
+    }
     counters_.add(values.usage, {modelId, response.source}, &values.modes);
     counted_[response.key] = values;
     order_.push_back(response.key);

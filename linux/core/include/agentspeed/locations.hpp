@@ -69,6 +69,11 @@ std::string antigravityConversationsOf(const std::string& storeOrFolder);
 bool isAntigravityBackupStore(const std::string& storeOrFolder);
 bool isAntigravityDatabaseName(std::string_view name);
 std::string antigravityDatabaseOf(const std::string& path);
+// `config/config.json` in the folder that holds an Antigravity store (EXECUTION-MODES, Configured values).
+std::string antigravityConfigOf(const std::string& conversations);
+// Gemini CLI's user settings: next to the `tmp` folder of a root, else `<home>/.gemini/settings.json`, where `<home>` is
+// $GEMINI_CLI_HOME or the user's home (METRICS 2).
+std::string geminiSettingsOf(const std::vector<std::string>& roots, const Environment& environment, const std::string& home);
 
 }  // namespace paths
 

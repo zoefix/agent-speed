@@ -7,6 +7,7 @@
 
 #include "agentspeed/actions.hpp"
 #include "agentspeed/antigravity.hpp"
+#include "agentspeed/configured_modes.hpp"
 #include "agentspeed/claude_parser.hpp"
 #include "agentspeed/codex_parser.hpp"
 #include "agentspeed/droid.hpp"
@@ -36,25 +37,6 @@ public:
     std::map<std::string, ParsedResponse> byKey;
 };
 
-// A missing key is not checked; null means unknown.
-void expectMode(const std::optional<ModeAttribution>& got, const json::Value& want, const char* what) {
-    SCOPED_TRACE(what);
-    if (!want.valid()) return;
-    if (want.isNull()) {
-        EXPECT_FALSE(got.has_value()) << (got ? got->mode : "");
-        return;
-    }
-    ASSERT_TRUE(got.has_value());
-    EXPECT_EQ(got->mode, *want["mode"].string());
-    EXPECT_EQ(got->evidence, *want["evidence"].string());
-    EXPECT_EQ(got->provider, fixtures::optString(want["provider"]));
-}
-
-void expectModes(const ExecutionModes& modes, const json::Value& want) {
-    expectMode(effort_speed::effort(modes), want["effort"], "effort");
-    expectMode(effort_speed::speed(modes), want["speed"], "speed");
-}
-
 void expectResponse(const ParsedResponse& got, const json::Value& r) {
     SCOPED_TRACE(got.key);
     EXPECT_EQ(got.key, *r["key"].string());
@@ -71,6 +53,47 @@ void expectResponse(const ParsedResponse& got, const json::Value& r) {
     EXPECT_EQ(got.provider, fixtures::optString(r["provider"]));
     EXPECT_EQ(got.fast, r["fast"].isTrue());
     EXPECT_EQ(got.final, r["final"].isTrue());
+}
+
+void expectResponseModes(Collector& sink, const json::Value& want) {
+    const auto modes = want["responseModes"];
+    if (!modes.isObject()) return;
+    for (const auto& [key, value] : modes.members()) {
+        SCOPED_TRACE(key);
+        ASSERT_TRUE(sink.byKey.contains(key));
+        fixtures::expectModes(sink.byKey[key].modes, value);
+    }
+}
+
+// What the fixture folders play for an agent's current values: `codex/config.toml`, `gemini/settings.json`,
+// `antigravity/config/config.json`, and the settings and database of the `workbuddy` data folders.
+void expectFixtureCurrent(const TranscriptParser& parser, const std::string& agentId, const json::Value& want) {
+    const auto root = fixtures::fixtureDir();
+    auto session = parser.sessionModes();
+    ExecutionModes config;
+    switch (parser.source()) {
+        case SourceKind::Codex:
+            config = configured::codex(agentId.substr(0, agentId.find("/sessions/")) + "/config.toml");
+            break;
+        case SourceKind::Gemini:
+            config = configured::gemini((root / "gemini/settings.json").string()).modes(parser.model());
+            break;
+        case SourceKind::Antigravity:
+            config = configured::antigravity((root / "antigravity/config/config.json").string());
+            break;
+        case SourceKind::WorkBuddy:
+        case SourceKind::WorkBuddyAi: {
+            const auto data = root / (parser.source() == SourceKind::WorkBuddy ? "workbuddy/.workbuddy" : "workbuddy/.workbuddy-ai");
+            config = configured::workBuddy((data / "settings.json").string());
+            const auto id = std::filesystem::path(agentId).stem().string();
+            const auto read = session_modes::workBuddy((data / "workbuddy.db").string(), {id});
+            if (const auto it = read.find(id); it != read.end()) session = it->second;
+            break;
+        }
+        default:
+            break;
+    }
+    fixtures::expectCurrent(parser.modes(), session, config, want);
 }
 
 std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const std::string& agentId, Deduper& deduper) {
@@ -168,14 +191,8 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         EXPECT_EQ(parser->inFlightStartMs(), fixtures::optInt(want["inFlightStartMs"]));
         EXPECT_EQ(parser->lastLineMs(), fixtures::optInt(want["lastLineMs"]));
         EXPECT_EQ(parser->malformedLines(), *fixtures::optInt(want["malformedLines"]));
-        expectModes(parser->modes(), want);
-        if (const auto modes = want["responseModes"]; modes.isObject()) {
-            for (const auto& [key, value] : modes.members()) {
-                SCOPED_TRACE(std::string(key));
-                ASSERT_TRUE(sink.byKey.contains(std::string(key)));
-                expectModes(sink.byKey[std::string(key)].modes, value);
-            }
-        }
+        expectFixtureCurrent(*parser, absolute, want);
+        expectResponseModes(sink, want);
 
         const auto responses = want["responses"].elements();
         ASSERT_EQ(sink.order.size(), responses.size());
@@ -202,7 +219,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 56);
+    EXPECT_EQ(checked, 58);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);
@@ -232,7 +249,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         EXPECT_EQ(phaseId(got.phase), *want["phase"].string());
         EXPECT_EQ(got.inFlightStartMs, fixtures::optInt(want["inFlightStartMs"]));
         EXPECT_EQ(got.lastLineMs, fixtures::optInt(want["lastLineMs"]));
-        expectModes(got.modes, want);
+        fixtures::expectCurrent(got.modes, {}, {}, want);
         std::vector<ParsedResponse> mine;
         for (const auto& [r, _] : update.responses) {
             if (r.agentId == id) mine.push_back(r);
@@ -244,7 +261,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
             for (const auto& [key, value] : modes.members()) {
                 const auto r = std::find_if(mine.begin(), mine.end(), [&](const ParsedResponse& p) { return p.key == key; });
                 ASSERT_NE(r, mine.end()) << key;
-                expectModes(r->modes, value);
+                fixtures::expectModes(r->modes, value);
             }
         }
     }
@@ -293,6 +310,8 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         const auto responses = want["responses"].elements();
         ASSERT_EQ(sink.order.size(), responses.size());
         for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
+        expectFixtureCurrent(*parser, absolute, want);
+        expectResponseModes(sink, want);
         databaseLinks.push_back(parser->link());
         databases.push_back(std::move(parser));
     }
@@ -354,7 +373,24 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
             const auto responses = agent["responses"].elements();
             ASSERT_EQ(sink.order.size(), responses.size());
             for (std::size_t i = 0; i < responses.size(); ++i) expectResponse(sink.byKey[sink.order[i]], responses[i]);
+            fixtures::expectCurrent(parser->modes(), {}, {}, agent);
+            expectResponseModes(sink, agent);
         }
     }
     EXPECT_EQ(fixtures::listFiles(openclawDir), openclawBefore);
+}
+
+TEST(ParserFixtures, TheTrajectoryQuerySelectsOnlyTheListedRows) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "parser-expected.json");
+    ASSERT_TRUE(expected.ok);
+    for (const auto& [relative, windows] : expected.root()["openclaw"]["traceSeqs"].members()) {
+        auto database = openclaw::Database::open((fixtures::fixtureDir() / relative).string());
+        for (const auto& [window, wanted] : windows.members()) {
+            SCOPED_TRACE(relative + "#" + window);
+            std::vector<std::int64_t> want, selected;
+            for (const auto& seq : wanted.elements()) want.push_back(*fixtures::optInt(seq));
+            database->traces(window, -1, [&](std::int64_t seq, const std::optional<openclaw::Trace>&) { selected.push_back(seq); });
+            EXPECT_EQ(selected, want);
+        }
+    }
 }

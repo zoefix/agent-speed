@@ -1,5 +1,6 @@
 #pragma once
 
+#include <functional>
 #include <map>
 #include <set>
 #include <string>
@@ -67,7 +68,9 @@ public:
         e.requestCount = r.requestCount;
         e.costMicroUsd = book_ ? book_->cost(r, localDate(r.endMs)) : std::nullopt;
         if (completion && live_ && !seeding_ && r.endMs >= nowMs_ - kCompletionWindowMs) {
-            ledger_.count(r, e.costMicroUsd, reportModelId(r.model, r.provider));
+            std::optional<ModeAttribution> current;
+            if (currentEffort_ && !r.modes.attribute(ModeKind::Effort).known()) current = currentEffort_(r.agentId);
+            ledger_.count(r, e.costMicroUsd, reportModelId(r.model, r.provider), current);
         } else if (ledger_.counted(r.key)) {
             ledger_.grow(r, e.costMicroUsd, reportModelId(r.model, r.provider));
         }
@@ -100,6 +103,8 @@ public:
     }
 
     void goLive() { live_ = true; }
+    // The agent's current effort as read so far, which the ledger freezes for a response without one of its own.
+    void setCurrentEffort(std::function<ModeAttribution(const std::string&)> lookup) { currentEffort_ = std::move(lookup); }
     void setSeeding(bool seeding) { seeding_ = seeding; }
     void setClock(std::int64_t nowMs) { nowMs_ = nowMs; }
     std::vector<Completion> takeCompletions() { return std::exchange(completions_, {}); }
@@ -150,6 +155,7 @@ private:
     std::map<std::string, std::string> providers_;
     report::Ledger ledger_;
     report::PerfLedger* perfLedger_ = nullptr;
+    std::function<ModeAttribution(const std::string&)> currentEffort_;
     bool live_ = false;
     bool seeding_ = false;
     std::int64_t nowMs_ = 0;

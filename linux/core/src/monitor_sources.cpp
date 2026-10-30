@@ -185,6 +185,8 @@ bool Monitor::applyHermes(const hermes::Update& update, bool seeded) {
             info.phase = agent->phase;
             info.inFlightStartMs = agent->inFlightStartMs;
             info.lastLineMs = agent->lastLineMs;
+            info.sessionModes = agent->sessionModes;
+            info.configuredModes = agent->configuredModes;
             agents_[info.id] = std::move(info);
             pushed = true;
         }

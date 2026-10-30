@@ -122,7 +122,4 @@ int bolts(std::string_view speed);
 bool less(ModeKind kind, std::string_view a, std::string_view b);
 }  // namespace effort_speed
 
-// `service_tier` of a Codex root's config.toml, as a configured fact (cached by size and modification time).
-ExecutionModes codexConfiguredModes(const std::string& root);
-
 }  // namespace agentspeed

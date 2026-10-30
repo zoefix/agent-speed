@@ -9,6 +9,8 @@
 #include <fstream>
 #include <regex>
 
+#include "agentspeed/configured_modes.hpp"
+#include "agentspeed/fs_util.hpp"
 #include "agentspeed/rfc3339.hpp"
 #include "agentspeed/text.hpp"
 
@@ -240,10 +242,10 @@ bool startsWithKey(std::string_view s, std::string_view key, std::size_t& after)
 
 bool isBlankOrTab(char c) { return c == ' ' || c == '\t'; }
 
-// ^(model|"model"|'model')[ \t]*:([ \t]+(#.*)?)?$
-bool modelHeader(std::string_view line) {
+// ^(name|"name"|'name')[ \t]*:([ \t]+(#.*)?)?$
+bool blockHeader(std::string_view line, std::string_view name) {
     std::size_t i = 0;
-    if (!startsWithKey(line, "model", i)) return false;
+    if (!startsWithKey(line, name, i)) return false;
     while (i < line.size() && isBlankOrTab(line[i])) ++i;
     if (i >= line.size() || line[i] != ':') return false;
     ++i;
@@ -253,15 +255,46 @@ bool modelHeader(std::string_view line) {
     return i == line.size() || line[i] == '#';
 }
 
-// ^(openai_runtime|...)[ \t]*:(|[ \t].*)$ → the group after the colon.
-std::optional<std::string_view> runtimeKey(std::string_view body) {
+// ^(name|"name"|'name')[ \t]*:(|[ \t].*)$ → the group after the colon.
+std::optional<std::string_view> keyValue(std::string_view body, std::string_view name) {
     std::size_t i = 0;
-    if (!startsWithKey(body, "openai_runtime", i)) return std::nullopt;
+    if (!startsWithKey(body, name, i)) return std::nullopt;
     while (i < body.size() && isBlankOrTab(body[i])) ++i;
     if (i >= body.size() || body[i] != ':') return std::nullopt;
     const auto rest = body.substr(i + 1);
     if (!rest.empty() && !isBlankOrTab(rest[0])) return std::nullopt;
     return rest;
+}
+
+// `^[ \t]+("[ \t]*(token)[ \t]*"|'[ \t]*(token)[ \t]*'|(token))([ \t]+#.*)?[ \t]*$`, token `[A-Za-z0-9._:-]+`.
+std::optional<std::string> plainScalar(std::string_view value) {
+    const auto isToken = [](char c) {
+        return (c >= 'a' && c <= 'z') || (c >= 'A' && c <= 'Z') || (c >= '0' && c <= '9') || c == '.' || c == '-' || c == '_' || c == ':';
+    };
+    const auto skipBlanks = [&](std::size_t from) {
+        while (from < value.size() && isBlankOrTab(value[from])) ++from;
+        return from;
+    };
+    if (value.empty() || !isBlankOrTab(value[0])) return std::nullopt;
+    auto at = skipBlanks(0);
+    std::optional<char> quote;
+    if (at < value.size() && (value[at] == '"' || value[at] == '\'')) {
+        quote = value[at];
+        at = skipBlanks(at + 1);
+    }
+    const auto begin = at;
+    while (at < value.size() && isToken(value[at])) ++at;
+    if (at == begin) return std::nullopt;
+    const std::string token(value.substr(begin, at - begin));
+    if (quote) {
+        at = skipBlanks(at);
+        if (at >= value.size() || value[at] != *quote) return std::nullopt;
+        ++at;
+    }
+    const auto gapStart = at;
+    at = skipBlanks(at);
+    if (at < value.size() && !(at > gapStart && value[at] == '#')) return std::nullopt;
+    return token;
 }
 
 bool codexValue(std::string_view v) {
@@ -400,12 +433,12 @@ bool selectsCodexRuntime(std::string text) {
         const auto spaces = line.find_first_not_of(' ');
         const std::size_t depth = spaces == std::string_view::npos ? line.size() : spaces;
         if (depth == 0) {
-            inModel = modelHeader(line);
+            inModel = blockHeader(line, "model");
             indent.reset();
         } else if (inModel) {
             if (!indent) indent = depth;
             if (depth == *indent) {
-                if (auto value = runtimeKey(line.substr(depth))) codex = codexValue(*value);
+                if (auto value = keyValue(line.substr(depth), "openai_runtime")) codex = codexValue(*value);
             }
         }
         if (end == text.size()) break;
@@ -413,10 +446,53 @@ bool selectsCodexRuntime(std::string text) {
     return codex;
 }
 
+std::map<std::string, std::optional<std::string>> agentScalars(std::string text) {
+    if (text.rfind("\xEF\xBB\xBF", 0) == 0) text = text.substr(3);
+    std::map<std::string, std::optional<std::string>> found;
+    bool inAgent = false;
+    std::optional<std::size_t> indent;
+    std::size_t start = 0;
+    while (start <= text.size()) {
+        auto end = text.find('\n', start);
+        if (end == std::string::npos) end = text.size();
+        std::string_view line(text.data() + start, end - start);
+        start = end + 1;
+        if (!line.empty() && line.back() == '\r') line.remove_suffix(1);
+        const auto firstVisible = line.find_first_not_of(" \t");
+        if (firstVisible != std::string_view::npos && line[firstVisible] != '#') {
+            const auto spaces = line.find_first_not_of(' ');
+            const std::size_t depth = spaces == std::string_view::npos ? line.size() : spaces;
+            if (depth == 0) {
+                inAgent = blockHeader(line, "agent");
+                indent.reset();
+            } else if (inAgent) {
+                if (!indent) indent = depth;
+                if (depth == *indent) {
+                    for (const char* name : {"reasoning_effort", "service_tier"}) {
+                        if (const auto value = keyValue(line.substr(depth), name)) found[name] = plainScalar(*value);
+                    }
+                }
+            }
+        }
+        if (end == text.size()) break;
+    }
+    return found;
+}
+
+ExecutionModes configuredModes(const std::string& text) {
+    const auto scalars = agentScalars(text);
+    const auto scalar = [&](const char* name) {
+        const auto it = scalars.find(name);
+        return it == scalars.end() ? std::nullopt : it->second;
+    };
+    return native::hermesEffort(scalar("reasoning_effort"), ModeEvidence::Configured, ModeScope::Configuration)
+        .merge(native::hermesServiceTier(scalar("service_tier"), ModeEvidence::Configured, ModeScope::Configuration));
+}
+
 ConfigCheck checkConfig(const std::optional<std::string>& path, const std::optional<ConfigSignature>& known,
-                        std::optional<ConfigSignature>& signature, bool& codex) {
+                        std::optional<ConfigSignature>& signature, ProfileConfig& config) {
     signature.reset();
-    codex = false;
+    config = {};
     if (!path) return ConfigCheck::Off;
     struct stat st {};
     if (stat(path->c_str(), &st) != 0) return errno == ENOENT || errno == ENOTDIR ? ConfigCheck::Off : ConfigCheck::Failed;
@@ -433,7 +509,10 @@ ConfigCheck checkConfig(const std::optional<std::string>& path, const std::optio
     std::string data(static_cast<std::size_t>((1 << 20) + 1), '\0');
     in.read(data.data(), static_cast<std::streamsize>(data.size()));
     data.resize(static_cast<std::size_t>(in.gcount()));
-    codex = data.size() <= (1u << 20) && selectsCodexRuntime(text::sanitizeUtf8(data));
+    if (data.size() > (1u << 20)) return ConfigCheck::Read;
+    const auto text = text::sanitizeUtf8(data);
+    config.codexRuntime = selectsCodexRuntime(text);
+    config.configuredModes = configuredModes(text);
     return ConfigCheck::Read;
 }
 
@@ -503,7 +582,9 @@ void Agent::setPhase(Phase p, std::optional<std::int64_t> inFlight) {
 }
 
 LogSet::LogSet(std::string folder, Deduper& deduper, std::shared_ptr<const TimeZone> zone)
-    : folder_(std::move(folder)), deduper_(deduper), zone_(std::move(zone)), configPath_(configPath(folder_)) {}
+    : folder_(std::move(folder)), deduper_(deduper), zone_(std::move(zone)), configPath_(configPath(folder_)) {
+    if (configPath_) statePath_ = fsx::join(fsx::parentOf(*configPath_), "state.db");
+}
 
 Agent* LogSet::agent(const std::string& sessionId) {
     const auto it = agents_.find(sessionId);
@@ -512,22 +593,42 @@ Agent* LogSet::agent(const std::string& sessionId) {
 
 bool LogSet::checkConfig() {
     const bool before = codexRuntime_;
+    const auto modesBefore = configuredModes_;
     std::optional<ConfigSignature> signature;
-    bool codex = false;
-    switch (hermes::checkConfig(configPath_, configSignature_, signature, codex)) {
+    ProfileConfig config;
+    switch (hermes::checkConfig(configPath_, configSignature_, signature, config)) {
         case ConfigCheck::Off:
             configSignature_.reset();
             setCodexRuntime(false);
+            setConfiguredModes({});
             break;
         case ConfigCheck::Read:
             configSignature_ = signature;
-            setCodexRuntime(codex);
+            setCodexRuntime(config.codexRuntime);
+            setConfiguredModes(config.configuredModes);
             break;
         case ConfigCheck::Unchanged:
         case ConfigCheck::Failed:
             break;
     }
-    return before != codexRuntime_;
+    return before != codexRuntime_ || modesBefore != configuredModes_;
+}
+
+void LogSet::setConfiguredModes(const ExecutionModes& modes) {
+    if (modes == configuredModes_) return;
+    configuredModes_ = modes;
+    for (auto* agent : ordered_) {
+        agent->configuredModes = modes;
+        ++agent->version;
+    }
+}
+
+bool LogSet::setSessionModes(const std::string& sessionId, const ExecutionModes& modes) {
+    auto* target = agent(sessionId);
+    if (!target || target->sessionModes == modes) return false;
+    target->sessionModes = modes;
+    ++target->version;
+    return true;
 }
 
 void LogSet::setCodexRuntime(bool on) {
@@ -545,6 +646,7 @@ Agent& LogSet::agentFor(const std::string& sessionId, std::int64_t ts) {
         auto agent = std::make_unique<Agent>();
         agent->agentId = agentIdOf(folder_, sessionId);
         agent->sessionId = sessionId;
+        agent->configuredModes = configuredModes_;
         ordered_.push_back(agent.get());
         it = agents_.emplace(sessionId, std::move(agent)).first;
     }
@@ -720,6 +822,7 @@ Update Source::seed(std::int64_t todayStartMs) {
         Tracked& tracked = add(folder);
         tracked.set->checkConfig();
         readSet(tracked, update, todayStartMs - kBacklogWindowMs, false);
+        checkSessions(tracked, update);
     }
     return update;
 }
@@ -752,8 +855,36 @@ Update Source::refresh(bool discover) {
     for (auto& tracked : sets_) {
         if (discover) update.changed |= tracked->set->checkConfig();
         readSet(*tracked, update, std::nullopt, discover);
+        if (discover) checkSessions(*tracked, update);
     }
     return update;
+}
+
+// The session-current efforts of `state.db`: read when it or its `-wal` changed, else only for sessions it was not asked
+// about yet, so at most once per rediscovery. No connection stays open (METRICS 4.15).
+void Source::checkSessions(Tracked& tracked, Update& update) {
+    const auto& path = tracked.set->statePath();
+    if (!path) return;
+    const auto stampOf = [](const std::string& file) -> std::optional<std::pair<std::int64_t, std::int64_t>> {
+        const auto stat = fsx::statOf(file);
+        if (!stat) return std::nullopt;
+        return std::make_pair(stat->length, stat->writeNs);
+    };
+    const auto stamp = stampOf(*path), wal = stampOf(*path + "-wal");
+    const bool changed = stamp != tracked.stateStamp || wal != tracked.stateWalStamp;
+    tracked.stateStamp = stamp;
+    tracked.stateWalStamp = wal;
+    std::vector<std::string> sessions;
+    for (const auto* agent : tracked.set->agents()) {
+        if (!agent->sessionId.empty() && (changed || !tracked.queriedSessions.contains(agent->sessionId))) sessions.push_back(agent->sessionId);
+    }
+    if (sessions.empty()) return;
+    const auto values = session_modes::hermes(*path, sessions);
+    for (const auto& session : sessions) {
+        tracked.queriedSessions.insert(session);
+        const auto value = values.find(session);
+        update.changed |= tracked.set->setSessionModes(session, value == values.end() ? ExecutionModes() : value->second);
+    }
 }
 
 void Source::readSet(Tracked& tracked, Update& update, std::optional<std::int64_t> thresholdMs, bool forget) {

@@ -46,6 +46,8 @@ public:
     const std::optional<std::string>& cwdPath() const { return cwdPath_; }
     const std::optional<std::string>& model() const { return model_; }
     const ExecutionModes& modes() const { return modes_; }
+    // A session-current fact, held apart from `modes`: it never reaches a response.
+    const ExecutionModes& sessionModes() const { return sessionModes_; }
     bool isSubagent() const { return isSubagent_; }
     Phase phase() const { return phase_; }
     std::optional<std::int64_t> phaseSinceMs() const { return phaseSinceMs_; }
@@ -77,6 +79,7 @@ protected:
     void setPhase(Phase phase, std::int64_t timestampMs, std::optional<std::int64_t> inFlightStartMs);
     void markChanged() { ++version_; }
     void setModes(const ExecutionModes& modes);
+    void setSessionModes(const ExecutionModes& modes);
     void setProject(const std::optional<std::string>& project);
     void clearModel() {
         if (model_) {
@@ -97,6 +100,7 @@ private:
     std::optional<std::string> cwdPath_;
     std::optional<std::string> model_;
     ExecutionModes modes_;
+    ExecutionModes sessionModes_;
     bool isSubagent_ = false;
     Phase phase_ = Phase::Idle;
     std::optional<std::int64_t> phaseSinceMs_;

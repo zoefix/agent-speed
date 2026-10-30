@@ -21,6 +21,7 @@ void TranscriptParser::reset() {
     cwdPath_.reset();
     model_.reset();
     modes_ = ExecutionModes();
+    sessionModes_ = ExecutionModes();
     isSubagent_ = false;
     phase_ = Phase::Idle;
     phaseSinceMs_.reset();
@@ -68,6 +69,12 @@ void TranscriptParser::setModes(const ExecutionModes& modes) {
         modes_ = modes;
         ++version_;
     }
+}
+
+void TranscriptParser::setSessionModes(const ExecutionModes& modes) {
+    if (modes == sessionModes_) return;
+    sessionModes_ = modes;
+    ++version_;
 }
 
 void TranscriptParser::setSubagent(bool value) {

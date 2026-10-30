@@ -35,6 +35,8 @@ struct AgentRow {
     // EXECUTION-MODES: the effort and speed the row shows (mode tokens), nullopt when unknown.
     std::optional<std::string> effort;
     std::optional<std::string> speed;
+    // A value only a config file holds, shown in the configured form.
+    bool effortConfigured = false, speedConfigured = false;
     // METRICS 6.9: every listed agent.
     std::optional<AgentPerf> perf;
     // METRICS 6.9 Live thinking: this agent's reasoning tokens per second and share.

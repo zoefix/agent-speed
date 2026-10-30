@@ -6,6 +6,7 @@
 #include <fstream>
 #include <map>
 
+#include "agentspeed/configured_modes.hpp"
 #include "agentspeed/file_reader.hpp"
 #include "agentspeed/hermes.hpp"
 #include "fixture_support.hpp"
@@ -140,6 +141,14 @@ TEST(Hermes, LogSetsMatchTheReference) {
             EXPECT_EQ(agent->sessionId, session);
             EXPECT_EQ(agent->agentId, folder + "#" + session);
             expectAgent(agent, w);
+            // The profile's `config.yaml` and `state.db` beside the log folder play what a live read would find.
+            ExecutionModes config, current;
+            if (const auto path = hermes::configPath(folder)) {
+                config = hermes::configuredModes(fixtures::readText(*path));
+                const auto values = session_modes::hermes(fs::path(*path).replace_filename("state.db").string(), {session});
+                if (const auto it = values.find(session); it != values.end()) current = it->second;
+            }
+            fixtures::expectCurrent({}, current, config, w);
             const auto responses = w["responses"].elements();
             const auto& got = byAgent[agent->agentId];
             ASSERT_EQ(got.size(), responses.size());
@@ -184,6 +193,19 @@ TEST(Hermes, WallTimesHomesAndRuntimeConfigs) {
     for (const auto& c : h["runtimeConfigs"].elements()) {
         SCOPED_TRACE(*c["name"].string());
         EXPECT_EQ(hermes::selectsCodexRuntime(*c["text"].string()), c["codexRuntime"].isTrue());
+    }
+}
+
+TEST(Hermes, AgentScalarsFollowTheLineRules) {
+    fixtures::JsonFile expected(fixtures::fixtureDir() / "parser-expected.json");
+    ASSERT_TRUE(expected.ok);
+    for (const auto& item : expected.root()["hermes"]["agentConfigs"].elements()) {
+        SCOPED_TRACE(*item["name"].string());
+        std::map<std::string, std::optional<std::string>> want;
+        for (const auto& [key, value] : item.members()) {
+            if (key != "name" && key != "text") want[key] = fixtures::optString(value);
+        }
+        EXPECT_EQ(hermes::agentScalars(*item["text"].string()), want);
     }
 }
 

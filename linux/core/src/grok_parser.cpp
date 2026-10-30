@@ -46,7 +46,8 @@ std::optional<GrokMetadata> GrokMetadata::read(const std::string& folder) {
                         root["current_model_id"].nonEmptyString(),
                         root["parent_session_id"].nonEmptyString(),
                         root["session_kind"].nonEmptyString(),
-                        harness::timestamp(root["created_at"])};
+                        harness::timestamp(root["created_at"]),
+                        root["reasoning_effort"].string()};
 }
 
 GrokParser::Line GrokParser::Line::read(std::string_view text) {
@@ -210,6 +211,7 @@ void GrokParser::applyMetadata(const std::optional<GrokMetadata>& metadata) {
     if (metadata->id) sessionId_ = *metadata->id;
     setProjectFromCwd(metadata->cwd);
     setModel(metadata->model);
+    setSessionModes(ExecutionModes::of(native::effort(metadata->effort, ModeEvidence::Selected, ModeScope::Session)));
     parentSessionId_ = metadata->parent;
     createdMs_ = metadata->createdMs;
     const bool hasParent = parentSessionId_ && !parentSessionId_->empty();

@@ -35,8 +35,8 @@ class Analyzer {
 public:
     // The parsers' analysis version: a change re-analyses every file.
     // 2: task records; 3: performance records instead (METRICS 6.11); 4: the effort and speed breakdowns
-    // (EXECUTION-MODES).
-    static constexpr int kVersion = 4;
+    // (EXECUTION-MODES); 5: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
+    static constexpr int kVersion = 5;
 
     Analyzer(Store& store, std::shared_ptr<pricing::PriceBook> prices, std::shared_ptr<const TimeZone> hermesZone = nullptr);
 
