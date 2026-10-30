@@ -58,13 +58,17 @@ struct ExecutionModeTests {
         }
     }
 
-    @Test func speedIsNeverAFactAndEffortIsNeverReported() throws {
+    @Test func speedIsNeverAFactOrReported() throws {
         #expect(ExecutionModeFact(kind: .speed, rawValue: "fast", evidence: .served, scope: .response) == nil)
         let bad = #"{"kind":"speed","value":"fast","rawValue":"fast","evidence":"served","scope":"response"}"#
         #expect(throws: (any Error).self) { try JSONDecoder().decode(ExecutionModeFact.self, from: Data(bad.utf8)) }
         var modes = ExecutionModeAdapters.claude("fast")
         modes.insert(try #require(ExecutionModeAdapters.effort("xhigh", evidence: .recorded, scope: .request)))
-        #expect(modes.reportedAttributions.map(\.kind) == [.serviceTier])
+        // The effort is frozen for reports (version 2 sends it); the derived speed never is.
+        #expect(modes.reportedAttributions.map(\.kind) == [.serviceTier, .effort])
+        #expect(ExecutionModeKind.reported(version: 1) == ExecutionModeKind.reported)
+        #expect(ExecutionModeKind.reported(version: 2) == ExecutionModeKind.reported + [.effort])
+        #expect(ExecutionModeKind.reported(version: 3).isEmpty)
         #expect(Set(modes.breakdownAttributions.map(\.kind)) == [.serviceTier, .effort, .speed])
         #expect(modes.effortAndSpeed.effort?.mode == "xhigh" && modes.effortAndSpeed.bolts == 1)
         #expect(ExecutionModes.empty.effortAndSpeed == .unknown && !EffortAndSpeed.unknown.isVisible)

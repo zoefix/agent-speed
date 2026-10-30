@@ -401,7 +401,8 @@ public enum ReportBody {
             members.append(.init("harnessRequests", rows))
         }
         if extensions.executionModes, !entry.perfOnly,
-           let rows = ReportModelBreakdown.modes(entry.usageBySource, groups: entry.modes) {
+           let rows = ReportModelBreakdown.modes(entry.usageBySource, groups: entry.modes,
+                                                 version: extensions.executionModesVersion) {
             members.append(.init("modeUsage", rows))
         }
         switch scores {
