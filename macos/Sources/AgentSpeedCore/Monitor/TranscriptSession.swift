@@ -159,7 +159,7 @@ final class TranscriptSession {
         hermes = configuration.readsHermes
             ? HermesSource(root: hermesRoot.path, isSetting: hermesRoot.isSetting,
                            timeZone: configuration.resolvedHermesTimeZone, limits: limits) : nil
-        modeContext = AgentModeContext(roots: roots.filter(\.enabled).map { ($0.family, $0.path) },
+        modeContext = AgentModeContext(roots: roots.filter { $0.enabled && $0.readable }.map { ($0.family, $0.path) },
                                        geminiSettings: configuration.resolvedGeminiSettings)
         refreshAvailability()
     }
