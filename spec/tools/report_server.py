@@ -34,6 +34,7 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent))
 
+import execution_modes_reference as modes  # noqa: E402
 import report_reference as ref  # noqa: E402
 import report_server_ws as ws  # noqa: E402
 
@@ -53,7 +54,8 @@ def build_service(args) -> ref.ReferenceService:
 
 
 def extensions(args) -> dict | None:
-    chosen = {name: 1 for name in ref.EXTENSIONS} if args.extensions else {}
+    # Every extension at its newest version: executionModes 2 also carries the reasoning effort.
+    chosen = {name: max(modes.VERSIONS.get(name, (1,))) for name in ref.EXTENSIONS} if args.extensions else {}
     if args.perf_score:
         chosen["perfScore"] = 1
     if args.task_score:

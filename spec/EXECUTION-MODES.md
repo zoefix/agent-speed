@@ -199,14 +199,20 @@ The existing CSV format stays unchanged. A separate mode CSV uses these fixed co
 Each kind is an independent breakdown with unknown totals filled from the ordinary aggregates. Average speed uses
 the existing measured-output/measured-time formula; it is not an average of group averages.
 
-## Optional report extension version 1
+## Report extension (versions 1 and 2)
 
-Discovery advertises `extensions.executionModes: 1`. A client sends the optional `models[].modeUsage` field only
-when this exact integer is advertised and the user's existing models sharing section is enabled. Boolean true,
-unknown versions, absent capability and disabled models sharing all retain the old report shape. The receiver
-and leaderboard must implement this contract before advertising it. No conversation, paths or raw config is sent.
+Discovery advertises `extensions.executionModes` as the JSON integer `1` or `2`. A client sends the optional
+`models[].modeUsage` field only when one of these exact integers is advertised and the user's existing models sharing
+section is enabled. Boolean true, other numbers (an unknown future version included), absent capability and disabled
+models sharing all retain the old report shape. The receiver and leaderboard must implement the advertised version
+before advertising it. No conversation, paths or raw config is sent.
 
-`effort` and `speed` are local only and are never sent (they are not version 1 kinds).
+- **Version 1** carries the kinds `serviceTier`, `accelerator`, `modelVariant`, `routing` and `workflow`.
+- **Version 2** (user's decision, 2026-10-30: report the reasoning effort) carries those and `effort`: the response's
+  effort attribution (*Reasoning effort and speed*; `ultracode` and `ultra` included). Effort rows have no
+  `provider`. `speed` stays local: it is derived from the service-tier, accelerator and model-variant rows a service
+  already receives. A version 2 receiver accepts every version 1 row.
+
 Each modeUsage row contains `source`, optional `provider`, `kind`, `mode`, `evidence`, `requests`, `output`,
 `measuredOutput`, `measuredMs`. Evidence is `served`, `recorded`, `selected`, or `unknown`; `configured` is forbidden.
 Mode and evidence are both `unknown` for an unattributable row. Native rawValue and native scope stay local.
@@ -214,14 +220,23 @@ Use the same bounded identifiers and integer bounds as the existing protocol. At
 
 For every kind present, rows have unique `(source,provider,kind,mode,evidence)` keys and their requests/output/
 measuredOutput/measuredMs sums exactly equal the parent model entry. Row sources belong to the parent's sources.
-Kinds are independent breakdowns, never extra model totals. If a complete bounded breakdown does not fit, omit the
-optional field for that model rather than transmitting a partial/misleading breakdown or exceeding body limits.
-Keep model IDs unique and unchanged. Existing signatures, run/seq deduplication and retry rules apply unchanged.
+Kinds are independent breakdowns, never extra model totals.
 
-The report ledger freezes a response's mode attribution when that response first enters its live counters. Later
-numeric growth uses that same attribution, so a late mode observation cannot replay a previously reported request
-or transfer old tokens into a later window. Local UI/history can still retain richer later evidence. A late or
-ambiguous fact may therefore remain unknown in already-reported data; no unnegotiated correction is sent.
+**Rows** (both platforms; `execution_modes_reference.py` `mode_rows`, fixture `reportRows` of
+`execution-mode-cases.json`). The kinds of the negotiated version that some frozen attribution of the model has, plus
+`serviceTier` and, with version 2, `effort` (so a service always gets their complete denominators), each complete per
+source: the attributions' usage, then an `unknown` bucket for the rest of that source's totals. Rows are ordered by
+`source/kind/provider/mode/evidence` joined with `/` (an absent provider is empty), compared as strings. If a complete
+bounded breakdown does not fit, omit the optional field for that model rather than transmitting a partial or
+misleading breakdown or exceeding body limits: more than 64 rows under version 2 first leave the `effort` kind out
+(the version 1 rows); more than 64 rows then, an attribution whose usage does not fit within its source's totals, or
+an unsafe identifier omit the field. Keep model IDs unique and unchanged. Existing signatures, run/seq deduplication
+and retry rules apply unchanged.
+
+The report ledger freezes a response's mode attributions, the effort included, when that response first enters its
+live counters. Later numeric growth uses that same attribution, so a late mode observation cannot replay a previously
+reported request or transfer old tokens into a later window. Local UI/history can still retain richer later evidence.
+A late or ambiguous fact may therefore remain unknown in already-reported data; no unnegotiated correction is sent.
 
 ## Acceptance
 

@@ -27,7 +27,7 @@ def png(metadata=False):
 
 class ContractTests(unittest.TestCase):
     def test_shared_mode_vectors(self):
-        self.assertEqual(modes.check_fixtures(), 99)
+        self.assertEqual(modes.check_fixtures(), 109)
 
     def test_modes_and_harness_must_conserve_parent_totals(self):
         model = {"sources": ["codex", "opencode"], "requests": 3, "output": 30, "measuredOutput": 20,
@@ -46,6 +46,26 @@ class ContractTests(unittest.TestCase):
         broken = copy.deepcopy(model)
         broken["modeUsage"].append(copy.deepcopy(broken["modeUsage"][0]))
         self.assertTrue(any("duplicate" in reason for _, reason in modes.model_extension_errors(broken)))
+
+    def test_effort_rows_need_version_2_and_no_provider(self):
+        row = {"source": "codex", "kind": "effort", "mode": "xhigh", "evidence": "recorded",
+               "requests": 3, "output": 30, "measuredOutput": 20, "measuredMs": 1000}
+        model = {"sources": ["codex"], "requests": 3, "output": 30, "measuredOutput": 20, "measuredMs": 1000,
+                 "modeUsage": [row]}
+        self.assertEqual(modes.model_extension_errors(model, extensions={"executionModes": 2}), [])
+        self.assertIn(("/models/0/modeUsage/0/kind", "unknown kind"),
+                      modes.model_extension_errors(model, extensions={"executionModes": 1}))
+        model["modeUsage"][0] = {**row, "provider": "openai"}
+        self.assertIn(("/models/0/modeUsage/0/provider", "effort rows have no provider"),
+                      modes.model_extension_errors(model, extensions={"executionModes": 2}))
+
+    def test_discovery_keeps_the_execution_modes_version(self):
+        for advertised in (1, 2):
+            service = ref.ReferenceService(authority="127.0.0.1:18789", extensions={"executionModes": advertised})
+            parsed = ref.parse_discovery(service.discovery("http"), "http://127.0.0.1:18789/.well-known/agent-speed-report")
+            self.assertEqual(parsed["extensions"]["executionModes"], advertised)
+        service = ref.ReferenceService(authority="127.0.0.1:18789", extensions={"executionModes": 3})
+        self.assertNotIn("extensions", service.discovery("http"))
 
     def test_untrusted_sources_and_unsafe_numbers_are_rejected(self):
         for source in ({}, [], True, None):

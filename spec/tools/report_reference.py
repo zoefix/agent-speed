@@ -45,7 +45,7 @@ import urllib.request
 import uuid
 from pathlib import Path
 
-from execution_modes_reference import EXTENSIONS, report_extension_errors, supported
+from execution_modes_reference import EXTENSIONS, report_extension_errors, supported, version
 
 SPEC = Path(__file__).resolve().parent.parent
 SCHEMA_PATH = SPEC / "report-schema.json"
@@ -755,7 +755,8 @@ def parse_discovery(document, fetched_from: str) -> dict:
     result["sections"] = [name for name in SECTIONS if sections is None or name in sections]
     from report_websocket import EXTENSION, stream_settings
 
-    enabled = {name: 1 for name in (*EXTENSIONS, EXTENSION) if supported(document.get("extensions"), name)}
+    enabled = {name: version(document.get("extensions"), name) for name in (*EXTENSIONS, EXTENSION)
+               if supported(document.get("extensions"), name)}
     if enabled:
         result["extensions"] = enabled
     result["websocket"] = stream_settings(document)
@@ -845,7 +846,7 @@ class ReferenceService:
         self.ip_bucket = TokenBucket(60, 1.0)
         self.device_bucket = TokenBucket(3, 0.25)
         self.log = log or (lambda line: None)
-        self.extensions = {name: 1 for name in EXTENSIONS if supported(extensions, name)}
+        self.extensions = {name: version(extensions, name) for name in EXTENSIONS if supported(extensions, name)}
         self.websocket = None
         if websocket is not None:
             from report_websocket import DEFAULT_STREAM
