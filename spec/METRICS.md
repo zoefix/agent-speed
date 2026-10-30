@@ -1560,8 +1560,8 @@ files of the log folder's parent, the same folder `config.yaml` is found in (no 
 EXECUTION-MODES, *Current values*):
 
 - **`state.db`** (user's decision, 2026-10-30; it replaces the rule that it is never opened): a regular file (a symlink
-  is not followed), opened read-only with the rules of 4.5, so no `-wal` or `-shm` is ever created, for one short query
-  per session id and closed right after it
+  is not followed), opened read-only with the rules of 4.5, so no `-wal` or `-shm` is ever created, for one short read
+  of one query per session id and closed right after it
   (Hermes defers its database maintenance while a foreign process holds the file, so no connection is kept):
   `SELECT CASE WHEN length(model_config) <= 65536 THEN model_config END FROM sessions WHERE id = ?`. It runs only when
   `state.db` or its `-wal` changed since the last read, at rediscovery (section 5), so at most once per 10 seconds. A

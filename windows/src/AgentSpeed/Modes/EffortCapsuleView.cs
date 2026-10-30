@@ -262,6 +262,7 @@ internal sealed class EffortCapsuleView : Grid
     {
         _mark.Text = Mark;
         _mark.Visibility = capsule.ShowsMark(Compact) ? Visibility.Visible : Visibility.Collapsed;
+        _mark.Margin = new Thickness(capsule.Level is not null || capsule.ShowsWord(Compact) ? Capsule.PartSpacing : 0, 1.2, 0, 0);
         Paint(_mark, brushes.Word(EffortTone.Configured), EffortTone.Configured);
     }
 

@@ -5,7 +5,7 @@ struct KimiLine: Sendable {
     var time: Int64?
     var agent: String?
     var model: String?
-    /// The line has a `model` member, or an assistant message a `meta.model.model`.
+    /// The line has a `model` member, or a message a `meta.model.model`.
     var hasModeSelection = false
     /// `thinkingEffort` of `profile.bind`, `config.update` and `llm.request`.
     var thinkingEffort: String?

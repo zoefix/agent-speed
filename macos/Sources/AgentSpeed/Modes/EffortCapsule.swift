@@ -63,9 +63,10 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
         return !compact || (level == nil && bolts == 0)
     }
 
-    /// The configured mark, which drops with the word and says nothing in a capsule with a real part.
+    /// The configured mark, which drops with the word and says nothing in a capsule with a real part. A capsule with
+    /// only a speed has no word, so its mark drops where a word would.
     func showsMark(compact: Bool) -> Bool {
-        isConfiguredForm && !mark.isEmpty && showsWord(compact: compact)
+        isConfiguredForm && !mark.isEmpty && (showsWord(compact: compact) || (effort == nil && !compact))
     }
 
     // MARK: Geometry

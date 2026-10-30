@@ -153,7 +153,8 @@ public sealed class EffortCapsuleTests
         Assert.True(capsule.ShowsMark(compact: false));
         Assert.False(capsule.ShowsMark(compact: true));
         Assert.False(new EffortCapsule("xhigh", "fast", EffortConfigured: true).ShowsMark(compact: false));
-        Assert.False(new EffortCapsule(null, "fast", SpeedConfigured: true).ShowsMark(compact: false));
+        Assert.True(new EffortCapsule(null, "fast", SpeedConfigured: true).ShowsMark(compact: false));
+        Assert.False(new EffortCapsule(null, "fast", SpeedConfigured: true).ShowsMark(compact: true));
         Assert.Equal(12 + 18.5 + 5 + 30 + 5 + 21, capsule.Width(compact: false, Word, 20.5));
         Assert.Equal(12 + 18.5, capsule.Width(compact: true, Word, 20.5));
         Assert.Equal(12 + 18.5 + 5 + 30, new EffortCapsule("xhigh", null).Width(compact: false, Word, 20.5));

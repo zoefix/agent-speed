@@ -139,7 +139,7 @@ Window {
         var wordShown = a.effort && (withWord || (a.effortLevel < 0 && a.bolts === 0))
         if (wordShown) parts.push(capsuleMetrics.advanceWidth(a.effort.toLowerCase()))
         var configuredForm = (!a.effort || a.effortConfigured) && (a.bolts === 0 || a.speedConfigured)
-        if (wordShown && configuredForm) parts.push(capsuleMarkMetrics.advanceWidth(S.tr2(S.rev, "mode.configured.mark")))
+        if (configuredForm && (wordShown || (!a.effort && withWord))) parts.push(capsuleMarkMetrics.advanceWidth(S.tr2(S.rev, "mode.configured.mark")))
         if (a.bolts > 0) parts.push(a.bolts > 1 ? 15 : 9)
         if (parts.length === 0) return 0
         var sum = 12 + 5 * (parts.length - 1)

@@ -28,7 +28,7 @@ struct EffortCapsuleView: View {
     private func face(_ palette: EffortCapsulePalette) -> some View {
         let word = capsule.showsWord(compact: compact) ? capsule.effort : nil
         let mark = capsule.showsMark(compact: compact) ? capsule.mark : nil
-        let leads = capsule.level != nil || word != nil
+        let leads = capsule.level != nil || word != nil || mark != nil
 
         return HStack(spacing: 0) {
             HStack(spacing: EffortCapsule.partSpacing) {

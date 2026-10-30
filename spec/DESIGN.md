@@ -1887,8 +1887,9 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
      - Meter: lit bars in the tertiary label color, unlit bars label 10 % (dark 12 %), for every level: `max` and the
        top rung get no heat, gradient, glow or shimmer, since nothing confirms them.
      - Word: the token, 11 pt medium, tertiary color.
-     - Mark: `mode.configured.mark` (設定值) right after the word, 5 pt gap, 9.5 pt medium, tertiary color. It drops
-       with the word (72 pt rule, boards); the dashed stroke then carries the difference and the tooltip the words.
+     - Mark: `mode.configured.mark` (設定值) right after the word, 5 pt gap, 9.5 pt medium, tertiary color; a capsule
+       with only a speed has no word, so the mark stands before the bolts and drops where a word would. It drops with
+       the word (72 pt rule, boards); the dashed stroke then carries the difference and the tooltip the words.
      - Bolts: the outline symbol `bolt` / the same Segoe glyph, 9 pt, tertiary color, never amber.
      - Parts run meter, word, mark, bolts, so the meter and bolt alignment of the column holds.
      - A capsule with one real value and one configured value (a recorded effort with a configured tier) stays the

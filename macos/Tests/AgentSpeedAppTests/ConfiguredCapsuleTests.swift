@@ -22,7 +22,9 @@ struct ConfiguredCapsuleTests {
     @Test func onlyConfiguredPartsMakeTheDashedForm() {
         #expect(capsule(configured: [fact(.effort, "high", .configured)]).isConfiguredForm)
         #expect(capsule(configured: [fact(.effort, "max", .configured), fact(.serviceTier, "fast", .configured)]).isConfiguredForm)
-        #expect(capsule(configured: [fact(.serviceTier, "ultrafast", .configured)]).isConfiguredForm)
+        let speedOnly = capsule(configured: [fact(.serviceTier, "ultrafast", .configured)])
+        #expect(speedOnly.isConfiguredForm)
+        #expect(speedOnly.showsMark(compact: false) && !speedOnly.showsMark(compact: true), "a capsule with only a speed still says what it is")
         #expect(!capsule(facts: [fact(.effort, "high", .recorded)]).isConfiguredForm)
         // One real part keeps the solid capsule, and the mark would not say which part it means.
         let mixed = capsule(facts: [fact(.effort, "xhigh", .recorded)], configured: [fact(.serviceTier, "fast", .configured)])

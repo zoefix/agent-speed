@@ -92,8 +92,8 @@ public sealed record EffortCapsule(string? Effort, string? Speed, bool EffortCon
     /// <summary>Compact capsules drop the word whole, unless the word is all the capsule would show.</summary>
     public bool ShowsWord(bool compact) => Effort is not null && (!compact || (Level is null && Bolts == 0));
 
-    /// <summary>The mark follows the word and drops with it; the dashed stroke then carries the difference.</summary>
-    public bool ShowsMark(bool compact) => IsConfigured && ShowsWord(compact);
+    /// <summary>The mark follows the word and drops with it; the dashed stroke then carries the difference. A capsule with only a speed has no word, so its mark drops where a word would.</summary>
+    public bool ShowsMark(bool compact) => IsConfigured && (ShowsWord(compact) || (Effort is null && !compact));
 
     /// <summary>Intrinsic width; 0 when nothing is drawn. <paramref name="wordWidth"/> measures the word at 11 DIP medium.</summary>
     /// <param name="markWidth">The configured mark at 9.5 DIP medium.</param>

@@ -93,7 +93,7 @@ Item {
             Behavior on color { ColorAnimation { duration: 200 } }
         }
         Text {
-            visible: capsule.configuredForm && capsule.wordShown && capsule.mark.length > 0
+            visible: capsule.configuredForm && capsule.mark.length > 0 && (capsule.wordShown || (!capsule.hasEffort && capsule.showWord))
             anchors.verticalCenter: parent.verticalCenter
             text: capsule.mark
             color: capsule.configuredInk

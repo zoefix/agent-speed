@@ -186,8 +186,8 @@ facts, and one that names no effort has no effort facts.
   stays out of the branch. A `model_usage` side call takes the tier of its family and no effort: it runs at its own,
   unrecorded level. Families: `anthropic`; `openai`, `openai-codex`, `azure`, `azure-openai-responses` as `openai`;
   `google`, `google-gemini-cli`, `google-antigravity`, `google-vertex` as `google`; any other provider has no family
-  and no tier fact. Current: the context of the latest entry plus what the latest message recorded, its tier facts
-  limited to the family of the latest response.
+  and no tier fact. Current: the context of the latest entry, plus what that entry recorded when it is an assistant
+  message, its tier facts limited to the family of the latest response.
 - **OpenClaw** (METRICS 4.14): a window's `trace.metadata` rows, one per attempt. `data.model.thinkLevel` (adapter
   `effort`, evidence `recorded`, scope `turn`; `off`, `minimal`, `low`, `medium`, `high`, `xhigh`, `adaptive` (a word
   without a meter level), `max`, `ultra`) and `data.model.fastMode` when it is `true` (`serviceTier:fast`, evidence
@@ -241,7 +241,7 @@ facts, and one that names no effort has no effort facts.
   leaves unresolved clears it); a record without them changes nothing. Every `llm.request` (one per attempt, `loop` and
   `compaction` alike) replaces it with its
   `thinkingEffort` (adapter `effort`, evidence `recorded`, scope `request`) or, when that is absent, removes it. A line
-  with a `model` member, or an assistant message's `meta.model.model`, replaces the variant (adapter `kimiModel`,
+  with a `model` member, or a message's `meta.model.model`, replaces the variant (adapter `kimiModel`,
   evidence `selected`, scope `request`, provider `kimi`). A response takes a snapshot of the context at its first
   emission and a mirror of the same key keeps it. `llm.request` exists since 0.23.1, so older journals only have the
   selection, which reaches their responses. Tokens: `off`, `on` (thinking on, no effort parameter), `low`, `medium`,
@@ -276,7 +276,8 @@ facts, and one that names no effort has no effort facts.
   3. that executor's `completion_config_override.thinking_level` (`1` `low`, `2` `medium`, `3` `high`, others no fact),
      the API-key path where a model has no variants (evidence `recorded`, scope `turn`).
 
-  Steps 2 and 3 apply only when the generation's `response_model` is missing, or equals the executor's `model_name` or
+  Steps 2 and 3 need an executor with a `model_name`, and apply only when the generation's `response_model` is missing,
+  or equals the executor's `model_name` or
   its base (the name without the suffix) once a trailing `-exp-b` is removed: otherwise the call was answered by
   another model and the effort is unknown. A row outside every executor's range has only step 1. `response_model` is
   never read for a suffix, and neither are the placeholder enums, `metadata.staticConfig` or
