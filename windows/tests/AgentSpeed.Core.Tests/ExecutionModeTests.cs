@@ -16,6 +16,9 @@ public sealed class ExecutionModeTests
     public static IEnumerable<object[]> NormalizationCases() => Cases("normalization");
     public static IEnumerable<object[]> AttributionCases() => Cases("attribution");
     public static IEnumerable<object[]> SpeedCases() => Cases("speed");
+    public static IEnumerable<object[]> CurrentCases() => Cases("current");
+    public static IEnumerable<object[]> LedgerCases() => Cases("ledger");
+    public static IEnumerable<object[]> AntigravityEffortCases() => Cases("antigravityEffort");
     private static IEnumerable<object[]> Cases(string group)
     {
         using var document = JsonDocument.Parse(File.ReadAllBytes(FixtureLocator.PathOf("execution-mode-cases.json")));
@@ -28,16 +31,24 @@ public sealed class ExecutionModeTests
     public void SharedNormalization(string id, JsonElement data)
     {
         var raw = String(data, "rawValue");
+        var evidence = Enum.Parse<ExecutionModeEvidence>(String(data, "evidence")!, true);
+        var scope = Enum.Parse<ExecutionModeScope>(String(data, "scope")!, true);
+        var provider = String(data, "provider");
         var modes = String(data, "adapter") switch
         {
             "claudeSpeed" => ExecutionModeNative.ClaudeSpeed(raw),
             "kimiModel" => ExecutionModeNative.KimiModel(raw),
             "routing" => ExecutionModeNative.Routing(raw),
             "workflow" => ExecutionModeNative.Workflow(raw),
-            "effort" => ExecutionModes.Of(ExecutionModeNative.Effort(raw, Enum.Parse<ExecutionModeEvidence>(String(data, "evidence")!, true),
-                Enum.Parse<ExecutionModeScope>(String(data, "scope")!, true))),
-            _ => ExecutionModeNative.OpenAiTier(raw, Enum.Parse<ExecutionModeEvidence>(String(data, "evidence")!, true),
-                Enum.Parse<ExecutionModeScope>(String(data, "scope")!, true), String(data, "provider")),
+            "effort" => ExecutionModes.Of(ExecutionModeNative.Effort(raw, evidence, scope)),
+            "zcodeModel" => ExecutionModeNative.ZCodeModel(raw),
+            "zcodeProvider" => ExecutionModeNative.ZCodeProvider(raw),
+            "droidModel" => ExecutionModeNative.DroidModel(raw),
+            "ompTier" => ExecutionModeNative.OmpTier(raw, provider, evidence, scope),
+            "hermesEffort" => ExecutionModeNative.HermesEffort(raw, evidence, scope),
+            "hermesServiceTier" => ExecutionModeNative.HermesServiceTier(raw, evidence, scope),
+            _ when provider == "google" => ExecutionModeNative.GoogleTier(raw, evidence, scope),
+            _ => ExecutionModeNative.OpenAiTier(raw, evidence, scope, provider),
         };
         var expected = data.GetProperty("expected");
         if (expected.ValueKind == JsonValueKind.Null) Assert.Empty(modes.Facts);
@@ -67,6 +78,52 @@ public sealed class ExecutionModeTests
         Assert.Equal((String(expected, "mode"), String(expected, "evidence"), String(expected, "provider")),
             (value.Mode, value.Evidence, value.Provider));
         Assert.Equal(value.IsKnown ? value : null, EffortAndSpeed.Speed(modes));
+        Assert.False(string.IsNullOrEmpty(id));
+    }
+
+    [Theory]
+    [MemberData(nameof(CurrentCases))]
+    public void SharedCurrentValue(string id, JsonElement data)
+    {
+        ExecutionModes Layer(string name) => new(data.TryGetProperty(name, out var facts) ? facts.EnumerateArray().Select(Fact) : []);
+        var value = ExecutionModes.Current(Enum.Parse<ExecutionModeKind>(String(data, "kind")!, true), Layer("facts"), Layer("session"), Layer("configured"));
+        var expected = data.GetProperty("expected");
+        Assert.Equal((String(expected, "mode"), String(expected, "evidence"), String(expected, "provider")), (value.Mode, value.Evidence, value.Provider));
+        Assert.False(string.IsNullOrEmpty(id));
+    }
+
+    [Theory]
+    [MemberData(nameof(LedgerCases))]
+    public void SharedLedgerEffort(string id, JsonElement data)
+    {
+        static ExecutionModeAttribution Value(JsonElement item) =>
+            new(ExecutionModeKind.Effort, String(item, "mode")!, String(item, "evidence")!, String(item, "provider"));
+        var value = ExecutionModes.LedgerEffort(Value(data.GetProperty("response")), Value(data.GetProperty("current")));
+        Assert.Equal(Value(data.GetProperty("expected")), value);
+
+        // The frozen facts say the same, so a report's effort row follows this rule.
+        var response = data.GetProperty("response");
+        var facts = String(response, "mode") == "unknown" ? ExecutionModes.Empty : ExecutionModes.Of(new(ExecutionModeKind.Effort, String(response, "mode")!,
+            String(response, "mode")!, Enum.Parse<ExecutionModeEvidence>(String(response, "evidence")!, true), Scope: ExecutionModeScope.Request));
+        Assert.Equal(value, facts.WithLedgerEffort(Value(data.GetProperty("current"))).Attribute(ExecutionModeKind.Effort));
+        Assert.False(string.IsNullOrEmpty(id));
+    }
+
+    [Theory]
+    [MemberData(nameof(AntigravityEffortCases))]
+    public void SharedAntigravityEffort(string id, JsonElement data)
+    {
+        var expected = data.GetProperty("expected");
+        if (data.TryGetProperty("label", out var label))
+        {
+            Assert.Equal(expected.ValueKind == JsonValueKind.Null ? null : expected.GetString(), ExecutionModeNative.AntigravityLabelEffort(label.GetString()!));
+        }
+        else
+        {
+            var split = ExecutionModeNative.AntigravityModelEffort(data.GetProperty("model").GetString()!);
+            Assert.Equal(expected.ValueKind == JsonValueKind.Null ? null : (expected[0].GetString()!, expected[1].GetString()!), split);
+        }
+
         Assert.False(string.IsNullOrEmpty(id));
     }
 
@@ -192,22 +249,25 @@ public sealed class ExecutionModeTests
             """{"type":"message","id":"d","parentId":"a","timestamp":"2026-10-20T00:00:04Z","message":{"role":"assistant","id":"r3","provider":"openai","api":"openai-responses","model":"gpt","usage":{"input":1,"output":10},"stopReason":"stop"}}""");
         Assert.Equal("fast", sink.Latest[2].Modes.Attribute(ExecutionModeKind.ServiceTier).Mode);
         Feed.Lines(parser, sink, """{"type":"model_usage","id":"side","parentId":"a","timestamp":"2026-10-20T00:00:05Z","provider":"openai","api":"openai-responses","model":"gpt","serviceTier":"priority","usage":{"input":1,"output":20}}""");
-        Assert.Contains(sink.Latest[^1].Modes.Facts, f => f.Value == "fast" && f.Evidence == ExecutionModeEvidence.Recorded);
+        var side = Assert.Single(sink.Latest[^1].Modes.Facts);
+        Assert.Equal(("fast", ExecutionModeEvidence.Selected), (side.Value, side.Evidence));
     }
 
     [Fact]
     public void ZCodeRetriesClassifyEachAttemptAndMockIsNeverRecordedAsAccelerated()
     {
-        var metadata = """{"metadata":{"highspeed":{"schemaVersion":1,"provider":"account:zai","model":"glm-5","cardId":"hsc_real"}}}""";
-        var accelerated = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata), "account:zai-highspeed-card", "glm-5");
-        var fallback = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata), "account:zai", "glm-5");
+        var metadata = """{"role":"user","metadata":{"highspeed":{"schemaVersion":1,"provider":"account:zai","model":"glm-5","cardId":"hsc_real","fallbackAt":2000}}}""";
+        var accelerated = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata), null, "account:zai-highspeed-card", "glm-5", 1000);
+        var early = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata), null, "account:zai", "glm-5", 1000);
+        var fallback = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata), null, "account:zai", "glm-5", 2000);
         Assert.Equal(("highspeed", "recorded"), (accelerated.Attribute(ExecutionModeKind.Accelerator).Mode, accelerated.Attribute(ExecutionModeKind.Accelerator).Evidence));
+        Assert.Equal(("highspeed", "selected"), (early.Attribute(ExecutionModeKind.Accelerator).Mode, early.Attribute(ExecutionModeKind.Accelerator).Evidence));
         Assert.Equal("standard", fallback.Attribute(ExecutionModeKind.Accelerator).Mode);
         Assert.DoesNotContain(accelerated.Facts, f => f.Evidence == ExecutionModeEvidence.Served);
-        var mock = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata.Replace("hsc_real", "hsc_mock_1", StringComparison.Ordinal)), "account:zai-highspeed-card", "glm-5");
+        var mock = ZCodeModes.Read(Encoding.UTF8.GetBytes(metadata.Replace("hsc_real", "hsc_mock_1", StringComparison.Ordinal)), null, "account:zai-highspeed-card", "glm-5", 3000);
         Assert.All(mock.Facts, f => Assert.Equal(ExecutionModeEvidence.Selected, f.Evidence));
-        Assert.Empty(ZCodeModes.Read("{\"metadata\":{\"highspeed\":{\"schemaVersion\":\"1\"}}}"u8, null, null).Facts);
-        Assert.Empty(ZCodeModes.Read("[]"u8, null, null).Facts);
+        Assert.Empty(ZCodeModes.Read("{\"metadata\":{\"highspeed\":{\"schemaVersion\":\"1\"}}}"u8, null, null, null, null).Facts);
+        Assert.Empty(ZCodeModes.Read("[]"u8, null, null, null, null).Facts);
     }
 
     [Fact]

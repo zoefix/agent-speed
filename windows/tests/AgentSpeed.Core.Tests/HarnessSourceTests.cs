@@ -24,7 +24,7 @@ public sealed class HarnessSourceTests : IDisposable
         File.Copy(FixtureLocator.PathOf("zcode/cli/db/db.sqlite"), path);
         var source = new ZCodeSource(path, new Deduper());
         var seeded = source.Seed(Start);
-        Assert.Equal(4, seeded.Responses.Count);
+        Assert.Equal(7, seeded.Responses.Count);
         Assert.All(seeded.Responses, row => Assert.True(row.Completion));
         Assert.False(source.Refresh().Changed);
         using (var writer = SqliteConnection.Open(path, SqliteOpenMode.ReadWriteCreate))
@@ -102,7 +102,7 @@ public sealed class HarnessSourceTests : IDisposable
         File.Copy(FixtureLocator.PathOf("zcode/cli/db/db.sqlite"), Path.Combine(root, "db.sqlite"));
         Assert.True(core.Rediscover(Start + 500_000, Start, CancellationToken.None));
         var (snapshot, _) = core.BuildSnapshot(Start + 500_000, Start, MonitorState.Running, observeLive: false);
-        Assert.Equal(4, snapshot.Today.Requests);
+        Assert.Equal(7, snapshot.Today.Requests);
     }
 
     [Fact]

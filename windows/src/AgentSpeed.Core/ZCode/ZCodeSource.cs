@@ -10,7 +10,6 @@ internal sealed record ZCodeAgent(string Id, string SessionId, string? ParentSes
     string? Project, string? Model, AgentPhase Phase, long? StartMs, long LastMs)
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
-    public bool ModeContext { get; init; }
 }
 
 internal sealed class ZCodeUpdate
@@ -94,7 +93,7 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
                 var agent = new ZCodeAgent(latest.AgentId(DatabasePath), latest.SessionId, latest.ParentId, latest.CreatedMs,
                     latest.Directory is { } cwd ? PathText.Basename(cwd) : null, latest.Model,
                     latest.Status == "running" ? AgentPhase.Generating : AgentPhase.Idle,
-                    latest.Status == "running" ? latest.StartedMs : null, last) { Modes = latest.Modes };
+                    latest.Status == "running" ? latest.StartedMs : null, last) { Modes = CurrentModes(group) };
                 if (!_agents.TryGetValue(agent.Id, out var known) || known != agent)
                 {
                     _agents[agent.Id] = agent;
@@ -129,7 +128,7 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
                         continue;
                     }
 
-                    agent = agent with { Model = agent.Model ?? known.Model, Modes = agent.ModeContext ? agent.Modes : agent.Modes.IsEmpty ? known.Modes : agent.Modes };
+                    agent = agent with { Model = agent.Model ?? known.Model, Modes = known.Modes };
                     if (agent == known)
                     {
                         continue;
@@ -164,6 +163,9 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
 
         return update;
     }
+
+    /// <summary>The facts of a session's latest row by <c>started_at</c>, a running one included, that is no auxiliary call.</summary>
+    internal static ExecutionModes CurrentModes(IEnumerable<ZCodeRow> rows) => rows.LastOrDefault(r => !r.Auxiliary)?.Modes ?? ExecutionModes.Empty;
 
     private static FileIdentity? ReadIdentity(string path)
     {

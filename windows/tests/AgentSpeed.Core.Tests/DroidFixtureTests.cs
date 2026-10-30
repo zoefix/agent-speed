@@ -48,7 +48,7 @@ public sealed class DroidFixtureTests : IDisposable
         Assert.Equal(15, SidecarCases().Count);
         Assert.Equal(7, AllocationCases().Count);
         Assert.Equal(6, RootCases().Count);
-        Assert.Equal(10, ParserFixtureTests.Expected.GetProperty("order").EnumerateArray()
+        Assert.Equal(11, ParserFixtureTests.Expected.GetProperty("order").EnumerateArray()
             .Count(e => e.GetString()!.StartsWith("droid/", StringComparison.Ordinal)));
     }
 

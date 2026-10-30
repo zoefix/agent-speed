@@ -39,7 +39,7 @@ public sealed class OmpFixtureTests : IDisposable
     }
 
     [Fact]
-    public void EveryTraceAndTailReadIsListed() => Assert.Equal((78, 1), (Traces().Count, TailReads().Count));
+    public void EveryTraceAndTailReadIsListed() => Assert.Equal((80, 1), (Traces().Count, TailReads().Count));
 
     [Theory]
     [MemberData(nameof(Traces))]

@@ -23,6 +23,18 @@ internal struct KimiLine
     public bool ToolCalls;
     public bool Partial;
 
+    /// <summary>The line's own <c>model</c> member, not the alias: an exact id may name a variant.</summary>
+    public bool HasModelMember;
+    public string? ModelMember;
+
+    /// <summary>A message's <c>meta.model.model</c>.</summary>
+    public bool HasMetaModel;
+    public string? MetaModel;
+
+    /// <summary><c>thinkingEffort</c>, and the legacy <c>thinkingLevel</c>, when they are non-empty strings.</summary>
+    public string? ThinkingEffort;
+    public string? ThinkingLevel;
+
     public static KimiLine Read(ReadOnlySpan<byte> line)
     {
         if (JsonScan.IsBlank(line))
@@ -47,7 +59,14 @@ internal struct KimiLine
                 TimeMs = Timestamp(Get(root, "time")) ?? Timestamp(Get(root, "timestamp")),
                 Cwd = String(Get(root, "environmentDisclosure"), "cwd"),
                 Model = String(root, "modelAlias") ?? String(root, "model"), Provider = String(root, "provider"),
+                ThinkingEffort = String(root, "thinkingEffort"), ThinkingLevel = String(root, "thinkingLevel"),
             };
+            if (root.TryGetProperty("model", out var modelMember))
+            {
+                result.HasModelMember = true;
+                result.ModelMember = modelMember.ValueKind == JsonValueKind.String ? modelMember.GetString() : null;
+            }
+
             var message = Get(root, "message");
             var meta = Get(message, "meta");
             if (Get(message, "message").ValueKind == JsonValueKind.Object)
@@ -96,6 +115,12 @@ internal struct KimiLine
                 result.DurationMs = Milliseconds(Get(message, "durationMs")) ?? Milliseconds(Get(meta, "durationMs"));
                 result.Model = String(Get(meta, "model"), "model") ?? String(message, "model") ?? result.Model;
                 result.Provider = String(Get(meta, "model"), "provider") ?? result.Provider;
+                if (Get(meta, "model") is { ValueKind: JsonValueKind.Object } metaModel && metaModel.TryGetProperty("model", out var metaId))
+                {
+                    result.HasMetaModel = true;
+                    result.MetaModel = metaId.ValueKind == JsonValueKind.String ? metaId.GetString() : null;
+                }
+
                 var calls = Get(message, "toolCalls");
                 result.ToolCalls = calls.ValueKind == JsonValueKind.Array && calls.GetArrayLength() > 0;
             }

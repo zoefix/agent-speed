@@ -19,6 +19,7 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
     private readonly Dictionary<string, ParsedResponse> _responses = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ExecutionModes> _modeBranches = new(StringComparer.Ordinal);
     private ExecutionModes _branchModes = ExecutionModes.Empty;
+    private string? _latestFamily;
     private bool _headerSeen;
     private bool _headerProbed;
 
@@ -48,6 +49,7 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
         _responses.Clear();
         _modeBranches.Clear();
         _branchModes = ExecutionModes.Empty;
+        _latestFamily = null;
         _headerSeen = false;
         _headerProbed = false;
         HeaderMs = null;
@@ -97,11 +99,7 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
         }
 
         Touch(ts);
-        _branchModes = line.SelectedModes ?? (line.ParentId is { } parent && _modeBranches.TryGetValue(parent, out var inherited)
-            ? inherited : ExecutionModes.Empty);
-        if (_modeBranches.Count >= 65536) _modeBranches.Clear();
-        _modeBranches[line.Id] = _branchModes;
-        Modes = _branchModes;
+        ApplyBranch(in line);
         switch (line.Kind)
         {
             case OmpEntryKind.Message:
@@ -118,6 +116,30 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
     }
 
     protected override OmpLine Extract(ReadOnlySpan<byte> line) => OmpLineReader.Read(line);
+
+    // An entry's context is its parent's, changed by a selection: a branch sees only its own (EXECUTION-MODES, omp).
+    private void ApplyBranch(in OmpLine line)
+    {
+        var context = line.ParentId is { } parent && _modeBranches.TryGetValue(parent, out var inherited) ? inherited : ExecutionModes.Empty;
+        if (line.Kind == OmpEntryKind.ServiceTierChange)
+        {
+            context = context.Without(f => f.Kind == ExecutionModeKind.ServiceTier).Merge(line.SelectedModes);
+        }
+        else if (line is { Kind: OmpEntryKind.ThinkingLevelChange, HasThinkingLevel: true })
+        {
+            context = context.Without(f => f.Kind == ExecutionModeKind.Effort)
+                .With(ExecutionModeNative.Effort(line.ThinkingLevel, ExecutionModeEvidence.Selected, ExecutionModeScope.Session));
+        }
+
+        if (_modeBranches.Count >= 65536) _modeBranches.Clear();
+        _modeBranches[line.Id!] = context;
+        _branchModes = context;
+        Modes = OfLatestFamily(context);
+    }
+
+    private ExecutionModes OfLatestFamily(ExecutionModes facts) => _latestFamily is { } family
+        ? facts.Without(f => f.Kind == ExecutionModeKind.ServiceTier && f.Provider != family)
+        : facts;
 
     /// <summary>The first <c>session</c> line among the first two lines of the file, else a blank line.</summary>
     internal static OmpLine ReadHeader(string path)
@@ -222,8 +244,11 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
             : line.CompletedAtMs ?? ts;
         if (call.HasUsage)
         {
-            Emit(key, failed ? null : line.StartedMs, end, in call, sink);
+            var recorded = RecordedFacts(in call);
+            Emit(key, failed ? null : line.StartedMs, end, in call, BranchFacts(call.Provider).Merge(recorded), sink);
             SetModel(call.Model);
+            _latestFamily = ExecutionModeNative.OmpFamily(call.Provider);
+            Modes = OfLatestFamily(_branchModes.Merge(recorded));
         }
 
         RecordTools(in line.Tools, ts);
@@ -266,20 +291,33 @@ internal sealed class OmpParser : TranscriptParser<OmpLine>
 
         if (call.HasUsage)
         {
-            Emit(key, null, ts, in call, sink);
+            Emit(key, null, ts, in call, TierOf(call.Provider), sink);
         }
     }
 
-    private void Emit(string key, long? startMs, long endMs, in OmpCall call, IResponseSink sink)
+    // A response's context: the tier of its provider's family and the effort; a side call runs at its own, unrecorded level.
+    private ExecutionModes BranchFacts(string? provider) =>
+        TierOf(provider).Merge(_branchModes.Without(f => f.Kind != ExecutionModeKind.Effort));
+
+    private ExecutionModes TierOf(string? provider)
+    {
+        var family = ExecutionModeNative.OmpFamily(provider);
+        return _branchModes.Without(f => f.Kind != ExecutionModeKind.ServiceTier || family is null || f.Provider != family);
+    }
+
+    // What the message itself records stays out of the branch.
+    private static ExecutionModes RecordedFacts(in OmpCall call)
+    {
+        var tier = call.DisabledPriority ? ExecutionModes.Empty
+            : ExecutionModeNative.OmpTier(call.ServiceTier, call.Provider, ExecutionModeEvidence.Recorded, ExecutionModeScope.Response);
+        return tier.With(ExecutionModeNative.Effort(call.RequestEffort, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request));
+    }
+
+    private void Emit(string key, long? startMs, long endMs, in OmpCall call, ExecutionModes modes, IResponseSink sink)
     {
         var isCompletion = Deduper.TryClaim(key, AgentId, out _);
-        var family = call.Provider is "openai-codex" ? "openai" : call.Provider;
-        var selected = new ExecutionModes(_branchModes.Facts.Where(f => f.Provider == family));
-        var recorded = call.DisabledPriority ? ExecutionModes.Empty
-            : ExecutionModeNative.OmpTier(call.ServiceTier, family, ExecutionModeEvidence.Recorded, ExecutionModeScope.Response);
         var response = new ParsedResponse(key, SourceKind.Omp, AgentId, call.Model, startMs, endMs, call.Tokens, Final: true, Provider: call.Provider)
-        { Modes = selected.Merge(recorded) };
-        Modes = response.Modes;
+        { Modes = modes };
         if (_responses.TryGetValue(key, out var previous) && previous == response)
         {
             return;

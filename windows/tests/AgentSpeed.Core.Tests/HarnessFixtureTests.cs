@@ -13,11 +13,13 @@ public sealed class HarnessFixtureTests
 {
     private static JsonDocument Expected() => JsonDocument.Parse(File.ReadAllBytes(FixtureLocator.PathOf("harness-expected.json")));
 
-    [Fact]
-    public void ZCodeNativeDatabaseMatchesEverySharedRequestAndStaysReadOnly()
+    [Theory]
+    [InlineData("zcode")]
+    [InlineData("zcodeWithoutVariant")]
+    public void ZCodeNativeDatabaseMatchesEverySharedRequestAndStaysReadOnly(string block)
     {
         using var expected = Expected();
-        var section = expected.RootElement.GetProperty("zcode");
+        var section = expected.RootElement.GetProperty(block);
         var path = FixtureLocator.PathOf(section.GetProperty("database").GetString()!);
         var before = File.ReadAllBytes(path);
         var folder = Path.GetDirectoryName(path)!;
@@ -31,6 +33,7 @@ public sealed class HarnessFixtureTests
                 var actual = rows.Where(row => row.SessionId == id).Select(row => row.Response(path)).OfType<ParsedResponse>().ToList();
                 AssertResponses(session.GetProperty("responses"), actual);
                 Assert.All(actual, response => Assert.Equal(path + "#" + id, response.AgentId));
+                ParserFixtureTests.AssertModes(session, id, ZCodeSource.CurrentModes(rows.Where(row => row.SessionId == id)), actual);
             }
         }
 
@@ -57,6 +60,7 @@ public sealed class HarnessFixtureTests
             var parent = file.GetProperty("parentFile").GetString();
             Assert.Equal(parent is null ? null : FixtureLocator.PathOf(parent), parser.ParentPath);
             Assert.Equal(sink.Latest.Count, sink.Emissions.Count(e => e.IsCompletion));
+            ParserFixtureTests.AssertModes(file, file.GetProperty("path").GetString()!, parser.Modes, sink.Latest);
         }
     }
 
@@ -79,6 +83,7 @@ public sealed class HarnessFixtureTests
             Assert.Equal(file.GetProperty("isSubagent").GetBoolean(), parser.IsSubagent);
             var parent = file.GetProperty("parentFile").GetString();
             Assert.Equal(parent is null ? null : FixtureLocator.PathOf(parent), parser.ParentPath);
+            ParserFixtureTests.AssertModes(file, file.GetProperty("path").GetString()!, parser.Modes, sink.Latest, parser.SessionModes);
         }
     }
 
@@ -100,10 +105,10 @@ public sealed class HarnessFixtureTests
         {
             core.Seed(start + 30_000_000, start, CancellationToken.None);
             var (snapshot, _) = core.BuildSnapshot(start + 30_000_000, start, MonitorState.Running, observeLive: false);
-            Assert.Equal(12, snapshot.Today.Requests);
-            Assert.Equal(1475, snapshot.Today.Output);
+            Assert.Equal(16, snapshot.Today.Requests);
+            Assert.Equal(1875, snapshot.Today.Output);
             Assert.Equal(2, core.SessionCount(SourceKind.ZCode, start));
-            Assert.Equal(2, core.SessionCount(SourceKind.Kimi, start));
+            Assert.Equal(3, core.SessionCount(SourceKind.Kimi, start));
             Assert.Contains(snapshot.Agents, a => a.Source == SourceKind.Kimi && a.IsSubagent && a.ParentId is not null);
             Assert.Contains(snapshot.Agents, a => a.Source == SourceKind.ZCode && a.IsSubagent && a.ParentId is not null);
         }
@@ -114,15 +119,15 @@ public sealed class HarnessFixtureTests
             var history = new HistoryAnalyzer(store);
             var report = history.Run(paths, enabled, TimeZoneInfo.Utc, CancellationToken.None);
             Assert.Equal(0, report.FilesUnreadable);
-            Assert.Equal(12, history.Days().Sum(day => day.Totals.Requests));
-            Assert.Equal(1475, history.Days().Sum(day => day.Totals.Output));
+            Assert.Equal(16, history.Days().Sum(day => day.Totals.Requests));
+            Assert.Equal(1875, history.Days().Sum(day => day.Totals.Output));
             var repeated = history.Run(paths, enabled, TimeZoneInfo.Utc, CancellationToken.None);
             Assert.Equal(0, repeated.FilesPlanned);
         }
 
         using (var store = HistoryStore.Open(storePath))
         {
-            Assert.Equal(1475, new HistoryAnalyzer(store).Days().Sum(day => day.Totals.Output));
+            Assert.Equal(1875, new HistoryAnalyzer(store).Days().Sum(day => day.Totals.Output));
         }
     }
 

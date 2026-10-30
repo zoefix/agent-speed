@@ -47,6 +47,9 @@ internal sealed class AntigravityParser : TranscriptParser
     /// <summary>Steps created this much before the conversation were copied from another one (a fork).</summary>
     public const long CopiedHistoryMs = 2000;
 
+    /// <summary>A serving variant of a model, which a <c>response_model</c> may carry (EXECUTION-MODES, Antigravity).</summary>
+    private const string ServedVariantSuffix = "-exp-b";
+
     private readonly SortedDictionary<long, AntigravityGeneration> _generations = [];
     private readonly Dictionary<long, AntigravityExecutor> _executors = [];
     private readonly Dictionary<string, Emitted> _responses = new(StringComparer.Ordinal);
@@ -201,29 +204,32 @@ internal sealed class AntigravityParser : TranscriptParser
 
         var isCompletion = Deduper.TryClaim(key, AgentId, out _);
         var response = new ParsedResponse(
-            key, SourceKind.Antigravity, AgentId, ModelFor(row.Idx), start, end.Value, usage.ToTokens(), Final: true);
-        Emit(response, row.Idx, isCompletion, sink);
+            key, SourceKind.Antigravity, AgentId, ModelFor(row.Idx), start, end.Value, usage.ToTokens(), Final: true)
+        { Modes = ModesFor(row.Idx, usage.Tier) };
+        Emit(response, row.Idx, usage.Tier, isCompletion, sink);
     }
 
     /// <summary>
     /// <c>chat_model.response_model</c> (else <c>model_display_name</c>) of the lowest generation listing the step, else the
     /// <c>model_name</c> of the executor with the smallest <c>last_step_idx</c> at or after it (ties: lowest idx).
     /// </summary>
-    private string? ModelFor(long idx)
+    private string? ModelFor(long idx) => GenerationOf(idx)?.Model ?? CoveringExecutor(idx)?.Model;
+
+    private AntigravityGeneration? GenerationOf(long idx)
     {
         foreach (var generation in _generations.Values)
         {
             if (idx >= 0 && generation.StepIndices.Contains((ulong)idx))
             {
-                if (generation.Model is { } model)
-                {
-                    return model;
-                }
-
-                break;
+                return generation;
             }
         }
 
+        return null;
+    }
+
+    private AntigravityExecutor? CoveringExecutor(long idx)
+    {
         AntigravityExecutor? covering = null;
         foreach (var executor in _executors.Values)
         {
@@ -235,46 +241,81 @@ internal sealed class AntigravityParser : TranscriptParser
             }
         }
 
-        return covering?.Model;
+        return covering;
     }
 
-    // A later read may change a response's model (METRICS 4.8 Metadata): such responses are updated (4.4).
+    private ExecutionModes ModesFor(long idx, string? tier) =>
+        ExecutionModes.Of(EffortFor(GenerationOf(idx), CoveringExecutor(idx)))
+            .Merge(ExecutionModeNative.GoogleTier(tier, ExecutionModeEvidence.Served, ExecutionModeScope.Response));
+
+    /// <summary>
+    /// The generation's display name, else the executor's model suffix or pass-through level when that executor ran the
+    /// model the generation answered with (EXECUTION-MODES, Antigravity).
+    /// </summary>
+    private static ExecutionModeFact? EffortFor(AntigravityGeneration? generation, AntigravityExecutor? executor)
+    {
+        if (generation?.Label is { } label && ExecutionModeNative.AntigravityLabelEffort(label) is { } word)
+        {
+            return ExecutionModeNative.Effort(word, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request);
+        }
+
+        if (executor?.Model is not { } model)
+        {
+            return null;
+        }
+
+        var split = ExecutionModeNative.AntigravityModelEffort(model);
+        var answered = generation?.ResponseModel;
+        answered = answered?.EndsWith(ServedVariantSuffix, StringComparison.Ordinal) == true ? answered[..^ServedVariantSuffix.Length] : answered;
+        return answered is { Length: > 0 } && answered != model && answered != split?.Base
+            ? null
+            : ExecutionModeNative.Effort(split?.Effort ?? executor.ThinkingLevel, ExecutionModeEvidence.Recorded, ExecutionModeScope.Turn);
+    }
+
+    // A later read may change a response's model and effort (METRICS 4.8 Metadata): such responses are updated (4.4).
     private void ResolveModels(IResponseSink sink)
     {
         foreach (var emitted in _responses.Values.ToList())
         {
-            var model = ModelFor(emitted.Idx);
-            if (!string.Equals(model, emitted.Response.Model, StringComparison.Ordinal))
+            var response = emitted.Response with { Model = ModelFor(emitted.Idx), Modes = ModesFor(emitted.Idx, emitted.Tier) };
+            if (response != emitted.Response)
             {
-                Emit(emitted.Response with { Model = model }, emitted.Idx, isCompletion: false, sink);
+                Emit(response, emitted.Idx, emitted.Tier, isCompletion: false, sink);
             }
         }
     }
 
-    private void Emit(ParsedResponse response, long idx, bool isCompletion, IResponseSink sink)
+    private void Emit(ParsedResponse response, long idx, string? tier, bool isCompletion, IResponseSink sink)
     {
         if (_responses.TryGetValue(response.Key, out var previous) && previous.Response == response && previous.Idx == idx)
         {
             return;
         }
 
-        _responses[response.Key] = new Emitted(response, idx);
+        _responses[response.Key] = new Emitted(response, idx, tier);
         sink.OnResponse(response, isCompletion);
     }
 
-    // The agent's model is the model of the response with the highest idx that has one.
+    // The agent's model is the model of the response with the highest idx that has one; its modes those of the highest idx.
     private void UpdateAgentModel()
     {
         Emitted? best = null;
+        Emitted? latest = null;
         foreach (var emitted in _responses.Values)
         {
             if (emitted.Response.Model is not null && (best is null || emitted.Idx > best.Idx))
             {
                 best = emitted;
             }
+
+            if (latest is null || emitted.Idx >= latest.Idx)
+            {
+                latest = emitted;
+            }
         }
 
         SetModel(best?.Response.Model);
+        Modes = latest?.Response.Modes ?? ExecutionModes.Empty;
     }
 
     private void UpdatePhase()
@@ -315,5 +356,5 @@ internal sealed class AntigravityParser : TranscriptParser
         }
     }
 
-    private sealed record Emitted(ParsedResponse Response, long Idx);
+    private sealed record Emitted(ParsedResponse Response, long Idx, string? Tier);
 }

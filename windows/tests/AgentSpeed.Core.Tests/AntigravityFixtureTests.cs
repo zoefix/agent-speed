@@ -31,7 +31,7 @@ public sealed class AntigravityFixtureTests
     {
         var listed = Expected.GetProperty("order").EnumerateArray().Select(e => e.GetString()!).ToHashSet();
         Assert.Equal(Expected.GetProperty("databases").EnumerateObject().Select(p => p.Name).ToHashSet(), listed);
-        Assert.Equal(11, listed.Count);
+        Assert.Equal(12, listed.Count);
     }
 
     [Theory]
@@ -78,6 +78,8 @@ public sealed class AntigravityFixtureTests
                 r.Tokens);
             Assert.Equal((e.GetProperty("final").GetBoolean(), SourceKind.Antigravity, parser.AgentId), (r.Final, r.Source, r.AgentId));
         }
+
+        ParserFixtureTests.AssertModes(expected, relative, parser.Modes, responses, configured: new ConfiguredValues().Of(parser.Source, string.Empty, parser.AgentId, parser.Model));
     }
 
     [Theory]

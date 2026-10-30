@@ -21,7 +21,8 @@ internal static class StepCodes
 }
 
 /// <summary><c>ModelUsageStats</c> of a step; the key is <c>response_id</c>, else <c>message_id</c>, else null.</summary>
-internal sealed record AntigravityUsage(long Input, long Output, long CacheRead, long Thinking, long Response, string? Key)
+/// <param name="Tier"><c>service_tier</c>; no real row has shown a value so far (EXECUTION-MODES, Antigravity).</param>
+internal sealed record AntigravityUsage(long Input, long Output, long CacheRead, long Thinking, long Response, string? Key, string? Tier = null)
 {
     public bool HasTokens => Input > 0 || Output > 0 || CacheRead > 0 || Thinking > 0 || Response > 0;
 
@@ -62,10 +63,14 @@ internal sealed record AntigravityStep(
 internal sealed record AntigravityStepRow(long Idx, long StepType, long Status, AntigravityStep? Step);
 
 /// <summary>A <c>gen_metadata</c> row: the steps it generated and the model that served them.</summary>
-internal sealed record AntigravityGeneration(long Idx, IReadOnlySet<ulong> StepIndices, string? Model);
+/// <param name="Model"><c>response_model</c>, else <c>model_display_name</c>.</param>
+/// <param name="ResponseModel"><c>response_model</c>: what answered, never read for an effort suffix.</param>
+/// <param name="Label"><c>model_display_name</c>.</param>
+internal sealed record AntigravityGeneration(long Idx, IReadOnlySet<ulong> StepIndices, string? Model, string? ResponseModel = null, string? Label = null);
 
 /// <summary>An <c>executor_metadata</c> row: how the run ended, its last step and its planner model.</summary>
-internal sealed record AntigravityExecutor(long Idx, long TerminationReason, long LastStepIdx, string? Model);
+/// <param name="ThinkingLevel"><c>completion_config_override.thinking_level</c> as its effort token, the API-key path.</param>
+internal sealed record AntigravityExecutor(long Idx, long TerminationReason, long LastStepIdx, string? Model, string? ThinkingLevel = null);
 
 /// <summary><c>CortexTrajectoryMetadata</c>: when the conversation was created, where, and whose sub-agent it is.</summary>
 internal sealed record AntigravityTrajectory(long? CreatedMs, string? ParentConversationId, string? Project, bool IsSubagent);
@@ -98,7 +103,7 @@ internal static class AntigravityDecoder
             }
 
             var key = NonEmpty(stats.String(11)) ?? NonEmpty(stats.String(7));
-            usage = new AntigravityUsage((long)input, (long)output, (long)cache, (long)thinking, (long)response, key);
+            usage = new AntigravityUsage((long)input, (long)output, (long)cache, (long)thinking, (long)response, key, NonEmpty(stats.String(13)));
         }
 
         return new AntigravityStep(created, viewable, finished, completed, chunk, started, usage);
@@ -108,26 +113,31 @@ internal static class AntigravityDecoder
     public static AntigravityGeneration Generation(long idx, ReadOnlySpan<byte> blob)
     {
         var message = ProtoMessage.Parse(blob);
-        string? model = null;
+        string? response = null, label = null;
         if (message.TryMessage(1, out var chat))
         {
-            model = NonEmpty(chat.String(19)) ?? NonEmpty(chat.String(21));
+            response = NonEmpty(chat.String(19));
+            label = NonEmpty(chat.String(21));
         }
 
-        return new AntigravityGeneration(idx, message.RepeatedUInt(2).ToHashSet(), model);
+        return new AntigravityGeneration(idx, message.RepeatedUInt(2).ToHashSet(), response ?? label, response, label);
     }
 
     /// <exception cref="ProtoFormatException">Malformed.</exception>
     public static AntigravityExecutor Executor(long idx, ReadOnlySpan<byte> blob)
     {
         var message = ProtoMessage.Parse(blob);
-        string? model = null;
+        string? model = null, thinking = null;
         if (message.TryMessage(10, out var cascade) && cascade.TryMessage(1, out var planner))
         {
             model = NonEmpty(planner.String(28));
+            if (planner.TryMessage(56, out var completion))
+            {
+                thinking = completion.Int(19) switch { 1 => "low", 2 => "medium", 3 => "high", _ => null };
+            }
         }
 
-        return new AntigravityExecutor(idx, message.Int(1), message.Int(3), model);
+        return new AntigravityExecutor(idx, message.Int(1), message.Int(3), model, thinking);
     }
 
     /// <exception cref="ProtoFormatException">Malformed.</exception>
