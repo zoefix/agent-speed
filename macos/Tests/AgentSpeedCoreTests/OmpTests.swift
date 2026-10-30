@@ -26,10 +26,10 @@ struct OmpTests {
         let (expected, results) = try ParserFixtureTests.runFixtures()
         let files = try #require(expected["files"] as? [String: [String: Any]])
         let omp = files.filter { $0.key.hasPrefix("omp/") }
-        #expect(omp.count == 12)
+        #expect(omp.count == 13)
         for (relative, spec) in omp {
             let summary = Self.summary(try #require(results[relative]))
-            for (field, wanted) in spec where field != "parentFile" {
+            for (field, wanted) in spec where !["parentFile", "effort", "speed", "responseModes"].contains(field) {
                 let actual = summary[field] ?? NSNull()
                 #expect((actual as AnyObject).isEqual(wanted), "\(relative) \(field): \(actual)")
             }

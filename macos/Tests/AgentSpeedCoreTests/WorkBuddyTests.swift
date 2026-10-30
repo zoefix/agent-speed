@@ -25,7 +25,7 @@ struct WorkBuddyTests {
         #expect(workbuddy.count == 8)
         for (relative, spec) in workbuddy {
             let summary = OmpTests.summary(try #require(results[relative]))
-            for (field, wanted) in spec where field != "parentFile" {
+            for (field, wanted) in spec where !["parentFile", "effort", "speed", "responseModes"].contains(field) {
                 let actual = summary[field] ?? NSNull()
                 #expect((actual as AnyObject).isEqual(wanted), "\(relative) \(field): \(actual)")
             }

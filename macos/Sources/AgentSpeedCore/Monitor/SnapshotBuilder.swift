@@ -43,9 +43,7 @@ struct SnapshotContext: Sendable {
             } else {
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: "", available: false, sessionCount: 0)
             }
-        }
-        if let info = sources[.codex] {
-            sources[.codex]?.configuredModes = ConfiguredModes.codex(sessionsRoot: info.rootPath)
+            sources[kind]?.configuredModes = session.configuredModes(of: kind)
         }
         self.sources = sources
         var warnings: [MonitorWarning] = []
@@ -68,7 +66,7 @@ struct SnapshotContext: Sendable {
 enum SnapshotBuilder {
     static func running(_ output: EngineOutput, context: SnapshotContext) -> SpeedSnapshot {
         let agents = output.agents.map { row in
-            AgentStatus(
+            var agent = AgentStatus(
                 id: row.agent.id,
                 source: row.agent.source,
                 project: row.agent.project,
@@ -85,6 +83,9 @@ enum SnapshotBuilder {
                 perf: row.perf,
                 signals: row.signals
             )
+            agent.sessionModes = row.agent.sessionModes
+            agent.configuredModes = row.agent.configuredModes
+            return agent
         }
         let sources = SourceKind.allCases.map { kind in
             let info = context.sources[kind]

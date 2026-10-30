@@ -9,6 +9,9 @@ struct EngineAgent: Equatable, Sendable {
     var cwdPath: String?
     var model: String?
     var modes: ExecutionModes = .empty
+    /// A session-current fact and configured values (EXECUTION-MODES, Current values).
+    var sessionModes: ExecutionModes = .empty
+    var configuredModes: ExecutionModes = .empty
     var isSubagent: Bool
     var phase: AgentPhase
     var inFlightStartMs: Int64?
@@ -58,6 +61,8 @@ struct EngineAgent: Equatable, Sendable {
             cwdPath: state.cwdPath,
             modes: state.modes
         )
+        sessionModes = state.sessionModes
+        configuredModes = state.configuredModes
         actions = state.actions.actions
     }
 

@@ -48,13 +48,19 @@ final class HermesSource {
     private final class LogSet {
         let canonicalFolder: String
         let configPath: String?
+        /// `state.db` beside `config.yaml`; none for a log folder of another name.
+        let statePath: String?
         var parser: HermesLogSet
         var files: [FileIdentity: TrackedLog] = [:]
         var configSignature: HermesCodexRuntime.FileSignature?
+        var stateStat: FileStat?
+        var stateWalStat: FileStat?
+        var queriedSessions: Set<String> = []
 
         init(folder: String, timeZone: TimeZone, fileID: FileID) {
             canonicalFolder = HermesSource.canonical(folder)
             configPath = HermesHome.configPath(ofLogFolder: folder)
+            statePath = configPath.map { HermesHome.join(HermesHome.directory(of: $0), "state.db") }
             parser = HermesLogSet(folder: folder, timeZone: timeZone, fileID: fileID)
         }
 
@@ -136,6 +142,7 @@ final class HermesSource {
         let threshold = todayStartMs - TranscriptSession.startupLookbackMs
         for folder in logFolders {
             update.merge(add(folder, threshold: threshold, deduper: &deduper))
+            if let set = sets[folder] { update.merge(checkSessions(set)) }
         }
         update.removedAgents = update.removedAgents.filter { update.agents[$0] == nil }
         return update
@@ -186,6 +193,7 @@ final class HermesSource {
             } else {
                 update.merge(add(folder, threshold: nil, deduper: &deduper))
             }
+            if let set = sets[folder] { update.merge(checkSessions(set)) }
         }
         update.removedAgents = update.removedAgents.filter { update.agents[$0] == nil }
         return update
@@ -275,7 +283,7 @@ final class HermesSource {
         return update
     }
 
-    /// Applies the Codex runtime switch of the set's `config.yaml` (METRICS 4.15).
+    /// Applies the Codex runtime switch and the configured values of the set's `config.yaml` (METRICS 4.15).
     private func checkConfig(_ set: LogSet) -> Update {
         guard let path = set.configPath else {
             set.parser.setCodexRuntime(false)
@@ -285,15 +293,33 @@ final class HermesSource {
         switch HermesCodexRuntime.check(path, last: set.configSignature) {
         case .missing:
             set.configSignature = nil
-            changed = set.parser.setCodexRuntime(false)
-        case .read(let on, let signature):
+            changed = set.parser.setCodexRuntime(false) + set.parser.setConfiguredModes(.empty)
+        case .read(let config, let signature):
             set.configSignature = signature
-            changed = set.parser.setCodexRuntime(on)
+            changed = set.parser.setCodexRuntime(config.codexRuntime) + set.parser.setConfiguredModes(config.configuredModes)
         case .unchanged:
             break
         }
         var update = Update()
-        for session in changed { note(session, of: set, in: &update) }
+        for session in Set(changed) { note(session, of: set, in: &update) }
+        return update
+    }
+
+    /// The session-current efforts of `state.db`: read when it or its `-wal` changed, else only for sessions it was not
+    /// asked about yet, so at most once per rediscovery. No connection stays open (METRICS 4.15).
+    private func checkSessions(_ set: LogSet) -> Update {
+        guard let path = set.statePath else { return Update() }
+        let stat = FileStat.lstat(path), wal = FileStat.lstat(path + "-wal")
+        let changed = stat != set.stateStat || wal != set.stateWalStat
+        let sessions = set.parser.sessionOrder.filter { !$0.isEmpty && (changed || !set.queriedSessions.contains($0)) }
+        (set.stateStat, set.stateWalStat) = (stat, wal)
+        guard !sessions.isEmpty else { return Update() }
+        let values = SessionModes.hermes(databasePath: path, sessions: sessions)
+        set.queriedSessions.formUnion(sessions)
+        var update = Update()
+        for session in sessions where set.parser.setSessionModes(values[session] ?? .empty, of: session) {
+            note(session, of: set, in: &update)
+        }
         return update
     }
 

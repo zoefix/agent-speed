@@ -58,7 +58,7 @@ struct OpencodeTests {
                 #expect(record.isFinal == (want["final"] as? Bool), "\(record.key) final")
                 expectPricingFields(record, want, record.key)
             }
-            expectModeFields(state.modes, actual, spec, id)
+            expectModeFields(state.modes.effortAndSpeed, actual, spec, id)
         }
     }
 

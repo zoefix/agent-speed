@@ -19,7 +19,7 @@ struct DroidTests {
         let (expected, results) = try ParserFixtureTests.runFixtures()
         let files = try #require(expected["files"] as? [String: [String: Any]])
         let droid = files.filter { $0.key.hasPrefix("droid/") }
-        #expect(droid.count == 10)
+        #expect(droid.count == 11)
         for (relative, spec) in droid {
             let summary = OmpTests.summary(try #require(results[relative]))
             for (field, wanted) in spec where !["parentFile", "effort", "speed", "responseModes"].contains(field) {

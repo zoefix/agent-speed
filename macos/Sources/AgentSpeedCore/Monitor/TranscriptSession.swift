@@ -122,6 +122,8 @@ final class TranscriptSession {
     private let opencodeRoot: String
     private var opencodeNeedsSeed = false
     private var opencodeLinks: [String: String] = [:]
+    /// Configured values and WorkBuddy's session-current effort of transcript agents (EXECUTION-MODES, Current values).
+    private let modeContext: AgentModeContext
     /// Live reporting's watch epoch (METRICS 11.10 *Watch*); nil while it is off.
     private var reportWatch: Int?
 
@@ -157,6 +159,8 @@ final class TranscriptSession {
         hermes = configuration.readsHermes
             ? HermesSource(root: hermesRoot.path, isSetting: hermesRoot.isSetting,
                            timeZone: configuration.resolvedHermesTimeZone, limits: limits) : nil
+        modeContext = AgentModeContext(roots: roots.filter(\.enabled).map { ($0.family, $0.path) },
+                                       geminiSettings: configuration.resolvedGeminiSettings)
         refreshAvailability()
     }
 
@@ -251,6 +255,7 @@ final class TranscriptSession {
         var summary = SeedSummary()
         self.todayStartMs = todayStartMs
         refreshAvailability()
+        _ = modeContext.refresh()
 
         var backlog: [(file: DiscoveredFile, tracked: TrackedFile, start: FileTailer.Start)] = []
         var droidBaselines: [TrackedFile] = []
@@ -332,7 +337,7 @@ final class TranscriptSession {
             file.parser.setSeeding(false)
             if !result.read.failed { _ = file.parser.finishReadCycle { upserts.append($0) } }
             let project = projectName(of: file)
-            for upsert in upserts { deliver(upsert, project: project, live: false) }
+            for upsert in upserts { deliver(upsert, project: project, live: false, agent: agentState(of: file)) }
             finishRead(of: file, result: result.read)
         }
         decoder.cancel()
@@ -368,6 +373,7 @@ final class TranscriptSession {
             summary.filesRead += hermes.filesRead
             summary.bytesRead += hermes.bytesRead
         }
+        refreshModeContext()
         summary.partialHistory = partialHistory
         summary.durationMs = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
         return summary
@@ -516,7 +522,7 @@ final class TranscriptSession {
         for file in files.values where file.family == .grokBuild {
             var upserts: [ResponseUpsert] = []
             if file.parser.refreshMetadata(deduper: &deduper, emit: { upserts.append($0) }) {
-                for upsert in upserts { deliver(upsert, project: projectName(of: file), live: true) }
+                for upsert in upserts { deliver(upsert, project: projectName(of: file), live: true, agent: agentState(of: file)) }
                 syncAgent(file)
                 changed = true
             }
@@ -541,7 +547,46 @@ final class TranscriptSession {
             changed = apply(openclaw.rediscover(todayStartMs: todayStartMs, deduper: &deduper), live: true) || changed
         }
         if let hermes { changed = apply(hermes.rediscover(deduper: &deduper), live: true) || changed }
-        return changed
+        return refreshModeContext() || changed
+    }
+
+    /// Checks the config files and `workbuddy.db`; agents take what changed.
+    @discardableResult
+    private func refreshModeContext() -> Bool {
+        var sessions: [String: Set<String>] = [:]
+        for file in files.values where file.family.isWorkBuddy {
+            let state = file.parser.state
+            if state.lastLineMs != nil, !state.isSubagent { sessions[file.root, default: []].insert(Self.sessionId(of: file)) }
+        }
+        guard modeContext.refresh(workBuddySessions: sessions) else { return false }
+        for file in files.values { syncAgent(file) }
+        return true
+    }
+
+    private static func sessionId(of file: TrackedFile) -> String {
+        ((file.path as NSString).lastPathComponent as NSString).deletingPathExtension
+    }
+
+    /// A source's configured value, where it has one per source (not Gemini CLI's, which depends on the model).
+    func configuredModes(of source: SourceKind) -> ExecutionModes {
+        guard let family = TranscriptFamily(source) else { return .empty }
+        return modeContext.sourceConfigured(root: roots.first { $0.family == family && $0.enabled && $0.detected }?.path)
+    }
+
+    /// The parser's state with what the session-current stores and config files say.
+    private func agentState(of file: TrackedFile) -> AgentState {
+        var state = file.parser.state
+        state.configuredModes = modeContext.configured(family: file.family, root: file.root, model: state.model)
+        if file.family.isWorkBuddy { state.sessionModes = modeContext.session(root: file.root, sessionId: Self.sessionId(of: file)) }
+        return state
+    }
+
+    /// The agent's current effort, for the report ledger.
+    private func currentEffort(_ state: AgentState?, agentId: String) -> ExecutionModeAttribution? {
+        if let state { return EffortAndSpeed(facts: state.modes, session: state.sessionModes, configured: state.configuredModes).effort }
+        return engine.agents[agentId].flatMap {
+            EffortAndSpeed(facts: $0.modes, session: $0.sessionModes, configured: $0.configuredModes).effort
+        }
     }
 
     /// Candidate paths of a root, limited to the most recently modified ones when there are too many.
@@ -580,14 +625,14 @@ final class TranscriptSession {
         var upserts: [ResponseUpsert] = []
         var completions: [ToolCompletion] = []
         let metadataChanged = file.parser.refreshMetadata(deduper: &deduper) { upserts.append($0) }
-        for upsert in upserts { deliver(upsert, project: projectName(of: file), live: live) }
+        for upsert in upserts { deliver(upsert, project: projectName(of: file), live: live, agent: agentState(of: file)) }
         upserts.removeAll(keepingCapacity: true)
         func consume(_ bytes: UnsafeRawBufferPointer, at offset: Int64) {
             file.parser.consume(rawLine: bytes, offset: offset, deduper: &deduper,
                                 emit: { upserts.append($0) }, onToolResult: { completions.append($0) })
             if !upserts.isEmpty {
                 let project = projectName(of: file)
-                for upsert in upserts { deliver(upsert, project: project, live: live) }
+                for upsert in upserts { deliver(upsert, project: project, live: live, agent: agentState(of: file)) }
                 upserts.removeAll(keepingCapacity: true)
             }
             if !completions.isEmpty {
@@ -614,7 +659,7 @@ final class TranscriptSession {
             file.parser.noteReadStart(result.startOffset)
             cycleChanged = file.parser.finishReadCycle { upserts.append($0) }
             let project = projectName(of: file)
-            for upsert in upserts { deliver(upsert, project: project, live: live) }
+            for upsert in upserts { deliver(upsert, project: project, live: live, agent: agentState(of: file)) }
         }
         finishRead(of: file, result: result)
         return metadataChanged || result.bytesRead > 0 || result.didReset || cycleChanged
@@ -638,7 +683,7 @@ final class TranscriptSession {
         var upserts: [ResponseUpsert] = []
         file.parser.consume(.antigravity(batch), deduper: &deduper) { upserts.append($0) }
         let project = projectName(of: file)
-        for upsert in upserts { deliver(upsert, project: project, live: live) }
+        for upsert in upserts { deliver(upsert, project: project, live: live, agent: agentState(of: file)) }
         finishRead(of: file, result: result)
         return result.bytesRead > 0 || result.didReset
     }
@@ -663,7 +708,7 @@ final class TranscriptSession {
         let project = projectName(of: file)
         for item in completed {
             switch item {
-            case .upsert(let upsert): deliver(upsert, project: project, live: true)
+            case .upsert(let upsert): deliver(upsert, project: project, live: true, agent: agentState(of: file))
             case .tool(let completion): deliver(completion, agentId: file.path, source: file.parser.state.source)
             }
         }
@@ -784,10 +829,13 @@ final class TranscriptSession {
         return counts
     }
 
-    private func deliver(_ upsert: ResponseUpsert, project: String, live: Bool) {
+    /// `agent`: the state of the agent the response belongs to, as read so far; nil falls back to what the engine holds.
+    private func deliver(_ upsert: ResponseUpsert, project: String, live: Bool, agent: @autoclosure () -> AgentState?) {
         guard enabledSources.contains(upsert.record.source) else { return }
         let nowMs = live ? clock() : nil
-        if let event = engine.upsert(upsert.record, project: project, isCompletion: upsert.isCompletion, emitsEvents: live, nowMs: nowMs) {
+        let id = upsert.record.agentId
+        if let event = engine.upsert(upsert.record, project: project, isCompletion: upsert.isCompletion, emitsEvents: live,
+                                     nowMs: nowMs, currentEffort: currentEffort(agent(), agentId: id)) {
             pendingEvents.append(event)
         }
     }
@@ -803,7 +851,7 @@ final class TranscriptSession {
         if state.lastLineMs != nil, enabledSources.contains(state.source) {
             let member = AgentParents.Member(id: file.path, family: file.family, thread: state.thread)
             if parentMembers.updateValue(member, forKey: file.path) != member { parentLinksAreStale = true }
-            engine.setAgent(EngineAgent(id: file.path, state: state, parentId: parentLinks[file.path]))
+            engine.setAgent(EngineAgent(id: file.path, state: agentState(of: file), parentId: parentLinks[file.path]))
         } else {
             removeAgent(file.path)
         }
@@ -829,7 +877,9 @@ final class TranscriptSession {
     @discardableResult
     private func apply(_ update: OpencodeSource.Update, live: Bool) -> Bool {
         guard !update.isEmpty else { return false }
-        for (upsert, project) in update.upserts { deliver(upsert, project: project, live: live) }
+        for (upsert, project) in update.upserts {
+            deliver(upsert, project: project, live: live, agent: update.agents[upsert.record.agentId])
+        }
         for id in update.removedAgents { engine.removeAgent(id: id) }
         for (id, state) in update.agents {
             if state.lastLineMs != nil {
@@ -848,7 +898,9 @@ final class TranscriptSession {
 
     @discardableResult
     private func apply(_ update: ZcodeSource.Update, live: Bool) -> Bool {
-        for (upsert, project) in update.upserts { deliver(upsert, project: project, live: live) }
+        for (upsert, project) in update.upserts {
+            deliver(upsert, project: project, live: live, agent: update.agents[upsert.record.agentId])
+        }
         for id in update.removedAgents { engine.removeAgent(id: id) }
         for (id, state) in update.agents {
             if state.lastLineMs != nil { engine.setAgent(EngineAgent(id: id, state: state, parentId: zcode?.parentLinks[id])) }
@@ -870,7 +922,7 @@ final class TranscriptSession {
                 deliver(next.completion, agentId: next.agentId, source: .openclaw)
                 tools = tools.dropFirst()
             }
-            deliver(upsert, project: project, live: live)
+            deliver(upsert, project: project, live: live, agent: update.agents[upsert.record.agentId])
         }
         for next in tools { deliver(next.completion, agentId: next.agentId, source: .openclaw) }
         for id in update.removedAgents { engine.removeAgent(id: id) }
@@ -893,7 +945,9 @@ final class TranscriptSession {
     private func apply(_ update: HermesSource.Update, live: Bool) -> Bool {
         if hermes?.partialHistory == true { partialHistory = true }
         guard !update.isEmpty else { return false }
-        for (upsert, project) in update.upserts { deliver(upsert, project: project, live: live) }
+        for (upsert, project) in update.upserts {
+            deliver(upsert, project: project, live: live, agent: update.agents[upsert.record.agentId])
+        }
         for id in update.removedAgents { engine.removeAgent(id: id) }
         for (id, state) in update.agents {
             if state.lastLineMs != nil, enabledSources.contains(.hermes) {

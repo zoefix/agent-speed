@@ -86,10 +86,14 @@ struct HermesTests {
                 let responses = sets.responses[set.agentId(sessionId)] ?? []
                 var summary = OmpTests.summary(ParserFixtureTests.FileResult(state: state, responses: responses))
                 summary["parentId"] = NSNull()
-                for (field, value) in spec where field != "responses" {
+                for (field, value) in spec where !["responses", "effort", "speed", "responseModes"].contains(field) {
                     let actual = summary[field] ?? NSNull()
                     #expect((actual as AnyObject).isEqual(value), "\(label) \(field): \(actual)")
                 }
+                // The profile's `config.yaml` and `state.db` beside the log folder play what a live read would find.
+                let config = Self.profileConfig(ofFolder: folderRelative)
+                let session = Self.sessionModes(ofFolder: folderRelative, session: sessionId)
+                expectModeFields(EffortAndSpeed(facts: state.modes, session: session, configured: config), responses, spec, label)
                 let wantedResponses = try #require(spec["responses"] as? [[String: Any]])
                 #expect(responses.map(\.key) == wantedResponses.compactMap { $0.string("key") }, "\(label) keys")
                 for (record, want) in zip(responses, wantedResponses) {
@@ -105,6 +109,30 @@ struct HermesTests {
             }
         }
         #expect(agents == 6)
+    }
+
+    private static func profileConfig(ofFolder relative: String) -> ExecutionModes {
+        let folder = Fixtures.root.appendingPathComponent(relative).path
+        guard let path = HermesHome.configPath(ofLogFolder: folder),
+              let data = FileManager.default.contents(atPath: path) else { return .empty }
+        return HermesCodexRuntime.configuredModes(data)
+    }
+
+    private static func sessionModes(ofFolder relative: String, session: String) -> ExecutionModes {
+        let folder = Fixtures.root.appendingPathComponent(relative).path
+        guard let path = HermesHome.configPath(ofLogFolder: folder) else { return .empty }
+        return SessionModes.hermes(databasePath: HermesHome.join(HermesHome.directory(of: path), "state.db"),
+                                   sessions: [session])[session] ?? .empty
+    }
+
+    @Test func agentScalarsFollowTheLineRules() throws {
+        for item in try #require(try Self.fixtures["agentConfigs"] as? [[String: Any]]) {
+            let text = try #require(item.string("text"))
+            let got = HermesCodexRuntime.agentScalars(Array(text.utf8))
+            let name = item.string("name") ?? ""
+            #expect(Set(got.keys) == Set(item.keys).subtracting(["name", "text"]), "\(name)")
+            for (key, value) in got { #expect(value == item.string(key), "\(name) \(key)") }
+        }
     }
 
     @Test func tracesMatchPhaseAfterEveryLine() throws {
