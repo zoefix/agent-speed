@@ -72,7 +72,7 @@ Maintainer: zoefix <zony1937@gmail.com>
 Homepage: https://github.com/zoefix/agent-speed
 Description: Live token speed of your AI coding agents
  Agent Speed reads the local logs of AI coding agents and shows their live
- output speed, costs, task scores and network traffic in the tray, a floating
+ output speed, costs, performance scores and network traffic in the tray, a floating
  orb and a usage history. Everything stays on this computer.
 CONTROL
 dpkg-deb --build --root-owner-group "$deb" "$out/agent-speed_${version}_${debarch}.deb" >/dev/null
