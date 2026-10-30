@@ -3,6 +3,7 @@ using System.Text;
 using AgentSpeed.Core.Antigravity;
 using AgentSpeed.Core.Engine;
 using AgentSpeed.Core.Hermes;
+using AgentSpeed.Core.History;
 using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.OpenClaw;
@@ -332,6 +333,22 @@ public sealed class CurrentValueTests : IDisposable
         agent = Assert.Single(core.BuildSnapshot(now, today, MonitorState.Running, observeLive: false).Snapshot.Agents);
         Assert.Equal(("xhigh", "selected"), Pair(agent, ExecutionModeKind.Effort));
         Assert.Equal(("fast", "configured"), Pair(agent, ExecutionModeKind.Speed));
+    }
+
+    [Fact]
+    public void TheHistoryCountsARowsEffortAndKeepsSessionAndConfiguredValuesOut()
+    {
+        var enabled = new HashSet<SourceKind> { SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.GrokBuild, SourceKind.Hermes, SourceKind.OpenClaw };
+        var locations = new SourceLocations("", "", "", "", [],
+            WorkBuddyRoot: WorkBuddyFixture.RootOf(SourceKind.WorkBuddy), WorkBuddyAiRoot: WorkBuddyFixture.RootOf(SourceKind.WorkBuddyAi),
+            GrokBuildRoot: FixtureLocator.PathOf("grok/sessions"), HermesRoot: FixtureLocator.PathOf("hermes/home"), OpenClawRoots: [FixtureLocator.PathOf("openclaw/.openclaw")]);
+        using var store = HistoryStore.Open(_temp.Combine("history.sqlite"));
+        var analyzer = new HistoryAnalyzer(store);
+        analyzer.Run(locations, enabled, TimeZoneInfo.Utc, CancellationToken.None);
+        var rows = analyzer.Days().SelectMany(d => d.Modes).Where(m => m.Kind == ExecutionModeKind.Effort).ToList();
+        Assert.All(rows.Where(m => m.Source != SourceKind.OpenClaw), m => Assert.Equal(("unknown", "unknown"), (m.Mode, m.Evidence)));
+        Assert.Contains(rows, m => m.Source == SourceKind.OpenClaw && m.Evidence == "recorded");
+        Assert.DoesNotContain(rows, m => m.Evidence == "configured");
     }
 
     [Fact]

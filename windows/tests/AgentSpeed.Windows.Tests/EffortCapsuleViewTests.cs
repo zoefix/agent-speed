@@ -98,7 +98,7 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
             var word = texts.Single(t => t.Text == "high");
             var mark = texts.Single(t => t.Text == "設定值");
             return (own, view.Width, meter.TranslatePoint(default, view).X, bolts.TranslatePoint(new Point(bolts.ActualWidth, 0), view).X,
-                Find<Rectangle>(view), mark.TranslatePoint(default, view).X, word.TranslatePoint(new Point(word.ActualWidth, 0), view).X,
+                Dashes(view), mark.TranslatePoint(default, view).X, word.TranslatePoint(new Point(word.ActualWidth, 0), view).X,
                 Math.Abs(Baseline(word, view) - Baseline(mark, view)));
         });
         output.WriteLine($"width {width:0.0}, meter {meterLeft:0.0}, bolts end {boltsRight:0.0}, mark at {markLeft:0.0} after word end {wordRight:0.0}, baselines {baselines:0.00} apart");
@@ -118,7 +118,7 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
             var view = View(new EffortCapsule("high", "fast", SpeedConfigured: true), double.NaN, gap: 0);
             view.Mark = "config";
             Layout(view);
-            return (Find<Rectangle>(view).Visibility, Texts(view).Count(t => t.Text == "config" && t.IsVisible));
+            return (Dashes(view).Visibility, Texts(view).Count(t => t.Text == "config" && t.Visibility == Visibility.Visible));
         });
         Assert.Equal(Visibility.Collapsed, dashes);
         Assert.Equal(0, marks);
@@ -131,7 +131,7 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
         {
             var view = View(new EffortCapsule("high", null, EffortConfigured: true), double.NaN, gap: 0);
             view.Appearance = new CapsuleAppearance(Dark: true, HighContrast: true, ReduceMotion: false, Shimmer: false);
-            var rectangle = Find<Rectangle>(view);
+            var rectangle = Dashes(view);
             return (rectangle.StrokeThickness, rectangle.StrokeDashArray.ToArray());
         });
         Assert.Equal(1, thickness);
@@ -154,7 +154,7 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
             view.Capsule = new EffortCapsule("high", null);
             var image = Find<Image>(view);
             var visible = image.Visibility;
-            var bar = (FindAll<Rectangle>(view).First(r => r.RenderTransform is ScaleTransform).RenderTransform as ScaleTransform)!.ScaleY;
+            var bar = FindAll<Rectangle>(view).Select(r => r.RenderTransform).OfType<ScaleTransform>().Min(t => t.ScaleY);
             Pump(TimeSpan.FromMilliseconds(400));
             var gone = image.Visibility;
             window.Close();
@@ -186,6 +186,8 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
     }
 
     private static List<TextBlock> Texts(DependencyObject parent) => FindAll<TextBlock>(parent);
+
+    private static Rectangle Dashes(DependencyObject parent) => FindAll<Rectangle>(parent).Single(r => r.RadiusX == EffortCapsule.Height / 2);
 
     private static double Baseline(TextBlock text, Visual view) => text.TranslatePoint(new Point(0, text.BaselineOffset), (UIElement)view).Y;
 

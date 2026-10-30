@@ -47,7 +47,7 @@ internal sealed class EffortCapsuleView : Grid
     private readonly TextBlock _mark = MarkText();
     private readonly SpeedBolts _bolts = new();
     private string? _shownWord;
-    private Capsule? _shown;
+    private Capsule _shown = new(null, null);
     private bool _drawn;
 
     public EffortCapsuleView()
@@ -172,8 +172,9 @@ internal sealed class EffortCapsuleView : Grid
         var brushes = appearance.Brushes;
         animate &= IsLoaded && IsVisible && _drawn;
         _drawn = IsLoaded;
-        var newForm = animate && capsule.IsVisible && _shown is { IsVisible: true } shown
-            && (shown.EffortConfigured != capsule.EffortConfigured || shown.SpeedConfigured != capsule.SpeedConfigured);
+        var newForm = animate && capsule.IsVisible && _shown.IsVisible
+            && (_shown.EffortConfigured != capsule.EffortConfigured || _shown.SpeedConfigured != capsule.SpeedConfigured);
+        _shown = capsule;
         if (newForm)
         {
             CapturePreviousForm();
@@ -199,7 +200,6 @@ internal sealed class EffortCapsuleView : Grid
             _words.Margin = new Thickness(capsule.Level is not null && _shownWord is not null ? Capsule.PartSpacing : 0, 0, 0, 0);
             ShowMark(capsule, brushes);
             _bolts.Show(capsule.Bolts, brushes, parts, appearance.ReduceMotion, capsule.SpeedConfigured);
-            _shown = capsule;
         }
 
         var own = capsule.Width(Compact, CapsuleWordMeasure.For(LanguageCode), CapsuleWordMeasure.Mark(Mark, LanguageCode));
