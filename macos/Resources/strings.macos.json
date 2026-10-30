@@ -563,5 +563,11 @@
     "zh-Hans": "选择 Factory Droid 的 .factory 文件夹或 sessions 文件夹",
     "en": "Choose Factory Droid's .factory folder or its sessions folder",
     "ja": "Factory Droid の .factory フォルダまたは sessions フォルダを選択"
+  },
+  "mac.update.relaunching": {
+    "zh-Hant": "正在重新啟動…",
+    "zh-Hans": "正在重新启动…",
+    "en": "Relaunching…",
+    "ja": "再起動中…"
   }
 }

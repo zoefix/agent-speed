@@ -50,6 +50,9 @@ jobs:
             grep -E '✘ Test [^ ]+ (recorded|failed)|error:' "$RUNNER_TEMP/test.log" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1
           }
+      - name: Test update relaunch
+        timeout-minutes: 5
+        run: python3 macos/scripts/test-update-relaunch.py
       - name: Build app bundle
         run: macos/scripts/build-app.sh
       - uses: actions/upload-artifact@v7

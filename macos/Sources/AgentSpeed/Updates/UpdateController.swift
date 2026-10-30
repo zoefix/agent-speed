@@ -243,7 +243,12 @@ final class UpdateController {
             configuration.createsNewApplicationInstance = true
             NSWorkspace.shared.openApplication(at: replacer.target, configuration: configuration)
         }
-        onReadyToRelaunch?()
+        // AppKit can wait in a nested run loop for asynchronous termination approval. Enter it outside the main
+        // dispatch executor, so the approval callback and its timeout can still run on the main queue.
+        let ready = onReadyToRelaunch
+        RunLoop.main.perform(inModes: [.common]) {
+            MainActor.assumeIsolated { ready?() }
+        }
     }
 
     // MARK: Previews

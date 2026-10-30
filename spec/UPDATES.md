@@ -74,6 +74,14 @@ macOS:
 - Replace with `FileManager.replaceItemAt(_:withItemAt:)` (same volume: stage the new bundle in a temporary folder next
   to the target, e.g. `<parent>/.Agent Speed.update/`), remove `com.apple.quarantine`, then spawn a detached
   `/bin/sh -c` helper that waits for this PID to exit and runs `open -n <target>`; terminate the app.
+- Request macOS termination from the main run loop, outside a MainActor task or main-dispatch work item. AppKit
+  may enter a nested loop while waiting for asynchronous termination approval; the normal leaving-report callback
+  and its one-second main-queue timeout must remain able to run. Do not replace normal shutdown with forced exit.
+  While handing over to the new instance, the macOS window shows a separate relaunching status.
+
+The macOS process regression runs with `python3 macos/scripts/test-update-relaunch.py`. It compiles the production
+updater into isolated fixture bundles and verifies download, replacement, asynchronous termination approval and
+automatic relaunch, including the one-time update notice. It never launches or replaces the user's installed app.
 
 Windows:
 - Payload must contain `AgentSpeed.exe` whose `FileVersionInfo.ProductVersion` (without `+metadata`) equals the

@@ -33,6 +33,9 @@ jobs:
       - name: Test core
         working-directory: macos
         run: swift test
+      - name: Test update relaunch
+        timeout-minutes: 5
+        run: python3 macos/scripts/test-update-relaunch.py
       - name: Build app bundle
         run: macos/scripts/build-app.sh --version "${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@v7

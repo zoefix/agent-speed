@@ -382,6 +382,7 @@ enum StringTable {
         "mac.update.failed.rateLimited": Entry("GitHub 暫時限制了請求次數，請稍後再試", "GitHub 暂时限制了请求次数，请稍后再试", "GitHub is limiting requests right now. Try again later", "GitHub がリクエストを制限しています。しばらくしてから再試行してください"),
         "mac.update.failed.unbundled": Entry("這份 Agent Speed 無法自行更新，請從 GitHub 下載新版本", "这份 Agent Speed 无法自行更新，请从 GitHub 下载新版本", "This copy of Agent Speed can't update itself. Download the new version from GitHub", "この Agent Speed は自動で更新できません。GitHub から新しいバージョンをダウンロードしてください"),
         "mac.update.ok": Entry("好", "好", "OK", "OK"),
+        "mac.update.relaunching": Entry("正在重新啟動…", "正在重新启动…", "Relaunching…", "再起動中…"),
         "mac.update.windowTitle": Entry("軟體更新", "软件更新", "Software Update", "ソフトウェア・アップデート"),
         "menu.about": Entry("關於 Agent Speed", "关于 Agent Speed", "About Agent Speed", "Agent Speed について"),
         "menu.alwaysOnTop": Entry("永遠置頂", "永远置顶", "Always on Top", "常に手前に表示"),

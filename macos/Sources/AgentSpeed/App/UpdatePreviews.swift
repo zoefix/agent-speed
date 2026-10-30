@@ -33,6 +33,8 @@ enum UpdatePreviews {
             ("available", .available(release), .idle),
             ("downloading", .available(release), .downloading(0.42)),
             ("verifying", .available(release), .verifying),
+            ("installing", .available(release), .installing),
+            ("relaunching", .available(release), .relaunching),
             ("failed", .available(release), .failed(.checksum)),
             ("checking", .checking, .idle),
             ("uptodate", .upToDate, .idle),

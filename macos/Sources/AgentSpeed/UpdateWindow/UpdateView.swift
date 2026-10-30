@@ -275,7 +275,9 @@ private struct InstallProgress: View {
             return (fraction, l10n("update.downloading", percent))
         case .verifying:
             return (1, l10n("update.verifying"))
-        case .installing, .relaunching, .idle, .failed:
+        case .relaunching:
+            return (1, l10n("mac.update.relaunching"))
+        case .installing, .idle, .failed:
             return (1, l10n("update.installing"))
         }
     }
