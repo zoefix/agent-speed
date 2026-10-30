@@ -70,6 +70,36 @@ struct CurrentValueTests {
         #expect(parser.state.modes.facts.isEmpty)
     }
 
+    @Test func aTraceRowWrittenAfterItsTranscriptReachesTheLiveWindow() throws {
+        let directory = try TempDirectory()
+        let relative = "agents/main/agent/openclaw-agent.sqlite"
+        let path = directory.file(relative).path
+        try FileManager.default.createDirectory(at: directory.file("agents/main/agent"), withIntermediateDirectories: true)
+        try FileManager.default.copyItem(at: Fixtures.root.appendingPathComponent("openclaw/.openclaw/" + relative), to: directory.file(relative))
+        let window = "0f1c2d3e-0001-4a00-8000-00000000c001"
+        let source = OpenClawSource(roots: [directory.path])
+        var deduper = Deduper()
+        let seeded = source.seed(todayStartMs: 0, deduper: &deduper)
+        let agentId = OpenClawSource.agentId(path, window)
+        let last = try #require(seeded.upserts.map(\.upsert.record).filter { $0.agentId == agentId && $0.startMs != nil }.last)
+        let before = last.modes
+        let writer = try SQLiteConnection(path: path, mode: .readWriteCreate)
+        let insert = try writer.prepare("""
+            INSERT INTO trajectory_runtime_events (session_id, seq, event_json, created_at)
+            VALUES (?1, 99, '{"type":"trace.metadata","data":{"model":{"thinkLevel":"ultra"}}}', ?2)
+            """)
+        insert.bind(1, window)
+        insert.bind(2, try #require(last.startMs))
+        try insert.run()
+        writer.close()
+        let update = source.refreshIfChanged(deduper: &deduper)
+        #expect(update.agents[agentId]?.modes.effortAndSpeed.effort?.mode == "ultra")
+        let changed = update.upserts.map(\.upsert).filter { $0.record.key == last.key }
+        #expect(before.attribution(for: .effort).mode != "ultra")
+        #expect(changed.count == 1 && changed.first?.isCompletion == false)
+        #expect(changed.first?.record.modes.effortAndSpeed.effort?.mode == "ultra", "a late row updates a response like any upsert")
+    }
+
     // MARK: - Config files
 
     @Test func geminiOverridesCountOnlyForTheAgentsModel() throws {
@@ -233,8 +263,25 @@ struct CurrentValueTests {
 
     // MARK: - Ledger
 
-    private static func grokLine(_ update: String, at ms: Int64) -> String {
-        #"{"timestamp":\#(ms / 1000),"method":"session/update","params":{"sessionId":"g","update":\#(update),"_meta":{"agentTimestampMs":\#(ms)}}}"#
+    @Test func aLiveGrokResponseFreezesTheSummarysEffort() throws {
+        let directory = try TempDirectory()
+        let wire = "sessions/work/one/updates.jsonl"
+        try directory.write("sessions/work/one/summary.json",
+                            #"{"info":{"id":"one","cwd":"/projects/nova"},"current_model_id":"grok-4.5","reasoning_effort":"high"}"#)
+        try directory.write(wire, "")
+        let configuration = MonitorConfiguration(enabledSources: [.grokBuild], grokBuildRoot: directory.file("sessions"))
+        let base = HarnessEdgeTests.base
+        let session = TranscriptSession(configuration: configuration, clock: { base + 5000 })
+        _ = session.seed(todayStartMs: base - 3_600_000)
+        try directory.append(wire, HarnessEdgeTests.grokTurn())
+        #expect(session.handleChanges(atCanonicalPaths: [try WorkBuddySessionTests.canonical(directory.file(wire).path)]))
+        let report = session.advance(nowMs: base + 5000, todayStartMs: base - 3_600_000, emitsEvents: true).output.report
+        let efforts = report.counters.byMode.keys.map(\.attribution).filter { $0.kind == .effort }
+        #expect(efforts == [ExecutionModeAttribution(kind: .effort, mode: "high", evidence: "selected")])
+        // The response itself and the history stay unknown: a session-current value is not a response's.
+        #expect(session.responses.first?.modes.facts.isEmpty == true)
+        let history = try HistoryScan.run(configuration: configuration, storePath: directory.file("history.sqlite").path)
+        #expect(history.days.first?.modeUsage.allSatisfy { $0.attribution.kind != .effort || $0.attribution.isUnknown } == true)
     }
 
     @Test func aLiveResponseFreezesTheSessionCurrentEffortAndNeverAConfiguredOne() throws {

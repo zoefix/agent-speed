@@ -118,7 +118,7 @@ final class ZcodeDatabase {
         var result: [String: (modes: ExecutionModes, isAuxiliary: Bool)] = [:]
         try? query.forEachRow { row in
             guard let id = row.string(0) else { return }
-            let message = row.type(6) == SQLITE_TEXT ? row.withText(6) { try? JSONParser.parse(Data($0)) } : nil
+            let message = row.withText(6) { try? JSONParser.parse(Data($0)) }
             let highspeed = message?["role"]?.string == "user" ? message?["metadata"]?["highspeed"] : nil
             var modes = Self.highspeedModes(highspeed, provider: row.string(1), model: row.string(2), startedMs: row.int64(3))
             if row.type(4) == SQLITE_TEXT, let effort = ExecutionModeAdapters.effort(row.string(4), evidence: .recorded, scope: .request) {

@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 /// One short read of another program's database (EXECUTION-MODES, Session-current facts): a regular file, opened
 /// read-only with the rules of METRICS 4.5, so no `-wal` or `-shm` is created, and closed right after the read, since a
@@ -13,7 +14,7 @@ enum ForeignDatabase {
         for id in ids {
             statement.bind(1, id)
             try? statement.forEachRow { row in
-                if row.type(0) == 3, let value = row.string(0) { values[id] = value }
+                if row.type(0) == SQLITE_TEXT, let value = row.string(0) { values[id] = value }
             }
         }
         return values
