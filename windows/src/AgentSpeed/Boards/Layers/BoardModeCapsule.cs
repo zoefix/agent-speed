@@ -20,12 +20,16 @@ namespace AgentSpeed.Boards.Layers;
 /// <param name="TopGlow">The top rung's bar glow (CSS blur).</param>
 /// <param name="BoltGlow">The bolts' glow, 0 for none.</param>
 /// <param name="Compact">S boards drop the word (DESIGN 2c Layout per size).</param>
+/// <param name="Mark"><c>mode.configured.mark</c> in the board's language.</param>
 internal sealed record BoardCapsuleLook(float Corner, float Padding, float Gap, float Stroke, BoardTextStyle Word, bool Glows, float TopGlow,
-    float BoltGlow, bool Compact, BoardPalette Palette)
+    float BoltGlow, bool Compact, BoardPalette Palette, string Mark = "")
 {
     public bool Dark => Palette.Dark;
 
     public bool HighContrast => Palette.HighContrast;
+
+    /// <summary>The mark next to the word: as much smaller as on the dashboard.</summary>
+    public BoardTextStyle MarkStyle => Word.With(Word.Size - (float)(EffortCapsule.WordFontSize - EffortCapsule.MarkFontSize));
 }
 
 /// <summary>
@@ -79,6 +83,12 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
             parts++;
         }
 
+        if (capsule.ShowsMark(look.Compact))
+        {
+            width += MathF.Ceiling(_text.Measure(look.Mark, look.MarkStyle));
+            parts++;
+        }
+
         if (capsule.Bolts > 0)
         {
             width += BoltWidth * capsule.Bolts - 3 * (capsule.Bolts - 1);
@@ -99,13 +109,22 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
         var palette = look.Palette;
         var height = box.Bottom - box.Top;
         var hc = look.HighContrast;
-        if (!hc)
+        if (capsule.IsConfigured)
         {
-            BoardPaint.FillRound(context, box.Left, box.Top, box.Right - box.Left, height, look.Corner, palette.Fill);
+            BoardPaint.DashRound(context, box.Left, box.Top, box.Right - box.Left, height, look.Corner, hc ? palette.Ink : palette.Line,
+                hc ? 1 : Math.Max(look.Stroke, (float)EffortCapsule.DashedStroke), (float)EffortCapsule.DashLength, (float)EffortCapsule.DashGap);
+        }
+        else
+        {
+            if (!hc)
+            {
+                BoardPaint.FillRound(context, box.Left, box.Top, box.Right - box.Left, height, look.Corner, palette.Fill);
+            }
+
+            BoardPaint.StrokeRound(context, box.Left, box.Top, box.Right - box.Left, height, look.Corner, hc ? palette.Ink : palette.Line,
+                hc ? 1 : look.Stroke);
         }
 
-        BoardPaint.StrokeRound(context, box.Left, box.Top, box.Right - box.Left, height, look.Corner, hc ? palette.Ink : palette.Line,
-            hc ? 1 : look.Stroke);
         var mid = box.Top + height / 2;
         var x = box.Left + look.Padding;
         var tone = capsule.Tone;
@@ -120,10 +139,16 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
             x += Word(context, capsule.Effort!, x, mid, tone) + look.Gap;
         }
 
+        if (capsule.ShowsMark(look.Compact))
+        {
+            using var ink = BoardPaint.Brush(context, hc ? palette.Ink : palette.Ink3);
+            _text.Draw(context, look.Mark, look.MarkStyle, x, mid, ink);
+        }
+
         if (capsule.Bolts > 0)
         {
             var width = BoltWidth * capsule.Bolts - 3 * (capsule.Bolts - 1);
-            Bolts(context, box.Right - look.Padding - width, mid, capsule.Bolts);
+            Bolts(context, box.Right - look.Padding - width, mid, capsule.Bolts, capsule.SpeedConfigured);
         }
     }
 
@@ -185,6 +210,9 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
                 case EffortTone.Max:
                     BoardPaint.FillRound(context, left, bottom - h, w, h, radius, EffortCapsulePalette.Heat(EffortCapsulePalette.MaxHeat, look.Dark));
                     break;
+                case EffortTone.Configured:
+                    BoardPaint.FillRound(context, left, bottom - h, w, h, radius, palette.Ink3);
+                    break;
                 default:
                     // Neon's lit bars on dark: #cfe0ff (their glow is above).
                     BoardPaint.FillRound(context, left, bottom - h, w, h, radius, look.Glows && look.Dark ? Rgba.FromHex("#CFE0FF") : palette.Ink2);
@@ -223,6 +251,12 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
                 return _text.Draw(context, word, style, x, mid, brush);
             }
 
+            case EffortTone.Configured:
+            {
+                using var brush = BoardPaint.Brush(context, look.Palette.Ink3);
+                return _text.Draw(context, word, style, x, mid, brush);
+            }
+
             case EffortTone.Max:
             {
                 var color = EffortCapsulePalette.Heat(EffortCapsulePalette.MaxHeat, look.Dark);
@@ -247,14 +281,14 @@ internal sealed class BoardModeCapsule : IBoardModeCapsule
         }
     }
 
-    private void Bolts(ID2D1DeviceContext context, float x, float mid, int count)
+    private void Bolts(ID2D1DeviceContext context, float x, float mid, int count, bool configured)
     {
         var look = Look;
-        var color = look.HighContrast ? look.Palette.Ink : look.Palette.AmberInk;
+        var color = look.HighContrast ? look.Palette.Ink : configured ? look.Palette.Ink3 : look.Palette.AmberInk;
         var top = mid - 5;
         float Left(int i) => x + i * (BoltWidth - 3);
         double Alpha(int i) => count > 1 && i < count - 1 ? EffortCapsule.RearBoltOpacity : 1;
-        if (!look.HighContrast && look.BoltGlow > 0)
+        if (!look.HighContrast && !configured && look.BoltGlow > 0)
         {
             // Glass: drop-shadow 2 px of amber at 45 %; neon: 3 px of amber; the rear bolt's at its opacity. One effect for both.
             BoardPaint.Glow(context, Rgba.FromHex("#F5A524").WithAlpha(look.Glows ? 1 : 0.45), look.BoltGlow, c =>

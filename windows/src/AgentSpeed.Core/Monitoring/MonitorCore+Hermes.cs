@@ -128,7 +128,8 @@ internal sealed partial class MonitorCore
 
         _hermesPushed[agent.AgentId] = agent.Version;
         _engine.UpdateAgent(new AgentInfo(
-            agent.AgentId, SourceKind.Hermes, null, agent.Model, agent.IsSubagent, agent.Phase, agent.InFlightStartMs, agent.LastLineMs));
+            agent.AgentId, SourceKind.Hermes, null, agent.Model, agent.IsSubagent, agent.Phase, agent.InFlightStartMs, agent.LastLineMs)
+        { SessionModes = agent.SessionModes, ConfiguredModes = agent.ConfiguredModes });
         return true;
     }
 

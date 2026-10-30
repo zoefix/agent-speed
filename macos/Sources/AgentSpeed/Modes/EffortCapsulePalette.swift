@@ -5,14 +5,17 @@ import SwiftUI
 struct EffortCapsulePalette {
     let dark: Bool
     let increasedContrast: Bool
+    let tint: EffortCapsuleTint?
 
-    init(dark: Bool, increasedContrast: Bool) {
+    init(dark: Bool, increasedContrast: Bool, tint: EffortCapsuleTint? = nil) {
         self.dark = dark
         self.increasedContrast = increasedContrast
+        self.tint = tint
     }
 
     init(_ environment: EnvironmentValues) {
-        self.init(dark: environment.colorScheme == .dark, increasedContrast: environment.colorSchemeContrast == .increased)
+        self.init(dark: environment.colorScheme == .dark, increasedContrast: environment.colorSchemeContrast == .increased,
+                  tint: environment.effortCapsuleTint)
     }
 
     var fill: Color { increasedContrast ? .clear : Color.primary.opacity(dark ? 0.07 : 0.055) }
@@ -29,12 +32,32 @@ struct EffortCapsulePalette {
         increasedContrast ? .accentColor : DashboardPalette.amber(dark: dark).color
     }
 
+    // MARK: Configured values
+
+    /// Bars, word, mark and bolts of a configured value: tertiary, the text color with Increase Contrast.
+    var configuredInk: Color {
+        if increasedContrast { return .primary }
+        return tint?.ink ?? Color(nsColor: .tertiaryLabelColor)
+    }
+
+    var configuredUnlit: Color {
+        increasedContrast ? Color(nsColor: .disabledControlTextColor) : Color.primary.opacity(dark ? 0.12 : 0.1)
+    }
+
+    var configuredStroke: Color {
+        if increasedContrast { return .primary }
+        return tint?.line ?? Color.primary.opacity(dark ? 0.26 : 0.22)
+    }
+
+    var configuredStrokeWidth: CGFloat { increasedContrast ? 1 : 0.75 }
+
     /// Fill of a lit bar whose top sits at `top` (0–1) of the meter height; the top rung's gradient spans the meter.
     func litBar(_ tone: EffortTone, top: Double) -> LinearGradient {
         let colors: [Color]
         switch tone {
         case _ where increasedContrast: colors = [.primary, .primary]
         case .neutral: colors = [secondary, secondary]
+        case .configured: colors = [configuredInk, configuredInk]
         case .max: colors = Array(repeating: DashboardPalette.heatGraphic(0.82, dark: dark, increasedContrast: false).color, count: 2)
         case .topRung: colors = [heat(Self.topRungRange.lowerBound + topRungSpan * top), heat(Self.topRungRange.lowerBound)]
         }
@@ -46,6 +69,7 @@ struct EffortCapsulePalette {
         if increasedContrast { return AnyShapeStyle(Color.primary) }
         switch tone {
         case .neutral: return AnyShapeStyle(secondary)
+        case .configured: return AnyShapeStyle(configuredInk)
         case .max: return AnyShapeStyle(DashboardPalette.heatText(0.82, dark: dark, increasedContrast: false))
         case .topRung:
             let range = Self.topRungRange
@@ -64,7 +88,7 @@ struct EffortCapsulePalette {
     func shareBar(_ tone: EffortTone) -> AnyShapeStyle {
         if increasedContrast { return AnyShapeStyle(Color.primary) }
         switch tone {
-        case .neutral: return AnyShapeStyle(Color.primary.opacity(dark ? 0.42 : 0.36))
+        case .neutral, .configured: return AnyShapeStyle(Color.primary.opacity(dark ? 0.42 : 0.36))
         case .max: return AnyShapeStyle(heat(0.82))
         case .topRung:
             let range = Self.topRungRange
@@ -82,9 +106,20 @@ struct EffortCapsulePalette {
     }
 }
 
-/// How an effort token is colored: neutral up to `xhigh`, `max`, and the top rung (`ultra`, `ultracode`).
+/// The colors a surface gives a configured value instead of the dashboard's: a board's `ink-3` and `line` (DESIGN 2c).
+struct EffortCapsuleTint: Equatable, Hashable, Sendable {
+    var ink: Color
+    var line: Color
+}
+
+extension EnvironmentValues {
+    @Entry var effortCapsuleTint: EffortCapsuleTint?
+}
+
+/// How an effort token is colored: neutral up to `xhigh`, `max`, the top rung (`ultra`, `ultracode`), and a configured
+/// value of any level, which nothing confirms.
 enum EffortTone: Equatable, Sendable {
-    case neutral, max, topRung
+    case neutral, max, topRung, configured
 
     init(_ effort: String?) {
         switch effort {

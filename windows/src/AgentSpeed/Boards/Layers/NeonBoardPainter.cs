@@ -49,7 +49,7 @@ internal sealed class NeonBoardPainter : BoardStylePainter
 
     protected override BoardCapsuleLook CapsuleLook(BoardScene scene, bool sub) =>
         new(sub ? 8 : 9, 6, 5, 1, new BoardTextStyle(BoardFont.Mono, 10, FontWeight.Bold, 0.04f), true, 6, 3, scene.Size == BoardSize.S,
-            scene.Palette);
+            scene.Palette, ConfiguredMark);
 
     protected override BoardTextStyle NumberStyle(BoardScene scene) => new(BoardFont.Mono, (float)scene.Metrics.ValueSize, FontWeight.Bold);
 

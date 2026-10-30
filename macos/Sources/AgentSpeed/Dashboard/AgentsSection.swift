@@ -28,7 +28,7 @@ struct AgentsSection: View {
         let intelligenceCaption = l10n("intel.glyph")
         let intelligenceWidth = AgentIntelligenceColumn.width(caption: intelligenceCaption)
         let column = AgentCapsuleColumn(
-            rows: rows.indices.map { (EffortCapsule(rows[$0].modes), depths[$0]) },
+            rows: rows.indices.map { (EffortCapsule(rows[$0].current, l10n), depths[$0]) },
             rowWidth: rowWidth,
             intelligence: intelligenceWidth
         )

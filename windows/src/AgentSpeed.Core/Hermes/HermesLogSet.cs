@@ -1,5 +1,7 @@
 using System.Text;
+using System.Text.Json;
 using System.Text.RegularExpressions;
+using AgentSpeed.Core.Harnesses;
 using AgentSpeed.Core.Parsing;
 
 namespace AgentSpeed.Core.Hermes;
@@ -23,9 +25,13 @@ internal sealed partial class HermesLogSet
     private static readonly string[] Levels = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"];
     private static readonly byte[][] LevelBytes = [.. Levels.Select(Encoding.ASCII.GetBytes)];
 
+    private const string StateDatabaseName = "state.db";
+    private const string StateSql = "SELECT CASE WHEN length(model_config) <= 65536 THEN model_config END FROM sessions WHERE id = ?";
+
     private readonly IDeduper _deduper;
     private readonly Dictionary<string, HermesAgent> _agents = new(StringComparer.Ordinal);
     private readonly List<HermesAgent> _ordered = [];
+    private readonly SessionStore? _sessions;
 
     /// <param name="folder">The log folder as discovered; agent ids are <c>folder#session</c>.</param>
     /// <param name="zone">The zone whose rules convert the log's wall times (this computer's; fixtures name theirs).</param>
@@ -35,6 +41,7 @@ internal sealed partial class HermesLogSet
         _deduper = deduper;
         Zone = zone;
         ConfigPath = HermesPaths.ConfigPath(folder);
+        _sessions = ConfigPath is null ? null : new SessionStore(Path.Combine(Path.GetDirectoryName(ConfigPath)!, StateDatabaseName), StateSql, StateEffort);
     }
 
     public string Folder { get; }
@@ -53,29 +60,82 @@ internal sealed partial class HermesLogSet
     /// <summary>Turns run through Hermes's Codex app-server runtime show no generating phase (METRICS 4.15 Codex runtime).</summary>
     public bool CodexRuntime { get; private set; }
 
+    /// <summary>The effort and tier of the profile's <c>config.yaml</c>, shown as configured (EXECUTION-MODES).</summary>
+    public ExecutionModes ConfiguredModes { get; private set; } = ExecutionModes.Empty;
+
     private (long Ticks, long Size)? _configSignature;
 
     public static string AgentIdOf(string folder, string sessionId) => folder + "#" + sessionId;
 
     public HermesAgent? Agent(string sessionId) => _agents.GetValueOrDefault(sessionId);
 
-    /// <summary>Checks the profile's <c>config.yaml</c> and reads it again when its time or size changed; true when the switch changed.</summary>
+    /// <summary>Checks the profile's <c>config.yaml</c> and reads it again when its time or size changed; true when a value changed.</summary>
     public bool CheckConfig()
     {
-        var before = CodexRuntime;
-        switch (HermesConfig.Check(ConfigPath, _configSignature, out var signature, out var codex))
+        var (codexBefore, configuredBefore) = (CodexRuntime, ConfiguredModes);
+        switch (HermesConfig.Check(ConfigPath, _configSignature, out var signature, out var codex, out var configured))
         {
             case ConfigCheck.Off:
                 _configSignature = null;
                 SetCodexRuntime(false);
+                ConfiguredModes = ExecutionModes.Empty;
                 break;
             case ConfigCheck.Read:
                 _configSignature = signature;
                 SetCodexRuntime(codex);
+                ConfiguredModes = configured;
                 break;
         }
 
-        return before != CodexRuntime;
+        foreach (var agent in _ordered)
+        {
+            agent.SetModes(agent.SessionModes, ConfiguredModes);
+        }
+
+        return codexBefore != CodexRuntime || !configuredBefore.Equals(ConfiguredModes);
+    }
+
+    /// <summary>Reads the sessions' efforts from <c>state.db</c> when it changed or a session is new; true when one changed.</summary>
+    public bool RefreshSessions()
+    {
+        if (_sessions is null || _ordered.Count == 0)
+        {
+            return false;
+        }
+
+        var changed = _sessions.Refresh([.. _agents.Keys.Where(id => id.Length > 0)]);
+        foreach (var agent in _ordered)
+        {
+            agent.SetModes(_sessions.Of(agent.SessionId), ConfiguredModes);
+        }
+
+        return changed;
+    }
+
+    /// <summary>Of <c>model_config</c> only <c>reasoning_config</c>: <c>enabled: false</c> is <c>off</c>, else its <c>effort</c>.</summary>
+    internal static ExecutionModes StateEffort(string? modelConfig)
+    {
+        if (modelConfig is null)
+        {
+            return ExecutionModes.Empty;
+        }
+
+        try
+        {
+            using var document = JsonDocument.Parse(modelConfig, new JsonDocumentOptions { MaxDepth = 512 });
+            var reasoning = HarnessJson.Get(document.RootElement, "reasoning_config");
+            if (reasoning.ValueKind != JsonValueKind.Object)
+            {
+                return ExecutionModes.Empty;
+            }
+
+            var raw = HarnessJson.Get(reasoning, "enabled").ValueKind == JsonValueKind.False ? "disabled" : HarnessJson.String(reasoning, "effort");
+            return ExecutionModes.Of(ExecutionModeNative.Effort(raw, ExecutionModeEvidence.Selected, ExecutionModeScope.Session));
+        }
+        catch (JsonException)
+        {
+            return ExecutionModes.Empty;
+        }
     }
 
     /// <summary>Turning the switch on idles the generating agents of the set; turning it off changes no phase.</summary>
@@ -322,6 +382,7 @@ internal sealed partial class HermesLogSet
         if (!_agents.TryGetValue(sessionId, out var agent))
         {
             agent = new HermesAgent(AgentIdOf(Folder, sessionId), sessionId);
+            agent.SetModes(ExecutionModes.Empty, ConfiguredModes);
             _agents[sessionId] = agent;
             _ordered.Add(agent);
         }

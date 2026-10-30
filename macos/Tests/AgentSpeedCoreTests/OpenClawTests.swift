@@ -47,6 +47,11 @@ struct OpenClawTests {
                 var latest: [String: ResponseRecord] = [:]
                 var order: [String] = []
                 var stopped = false
+                var traces: [OpenClawTrace] = []
+                try database.traces(session: window.sessionId, after: -1) { _, trace in
+                    if let trace { traces.append(trace) }
+                }
+                parser.addTraces(traces) { _ in }
                 try database.rows(session: window.sessionId, after: .min, maxLineBytes: FileTailer.defaultMaxLineBytes,
                                   tools: .hashed) { row in
                     guard !stopped, let entry = row.entry else { return }
@@ -99,10 +104,24 @@ struct OpenClawTests {
                     let actual = summary[field] ?? NSNull()
                     #expect((actual as AnyObject).isEqual(value), "\(id) \(field): \(actual)")
                 }
-                expectModeFields(result.state.modes, result.responses, spec, id)
+                expectModeFields(result.state.modes.effortAndSpeed, result.responses, spec, id)
             }
         }
         #expect(windows == 9)
+    }
+
+    @Test func theTrajectoryQuerySelectsOnlyTheListedRows() throws {
+        let wanted = try #require(try Self.fixtures["traceSeqs"] as? [String: [String: [Int]]])
+        for (relative, windows) in wanted {
+            let database = try OpenClawDatabase(path: Fixtures.root.appendingPathComponent(relative).path)
+            try database.read {
+                for (window, seqs) in windows {
+                    var selected: [Int] = []
+                    try database.traces(session: window, after: -1) { seq, _ in selected.append(Int(seq)) }
+                    #expect(selected == seqs, "\(relative)#\(window)")
+                }
+            }
+        }
     }
 
     @Test func tracesMatchPhaseAfterEveryCheckpoint() throws {

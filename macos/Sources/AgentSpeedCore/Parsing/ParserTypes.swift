@@ -81,7 +81,12 @@ struct AgentState: Equatable, Sendable {
     /// The full working directory the transcript names (METRICS 4, 10.6); metadata only.
     var cwdPath: String?
     var model: String?
+    /// The agent's own facts: the *Current* of its source's rule (EXECUTION-MODES).
     var modes: ExecutionModes = .empty
+    /// A session-current fact, held apart from `modes`: it never reaches a response.
+    var sessionModes: ExecutionModes = .empty
+    /// Configured values: they reach the agent's current values and nothing else.
+    var configuredModes: ExecutionModes = .empty
     var isSubagent: Bool
     /// Codex and DeepSeek only; set once by the first `session_meta` or header.
     var thread: SessionThread?

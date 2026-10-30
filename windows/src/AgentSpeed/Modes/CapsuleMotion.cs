@@ -18,8 +18,9 @@ internal static class CapsuleMotion
     public static IEasingFunction Smooth { get; } = Frozen(new CubicEase { EasingMode = EasingMode.EaseOut });
 
     /// <summary>Sets <paramref name="property"/> to <paramref name="to"/>, animating from its current value when asked.</summary>
+    /// <param name="completed">Runs when the value has arrived, at once when nothing animates.</param>
     public static void To<T>(T target, DependencyProperty property, double to, TimeSpan duration, IEasingFunction easing, bool animate,
-        TimeSpan delay = default)
+        TimeSpan delay = default, Action? completed = null)
         where T : DependencyObject, IAnimatable
     {
         var from = (double)target.GetValue(property);
@@ -27,7 +28,17 @@ internal static class CapsuleMotion
         target.SetValue(property, to);
         if (animate && Math.Abs(from - to) > 0.001)
         {
-            target.BeginAnimation(property, Animation(from, to, duration, easing, delay));
+            var animation = Animation(from, to, duration, easing, delay);
+            if (completed is not null)
+            {
+                animation.Completed += (_, _) => completed();
+            }
+
+            target.BeginAnimation(property, animation);
+        }
+        else
+        {
+            completed?.Invoke();
         }
     }
 

@@ -43,7 +43,7 @@ struct HistoryUnpricedTests {
 
     @Test func theAnalysisVersionCoversTheSideTables() {
         // 7: the unpriced facts (METRICS 9.10); 8: the task records (6.11).
-        #expect(HistoryAnalyzer.analysisVersion == 9)
+        #expect(HistoryAnalyzer.analysisVersion == 10)
     }
 
     @Test func sideRowsAreWrittenWithTheContributionsAndReadBack() throws {
@@ -59,8 +59,8 @@ struct HistoryUnpricedTests {
         #expect(days.count == 1)
         #expect(days[0].unpriced == UnpricedReading(requests: 4, facts: facts))
         #expect(try Self.sideRows(at: scratch.storePath) == [
-            ["2026-10-20", "claudeCode", "claude-sonnet-5-5", "", "1", "1", "9"],
-            ["2026-10-20", "claudeCode", "mystery-model", "", "0", "2", "9"],
+            ["2026-10-20", "claudeCode", "claude-sonnet-5-5", "", "1", "1", "10"],
+            ["2026-10-20", "claudeCode", "mystery-model", "", "0", "2", "10"],
         ])
 
         let (unchanged, again, _) = try scratch.run([v2])
@@ -87,7 +87,7 @@ struct HistoryUnpricedTests {
         #expect(report.filesAnalyzed == 1, "a file of another analysis version is analysed again")
         #expect(days[0].unpriced == UnpricedReading(
             requests: 2, facts: [Self.fact("claude-sonnet-5-5", fast: true, 1), Self.fact("mystery-model", 1)]))
-        #expect(try Self.sideRows(at: scratch.storePath).allSatisfy { $0[6] == "9" })
+        #expect(try Self.sideRows(at: scratch.storePath).allSatisfy { $0[6] == "10" })
     }
 
     @Test func readingChecksEveryRowAndDerivesOtherwise() throws {

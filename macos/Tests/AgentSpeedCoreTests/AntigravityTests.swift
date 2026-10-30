@@ -141,6 +141,8 @@ struct AntigravityTests {
             #expect(state.inFlightStartMs == spec.int64("inFlightStartMs"), "\(relative) inFlightStartMs")
             #expect(state.lastLineMs == spec.int64("lastLineMs"), "\(relative) lastLineMs")
             #expect(state.malformedLines == spec.int("malformedLines"), "\(relative) malformedLines")
+            expectModeFields(fixtureCurrent(state, agentId: Fixtures.root.appendingPathComponent(relative).path),
+                             result.responses, spec, relative)
             let expected = try #require(spec["responses"] as? [[String: Any]])
             #expect(result.responses.count == expected.count, "\(relative) response count")
             for (actual, wanted) in zip(result.responses, expected) {

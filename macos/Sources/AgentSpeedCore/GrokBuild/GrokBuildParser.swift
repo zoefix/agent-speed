@@ -46,6 +46,8 @@ struct GrokBuildParser: Sendable {
         metadataStat = stat
         if let cwd = summary["info"]?["cwd"]?.string { state.setProject(fromWorkingDirectory: cwd) }
         if let model = summary["current_model_id"]?.string { state.model = model }
+        state.sessionModes = ExecutionModes([ExecutionModeAdapters.effort(
+            summary["reasoning_effort"]?.string, evidence: .selected, scope: .session)].compactMap { $0 })
         let parent = summary["parent_session_id"]?.string.flatMap { $0.isEmpty || $0 == sessionId ? nil : $0 }
         let kind = summary["session_kind"]?.string
         state.isSubagent = parent != nil && (kind == "subagent" || kind == "subagent_fork")

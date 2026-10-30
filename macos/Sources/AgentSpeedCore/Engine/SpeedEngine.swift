@@ -71,14 +71,16 @@ struct SpeedEngine: Sendable {
 
     /// Stores (or replaces) a response. Returns a `responseCompleted` event for live completions that ended within
     /// `completionEventMaxAgeMs` of `nowMs`; older ones (a whole-file source read late) update totals silently.
-    /// Without `nowMs` the age is not checked.
+    /// Without `nowMs` the age is not checked. `currentEffort` is the agent's current effort at this moment, which the
+    /// report ledger freezes for a response without one of its own.
     @discardableResult
     mutating func upsert(
         _ record: ResponseRecord,
         project: String,
         isCompletion: Bool,
         emitsEvents: Bool,
-        nowMs: Int64? = nil
+        nowMs: Int64? = nil,
+        currentEffort: @autoclosure () -> ExecutionModeAttribution? = nil
     ) -> SpeedEvent? {
         var record = record
         if let pricing {
@@ -91,7 +93,8 @@ struct SpeedEngine: Sendable {
         if let provider = record.provider { agentProviders[record.agentId] = provider }
         let isLiveCompletion = isCompletion && emitsEvents && nowMs.map { record.endMs >= $0 - Self.completionEventMaxAgeMs } ?? false
         if isLiveCompletion {
-            reportLedger.count(record, modelId: reportModelId(of: record))
+            let known = !record.modes.attribution(for: .effort).isUnknown
+            reportLedger.count(record, modelId: reportModelId(of: record), currentEffort: known ? nil : currentEffort())
         } else if reportLedger.isCounted(record.key) {
             reportLedger.grow(record, modelId: reportModelId(of: record))
         }

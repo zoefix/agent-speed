@@ -340,6 +340,9 @@ internal sealed partial class DashboardViewModel : ObservableObject
 
     public string LanguageCode { get => _languageCode; private set => Set(ref _languageCode, value); }
 
+    /// <summary>What a configured capsule says after its word (DESIGN 4, Configured capsule).</summary>
+    public string ConfiguredMark { get => _configuredMark; private set => Set(ref _configuredMark, value); }
+
     public string HeroAccessibleName { get => _heroAccessibleName; private set => Set(ref _heroAccessibleName, value); }
 
     /// <summary>The General title theme the hero's title reads in (DESIGN 1, Where the theme applies).</summary>
@@ -354,6 +357,7 @@ internal sealed partial class DashboardViewModel : ObservableObject
     private EffortCapsuleColumn _capsuleColumn;
     private double _intelligenceWidth = 24;
     private CapsuleAppearance _capsuleAppearance;
+    private string _configuredMark = string.Empty;
     private string _languageCode = LanguageCodes.ZhHant;
     private int _titleLevel;
     private bool _titleSlides = true;
@@ -613,7 +617,7 @@ internal sealed partial class DashboardViewModel : ObservableObject
 
             // The row's former tooltip lines are its score card's facts: effort and speed, a top rung's detail, traffic.
             var facts = new List<string>();
-            var capsule = EffortCapsule.Of(agent.Modes);
+            var capsule = EffortCapsule.Of(agent);
             row.Capsule = capsule;
             if (capsule.IsKnown)
             {
@@ -674,7 +678,9 @@ internal sealed partial class DashboardViewModel : ObservableObject
         IntelligenceWidth = IntelligenceColumnMeasure.Width(loc.LanguageCode, loc["intel.glyph"]);
         var deepest = rows.Count == 0 ? 0 : rows.Max(r => r.Indent);
         var nameRoom = NameRoom(deepest * TreeConnectors.LevelWidth, IntelligenceWidth);
-        CapsuleColumn = EffortCapsuleColumn.For(Agents.Select(r => r.Capsule), nameRoom, CapsuleWordMeasure.For(loc.LanguageCode));
+        ConfiguredMark = loc["mode.configured.mark"];
+        CapsuleColumn = EffortCapsuleColumn.For(Agents.Select(r => r.Capsule), nameRoom, CapsuleWordMeasure.For(loc.LanguageCode),
+            CapsuleWordMeasure.Mark(ConfiguredMark, loc.LanguageCode));
         LanguageCode = loc.LanguageCode;
 
         HasAgents = rows.Count > 0;

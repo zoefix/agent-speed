@@ -42,6 +42,8 @@ internal sealed class OpenClawUpdate : IResponseSink, ICallSink
 /// </summary>
 internal sealed class OpenClawSource
 {
+    private const long NoTraceSeq = -1;
+
     private static readonly StringComparer PathComparer =
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
@@ -239,6 +241,7 @@ internal sealed class OpenClawSource
                 parsers.Add(parser);
                 var sink = sinkFor(parser);
                 var stop = stopAfter is { } at && at.Session == window.SessionId;
+                parser.ApplyTraces(TracesAfter(d, window.SessionId, NoTraceSeq, out _), sink);
                 d.Rows(window.SessionId, long.MinValue, (seq, line) =>
                 {
                     parser.Apply(in line, sink);
@@ -374,6 +377,12 @@ internal sealed class OpenClawSource
             state.Parser.UpdateWindow(window);
             if (!rewritten && !runtime && window.UpdatedMs == state.UpdatedMs)
             {
+                // A recorder's rows are buffered and often reach the database after the attempt's transcript rows.
+                if (!state.NeedsHeader)
+                {
+                    ReadTraces(state, database, update);
+                }
+
                 continue;
             }
 
@@ -386,6 +395,7 @@ internal sealed class OpenClawSource
             {
                 state.Parser.Reset();
                 state.LastSeq = long.MinValue;
+                state.LastTraceSeq = NoTraceSeq;
                 state.NeedsHeader = false;
                 update.Changed = true;
             }
@@ -403,12 +413,35 @@ internal sealed class OpenClawSource
         LinkParents(tracked.Path, [.. tracked.Windows.Values.Select(w => w.Parser)], database.CurrentSessions());
     }
 
+    private static List<OpenClawTrace> TracesAfter(OpenClawDatabase database, string sessionId, long afterSeq, out long lastSeq)
+    {
+        var traces = new List<OpenClawTrace>();
+        lastSeq = database.Traces(sessionId, afterSeq, (_, trace) =>
+        {
+            if (trace is { } kept)
+            {
+                traces.Add(kept);
+            }
+        });
+        return traces;
+    }
+
+    private static void ReadTraces(WindowState state, OpenClawDatabase database, OpenClawUpdate update)
+    {
+        var before = state.Parser.Version;
+        var traces = TracesAfter(database, state.Parser.SessionId, state.LastTraceSeq, out var lastSeq);
+        state.LastTraceSeq = lastSeq;
+        state.Parser.ApplyTraces(traces, update);
+        update.Changed |= state.Parser.Version != before;
+    }
+
     private void ReadRows(WindowState state, OpenClawDatabase database, OpenClawUpdate update)
     {
         state.Parser.Seeding = _seeding;
         state.Parser.CallSink = update;
         try
         {
+            ReadTraces(state, database, update);
             if (state.NeedsHeader)
             {
                 // An older window read from its end: its header first, as omp does for a file read from an offset (4.7).
@@ -499,6 +532,9 @@ internal sealed class OpenClawSource
 
         /// <summary>The highest <c>seq</c> read so far; <see cref="long.MinValue"/> before the first row.</summary>
         public long LastSeq { get; set; } = long.MinValue;
+
+        /// <summary>The highest trajectory <c>seq</c> read so far.</summary>
+        public long LastTraceSeq { get; set; } = NoTraceSeq;
 
         public long? UpdatedMs { get; set; }
 

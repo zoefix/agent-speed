@@ -107,6 +107,18 @@ enum TranscriptLocations {
         return !(store as NSString).lastPathComponent.hasSuffix("-backup")
     }
 
+    /// `config/config.json` in the folder that holds an Antigravity store (EXECUTION-MODES, Configured values).
+    static func antigravityConfig(ofRoot conversations: String) -> String {
+        let store = (TranscriptDiscovery.normalizedRoot(conversations) as NSString).deletingLastPathComponent
+        return ((store as NSString).deletingLastPathComponent as NSString).appendingPathComponent("config/config.json")
+    }
+
+    /// `<home>/.gemini/settings.json`, where `<home>` is `$GEMINI_CLI_HOME`, else the user's home (METRICS 2).
+    static var defaultGeminiSettings: String {
+        (environment("GEMINI_CLI_HOME").map { URL(fileURLWithPath: $0, isDirectory: true) } ?? home)
+            .appendingPathComponent(".gemini/settings.json").path
+    }
+
     /// WorkBuddy's data folders (METRICS 2, 4.9). `WORKBUDDY_CONFIG_DIR` and `CODEBUDDY_CONFIG_DIR` are not honoured.
     static var defaultWorkBuddyDataFolder: URL { home.appendingPathComponent(".workbuddy", isDirectory: true) }
     static var defaultWorkBuddyAiDataFolder: URL { home.appendingPathComponent(".workbuddy-ai", isDirectory: true) }
@@ -235,6 +247,16 @@ extension MonitorConfiguration {
             if !roots.contains(root) { roots.append(root) }
         }
         return roots
+    }
+
+    /// Gemini CLI's user settings: next to the `tmp` folder of a set root, else the file of the automatic home.
+    var resolvedGeminiSettings: String {
+        guard let root = configuredRoot(for: .gemini) ?? automaticRoots[.gemini]?.first else {
+            return TranscriptLocations.defaultGeminiSettings
+        }
+        let folder = TranscriptDiscovery.normalizedRoot(root.path)
+        let home = (folder as NSString).lastPathComponent == "tmp" ? (folder as NSString).deletingLastPathComponent : folder
+        return (home as NSString).appendingPathComponent("settings.json")
     }
 
     /// The first root of a family.

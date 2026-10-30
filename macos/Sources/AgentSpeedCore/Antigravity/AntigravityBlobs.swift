@@ -83,7 +83,8 @@ enum AntigravityBlobs {
                   response <= maxTokens else { return nil }
             step.usage = AntigravityUsage(
                 input: Int64(input), output: Int64(output), cacheRead: Int64(cacheRead), thinking: Int64(thinking),
-                response: Int64(response), key: nonEmpty(usage.string(11)) ?? nonEmpty(usage.string(7))
+                response: Int64(response), key: nonEmpty(usage.string(11)) ?? nonEmpty(usage.string(7)),
+                tier: nonEmpty(usage.string(13))
             )
         }
         return step
@@ -94,7 +95,9 @@ enum AntigravityBlobs {
         let chat = try message.message(1)
         var generation = AntigravityGeneration(stepIndices: Set(try message.repeatedUInt(2)))
         if let chat {
-            generation.model = nonEmpty(chat.string(19)) ?? nonEmpty(chat.string(21))
+            generation.responseModel = nonEmpty(chat.string(19))
+            generation.label = nonEmpty(chat.string(21))
+            generation.model = generation.responseModel ?? generation.label
         }
         return generation
     }
@@ -102,10 +105,12 @@ enum AntigravityBlobs {
     private static func executorMetadata(_ blob: UnsafeRawBufferPointer) throws(ProtobufError) -> AntigravityExecutor {
         let message = try ProtobufMessage(blob)
         let planner = try message.message(10)?.message(1)
+        let override = try planner?.message(56)
         return AntigravityExecutor(
             terminationReason: message.int(1),
             lastStepIdx: message.int(3),
-            model: planner.flatMap { nonEmpty($0.string(28)) }
+            model: planner.flatMap { nonEmpty($0.string(28)) },
+            thinking: override.flatMap { AntigravityEffort.token(thinkingLevel: $0.int(19)) }
         )
     }
 

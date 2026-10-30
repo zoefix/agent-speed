@@ -18,6 +18,8 @@ enum BoardScorePreviewData {
         case provisional
         /// The highest live score has five digits: compact on the rows, full on the hero.
         case compact
+        /// Live scores, with configured capsules on some rows (DESIGN 4, *Configured capsule*).
+        case configured
     }
 
     /// `agent` with its own performance score: live while it works, resting while idle; nil leaves it with fewer than
@@ -82,6 +84,18 @@ enum BoardScorePreviewData {
             assign(root(1), 12_840)
             assign(sub(1), 702)
             assign(root(2), 893.3)
+        case .configured:
+            assign(root(0), 1123.4)
+            assign(root(1), 1286.4)
+            assign(root(2), 893.3)
+            let configured: [(String?, String?, String?)] = [(root(0), "high", nil), (root(1), "max", "fast"), (root(2), nil, "ultrafast")]
+            for (id, effort, tier) in configured {
+                guard let index = agents.firstIndex(where: { $0.id == id }) else { continue }
+                let facts = [effort.flatMap { ExecutionModeFact(kind: .effort, rawValue: $0, evidence: .configured, scope: .configuration) },
+                             tier.flatMap { ExecutionModeFact(kind: .serviceTier, rawValue: $0, evidence: .configured, scope: .configuration) }]
+                agents[index].modes = .empty
+                agents[index].configuredModes = ExecutionModes(facts.compactMap { $0 })
+            }
         }
         if idle {
             agents = agents.map { agent in

@@ -11,6 +11,7 @@ enum ExecutionModeLogicChecks {
         let fastXhigh = capsule("xhigh", tier: "fast")
         let ultracode = capsule("ultracode")
         let future = capsule("warp-2")
+        let configuredHigh = EffortCapsule(effort: "high", speed: nil, effortIsConfigured: true, mark: l10n("mode.configured.mark"))
         let column = AgentCapsuleColumn(rows: [(ultracode, 2), (fastXhigh, 0)], rowWidth: 328, intelligence: 24)
         let narrow = AgentCapsuleColumn(rows: [(ultracode, 2), (fastXhigh, 0)], rowWidth: 200, intelligence: 24)
         return [
@@ -28,6 +29,11 @@ enum ExecutionModeLogicChecks {
             ("modes: the column fits the widest capsule", !column.compact && column.width == ultracode.width(compact: false)),
             ("modes: a narrow list drops every word", narrow.compact && narrow.width < column.width && !ultracode.showsWord(compact: true)),
             ("modes: no capsule takes no column", AgentCapsuleColumn(rows: [(EffortCapsule(.empty), 0)], rowWidth: 328, intelligence: 24).width == 0),
+            ("modes: a configured value keeps its parts' place", configuredHigh.width(compact: true) == capsule("high").width(compact: true)),
+            ("modes: the mark follows the word", configuredHigh.showsMark(compact: false) && !configuredHigh.showsMark(compact: true)),
+            ("modes: a configured value is announced as configured",
+             configuredHigh.accessibilityText(l10n).hasPrefix(l10n("effort.tooltip.configured", "high"))
+                 && !configuredHigh.accessibilityText(l10n).contains(l10n("modes.configured.note"))),
         ]
     }
 

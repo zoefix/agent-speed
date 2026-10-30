@@ -1,5 +1,8 @@
 using System.Windows;
+using System.Windows.Controls;
 using System.Windows.Media;
+using System.Windows.Shapes;
+using System.Windows.Threading;
 using AgentSpeed.Dashboard;
 using AgentSpeed.Modes;
 using AgentSpeed.Presentation.Localization;
@@ -76,6 +79,137 @@ public class EffortCapsuleViewTests(ITestOutputHelper output)
             Assert.False(column.Compact, language);
             Assert.True(room - column.Footprint >= EffortCapsuleColumn.MinimumName, language);
         }
+    }
+
+    [Fact]
+    public void TheConfiguredFormKeepsTheColumnsLinesAndItsWidth()
+    {
+        var capsule = new EffortCapsule("high", "fast", true, true);
+        var (measured, width, meterLeft, boltsRight, dashes, markLeft, wordRight, baselines) = OnStaThread(() =>
+        {
+            var markWidth = CapsuleWordMeasure.Mark("設定值", LanguageCodes.En);
+            var own = capsule.Width(compact: false, CapsuleWordMeasure.For(LanguageCodes.En), markWidth);
+            var view = View(capsule, double.NaN, gap: 0);
+            view.Mark = "設定值";
+            Layout(view);
+            var meter = Find<EffortMeter>(view);
+            var bolts = Find<SpeedBolts>(view);
+            var texts = Texts(view);
+            var word = texts.Single(t => t.Text == "high");
+            var mark = texts.Single(t => t.Text == "設定值");
+            return (own, view.Width, meter.TranslatePoint(default, view).X, bolts.TranslatePoint(new Point(bolts.ActualWidth, 0), view).X,
+                Dashes(view), mark.TranslatePoint(default, view).X, word.TranslatePoint(new Point(word.ActualWidth, 0), view).X,
+                Math.Abs(Baseline(word, view) - Baseline(mark, view)));
+        });
+        output.WriteLine($"width {width:0.0}, meter {meterLeft:0.0}, bolts end {boltsRight:0.0}, mark at {markLeft:0.0} after word end {wordRight:0.0}, baselines {baselines:0.00} apart");
+        Assert.Equal(measured, width, 3);
+        Assert.Equal(EffortCapsule.Padding, meterLeft, 1);
+        Assert.Equal(width - EffortCapsule.Padding, boltsRight, 1);
+        Assert.Equal(EffortCapsule.PartSpacing, markLeft - wordRight, 0);
+        Assert.True(baselines < 0.5, $"{baselines}");
+        Assert.NotNull(dashes);
+    }
+
+    [Fact]
+    public void ARealValueBesideAConfiguredOneStaysSolidAndWithoutAMark()
+    {
+        var (dashes, marks) = OnStaThread(() =>
+        {
+            var view = View(new EffortCapsule("high", "fast", SpeedConfigured: true), double.NaN, gap: 0);
+            view.Mark = "config";
+            Layout(view);
+            return (Dashes(view).Visibility, Texts(view).Count(t => t.Text == "config" && t.Visibility == Visibility.Visible));
+        });
+        Assert.Equal(Visibility.Collapsed, dashes);
+        Assert.Equal(0, marks);
+    }
+
+    [Fact]
+    public void HighContrastDrawsTheSameDashesAtOneDip()
+    {
+        var (thickness, dashes) = OnStaThread(() =>
+        {
+            var view = View(new EffortCapsule("high", null, EffortConfigured: true), double.NaN, gap: 0);
+            view.Appearance = new CapsuleAppearance(Dark: true, HighContrast: true, ReduceMotion: false, Shimmer: false);
+            var rectangle = Dashes(view);
+            return (rectangle.StrokeThickness, rectangle.StrokeDashArray.ToArray());
+        });
+        Assert.Equal(1, thickness);
+        Assert.Equal([EffortCapsule.DashLength, EffortCapsule.DashGap], dashes);
+    }
+
+    [Theory]
+    [InlineData(false)]
+    [InlineData(true)]
+    public void ARealValueArrivingCrossfadesTheFormAndNeverRefillsTheBars(bool reduceMotion)
+    {
+        var (during, after, scale) = OnStaThread(() =>
+        {
+            var window = new Window { Width = 200, Height = 60, WindowStyle = WindowStyle.None, ShowInTaskbar = false, ShowActivated = false, Left = -4000, Top = -4000 };
+            var view = View(new EffortCapsule("high", null, EffortConfigured: true), double.NaN, gap: 0);
+            view.Appearance = new CapsuleAppearance(Dark: false, HighContrast: false, reduceMotion, Shimmer: false);
+            window.Content = view;
+            window.Show();
+            Pump(TimeSpan.FromMilliseconds(100));
+            view.Capsule = new EffortCapsule("high", null);
+            var image = Find<Image>(view);
+            var visible = image.Visibility;
+            var bar = FindAll<Rectangle>(view).Select(r => r.RenderTransform).OfType<ScaleTransform>().Min(t => t.ScaleY);
+            Pump(TimeSpan.FromMilliseconds(400));
+            var gone = image.Visibility;
+            window.Close();
+            return (visible, gone, bar);
+        });
+        Assert.Equal(Visibility.Visible, during);
+        Assert.Equal(Visibility.Collapsed, after);
+        Assert.Equal(1, scale);
+    }
+
+    private static void Pump(TimeSpan time)
+    {
+        var frame = new DispatcherFrame();
+        var timer = new DispatcherTimer { Interval = time };
+        timer.Tick += (_, _) =>
+        {
+            timer.Stop();
+            frame.Continue = false;
+        };
+        timer.Start();
+        Dispatcher.PushFrame(frame);
+    }
+
+    private static void Layout(FrameworkElement view)
+    {
+        view.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
+        view.Arrange(new Rect(view.DesiredSize));
+        view.UpdateLayout();
+    }
+
+    private static List<TextBlock> Texts(DependencyObject parent) => FindAll<TextBlock>(parent);
+
+    private static Rectangle Dashes(DependencyObject parent) => FindAll<Rectangle>(parent).Single(r => r.RadiusX == EffortCapsule.Height / 2);
+
+    private static double Baseline(TextBlock text, Visual view) => text.TranslatePoint(new Point(0, text.BaselineOffset), (UIElement)view).Y;
+
+    private static List<T> FindAll<T>(DependencyObject parent)
+        where T : DependencyObject
+    {
+        var found = new List<T>();
+        for (var i = 0; i < VisualTreeHelper.GetChildrenCount(parent); i++)
+        {
+            var child = VisualTreeHelper.GetChild(parent, i);
+            if (child is T match)
+            {
+                found.Add(match);
+            }
+
+            if (child is Visual)
+            {
+                found.AddRange(FindAll<T>(child));
+            }
+        }
+
+        return found;
     }
 
     private static double NameRoom(string language) => DashboardViewModel.NameRoom(0,

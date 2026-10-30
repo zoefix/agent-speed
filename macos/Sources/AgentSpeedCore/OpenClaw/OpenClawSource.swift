@@ -36,6 +36,8 @@ final class OpenClawSource {
         var parser: OpenClawParser
         /// The last row read; `.min` before the first.
         var lastSeq: Int64 = .min
+        /// The last trajectory row read; -1 before the first.
+        var lastTraceSeq: Int64 = -1
         var generation: String?
         /// Started past its first row: the header is read before the next rows (METRICS 4.7, 4.14).
         var headerPending = false
@@ -290,6 +292,7 @@ final class OpenClawSource {
             let advanced = rewritten || info.transcriptUpdatedMs == nil || info.transcriptUpdatedMs != tracked.info.transcriptUpdatedMs
             tracked.info = info
             guard advanced else {
+                if !tracked.headerPending { readTraces(&tracked, agentId: agentId, connection: connection, into: &update) }
                 database.windows[info.sessionId] = tracked
                 return
             }
@@ -299,6 +302,7 @@ final class OpenClawSource {
                 removedMalformedLines += tracked.parser.state.malformedLines
                 tracked = TrackedWindow(info: info, parser: OpenClawParser(agentId: agentId, fileID: fileID(agentId), window: info))
             } else if highest == tracked.lastSeq {
+                if !tracked.headerPending { readTraces(&tracked, agentId: agentId, connection: connection, into: &update) }
                 database.windows[info.sessionId] = tracked
                 return
             }
@@ -314,6 +318,7 @@ final class OpenClawSource {
             }
         }
         window.generation = generation
+        readTraces(&window, agentId: agentId, connection: connection, into: &update)
         var upserts: [ResponseUpsert] = []
         if window.headerPending {
             window.headerPending = false
@@ -336,6 +341,27 @@ final class OpenClawSource {
         let project = Self.project(of: window.parser.state, agentId: agentId)
         update.upserts += upserts.map { ($0, project) }
         update.agents[agentId] = window.parser.state
+    }
+
+    /// The window's new trace rows, before its transcript rows. A failed query is tried again on the next read.
+    private func readTraces(_ window: inout TrackedWindow, agentId: String, connection: OpenClawDatabase, into update: inout Update) {
+        var rows: [OpenClawTrace] = []
+        var highest = window.lastTraceSeq
+        do {
+            try connection.traces(session: window.info.sessionId, after: highest) { seq, trace in
+                highest = seq
+                if let trace { rows.append(trace) }
+            }
+        } catch {
+            return
+        }
+        window.lastTraceSeq = highest
+        guard !rows.isEmpty else { return }
+        var upserts: [ResponseUpsert] = []
+        window.parser.addTraces(rows) { upserts.append($0) }
+        let project = Self.project(of: window.parser.state, agentId: agentId)
+        update.upserts += upserts.map { ($0, project) }
+        if window.parser.state.lastLineMs != nil { update.agents[agentId] = window.parser.state }
     }
 
     private func forget(_ database: TrackedDatabase) {

@@ -60,9 +60,10 @@ internal sealed partial class HistoryAnalyzer
     /// and speed breakdowns (EXECUTION-MODES). 6: the copied prefix of paginated Codex sub-agents (METRICS 3.5). 7: the
     /// unpriced facts of the side table <c>contribution_unpriced</c> (METRICS 9.10).
     /// 8: the task records of the retired task score. 9: the performance records of the side table <c>perf_records</c>, with
-    /// each response's first-content time and each tool call's result time and model (METRICS 6.11).
+    /// each response's first-content time and each tool call's result time and model (METRICS 6.11). 10: the effort and speed
+    /// of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses (EXECUTION-MODES).
     /// </summary>
-    public const int AnalysisVersion = 9;
+    public const int AnalysisVersion = 10;
 
     private const string OpenCodeFamily = "opencode";
     private const string ZoneMeta = "timeZone";

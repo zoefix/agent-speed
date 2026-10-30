@@ -49,9 +49,26 @@ struct HarnessFixtureTests {
             #expect(source.parentLinks[id] == wanted.string("parentId").map { path + "#" + $0 })
             let records = update.upserts.map(\.0.record).filter { $0.agentId == id }
             try Self.compare(records, try #require(wanted["responses"] as? [[String: Any]]))
+            expectModeFields(state.modes.effortAndSpeed, records, wanted, id)
         }
         #expect(update.agents.values.contains { $0.phase == .generating })
         #expect(source.refreshIfChanged(deduper: &deduper) == nil)
+    }
+
+    @Test func zcodeWithoutVariantOrParentColumnsStillAttributes() throws {
+        let expected = try Self.expected("zcodeWithoutVariant")
+        let path = Fixtures.root.appendingPathComponent(try #require(expected.string("database"))).path
+        let source = ZcodeSource(root: path, fileID: -2)
+        #expect(source.refreshAvailability() && source.isReady)
+        var deduper = Deduper()
+        let update = source.seed(todayStartMs: Self.dayStart, deduper: &deduper)
+        for wanted in try #require(expected["sessions"] as? [[String: Any]]) {
+            let id = path + "#" + (try #require(wanted.string("id")))
+            let state = try #require(update.agents[id])
+            let records = update.upserts.map(\.0.record).filter { $0.agentId == id }
+            try Self.compare(records, try #require(wanted["responses"] as? [[String: Any]]))
+            expectModeFields(state.modes.effortAndSpeed, records, wanted, id)
+        }
     }
 
     @Test func kimiWireVariantsAndSharedDeduplication() throws {
@@ -69,6 +86,7 @@ struct HarnessFixtureTests {
                 }
             }
             try Self.compare(order.compactMap { records[$0] }, try #require(wanted["responses"] as? [[String: Any]]))
+            expectModeFields(parser.state.modes.effortAndSpeed, order.compactMap { records[$0] }, wanted, path.path)
             #expect(parser.state.project == wanted.string("project"))
             #expect(parser.state.isSubagent == wanted["isSubagent"] as? Bool)
             #expect(parser.state.thread?.parentId == wanted.string("parentFile").map { Fixtures.root.appendingPathComponent($0).path })
@@ -90,6 +108,8 @@ struct HarnessFixtureTests {
                 }
             }
             try Self.compare(order.compactMap { records[$0] }, try #require(wanted["responses"] as? [[String: Any]]))
+            expectModeFields(EffortAndSpeed(facts: parser.state.modes, session: parser.state.sessionModes),
+                             order.compactMap { records[$0] }, wanted, path.path)
             #expect(parser.state.project == wanted.string("project"))
             #expect(parser.state.isSubagent == wanted["isSubagent"] as? Bool)
             #expect(parser.state.thread?.parentId == wanted.string("parentFile").map { URL(fileURLWithPath: $0).deletingLastPathComponent().lastPathComponent })
@@ -132,15 +152,15 @@ struct HarnessFixtureTests {
         #expect(session.hasAvailableRoot)
         _ = session.seed(todayStartMs: Self.dayStart)
         let (output, _) = session.advance(nowMs: Self.now, todayStartMs: Self.dayStart, emitsEvents: false)
-        #expect(output.todayBySource[.zcode]?.requests == 4)
-        #expect(output.todayBySource[.zcode]?.input == 3680 && output.todayBySource[.zcode]?.output == 470)
-        #expect(output.todayBySource[.kimi]?.requests == 4)
-        #expect(output.todayBySource[.kimi]?.input == 560 && output.todayBySource[.kimi]?.output == 305)
+        #expect(output.todayBySource[.zcode]?.requests == 7)
+        #expect(output.todayBySource[.zcode]?.input == 8280 && output.todayBySource[.zcode]?.output == 840)
+        #expect(output.todayBySource[.kimi]?.requests == 5)
+        #expect(output.todayBySource[.kimi]?.input == 600 && output.todayBySource[.kimi]?.output == 335)
         #expect(output.todayBySource[.grokBuild]?.requests == 4 && output.todayBySource[.grokBuild]?.output == 700)
-        #expect(output.today.requests == 12 && output.today.output == 1475)
+        #expect(output.today.requests == 16 && output.today.output == 1875)
         let context = SnapshotContext(session: session, todayStartMs: Self.dayStart)
         #expect(context.sources[.zcode]?.sessionCount == 2)
-        #expect(context.sources[.kimi]?.sessionCount == 2)
+        #expect(context.sources[.kimi]?.sessionCount == 3)
         #expect(context.sources[.grokBuild]?.sessionCount == 2)
         let directory = try TempDirectory()
         let store = directory.file("history.sqlite").path
@@ -152,7 +172,7 @@ struct HarnessFixtureTests {
         let kimi = try #require(first.days.first { $0.source == .kimi })
         #expect(zcode.totals == output.todayBySource[.zcode])
         #expect(kimi.totals == output.todayBySource[.kimi])
-        #expect(zcode.measuredMs == 9500 && kimi.measuredMs == 12_200)
+        #expect(zcode.measuredMs == 11_000 && kimi.measuredMs == 14_200)
         let grok = try #require(first.days.first { $0.source == .grokBuild })
         #expect(grok.totals == output.todayBySource[.grokBuild] && grok.measuredMs == 11_000)
     }
@@ -171,7 +191,7 @@ struct HarnessFixtureTests {
         try writer.execute("UPDATE model_usage SET status='completed',completed_at=1792497669000,input_tokens=300,output_tokens=70 WHERE status='running'")
         #expect(session.pollRecentFiles(nowMs: 1_792_497_670_000))
         let (output, events) = session.advance(nowMs: 1_792_497_670_000, todayStartMs: Self.dayStart, emitsEvents: true)
-        #expect(output.today.requests == 5 && output.today.output == 540)
+        #expect(output.today.requests == 8 && output.today.output == 910)
         #expect(events.filter { if case .responseCompleted = $0 { true } else { false } }.count == 1)
         #expect(!session.pollRecentFiles(nowMs: Self.now))
     }
@@ -195,11 +215,11 @@ struct HarnessFixtureTests {
         try writer.execute("INSERT INTO part(id,message_id,session_id,time_created,time_updated,data) VALUES('tool-live','assistant-live','sess-z-main',1792497645000,1792497645000,'{\"type\":\"tool\",\"state\":{\"status\":\"running\"}}')")
         #expect(session.pollRecentFiles(nowMs: Self.now))
         #expect(phase() == .tools)
-        #expect(session.responses.count == 4)
+        #expect(session.responses.count == 7)
         try writer.execute("UPDATE part SET data='{\"type\":\"tool\",\"state\":{\"status\":\"completed\"}}' WHERE id='tool-live'")
         try writer.execute("UPDATE message SET data='{\"role\":\"assistant\",\"time\":{\"created\":1792497645000,\"completed\":1792497645500}}' WHERE id='assistant-live'")
         #expect(session.pollRecentFiles(nowMs: Self.now))
-        #expect(phase() == .idle && session.responses.count == 4)
+        #expect(phase() == .idle && session.responses.count == 7)
     }
 
     @Test func unsupportedDatabaseReportsWarningWithoutWriting() throws {
@@ -225,7 +245,7 @@ struct HarnessFixtureTests {
         try FileManager.default.createDirectory(at: database.deletingLastPathComponent(), withIntermediateDirectories: true)
         try FileManager.default.copyItem(at: Fixtures.root.appendingPathComponent("zcode/cli/db/db.sqlite"), to: database)
         #expect(session.rediscover(todayStartMs: Self.dayStart) && session.hasAvailableRoot)
-        #expect(session.responses.count == 4)
+        #expect(session.responses.count == 7)
         var moved = configuration
         moved.zcodeRoot = directory.file("other")
         #expect(moved.requiresRescan(comparedTo: configuration))

@@ -28,7 +28,7 @@ public sealed class UnpricedHistoryTests : IDisposable
         _temp.Combine("opencode"), []);
 
     [Fact]
-    public void TheAnalysisVersionIsNine() => Assert.Equal(9, HistoryAnalyzer.AnalysisVersion);
+    public void TheAnalysisVersionIsTen() => Assert.Equal(10, HistoryAnalyzer.AnalysisVersion);
 
     [Fact]
     public void EveryFixtureDayReadsBackItsFactsFromTheSideTable()

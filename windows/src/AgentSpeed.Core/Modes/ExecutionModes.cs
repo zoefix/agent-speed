@@ -18,8 +18,8 @@ public sealed record ExecutionModeFact(
         if (!ExecutionModes.IsIdentifier(raw, 64) || (provider is not null && !ExecutionModes.IsIdentifier(provider, 32))
             || !ExecutionModes.IsFactKind(kind) || !Enum.IsDefined(evidence) || !Enum.IsDefined(scope)) return null;
         var value = raw!.ToLowerInvariant();
-        if (kind == ExecutionModeKind.ServiceTier && provider == "openai")
-            value = value switch { "default" => "standard", "priority" => "fast", _ => value };
+        if (kind == ExecutionModeKind.ServiceTier)
+            value = (provider, value) switch { ("openai", "default") => "standard", ("openai" or "google", "priority") => "fast", _ => value };
         return new(kind, value, raw, evidence, provider, scope);
     }
 }
@@ -27,6 +27,9 @@ public sealed record ExecutionModeFact(
 public readonly record struct ExecutionModeAttribution(ExecutionModeKind Kind, string Mode, string Evidence, string? Provider)
 {
     public bool IsKnown => Mode != "unknown";
+
+    /// <summary>A value only a config file holds (EXECUTION-MODES, Current values): shown with its own form, reported never.</summary>
+    public bool IsConfigured => Evidence == "configured";
 
     public static ExecutionModeAttribution Unknown(ExecutionModeKind kind) => new(kind, "unknown", "unknown", null);
 }
@@ -79,22 +82,67 @@ public sealed class ExecutionModes : IEquatable<ExecutionModes>
     public ExecutionModes Without(ExecutionModeEvidence evidence) => Without(f => f.Evidence == evidence);
     public ExecutionModes Without(Func<ExecutionModeFact, bool> match) => _facts.Any(match) ? new(_facts.Where(f => !match(f))) : this;
 
-    public ExecutionModeAttribution Attribute(ExecutionModeKind kind)
+    /// <summary>Served, then recorded, then selected; scope breaks ties, and facts that still tie and disagree are unknown.</summary>
+    public ExecutionModeAttribution Attribute(ExecutionModeKind kind) => Attribute(kind, ExecutionModeEvidence.Selected, ExecutionModeEvidence.Served);
+
+    /// <summary>
+    /// An agent's current value (EXECUTION-MODES, Current values): the first known of its own facts, a session-current fact
+    /// and a configured value. Only the last two can carry their evidence here; they reach nothing but this value.
+    /// </summary>
+    public static ExecutionModeAttribution Current(ExecutionModeKind kind, ExecutionModes facts, ExecutionModes session, ExecutionModes configured)
     {
-        if (kind == ExecutionModeKind.Speed) return AttributeSpeed();
-        var fact = _facts.Where(f => f.Kind == kind && f.Evidence != ExecutionModeEvidence.Configured)
-            .OrderByDescending(f => f.Evidence).ThenByDescending(f => f.Scope).FirstOrDefault();
-        return fact is null || fact.Value is "unknown" or "none" or "auto" or "inherit" or "inherited"
+        var own = facts.Attribute(kind);
+        if (own.IsKnown) return own;
+        var selected = session.Attribute(kind, ExecutionModeEvidence.Selected, ExecutionModeEvidence.Selected);
+        return selected.IsKnown ? selected : configured.Attribute(kind, ExecutionModeEvidence.Configured, ExecutionModeEvidence.Configured);
+    }
+
+    /// <summary>
+    /// The effort the report ledger freezes for a response (EXECUTION-MODES, Current values, Ledger): its own when known, else
+    /// the agent's current one when that is <c>selected</c> or better, without a provider.
+    /// </summary>
+    public static ExecutionModeAttribution LedgerEffort(ExecutionModeAttribution response, ExecutionModeAttribution current) =>
+        response.IsKnown || !current.IsKnown || current.IsConfigured ? response : current with { Provider = null };
+
+    /// <summary>These facts as the ledger freezes them: an unknown effort takes <see cref="LedgerEffort"/>.</summary>
+    public ExecutionModes WithLedgerEffort(ExecutionModeAttribution current)
+    {
+        var own = Attribute(ExecutionModeKind.Effort);
+        var frozen = LedgerEffort(own, current);
+        return frozen == own ? this : Without(f => f.Kind == ExecutionModeKind.Effort).With(new(ExecutionModeKind.Effort, frozen.Mode, frozen.Mode,
+            Enum.Parse<ExecutionModeEvidence>(frozen.Evidence, ignoreCase: true), Scope: ExecutionModeScope.Session));
+    }
+
+    private ExecutionModeAttribution Attribute(ExecutionModeKind kind, ExecutionModeEvidence lowest, ExecutionModeEvidence highest)
+    {
+        if (kind == ExecutionModeKind.Speed) return AttributeSpeed(lowest, highest);
+        ExecutionModeFact? chosen = null;
+        var disagree = false;
+        foreach (var fact in _facts)
+        {
+            if (fact.Kind != kind || fact.Evidence < lowest || fact.Evidence > highest) continue;
+            if (chosen is null || fact.Evidence > chosen.Evidence || (fact.Evidence == chosen.Evidence && fact.Scope > chosen.Scope))
+            {
+                chosen = fact;
+                disagree = false;
+            }
+            else if (fact.Evidence == chosen.Evidence && fact.Scope == chosen.Scope)
+            {
+                disagree |= fact.Value != chosen.Value || fact.Provider != chosen.Provider;
+            }
+        }
+
+        return chosen is null || disagree || chosen.Value is "unknown" or "none" or "auto" or "inherit" or "inherited"
             ? ExecutionModeAttribution.Unknown(kind)
-            : new(kind, fact.Value, Name(fact.Evidence), fact.Provider);
+            : new(kind, chosen.Value, Name(chosen.Evidence), chosen.Provider);
     }
 
     /// <summary>The service tier when resolved, else the accelerator, else a <c>highspeed</c> model variant.</summary>
-    private ExecutionModeAttribution AttributeSpeed()
+    private ExecutionModeAttribution AttributeSpeed(ExecutionModeEvidence lowest, ExecutionModeEvidence highest)
     {
         foreach (var kind in SpeedSources)
         {
-            var value = Attribute(kind);
+            var value = Attribute(kind, lowest, highest);
             if (value.IsKnown && (kind != ExecutionModeKind.ModelVariant || value.Mode == "highspeed"))
                 return value with { Kind = ExecutionModeKind.Speed };
         }

@@ -14,13 +14,17 @@ public enum EffortTone
 
     /// <summary><c>ultra</c> and <c>ultracode</c>: the heat 0.72 → 1.0 gradient, glow and shimmer.</summary>
     TopRung,
+
+    /// <summary>A configured value, for every level: tertiary label color, no heat, glow or shimmer, since nothing confirms it.</summary>
+    Configured,
 }
 
 /// <summary>
 /// What one effort capsule draws (DESIGN 4, Agents): the effort's meter and word and the speed's bolts. Both tokens are
-/// null when unknown; unknown is never drawn as a level or as Standard.
+/// null when unknown; unknown is never drawn as a level or as Standard. A token only a config file holds is flagged:
+/// a capsule of such tokens alone takes the configured form, and beside a real value it stays solid with that part tertiary.
 /// </summary>
-public sealed record EffortCapsule(string? Effort, string? Speed)
+public sealed record EffortCapsule(string? Effort, string? Speed, bool EffortConfigured = false, bool SpeedConfigured = false)
 {
     public const double Height = 18;
     public const double Padding = 6;
@@ -30,6 +34,14 @@ public sealed record EffortCapsule(string? Effort, string? Speed)
     public const double BarCornerRadius = 0.75;
     public const double MeterWidth = BarWidth * 5 + BarSpacing * 4;
     public const double WordFontSize = 11;
+
+    /// <summary>The configured mark, <c>mode.configured.mark</c>, in the word's weight.</summary>
+    public const double MarkFontSize = 9.5;
+
+    /// <summary>The configured form's stroke: 0.75 DIP, dash 3, gap 2.5, round caps.</summary>
+    public const double DashedStroke = 0.75;
+    public const double DashLength = 3;
+    public const double DashGap = 2.5;
 
     /// <summary>Segoe Fluent Icons Lightning at 9 DIP: one em wide.</summary>
     public const double BoltSize = 9;
@@ -49,12 +61,25 @@ public sealed record EffortCapsule(string? Effort, string? Speed)
         return new(EffortAndSpeed.Effort(modes)?.Mode, EffortAndSpeed.Speed(modes)?.Mode);
     }
 
+    /// <summary>The agent's current values (EXECUTION-MODES, Current values): session-current ones like any other, configured ones flagged.</summary>
+    public static EffortCapsule Of(AgentStatus agent)
+    {
+        ArgumentNullException.ThrowIfNull(agent);
+        var effort = agent.Current(ExecutionModeKind.Effort);
+        var speed = agent.Current(ExecutionModeKind.Speed);
+        return new(effort.IsKnown ? effort.Mode : null, speed.IsKnown ? speed.Mode : null, effort.IsConfigured, speed.IsConfigured);
+    }
+
     /// <summary>Lit bars 0–5; null when there is no meter (unknown effort, or a token without a level).</summary>
     public int? Level => Effort is { } effort ? EffortAndSpeed.Level(effort) : null;
 
-    public bool IsTopRung => Effort is { } effort && EffortAndSpeed.IsTopRung(effort);
+    public bool IsTopRung => !EffortConfigured && Effort is { } effort && EffortAndSpeed.IsTopRung(effort);
 
-    public EffortTone Tone => IsTopRung ? EffortTone.TopRung : Effort == "max" ? EffortTone.Max : EffortTone.Neutral;
+    public EffortTone Tone => EffortConfigured ? EffortTone.Configured
+        : IsTopRung ? EffortTone.TopRung : Effort == "max" ? EffortTone.Max : EffortTone.Neutral;
+
+    /// <summary>Every known value is configured: the dashed form with its mark. A capsule with a real value stays solid.</summary>
+    public bool IsConfigured => (EffortConfigured || SpeedConfigured) && (Effort is null || EffortConfigured) && (Speed is null || SpeedConfigured);
 
     public int Bolts => Speed is { } speed ? EffortAndSpeed.Bolts(speed) : 0;
 
@@ -67,8 +92,12 @@ public sealed record EffortCapsule(string? Effort, string? Speed)
     /// <summary>Compact capsules drop the word whole, unless the word is all the capsule would show.</summary>
     public bool ShowsWord(bool compact) => Effort is not null && (!compact || (Level is null && Bolts == 0));
 
+    /// <summary>The mark follows the word and drops with it; the dashed stroke then carries the difference.</summary>
+    public bool ShowsMark(bool compact) => IsConfigured && ShowsWord(compact);
+
     /// <summary>Intrinsic width; 0 when nothing is drawn. <paramref name="wordWidth"/> measures the word at 11 DIP medium.</summary>
-    public double Width(bool compact, Func<string, double> wordWidth)
+    /// <param name="markWidth">The configured mark at 9.5 DIP medium.</param>
+    public double Width(bool compact, Func<string, double> wordWidth, double markWidth = 0)
     {
         ArgumentNullException.ThrowIfNull(wordWidth);
         var parts = 0;
@@ -85,6 +114,12 @@ public sealed record EffortCapsule(string? Effort, string? Speed)
             parts++;
         }
 
+        if (ShowsMark(compact))
+        {
+            width += Math.Ceiling(markWidth);
+            parts++;
+        }
+
         if (Bolts > 0)
         {
             width += BoltsWidth(Bolts);
@@ -97,20 +132,25 @@ public sealed record EffortCapsule(string? Effort, string? Speed)
     public static double BoltsWidth(int count) => count <= 0 ? 0 : BoltSize * count - BoltOverlap * (count - 1);
 
     /// <summary>
-    /// <c>effort.tooltip</c> and <c>speed.tooltip</c>, each value spelled as its token (<c>modes.unrecorded</c> when
-    /// unknown), and the top rung's explanation.
+    /// <c>effort.tooltip</c> and <c>speed.tooltip</c> (their <c>.configured</c> forms for configured values), each value spelled
+    /// as its token (<c>modes.unrecorded</c> when unknown), the top rung's explanation and one note for configured values.
     /// </summary>
     public IReadOnlyList<string> TooltipLines(Localizer loc)
     {
         ArgumentNullException.ThrowIfNull(loc);
         var lines = new List<string>
         {
-            loc.Format("effort.tooltip", Effort ?? loc["modes.unrecorded"]),
-            loc.Format("speed.tooltip", Speed is { } speed ? SpeedValue(speed, loc) : loc["modes.unrecorded"]),
+            loc.Format(EffortConfigured ? "effort.tooltip.configured" : "effort.tooltip", Effort ?? loc["modes.unrecorded"]),
+            loc.Format(SpeedConfigured ? "speed.tooltip.configured" : "speed.tooltip", Speed is { } speed ? SpeedValue(speed, loc) : loc["modes.unrecorded"]),
         };
-        if (Effort is "ultra" or "ultracode")
+        if (IsTopRung)
         {
             lines.Add(loc[$"effort.{Effort}.detail"]);
+        }
+
+        if (EffortConfigured || SpeedConfigured)
+        {
+            lines.Add(loc["modes.configured.note"]);
         }
 
         return lines;

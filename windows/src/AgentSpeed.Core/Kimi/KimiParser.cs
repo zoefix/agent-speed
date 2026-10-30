@@ -12,6 +12,7 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
     private long? _requestStart;
     private string? _requestId;
     private string? _provider;
+    private ExecutionModes _context = ExecutionModes.Empty;
 
     public KimiParser(string agentId, IDeduper deduper) : base(agentId, deduper, SourceKind.Kimi)
     {
@@ -32,6 +33,7 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
         _requestStart = null;
         _requestId = null;
         _provider = null;
+        _context = ExecutionModes.Empty;
         RestoreMetadata();
     }
 
@@ -53,16 +55,22 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
         SetProjectFromCwd(line.Cwd);
         SetModel(line.Model);
         _provider = line.Provider ?? _provider;
+        if (line.HasModelMember)
+        {
+            SetVariant(line.ModelMember);
+        }
+
         if (line.TimeMs is not { } time)
         {
             return;
         }
 
         Touch(time);
+        ApplySelection(in line);
         switch (line.Type)
         {
             case "llm.request":
-                Modes = ExecutionModeNative.KimiModel(Model);
+                SetEffort(line.ThinkingEffort, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request);
                 _requestStart = time;
                 _requestId = line.ResponseId;
                 SetPhase(AgentPhase.Generating, time, time);
@@ -74,7 +82,6 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
                 break;
             case "turn.prompt":
             case "turn.started":
-                Modes = ExecutionModeNative.KimiModel(Model);
                 SetPhase(AgentPhase.Generating, time, time);
                 break;
             case "step.end":
@@ -83,6 +90,11 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
             case "context.append_message":
             case "agent.message.appended":
             case "human.agent.message.appended":
+                if (line.HasMetaModel)
+                {
+                    SetVariant(line.MetaModel);
+                }
+
                 if (line.Role == "assistant")
                 {
                     Complete(line, time, sink);
@@ -133,9 +145,9 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
             start ??= duration is >= 0 && duration <= end ? end - duration : null;
             start = ValidTimestamp(start);
 
+            // The snapshot of the first emission: a mirror of the same key keeps it.
             var response = new ParsedResponse(key, SourceKind.Kimi, AgentId, Model, start, end, usage, Provider: _provider)
-            { Modes = ExecutionModeNative.KimiModel(Model) };
-            Modes = response.Modes;
+            { Modes = timed?.Modes ?? _context };
             var completion = Deduper.TryClaim(key, AgentId, out var owner);
             if ((completion || string.Equals(owner, AgentId, StringComparison.Ordinal))
                 && (!_responses.TryGetValue(key, out var previous) || previous != response))
@@ -147,6 +159,32 @@ internal sealed class KimiParser : TranscriptParser<KimiLine>
 
         _requestStart = null;
         SetPhase(line.ToolCalls ? AgentPhase.Tools : AgentPhase.Idle, time, null);
+    }
+
+    private void ApplySelection(in KimiLine line)
+    {
+        var selected = line.Type switch
+        {
+            "profile.bind" => line.ThinkingEffort,
+            "config.update" => line.ThinkingEffort ?? line.ThinkingLevel,
+            _ => null,
+        };
+        if (selected is not null)
+        {
+            SetEffort(selected, ExecutionModeEvidence.Selected, ExecutionModeScope.Session);
+        }
+    }
+
+    private void SetEffort(string? raw, ExecutionModeEvidence evidence, ExecutionModeScope scope)
+    {
+        _context = _context.Without(f => f.Kind == ExecutionModeKind.Effort).With(ExecutionModeNative.Effort(raw, evidence, scope));
+        Modes = _context;
+    }
+
+    private void SetVariant(string? model)
+    {
+        _context = _context.Without(f => f.Kind == ExecutionModeKind.ModelVariant).Merge(ExecutionModeNative.KimiModel(model));
+        Modes = _context;
     }
 
     private void RestoreMetadata()

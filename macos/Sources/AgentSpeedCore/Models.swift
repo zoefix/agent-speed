@@ -105,7 +105,12 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
     public var source: SourceKind
     public var project: String
     public var model: String?
+    /// The agent's own facts (EXECUTION-MODES, Native rules).
     public var modes: ExecutionModes
+    /// A session-current fact, held apart from the agent's own facts.
+    public var sessionModes: ExecutionModes = .empty
+    /// Values only a config file holds.
+    public var configuredModes: ExecutionModes = .empty
     public var phase: AgentPhase
     public var isSubagent: Bool
     public var live: Rate
@@ -156,6 +161,11 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
         self.intelligence = intelligence
         self.perf = perf
         self.signals = signals
+    }
+
+    /// The current reasoning effort and speed (EXECUTION-MODES, Current values).
+    public var current: EffortAndSpeed {
+        EffortAndSpeed(facts: modes, session: sessionModes, configured: configuredModes)
     }
 
     /// Live, resting or none (METRICS 6.9 *Values*).

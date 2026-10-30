@@ -21,7 +21,8 @@ internal sealed class ReportLedger
     public bool IsCounted(string key) => _counted.ContainsKey(key);
 
     /// <summary>Counts a response at its first live emission (a key already counted grows instead).</summary>
-    public void Count(ParsedResponse response, string modelId)
+    /// <param name="currentEffort">The agent's current effort now, which an unknown effort freezes (EXECUTION-MODES, Ledger).</param>
+    public void Count(ParsedResponse response, string modelId, ExecutionModeAttribution? currentEffort = null)
     {
         if (_counted.ContainsKey(response.Key))
         {
@@ -30,6 +31,11 @@ internal sealed class ReportLedger
         }
 
         var values = Values(response);
+        if (currentEffort is { } effort)
+        {
+            values = values with { Modes = values.Modes.WithLedgerEffort(effort) };
+        }
+
         var usage = new ReportUsage(values.Requests, values.Output, values.Input, values.CachedInput, values.CacheWriteInput, values.Reasoning,
             values.MeasuredOutput, values.MeasuredMs, values.CostMicroUsd, values.UnpricedRequests);
         Counters.Add(usage, new ReportModelKey(modelId, response.Source), values.Modes);

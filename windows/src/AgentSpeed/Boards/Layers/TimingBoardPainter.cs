@@ -60,7 +60,7 @@ internal sealed class TimingBoardPainter : BoardStylePainter
     // With the 性能 column the tower drops the capsule's word below L (meter and bolts stay; the word is in the tooltip).
     protected override BoardCapsuleLook CapsuleLook(BoardScene scene, bool sub) =>
         new(4, 5, 4, 1, new BoardTextStyle(BoardFont.Mono, 10, FontWeight.Bold, 0.02f, true), false, 3, 0,
-            scene.Size == BoardSize.S || (scene.Metrics.IntelligenceColumn && scene.Size != BoardSize.L), scene.Palette);
+            scene.Size == BoardSize.S || (scene.Metrics.IntelligenceColumn && scene.Size != BoardSize.L), scene.Palette, ConfiguredMark);
 
     protected override BoardTextStyle ReadoutStyle(BoardScene scene, BoardReadoutFont font)
     {

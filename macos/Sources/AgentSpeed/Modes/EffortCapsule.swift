@@ -8,14 +8,28 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
     var effort: String?
     /// Speed token, nil when unknown.
     var speed: String?
+    /// Only a config file holds the effort; the agent may not be using it.
+    var effortIsConfigured = false
+    var speedIsConfigured = false
+    /// `mode.configured.mark`, in the current language: its width is part of the capsule's.
+    var mark = ""
 
-    init(effort: String?, speed: String?) {
+    init(effort: String?, speed: String?, effortIsConfigured: Bool = false, speedIsConfigured: Bool = false, mark: String = "") {
         self.effort = effort
         self.speed = speed
+        self.effortIsConfigured = effortIsConfigured
+        self.speedIsConfigured = speedIsConfigured
+        self.mark = mark
     }
 
-    init(_ values: EffortAndSpeed) {
-        self.init(effort: values.effort?.mode, speed: values.speed?.mode)
+    init(_ values: EffortAndSpeed, mark: String = "") {
+        self.init(effort: values.effort?.mode, speed: values.speed?.mode, effortIsConfigured: values.effort?.isConfigured ?? false,
+                  speedIsConfigured: values.speed?.isConfigured ?? false, mark: mark)
+    }
+
+    @MainActor
+    init(_ values: EffortAndSpeed, _ l10n: Localizer) {
+        self.init(values, mark: l10n("mode.configured.mark"))
     }
 
     init(_ modes: ExecutionModes) {
@@ -31,10 +45,27 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
     /// A capsule shows for a known effort or a speed with bolts; never for unknown values or a standard speed.
     var isVisible: Bool { effort != nil || bolts > 0 }
 
+    /// Everything the capsule draws is configured: the dashed form. With a real part beside a configured one it stays
+    /// solid, and a value that draws nothing (a standard speed) does not count either way.
+    var isConfiguredForm: Bool {
+        isVisible && (effort == nil || effortIsConfigured) && (bolts == 0 || speedIsConfigured)
+    }
+
+    /// How the effort's meter and word are colored.
+    var tone: EffortTone { effortIsConfigured ? .configured : EffortTone(effort) }
+
+    /// What changes the capsule's look as a whole: a change of it crossfades, without bars refilling or bolts popping.
+    var provenance: [Bool] { [isConfiguredForm, effortIsConfigured, speedIsConfigured] }
+
     /// Whether the word is drawn: it is dropped whole in compact mode, unless it is all the capsule would show.
     func showsWord(compact: Bool) -> Bool {
         guard effort != nil else { return false }
         return !compact || (level == nil && bolts == 0)
+    }
+
+    /// The configured mark, which drops with the word and says nothing in a capsule with a real part.
+    func showsMark(compact: Bool) -> Bool {
+        isConfiguredForm && !mark.isEmpty && showsWord(compact: compact)
     }
 
     // MARK: Geometry
@@ -47,6 +78,7 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
     static let barHeights: [CGFloat] = [4, 5.5, 7, 8.5, 10]
     static let meterWidth = barWidth * 5 + barSpacing * 4
     static let wordFontSize: CGFloat = 11
+    static let markFontSize: CGFloat = 9.5
     static let boltPointSize: CGFloat = 9
     static let boltOverlap: CGFloat = 3
 
@@ -61,10 +93,18 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
 
     /// The word's width, measured once per word (board rows ask on every tick).
     static func wordWidth(_ word: String) -> CGFloat {
-        if let width = wordWidths.withLock({ $0[word] }) { return width }
-        let font = NSFont.systemFont(ofSize: wordFontSize, weight: .medium)
-        let width = ceil((word as NSString).size(withAttributes: [.font: font]).width)
-        wordWidths.withLock { $0[word] = width }
+        measured(word, key: word, size: wordFontSize)
+    }
+
+    static func markWidth(_ mark: String) -> CGFloat {
+        measured(mark, key: "mark:" + mark, size: markFontSize)
+    }
+
+    private static func measured(_ text: String, key: String, size: CGFloat) -> CGFloat {
+        if let width = wordWidths.withLock({ $0[key] }) { return width }
+        let font = NSFont.systemFont(ofSize: size, weight: .medium)
+        let width = ceil((text as NSString).size(withAttributes: [.font: font]).width)
+        wordWidths.withLock { $0[key] = width }
         return width
     }
 
@@ -77,6 +117,7 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
         var parts: [CGFloat] = []
         if level != nil { parts.append(Self.meterWidth) }
         if showsWord(compact: compact), let effort { parts.append(Self.wordWidth(effort)) }
+        if showsMark(compact: compact) { parts.append(Self.markWidth(mark)) }
         if bolts > 0 { parts.append(Self.boltsWidth(bolts)) }
         guard !parts.isEmpty else { return 0 }
         return Self.padding * 2 + parts.reduce(0, +) + Self.partSpacing * CGFloat(parts.count - 1)
@@ -89,16 +130,28 @@ struct EffortCapsule: Equatable, Hashable, Sendable {
 
     // MARK: Text
 
-    /// The tooltip lines: effort and speed, each spelled as its token, and the top rung's explanation.
+    /// The tooltip lines: effort and speed, each spelled as its token, a real top rung's explanation, and the note that
+    /// says what a configured value is.
     @MainActor
     func tooltipLines(_ l10n: Localizer) -> [String] {
-        var lines = [
-            l10n("effort.tooltip", effort ?? l10n("modes.unrecorded")),
-            l10n("speed.tooltip", speed.map { Self.speedValue($0, l10n) } ?? l10n("modes.unrecorded")),
-        ]
-        if effort == "ultra" { lines.append(l10n("effort.ultra.detail")) }
-        if effort == "ultracode" { lines.append(l10n("effort.ultracode.detail")) }
+        var lines = [effortLine(l10n) ?? l10n("effort.tooltip", l10n("modes.unrecorded")),
+                     speedLine(l10n) ?? l10n("speed.tooltip", l10n("modes.unrecorded"))]
+        if effort == "ultra", !effortIsConfigured { lines.append(l10n("effort.ultra.detail")) }
+        if effort == "ultracode", !effortIsConfigured { lines.append(l10n("effort.ultracode.detail")) }
+        if effortIsConfigured || speedIsConfigured { lines.append(l10n("modes.configured.note")) }
         return lines
+    }
+
+    /// The effort's line; nil when unknown.
+    @MainActor
+    func effortLine(_ l10n: Localizer) -> String? {
+        effort.map { l10n(effortIsConfigured ? "effort.tooltip.configured" : "effort.tooltip", $0) }
+    }
+
+    /// The speed's line; nil when unknown.
+    @MainActor
+    func speedLine(_ l10n: Localizer) -> String? {
+        speed.map { l10n(speedIsConfigured ? "speed.tooltip.configured" : "speed.tooltip", Self.speedValue($0, l10n)) }
     }
 
     /// The end of a row's accessibility label: the effort and speed lines.

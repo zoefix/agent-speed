@@ -119,6 +119,7 @@ internal sealed class HermesSource
             var tracked = Add(folder);
             tracked.Set.CheckConfig();
             ReadSet(tracked, update, todayStartMs - Monitoring.MonitorCore.BacklogWindowMs, forget: false, cancellationToken);
+            tracked.Set.RefreshSessions();
         }
 
         return update;
@@ -164,6 +165,10 @@ internal sealed class HermesSource
             }
 
             ReadSet(tracked, update, thresholdMs: null, forget: discover, cancellationToken);
+            if (discover)
+            {
+                update.Changed |= tracked.Set.RefreshSessions();
+            }
         }
 
         return update;

@@ -11,7 +11,8 @@ final class HistoryAnalyzer {
     /// 2: per-model measured output and time (METRICS 8). 3: cost (METRICS 9.7). 5: reasoning effort and speed.
     /// 6: the copied prefix of paginated Codex sub-agents (METRICS 3.5). 7: the unpriced facts (METRICS 9.10).
     /// 8: the task records of the retired task score. 9: the performance records (METRICS 6.11).
-    static let analysisVersion: Int64 = 9
+    /// 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
+    static let analysisVersion: Int64 = 10
     /// The current price table version of the last complete run; when it changes, files with unpriced responses are
     /// analysed again (METRICS 9.7).
     static let priceVersionKey = "priceTableVersion"
@@ -274,7 +275,8 @@ final class HistoryAnalyzer {
                 try source.read {
                     for window in try source.windows() {
                         let agentId = OpenClawSource.agentId(path, window.sessionId)
-                        let rows = try source.maxSeq(session: window.sessionId) ?? 0
+                        // A trace row can arrive after the transcript rows it covers.
+                        let rows = try (source.maxSeq(session: window.sessionId) ?? 0) &+ source.maxTrajectorySeq(session: window.sessionId)
                         let previous = entries[agentId]
                         if let previous, !zoneChanged, previous.version == options.analysisVersion, previous.size == rows,
                            previous.modified == window.activityMs, !(repricing && previous.hasUnpriced) {
@@ -288,6 +290,11 @@ final class HistoryAnalyzer {
                         var order: [String] = []
                         var measured: Set<String> = []
                         var completions: [OpenClawCompletion] = []
+                        var traces: [OpenClawTrace] = []
+                        try source.traces(session: window.sessionId, after: -1) { _, trace in
+                            if let trace { traces.append(trace) }
+                        }
+                        parser.addTraces(traces) { _ in }
                         try source.rows(session: window.sessionId, after: .min, maxLineBytes: FileTailer.defaultMaxLineBytes,
                                         tools: .unhashed) { row in
                             guard let entry = row.entry else { return }

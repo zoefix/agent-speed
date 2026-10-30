@@ -20,10 +20,14 @@ internal sealed class OpenClawWriter : IDisposable
         CREATE TABLE IF NOT EXISTS transcript_rewrite_watermarks (session_id TEXT NOT NULL PRIMARY KEY, generation TEXT NOT NULL,
           updated_at INTEGER NOT NULL);
         CREATE TABLE IF NOT EXISTS auth_profile_store (store_key TEXT NOT NULL PRIMARY KEY, value_json TEXT NOT NULL);
+        CREATE TABLE IF NOT EXISTS trajectory_runtime_events (session_id TEXT NOT NULL, seq INTEGER NOT NULL, run_id TEXT,
+          event_json TEXT NOT NULL, created_at INTEGER NOT NULL, event_utf8_bytes INTEGER, event_payload BLOB, event_codec TEXT,
+          PRIMARY KEY (session_id, seq));
         """;
 
     private readonly SqliteConnection _db;
     private readonly Dictionary<string, long> _seq = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _trajectory = new(StringComparer.Ordinal);
 
     public OpenClawWriter(string path)
     {
@@ -99,6 +103,58 @@ internal sealed class OpenClawWriter : IDisposable
         using var watermark = _db.Prepare("INSERT OR REPLACE INTO transcript_rewrite_watermarks (session_id, generation, updated_at) VALUES (?1, ?2, ?3)");
         watermark.Bind(1, session).Bind(2, generation).Bind(3, at).Run();
         return Touch(session, at);
+    }
+
+    /// <summary>One <c>trace.metadata</c> row, Brotli compressed after a plain <c>session.started</c> when asked.</summary>
+    public OpenClawWriter Trace(string session, long at, string? thinkLevel, bool? fastMode = null, bool compressed = false)
+    {
+        var model = new JsonObject { ["provider"] = "anthropic", ["name"] = "claude-opus-5-5", ["reasoningLevel"] = "stream" };
+        if (thinkLevel is not null)
+        {
+            model["thinkLevel"] = thinkLevel;
+        }
+
+        if (fastMode is not null)
+        {
+            model["fastMode"] = fastMode;
+        }
+
+        var text = new JsonObject { ["type"] = "trace.metadata", ["ts"] = Iso(at), ["data"] = new JsonObject { ["model"] = model } }.ToJsonString();
+        if (compressed)
+        {
+            Trajectory(session, at, """{"type":"session.started"}""");
+        }
+
+        return Trajectory(session, at, compressed ? string.Empty : text, compressed ? BrotliOf(text) : null, compressed ? "br" : null,
+            compressed ? System.Text.Encoding.UTF8.GetByteCount(text) : null);
+    }
+
+    public OpenClawWriter Trajectory(string session, long at, string json, byte[]? payload = null, string? codec = null, long? bytes = null)
+    {
+        var seq = _trajectory[session] = _trajectory.GetValueOrDefault(session) + 1;
+        using var insert = _db.Prepare(
+            "INSERT INTO trajectory_runtime_events (session_id, seq, event_json, created_at, event_utf8_bytes, event_payload, event_codec) VALUES (?1, ?2, ?3, ?4, ?5, ?6, ?7)");
+        insert.Bind(1, session).Bind(2, seq).Bind(3, json).Bind(4, at).Bind(7, codec);
+        if (bytes is { } size)
+        {
+            insert.Bind(5, size);
+        }
+
+        if (payload is not null)
+        {
+            insert.BindBlob(6, payload);
+        }
+
+        insert.Run();
+        return this;
+    }
+
+    internal static byte[] BrotliOf(string text)
+    {
+        var input = System.Text.Encoding.UTF8.GetBytes(text);
+        var output = new byte[input.Length + 1024];
+        Assert.True(System.IO.Compression.BrotliEncoder.TryCompress(input, output, out var written));
+        return output[..written];
     }
 
     public OpenClawWriter DeleteWindow(string session)
@@ -181,6 +237,64 @@ public sealed class OpenClawLiveTests : IDisposable
 
         Assert.False(core.PollRecent(_now));
         Assert.False(core.ProcessPaths([DatabasePath], _now, TodayStart));
+    }
+
+    [Fact]
+    public void TraceRowsThatArriveLateUpdateTheirResponsesWithoutRecountingThem()
+    {
+        var t = _now - 300_000;
+        using var writer = new OpenClawWriter(DatabasePath);
+        writer.Window(Main, "agent:main:main", t).Trace(Main, t + 100, "high").User(Main, "u1", t + 1000).Assistant(Main, "a1", t + 1005, t + 3000, 300)
+            .User(Main, "u2", t + 4000).Assistant(Main, "a2", t + 4005, t + 6000, 200);
+        using var core = Core();
+        core.Seed(_now, TodayStart, CancellationToken.None);
+        Assert.Equal("high", Assert.Single(Build(core).Agents).Current(ExecutionModeKind.Effort).Mode);
+
+        // The recorder's buffer reaches the database later: nothing else changed in the window.
+        writer.Trace(Main, t + 3500, "xhigh", fastMode: true, compressed: true);
+        Assert.True(core.ProcessPaths([DatabasePath + "-wal"], _now, TodayStart));
+        var agent = Assert.Single(Build(core).Agents);
+        Assert.Equal(("xhigh", "recorded"), (agent.Current(ExecutionModeKind.Effort).Mode, agent.Current(ExecutionModeKind.Effort).Evidence));
+        Assert.Equal(("fast", "selected"), (agent.Current(ExecutionModeKind.Speed).Mode, agent.Current(ExecutionModeKind.Speed).Evidence));
+        var snapshot = Build(core);
+        var source = snapshot.Sources.Single(s => s.Kind == SourceKind.OpenClaw);
+        Assert.Equal(2L, source.Today.Requests);
+        Assert.Equal(1L, snapshot.TodayModes.Single(m => m.Kind == ExecutionModeKind.Effort && m.Mode == "high").Requests);
+        Assert.Equal(1L, snapshot.TodayModes.Single(m => m.Kind == ExecutionModeKind.Effort && m.Mode == "xhigh").Requests);
+    }
+
+    [Fact]
+    public void ARewrittenWindowReadsItsTraceRowsAgainAndAFalseFastModeSaysNothing()
+    {
+        var t = _now - 300_000;
+        using var writer = new OpenClawWriter(DatabasePath);
+        writer.Window(Main, "agent:main:main", t).Trace(Main, t + 100, "low", fastMode: false).User(Main, "u1", t + 1000).Assistant(Main, "a1", t + 1005, t + 3000, 300);
+        using var core = Core();
+        core.Seed(_now, TodayStart, CancellationToken.None);
+        Assert.False(Assert.Single(Build(core).Agents).Current(ExecutionModeKind.Speed).IsKnown);
+
+        writer.Rewrite(Main, "generation-2", t + 5000).User(Main, "u2", t + 5100).Assistant(Main, "a2", t + 5105, t + 7000, 100);
+        core.ProcessPaths([DatabasePath + "-wal"], _now, TodayStart);
+        Assert.Equal("low", Assert.Single(Build(core).Agents).Current(ExecutionModeKind.Effort).Mode);
+    }
+
+    [Fact]
+    public void ADatabaseWithoutTheCodecColumnsKeepsThePlainRows()
+    {
+        var t = _now - 300_000;
+        using (var writer = new OpenClawWriter(DatabasePath))
+        {
+            writer.Window(Main, "agent:main:main", t).Trace(Main, t + 100, "medium").User(Main, "u1", t + 1000).Assistant(Main, "a1", t + 1005, t + 3000, 300);
+        }
+
+        using (var old = SqliteConnection.Open(DatabasePath, SqliteOpenMode.ReadWriteCreate))
+        {
+            old.Execute("ALTER TABLE trajectory_runtime_events DROP COLUMN event_codec");
+        }
+
+        using var core = Core();
+        core.Seed(_now, TodayStart, CancellationToken.None);
+        Assert.Equal("medium", Assert.Single(Build(core).Agents).Current(ExecutionModeKind.Effort).Mode);
     }
 
     [Fact]

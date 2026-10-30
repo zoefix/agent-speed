@@ -72,6 +72,15 @@ internal abstract class TranscriptParser
         protected set { if (!_modes.Equals(value)) { _modes = value; Version++; } }
     }
 
+    private ExecutionModes _sessionModes = ExecutionModes.Empty;
+
+    /// <summary>A session-current fact (EXECUTION-MODES, Current values): the agent's current value only, never a response's.</summary>
+    public ExecutionModes SessionModes
+    {
+        get => _sessionModes;
+        set { if (!_sessionModes.Equals(value)) { _sessionModes = value; Version++; } }
+    }
+
     public AgentPhase Phase => _phase;
 
     public long? PhaseSinceMs { get; private set; }
@@ -122,6 +131,7 @@ internal abstract class TranscriptParser
         Project = null;
         Model = null;
         Modes = ExecutionModes.Empty;
+        SessionModes = ExecutionModes.Empty;
         IsSubagent = false;
         _phase = AgentPhase.Idle;
         PhaseSinceMs = null;

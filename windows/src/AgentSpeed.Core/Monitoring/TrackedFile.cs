@@ -186,6 +186,9 @@ internal sealed class TrackedFile
 
     public int PushedVersion { get; set; } = -1;
 
+    /// <summary>The configured values' version the agent was last pushed with.</summary>
+    public int PushedConfiguredVersion { get; set; } = -1;
+
     public bool Unreadable { get; set; }
 
     /// <summary>Changed while a recent read was still within its rate limit (Antigravity, METRICS 5.4); read on the next poll.</summary>

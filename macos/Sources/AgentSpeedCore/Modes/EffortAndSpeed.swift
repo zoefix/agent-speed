@@ -17,11 +17,32 @@ public struct EffortAndSpeed: Equatable, Hashable, Sendable {
         self.init(effort: effort.isUnknown ? nil : effort, speed: speed.isUnknown ? nil : speed)
     }
 
+    /// An agent's current values (EXECUTION-MODES, Current values): each the first known one of its own facts, a
+    /// session-current fact and a configured value.
+    public init(facts: ExecutionModes, session: ExecutionModes = .empty, configured: ExecutionModes = .empty) {
+        func current(_ kind: ExecutionModeKind) -> ExecutionModeAttribution? {
+            let tiers: [(ExecutionModes, Set<ExecutionModeEvidence>)] = [
+                (facts, ExecutionModeEvidence.attributable), (session, [.selected]), (configured, [.configured]),
+            ]
+            for (modes, evidence) in tiers {
+                let result = modes.attribution(for: kind, among: evidence)
+                if !result.isUnknown { return result }
+            }
+            return nil
+        }
+        self.init(effort: current(.effort), speed: current(.speed))
+    }
+
     /// Bolts of the speed; 0 when unknown or without bolts.
     public var bolts: Int { speed.map { ModeDisplay.bolts($0.mode) } ?? 0 }
 
     /// Whether there is anything to draw: a known effort or a speed with bolts.
     public var isVisible: Bool { effort != nil || bolts > 0 }
+}
+
+extension ExecutionModeAttribution {
+    /// A value only a config file holds, which the agent may not be using.
+    public var isConfigured: Bool { evidence == ExecutionModeEvidence.configured.rawValue }
 }
 
 extension ExecutionModes {

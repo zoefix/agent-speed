@@ -39,7 +39,7 @@ struct AgentRow: View {
         let trafficSuffix = received.map { " · " + $0 }
         let speed = model.value(of: agent.live)
         let status = status(l10n)
-        let capsule = EffortCapsule(agent.modes)
+        let capsule = EffortCapsule(agent.current, l10n)
         let modeLines = capsule.effort != nil || capsule.speed != nil ? capsule.tooltipLines(l10n) : []
         let live = LiveSpeedValue(
             speed: speed,
@@ -148,7 +148,7 @@ struct AgentRow: View {
     /// today's traffic.
     static func facts(of agent: AgentStatus, model: AppModel) -> [String] {
         let l10n = model.l10n
-        let capsule = EffortCapsule(agent.modes)
+        let capsule = EffortCapsule(agent.current, l10n)
         var lines = capsule.effort != nil || capsule.speed != nil ? capsule.tooltipLines(l10n) : []
         if let traffic = traffic(of: agent, model: model) {
             lines.append(l10n("traffic.agent.tooltip", TrafficText(model: model).pair(traffic)))

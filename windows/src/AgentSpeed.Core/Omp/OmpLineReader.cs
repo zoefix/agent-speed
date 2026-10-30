@@ -65,6 +65,7 @@ internal static class OmpLineReader
             TypeName.Message => top.HasMessage ? OmpEntryKind.Message : OmpEntryKind.Other,
             TypeName.ModelUsage => OmpEntryKind.ModelUsage,
             TypeName.ServiceTierChange => OmpEntryKind.ServiceTierChange,
+            TypeName.ThinkingLevelChange => OmpEntryKind.ThinkingLevelChange,
             TypeName.Custom when top.IsSessionExit => OmpEntryKind.SessionExit,
             _ => OmpEntryKind.Other,
         };
@@ -106,6 +107,7 @@ internal static class OmpLineReader
                 : reader.ValueTextEquals("session"u8) ? TypeName.Session
                 : reader.ValueTextEquals("title"u8) ? TypeName.Title
                 : reader.ValueTextEquals("service_tier_change"u8) ? TypeName.ServiceTierChange
+                : reader.ValueTextEquals("thinking_level_change"u8) ? TypeName.ThinkingLevelChange
                 : reader.ValueTextEquals("model_usage"u8) ? TypeName.ModelUsage
                 : reader.ValueTextEquals("custom"u8) ? TypeName.Custom
                 : TypeName.Other;
@@ -141,6 +143,12 @@ internal static class OmpLineReader
             else if (reader.TokenType == JsonTokenType.String) top.Call.ServiceTier = reader.GetString();
             else JsonScan.SkipValue(ref reader);
             result.SelectedModes = modes;
+        }
+        else if (reader.ValueTextEquals("thinkingLevel"u8))
+        {
+            reader.Read();
+            result.HasThinkingLevel = true;
+            result.ThinkingLevel = JsonScan.ReadString(ref reader);
         }
         else if (reader.ValueTextEquals("timestamp"u8))
         {
@@ -280,6 +288,16 @@ internal static class OmpLineReader
             reader.Read();
             call.ServiceTier = JsonScan.ReadString(ref reader);
         }
+        else if (reader.ValueTextEquals("requestControls"u8))
+        {
+            reader.Read();
+            if (reader.TokenType == JsonTokenType.StartObject)
+            {
+                ReadRequestControls(ref reader, ref call);
+            }
+
+            JsonScan.SkipValue(ref reader);
+        }
         else if (reader.ValueTextEquals("disabledFeatures"u8))
         {
             reader.Read();
@@ -312,6 +330,36 @@ internal static class OmpLineReader
         }
 
         return true;
+    }
+
+    // The reader is on the requestControls object; it ends on its EndObject.
+    private static void ReadRequestControls(ref Utf8JsonReader reader, ref CallFields call)
+    {
+        while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+        {
+            var isEffort = reader.ValueTextEquals("effort"u8);
+            reader.Read();
+            if (isEffort)
+            {
+                string? tail = null, top = null;
+                if (reader.TokenType == JsonTokenType.StartObject)
+                {
+                    while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
+                    {
+                        var isTail = reader.ValueTextEquals("tail"u8);
+                        var isTop = reader.ValueTextEquals("topLevel"u8);
+                        reader.Read();
+                        if (isTail) tail = JsonScan.ReadString(ref reader);
+                        else if (isTop) top = JsonScan.ReadString(ref reader);
+                        else JsonScan.SkipValue(ref reader);
+                    }
+                }
+
+                call.RequestEffort = tail ?? top;
+            }
+
+            JsonScan.SkipValue(ref reader);
+        }
     }
 
     // The reader is on the usage object; it ends on its EndObject.
@@ -398,6 +446,7 @@ internal static class OmpLineReader
         ModelUsage,
         Custom,
         ServiceTierChange,
+        ThinkingLevelChange,
     }
 
     private struct Usage
@@ -414,6 +463,7 @@ internal static class OmpLineReader
         public string? Model;
         public string? ServiceTier;
         public bool DisabledPriority;
+        public string? RequestEffort;
         public bool HasProvider;
         public string? Provider;
         public bool HasApi;
@@ -426,6 +476,7 @@ internal static class OmpLineReader
             Model = Model,
             ServiceTier = ServiceTier,
             DisabledPriority = DisabledPriority,
+            RequestEffort = RequestEffort,
             Provider = Provider,
             HasUsage = Usage.Input > 0 || Usage.Output > 0 || Usage.CacheRead > 0 || Usage.CacheWrite > 0,
             Tokens = new TokenCounts(

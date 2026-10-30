@@ -127,7 +127,8 @@ struct ParserFixtureTests {
                 #expect(actual.isFinal == (wanted["final"] as? Bool), "\(relative) \(actual.key) final")
                 expectPricingFields(actual, wanted, "\(relative) \(actual.key)")
             }
-            expectModeFields(state.modes, result.responses, spec, relative)
+            expectModeFields(fixtureCurrent(state, agentId: Fixtures.root.appendingPathComponent(relative).path),
+                             result.responses, spec, relative)
             // The actions of 6.10, for the files the fixture lists them for.
             if let wanted = spec["actions"] as? [[String: Any]] {
                 let actions = state.actions.actions.map(Self.json)

@@ -131,6 +131,21 @@ public sealed class OpenClawFixtureTests : IDisposable
     }
 
     [Fact]
+    public void TheTraceQuerySelectsExactlyTheRowsOfTheFixture()
+    {
+        foreach (var database in Expected.GetProperty("traceSeqs").EnumerateObject())
+        {
+            using var open = OpenClawDatabase.Open(FixtureLocator.PathOf(database.Name));
+            foreach (var window in database.Value.EnumerateObject())
+            {
+                var seqs = new List<long>();
+                open.Traces(window.Name, -1, (seq, _) => seqs.Add(seq));
+                Assert.Equal(window.Value.EnumerateArray().Select(s => s.GetInt64()), seqs);
+            }
+        }
+    }
+
+    [Fact]
     public void ParentsResolveThroughTheSharedLinkRules()
     {
         var parsers = Results.Value.Values.SelectMany(r => r.Parsers ?? []).ToList();

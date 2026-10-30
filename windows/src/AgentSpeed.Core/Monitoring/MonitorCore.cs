@@ -356,6 +356,7 @@ internal sealed partial class MonitorCore : IDisposable
         SeedZCode(todayStartMs);
         SeedOpenClaw(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         SeedHermes(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
+        RefreshAgentContext();
         return new SeedReport(stopwatch.ElapsedMilliseconds, discovered, filesRead, bytesRead, _responsesSeen);
     }
 
@@ -604,7 +605,7 @@ internal sealed partial class MonitorCore : IDisposable
             }
         }
 
-        return changed;
+        return RefreshAgentContext() || changed;
     }
 
     /// <summary>Files of that source with at least one line today; WorkBuddy counts main sessions only (DESIGN 5).</summary>
@@ -722,7 +723,11 @@ internal sealed partial class MonitorCore : IDisposable
                 a.Live,
                 a.RecentSpeed,
                 UnixTime.FromMs(a.Info.LastLineMs ?? nowMs),
-                a.ParentId) { Modes = a.Info.Modes, Intelligence = a.Intelligence, Perf = a.Perf, Work = a.Work })
+                a.ParentId)
+            {
+                Modes = a.Info.Modes, SessionModes = a.Info.SessionModes, ConfiguredModes = a.Info.ConfiguredModes,
+                Intelligence = a.Intelligence, Perf = a.Perf, Work = a.Work,
+            })
             .ToList();
 
         var sources = Enum.GetValues<SourceKind>()
@@ -864,7 +869,7 @@ internal sealed partial class MonitorCore : IDisposable
             enabled ? today : TokenTotals.Zero,
             enabled ? activeAgents : 0,
             enabled ? liveEstimated : Rate.Zero)
-        { ConfiguredModes = kind == SourceKind.Codex ? CodexConfiguredModes.Read(path) : ExecutionModes.Empty };
+        { ConfiguredModes = kind == SourceKind.Codex && path.Length > 0 ? _configured.Of(kind, path, string.Empty, null) : ExecutionModes.Empty };
     }
 
     private ReadPlan? PlanInitialRead(TrackedFile tracked, DiscoveredFile file, long todayStartMs)
@@ -1187,12 +1192,13 @@ internal sealed partial class MonitorCore : IDisposable
     private void PushAgent(TrackedFile tracked)
     {
         var parser = tracked.Parser;
-        if (parser.Version == tracked.PushedVersion)
+        if (parser.Version == tracked.PushedVersion && _configured.Version == tracked.PushedConfiguredVersion)
         {
             return;
         }
 
         tracked.PushedVersion = parser.Version;
+        tracked.PushedConfiguredVersion = _configured.Version;
         if (parser.LastLineMs is null)
         {
             return;
@@ -1221,7 +1227,10 @@ internal sealed partial class MonitorCore : IDisposable
             parser.Phase,
             parser.InFlightStartMs,
             parser.LastLineMs,
-            _parents.GetValueOrDefault(parser.AgentId)) { Modes = parser.Modes, Work = parser.WorkActions });
+            _parents.GetValueOrDefault(parser.AgentId))
+        {
+            Modes = parser.Modes, SessionModes = parser.SessionModes, ConfiguredModes = ConfiguredOf(tracked), Work = parser.WorkActions,
+        });
     }
 
     /// <summary>Applies one read of the OpenCode database; true when anything changed.</summary>

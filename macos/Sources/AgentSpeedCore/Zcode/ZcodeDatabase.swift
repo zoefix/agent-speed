@@ -1,4 +1,5 @@
 import Foundation
+import SQLite3
 
 struct ZcodeBatch: Sendable {
     struct Session: Sendable {
@@ -19,6 +20,8 @@ struct ZcodeBatch: Sendable {
         var durationMs: Int64?
         var usage: TokenUsage
         var modes: ExecutionModes = .empty
+        /// A title, compaction or verification call, which runs at the catalog's lowest level.
+        var isAuxiliary = false
     }
     var sessions: [Session]
     var rows: [Usage]
@@ -79,7 +82,7 @@ final class ZcodeDatabase {
                               usage: TokenUsage(input: input, cachedInput: cacheRead,
                                                 cacheWriteInput: min(input, TokenCount.clamp(row.optionalInt64(10))),
                                                 output: output, reasoning: min(output, TokenCount.clamp(row.optionalInt64(9)))),
-                              modes: modeFacts[id] ?? .empty))
+                              modes: modeFacts[id]?.modes ?? .empty, isAuxiliary: modeFacts[id]?.isAuxiliary ?? false))
         }
         return ZcodeBatch(sessions: sessions, rows: rows, messageStates: try messageStates(sinceMs: nil))
     }
@@ -91,36 +94,57 @@ final class ZcodeDatabase {
                               startMs: row.startMs > 0 ? row.startMs : durationStart, endMs: end, usage: row.usage, provider: row.provider, modes: row.modes)
     }
 
-    private func usageModes(sinceMs: Int64?) -> [String: ExecutionModes] {
+    private static let auxiliaryQuerySources: Set<String> = ["compact", "session_title", "goal_completion_verification"]
+
+    /// Each `model_usage` row's facts (EXECUTION-MODES, ZCode). `variant` and `parent_user_message_id` may be absent.
+    private func usageModes(sinceMs: Int64?) -> [String: (modes: ExecutionModes, isAuxiliary: Bool)] {
+        var columns: Set<String> = []
+        if let info = try? connection.prepare("SELECT name FROM pragma_table_info('model_usage')") {
+            try? info.forEachRow { row in
+                if let name = row.string(0) { columns.insert(name) }
+            }
+        }
+        func column(_ name: String) -> String { columns.contains(name) ? "u." + name : "NULL" }
         let suffix = sinceMs == nil ? "" : " WHERE coalesce(u.completed_at,u.started_at)>=?1 OR u.status='running'"
-        guard let query = try? connection.prepare("""
-            SELECT u.id,u.provider_id,u.model_id,u.started_at,
-                   CASE WHEN length(CAST(m.data AS BLOB))<=1048576 THEN m.data END
+        let plain = "SELECT u.id,u.provider_id,u.model_id,u.started_at,\(column("variant")),\(column("query_source")),"
+        let joined = plain + """
+            CASE WHEN length(CAST(m.data AS BLOB))<=1048576 THEN m.data END
             FROM model_usage u LEFT JOIN message m ON m.id=u.parent_user_message_id AND m.session_id=u.session_id
             \(suffix)
-            """) else { return [:] }
+            """
+        let query = columns.contains("parent_user_message_id") ? try? connection.prepare(joined) : nil
+        guard let query = query ?? (try? connection.prepare(plain + "NULL FROM model_usage u" + suffix)) else { return [:] }
         if let sinceMs { query.bind(1, sinceMs) }
-        var result: [String: ExecutionModes] = [:]
+        var result: [String: (modes: ExecutionModes, isAuxiliary: Bool)] = [:]
         try? query.forEachRow { row in
-            guard let id = row.string(0), let json = row.withText(4, { try? JSONParser.parse(Data($0)) }),
-                  json["role"]?.string == "user" else { return }
-            result[id] = Self.highspeedModes(json["metadata"]?["highspeed"], provider: row.string(1),
-                                              model: row.string(2), startedMs: row.int64(3))
+            guard let id = row.string(0) else { return }
+            let message = row.withText(6) { try? JSONParser.parse(Data($0)) }
+            let highspeed = message?["role"]?.string == "user" ? message?["metadata"]?["highspeed"] : nil
+            var modes = Self.highspeedModes(highspeed, provider: row.string(1), model: row.string(2), startedMs: row.int64(3))
+            if row.type(4) == SQLITE_TEXT, let effort = ExecutionModeAdapters.effort(row.string(4), evidence: .recorded, scope: .request) {
+                modes.insert(effort)
+            }
+            result[id] = (modes, row.string(5).map(Self.auxiliaryQuerySources.contains) ?? false)
         }
         return result
     }
 
+    /// The speed facts of a row: its exact model, its card provider and the card of the user message it answers.
     static func highspeedModes(_ metadata: JSONValue?, provider: String?, model: String?, startedMs: Int64) -> ExecutionModes {
-        guard metadata?["schemaVersion"]?.int64 == 1,
-              let card = metadata?["cardId"]?.string, !card.isEmpty,
-              let selectedModel = metadata?["model"]?.string else { return .empty }
-        var modes = ExecutionModeAdapters.fact(kind: .accelerator, raw: "highspeed", evidence: .selected,
-                                                provider: "zcode", scope: .turn)
-        guard !card.hasPrefix("hsc_mock_"), let provider else { return modes }
-        if ["account:zai-highspeed-card", "account:bigmodel-highspeed-card"].contains(provider), model == selectedModel {
-            modes = modes.merging(ExecutionModeAdapters.fact(kind: .accelerator, raw: "highspeed", evidence: .recorded,
-                                                              provider: "zcode", scope: .request))
-        } else if let fallback = metadata?["fallbackAt"]?.int64, startedMs >= fallback,
+        var modes = ExecutionModes([ExecutionModeAdapters.zcodeModel(model)].compactMap { $0 })
+        var isMock = false
+        var fallback: Int64?
+        if metadata?["schemaVersion"]?.int64 == 1, let card = metadata?["cardId"]?.string, !card.isEmpty,
+           metadata?["model"]?.string?.isEmpty == false {
+            modes = modes.merging(ExecutionModeAdapters.fact(kind: .accelerator, raw: "highspeed", evidence: .selected,
+                                                              provider: "zcode", scope: .turn))
+            isMock = card.hasPrefix("hsc_mock_")
+            fallback = metadata?["fallbackAt"]?.int64
+        }
+        guard !isMock else { return modes }
+        if let routed = ExecutionModeAdapters.zcodeProvider(provider) {
+            modes.insert(routed)
+        } else if let fallback, startedMs >= fallback,
                   let native = ExecutionModeAdapters.fact(kind: .accelerator, raw: "fallback", evidence: .recorded,
                                                             provider: "zcode", scope: .request).facts.first {
             modes.insert(native.withCanonicalValue("standard"))
@@ -151,7 +175,6 @@ final class ZcodeDatabase {
                 : role == "user" || (completed == nil && !hasError) ? .generating : .idle
             var state = AgentState(source: .zcode)
             state.model = json["modelId"]?.string ?? json["modelID"]?.string
-            state.modes = Self.highspeedModes(json["metadata"]?["highspeed"], provider: nil, model: nil, startedMs: created)
             state.noteLine(at: max(row.int64(3), completed ?? created))
             state.setPhase(phase, at: created, inFlightStartMs: phase == .generating ? created : nil)
             states[session] = state

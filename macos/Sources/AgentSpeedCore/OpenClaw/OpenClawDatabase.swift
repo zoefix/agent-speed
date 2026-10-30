@@ -46,10 +46,13 @@ enum OpenClawToolReading: Sendable {
 
 /// Read-only access to one OpenClaw agent database (METRICS 4.14), opened exactly like OpenCode's (4.5): `mode=ro`,
 /// busy timeout 2 s, `immutable=1` when the header says WAL and no `-wal` exists; reading never creates a file. Only
-/// `session_windows`, `session_nodes`, `transcript_events` and `transcript_rewrite_watermarks` are ever selected.
+/// `session_windows`, `session_nodes`, `transcript_events` and `transcript_rewrite_watermarks` are ever selected, and of
+/// `trajectory_runtime_events` the `trace.metadata` rows, chosen in SQL.
 final class OpenClawDatabase {
     /// `event_utf8_bytes` above this is not decoded (METRICS 4.14).
     static let maxEventBytes = 4 << 20
+    /// A trajectory row larger than OpenClaw's own limit is not read (METRICS 4.14, Trajectory rows).
+    static let maxTraceBytes = 262_144
 
     enum OpenError: Error, Equatable {
         case missing
@@ -67,6 +70,8 @@ final class OpenClawDatabase {
     private let maxSeqStatement: SQLiteStatement
     private let nodesStatement: SQLiteStatement?
     private let watermarksStatement: SQLiteStatement?
+    private let tracesStatement: SQLiteStatement?
+    private let maxTrajectorySeqStatement: SQLiteStatement?
     private var decoder: ZstdFrameDecoder?
 
     init(path: String) throws(OpenError) {
@@ -104,6 +109,11 @@ final class OpenClawDatabase {
                 ? try opened.prepare("SELECT session_key, current_session_id FROM session_nodes") : nil
             watermarksStatement = tables.contains("transcript_rewrite_watermarks")
                 ? try opened.prepare("SELECT session_id, generation FROM transcript_rewrite_watermarks") : nil
+            let trajectory = tables.contains("trajectory_runtime_events")
+                ? try Self.columns(of: "trajectory_runtime_events", in: opened) : []
+            tracesStatement = Self.traceSQL(columns: trajectory).flatMap { try? opened.prepare($0) }
+            maxTrajectorySeqStatement = tracesStatement == nil ? nil
+                : try? opened.prepare("SELECT max(seq) FROM trajectory_runtime_events WHERE session_id = ?1")
         } catch let error as OpenError {
             throw error
         } catch let error as SQLiteError {
@@ -122,6 +132,31 @@ final class OpenClawDatabase {
         } catch {
             throw .unreadable
         }
+    }
+
+    /// The one query on `trajectory_runtime_events` (METRICS 4.14): `?1` the window, `?2` the highest `seq` read so far.
+    /// A compressed row cannot be matched in SQL, but the row right after a plain `session.started` is a trace row by
+    /// construction. A database from 2026.8 has no codec columns and no compressed rows.
+    static func traceSQL(columns: Set<String>) -> String? {
+        guard columns.isSuperset(of: ["session_id", "seq", "event_json", "created_at"]) else { return nil }
+        let plain = "length(e.event_json) <= \(maxTraceBytes) AND instr(e.event_json, '\"type\":\"trace.metadata\"') > 0"
+        guard columns.isSuperset(of: ["event_payload", "event_codec", "event_utf8_bytes"]) else {
+            return """
+                SELECT e.seq, e.created_at, e.event_json, NULL, NULL, NULL FROM trajectory_runtime_events e
+                WHERE e.session_id = ?1 AND e.seq > ?2 AND \(plain) ORDER BY e.seq
+                """
+        }
+        return """
+            SELECT e.seq, e.created_at, e.event_json, e.event_payload, e.event_codec, e.event_utf8_bytes
+            FROM trajectory_runtime_events e
+            WHERE e.session_id = ?1 AND e.seq > ?2 AND (
+              (e.event_codec IS NULL AND \(plain))
+              OR (e.event_codec = 'br' AND e.event_utf8_bytes <= \(maxTraceBytes) AND length(e.event_payload) <= \(maxTraceBytes)
+                AND EXISTS (SELECT 1 FROM trajectory_runtime_events p
+                            WHERE p.session_id = e.session_id AND p.seq = e.seq - 1 AND p.event_codec IS NULL
+                              AND instr(p.event_json, '"type":"session.started"') > 0)))
+            ORDER BY e.seq
+            """
     }
 
     private static func tableNames(_ connection: SQLiteConnection) throws -> Set<String> {
@@ -195,6 +230,41 @@ final class OpenClawDatabase {
         var value: Int64?
         try maxSeqStatement.forEachRow { row in value = row.optionalInt64(0) }
         return value
+    }
+
+    /// The window's selected trajectory rows above `seq`, in order: each row's `seq` with its trace, nil when the row does
+    /// not decode or is no `trace.metadata` event. Nothing else of a row leaves this call.
+    func traces(session id: String, after seq: Int64, _ body: (Int64, OpenClawTrace?) -> Void) throws {
+        guard let tracesStatement else { return }
+        tracesStatement.bind(1, id)
+        tracesStatement.bind(2, seq)
+        try tracesStatement.forEachRow { row in
+            body(row.int64(0), Self.trace(row))
+        }
+    }
+
+    /// The highest trajectory `seq` of a window, of any row; 0 without any.
+    func maxTrajectorySeq(session id: String) throws -> Int64 {
+        guard let maxTrajectorySeqStatement else { return 0 }
+        maxTrajectorySeqStatement.bind(1, id)
+        var value: Int64?
+        try maxTrajectorySeqStatement.forEachRow { row in value = row.optionalInt64(0) }
+        return value ?? 0
+    }
+
+    private static func trace(_ row: SQLiteStatement) -> OpenClawTrace? {
+        guard let created = row.optionalInt64(1) else { return nil }
+        let modes: ExecutionModes?
+        if row.isNull(4) {
+            modes = row.type(2) == SQLITE_TEXT ? row.withText(2, OpenClawTraceExtractor.modes) : nil
+        } else if row.string(4) == "br", row.type(3) == SQLITE_BLOB, let size = row.optionalInt64(5), (1...Int64(maxTraceBytes)).contains(size) {
+            modes = row.withBlob(3) { stream in
+                Brotli.decode(stream, size: Int(size))?.withUnsafeBytes(OpenClawTraceExtractor.modes)
+            }
+        } else {
+            modes = nil
+        }
+        return modes.map { OpenClawTrace(createdMs: created, modes: $0) }
     }
 
     /// The rows of a window above `seq`, in order.

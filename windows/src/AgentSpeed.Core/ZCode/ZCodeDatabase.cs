@@ -12,6 +12,9 @@ internal sealed record ZCodeRow(
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
 
+    /// <summary>A title, compaction or verification call: it runs at the catalog's lowest level and is not the agent's current value.</summary>
+    public bool Auxiliary { get; init; }
+
     public string AgentId(string databasePath) => databasePath + "#" + SessionId;
 
     public ParsedResponse? Response(string databasePath)
@@ -64,11 +67,13 @@ internal sealed class ZCodeDatabase : IDisposable
             && HasColumns(_connection, "message", ["id", "session_id", "data"]);
         var modeColumn = hasModes ? ", CASE WHEN length(CAST(m.data AS BLOB))<=1048576 THEN m.data END" : ", NULL";
         var modeJoin = hasModes ? " LEFT JOIN message m ON m.id=u.parent_user_message_id AND m.session_id=u.session_id " : " ";
+        var variant = HasColumns(_connection, "model_usage", ["variant"]) ? ", u.variant" : ", NULL";
+        var querySource = HasColumns(_connection, "model_usage", ["query_source"]) ? ", u.query_source" : ", NULL";
         using var rows = _connection.Prepare("""
             SELECT u.id,u.session_id,s.parent_id,s.directory,s.time_created,u.model_id,u.provider_id,u.status,
                    u.started_at,u.completed_at,u.duration_ms,u.input_tokens,u.output_tokens,u.reasoning_tokens,
                    u.cache_creation_input_tokens,u.cache_read_input_tokens,s.time_updated
-            """ + modeColumn + " FROM model_usage u LEFT JOIN session s ON s.id=u.session_id " + modeJoin +
+            """ + modeColumn + variant + querySource + " FROM model_usage u LEFT JOIN session s ON s.id=u.session_id " + modeJoin +
             " WHERE coalesce(u.completed_at,u.started_at)>=? ORDER BY u.started_at,u.id");
         rows.Bind(1, sinceMs);
         var result = new List<ZCodeRow>();
@@ -86,7 +91,10 @@ internal sealed class ZCodeDatabase : IDisposable
                 rows.GetString(6), rows.GetString(7) ?? string.Empty, ValidTimestamp(rows.GetInt64(8)), ValidTimestamp(rows.GetNullableInt64(9)), rows.GetNullableInt64(10),
                 new TokenCounts(input, Math.Min(input, TokenCounts.Clamp(rows.GetInt64(15))), Math.Min(input, TokenCounts.Clamp(rows.GetInt64(14))),
                     output, Math.Min(output, TokenCounts.Clamp(rows.GetInt64(13)))))
-            { Modes = ZCodeModes.Read(rows.GetUtf8(17), rows.GetString(6), rows.GetString(5)) });
+            {
+                Modes = ZCodeModes.Read(rows.GetUtf8(17), rows.GetString(18), rows.GetString(6), rows.GetString(5), rows.GetNullableInt64(8)),
+                Auxiliary = rows.GetString(19) is "compact" or "session_title" or "goal_completion_verification",
+            });
         }
 
         return result;
@@ -139,8 +147,7 @@ internal sealed class ZCodeDatabase : IDisposable
                 var project = rows.GetString(6) ?? String(Get(root, "path"), "cwd");
                 result.Add(new ZCodeAgent(_connection.Path + "#" + session, session, rows.GetString(5), ValidTimestamp(rows.GetInt64(7)) ?? 0,
                     project is null ? null : PathText.Basename(project), String(root, "modelId") ?? String(root, "modelID"), phase,
-                    phase == AgentPhase.Generating ? created : null, Math.Max(ValidTimestamp(rows.GetInt64(8)) ?? 0, Math.Max(ValidTimestamp(rows.GetInt64(3)) ?? 0, completed ?? created)))
-                { Modes = ZCodeModes.Read(rows.GetUtf8(4), null, null), ModeContext = role == "user" });
+                    phase == AgentPhase.Generating ? created : null, Math.Max(ValidTimestamp(rows.GetInt64(8)) ?? 0, Math.Max(ValidTimestamp(rows.GetInt64(3)) ?? 0, completed ?? created))));
             }
             catch (JsonException)
             {

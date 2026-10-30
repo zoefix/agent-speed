@@ -20,8 +20,9 @@ internal enum ConfigCheck
 }
 
 /// <summary>
-/// The Codex runtime switch of a log set: the key <c>model.openai_runtime</c> of the profile's <c>config.yaml</c>
-/// (METRICS 4.15). A tolerant line reader for the block layout Hermes writes, not a YAML parser; no other key is read.
+/// The keys of a profile's <c>config.yaml</c> (METRICS 4.15): <c>model.openai_runtime</c>, the Codex runtime switch of a log
+/// set, and the configured <c>agent.reasoning_effort</c> and <c>agent.service_tier</c>. A tolerant line reader for the block
+/// layout Hermes writes, not a YAML parser; no other key is read.
 /// </summary>
 internal static partial class HermesConfig
 {
@@ -73,14 +74,72 @@ internal static partial class HermesConfig
     }
 
     /// <summary>
+    /// The scalars <c>reasoning_effort</c> and <c>service_tier</c> of a top-level <c>agent</c> block, read like the Codex
+    /// runtime key: the last key line of each decides, and a value that is no plain scalar is null.
+    /// </summary>
+    public static IReadOnlyDictionary<string, string?> AgentScalars(string text)
+    {
+        if (text.StartsWith('\uFEFF'))
+        {
+            text = text[1..];
+        }
+
+        var found = new Dictionary<string, string?>(StringComparer.Ordinal);
+        var inAgent = false;
+        int? indent = null;
+        foreach (var raw in text.Split('\n'))
+        {
+            var line = raw.EndsWith('\r') ? raw[..^1] : raw;
+            var rest = line.AsSpan().TrimStart(" \t");
+            if (rest.IsEmpty || rest[0] == '#')
+            {
+                continue;
+            }
+
+            var body = line.AsSpan().TrimStart(' ');
+            var depth = line.Length - body.Length;
+            if (depth == 0)
+            {
+                inAgent = AgentHeader().IsMatch(line);
+                indent = null;
+                continue;
+            }
+
+            if (!inAgent)
+            {
+                continue;
+            }
+
+            indent ??= depth;
+            if (depth == indent && AgentKey().Match(body.ToString()) is { Success: true } key)
+            {
+                var value = Scalar().Match(key.Groups["rest"].Value);
+                found[key.Groups["key"].Value] = !value.Success ? null
+                    : value.Groups[1].Success ? value.Groups[1].Value : value.Groups[2].Success ? value.Groups[2].Value : value.Groups[3].Value;
+            }
+        }
+
+        return found;
+    }
+
+    /// <summary>The configured effort and tier of config.yaml text (EXECUTION-MODES, Configured values).</summary>
+    public static ExecutionModes ConfiguredModes(string text)
+    {
+        var scalars = AgentScalars(text);
+        return ExecutionModeNative.HermesEffort(scalars.GetValueOrDefault("reasoning_effort"), ExecutionModeEvidence.Configured, ExecutionModeScope.Configuration)
+            .Merge(ExecutionModeNative.HermesServiceTier(scalars.GetValueOrDefault("service_tier"), ExecutionModeEvidence.Configured, ExecutionModeScope.Configuration));
+    }
+
+    /// <summary>
     /// Checks the file: when it is a regular file (a link is followed) whose modification time or size differs from
     /// <paramref name="known"/>, reads it with read, write and delete sharing and closes it right away.
     /// </summary>
     /// <param name="known">The (modification ticks, size) of the last successful read; null before the first.</param>
-    public static ConfigCheck Check(string? path, (long Ticks, long Size)? known, out (long Ticks, long Size)? signature, out bool codex)
+    public static ConfigCheck Check(string? path, (long Ticks, long Size)? known, out (long Ticks, long Size)? signature, out bool codex, out ExecutionModes configured)
     {
         signature = null;
         codex = false;
+        configured = ExecutionModes.Empty;
         if (path is null)
         {
             return ConfigCheck.Off;
@@ -141,7 +200,13 @@ internal static partial class HermesConfig
             return ConfigCheck.Failed;
         }
 
-        codex = length <= MaxBytes && SelectsCodexRuntime(Utf8.GetString(data, 0, length));
+        if (length <= MaxBytes)
+        {
+            var text = Utf8.GetString(data, 0, length);
+            codex = SelectsCodexRuntime(text);
+            configured = ConfiguredModes(text);
+        }
+
         return ConfigCheck.Read;
     }
 
@@ -150,6 +215,19 @@ internal static partial class HermesConfig
 
     [GeneratedRegex("^(?:openai_runtime|\"openai_runtime\"|'openai_runtime')[ \\t]*:(|[ \\t].*)\\z", RegexOptions.CultureInvariant)]
     private static partial Regex RuntimeKey();
+
+    [GeneratedRegex("^(?:agent|\"agent\"|'agent')[ \\t]*:(?:[ \\t]+(?:#.*)?)?\\z", RegexOptions.CultureInvariant)]
+    private static partial Regex AgentHeader();
+
+    [GeneratedRegex(
+        "^(?:(?<key>reasoning_effort|service_tier)|\"(?<key>reasoning_effort|service_tier)\"|'(?<key>reasoning_effort|service_tier)')[ \\t]*:(?<rest>|[ \\t].*)\\z",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex AgentKey();
+
+    [GeneratedRegex(
+        "^[ \\t]+(?:\"[ \\t]*([A-Za-z0-9._:-]+)[ \\t]*\"|'[ \\t]*([A-Za-z0-9._:-]+)[ \\t]*'|([A-Za-z0-9._:-]+))(?:[ \\t]+#.*)?[ \\t]*\\z",
+        RegexOptions.CultureInvariant)]
+    private static partial Regex Scalar();
 
     // ASCII case-insensitive, as Python's re.I | re.A (no Kelvin sign for k).
     [GeneratedRegex(

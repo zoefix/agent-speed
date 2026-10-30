@@ -15,6 +15,8 @@ struct HermesLogSet: Sendable {
     private(set) var mainTurnMs: [String: Int64] = [:]
     private(set) var malformedLines = 0
     private(set) var codexRuntime = false
+    /// The profile's configured values, which every agent of the set shows.
+    private(set) var configuredModes: ExecutionModes = .empty
 
     init(folder: String, timeZone: TimeZone, fileID: FileID) {
         self.folder = folder
@@ -85,6 +87,23 @@ struct HermesLogSet: Sendable {
         return changed
     }
 
+    /// The profile's configured values. Returns the sessions that changed.
+    @discardableResult
+    mutating func setConfiguredModes(_ modes: ExecutionModes) -> [String] {
+        guard modes != configuredModes else { return [] }
+        configuredModes = modes
+        for sessionId in sessionOrder { agents[sessionId]?.configuredModes = modes }
+        return sessionOrder
+    }
+
+    /// A session's session-current fact (EXECUTION-MODES). True when it changed.
+    @discardableResult
+    mutating func setSessionModes(_ modes: ExecutionModes, of sessionId: String) -> Bool {
+        guard agents[sessionId] != nil, agents[sessionId]?.sessionModes != modes else { return false }
+        agents[sessionId]?.sessionModes = modes
+        return true
+    }
+
     /// Sessions of the set that are not sub-agents and started a turn since `todayStartMs`.
     func mainSessionCount(since todayStartMs: Int64) -> Int {
         mainTurnMs.values.filter { $0 >= todayStartMs }.count
@@ -93,7 +112,9 @@ struct HermesLogSet: Sendable {
     private mutating func agent(_ sessionId: String, at timeMs: Int64) -> AgentState {
         var state = agents[sessionId] ?? {
             sessionOrder.append(sessionId)
-            return AgentState(source: .hermes)
+            var state = AgentState(source: .hermes)
+            state.configuredModes = configuredModes
+            return state
         }()
         state.noteLine(at: timeMs)
         return state

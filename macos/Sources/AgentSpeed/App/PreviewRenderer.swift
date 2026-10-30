@@ -118,6 +118,7 @@ enum PreviewRenderer {
             CostPreviews.render(model: model, into: directory)
         }
         if wants("modes") { ExecutionModePreviews.render(model: model, into: directory) }
+        if wants("configured") { ConfiguredCapsulePreviews.render(model: model, into: directory) }
         #if DEBUG
         if wants("profilecard") { ProfileCardPreviews.render(model: model, into: directory) }
         #endif

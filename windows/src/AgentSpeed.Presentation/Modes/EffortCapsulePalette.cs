@@ -21,6 +21,12 @@ public static class EffortCapsulePalette
 
     public const double StrokeOpacity = 0.08;
 
+    /// <summary>The configured form's dashed stroke: label 22 % (dark 26 %).</summary>
+    public static double ConfiguredStrokeOpacity(bool dark) => dark ? 0.26 : 0.22;
+
+    /// <summary>The configured form's unlit bars: label 10 % (dark 12 %).</summary>
+    public static double ConfiguredUnlitOpacity(bool dark) => dark ? 0.12 : 0.10;
+
     /// <summary>The history's unknown bar: label 12 %.</summary>
     public const double UnknownBarOpacity = 0.12;
 

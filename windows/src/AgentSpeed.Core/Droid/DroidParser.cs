@@ -238,7 +238,8 @@ internal sealed class DroidParser : TranscriptParser
 
         Deduper.TryClaim(key, AgentId, out _);
         _seen.Add(key);
-        _context = ExecutionModes.Of(ExecutionModeNative.Effort(line.Effort, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request));
+        _context = ExecutionModes.Of(ExecutionModeNative.Effort(line.Effort, ExecutionModeEvidence.Recorded, ExecutionModeScope.Request))
+            .Merge(ExecutionModeNative.DroidModel(line.ModelId));
         Modes = _context;
         var start = _compactionOffset ?? _readFrom;
         _open.Add(new OpenCall(

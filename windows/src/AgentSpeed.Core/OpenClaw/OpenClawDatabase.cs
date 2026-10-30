@@ -22,7 +22,8 @@ internal sealed record OpenClawWindow(string SessionId, long? CreatedMs, long? U
 /// <summary>
 /// Read-only access to one OpenClaw agent database (METRICS 4.14): opened like OpenCode's (4.5), never written, and only
 /// the tables <c>session_windows</c>, <c>session_nodes</c>, <c>transcript_events</c> and
-/// <c>transcript_rewrite_watermarks</c> are read. Not thread-safe; callers keep reads inside <see cref="Read{T}"/>.
+/// <c>transcript_rewrite_watermarks</c> are read, with the <c>trace.metadata</c> rows of <c>trajectory_runtime_events</c>.
+/// Not thread-safe; callers keep reads inside <see cref="Read{T}"/>.
 /// </summary>
 internal sealed class OpenClawDatabase : IDisposable
 {
@@ -32,9 +33,20 @@ internal sealed class OpenClawDatabase : IDisposable
     /// <summary>A longer entry is skipped like a long line (METRICS 4).</summary>
     public const int MaxEntryBytes = 32 * 1024 * 1024;
 
+    private const string TraceColumns = "SELECT e.seq, e.created_at, e.event_json, ";
+    private const string TraceWindow = " FROM trajectory_runtime_events e WHERE e.session_id = ?1 AND e.seq > ?2 AND (";
+    private const string PlainTrace = "length(e.event_json) <= 262144 AND instr(e.event_json, '\"type\":\"trace.metadata\"') > 0";
+
+    // A compressed row's text is empty, so nothing in it can be matched: the row right after a plain session.started is a trace.
+    private const string TraceAfterSessionStart =
+        " OR (e.event_codec = 'br' AND e.event_utf8_bytes <= 262144 AND length(e.event_payload) <= 262144"
+        + " AND EXISTS (SELECT 1 FROM trajectory_runtime_events p WHERE p.session_id = e.session_id AND p.seq = e.seq - 1"
+        + " AND p.event_codec IS NULL AND instr(p.event_json, '\"type\":\"session.started\"') > 0))";
+
     private readonly SqliteConnection _connection;
     private readonly string _windowsSql;
     private readonly string _rowsSql;
+    private readonly string? _tracesSql;
     private readonly bool _hasNodes;
     private readonly bool _hasWatermarks;
 
@@ -59,6 +71,21 @@ internal sealed class OpenClawDatabase : IDisposable
         var events = Columns(connection, "transcript_events");
         var zstd = events.Contains("event_zstd") && events.Contains("event_utf8_bytes") ? "event_zstd, event_utf8_bytes" : "NULL, NULL";
         _rowsSql = "SELECT seq, event_json, " + zstd + " FROM transcript_events WHERE session_id = ?1 AND seq > ?2 ORDER BY seq";
+        _tracesSql = tables.Contains("trajectory_runtime_events") ? TracesSql(Columns(connection, "trajectory_runtime_events")) : null;
+    }
+
+    // Without the codec columns (a database from 2026.8) there are no compressed rows.
+    private static string? TracesSql(HashSet<string> columns)
+    {
+        if (!columns.IsSupersetOf(["session_id", "seq", "event_json", "created_at"]))
+        {
+            return null;
+        }
+
+        return columns.IsSupersetOf(["event_payload", "event_codec", "event_utf8_bytes"])
+            ? TraceColumns + "e.event_payload, e.event_codec, e.event_utf8_bytes" + TraceWindow + "(e.event_codec IS NULL AND " + PlainTrace + ")"
+                + TraceAfterSessionStart + ") ORDER BY e.seq"
+            : TraceColumns + "NULL, NULL, NULL" + TraceWindow + PlainTrace + ") ORDER BY e.seq";
     }
 
     /// <summary>The database has the session tables (agent schema 8 and later).</summary>
@@ -212,6 +239,42 @@ internal sealed class OpenClawDatabase : IDisposable
         }
 
         return last;
+    }
+
+    /// <summary>
+    /// The window's selected trajectory rows above <paramref name="afterSeq"/> in <c>seq</c> order, each decoded (null when it
+    /// is not a trace). Returns the highest <c>seq</c> visited; a database without the table visits none.
+    /// </summary>
+    public long Traces(string sessionId, long afterSeq, Action<long, OpenClawTrace?> onRow)
+    {
+        if (_tracesSql is null)
+        {
+            return afterSeq;
+        }
+
+        using var statement = _connection.Prepare(_tracesSql);
+        statement.Bind(1, sessionId).Bind(2, afterSeq);
+        var last = afterSeq;
+        while (statement.Step())
+        {
+            var seq = Integer(statement, 0) ?? last;
+            last = Math.Max(last, seq);
+            onRow(seq, Integer(statement, 1) is { } created ? Trace(statement, created) : null);
+        }
+
+        return last;
+    }
+
+    private static OpenClawTrace? Trace(SqliteStatement statement, long createdMs)
+    {
+        if (statement.IsNull(4))
+        {
+            return statement.ColumnType(2) == SqliteNative.ColumnText ? OpenClawTraces.Read(createdMs, statement.GetUtf8(2)) : null;
+        }
+
+        return statement.ColumnType(3) == SqliteNative.ColumnBlob && Integer(statement, 5) is { } size
+            ? OpenClawTraces.ReadCompressed(createdMs, statement.GetString(4), statement.GetBlob(3), size)
+            : null;
     }
 
     /// <summary>The first row whose entry is the window header (METRICS 4.14, read before a window started at its end).</summary>

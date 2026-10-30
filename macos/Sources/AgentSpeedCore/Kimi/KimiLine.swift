@@ -5,7 +5,12 @@ struct KimiLine: Sendable {
     var time: Int64?
     var agent: String?
     var model: String?
+    /// The line has a `model` member, or an assistant message a `meta.model.model`.
     var hasModeSelection = false
+    /// `thinkingEffort` of `profile.bind`, `config.update` and `llm.request`.
+    var thinkingEffort: String?
+    /// The legacy `thinkingLevel` of `config.update`.
+    var thinkingLevel: String?
     var provider: String?
     var role: String?
     var messageId: String?
@@ -25,6 +30,8 @@ enum KimiLineExtractor {
         var line = KimiLine(type: type, time: timestamp(json["time"] ?? json["created_at"]), agent: json["agentId"]?.string,
                             model: json["model"]?.string, provider: json["provider"]?.string)
         line.hasModeSelection = json["model"] != nil
+        line.thinkingEffort = json["thinkingEffort"]?.string
+        line.thinkingLevel = json["thinkingLevel"]?.string
         line.cwd = json["environmentDisclosure"]?["cwd"]?.string ?? json["cwd"]?.string ?? json["workDir"]?.string ?? json["work_dir"]?.string
         if type == "context.append_loop_event", let event = json["event"] {
             line.event = event["type"]?.string ?? event.string

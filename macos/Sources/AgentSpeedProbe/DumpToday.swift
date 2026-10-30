@@ -80,7 +80,7 @@ enum DumpToday {
     }
 
     /// `{mode, evidence[, provider]}`, or null when unknown, like `reference.py`.
-    private static func attribution(_ value: ExecutionModeAttribution?) -> String {
+    static func attribution(_ value: ExecutionModeAttribution?) -> String {
         guard let value else { return "null" }
         var object = JSONLine()
         object.add("mode", value.mode)

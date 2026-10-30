@@ -16,6 +16,8 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
 
     private readonly HashSet<string> _pendingToolCalls = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ParsedResponse> _responses = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, long> _stamps = new(StringComparer.Ordinal);
+    private readonly List<OpenClawTrace> _traces = [];
     private bool _headerSeen;
 
     public OpenClawParser(string databasePath, OpenClawWindow window, IDeduper deduper)
@@ -68,9 +70,35 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         base.Reset();
         _pendingToolCalls.Clear();
         _responses.Clear();
+        _stamps.Clear();
+        _traces.Clear();
         _headerSeen = false;
         HeaderMs = null;
         RestoreWindowState();
+    }
+
+    /// <summary>
+    /// Takes new <c>trace.metadata</c> rows (EXECUTION-MODES, OpenClaw): the latest row is the current value, and a row read
+    /// after the responses it covers updates them like any upsert.
+    /// </summary>
+    public void ApplyTraces(IReadOnlyCollection<OpenClawTrace> traces, IResponseSink sink)
+    {
+        if (traces.Count == 0)
+        {
+            return;
+        }
+
+        _traces.AddRange(traces);
+        Modes = _traces[^1].Modes;
+        foreach (var (key, previous) in _responses.ToList())
+        {
+            var response = previous with { Modes = ModesAt(_stamps[key]) };
+            if (response != previous)
+            {
+                _responses[key] = response;
+                sink.OnResponse(response, isCompletion: false);
+            }
+        }
     }
 
     public override void Apply(in PiLine line, IResponseSink sink)
@@ -175,7 +203,7 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         if (!mirror && !call.UsageUnavailable && call.HasUsage)
         {
             var timed = !Window.Delegated && !call.ApiIsCli && !failed;
-            Emit(key, timed ? line.StartedMs : null, ts, call.Tokens with { Reasoning = call.ReasoningTokens }, call.Model, call.Provider, sink);
+            Emit(key, timed ? line.StartedMs : null, ts, line.StartedMs ?? ts, call.Tokens with { Reasoning = call.ReasoningTokens }, call.Model, call.Provider, sink);
             SetModel(call.Model);
         }
 
@@ -207,17 +235,33 @@ internal sealed class OpenClawParser : TranscriptParser<PiLine>
         }
     }
 
-    private void Emit(string key, long? startMs, long endMs, TokenCounts tokens, string? model, string? provider, IResponseSink sink)
+    private void Emit(string key, long? startMs, long endMs, long stamp, TokenCounts tokens, string? model, string? provider, IResponseSink sink)
     {
         var isCompletion = Deduper.TryClaim(key, AgentId, out _);
-        var response = new ParsedResponse(key, SourceKind.OpenClaw, AgentId, model, startMs, endMs, tokens, Final: true, Provider: provider);
+        var response = new ParsedResponse(key, SourceKind.OpenClaw, AgentId, model, startMs, endMs, tokens, Final: true, Provider: provider)
+        { Modes = ModesAt(stamp) };
         if (_responses.TryGetValue(key, out var previous) && previous == response)
         {
             return;
         }
 
         _responses[key] = response;
+        _stamps[key] = stamp;
         sink.OnResponse(response, isCompletion);
+    }
+
+    // The window's latest row at or before the stamp: a trimmed row makes its attempt unknown instead of the attempt before it reaching further.
+    private ExecutionModes ModesAt(long stamp)
+    {
+        for (var i = _traces.Count - 1; i >= 0; i--)
+        {
+            if (_traces[i].CreatedMs <= stamp)
+            {
+                return _traces[i].Modes;
+            }
+        }
+
+        return ExecutionModes.Empty;
     }
 
     private static string Key(string id, long stamp) => string.Create(CultureInfo.InvariantCulture, $"openclaw:{id}:{stamp}");

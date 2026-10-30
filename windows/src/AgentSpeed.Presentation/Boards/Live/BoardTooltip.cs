@@ -32,7 +32,7 @@ public static class BoardTooltip
             lines.Add(root.Model);
         }
 
-        lines.AddRange(EffortCapsule.Of(root.Modes).TooltipLines(loc));
+        lines.AddRange(EffortCapsule.Of(root).TooltipLines(loc));
         lines.Add(SpeedLine(group, loc));
         return lines;
     }

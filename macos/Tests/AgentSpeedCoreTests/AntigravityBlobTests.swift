@@ -115,7 +115,7 @@ struct AntigravityBlobTests {
             finishedGeneratingMs: AG.ms("09:00:04.250"), completedMs: AG.ms("09:00:04.300"),
             lastCompletedChunkMs: AG.ms("09:00:04.200"), startedMs: AG.ms("09:00:01.060"),
             usage: AntigravityUsage(input: 12000, output: 480, cacheRead: 0, thinking: 300, response: 180,
-                                    key: "resp-ag-main-1")
+                                    key: "resp-ag-main-1", tier: "standard")
         )
         #expect(Self.step(blob) == .line(expected))
         #expect(expected.timestamps.count == 6)
@@ -151,7 +151,7 @@ struct AntigravityBlobTests {
 
     @Test func usageFieldsAreRaw() {
         let blob = PB.bytes(9, AG.usage(input: 3000, cache: 1000, thinking: 64, response: 136))
-        let usage = AntigravityUsage(input: 3000, output: 0, cacheRead: 1000, thinking: 64, response: 136)
+        let usage = AntigravityUsage(input: 3000, output: 0, cacheRead: 1000, thinking: 64, response: 136, tier: "standard")
         #expect(Self.step(blob) == .line(AntigravityStepMetadata(usage: usage)))
         #expect(Self.step(AG.step(created: 1000)) == .line(AntigravityStepMetadata(createdMs: 1000)))
         #expect(Self.step(PB.bytes(9, [])) == .line(AntigravityStepMetadata(usage: AntigravityUsage())))
@@ -206,15 +206,16 @@ struct AntigravityBlobTests {
 
     @Test func generationModelFallsBackToDisplayName() {
         #expect(Self.generation(AG.generation([1], responseModel: "gemini-3.1-pro-high", display: "Gemini 3.1 Pro (High)"))
-            == .line(AntigravityGeneration(stepIndices: [1], model: "gemini-3.1-pro-high")))
+            == .line(AntigravityGeneration(stepIndices: [1], model: "gemini-3.1-pro-high", responseModel: "gemini-3.1-pro-high",
+                                         label: "Gemini 3.1 Pro (High)")))
         #expect(Self.generation(AG.generation([5], display: "Gemini 3.1 Pro (High)"))
-            == .line(AntigravityGeneration(stepIndices: [5], model: "Gemini 3.1 Pro (High)")))
+            == .line(AntigravityGeneration(stepIndices: [5], model: "Gemini 3.1 Pro (High)", label: "Gemini 3.1 Pro (High)")))
         #expect(Self.generation(AG.generation([2])) == .line(AntigravityGeneration(stepIndices: [2])))
         #expect(Self.generation(PB.packed(2, [4])) == .line(AntigravityGeneration(stepIndices: [4])))
         #expect(Self.generation(PB.uint(1, 3) + PB.uint(2, 4)) == .line(AntigravityGeneration(stepIndices: [4])))
         #expect(Self.generation(PB.string(1, "x") + PB.uint(2, 4)) == .malformed)
         let twice = PB.bytes(1, AG.chatModel(responseModel: "first")) + PB.bytes(1, AG.chatModel(display: "second"))
-        #expect(Self.generation(twice) == .line(AntigravityGeneration(model: "second")))
+        #expect(Self.generation(twice) == .line(AntigravityGeneration(model: "second", label: "second")))
     }
 
     @Test func generationStepIndicesArePackedOrUnpacked() {
@@ -229,9 +230,9 @@ struct AntigravityBlobTests {
         #expect(Self.generation(PB.bytes(1, [0x0F]) + PB.packed(2, [1])) == .malformed)
         #expect(Self.generation(PB.bytes(2, [0x80])) == .malformed)
         #expect(Self.generation(PB.bytes(1, [0x0F]) + PB.bytes(1, AG.chatModel(display: "ok")))
-            == .line(AntigravityGeneration(model: "ok")))
+            == .line(AntigravityGeneration(model: "ok", label: "ok")))
         #expect(Self.generation(PB.bytes(1, PB.bytes(4, [0x0F]) + PB.string(19, "m")))
-            == .line(AntigravityGeneration(model: "m")))
+            == .line(AntigravityGeneration(model: "m", responseModel: "m")))
     }
 
     // MARK: - Executors
@@ -334,7 +335,7 @@ struct AntigravityBlobTests {
         #expect(Self.trajectory(PB.bytes(7, Array("file:///x/%C3".utf8)))
             == .line(AntigravityTrajectory(project: "\u{FFFD}", cwdPath: "/x/\u{FFFD}")))
         #expect(Self.generation(PB.message(1, PB.bytes(21, [0xE2, 0x82, 0x41])))
-            == .line(AntigravityGeneration(model: "\u{FFFD}A")))
+            == .line(AntigravityGeneration(model: "\u{FFFD}A", label: "\u{FFFD}A")))
         #expect(Self.executor(PB.message(10, PB.message(1, PB.bytes(28, [0xF0, 0x80, 0x80, 0x80]))))
             == .line(AntigravityExecutor(model: String(repeating: "\u{FFFD}", count: 4))))
     }
@@ -426,7 +427,7 @@ struct AntigravityBlobTests {
 
     @Test func fixtureDatabasesHaveTheExpectedMalformedBlobs() throws {
         let databases = try Self.databases
-        #expect(databases.count == 11)
+        #expect(databases.count == 12)
         var checked = 0
         for (relative, expected) in databases.sorted(by: { $0.key < $1.key }) where expected["unsupported"] == nil {
             let decoded = try Self.decode(relative)
@@ -440,7 +441,7 @@ struct AntigravityBlobTests {
             #expect(!decoded.steps.isEmpty, "\(relative)")
             checked += 1
         }
-        #expect(checked == 10)
+        #expect(checked == 11)
     }
 
     @Test func mainConversationDecodesAsWritten() throws {
@@ -448,9 +449,11 @@ struct AntigravityBlobTests {
         #expect(decoded.trajectory == [.line(AntigravityTrajectory(
             createdMs: AG.ms("09:00:00.000"), project: "star map", cwdPath: "/Users/dev/projects/star map"))])
         #expect(decoded.generations == [
-            .line(AntigravityGeneration(stepIndices: [1], model: "gemini-3.1-pro-high")),
-            .line(AntigravityGeneration(stepIndices: [3], model: "gemini-3.1-pro-high-exp-b")),
-            .line(AntigravityGeneration(stepIndices: [5], model: "Gemini 3.1 Pro (High)")),
+            .line(AntigravityGeneration(stepIndices: [1], model: "gemini-3.1-pro-high", responseModel: "gemini-3.1-pro-high",
+                                         label: "Gemini 3.1 Pro (High)")),
+            .line(AntigravityGeneration(stepIndices: [3], model: "gemini-3.1-pro-high-exp-b", responseModel: "gemini-3.1-pro-high-exp-b",
+                                         label: "Gemini 3.1 Pro (High)")),
+            .line(AntigravityGeneration(stepIndices: [5], model: "Gemini 3.1 Pro (High)", label: "Gemini 3.1 Pro (High)")),
             nil,
         ])
         #expect(decoded.executors == [.line(AntigravityExecutor(terminationReason: 4, lastStepIdx: 8, model: "gemini-3.1-pro"))])
