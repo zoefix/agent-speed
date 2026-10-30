@@ -41,8 +41,9 @@ enum SyntheticClicks {
 
 /// The day under the pointer is the day drawn there (issue #42: on macOS 27 the pointer's local space behind
 /// `.offset` still includes the offset, so the chart picked a day one y-axis width to the right).
-@Suite("History chart pointer", .enabled("needs a session that delivers synthesized clicks") {
-    await MainActor.run { SyntheticClicks.delivered }
+@Suite("History chart pointer", .enabled("needs an interactive session that delivers synthesized clicks; not on CI runners") {
+    if ProcessInfo.processInfo.environment["CI"] != nil { return false }
+    return await MainActor.run { SyntheticClicks.delivered }
 })
 @MainActor
 struct HistoryChartPointerTests {
@@ -87,26 +88,21 @@ struct HistoryChartPointerTests {
         host.layoutSubtreeIfNeeded()
         RunLoop.main.run(until: Date().addingTimeInterval(0.3))
 
-        // The plot starts right of the y-axis labels; its first hit is the first point of the range's first day.
-        var first: (x: CGFloat, day: DayKey)?
-        for x in stride(from: CGFloat(1), to: size.width / 2, by: 2) {
-            if let day = click(window, x: x, interaction: interaction) {
-                first = (x, day)
-                break
+        // Clicks land only on the plot, so its edges are found by bisection from the middle (about 20 clicks): the
+        // first hit right of the y-axis labels is the range's first day, the last one before the trailing axis its last.
+        func edge(towards outside: CGFloat) -> (x: CGFloat, day: DayKey)? {
+            let inside = size.width / 2
+            guard let day = click(window, x: inside, interaction: interaction) else { return nil }
+            var hit = (x: inside, day: day), miss = outside
+            while abs(hit.x - miss) > 0.5 {
+                let middle = (hit.x + miss) / 2
+                if let day = click(window, x: middle, interaction: interaction) { hit = (middle, day) } else { miss = middle }
             }
+            return hit
         }
-        let hit = try #require(first, "no click reached the plot")
-        #expect(hit.x > 10, "the y-axis labels sit left of the plot")
-        #expect(hit.day == chart.range.start)
-
-        // And the last point before the trailing axis is the range's last day.
-        var last: DayKey?
-        for x in stride(from: size.width - 1, to: size.width / 2, by: -2) {
-            if let day = click(window, x: x, interaction: interaction) {
-                last = day
-                break
-            }
-        }
-        #expect(last == chart.range.end)
+        let first = try #require(edge(towards: 0), "no click reached the plot")
+        #expect(first.x > 10, "the y-axis labels sit left of the plot")
+        #expect(first.day == chart.range.start)
+        #expect(edge(towards: size.width)?.day == chart.range.end)
     }
 }
