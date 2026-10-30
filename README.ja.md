@@ -14,7 +14,7 @@
 
 ## インストール
 
-**macOS 14 以降**（Apple Silicon・Intel）——ターミナルに貼り付け：
+**macOS 14 以降**（Apple Silicon・Intel）**と Linux**（x86_64・arm64）——ターミナルに貼り付け：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh | sh
@@ -28,14 +28,7 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 これだけです。インストーラーが GitHub から最新版をダウンロードし、SHA-256 チェックサムを検証してインストール・起動します。同じコマンドを再実行すると更新できます。
 
-**Linux**（x86_64 と arm64。glibc 2.35 以降、Ubuntu 22.04 や Debian 12 以降など）——[最新リリース](https://github.com/zoefix/agent-speed/releases/latest)からダウンロードし、`SHA256SUMS-Linux-<arch>.txt` で確認してください。AppImage はそのまま実行でき、アプリ内から更新できます。`.deb` は `/opt/agent-speed` にインストールされます：
-
-```sh
-chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
-sudo apt install ./agent-speed_*_amd64.deb
-```
-
-トレイアイコンには StatusNotifierItem が必要です。KDE Plasma は標準対応、GNOME では AppIndicator 拡張を有効にしてください（Ubuntu は標準搭載）。
+Linux ではスクリプトが AppImage を `~/.local/share/agent-speed` にインストールし（以後はアプリ内から更新できます）、アプリケーションメニューに追加します。x86_64 は glibc 2.35 以降（Ubuntu 22.04、Debian 12 以降）、arm64 は 2.39 以降（Ubuntu 24.04、Debian 13 以降）が必要です。トレイアイコンには StatusNotifierItem が必要です。KDE Plasma は標準対応、GNOME では AppIndicator 拡張を有効にしてください（Ubuntu は標準搭載）。パッケージで入れたい場合は、[最新リリース](https://github.com/zoefix/agent-speed/releases/latest)の `.deb`（`sudo apt install ./agent-speed_*_amd64.deb`）を使い、`SHA256SUMS-Linux-<arch>.txt` で確認してください。
 
 <details>
 <summary>アンインストール</summary>

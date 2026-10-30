@@ -2,6 +2,7 @@ name: Linux
 
 # The Linux desktop version: core tests on every push and pull request; on a vX.Y.Z tag, the AppImage and the .deb of
 # both architectures are attached to that release with their own checksum files (UPDATES 1, SHA256SUMS-Linux-<arch>.txt).
+# Run it by hand with an existing release tag to build the packages again and attach them to that release.
 on:
   push:
     branches: [main, linux]
@@ -9,6 +10,11 @@ on:
     paths: ["linux/**", "spec/**", ".github/workflows/linux.yml"]
   pull_request:
     paths: ["linux/**", "spec/**", ".github/workflows/linux.yml"]
+  workflow_dispatch:
+    inputs:
+      release:
+        description: "Existing release tag (vX.Y.Z) to build for and attach the packages to"
+        required: true
 
 permissions:
   contents: read
@@ -34,12 +40,14 @@ jobs:
   package:
     needs: test
     strategy:
+      fail-fast: false
       matrix:
         include:
           - runner: ubuntu-22.04
             qtarch: linux_gcc_64
             host: linux
-          - runner: ubuntu-22.04-arm
+          # Qt's arm64 binaries are built on Ubuntu 24.04 (glibc 2.38+, the GCC 13 runtime), so arm64 packages are too.
+          - runner: ubuntu-24.04-arm
             qtarch: linux_gcc_arm64
             host: linux_arm64
     runs-on: ${{ matrix.runner }}
@@ -64,9 +72,18 @@ jobs:
           cache: true
       - name: Version
         id: version
+        env:
+          RELEASE: ${{ github.event.inputs.release }}
         run: |
-          if [[ "$GITHUB_REF" == refs/tags/v* ]]; then
+          if [[ "$RELEASE" =~ ^v[0-9]+\.[0-9]+\.[0-9]+$ ]]; then
+            echo "value=${RELEASE#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=$RELEASE" >> "$GITHUB_OUTPUT"
+          elif [[ -n "$RELEASE" ]]; then
+            echo "Not a release tag: $RELEASE" >&2
+            exit 1
+          elif [[ "$GITHUB_REF" == refs/tags/v* ]]; then
             echo "value=${GITHUB_REF_NAME#v}" >> "$GITHUB_OUTPUT"
+            echo "tag=$GITHUB_REF_NAME" >> "$GITHUB_OUTPUT"
           else
             echo "value=$(sed -nE 's/^project\(AgentSpeedLinux VERSION ([0-9.]+).*/\1/p' linux/CMakeLists.txt)-dev" >> "$GITHUB_OUTPUT"
           fi
@@ -86,15 +103,16 @@ jobs:
           name: agent-speed-linux-${{ matrix.host }}
           path: dist/*
       - name: Attach to the release
-        if: startsWith(github.ref, 'refs/tags/v')
+        if: steps.version.outputs.tag != ''
         env:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          TAG: ${{ steps.version.outputs.tag }}
         run: |
           # release.yml creates the release; wait for it before uploading.
           for attempt in $(seq 1 30); do
-            gh release view "$GITHUB_REF_NAME" >/dev/null 2>&1 && break
+            gh release view "$TAG" >/dev/null 2>&1 && break
             sleep 20
           done
-          gh release upload "$GITHUB_REF_NAME" dist/* --clobber
+          gh release upload "$TAG" dist/* --clobber
     permissions:
       contents: write

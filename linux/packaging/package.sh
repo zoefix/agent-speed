@@ -60,6 +60,9 @@ ln -s /opt/agent-speed/bin/agent-speed "$deb/usr/bin/agent-speed"
 cp "$repo/linux/app/packaging/agent-speed.desktop" "$deb/usr/share/applications/"
 cp "$repo/linux/app/packaging/agent-speed.svg" "$deb/usr/share/icons/hicolor/scalable/apps/"
 size=$(du -sk "$deb" | cut -f1)
+# The binaries need at most the build machine's C and C++ runtimes (arm64 builds on a newer Ubuntu, whose Qt needs them).
+glibc=$(getconf GNU_LIBC_VERSION | awk '{ print $2 }')
+cxx=$(dpkg-query -W -f='${Version}' libstdc++6 | sed -E 's/^([0-9]+).*/\1/')
 cat >"$deb/DEBIAN/control" <<CONTROL
 Package: agent-speed
 Version: $version
@@ -67,8 +70,8 @@ Section: utils
 Priority: optional
 Architecture: $debarch
 Installed-Size: $size
-Depends: libc6 (>= 2.35), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3
-Maintainer: zoefix <zony1937@gmail.com>
+Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3
+Maintainer: zoefix <277453498+zoefix@users.noreply.github.com>
 Homepage: https://github.com/zoefix/agent-speed
 Description: Live token speed of your AI coding agents
  Agent Speed reads the local logs of AI coding agents and shows their live

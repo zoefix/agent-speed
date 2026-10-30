@@ -19,7 +19,7 @@
 
 ## Install
 
-**macOS 14 or later** (Apple Silicon and Intel) — paste into Terminal:
+**macOS 14 or later** (Apple Silicon and Intel) **and Linux** (x86_64 and arm64) — paste into Terminal:
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh | sh
@@ -33,14 +33,7 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 That's it. The installer downloads the latest release from GitHub, verifies its SHA-256 checksum, installs it and starts it. Run the same command again to update.
 
-**Linux** (x86_64 and arm64; glibc 2.35 or later, such as Ubuntu 22.04 or Debian 12) — download from the [latest release](https://github.com/zoefix/agent-speed/releases/latest) and check it against `SHA256SUMS-Linux-<arch>.txt`. The AppImage runs as is and updates itself from inside the app; the `.deb` installs to `/opt/agent-speed`:
-
-```sh
-chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
-sudo apt install ./agent-speed_*_amd64.deb
-```
-
-The tray icon needs a StatusNotifierItem host: KDE Plasma has one; on GNOME, enable the AppIndicator extension (built into Ubuntu).
+On Linux the script installs the AppImage into `~/.local/share/agent-speed`, where it updates itself from inside the app, and adds Agent Speed to the application menu. It needs glibc 2.35 or later on x86_64 (Ubuntu 22.04, Debian 12 and newer) and 2.39 on arm64 (Ubuntu 24.04, Debian 13 and newer). The tray icon needs a StatusNotifierItem host: KDE Plasma has one; on GNOME, enable the AppIndicator extension (built into Ubuntu). Prefer a package? The [latest release](https://github.com/zoefix/agent-speed/releases/latest) also has a `.deb` (`sudo apt install ./agent-speed_*_amd64.deb`), checked with `SHA256SUMS-Linux-<arch>.txt`.
 
 <details>
 <summary>Uninstall</summary>

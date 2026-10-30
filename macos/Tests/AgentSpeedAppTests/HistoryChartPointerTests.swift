@@ -4,9 +4,46 @@ import SwiftUI
 import Testing
 @testable import AgentSpeed
 
+/// Whether this session delivers synthesized clicks to an offscreen window: a signed-in desktop does, a CI runner
+/// without a window server session may not, and there the chart tests cannot observe anything.
+@MainActor
+enum SyntheticClicks {
+    private final class Box { var tapped = false }
+    private static var probed: Bool?
+
+    static var delivered: Bool {
+        if let probed { return probed }
+        let result = probe()
+        probed = result
+        return result
+    }
+
+    private static func probe() -> Bool {
+        _ = NSApplication.shared
+        let box = Box()
+        let window = NSWindow(contentRect: NSRect(x: -4000, y: -4000, width: 40, height: 40), styleMask: [.borderless],
+                              backing: .buffered, defer: false)
+        window.isReleasedWhenClosed = false
+        defer { window.close() }
+        window.contentView = NSHostingView(rootView: Color.clear.contentShape(Rectangle()).onTapGesture { box.tapped = true })
+        window.orderFrontRegardless()
+        RunLoop.main.run(until: Date().addingTimeInterval(0.2))
+        for type in [NSEvent.EventType.leftMouseDown, .leftMouseUp] {
+            guard let event = NSEvent.mouseEvent(with: type, location: NSPoint(x: 20, y: 20), modifierFlags: [],
+                                                 timestamp: ProcessInfo.processInfo.systemUptime, windowNumber: window.windowNumber,
+                                                 context: nil, eventNumber: 0, clickCount: 1, pressure: 1) else { return false }
+            window.sendEvent(event)
+        }
+        RunLoop.main.run(until: Date().addingTimeInterval(0.1))
+        return box.tapped
+    }
+}
+
 /// The day under the pointer is the day drawn there (issue #42: on macOS 27 the pointer's local space behind
 /// `.offset` still includes the offset, so the chart picked a day one y-axis width to the right).
-@Suite("History chart pointer")
+@Suite("History chart pointer", .enabled("needs a session that delivers synthesized clicks") {
+    await MainActor.run { SyntheticClicks.delivered }
+})
 @MainActor
 struct HistoryChartPointerTests {
     let today = DayKey("2026-10-28")!

@@ -14,7 +14,7 @@
 
 ## 安裝
 
-**macOS 14 以上**（Apple Silicon 與 Intel）——貼到「終端機」：
+**macOS 14 以上**（Apple Silicon 與 Intel）**與 Linux**（x86_64 與 arm64）——貼到終端機：
 
 ```sh
 curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh | sh
@@ -28,14 +28,7 @@ irm https://raw.githubusercontent.com/zoefix/agent-speed/main/install.ps1 | iex
 
 就這樣。安裝程式會從 GitHub 下載最新版本、驗證 SHA-256 校驗碼、安裝並啟動。之後重新執行同一行指令即可更新。
 
-**Linux**（x86_64 與 arm64；需要 glibc 2.35 以上，例如 Ubuntu 22.04、Debian 12 或更新）——從[最新版本](https://github.com/zoefix/agent-speed/releases/latest)下載，並用 `SHA256SUMS-Linux-<arch>.txt` 核對。AppImage 直接就能執行，也能在 App 內更新；`.deb` 會安裝到 `/opt/agent-speed`：
-
-```sh
-chmod +x AgentSpeed-Linux-x86_64.AppImage && ./AgentSpeed-Linux-x86_64.AppImage
-sudo apt install ./agent-speed_*_amd64.deb
-```
-
-托盤圖示需要 StatusNotifierItem：KDE Plasma 已內建；GNOME 請開啟 AppIndicator 擴充（Ubuntu 已內建）。
+在 Linux 上，腳本會把 AppImage 裝到 `~/.local/share/agent-speed`（之後可在 App 內更新），並加進應用程式選單。x86_64 需要 glibc 2.35 以上（Ubuntu 22.04、Debian 12 起），arm64 需要 2.39 以上（Ubuntu 24.04、Debian 13 起）。托盤圖示需要 StatusNotifierItem：KDE Plasma 已內建；GNOME 請開啟 AppIndicator 擴充（Ubuntu 已內建）。偏好套件安裝的話，[最新版本](https://github.com/zoefix/agent-speed/releases/latest)也有 `.deb`（`sudo apt install ./agent-speed_*_amd64.deb`），可用 `SHA256SUMS-Linux-<arch>.txt` 核對。
 
 <details>
 <summary>解除安裝</summary>
