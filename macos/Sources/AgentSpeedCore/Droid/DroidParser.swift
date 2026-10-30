@@ -152,9 +152,10 @@ struct DroidParser: Sendable {
         guard !seen.contains(key), !deduper.isOwnedByOtherFile(key, for: fileID) else { return }
         let claim = deduper.claim(key, for: fileID)
         seen.insert(key)
-        // Each call replaces (or clears) the effort; its response keeps a snapshot of the context (EXECUTION-MODES).
-        var modes = ExecutionModes(state.modes.facts.filter { $0.kind != .effort })
+        // Each call replaces (or clears) the effort and tier; its response keeps a snapshot of the context (EXECUTION-MODES).
+        var modes = ExecutionModes(state.modes.facts.filter { $0.kind != .effort && $0.kind != .serviceTier })
         if let effort = assistant.effort { modes.insert(effort) }
+        if let tier = assistant.tier { modes.insert(tier) }
         state.modes = modes
         open.append(OpenCall(
             key: key, startMs: pendingStartMs, endMs: timestamp, modelId: assistant.modelId, modes: modes,

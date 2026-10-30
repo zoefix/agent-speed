@@ -15,6 +15,8 @@ struct AntigravityUsage: Equatable, Sendable {
     var response: Int64 = 0
     /// `response_id` (11) when non-empty, else `message_id` (7) when non-empty.
     var key: String?
+    /// `service_tier` (13) when non-empty.
+    var tier: String?
 
     var hasTokens: Bool { input > 0 || output > 0 || cacheRead > 0 || thinking > 0 || response > 0 }
 
@@ -59,6 +61,10 @@ struct AntigravityGeneration: Equatable, Sendable {
     var stepIndices: Set<UInt64> = []
     /// `chat_model.response_model` (1 → 19), else `chat_model.model_display_name` (1 → 21); empty strings are nil.
     var model: String?
+    /// `chat_model.response_model` alone.
+    var responseModel: String?
+    /// `chat_model.model_display_name` alone.
+    var label: String?
 }
 
 /// `ExecutorMetadata` (`executor_metadata.data`).
@@ -69,6 +75,8 @@ struct AntigravityExecutor: Equatable, Sendable {
     var lastStepIdx: Int64 = 0
     /// `cascade_config.planner_config.model_name` (10 → 1 → 28); empty is nil.
     var model: String?
+    /// The token of `planner_config.completion_config_override.thinking_level` (… → 56 → 19), the API-key path.
+    var thinking: String?
 }
 
 /// `CortexTrajectoryMetadata` (`trajectory_metadata_blob.data`).

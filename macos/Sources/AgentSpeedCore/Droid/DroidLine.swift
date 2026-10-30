@@ -8,6 +8,8 @@ struct DroidAssistant: Equatable, Sendable {
     var modelId: String?
     /// `message.reasoningEffort` as a recorded request effort; nil when absent or no effort token.
     var effort: ExecutionModeFact?
+    /// The tier an exact catalog `message.modelId` names (EXECUTION-MODES, Factory Droid).
+    var tier: ExecutionModeFact?
     /// `message.content` is an array with a `tool_use` block.
     var asksForTools: Bool
 }
@@ -105,6 +107,7 @@ enum DroidLineExtractor {
                     return .assistant(DroidAssistant(
                         id: id.flatMap { $0.isEmpty ? nil : $0 }, modelId: modelId,
                         effort: ExecutionModeAdapters.effort(message.effort, evidence: .recorded, scope: .request),
+                        tier: ExecutionModeAdapters.droidModel(modelId, evidence: .recorded, scope: .request),
                         asksForTools: message.asksForTools))
                 default:
                     return .other

@@ -16,6 +16,8 @@ final class ZcodeSource {
     private var walStat: FileStat?
     private var emitted: [String: ResponseRecord] = [:]
     private var states: [String: AgentState] = [:]
+    /// The newest row each session's current facts come from.
+    private var currentRows: [String: (startMs: Int64, id: String)] = [:]
     private var watermark: Int64?
     private var needsRead = true
     private let fileID: FileID
@@ -86,6 +88,7 @@ final class ZcodeSource {
             update.removedAgents = Array(states.keys)
             emitted = [:]
             states = [:]
+            currentRows = [:]
             watermark = nil
         }
         do {
@@ -110,7 +113,10 @@ final class ZcodeSource {
                 let id = database.agentId(row.sessionId)
                 guard var state = next[id] else { continue }
                 state.model = row.model ?? state.model
-                state.modes = row.modes
+                if !row.isAuxiliary, currentRows[id].map({ ($0.startMs, $0.id) <= (row.startMs, row.id) }) ?? true {
+                    currentRows[id] = (row.startMs, row.id)
+                    state.modes = row.modes
+                }
                 let time = row.endMs ?? row.startMs
                 rowTimes[row.sessionId] = max(rowTimes[row.sessionId] ?? time, time)
                 state.noteLine(at: time)
@@ -132,7 +138,6 @@ final class ZcodeSource {
                 guard var state = next[id], let time = message.lastLineMs,
                       time >= (rowTimes[session] ?? Int64.min) else { continue }
                 state.model = message.model ?? state.model
-                if !message.modes.facts.isEmpty { state.modes = message.modes }
                 state.noteLine(at: time)
                 state.setPhase(message.phase, at: message.phaseSinceMs ?? time, inFlightStartMs: message.inFlightStartMs)
                 next[id] = state

@@ -46,11 +46,14 @@ struct KimiParser: Sendable {
     private mutating func consume(_ line: KimiLine, deduper: inout Deduper, emit: (ResponseUpsert) -> Void) {
         guard line.agent == nil || line.agent == wireAgent else { return }
         if let cwd = line.cwd { state.setProject(fromWorkingDirectory: cwd) }
-        if line.hasModeSelection || line.model != nil { state.modes = ExecutionModeAdapters.kimi(line.model) }
+        if line.hasModeSelection || line.model != nil {
+            replaceModes(of: .modelVariant, with: ExecutionModeAdapters.kimi(line.model).facts.first)
+        }
         if let model = line.model { state.model = model }
         if let provider = line.provider { self.provider = provider }
         guard let time = line.time else { return }
         state.noteLine(at: time)
+        applyEffort(line)
         switch line.type {
         case "llm.request":
             pendingStartMs = time
@@ -76,6 +79,24 @@ struct KimiParser: Sendable {
         }
     }
 
+    /// A selection replaces the effort when it names one; every `llm.request` replaces it, or clears it without one.
+    private mutating func applyEffort(_ line: KimiLine) {
+        switch line.type {
+        case "profile.bind", "config.update":
+            let legacy = line.type == "config.update" ? line.thinkingLevel : nil
+            guard let token = [line.thinkingEffort, legacy].compactMap({ $0 }).first(where: { !$0.isEmpty }) else { return }
+            replaceModes(of: .effort, with: ExecutionModeAdapters.effort(token, evidence: .selected, scope: .session))
+        case "llm.request":
+            replaceModes(of: .effort, with: ExecutionModeAdapters.effort(line.thinkingEffort, evidence: .recorded, scope: .request))
+        default:
+            break
+        }
+    }
+
+    private mutating func replaceModes(of kind: ExecutionModeKind, with fact: ExecutionModeFact?) {
+        state.modes = ExecutionModes(state.modes.facts.filter { $0.kind != kind } + [fact].compactMap { $0 })
+    }
+
     private mutating func consumeMessage(_ line: KimiLine, time: Int64, deduper: inout Deduper, emit: (ResponseUpsert) -> Void) {
         guard !line.partial, let usage = line.usage else { return }
         let mirroredId = line.type == "context.append_loop_event" ? requestMessageId : nil
@@ -86,7 +107,8 @@ struct KimiParser: Sendable {
         let start = previous?.startMs ?? pendingStartMs ?? line.durationMs.map { time - $0 }
         let end = previous?.endMs ?? time
         let record = ResponseRecord(key: key, source: .kimi, agentId: agentId, model: line.model ?? state.model,
-                                    startMs: start, endMs: end, usage: usage, provider: line.provider ?? provider, modes: state.modes)
+                                    startMs: start, endMs: end, usage: usage, provider: line.provider ?? provider,
+                                    modes: previous?.modes ?? state.modes)
         guard record != previous, deduper.claim(key, for: fileID) != .otherFile else { return }
         latest[key] = record
         emit(ResponseUpsert(record: record, isCompletion: previous == nil))

@@ -16,6 +16,7 @@ struct AntigravityParser: Sendable {
 
     private struct Emitted: Sendable {
         var idx: Int64
+        var usage: AntigravityUsage
         var record: ResponseRecord
     }
 
@@ -148,25 +149,37 @@ struct AntigravityParser: Sendable {
         let claim = deduper.claim(key, for: fileID)
         let record = ResponseRecord(
             key: key, source: .antigravity, agentId: agentId, model: model(forStep: row.idx), startMs: startMs,
-            endMs: endMs, usage: usage.tokens, isFinal: true
+            endMs: endMs, usage: usage.tokens, isFinal: true, modes: modes(forStep: row.idx, usage: usage)
         )
         let previous = emitted[key]
-        emitted[key] = Emitted(idx: row.idx, record: record)
+        emitted[key] = Emitted(idx: row.idx, usage: usage, record: record)
         if previous?.record != record { emit(ResponseUpsert(record: record, isCompletion: claim == .new)) }
     }
 
     /// `chat_model.response_model` (else `model_display_name`) of the lowest generation listing the step, else the
     /// planner model of the executor run with the smallest `last_step_idx >=` the step (ties: lowest idx).
     private func model(forStep idx: Int64) -> String? {
-        if idx >= 0, let generation = generationOfStep[UInt64(idx)].flatMap({ generations[$0] }), let model = generation.model {
-            return model
-        }
-        var best: (last: Int64, idx: Int64, model: String?)?
+        generation(ofStep: idx)?.model ?? executor(coveringStep: idx)?.model
+    }
+
+    private func modes(forStep idx: Int64, usage: AntigravityUsage) -> ExecutionModes {
+        AntigravityEffort.modes(generation: generation(ofStep: idx), executor: executor(coveringStep: idx), usage: usage)
+    }
+
+    /// The lowest generation listing the step.
+    private func generation(ofStep idx: Int64) -> AntigravityGeneration? {
+        guard idx >= 0 else { return nil }
+        return generationOfStep[UInt64(idx)].flatMap { generations[$0] }
+    }
+
+    /// The executor run with the smallest `last_step_idx >=` the step (ties: lowest idx).
+    private func executor(coveringStep idx: Int64) -> AntigravityExecutor? {
+        var best: (last: Int64, idx: Int64, executor: AntigravityExecutor)?
         for (executorIdx, executor) in executors where executor.lastStepIdx >= idx {
             if let current = best, (current.last, current.idx) <= (executor.lastStepIdx, executorIdx) { continue }
-            best = (executor.lastStepIdx, executorIdx, executor.model)
+            best = (executor.lastStepIdx, executorIdx, executor)
         }
-        return best?.model ?? nil
+        return best?.executor
     }
 
     private mutating func rebuildGenerationIndex() {
@@ -178,27 +191,32 @@ struct AntigravityParser: Sendable {
         }
     }
 
-    /// A later read may name the model of an earlier response: the response is updated (METRICS 4.4).
+    /// A later read may name the model or the effort of an earlier response: the response is updated (METRICS 4.4).
     private mutating func resolveModels(emit: (ResponseUpsert) -> Void) {
         for (key, entry) in emitted.sorted(by: { ($0.value.idx, $0.key) < ($1.value.idx, $1.key) }) {
             let model = model(forStep: entry.idx)
-            guard model != entry.record.model else { continue }
+            let modes = modes(forStep: entry.idx, usage: entry.usage)
+            guard model != entry.record.model || modes != entry.record.modes else { continue }
             var record = entry.record
             record.model = model
-            emitted[key] = Emitted(idx: entry.idx, record: record)
+            record.modes = modes
+            emitted[key] = Emitted(idx: entry.idx, usage: entry.usage, record: record)
             emit(ResponseUpsert(record: record, isCompletion: false))
         }
     }
 
-    /// The model of the response with the highest idx that has one.
+    /// The model of the response with the highest idx that has one, and the facts of the response with the highest idx.
     private mutating func updateAgentModel() {
         var best: (idx: Int64, model: String)?
+        var latest: Emitted?
         for entry in emitted.values {
+            if entry.idx > latest?.idx ?? .min { latest = entry }
             guard let model = entry.record.model else { continue }
             if let current = best, current.idx > entry.idx || (current.idx == entry.idx && current.model <= model) { continue }
             best = (entry.idx, model)
         }
         state.model = best?.model
+        state.modes = latest?.record.modes ?? .empty
     }
 
     /// METRICS 4.8 Phase: a function of the latest step and the executor rows.
