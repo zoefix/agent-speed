@@ -241,6 +241,14 @@ void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const M
         unit.baselineCenter = QPointF(cx, cy + (layout.valueBaseline + layout.unitGap) * s);
         unit.color = palette.unit.value_or(f.tokens.secondaryText);
         unit.clip = pass.clip;
+        if (c.unitHover > 0) {
+            // Hover: 55 % → 85 % and a 0.5 pt underline at 40 %.
+            const float rest = unit.color.a;
+            unit.color = unit.color.withAlpha(rest + (std::max(rest, 0.85f) - rest) * c.unitHover);
+            const double half = widthOf(measure, unit.text, unit.pixelSize, unit.weight) / 2;
+            const QPointF under(cx, unit.baselineCenter.y() + 0.18 * unit.pixelSize);
+            scene.add(Instance::roundedRect(under, half, 0.25 * f.unit, 0, 0.25 * f.unit, unit.color.withAlpha(0.4 * c.unitHover)), Blend::Over);
+        }
         shadowed(unit);
         scene.add(unit);
     }

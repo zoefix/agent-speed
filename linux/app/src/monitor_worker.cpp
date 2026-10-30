@@ -265,7 +265,7 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     map.insert(QStringLiteral("traffic"), trafficVariant(snap));
 
     // DESIGN 9: money values sum the billable sources (9.4); a partly unpriced value carries `≥`.
-    double liveCost = 0, knownWeight = 0, weight = 0;
+    double liveCost = 0, liveOutput = 0, knownWeight = 0, weight = 0;
     std::int64_t todayCost = 0, unpriced = 0;
     QVariantList sources;
     for (const auto& s : snap.sources) {
@@ -289,6 +289,7 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         sources.push_back(row);
         if (!s.enabled || !billable(s.source)) continue;
         liveCost += s.liveCost;
+        liveOutput += s.liveOutput;
         const double w = std::max(s.liveOutput, 1e-9);
         weight += w;
         knownWeight += w * s.liveCostKnownShare;
@@ -303,6 +304,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     map.insert(QStringLiteral("costLiveNumber"), QString::fromStdString((livePartial ? "≥" : "") + liveMoney.number));
     map.insert(QStringLiteral("costLiveText"), QString::fromStdString((livePartial ? "≥" : "") + liveMoney.text));
     map.insert(QStringLiteral("costSymbol"), QString::fromStdString(liveMoney.symbol));
+    map.insert(QStringLiteral("costCurrency"), options_.currency);
+    map.insert(QStringLiteral("costLiveUnknown"), liveOutput > 0 && liveCost == 0 && knownWeight <= 0);
     map.insert(QStringLiteral("costTodayText"),
                todayCost == 0 && unpriced > 0 ? QStringLiteral("–") : QString::fromStdString((unpriced > 0 ? "≥" : "") + todayMoney.text));
     map.insert(QStringLiteral("costUnpriced"), static_cast<qint64>(unpriced));

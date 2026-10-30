@@ -18,6 +18,7 @@
 #include <tuple>
 #include <QStyleHints>
 #include <QSurfaceFormat>
+#include <QToolTip>
 #include <QVariantAnimation>
 #include <algorithm>
 #include <cmath>
@@ -87,6 +88,10 @@ OrbWindow::OrbWindow(const Strings& strings, const QString& id) : QOpenGLWindow(
     unitTimer_.setSingleShot(true);
     connect(&unitTimer_, &QTimer::timeout, this, [this] {
         emit editRequested(id_, QStringLiteral("unit"), unit_ == QLatin1String("cost") ? QStringLiteral("tokens") : QStringLiteral("cost"));
+    });
+    hintTimer_.setSingleShot(true);
+    connect(&hintTimer_, &QTimer::timeout, this, [this] {
+        if (unitHover_) QToolTip::showText(QCursor::pos(), strings_.t(QStringLiteral("orbs.unit.toggleHint")));
     });
     connect(&Appearance::instance(), &Appearance::changed, this, [this] {
         bodyDirty_ = true;
@@ -180,13 +185,39 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
     const bool changed = sources != sources_ || config.unit != unit_ || theme != theme_ || config.traffic != traffic_ ||
                          std::abs(gauge_.redline() - redline) > 0.5;
     sources_ = sources;
+    const bool unitChanged = config.unit != unit_ && !labelText_.isEmpty();
     unit_ = config.unit;
     theme_ = theme;
     traffic_ = config.traffic;
     gauge_.setRedline(redline);
     applyOpacity();
     updateLabel();
+    if (unitChanged) announceUnit();
     if (changed) requestFrame();
+}
+
+// DESIGN 9 Accessibility: a unit change is announced once (`a11y.unitChanged`).
+void OrbWindow::announceUnit() {
+#if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
+    const QString name = unit_ == QLatin1String("cost") ? fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {costSymbol_.isEmpty() ? QStringLiteral("$") : costSymbol_})
+                                                         : strings_.t(QStringLiteral("unit.tokS"));
+    QAccessibleAnnouncementEvent event(this, fill(strings_.t(QStringLiteral("a11y.unitChanged")), {name}));
+    event.setPoliteness(QAccessible::AnnouncementPoliteness::Assertive);
+    QAccessible::updateAccessibility(&event);
+#endif
+}
+
+// DESIGN 9 Switching: the pointer over the unit raises it, and after 0.8 s shows `orbs.unit.toggleHint`.
+void OrbWindow::setUnitHover(bool on) {
+    if (on == unitHover_) return;
+    unitHover_ = on;
+    if (on) {
+        hintTimer_.start(800);
+    } else {
+        hintTimer_.stop();
+        QToolTip::hideText();
+    }
+    requestFrame();
 }
 
 void OrbWindow::setHighlighted(bool on) {
@@ -287,6 +318,7 @@ void OrbWindow::stepIntel(double time, double dt) {
     glide_ = ramp(glide_, 1 - shown, dt, 0.3);
     const double netTarget = netAvailable_ && time - netLastActive_ < 10 ? 1 : 0;
     netOpacity_ = ramp(netOpacity_, netTarget, dt, netTarget > netOpacity_ ? 0.25 : 0.6);
+    unitHoverAmount_ = ramp(unitHoverAmount_, unitHover_ ? 1 : 0, dt, 0.15);
 }
 
 // The 性能 integer on screen at `time`: the count's intermediate value while one runs (easeOutCubic).
@@ -326,7 +358,8 @@ bool OrbWindow::intelBusy(double time) const {
     const bool zero = thinkingText_.isEmpty() || thinkingText_ == QLatin1String("0");
     const double shown = zero && thinkingZeroSince_ >= 0 && time - thinkingZeroSince_ >= 3 ? 0 : 1;
     const double netTarget = netAvailable_ && time - netLastActive_ < 10 ? 1 : 0;
-    return std::abs(netOpacity_ - netTarget) > 0.001 || std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 ||
+    return std::abs(netOpacity_ - netTarget) > 0.001 || std::abs(unitHoverAmount_ - (unitHover_ ? 1 : 0)) > 0.001 ||
+           std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 ||
            std::abs(glide_ - (1 - shown)) > 0.001 ||
            (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.15);
 }
@@ -416,6 +449,7 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
                          {snap.value(QStringLiteral("costTodayText")).toString(), QString::number(agents.size())});
         }
         costSymbol_ = snap.value(QStringLiteral("costSymbol")).toString();
+        currency_ = snap.value(QStringLiteral("costCurrency")).toString();
     } else {
         valueText_ = snap.value(QStringLiteral("liveText")).toString();
         info_ = fill(strings_.t(QStringLiteral("today.summary")),
@@ -664,6 +698,7 @@ void OrbWindow::renderFrame() {
     content.rising = valueRising_;
     content.rolls = e.level > 0 && diameter_ >= 80;
     content.unit = unit_ == QLatin1String("cost") ? fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {costSymbol_}) : strings_.t(QStringLiteral("unit.tokS"));
+    content.unitHover = unitHoverAmount_;
     content.title = unavailable_.isEmpty() ? titleText(gauge_.title()) : strings_.t(QStringLiteral("source.") + unavailable_);
     content.previousTitle = titleText(gauge_.previousTitle());
     content.titleChangedAt = gauge_.titleChangedAt();
@@ -737,7 +772,10 @@ void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, 
 }
 
 bool OrbWindow::event(QEvent* event) {
-    if (event->type() == QEvent::Leave) setHovered(false);
+    if (event->type() == QEvent::Leave) {
+        setHovered(false);
+        setUnitHover(false);
+    }
     return QOpenGLWindow::event(event);
 }
 
@@ -837,13 +875,16 @@ void OrbWindow::mouseMoveEvent(QMouseEvent* event) {
     if (!dragging_) {
         const bool inside = insideDisc(event->position());
         setHovered(inside);
-        if (inside) setCursor(onUnit(event->position()) ? Qt::PointingHandCursor : Qt::OpenHandCursor);
+        const bool unit = inside && !clickThrough_ && onUnit(event->position());
+        if (inside) setCursor(unit ? Qt::PointingHandCursor : Qt::OpenHandCursor);
+        setUnitHover(unit);
         return;
     }
     const QPointF delta = event->globalPosition() - pressGlobal_;
     if (!moved_ && std::hypot(delta.x(), delta.y()) < 4) return;
     if (!moved_) {
         moved_ = true;
+        setUnitHover(false);
         emit dragChanged(id_, true);
     }
     // Within 16 pt of a touching position beside another orb the disc is pulled in (DESIGN 2b Orb to orb).
@@ -972,8 +1013,20 @@ void OrbWindow::addHighlight(Scene& scene, const Frame& f) const {
 void OrbWindow::updateLabel() {
     QString label;
     const QString title = titleText(gauge_.title());
+    const auto language = strings_.language();
+    const QString separator = language == QLatin1String("ja") ? QStringLiteral("、") : language == QLatin1String("en") ? QStringLiteral(", ") : QStringLiteral("，");
+    // The money unit reads the number as shown with the currency's name; nothing priced reads as unknown (DESIGN 9).
+    const bool money = unit_ == QLatin1String("cost");
+    const QString amount = atLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {valueText_}) : valueText_;
+    const QString currency = strings_.t(QStringLiteral("currency.") + (currency_.isEmpty() ? QStringLiteral("USD") : currency_));
     if (!unavailable_.isEmpty()) {
         label = fill(strings_.t(QStringLiteral("a11y.orb.unavailable")), {name_});
+    } else if (money && valueText_ == QStringLiteral("–")) {
+        const QString unknown = fill(strings_.t(QStringLiteral("a11y.orb.costUnknown")), {title});
+        label = name_.isEmpty() ? unknown : name_ + separator + unknown;
+    } else if (money) {
+        label = name_.isEmpty() ? fill(strings_.t(QStringLiteral("a11y.orb.cost")), {amount, currency, title})
+                                : fill(strings_.t(QStringLiteral("a11y.orb.costNamed")), {name_, amount, currency, title});
     } else if (name_.isEmpty()) {
         label = fill(strings_.t(QStringLiteral("a11y.orb")), {valueText_, title});
     } else {
@@ -993,8 +1046,15 @@ void OrbWindow::updateLabel() {
         } else {
             sentence = strings_.t(QStringLiteral("intel.none"));
         }
-        const auto language = strings_.language();
-        label += (language == QLatin1String("ja") ? QStringLiteral("、") : language == QLatin1String("en") ? QStringLiteral(", ") : QStringLiteral("，")) + sentence;
+        label += separator + sentence;
+    }
+    // DESIGN 10 Accessibility: the network rates read as words while the readout shows.
+    if (unavailable_.isEmpty() && netAvailable_ && netOpacity_ > 0.5) {
+        const auto spoken = [](QString text) {
+            text.replace(QChar(0x00A0), QLatin1Char(' '));
+            return text.endsWith(QLatin1String("/s")) ? text.chopped(2) : text;
+        };
+        label += separator + fill(strings_.t(QStringLiteral("a11y.orb.traffic")), {spoken(netDown_), spoken(netUp_)});
     }
     if (label == labelText_) return;
     labelText_ = label;

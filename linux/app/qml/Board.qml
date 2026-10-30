@@ -21,6 +21,9 @@ Item {
     readonly property bool showThinking: readouts.thinking !== false
     readonly property bool showCost: readouts.cost !== false
     readonly property bool metrics: showIntel || showThinking || showCost
+    // Timing's interval column (not at S).
+    readonly property bool showGap: style === "timing" && size !== "S"
+    readonly property real gapWidth: 38
     readonly property real heat: view.heat || 0
     readonly property color heatColor: Heat.color(heat)
     readonly property bool hot: heat > 0.02
@@ -120,6 +123,19 @@ Item {
         boardCard.visible = true
         if (changed) boardCard.fit()
     }
+    // Keyboard: Space on a focused row (or its press action, `a11y.perf.card`) shows the card; Esc hides it.
+    function cardToggle(item, key) {
+        if (boardCard.visible && cardKey === key) {
+            boardCard.visible = false
+            cardKey = ""
+            return
+        }
+        cardItem = item
+        cardKey = key
+        cardShow.stop()
+        cardHide.stop()
+        showCard()
+    }
     // The open card updates with the engine tick (see onViewChanged below).
     function refreshCard() {
         if (!boardCard.visible) return
@@ -135,7 +151,43 @@ Item {
     }
 
     Accessible.role: Accessible.List
-    Accessible.name: Format.fill(S.tr2(S.rev, "a11y.board"), [spec.sources === "all" || !spec.sources ? S.tr2(S.rev, "orbs.sources.all") : "", view.liveText || "0", titleText(view.titleLevel || 0)])
+    Accessible.name: spokenLabel()
+    readonly property string separator: S.language === "ja" ? "、" : S.language === "en" ? ", " : "，"
+    // DESIGN 2c Live metrics, Accessibility: the label goes on with the readouts that are switched on.
+    function spokenLabel() {
+        var parts = [Format.fill(S.tr2(S.rev, "a11y.board"), [spec.sources === "all" || !spec.sources ? S.tr2(S.rev, "orbs.sources.all") : "",
+                                                           view.liveText || "0", titleText(view.titleLevel || 0)])]
+        var intel = view.intel || {}
+        var thinking = showThinking && view.thinkingText ? view.thinkingText : ""
+        if (showIntel) {
+            if ((intel.shown === undefined ? -1 : intel.shown) >= 0 && intel.words) {
+                parts.push(thinking ? Format.fill(S.tr2(S.rev, "a11y.orb.intel"), [intel.words, thinking]) : Format.fill(S.tr2(S.rev, "a11y.orb.intel.only"), [intel.words]))
+            } else {
+                parts.push(S.tr2(S.rev, "intel.none"))
+                if (thinking) parts.push(Format.fill(S.tr2(S.rev, "a11y.board.thinking"), [thinking]))
+            }
+        } else if (thinking) {
+            parts.push(Format.fill(S.tr2(S.rev, "a11y.board.thinking"), [thinking]))
+        }
+        if (showCost) {
+            if (view.costSubscription) parts.push(S.tr2(S.rev, "cost.subscriptionOnly"))
+            else if (view.costUnknown) parts.push(S.tr2(S.rev, "a11y.board.costUnknown"))
+            else {
+                var number = view.costNumber || "0"
+                var amount = view.costPartial ? Format.fill(S.tr2(S.rev, "a11y.orb.costAtLeast"), [number]) : number
+                parts.push(Format.fill(S.tr2(S.rev, "a11y.board.cost"), [amount, S.tr2(S.rev, "currency." + (prefs.currency || "USD"))]))
+            }
+        }
+        return parts.join(separator)
+    }
+    // A new leader is announced politely, at most once per 10 s.
+    property real leaderAnnouncedAt: 0
+    function announceLeader(name) {
+        var now = Date.now()
+        if (now - leaderAnnouncedAt < 10000) return
+        leaderAnnouncedAt = now
+        try { Accessible.announce(Format.fill(S.tr2(S.rev, "a11y.board.newLeader"), [name])) } catch (e) {}
+    }
 
     // The bloom that grows with heat and fades out along the rounded outline before the window's edge.
     Rectangle {
@@ -399,6 +451,7 @@ Item {
                         }
                     }
                     Text {
+                        id: heroUnit
                         anchors.bottom: parent.bottom
                         anchors.bottomMargin: 2
                         text: board.style === "glass" ? S.tr2(S.rev, "unit.tokS") : S.tr2(S.rev, "unit.tokS").toUpperCase()
@@ -409,15 +462,64 @@ Item {
                         font.letterSpacing: board.style === "glass" ? 0 : 1.4
                     }
                 }
-                Text {
+                Item {
                     width: parent.width
-                    text: board.titleText(board.view.titleLevel || 0)
-                    color: (board.view.titleLevel || 0) > 0 ? board.heatColor : board.ink3
-                    font.pixelSize: 12
-                    font.weight: Font.Bold
-                    font.letterSpacing: board.style === "glass" ? 0.4 : 0.8
-                    elide: Text.ElideRight
-                    Behavior on color { ColorAnimation { duration: 300 } }
+                    height: heroTitle.implicitHeight
+                    // Timing: the pulsing `boards.live` dot before the title (red while an agent generates).
+                    Row {
+                        id: liveMark
+                        visible: board.style === "timing"
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 5
+                        Item {
+                            width: 7
+                            height: 7
+                            anchors.verticalCenter: parent.verticalCenter
+                            readonly property bool active: (board.view.generating || 0) > 0
+                            Rectangle {
+                                id: livePulse
+                                anchors.centerIn: parent
+                                width: 7
+                                height: width
+                                radius: width / 2
+                                color: "transparent"
+                                border.width: 1.5
+                                border.color: "#EF4444"
+                                visible: parent.active && board.effects !== "off"
+                                opacity: Math.max(0, 0.55 * (1 - (width - 7) / 14))
+                                SequentialAnimation on width {
+                                    running: livePulse.visible
+                                    loops: Animation.Infinite
+                                    NumberAnimation { from: 7; to: 21; duration: 1600; easing.type: Easing.OutCubic }
+                                }
+                            }
+                            Rectangle {
+                                anchors.fill: parent
+                                radius: width / 2
+                                color: parent.active ? "#EF4444" : board.ink3
+                            }
+                        }
+                        Text {
+                            text: S.tr2(S.rev, "boards.live").toUpperCase()
+                            color: board.ink2
+                            font.pixelSize: 10
+                            font.weight: Font.Bold
+                            font.letterSpacing: 1.4
+                            font.family: board.numFont
+                        }
+                    }
+                    Text {
+                        id: heroTitle
+                        x: liveMark.visible ? liveMark.width + 8 : 0
+                        width: parent.width - x
+                        text: board.titleText(board.view.titleLevel || 0)
+                        color: (board.view.titleLevel || 0) > 0 ? board.heatColor : board.ink3
+                        font.pixelSize: 12
+                        font.weight: Font.Bold
+                        font.letterSpacing: board.style === "glass" ? 0.4 : 0.8
+                        elide: Text.ElideRight
+                        Behavior on color { ColorAnimation { duration: 300 } }
+                    }
                 }
                 Text {
                     width: parent.width
@@ -778,6 +880,66 @@ Item {
             }
         }
 
+        // Timing: the `boards.newLeader` banner slides across the bottom of the hero (1.9 s).
+        Item {
+            id: leaderBanner
+            x: 0
+            y: hero.y + hero.height - 14
+            width: board.side
+            height: 22
+            z: 6
+            visible: reveal > hide
+            property real reveal: 0
+            property real hide: 0
+            property string name: ""
+            function show(who) {
+                name = who
+                bannerRun.restart()
+            }
+            // Development aid: --board-banner shows the banner 4.5 s after launch, in time for --board-snapshot.
+            Timer {
+                interval: 4500
+                running: board.style === "timing" && Qt.application.arguments.indexOf("--board-banner") >= 0
+                onTriggered: leaderBanner.show((board.view.groups || [{}])[0].project || "agent-speed")
+            }
+            SequentialAnimation {
+                id: bannerRun
+                ScriptAction { script: { leaderBanner.reveal = 0; leaderBanner.hide = 0 } }
+                NumberAnimation { target: leaderBanner; property: "reveal"; from: 0; to: 1; duration: 340; easing.type: Easing.OutQuint }
+                PauseAnimation { duration: 1140 }
+                NumberAnimation { target: leaderBanner; property: "hide"; from: 0; to: 1; duration: 420; easing.type: Easing.InOutCubic }
+                ScriptAction { script: { leaderBanner.reveal = 0; leaderBanner.hide = 0 } }
+            }
+            Item {
+                x: parent.width * leaderBanner.hide
+                width: parent.width * (leaderBanner.reveal - leaderBanner.hide)
+                height: parent.height
+                clip: true
+                Rectangle {
+                    x: -parent.x
+                    width: leaderBanner.width
+                    height: leaderBanner.height
+                    gradient: Gradient {
+                        orientation: Gradient.Horizontal
+                        GradientStop { position: 0; color: "#FACC15" }
+                        GradientStop { position: 0.4; color: "#FFF1A8" }
+                        GradientStop { position: 0.7; color: "#FACC15" }
+                        GradientStop { position: 1; color: Qt.rgba(250 / 255, 204 / 255, 21 / 255, 0) }
+                    }
+                    Text {
+                        x: board.pad
+                        anchors.verticalCenter: parent.verticalCenter
+                        text: Format.fill(S.tr2(S.rev, "boards.newLeader"), [leaderBanner.name])
+                        color: "#120D00"
+                        font.pixelSize: 11
+                        font.weight: Font.ExtraBold
+                        font.letterSpacing: 1.2
+                        font.family: board.numFont
+                    }
+                }
+            }
+        }
+
         // ---- Ranking
         Item {
             id: ranking
@@ -799,7 +961,9 @@ Item {
                 var kept = 0
                 for (var i = 0; i < groups.length && kept < maxGroups; ++i) {
                     if (y + groupHeight > room - (i < groups.length - 1 ? 20 : 0)) break
-                    rows.push({ kind: "group", key: groups[i].id, data: groups[i], y: y, h: groupHeight })
+                    // Timing: the interval to the group above, `boards.leader` on the first.
+                    var gap = i === 0 ? S.tr2(S.rev, "boards.leader") : "−" + Format.speed(Math.max(0, groups[i - 1].value - groups[i].value))
+                    rows.push({ kind: "group", key: groups[i].id, data: groups[i], y: y, h: groupHeight, gap: gap, leader: i === 0 })
                     y += groupHeight + (board.twoLines ? 0 : 2)
                     ++kept
                 }
@@ -821,10 +985,20 @@ Item {
                     if (row.kind !== "group") continue
                     var subs = row.data.subs || []
                     var wantSubs = Math.min(subs.length, allowance[out.filter(o => o.kind === "group").length - 1] || 0)
+                    var shown = 0
                     for (var s = 0; s < wantSubs; ++s) {
                         if (y + shift + board.subHeight > room) break
                         out.push({ kind: "sub", key: row.data.id + "/" + subs[s].id, data: subs[s], y: row.y + row.h + s * board.subHeight, h: board.subHeight })
                         shift += board.subHeight
+                        ++shown
+                    }
+                    // `boards.moreSubs` for the sub-agents left out, with their summed speed.
+                    if (wantSubs > 0 && subs.length > shown && y + shift + 18 <= room) {
+                        var restSpeed = 0
+                        for (var t = shown; t < subs.length; ++t) restSpeed += subs[t].value
+                        out.push({ kind: "more", key: row.data.id + "/more", indent: 56, y: row.y + row.h + shown * board.subHeight, h: 18,
+                                   text: Format.fill(S.tr2(S.rev, "boards.moreSubs"), [subs.length - shown, Format.speed(restSpeed)]) })
+                        shift += 18
                     }
                 }
                 return out
@@ -854,11 +1028,25 @@ Item {
                     font.pixelSize: Math.round(board.style === "glass" ? 9 : 8.5)
                     font.weight: Font.DemiBold
                 }
+                Text {
+                    visible: board.showGap
+                    anchors.right: parent.right
+                    anchors.rightMargin: 6 + 44 + 8 + board.perfColumn(false) + 6
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: board.gapWidth
+                    horizontalAlignment: Text.AlignRight
+                    text: S.tr2(S.rev, "boards.gap").toUpperCase()
+                    color: board.ink3
+                    font.pixelSize: 8
+                    font.weight: Font.Bold
+                    font.letterSpacing: 0.8
+                    font.family: board.numFont
+                }
                 Rectangle {
                     anchors.left: parent.left
                     anchors.leftMargin: 6
                     anchors.right: parent.right
-                    anchors.rightMargin: 6 + 44 + 8 + board.perfColumn(false) + 6
+                    anchors.rightMargin: 6 + 44 + 8 + board.perfColumn(false) + 6 + (board.showGap ? board.gapWidth + 6 : 0)
                     anchors.verticalCenter: parent.verticalCenter
                     height: 1
                     color: board.line
@@ -924,7 +1112,7 @@ Item {
                     }
                     Text {
                         visible: modelData.kind === "more"
-                        x: 18
+                        x: modelData.indent || 18
                         anchors.verticalCenter: parent.verticalCenter
                         text: modelData.text || ""
                         color: board.ink3
@@ -1003,10 +1191,29 @@ Item {
                             elide: Text.ElideRight
                         }
                     }
+                    // Timing: the interval to the group above (`boards.leader` in gold on the first).
+                    Text {
+                        id: gapCell
+                        readonly property bool shown: board.showGap && rowItem.group
+                        visible: shown
+                        width: board.showGap ? board.gapWidth : 0
+                        anchors.right: intelCell.left
+                        anchors.rightMargin: board.showGap ? 6 : 0
+                        anchors.verticalCenter: parent.verticalCenter
+                        horizontalAlignment: Text.AlignRight
+                        text: rowItem.modelData.gap || ""
+                        color: rowItem.modelData.leader ? (board.dark ? "#FACC15" : "#B07800") : board.ink3
+                        font.pixelSize: rowItem.modelData.leader ? 9 : 10
+                        font.weight: rowItem.modelData.leader ? Font.ExtraBold : Font.DemiBold
+                        font.letterSpacing: rowItem.modelData.leader ? 0.7 : 0
+                        font.family: board.numFont
+                        font.features: Theme.tabular
+                        elide: Text.ElideRight
+                    }
                     EffortCapsule {
                         id: capsule
                         visible: modelData.kind !== "more"
-                        anchors.right: intelCell.left
+                        anchors.right: gapCell.left
                         anchors.rightMargin: 6
                         y: rowItem.group && board.twoLines ? 4 : (parent.height - height) / 2
                         level: rowItem.row.effortLevel === undefined ? -1 : rowItem.row.effortLevel
@@ -1101,7 +1308,29 @@ Item {
                     ToolTip.delay: 350
                     ToolTip.text: rowItem.group ? [rowItem.row.project, rowItem.row.model, rowItem.row.valueText + " " + S.tr2(S.rev, "unit.tokS")].filter(x => x).join("\n") : ""
                     Accessible.role: Accessible.ListItem
-                    Accessible.name: rowItem.group ? Format.fill(S.tr2(S.rev, "a11y.board.row"), [rowItem.row.rank, rowItem.row.project, rowItem.row.valueText, rowItem.row.effort || "", rowItem.row.speedMode || "", rowItem.row.subCount]) : ""
+                    Accessible.name: {
+                        if (kind === "more") return modelData.text || ""
+                        var base = rowItem.group ? Format.fill(S.tr2(S.rev, "a11y.board.row"), [rowItem.row.rank, rowItem.row.project, rowItem.row.valueText])
+                                                 : [rowItem.row.name || S.tr2(S.rev, "source." + (rowItem.row.source || "")), S.tr2(S.rev, "agents.subagent"),
+                                                    (rowItem.row.valueText || "0") + " " + S.tr2(S.rev, "unit.tokS")].join(board.separator)
+                        var intel = rowItem.row.intel || {}
+                        if (board.showIntel && (intel.shown === undefined ? -1 : intel.shown) >= 0 && intel.words)
+                            base += board.separator + Format.fill(S.tr2(S.rev, "a11y.agent.intel"), [intel.words])
+                        return base
+                    }
+                    Accessible.description: board.showIntel && kind !== "more" ? S.tr2(S.rev, "a11y.perf.card") : ""
+                    Accessible.onPressAction: if (board.showIntel && kind !== "more") board.cardToggle(rowItem, rowItem.key)
+                    activeFocusOnTab: board.showIntel && kind !== "more"
+                    Keys.onSpacePressed: board.cardToggle(rowItem, rowItem.key)
+                    Keys.onEscapePressed: { boardCard.visible = false; board.cardKey = "" }
+                    onActiveFocusChanged: if (activeFocus && boardCard.visible && board.cardKey !== rowItem.key) board.cardToggle(rowItem, rowItem.key)
+                    Rectangle {
+                        anchors.fill: parent
+                        radius: 9
+                        color: "transparent"
+                        border.width: rowItem.activeFocus ? 1.5 : 0
+                        border.color: Theme.accent
+                    }
                 }
             }
         }
@@ -1322,9 +1551,16 @@ Item {
             }
             if (rowY < 0) continue
             const top = ranking.mapToItem(board, 0, rowY)
-            if (e.type === "newLeader" && prefs.celebratePeaks) {
-                boardFx.newLeader(top.x + 18, top.y + rowH / 2, board.side * 0.95)
-                comets.goldUntil = Date.now() / 1000 + 2.2
+            if (e.type === "newLeader") {
+                let name = ""
+                const leaders = view.groups || []
+                for (let g = 0; g < leaders.length; ++g) if (leaders[g].id === e.id) name = leaders[g].project || ""
+                announceLeader(name)
+                if (prefs.celebratePeaks) {
+                    boardFx.newLeader(top.x + 18, top.y + rowH / 2, board.side * 0.95)
+                    comets.goldUntil = Date.now() / 1000 + 2.2
+                    if (board.style === "timing") leaderBanner.show(name)
+                }
             } else if (e.type === "overtake") {
                 const groups = view.groups || []
                 let color = board.heatColor

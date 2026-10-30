@@ -38,6 +38,7 @@ struct ReadoutContent {
     bool rising = true;
     bool rolls = false;  // the effects allow it (not Off, S ≥ 80)
     QString unit;
+    double unitHover = 0;   // 0–1: the pointer over the unit toggle raises it and underlines it (DESIGN 9)
     QString title;          // the speed title, or the idle label
     QString previousTitle;  // the one sliding out
     double titleChangedAt = -1e9;

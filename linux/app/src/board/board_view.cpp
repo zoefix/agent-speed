@@ -20,10 +20,13 @@ QString key(SourceKind kind) { return QString::fromUtf8(agentspeed::sourceId(kin
 double valueOf(const AgentRow& row, bool total) { return total ? row.liveTotal : row.liveOutput; }
 
 // DESIGN 12: a 性能 value as the board draws it — the shown integer (−1 for –), its compact and full texts, the form,
-// the provisional mark and the supplying agent.
-QVariantMap intelMap(const agentspeed::perf::Highest& value, bool provisional, std::int64_t scored) {
+// the provisional mark, the supplying agent and the words accessibility reads (the highest of N when N > 1).
+QVariantMap intelMap(const agentspeed::perf::Highest& value, bool provisional, std::int64_t scored, const Strings* strings) {
     const auto shown = value.shown.value_or(-1);
+    const QString words = strings && value.shown ? perf_card::scoreWords(*strings, shown, provisional, value.form == agentspeed::perf::Form::Resting, scored)
+                                                 : QString();
     return {{QStringLiteral("shown"), static_cast<qlonglong>(shown)},
+            {QStringLiteral("words"), words},
             {QStringLiteral("text"), value.shown ? format::perfCompact(shown) : QStringLiteral("–")},
             {QStringLiteral("fullText"), value.shown ? format::perfFull(shown) : QStringLiteral("–")},
             {QStringLiteral("scale"), value.shown ? format::perfScale(static_cast<double>(shown)) : 0.0},
@@ -34,7 +37,7 @@ QVariantMap intelMap(const agentspeed::perf::Highest& value, bool provisional, s
 }
 
 // METRICS 6.9 Sets and groups: the highest live score, else the highest resting score, else none.
-QVariantMap intelOf(const std::vector<const AgentRow*>& members) {
+QVariantMap intelOf(const std::vector<const AgentRow*>& members, const Strings* strings) {
     std::vector<agentspeed::perf::Valued> values;
     for (const auto* m : members) {
         if (m->perf) values.push_back({m->id, m->lastLineMs, m->perf->score.form, m->perf->score.score});
@@ -47,7 +50,7 @@ QVariantMap intelOf(const std::vector<const AgentRow*>& members) {
         if (value.agent && m->id == *value.agent) provisional = m->perf->score.provisional;
         if (value.form != agentspeed::perf::Form::None && m->perf->score.form == value.form) ++scored;
     }
-    return intelMap(value, provisional, scored);
+    return intelMap(value, provisional, scored, strings);
 }
 
 void capsule(const AgentRow& a, QVariantMap& row) {
@@ -144,7 +147,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
                                                           : QString());
         if (setOffset + index < snap.scoreSets.size()) {
             const auto& set = snap.scoreSets[setOffset + index];
-            view.insert(QStringLiteral("intel"), intelMap(set.value, set.provisional, set.scored));
+            view.insert(QStringLiteral("intel"), intelMap(set.value, set.provisional, set.scored, c.strings));
             view.insert(QStringLiteral("intelScored"), static_cast<int>(set.scored));
             view.insert(QStringLiteral("thinking"), set.liveThinking);
             view.insert(QStringLiteral("thinkingText"), format::speed(set.liveThinking));
@@ -155,7 +158,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
             std::vector<const AgentRow*> all;
             for (const auto& a : snap.agents)
                 if (inSet(a.source)) all.push_back(&a);
-            view.insert(QStringLiteral("intel"), intelOf(all));
+            view.insert(QStringLiteral("intel"), intelOf(all, c.strings));
             double thinking = 0;
             for (const auto* a : all) thinking += a->liveThinking;
             view.insert(QStringLiteral("thinking"), thinking);
@@ -234,7 +237,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
             row.insert(QStringLiteral("value"), groupValue[id]);
             row.insert(QStringLiteral("valueText"), format::speed(groupValue[id]));
             row.insert(QStringLiteral("share"), live > 0 ? std::min(1.0, groupValue[id] / live) : 0.0);
-            const auto intel = intelOf(team);
+            const auto intel = intelOf(team, c.strings);
             row.insert(QStringLiteral("intel"), intel);
             if (c.strings) {
                 // DESIGN 12 Score card: a group row's card is its supplying member's (none: the root's).
@@ -269,7 +272,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
                 sub.insert(QStringLiteral("name"), s->model ? QString::fromStdString(*s->model) : s->project ? QString::fromStdString(*s->project) : QString());
                 sub.insert(QStringLiteral("value"), valueOf(*s, c.totalMetric));
                 sub.insert(QStringLiteral("valueText"), format::speed(valueOf(*s, c.totalMetric)));
-                sub.insert(QStringLiteral("intel"), intelOf({s}));
+                sub.insert(QStringLiteral("intel"), intelOf({s}, c.strings));
                 if (c.strings) sub.insert(QStringLiteral("card"), perf_card::card(*s, *c.strings, c.strings->t(QStringLiteral("source.") + key(s->source))));
                 capsule(*s, sub);
                 subRows.append(sub);

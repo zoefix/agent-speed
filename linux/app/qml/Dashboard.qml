@@ -332,6 +332,16 @@ Window {
                             property real shown: root.snap.liveOutput || 0
                             Layout.fillWidth: true
                             implicitHeight: bigValue.implicitHeight
+                            // DESIGN 9 Accessibility: the hero reads like the orb; money with the currency's name.
+                            Accessible.role: Accessible.StaticText
+                            Accessible.name: {
+                                var title = heroTitle.text
+                                if (!root.moneyLive) return Format.fill(S.tr2(S.rev, "a11y.orb"), [Format.speed(valueRow.shown), title])
+                                if (root.snap.costLiveUnknown) return Format.fill(S.tr2(S.rev, "a11y.orb.costUnknown"), [title])
+                                var number = root.snap.costLiveNumber || "0"
+                                var amount = number.charAt(0) === "≥" ? Format.fill(S.tr2(S.rev, "a11y.orb.costAtLeast"), [number.substr(1)]) : number
+                                return Format.fill(S.tr2(S.rev, "a11y.orb.cost"), [amount, S.tr2(S.rev, "currency." + (prefs.currency || "USD")), title])
+                            }
                             Text {
                                 id: bigValue
                                 text: root.moneyLive ? (root.snap.costLiveNumber || "0") : Format.speed(valueRow.shown)

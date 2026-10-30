@@ -139,6 +139,8 @@ private:
     void addHighlight(Scene& scene, const Frame& frame) const;
     bool onUnit(QPointF local) const;
     void updateLabel();
+    void announceUnit();
+    void setUnitHover(bool on);
     const ::TitleThemes* titles_ = nullptr;
     std::function<std::vector<Disc>()> neighbors_;
     void stepIntel(double time, double dt);
@@ -185,6 +187,10 @@ private:
     double valueChangedAt_ = -1e9;
     bool valueRising_ = true;
     QString costSymbol_;
+    QString currency_;  // the display currency's code, read by name (DESIGN 9 Accessibility)
+    bool unitHover_ = false;
+    double unitHoverAmount_ = 0;
+    QTimer hintTimer_;
     QString info_;
     QString unavailable_;  // "", "disabled" or "notFound"
     QStringList unavailableSources_;
