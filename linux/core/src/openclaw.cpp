@@ -1,5 +1,7 @@
 #include "agentspeed/openclaw.hpp"
 
+#include <brotli/decode.h>
+#include <sqlite3.h>
 #include <sys/stat.h>
 #include <zstd.h>
 
@@ -93,6 +95,8 @@ void Parser::reset() {
     TranscriptParser::reset();
     pendingToolCalls_.clear();
     responses_.clear();
+    traces_.clear();
+    stamped_.clear();
     headerSeen_ = false;
     headerMs_.reset();
     setSource(SourceKind::OpenClaw);
@@ -172,16 +176,21 @@ void Parser::applyAssistant(const pi::Line& line, std::int64_t ts, ResponseSink&
         r.tokens = call.tokens;
         r.tokens.reasoning = call.reasoningTokens;
         r.provider = call.provider;
+        const std::int64_t stamp = line.startedMs.value_or(ts);
+        r.modes = modesAt(stamp);
         bool same = false;
         if (auto previous = responses_.find(key); previous != responses_.end()) {
             const auto& p = previous->second;
             same = p.startMs == r.startMs && p.endMs == r.endMs && p.tokens == r.tokens && p.model == r.model &&
-                   p.provider == r.provider;
+                   p.provider == r.provider && p.modes == r.modes;
         }
         if (!same) {
             responses_[key] = r;
             sink.onResponse(r, completion);
         }
+        std::erase_if(stamped_, [&](const auto& s) { return s.second == key; });
+        stamped_.emplace_back(stamp, key);
+        if (stamped_.size() > kUpdatableResponses) stamped_.erase(stamped_.begin());
         setModel(call.model);
     }
     if (window_.delegated()) return;
@@ -195,6 +204,54 @@ void Parser::applyAssistant(const pi::Line& line, std::int64_t ts, ResponseSink&
     } else {
         setPhase(Phase::Idle, ts, std::nullopt);
     }
+}
+
+// The facts of the window's latest row at or before `stampMs` (EXECUTION-MODES, OpenClaw).
+ExecutionModes Parser::modesAt(std::int64_t stampMs) const {
+    for (auto it = traces_.rbegin(); it != traces_.rend(); ++it) {
+        if (it->createdMs <= stampMs) return it->modes;
+    }
+    return {};
+}
+
+void Parser::addTraces(const std::vector<Trace>& rows, ResponseSink& sink) {
+    if (rows.empty()) return;
+    traces_.insert(traces_.end(), rows.begin(), rows.end());
+    setModes(traces_.back().modes);
+    for (const auto& [stamp, key] : stamped_) {
+        auto response = responses_.find(key);
+        if (response == responses_.end()) continue;
+        const auto modes = modesAt(stamp);
+        if (modes == response->second.modes) continue;
+        response->second.modes = modes;
+        sink.onResponse(response->second, false);
+    }
+}
+
+std::optional<ExecutionModes> traceModes(std::string_view text) {
+    json::Document document;
+    if (!document.parse(text) || !document.root().isObject() || !document.root()["type"].equals("trace.metadata")) return std::nullopt;
+    const auto model = document.root()["data"]["model"];
+    if (!model.isObject()) return ExecutionModes();
+    const auto think = model["thinkLevel"];
+    auto modes = ExecutionModes::of(native::effort(think.isString() ? think.string() : std::nullopt, ModeEvidence::Recorded, ModeScope::Turn));
+    // `fastMode` counts only when `true`: `ultrafast` and `auto` are written as `false` too.
+    if (model["fastMode"].isTrue()) {
+        modes = modes.with(ModeFact{ModeKind::ServiceTier, "fast", "fast", ModeEvidence::Selected, std::nullopt, ModeScope::Turn});
+    }
+    return modes;
+}
+
+std::optional<std::string> brotliDecode(std::string_view stream, std::size_t size) {
+    if (size == 0 || stream.empty()) return std::nullopt;
+    // One byte more than expected, so a stream that decodes to anything longer stops there.
+    std::string output(size + 1, '\0');
+    std::size_t written = output.size();
+    const auto status = BrotliDecoderDecompress(stream.size(), reinterpret_cast<const std::uint8_t*>(stream.data()), &written,
+                                                reinterpret_cast<std::uint8_t*>(output.data()));
+    if (status != BROTLI_DECODER_RESULT_SUCCESS || written != size) return std::nullopt;
+    output.resize(size);
+    return output;
 }
 
 Database::Database(std::unique_ptr<sqlite::Connection> connection, bool immutable, const std::set<std::string>& tables)
@@ -211,6 +268,24 @@ Database::Database(std::unique_ptr<sqlite::Connection> connection, bool immutabl
     const std::string zstd =
         events.contains("event_zstd") && events.contains("event_utf8_bytes") ? "event_zstd, event_utf8_bytes" : "NULL, NULL";
     rowsSql_ = "SELECT seq, event_json, " + zstd + " FROM transcript_events WHERE session_id = ?1 AND seq > ?2 ORDER BY seq";
+    if (!tables.contains("trajectory_runtime_events")) return;
+    const auto trajectory = columnsOf(*connection_, "trajectory_runtime_events");
+    if (!trajectory.contains("session_id") || !trajectory.contains("seq") || !trajectory.contains("event_json") || !trajectory.contains("created_at")) return;
+    const std::string limit = std::to_string(kMaxTraceBytes);
+    const std::string plain = "length(e.event_json) <= " + limit + " AND instr(e.event_json, '\"type\":\"trace.metadata\"') > 0";
+    if (trajectory.contains("event_payload") && trajectory.contains("event_codec") && trajectory.contains("event_utf8_bytes")) {
+        // A compressed row cannot be matched in SQL, but the row right after a plain `session.started` is a trace row.
+        tracesSql_ =
+            "SELECT e.seq, e.created_at, e.event_json, e.event_payload, e.event_codec, e.event_utf8_bytes "
+            "FROM trajectory_runtime_events e WHERE e.session_id = ?1 AND e.seq > ?2 AND ("
+            "(e.event_codec IS NULL AND " + plain + ") OR (e.event_codec = 'br' AND e.event_utf8_bytes <= " + limit +
+            " AND length(e.event_payload) <= " + limit +
+            " AND EXISTS (SELECT 1 FROM trajectory_runtime_events p WHERE p.session_id = e.session_id AND p.seq = e.seq - 1 "
+            "AND p.event_codec IS NULL AND instr(p.event_json, '\"type\":\"session.started\"') > 0))) ORDER BY e.seq";
+    } else {
+        tracesSql_ = "SELECT e.seq, e.created_at, e.event_json, NULL, NULL, NULL FROM trajectory_runtime_events e "
+                     "WHERE e.session_id = ?1 AND e.seq > ?2 AND " + plain + " ORDER BY e.seq";
+    }
 }
 
 Database::~Database() = default;
@@ -298,6 +373,30 @@ std::optional<std::int64_t> Database::maxSeq(const std::string& sessionId) {
     return s.step() ? integer(s, 0) : std::nullopt;
 }
 
+void Database::traces(const std::string& sessionId, std::int64_t afterSeq,
+                      const std::function<void(std::int64_t, const std::optional<Trace>&)>& onRow) {
+    if (tracesSql_.empty()) return;
+    auto s = connection_->prepare(tracesSql_);
+    s.bind(1, sessionId);
+    s.bind(2, afterSeq);
+    while (s.step()) {
+        std::optional<Trace> trace;
+        if (const auto created = integer(s, 1)) {
+            std::optional<ExecutionModes> modes;
+            if (s.isNull(4)) {
+                if (s.columnType(2) == SQLITE_TEXT) modes = traceModes(s.getText(2));
+            } else if (s.getString(4) == "br" && s.columnType(3) == SQLITE_BLOB) {
+                const auto size = integer(s, 5);
+                if (size && *size >= 1 && *size <= kMaxTraceBytes) {
+                    if (const auto text = brotliDecode(s.getBlob(3), static_cast<std::size_t>(*size))) modes = traceModes(*text);
+                }
+            }
+            if (modes) trace = Trace{*created, *modes};
+        }
+        onRow(s.getInt64(0), trace);
+    }
+}
+
 std::int64_t Database::rows(const std::string& sessionId, std::int64_t afterSeq,
                             const std::function<bool(std::int64_t, const Entry&)>& onRow) {
     auto s = connection_->prepare(rowsSql_);
@@ -366,6 +465,11 @@ std::optional<std::vector<std::unique_ptr<Parser>>> readAll(const std::string& p
         if (std::any_of(parsers.begin(), parsers.end(), [&](const auto& p) { return p->sessionId() == window.sessionId; })) continue;
         auto parser = std::make_unique<Parser>(path, window, deduper);
         ResponseSink& sink = sinkFor(*parser);
+        std::vector<Trace> traces;
+        database->traces(window.sessionId, -1, [&](std::int64_t, const std::optional<Trace>& trace) {
+            if (trace) traces.push_back(*trace);
+        });
+        parser->addTraces(traces, sink);
         database->rows(window.sessionId, INT64_MIN, [&](std::int64_t seq, const Entry& entry) {
             if (entry.status == Entry::Status::Malformed) {
                 parser->addMalformed(1);
@@ -539,11 +643,16 @@ void Source::readWindows(Tracked& tracked, Database& database, Update& update) {
         bool rewritten = generation != state.generation;
         const bool runtime = state.parser->runtimeChanged(window);
         state.parser->updateWindow(window);
-        if (!rewritten && !runtime && window.updatedMs == state.updatedMs) continue;
+        if (!rewritten && !runtime && window.updatedMs == state.updatedMs) {
+            // OpenClaw buffers a recorder's rows, so they can arrive after the transcript stopped changing.
+            if (!state.needsHeader) readTraces(state, database, update);
+            continue;
+        }
         if (!rewritten && !runtime && database.maxSeq(window.sessionId).value_or(INT64_MIN) < state.lastSeq) rewritten = true;
         if (rewritten || runtime) {
             state.parser->reset();
             state.lastSeq = INT64_MIN;
+            state.lastTraceSeq = -1;
             state.needsHeader = false;
             update.changed = true;
         }
@@ -561,12 +670,26 @@ void Source::readWindows(Tracked& tracked, Database& database, Update& update) {
     linkParents(tracked.path, raw, database.currentSessions());
 }
 
+void Source::readTraces(WindowState& state, Database& database, Update& update) {
+    std::vector<Trace> rows;
+    std::int64_t highest = state.lastTraceSeq;
+    database.traces(state.parser->sessionId(), highest, [&](std::int64_t seq, const std::optional<Trace>& trace) {
+        highest = seq;
+        if (trace) rows.push_back(*trace);
+    });
+    state.lastTraceSeq = highest;
+    if (rows.empty()) return;
+    state.parser->addTraces(rows, update);
+    update.changed = true;
+}
+
 void Source::readRows(WindowState& state, Database& database, Update& update) {
     if (state.needsHeader) {
         // An older window read from its end: its header first, as omp does for a file read from an offset (4.7).
         state.needsHeader = false;
         if (auto header = database.header(state.parser->sessionId())) state.parser->applyEntry(*header, update);
     }
+    readTraces(state, database, update);
     const auto before = state.parser->version();
     state.lastSeq = database.rows(state.parser->sessionId(), state.lastSeq, [&](std::int64_t, const Entry& entry) {
         if (entry.status == Entry::Status::Malformed) {

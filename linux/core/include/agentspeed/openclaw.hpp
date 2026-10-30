@@ -11,6 +11,18 @@
 // METRICS 4.14: OpenClaw keeps every transcript window in one SQLite database per OpenClaw agent, as Pi entries.
 namespace agentspeed::openclaw {
 
+// One `trace.metadata` row of a window: when it was written and what the attempt ran with. A row that lost `data.model`
+// to OpenClaw's size limit has no facts, which ends the previous row's reach.
+struct Trace {
+    std::int64_t createdMs = 0;
+    ExecutionModes modes;
+};
+
+// `data.model.thinkLevel` and `data.model.fastMode` of a trace row's JSON; nullopt unless its type is `trace.metadata`.
+std::optional<ExecutionModes> traceModes(std::string_view text);
+// A Brotli stream decoded to exactly `size` bytes; nullopt for a damaged stream or one of any other size.
+std::optional<std::string> brotliDecode(std::string_view stream, std::size_t size);
+
 struct Window {
     std::string sessionId;
     std::optional<std::int64_t> createdMs, updatedMs;
@@ -26,6 +38,9 @@ struct Window {
 
 class Parser : public TranscriptParser {
 public:
+    // Recent responses a late trace row can still update.
+    static constexpr std::size_t kUpdatableResponses = 1024;
+
     Parser(const std::string& databasePath, Window window, Deduper& deduper);
     static std::string agentIdOf(const std::string& databasePath, const std::string& sessionId) {
         return databasePath + "#" + sessionId;
@@ -35,6 +50,8 @@ public:
     // A valid row: applied, then shown to the line observer.
     void applyEntry(const struct Entry& entry, ResponseSink& sink);
     void reset() override;
+    // Rows read after the ones before them; a response at or after a new row takes its facts, like any upsert.
+    void addTraces(const std::vector<Trace>& rows, ResponseSink& sink);
     CopyFacts copyFacts() const override { return {headerMs_, std::nullopt, window_.mirrorsOnly()}; }
     AgentLink link() const override;
 
@@ -50,12 +67,16 @@ public:
 private:
     bool isMirror(const pi::Line& line) const;
     void applyAssistant(const pi::Line& line, std::int64_t ts, ResponseSink& sink);
+    ExecutionModes modesAt(std::int64_t stampMs) const;
 
     std::string databasePath_;
     Window window_;
     std::optional<std::string> parentId_;
     std::set<std::string> pendingToolCalls_;
     std::map<std::string, ParsedResponse> responses_;
+    // The window's trace rows in `seq` order, and recent responses with the stamp a row's `created_at` is compared with.
+    std::vector<Trace> traces_;
+    std::vector<std::pair<std::int64_t, std::string>> stamped_;
     bool headerSeen_ = false;
     std::optional<std::int64_t> headerMs_;
 };
@@ -71,6 +92,7 @@ class Database {
 public:
     static constexpr std::int64_t kMaxEventBytes = 4 * 1024 * 1024;
     static constexpr std::size_t kMaxEntryBytes = 32u << 20;
+    static constexpr std::int64_t kMaxTraceBytes = 262144;
 
     // Throws sqlite::Error.
     static std::unique_ptr<Database> open(const std::string& path);
@@ -88,6 +110,10 @@ public:
                       const std::function<bool(std::int64_t, const Entry&)>& onRow);
     // The first entry of type `session`.
     std::optional<Entry> header(const std::string& sessionId);
+    // The window's selected trajectory rows above `afterSeq`, in order: each row's seq with its trace, nullopt when it does
+    // not decode or is no `trace.metadata` event. Nothing else of a row leaves this call.
+    void traces(const std::string& sessionId, std::int64_t afterSeq,
+                const std::function<void(std::int64_t, const std::optional<Trace>&)>& onRow);
 
 private:
     Database(std::unique_ptr<sqlite::Connection> connection, bool immutable, const std::set<std::string>& tables);
@@ -95,7 +121,7 @@ private:
     bool immutable_;
     bool supported_;
     bool hasNodes_, hasWatermarks_;
-    std::string windowsSql_, rowsSql_;
+    std::string windowsSql_, rowsSql_, tracesSql_;
 };
 
 // Every window of a database read completely (history, fixtures); nullopt for an unsupported database.
@@ -130,6 +156,8 @@ private:
     struct WindowState {
         std::unique_ptr<Parser> parser;
         std::int64_t lastSeq = INT64_MIN;
+        // The last trajectory row read; -1 before the first.
+        std::int64_t lastTraceSeq = -1;
         std::optional<std::int64_t> updatedMs;
         std::optional<std::string> generation;
         bool needsHeader = false;
@@ -145,6 +173,7 @@ private:
     void read(Tracked& tracked, Update& update);
     void readWindows(Tracked& tracked, Database& database, Update& update);
     void readRows(WindowState& state, Database& database, Update& update);
+    void readTraces(WindowState& state, Database& database, Update& update);
     void removeWindow(Tracked& tracked, const std::string& sessionId, Update& update);
     void drop(Tracked& tracked, Update& update);
     std::vector<std::pair<std::string, sqlite::DatabaseStamp>> discovered();

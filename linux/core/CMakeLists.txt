@@ -1,5 +1,6 @@
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
+pkg_check_modules(BROTLI REQUIRED IMPORTED_TARGET libbrotlidec)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
 pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
@@ -30,6 +31,7 @@ add_library(agentspeed_core STATIC
     src/board.cpp
     src/claude_parser.cpp
     src/codex_parser.cpp
+    src/configured_modes.cpp
     src/dedupe.cpp
     src/demo.cpp
     src/discovery.cpp
@@ -52,6 +54,7 @@ add_library(agentspeed_core STATIC
     src/model.cpp
     src/modes.cpp
     src/money.cpp
+    src/mode_context.cpp
     src/monitor.cpp
     src/monitor_snapshot.cpp
     src/monitor_sources.cpp
@@ -97,4 +100,4 @@ add_library(agentspeed_core STATIC
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_core PUBLIC include)
-target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::ICU)
+target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::BROTLI PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::ICU)
