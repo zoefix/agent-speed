@@ -144,7 +144,7 @@ dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ```sh
 cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
 cmake --build build && ctest --test-dir build
-linux/packaging/package.sh build dist 1.6.0   # → AppImage と .deb
+linux/packaging/package.sh build dist 1.6.1   # → AppImage と .deb
 ```
 </details>
 
