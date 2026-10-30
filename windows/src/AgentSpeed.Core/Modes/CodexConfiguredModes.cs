@@ -2,38 +2,25 @@ using System.Text.RegularExpressions;
 
 namespace AgentSpeed.Core;
 
+/// <summary>The declared root <c>service_tier</c> of the Codex home's <c>config.toml</c>: a configured value, never a running task's.</summary>
 public static partial class CodexConfiguredModes
 {
-    private static readonly Dictionary<string, (long Length, DateTime Modified, ExecutionModes Modes)> Cache = new(StringComparer.Ordinal);
-
-    public static ExecutionModes Read(string? root)
+    /// <summary><c>config.toml</c> of the Codex home, for the home or its <c>sessions</c> folder.</summary>
+    public static string ConfigPath(string root)
     {
-        if (string.IsNullOrEmpty(root)) return ExecutionModes.Empty;
-        try
-        {
-            root = Path.TrimEndingDirectorySeparator(root);
-            var config = Path.Combine(Path.GetFileName(root) == "sessions" ? Path.GetDirectoryName(root)! : root, "config.toml");
-            var info = new FileInfo(config);
-            if (!info.Exists || info.Length > 1024 * 1024 || info.LinkTarget is not null) return ExecutionModes.Empty;
-            lock (Cache)
-            {
-                if (Cache.TryGetValue(config, out var cached) && cached.Length == info.Length && cached.Modified == info.LastWriteTimeUtc)
-                    return cached.Modes;
-                var modes = Parse(config);
-                if (Cache.Count >= 16) Cache.Clear();
-                Cache[config] = (info.Length, info.LastWriteTimeUtc, modes);
-                return modes;
-            }
-        }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or ArgumentException) { }
-        return ExecutionModes.Empty;
+        root = Path.TrimEndingDirectorySeparator(root);
+        return Path.Combine(Path.GetFileName(root) == "sessions" ? Path.GetDirectoryName(root) ?? string.Empty : root, "config.toml");
     }
 
-    private static ExecutionModes Parse(string config)
+    public static ExecutionModes Read(string? root) => string.IsNullOrEmpty(root) ? ExecutionModes.Empty : Parse(ConfigFile.Text(ConfigPath(root)));
+
+    internal static ExecutionModes Parse(string? config)
     {
+        if (config is null) return ExecutionModes.Empty;
         var modes = ExecutionModes.Empty;
         var found = false;
-        foreach (var line in File.ReadLines(config))
+        using var lines = new StringReader(config);
+        while (lines.ReadLine() is { } line)
         {
             var text = line.Trim();
             if (text.StartsWith('#')) continue;

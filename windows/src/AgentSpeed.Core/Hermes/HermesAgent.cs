@@ -21,8 +21,24 @@ internal sealed class HermesAgent(string agentId, string sessionId)
     /// <summary>The latest turn-start line whose platform is not <c>subagent</c>: a main session that day (DESIGN 5).</summary>
     public long? LastMainTurnMs { get; private set; }
 
+    /// <summary>The session's effort in <c>state.db</c>, a session-current fact.</summary>
+    public ExecutionModes SessionModes { get; private set; } = ExecutionModes.Empty;
+
+    /// <summary>The effort and tier of the profile's <c>config.yaml</c>.</summary>
+    public ExecutionModes ConfiguredModes { get; private set; } = ExecutionModes.Empty;
+
     /// <summary>Changes whenever agent-visible state changes.</summary>
     public int Version { get; private set; }
+
+    public void SetModes(ExecutionModes session, ExecutionModes configured)
+    {
+        if (!session.Equals(SessionModes) || !configured.Equals(ConfiguredModes))
+        {
+            SessionModes = session;
+            ConfiguredModes = configured;
+            Version++;
+        }
+    }
 
     public void Touch(long timestampMs)
     {

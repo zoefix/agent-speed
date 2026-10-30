@@ -15,6 +15,14 @@ internal readonly record struct AgentInfo(
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
 
+    /// <summary>A session-current fact (EXECUTION-MODES, Current values): the agent's current value only, never a response's.</summary>
+    public ExecutionModes SessionModes { get; init; } = ExecutionModes.Empty;
+
+    /// <summary>A value only a config file holds: shown as configured and nothing else.</summary>
+    public ExecutionModes ConfiguredModes { get; init; } = ExecutionModes.Empty;
+
+    public ExecutionModeAttribution CurrentEffort => ExecutionModes.Current(ExecutionModeKind.Effort, Modes, SessionModes, ConfiguredModes);
+
     /// <summary>The file's latest tool calls (METRICS 6.10), oldest first.</summary>
     public IReadOnlyList<Work.WorkAction> Work { get; init; } = [];
 }

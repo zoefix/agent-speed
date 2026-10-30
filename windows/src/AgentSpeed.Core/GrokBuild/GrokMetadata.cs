@@ -6,7 +6,8 @@ using static AgentSpeed.Core.Harnesses.HarnessJson;
 
 namespace AgentSpeed.Core.GrokBuild;
 
-internal sealed record GrokMetadata(string? Id, string? Cwd, string? Model, string? Parent, string? Kind, long? CreatedMs)
+/// <param name="Effort"><c>reasoning_effort</c>: what the session has selected now, overwritten in place.</param>
+internal sealed record GrokMetadata(string? Id, string? Cwd, string? Model, string? Parent, string? Kind, long? CreatedMs, string? Effort = null)
 {
     public static GrokMetadata? Read(string folder)
     {
@@ -23,7 +24,7 @@ internal sealed record GrokMetadata(string? Id, string? Cwd, string? Model, stri
 
             var session = Get(root, "info");
             return new GrokMetadata(String(session, "id"), String(session, "cwd"), String(root, "current_model_id"),
-                String(root, "parent_session_id"), String(root, "session_kind"), Timestamp(Get(root, "created_at")));
+                String(root, "parent_session_id"), String(root, "session_kind"), Timestamp(Get(root, "created_at")), String(root, "reasoning_effort"));
         }
         catch (Exception error) when (error is IOException or UnauthorizedAccessException or JsonException)
         {

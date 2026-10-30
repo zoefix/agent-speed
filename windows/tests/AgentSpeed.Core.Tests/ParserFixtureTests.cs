@@ -88,7 +88,8 @@ public sealed class ParserFixtureTests
             Assert.Equal(parser.AgentId, r.AgentId);
         }
 
-        AssertModes(expected, relative, parser.Modes, responses);
+        var (session, configured) = Context(relative, parser);
+        AssertModes(expected, relative, parser.Modes, responses, session, configured);
         AssertActions(expected, relative, parser.WorkActions);
     }
 
@@ -174,15 +175,18 @@ public sealed class ParserFixtureTests
     };
 
     /// <summary>
-    /// The current <c>effort</c> and <c>speed</c> and each response's <c>responseModes</c> (EXECUTION-MODES, Native rules);
-    /// entries without these keys are not checked.
+    /// The current <c>effort</c> and <c>speed</c> (EXECUTION-MODES, Current values) and each response's <c>responseModes</c>
+    /// (Native rules); entries without these keys are not checked.
     /// </summary>
-    internal static void AssertModes(JsonElement expected, string label, ExecutionModes current, IEnumerable<ParsedResponse> responses)
+    internal static void AssertModes(JsonElement expected, string label, ExecutionModes current, IEnumerable<ParsedResponse> responses,
+        ExecutionModes? session = null, ExecutionModes? configured = null)
     {
+        ExecutionModeAttribution? Current(ExecutionModeKind kind) =>
+            ExecutionModes.Current(kind, current, session ?? ExecutionModes.Empty, configured ?? ExecutionModes.Empty) is { IsKnown: true } known ? known : null;
         if (expected.TryGetProperty("effort", out var effort))
-            Assert.True(Attribution(effort) == View(EffortAndSpeed.Effort(current)), $"{label} effort: got {EffortAndSpeed.Effort(current)}");
+            Assert.True(Attribution(effort) == View(Current(ExecutionModeKind.Effort)), $"{label} effort: got {Current(ExecutionModeKind.Effort)}");
         if (expected.TryGetProperty("speed", out var speed))
-            Assert.True(Attribution(speed) == View(EffortAndSpeed.Speed(current)), $"{label} speed: got {EffortAndSpeed.Speed(current)}");
+            Assert.True(Attribution(speed) == View(Current(ExecutionModeKind.Speed)), $"{label} speed: got {Current(ExecutionModeKind.Speed)}");
         if (!expected.TryGetProperty("responseModes", out var byKey)) return;
         var latest = responses.GroupBy(r => r.Key).ToDictionary(g => g.Key, g => g.Last().Modes, StringComparer.Ordinal);
         Assert.Equal(byKey.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal), latest.Keys.Order(StringComparer.Ordinal));
@@ -194,6 +198,31 @@ public sealed class ParserFixtureTests
             Assert.True(Attribution(item.Value.GetProperty("speed")) == View(EffortAndSpeed.Speed(modes)),
                 $"{label} {item.Name} speed: got {EffortAndSpeed.Speed(modes)}");
         }
+    }
+
+    /// <summary>
+    /// The session-current and configured facts of a fixture agent, read by the app's own readers from the homes the fixture
+    /// folders play, like the reference's <c>fixture_context</c>.
+    /// </summary>
+    private static (ExecutionModes Session, ExecutionModes Configured) Context(string relative, TranscriptParser parser)
+    {
+        var configured = new ConfiguredValues();
+        if (relative.StartsWith("workbuddy/", StringComparison.Ordinal))
+        {
+            var root = WorkBuddyFixture.RootOf(parser.Source);
+            var store = WorkBuddyPaths.Sessions(root);
+            var session = WorkBuddyPaths.SessionId(parser.AgentId);
+            store.Refresh([session]);
+            return (store.Of(session), configured.Of(parser.Source, root, parser.AgentId, parser.Model));
+        }
+
+        var folder = parser.Source switch
+        {
+            SourceKind.Codex => parser.AgentId[..(parser.AgentId.IndexOf(Path.DirectorySeparatorChar + "sessions" + Path.DirectorySeparatorChar, StringComparison.Ordinal) + 9)],
+            SourceKind.Gemini => FixtureLocator.PathOf("gemini/tmp"),
+            _ => string.Empty,
+        };
+        return (parser.SessionModes, configured.Of(parser.Source, folder, parser.AgentId, parser.Model));
     }
 
     private static (string, string, string?)? Attribution(JsonElement value) => value.ValueKind == JsonValueKind.Null ? null

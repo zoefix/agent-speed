@@ -34,6 +34,14 @@ internal static class WorkBuddyPaths
         return IsProjectsFolder(trimmed) && Path.GetDirectoryName(trimmed) is { Length: > 0 } data ? data : trimmed;
     }
 
+    /// <summary>The session a transcript belongs to: its file name without <c>.jsonl</c>.</summary>
+    public static string SessionId(string transcript) => Path.GetFileNameWithoutExtension(transcript);
+
+    /// <summary>The session-current efforts in <c>workbuddy.db</c> of a data or <c>projects</c> folder (METRICS 4.9).</summary>
+    public static SessionStore Sessions(string dataOrProjects) => new(
+        Path.Combine(DataFolderOf(dataOrProjects), "workbuddy.db"), "SELECT thought_level FROM sessions WHERE id = ?",
+        raw => ExecutionModes.Of(ExecutionModeNative.Effort(raw, ExecutionModeEvidence.Selected, ExecutionModeScope.Session)));
+
     private static bool IsProjectsFolder(string path) =>
         Parsing.PathText.Basename(path).Equals(ProjectsFolder, StringComparison.OrdinalIgnoreCase);
 

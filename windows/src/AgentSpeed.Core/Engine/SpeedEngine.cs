@@ -119,7 +119,8 @@ internal sealed class SpeedEngine
 
         if (isCompletion && !seeded && liveNowMs is { } now && response.EndMs >= now - CompletionEventWindowMs)
         {
-            _reportLedger.Count(response, ReportModelId(response.Model, response.Provider));
+            _reportLedger.Count(response, ReportModelId(response.Model, response.Provider),
+                _agents.TryGetValue(response.AgentId, out var agent) ? agent.CurrentEffort : null);
         }
         else if (_reportLedger.IsCounted(response.Key))
         {

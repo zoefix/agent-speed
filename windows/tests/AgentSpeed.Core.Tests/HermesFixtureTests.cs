@@ -46,6 +46,8 @@ public sealed class HermesFixtureTests
 
     public static TheoryData<int> RuntimeConfigs() => Indexes("runtimeConfigs");
 
+    public static TheoryData<int> AgentConfigs() => Indexes("agentConfigs");
+
     [Fact]
     public void DiscoveryFindsTheLogsOfTheHomeAndEveryProfile()
     {
@@ -91,6 +93,8 @@ public sealed class HermesFixtureTests
             {
                 AssertResponse(expectedResponses[i], responses[i], label);
             }
+
+            ParserFixtureTests.AssertModes(want, label, ExecutionModes.Empty, responses, agent.SessionModes, agent.ConfiguredModes);
         }
     }
 
@@ -161,6 +165,16 @@ public sealed class HermesFixtureTests
         var item = Expected.GetProperty("runtimeConfigs")[index];
         Assert.True(item.GetProperty("codexRuntime").GetBoolean() == HermesConfig.SelectsCodexRuntime(item.GetProperty("text").GetString()!),
             item.GetProperty("name").GetString());
+    }
+
+    [Theory]
+    [MemberData(nameof(AgentConfigs))]
+    public void AgentScalarsMatchExpectation(int index)
+    {
+        var item = Expected.GetProperty("agentConfigs")[index];
+        var want = item.EnumerateObject().Where(p => p.Name is not ("name" or "text"))
+            .ToDictionary(p => p.Name, p => p.Value.ValueKind == JsonValueKind.Null ? null : p.Value.GetString(), StringComparer.Ordinal);
+        Assert.Equal(want, HermesConfig.AgentScalars(item.GetProperty("text").GetString()!));
     }
 
     [Fact]
@@ -355,6 +369,11 @@ public sealed class HermesFixtureTests
             {
                 break;
             }
+        }
+
+        foreach (var set in sets.Values)
+        {
+            set.RefreshSessions();
         }
 
         return (sets, sink);

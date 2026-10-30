@@ -92,6 +92,15 @@ public sealed record AgentStatus(
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
 
+    /// <summary>A session-current fact (EXECUTION-MODES, Current values): the agent's current value only, never a response's.</summary>
+    public ExecutionModes SessionModes { get; init; } = ExecutionModes.Empty;
+
+    /// <summary>A value only a config file holds: shown as configured and nothing else.</summary>
+    public ExecutionModes ConfiguredModes { get; init; } = ExecutionModes.Empty;
+
+    /// <summary>The first known of the agent's own facts, a session-current fact and a configured value.</summary>
+    public ExecutionModeAttribution Current(ExecutionModeKind kind) => ExecutionModes.Current(kind, Modes, SessionModes, ConfiguredModes);
+
     /// <summary>
     /// The agent's 性能 (METRICS 6.9 <i>Values</i>): its performance score by phase — live, resting (pale) or none — and
     /// its own live thinking sums.

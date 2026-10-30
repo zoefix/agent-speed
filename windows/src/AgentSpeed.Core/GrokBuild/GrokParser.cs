@@ -146,6 +146,7 @@ internal sealed class GrokParser : TranscriptParser<GrokLine>
         SetModel(metadata.Model);
         ParentSessionId = metadata.Parent;
         CreatedMs = metadata.CreatedMs;
+        SessionModes = ExecutionModes.Of(ExecutionModeNative.Effort(metadata.Effort, ExecutionModeEvidence.Selected, ExecutionModeScope.Session));
         SetSubagent(ParentSessionId is { Length: > 0 } && (metadata.Kind is "subagent" or "subagent_fork"));
         _suppressUsage = IsSubagent && ParentSessionId is { Length: > 0 };
         if (ParentSessionId is { Length: <= 256 } parent && parent is not "." and not ".." && parent.IndexOfAny(['/', '\\', ':']) < 0
