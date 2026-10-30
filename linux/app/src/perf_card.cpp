@@ -225,8 +225,17 @@ QVariantMap card(const agentspeed::AgentRow& row, const Strings& s, const QStrin
 
     QStringList facts;
     if (scored) facts << s.fmt(QStringLiteral("perf.card.sample"), {static_cast<qlonglong>(e.n)});
-    if (row.effort) facts << s.fmt(QStringLiteral("effort.tooltip"), {QString::fromStdString(*row.effort)});
-    if (row.speed) facts << s.fmt(QStringLiteral("speed.tooltip"), {QString::fromStdString(*row.speed)});
+    // Effort and speed, each spelled as its token (unrecorded when missing), and the top rung's explanation.
+    if (row.effort || row.speed) {
+        const auto speedValue = [&](const std::string& v) {
+            return v == "standard" || v == "fast" || v == "ultrafast" || v == "highspeed" ? s.t(QStringLiteral("speed.value.") + QString::fromStdString(v))
+                                                                                         : QString::fromStdString(v);
+        };
+        facts << s.fmt(QStringLiteral("effort.tooltip"), {row.effort ? QString::fromStdString(*row.effort) : s.t(QStringLiteral("modes.unrecorded"))});
+        facts << s.fmt(QStringLiteral("speed.tooltip"), {row.speed ? speedValue(*row.speed) : s.t(QStringLiteral("modes.unrecorded"))});
+        if (row.effort == "ultra") facts << s.t(QStringLiteral("effort.ultra.detail"));
+        if (row.effort == "ultracode") facts << s.t(QStringLiteral("effort.ultracode.detail"));
+    }
     card.insert(QStringLiteral("facts"), facts);
     a11y << facts;
     const auto footnote = s.t(QStringLiteral("perf.card.footnote"));

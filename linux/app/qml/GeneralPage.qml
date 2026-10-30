@@ -25,10 +25,10 @@ SettingsPage {
                 value: prefs.language
                 options: [
                     { value: "system", label: S.tr2(S.rev, "settings.language.system") },
-                    { value: "zh-Hant", label: "繁體中文" },
-                    { value: "zh-Hans", label: "简体中文" },
-                    { value: "en", label: "English" },
-                    { value: "ja", label: "日本語" }
+                    { value: "zh-Hant", label: S.tr2(S.rev, "language.zhHant") },
+                    { value: "zh-Hans", label: S.tr2(S.rev, "language.zhHans") },
+                    { value: "en", label: S.tr2(S.rev, "language.en") },
+                    { value: "ja", label: S.tr2(S.rev, "language.ja") }
                 ]
                 onActivated: (v) => prefs.language = v
             }

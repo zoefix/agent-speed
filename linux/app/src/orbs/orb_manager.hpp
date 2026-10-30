@@ -65,6 +65,11 @@ public:
     bool canSplitAll() const { return detected().size() >= 2; }
     // Development aids.
     orb::OrbWindow* first() const;
+    // Development aid: the first orb's id and its name plate's picture.
+    QString firstId() const;
+    QImage platePicture(const QString& id) const;
+    // The source chip (folded into the plate while one shows) for `seconds`.
+    void showChip(const QString& id, double seconds);
     void forceDark(bool on);
 
     Q_INVOKABLE void set(const QString& id, const QString& key, const QVariant& value);
@@ -125,7 +130,6 @@ private:
     std::vector<orb::Disc> discs(const QString& except) const;
     void showMenu(const QString& id, QPoint global);
     void showBanner(const QString& text);
-    void showChip(const QString& id, double seconds);
     QStringList detected() const;
     QString nameOf(const OrbConfig& config) const;
     QString sourceName(const QString& key) const;

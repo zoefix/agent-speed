@@ -84,7 +84,7 @@ Window {
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
                 rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
                 bolts: a.bolts, perf: a.perf, perfForm: a.perfForm, perfProvisional: a.perfProvisional, perfA11y: a.perfA11y || "", looping: a.looping,
-                trafficSuffix: a.trafficSuffix || ""
+                trafficSuffix: a.trafficSuffix || "", status: a.status || "", liveText: a.liveText || "0"
             })
         }
         Sync.sync(agentModel, agents, "key")
@@ -188,6 +188,18 @@ Window {
         scoreCard.visible = true
         if (changed) scoreCard.fit()
     }
+    // Keyboard: Space on a focused row (or its press action, `a11y.perf.card`) shows the card; again hides it.
+    function cardToggle(key, item) {
+        if (scoreCard.visible && cardKey === key) {
+            hideCard()
+            return
+        }
+        hoverKey = key
+        hoverItem = item
+        cardShow.stop()
+        cardHide.stop()
+        openCard()
+    }
     function hideCard() {
         cardShow.stop()
         cardHide.stop()
@@ -216,7 +228,7 @@ Window {
 
     Shortcut {
         sequence: "Escape"
-        onActivated: root.dismissed()
+        onActivated: scoreCard.visible ? root.hideCard() : root.dismissed()
     }
 
     Item {
@@ -527,6 +539,8 @@ Window {
                             capsuleWords: root.capsuleWords
                             perfWidth: root.perfCellWidth
                             onHoverChanged: hovered => root.rowHover(key, this, hovered)
+                            onCardRequested: root.cardToggle(key, this)
+                            onActiveFocusChanged: if (activeFocus && scoreCard.visible && root.cardKey !== key) root.cardToggle(key, this)
                         }
                         add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
                         remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
@@ -777,7 +791,8 @@ Window {
                     visible: info.checked
                     Layout.fillWidth: true
                     Layout.bottomMargin: 10
-                    text: S.tr2(S.rev, "metric.info")
+                    // DESIGN 9 Metric info: the cost explanation follows as a second paragraph.
+                    text: S.tr2(S.rev, "metric.info") + "\n\n" + S.tr2(S.rev, "cost.info")
                     color: Theme.ink2
                     font.pixelSize: 12
                     lineHeight: 1.3

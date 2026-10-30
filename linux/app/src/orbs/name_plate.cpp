@@ -12,6 +12,7 @@
 #include <QVariantAnimation>
 #include <algorithm>
 #include <cmath>
+#include <numbers>
 
 namespace {
 
@@ -30,6 +31,8 @@ bool cjk(const QString& text) {
 }  // namespace
 
 NamePlate::NamePlate() {
+    spring_.setInterval(16);
+    connect(&spring_, &QTimer::timeout, this, &NamePlate::step);
     QSurfaceFormat format;
     format.setAlphaBufferSize(8);
     setFormat(format);
@@ -55,7 +58,7 @@ bool NamePlate::event(QEvent* e) {
 }
 
 void NamePlate::mousePressEvent(QMouseEvent* e) {
-    if (!QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()).contains(e->position())) {
+    if (!drawn().contains(e->position())) {
         e->ignore();
         return;
     }
@@ -64,7 +67,7 @@ void NamePlate::mousePressEvent(QMouseEvent* e) {
 }
 
 void NamePlate::mouseMoveEvent(QMouseEvent* e) {
-    const bool inside = QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()).contains(e->position());
+    const bool inside = drawn().contains(e->position());
     if (inside != inside_ && !pressing_) {
         inside_ = inside;
         emit hovered(inside);
@@ -113,21 +116,80 @@ QString NamePlate::fitted() const {
 
 void NamePlate::setLook(const Look& look) {
     if (look == look_ && !text_.isEmpty()) return;
+    const QString oldText = text_, oldStatus = status_;
     look_ = look;
     text_ = fitted();
+    status_ = look_.status;
     const double s = look_.diameter, f = textSize(s), h = plateHeight(s), d = dotSize(s);
     const int dots = look_.spectrum.empty() ? std::min<int>(3, static_cast<int>(look_.dots.size())) : 1;
     const QFontMetricsF fm(font());
     const QString status = look_.status.isEmpty() ? QString() : QStringLiteral(" · ") + look_.status;
     const double width = h / 2 + (dots > 0 ? (dots - 1) * d * 2 / 3 + d / 2 + 0.42 * f : 0) + fm.horizontalAdvance(text_ + status) + 0.52 * h;
     capsule_ = QSizeF(std::ceil(width), h);
-    resize(qCeil(capsule_.width()) + 2 * kMargin, qCeil(capsule_.height()) + 2 * kMargin);
+    const bool shown = isVisible() && opacity() > 0.01;
+    // A visible plate morphs: the text crossfades and the width springs; otherwise both jump.
+    if (shown && !oldText.isEmpty() && (oldText != text_ || oldStatus != status_)) {
+        previousText_ = oldText;
+        previousStatus_ = oldStatus;
+        crossfade_ = 0;
+    }
+    if (!shown || width_ <= 0) {
+        width_ = capsule_.width();
+        velocity_ = 0;
+    }
+    canvas_ = std::max(width_, capsule_.width());
+    resize(qCeil(canvas_) + 2 * kMargin, qCeil(capsule_.height()) + 2 * kMargin);
+    if (placed_) reposition();
     // Outside the capsule clicks reach what is below.
-    if (isVisible()) orb::x11::setInputRect(this, QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()));
+    if (isVisible()) orb::x11::setInputRect(this, drawn());
+    if (std::abs(width_ - capsule_.width()) > 0.25 || crossfade_ < 1) {
+        clock_.start();
+        spring_.start();
+    }
     update();
 }
 
-void NamePlate::placeCapsule(QPointF point) { setPosition((point - QPointF(kMargin, kMargin)).toPoint()); }
+void NamePlate::placeCapsule(QPointF point, double anchor) {
+    anchor_ = anchor;
+    anchorPoint_ = QPointF(point.x() + anchor * capsule_.width(), point.y());
+    placed_ = true;
+    reposition();
+}
+
+// The window keeps the anchor point still; the capsule is drawn inside it at its current width.
+void NamePlate::reposition() {
+    setPosition(QPointF(anchorPoint_.x() - anchor_ * canvas_ - kMargin, anchorPoint_.y() - kMargin).toPoint());
+}
+
+QRectF NamePlate::drawn() const {
+    return QRectF(kMargin + anchor_ * (canvas_ - width_), kMargin, width_, capsule_.height());
+}
+
+void NamePlate::step() {
+    const double dt = std::min(0.05, static_cast<double>(clock_.restart()) / 1000.0);
+    const double omega = 2 * std::numbers::pi / 0.3, zeta = 0.86;
+    const double target = capsule_.width();
+    velocity_ += (-omega * omega * (width_ - target) - 2 * zeta * omega * velocity_) * dt;
+    width_ += velocity_ * dt;
+    crossfade_ = std::min(1.0, crossfade_ + dt / 0.15);
+    const bool settled = std::abs(width_ - target) < 0.25 && std::abs(velocity_) < 2 && crossfade_ >= 1;
+    if (settled) {
+        width_ = target;
+        velocity_ = 0;
+        spring_.stop();
+        previousText_.clear();
+        previousStatus_.clear();
+        canvas_ = target;
+        resize(qCeil(canvas_) + 2 * kMargin, qCeil(capsule_.height()) + 2 * kMargin);
+        if (placed_) reposition();
+    } else if (width_ > canvas_) {
+        canvas_ = std::ceil(width_);
+        resize(qCeil(canvas_) + 2 * kMargin, qCeil(capsule_.height()) + 2 * kMargin);
+        if (placed_) reposition();
+    }
+    if (isVisible()) orb::x11::setInputRect(this, drawn());
+    update();
+}
 
 // Appear: opacity 0 → 1 in 0.28 s; disappear: fade out in 0.18 s.
 void NamePlate::appear() {
@@ -135,7 +197,7 @@ void NamePlate::appear() {
     wanted_ = true;
     if (!isVisible()) {
         show();
-        orb::x11::setInputRect(this, QRectF(kMargin, kMargin, capsule_.width(), capsule_.height()));
+        orb::x11::setInputRect(this, drawn());
     }
     if (fade_) fade_->stop();
     auto* fade = new QVariantAnimation(this);
@@ -166,13 +228,25 @@ void NamePlate::disappear() {
 
 void NamePlate::paintEvent(QPaintEvent*) {
     QPainter p(this);
+    paintTo(p);
+}
+
+QImage NamePlate::picture() const {
+    QImage image(size(), QImage::Format_ARGB32_Premultiplied);
+    image.fill(Qt::transparent);
+    QPainter p(&image);
+    paintTo(p);
+    return image;
+}
+
+void NamePlate::paintTo(QPainter& p) const {
     p.setRenderHint(QPainter::Antialiasing);
     p.setCompositionMode(QPainter::CompositionMode_Source);
     p.fillRect(QRect(0, 0, width(), height()), Qt::transparent);
     p.setCompositionMode(QPainter::CompositionMode_SourceOver);
     const bool dark = look_.dark;
     const double s = look_.diameter, f = textSize(s), h = capsule_.height(), d = dotSize(s);
-    const QRectF plate(kMargin, kMargin, capsule_.width(), h);
+    const QRectF plate = drawn();
     const double radius = h / 2;
 
     // Shadow: black 38 % / 14 %, y 1, blur 6, as a few widening translucent capsules.
@@ -238,11 +312,21 @@ void NamePlate::paintEvent(QPaintEvent*) {
     else textX = plate.left() + 0.52 * h;
     p.setFont(font());
     const QFontMetricsF fm(font());
-    const double baseline = cy + (fm.capHeight() > 0 && !cjk(text_) ? fm.capHeight() / 2 : (fm.ascent() - fm.descent()) / 2);
-    p.setPen(dark ? QColor(255, 255, 255, 235) : QColor(0x0B, 0x0D, 0x12, 224));
-    p.drawText(QPointF(textX, baseline), text_);
-    if (!look_.status.isEmpty()) {
-        p.setPen(secondary);
-        p.drawText(QPointF(textX + fm.horizontalAdvance(text_), baseline), QStringLiteral(" · ") + look_.status);
-    }
+    const QColor ink = dark ? QColor(255, 255, 255, 235) : QColor(0x0B, 0x0D, 0x12, 224);
+    // The text stays inside the capsule while it springs; the old text fades out as the new one fades in.
+    p.setClipRect(plate.adjusted(0, 0, -0.3 * h, 0));
+    const auto line = [&](const QString& text, const QString& status, double alpha) {
+        if (alpha <= 0.01 || text.isEmpty()) return;
+        const double baseline = cy + (fm.capHeight() > 0 && !cjk(text) ? fm.capHeight() / 2 : (fm.ascent() - fm.descent()) / 2);
+        p.setOpacity(alpha);
+        p.setPen(ink);
+        p.drawText(QPointF(textX, baseline), text);
+        if (!status.isEmpty()) {
+            p.setPen(secondary);
+            p.drawText(QPointF(textX + fm.horizontalAdvance(text), baseline), QStringLiteral(" · ") + status);
+        }
+    };
+    line(previousText_, previousStatus_, 1 - crossfade_);
+    line(text_, status_, crossfade_);
+    p.setOpacity(1);
 }

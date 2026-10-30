@@ -39,6 +39,7 @@ namespace {
 // The settings pane between 網路流量 and 資料來源 (DESIGN 11).
 constexpr int kApiPage = 5;
 constexpr int kSourcesPage = 6;
+constexpr int kAboutPage = 7;
 
 
 std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
@@ -277,6 +278,7 @@ int main(int argc, char* argv[]) {
     QObject::connect(&state, &AppState::historyRequested, &app, [&](const QString& source) { openHistory(source); });
     QObject::connect(&tray, &TrayIcon::settingsRequested, &app, [&] { openSettings(-1); });
     QObject::connect(&tray, &TrayIcon::sourcesRequested, &app, [&] { openSettings(kSourcesPage); });
+    QObject::connect(&tray, &TrayIcon::aboutRequested, &app, [&] { openSettings(kAboutPage); });
     QObject::connect(&report, &ReportController::settingsRequested, &app, [&] { openSettings(kApiPage); });
     QObject::connect(&tray, &TrayIcon::reportSettings, &app, [&] { openSettings(kApiPage); });
     QObject::connect(&tray, &TrayIcon::reportPause, &report, &ReportController::pause);
@@ -434,6 +436,24 @@ int main(int argc, char* argv[]) {
             if (++orbShot >= 16) QApplication::quit();
         });
         orbShotTimer.start(4000);
+    }
+    // Development aid: --plate-snapshots=<prefix> widens the first orb's plate to its chip after 3 s and saves the plate
+    // every 50 ms for 0.8 s, then quits.
+    QString plateShots;
+    for (const auto& arg : app.arguments()) {
+        if (arg.startsWith(QStringLiteral("--plate-snapshots="))) plateShots = arg.mid(18);
+    }
+    int plateShot = 0;
+    QTimer plateShotTimer;
+    if (!plateShots.isEmpty()) {
+        QTimer::singleShot(3000, &app, [&] {
+            orbs.showChip(orbs.firstId(), 2);
+            plateShotTimer.start(50);
+        });
+        QObject::connect(&plateShotTimer, &QTimer::timeout, &app, [&] {
+            orbs.platePicture(orbs.firstId()).save(plateShots + QStringLiteral("-%1.png").arg(plateShot, 2, 10, QLatin1Char('0')));
+            if (++plateShot >= 16) QApplication::quit();
+        });
     }
     // Without a tray (GNOME without the AppIndicator extension) the dashboard is the only way in.
     if (!hidden || !tray.available()) flyout.present();

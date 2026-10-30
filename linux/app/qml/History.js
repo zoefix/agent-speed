@@ -62,8 +62,10 @@ function days(rows, source, from, to, traffic, disabled, includeTools, excluded)
         for (var m = 0; m < r.models.length; ++m) {
             var model = r.models[m]
             var key = model.name || "?"
-            var t = d.models[key] || (d.models[key] = { name: key, requests: 0, output: 0, measuredOutput: 0, measuredMs: 0 })
+            var t = d.models[key] || (d.models[key] = { name: key, requests: 0, output: 0, measuredOutput: 0, measuredMs: 0, cost: 0, unknown: false })
             t.requests += model.requests; t.output += model.output; t.measuredOutput += model.measuredOutput; t.measuredMs += model.measuredMs
+            if (model.cost === undefined || model.cost === null) t.unknown = true
+            else t.cost += model.cost
         }
     }
     var out = []

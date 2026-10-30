@@ -1,6 +1,7 @@
 #pragma once
 
 #include <QElapsedTimer>
+#include <QLineF>
 #include <QOpenGLWindow>
 #include <QPointer>
 #include <QTimer>
@@ -23,6 +24,8 @@ class TitleThemes;
 struct OrbConfig;
 
 namespace orb {
+
+class AlignGuide;
 
 // Another orb's disc on the desktop (global points), for snapping.
 struct Disc {
@@ -132,7 +135,11 @@ private:
     void applyOpacity();
     void setStyle(const QString& style);
     void setDiameter(double diameter);
-    QPointF snapped(QPointF center, bool release) const;
+    // `guides` receives the alignment guides (facing disc edges) of the snapped position.
+    QPointF snapped(QPointF center, bool release, std::vector<QLineF>* guides = nullptr) const;
+    void moveDisc(QPointF raw);
+    void follow();
+    void stopFollow();
     void settle();
     QString titleText(int index) const;
     void addBezel(Scene& scene, const Frame& frame) const;
@@ -251,6 +258,11 @@ private:
     QPointF pressGlobal_;
     QPoint pressPosition_;
     QPointer<QVariantAnimation> snap_;
+    // DESIGN 2b Orb to orb: in the pull zone the disc follows the pointer through a critically damped spring.
+    QTimer follow_;
+    QElapsedTimer followClock_;
+    QPointF followPos_, followVelocity_, followTarget_;
+    std::unique_ptr<AlignGuide> guide_;
 };
 
 }  // namespace orb

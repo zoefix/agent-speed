@@ -49,7 +49,10 @@ Item {
         var list = Object.keys(day.models).map(function(k) { return day.models[k] })
         var total = list.reduce(function(a, m) { return a + m.output }, 0)
         list.sort(function(a, b) { return b.output - a.output })
-        return list.slice(0, 3).map(function(m) { return { name: m.name, share: total > 0 ? m.output / total : 0 } })
+        return list.slice(0, 3).map(function(m) {
+            var cost = m.unknown ? S.tr2(S.rev, "cost.unknown") : (m.cost || 0) === 0 ? S.tr2(S.rev, "cost.free") : chart.formatMoney(m.cost)
+            return { name: m.name, share: total > 0 ? m.output / total : 0, cost: cost }
+        })
     }
 
     Canvas {
@@ -239,7 +242,7 @@ Item {
         id: tip
         readonly property var day: chart.hover >= 0 && chart.hover < chart.series.length ? chart.series[chart.hover] : null
         visible: day !== null
-        width: 236
+        width: 264
         height: tipColumn.implicitHeight + 20
         radius: 10
         color: Theme.dark ? "#22252C" : "#FFFFFF"
@@ -328,7 +331,7 @@ Item {
                     width: tipColumn.width
                     spacing: 6
                     Text {
-                        width: parent.width - 86
+                        width: parent.width - 86 - costText.width - 6
                         text: modelData.name
                         color: Theme.ink2
                         font.pixelSize: 11
@@ -347,6 +350,14 @@ Item {
                             radius: 2
                             color: chart.source === "all" ? Theme.ink2 : Theme.sourceColor(chart.source)
                         }
+                    }
+                    Text {
+                        id: costText
+                        text: modelData.cost
+                        color: Theme.ink3
+                        font.pixelSize: 11
+                        font.features: Theme.tabular
+                        anchors.verticalCenter: parent.verticalCenter
                     }
                     Text {
                         width: 28

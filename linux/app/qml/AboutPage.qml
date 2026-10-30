@@ -39,6 +39,12 @@ SettingsPage {
                     onClicked: catalog.openUrl("https://github.com/zoefix/agent-speed")
                 }
             }
+            Text {
+                Layout.topMargin: 4
+                text: S.tr2(S.rev, "settings.about.update")
+                color: Theme.ink3
+                font.pixelSize: 12
+            }
         }
     }
 

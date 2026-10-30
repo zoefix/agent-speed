@@ -66,6 +66,9 @@ SettingsGroup {
                 RowLayout {
                     Layout.fillWidth: true
                     spacing: 10
+                    // The typed name until it is saved: 儲存 commits it, as Return does.
+                    property string draft: ""
+                    readonly property bool changed: draft.length > 0 && draft !== report.profileName
                     Text {
                         text: report.profileBound ? S.tr2(S.rev, "profile.displayName") : S.tr2(S.rev, "report.username")
                         color: Theme.ink
@@ -76,7 +79,17 @@ SettingsGroup {
                         Layout.fillWidth: true
                         text: report.profileName
                         accessibleName: report.profileBound ? S.tr2(S.rev, "profile.displayName") : S.tr2(S.rev, "report.username")
-                        onCommitted: (t) => report.saveProfileName(t)
+                        onEdited: (t) => parent.draft = t
+                        onCommitted: (t) => { parent.draft = ""; report.saveProfileName(t) }
+                    }
+                    PillButton {
+                        visible: parent.changed
+                        text: S.tr2(S.rev, "profile.save")
+                        onClicked: {
+                            var name = parent.draft
+                            parent.draft = ""
+                            report.saveProfileName(name)
+                        }
                     }
                 }
                 Text {

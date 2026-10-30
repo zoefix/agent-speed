@@ -201,7 +201,18 @@ Rectangle {
             usual: section.selected && section.selected.usual !== undefined ? section.selected.usual : undefined
             highlight: section.perf.single ? section.last : ""
             emptyText: section.selected ? Format.fill(S.tr2(S.rev, "a11y.history.perf.chart.empty"), [section.selected.modelName + " · " + section.selected.sourceName]) : ""
-            Accessible.name: emptyText
+            // The chart as an image: the lowest, highest and latest daily scores, or the empty sentence.
+            Accessible.name: {
+                var scored = points.filter(function(p) { return p.score !== null && p.score !== undefined })
+                if (scored.length === 0 || !section.selected) return emptyText
+                var low = scored[0], high = scored[0]
+                for (var i = 1; i < scored.length; ++i) {
+                    if (scored[i].score < low.score) low = scored[i]
+                    if (scored[i].score > high.score) high = scored[i]
+                }
+                return Format.fill(S.tr2(S.rev, "a11y.history.perf.chart"), [section.selected.modelName + " · " + section.selected.sourceName,
+                                                                            low.text, high.text, scored[scored.length - 1].text])
+            }
         }
 
         // Table.

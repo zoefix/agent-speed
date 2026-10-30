@@ -107,6 +107,13 @@ orb::OrbWindow* OrbManager::first() const {
     return it == orbs_.end() ? nullptr : it->second.window.get();
 }
 
+QString OrbManager::firstId() const { return store_.orbs().empty() ? QString() : store_.orbs().front().id; }
+
+QImage OrbManager::platePicture(const QString& id) const {
+    const auto it = orbs_.find(id);
+    return it == orbs_.end() || !it->second.plate ? QImage() : it->second.plate->picture();
+}
+
 void OrbManager::forceDark(bool on) {
     forcedDark_ = on;
     for (auto& [id, orb] : orbs_) orb.window->forceDark(on);
@@ -912,7 +919,9 @@ void OrbManager::layoutPlates() {
         places.push_back(towardRight ? right : left);
         places.push_back(towardRight ? left : right);
         std::optional<QPointF> chosen;
-        for (const auto& place : places) {
+        double anchor = 0.5;
+        for (std::size_t i = 0; i < places.size(); ++i) {
+            const auto& place = places[i];
             const QRectF rect(place, size);
             if (!avail.contains(rect)) continue;
             bool clear = true;
@@ -922,6 +931,8 @@ void OrbManager::layoutPlates() {
             }
             if (clear) {
                 chosen = place;
+                // Side plates grow away from the disc; plates above or below grow about their center.
+                anchor = i < 2 ? 0.5 : (place == right ? 0.0 : 1.0);
                 break;
             }
         }
@@ -930,7 +941,7 @@ void OrbManager::layoutPlates() {
             continue;
         }
         taken.push_back(QRectF(*chosen, size));
-        orb.plate->placeCapsule(*chosen);
+        orb.plate->placeCapsule(*chosen, anchor);
         orb.plate->appear();
     }
 }

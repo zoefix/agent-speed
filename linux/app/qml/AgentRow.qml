@@ -24,14 +24,24 @@ Item {
     required property string perfA11y
     required property bool looping
     required property string trafficSuffix
+    required property string status
+    required property string liveText
     // Set by the list: the shared capsule column width and the 性能 cell width (DESIGN 4, 12).
     property real capsuleColumn: 0
     property real perfWidth: 35
     property bool capsuleWords: true
     signal hoverChanged(bool hovered)
     implicitHeight: 40
+    signal cardRequested()
+    readonly property string separator: S.language === "ja" ? "、" : S.language === "en" ? ", " : "，"
     Accessible.role: Accessible.ListItem
-    Accessible.name: project + ", " + detail + ", " + perfA11y
+    Accessible.name: [depth > 0 ? project + separator + S.tr2(S.rev, "agents.subagent") : project, detail, status,
+                      live >= 0.05 ? liveText + " " + S.tr2(S.rev, "unit.tokS") : "", perf >= 0 ? perfA11y : ""]
+                     .filter(function(t) { return t.length > 0 }).join(separator)
+    Accessible.description: S.tr2(S.rev, "a11y.perf.card")
+    Accessible.onPressAction: cardRequested()
+    activeFocusOnTab: true
+    Keys.onSpacePressed: cardRequested()
 
     readonly property real indent: depth * 12
     readonly property real railX: (depth - 1) * 12 + 7.5
@@ -42,6 +52,8 @@ Item {
         anchors.rightMargin: -6
         radius: 7
         color: hover.hovered ? Theme.hover : "transparent"
+        border.width: row.activeFocus ? 1.5 : 0
+        border.color: Theme.accent
         Behavior on color { ColorAnimation { duration: 120 } }
     }
     HoverHandler {

@@ -100,6 +100,8 @@ TrayIcon::TrayIcon(const Strings& strings, bool demo, QObject* parent)
     connect(history_, &QAction::triggered, this, &TrayIcon::historyRequested);
     settings_ = menu_->addAction(QString());
     connect(settings_, &QAction::triggered, this, &TrayIcon::settingsRequested);
+    about_ = menu_->addAction(QString());
+    connect(about_, &QAction::triggered, this, &TrayIcon::aboutRequested);
     quit_ = menu_->addAction(QString());
     connect(quit_, &QAction::triggered, this, &TrayIcon::quitRequested);
     retranslate();
@@ -128,6 +130,7 @@ void TrayIcon::retranslate() {
                                                                 : QStringLiteral("Demo Mode"));
     history_->setText(strings_.t(QStringLiteral("history.open")));
     settings_->setText(strings_.t(QStringLiteral("menu.settings")));
+    about_->setText(strings_.t(QStringLiteral("menu.about")));
     quit_->setText(strings_.t(QStringLiteral("menu.quit")));
     update_->setText(strings_.t(QStringLiteral("update.menu")).replace(QStringLiteral("%@"), updateVersion_));
     reportHour_->setText(strings_.t(QStringLiteral("report.pause.hour")));

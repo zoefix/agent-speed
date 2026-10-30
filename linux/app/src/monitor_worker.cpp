@@ -215,6 +215,20 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("bolts"), a.speed ? agentspeed::effort_speed::bolts(*a.speed) : 0);
         row.insert(QStringLiteral("looping"), a.perf && a.perf->workSignals.looping.has_value());
         row.insert(QStringLiteral("liveThinking"), a.liveThinking);
+        // The row's status as accessibility reads it: the phase, and for an idle agent how long ago it last wrote.
+        QString status;
+        if (a.phase == agentspeed::Phase::Generating) {
+            status = strings_->t(QStringLiteral("phase.generating"));
+        } else if (a.phase == agentspeed::Phase::Tools) {
+            status = strings_->t(QStringLiteral("phase.tools"));
+        } else {
+            const auto seconds = a.lastLineMs ? std::max<std::int64_t>(0, (snap.nowMs - *a.lastLineMs) / 1000) : 0;
+            const auto ago = seconds < 10   ? strings_->t(QStringLiteral("time.justNow"))
+                             : seconds < 60 ? strings_->fmt(QStringLiteral("time.secondsAgo"), {static_cast<qlonglong>(seconds)})
+                                            : strings_->fmt(QStringLiteral("time.minutesAgo"), {static_cast<qlonglong>(seconds / 60)});
+            status = strings_->t(QStringLiteral("phase.idle")) + QStringLiteral(" · ") + ago;
+        }
+        row.insert(QStringLiteral("status"), status);
         perf_card::cell(a, *strings_, row);
         auto card = perf_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source));
         // DESIGN 10: an agent tree with attributed traffic today shows its download after the detail line.

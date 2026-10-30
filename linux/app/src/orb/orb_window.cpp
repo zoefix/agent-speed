@@ -27,6 +27,7 @@
 #include "format.hpp"
 #include "heat.hpp"
 #include "source_colors.hpp"
+#include "orb/align_guide.hpp"
 #include "orb/body.hpp"
 #include "orb/x11.hpp"
 #include "orbs/orbs_store.hpp"
@@ -89,6 +90,8 @@ OrbWindow::OrbWindow(const Strings& strings, const QString& id) : QOpenGLWindow(
     connect(&unitTimer_, &QTimer::timeout, this, [this] {
         emit editRequested(id_, QStringLiteral("unit"), unit_ == QLatin1String("cost") ? QStringLiteral("tokens") : QStringLiteral("cost"));
     });
+    follow_.setInterval(16);
+    connect(&follow_, &QTimer::timeout, this, &OrbWindow::follow);
     hintTimer_.setSingleShot(true);
     connect(&hintTimer_, &QTimer::timeout, this, [this] {
         if (unitHover_) QToolTip::showText(QCursor::pos(), strings_.t(QStringLiteral("orbs.unit.toggleHint")));
@@ -838,13 +841,13 @@ void OrbWindow::dragTo(QPointF global) {
         moved_ = true;
         emit dragChanged(id_, true);
     }
-    const QPointF raw = QPointF(pressPosition_ + delta.toPoint()) + center();
-    setPosition((snapped(raw, false) - center()).toPoint());
+    moveDisc(QPointF(pressPosition_ + delta.toPoint()) + center());
 }
 
 void OrbWindow::endDrag() {
     if (!dragging_) return;
     dragging_ = false;
+    stopFollow();
     if (moved_) {
         emit dragChanged(id_, false);
         settle();
@@ -887,14 +890,54 @@ void OrbWindow::mouseMoveEvent(QMouseEvent* event) {
         setUnitHover(false);
         emit dragChanged(id_, true);
     }
-    // Within 16 pt of a touching position beside another orb the disc is pulled in (DESIGN 2b Orb to orb).
-    const QPointF raw = QPointF(pressPosition_ + delta.toPoint()) + center();
-    setPosition((snapped(raw, false) - center()).toPoint());
+    moveDisc(QPointF(pressPosition_ + delta.toPoint()) + center());
+}
+
+// Within 16 pt of a touching position beside another orb the disc is pulled in (DESIGN 2b Orb to orb), following the
+// pointer through a spring; aligned centers show the dashed guide.
+void OrbWindow::moveDisc(QPointF raw) {
+    std::vector<QLineF> guides;
+    const QPointF goal = snapped(raw, false, &guides);
+    if (!guide_) guide_ = std::make_unique<AlignGuide>();
+    guide_->show(guides, Appearance::instance().dark());
+    followTarget_ = goal - center();
+    if (follow_.isActive()) return;
+    if (std::abs(goal.x() - raw.x()) + std::abs(goal.y() - raw.y()) < 0.5) {
+        setPosition(followTarget_.toPoint());
+        return;
+    }
+    followPos_ = QPointF(position());
+    followVelocity_ = QPointF();
+    followClock_.start();
+    follow_.start();
+}
+
+// Critically damped (ω = 33 /s, settling in ≈ 0.12 s), so the pull feels magnetic, not sticky.
+void OrbWindow::follow() {
+    const double dt = std::min(0.05, static_cast<double>(followClock_.restart()) / 1000.0);
+    constexpr double w = 33;
+    followVelocity_ += (w * w * (followTarget_ - followPos_) - 2 * w * followVelocity_) * dt;
+    followPos_ += followVelocity_ * dt;
+    const QPointF left = followTarget_ - followPos_;
+    if (std::hypot(left.x(), left.y()) < 0.3 && std::hypot(followVelocity_.x(), followVelocity_.y()) < 5) {
+        followPos_ = followTarget_;
+        follow_.stop();
+    }
+    setPosition(followPos_.toPoint());
+}
+
+void OrbWindow::stopFollow() {
+    if (follow_.isActive()) {
+        follow_.stop();
+        setPosition(followTarget_.toPoint());
+    }
+    if (guide_) guide_->clear();
 }
 
 void OrbWindow::mouseReleaseEvent(QMouseEvent* event) {
     if (event->button() != Qt::LeftButton || !dragging_) return;
     dragging_ = false;
+    stopFollow();
     setCursor(hovered_ ? Qt::OpenHandCursor : Qt::ArrowCursor);
     if (moved_) {
         emit dragChanged(id_, false);
@@ -912,7 +955,7 @@ void OrbWindow::mouseDoubleClickEvent(QMouseEvent* event) {
 // DESIGN 2b Creating, placing and snapping: screen edges first (released within 24 pt, a 12 pt margin), then touching
 // another orb at a 12 pt gap (pulled in within 16 pt, pushed out of an overlap on release), then alignment of centers
 // (within 8 pt, discs within 64 pt), which never pulls a disc off an edge it is docked to.
-QPointF OrbWindow::snapped(QPointF c, bool release) const {
+QPointF OrbWindow::snapped(QPointF c, bool release, std::vector<QLineF>* guides) const {
     const double r = diameter_ / 2;
     QScreen* target = QGuiApplication::screenAt(c.toPoint());
     if (!target) target = screen();
@@ -942,11 +985,27 @@ QPointF OrbWindow::snapped(QPointF c, bool release) const {
         c = touch;
         break;
     }
+    std::vector<const Disc*> alignedX, alignedY;
     for (const auto& other : others) {
         const double gap = std::hypot(c.x() - other.center.x(), c.y() - other.center.y()) - r - other.radius;
         if (gap > 64) continue;
-        if (!dockX && std::abs(c.x() - other.center.x()) < 8) c.setX(other.center.x());
-        if (!dockY && std::abs(c.y() - other.center.y()) < 8) c.setY(other.center.y());
+        if (!dockX && std::abs(c.x() - other.center.x()) < 8) c.setX(other.center.x()), alignedX.push_back(&other);
+        if (!dockY && std::abs(c.y() - other.center.y()) < 8) c.setY(other.center.y()), alignedY.push_back(&other);
+    }
+    if (guides) {
+        // The guide joins the facing edges of two aligned discs (nothing when they touch).
+        for (const auto* other : alignedX) {
+            const double dy = c.y() - other->center.y(), room = std::abs(dy) - r - other->radius;
+            if (std::abs(c.x() - other->center.x()) > 0.5 || room < 2) continue;
+            const double sign = dy > 0 ? 1 : -1;
+            guides->emplace_back(QPointF(c.x(), other->center.y() + sign * other->radius), QPointF(c.x(), c.y() - sign * r));
+        }
+        for (const auto* other : alignedY) {
+            const double dx = c.x() - other->center.x(), room = std::abs(dx) - r - other->radius;
+            if (std::abs(c.y() - other->center.y()) > 0.5 || room < 2) continue;
+            const double sign = dx > 0 ? 1 : -1;
+            guides->emplace_back(QPointF(other->center.x() + sign * other->radius, c.y()), QPointF(c.x() - sign * r, c.y()));
+        }
     }
     if (release) {
         // Never off-screen.

@@ -1,7 +1,10 @@
 #pragma once
 
 #include <QColor>
+#include <QImage>
+#include <QElapsedTimer>
 #include <QPointer>
+#include <QTimer>
 #include <QMouseEvent>
 #include <QRasterWindow>
 #include <QStringList>
@@ -39,11 +42,14 @@ public:
     void setLook(const Look& look);
     // The capsule's size (without the shadow margin) for the current look.
     QSizeF capsule() const { return capsule_; }
-    // Places the capsule's top-left corner at `point` (global points).
-    void placeCapsule(QPointF point);
+    // Places the capsule's top-left corner at `point` (global points). A width change springs about the point at
+    // `anchor` of its width: 0.5 (above or below the disc), 0 (right of it) or 1 (left of it).
+    void placeCapsule(QPointF point, double anchor = 0.5);
     void appear();
     void disappear();
     void setClickThrough(bool on);
+    // The window's current picture (development aid).
+    QImage picture() const;
     static double gap(double diameter);
     static constexpr int kMargin = 8;
 
@@ -65,10 +71,24 @@ protected:
 private:
     QFont font() const;
     QString fitted() const;
+    QRectF drawn() const;
+    void paintTo(QPainter& p) const;
+    void step();
+    void reposition();
 
     Look look_;
     QString text_;
+    QString status_;
     QSizeF capsule_;
+    // DESIGN 2b Chip and undo: the width springs (response 0.3 s, damping 0.86) while the text crossfades (0.15 s).
+    double width_ = 0, velocity_ = 0, canvas_ = 0;
+    QString previousText_, previousStatus_;
+    double crossfade_ = 1;
+    QPointF anchorPoint_;
+    double anchor_ = 0.5;
+    bool placed_ = false;
+    QTimer spring_;
+    QElapsedTimer clock_;
     bool wanted_ = false;
     bool inside_ = false;
     bool pressing_ = false;

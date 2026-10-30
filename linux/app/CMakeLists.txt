@@ -44,6 +44,7 @@ qt_add_executable(agent-speed
     src/orb/minimal_style.cpp
     src/orb/needle_style.cpp
     src/orb/orb_window.cpp
+    src/orb/align_guide.cpp
     src/orb/preview.cpp
     src/orb/reactor_style.cpp
     src/orb/readout.cpp
