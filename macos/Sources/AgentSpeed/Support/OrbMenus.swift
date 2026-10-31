@@ -193,14 +193,60 @@ enum OrbMenus {
     private static func sizeItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
         let item = NSMenuItem(title: model.l10n("menu.size"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
+        submenu.autoenablesItems = false
         for preset in OrbSizePreset.allCases {
             let state: NSControl.StateValue = abs(orb.size - preset.diameter) < 0.5 ? .on : .off
             submenu.addItem(ActionMenuItem(model.l10n(preset.titleKey), state: state) { [weak model] in
                 model?.orbs.setSize(preset.diameter, of: orb.id)
             })
         }
+        submenu.addItem(.separator())
+        submenu.addItem(sizeSliderItem(model: model, orb: orb))
         item.submenu = submenu
         return item
+    }
+
+    /// Any size between the style's limits (DESIGN 2b): the slider is continuous, so a size that the presets do not
+    /// offer is set by dragging here instead of a trip to Settings, and the orb resizes while the thumb moves. The
+    /// value follows in points at the trailing edge.
+    private static func sizeSliderItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
+        let range = orb.style.sizeRange
+        let row = NSView(frame: NSRect(x: 0, y: 0, width: 220, height: 30))
+        let slider = NSSlider(value: orb.size, minValue: range.lowerBound, maxValue: range.upperBound,
+                              target: nil, action: nil)
+        slider.frame = NSRect(x: 14, y: 5, width: 158, height: 20)
+        slider.controlSize = .small
+        slider.isContinuous = true
+        slider.setAccessibilityLabel(model.l10n("settings.orb.size"))
+        slider.setAccessibilityValue(model.l10n("mac.settings.orb.sizeValue", Int(orb.size.rounded())))
+
+        let value = NSTextField(labelWithString: sizeText(model, orb.size))
+        value.frame = NSRect(x: 178, y: 6, width: 38, height: 18)
+        value.font = .monospacedDigitSystemFont(ofSize: NSFont.smallSystemFontSize, weight: .regular)
+        value.textColor = .secondaryLabelColor
+        value.alignment = .right
+
+        let target = SizeSliderTarget { [weak model, weak slider, weak value] size in
+            model?.orbs.setSize(size, of: orb.id)
+            guard let model else { return }
+            value?.stringValue = sizeText(model, size)
+            slider?.setAccessibilityValue(value?.stringValue ?? "")
+        }
+        slider.target = target
+        slider.action = #selector(SizeSliderTarget.changed(_:))
+        row.addSubview(slider)
+        row.addSubview(value)
+
+        let item = NSMenuItem()
+        item.view = row
+        item.isEnabled = true
+        // NSControl does not retain its target, and the item's view outlives the menu.
+        item.representedObject = target
+        return item
+    }
+
+    private static func sizeText(_ model: AppModel, _ size: Double) -> String {
+        model.l10n("mac.settings.orb.sizeValue", Int(size.rounded()))
     }
 
     /// The menu asks before removing (it has no undo banner of its own; the desktop undo chip still appears).
@@ -286,5 +332,20 @@ enum OrbMenus {
         }
         image.accessibilityDescription = nil
         return image
+    }
+}
+
+/// The action of a size slider inside its menu item. An `NSSlider` does not retain its target, and the item keeps this
+/// one alive through `representedObject`.
+@MainActor
+private final class SizeSliderTarget: NSObject {
+    private let onChange: (Double) -> Void
+
+    init(_ onChange: @escaping (Double) -> Void) {
+        self.onChange = onChange
+    }
+
+    @objc func changed(_ sender: NSSlider) {
+        onChange((sender.doubleValue / OrbSizes.step).rounded() * OrbSizes.step)
     }
 }

@@ -1,8 +1,8 @@
 import AgentSpeedOrbModel
 import SwiftUI
 
-/// Size and opacity of the selected orb (DESIGN 5, editor): S / M / L presets left of a slider (96–240 pt, `minimal`
-/// 64–240, step 4) with the value, opacity 40–100 %, and whether its name plate shows (automatic, on or off).
+/// Size and opacity of the selected orb (DESIGN 5, editor): S / M / L presets left of a slider (64–240 pt, step 4)
+/// with the value, opacity 40–100 %, and whether its name plate shows (automatic, on or off).
 struct OrbLookSection: View {
     let model: AppModel
     let orb: OrbConfig

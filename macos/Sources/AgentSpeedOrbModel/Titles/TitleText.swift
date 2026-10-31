@@ -6,7 +6,7 @@ public enum TitleText {
     public static let graphemeLimit = 24
     /// The maximum width budget `w7` in points (the readout's title style at the 7 pt floor, tracking 0).
     public static let maximumWidth = 51.5
-    /// The comfortable budget (fits every style from 96 pt).
+    /// The comfortable budget (fits every style from 64 pt).
     public static let comfortableWidth = 44.2
 
     public struct Result: Equatable, Sendable {

@@ -172,7 +172,7 @@ Latin) at the 7 pt floor with its tracking tightened to 0 — the narrowest the 
 
 | Budget | `w7` | Guarantee |
 | --- | --- | --- |
-| Comfortable | ≤ 44.2 pt | fits every style at every size from 96 pt (`minimal` from 72 pt) |
+| Comfortable | ≤ 44.2 pt | fits every style at every size from 64 pt |
 | Maximum | ≤ 51.5 pt | fits every style from the Small size preset (112 pt) up; on smaller orbs it may run past the label width, centered, never truncated |
 
 Up to six CJK characters are comfortable (42 pt) and seven reach the maximum (49 pt); in English about eight letters
@@ -340,7 +340,7 @@ after Antigravity, the China edition first.
 
 A circular smoked-glass instrument. This section defines the shared frame and the default style, `led`; section 2a adds
 four more styles and section 2b lets the user float several orbs, each tracking its own sources. Diameter `S` (per orb,
-96–240 pt/DIP, `minimal` 64–240, default 148). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
+64–240 pt/DIP, default 148). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
 the platform allows it. The orb follows the Appearance setting. The dark variant is described inline below; the
 light variant ("porcelain") changes only these tokens:
 
@@ -838,7 +838,7 @@ thumbnails draw rotors A and C and the core only.
 ### 2a.5 `minimal` — Minimal ring
 
 Only the number, one thin progress ring and the title; almost nothing moves. The calmest style, and the one that stays
-clear at small sizes (it alone may go down to 64 pt).
+clear at small sizes (the frame's smallest size, 64 pt, is what it was designed for).
 
 Layers, back to front:
 
@@ -985,7 +985,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `name` | Custom name, 1–32 characters, trimmed; `null` = automatic: `orbs.sources.all` for all sources, the source name for one, `orbs.name.pair` for two, `orbs.name.more` (first source + count) for three or more, in source order (METRICS 1). |
 | `sources` | `"all"` (every enabled source, including sources detected or added later) or a non-empty array of METRICS 1 keys, stored in source order without duplicates. Unknown keys from a newer version are kept and ignored. |
 | `style` | `led` · `needle` · `liquid` · `reactor` · `minimal`; unknown → `led`. |
-| `size` | 96–240 pt/DIP (`minimal` 64–240), clamped when the style changes (a 72 pt `minimal` becomes 96 pt `needle`). |
+| `size` | 64–240 pt/DIP, clamped on decode and when the style changes (a 20 pt value becomes 64 pt; every style keeps a 64 pt size, so changing style never resizes the orb). |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1215,8 +1215,9 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    `orbs.unit.cost` (section 9), `orbs.traffic` ▸ `orbs.traffic.sources` / `orbs.traffic.machine` /
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
    plate shows (Name plate).
-4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196; `minimal` sizes below 96 are set in
-   Settings).
+4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196), a separator, then a continuous slider over
+   the style's range (64–240 pt, 4 pt steps) with its value in pt at the trailing edge; dragging resizes the orb as the
+   thumb moves.
 5. `menu.effects` ▸ Off / Soft / Standard / Max (global).
 6. Separator; `menu.alwaysOnTop`, `menu.clickThrough` (this orb).
 7. Separator; `orbs.add`; `menu.orb.duplicate`; `menu.orb.split` (enabled when the orb tracks two or more available
@@ -2609,7 +2610,7 @@ accent color for selection, no extra borders. The pane scrolls when taller than 
      card's accessibility label is `orbs.preview.a11y`. Below the cards the selected style's name (semibold) and its
      description (`style.*.desc`).
    - **Size** — `menu.size.small` / `.medium` / `.large` presets (112 / 148 / 196) as a compact segmented control left of
-     a slider (96–240, `minimal` 64–240, step 4) with the value in pt. **Opacity** — slider 40–100 % with the value.
+     a slider (64–240, step 4) with the value in pt. **Opacity** — slider 40–100 % with the value.
    - `orbs.showName` popup — `orbs.showName.auto` with the current automatic result, a separator, `orbs.showName.on`,
      `orbs.showName.off` (2b Name plate); changing it fades the desktop plate in or out live.
    - Switches: `menu.alwaysOnTop`; `menu.clickThrough` with the platform hint (the orb is then controlled from the menu

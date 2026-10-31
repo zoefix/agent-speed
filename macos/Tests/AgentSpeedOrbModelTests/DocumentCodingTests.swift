@@ -107,7 +107,7 @@ struct DocumentCodingTests {
         #expect(document.orbs.map(\.id) == ["a", "c"])
         let a = document.orbs[0]
         #expect(a.style == .led)
-        #expect(a.size == 96)
+        #expect(a.size == 64)
         #expect(a.opacity == 1)
         #expect(a.sources == .explicit(["codex", "gemini", "future"]))
         #expect(a.sources.knownSources == [.codex, .gemini])
@@ -143,14 +143,16 @@ struct DocumentCodingTests {
         #expect(document.orbs.map(\.id) == (0..<8).map { "o\($0)" })
     }
 
-    @Test func sizeIsClampedWhenTheStyleChanges() {
+    @Test func sizeIsClampedToTheSharedRange() {
         let small = OrbConfig(id: "m", style: .minimal, size: 72)
         #expect(small.size == 72)
-        #expect(small.withStyle(.needle).size == 96)
+        #expect(small.withStyle(.needle).size == 72)
         #expect(small.withStyle(.needle).style == .needle)
-        #expect(OrbConfig(id: "l", style: .led, size: 72).size == 96)
+        #expect(OrbConfig(id: "l", style: .led, size: 72).size == 72)
+        #expect(OrbConfig(id: "l", style: .led, size: 20).size == 64)
+        #expect(OrbConfig(id: "l", style: .led, size: 500).size == 240)
         #expect(OrbStyleKind.minimal.sizeRange == 64...240)
-        #expect(OrbStyleKind.reactor.sizeRange == 96...240)
+        #expect(OrbStyleKind.reactor.sizeRange == 64...240)
         #expect(OrbStyleKind.liquid.clampSize(.nan) == 148)
     }
 

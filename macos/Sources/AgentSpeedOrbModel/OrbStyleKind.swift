@@ -11,10 +11,8 @@ public enum OrbStyleKind: String, CaseIterable, Codable, Sendable, Identifiable 
         self = OrbStyleKind(rawValue: raw) ?? .led
     }
 
-    /// Allowed diameters: `minimal` alone may go down to 64 pt.
-    public var sizeRange: ClosedRange<Double> {
-        self == .minimal ? OrbSizes.minimalRange : OrbSizes.range
-    }
+    /// Allowed diameters: every style shares one range (DESIGN 2), so a 64 pt orb keeps its size across styles.
+    public var sizeRange: ClosedRange<Double> { OrbSizes.range }
 
     public func clampSize(_ size: Double) -> Double {
         guard size.isFinite else { return OrbSizes.default.clampedToRange(sizeRange) }
@@ -32,7 +30,6 @@ public enum OrbSizes {
     public static let `default`: Double = 148
     /// Slider step in Settings.
     public static let step: Double = 4
-    public static let range: ClosedRange<Double> = 96...240
-    public static let minimalRange: ClosedRange<Double> = 64...240
+    public static let range: ClosedRange<Double> = 64...240
     public static let opacityRange: ClosedRange<Double> = 0.4...1
 }
