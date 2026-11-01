@@ -34,6 +34,7 @@ add_library(agentspeed_core STATIC
     src/configured_modes.cpp
     src/dedupe.cpp
     src/demo.cpp
+    src/devin.cpp
     src/discovery.cpp
     src/droid.cpp
     src/dsh_parser.cpp

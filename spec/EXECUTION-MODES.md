@@ -74,6 +74,8 @@ Mode changes affect their native scope and time, not earlier responses. Upserts 
 - Factory Droid: each assistant message's `message.reasoningEffort` is the effort of that call, and its
   `message.modelId` names a tier variant from Factory's catalog (see *Reasoning effort and speed*). Effort observed in
   issue #33 (droid 0.250.0) and in public recordings of droid and Factory Desktop.
+- Devin: no effort or speed facts. CLI metrics and Desktop ACP usage record neither; `swe-2-max` is a model name, not a
+  speed tier, and an `adaptive` session model is routing information rather than a served model or mode.
 
 ## Reasoning effort and speed
 
@@ -368,6 +370,7 @@ and the mode CSV keep it unknown. `configured` stays forbidden in reports.
 | WorkBuddy, WorkBuddy AI | session-current; configured `reasoningEffort` | no local data (`fast-model` and its siblings are routing) | yes |
 | Hermes Agent | session-current; configured `agent.reasoning_effort` | configured `agent.service_tier` only | yes |
 | Gemini CLI | configured only | no local data | yes |
+| Devin | no local data | no local data | CLI: no; Desktop ACP shapes: yes |
 
 What would settle the rules checked only against shipped code:
 

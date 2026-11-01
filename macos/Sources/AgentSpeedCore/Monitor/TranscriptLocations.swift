@@ -166,6 +166,9 @@ enum TranscriptLocations {
     /// Factory Droid's sessions folder (METRICS 2, 4.16); no environment variable moves it.
     static var defaultDroidRoot: URL { DroidPaths.defaultRoot(home: home) }
 
+    /// Devin's CLI database and Desktop ACP folder (METRICS 2, 4.17).
+    static var defaultDevinLocation: DevinLocation { DevinPaths.automaticLocation() }
+
     static func sessionsFolder(_ folder: URL) -> URL {
         folder.lastPathComponent == "sessions" ? folder : folder.appendingPathComponent("sessions", isDirectory: true)
     }
@@ -350,6 +353,10 @@ extension MonitorConfiguration {
     var readsOpencode: Bool { enabledSources.contains(.opencode) }
     var readsZcode: Bool { enabledSources.contains(.zcode) }
     var resolvedZcodeRoot: String { TranscriptDiscovery.normalizedRoot((zcodeRoot ?? TranscriptLocations.defaultZcodeRoot).path) }
+    var readsDevin: Bool { enabledSources.contains(.devin) }
+    var resolvedDevinLocation: DevinLocation {
+        devinRoot.map(DevinPaths.resolve) ?? TranscriptLocations.defaultDevinLocation
+    }
 
     /// True when switching between the two configurations requires reading the transcripts again.
     func requiresRescan(comparedTo other: MonitorConfiguration) -> Bool {
@@ -359,5 +366,6 @@ extension MonitorConfiguration {
             || resolvedZcodeRoot != other.resolvedZcodeRoot
             || resolvedOpenclawRoots != other.resolvedOpenclawRoots
             || resolvedHermesRoot != other.resolvedHermesRoot
+            || resolvedDevinLocation != other.resolvedDevinLocation
     }
 }

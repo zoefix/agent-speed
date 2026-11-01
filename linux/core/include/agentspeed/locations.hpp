@@ -38,6 +38,7 @@ enum class RootFamily {
     OpenClaw,
     Hermes,
     Droid,
+    Devin,
 };
 
 RootFamily familyOf(SourceKind source);
@@ -80,7 +81,7 @@ std::string geminiSettingsOf(const std::vector<std::string>& roots, const Enviro
 // The user's folder settings; nullopt is the automatic root.
 struct RootSettings {
     std::optional<std::string> codex, claude, dsh, openCode, gemini, omp, antigravity, workBuddy, workBuddyAi, zcode, kimi,
-        grokBuild, pi, openClaw, hermes, droid;
+        grokBuild, pi, openClaw, hermes, droid, devin;
 };
 
 struct SourceLocations {
@@ -95,7 +96,7 @@ struct SourceLocations {
     bool codexAutomatic = true;
     std::string hermesRoot;
     bool hermesChosen = false;
-    std::string droidRoot;
+    std::string droidRoot, devinRoot;
 
     static SourceLocations resolve(const RootSettings& settings, const Environment& environment, const std::string& home);
     // The automatic roots shown in settings, one per source.

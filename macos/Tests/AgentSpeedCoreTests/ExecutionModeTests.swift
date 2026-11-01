@@ -249,7 +249,7 @@ struct ExecutionModeTests {
         #expect(csv.contains("2026-10-24,claudeCode,m,effort,unknown,unknown,,1,100,100,1000,100.0\r\n"))
         #expect(csv.contains("2026-10-24,claudeCode,m,speed,fast,served,anthropic,1,100,100,1000,100.0\r\n"))
         #expect(csv.contains("2026-10-24,claudeCode,m,speed,unknown,unknown,,2,200,200,2000,100.0\r\n"))
-        #expect(HistoryAnalyzer.analysisVersion == 10)
+        #expect(HistoryAnalyzer.analysisVersion == 11)
     }
 
     @Test func historySectionRowsSumModesInDisplayOrder() throws {

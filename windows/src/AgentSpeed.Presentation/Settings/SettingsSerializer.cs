@@ -104,6 +104,7 @@ public static class SettingsSerializer
             w.WriteBoolean("openclaw", s.OpenClawEnabled);
             w.WriteBoolean("hermes", s.HermesEnabled);
             w.WriteBoolean("droid", s.DroidEnabled);
+            w.WriteBoolean("devin", s.DevinEnabled);
             WriteNullableString(w, "codexRoot", s.CodexRoot);
             WriteNullableString(w, "claudeRoot", s.ClaudeRoot);
             WriteNullableString(w, "dshRoot", s.DshRoot);
@@ -120,6 +121,7 @@ public static class SettingsSerializer
             WriteNullableString(w, "openclawRoot", s.OpenClawRoot);
             WriteNullableString(w, "hermesRoot", s.HermesRoot);
             WriteNullableString(w, "droidRoot", s.DroidRoot);
+            WriteNullableString(w, "devinRoot", s.DevinRoot);
             w.WriteEndObject();
 
             w.WriteStartObject("dashboard");
@@ -279,6 +281,7 @@ public static class SettingsSerializer
             OpenClawEnabled = ReadBool(sources, "openclaw", d.OpenClawEnabled),
             HermesEnabled = ReadBool(sources, "hermes", d.HermesEnabled),
             DroidEnabled = ReadBool(sources, "droid", d.DroidEnabled),
+            DevinEnabled = ReadBool(sources, "devin", d.DevinEnabled),
             CodexRoot = ReadString(sources, "codexRoot"),
             ClaudeRoot = ReadString(sources, "claudeRoot"),
             DshRoot = ReadString(sources, "dshRoot"),
@@ -295,6 +298,7 @@ public static class SettingsSerializer
             OpenClawRoot = ReadString(sources, "openclawRoot"),
             HermesRoot = ReadString(sources, "hermesRoot"),
             DroidRoot = ReadString(sources, "droidRoot"),
+            DevinRoot = ReadString(sources, "devinRoot"),
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),
             HistoryModeKind = ReadString(history, "modeKind") == "speed" ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
             HistoryPerfSort = ReadPerfSort(history is { } ph ? Child(ph, "perfSort") : null),

@@ -87,6 +87,12 @@ internal sealed class SpeedEngine
 
     public void RemoveAgent(string id) => _agents.Remove(id);
 
+    /// <summary>Removes a Desktop response later found to mirror the CLI's authoritative session (METRICS 4.17).</summary>
+    public void RemoveResponse(string key)
+    {
+        if (_responses.Remove(key, out var held)) _today.Remove(held.Response);
+    }
+
     public void SetParent(string id, string? parentId)
     {
         if (_agents.TryGetValue(id, out var agent) && !string.Equals(agent.ParentId, parentId, StringComparison.Ordinal))

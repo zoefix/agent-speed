@@ -62,6 +62,12 @@ struct SpeedEngine: Sendable {
         agents[id] = nil
     }
 
+    /// Removes a response later found to be a mirror of another local source of the same session (METRICS 4.17).
+    mutating func removeResponse(key: String) {
+        if let old = responses.removeValue(forKey: key) { ledger?.replace(old, with: nil) }
+        projects.removeValue(forKey: key)
+    }
+
     /// Replaces the parent link of every agent (METRICS 6.7).
     mutating func setParents(_ parents: [String: String]) {
         for (id, agent) in agents where agent.parentId != parents[id] {

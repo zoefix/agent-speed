@@ -1,0 +1,181 @@
+{
+  "_comment": "Devin CLI sessions.db plus Desktop acp-events. Paths in agentId are relative to the devin fixture folder. Responses are in row/event order; duplicate CLI request rows are one response and the uniquely titled Desktop mirror is suppressed.",
+  "responses": [
+    {
+      "key": "devin:orbit-main:request:req-1",
+      "source": "devin",
+      "agentId": "devin/cli/sessions.db#orbit-main",
+      "startMs": 1792490400000,
+      "endMs": 1792490402000,
+      "firstMs": null,
+      "input": 125,
+      "cachedInput": 20,
+      "cacheWriteInput": 5,
+      "cacheWrite1hInput": 0,
+      "output": 40,
+      "reasoning": 0,
+      "model": "swe-2-max",
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin:orbit-main:request:req-2",
+      "source": "devin",
+      "agentId": "devin/cli/sessions.db#orbit-main",
+      "startMs": 1792490403000,
+      "endMs": 1792490404000,
+      "firstMs": null,
+      "input": 50,
+      "cachedInput": 0,
+      "cacheWriteInput": 0,
+      "cacheWrite1hInput": 0,
+      "output": 10,
+      "reasoning": 0,
+      "model": "swe-2-max",
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin:orbit-fallback:row:7",
+      "source": "devin",
+      "agentId": "devin/cli/sessions.db#orbit-fallback",
+      "startMs": 1792490459500,
+      "endMs": 1792490460000,
+      "firstMs": null,
+      "input": 17,
+      "cachedInput": 3,
+      "cacheWriteInput": 2,
+      "cacheWrite1hInput": 0,
+      "output": 7,
+      "reasoning": 0,
+      "model": "claude-sonnet-4-5",
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin:orbit-routing:request:req-routing",
+      "source": "devin",
+      "agentId": "devin/cli/sessions.db#orbit-routing",
+      "startMs": null,
+      "endMs": 1792490520000,
+      "firstMs": null,
+      "input": 10,
+      "cachedInput": 1,
+      "cacheWriteInput": 0,
+      "cacheWrite1hInput": 0,
+      "output": 4,
+      "reasoning": 0,
+      "model": null,
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin-desktop:desktop-legacy:line:1",
+      "source": "devin",
+      "agentId": "devin/User/acp-events/desktop-legacy.ndjson",
+      "startMs": 1792491058500,
+      "endMs": 1792491060000,
+      "firstMs": null,
+      "input": 35,
+      "cachedInput": 4,
+      "cacheWriteInput": 1,
+      "cacheWrite1hInput": 0,
+      "output": 12,
+      "reasoning": 0,
+      "model": "swe-2-max",
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin-desktop:desktop-metadata:line:2",
+      "source": "devin",
+      "agentId": "devin/User/acp-events/desktop-metadata.ndjson",
+      "startMs": 1792491118500,
+      "endMs": 1792491120000,
+      "firstMs": null,
+      "input": 35,
+      "cachedInput": 4,
+      "cacheWriteInput": 1,
+      "cacheWrite1hInput": 0,
+      "output": 12,
+      "reasoning": 0,
+      "model": "claude-sonnet-4-5",
+      "provider": null,
+      "fast": false,
+      "final": true
+    },
+    {
+      "key": "devin-desktop:desktop-only:usage",
+      "source": "devin",
+      "agentId": "devin/User/acp-events/desktop-only.ndjson",
+      "startMs": null,
+      "endMs": 1792491002000,
+      "firstMs": null,
+      "input": 152,
+      "cachedInput": 30,
+      "cacheWriteInput": 2,
+      "cacheWrite1hInput": 0,
+      "output": 13,
+      "reasoning": 0,
+      "model": null,
+      "provider": null,
+      "fast": false,
+      "final": true
+    }
+  ],
+  "agents": {
+    "devin/cli/sessions.db#orbit-main": {
+      "project": "orbit",
+      "model": "swe-2-max",
+      "phase": "idle",
+      "lastLineMs": 1792490405000,
+      "malformedLines": 1
+    },
+    "devin/cli/sessions.db#orbit-fallback": {
+      "project": "fallback",
+      "model": "claude-sonnet-4-5",
+      "phase": "idle",
+      "lastLineMs": 1792490460000,
+      "malformedLines": 0
+    },
+    "devin/cli/sessions.db#orbit-routing": {
+      "project": "routing",
+      "model": null,
+      "phase": "idle",
+      "lastLineMs": 1792490520000,
+      "malformedLines": 0
+    },
+    "devin/User/acp-events/desktop-only.ndjson": {
+      "project": null,
+      "model": null,
+      "phase": "idle",
+      "lastLineMs": 1792491002000,
+      "malformedLines": 1
+    },
+    "devin/User/acp-events/desktop-legacy.ndjson": {
+      "project": null,
+      "model": "swe-2-max",
+      "phase": "idle",
+      "lastLineMs": 1792491060000,
+      "malformedLines": 0
+    },
+    "devin/User/acp-events/desktop-metadata.ndjson": {
+      "project": "metadata-only",
+      "model": "claude-sonnet-4-5",
+      "phase": "idle",
+      "lastLineMs": 1792491120000,
+      "malformedLines": 0
+    }
+  },
+  "desktopFiles": [
+    "desktop-empty.ndjson",
+    "desktop-legacy.ndjson",
+    "desktop-metadata.ndjson",
+    "desktop-only.ndjson"
+  ]
+}

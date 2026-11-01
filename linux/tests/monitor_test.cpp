@@ -31,6 +31,7 @@ MonitorConfig fixtureConfig(std::set<SourceKind> enabled) {
     s.openClaw = fixturePath("openclaw/.openclaw");
     s.hermes = fixturePath("hermes/home");
     s.droid = fixturePath("droid/.factory");
+    s.devin = fixturePath("devin");
     MonitorConfig config;
     config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");
     config.enabled = std::move(enabled);

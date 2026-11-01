@@ -107,6 +107,7 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         InitializeZCode(locations);
+        InitializeDevin(locations);
         InitializeOpenClaw(locations);
         InitializeHermes(locations, zone);
         OpenCodeRootPath = locations.OpenCodeRoot;
@@ -172,12 +173,13 @@ internal sealed partial class MonitorCore : IDisposable
 
     /// <summary>Every folder a file watcher should observe, including the OpenCode database folder.</summary>
     public IEnumerable<SourceRoot> WatchRoots => (_zcodeRoot is { } zcode ? _roots.Append(zcode) : _roots)
+        .Concat(_devinWatchRoots)
         .Concat(OpenCodeRoot is { } openCode ? [openCode] : [])
         .Concat(_openClawWatchRoots)
         .Concat(_hermesWatchRoots);
 
     public bool AnyEnabledRootAvailable => _roots.Any(r => r.Enabled && r.Available) || OpenCodeRoot?.Available == true
-        || _zcodeRoot?.Available == true || _openClaw?.Available == true || _hermes?.Available == true;
+        || _zcodeRoot?.Available == true || _devinRoot?.Available == true || _openClaw?.Available == true || _hermes?.Available == true;
 
     public int TrackedFileCount => _files.Count;
 
@@ -190,6 +192,7 @@ internal sealed partial class MonitorCore : IDisposable
     public void RefreshAvailability()
     {
         RefreshZCodeAvailability();
+        RefreshDevinAvailability();
         RefreshOpenClawWatchRoots();
         RefreshHermesWatchRoots();
         foreach (var root in _roots)
@@ -354,6 +357,7 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         SeedZCode(todayStartMs);
+        SeedDevin(todayStartMs);
         SeedOpenClaw(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         SeedHermes(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         RefreshAgentContext();
@@ -372,6 +376,7 @@ internal sealed partial class MonitorCore : IDisposable
         var changed = false;
         var openCodeChanged = false;
         var zcodeChanged = false;
+        var devinChanged = false;
         var openClawChanged = false;
         var openClawNew = false;
         var hermesChanged = false;
@@ -391,6 +396,11 @@ internal sealed partial class MonitorCore : IDisposable
             if (_zcode?.IsWatchedPath(path) == true)
             {
                 zcodeChanged = true;
+                continue;
+            }
+            if (_devin?.IsWatchedPath(path) == true)
+            {
+                devinChanged = true;
                 continue;
             }
             if (_openCode?.IsWatchedPath(path) == true)
@@ -443,6 +453,11 @@ internal sealed partial class MonitorCore : IDisposable
             changed |= RefreshZCode();
         }
 
+        if (devinChanged && _devinSeeded)
+        {
+            changed |= RefreshDevin();
+        }
+
         if (openCodeChanged && _openCodeSeeded && _openCode is { } openCode)
         {
             changed |= ApplyOpenCode(openCode.Refresh(), seeded: false);
@@ -473,6 +488,7 @@ internal sealed partial class MonitorCore : IDisposable
         var cutoff = DateTime.UnixEpoch.AddMilliseconds(nowMs - RecentWriteWindowMs);
         var changed = _openCodeSeeded && _openCode?.RefreshIfChanged() is { } update && ApplyOpenCode(update, seeded: false);
         changed |= _zcodeSeeded && RefreshZCode();
+        changed |= _devinSeeded && RefreshDevin();
         changed |= RefreshOpenClaw(discover: false);
         changed |= RefreshHermes(discover: false);
         _connections.CloseIdle();
@@ -529,6 +545,11 @@ internal sealed partial class MonitorCore : IDisposable
         if (_zcodeSeeded)
         {
             changed |= RefreshZCode();
+        }
+        RefreshDevinAvailability();
+        if (_devinSeeded)
+        {
+            changed |= RefreshDevin();
         }
 
         AddNewPiRoots();
@@ -621,6 +642,11 @@ internal sealed partial class MonitorCore : IDisposable
             return _zcode?.ActiveSessionCount(todayStartMs) ?? 0;
         }
 
+        if (kind == SourceKind.Devin)
+        {
+            return _devin?.ActiveSessionCount(todayStartMs) ?? 0;
+        }
+
         if (kind == SourceKind.OpenClaw)
         {
             return _openClaw?.ActiveSessionCount(todayStartMs) ?? 0;
@@ -674,6 +700,10 @@ internal sealed partial class MonitorCore : IDisposable
         {
             warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.ZCode));
         }
+        if (_devin?.Unsupported == true)
+        {
+            warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.Devin));
+        }
 
         if (_openCode?.Status == OpenCodeStatus.Unsupported)
         {
@@ -695,13 +725,13 @@ internal sealed partial class MonitorCore : IDisposable
 
     public long MalformedLineCount =>
         _removedMalformedLines + _files.Values.Sum(f => f.Parser.MalformedLines) + (_openCode?.MalformedRows ?? 0)
-        + (_openClaw?.MalformedLines ?? 0) + (_hermes?.MalformedLines ?? 0);
+        + (_devin?.MalformedLines ?? 0) + (_openClaw?.MalformedLines ?? 0) + (_hermes?.MalformedLines ?? 0);
 
     public long OversizedLineCount => _removedOversizedLines + _files.Values.Sum(f => f.Tailer.OversizedLines) + (_hermes?.OversizedLines ?? 0);
 
     public int UnreadableFileCount =>
         _files.Values.Count(f => f.Unreadable) + (_openCode?.Status == OpenCodeStatus.Unreadable ? 1 : 0) + (_zcode?.Unreadable == true ? 1 : 0)
-        + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0);
+        + (_devin?.Unreadable == true ? 1 : 0) + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0);
 
     public bool PartialHistory => _partialHistory;
 
@@ -833,6 +863,12 @@ internal sealed partial class MonitorCore : IDisposable
             path = _zcodeRootPath;
             available = _zcodeRoot?.Available ?? File.Exists(ZCode.ZCodeDatabase.DatabasePath(_zcodeRootPath));
             rootEnabled = _zcodeRoot is not null;
+        }
+        else if (kind == SourceKind.Devin)
+        {
+            path = _devinRootPath;
+            available = _devinRoot?.Available ?? false;
+            rootEnabled = _devinRoot is not null;
         }
         else if (kind == SourceKind.OpenClaw)
         {

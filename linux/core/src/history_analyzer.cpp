@@ -16,6 +16,7 @@
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/actions.hpp"
+#include "agentspeed/devin.hpp"
 #include "agentspeed/perf_history.hpp"
 #include "agentspeed/tz.hpp"
 #include "agentspeed/zcode.hpp"
@@ -49,6 +50,7 @@ const char* familyName(RootFamily family) {
         case RootFamily::OpenClaw: return "OpenClaw";
         case RootFamily::Hermes: return "Hermes";
         case RootFamily::Droid: return "Droid";
+        case RootFamily::Devin: return "Devin";
     }
     return "?";
 }
@@ -175,6 +177,11 @@ struct Analyzer::Work {
         std::int64_t size = 0, modified = 0;
     };
     std::optional<ZCodeWork> zcode;
+    struct DevinWork {
+        devin::Location location;
+        std::int64_t size = 0, modified = 0;
+    };
+    std::optional<DevinWork> devin;
     struct OpenClawWork {
         std::string path;
         sqlite::DatabaseStamp stamp;
@@ -281,9 +288,10 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
     planOpenClaw(locations, enabled, zoneChanged, work, report);
     planHermes(locations, enabled, zoneChanged, work, report);
     planZCode(locations, enabled, zoneChanged, work, report);
+    planDevin(locations, enabled, zoneChanged, work, report);
     planOpenCode(locations, enabled, zoneChanged, zoneId, work, report);
     report.filesPlanned = static_cast<int>(work.files.size() + work.openClaw.size() + work.hermes.size()) + (work.zcode ? 1 : 0) +
-                          (work.openCode ? 1 : 0);
+                          (work.devin ? 1 : 0) + (work.openCode ? 1 : 0);
     progress_ = progress;
     struct Reset {
         std::function<void(int, int)>& progress;
@@ -299,6 +307,7 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
         if (!report.cancelled) analyzeOpenClaw(work, ledger, labeler, report);
         if (!report.cancelled) analyzeHermes(work, ledger, labeler, report);
         if (!report.cancelled) analyzeZCode(work, ledger, labeler, report);
+        if (!report.cancelled) analyzeDevin(work, ledger, labeler, report);
         if (!report.cancelled) analyzeOpenCode(work, ledger, labeler, report);
     } catch (...) {
         flush(pending_);
@@ -528,6 +537,64 @@ void Analyzer::analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.version = kVersion;
         entry.days = contributionsOf(responses, SourceKind::ZCode, labeler, *prices_);
         entry.perf = emittedRecords(responses, SourceKind::ZCode, labeler);
+        keep(std::move(entry), ledger.finish(id));
+        advance(report);
+    }
+}
+
+void Analyzer::planDevin(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
+    if (!enabled.contains(SourceKind::Devin) || locations.devinRoot.empty()) return;
+    const auto location = devin::resolveLocation(locations.devinRoot, processEnvironment(), userHome(processEnvironment()));
+    if (!location.exists()) return;
+    ++report.filesDiscovered;
+    const auto databaseStamp = location.databasePath ? sqlite::stampOf(*location.databasePath) : std::nullopt;
+    std::int64_t modified = databaseStamp ? databaseStamp->lastWriteNs() : 0;
+    for (const auto& path : devin::desktopFiles(location)) {
+        if (const auto stat = fsx::statOf(path)) modified = std::max(modified, stat->writeNs);
+    }
+    bool any = false, changed = force;
+    for (const auto& [path, entry] : entries_) {
+        if (entry.family != "devin") continue;
+        any = true;
+        changed |= !unchanged(&entry, "devin", databaseStamp ? databaseStamp->length() : 0, modified, false);
+    }
+    if (any && !changed) return;
+    for (const auto& [path, entry] : entries_) {
+        if (entry.family == "devin") work.replaced.insert(entry.id);
+    }
+    work.devin = Work::DevinWork{location, databaseStamp ? databaseStamp->length() : 0, modified};
+}
+
+void Analyzer::analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
+    if (!work.devin) return;
+    Deduper deduper;
+    devin::Source source(work.devin->location, deduper);
+    const auto update = source.seed(devin::Source::kBacklogWindowMs);
+    if (source.unreadable()) { ++report.filesUnreadable; return; }
+    if (source.unsupported()) return;
+    const std::set<std::string> removed(update.removedResponses.begin(), update.removedResponses.end());
+    for (const auto& agent : update.agents) {
+        const auto& id = agent.id;
+        std::map<std::string, ParsedResponse> latest;
+        std::vector<std::string> keys;
+        for (const auto& [response, completion] : update.responses) {
+            if (response.agentId != id || removed.contains(response.key)) continue;
+            std::string owner;
+            if (ledger.tryClaim(response.key, id, &owner) || owner == id) {
+                if (!latest.contains(response.key)) keys.push_back(response.key);
+                latest[response.key] = response;
+            }
+        }
+        std::vector<ParsedResponse> responses;
+        for (const auto& key : keys) responses.push_back(latest[key]);
+        StoredFile entry;
+        entry.path = id;
+        entry.family = "devin";
+        entry.size = work.devin->size;
+        entry.modified = work.devin->modified;
+        entry.version = kVersion;
+        entry.days = contributionsOf(responses, SourceKind::Devin, labeler, *prices_);
+        entry.perf = emittedRecords(responses, SourceKind::Devin, labeler);
         keep(std::move(entry), ledger.finish(id));
         advance(report);
     }

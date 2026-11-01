@@ -287,6 +287,7 @@ std::optional<SourceKind> matchSource(const Env& env, const Process& p, const st
     if (name == "openclaw" || contains(script, "/openclaw.mjs") || contains(script, "/openclaw/dist/")) return SourceKind::OpenClaw;
     if (isHermes(env, p)) return SourceKind::Hermes;
     if (name == "droid") return SourceKind::Droid;
+    if (name == "devin") return SourceKind::Devin;
     const auto edition = workBuddyEdition(env.platform, env.platform == Platform::MacOS ? p.bundle.value_or("") : name);
     if (edition) {
         for (std::size_t i = 1; i < p.args.size(); ++i) {
@@ -574,7 +575,7 @@ void Engine::tick(const Sample& sample, const std::vector<AgentFacts>& agents) {
             src.unassignedTx += acc.v[1] + acc.v[3];
         }
     }
-    for (int k = 0; k <= static_cast<int>(SourceKind::Droid); ++k) {
+    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) {
         const auto source = static_cast<SourceKind>(k);
         const auto it = totals.find(source);
         const std::array<std::uint64_t, 4> v = it == totals.end() ? std::array<std::uint64_t, 4>{} : it->second;
@@ -613,7 +614,7 @@ std::vector<HistoryRow> Engine::history() const {
     std::vector<HistoryRow> rows;
     for (const auto& [date, d] : days_) {
         rows.push_back({date, "machine", d.machine.rx, d.machine.tx, 0, 0, d.machine.sampledMs});
-        for (int k = 0; k <= static_cast<int>(SourceKind::Droid); ++k) {
+        for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) {
             const auto source = static_cast<SourceKind>(k);
             const auto it = d.sources.find(source);
             if (it == d.sources.end()) continue;

@@ -4,7 +4,7 @@
 
 # Agent Speed
 
-**AI agent が全力で走る瞬間を、目で感じる。** Codex・Claude Code・Claude Desktop・DSH（DeepSeek Harness）・OpenCode・Gemini CLI・omp・Antigravity・WorkBuddy・WorkBuddy AI・ZCode・Kimi Code CLI・Grok Build のトークン速度をリアルタイムに映し出すネイティブ計器。待機中は静かに、レッドラインでは燃え上がる。
+**AI agent が全力で走る瞬間を、目で感じる。** Codex・Claude Code・Claude Desktop・DSH（DeepSeek Harness）・OpenCode・Gemini CLI・omp・Antigravity・WorkBuddy・WorkBuddy AI・ZCode・Kimi Code CLI・Grok Build・Devin のトークン速度をリアルタイムに映し出すネイティブ計器。待機中は静かに、レッドラインでは燃え上がる。
 
 [English](README.md) · [繁體中文](README.zh-TW.md) · [简体中文](README.zh-CN.md) · [日本語](README.ja.md)
 
@@ -91,6 +91,9 @@ Agent Speed は、agent がすでにローカルに書き出している記録�
 | ZCode | `~/.zcode/cli/db/db.sqlite`（または `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
 | Kimi Code CLI（TypeScript v2） | `~/.kimi-code/sessions`（または `$KIMI_CODE_HOME/sessions`） |
 | Grok Build | `~/.grok/sessions`（または `$GROK_HOME/sessions`） |
+| Devin（CLI・デスクトップ） | `~/.local/share/devin/cli/sessions.db`（または `$XDG_DATA_HOME/devin/cli`）と Devin ユーザーデータフォルダー内の `acp-events` |
+
+Devin CLI とデスクトップは 1 つのソースにまとめ、同じセッションが両方にある場合は CLI データベースを優先して二重計上を防ぎます。デスクトップの ACP `usage_update` には呼び出しごとの所要時間がないため、トークンのみを数え、速度は推定しません。デフォルトのクラウド専用デスクトップ agent はローカルに使用量を書き出さないため、測定できません。
 
 Grok Build のターン別・モデル別バッチに保存されたトークン数、API 所要時間、実際の呼び出し回数を、既存の速度エンジンで計算します。サブエージェントの使用量は親に集約されるため一度だけ計上し、子の動作状態も表示します。個々の呼び出しのタイムラインは保存されないため、バッチ内の並列実行速度は復元できません。
 

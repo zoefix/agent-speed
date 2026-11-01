@@ -13,7 +13,7 @@ namespace agentspeed {
 // METRICS 1: the append-only source order.
 enum class SourceKind : std::uint8_t {
     Codex, ClaudeCode, ClaudeDesktop, Deepseek, OpenCode, Gemini, Omp, Antigravity, WorkBuddy, WorkBuddyAi, ZCode,
-    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid,
+    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid, Devin,
 };
 
 std::string_view sourceId(SourceKind source);

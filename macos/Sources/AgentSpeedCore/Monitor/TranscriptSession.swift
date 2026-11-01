@@ -87,6 +87,7 @@ final class TranscriptSession {
     /// Deduplication owner of every OpenCode row; transcript files count up from 0.
     static let opencodeFileID: FileID = -1
     static let zcodeFileID: FileID = -2
+    static let devinFileID: FileID = -3
 
     let enabledSources: Set<SourceKind>
     let limits: ReadingLimits
@@ -109,6 +110,8 @@ final class TranscriptSession {
     /// The OpenCode database, when that source is enabled (METRICS 4.5, 5.2).
     let opencode: OpencodeSource?
     let zcode: ZcodeSource?
+    let devin: DevinSource?
+    private var devinNeedsSeed = false
     /// OpenClaw's agent databases, when that source is enabled (METRICS 4.14).
     let openclaw: OpenClawSource?
     private var openclawLinks: [String: String] = [:]
@@ -153,6 +156,7 @@ final class TranscriptSession {
         opencode = configuration.readsOpencode ? OpencodeSource(root: opencodeRoot, fileID: Self.opencodeFileID) : nil
         zcodeRoot = configuration.resolvedZcodeRoot
         zcode = configuration.readsZcode ? ZcodeSource(root: zcodeRoot, fileID: Self.zcodeFileID) : nil
+        devin = configuration.readsDevin ? DevinSource(location: configuration.resolvedDevinLocation, fileID: Self.devinFileID) : nil
         openclaw = configuration.readsOpenclaw
             ? OpenClawSource(roots: configuration.resolvedOpenclawRoots, maxLineBytes: limits.maxLineBytes) : nil
         let hermesRoot = configuration.resolvedHermesRoot
@@ -168,7 +172,7 @@ final class TranscriptSession {
 
     var hasAvailableRoot: Bool {
         roots.contains { $0.enabled && $0.detected } || opencode?.isReady == true || zcode?.isReady == true
-            || openclaw?.detected == true || hermes?.detected == true
+            || devin?.isReady == true || openclaw?.detected == true || hermes?.detected == true
     }
 
     var watchedPaths: [String] {
@@ -177,6 +181,7 @@ final class TranscriptSession {
             paths.append(directory)
         }
         if let directory = zcode?.watchedDirectory, !paths.contains(directory) { paths.append(directory) }
+        for directory in devin?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         for directory in openclaw?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         for directory in hermes?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         return paths
@@ -188,6 +193,7 @@ final class TranscriptSession {
     }
 
     var zcodeLocation: (path: String, available: Bool) { (zcodeRoot, zcode?.exists ?? false) }
+    var devinLocation: (path: String, available: Bool) { (configuration.resolvedDevinLocation.displayPath, devin?.exists ?? false) }
 
     /// The Hermes Agent row's path (the home, or the folder of the setting) and whether it exists (METRICS 2).
     var hermesLocation: (path: String, available: Bool) {
@@ -210,6 +216,10 @@ final class TranscriptSession {
         if let zcode, zcode.refreshAvailability() {
             changed = true
             zcodeNeedsSeed = true
+        }
+        if let devin, devin.refreshAvailability() {
+            changed = true
+            devinNeedsSeed = true
         }
         for index in roots.indices {
             let available = roots[index].readable && TranscriptDiscovery.isAvailable(root: roots[index].path)
@@ -361,6 +371,11 @@ final class TranscriptSession {
             zcodeNeedsSeed = false
             apply(zcode.seed(todayStartMs: todayStartMs, deduper: &deduper), live: false)
         }
+        if let devin, devin.exists {
+            summary.filesDiscovered += 1
+            devinNeedsSeed = false
+            apply(devin.seed(todayStartMs: todayStartMs, deduper: &deduper), live: false)
+        }
         if let openclaw {
             apply(openclaw.seed(todayStartMs: todayStartMs, deduper: &deduper), live: false)
             summary.filesDiscovered += openclaw.databaseCount
@@ -422,6 +437,9 @@ final class TranscriptSession {
         if let zcode, paths.contains(where: zcode.matches(canonicalPath:)) {
             changed = apply(zcode.refresh(deduper: &deduper), live: true) || changed
         }
+        if let devin, paths.contains(where: devin.matches(canonicalPath:)) {
+            changed = apply(devin.refresh(deduper: &deduper), live: true) || changed
+        }
         if let openclaw {
             changed = apply(openclaw.handleChanges(atCanonicalPaths: paths, todayStartMs: todayStartMs, deduper: &deduper), live: true)
                 || changed
@@ -471,6 +489,7 @@ final class TranscriptSession {
             changed = apply(update, live: true)
         }
         if let update = zcode?.refreshIfChanged(deduper: &deduper) { changed = apply(update, live: true) || changed }
+        if let update = devin?.refreshIfChanged(deduper: &deduper) { changed = apply(update, live: true) || changed }
         if let openclaw { changed = apply(openclaw.refreshIfChanged(deduper: &deduper), live: true) || changed }
         if let hermes { changed = apply(hermes.poll(nowMs: nowMs, deduper: &deduper), live: true) || changed }
         let hot = files.values.filter { nowMs - $0.lastStat.modifiedMs <= Self.hotWindowMs }
@@ -540,6 +559,14 @@ final class TranscriptSession {
                 zcodeNeedsSeed = false
                 changed = apply(zcode.seed(todayStartMs: todayStartMs, deduper: &deduper), live: false) || changed
             } else if let update = zcode.refreshIfChanged(deduper: &deduper) {
+                changed = apply(update, live: true) || changed
+            }
+        }
+        if let devin {
+            if devinNeedsSeed {
+                devinNeedsSeed = false
+                changed = apply(devin.seed(todayStartMs: todayStartMs, deduper: &deduper), live: false) || changed
+            } else if let update = devin.refreshIfChanged(deduper: &deduper) {
                 changed = apply(update, live: true) || changed
             }
         }
@@ -783,12 +810,12 @@ final class TranscriptSession {
 
     var malformedLines: Int {
         files.values.reduce(removedMalformedLines) { $0 + $1.parser.state.malformedLines } + (opencode?.malformedRows ?? 0)
-            + (openclaw?.malformedRows ?? 0) + (hermes?.malformedLines ?? 0)
+            + (devin?.malformedRows ?? 0) + (openclaw?.malformedRows ?? 0) + (hermes?.malformedLines ?? 0)
     }
 
     var unreadableFileCount: Int {
         unreadablePaths.count + (opencode?.status == .unreadable ? 1 : 0) + (zcode?.status == .unreadable ? 1 : 0)
-            + (openclaw?.unreadableDatabaseCount ?? 0) + (hermes?.unreadableFileCount ?? 0)
+            + (devin?.status == .unreadable ? 1 : 0) + (openclaw?.unreadableDatabaseCount ?? 0) + (hermes?.unreadableFileCount ?? 0)
     }
 
     /// Antigravity databases whose connection is open.
@@ -801,6 +828,7 @@ final class TranscriptSession {
         var sources: [SourceKind] = []
         if opencode?.status == .unsupported { sources.append(.opencode) }
         if zcode?.status == .unsupported { sources.append(.zcode) }
+        if devin?.status == .unsupported { sources.append(.devin) }
         if enabledSources.contains(.antigravity), files.values.contains(where: { $0.family.isDatabase && $0.parser.isUnsupported }) {
             sources.append(.antigravity)
         }
@@ -824,6 +852,7 @@ final class TranscriptSession {
             counts[.opencode] = opencode.activeSessionCount(todayStartMs: todayStartMs)
         }
         if let zcode { counts[.zcode] = zcode.activeSessionCount(todayStartMs: todayStartMs) }
+        if let devin { counts[.devin] = devin.activeSessionCount(todayStartMs: todayStartMs) }
         if let openclaw { counts[.openclaw] = openclaw.activeSessionCount(todayStartMs: todayStartMs) }
         if let hermes { counts[.hermes] = hermes.activeSessionCount(todayStartMs: todayStartMs) }
         return counts
@@ -909,6 +938,19 @@ final class TranscriptSession {
         if links != zcodeLinks {
             zcodeLinks = links
             parentLinksAreStale = true
+        }
+        return !update.isEmpty
+    }
+
+    @discardableResult
+    private func apply(_ update: DevinSource.Update, live: Bool) -> Bool {
+        for key in update.removedResponseKeys { engine.removeResponse(key: key) }
+        for (upsert, project) in update.upserts {
+            deliver(upsert, project: project, live: live, agent: update.agents[upsert.record.agentId])
+        }
+        for id in update.removedAgents { engine.removeAgent(id: id) }
+        for (id, state) in update.agents {
+            engine.setAgent(EngineAgent(id: id, state: state))
         }
         return !update.isEmpty
     }

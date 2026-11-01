@@ -41,6 +41,9 @@ internal enum RootFamily
 
     /// <summary>Factory Droid's sessions folder: transcripts read with their settings files (METRICS 4.16).</summary>
     Droid,
+
+    /// <summary>Devin's CLI and Desktop locations, watched only (METRICS 4.17).</summary>
+    Devin,
 }
 
 /// <summary>Per-family file rules: names, parser and the sources it can produce (METRICS 2 and 4).</summary>
@@ -69,6 +72,7 @@ internal static class Families
         RootFamily.OpenClaw => TranscriptNaming.OpenClawDatabase,
         RootFamily.Hermes => TranscriptNaming.HermesLog,
         RootFamily.Droid => TranscriptNaming.DroidSession,
+        RootFamily.Devin => TranscriptNaming.DevinEvents,
         _ => TranscriptNaming.Jsonl,
     };
 
@@ -115,6 +119,7 @@ internal static class Families
         RootFamily.OpenClaw => enabled.Contains(SourceKind.OpenClaw),
         RootFamily.Hermes => enabled.Contains(SourceKind.Hermes),
         RootFamily.Droid => enabled.Contains(SourceKind.Droid),
+        RootFamily.Devin => enabled.Contains(SourceKind.Devin),
         _ => false,
     };
 
@@ -135,6 +140,7 @@ internal static class Families
         SourceKind.OpenClaw => RootFamily.OpenClaw,
         SourceKind.Hermes => RootFamily.Hermes,
         SourceKind.Droid => RootFamily.Droid,
+        SourceKind.Devin => RootFamily.Devin,
         _ => RootFamily.Claude,
     };
 }

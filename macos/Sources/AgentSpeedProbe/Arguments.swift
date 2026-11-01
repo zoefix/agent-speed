@@ -50,7 +50,7 @@ struct ProbeArguments {
                                [--prices PATH] [--codex PATH] [--claude PATH] [--dsh PATH] [--opencode PATH]
                                [--gemini PATH] [--omp PATH] [--antigravity PATH] [--workbuddy PATH] [--workbuddy-ai PATH]
                                [--zcode PATH] [--kimi PATH] [--grok-build PATH] [--pi PATH]
-                               [--openclaw PATH] [--hermes PATH] [--droid PATH]
+                               [--openclaw PATH] [--hermes PATH] [--droid PATH] [--devin PATH]
                AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY
         """
 
@@ -172,6 +172,10 @@ struct ProbeArguments {
                 // `reference.py --droid`.
                 guard let path = iterator.next() else { return nil }
                 configuration.droidRoot = URL(fileURLWithPath: path, isDirectory: true)
+            case "--devin":
+                // A Devin data or CLI folder, sessions.db or acp-events folder; it replaces both automatic roots.
+                guard let path = iterator.next() else { return nil }
+                configuration.devinRoot = URL(fileURLWithPath: path)
             case "--opencode":
                 // The database file (as in reference.py) or the folder that contains it.
                 guard let path = iterator.next() else { return nil }

@@ -5,7 +5,7 @@
   python3 spec/tools/reference.py --dump-today [--codex PATH] [--claude PATH] [--dsh PATH] [--gemini PATH]
                                               [--omp PATH] [--pi PATH] [--antigravity PATH] [--workbuddy PATH]
                                               [--workbuddy-ai PATH] [--openclaw PATH] [--hermes PATH]
-                                              [--droid PATH]
+                                              [--droid PATH] [--devin PATH]
   python3 spec/tools/reference.py --dump-history [--utc] [--prices PATH] [...]
   python3 spec/tools/reference.py --write-history-fixture
   python3 spec/tools/reference.py --dump-unpriced [--days N | --first YYYY-MM-DD --last YYYY-MM-DD | --live]
@@ -2594,6 +2594,205 @@ def droid_finish(state):
     state.droid_growth = dict.fromkeys(DROID_FIELDS, 0)
 
 
+# ----------------------------------------------------------------------------- Devin (METRICS 4.17)
+
+def devin_response(key, agent, start, end, tokens, model):
+    return dict(key=key, source="devin", agentId=agent, startMs=start, endMs=end, firstMs=None, model=model,
+                provider=None, fast=False, final=True, **tokens)
+
+
+def devin_cli_tokens(usage):
+    read, write = num(usage.get("cache_read_tokens")), num(usage.get("cache_creation_tokens"))
+    return dict(input=min(TOKEN_CAP, num(usage.get("input_tokens")) + read + write), cachedInput=read,
+                cacheWriteInput=write, cacheWrite1hInput=0, output=num(usage.get("output_tokens")), reasoning=0)
+
+
+def devin_model(metadata, session_model=None):
+    model = metadata.get("generation_model")
+    if isinstance(model, str) and model.strip():
+        return model.strip()
+    if isinstance(session_model, str) and session_model.strip() and session_model.strip().lower() != "adaptive":
+        return session_model.strip()
+    return None
+
+
+def devin_read(root):
+    """Complete Devin CLI + Desktop read. Returns (responses, agents), with duplicate Desktop mirrors removed."""
+    responses, agents, titles = OrderedDict(), {}, {}
+    database = os.path.join(root, "cli", "sessions.db")
+    if os.path.isfile(database) and not os.path.islink(database):
+        uri = "file:" + database.replace("?", "%3f").replace("#", "%23") + "?mode=ro"
+        connection = sqlite3.connect(uri, uri=True)
+        try:
+            sessions = {}
+            for row in connection.execute("SELECT id,working_directory,model,title FROM sessions"):
+                sid, cwd, model, title = row
+                if isinstance(title, str) and title.strip():
+                    titles.setdefault(title.strip(), set()).add(sid)
+                sessions[sid] = {"cwd": cwd, "model": model}
+            for row_id, sid, raw, created in connection.execute(
+                    "SELECT row_id,session_id,chat_message,created_at FROM message_nodes ORDER BY row_id"):
+                if sid not in sessions:
+                    continue
+                end = created * 1000
+                agent = database + "#" + sid
+                state = agents.setdefault(agent, dict(id=agent, source="devin", project=None, model=None, phase="idle",
+                                                      isSubagent=False, lastLineMs=None, malformedLines=0))
+                session = sessions[sid]
+                state["lastLineMs"] = max(state["lastLineMs"] or end, end)
+                cwd = session["cwd"]
+                if isinstance(cwd, str) and cwd:
+                    state["project"] = re.split(r"[\\/]", cwd.rstrip("/\\"))[-1] or None
+                try:
+                    message = json.loads(raw)
+                    if not isinstance(message, dict):
+                        raise ValueError("not an object")
+                except (ValueError, TypeError, json.JSONDecodeError):
+                    state["malformedLines"] += 1
+                    continue
+                role = message.get("role")
+                metadata = message.get("metadata") if isinstance(message.get("metadata"), dict) else {}
+                if role == "user":
+                    state["phase"] = "generating"
+                    state["inFlightStartMs"] = end
+                    continue
+                if role != "assistant":
+                    continue
+                state["phase"] = "tools" if metadata.get("finish_reason") == "tool_calls" else "idle"
+                state.pop("inFlightStartMs", None)
+                usage = metadata.get("metrics")
+                if not isinstance(usage, dict):
+                    continue
+                tokens = devin_cli_tokens(usage)
+                if tokens["input"] == 0 and tokens["output"] == 0:
+                    continue
+                model = devin_model(metadata, session["model"])
+                state["model"] = model
+                request = metadata.get("request_id")
+                request = request.strip() if isinstance(request, str) and request.strip() else None
+                key = "devin:%s:%s" % (sid, "request:" + request if request else "row:" + str(row_id))
+                duration = usage.get("total_time_ms")
+                start = end - trunc64(duration) if finite(duration) and duration > 0 else None
+                responses[key] = devin_response(key, agent, start, end, tokens, model)
+        finally:
+            connection.close()
+    used_titles = {title for title, ids in titles.items() if len(ids) == 1
+                   and any(r["agentId"] == database + "#" + next(iter(ids)) for r in responses.values())}
+    desktop = os.path.join(root, "User", "acp-events")
+    if os.path.isdir(desktop) and not os.path.islink(desktop):
+        for name in sorted(os.listdir(desktop)):
+            path = os.path.join(desktop, name)
+            if not name.endswith(".ndjson") or not os.path.isfile(path) or os.path.islink(path):
+                continue
+            agent = path
+            state = agents.setdefault(agent, dict(id=agent, source="devin", project=None, model=None, phase="idle",
+                                                  isSubagent=False, lastLineMs=None, malformedLines=0))
+            title, aggregate = None, None
+            with open(path, encoding="utf-8", errors="replace") as fh:
+                for line_number, line in enumerate(fh, 1):
+                    try:
+                        obj = json.loads(line)
+                        notification = obj.get("notification") if isinstance(obj, dict) else None
+                        if not isinstance(notification, dict):
+                            continue
+                    except (ValueError, TypeError, json.JSONDecodeError):
+                        state["malformedLines"] += 1
+                        continue
+                    kind = notification.get("sessionUpdate")
+                    if kind == "session_info_update":
+                        candidate = notification.get("title")
+                        if isinstance(candidate, str) and candidate.strip():
+                            title = candidate.strip()
+                        continue
+                    def at(paths):
+                        for parts in paths:
+                            value = notification
+                            for part in parts:
+                                value = value.get(part) if isinstance(value, dict) else None
+                            if value is not None:
+                                return value
+                        return None
+                    stamp = parse_ts(at((("content", "metadata", "created_at"), ("metadata", "created_at"),
+                                         ("created_at",), ("timestamp",))))
+                    if stamp is not None:
+                        state["lastLineMs"] = max(state["lastLineMs"] or stamp, stamp)
+                    model = at((("content", "metadata", "generation_model"), ("metadata", "generation_model"),
+                                ("_meta", "cognition.ai/model")))
+                    model = model if isinstance(model, str) and model else None
+                    meta = notification.get("_meta") if isinstance(notification.get("_meta"), dict) else {}
+                    fields = ("cognition.ai/inputTokens", "cognition.ai/cachedReadTokens",
+                              "cognition.ai/cachedWriteTokens", "cognition.ai/outputTokens")
+                    canonical = kind == "usage_update" and any(field in meta for field in fields)
+                    if canonical:
+                        if aggregate is None:
+                            aggregate = {"input": 0, "read": 0, "write": 0, "output": 0, "model": None}
+                        aggregate["input"] = num(meta.get(fields[0])) if fields[0] in meta else aggregate["input"]
+                        aggregate["read"] = num(meta.get(fields[1])) if fields[1] in meta else aggregate["read"]
+                        aggregate["write"] = num(meta.get(fields[2])) if fields[2] in meta else aggregate["write"]
+                        aggregate["output"] = min(TOKEN_CAP, aggregate["output"] + num(meta.get(fields[3])))
+                        aggregate["model"] = aggregate["model"] or model
+                        continue
+                    usage = at((("content", "metadata", "metrics"), ("metadata", "metrics"), ("metrics",),
+                                ("content", "metadata"), ("metadata",)))
+                    if not isinstance(usage, dict):
+                        continue
+                    tokens = devin_cli_tokens(usage)
+                    if tokens["input"] == 0 and tokens["output"] == 0:
+                        continue
+                    key = "devin-desktop:%s:line:%d" % (name[:-7], line_number)
+                    duration = usage.get("total_time_ms")
+                    start = stamp - trunc64(duration) if stamp is not None and finite(duration) and duration > 0 else None
+                    if stamp is not None:
+                        state["model"] = model or state["model"]
+                        responses[key] = devin_response(key, agent, start, stamp, tokens, model)
+            if aggregate is not None and (aggregate["input"] + aggregate["write"] > 0 or aggregate["output"] > 0):
+                key = "devin-desktop:%s:usage" % name[:-7]
+                tokens = dict(input=min(TOKEN_CAP, aggregate["input"] + aggregate["write"]),
+                              cachedInput=aggregate["read"], cacheWriteInput=aggregate["write"], cacheWrite1hInput=0,
+                              output=aggregate["output"], reasoning=0)
+                state["model"] = aggregate["model"]
+                responses[key] = devin_response(key, agent, None, state["lastLineMs"] or 0, tokens, aggregate["model"])
+            if title and len(titles.get(title, ())) == 1:
+                session = sessions[next(iter(titles[title]))]
+                fallback = devin_model({}, session["model"])
+                cwd = session["cwd"]
+                if isinstance(cwd, str) and cwd:
+                    state["project"] = re.split(r"[\\/]", cwd.rstrip("/\\"))[-1] or None
+                if fallback:
+                    state["model"] = state["model"] or fallback
+                    for response in responses.values():
+                        if response["agentId"] == agent and response["model"] is None:
+                            response["model"] = fallback
+            if title in used_titles:
+                for key in [key for key, response in responses.items() if response["agentId"] == agent]:
+                    del responses[key]
+                agents[agent]["duplicate"] = True
+    agents = {key: value for key, value in agents.items() if not value.pop("duplicate", False)
+              and value.get("lastLineMs") is not None}
+    return list(responses.values()), agents
+
+
+def check_devin(root, expected):
+    responses, agents = devin_read(os.path.join(root, "devin"))
+    failures = []
+    relative = lambda path: os.path.relpath(path, root).replace(os.sep, "/")  # noqa: E731
+    got = [dict(r, agentId=relative(r["agentId"])) for r in responses]
+    if got != expected["responses"]:
+        failures.append("devin responses: expected %r got %r" % (expected["responses"], got))
+    for agent, want in expected["agents"].items():
+        full = os.path.join(root, *agent.split("/"))
+        actual = agents.get(full)
+        if actual is None:
+            failures.append("devin agent missing: " + agent)
+            continue
+        for key, value in want.items():
+            if actual.get(key) != value:
+                failures.append("devin %s %s: expected %r got %r" % (agent, key, value, actual.get(key)))
+    if len(agents) != len(expected["agents"]):
+        failures.append("devin agents: expected %d got %d" % (len(expected["agents"]), len(agents)))
+    return failures
+
+
 class DroidTail:
     """Live reading of one session (METRICS 4.16 Read cycle): appended lines, then the sidecar, then allocation."""
 
@@ -3670,6 +3869,9 @@ def check_fixtures():
     if dr:
         failures += check_droid(root, dr)
         failures += check_traces(root, expected, dr["traces"])
+    devin_path = os.path.join(root, "devin-expected.json")
+    if os.path.exists(devin_path):
+        failures += check_devin(root, json.load(open(devin_path, encoding="utf-8")))
     hist_path = os.path.join(root, "history-expected.json")
     if os.path.exists(hist_path):
         hist = json.load(open(hist_path, encoding="utf-8"))
@@ -4500,7 +4702,7 @@ def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=()
 
 def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), devin_roots=(), agents_out=None):
     """Today's responses as the engine seeds them (the `--dump-today` rows), with files and bytes read; `agents_out`
     receives the parser state of every seeded agent (METRICS 6.9)."""
     index = pricing.Index(pricing.load(table))
@@ -4573,18 +4775,42 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
             rows.append(dict(record, source=source, agentId=agent,
                              costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
                              **harness_modes[record["key"]]))
+    for root in devin_roots:
+        found, agents = devin_read(root)
+        read_files += int(os.path.isfile(os.path.join(root, "cli", "sessions.db")))
+        desktop = os.path.join(root, "User", "acp-events")
+        read_files += len([name for name in os.listdir(desktop) if name.endswith(".ndjson")]) if os.path.isdir(desktop) else 0
+        for response in found:
+            if response["endMs"] < today_start:
+                continue
+            rows.append(dict(response, costMicroUsd=index.price(response) if has_day(response["endMs"]) else None,
+                             effort=None, speed=None))
+        if agents_out is not None:
+            for agent, info in agents.items():
+                state = FileState(agent, "devin")
+                state.project = info.get("project")
+                state.model = info.get("model")
+                state.phase = info.get("phase", "idle")
+                state.last_line = info.get("lastLineMs")
+                state.malformed = info.get("malformedLines", 0)
+                state.responses = OrderedDict((r["key"], r) for r in found if r["agentId"] == agent)
+                state.completions = [("response", key) for key in state.responses]
+                agents_out.append(state)
+        for path in [os.path.join(root, "cli", "sessions.db")] + [os.path.join(desktop, name) for name in os.listdir(desktop)] if os.path.isdir(desktop) else []:
+            if os.path.isfile(path):
+                read_bytes += os.path.getsize(path)
     rows.sort(key=lambda r: (r["endMs"], r["key"]))
     return rows, read_files, read_bytes
 
 
 def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), devin_roots=(), now_ms=None):
     started = time.time()
     seeded = []
     rows, read_files, read_bytes = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores,
                                               wb_roots, table, zcode_root, kimi_root, grok_root, pi_dirs, openclaw_dbs,
-                                              codex_roots, hermes_dirs, droid_roots, agents_out=seeded)
+                                              codex_roots, hermes_dirs, droid_roots, devin_roots, agents_out=seeded)
     for r in rows:
         print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
     now = now_ms if now_ms is not None else int(time.time() * 1000)
@@ -4605,8 +4831,8 @@ def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
 
 def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), omp_dirs=(), ag_stores=(),
                 wb_roots=(), include_archived=True, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(),
-                openclaw_dbs=(), codex_roots=None, hermes_dirs=(), hermes_tz=None, droid_roots=(), droid_memory=None,
-                droid_skipped=None, perf_out=None):
+                openclaw_dbs=(), codex_roots=None, hermes_dirs=(), hermes_tz=None, droid_roots=(), devin_roots=(),
+                droid_memory=None, droid_skipped=None, perf_out=None):
     """Parses every log completely (METRICS 8) and returns all responses with their source and agent. A Droid session
     whose parent counters are unknown is skipped (listed in `droid_skipped`); `droid_memory` keeps the signatures of
     unreadable parent sidecars from one analysis to the next (METRICS 4.16 Own counters). `perf_out` receives every
@@ -4659,6 +4885,21 @@ def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), 
         for source, agent, r in collected:
             by_agent.setdefault((source, agent), []).append({"response": r})
         perf_out += [{"id": agent, "source": source, "events": events} for (source, agent), events in by_agent.items()]
+    for root in devin_roots:
+        found, agents = devin_read(root)
+        out += [("devin", r["agentId"], r) for r in found]
+        if perf_out is not None:
+            states = []
+            for agent, info in agents.items():
+                state = FileState(agent, "devin")
+                state.project = info.get("project")
+                state.model = info.get("model")
+                state.phase = info.get("phase", "idle")
+                state.last_line = info.get("lastLineMs")
+                state.responses = OrderedDict((r["key"], r) for r in found if r["agentId"] == agent)
+                state.completions = [("response", key) for key in state.responses]
+                states.append(state)
+            perf_out += perf_agents(states)
     return out
 
 
@@ -4762,6 +5003,8 @@ def main():
                         help="OpenClaw state folder, agent folder or openclaw-agent.sqlite (replaces the automatic roots)")
     parser.add_argument("--droid", default=None,
                         help="Factory Droid .factory folder or its sessions folder (replaces the automatic root)")
+    parser.add_argument("--devin", default=None,
+                        help="Devin data or CLI folder, sessions.db or acp-events folder (replaces the automatic roots)")
     parser.add_argument("--write-history-fixture", action="store_true")
     parser.add_argument("--prices", default=pricing.TABLE, help="price table for --dump-history (METRICS 9)")
     parser.add_argument("--dump-unpriced", action="store_true", help="unpriced diagnostics text (METRICS 9.10)")
@@ -4797,6 +5040,8 @@ def main():
     openclaw_dbs = [db for r in ([args.openclaw] if args.openclaw else openclaw_state_dirs()) for db in discover_openclaw(r)]
     codex_roots = [args.codex] if args.codex else None
     droid_roots = [droid_root(setting=args.droid)] if args.droid else [droid_root(home)]
+    devin_roots = [args.devin] if args.devin else [os.path.join(os.environ.get("XDG_DATA_HOME")
+        or os.path.join(home, ".local", "share"), "devin")]
     if args.write_history_fixture:
         write_history_fixture()
         return
@@ -4816,14 +5061,14 @@ def main():
             rows, _, _ = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                                     args.prices, zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs,
                                     openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                                    droid_roots=droid_roots)
+                                    droid_roots=droid_roots, devin_roots=devin_roots)
             parts = diagnostics.live_parts([(r["source"], r) for r in rows], first)
         else:
             parts = diagnostics.history_parts(daily_history(
                 collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                             zcode_root=zcode_root, kimi_root=kimi_root, grok_root=grok_root, pi_dirs=pi_dirs,
                             openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                            droid_roots=droid_roots),
+                            droid_roots=droid_roots, devin_roots=devin_roots),
                 day_pricing=pricing.DayPricing([pricing.load(args.prices)])))
         dump_unpriced(parts, args.prices, view, first, last, args.source)
         return
@@ -4833,7 +5078,7 @@ def main():
                                          ag_stores, wb_roots, zcode_root=zcode_root, kimi_root=kimi_root,
                                          grok_root=grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
                                          codex_roots=codex_roots, hermes_dirs=hermes_dirs, droid_roots=droid_roots,
-                                         perf_out=agents),
+                                         devin_roots=devin_roots, perf_out=agents),
                              tz=timezone.utc if args.utc else None,
                              day_pricing=pricing.DayPricing([pricing.load(args.prices)]))
         for row in rows:
@@ -4846,7 +5091,7 @@ def main():
     elif args.dump_today:
         dump_today(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, args.prices,
                    zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs, codex_roots=codex_roots,
-                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now)
+                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, devin_roots=devin_roots, now_ms=args.now)
     else:
         parser.print_help()
 

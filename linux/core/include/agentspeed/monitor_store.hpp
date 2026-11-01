@@ -38,6 +38,8 @@ public:
         return pricing::UtcDay(ms + (zone_ ? zone_->offsetMs(ms) : 0)).label();
     }
 
+    void removeResponse(const std::string& key) { byKey_.erase(key); }
+
     void onResponse(const ParsedResponse& r, bool completion) override {
         if (enabled_ && !enabled_->contains(r.source)) return;
         if (completion && live_ && !seeding_ && r.endMs >= nowMs_ - kCompletionWindowMs) {

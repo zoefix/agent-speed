@@ -1,0 +1,2 @@
+{"notification":{"sessionUpdate":"session_info_update","title":"Mirror task"}}
+{"notification":{"sessionUpdate":"usage_update","_meta":{"cognition.ai/inputTokens":999,"cognition.ai/outputTokens":999}}}

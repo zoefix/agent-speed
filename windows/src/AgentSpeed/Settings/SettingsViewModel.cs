@@ -183,6 +183,9 @@ internal sealed class SettingsViewModel : ObservableObject
         ChangeDroidCommand = new RelayCommand(() => ChangeFolder(DroidPath, (s, path) => s with { DroidRoot = path }));
         ResetDroidCommand = new RelayCommand(() => _settings.Update(s => s with { DroidRoot = null }),
             () => _settings.Current.DroidRoot is not null);
+        ChangeDevinCommand = new RelayCommand(() => ChangeFolder(DevinPath, (s, path) => s with { DevinRoot = path }));
+        ResetDevinCommand = new RelayCommand(() => _settings.Update(s => s with { DevinRoot = null }),
+            () => _settings.Current.DevinRoot is not null);
         ResetTaskbarPositionCommand = new RelayCommand(() => _settings.Update(s => s with { TaskbarOffset = 0 }),
             () => _settings.Current.TaskbarOffset > 0);
         OpenHistoryCommand = new RelayCommand(openHistory);
@@ -623,6 +626,11 @@ internal sealed class SettingsViewModel : ObservableObject
     /// <summary>Today's main sessions; Task-tool workers are not counted (DESIGN 5).</summary>
     public string DroidStatus => StatusFor(SourceKind.Droid);
 
+    /// <summary>Devin's data folder, or the chosen CLI/data folder or sessions.db.</summary>
+    public string DevinPath => S.DevinRoot ?? LiveMonitor.DefaultDevinRoot.DisplayPath;
+
+    public string DevinStatus => StatusFor(SourceKind.Devin);
+
     public string CodexStatus => StatusFor(SourceKind.Codex);
 
     public string DshStatus => StatusFor(SourceKind.DeepSeek);
@@ -787,6 +795,8 @@ internal sealed class SettingsViewModel : ObservableObject
         OnPropertyChanged(nameof(HermesStatus));
         OnPropertyChanged(nameof(DroidStatus));
         OnPropertyChanged(nameof(DroidPath));
+        OnPropertyChanged(nameof(DevinStatus));
+        OnPropertyChanged(nameof(DevinPath));
         OnPropertyChanged(nameof(UpdateLastCheckedText));
     }
 

@@ -188,6 +188,8 @@ public sealed record AppSettings
 
     public bool DroidEnabled { get; init; } = true;
 
+    public bool DevinEnabled { get; init; } = true;
+
     /// <summary>Null uses the default Codex sessions folder.</summary>
     public string? CodexRoot { get; init; }
 
@@ -232,6 +234,9 @@ public sealed record AppSettings
 
     /// <summary>The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder; null uses <c>~/.factory/sessions</c>.</summary>
     public string? DroidRoot { get; init; }
+
+    /// <summary>A Devin data or CLI folder, sessions.db or acp-events folder; null uses the automatic roots.</summary>
+    public string? DevinRoot { get; init; }
 
     public int ChartSeconds { get; init; } = 120;
 
@@ -305,6 +310,7 @@ public sealed record AppSettings
         SourceKind.OpenClaw => OpenClawEnabled,
         SourceKind.Hermes => HermesEnabled,
         SourceKind.Droid => DroidEnabled,
+        SourceKind.Devin => DevinEnabled,
         _ => false,
     };
 
@@ -342,6 +348,7 @@ public sealed record AppSettings
         SourceKind.OpenClaw => this with { OpenClawEnabled = enabled },
         SourceKind.Hermes => this with { HermesEnabled = enabled },
         SourceKind.Droid => this with { DroidEnabled = enabled },
+        SourceKind.Devin => this with { DevinEnabled = enabled },
         _ => this,
     };
 
@@ -351,7 +358,7 @@ public sealed record AppSettings
         return new MonitorConfiguration(enabled, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, OmpRoot, AntigravityRoot,
             WorkBuddyRoot: WorkBuddyRoot, WorkBuddyAiRoot: WorkBuddyAiRoot,
             ZCodeRoot: ZCodeRoot, KimiRoot: KimiRoot, GrokBuildRoot: GrokBuildRoot, PiRoot: PiRoot,
-            OpenClawRoot: OpenClawRoot, HermesRoot: HermesRoot, DroidRoot: DroidRoot);
+            OpenClawRoot: OpenClawRoot, HermesRoot: HermesRoot, DroidRoot: DroidRoot, DevinRoot: DevinRoot);
     }
 
     /// <summary>The master switch; turning it on while every orb is individually hidden makes them all visible.</summary>
@@ -405,6 +412,7 @@ public sealed record AppSettings
         OpenClawRoot = CleanPath(OpenClawRoot),
         HermesRoot = CleanPath(HermesRoot),
         DroidRoot = CleanPath(DroidRoot),
+        DevinRoot = CleanPath(DevinRoot),
         HistoryWindow = WindowFrame.ValidHistory(HistoryWindow),
         HistoryModeKind = HistoryModeKind == ExecutionModeKind.Speed ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
         HistoryPerfSort = HistoryPerfSort ?? History.Perf.PerfSort.Default,

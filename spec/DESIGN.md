@@ -298,6 +298,7 @@ White-hot core for highlights: `#FFF7D6`. With overdrive `o > 0`, highlights ble
 | OpenClaw | `#DE2E1F` lobster red |
 | Hermes Agent | `#B8860B` dark goldenrod |
 | Factory Droid | `#9E5F46` rust copper |
+| Devin | `#BE185D` raspberry |
 
 Pink is `#EC4899`, not the lighter `#F472B6` (too close to coral and lilac); lime is `#84CC16`, not the lighter `#A3E635`, which nearly vanishes on light backgrounds.
 
@@ -324,6 +325,11 @@ crowded (coral, amber, rose, lobster red, dark goldenrod), so it keeps their hue
 (closest: OpenClaw's lobster red 0.131, Hermes Agent's dark goldenrod 0.132, slate 0.135, Grok Build's steel 0.157)
 and reads on both appearances (contrast against `#1E1E1E`: 3.3; against white: 5.0). Like every source it has no icon
 and no short name: its dot and `source.droid` "Factory Droid", in source order (METRICS 1) after Hermes Agent.
+
+Devin takes raspberry `#BE185D`, a deep pink-red that stays distinct from Antigravity's brighter pink, Kimi's rose and
+OpenClaw's red in both appearances. CLI and Desktop sessions share this one source and color; their locally measured
+usage is folded together, with CLI data authoritative for a session found in both. Its dot and `source.devin` "Devin"
+come after Factory Droid in source order (METRICS 1).
 
 The two WorkBuddy editions share one app icon, teal-green (`#0EC8A8` → `#05C890`), which is nearly Codex mint (OKLab
 distance about 0.04; the closest existing pair, coral and amber, is 0.11 apart). So both take a darker member of that teal family,

@@ -491,8 +491,9 @@ struct DroidTests {
     // MARK: - Source
 
     @Test func sourceOrderAndProcessRow() {
-        #expect(SourceKind.allCases.last == .droid)
+        #expect(SourceKind.allCases.last == .devin)
         #expect(SourceKind.allCases.firstIndex(of: .droid) == SourceKind.allCases.firstIndex(of: .hermes)! + 1)
+        #expect(SourceKind.allCases.firstIndex(of: .devin) == SourceKind.allCases.firstIndex(of: .droid)! + 1)
         #expect(SourceSet(.droid).rawValue == 1 << 16)
         #expect(TranscriptFamily(.droid) == .droid && TranscriptFamily.droid.sources == [.droid])
         let mac = AgentProcessRules(platform: TrafficPlatform(kind: .macos, home: "/Users/dev"))

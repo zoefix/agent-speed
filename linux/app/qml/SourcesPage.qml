@@ -14,7 +14,7 @@ SettingsPage {
         gemini: "settings.sources.geminiHint", omp: "settings.sources.ompHint", antigravity: "settings.sources.antigravityHint",
         workbuddy: "settings.sources.workbuddyHint", workbuddyAi: "settings.sources.workbuddyAiHint", zcode: "settings.sources.zcodeHint",
         kimi: "settings.sources.kimiHint", grokBuild: "settings.sources.grokBuildHint", pi: "settings.sources.piHint",
-        openclaw: "settings.sources.openclawHint", hermes: "settings.sources.hermesHint", droid: "settings.sources.droidHint"
+        openclaw: "settings.sources.openclawHint", hermes: "settings.sources.hermesHint", droid: "settings.sources.droidHint", devin: "settings.sources.devinHint"
     })
 
     ListModel { id: sourceModel }

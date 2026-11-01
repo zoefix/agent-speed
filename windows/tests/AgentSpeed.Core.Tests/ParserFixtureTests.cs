@@ -163,6 +163,7 @@ public sealed class ParserFixtureTests
         SourceKind.Pi => "pi",
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Droid => "droid",
+        SourceKind.Devin => "devin",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 

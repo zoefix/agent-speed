@@ -102,6 +102,11 @@ public final class LiveMonitor {
     /// Factory Droid's sessions folder, `~/.factory/sessions` (a configured folder replaces it).
     public nonisolated static var defaultDroidRoot: URL { TranscriptLocations.defaultDroidRoot }
 
+    /// Devin's data folder (the CLI database and Desktop ACP folder are resolved from it).
+    public nonisolated static var defaultDevinRoot: URL {
+        URL(fileURLWithPath: TranscriptLocations.defaultDevinLocation.displayPath, isDirectory: true)
+    }
+
     /// The sessions folder a configured Factory Droid folder names: its `sessions` folder when it has one (a `.factory`
     /// folder), else the folder itself (METRICS 4.16).
     public nonisolated static func droidSessionsFolder(_ url: URL) -> URL { DroidPaths.sessionsFolder(url) }

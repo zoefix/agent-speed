@@ -1,0 +1,4 @@
+{"notification":{"sessionUpdate":"session_info_update","title":"Desktop only"}}
+{"notification":{"sessionUpdate":"usage_update","_meta":{"cognition.ai/inputTokens":100,"cognition.ai/outputTokens":5,"cognition.ai/cachedReadTokens":20},"metadata":{"created_at":"2026-10-20T10:10:00.000Z"}}}
+{"notification":{"sessionUpdate":"usage_update","_meta":{"cognition.ai/inputTokens":150,"cognition.ai/outputTokens":8,"cognition.ai/cachedReadTokens":30,"cognition.ai/cachedWriteTokens":2},"created_at":"2026-10-20T10:10:02.000Z"}}
+not json

@@ -1,5 +1,6 @@
 #include <algorithm>
 
+#include "agentspeed/devin.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/harness.hpp"
 #include "agentspeed/hermes.hpp"
@@ -29,6 +30,9 @@ void Monitor::initSources() {
     }
     if (config_.enabled.contains(SourceKind::ZCode) && !l.zcodeRoot.empty()) {
         zcode_ = std::make_unique<zcode::Source>(l.zcodeRoot, deduper_);
+    }
+    if (config_.enabled.contains(SourceKind::Devin) && !l.devinRoot.empty()) {
+        devin_ = std::make_unique<devin::Source>(devin::resolveLocation(l.devinRoot, environment_, home_), deduper_);
     }
     if (config_.enabled.contains(SourceKind::OpenClaw) && !l.openClawRoots.empty()) {
         openClaw_ = std::make_unique<openclaw::Source>(
@@ -65,6 +69,10 @@ void Monitor::seedSources(std::int64_t todayStartMs) {
         applyZCode(zcode_->seed(todayStartMs), true);
         zcodeSeeded_ = true;
     }
+    if (devin_ && !devinSeeded_) {
+        applyDevin(devin_->seed(todayStartMs), true);
+        devinSeeded_ = true;
+    }
     if (openClaw_ && !openClawSeeded_) {
         applyOpenClaw(openClaw_->seed(todayStartMs), true);
         openClawSeeded_ = true;
@@ -88,6 +96,7 @@ bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t tod
         }
     }
     if (zcode_ && zcodeSeeded_) changed |= applyZCode(zcode_->refresh(), false);
+    if (devin_ && devinSeeded_) changed |= applyDevin(devin_->refreshIfChanged(), false);
     if (openClaw_ && openClawSeeded_) changed |= applyOpenClaw(openClaw_->refresh(discover), false);
     if (hermes_ && hermesSeeded_) changed |= applyHermes(hermes_->refresh(discover), false);
     return changed;
@@ -133,6 +142,24 @@ bool Monitor::applyZCode(const zcode::Update& update, bool seeded) {
         info.lastLineMs = agent.lastMs;
         info.modes = agent.modes;
         pushInfo(std::move(info), {agent.id, LinkKind::ZCodeSession, agent.sessionId, agent.parentSessionId, agent.createdMs, 0});
+    }
+    for (const auto& [response, completion] : update.responses) upsert(response, completion, seeded);
+    return update.changed();
+}
+
+bool Monitor::applyDevin(const devin::Update& update, bool seeded) {
+    for (const auto& key : update.removedResponses) store_->removeResponse(key);
+    for (const auto& id : update.removed) removeAgent(id);
+    for (const auto& agent : update.agents) {
+        AgentInfo info;
+        info.id = agent.id;
+        info.source = SourceKind::Devin;
+        info.project = agent.project;
+        info.model = agent.model;
+        info.phase = agent.phase;
+        info.inFlightStartMs = agent.startMs;
+        info.lastLineMs = agent.lastMs;
+        agents_[info.id] = std::move(info);
     }
     for (const auto& [response, completion] : update.responses) upsert(response, completion, seeded);
     return update.changed();
@@ -199,6 +226,7 @@ std::pair<std::string, bool> Monitor::sourceStatus(SourceKind kind) const {
     const auto& l = config_.locations;
     switch (kind) {
         case SourceKind::ZCode: return {l.zcodeRoot, zcode_ ? zcode_->available() : fsx::isRegularFile(harness::zcodeDatabase(l.zcodeRoot))};
+        case SourceKind::Devin: return {l.devinRoot, devin_ ? devin_->available() : false};
         case SourceKind::OpenClaw:
             return {l.openClawRoots.empty() ? std::string() : l.openClawRoots.front(),
                     std::any_of(l.openClawRoots.begin(), l.openClawRoots.end(), paths::openClawExists)};

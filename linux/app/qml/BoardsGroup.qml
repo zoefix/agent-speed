@@ -15,7 +15,7 @@ ColumnLayout {
         return list.length > 0 ? list[0] : null
     }
     readonly property var sourceIds: ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
-                                      "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid"]
+                                      "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin"]
 
     SettingsGroup {
         title: S.tr2(S.rev, "boards.title")

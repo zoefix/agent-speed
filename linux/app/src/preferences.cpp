@@ -168,6 +168,7 @@ agentspeed::MonitorConfig Preferences::monitorConfig() const {
     roots.openClaw = folder(SourceKind::OpenClaw);
     roots.hermes = folder(SourceKind::Hermes);
     roots.droid = folder(SourceKind::Droid);
+    roots.devin = folder(SourceKind::Devin);
     auto enabled = agentspeed::MonitorConfig::allSources();
     for (const auto& id : disabledSources()) {
         if (const auto kind = agentspeed::sourceFromId(id.toStdString())) enabled.erase(*kind);

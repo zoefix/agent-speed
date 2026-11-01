@@ -37,6 +37,9 @@ public enum SourceKind
 
     /// <summary>Factory Droid: session transcripts with their settings files, one agent per transcript, METRICS 4.16.</summary>
     Droid,
+
+    /// <summary>Devin CLI and Devin Desktop, one source over sessions.db and local ACP events, METRICS 4.17.</summary>
+    Devin,
 }
 
 public enum AgentPhase
@@ -276,6 +279,7 @@ public abstract record SpeedEvent
 /// <param name="OpenClawRoot">An OpenClaw state folder, agent folder or database; null reads every automatic state folder.</param>
 /// <param name="HermesRoot">A Hermes home or one <c>logs</c> folder; null reads the automatic Hermes home and its profiles.</param>
 /// <param name="DroidRoot">The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder; null uses <c>~/.factory/sessions</c>.</param>
+/// <param name="DevinRoot">A Devin data or CLI folder, sessions.db or acp-events folder; null uses the automatic roots.</param>
 public sealed record MonitorConfiguration(
     IReadOnlySet<SourceKind> EnabledSources,
     string? CodexRoot = null,
@@ -293,7 +297,8 @@ public sealed record MonitorConfiguration(
     string? PiRoot = null,
     string? OpenClawRoot = null,
     string? HermesRoot = null,
-    string? DroidRoot = null)
+    string? DroidRoot = null,
+    string? DevinRoot = null)
 {
     public static MonitorConfiguration Default { get; } =
         new(new HashSet<SourceKind>(Enum.GetValues<SourceKind>()));
@@ -316,10 +321,11 @@ public sealed record MonitorConfiguration(
         && PiRoot == other.PiRoot
         && OpenClawRoot == other.OpenClawRoot
         && HermesRoot == other.HermesRoot
-        && DroidRoot == other.DroidRoot;
+        && DroidRoot == other.DroidRoot
+        && DevinRoot == other.DevinRoot;
 
     public override int GetHashCode() => HashCode.Combine(
         HashCode.Combine(EnabledSources.Count, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, OmpRoot, AntigravityRoot),
         WorkBuddyRoot,
-        WorkBuddyAiRoot, ZCodeRoot, KimiRoot, GrokBuildRoot, PiRoot, HashCode.Combine(OpenClawRoot, HermesRoot, DroidRoot));
+        WorkBuddyAiRoot, ZCodeRoot, KimiRoot, GrokBuildRoot, PiRoot, HashCode.Combine(OpenClawRoot, HermesRoot, DroidRoot, DevinRoot));
 }

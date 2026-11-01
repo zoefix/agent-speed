@@ -26,6 +26,8 @@ public enum SourceKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case hermes
     /// Factory Droid (CLI `droid` and Factory Desktop): session transcripts with their settings files.
     case droid
+    /// Devin CLI and Devin Desktop: one session database plus local ACP event streams.
+    case devin
 
     public var id: String { rawValue }
 }
@@ -426,6 +428,8 @@ public struct MonitorConfiguration: Equatable, Sendable {
     public var hermesRoot: URL?
     /// The `.factory` folder or its `sessions` folder; nil reads `~/.factory/sessions` (METRICS 2, 4.16).
     public var droidRoot: URL?
+    /// A Devin data folder, CLI folder, `sessions.db` or `acp-events` folder (METRICS 2, 4.17).
+    public var devinRoot: URL?
     /// Tests: replaces the automatic roots of a family that are otherwise derived from the environment and the home
     /// folder (omp `sessions` roots, Antigravity store folders, WorkBuddy data folders).
     var automaticRoots: [TranscriptFamily: [URL]] = [:]
@@ -455,7 +459,8 @@ public struct MonitorConfiguration: Equatable, Sendable {
         piRoot: URL? = nil,
         openclawRoot: URL? = nil,
         hermesRoot: URL? = nil,
-        droidRoot: URL? = nil
+        droidRoot: URL? = nil,
+        devinRoot: URL? = nil
     ) {
         self.enabledSources = enabledSources
         self.codexRoot = codexRoot
@@ -474,5 +479,6 @@ public struct MonitorConfiguration: Equatable, Sendable {
         self.openclawRoot = openclawRoot
         self.hermesRoot = hermesRoot
         self.droidRoot = droidRoot
+        self.devinRoot = devinRoot
     }
 }

@@ -28,6 +28,10 @@ namespace zcode {
 class Source;
 struct Update;
 }
+namespace devin {
+class Source;
+struct Update;
+}
 namespace openclaw {
 class Source;
 struct Update;
@@ -170,6 +174,7 @@ private:
     bool refreshSources(bool discover, std::int64_t nowMs, std::int64_t todayStartMs);
     bool applyOpenCode(const opencode::Update& update, bool seeded);
     bool applyZCode(const zcode::Update& update, bool seeded);
+    bool applyDevin(const devin::Update& update, bool seeded);
     bool applyOpenClaw(const openclaw::Update& update, bool seeded);
     bool applyHermes(const hermes::Update& update, bool seeded);
     void upsert(const ParsedResponse& response, bool completion, bool seeded);
@@ -194,6 +199,7 @@ private:
 
     std::unique_ptr<opencode::Source> openCode_;
     std::unique_ptr<zcode::Source> zcode_;
+    std::unique_ptr<devin::Source> devin_;
     std::unique_ptr<openclaw::Source> openClaw_;
     std::unique_ptr<hermes::Source> hermes_;
     std::shared_ptr<const TimeZone> zone_;
@@ -209,7 +215,7 @@ private:
     std::unique_ptr<work::ActionReader> makeActions(const std::string& id, SourceKind source);
     void scoreAgents(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
                      std::int64_t nowMs);
-    bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
+    bool openCodeSeeded_ = false, zcodeSeeded_ = false, devinSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
     const std::int64_t epoch_;
     std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
     std::uint64_t reportCountersVersion_ = 0;

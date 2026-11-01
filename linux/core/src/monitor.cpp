@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "agentspeed/antigravity.hpp"
+#include "agentspeed/devin.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/gemini_parser.hpp"
@@ -47,7 +48,7 @@ std::int64_t nextEpoch() {
 
 std::set<SourceKind> MonitorConfig::allSources() {
     std::set<SourceKind> all;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Droid); ++k) all.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) all.insert(static_cast<SourceKind>(k));
     return all;
 }
 
@@ -97,6 +98,7 @@ bool Monitor::familyEnabled(RootFamily family) const {
         case RootFamily::OpenClaw: return e.contains(SourceKind::OpenClaw);
         case RootFamily::Hermes: return e.contains(SourceKind::Hermes);
         case RootFamily::Droid: return e.contains(SourceKind::Droid);
+        case RootFamily::Devin: return e.contains(SourceKind::Devin);
     }
     return false;
 }
@@ -508,6 +510,7 @@ void Monitor::addNewCodexHomeRoots() {
 }
 
 int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
+    if (kind == SourceKind::Devin) return devin_ ? devin_->activeSessionCount(todayStartMs) : 0;
     if (kind == SourceKind::Hermes) {
         int count = 0;
         if (hermes_) {

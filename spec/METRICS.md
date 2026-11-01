@@ -8,8 +8,8 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid). This is the append-only *source order*. |
-| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16.) |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI and Devin Desktop). This is the append-only *source order*. |
+| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per CLI session or Desktop ACP event file, 4.17.) |
 | Response | One model API call that produced a usage record. |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
 
@@ -38,6 +38,7 @@ from cumulative session counters (4.16).
 | OpenClaw (a Gateway on this computer, 2026.8.1+) | the agent databases `<state>/agents/<agentId>/agent/openclaw-agent.sqlite` of every state folder: `$OPENCLAW_STATE_DIR`, else `<base>/.openclaw` and every named-profile folder `<base>/.openclaw-<profile>`, with `<base>` = `$OPENCLAW_HOME`, else `~` (4.14) | user setting (a state folder, an agent folder or a database; replaces every automatic root) |
 | Hermes Agent (CLI, TUI, desktop app, messaging gateway, cron, ACP) | the log folders of the Hermes home: `<home>/logs` and `<home>/profiles/<name>/logs`, with `<home>` from `$HERMES_HOME` (4.15), else macOS `~/.hermes`, Windows `%LOCALAPPDATA%\hermes` | user setting (a Hermes home or one `logs` folder; replaces the automatic home) |
 | Factory Droid (CLI `droid`, interactive and `droid exec`; Factory Desktop) | `~/.factory/sessions`; no environment variable (4.16) | user setting (the `.factory` folder or its `sessions` folder) |
+| Devin (CLI and Desktop) | CLI `$XDG_DATA_HOME/devin/cli/sessions.db`, else `~/.local/share/devin/cli/sessions.db` (Windows also `%APPDATA%\devin\cli\sessions.db`); Desktop `acp-events` under the Devin user-data folder (4.17) | user setting (a data folder, CLI folder, `sessions.db` or `acp-events` folder; replaces the automatic roots) |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
@@ -1896,6 +1897,100 @@ the same day (9.6) until the next launch seeds the session by the history rule.
   (evidence in `spec/research/droid.md`); not yet verified against a running droid. Verification target (by hand): for
   a session watched live, the sums of its responses' fields equal its sidecar's own counters, and each response's
   `endMs − startMs` equals the gap between its assistant message and the user line before it.
+
+### 4.17 Devin
+
+Devin CLI and Devin Desktop are one source. The CLI keeps a SQLite `sessions.db`; Desktop writes NDJSON ACP event
+streams. Only usage metadata is read: never message text, prompt history, rendered HTML, credentials or request logs.
+Evidence: `spec/research/devin.md`; fixtures: `spec/tools/devin_fixtures.py` (`spec/fixtures/devin` and
+`devin-expected.json`). Devin's default cloud-only Desktop agent writes no local usage and is out of scope.
+
+#### Locations and discovery
+
+- **CLI**: `$XDG_DATA_HOME/devin/cli/sessions.db` when `XDG_DATA_HOME` is non-empty, else
+  `~/.local/share/devin/cli/sessions.db`. Windows uses `%APPDATA%\devin\cli\sessions.db` (or the home-relative
+  `AppData/Roaming` fallback), with the XDG path as an additional candidate when that variable is set. Open the database
+  read-only with the WAL/immutable safeguards of 4.5. It must have `sessions(id, working_directory, model, title,
+  last_activity_at)` and `message_nodes(row_id, session_id, chat_message, created_at)`; older schemas without `title`
+  remain readable. An unsupported schema contributes nothing and carries `unsupportedFormat`.
+- **Desktop**: regular, non-symlink `*.ndjson` files directly in `acp-events`: macOS
+  `~/Library/Application Support/Devin/User/acp-events`, Linux `~/.config/Devin/User/acp-events` and
+  `~/.config/devin/User/acp-events`, Windows `%APPDATA%\Devin\User\acp-events`. `acp-messages`, logs, databases and
+  deeper folders are not read.
+- **Setting**: one `sessions.db`, an `acp-events` folder, a CLI/data folder or a Devin user-data folder. It replaces
+  both automatic roots. A data folder's `cli/sessions.db` and `User/acp-events` are used when present; a CLI folder's
+  `sessions.db` is used directly.
+- The source is detected when either location exists. One CLI session row and one Desktop event file are each an agent;
+  agent id = the database absolute path + `#` + session id, or the event file's absolute path. Desktop has no subagent
+  metadata. When a Desktop file's title maps to exactly one CLI session, its `working_directory` supplies the Desktop
+  agent's project and `cwdPath`, and its non-`adaptive` model is the fallback when the events name none. CLI session
+  count is the number of sessions whose `last_activity_at` is today; Desktop event files with activity today count
+  separately after the duplicate rule below.
+
+#### CLI responses
+
+Read sessions and message rows in `row_id` order. `created_at` is Unix seconds and becomes milliseconds by exact
+multiplication. `chat_message` must be a JSON object within the common line/size and number rules; only `role` and its
+`metadata` are inspected. A malformed object counts as malformed and does not hide later rows.
+
+An assistant row with a `metadata.metrics` object emits a response:
+
+- `key = "devin:" + session id + ":request:" + request_id` when `metadata.request_id` is a non-empty trimmed string,
+  else `"devin:" + session id + ":row:" + row_id`. Repeated rows of one request in the same database are updates (4.4),
+  not more requests. The shared deduper (3.4) also excludes copies between databases.
+- `endMs = created_at × 1000`. When `metrics.total_time_ms` is finite and > 0, `startMs = endMs − total_time_ms`
+  (truncated and saturated as in 3.6); otherwise `startMs = null`. The row is written when the finalized assistant
+  message is stored, so the duration is back-anchored from its end and includes time to first token.
+- `model = metadata.generation_model` when non-blank, else `sessions.model` when non-blank and not exactly `adaptive`
+  (ASCII case-insensitive); otherwise null. `adaptive` is a routing selection, not a model.
+- `input = input_tokens + cache_read_tokens + cache_creation_tokens`, `cachedInput = cache_read_tokens`,
+  `cacheWriteInput = cache_creation_tokens`, `output = output_tokens`, `reasoning = 0`, provider null and final true.
+  Devin's `input_tokens` excludes both cache fields (the real rows' `context_input_tokens` is their sum); null, missing
+  and non-numeric fields follow 3.2. `context_input_tokens`, `ttft_ms`, `tpot_ms`, `tokens_per_sec`, `num_tokens` and
+  subscription/ACU figures are not used.
+- Rows without metrics contribute phase and `lastLineMs` but no response; zero-token metrics are retained as zero-token
+  responses only when input or output is nonzero after normalization.
+
+A user row sets phase `generating` at its time. An assistant row sets `tools` when `metadata.finish_reason` is
+`tool_calls`, else `idle`; duplicates do not move the phase backwards. `lastLineMs` is the latest row time, malformed
+rows included. `project` and `cwdPath` come from `sessions.working_directory`; agent model is the latest accepted
+response model, falling back to the session model under the same `adaptive` rule. Sessions and rows are read
+incrementally by `row_id`; startup reads rows ending within the ordinary startup window (5).
+
+#### Desktop responses and deduplication
+
+Each NDJSON line follows section 4. Only its `notification` object is inspected. A
+`sessionUpdate == "session_info_update"` line's non-blank `title` is remembered for duplicate resolution, never shown as
+conversation content.
+
+Canonical `sessionUpdate == "usage_update"` lines carry `_meta` numbers
+`cognition.ai/inputTokens`, `cognition.ai/cachedReadTokens`, `cognition.ai/cachedWriteTokens` and
+`cognition.ai/outputTokens`. Input and cache values are cumulative snapshots (the latest present value replaces the
+previous one); output is per step and is added. One file therefore has one aggregate response with key
+`"devin-desktop:" + file stem + ":usage"`, `startMs = null`, final true, and `endMs` = the latest event timestamp found
+at `/content/metadata/created_at`, `/metadata/created_at`, `/created_at` or `/timestamp` (3.1), else the file's latest
+known time. Its model is the first non-empty generation model at `/content/metadata/generation_model`,
+`/metadata/generation_model` or `/_meta/cognition.ai/model`, else null. Tokens are `input = inputTokens +
+cachedWriteTokens` (ACP input already includes cached reads), `cachedInput = cachedReadTokens`,
+`cacheWriteInput = cachedWriteTokens`, `output = Σ outputTokens`, reasoning 0. An aggregate with all fields zero emits
+nothing. Later usage lines update that response (4.4).
+
+For compatibility with older ACP captures, a notification with an embedded metrics object at
+`/content/metadata/metrics`, `/metadata/metrics`, `/metrics`, `/content/metadata` or `/metadata` (in that order), and
+without canonical ACP token fields, emits one response per event with key `"devin-desktop:" + file stem + ":line:" +
+1-based line number`. Its token mapping is the CLI mapping above; `total_time_ms` back-anchors its start when available,
+otherwise start is null. Model and timestamp use the Desktop paths above. Events with no usage or all-zero usage emit
+nothing. Desktop phases remain `idle` because these usage events do not establish request boundaries.
+
+**CLI is authoritative.** If a Desktop title maps to exactly one CLI session and that session has at least one accepted
+CLI response, every response of that Desktop file is ignored, including an aggregate emitted before the CLI rows were
+seen; its duplicate agent is not listed. An ambiguous title (two or more CLI sessions) or a title without CLI usage does
+not suppress Desktop usage. Do not match file names, generated session ids or titles loosely.
+
+Desktop change detection follows appended lines with the common reader; a reset replays the file and same-key responses
+become updates. The aggregate must be removed when its file becomes CLI-authoritative. History reads the complete
+database and event files and applies the same rule. Devin records no effort or speed facts (EXECUTION-MODES), and no
+tool actions (6.10).
 
 ## 5. Reading files
 

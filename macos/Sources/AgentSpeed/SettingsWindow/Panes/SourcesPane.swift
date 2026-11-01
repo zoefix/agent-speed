@@ -71,6 +71,7 @@ extension SourceKind {
         case .openclaw: .openclaw
         case .hermes: .hermes
         case .droid: .droid
+        case .devin: .devin
         }
     }
 }
@@ -244,7 +245,7 @@ private struct SourceFolderRow: View {
                     prompt: l10n("mac.settings.sources.choosePrompt"),
                     startingAt: url,
                     window: host.window ?? NSApp.keyWindow,
-                    acceptsDatabaseFile: folder.acceptsDatabaseFile
+                    acceptedDatabaseNames: folder.acceptedDatabaseNames
                 ) { chosen in
                     folder.setURL(chosen, in: settings)
                 }

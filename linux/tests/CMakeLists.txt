@@ -9,6 +9,7 @@ add_executable(agentspeed_tests
     current_values_test.cpp
     discovery_test.cpp
     droid_test.cpp
+    devin_test.cpp
     engine_fixture_test.cpp
     execution_modes_test.cpp
     harness_fixture_test.cpp

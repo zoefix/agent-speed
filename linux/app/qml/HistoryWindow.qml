@@ -98,7 +98,7 @@ Window {
         var seen = {}
         for (var i = 0; i < rows.length; ++i) seen[rows[i].source] = true
         var order = ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid"]
+                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin"]
         return order.filter(function(s) { return seen[s] && prefs.disabledSources.indexOf(s) < 0 })
     }
     readonly property var chartSeries: {

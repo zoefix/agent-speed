@@ -5340,6 +5340,12 @@
     "en": "Factory Droid",
     "ja": "Factory Droid"
   },
+  "source.devin": {
+    "zh-Hant": "Devin",
+    "zh-Hans": "Devin",
+    "en": "Devin",
+    "ja": "Devin"
+  },
   "settings.sources.zcodeHint": {
     "zh-Hant": "讀取 ZCode 的本機工作階段資料庫；可選擇資料目錄或包含 db.sqlite 的資料夾。",
     "zh-Hans": "读取 ZCode 的本地会话数据库；可选择数据目录或包含 db.sqlite 的文件夹。",
@@ -5381,6 +5387,12 @@
     "zh-Hans": "Factory Droid 的会话文件夹，通常是 ~/.factory/sessions（Windows 为 %USERPROFILE%\\.factory\\sessions），也可以选择 .factory 文件夹。Token 用量取自每个会话旁的 .settings.json，Droid 写入后才会出现；子 agent 分别计算。",
     "en": "Factory Droid's sessions folder, usually ~/.factory/sessions (Windows: %USERPROFILE%\\.factory\\sessions). You can also choose the .factory folder. Token usage comes from the .settings.json next to each session and appears once Droid saves it; sub-agents count on their own.",
     "ja": "Factory Droid のセッションフォルダです。通常は ~/.factory/sessions（Windows では %USERPROFILE%\\.factory\\sessions）です。.factory フォルダも選べます。トークン使用量は各セッションの隣にある .settings.json から取得し、Droid が保存した時点で反映されます。サブ agent はそれぞれ個別に集計されます。"
+  },
+  "settings.sources.devinHint": {
+    "zh-Hant": "Devin CLI 的 sessions.db 與 Devin Desktop 的 acp-events 會匯總為同一來源；同一工作階段以 CLI 為準。預設雲端 Desktop agent 不在本機記錄 token，因此無法測量。",
+    "zh-Hans": "Devin CLI 的 sessions.db 与 Devin Desktop 的 acp-events 会汇总为同一来源；同一会话以 CLI 为准。默认云端 Desktop agent 不在本地记录 token，因此无法测量。",
+    "en": "Devin CLI's sessions.db and Devin Desktop's acp-events are combined into one source, with CLI data authoritative for a shared session. The default cloud Desktop agent writes no local tokens and cannot be measured.",
+    "ja": "Devin CLI の sessions.db と Devin Desktop の acp-events を一つのソースにまとめ、同じセッションでは CLI を優先します。デフォルトのクラウド Desktop agent はローカルにトークンを記録しないため、測定できません。"
   },
   "mode.label": {
     "zh-Hant": "執行模式",

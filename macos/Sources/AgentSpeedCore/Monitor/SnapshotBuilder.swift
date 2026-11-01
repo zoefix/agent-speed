@@ -34,6 +34,9 @@ struct SnapshotContext: Sendable {
             } else if kind == .zcode {
                 let location = session.zcodeLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
+            } else if kind == .devin {
+                let location = session.devinLocation
+                sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
             } else if kind == .openclaw {
                 let location = session.openclawLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)

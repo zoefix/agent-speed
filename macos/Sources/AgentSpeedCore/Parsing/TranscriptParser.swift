@@ -39,7 +39,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: self = .grokBuild
         case .pi: self = .pi
         case .droid: self = .droid
-        case .opencode, .zcode, .openclaw, .hermes: return nil
+        case .opencode, .zcode, .openclaw, .hermes, .devin: return nil
         }
     }
 

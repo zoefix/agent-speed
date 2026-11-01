@@ -1,0 +1,2 @@
+{"notification":{"metadata":{"input_tokens":30,"output_tokens":12,"cache_read_tokens":4,"cache_creation_tokens":1,"total_time_ms":1500,"generation_model":"swe-2-max","created_at":"2026-10-20T10:11:00.000Z"}}}
+{"notification":{"metadata":{"input_tokens":0,"output_tokens":0}}}

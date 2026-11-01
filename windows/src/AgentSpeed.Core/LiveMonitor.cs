@@ -156,6 +156,9 @@ public sealed class LiveMonitor : IDisposable
     /// </summary>
     public static string DefaultDroidRoot => Droid.DroidPaths.DefaultRoot(UserHome);
 
+    /// <summary>Devin's data folder; its CLI database and Desktop ACP folder are discovered below it.</summary>
+    public static Devin.DevinLocation DefaultDevinRoot => Devin.DevinPaths.Automatic();
+
     /// <summary>The Factory Droid sessions folder a setting stands for: its <c>sessions</c> folder or the folder itself; null: the default.</summary>
     public static string DroidRoot(string? setting) => SourceLocations.DroidRootOf(setting);
 

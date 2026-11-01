@@ -40,7 +40,7 @@ enum SourcePreviews {
             return nil
         }
         let entries: [(OrbStyleKind, [SourceKind])] = [
-            (.liquid, [.droid]), (.needle, [.hermes]), (.led, [.openclaw]),
+            (.liquid, [.devin]), (.needle, [.hermes]), (.led, [.openclaw]),
             (.reactor, [.codex, .claudeCode, .hermes, .droid]), (.minimal, [.deepseek]),
         ]
         for (index, entry) in entries.enumerated() {

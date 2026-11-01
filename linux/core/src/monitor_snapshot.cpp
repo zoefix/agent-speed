@@ -2,6 +2,7 @@
 #include <set>
 
 #include "agentspeed/antigravity.hpp"
+#include "agentspeed/devin.hpp"
 #include "agentspeed/engine.hpp"
 #include "agentspeed/hermes.hpp"
 #include "agentspeed/monitor.hpp"
@@ -331,6 +332,11 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
     if (zcode_) {
         if (zcode_->unreadable()) ++unreadable;
         if (zcode_->unsupported()) snap.warnings.unsupported.push_back(SourceKind::ZCode);
+    }
+    if (devin_) {
+        malformed += devin_->malformedLines();
+        if (devin_->unreadable()) ++unreadable;
+        if (devin_->unsupported()) snap.warnings.unsupported.push_back(SourceKind::Devin);
     }
     if (openClaw_ && openClaw_->unsupported()) snap.warnings.unsupported.push_back(SourceKind::OpenClaw);
     snap.warnings.malformedLines = malformed;

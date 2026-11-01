@@ -29,7 +29,8 @@ struct LiveMonitorTests {
             piRoot: directory.file("missing-pi"),
             openclawRoot: directory.file("missing-openclaw"),
             hermesRoot: directory.file("missing-hermes"),
-            droidRoot: directory.file("missing-droid")
+            droidRoot: directory.file("missing-droid"),
+            devinRoot: directory.file("missing-devin")
         ))
         monitor.start()
         defer { monitor.stop() }

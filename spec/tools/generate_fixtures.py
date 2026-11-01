@@ -14,6 +14,7 @@ from datetime import datetime, timezone
 sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import antigravity_fixtures  # noqa: E402
+import devin_fixtures  # noqa: E402
 import droid_fixtures  # noqa: E402
 import gemini_fixtures  # noqa: E402
 import hermes_fixtures  # noqa: E402
@@ -855,6 +856,12 @@ order += droid["order"]
 files.update(droid["files"])
 mtimes.update(droid["mtimes"])
 traces_droid = droid["traces"]
+
+# --- Devin: one source over the CLI database and Desktop ACP event logs -----------
+devin = devin_fixtures.write_fixtures(ROOT)
+with open(os.path.join(ROOT, "devin-expected.json"), "w", encoding="utf-8") as f:
+    json.dump(devin, f, indent=2, ensure_ascii=False)
+    f.write("\n")
 
 with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as f:
     json.dump({"_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the "

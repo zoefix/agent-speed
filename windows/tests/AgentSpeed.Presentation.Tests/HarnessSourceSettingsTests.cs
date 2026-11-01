@@ -140,6 +140,36 @@ public sealed class HarnessSourceSettingsTests
     }
 
     [Fact]
+    public void TheDevinFolderAndToggleRoundTripAndReachTheMonitor()
+    {
+        var devin = Path.Combine(Path.GetTempPath(), "devin-data");
+        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.Devin, false) with { DevinRoot = $"  {devin}  " };
+        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.Validated()));
+
+        Assert.Equal((false, devin), (back.DevinEnabled, back.DevinRoot));
+        var config = back.ToMonitorConfiguration();
+        Assert.Equal(devin, config.DevinRoot);
+        Assert.DoesNotContain(SourceKind.Devin, config.EnabledSources);
+        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { DevinRoot = devin }).ToMonitorConfiguration());
+        Assert.Null((AppSettings.Default with { DevinRoot = Path.Combine("relative", "devin") }).Validated().DevinRoot);
+    }
+
+    [Fact]
+    public void OlderSettingsFilesKeepDevinOnWithItsAutomaticRoot()
+    {
+        var s = SettingsSerializer.Deserialize("""
+            { "version": 1, "sources": { "codex": true, "droid": false, "droidRoot": null } }
+            """);
+
+        Assert.True(s.DevinEnabled);
+        Assert.Null(s.DevinRoot);
+        var config = s.ToMonitorConfiguration();
+        Assert.Contains(SourceKind.Devin, config.EnabledSources);
+        Assert.DoesNotContain(SourceKind.Droid, config.EnabledSources);
+        Assert.Null(config.DevinRoot);
+    }
+
+    [Fact]
     public void TheDroidRowShowsTheSessionsFolderAChosenFolderStandsFor()
     {
         using var temp = new TempDirectory();
@@ -177,6 +207,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.OpenClaw, "openclaw")]
     [InlineData(SourceKind.Hermes, "hermes")]
     [InlineData(SourceKind.Droid, "droid")]
+    [InlineData(SourceKind.Devin, "devin")]
     public void EverySurfaceUsesTheSameStableSourceIdentifier(SourceKind kind, string id)
     {
         Assert.Equal(id, ReportBody.SourceId(kind));

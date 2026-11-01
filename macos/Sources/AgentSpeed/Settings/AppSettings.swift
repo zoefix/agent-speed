@@ -90,6 +90,8 @@ final class AppSettings {
     var hermesRoot: URL? { didSet { store(hermesRoot?.path, .hermesRoot) } }
     /// Factory Droid's `.factory` folder or its `sessions` folder, replacing `~/.factory/sessions`.
     var droidRoot: URL? { didSet { store(droidRoot?.path, .droidRoot) } }
+    /// Devin's data folder, CLI folder, sessions.db or Desktop acp-events folder.
+    var devinRoot: URL? { didSet { store(devinRoot?.path, .devinRoot) } }
 
     /// UPDATES section 3: check GitHub at launch and every 6 h.
     var autoCheckUpdates: Bool { didSet { store(autoCheckUpdates, .autoCheckUpdates) } }
@@ -182,6 +184,7 @@ final class AppSettings {
         openclawRoot = Self.location(defaults.string(forKey: Key.openclawRoot.rawValue))
         hermesRoot = Self.url(defaults.string(forKey: Key.hermesRoot.rawValue))
         droidRoot = Self.url(defaults.string(forKey: Key.droidRoot.rawValue))
+        devinRoot = Self.url(defaults.string(forKey: Key.devinRoot.rawValue))
         autoCheckUpdates = defaults.object(forKey: Key.autoCheckUpdates.rawValue) as? Bool ?? true
         networkEnabled = defaults.object(forKey: Key.networkEnabled.rawValue) as? Bool ?? true
         syncPrices = defaults.object(forKey: Key.syncPrices.rawValue) as? Bool ?? true
@@ -217,7 +220,8 @@ final class AppSettings {
             piRoot: piRoot,
             openclawRoot: openclawRoot,
             hermesRoot: hermesRoot,
-            droidRoot: droidRoot
+            droidRoot: droidRoot,
+            devinRoot: devinRoot
         )
     }
 
@@ -291,7 +295,7 @@ final class AppSettings {
         case effects, celebratePeaks, responsePulses
         case enabledSources, knownSources
         case codexRoot, claudeRoot, dshRoot, opencodeRoot, geminiRoot, ompRoot, antigravityRoot, workbuddyRoot, workbuddyAiRoot
-        case zcodeRoot, kimiRoot, grokBuildRoot, piRoot, openclawRoot, hermesRoot, droidRoot
+        case zcodeRoot, kimiRoot, grokBuildRoot, piRoot, openclawRoot, hermesRoot, droidRoot, devinRoot
         case autoCheckUpdates
         case networkEnabled, syncPrices, currency, liveUnit, subscriptionSources, includeSubscriptions
         case heroLastTitle

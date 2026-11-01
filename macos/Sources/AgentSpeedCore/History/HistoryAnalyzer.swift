@@ -11,8 +11,8 @@ final class HistoryAnalyzer {
     /// 2: per-model measured output and time (METRICS 8). 3: cost (METRICS 9.7). 5: reasoning effort and speed.
     /// 6: the copied prefix of paginated Codex sub-agents (METRICS 3.5). 7: the unpriced facts (METRICS 9.10).
     /// 8: the task records of the retired task score. 9: the performance records (METRICS 6.11).
-    /// 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
-    static let analysisVersion: Int64 = 10
+    /// 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses. 11: Devin.
+    static let analysisVersion: Int64 = 11
     /// The current price table version of the last complete run; when it changes, files with unpriced responses are
     /// analysed again (METRICS 9.7).
     static let priceVersionKey = "priceTableVersion"
@@ -124,6 +124,13 @@ final class HistoryAnalyzer {
         var previous: HistoryDatabase.Entry?
     }
 
+    private struct PlannedDevinSession {
+        var path: String
+        var records: [ResponseRecord]
+        var modified: Int64
+        var previous: HistoryDatabase.Entry?
+    }
+
     /// One OpenClaw transcript window to analyse again (METRICS 4.14): its responses were read during planning.
     private struct PlannedOpenClawWindow {
         var agentId: String
@@ -164,6 +171,8 @@ final class HistoryAnalyzer {
         var opencodeIdentity: String?
         var zcode: [PlannedZcodeSession] = []
         var zcodeIdentity: String?
+        var devin: [PlannedDevinSession] = []
+        var devinIdentity: String?
         var openclaw: [PlannedOpenClawDatabase] = []
         var hermes: [PlannedHermesFile] = []
 
@@ -207,6 +216,9 @@ final class HistoryAnalyzer {
         }
         if configuration.readsZcode {
             try planZcode(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
+        }
+        if configuration.readsDevin {
+            try planDevin(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
         }
         if configuration.readsOpenclaw {
             try planOpenclaw(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
@@ -343,6 +355,39 @@ final class HistoryAnalyzer {
         }
     }
 
+    private func planDevin(configuration: MonitorConfiguration, options: Options, zoneChanged: Bool,
+                           repricing: Bool, into plan: inout Plan) throws {
+        let location = configuration.resolvedDevinLocation
+        let files = DevinPaths.desktopFiles(in: location.desktopFolders)
+        let databaseStat = location.databasePath.flatMap(FileStat.stat)
+        let walStat = location.databasePath.flatMap { FileStat.stat($0 + "-wal") }
+        guard databaseStat?.isRegularFile == true || !files.isEmpty else { return }
+        plan.discovered += (databaseStat?.isRegularFile == true ? 1 : 0) + files.count
+        let parts = ([databaseStat, walStat] + files.map(\.stat)).compactMap { $0 }.map {
+            "\($0.identity.device):\($0.identity.inode):\($0.size):\($0.modifiedNs)"
+        }
+        let identity = (parts + ["v\(options.analysisVersion)"]).joined(separator: "|")
+        let reprices = repricing && entries.values.contains { $0.family == "devin" && $0.hasUnpriced }
+        if !zoneChanged, !reprices, try database.meta("devin") == identity { return }
+        let source = DevinSource(location: location, fileID: TranscriptSession.devinFileID)
+        var local = Deduper(capacity: .max)
+        let update = source.seed(todayStartMs: TranscriptSession.startupLookbackMs, deduper: &local)
+        guard source.status != .unreadable, source.status != .unsupported else { return }
+        plan.devinIdentity = identity
+        let removed = Set(update.removedResponseKeys)
+        let grouped = Dictionary(grouping: update.upserts.map(\.0.record).filter { !removed.contains($0.key) }, by: \.agentId)
+            .mapValues { records in
+                var latest: [String: ResponseRecord] = [:]
+                for record in records { latest[record.key] = record }
+                return Array(latest.values)
+            }
+        let modified = ([databaseStat, walStat] + files.map(\.stat)).compactMap { $0 }.map(\.modifiedNs).max() ?? 0
+        for id in update.agents.keys.sorted() {
+            plan.devin.append(PlannedDevinSession(path: id, records: grouped[id] ?? [], modified: modified,
+                                                  previous: entries[id]))
+        }
+    }
+
     private func planOpencode(
         configuration: MonitorConfiguration,
         options: Options,
@@ -409,12 +454,13 @@ final class HistoryAnalyzer {
         let plan = try plan(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing)
         report.filesDiscovered = plan.discovered
         let sessions = plan.opencode?.sessions ?? []
-        var state = Progress(filesTotal: plan.files.count + sessions.count + plan.zcode.count + plan.openclawWindows
+        var state = Progress(filesTotal: plan.files.count + sessions.count + plan.zcode.count + plan.devin.count + plan.openclawWindows
                                 + plan.hermes.count, bytesTotal: plan.bytes)
         progress(state)
         func elapsedMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
 
-        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty {
+        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.devin.isEmpty && plan.openclaw.isEmpty
+            && plan.hermes.isEmpty {
             try finish(plan: plan, zone: zone, priceVersion: priceVersion)
             report.durationMs = elapsedMs()
             return report
@@ -422,7 +468,8 @@ final class HistoryAnalyzer {
 
         var deduper = Deduper.hashed()
         let replaced = Set(plan.files.compactMap(\.previous?.id) + sessions.compactMap(\.previous?.id) + plan.zcode.compactMap(\.previous?.id)
-            + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id))
+            + plan.devin.compactMap(\.previous?.id) + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) }
+            + plan.hermes.compactMap(\.previous?.id))
         try database.loadKeys(excluding: replaced, into: &deduper)
         var labeler = DayLabeler(timeZone: options.timeZone)
         var pending: [(path: String, entry: HistoryDatabase.Entry, keys: [UInt64])] = []
@@ -579,6 +626,24 @@ final class HistoryAnalyzer {
         }
 
         if !report.cancelled {
+            for session in plan.devin {
+                if isCancelled() { report.cancelled = true; break }
+                let records = session.records.filter { deduper.claim($0.key, for: TranscriptSession.devinFileID) != .otherFile }
+                let keys = deduper.finishFile()
+                pendingPerf[session.path] = Self.perfRecords(responses: records, source: .devin, timeZone: options.timeZone)
+                let entry = HistoryDatabase.Entry(id: session.previous?.id, family: "devin", size: Int64(records.count),
+                                                  modified: session.modified, version: options.analysisVersion,
+                                                  days: DayAggregate.contributions(of: records, source: .devin, labeler: &labeler, pricing: pricing))
+                entries[session.path] = entry
+                pending.append((session.path, entry, keys))
+                report.sessionsAnalyzed += 1
+                state.filesDone += 1
+                try flush(force: false)
+                progress(state)
+            }
+        }
+
+        if !report.cancelled {
             // Each window owns its keys like a file (METRICS 3.4, 8); window ids only need to differ from each other.
             var windowID = OpenClawSource.firstFileID
             for database in plan.openclaw {
@@ -707,6 +772,7 @@ final class HistoryAnalyzer {
         try database.setMeta(Self.priceVersionKey, priceVersion)
         if opencodeComplete, let identity = plan.opencodeIdentity { try database.setMeta("opencode", identity) }
         if let identity = plan.zcodeIdentity { try database.setMeta("zcode", identity) }
+        if let identity = plan.devinIdentity { try database.setMeta("devin", identity) }
         for planned in plan.openclaw { try database.setMeta(Self.openclawMetaPrefix + planned.path, planned.identity) }
     }
 

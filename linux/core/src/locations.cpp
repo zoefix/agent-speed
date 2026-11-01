@@ -8,6 +8,7 @@
 #include <regex>
 #include <set>
 
+#include "agentspeed/devin.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/harness.hpp"
@@ -118,6 +119,7 @@ RootFamily familyOf(SourceKind source) {
         case SourceKind::OpenClaw: return RootFamily::OpenClaw;
         case SourceKind::Hermes: return RootFamily::Hermes;
         case SourceKind::Droid: return RootFamily::Droid;
+        case SourceKind::Devin: return RootFamily::Devin;
         default: return RootFamily::Claude;
     }
 }
@@ -347,6 +349,7 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         }
         case RootFamily::Hermes: return hermes::home(environment, false, home);
         case RootFamily::Droid: return droid::defaultRoot(home);
+        case RootFamily::Devin: return devin::automaticLocation(environment, home).displayPath;
     }
     return {};
 }
@@ -381,6 +384,7 @@ SourceLocations SourceLocations::resolve(const RootSettings& s, const Environmen
     l.hermesChosen = s.hermes.has_value();
     l.droidRoot = s.droid && !trimSpaces(*s.droid).empty() ? normalizeRoot(droid::rootOf(normalizeRoot(*s.droid)))
                                                            : normalizeRoot(automatic(SourceKind::Droid));
+    l.devinRoot = s.devin && !trimSpaces(*s.devin).empty() ? normalizeRoot(*s.devin) : normalizeRoot(automatic(SourceKind::Devin));
     return l;
 }
 

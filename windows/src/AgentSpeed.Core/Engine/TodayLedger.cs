@@ -123,6 +123,15 @@ internal sealed partial class TodayLedger
         _unfinalized = 0;
     }
 
+    public void Remove(ParsedResponse response)
+    {
+        if (_entries.Remove(response.Key))
+        {
+            Apply(response, -1);
+            _unpriced.Remove(response.Key);
+        }
+    }
+
     public void Upsert(ParsedResponse response)
     {
         var belongs = response.EndMs >= StartMs;

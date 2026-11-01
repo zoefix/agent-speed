@@ -45,6 +45,9 @@ internal enum TranscriptNaming
 
     /// <summary><c>*.jsonl</c> directly in a root or one folder below it, nothing starting with <c>.</c> (Factory Droid, METRICS 4.16).</summary>
     DroidSession,
+
+    /// <summary>Devin's sessions.db and Desktop ACP *.ndjson files (METRICS 4.17); not enumerated as transcripts.</summary>
+    DevinEvents,
 }
 
 /// <summary>Recursive transcript enumeration that never follows reparse points or symlinks (METRICS 2).</summary>

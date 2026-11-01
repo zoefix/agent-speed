@@ -156,6 +156,7 @@ struct AgentProcessRules: Sendable {
         if isHermes(executable: executable, arguments: arguments) { return .hermes }
         // Factory Droid is one native executable for the CLI, its `droid exec` children and Factory Desktop's daemon.
         if name == "droid" { return .droid }
+        if name == "devin" { return .devin }
         // Only the embedded CodeBuddy Code CLI is the agent; the app, its helpers and its daemon are not.
         if let edition = workbuddyEdition(executable: executable, bundleIdentifier: bundleIdentifier),
            (arguments() ?? []).dropFirst().contains(where: { platform.normalize($0).contains(Self.workbuddyCLI) }) {

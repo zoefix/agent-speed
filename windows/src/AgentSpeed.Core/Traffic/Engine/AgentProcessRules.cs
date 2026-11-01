@@ -268,6 +268,10 @@ internal sealed class AgentProcessRules
         {
             return SourceKind.Droid;
         }
+        if (name == "devin")
+        {
+            return SourceKind.Devin;
+        }
 
         // WorkBuddy's embedded CLI, never its app, helper or daemon processes (the same executable without the CLI entry).
         if (WorkBuddyEdition(name, bundle ?? (() => null)) is { } edition && arguments() is { Count: > 1 } args
