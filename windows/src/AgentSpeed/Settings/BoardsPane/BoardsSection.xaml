@@ -264,6 +264,9 @@
                 <controls:SettingsCard Header="{loc:Loc menu.clickThrough}" Icon="&#xE7C9;" Description="{Binding ClickThroughHint}">
                     <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClickThrough, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc menu.clickThrough}" />
                 </controls:SettingsCard>
+                <controls:SettingsCard Header="{loc:Loc settings.orb.fadeIdle}" Icon="&#xE708;" Description="{Binding FadeHint}">
+                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding FadeWhenIdle, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc settings.orb.fadeIdle}" />
+                </controls:SettingsCard>
             </StackPanel>
         </StackPanel>
     </StackPanel>

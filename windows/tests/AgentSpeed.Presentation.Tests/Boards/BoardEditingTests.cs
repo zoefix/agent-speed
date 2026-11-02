@@ -22,6 +22,8 @@ public class BoardEditingTests
         Assert.Equal(BoardSize.L, BoardEditing.SetSize(document, "a", BoardSize.L).Find("a")!.Size);
         Assert.False(BoardEditing.SetAlwaysOnTop(document, "a", false).Find("a")!.AlwaysOnTop);
         Assert.True(BoardEditing.SetClickThrough(document, "a", true).Find("a")!.ClickThrough);
+        Assert.True(BoardEditing.SetFadeWhenIdle(document, "a", true).Find("a")!.FadeWhenIdle);
+        Assert.False(document.Find("b")!.FadeWhenIdle);
         Assert.False(BoardEditing.SetVisible(document, "b", false).Find("b")!.Visible);
         Assert.Same(document, BoardEditing.SetSize(document, "zzz", BoardSize.L));
     }

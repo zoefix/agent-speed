@@ -127,6 +127,7 @@ final class BoardsController {
     func setOpacity(_ opacity: Double, of id: String) { edit(id) { $0.setOpacity(opacity, of: id) } }
     func setAlwaysOnTop(_ value: Bool, of id: String) { edit(id) { $0.setAlwaysOnTop(value, of: id) } }
     func setClickThrough(_ value: Bool, of id: String) { edit(id) { $0.setClickThrough(value, of: id) } }
+    func setFadeWhenIdle(_ value: Bool, of id: String) { edit(id) { $0.setFadeWhenIdle(value, of: id) } }
     func setAllSpaces(_ value: Bool, of id: String) { edit(id) { $0.setAllSpaces(value, of: id) } }
     func setVisible(_ value: Bool, of id: String) { edit(id) { $0.setVisible(value, of: id) } }
     func setReadouts(_ readouts: BoardReadouts, of id: String) { edit(id) { $0.setReadouts(readouts, of: id) } }

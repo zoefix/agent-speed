@@ -11,6 +11,7 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
     public var opacity: Double
     public var alwaysOnTop: Bool
     public var clickThrough: Bool
+    public var fadeWhenIdle: Bool
     /// macOS only.
     public var allSpaces: Bool
     public var visible: Bool
@@ -25,6 +26,7 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
         opacity: Double = 1,
         alwaysOnTop: Bool = true,
         clickThrough: Bool = false,
+        fadeWhenIdle: Bool = false,
         allSpaces: Bool = true,
         visible: Bool = true,
         readouts: BoardReadouts = .all
@@ -36,6 +38,7 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
         self.opacity = OrbConfig.cleanOpacity(opacity)
         self.alwaysOnTop = alwaysOnTop
         self.clickThrough = clickThrough
+        self.fadeWhenIdle = fadeWhenIdle
         self.allSpaces = allSpaces
         self.visible = visible
         self.readouts = readouts
@@ -44,7 +47,7 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
 
 extension BoardConfig: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, style, size, sources, opacity, alwaysOnTop, clickThrough, allSpaces, visible, readouts
+        case id, style, size, sources, opacity, alwaysOnTop, clickThrough, fadeWhenIdle, allSpaces, visible, readouts
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,6 +67,7 @@ extension BoardConfig: Codable {
             opacity: value(Double.self, .opacity) ?? 1,
             alwaysOnTop: value(Bool.self, .alwaysOnTop) ?? true,
             clickThrough: value(Bool.self, .clickThrough) ?? false,
+            fadeWhenIdle: value(Bool.self, .fadeWhenIdle) ?? false,
             allSpaces: value(Bool.self, .allSpaces) ?? true,
             visible: value(Bool.self, .visible) ?? true,
             readouts: value(BoardReadouts.self, .readouts) ?? .all
@@ -79,6 +83,7 @@ extension BoardConfig: Codable {
         try container.encode(opacity, forKey: .opacity)
         try container.encode(alwaysOnTop, forKey: .alwaysOnTop)
         try container.encode(clickThrough, forKey: .clickThrough)
+        try container.encode(fadeWhenIdle, forKey: .fadeWhenIdle)
         try container.encode(allSpaces, forKey: .allSpaces)
         try container.encode(visible, forKey: .visible)
         try container.encode(readouts, forKey: .readouts)

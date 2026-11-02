@@ -39,6 +39,8 @@ public static class BoardEditing
 
     public static BoardsDocument SetClickThrough(BoardsDocument document, string id, bool value) => Update(document, id, b => b with { ClickThrough = value });
 
+    public static BoardsDocument SetFadeWhenIdle(BoardsDocument document, string id, bool value) => Update(document, id, b => b with { FadeWhenIdle = value });
+
     /// <summary>Turns one live metrics switch on or off (DESIGN 2c, Live metrics: Switches); the others stay as they are.</summary>
     public static BoardsDocument SetReadout(BoardsDocument document, string id, BoardReadout readout, bool on) =>
         Update(document, id, b => b with { Readouts = b.Readouts.With(readout, on) });

@@ -307,7 +307,7 @@ internal sealed class BoardManager : IDisposable
         var board = entry.Definition;
         var config = (Style: board.Style, Size: board.Size,
             Policy: new BoardEffectsPolicy(settings.Effects, _theme.ReduceMotion, _theme.HighContrast, settings.CelebratePeaks),
-            Options: new BoardWindowOptions(board.AlwaysOnTop, board.ClickThrough, board.Opacity, _theme.ReduceMotion));
+            Options: new BoardWindowOptions(board.AlwaysOnTop, board.ClickThrough, board.FadeWhenIdle, board.Opacity, _theme.ReduceMotion));
         if (entry.Config == config)
         {
             return;

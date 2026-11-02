@@ -2,6 +2,7 @@ using System.Windows.Automation.Provider;
 using System.Windows.Threading;
 using AgentSpeed.Boards.Gpu;
 using AgentSpeed.Boards.Layers;
+using AgentSpeed.Core;
 using AgentSpeed.Interop;
 using AgentSpeed.Orb;
 using AgentSpeed.Orb.Gpu;
@@ -17,7 +18,7 @@ using AgentSpeed.Presentation.Orb;
 namespace AgentSpeed.Boards;
 
 /// <summary>The window side of a board's settings (DESIGN 2c, Interaction and window).</summary>
-internal readonly record struct BoardWindowOptions(bool AlwaysOnTop = true, bool ClickThrough = false, double Opacity = 1, bool ReduceMotion = false);
+internal readonly record struct BoardWindowOptions(bool AlwaysOnTop = true, bool ClickThrough = false, bool FadeWhenIdle = false, double Opacity = 1, bool ReduceMotion = false);
 
 /// <summary>
 /// One floating board (DESIGN 2c, Interaction and window): a composition window like the GPU orbs' (no redirection bitmap,
@@ -29,6 +30,10 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 {
     private const double DragSlop = 3;
     private const double DragSettle = 0.12;
+    private const double IdleFadeDelay = 60;
+    private const double IdleDimFactor = 0.45;
+    private const double DimFadeSeconds = 0.6;
+    private const double RestoreFadeSeconds = 0.12;
 
     private readonly Func<double> _clock;
     private readonly OrbClock _orbClock;
@@ -56,6 +61,15 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     private bool _moving;
     private double _lastFrame;
     private string? _hovered;
+    private bool _discHover;
+    private double _idleSince;
+    private bool _faded;
+    private bool _fading;
+    private double _opacity = 1;
+    private double _opacityFrom = 1;
+    private double _opacityTo = 1;
+    private double _opacityStart = double.NegativeInfinity;
+    private double _opacityDuration = RestoreFadeSeconds;
     private bool _closed;
 
     public GpuBoardWindow(string boardId, GpuDevice device, OrbClock orbClock, BoardStyle style, BoardSize size, IBoardLayerPainter painter, uint seed = 1)
@@ -63,6 +77,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         BoardId = boardId;
         _orbClock = orbClock;
         _clock = () => orbClock.Now;
+        _idleSince = _clock();
         _host = new OrbHostWindow("Agent Speed Board", this, topmost: true);
         _surface = new BoardSurface(device, orbClock, style, size, painter, seed) { Hwnd = _host.Handle };
         _mover = new MotionClient(this);
@@ -183,8 +198,13 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     {
         var resized = size != _surface.Scene.Size;
         _options = options;
+        if (!options.FadeWhenIdle)
+        {
+            _faded = false;
+        }
+
         _surface.Configure(style, size, policy with { ReduceMotion = policy.ReduceMotion || options.ReduceMotion });
-        _surface.Opacity = Math.Clamp(options.Opacity, 0, 1);
+        ApplyOpacity();
         _host.Topmost = options.AlwaysOnTop;
         SetClickThrough(options.ClickThrough);
         if (resized && _hasCenter)
@@ -193,7 +213,24 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         }
     }
 
-    public void Apply(BoardTick tick) => _surface.Apply(tick);
+    public void Apply(BoardTick tick)
+    {
+        NoteActivity(tick.Tier != SpeedTier.Idle);
+        _surface.Apply(tick);
+    }
+
+    public void NoteActivity(bool active)
+    {
+        if (active)
+        {
+            _idleSince = double.NaN;
+            Restore();
+        }
+        else if (double.IsNaN(_idleSince))
+        {
+            _idleSince = _clock();
+        }
+    }
 
     public void MoveTo(PointD center)
     {
@@ -257,6 +294,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 
         if (!IsOnDisc(x, y))
         {
+            SetDiscHover(false);
             SetHovered(null, null);
             if (!_options.ClickThrough)
             {
@@ -266,6 +304,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
             return;
         }
 
+        SetDiscHover(true);
         Hover(x, y);
     }
 
@@ -273,6 +312,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     {
         if (!_dragging)
         {
+            SetDiscHover(false);
             SetHovered(null, null);
         }
     }
@@ -364,6 +404,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         }
 
         StopMove();
+        Restore();
         _dragging = true;
         _dragMoved = false;
         _dragStartCursor = cursor;
@@ -410,7 +451,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         _dragging = false;
         if (!_dragMoved)
         {
-            StopFrames();
+            StopFramesIfIdle();
             if (_surface.Scene.HitRow(_press.X / DisplayScale, _press.Y / DisplayScale) is { Entry.Kind: BoardEntryKind.Group } row)
             {
                 RowClicked?.Invoke(this, row.Key);
@@ -450,11 +491,36 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 
     private void StopFrames() => _mover.Active = false;
 
+    private void StopFramesIfIdle()
+    {
+        if (!_dragging && !_moving && !_fading)
+        {
+            StopFrames();
+        }
+    }
+
     private void OnMotionFrame()
     {
         var now = _clock();
         var dt = Math.Clamp(now - _lastFrame, 0, 0.05);
         _lastFrame = now;
+        if (_fading)
+        {
+            var t = _opacityDuration > 0 ? (now - _opacityStart) / _opacityDuration : 1;
+            if (t >= 1 || t < 0)
+            {
+                _fading = false;
+                _opacity = _opacityTo;
+                _surface.Opacity = _opacityTo;
+            }
+            else
+            {
+                var eased = t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
+                _opacity = _opacityFrom + (_opacityTo - _opacityFrom) * eased;
+                _surface.Opacity = _opacity;
+            }
+        }
+
         if (_dragging && _dragMoved)
         {
             _followX.Step(_dragTarget.X, dt);
@@ -464,7 +530,11 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
                 _followX.Snap(_dragTarget.X);
                 _followY.Snap(_dragTarget.Y);
                 PlaceAt(_dragTarget);
-                StopFrames();
+                if (!_fading)
+                {
+                    StopFrames();
+                }
+
                 return;
             }
 
@@ -487,16 +557,13 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
             return;
         }
 
-        StopFrames();
+        StopFramesIfIdle();
     }
 
     private void StopMove()
     {
         _moving = false;
-        if (!_dragging)
-        {
-            StopFrames();
-        }
+        StopFramesIfIdle();
     }
 
     // ---- Hover and click-through ----
@@ -537,9 +604,16 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         }
 
         var insideWindow = cursor.X >= rect.Left && cursor.X < rect.Right && cursor.Y >= rect.Top && cursor.Y < rect.Bottom;
-        if (!insideWindow || IsOnDisc(cursor.X - rect.Left, cursor.Y - rect.Top))
+        if (!insideWindow)
         {
             SetPassThrough(false);
+            return;
+        }
+
+        if (IsOnDisc(cursor.X - rect.Left, cursor.Y - rect.Top))
+        {
+            SetPassThrough(false);
+            SetDiscHover(true);
         }
     }
 
@@ -569,14 +643,72 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         _host.Transparent = enabled;
         if (enabled)
         {
+            SetDiscHover(false);
             SetHovered(null, null);
+        }
+    }
+
+    private void SetDiscHover(bool hover)
+    {
+        if (_discHover == hover)
+        {
+            return;
+        }
+
+        _discHover = hover;
+        if (hover)
+        {
+            Restore();
         }
     }
 
     private System.Windows.Rect RowBounds(string key) =>
         RowRect(key) is { } r ? new System.Windows.Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top) : System.Windows.Rect.Empty;
 
-    private void Housekeeping() => _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
+    private void Housekeeping()
+    {
+        _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
+        if (_options.FadeWhenIdle && !_faded && !_discHover && !_dragging && !double.IsNaN(_idleSince) && _clock() - _idleSince >= IdleFadeDelay)
+        {
+            _faded = true;
+            ApplyOpacity(animated: true, duration: DimFadeSeconds);
+        }
+    }
+
+    private void Restore()
+    {
+        if (!_faded)
+        {
+            return;
+        }
+
+        _faded = false;
+        ApplyOpacity(animated: true, duration: RestoreFadeSeconds);
+    }
+
+    private void ApplyOpacity(bool animated = false, double duration = RestoreFadeSeconds)
+    {
+        var target = Math.Clamp(_options.Opacity, 0, 1) * (_faded ? IdleDimFactor : 1);
+        var now = _clock();
+        if (animated && !_options.ReduceMotion && Math.Abs(target - _opacity) > 0.001)
+        {
+            _opacityFrom = _opacity;
+            _opacityTo = target;
+            _opacityStart = now;
+            _opacityDuration = duration;
+            _fading = true;
+            StartFrames();
+            return;
+        }
+
+        _fading = false;
+        _opacity = target;
+        _opacityFrom = target;
+        _opacityTo = target;
+        _opacityStart = double.NegativeInfinity;
+        _surface.Opacity = target;
+        StopFramesIfIdle();
+    }
 
     /// <summary>Drives drag-follow and the snap on the shared frame clock (no WPF render loop).</summary>
     private sealed class MotionClient(GpuBoardWindow owner) : IOrbFrameClient

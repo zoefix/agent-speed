@@ -115,18 +115,25 @@ final class OrbWindowIdleDimmer {
     private let enabled: @MainActor () -> Bool
     private let interaction: OrbInteraction
     private let apply: (Bool) -> Void
-    private let armedAt = Clock.now
+    private let armedAt: TimeInterval
     private var pointerLeftAt: TimeInterval = -.infinity
     private var wasEngaged = false
     private var timer: Timer?
     private var loop: ObservationLoop?
 
-    init(gauge: LiveGauge, enabled: @escaping @MainActor () -> Bool, interaction: OrbInteraction, apply: @escaping (Bool) -> Void) {
+    init(gauge: LiveGauge, enabled: @escaping @MainActor () -> Bool, interaction: OrbInteraction,
+         armedAt: TimeInterval = Clock.now, apply: @escaping (Bool) -> Void) {
         self.gauge = gauge
         self.enabled = enabled
         self.interaction = interaction
+        self.armedAt = armedAt
         self.apply = apply
         loop = ObservationLoop { [weak self] in self?.evaluate() }
+    }
+
+    /// Re-evaluates immediately after a non-observable configuration change.
+    func refresh() {
+        evaluate()
     }
 
     func cancel() {

@@ -28,6 +28,8 @@ public sealed record BoardDefinition
 
     public bool ClickThrough { get; init; }
 
+    public bool FadeWhenIdle { get; init; }
+
     /// <summary>macOS only; kept for the round trip.</summary>
     public bool AllSpaces { get; init; } = true;
 

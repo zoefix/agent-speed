@@ -19,7 +19,8 @@ QVariantMap BoardStore::normalized(QVariantMap b) {
     b.insert(QStringLiteral("opacity"), std::clamp(opacity, 0.3, 1.0));
     for (const auto* flag : {"alwaysOnTop", "allSpaces", "visible"})
         if (!b.value(QLatin1String(flag)).canConvert<bool>() || b.value(QLatin1String(flag)).typeId() != QMetaType::Bool) b.insert(QLatin1String(flag), true);
-    if (b.value(QStringLiteral("clickThrough")).typeId() != QMetaType::Bool) b.insert(QStringLiteral("clickThrough"), false);
+    for (const auto* flag : {"clickThrough", "fadeWhenIdle"})
+        if (b.value(QLatin1String(flag)).typeId() != QMetaType::Bool) b.insert(QLatin1String(flag), false);
     auto readouts = b.value(QStringLiteral("readouts")).toMap();
     for (const auto* readout : {"intelligence", "thinking", "cost"})
         if (readouts.value(QLatin1String(readout)).typeId() != QMetaType::Bool) readouts.insert(QLatin1String(readout), true);

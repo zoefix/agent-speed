@@ -231,6 +231,20 @@ internal sealed class BoardsPaneViewModel : ObservableObject
 
     public string ClickThroughHint => _loc["win.settings.clickThrough.description"];
 
+    public bool FadeWhenIdle
+    {
+        get => Board?.FadeWhenIdle ?? false;
+        set
+        {
+            if (SelectedId is { } id && !_syncing)
+            {
+                Update(d => BoardEditing.SetFadeWhenIdle(d, id, value));
+            }
+        }
+    }
+
+    public string FadeHint => _loc["win.settings.fadeIdle.description"];
+
     /// <summary>The selected board's live metrics switches (the style cards' thumbnails show them).</summary>
     public BoardReadouts Readouts => Board?.Readouts ?? BoardReadouts.All;
 
@@ -395,6 +409,7 @@ internal sealed class BoardsPaneViewModel : ObservableObject
         OnPropertyChanged(nameof(OpacityText));
         OnPropertyChanged(nameof(AlwaysOnTop));
         OnPropertyChanged(nameof(ClickThrough));
+        OnPropertyChanged(nameof(FadeWhenIdle));
         OnPropertyChanged(nameof(Readouts));
         OnPropertyChanged(nameof(ReadoutIntelligence));
         OnPropertyChanged(nameof(ReadoutThinking));

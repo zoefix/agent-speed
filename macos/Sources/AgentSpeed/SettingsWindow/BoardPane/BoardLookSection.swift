@@ -63,6 +63,9 @@ struct BoardLookSection: View {
             SettingToggle(title: l10n("menu.clickThrough"), isOn: Binding(
                 get: { board.clickThrough }, set: { boards.setClickThrough($0, of: id) }
             ))
+            SettingToggle(title: l10n("settings.orb.fadeIdle"), isOn: Binding(
+                get: { board.fadeWhenIdle }, set: { boards.setFadeWhenIdle($0, of: id) }
+            ))
             SettingToggle(title: l10n("settings.orb.allSpaces"), isOn: Binding(
                 get: { board.allSpaces }, set: { boards.setAllSpaces($0, of: id) }
             ))

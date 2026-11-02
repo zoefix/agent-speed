@@ -28,6 +28,19 @@ Item {
     readonly property color heatColor: Heat.color(heat)
     readonly property bool hot: heat > 0.02
     readonly property string effects: prefs.effects
+    readonly property bool fadeWhenIdle: spec.fadeWhenIdle === true
+    readonly property bool isIdle: (view.titleLevel || 0) === 0 && (view.live || 0) < 0.05
+    property bool idleFaded: false
+    opacity: fadeWhenIdle && idleFaded && !squareHover.hovered ? 0.45 : 1.0
+    Behavior on opacity { NumberAnimation { duration: board.opacity < 1 ? 600 : 120; easing.type: Easing.OutQuad } }
+    Timer {
+        id: idleFadeTimer
+        interval: 60000
+        running: board.fadeWhenIdle && board.isIdle && !board.idleFaded
+        onTriggered: board.idleFaded = true
+    }
+    onIsIdleChanged: if (!isIdle) idleFaded = false
+    onFadeWhenIdleChanged: if (!fadeWhenIdle) idleFaded = false
 
     // Style tokens (the prototypes' palettes).
     readonly property real radius: style === "glass" ? 24 : style === "timing" ? 14 : 22
@@ -226,6 +239,7 @@ Item {
         border.width: board.style === "glass" ? 1 : board.style === "timing" ? 1 : 0
         border.color: board.style === "glass" ? (board.dark ? Qt.rgba(1, 1, 1, 0.13) : Qt.rgba(0, 0, 0, 0.08)) : (board.dark ? Qt.rgba(1, 1, 1, 0.09) : Qt.rgba(0, 0, 0, 0.08))
         Behavior on width { NumberAnimation { duration: 450; easing.type: Easing.OutCubic } }
+        HoverHandler { id: squareHover }
 
         // Style ambience: glass a heat-tinted glow behind the hero, timing a heat rail along the top, neon a grid.
         Rectangle {

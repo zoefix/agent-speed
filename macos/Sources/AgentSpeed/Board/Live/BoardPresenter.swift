@@ -57,6 +57,7 @@ final class BoardPresenter {
     private var cards: PerfCardPresenter?
     /// The card's window, closed with the board (AppKit keeps a window until it is closed).
     private var cardPanel: PerfCardPanel?
+    private var dimmer: OrbWindowIdleDimmer?
     private lazy var climbFrames = BoardClimbFrames(window: window.panel) { [weak self] in self?.climbFrame() }
     /// The score rows' keyboard focus; drawn while the board is key.
     private var focus = BoardKeyboardFocus()
@@ -77,6 +78,12 @@ final class BoardPresenter {
         look = Look(style: runtime.config.style, size: runtime.config.size, dark: dark, language: model.l10n.language)
         builder = BoardContentBuilders.make(style: look.style, size: look.size, dark: dark, l10n: model.l10n, capsule: nil)
         window = BoardWindowController(config: runtime.config, center: center, dark: dark)
+        let boardId = runtime.id
+        dimmer = OrbWindowIdleDimmer(gauge: runtime.gauge, enabled: { [weak self] in
+            self?.model.boards.board(boardId)?.fadeWhenIdle ?? self?.window.config.fadeWhenIdle ?? false
+        }, interaction: window.interaction) { [weak self] dimmed in
+            self?.window.setDimmed(dimmed)
+        }
         accessibility = BoardAccessibilityReporter(host: window.host)
         accessibility.onCardAction = { [weak self] key in self?.toggleCard(key) }
         accessibility.onFocus = { [weak self] key in self?.focusFromAccessibility(key) }
@@ -98,6 +105,7 @@ final class BoardPresenter {
 
     func close() {
         runtime.onTick = nil
+        dimmer?.cancel()
         tooltipTimer?.invalidate()
         wakeTimer?.invalidate()
         climbFrames.stop()
@@ -113,6 +121,7 @@ final class BoardPresenter {
     func apply(_ config: BoardConfig) {
         guard config != window.config else { return }
         window.apply(config)
+        dimmer?.refresh()
         setLook(style: config.style, size: config.size, dark: look.dark, language: look.language)
     }
 

@@ -18,7 +18,7 @@ public class BoardsSettingsTests
                 new BoardDefinition(IdA)
                 {
                     Style = BoardStyle.Timing, Size = BoardSize.L, Sources = OrbSources.Of(SourceSet.Of(SourceKind.Codex)), Opacity = 0.7, AlwaysOnTop = false,
-                    ClickThrough = true, AllSpaces = false, Readouts = new BoardReadouts(intelligence: true, thinking: false, cost: true),
+                    ClickThrough = true, FadeWhenIdle = true, AllSpaces = false, Readouts = new BoardReadouts(intelligence: true, thinking: false, cost: true),
                 },
                 new BoardDefinition(IdB) { Visible = false },
             ])
@@ -46,7 +46,9 @@ public class BoardsSettingsTests
         Assert.Equal(SourceSet.Of(SourceKind.Codex), a.TrackedSources);
         Assert.Equal(0.7, a.Opacity);
         Assert.True(a.ClickThrough);
+        Assert.True(a.FadeWhenIdle);
         Assert.False(a.AlwaysOnTop);
+        Assert.False(back.Boards.Find(IdB)!.FadeWhenIdle);
         Assert.False(back.Boards.Find(IdB)!.Visible);
         Assert.Equal(new BoardReadouts(true, false, true), a.Readouts);
         Assert.Equal(BoardReadouts.All, back.Boards.Find(IdB)!.Readouts);
@@ -65,10 +67,13 @@ public class BoardsSettingsTests
         Assert.Equal("L", first["size"]!.GetValue<string>());
         Assert.Equal("codex", first["sources"]![0]!.GetValue<string>());
         Assert.Equal("all", boards["boards"]![1]!["sources"]!.GetValue<string>());
-        foreach (var key in new[] { "opacity", "alwaysOnTop", "clickThrough", "allSpaces", "visible" })
+        foreach (var key in new[] { "opacity", "alwaysOnTop", "clickThrough", "fadeWhenIdle", "allSpaces", "visible" })
         {
             Assert.NotNull(first[key]);
         }
+
+        Assert.True(first["fadeWhenIdle"]!.GetValue<bool>());
+        Assert.False(boards["boards"]![1]!["fadeWhenIdle"]!.GetValue<bool>());
 
         var readouts = first["readouts"]!;
         Assert.True(readouts["intelligence"]!.GetValue<bool>());

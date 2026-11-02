@@ -191,11 +191,19 @@ ColumnLayout {
         }
         SettingsRow {
             label: S.tr2(S.rev, "menu.clickThrough")
-            divider: false
             ToggleSwitch {
                 label: S.tr2(S.rev, "menu.clickThrough")
                 checked: group.current ? group.current.clickThrough : false
                 onToggled: (on) => boardStore.set(group.current.id, "clickThrough", on)
+            }
+        }
+        SettingsRow {
+            label: S.tr2(S.rev, "settings.orb.fadeIdle")
+            divider: false
+            ToggleSwitch {
+                label: S.tr2(S.rev, "settings.orb.fadeIdle")
+                checked: group.current ? group.current.fadeWhenIdle === true : false
+                onToggled: (on) => boardStore.set(group.current.id, "fadeWhenIdle", on)
             }
         }
     }

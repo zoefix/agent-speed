@@ -7,7 +7,7 @@ struct BoardsDocumentTests {
     static let specExample = """
     { "version": 1,
       "boards": [ { "id": "B1", "style": "neon", "size": "M", "sources": "all", "opacity": 1.0, "alwaysOnTop": true,
-                    "clickThrough": false, "allSpaces": true, "visible": true } ],
+                    "clickThrough": false, "fadeWhenIdle": false, "allSpaces": true, "visible": true } ],
       "layouts": { "D1+D2": { "B1": { "display": "D1", "xAnchor": "high", "x": 12, "yAnchor": "fraction", "y": 0.2 } } } }
     """
 
@@ -40,7 +40,7 @@ struct BoardsDocumentTests {
         #expect(a.style == .glass && a.size == .medium)
         #expect(a.sources == .explicit(["codex", "future"]))
         #expect(a.opacity == 0.4)
-        #expect(a.alwaysOnTop && !a.clickThrough && a.allSpaces && a.visible)
+        #expect(a.alwaysOnTop && !a.clickThrough && !a.fadeWhenIdle && a.allSpaces && a.visible)
         #expect(document.boards[1].style == .timing && document.boards[1].size == .large && document.boards[1].opacity == 1)
         #expect(document.lastStyle == .glass)
     }

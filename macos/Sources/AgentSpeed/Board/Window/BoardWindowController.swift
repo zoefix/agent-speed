@@ -10,8 +10,10 @@ final class BoardWindowController {
     let effectsPanel = BoardEffectsPanel()
     let driver: BoardEffectsDriver
     let host: BoardHostView
+    let interaction = OrbInteraction()
     private(set) var config: BoardConfig
     private(set) var center: CGPoint
+    private(set) var isDimmed = false
     var dark: Bool {
         didSet { if dark != oldValue { applyLook() } }
     }
@@ -49,6 +51,7 @@ final class BoardWindowController {
     private var drag: OrbDragSession?
     private var shown = false
     private var contentStale = true
+    private var fadeGeneration = 0
 
     init(config: BoardConfig, center: CGPoint, dark: Bool) {
         self.config = config
@@ -65,6 +68,10 @@ final class BoardWindowController {
         host.onMouseDragged = { [weak self] _ in self?.continueDrag() }
         host.onMouseUp = { [weak self] event in self?.endDrag(event) }
         host.onRightMouseDown = { [weak self] event in self?.onContextMenu?(event) }
+        host.onHoverChanged = { [weak self] hovered in
+            guard let self else { return }
+            self.interaction.isHovered = !self.config.clickThrough && hovered
+        }
         visibility = OrbWindowVisibilityMonitor(window: panel)
         visibility?.onChange = { [weak self] in self?.updateRendering() }
         applyLook()
@@ -76,6 +83,10 @@ final class BoardWindowController {
 
     var shape: FloatingShape {
         .board(center: center, side: side, corner: CGFloat(config.style.cornerRadius))
+    }
+
+    var targetAlpha: CGFloat {
+        CGFloat(min(max(config.opacity, 0), 1)) * (isDimmed ? OrbWindowFader.dimmedAlpha : 1)
     }
 
     // MARK: Showing
@@ -93,6 +104,8 @@ final class BoardWindowController {
     func hide() {
         guard shown else { return }
         shown = false
+        interaction.isHovered = false
+        interaction.isDragging = false
         panel.removeChildWindow(effectsPanel)
         effectsPanel.orderOut(nil)
         panel.orderOut(nil)
@@ -101,13 +114,39 @@ final class BoardWindowController {
 
     /// A new board fades in where it was placed (DESIGN 2c `boards.add`, as a new orb appears).
     func fadeIn(duration: TimeInterval = 0.25) {
-        let alpha = CGFloat(min(max(config.opacity, 0), 1))
+        let alpha = targetAlpha
         panel.alphaValue = 0
         effectsPanel.alphaValue = 0
         NSAnimationContext.runAnimationGroup { context in
             context.duration = duration
             panel.animator().alphaValue = alpha
             effectsPanel.animator().alphaValue = alpha
+        }
+    }
+
+    /// Idle fade ("fade when idle", DESIGN 2c): 45 % of configured opacity after 60 s idle, back on activity or hover.
+    func setDimmed(_ dimmed: Bool) {
+        guard dimmed != isDimmed else { return }
+        isDimmed = dimmed
+        fadeGeneration &+= 1
+        let alpha = targetAlpha
+        guard shown, !reduceMotion else {
+            panel.alphaValue = alpha
+            effectsPanel.alphaValue = alpha
+            updateRendering()
+            return
+        }
+        let current = fadeGeneration
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = dimmed ? 0.6 : 0.12
+            context.timingFunction = CAMediaTimingFunction(name: dimmed ? .easeInEaseOut : .easeOut)
+            panel.animator().alphaValue = alpha
+            effectsPanel.animator().alphaValue = alpha
+        } completionHandler: { [weak self] in
+            MainActor.assumeIsolated {
+                guard let self, self.fadeGeneration == current else { return }
+                self.updateRendering()
+            }
         }
     }
 
@@ -128,6 +167,7 @@ final class BoardWindowController {
             applyLook()
             place(at: center)
         }
+        if !newConfig.fadeWhenIdle, isDimmed { isDimmed = false }
         applyWindowOptions()
         if newConfig.visible != old.visible { newConfig.visible ? show() : hide() }
         updateRendering()
@@ -148,7 +188,8 @@ final class BoardWindowController {
         panel.apply(alwaysOnTop: config.alwaysOnTop, allSpaces: config.allSpaces)
         BoardPanel.apply(effectsPanel, alwaysOnTop: config.alwaysOnTop, allSpaces: config.allSpaces)
         panel.ignoresMouseEvents = config.clickThrough
-        let alpha = CGFloat(min(max(config.opacity, 0), 1))
+        if config.clickThrough { interaction.isHovered = false }
+        let alpha = targetAlpha
         panel.alphaValue = alpha
         effectsPanel.alphaValue = alpha
     }
@@ -165,7 +206,7 @@ final class BoardWindowController {
     }
 
     private func updateRendering() {
-        driver.canRender = shown && panel.isVisible && config.visible && config.opacity > 0.01
+        driver.canRender = shown && panel.isVisible && config.visible && targetAlpha > 0.01
             && (visibility?.allowsVisibility ?? true)
         if isRendering, contentStale { contentChanged(animated: false) }
     }
@@ -192,6 +233,7 @@ final class BoardWindowController {
 
     private func beginDrag() {
         animator.freezeCenter()
+        interaction.isDragging = true
         drag = OrbDragSession(pointer: NSEvent.mouseLocation, center: animator.state.center)
     }
 
@@ -209,6 +251,7 @@ final class BoardWindowController {
     private func endDrag(_ event: NSEvent) {
         guard let session = drag else { return }
         drag = nil
+        interaction.isDragging = false
         guard session.isMoving else {
             let local = host.convert(event.locationInWindow, from: nil)
             onClick?(CGPoint(x: local.x, y: side - local.y))

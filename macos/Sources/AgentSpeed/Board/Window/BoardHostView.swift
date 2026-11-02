@@ -12,6 +12,8 @@ final class BoardHostView: NSView {
     /// The pointer moved over the board or left it (hover tooltips and row tint).
     var onMouseMoved: ((NSEvent) -> Void)?
     var onMouseExited: ((NSEvent) -> Void)?
+    /// Whether the pointer rests inside the board's rounded square (restores an idle-faded board).
+    var onHoverChanged: ((Bool) -> Void)?
     /// A key while the board has the keyboard focus; true when it was handled.
     var onKeyDown: ((NSEvent) -> Bool)?
     /// The rows take keyboard focus (keyboard navigation on, DESIGN 12 *Keyboard*): the view takes the key events.
@@ -25,6 +27,9 @@ final class BoardHostView: NSView {
     private var style = BoardStyle.glass
     private var dark = true
     private var tracking: NSTrackingArea?
+    private var hovered = false {
+        didSet { if hovered != oldValue { onHoverChanged?(hovered) } }
+    }
 
     init(warp: CALayer) {
         super.init(frame: NSRect(x: 0, y: 0, width: 340, height: 340))
@@ -101,18 +106,30 @@ final class BoardHostView: NSView {
 
     override func hitTest(_ point: NSPoint) -> NSView? {
         let local = convert(point, from: superview)
-        guard bounds.contains(local) else { return nil }
+        return containsLocal(local) ? self : nil
+    }
+
+    private func containsLocal(_ local: NSPoint) -> Bool {
+        guard bounds.contains(local) else { return false }
         let corner = CGFloat(style.cornerRadius)
-        let path = CGPath(roundedRect: bounds, cornerWidth: corner, cornerHeight: corner, transform: nil)
-        return path.contains(local) ? self : nil
+        return CGPath(roundedRect: bounds, cornerWidth: corner, cornerHeight: corner, transform: nil).contains(local)
     }
 
     override func mouseDown(with event: NSEvent) { onMouseDown?(event) }
     override func mouseDragged(with event: NSEvent) { onMouseDragged?(event) }
     override func mouseUp(with event: NSEvent) { onMouseUp?(event) }
     override func rightMouseDown(with event: NSEvent) { onRightMouseDown?(event) }
-    override func mouseMoved(with event: NSEvent) { onMouseMoved?(event) }
-    override func mouseExited(with event: NSEvent) { onMouseExited?(event) }
+    override func mouseEntered(with event: NSEvent) {
+        hovered = containsLocal(convert(event.locationInWindow, from: nil))
+    }
+    override func mouseMoved(with event: NSEvent) {
+        hovered = containsLocal(convert(event.locationInWindow, from: nil))
+        onMouseMoved?(event)
+    }
+    override func mouseExited(with event: NSEvent) {
+        hovered = false
+        onMouseExited?(event)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

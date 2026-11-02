@@ -45,6 +45,10 @@ public extension BoardsDocument {
         edit(id) { $0.clickThrough = value }
     }
 
+    mutating func setFadeWhenIdle(_ value: Bool, of id: String) {
+        edit(id) { $0.fadeWhenIdle = value }
+    }
+
     mutating func setAllSpaces(_ value: Bool, of id: String) {
         edit(id) { $0.allSpaces = value }
     }

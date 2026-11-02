@@ -1286,7 +1286,7 @@ Persisted next to the orbs as one JSON value (key `boards`), written atomically 
 ```json
 { "version": 1,
   "boards": [ { "id": "…", "style": "neon", "size": "M", "sources": "all", "opacity": 1.0, "alwaysOnTop": true,
-                "clickThrough": false, "allSpaces": true, "visible": true,
+                "clickThrough": false, "fadeWhenIdle": false, "allSpaces": true, "visible": true,
                 "readouts": { "intelligence": true, "thinking": true, "cost": true } } ],
   "layouts": { "<arrangement key>": { "<board id>": { "display": "…", "xAnchor": "high", "x": 12, "yAnchor": "fraction", "y": 0.2 } } } }
 ```
@@ -1297,7 +1297,7 @@ Persisted next to the orbs as one JSON value (key `boards`), written atomically 
 | `style` | `glass` (流光玻璃) · `timing` (計時塔) · `neon` (霓虹座艙); unknown → `glass`. |
 | `size` | `S` 280 × 280, `M` 340 × 340 (default), `L` 420 × 420 pt/DIP; unknown → `M`. |
 | `sources` | As an orb's (2b): `"all"` or METRICS 1 keys; the board counts only those sources (METRICS 6.8). |
-| `opacity`, `alwaysOnTop`, `clickThrough`, `allSpaces`, `visible` | As an orb's. |
+| `opacity`, `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces`, `visible` | As an orb's. |
 | `readouts` | The live metrics switches (*Live metrics*, below): `intelligence`, `thinking`, `cost`; a missing field or key, or a value that is not a boolean, reads as `true`. A `rowCost` key saved by an earlier version is ignored and no longer written. |
 | `layouts` | As the orbs' (2b, arrangement keys, position records, at most 16 arrangements). |
 
@@ -1730,7 +1730,8 @@ memory the board owns (layer textures, swap chain or drawable surfaces, instance
   懸浮窗, Boards).
 - Settings → 懸浮窗 gains a Boards list under the orbs: one row per board (style preview thumbnail, style name,
   sources, visible switch) with add / remove, and an editor for style, size, sources, the live metrics switches
-  (*Live metrics*), opacity and the window toggles.
+  (*Live metrics*), opacity and the window toggles (`alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, and `allSpaces` on
+  macOS). With `fadeWhenIdle` on, after 60 s idle the board fades to 45 % of its opacity and restores on activity or hover.
   The quick menu gets `boards.show` / `boards.hide` (all boards) and `boards.add`.
 - Accessibility: a board is a list element labelled `a11y.board` (sources, value, title); each group row is an item
   labelled `a11y.board.row` (`第 1 名，tihu，每秒 7.88k 個 token，推理強度 xhigh，加速 Fast，100 個子 agent`); the live
