@@ -78,13 +78,13 @@ final class BoardPresenter {
         look = Look(style: runtime.config.style, size: runtime.config.size, dark: dark, language: model.l10n.language)
         builder = BoardContentBuilders.make(style: look.style, size: look.size, dark: dark, l10n: model.l10n, capsule: nil)
         window = BoardWindowController(config: runtime.config, center: center, dark: dark)
+        accessibility = BoardAccessibilityReporter(host: window.host)
         let boardId = runtime.id
         dimmer = OrbWindowIdleDimmer(gauge: runtime.gauge, enabled: { [weak self] in
             self?.model.boards.board(boardId)?.fadeWhenIdle ?? self?.window.config.fadeWhenIdle ?? false
         }, interaction: window.interaction) { [weak self] dimmed in
             self?.window.setDimmed(dimmed)
         }
-        accessibility = BoardAccessibilityReporter(host: window.host)
         accessibility.onCardAction = { [weak self] key in self?.toggleCard(key) }
         accessibility.onFocus = { [weak self] key in self?.focusFromAccessibility(key) }
         window.host.onKeyDown = { [weak self] event in self?.keyDown(event) ?? false }
