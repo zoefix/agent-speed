@@ -7,8 +7,8 @@ enum BundledPriceAssets {
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 3,
-  "updated": "2026-10-28",
+  "version": 4,
+  "updated": "2026-11-05",
   "currency": "USD",
   "unit": "perMillionTokens",
   "providers": {
@@ -3206,6 +3206,44 @@ enum BundledPriceAssets {
       "checked": "2026-10-22"
     },
     {
+      "id": "kimi-k3.1-pro",
+      "provider": "moonshot",
+      "name": "Kimi K3.1 Pro",
+      "status": "current",
+      "prices": {
+        "input": 2,
+        "cachedInput": 0.2,
+        "cacheWrite": 2,
+        "cacheWrite1h": 4,
+        "output": 10
+      },
+      "source": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+      "checked": "2026-11-05",
+      "note": "International USD list prices. Flat pricing across the context window. Default cache writes have a 5-minute TTL; 1-hour writes have a separate rate. Kimi Code alias: https://www.kimi.com/code/docs/en/kimi-code/models.html",
+      "aliases": [
+        "k3.1-pro"
+      ]
+    },
+    {
+      "id": "kimi-k3.1-pro-highspeed",
+      "provider": "moonshot",
+      "name": "Kimi K3.1 Pro Highspeed",
+      "status": "current",
+      "prices": {
+        "input": 4,
+        "cachedInput": 0.2,
+        "cacheWrite": 4,
+        "cacheWrite1h": 8,
+        "output": 20
+      },
+      "source": "https://www.kimi.ai/zh-hans/resources/kimi-k3-1-pro-pricing",
+      "checked": "2026-11-05",
+      "note": "Separate official Highspeed model ID. Cache-hit pricing is the same as the standard model; input, output and cache writes use the Highspeed rates. Kimi Code alias: https://www.kimi.com/code/docs/en/kimi-code/models.html",
+      "aliases": [
+        "k3.1-pro-highspeed"
+      ]
+    },
+    {
       "id": "kimi-k3",
       "provider": "moonshot",
       "name": "Kimi K3",
@@ -4796,6 +4834,42 @@ enum BundledPriceAssets {
     {
       "model": "mimo-v2.5-pro",
       "expect": "unknown"
+    },
+    {
+      "model": "kimi-k3.1-pro",
+      "expect": "kimi-k3.1-pro"
+    },
+    {
+      "model": "kimi-k3.1-pro-highspeed",
+      "expect": "kimi-k3.1-pro-highspeed"
+    },
+    {
+      "model": "moonshot/kimi-k3.1-pro",
+      "expect": "kimi-k3.1-pro"
+    },
+    {
+      "model": "moonshot/kimi-k3.1-pro-highspeed",
+      "expect": "kimi-k3.1-pro-highspeed"
+    },
+    {
+      "model": "kimi-k3.1-pro-unknown",
+      "expect": "unknown"
+    },
+    {
+      "model": "k3.1-pro",
+      "expect": "kimi-k3.1-pro"
+    },
+    {
+      "model": "k3.1-pro-highspeed",
+      "expect": "kimi-k3.1-pro-highspeed"
+    },
+    {
+      "model": "moonshot/k3.1-pro",
+      "expect": "kimi-k3.1-pro"
+    },
+    {
+      "model": "moonshot/k3.1-pro-highspeed",
+      "expect": "kimi-k3.1-pro-highspeed"
     }
   ]
 }
