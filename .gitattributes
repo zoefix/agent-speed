@@ -1,2 +1,4 @@
 # Fixtures must stay byte-exact on every platform.
 spec/fixtures/** -text
+# Stand-in relays checked against their SHA-256 (REMOTE 3.1).
+windows/tests/AgentSpeed.Core.Tests/Remote/Resources/** -text
