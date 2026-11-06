@@ -3256,7 +3256,12 @@ enum BundledPriceAssets {
         "output": 15
       },
       "source": "https://platform.kimi.ai/docs/pricing/chat",
-      "checked": "2026-10-22"
+      "checked": "2026-11-06",
+      "aliases": [
+        "k3",
+        "k3-256k"
+      ],
+      "note": "Kimi Code aliases k3 and k3-256k select K3 with different context limits. Both use the standard K3 API-equivalent rates; membership quota multipliers are not token prices. Alias source: https://www.kimi.com/code/docs/en/kimi-code/models.html"
     },
     {
       "id": "kimi-k2.8-preview",
@@ -3299,7 +3304,11 @@ enum BundledPriceAssets {
         "output": 8
       },
       "source": "https://platform.kimi.ai/docs/pricing/chat",
-      "checked": "2026-10-22"
+      "checked": "2026-11-06",
+      "aliases": [
+        "kimi-for-coding-highspeed"
+      ],
+      "note": "Kimi Code maps kimi-for-coding-highspeed to K2.7 Code Highspeed, separately from kimi-for-coding (K2.8 Preview) and k3.1-pro-highspeed. Alias source: https://www.kimi.com/code/docs/en/kimi-code/models.html"
     },
     {
       "id": "kimi-k2.6",
@@ -4910,6 +4919,63 @@ enum BundledPriceAssets {
     },
     {
       "model": "kimi-k2.8-preview-unknown",
+      "expect": "unknown"
+    },
+    {
+      "model": "k3",
+      "expect": "kimi-k3"
+    },
+    {
+      "model": "k3-256k",
+      "expect": "kimi-k3"
+    },
+    {
+      "model": "kimi-for-coding-highspeed",
+      "expect": "kimi-k2.7-code-highspeed"
+    },
+    {
+      "model": "kimi-code/k3",
+      "provider": "openai",
+      "expect": "kimi-k3"
+    },
+    {
+      "model": "kimi-code/k3-256k",
+      "provider": "openai",
+      "expect": "kimi-k3"
+    },
+    {
+      "model": "kimi-code/kimi-for-coding-highspeed",
+      "provider": "openai",
+      "expect": "kimi-k2.7-code-highspeed"
+    },
+    {
+      "model": "kimi-code/kimi-for-coding",
+      "provider": "openai",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "代理/kimi-for-coding",
+      "provider": "openai",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "kimi-code/k3.1-pro",
+      "provider": "openai",
+      "expect": "kimi-k3.1-pro"
+    },
+    {
+      "model": "kimi-code/k3.1-pro-highspeed",
+      "provider": "openai",
+      "expect": "kimi-k3.1-pro-highspeed"
+    },
+    {
+      "model": "kimi-code/k3-unknown",
+      "provider": "openai",
+      "expect": "unknown"
+    },
+    {
+      "model": "kimi-code/kimi-for-coding-highspeed-unknown",
+      "provider": "openai",
       "expect": "unknown"
     }
   ]
