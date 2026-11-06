@@ -47,6 +47,12 @@ jobs:
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
+      # The tests read the embedded relays as the app bundle does.
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: relay-*
+          path: linux/relay/dist
+          merge-multiple: true
       - name: Select newest Xcode
         run: |
           xcode="$(ls -d /Applications/Xcode*.app | grep -viE 'beta|_rc|release_candidate' | sort -V | tail -1)"
@@ -54,15 +60,13 @@ jobs:
           echo "::notice::$(xcodebuild -version | tr '\n' ' ')"
       - name: Test core
         working-directory: macos
-        run: swift test
+        run: |
+          # As in ci.yml: the suites with network round trips run after the rest, on their own.
+          network='HTTPFetcherTests|Report(Discovery|DiscoveryFailure|EndToEnd|Invite|Profile|StreamEndToEnd)Tests'
+          swift test --skip "$network" && swift test --filter "$network"
       - name: Test update relaunch
         timeout-minutes: 5
         run: python3 macos/scripts/test-update-relaunch.py
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: relay-*
-          path: linux/relay/dist
-          merge-multiple: true
       - name: Build app bundle
         run: macos/scripts/build-app.sh --version "${GITHUB_REF_NAME#v}"
       - uses: actions/upload-artifact@v7
@@ -77,6 +81,12 @@ jobs:
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
+      # The tests read the embedded relays as the published app does.
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: relay-*
+          path: linux/relay/dist
+          merge-multiple: true
       - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: 10.0.x
@@ -86,11 +96,6 @@ jobs:
         run: dotnet test windows/tests/AgentSpeed.Presentation.Tests -c Release
       - name: Test traffic helper
         run: dotnet test windows/tests/AgentSpeed.TrafficHelper.Tests -c Release
-      - uses: actions/download-artifact@v7
-        with:
-          pattern: relay-*
-          path: linux/relay/dist
-          merge-multiple: true
       - name: Publish
         shell: pwsh
         run: ./windows/scripts/publish.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')

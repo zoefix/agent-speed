@@ -137,10 +137,10 @@ jobs:
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
           TAG: ${{ steps.version.outputs.tag }}
         run: |
-          # release.yml creates the release; wait for it before uploading.
-          for attempt in $(seq 1 30); do
+          # release.yml creates the release once its macOS and Windows jobs pass (about half an hour); wait for it.
+          for attempt in $(seq 1 120); do
             gh release view "$TAG" >/dev/null 2>&1 && break
-            sleep 20
+            sleep 30
           done
           gh release upload "$TAG" dist/* --clobber
     permissions:
