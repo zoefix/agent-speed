@@ -8,7 +8,7 @@ enum BundledPriceAssets {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
   "version": 4,
-  "updated": "2026-11-05",
+  "updated": "2026-11-06",
   "currency": "USD",
   "unit": "perMillionTokens",
   "providers": {
@@ -3259,6 +3259,23 @@ enum BundledPriceAssets {
       "checked": "2026-10-22"
     },
     {
+      "id": "kimi-k2.8-preview",
+      "provider": "moonshot",
+      "name": "Kimi K2.8 Preview",
+      "status": "preview",
+      "prices": {
+        "input": 1,
+        "cachedInput": 0.25,
+        "output": 4
+      },
+      "aliases": [
+        "kimi-for-coding"
+      ],
+      "source": "https://www.tencentcloud.com/document/product/1300/78937",
+      "checked": "2026-11-06",
+      "note": "API-equivalent reference rates from Tencent Cloud TokenHub's international USD list, not a Kimi Code subscription or Extra Usage tariff. Cache-write rates are not listed; omitted fields use the standard input-price fallback. Kimi Code maps kimi-for-coding to K2.8 Preview since 2026-09-11; earlier uses of this changing alias may refer to other models, so historical alias costs are estimates. Model mapping: https://www.kimi.com/code/docs/en/kimi-code/models.html"
+    },
+    {
       "id": "kimi-k2.7-code",
       "provider": "moonshot",
       "name": "Kimi K2.7 Code",
@@ -4870,6 +4887,30 @@ enum BundledPriceAssets {
     {
       "model": "moonshot/k3.1-pro-highspeed",
       "expect": "kimi-k3.1-pro-highspeed"
+    },
+    {
+      "model": "kimi-k2.8-preview",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "moonshot/kimi-k2.8-preview",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "kimi/kimi-k2.8-preview",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "kimi-for-coding",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "moonshot/kimi-for-coding",
+      "expect": "kimi-k2.8-preview"
+    },
+    {
+      "model": "kimi-k2.8-preview-unknown",
+      "expect": "unknown"
     }
   ]
 }
