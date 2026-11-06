@@ -52,14 +52,16 @@ internal sealed class AgentProcessRules
         _claudeDesktopApp = platform.IsWindows
             ? platform.Prefixes("%LOCALAPPDATA%/AnthropicClaude/")
             : platform.Prefixes("/Applications/Claude.app/Contents/MacOS/Claude");
+        // Devin Desktop's own executable is an app process (Windows: an assumed path); its `devin acp` agent follows the row.
         _desktopApps = platform.IsWindows
-            ? platform.Prefixes("%LOCALAPPDATA%/AnthropicClaude/")
+            ? platform.Prefixes("%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe")
             : platform.Prefixes(
                 "/Applications/Claude.app/Contents/MacOS/Claude",
                 "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT",
                 "/Applications/Codex.app/Contents/MacOS/Codex",
                 "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
-                "/Applications/Antigravity.app/Contents/MacOS/Antigravity");
+                "/Applications/Antigravity.app/Contents/MacOS/Antigravity",
+                "/Applications/Devin.app/Contents/MacOS/Devin");
         _deepseekApp = platform.IsWindows ? [] : platform.Prefixes("/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness");
         _claudeVersions = platform.Prefixes("~/.local/share/claude/versions");
     }
@@ -267,6 +269,12 @@ internal sealed class AgentProcessRules
         if (name == "droid")
         {
             return SourceKind.Droid;
+        }
+
+        // The Devin CLI, also `devin acp` started by Devin Desktop or another client as its local agent.
+        if (name == "devin")
+        {
+            return SourceKind.Devin;
         }
 
         // WorkBuddy's embedded CLI, never its app, helper or daemon processes (the same executable without the CLI entry).

@@ -63,6 +63,9 @@ internal sealed class SpeedEngine
     private ReportCounters _reportCounters = ReportCounters.Zero;
     private long _reportCountersVersion = -1;
 
+    /// <summary>Responses held per remote host (REMOTE 5.6); a host above <see cref="RemoteResponseLimit"/> loses its oldest first.</summary>
+    private readonly Dictionary<string, int> _remoteResponseCounts = new(StringComparer.Ordinal);
+
     public SpeedEngine(long todayStartMs, PriceBook? pricing = null, TimeZoneInfo? zone = null)
     {
         _today = new TodayLedger(todayStartMs);
@@ -83,6 +86,13 @@ internal sealed class SpeedEngine
     /// <summary>Sources with measured output today.</summary>
     public SourceSet MeasuredSourcesToday => _today.MeasuredSources;
 
+    /// <summary>Computes the per-cell values of <see cref="EngineFrame.Cells"/> (set while remote hosts are configured).</summary>
+    public bool TracksCells { get; set; }
+
+    public int RemoteResponseLimit { get; set; } = Remote.RemoteLimits.Responses;
+
+    public IReadOnlyDictionary<string, AgentInfo> Agents => _agents;
+
     public void UpdateAgent(in AgentInfo agent) => _agents[agent.Id] = agent;
 
     public void RemoveAgent(string id) => _agents.Remove(id);
@@ -95,10 +105,20 @@ internal sealed class SpeedEngine
         }
     }
 
-    /// <summary>Adds or replaces a response (METRICS 4.3). Seeded responses never produce events.</summary>
+    /// <summary>
+    /// Adds or replaces a response (METRICS 4.3). Seeded responses never produce events. A key the engine already holds
+    /// for another host is ignored (REMOTE 7: the first arrival wins across hosts); returns false then.
+    /// </summary>
     /// <param name="liveNowMs">The live clock at the upsert; null (seeding, tests) never counts the response for reporting.</param>
-    public void Upsert(ParsedResponse response, bool isCompletion, bool seeded, long? liveNowMs = null)
+    public bool Upsert(ParsedResponse response, bool isCompletion, bool seeded, long? liveNowMs = null)
     {
+        var heldHost = _responses.TryGetValue(response.Key, out var current) ? current.Response.Host : _today.HostOf(response.Key);
+        if (heldHost is not null && !string.Equals(heldHost, response.Host, StringComparison.Ordinal))
+        {
+            return false;
+        }
+
+        var isNew = current is null;
         if (_pricing is not null)
         {
             response = response with { CostMicroUsd = Price(response) };
@@ -143,6 +163,95 @@ internal sealed class SpeedEngine
         {
             _last = response;
         }
+
+        if (isNew && response.Host != Remote.RemoteHost.LocalId)
+        {
+            CountRemote(response.Host);
+        }
+
+        return true;
+    }
+
+    /// <summary>A host that cannot be seen: its agents become idle without an in-flight start, so no estimate keeps running.</summary>
+    public void SetIdle(string host)
+    {
+        foreach (var (id, agent) in _agents.Where(a => a.Value.Host == host && (a.Value.Phase != AgentPhase.Idle || a.Value.InFlightStartMs is not null)).ToList())
+        {
+            _agents[id] = agent with { Phase = AgentPhase.Idle, InFlightStartMs = null };
+        }
+    }
+
+    /// <summary>A host removed from the settings: its agents and responses leave every live value.</summary>
+    public void RemoveHost(string host)
+    {
+        foreach (var id in _agents.Where(a => a.Value.Host == host).Select(a => a.Key).ToList())
+        {
+            _agents.Remove(id);
+        }
+
+        foreach (var key in _responses.Where(r => r.Value.Response.Host == host).Select(r => r.Key).ToList())
+        {
+            RemoveResponse(key);
+        }
+
+        foreach (var key in _today.KeysOf(host))
+        {
+            _today.Remove(key);
+        }
+
+        _completions.RemoveAll(r => r.Host == host);
+        if (_last?.Host == host)
+        {
+            _last = null;
+        }
+
+        _remoteResponseCounts.Remove(host);
+    }
+
+    private void RemoveResponse(string key)
+    {
+        if (_responses.Remove(key))
+        {
+            _today.Remove(key);
+        }
+    }
+
+    /// <summary>Counts a new response of a remote host; above the limit the host's oldest responses go, one percent at a time.</summary>
+    private void CountRemote(string host)
+    {
+        var count = _remoteResponseCounts.GetValueOrDefault(host) + 1;
+        _remoteResponseCounts[host] = count;
+        if (count <= RemoteResponseLimit)
+        {
+            return;
+        }
+
+        var excess = count - RemoteResponseLimit + Math.Max(1, RemoteResponseLimit / 100);
+        var oldest = _responses.Values.Select(s => s.Response).Where(r => r.Host == host)
+            .OrderBy(r => r.EndMs).ThenBy(r => r.Key, StringComparer.Ordinal).Take(excess).Select(r => r.Key).ToList();
+        foreach (var key in oldest)
+        {
+            RemoveResponse(key);
+        }
+
+        _remoteResponseCounts[host] = count - oldest.Count;
+    }
+
+    private void RecountRemote()
+    {
+        if (_remoteResponseCounts.Count == 0)
+        {
+            return;
+        }
+
+        _remoteResponseCounts.Clear();
+        foreach (var stored in _responses.Values)
+        {
+            if (stored.Response.Host != Remote.RemoteHost.LocalId)
+            {
+                _remoteResponseCounts[stored.Response.Host] = _remoteResponseCounts.GetValueOrDefault(stored.Response.Host) + 1;
+            }
+        }
     }
 
     public EngineFrame Compute(long nowMs, long todayStartMs, bool observeLive)
@@ -161,6 +270,7 @@ internal sealed class SpeedEngine
         var intelligence = new IntelligenceSums[SourceCount];
         var agentIntelligence = new Dictionary<string, IntelligenceSums>(StringComparer.Ordinal);
         var modelIntelligence = new Dictionary<ModelSumKey, IntelligenceSums>();
+        var cells = TracksCells ? new LiveCells() : null;
 
         // Every contribution counts for its source, its own agent and its model (METRICS 6.9, Live thinking).
         void AddIntelligence(SourceKind source, string agentId, double weight, double reasoning, string? model, string? provider)
@@ -211,6 +321,16 @@ internal sealed class SpeedEngine
                 }
 
                 AddIntelligence(response.Source, response.AgentId, output, ReasoningOf(response.Tokens) * fraction, response.Model, response.Provider);
+                if (cells is not null)
+                {
+                    var cell = new HostSource(response.Host, response.Source);
+                    cells.Add(cell, output, response.Tokens.Total * fraction, estimated: false);
+                    cells.AddIntelligence(cell, output, ReasoningOf(response.Tokens) * fraction);
+                    if (response.CostMicroUsd is { } cellCost)
+                    {
+                        cells.AddCost(cell, new LiveCost(cellCost * fraction, output));
+                    }
+                }
             }
         }
 
@@ -222,7 +342,7 @@ internal sealed class SpeedEngine
         var estimated = new Accumulator(SourceCount);
         var estimates = new List<(long StartMs, long EndMs, SpeedPair Speed)>();
 
-        void AddEstimate(SourceKind source, string agentId, SpeedPair reference, long overlap, string? model, string? provider)
+        void AddEstimate(SourceKind source, string host, string agentId, SpeedPair reference, long overlap, string? model, string? provider)
         {
             var output = reference.Output * overlap / 1000.0;
             estimated.Add(source, agentId, output, reference.Total * overlap / 1000.0);
@@ -232,6 +352,16 @@ internal sealed class SpeedEngine
             }
 
             AddIntelligence(source, agentId, output, output * reference.ThinkingShare, model, provider);
+            if (cells is not null)
+            {
+                var cell = new HostSource(host, source);
+                cells.Add(cell, output, reference.Total * overlap / 1000.0, estimated: true);
+                cells.AddIntelligence(cell, output, output * reference.ThinkingShare);
+                if (reference.CostRate is { } cellRate)
+                {
+                    cells.AddCost(cell, new LiveCost(cellRate * overlap / 1000.0, output));
+                }
+            }
         }
 
         // Unfinalized usage: the time is real, the token count is not, so it is estimated (METRICS 6.3).
@@ -249,7 +379,7 @@ internal sealed class SpeedEngine
 
             estimates.Add((stored.Interval.StartMs, stored.Interval.EndMs, reference));
             var overlap = SpeedMath.Overlap(windowStart, nowMs, stored.Interval.StartMs, stored.Interval.EndMs);
-            AddEstimate(response.Source, response.AgentId, reference, overlap, response.Model, response.Provider);
+            AddEstimate(response.Source, response.Host, response.AgentId, reference, overlap, response.Model, response.Provider);
         }
 
         foreach (var agent in _agents.Values)
@@ -270,7 +400,7 @@ internal sealed class SpeedEngine
             var estimateStart = latestEnd.TryGetValue(agent.Id, out var ownEnd) ? Math.Max(start, ownEnd) : start;
             estimates.Add((estimateStart, nowMs, estimate));
             var overlap = SpeedMath.Overlap(windowStart, nowMs, estimateStart, nowMs);
-            AddEstimate(agent.Source, agent.Id, estimate, overlap, agent.Model, _agentProviders.GetValueOrDefault(agent.Id));
+            AddEstimate(agent.Source, agent.Host, agent.Id, estimate, overlap, agent.Model, _agentProviders.GetValueOrDefault(agent.Id));
         }
 
         var seconds = WindowMs / 1000.0;
@@ -297,7 +427,7 @@ internal sealed class SpeedEngine
 
         liveCost = PerSecond(liveCost, seconds);
         var agents = BuildAgents(nowMs, measured, estimated, agentIntelligence, recent, valid, seconds, out var generating, out var tools);
-        AddPerfScores(intelligence, agents);
+        AddPerfScores(intelligence, agents, cells);
         var history = BuildHistory(nowMs, valid, estimates);
         var events = DrainCompletions(nowMs);
         var peak = UpdatePeak(nowMs, live, observeLive, events);
@@ -343,6 +473,7 @@ internal sealed class SpeedEngine
             SourceIntelligence = intelligence,
             ModelIntelligence = modelIntelligence,
             Report = ReportFacts(nowMs, agents, intelligence, modelIntelligence),
+            Cells = cells?.Cells(seconds, _today.Cells) ?? EmptyCells,
         };
     }
 
@@ -355,14 +486,20 @@ internal sealed class SpeedEngine
     /// Each source's performance value (METRICS 6.9 <i>Sets and groups</i>): the highest value among its agents in the agents
     /// list (6.7), which sets of sources merge by the same rule.
     /// </summary>
-    private static void AddPerfScores(IntelligenceSums[] sources, List<AgentFrame> agents)
+    private static void AddPerfScores(IntelligenceSums[] sources, List<AgentFrame> agents, LiveCells? cells)
     {
         foreach (var agent in agents)
         {
             ref var sums = ref sources[(int)agent.Info.Source];
             sums = sums with { Score = PerfSetValue.Merge(sums.Score, agent.Intelligence.Score) };
+            if (cells is not null && agent.Intelligence.Score.Form != PerfForm.None)
+            {
+                cells.AddScore(new HostSource(agent.Info.Host, agent.Info.Source), agent.Intelligence.Score);
+            }
         }
     }
+
+    private static readonly IReadOnlyDictionary<HostSource, EngineCell> EmptyCells = new Dictionary<HostSource, EngineCell>();
 
     /// <summary>The reasoning part of a response's output (METRICS 6.9): never more than the output.</summary>
     private static long ReasoningOf(in TokenCounts tokens) => Math.Min(tokens.Reasoning, tokens.Output);
@@ -485,6 +622,9 @@ internal sealed class SpeedEngine
     /// </summary>
     public double MeasuredPeakOutput(SourceSet sources) => _today.MeasuredPeakOutput(sources);
 
+    /// <summary>The same over the (host, source) cells of <paramref name="key"/> (DESIGN 13).</summary>
+    public double MeasuredPeakOutput(SubsetKey key) => _today.MeasuredPeakOutput(key);
+
     private long? Price(ParsedResponse response) =>
         _dayLabeler.Label(response.EndMs) is { } day ? _pricing!.Cost(response, day) : null;
 
@@ -580,6 +720,8 @@ internal sealed class SpeedEngine
         {
             _responses.Remove(key);
         }
+
+        RecountRemote();
 
         _reportLedger.Prune(cutoffMs);
         foreach (var agentId in _agentProviders.Keys.Where(id => !_agents.ContainsKey(id)).ToArray())
@@ -850,7 +992,7 @@ internal sealed class SpeedEngine
             response.Tokens.Total,
             duration,
             speed,
-            UnixTime.FromMs(response.EndMs));
+            UnixTime.FromMs(response.EndMs)) { Host = response.Host };
     }
 
     /// <param name="CostRate">micro-USD per second of the same reference responses (METRICS 9.5); null when none has a known cost.</param>

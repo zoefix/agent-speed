@@ -97,7 +97,7 @@ internal static class OrbFrameHarness
         {
             foreach (var style in styles)
             {
-                var sizes = new[] { style == OrbStyle.Minimal ? 64.0 : 96, 148, 240 };
+                var sizes = new[] { OrbStyles.MinSize, 148, 240 };
                 var rows = new List<List<BitmapSource>>();
                 var cpu = 0.0;
                 var frames = 0;

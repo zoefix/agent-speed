@@ -17,13 +17,15 @@ using AgentSpeed.Presentation.Orb;
 namespace AgentSpeed.Boards;
 
 /// <summary>The window side of a board's settings (DESIGN 2c, Interaction and window).</summary>
-internal readonly record struct BoardWindowOptions(bool AlwaysOnTop = true, bool ClickThrough = false, double Opacity = 1, bool ReduceMotion = false);
+internal readonly record struct BoardWindowOptions(bool AlwaysOnTop = true, bool ClickThrough = false, double Opacity = 1, bool ReduceMotion = false,
+    bool FadeWhenIdle = false);
 
 /// <summary>
 /// One floating board (DESIGN 2c, Interaction and window): a composition window like the GPU orbs' (no redirection bitmap,
 /// never activated, a tool window), the board's square and a 40 pt margin for its bloom. Clicks pass through the margin and,
 /// with click-through on, everywhere. Drag anywhere on the square; a release within 24 pt of a work-area edge snaps to the
-/// 12 pt margin. Positions are physical pixels of the square's center.
+/// 12 pt margin. With fade when idle on, the orbs' rule (<see cref="IdleFade"/>) dims the square and its bloom together.
+/// Positions are physical pixels of the square's center.
 /// </summary>
 internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 {
@@ -31,12 +33,13 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     private const double DragSettle = 0.12;
 
     private readonly Func<double> _clock;
-    private readonly OrbClock _orbClock;
     private readonly OrbHostWindow _host;
     private readonly BoardSurface _surface;
     private readonly DispatcherTimer _passThroughPoll;
     private readonly DispatcherTimer _housekeeping;
-    private readonly MotionClient _mover;
+    private readonly FrameClient _mover;
+    private readonly FrameClient _fader;
+    private readonly IdleFade _idleFade = new();
     private readonly BoardAutomation _automation;
     private BoardWindowOptions _options;
     private bool _passThrough;
@@ -56,16 +59,17 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     private bool _moving;
     private double _lastFrame;
     private string? _hovered;
+    private bool _pointerOver;
     private bool _closed;
 
     public GpuBoardWindow(string boardId, GpuDevice device, OrbClock orbClock, BoardStyle style, BoardSize size, IBoardLayerPainter painter, uint seed = 1)
     {
         BoardId = boardId;
-        _orbClock = orbClock;
         _clock = () => orbClock.Now;
         _host = new OrbHostWindow("Agent Speed Board", this, topmost: true);
         _surface = new BoardSurface(device, orbClock, style, size, painter, seed) { Hwnd = _host.Handle };
-        _mover = new MotionClient(this);
+        _mover = new FrameClient(orbClock, FrameClass.Fps60, preferred: true, _ => OnMotionFrame());
+        _fader = new FrameClient(orbClock, FrameClass.Fps30, preferred: false, OnFadeFrame);
         _automation = new BoardAutomation(() => _host.Handle, RowBounds);
         _passThroughPoll = new DispatcherTimer(TimeSpan.FromMilliseconds(40), DispatcherPriority.Input, (_, _) => PollPassThrough(),
             Dispatcher.CurrentDispatcher);
@@ -87,6 +91,9 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     public bool IsDragging => _dragging;
 
     public bool IsVisible => !_closed && _host.IsVisible;
+
+    /// <summary>Faded when idle (DESIGN 2c): the board is at 45 % of its opacity.</summary>
+    public bool IsFaded => _idleFade.Faded;
 
     /// <summary>The drag ended (after snapping): the owner saves the position for the arrangement.</summary>
     public event EventHandler<PointD>? DragReleased;
@@ -148,10 +155,12 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         var (x, y) = (cursor.X - rect.Left, cursor.Y - rect.Top);
         if (cursor.X < rect.Left || cursor.X >= rect.Right || cursor.Y < rect.Top || cursor.Y >= rect.Bottom || !IsOnDisc(x, y))
         {
+            SetPointerOver(false);
             SetHovered(null, null);
             return;
         }
 
+        SetPointerOver(true);
         Hover(x, y, atRest: true);
     }
 
@@ -184,7 +193,12 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         var resized = size != _surface.Scene.Size;
         _options = options;
         _surface.Configure(style, size, policy with { ReduceMotion = policy.ReduceMotion || options.ReduceMotion });
-        _surface.Opacity = Math.Clamp(options.Opacity, 0, 1);
+        if (!options.FadeWhenIdle)
+        {
+            _idleFade.Restore();
+        }
+
+        ApplyOpacity(_clock());
         _host.Topmost = options.AlwaysOnTop;
         SetClickThrough(options.ClickThrough);
         if (resized && _hasCenter)
@@ -194,6 +208,15 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     }
 
     public void Apply(BoardTick tick) => _surface.Apply(tick);
+
+    /// <summary>The board's own idle state drives its fade when idle (its tier idle for 60 s); activity restores it at once.</summary>
+    public void NoteActivity(bool active)
+    {
+        if (_idleFade.NoteActivity(active, _clock()))
+        {
+            ApplyOpacity(_clock());
+        }
+    }
 
     public void MoveTo(PointD center)
     {
@@ -236,6 +259,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         _housekeeping.Stop();
         _passThroughPoll.Stop();
         _mover.Active = false;
+        _fader.Active = false;
         _surface.Visible = false;
         _surface.Dispose();
         _host.Dispose();
@@ -257,6 +281,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
 
         if (!IsOnDisc(x, y))
         {
+            SetPointerOver(false);
             SetHovered(null, null);
             if (!_options.ClickThrough)
             {
@@ -266,6 +291,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
             return;
         }
 
+        SetPointerOver(true);
         Hover(x, y);
     }
 
@@ -273,6 +299,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     {
         if (!_dragging)
         {
+            SetPointerOver(false);
             SetHovered(null, null);
         }
     }
@@ -366,6 +393,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         StopMove();
         _dragging = true;
         _dragMoved = false;
+        SetPointerOver(true);
         _dragStartCursor = cursor;
         _dragStartCenter = _center;
         _dragTarget = _center;
@@ -569,6 +597,7 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
         _host.Transparent = enabled;
         if (enabled)
         {
+            SetPointerOver(false);
             SetHovered(null, null);
         }
     }
@@ -576,10 +605,42 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
     private System.Windows.Rect RowBounds(string key) =>
         RowRect(key) is { } r ? new System.Windows.Rect(r.Left, r.Top, r.Right - r.Left, r.Bottom - r.Top) : System.Windows.Rect.Empty;
 
-    private void Housekeeping() => _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
+    private void Housekeeping()
+    {
+        _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
+        var now = _clock();
+        if (_idleFade.TryFade(_options.FadeWhenIdle, engaged: _pointerOver || _dragging, _options.ReduceMotion, now))
+        {
+            ApplyOpacity(now);
+        }
+    }
 
-    /// <summary>Drives drag-follow and the snap on the shared frame clock (no WPF render loop).</summary>
-    private sealed class MotionClient(GpuBoardWindow owner) : IOrbFrameClient
+    // ---- Fade when idle ----
+
+    // The pointer on the square (hover or a drag) restores a faded board at once and keeps it from fading.
+    private void SetPointerOver(bool over)
+    {
+        _pointerOver = over;
+        if (over && _idleFade.Restore())
+        {
+            ApplyOpacity(_clock());
+        }
+    }
+
+    // The board's opacity × the idle fade; the 0.6 s fade draws at 30 fps on the shared clock, then nothing.
+    private void ApplyOpacity(double now)
+    {
+        _surface.Opacity = Math.Clamp(_options.Opacity, 0, 1) * _idleFade.Value(now);
+        _fader.Active = _idleFade.IsFading(now);
+    }
+
+    private void OnFadeFrame(double now) => ApplyOpacity(now);
+
+    /// <summary>
+    /// Window motion on the shared frame clock (no WPF render loop): the drag-follow and the snap at 60 fps, the idle fade at
+    /// 30 fps; registered only while it runs.
+    /// </summary>
+    private sealed class FrameClient(OrbClock clock, FrameClass rate, bool preferred, Action<double> render) : IOrbFrameClient
     {
         private bool _active;
 
@@ -596,25 +657,25 @@ internal sealed class GpuBoardWindow : IOrbHostInput, IDisposable
                 _active = value;
                 if (value)
                 {
-                    owner._orbClock.Register(this);
+                    clock.Register(this);
                 }
                 else
                 {
-                    owner._orbClock.Unregister(this);
+                    clock.Unregister(this);
                 }
             }
         }
 
         public bool IsActive => _active;
 
-        public bool IsPreferred => true;
+        public bool IsPreferred => preferred;
 
-        public FrameClass Demand => _active ? FrameClass.Fps60 : FrameClass.None;
+        public FrameClass Demand => _active ? rate : FrameClass.None;
 
         public double? NextWake => null;
 
-        public FrameClass Cap => FrameClass.Fps60;
+        public FrameClass Cap => rate;
 
-        public void Render(double now) => owner.OnMotionFrame();
+        public void Render(double now) => render(now);
     }
 }

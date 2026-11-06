@@ -66,6 +66,9 @@ internal sealed record EngineFrame(
 
     /// <summary>Live reporting's view of this instant (METRICS 11.2, 11.4, 11.10).</summary>
     public Reporting.ReportLiveFacts Report { get; init; } = Reporting.ReportLiveFacts.Empty;
+
+    /// <summary>Live values and today's totals per (host, source) cell; empty unless the engine tracks cells (DESIGN 13).</summary>
+    public IReadOnlyDictionary<HostSource, EngineCell> Cells { get; init; } = new Dictionary<HostSource, EngineCell>();
 }
 
 /// <summary>A raw model (empty when unknown) and its provider, which together resolve to a report id (METRICS 11.3).</summary>

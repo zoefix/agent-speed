@@ -5,7 +5,9 @@
 #include <string>
 #include <vector>
 
+#include "agentspeed/engine.hpp"
 #include "agentspeed/model.hpp"
+#include "agentspeed/remote_status.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/perf.hpp"
 #include "agentspeed/traffic_service.hpp"
@@ -42,11 +44,14 @@ struct AgentRow {
     // METRICS 6.9 Live thinking: this agent's reasoning tokens per second and share.
     double liveThinking = 0;
     double thinkingShare = 0;
+    // `local`, or the remote host the agent runs on (REMOTE 2.2).
+    std::string host = "local";
 };
 
 // 性能 and 思考 of one set of sources (METRICS 6.9 Sets and groups, Live thinking): an orb, the tray, a board.
 struct ScoreSet {
     std::optional<std::vector<SourceKind>> sources;  // nullopt: every enabled source
+    std::optional<std::vector<std::string>> hosts;   // nullopt: every host (DESIGN 13)
     perf::Highest value;
     std::int64_t scored = 0;   // N: the set's agents with a score in the value's form
     bool provisional = false;  // the supplying agent's score is provisional (3 ≤ n < 10)
@@ -67,6 +72,7 @@ struct Completion {
     SourceKind source = SourceKind::Codex;
     std::int64_t output = 0;
     std::optional<double> speed;
+    std::string host = "local";
 };
 
 struct SourceRow {
@@ -88,6 +94,46 @@ struct SourceRow {
     double liveCostKnownShare = 1;
     std::int64_t todayCostMicroUsd = 0;
     std::int64_t unpricedRequests = 0;
+};
+
+// DESIGN 13: one (host, source) cell, the per-source values restricted to one host. Per source the cells add up to the
+// source row.
+struct HostSourceRow {
+    std::string host;
+    SourceKind source = SourceKind::Codex;
+    // Detected on its host: this computer's root, or the relay's `status` while the host is connected.
+    bool available = false;
+    // Its host reads the source's data in a format it cannot read.
+    bool unsupported = false;
+    int sessions = 0;
+    double liveOutput = 0, liveTotal = 0;
+    double liveEstimated = 0;  // tok/s: the estimated part of liveOutput (METRICS 6.3)
+    double liveCost = 0, liveCostKnownShare = 1;
+    engine::ThinkingWindow thinking;  // METRICS 6.9: the window's sums
+    std::int64_t todayOutput = 0, todayInput = 0, todayRequests = 0, todayCostMicroUsd = 0, unpricedRequests = 0;
+    // Models of today's responses without a known price, most unpriced requests first (the unknown model left out).
+    std::vector<std::string> unpricedModels;
+    // The configured values the host reports for the source.
+    ExecutionModes configuredModes;
+};
+
+// DESIGN 13 Dashboard → Hosts: this computer or a remote host, with its cells' sums.
+struct HostRow {
+    std::string id;    // `local` or the remote host's id
+    std::string name;  // the display name; `local` for this computer
+    // The connection status; nullopt for this computer and for a host before its first status.
+    std::optional<remote::HostStatus> remote;
+    double liveOutput = 0, liveTotal = 0, liveEstimated = 0;
+    double liveCost = 0, liveCostKnownShare = 1;
+    std::int64_t todayOutput = 0, todayInput = 0, todayRequests = 0, todayCostMicroUsd = 0, unpricedRequests = 0;
+    // Today's main sessions: the relay's `status` for a remote host while connected.
+    int sessions = 0;
+    // This computer, or a remote host whose relay is connected (after `ready`).
+    bool connected = false;
+
+    bool local() const { return id == "local"; }
+    // Listed on the dashboard: connected, or it produced output today.
+    bool listed() const { return connected || todayOutput > 0 || liveOutput > 0; }
 };
 
 struct Warnings {
@@ -118,6 +164,10 @@ struct Snapshot {
     int tools = 0;
     std::vector<AgentRow> agents;
     std::vector<SourceRow> sources;
+    // DESIGN 13, only while remote hosts are configured: this computer first, then every configured host; and every
+    // (host, source) cell that is available or has data.
+    std::vector<HostRow> hosts;
+    std::vector<HostSourceRow> hostSources;
     // METRICS 6.8 peakToday_A of each requested set (Monitor::setPeakSets), with its live value.
     std::vector<double> peakSets;
     // One per requested set (Monitor::setScoreSets), then the board groups of the agents list.

@@ -112,8 +112,25 @@ struct HistoryContent: Equatable, Sendable {
     /// The range has token usage, and agent traffic, of the selection (DESIGN 10, Traffic without token usage).
     var hasTokenUsage = true
     var hasAgentTraffic = false
+    /// The selected host (every host when nil) and the hosts the picker offers, empty while no remote host has
+    /// history (DESIGN 13).
+    var host: String?
+    var hosts: [HistoryHost] = []
 
     var isEmpty: Bool { days.isEmpty }
+
+    /// The name of the selected host (`remote.local` for this Mac); nil for every host.
+    @MainActor
+    func hostName(_ l10n: Localizer) -> String? {
+        guard let host else { return nil }
+        if host == RemoteHost.localId { return l10n("remote.local") }
+        return hosts.first { $0.id == host }?.name ?? host
+    }
+
+    /// The CSV's trailing `host` value, only while host history exists (DESIGN 13).
+    var csvHost: String? {
+        hosts.isEmpty ? nil : HistoryHosts.csvValue(host, hosts: hosts)
+    }
 
     /// Only traffic to show: a chart of output or cost would be empty (DESIGN 10, Opening on traffic).
     var showsOnlyTraffic: Bool { !hasTokenUsage && hasAgentTraffic }
@@ -135,10 +152,15 @@ struct HistoryContent: Equatable, Sendable {
         DayRange(dataBounds.map { min($0.start, today) } ?? today.adding(days: -29), today)
     }
 
+    /// `host` filters the rows to one host (every host when nil), combined with `source`; `hostNames` names the
+    /// remote hosts (`HistoryStore.hostNames` and the settings). This Mac alone is every host while no remote host has
+    /// history.
     @MainActor
     static func build(
-        usage: [DailyUsage],
+        usage all: [DailyUsage],
         source: SourceKind?,
+        host selectedHost: String? = nil,
+        hostNames: [String: String] = [:],
         rangeKind: HistoryRangeKind,
         customRange: DayRange?,
         sort: HistorySort,
@@ -150,6 +172,12 @@ struct HistoryContent: Equatable, Sendable {
         prices: PriceTable = PriceBook.bundled,
         now: Date = Date()
     ) -> HistoryContent {
+        let hosts = HistoryHosts.withHistory(all, names: hostNames, selected: selectedHost)
+        let host = hosts.isEmpty ? nil : selectedHost
+        let usage = HistoryAggregator.records(all, host: host)
+        // Agent traffic is this computer's own (REMOTE 7): a remote host has none.
+        let remoteHost = host.map { $0 != RemoteHost.localId } ?? false
+        let traffic = remoteHost ? HistoryTraffic.none : traffic
         // Recorded agent traffic is history too (DESIGN 10): its days count for the bounds, the rows and the picker.
         let trafficDays = traffic.agentDays(source: source)
         let bounds = union(HistoryAggregator.bounds(usage, source: source), trafficDays.first.map { DayRange($0, trafficDays[trafficDays.count - 1]) })
@@ -158,7 +186,7 @@ struct HistoryContent: Equatable, Sendable {
         let sparkRange = HistoryRanges.sparkRange(range)
         let window = DayRange(min(previousRange.start, sparkRange.start), range.end)
         let excluded = costOptions.excluded(for: source)
-        let loaded = HistoryAggregator.daily(usage, source: source, range: window, excluded: excluded)
+        let loaded = HistoryAggregator.daily(usage, source: source, host: host, range: window, excluded: excluded)
         let calendar = HistoryDates.calendar
         let tokenDays = loaded.filter { range.contains($0.day) }
         let tokenKeys = Set(tokenDays.map(\.day))
@@ -171,7 +199,7 @@ struct HistoryContent: Equatable, Sendable {
         let previous = loaded.filter { previousRange.contains($0.day) }
         let sparkDays = loaded.filter { sparkRange.contains($0.day) }
 
-        let withHistory = Set(HistoryAggregator.sourcesWithHistory(usage)).union(traffic.sourcesWithTraffic)
+        let withHistory = Set(HistoryAggregator.sourcesWithHistory(all)).union(traffic.sourcesWithTraffic)
         var pickerSources = SourceKind.allCases.filter(withHistory.contains)
         if let source, !pickerSources.contains(source) {
             pickerSources = SourceKind.allCases.filter { pickerSources.contains($0) || $0 == source }
@@ -205,7 +233,9 @@ struct HistoryContent: Equatable, Sendable {
                                                  table: prices),
             trafficSince: traffic.since.flatMap { $0 > range.start && $0 <= range.end ? $0 : nil },
             hasTokenUsage: !tokenDays.isEmpty,
-            hasAgentTraffic: trafficDays.contains(where: range.contains)
+            hasAgentTraffic: trafficDays.contains(where: range.contains),
+            host: host,
+            hosts: hosts
         )
     }
 
@@ -223,7 +253,7 @@ struct HistoryContent: Equatable, Sendable {
             today: today, source: source, rangeKind: rangeKind, range: range, dataBounds: dataBounds,
             pickerSources: pickerSources, days: days, cards: cards, chart: chart, breakdown: breakdown, columns: columns, sort: sort,
             rows: HistoryTable.sort(days, by: sort), money: money, costOptions: costOptions, unpriced: unpriced,
-            trafficSince: trafficSince, hasTokenUsage: hasTokenUsage, hasAgentTraffic: hasAgentTraffic
+            trafficSince: trafficSince, hasTokenUsage: hasTokenUsage, hasAgentTraffic: hasAgentTraffic, host: host, hosts: hosts
         )
     }
 

@@ -18,7 +18,7 @@ enum BoardMenus {
         for (kind, source) in statuses where OrbSubset.isUnavailable(source) {
             status[kind] = source.enabled ? "source.notFound" : "source.disabled"
         }
-        for item in BoardMenuModel.context(board, document: boards.document, status: status) {
+        for item in BoardMenuModel.context(board, document: boards.document, status: status, hosts: model.hostChoices) {
             menu.addItem(menuItem(item, board: board, model: model))
         }
         return menu
@@ -62,6 +62,10 @@ enum BoardMenus {
                 items.append(row)
             }
             return submenu(l10n("orbs.sources"), items)
+        case .hosts(let all, let entries):
+            return HostMenus.item(model: model, all: all, entries: entries,
+                                  setAll: { [weak model] in model?.boards.setHosts(.all, of: id) },
+                                  toggle: { [weak model] host in model?.boards.toggleHost(host, of: id) })
         case .readouts(let readouts):
             // Each switch is independent and saves at once (DESIGN 2c Live metrics, *Switches*).
             return submenu(l10n("boards.readouts"), BoardReadout.allCases.map { readout in

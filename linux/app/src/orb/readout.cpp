@@ -121,9 +121,10 @@ double readoutShift(const Frame& f, const ReadoutLayout& layout, const LinePlace
     return wanted * smooth(lines.intel ? c.intel.opacity : c.net.opacity);
 }
 
-void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const MeasureText& measure, const ReadoutLayout& layout,
+void buildReadout(Scene& scene, const Frame& f, const ReadoutContent& c, const MeasureText& measure, const ReadoutLayout& full,
                   const LinePlacement& placement, const ReadoutPass& pass) {
     const double s = f.s;
+    const ReadoutLayout layout = full.at(s);
     const double cx = f.center.x(), dotsY = f.center.y();
     const bool idle = f.idle();
     const bool valueOnly = s < 64;

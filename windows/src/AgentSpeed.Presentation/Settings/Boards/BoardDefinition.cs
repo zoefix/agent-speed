@@ -28,6 +28,9 @@ public sealed record BoardDefinition
 
     public bool ClickThrough { get; init; }
 
+    /// <summary>Fade when idle (DESIGN 2, 2c): off for a new board and for one saved before the switch existed.</summary>
+    public bool FadeWhenIdle { get; init; }
+
     /// <summary>macOS only; kept for the round trip.</summary>
     public bool AllSpaces { get; init; } = true;
 
@@ -38,6 +41,12 @@ public sealed record BoardDefinition
 
     /// <summary>The engine's source set: null tracks every enabled source.</summary>
     public SourceSet? TrackedSources => Sources.Set;
+
+    /// <summary>The hosts it tracks (DESIGN 13); absent in the document = all.</summary>
+    public OrbHosts Hosts { get; init; } = OrbHosts.All;
+
+    /// <summary>The engine's host set: null tracks every host.</summary>
+    public IReadOnlySet<string>? TrackedHosts => Hosts.HostSet;
 
     /// <summary>The square's side in DIPs.</summary>
     public double Side => BoardSizes.Side(Size);

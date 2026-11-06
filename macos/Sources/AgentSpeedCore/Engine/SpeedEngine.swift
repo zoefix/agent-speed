@@ -46,6 +46,11 @@ struct SpeedEngine: Sendable {
     /// The stored performance history and the baselines computed from it for one day (METRICS 6.11 *Baseline*).
     private var perfHistory: [PerfDayRecord] = []
     private var perfBaselines = PerfBaselineCache()
+    /// Computes the per-cell values of `EngineOutput.cells` (set while remote hosts are configured).
+    var tracksCells = false
+    /// Responses held per remote host (REMOTE 5.6); a host above `remoteResponseLimit` loses its oldest first.
+    private var remoteResponseCounts: [String: Int] = [:]
+    var remoteResponseLimit = RemoteLimits.responses
 
     init(pricing: PriceBook? = nil) {
         self.pricing = pricing
@@ -82,6 +87,8 @@ struct SpeedEngine: Sendable {
         nowMs: Int64? = nil,
         currentEffort: @autoclosure () -> ExecutionModeAttribution? = nil
     ) -> SpeedEvent? {
+        // The first arrival of a key wins across hosts (REMOTE 7, METRICS 3.4).
+        if let held = responses[record.key]?.host, held != record.host { return nil }
         var record = record
         if let pricing {
             record.costMicroUsd = DayLabeler.hasDay(record.endMs)
@@ -90,6 +97,7 @@ struct SpeedEngine: Sendable {
         let old = responses.updateValue(record, forKey: record.key)
         projects[record.key] = project
         ledger?.replace(old, with: record)
+        if old == nil, record.host != RemoteHost.localId { countRemote(record.host) }
         if let provider = record.provider { agentProviders[record.agentId] = provider }
         let isLiveCompletion = isCompletion && emitsEvents && nowMs.map { record.endMs >= $0 - Self.completionEventMaxAgeMs } ?? false
         if isLiveCompletion {
@@ -113,8 +121,13 @@ struct SpeedEngine: Sendable {
 
     // MARK: - Computation
 
-    /// `subsets` are the source sets whose measured peak today is reported in `subsetPeaks` (METRICS 6.8).
-    mutating func advance(nowMs: Int64, todayStartMs: Int64, emitsEvents: Bool, subsets: Set<SourceSet> = []) -> EngineOutput {
+    /// `subsets` on every host.
+    mutating func advance(nowMs: Int64, todayStartMs: Int64, emitsEvents: Bool, subsets: Set<SourceSet>) -> EngineOutput {
+        advance(nowMs: nowMs, todayStartMs: todayStartMs, emitsEvents: emitsEvents, subsets: Set(subsets.map { SubsetKey($0) }))
+    }
+
+    /// `subsets` are the subsets whose measured peak today is reported in `subsetPeaks` (METRICS 6.8).
+    mutating func advance(nowMs: Int64, todayStartMs: Int64, emitsEvents: Bool, subsets: Set<SubsetKey> = []) -> EngineOutput {
         rollOverIfNeeded(todayStartMs: todayStartMs)
         prune(nowMs: nowMs, todayStartMs: todayStartMs)
         repriceIfNeeded()
@@ -125,7 +138,7 @@ struct SpeedEngine: Sendable {
         let references = SpeedReferences(timed: measured, nowMs: nowMs)
         let window = LiveWindow(
             nowMs: nowMs, measured: measured, unmeasured: unmeasured, agents: agents,
-            latestEnds: latestEndsByAgent(), references: references, providers: agentProviders
+            latestEnds: latestEndsByAgent(), references: references, providers: agentProviders, cells: tracksCells
         )
         let history = Self.history(nowMs: nowMs, measured: measured, estimates: window.estimates)
 
@@ -158,9 +171,9 @@ struct SpeedEngine: Sendable {
         var report = reportFacts(nowMs: nowMs)
         report.perf = perfFacts(listing.agents, window: window, all: listing.intelligence)
 
-        var subsetPeaks = [SourceSet: Double](minimumCapacity: subsets.count)
-        for set in subsets {
-            subsetPeaks[set] = ledger?.measuredPeakOutput(for: set) ?? 0
+        var subsetPeaks = [SubsetKey: Double](minimumCapacity: subsets.count)
+        for key in subsets {
+            subsetPeaks[key] = ledger?.measuredPeakOutput(for: key) ?? 0
         }
 
         return EngineOutput(
@@ -189,11 +202,23 @@ struct SpeedEngine: Sendable {
             peakToday: peak,
             peakTodayAtMs: peak.output > 0 ? peakAt : nil,
             subsetPeaks: subsetPeaks,
+            cells: tracksCells ? cells(window: listing.cellIntelligence) : [:],
             todayStartMs: todayStartMs,
             lastResponse: lastResponse,
             events: events,
             report: report
         )
+    }
+
+    /// The window's cells with the listed agents' scores merged in, and today's part from the ledger.
+    private func cells(window: [HostSource: EngineCell]) -> [HostSource: EngineCell] {
+        var cells = window
+        for (cell, day) in ledger?.cells ?? [:] {
+            cells[cell, default: EngineCell()].today = day.today
+            cells[cell, default: EngineCell()].todayCost = day.cost
+            cells[cell, default: EngineCell()].unpriced = day.unpriced
+        }
+        return cells
     }
 
     // MARK: - Live reporting
@@ -307,6 +332,49 @@ struct SpeedEngine: Sendable {
         perfBaselines = PerfBaselineCache()
     }
 
+    // MARK: - Hosts (REMOTE 7)
+
+    /// A host that cannot be seen: its agents become idle without an in-flight start, so no estimate keeps running.
+    mutating func setIdle(host: String) {
+        for (id, agent) in agents where agent.host == host && (agent.phase != .idle || agent.inFlightStartMs != nil) {
+            agents[id]?.phase = .idle
+            agents[id]?.inFlightStartMs = nil
+        }
+    }
+
+    /// A host removed from the settings: its agents and responses leave every live value.
+    mutating func removeHost(_ host: String) {
+        for (id, agent) in agents where agent.host == host { agents[id] = nil }
+        for (key, record) in responses where record.host == host { removeResponse(key) }
+        remoteResponseCounts[host] = nil
+    }
+
+    private mutating func removeResponse(_ key: String) {
+        guard let old = responses.removeValue(forKey: key) else { return }
+        projects[key] = nil
+        ledger?.replace(old, with: nil)
+    }
+
+    /// Counts a new response of a remote host; above the limit the host's oldest responses go, one percent at a time.
+    private mutating func countRemote(_ host: String) {
+        let count = (remoteResponseCounts[host] ?? 0) + 1
+        remoteResponseCounts[host] = count
+        guard count > remoteResponseLimit else { return }
+        let excess = count - remoteResponseLimit + max(1, remoteResponseLimit / 100)
+        let oldest = responses.values.filter { $0.host == host }
+            .sorted { ($0.endMs, $0.key) < ($1.endMs, $1.key) }
+            .prefix(excess)
+        for record in oldest { removeResponse(record.key) }
+        remoteResponseCounts[host] = count - oldest.count
+    }
+
+    private mutating func recountRemote() {
+        guard !remoteResponseCounts.isEmpty else { return }
+        var counts: [String: Int] = [:]
+        for record in responses.values where record.host != RemoteHost.localId { counts[record.host, default: 0] += 1 }
+        remoteResponseCounts = counts
+    }
+
     // MARK: - Day and retention
 
     /// A new current price table prices the responses no table could price before (METRICS 9.7); a day's bound
@@ -346,6 +414,7 @@ struct SpeedEngine: Sendable {
         guard responses.values.contains(where: { $0.endMs < cutoff }) else { return }
         responses = responses.filter { $0.value.endMs >= cutoff }
         projects = projects.filter { responses[$0.key] != nil }
+        recountRemote()
         reportLedger.prune(before: cutoff)
         agentProviders = agentProviders.filter { agents[$0.key] != nil }
     }
@@ -414,7 +483,8 @@ struct SpeedEngine: Sendable {
     /// highest value of the listed agents, in total and per source (6.9 *Sets and groups*).
     private mutating func agentList(nowMs: Int64, todayStartMs: Int64, window: LiveWindow, references: SpeedReferences,
                                     measured: [TimedResponse])
-        -> (agents: [EngineAgentStatus], intelligence: IntelligenceSums, sourceIntelligence: [SourceKind: IntelligenceSums]) {
+        -> (agents: [EngineAgentStatus], intelligence: IntelligenceSums, sourceIntelligence: [SourceKind: IntelligenceSums],
+            cellIntelligence: [HostSource: EngineCell]) {
         var samples: [String: [ResponseRecord]] = [:]
         for response in measured where response.endMs <= nowMs { samples[response.record.agentId, default: []].append(response.record) }
         let today = dayLabeler.label(forMs: todayStartMs)
@@ -457,11 +527,16 @@ struct SpeedEngine: Sendable {
         }
         var bySource = window.intelligenceBySource
         var all = window.intelligence
+        var byCell = window.byCell
         for row in listed.values where row.intelligence.score.form != .none {
             bySource[row.agent.source, default: .zero].score.merge(row.intelligence.score)
             all.score.merge(row.intelligence.score)
+            if tracksCells {
+                byCell[HostSource(host: row.agent.host, source: row.agent.source), default: EngineCell()]
+                    .intelligence.score.merge(row.intelligence.score)
+            }
         }
-        return (AgentListOrder.arrange(listed), all, bySource)
+        return (AgentListOrder.arrange(listed), all, bySource, byCell)
     }
 
     // MARK: - Summaries
@@ -477,7 +552,8 @@ struct SpeedEngine: Sendable {
             totalTokens: record.usage.total,
             duration: duration,
             speed: duration.map { Double(record.usage.output) / $0 },
-            endedAt: Date(timeIntervalSince1970: TimeInterval(record.endMs) / 1000)
+            endedAt: Date(timeIntervalSince1970: TimeInterval(record.endMs) / 1000),
+            host: record.host
         )
     }
 }

@@ -208,7 +208,8 @@ bool isTranscriptName(std::string_view name, RootFamily family) {
         case RootFamily::OpenCode:
         case RootFamily::ZCode:
         case RootFamily::OpenClaw:
-        case RootFamily::Hermes: return false;
+        case RootFamily::Hermes:
+        case RootFamily::Devin: return false;
         case RootFamily::Kimi: return name == "wire.jsonl";
         case RootFamily::GrokBuild: return name == "updates.jsonl";
         case RootFamily::Omp:
@@ -229,7 +230,8 @@ std::vector<DiscoveredFile> enumerate(const std::string& root, RootFamily family
         case RootFamily::OpenCode:
         case RootFamily::ZCode:
         case RootFamily::OpenClaw:
-        case RootFamily::Hermes: return {};
+        case RootFamily::Hermes:
+        case RootFamily::Devin: return {};
         case RootFamily::Omp:
         case RootFamily::Pi: {
             const bool flat = family == RootFamily::Pi;
@@ -301,7 +303,8 @@ bool isAcceptablePath(const std::string& root, const std::string& path, RootFami
         case RootFamily::OpenCode:
         case RootFamily::ZCode:
         case RootFamily::OpenClaw:
-        case RootFamily::Hermes: return false;
+        case RootFamily::Hermes:
+        case RootFamily::Devin: return false;
         default: break;
     }
     return isTranscriptName(name, family) && insideWithin(root, path, kMaxDepth + 1);

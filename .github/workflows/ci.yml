@@ -32,8 +32,30 @@ jobs:
       - name: Lint installer
         run: shellcheck install.sh
 
+  relay:
+    name: Remote relay (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v5
+      - name: Build static relay
+        run: linux/relay/build-static.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v7
+        with:
+          name: relay-${{ matrix.arch }}
+          path: linux/relay/dist/agent-speed-relay-linux-${{ matrix.arch }}
+          if-no-files-found: error
+
   macos:
     name: macOS
+    needs: relay
     runs-on: macos-26
     steps:
       - uses: actions/checkout@v5
@@ -53,6 +75,11 @@ jobs:
       - name: Test update relaunch
         timeout-minutes: 5
         run: python3 macos/scripts/test-update-relaunch.py
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: relay-*
+          path: linux/relay/dist
+          merge-multiple: true
       - name: Build app bundle
         run: macos/scripts/build-app.sh
       - uses: actions/upload-artifact@v7
@@ -63,6 +90,7 @@ jobs:
 
   windows:
     name: Windows
+    needs: relay
     runs-on: windows-latest
     steps:
       - uses: actions/checkout@v5
@@ -92,6 +120,11 @@ jobs:
           }
       - name: Test traffic helper
         run: dotnet test windows/tests/AgentSpeed.TrafficHelper.Tests -c Release
+      - uses: actions/download-artifact@v7
+        with:
+          pattern: relay-*
+          path: linux/relay/dist
+          merge-multiple: true
       - name: Publish
         shell: pwsh
         run: ./windows/scripts/publish.ps1

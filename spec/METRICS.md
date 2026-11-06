@@ -8,8 +8,8 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid). This is the append-only *source order*. |
-| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16.) |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition). This is the append-only *source order*. |
+| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17.) |
 | Response | One model API call that produced a usage record. |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
 
@@ -20,24 +20,25 @@ from cumulative session counters (4.16).
 
 ## 2. Locations
 
-| Source | Root | Override |
+| Source | Root (the automatic entry, 2.1) | A user location (2.1) names |
 | --- | --- | --- |
-| Codex | `$CODEX_HOME/sessions`, else `~/.codex/sessions`; plus `<agent folder>/codex-home/sessions` for the folder of every OpenClaw agent database (4.14: the Codex runs OpenClaw starts in its agent-scoped Codex homes) | user setting (replaces every automatic root) |
-| Claude Code + Claude Desktop | `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects` | user setting |
-| DeepSeek Harness (`dsh`, desktop app and CLI) | `$DSH_HOME/sessions`, else `~/.dsh/sessions` | user setting |
-| OpenCode (CLI and desktop app) | `$XDG_DATA_HOME/opencode/opencode.db`, else `~/.local/share/opencode/opencode.db` (same form on Windows under `%USERPROFILE%`) | user setting (folder that contains `opencode.db`) |
-| Gemini CLI (interactive, `-p`, ACP/IDE sessions) | `<home>/.gemini/tmp`; on macOS also `<home>/.cache/.gemini/tmp` (seatbelt sandbox, v0.63+). `<home>` = `$GEMINI_CLI_HOME`, else `~` | user setting (one `tmp` folder; replaces both defaults) |
-| omp (oh-my-pi: TUI, `-p`, RPC, ACP) | The default root plus one root per named profile (4.7). Default: `$PI_CODING_AGENT_DIR/sessions`, else on macOS `$XDG_DATA_HOME/omp/sessions` when `$XDG_DATA_HOME/omp` exists, else `~/<cfg>/agent/sessions`, where `<cfg>` = `$PI_CONFIG_DIR`, else `.omp`. Profiles: `~/<cfg>/profiles/<name>/agent/sessions` for every folder `<name>` | user setting (one `sessions` folder; replaces every automatic root) |
-| Antigravity (CLI `agy`, desktop app, IDE, IDE extensions) | three store folders: `~/.gemini/antigravity-cli`, `~/.gemini/antigravity`, `~/.gemini/antigravity-ide` (each contains `conversations`) | user setting (one store folder, or its `conversations` folder; replaces all three) |
-| WorkBuddy (desktop app `WorkBuddy`, China edition) | `~/.workbuddy/projects` (4.9) | user setting (the data folder or its `projects` folder) |
-| WorkBuddy AI (desktop app `WorkBuddy AI`, international edition) | `~/.workbuddy-ai/projects` (4.9) | user setting (the data folder or its `projects` folder) |
-| ZCode | `~/.zcode/cli/db/db.sqlite`; `$ZCODE_DATA_BASE_DIR` replaces the home base, with `.zcode/cli/db` underneath | user setting (data directory, database folder, or `db.sqlite`) |
-| Kimi Code CLI (TypeScript v2) | `$KIMI_CODE_HOME/sessions`, else `~/.kimi-code/sessions` | user setting (data directory or its `sessions` folder) |
-| Grok Build | `$GROK_HOME/sessions`, else `~/.grok/sessions` | user setting (data directory or its `sessions` folder) |
-| Pi (Pi Coding Agent: TUI, `-p`, RPC) | `<agent dir>/sessions` with `<agent dir>` = `$PI_CODING_AGENT_DIR`, else `~/.pi/agent`; plus Pi's own custom session folder when one is set: `sessionDir` of `<agent dir>/settings.json` and `$PI_CODING_AGENT_SESSION_DIR` (4.13) | user setting (one folder; replaces every automatic root) |
-| OpenClaw (a Gateway on this computer, 2026.8.1+) | the agent databases `<state>/agents/<agentId>/agent/openclaw-agent.sqlite` of every state folder: `$OPENCLAW_STATE_DIR`, else `<base>/.openclaw` and every named-profile folder `<base>/.openclaw-<profile>`, with `<base>` = `$OPENCLAW_HOME`, else `~` (4.14) | user setting (a state folder, an agent folder or a database; replaces every automatic root) |
-| Hermes Agent (CLI, TUI, desktop app, messaging gateway, cron, ACP) | the log folders of the Hermes home: `<home>/logs` and `<home>/profiles/<name>/logs`, with `<home>` from `$HERMES_HOME` (4.15), else macOS `~/.hermes`, Windows `%LOCALAPPDATA%\hermes` | user setting (a Hermes home or one `logs` folder; replaces the automatic home) |
-| Factory Droid (CLI `droid`, interactive and `droid exec`; Factory Desktop) | `~/.factory/sessions`; no environment variable (4.16) | user setting (the `.factory` folder or its `sessions` folder) |
+| Codex | `$CODEX_HOME/sessions`, else `~/.codex/sessions`; plus `<agent folder>/codex-home/sessions` for the folder of every OpenClaw agent database (4.14: the Codex runs OpenClaw starts in its agent-scoped Codex homes) | a folder: the root itself |
+| Claude Code + Claude Desktop | `$CLAUDE_CONFIG_DIR/projects`, else `~/.claude/projects` | a folder: the root itself |
+| DeepSeek Harness (`dsh`, desktop app and CLI) | `$DSH_HOME/sessions`, else `~/.dsh/sessions` | a folder: the root itself |
+| OpenCode (CLI and desktop app) | `$XDG_DATA_HOME/opencode/opencode.db`, else `~/.local/share/opencode/opencode.db` (same form on Windows under `%USERPROFILE%`) | the folder that contains `opencode.db`, or that file: one database |
+| Gemini CLI (interactive, `-p`, ACP/IDE sessions) | `<home>/.gemini/tmp`; on macOS also `<home>/.cache/.gemini/tmp` (seatbelt sandbox, v0.63+). `<home>` = `$GEMINI_CLI_HOME`, else `~` | one `tmp` folder (its `settings.json`: 2.1) |
+| omp (oh-my-pi: TUI, `-p`, RPC, ACP) | The default root plus one root per named profile (4.7). Default: `$PI_CODING_AGENT_DIR/sessions`, else on macOS `$XDG_DATA_HOME/omp/sessions` when `$XDG_DATA_HOME/omp` exists, else `~/<cfg>/agent/sessions`, where `<cfg>` = `$PI_CONFIG_DIR`, else `.omp`. Profiles: `~/<cfg>/profiles/<name>/agent/sessions` for every folder `<name>` | one `sessions` folder, without profiles |
+| Antigravity (CLI `agy`, desktop app, IDE, IDE extensions) | three store folders: `~/.gemini/antigravity-cli`, `~/.gemini/antigravity`, `~/.gemini/antigravity-ide` (each contains `conversations`) | one store folder, or its `conversations` folder |
+| WorkBuddy (desktop app `WorkBuddy`, China edition) | `~/.workbuddy/projects` (4.9) | the data folder or its `projects` folder: that `projects` folder |
+| WorkBuddy AI (desktop app `WorkBuddy AI`, international edition) | `~/.workbuddy-ai/projects` (4.9) | the data folder or its `projects` folder: that `projects` folder |
+| ZCode | `~/.zcode/cli/db/db.sqlite`; `$ZCODE_DATA_BASE_DIR` replaces the home base, with `.zcode/cli/db` underneath | a data directory, database folder, or `db.sqlite`: one database |
+| Kimi Code CLI (TypeScript v2) | `$KIMI_CODE_HOME/sessions`, else `~/.kimi-code/sessions` | a data directory or its `sessions` folder: that `sessions` folder |
+| Grok Build | `$GROK_HOME/sessions`, else `~/.grok/sessions` | a data directory or its `sessions` folder: that `sessions` folder |
+| Pi (Pi Coding Agent: TUI, `-p`, RPC) | `<agent dir>/sessions` with `<agent dir>` = `$PI_CODING_AGENT_DIR`, else `~/.pi/agent`; plus Pi's own custom session folder when one is set: `sessionDir` of `<agent dir>/settings.json` and `$PI_CODING_AGENT_SESSION_DIR` (4.13) | one folder, without Pi's custom session folder |
+| OpenClaw (a Gateway on this computer, 2026.8.1+) | the agent databases `<state>/agents/<agentId>/agent/openclaw-agent.sqlite` of every state folder: `$OPENCLAW_STATE_DIR`, else `<base>/.openclaw` and every named-profile folder `<base>/.openclaw-<profile>`, with `<base>` = `$OPENCLAW_HOME`, else `~` (4.14) | a state folder, an agent folder or a database (4.14) |
+| Hermes Agent (CLI, TUI, desktop app, messaging gateway, cron, ACP) | the log folders of the Hermes home: `<home>/logs` and `<home>/profiles/<name>/logs`, with `<home>` from `$HERMES_HOME` (4.15), else macOS `~/.hermes`, Windows `%LOCALAPPDATA%\hermes` | a Hermes home or one `logs` folder (4.15) |
+| Factory Droid (CLI `droid`, interactive and `droid exec`; Factory Desktop) | `~/.factory/sessions`; no environment variable (4.16) | the `.factory` folder or its `sessions` folder (4.16) |
+| Devin CLI (`devin`: interactive, `-p`, `devin acp`) | the CLI database (4.17): `$CHISEL_SESSION_DB`, else `$XDG_DATA_HOME/devin/cli/sessions.db`, else `~/.local/share/devin/cli/sessions.db` (Windows `%APPDATA%\devin\cli\sessions.db`) | a folder: the CLI folder that holds `sessions.db`, or its `devin` data folder: one database (4.17) |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
@@ -46,16 +47,90 @@ locally and are out of scope.
 Discovery: recursive enumeration of `*.jsonl` (Codex also `*.jsonl.zst`, 5.3; DeepSeek: `session.v<N>.jsonl.zstd` or `session.v<N>.jsonl`; Gemini CLI:
 fixed depths, see 4.6; omp and Pi: see 4.7 and 4.13; Antigravity: conversation databases, see 4.8; WorkBuddy: fixed
 depths, see 4.9; OpenClaw: agent databases, see 4.14; Hermes Agent: `agent.log` and its rotated files, see
-4.15; Factory Droid: one or two levels below the root, each transcript with its settings file, see 4.16),
+4.15; Factory Droid: one or two levels below the root, each transcript with its settings file, see 4.16; Devin: one
+SQLite database, see 4.17),
 maximum depth 6, never follow symlinks, at most 20 000 files per root.
-A source is *detected* when its root (Antigravity: any store; WorkBuddy: the data folder) exists or it has data today;
-what an undetected source shows is DESIGN 2b (unavailable sources), 4 and 5.
+A source is *detected* when any of its roots (Antigravity: any store; WorkBuddy: the data folder) exists or it has data
+today; what an undetected source shows is DESIGN 2b (unavailable sources), 4 and 5.
 The app never writes inside these folders.
 For ZCode, Kimi Code CLI, Grok Build, Hermes Agent and Factory Droid, the source's session count includes today's main
 sessions only; subagents remain visible in the agent tree and ordinary forks remain separate sessions, as with
 WorkBuddy.
-For OpenClaw, a source is detected when a state folder (or the folder of the setting) exists; its session count is the
+For OpenClaw, a source is detected when a state folder (or a user location) exists; its session count is the
 number of transcript windows that are not sub-agents (4.14).
+For Devin, a source is detected when a CLI database exists; its session count is the number of sessions with a row
+today (4.17).
+
+### 2.1 Location lists
+
+Every source group of the settings (DESIGN 5) has a *location list* (issue #45): Claude Code and Claude Desktop share
+one, every other source has its own. The seventeen lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
+`omp`, `antigravity`, `workbuddy`, `workbuddyAi`, `zcode`, `kimi`, `grokBuild`, `pi`, `openclaw`, `hermes`, `droid`,
+`devin`.
+
+- **Entries.** An entry is either `automatic` — every root of the table's *Root* column, derived from the environment
+  whenever roots are resolved, exactly as before lists existed (Codex: the sessions root and the agent-scoped Codex home
+  of every OpenClaw agent database; Gemini CLI: both `tmp` folders; omp: the default root and every profile;
+  Antigravity: the three stores; Pi: its sessions root and its custom session folder; OpenClaw: every state folder;
+  Hermes Agent: the home; Devin: the CLI database) — or a *user location*: one absolute path, read as the table's
+  last column says.
+- **Shape.** 1 to 8 entries, each at most once. A user location is absolute and normalized (no `.` or `..` segment, no
+  trailing separator). `automatic` appears at most once and, when present, first; user locations keep the order in which
+  they were added. A list never edited is `[automatic]`; a stored list left empty once invalid entries are dropped is
+  `[automatic]`.
+- **Reading.** A source reads the union of its entries' roots, in list order. Roots are normalized and a root named
+  twice is read once; a root that resolves (symbolic links followed, where the platform can resolve paths) to the same
+  folder as an earlier root of the same source is not read again. The discovery limits of section 2 (depth 6, 20 000
+  files, symbolic links never followed) apply per root. A file reachable from two roots (one root inside another) is
+  one file: it is read once, under the first root in list order that reaches it, and that root's rules apply (omp and
+  WorkBuddy sub-agents, the config files of EXECUTION-MODES). Nesting is judged by the normalized paths as listed: a
+  root that is a symbolic link to a folder *inside* another root is read as its own root, so its files can be counted
+  as sessions twice, while their records still count once (3.4). Response keys stay deduplicated across every root and
+  source (3.4), and the startup reading order (5) spans every root.
+- **Databases.** OpenCode and ZCode read one database per root; roots that name the same database file (a folder and
+  its file, a symbolic link to it) are one database. Each database owns its responses like a file (3.4). A session id
+  that another database of the same source already reads is skipped: at startup the databases are read in list order,
+  so the earliest database that has the session keeps it, and a database found later never takes a session from
+  another. A copied or backed-up database therefore adds no agents, sessions or tokens. OpenClaw reads the agent
+  databases of every root, each database once (4.14); Hermes Agent the log folders of every root, each folder once
+  (4.15). Devin reads one CLI database per root, like OpenCode and ZCode (4.17).
+- **Detected, counted, named.** A source is detected when any of its roots exists (OpenCode, ZCode: any database file;
+  WorkBuddy: any data folder). Its session count covers every root, each file, database session and log session once.
+  The path a source reports (DESIGN 4, the dashboard's source rows) is its first detected root in list order, else its
+  first root.
+- **Configured values** (EXECUTION-MODES). A file-based agent takes the config files of the root it is read under. A
+  source's own configured value is its first detected root's. Gemini CLI: the automatic roots share
+  `<home>/.gemini/settings.json`; a user location's file is the `settings.json` in the folder that holds its `tmp`
+  folder (in the location itself when its name is not `tmp`).
+- **History** (8). The analysis reads the same union with the same rules. OpenCode and ZCode keep each database's
+  identity on its own, keyed by the database path, so a database added to the list is analysed without the others
+  being read again; the session rule above applies across the list's databases in list order. Files of a location that
+  was removed keep their contributions like deleted files. The lists change what is read, not how a file is parsed:
+  no analysis version bump, and nothing in METRICS 6 changes.
+- **Editing** (DESIGN 5). A location the user adds is, in this order:
+  1. refused when it is not an absolute path;
+  2. refused (*already listed*) when it is the same location as a user location in the list. Two locations are the
+     same when they name the same root or database, compared resolved: a WorkBuddy data folder and its `projects`
+     folder, a `.factory` folder and its `sessions` folder, a Kimi Code CLI or Grok Build data directory and its
+     `sessions` folder, an Antigravity store and its `conversations` folder, an OpenCode folder and its `opencode.db`,
+     a ZCode data directory, its `.zcode/cli/db` folder and its `db.sqlite`, an OpenClaw agent folder and its
+     `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder (both name one `sessions.db`). A Hermes home and
+     its `logs` folder differ (the home has profiles);
+  3. refused (*already in the default location*) when `automatic` is in the list and the location is the same as one of
+     the roots the automatic entry reads now (Codex's OpenClaw Codex homes included);
+  4. when `automatic` is not in the list and the location is the default location (the automatic entry's first root),
+     for every source but omp, Antigravity, Pi and OpenClaw: `automatic` is inserted first instead. For those four one
+     chosen folder is narrower than the automatic set, so it is added as a user location;
+  5. refused when the list has 8 entries;
+  6. otherwise appended.
+
+  Any entry can be removed, the automatic one included, except the only remaining one: switching a source off is its
+  toggle's job. Reset returns the list to `[automatic]`.
+- **Migration.** A user who had chosen a folder in an earlier version (the single *Change…* setting) gets the list
+  `[that folder]`, without `automatic`, so exactly the same folders are read after upgrading. The earlier setting is
+  read only while the list value is absent and is never written again, so a downgrade restores the single folder.
+  Storage is per platform (DESIGN 5); paths are stored absolute and `automatic` as a marker, never as a path.
+- **Remote hosts** (REMOTE 3.3). Lists never apply to remote hosts: the relay reads every source's automatic roots.
 
 ## 3. Common rules
 
@@ -127,8 +202,8 @@ false (Codex records only the user's speed setting, not the tier a request was b
   valid interval. Unmeasured responses never contribute measured speed; their time is estimated instead (6.3).
 - Minimum duration: if `endMs - startMs < 500 ms`, use `startMs' = endMs - 500`.
 - `speed = output / ((endMs - startMs') / 1000)` — this is end-to-end output speed and includes time to first token.
-- `firstMs` = when the response's first content was written (Claude 4.1, Codex 4.2), else null: no other source's log
-  says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
+- `firstMs` = when the response's first content was written (Claude 4.1, Codex 4.2), or its first token arrived
+  (Devin 4.17), else null: no other source's log says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
 
 ### 3.4 Deduplication
 A global, bounded (65 536 entries, FIFO eviction) set of response keys shared by all files of all sources.
@@ -169,7 +244,7 @@ is malformed (section 4).
 
 Each parser is a per-file state machine fed complete lines in order. It produces:
 - response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, `firstMs`, normalized tokens; `firstMs`
-  is null for every source but Claude and Codex)
+  is null for every source but Claude, Codex and Devin)
 - the actions of 6.10 (sources with tool calls)
 - phase updates (`phase`, `phaseSinceMs`, `inFlightStartMs`; `inFlightStartMs` is null whenever the phase is not
   `generating`)
@@ -503,7 +578,7 @@ not read).
   session files.
 
 Reasoning effort and speed: Gemini CLI records neither (EXECUTION-MODES); only a configured effort is read, from
-`<home>/.gemini/settings.json`.
+`<home>/.gemini/settings.json` (a user location's own file: 2.1).
 
 ### 4.7 omp (oh-my-pi)
 
@@ -534,7 +609,7 @@ entirely from 18.x.
   `~/<cfg>/profiles/<name>/agent/sessions`. Profiles ignore `$PI_CODING_AGENT_DIR`. `XDG_*` variables are never used on
   Windows. Roots that do not exist are skipped; a path listed twice is scanned once.
 - Sessions written to custom folders (`--session-dir`, `--session`, `PI_CODING_AGENT_SESSION_DIR`; omp lists them in
-  `<agent dir>/custom-session-files/`) are read only when the user setting points at their folder.
+  `<agent dir>/custom-session-files/`) are read only when a user location (2.1) points at their folder.
 - A root that is also the Pi root (4.13), or lies inside it, is not read as omp: omp inherited Pi's
   `PI_CODING_AGENT_DIR`, and before Pi was a source users pointed the omp setting at `~/.pi/agent/sessions`. Those
   files are Pi's.
@@ -717,7 +792,7 @@ The database schema (`PRAGMA user_version = 1`, 7 tables) and the protobuf field
 - Stores (section 2): `~/.gemini/antigravity-cli` (CLI), `~/.gemini/antigravity` (desktop app, IDE extensions, IDE
   1.x), `~/.gemini/antigravity-ide` (IDE 2.x). A store is the language server's `--app_data_dir`; no environment
   variable moves it. A store folder whose name ends in `-backup` (`antigravity-backup` holds a copy of `antigravity`)
-  is never read, not even when the user setting names it. A user setting that names a folder called `conversations`
+  is never read, not even when a user location (2.1) names it. A user location that names a folder called `conversations`
   is used as that folder directly.
 - Discovery: regular files (never symlinks) directly inside `<store>/conversations/` whose name is a UUID (8-4-4-4-12
   hexadecimal digits, any case) followed by `.db`. Not sessions: `*.db-wal`, `*.db-shm`, `*.pb`, `implicit/`,
@@ -927,8 +1002,8 @@ tolerant: unknown line types and fields are ignored, and a timestamp may be a nu
 
 #### Roots and discovery
 
-- Root (section 2): `<data folder>/projects`. The user setting, per source, names the data folder or its `projects`
-  folder and replaces that source's root. The app's own `WORKBUDDY_CONFIG_DIR` / `CODEBUDDY_CONFIG_DIR` are **not**
+- Root (section 2): `<data folder>/projects`. A user location (2.1), per source, names the data folder or its
+  `projects` folder and reads that `projects` folder. The app's own `WORKBUDDY_CONFIG_DIR` / `CODEBUDDY_CONFIG_DIR` are **not**
   honoured: both editions read the same names, `CODEBUDDY_CONFIG_DIR` also moves the standalone CodeBuddy Code CLI, and
   the app sets them only on itself and its children (a launched app sees no shell variables).
 - The standalone CodeBuddy Code CLI (`~/.codebuddy`, same format) is not a WorkBuddy source. The Windows fallback
@@ -1169,6 +1244,10 @@ effort a Responses API call used, is never read: it holds the conversation, has 
 and is a cache that Grok rebuilds without that field. The persisted JSONL envelope is
 `{timestamp: <Unix seconds>, method, params: {sessionId, update, _meta}}`; prefer
 `params._meta.agentTimestampMs` over the second-resolution envelope time.
+Phase (5): `user_message_chunk`, `agent_message_chunk`, `agent_thought_chunk` and `response_started` are generating,
+in flight from the first of them; `tool_call` and `tool_call_update` are tools, except with `status` `completed` or
+`failed`: the model works again, so the phase is generating with a new in-flight start at that event (issue #52;
+the next thought chunk is often written minutes later); `turn_completed`, `turn_cancelled` and `turn_failed` are idle.
 When the native summary is not readable yet, activity can be tracked but numeric batches wait for metadata so a
 late child relationship cannot cause double-counting. The live parser keeps at most 256 pending numeric batches;
 the history reader can replay the full journal once metadata becomes available.
@@ -1182,7 +1261,11 @@ For each model bucket:
 
 - `key = "grok:" + prompt_id + ":" + model`, with native event id as the fallback identity.
 - `input = inputTokens`, already including `cachedReadTokens` and `cacheCreationTokens`;
-  `output = outputTokens` includes `reasoningTokens`. Provider remains null because the native record does not name one.
+  `output = outputTokens`, which includes `reasoningTokens` (the xAI Responses API of the default models), except when
+  `reasoningTokens > outputTokens`: then the provider counted reasoning apart (xAI Chat Completions, the default API of
+  a custom model) and `output = outputTokens + reasoningTokens`; `reasoning = min(reasoningTokens, output)` (issue
+  #51). A batch with reasoning counted apart but no larger than its output cannot be told apart and reads as included.
+  Provider remains null because the native record does not name one.
 - `endMs` is the completion event time. A positive `apiDurationMs` within the existing 15-minute interval limit gives
   `startMs = endMs - apiDurationMs`; otherwise `startMs = null`, as for any other response without a valid interval.
 - `requestCount` is native `modelCalls`, clamped to 1–100000. Other sources default to 1. Totals, model breakdowns,
@@ -1274,7 +1357,7 @@ section 2, or in the user's own Codex home), and an ACP agent's under its own so
 - **Databases**: for every folder `<agentId>` of `<state>/agents` (not a symlink, name not starting with `.`), the
   regular file (not a symlink) `<state>/agents/<agentId>/agent/openclaw-agent.sqlite`. Nothing else matches (the
   sentinel `incognito-openclaw-agent.sqlite`, archives, `-wal`, `-shm`, `.seal`).
-- **User setting**: one folder or file; it replaces every automatic root. A folder that contains
+- **User location** (2.1): one folder or file. A folder that contains
   `openclaw-agent.sqlite` is an agent folder (OpenClaw's `agents.entries.*.agentDir`) and contributes that database;
   any other folder is a state folder; a file named `openclaw-agent.sqlite` is used directly.
 - **Opening**: read-only, exactly like OpenCode (4.5): `mode=ro`, busy timeout 2 s, `immutable=1` when the header says
@@ -1441,8 +1524,8 @@ see as folders.
   bundle) is not used.
 - **Log folders**: `<home>/logs` (the default profile), then `<home>/profiles/<name>/logs` for every folder `<name>`
   of `<home>/profiles` (not a symlink) that does not start with `.`, in ordinal order. Folders that do not exist are
-  skipped; a path listed twice is read once. The user setting names a Hermes home (a folder that has a `logs` folder:
-  that home's log folders as above) or one log folder (any other folder), and replaces the automatic home.
+  skipped; a path listed twice is read once. A user location (2.1) names a Hermes home (a folder that has a `logs`
+  folder: that home's log folders as above) or one log folder (any other folder).
 - **Files**: regular files (never symlinks) directly in a log folder named exactly `agent.log` or `agent.log.<n>`
   (`<n>` one or more ASCII digits): the live log and its rotated copies. No other log is read: `errors.log` repeats
   the warnings, `gateway.log` and `gui.log` exclude the agent loop, `install.log`, lock files and compressed copies do
@@ -1592,7 +1675,7 @@ trims and lowercases the value; the `/codex-runtime` command writes `codex_app_s
 - **File**: `config.yaml` in the parent folder of the log folder, when the log folder is named `logs` (compared
   case-insensitively on Windows): `<home>/config.yaml` for `<home>/logs`, `<home>/profiles/<name>/config.yaml` for that
   profile's logs (macOS `~/.hermes/config.yaml`, Windows `%LOCALAPPDATA%\hermes\config.yaml`). Every profile has its
-  own file and does not inherit the default profile's. A log folder with another name (a user setting) has no file
+  own file and does not inherit the default profile's. A log folder with another name (a user location) has no file
   and its switch is off. The administrator overlay `/etc/hermes/config.yaml` (`$HERMES_MANAGED_DIR`) is not read.
 - **When**: before a log set's startup backlog is read, and at every rediscovery (section 5, every 10 seconds) before
   that set's new lines are read, the file's status is checked (a symbolic link is followed, as Hermes follows it). The
@@ -1699,10 +1782,9 @@ droid before 0.123, which kept no counters (they count nothing), cloud sessions 
 
 - **Root** (section 2): `~/.factory/sessions`. Factory documents no environment variable for this folder.
   `FACTORY_HOME_OVERRIDE`, which third parties found in the binary and read in two different ways, is not used; a moved
-  folder is chosen in the user setting.
-- **User setting**: one folder. When it contains a folder named `sessions` (compared case-insensitively on Windows)
-  it is the Factory folder and that `sessions` folder is the root; otherwise the folder itself is the root. It replaces
-  the automatic root.
+  folder is added as a user location (2.1).
+- **User location**: one folder. When it contains a folder named `sessions` (compared case-insensitively on Windows)
+  it is the Factory folder and that `sessions` folder is the root; otherwise the folder itself is the root.
 - **Sessions**: regular files (never symlinks) whose name ends in `.jsonl` and does not start with `.`, directly in the
   root (older droid versions) or in a folder directly in it (the working directory with its separators replaced by `-`,
   such as `-Users-dev-projects-forge` or `-C-Users-dev-halo`; not a symlink, name not starting with `.`); nothing
@@ -1897,6 +1979,114 @@ the same day (9.6) until the next launch seeds the session by the history rule.
   a session watched live, the sums of its responses' fields equal its sidecar's own counters, and each response's
   `endMs − startMs` equals the gap between its assistant message and the user line before it.
 
+### 4.17 Devin
+
+Devin is Cognition's coding agent (closed source). Its CLI `devin` — interactive, `devin -p`, and `devin acp`, the ACP
+server that Devin Desktop and other clients start for a local agent — keeps every session in one SQLite database,
+whose rows record each model call with its usage, total time and time to first token. The source `devin` reads that
+database: measured speed per call. Only usage metadata is read, never message content, titles, credentials or logs.
+Evidence: `spec/research/devin.md` (public readers and Devin's documentation; no real data on the project's machines);
+fixtures: `spec/tools/devin_fixtures.py` (`spec/fixtures/devin`, `spec/fixtures/devin-expected.json`, checked by
+`spec/tools/devin_reference.py`). Not read: Devin Desktop's own files (its `acp-events` logs have no times and no model,
+whether their counts are per call or cumulative is unsettled, and only titles could tie them to CLI sessions;
+`spec/research/devin.md`) — a Desktop session run with the local agent is a CLI session and counts here, Desktop's
+default cloud agent writes nothing locally; cloud Devin sessions; the air-gapped build (`cli-federal`);
+`transcripts/<id>.json` (the same calls again); credits and ACUs.
+
+#### Roots and discovery
+
+- **Automatic entry** (section 2): one root, the CLI database: `$CHISEL_SESSION_DB` when it is not empty (the CLI's own
+  override, a file; reported by a third-party reader, not by Devin's documentation); else on macOS and Linux
+  `$XDG_DATA_HOME/devin/cli/sessions.db` when `XDG_DATA_HOME` is not empty, else `~/.local/share/devin/cli/sessions.db`
+  (the CLI keeps the XDG layout on macOS too); on Windows `%APPDATA%\devin\cli\sessions.db` (the CLI reads no `XDG_*`
+  variable there).
+- **User location**: a folder. Its database is `<folder>/sessions.db`, else `<folder>/cli/sessions.db` (a CLI folder or
+  a `devin` data folder), the first that exists, looked up again at every rediscovery.
+- **Database**: a regular file, never a symbolic link. Two roots naming the same file (resolved) are one database; a
+  session id that an earlier database of the list has is skipped in a later one (2.1 *Databases*).
+- **Detected**: a database exists.
+
+#### Opening and rows
+
+- **Opening**: read-only with the WAL and immutable safeguards of 4.5, every read one short transaction; it never
+  creates `-wal` or `-shm` and never writes. Required: `sessions(id, working_directory, model)` and
+  `message_nodes(row_id, session_id, chat_message, created_at)`. A database without them is unsupported (warning
+  `unsupportedFormat`) and contributes nothing.
+- **Rows** of `message_nodes`, in `row_id` order; rows of a session the `sessions` table does not list are not read. A
+  row's time is `created_at` (Unix seconds; an integer or a finite real) × 1000, truncated (3.6). `chat_message` is
+  text of at most 32 MiB that is a JSON object (3.6); a row that breaks either, or has no such time, is malformed (it
+  still counts toward `lastLineMs` when it has a time). Of the object only `role`, `tool_calls` and `metadata` with
+  `metrics`, `request_id`, `generation_model` and `finish_reason` are read.
+
+#### Calls
+
+An assistant row (`role == "assistant"`) whose `metadata.metrics` is an object is one model call. Devin stores most
+calls twice (two rows with the same `request_id` and identical usage), so the key is
+`"devin:" + session id + ":request:" + request id` when `metadata.request_id` is a string that is not blank (trimmed),
+else `"devin:" + session id + ":row:" + row_id`. The same key again in the same database updates the response (4.4)
+and counts no request; a key another database owns is ignored (3.4).
+
+- Tokens (token values of 3.2): `input = input_tokens + cache_read_tokens + cache_creation_tokens` (Devin's
+  `input_tokens` excludes the cache), `cachedInput = cache_read_tokens`, `cacheWriteInput = cache_creation_tokens`,
+  `output = output_tokens`, `reasoning = 0`, `cacheWrite1hInput = 0`. A call whose `input` and `output` are both 0
+  emits nothing.
+- `endMs` = the row's time (written when the call ends; one-second resolution). `startMs = endMs − total_time_ms`
+  (saturating) when `metrics.total_time_ms` is a finite number whose truncated value (3.6) is above 0, else null: the
+  call's whole request time, time to first token included (3.3). `firstMs = startMs + ttft_ms` when `startMs` is set
+  and the truncated `metrics.ttft_ms` is above 0 and at most the truncated `total_time_ms`, else null.
+- `model` = `metadata.generation_model` when it is a string that is not blank (trimmed), else the session model:
+  `sessions.model` trimmed, unless it is blank or `adaptive` (ASCII case-insensitive; a routing mode, not a model).
+  `provider` null, `final` true, one request.
+
+#### Agents and phase
+
+- One agent per session with a row read; agent id `<database path>#<session id>`. `project` = the last path component
+  of `sessions.working_directory` (split on `/` and `\`), else the session id (never the database's folder);
+  `cwdPath` = `working_directory`; `model` = the latest call's model, else the session model; `lastLineMs` = the
+  latest row time; no sub-agents (the database names no parent). Hidden (deleted) sessions are read like the others:
+  their calls happened.
+- **Phase**, from the row's time: a row with `role` `user` or `tool` (the prompt or tool results: the next request
+  follows) → `generating` (`inFlightStartMs` = its time); an assistant row → `tools` when its `tool_calls` is a
+  non-empty array or `metadata.finish_reason == "tool_calls"`, else `idle`. A row whose time is earlier than the time
+  of the row that last set the phase changes nothing (a stored copy never moves it back); other roles only
+  `lastLineMs`.
+- Settings (DESIGN 5) count today's sessions: sessions with a row today.
+
+#### Reading
+
+Startup reads, per database, the rows of the startup window (5): from the highest `row_id` down while the rows' times
+are not earlier than `todayStartMs − 15 min` (a row without a time neither ends the read nor is left out: it is read
+and counts as malformed, as in the history; the first older row ends the read;
+rows are written in time order), then processes them in `row_id` order. While running, a change of the database or its
+`-wal` (watcher, the 1-second fallback, rediscovery) reads the rows above the highest `row_id` seen and the `sessions`
+table. A database that is replaced (another identity) or shrinks is read again like at startup; its keys update their
+responses. A row changed in place or deleted is not noticed until then.
+
+#### History
+
+The analysis (8) reads every row of every database with the same rules, databases in list order. Each database owns
+its calls' keys. Contributions are kept per session (key `<database path>#<session id>`; identity: its row count, its
+highest `row_id` and its session model); a session whose identity changed is read again, an unchanged one is not read.
+Adding the source needs no analysis version (section 8).
+
+#### Effort, actions, traffic
+
+- Effort and speed: none (EXECUTION-MODES). Thinking levels are not stored with the calls; `swe-1-6-fast` and
+  `…-max` are model names; `agent_mode` is a permission mode.
+- Actions (6.10): none. Rows hold tool calls, but their results' rows are not identified with confidence.
+- Traffic (10.5): the `devin` executable.
+
+#### Known approximations
+
+- Call times have one-second resolution: a call's position is uncertain by up to a second, its duration is exact.
+- The startup window assumes `created_at` grows with `row_id`; rows written out of time order near the window's start
+  can be missed at startup (history reads every row).
+- Sub-agent sessions, if Devin stores them as sessions of their own, are root agents.
+- Usage that only Devin Desktop records (another agent than the local CLI) is not counted.
+- Derived from Devin's documentation and public third-party readers, some of them checked against their authors' real
+  databases (`spec/research/devin.md`); not verified against a running Devin. Verification target (by hand): for one
+  session, the sums of its responses equal the request-deduplicated sums of its rows' `metrics`.
+
 ## 5. Reading files
 
 - Startup reading order (it decides which file owns a duplicated key): files sorted by modification time ascending,
@@ -2067,6 +2257,7 @@ Parent links (`parentId`, an agent id or null):
 - Factory Droid: a session whose `session_start` has a `callingSessionId` (a Task-tool worker, 4.16) has the parent
   `<folder>/<callingSessionId>.jsonl` (its own folder) when that file is a tracked agent. `parent` (forks and
   successors) is not a parent link.
+- Devin: none. The CLI database names no parent (4.17).
 - Self references and cycles resolve to null.
 
 List:
@@ -2170,7 +2361,7 @@ Per agent `a` at `nowMs`, evaluated on every engine tick (500 ms) with that tick
 - **Sub-score** of a present component = `1000 × r_i` (clamped): the score that component alone would give. The card
   shows it beside the measure.
 - **Absent components** carry a reason: `notRecorded` when the agent's source never records what the component
-  measures — L for every source but Claude (both) and Codex (no `firstMs`, 3.3); N, U and S for sources without
+  measures — L for every source but Claude (both), Codex and Devin (no `firstMs`, 3.3); N, U and S for sources without
   actions (6.10); R for DeepSeek Harness, whose output does not split out reasoning (the sources *Live thinking*
   leaves out of `w'`); H for Hermes Agent, whose log line states a cache read only when the provider reported one
   (4.15) — and `fewSamples` otherwise (including `n < 3`, when every component is absent). Each component also
@@ -2449,8 +2640,8 @@ performance records of 6.11 — are stored, never requests, keys in plain text, 
 
 Scope: every discovered file of every enabled source with no date filter and no file-count limit (Codex `.jsonl.zst`,
 all Gemini roots with legacy `.json`, every omp root including profiles, every Antigravity conversation database
-of every store, both WorkBuddy roots, the rotated logs of every Hermes Agent profile and every Factory Droid session
-with its sidecar included), plus Codex `archived_sessions` (the sibling of the sessions root) and the whole OpenCode
+of every store, both WorkBuddy roots, the rotated logs of every Hermes Agent profile, every Factory Droid session
+with its sidecar, and every row of Devin's databases included), plus Codex `archived_sessions` (the sibling of the sessions root) and the whole OpenCode
 database. Parsing uses exactly the rules of section 4 (same state machines, dedupe, copied-history rules) over whole
 files and complete database reads, in startup order (5; an Antigravity database's time is the newer of its `.db` and
 `-wal`, 5.4).
@@ -2476,7 +2667,7 @@ logs (4.15) are cached by file identity instead of path: a rotation renames a lo
 contributions and keys under its new name, and the oldest log, which rotation deletes, keeps its contributions like any
 deleted file. Daily totals are the sums over files. The history store is versioned: a parser change bumps the version
 and triggers a full recomputation that keeps previously stored days for which no logs exist any more (analysis version
-10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses, EXECUTION-MODES; 9: the
+11: Grok Build reasoning counted apart, 4.12; 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses, EXECUTION-MODES; 9: the
 performance records of 6.11, with `firstMs` (3.3) and the action times (6.10), and the retired task records
 dropped; 8: the task records of the retired task score; 7: the unpriced facts of 9.10; 6: the Codex ordinal rule of
 3.5). "Clear history"
@@ -2488,6 +2679,9 @@ function of these files alone; a session whose parent sidecar is unreadable is n
 analysed again by the next one (4.16 *Own counters*). Adding the source needs no new analysis version: no earlier build
 read its files, so the first analysis finds them as new files (this covers the `custom` step of 9.2 too, which in
 practice only Droid's ids reach).
+
+Devin (4.17): contributions are kept per CLI session, with the identity of 4.17 *History*. Adding the source needs no new
+analysis version either; nor does its `firstMs`, which only the performance records (6.11) use.
 
 Cost (9.7): every row also has `costMicroUsd` and `unpricedRequests`, every model `costMicroUsd` and
 `unpricedRequests`, and every date a `priceVersion`. The cost feature bumps the store version; days kept from an
@@ -3054,12 +3248,14 @@ desktop app that runs its agent on its own executable, so its row needs the argu
 | `openclaw` | `name == openclaw` (standalone builds), or a script host whose arguments after the first contain `/openclaw.mjs` (the npm package's `bin`, which may respawn itself with the same script; git checkouts) or `/openclaw/dist/` (services started on `dist/entry.js` or `dist/entry.mjs` of the npm or pnpm package). The Gateway process sends OpenClaw's own model requests. The agents it starts for delegated turns match their own rows and count for their sources: Claude Code and Codex app servers, like their turns (4.14); Gemini CLI too, although its turns count under `openclaw`. The Windows Hub's Gateway runs inside WSL, outside the process table. Not verified with a running OpenClaw; the macOS app's bundled runtime is assumed to run the same `openclaw.mjs`. |
 | `hermes` | A Python host whose arguments after the first contain `hermes_bootstrap`, `hermes_cli` or `acp_adapter` (Hermes's launchers run `python -I -c "…import hermes_bootstrap…"`; the desktop app, the TUI's local gateway and the gateway services run `-m hermes_cli.main` or the same bootstrap; source checkouts `hermes_cli/main.py`), or one with an argument whose file name without `.exe` is `hermes`, `hermes-agent` or `hermes-acp` (pip and uv console scripts `bin/hermes`, `Scripts\hermes.exe`, and Hermes's Windows launcher `.hermes\bin\hermes.exe`, which runs Python on its own path). The Python process sends Hermes's model requests; a launcher process sends nothing and is not a row, since `hermes` is also the name of the Hermes JavaScript engine's command-line tool. Not verified with a running Hermes. |
 | `droid` | `name == droid`: droid is one native executable (built with Bun), installed as `~/.local/bin/droid` (the install script), `%USERPROFILE%\bin\droid.exe` (the PowerShell installer), by the Homebrew cask `droid`, or as the npm package `droid`'s platform binary (`@factory/cli-<os>-<arch>[-baseline]/bin/droid`; on Windows a Node shim, which is not a row and sends nothing, starts `droid.exe`). The interactive CLI starts a second `droid` (`droid exec --input-format stream-jsonrpc …`), which counts as part of it; Factory Desktop runs `droid daemon` and `droid exec` children from its bundle (Windows `…\resources\bin\droid.exe`), and the app's own processes are app processes like the other desktop apps'. From the installers, the Homebrew cask, the npm package and Factory's issue reports; not verified with a running droid. |
+| `devin` | `name == devin`: the CLI, one native executable (Devin's install script, the Homebrew cask, the Windows installers), interactive, `devin -p` or `devin acp` — also when Devin Desktop or another client starts `devin acp` as its local agent, whose sessions are in the database (4.17). Devin Desktop's own executables (macOS `Devin.app/Contents/MacOS/Devin` and its helpers; Windows `%LOCALAPPDATA%\Programs\Devin\Devin.exe`, an assumed path, since Windows compares names case-insensitively) are app processes, never Devin agents. From Devin's documentation and a third-party reader; not verified with a running Devin. |
 
 The desktop apps' own processes are **not** agent processes, nor are their Electron or Tauri helpers: macOS
-`/Applications/{Claude,ChatGPT,Codex,OpenCode,Antigravity}.app/Contents/MacOS/<name>`; Windows executables directly in
+`/Applications/{Claude,ChatGPT,Codex,OpenCode,Antigravity,Devin}.app/Contents/MacOS/<name>`; Windows executables directly in
 the `app` folder of the `WindowsApps\Claude_*`, `WindowsApps\OpenAI.Codex_*` and `WindowsApps\OpenAI.ChatGPT*`
 packages (`app\claude.exe`, `app\Codex.exe`; the tools a package bundles deeper follow the rows, so
-`app\resources\codex.exe` is a Codex agent) and everything under `%LOCALAPPDATA%\AnthropicClaude\`. Their own traffic (chat UI, updates, telemetry) is outside the sources' scope, like
+`app\resources\codex.exe` is a Codex agent), everything under `%LOCALAPPDATA%\AnthropicClaude\` and
+`%LOCALAPPDATA%\Programs\Devin\Devin.exe` itself. Their own traffic (chat UI, updates, telemetry) is outside the sources' scope, like
 Claude Desktop chats are in section 2; only the agent processes they start count. DeepSeek Harness is the exception
 above. WorkBuddy's main process, its helpers, renderers and its daemon (the same executable running
 `app.asar/main/daemon-app-server-entry.js`, which starts the CLI processes) are app processes like these, so the
@@ -3114,7 +3310,8 @@ parent's process). Each tick, for every root agent process `P` of source `s` wit
 `cwdPath` is new parser metadata (section 4): the full working directory the transcript names — Claude: the latest
 `cwd`; Codex: `session_meta`/`turn_context` `cwd`; dsh: header `cwd`; OpenCode: `session_v2.directory`; Gemini CLI: the
 `.project_root` content; omp: header `cwd`; Antigravity: the decoded path of the first workspace URI; WorkBuddy: the
-latest `cwd`; Pi and OpenClaw: header `cwd`; Factory Droid: `session_start.cwd`. Null when absent.
+latest `cwd`; Pi and OpenClaw: header `cwd`; Factory Droid: `session_start.cwd`; Devin: `sessions.working_directory`.
+Null when absent.
 It is metadata only (no effect on tokens or history).
 
 Typical outcomes: one Claude Code session per terminal → exact; several Claude Desktop Code sessions (one CLI process

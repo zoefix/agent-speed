@@ -30,6 +30,11 @@ struct ProbeArguments {
     var noLive = false
     /// `--now MS`: `--dump-today` evaluates the performance scores at this Unix ms instead of the capture time.
     var now: Int64?
+    /// `--remote DESTINATION` (repeatable): `--watch` also watches these SSH hosts (REMOTE).
+    var remotes: [String] = []
+    /// `--history` (with `--remote`): also syncs the hosts' daily history (REMOTE 8) into `--history-store` or a
+    /// scratch store.
+    var remoteHistory = false
 
     /// The range and source of `--dump-unpriced`.
     struct UnpricedOptions: Equatable {
@@ -45,12 +50,16 @@ struct ProbeArguments {
     static let usage = """
         usage: AgentSpeedProbe (--dump-today [--now MS] | --dump-history [--utc] [--history-store PATH]
                                 | --dump-unpriced [--days N | --first YYYY-MM-DD --last YYYY-MM-DD | --live]
-                                  [--source ID] [--history-store PATH] | --watch SECONDS
+                                  [--source ID] [--history-store PATH]
+                                | --watch SECONDS [--remote DESTINATION... [--history] [--history-store PATH]]
                                 | --traffic SECONDS [--traffic-interval 0|1|5] [--no-live] [--history-store PATH])
-                               [--prices PATH] [--codex PATH] [--claude PATH] [--dsh PATH] [--opencode PATH]
-                               [--gemini PATH] [--omp PATH] [--antigravity PATH] [--workbuddy PATH] [--workbuddy-ai PATH]
-                               [--zcode PATH] [--kimi PATH] [--grok-build PATH] [--pi PATH]
-                               [--openclaw PATH] [--hermes PATH] [--droid PATH]
+                               [--prices PATH] [--codex LOCATION]... [--claude LOCATION]... [--dsh LOCATION]...
+                               [--opencode LOCATION]... [--gemini LOCATION]... [--omp LOCATION]...
+                               [--antigravity LOCATION]... [--workbuddy LOCATION]... [--workbuddy-ai LOCATION]...
+                               [--zcode LOCATION]... [--kimi LOCATION]... [--grok-build LOCATION]... [--pi LOCATION]...
+                               [--openclaw LOCATION]... [--hermes LOCATION]... [--droid LOCATION]...
+                               [--devin LOCATION]...
+               LOCATION: a path, or @auto for the source's automatic roots; repeat a flag to read several
                AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY
         """
 
@@ -65,6 +74,9 @@ struct ProbeArguments {
         var unpriced = UnpricedOptions()
         var dumpsUnpriced = false
         var now: Int64?
+        var remotes: [String] = []
+        var remoteHistory = false
+        var givenLocations: [TranscriptFolder: [DataLocation]] = [:]
         var iterator = arguments.makeIterator()
         while let argument = iterator.next() {
             switch argument {
@@ -116,70 +128,27 @@ struct ProbeArguments {
                 trafficInterval = seconds
             case "--no-live":
                 noLive = true
-            case "--codex":
-                guard let path = iterator.next() else { return nil }
-                configuration.codexRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--claude":
-                guard let path = iterator.next() else { return nil }
-                configuration.claudeRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--dsh":
-                guard let path = iterator.next() else { return nil }
-                configuration.dshRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--gemini":
-                // One Gemini CLI `tmp` folder; it replaces both defaults.
-                guard let path = iterator.next() else { return nil }
-                configuration.geminiRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--omp":
-                // One omp `sessions` folder; it replaces the default root and every profile.
-                guard let path = iterator.next() else { return nil }
-                configuration.ompRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--antigravity":
-                // One Antigravity store folder or its `conversations` folder; it replaces the three default stores.
-                guard let path = iterator.next() else { return nil }
-                configuration.antigravityRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--workbuddy":
-                // WorkBuddy's data folder or its `projects` folder.
-                guard let path = iterator.next() else { return nil }
-                configuration.workbuddyRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--workbuddy-ai":
-                // WorkBuddy AI's data folder or its `projects` folder.
-                guard let path = iterator.next() else { return nil }
-                configuration.workbuddyAiRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--zcode":
-                guard let path = iterator.next() else { return nil }
-                configuration.zcodeRoot = URL(fileURLWithPath: path)
-            case "--kimi":
-                guard let path = iterator.next() else { return nil }
-                configuration.kimiRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--grok-build":
-                guard let path = iterator.next() else { return nil }
-                configuration.grokBuildRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--pi":
-                // One Pi sessions folder; it replaces every automatic root, as `reference.py --pi`.
-                guard let path = iterator.next() else { return nil }
-                configuration.piRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--openclaw":
-                // One state folder, agent folder or openclaw-agent.sqlite; it replaces every automatic root, as
-                // `reference.py --openclaw`.
-                guard let path = iterator.next() else { return nil }
-                configuration.openclawRoot = URL(fileURLWithPath: path)
-            case "--hermes":
-                // A Hermes Agent home or one logs folder; it replaces the automatic home, as `reference.py --hermes`.
-                guard let path = iterator.next() else { return nil }
-                configuration.hermesRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--droid":
-                // Factory Droid's .factory folder or its sessions folder; it replaces the automatic root, as
-                // `reference.py --droid`.
-                guard let path = iterator.next() else { return nil }
-                configuration.droidRoot = URL(fileURLWithPath: path, isDirectory: true)
-            case "--opencode":
-                // The database file (as in reference.py) or the folder that contains it.
-                guard let path = iterator.next() else { return nil }
-                configuration.opencodeRoot = URL(fileURLWithPath: path)
+            case "--remote":
+                guard let destination = iterator.next(), RemoteHostValidation.destinationIssue(destination) == nil,
+                      remotes.count < RemoteHostsDocument.maxHosts else { return nil }
+                remotes.append(destination)
+            case "--history":
+                remoteHistory = true
+            case let flag where ProbeArguments.locationFlags[flag] != nil:
+                // Repeatable: every occurrence adds one location to that source's list (METRICS 2.1), as many folders
+                // as the settings would. `@auto` is the automatic entry; a list given only paths reads just those, as
+                // the matching `reference.py` option.
+                guard let folder = ProbeArguments.locationFlags[flag], let value = iterator.next(),
+                      let location = ProbeArguments.location(value) else { return nil }
+                var list = givenLocations[folder] ?? []
+                guard !list.contains(location), list.count < SourceLocations.maxEntries else { return nil }
+                list.append(location)
+                givenLocations[folder] = list
             default:
                 return nil
             }
         }
+        for (folder, list) in givenLocations { configuration.locations[folder] = list }
         let usesUnpricedOptions = unpriced != UnpricedOptions()
         if dumpsUnpriced {
             guard mode.map({ _ in false }) ?? true, (unpriced.first == nil) == (unpriced.last == nil),
@@ -194,12 +163,34 @@ struct ProbeArguments {
         if now != nil {
             guard case .dumpToday = mode else { return nil }
         }
+        if !remotes.isEmpty {
+            guard case .watch = mode else { return nil }
+        }
+        if remoteHistory, remotes.isEmpty { return nil }
         return ProbeArguments(mode: mode, configuration: configuration, utc: utc, historyStore: historyStore, prices: prices,
-                              trafficInterval: trafficInterval, noLive: noLive, now: now)
+                              trafficInterval: trafficInterval, noLive: noLive, now: now, remotes: remotes,
+                              remoteHistory: remoteHistory)
     }
 }
 
 extension ProbeArguments {
+    /// The source flags and the location list each one feeds.
+    static let locationFlags: [String: TranscriptFolder] = [
+        "--codex": .codex, "--claude": .claude, "--dsh": .dsh, "--opencode": .opencode, "--gemini": .gemini,
+        "--omp": .omp, "--antigravity": .antigravity, "--workbuddy": .workbuddy, "--workbuddy-ai": .workbuddyAi,
+        "--zcode": .zcode, "--kimi": .kimi, "--grok-build": .grokBuild, "--pi": .pi, "--openclaw": .openclaw,
+        "--hermes": .hermes, "--droid": .droid, "--devin": .devin,
+    ]
+
+    static let automaticLocation = "@auto"
+
+    /// `@auto`, or a path made absolute against the working directory.
+    static func location(_ value: String) -> DataLocation? {
+        if value == automaticLocation { return .automatic }
+        guard !value.isEmpty else { return nil }
+        return SourceLocations.standardized(URL(fileURLWithPath: value).path).map(DataLocation.path)
+    }
+
     /// `YYYY-MM-DD` of a real calendar date.
     static func isDate(_ text: String) -> Bool {
         UnpricedRange.isDate(text)

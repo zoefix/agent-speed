@@ -65,6 +65,8 @@ final class BoardPresenter {
     private var highContrast = NSWorkspace.shared.accessibilityDisplayShouldIncreaseContrast
     /// Lays the board out again when a sub-gauge cell narrows back with no new tick.
     private var wakeTimer: Timer?
+    /// Fade when idle, on the board's own gauge (the orbs' rule, DESIGN 2).
+    private var dimmer: OrbWindowIdleDimmer?
     /// A live metrics switch change crossfades the hero (0.2 s, DESIGN 2c Live metrics, *Switches*).
     static let switchCrossfade = 0.2
 
@@ -94,10 +96,14 @@ final class BoardPresenter {
         }
         runtime.onTick = { [weak self] _ in self?.tickArrived() }
         if runtime.tick != nil { tickArrived() }
+        let window = window
+        dimmer = OrbWindowIdleDimmer(gauge: runtime.gauge, enabled: { [weak window] in window?.config.fadeWhenIdle ?? false },
+                                     interaction: window.interaction) { [weak window] dimmed in window?.setDimmed(dimmed) }
     }
 
     func close() {
         runtime.onTick = nil
+        dimmer?.cancel()
         tooltipTimer?.invalidate()
         wakeTimer?.invalidate()
         climbFrames.stop()
@@ -112,7 +118,9 @@ final class BoardPresenter {
     /// A changed configuration: the window applies it, a new style or size takes a new content builder.
     func apply(_ config: BoardConfig) {
         guard config != window.config else { return }
+        let fadeChanged = config.fadeWhenIdle != window.config.fadeWhenIdle
         window.apply(config)
+        if fadeChanged { dimmer?.refresh() }
         setLook(style: config.style, size: config.size, dark: look.dark, language: look.language)
     }
 

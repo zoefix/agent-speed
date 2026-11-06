@@ -74,6 +74,9 @@ Mode changes affect their native scope and time, not earlier responses. Upserts 
 - Factory Droid: each assistant message's `message.reasoningEffort` is the effort of that call, and its
   `message.modelId` names a tier variant from Factory's catalog (see *Reasoning effort and speed*). Effort observed in
   issue #33 (droid 0.250.0) and in public recordings of droid and Factory Desktop.
+- Devin: no effort and no speed are recorded (METRICS 4.17). The CLI's thinking level (cycled with Alt+T) is not known
+  to be stored with a call; `agent.model` of `~/.config/devin/config.json` is a model selection; `swe-1-6-fast`, `…-max` and
+  `adaptive` are model names or routing, not tiers; `agent_mode` is a permission mode.
 
 ## Reasoning effort and speed
 
@@ -225,6 +228,8 @@ facts, and one that names no effort has no effort facts.
 
   No substring or suffix matching: `glm-5.2-fast` is a model of its own, `auto-fast` a router, and a `custom:` id has no
   tier fact. Current: the context, so a call shows its effort and tier as soon as its line is read.
+- **Devin** (METRICS 4.17): no facts and no current or configured values. The CLI's rows name no effort or tier, and
+  model ids are kept as models.
 - **Gemini CLI** (METRICS 4.6): no facts. The session file has token counts for thoughts but no level, `logs.json`
   has no settings, and OpenTelemetry leaves `thinkingConfig` out; `tokens.thoughts` says that a response thought, not
   how hard. It has no tier either: nothing in its code selects one. Only a configured effort exists.
@@ -319,11 +324,14 @@ CSV, live reports or performance statistics. Evidence `configured`, scope `confi
 | Source | File | Key | Adapter |
 | --- | --- | --- | --- |
 | Codex | `config.toml` of the Codex home | root `service_tier`, as *Native adapters* says | `serviceTier`, provider `openai` |
-| Gemini CLI | `<home>/.gemini/settings.json` (`<home>` as METRICS 2; not a workspace's) | below | `effort` |
+| Gemini CLI | `<home>/.gemini/settings.json` (`<home>` as METRICS 2; not a workspace's); for a user location, the `settings.json` beside its `tmp` folder (METRICS 2.1) | below | `effort` |
 | Antigravity | `config/config.json` in the folder that holds the store (`~/.gemini`) | `userSettings.vertexServiceTier` | `serviceTier`, provider `google` |
 | WorkBuddy, WorkBuddy AI | `<data folder>/settings.json` | `reasoningEffort` | `effort` |
 | Hermes Agent | the profile's `config.yaml` (METRICS 4.15) | `agent.reasoning_effort`, `agent.service_tier` | `hermesEffort`, `hermesServiceTier` |
 
+- Several locations (METRICS 2.1): an agent takes the files of the root it is read under (Codex's `config.toml` of
+  that Codex home, Antigravity's `config.json` beside that store, WorkBuddy's files in that data folder, Gemini CLI's
+  file of that root); a source's own configured value is its first detected root's.
 - Gemini CLI: of `modelConfigs.overrides` and then `modelConfigs.customOverrides`, in order, an entry counts only when
   its `match` is an object with the one member `model` equal to the agent's model. The last such entry whose
   `modelConfig.generateContentConfig.thinkingConfig` has a string `thinkingLevel` (`HIGH`, `LOW`, …) or a
@@ -368,6 +376,7 @@ and the mode CSV keep it unknown. `configured` stays forbidden in reports.
 | WorkBuddy, WorkBuddy AI | session-current; configured `reasoningEffort` | no local data (`fast-model` and its siblings are routing) | yes |
 | Hermes Agent | session-current; configured `agent.reasoning_effort` | configured `agent.service_tier` only | yes |
 | Gemini CLI | configured only | no local data | yes |
+| Devin | no local data | no local data | yes |
 
 What would settle the rules checked only against shipped code:
 

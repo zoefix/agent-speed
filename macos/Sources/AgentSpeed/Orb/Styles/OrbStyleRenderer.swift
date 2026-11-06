@@ -174,6 +174,22 @@ struct OrbReadoutLayout {
     /// and the redline chromatic split.
     var silkValue = false
 
+    /// Smaller orbs draw no unit line (DESIGN 2a, Shared foundation): at the 7 pt floor it would outgrow its gap.
+    static let unitFloor: CGFloat = 96
+
+    static func hasUnitLine(style: OrbStyleKind, diameter: CGFloat) -> Bool {
+        style != .minimal && diameter >= unitFloor
+    }
+
+    /// The layout at a diameter: below `unitFloor` without the unit line, the title where it was.
+    func at(diameter: CGFloat) -> OrbReadoutLayout {
+        guard diameter < Self.unitFloor, unitSize != nil else { return self }
+        var layout = self
+        if case .belowUnit(let gap) = title { layout.title = .belowValue(unitGap + gap) }
+        layout.unitSize = nil
+        return layout
+    }
+
     /// The title's baseline below the center, × S.
     var titleOffset: CGFloat {
         switch title {

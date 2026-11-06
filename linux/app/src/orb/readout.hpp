@@ -74,6 +74,20 @@ struct ReadoutLayout {
 
     double titleOffset() const;
     static const ReadoutLayout led;
+
+    // Smaller orbs draw no unit line (DESIGN 2a, Shared foundation): at the 7 pt floor it would outgrow its gap.
+    static constexpr double kUnitFloor = 96;
+    // The layout at diameter `s`: below kUnitFloor without the unit line, the title where it was.
+    ReadoutLayout at(double s) const {
+        if (s >= kUnitFloor || unitSize <= 0) return *this;
+        ReadoutLayout small = *this;
+        if (title == Title::BelowUnit) {
+            small.title = Title::BelowValue;
+            small.titlePlace = unitGap + titlePlace;
+        }
+        small.unitSize = 0;
+        return small;
+    }
 };
 
 // Where a style puts the two-line readout (DESIGN 10), fractions of S from the center.

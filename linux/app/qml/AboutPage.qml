@@ -62,6 +62,8 @@ SettingsPage {
                 text: S.tr2(S.rev, report.reporting ? "privacy.statement.report" : "privacy.statement") + "\n\n"
                       + S.tr2(S.rev, report.reporting ? "privacy.traffic.report" : "privacy.traffic") + "\n\n"
                       + S.tr2(S.rev, "privacy.report") + "\n\n" + S.tr2(S.rev, "privacy.perfScore")
+                      // DESIGN 13: the remote hosts' paragraph while hosts exist.
+                      + (hostsView.shown ? "\n\n" + S.tr2(S.rev, "privacy.remote") : "")
                 color: Theme.ink2
                 font.pixelSize: 12
                 lineHeight: 1.3

@@ -18,6 +18,27 @@ public enum ToolbarDensity
     Tight,
 }
 
+/// <summary>How the host picker (DESIGN 13) gives way once every other control is as narrow as it gets.</summary>
+public enum HostPickerMode
+{
+    /// <summary>Its symbol and name (a long name capped and cut in the middle once the pickers narrow).</summary>
+    Name,
+
+    /// <summary>Only its symbol; the tooltip keeps the name.</summary>
+    Symbol,
+
+    /// <summary>Only its symbol, and the source picker only its dot.</summary>
+    SourceDot,
+}
+
+/// <summary>A toolbar layout with the host picker: the usual density and how the pickers show their names.</summary>
+public readonly record struct ToolbarFit(ToolbarDensity Density, HostPickerMode Hosts)
+{
+    public bool ShowsHostName => Hosts == HostPickerMode.Name;
+
+    public bool ShowsSourceName => Hosts != HostPickerMode.SourceDot;
+}
+
 /// <summary>
 /// Layout of the Usage History toolbar (DESIGN 4b, item 1): source picker (with the <c>history.includeSubscriptions</c>
 /// checkbox while a source is marked as a subscription, DESIGN 9), range segments and export on one line, narrowing the
@@ -44,6 +65,96 @@ public static class HistoryToolbar
 
     /// <summary>The source picker's fixed width once it narrows.</summary>
     public const double CompactPickerWidth = 160;
+
+    /// <summary>The host picker's usual minimum width.</summary>
+    public const double HostPickerMinWidth = 132;
+
+    /// <summary>The widest the host picker grows for a long host name.</summary>
+    public const double HostPickerMaxWidth = 220;
+
+    /// <summary>The host picker once the pickers narrow: a longer name is cut in the middle.</summary>
+    public const double CompactHostPickerWidth = 140;
+
+    /// <summary>A picker showing only its symbol or dot, with the drop-down chevron.</summary>
+    public const double SymbolPickerWidth = 64;
+
+    /// <summary>The stages of a toolbar with the host picker, from roomiest to tightest (DESIGN 13).</summary>
+    private static readonly ToolbarFit[] HostStages =
+    [
+        new(ToolbarDensity.Full, HostPickerMode.Name),
+        new(ToolbarDensity.IconExport, HostPickerMode.Name),
+        new(ToolbarDensity.CompactRange, HostPickerMode.Name),
+        new(ToolbarDensity.CompactPicker, HostPickerMode.Name),
+        new(ToolbarDensity.CompactPicker, HostPickerMode.Symbol),
+        new(ToolbarDensity.Tight, HostPickerMode.Symbol),
+        new(ToolbarDensity.Tight, HostPickerMode.SourceDot),
+    ];
+
+    /// <summary>
+    /// The roomiest stage whose total width fits with the host picker after the source picker: the usual densities, then the
+    /// host picker as its symbol, then the source picker as its dot; the tightest when none fits.
+    /// </summary>
+    /// <param name="hostPickerWidth">The host picker at its natural width (its symbol and the selected host's name).</param>
+    public static ToolbarFit FitWithHosts(double available, IReadOnlyList<double> labelWidths, double pickerWidth, double hostPickerWidth,
+        double exportIcon, double exportLabel, double subscriptionsLabelWidth = 0, double subscriptionsIconWidth = 0)
+    {
+        ArgumentNullException.ThrowIfNull(labelWidths);
+        foreach (var stage in HostStages)
+        {
+            if (WidthWithHosts(stage, labelWidths, pickerWidth, hostPickerWidth, exportIcon, exportLabel, subscriptionsLabelWidth,
+                    subscriptionsIconWidth) <= available + 0.5)
+            {
+                return stage;
+            }
+        }
+
+        return HostStages[^1];
+    }
+
+    /// <summary>Everything on the toolbar line at <paramref name="fit"/>, the host picker included.</summary>
+    public static double WidthWithHosts(ToolbarFit fit, IReadOnlyList<double> labelWidths, double pickerWidth, double hostPickerWidth,
+        double exportIcon, double exportLabel, double subscriptionsLabelWidth = 0, double subscriptionsIconWidth = 0) =>
+        Width(fit.Density, labelWidths, pickerWidth, exportIcon, exportLabel, subscriptionsLabelWidth, subscriptionsIconWidth)
+        - PickerWidth(fit.Density, pickerWidth) + SourcePickerWidth(fit, pickerWidth)
+        + HostGap(fit.Density) + HostPickerWidth(fit, hostPickerWidth);
+
+    /// <summary>The source picker with the host picker present: as usual, or only its dot at the tightest stage.</summary>
+    public static double SourcePickerWidth(ToolbarFit fit, double pickerWidth) =>
+        fit.ShowsSourceName ? PickerWidth(fit.Density, pickerWidth) : SymbolPickerWidth;
+
+    /// <summary>The host picker: as wide as it needs within its bounds, capped once the pickers narrow, then its symbol.</summary>
+    public static double HostPickerWidth(ToolbarFit fit, double hostPickerWidth)
+    {
+        if (!fit.ShowsHostName)
+        {
+            return SymbolPickerWidth;
+        }
+
+        var natural = Math.Clamp(double.IsFinite(hostPickerWidth) ? hostPickerWidth : 0, HostPickerMinWidth, HostPickerMaxWidth);
+        return NarrowsPicker(fit.Density) ? Math.Min(natural, CompactHostPickerWidth) : natural;
+    }
+
+    /// <summary>
+    /// The host picker's width on a toolbar <paramref name="available"/> wide at <paramref name="fit"/>: at least its width for the
+    /// stage, and as much more of the room the other controls leave as its name needs (a long name is cut only when it must be).
+    /// </summary>
+    public static double FittedHostPickerWidth(double available, ToolbarFit fit, IReadOnlyList<double> labelWidths, double pickerWidth,
+        double hostPickerWidth, double exportIcon, double exportLabel, double subscriptionsLabelWidth = 0, double subscriptionsIconWidth = 0)
+    {
+        var stage = HostPickerWidth(fit, hostPickerWidth);
+        if (!fit.ShowsHostName || !double.IsFinite(available))
+        {
+            return stage;
+        }
+
+        var others = WidthWithHosts(fit, labelWidths, pickerWidth, hostPickerWidth, exportIcon, exportLabel, subscriptionsLabelWidth,
+            subscriptionsIconWidth) - stage;
+        var natural = Math.Clamp(double.IsFinite(hostPickerWidth) ? hostPickerWidth : 0, HostPickerMinWidth, HostPickerMaxWidth);
+        return Math.Max(stage, Math.Min(natural, Math.Floor(available - others)));
+    }
+
+    /// <summary>Space between the source picker and the host picker.</summary>
+    public static double HostGap(ToolbarDensity density) => density == ToolbarDensity.Tight ? 4 : 8;
 
     /// <summary>The roomiest density whose total width fits; the tightest one when none does.</summary>
     /// <param name="labelWidths">Width of each range label as drawn when selected (semibold).</param>

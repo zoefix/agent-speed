@@ -1578,17 +1578,65 @@
     "en": "Data Sources",
     "ja": "データソース"
   },
-  "settings.sources.change": {
-    "zh-Hant": "變更…",
-    "zh-Hans": "更改…",
-    "en": "Change…",
-    "ja": "変更…"
-  },
   "settings.sources.reset": {
     "zh-Hant": "重設",
     "zh-Hans": "重置",
     "en": "Reset",
     "ja": "リセット"
+  },
+  "settings.sources.locationsHint": {
+    "zh-Hant": "每個來源都可以讀取多個資料夾，例如同一個工具的不同版本各自寫入的資料夾。所有位置會一起讀取，同一份紀錄只計算一次。",
+    "zh-Hans": "每个来源都可以读取多个文件夹，例如同一工具的不同版本各自写入的文件夹。所有位置会一起读取，同一份记录只计算一次。",
+    "en": "Each source can read several folders, for example when two builds of the same tool keep their sessions apart. All locations are read together, and each record counts once.",
+    "ja": "各ソースは複数のフォルダを読み込めます（同じツールの別ビルドがそれぞれ別のフォルダに書き込む場合など）。すべての場所をまとめて読み込み、同じ記録は一度だけ数えます。"
+  },
+  "settings.sources.add": {
+    "zh-Hant": "加入資料夾…",
+    "zh-Hans": "添加文件夹…",
+    "en": "Add Folder…",
+    "ja": "フォルダを追加…"
+  },
+  "settings.sources.default": {
+    "zh-Hant": "預設",
+    "zh-Hans": "默认",
+    "en": "Default",
+    "ja": "デフォルト"
+  },
+  "settings.sources.remove": {
+    "zh-Hant": "移除",
+    "zh-Hans": "移除",
+    "en": "Remove",
+    "ja": "削除"
+  },
+  "settings.sources.removeLocation": {
+    "zh-Hant": "移除「%@」",
+    "zh-Hans": "移除“%@”",
+    "en": "Remove “%@”",
+    "ja": "「%@」を削除"
+  },
+  "settings.sources.keepOne": {
+    "zh-Hant": "至少要保留一個位置。要停止讀取這個來源，請關閉它的開關。",
+    "zh-Hans": "至少要保留一个位置。要停止读取这个来源，请关闭它的开关。",
+    "en": "Keep at least one location. To stop reading this source, turn it off.",
+    "ja": "場所は少なくとも 1 つ必要です。このソースの読み込みをやめるには、スイッチをオフにしてください。"
+  },
+  "settings.sources.limit": {
+    "zh-Hant": "最多可以加入 %d 個位置",
+    "zh-Hans": "最多可以添加 %d 个位置",
+    "en": "You can add up to %d locations",
+    "ja": "場所は最大 %d か所までです"
+  },
+  "settings.sources.alreadyListed": {
+    "zh-Hant": "這個位置已經在清單中。",
+    "zh-Hans": "这个位置已经在列表中。",
+    "en": "This location is already in the list.",
+    "ja": "この場所はすでにリストにあります。"
+  },
+  "settings.sources.alreadyDefault": {
+    "zh-Hant": "預設位置已經包含這個位置。",
+    "zh-Hans": "默认位置已经包含这个位置。",
+    "en": "The default location already includes this one.",
+    "ja": "この場所はデフォルトの場所にすでに含まれています。"
   },
   "settings.sources.sharedRoot": {
     "zh-Hant": "Claude Code 與 Claude Desktop 共用這個資料夾，依紀錄自動區分。",
@@ -1951,10 +1999,10 @@
     "ja": "Antigravity"
   },
   "settings.sources.ompHint": {
-    "zh-Hant": "omp（oh-my-pi）的 sessions 資料夾，通常是 ~/.omp/agent/sessions。未選擇資料夾時，也會自動讀取各個具名設定檔。",
-    "zh-Hans": "omp（oh-my-pi）的 sessions 文件夹，通常是 ~/.omp/agent/sessions。未选择文件夹时，也会自动读取各个命名配置文件。",
-    "en": "The sessions folder of omp (oh-my-pi), usually ~/.omp/agent/sessions. Unless you choose a folder, named profiles are included automatically.",
-    "ja": "omp（oh-my-pi）の sessions フォルダです。通常は ~/.omp/agent/sessions です。フォルダを選ばない場合は、名前付きプロファイルも自動で読み込みます。"
+    "zh-Hant": "omp（oh-my-pi）的 sessions 資料夾，通常是 ~/.omp/agent/sessions。預設位置也會自動讀取各個具名設定檔。",
+    "zh-Hans": "omp（oh-my-pi）的 sessions 文件夹，通常是 ~/.omp/agent/sessions。默认位置也会自动读取各个命名配置文件。",
+    "en": "The sessions folder of omp (oh-my-pi), usually ~/.omp/agent/sessions. The default location also includes named profiles automatically.",
+    "ja": "omp（oh-my-pi）の sessions フォルダです。通常は ~/.omp/agent/sessions です。デフォルトの場所には名前付きプロファイルも自動で含まれます。"
   },
   "settings.sources.antigravityHint": {
     "zh-Hant": "內含 conversations 的 Antigravity 資料夾，例如 ~/.gemini/antigravity-cli。命令列、桌面版與 IDE 的資料夾會自動讀取，對話紀錄只會讀取、不會變更。",
@@ -4410,6 +4458,12 @@
     "en": "Performance score: Agent Speed computes each agent's performance score from the timing and token counts of its responses and from when its tool calls start and finish and whether they fail; the usage history keeps only per-model daily totals of these figures. Only live reporting sends anything of it, when you turn it on, leave model sharing on and the service supports it: the current score and per-model performance statistics (sums of output and duration, the first-content latency distribution, thinking, cache, tool-call counts, time and failures, active time), for ranking and statistical analysis. It never sends anything about a single request or tool call, and no prompts, commands, paths or timestamps.",
     "ja": "性能スコア：Agent Speed は、応答の時間と token 数、ツール呼び出しの開始・終了の時刻とエラーの有無から各 agent の性能スコアを計算し、使用履歴にはモデルごとの日別の合計だけを保存します。送信するのは、ライブ送信をオンにしてモデルの共有もオンのままにし、サービスが対応している場合だけで、内容は現在のスコアとモデルごとの性能統計（出力量と所要時間の合計、最初の出力までの時間の分布、思考、キャッシュ、ツール呼び出しの回数・所要時間・失敗数、アクティブ時間）です。ランキングと統計分析に使われます。個々のリクエストやツール呼び出しのデータ、プロンプト、コマンド、パス、時刻は送信しません。"
   },
+  "privacy.remote": {
+    "zh-Hant": "遠端主機：Agent Speed 會在主機的 ~/.cache/agent-speed 放一個唯讀的小程式，並用你自己的 SSH 設定與金鑰連線。主機只傳回數字，絕不包含對話內容；任何關於主機的資訊都不會上報或傳送到其他地方。",
+    "zh-Hans": "远程主机：Agent Speed 会在主机的 ~/.cache/agent-speed 放置一个只读的小程序，并用你自己的 SSH 配置与密钥连接。主机只传回数字，绝不包含对话内容；任何关于主机的信息都不会上报或发送到其他地方。",
+    "en": "Remote hosts: Agent Speed puts a small read-only helper in ~/.cache/agent-speed on each host and connects with your own SSH configuration and keys. Only numbers come back, never conversation content, and nothing about your hosts is ever reported or sent anywhere else.",
+    "ja": "リモートホスト：Agent Speed は各ホストの ~/.cache/agent-speed に読み取り専用の小さなヘルパーを置き、あなた自身の SSH 設定と鍵で接続します。ホストから返ってくるのは数値だけで、会話の内容は含まれません。ホストに関する情報が報告されたり、ほかの場所へ送信されたりすることもありません。"
+  },
   "settings.report": {
     "zh-Hant": "API",
     "zh-Hans": "API",
@@ -5340,6 +5394,12 @@
     "en": "Factory Droid",
     "ja": "Factory Droid"
   },
+  "source.devin": {
+    "zh-Hant": "Devin",
+    "zh-Hans": "Devin",
+    "en": "Devin",
+    "ja": "Devin"
+  },
   "settings.sources.zcodeHint": {
     "zh-Hant": "讀取 ZCode 的本機工作階段資料庫；可選擇資料目錄或包含 db.sqlite 的資料夾。",
     "zh-Hans": "读取 ZCode 的本地会话数据库；可选择数据目录或包含 db.sqlite 的文件夹。",
@@ -5359,10 +5419,10 @@
     "ja": "Grok Build の sessions フォルダと各セッションの更新記録を読み取ります。"
   },
   "settings.sources.piHint": {
-    "zh-Hant": "Pi（Pi Coding Agent）的 sessions 資料夾，通常是 ~/.pi/agent/sessions。未選擇資料夾時，Pi 設定裡的自訂工作階段資料夾也會一起讀取。",
-    "zh-Hans": "Pi（Pi Coding Agent）的 sessions 文件夹，通常是 ~/.pi/agent/sessions。未选择文件夹时，也会读取 Pi 设置里的自定义会话文件夹。",
-    "en": "The sessions folder of Pi (Pi Coding Agent), usually ~/.pi/agent/sessions. Unless you choose a folder, the custom session folder in Pi's settings is included too.",
-    "ja": "Pi（Pi Coding Agent）の sessions フォルダです。通常は ~/.pi/agent/sessions です。フォルダを選ばない場合は、Pi の設定にあるカスタムのセッションフォルダも読み込みます。"
+    "zh-Hant": "Pi（Pi Coding Agent）的 sessions 資料夾，通常是 ~/.pi/agent/sessions。預設位置也會一起讀取 Pi 設定裡的自訂工作階段資料夾。",
+    "zh-Hans": "Pi（Pi Coding Agent）的 sessions 文件夹，通常是 ~/.pi/agent/sessions。默认位置也会读取 Pi 设置里的自定义会话文件夹。",
+    "en": "The sessions folder of Pi (Pi Coding Agent), usually ~/.pi/agent/sessions. The default location also includes the custom session folder in Pi's settings.",
+    "ja": "Pi（Pi Coding Agent）の sessions フォルダです。通常は ~/.pi/agent/sessions です。デフォルトの場所には Pi の設定にあるカスタムのセッションフォルダも含まれます。"
   },
   "settings.sources.openclawHint": {
     "zh-Hant": "OpenClaw 的狀態資料夾，通常是 ~/.openclaw；也可以選擇某個 agent 資料夾或 openclaw-agent.sqlite。交給 Claude Code、Codex 或 ACP agent 執行的對話，會算在那些工具底下。",
@@ -5381,6 +5441,12 @@
     "zh-Hans": "Factory Droid 的会话文件夹，通常是 ~/.factory/sessions（Windows 为 %USERPROFILE%\\.factory\\sessions），也可以选择 .factory 文件夹。Token 用量取自每个会话旁的 .settings.json，Droid 写入后才会出现；子 agent 分别计算。",
     "en": "Factory Droid's sessions folder, usually ~/.factory/sessions (Windows: %USERPROFILE%\\.factory\\sessions). You can also choose the .factory folder. Token usage comes from the .settings.json next to each session and appears once Droid saves it; sub-agents count on their own.",
     "ja": "Factory Droid のセッションフォルダです。通常は ~/.factory/sessions（Windows では %USERPROFILE%\\.factory\\sessions）です。.factory フォルダも選べます。トークン使用量は各セッションの隣にある .settings.json から取得し、Droid が保存した時点で反映されます。サブ agent はそれぞれ個別に集計されます。"
+  },
+  "settings.sources.devinHint": {
+    "zh-Hant": "Devin CLI 的工作階段資料庫，通常位於 ~/.local/share/devin/cli（Windows 為 %APPDATA%\\devin\\cli），也可以選擇上一層的 devin 資料夾。資料庫只會以唯讀方式讀取。",
+    "zh-Hans": "Devin CLI 的会话数据库，通常位于 ~/.local/share/devin/cli（Windows 为 %APPDATA%\\devin\\cli），也可以选择上一层的 devin 文件夹。数据库只会以只读方式读取。",
+    "en": "Devin CLI's session database, usually in ~/.local/share/devin/cli (Windows: %APPDATA%\\devin\\cli). You can also choose the devin folder above it. The database is only read, never written.",
+    "ja": "Devin CLI のセッションデータベースです。通常は ~/.local/share/devin/cli（Windows では %APPDATA%\\devin\\cli）にあり、その上の devin フォルダも選べます。データベースは読み取り専用で読み込みます。"
   },
   "mode.label": {
     "zh-Hant": "執行模式",
@@ -6203,5 +6269,485 @@
     "zh-Hant": "裝置管理",
     "zh-Hans": "设备管理",
     "ja": "デバイス管理"
+  },
+  "settings.remote": {
+    "zh-Hant": "遠端主機",
+    "zh-Hans": "远程主机",
+    "en": "Remote Hosts",
+    "ja": "リモートホスト"
+  },
+  "remote.local": {
+    "zh-Hant": "本機",
+    "zh-Hans": "本机",
+    "en": "This Mac",
+    "ja": "このMac"
+  },
+  "remote.hosts": {
+    "zh-Hant": "主機",
+    "zh-Hans": "主机",
+    "en": "Hosts",
+    "ja": "ホスト"
+  },
+  "remote.hosts.all": {
+    "zh-Hant": "全部主機",
+    "zh-Hans": "全部主机",
+    "en": "All Hosts",
+    "ja": "すべてのホスト"
+  },
+  "remote.hosts.allHint": {
+    "zh-Hant": "包含之後新增的主機。",
+    "zh-Hans": "包含之后添加的主机。",
+    "en": "Includes hosts that are added later.",
+    "ja": "あとから追加したホストも含みます。"
+  },
+  "remote.hosts.lastOne": {
+    "zh-Hant": "至少要追蹤一台主機。",
+    "zh-Hans": "至少要追踪一台主机。",
+    "en": "At least one host must be tracked.",
+    "ja": "少なくとも 1 台のホストが必要です。"
+  },
+  "remote.empty": {
+    "zh-Hant": "尚未加入遠端主機",
+    "zh-Hans": "尚未添加远程主机",
+    "en": "No remote hosts yet",
+    "ja": "リモートホストはまだありません"
+  },
+  "remote.empty.hint": {
+    "zh-Hant": "加入一台可以用 SSH 登入的 Linux 主機，它上面 agent 的速度就會和這台 Mac 的一起顯示。",
+    "zh-Hans": "添加一台可以用 SSH 登录的 Linux 主机，它上面 agent 的速度就会和这台 Mac 的一起显示。",
+    "en": "Add a Linux machine you can reach with SSH, and the speed of its agents appears next to this Mac’s.",
+    "ja": "SSH で接続できる Linux マシンを追加すると、そこで動く agent の速度がこの Mac の分と一緒に表示されます。"
+  },
+  "remote.empty.hint.computer": {
+    "zh-Hant": "加入一台可以用 SSH 登入的 Linux 主機，它上面 agent 的速度就會和這台電腦的一起顯示。",
+    "zh-Hans": "添加一台可以用 SSH 登录的 Linux 主机，它上面 agent 的速度就会和这台电脑的一起显示。",
+    "en": "Add a Linux machine you can reach with SSH, and the speed of its agents appears next to this computer’s.",
+    "ja": "SSH で接続できる Linux マシンを追加すると、そこで動く agent の速度がこのコンピューターの分と一緒に表示されます。"
+  },
+  "remote.add": {
+    "zh-Hant": "加入主機…",
+    "zh-Hans": "添加主机…",
+    "en": "Add Host…",
+    "ja": "ホストを追加…"
+  },
+  "remote.limit": {
+    "zh-Hant": "最多可以加入 %d 台主機",
+    "zh-Hans": "最多可以添加 %d 台主机",
+    "en": "You can add up to %d hosts",
+    "ja": "ホストは最大 %d 台までです"
+  },
+  "remote.footnote": {
+    "zh-Hant": "只傳回數字（例如 token 數、時間、模型與專案名稱），絕不傳送對話內容。連線使用你自己的 SSH 設定與金鑰，Agent Speed 不會儲存或詢問密碼。連線時會在主機的 ~/.cache/agent-speed 放一個唯讀的小程式。目前只支援 Linux（x86_64、ARM64）。",
+    "zh-Hans": "只传回数字（例如 token 数、时间、模型与项目名称），绝不发送对话内容。连接使用你自己的 SSH 配置与密钥，Agent Speed 不会保存或询问密码。连接时会在主机的 ~/.cache/agent-speed 放置一个只读的小程序。目前仅支持 Linux（x86_64、ARM64）。",
+    "en": "Only numbers come back — token counts, times, model and project names — never conversation content. Your own SSH configuration and keys are used; Agent Speed never stores or asks for a password. A small read-only helper is placed in ~/.cache/agent-speed on the host. Linux (x86_64, ARM64) only.",
+    "ja": "返ってくるのは数値（トークン数、時刻、モデル名やプロジェクト名など）だけで、会話の内容は送信されません。接続にはあなた自身の SSH 設定と鍵を使い、Agent Speed がパスワードを保存したり尋ねたりすることはありません。接続時にホストの ~/.cache/agent-speed に読み取り専用の小さなヘルパーを置きます。対応するのは Linux（x86_64、ARM64）のみです。"
+  },
+  "remote.edit": {
+    "zh-Hant": "編輯…",
+    "zh-Hans": "编辑…",
+    "en": "Edit…",
+    "ja": "編集…"
+  },
+  "remote.retry": {
+    "zh-Hant": "立即重試",
+    "zh-Hans": "立即重试",
+    "en": "Retry Now",
+    "ja": "今すぐ再試行"
+  },
+  "remote.copyCommand": {
+    "zh-Hant": "拷貝 SSH 指令",
+    "zh-Hans": "复制 SSH 命令",
+    "en": "Copy SSH Command",
+    "ja": "SSH コマンドをコピー"
+  },
+  "remote.remove": {
+    "zh-Hant": "移除…",
+    "zh-Hans": "移除…",
+    "en": "Remove…",
+    "ja": "削除…"
+  },
+  "remote.actions": {
+    "zh-Hant": "更多選項",
+    "zh-Hans": "更多选项",
+    "en": "More Options",
+    "ja": "その他のオプション"
+  },
+  "remote.enabled": {
+    "zh-Hant": "連線到「%@」",
+    "zh-Hans": "连接到“%@”",
+    "en": "Connect to %@",
+    "ja": "%@ に接続"
+  },
+  "remote.status.connecting": {
+    "zh-Hant": "連線中…",
+    "zh-Hans": "连接中…",
+    "en": "Connecting…",
+    "ja": "接続中…"
+  },
+  "remote.status.installing": {
+    "zh-Hant": "正在安裝…",
+    "zh-Hans": "正在安装…",
+    "en": "Installing…",
+    "ja": "インストール中…"
+  },
+  "remote.status.seeding": {
+    "zh-Hant": "讀取中… %d%%",
+    "zh-Hans": "读取中… %d%%",
+    "en": "Reading… %d%%",
+    "ja": "読み込み中… %d%%"
+  },
+  "remote.status.connected": {
+    "zh-Hant": "已連線",
+    "zh-Hans": "已连接",
+    "en": "Connected",
+    "ja": "接続済み"
+  },
+  "remote.status.connected.agents": {
+    "zh-Hant": "已連線 · %d 個 agent",
+    "zh-Hans": "已连接 · %d 个 agent",
+    "en": "Connected · %d agents",
+    "ja": "接続済み · %d 個の agent"
+  },
+  "remote.status.connected.one": {
+    "zh-Hant": "已連線 · %d 個 agent",
+    "zh-Hans": "已连接 · %d 个 agent",
+    "en": "Connected · %d agent",
+    "ja": "接続済み · %d 個の agent"
+  },
+  "remote.status.unreachable": {
+    "zh-Hant": "無法連線",
+    "zh-Hans": "无法连接",
+    "en": "Can’t reach the host",
+    "ja": "ホストに接続できません"
+  },
+  "remote.status.retryIn": {
+    "zh-Hant": "%@，%d 秒後重試",
+    "zh-Hans": "%@，%d 秒后重试",
+    "en": "%@ — retrying in %d s",
+    "ja": "%@。%d 秒後に再試行します"
+  },
+  "remote.status.retryingNow": {
+    "zh-Hant": "%@，正在重試…",
+    "zh-Hans": "%@，正在重试…",
+    "en": "%@ — retrying…",
+    "ja": "%@。再試行しています…"
+  },
+  "remote.status.authFailed": {
+    "zh-Hant": "需要金鑰登入 — Agent Speed 不使用密碼，請設定 SSH 金鑰或 ssh-agent",
+    "zh-Hans": "需要密钥登录 — Agent Speed 不使用密码，请配置 SSH 密钥或 ssh-agent",
+    "en": "Needs key login — Agent Speed never uses passwords; set up an SSH key or ssh-agent",
+    "ja": "鍵によるログインが必要です。Agent Speed はパスワードを使いません。SSH 鍵か ssh-agent を設定してください"
+  },
+  "remote.status.hostKeyUnknown": {
+    "zh-Hant": "尚未信任這台主機 — 請先在終端機執行 ssh %@",
+    "zh-Hans": "尚未信任这台主机 — 请先在终端执行 ssh %@",
+    "en": "This host isn’t trusted yet — run ssh %@ in Terminal once",
+    "ja": "まだ信頼されていないホストです。ターミナルで一度 ssh %@ を実行してください"
+  },
+  "remote.status.unsupportedSystem": {
+    "zh-Hant": "不支援這個系統（%@），只支援 Linux x86_64 與 ARM64",
+    "zh-Hans": "不支持这个系统（%@），仅支持 Linux x86_64 与 ARM64",
+    "en": "Unsupported system (%@) — only Linux x86_64 and ARM64",
+    "ja": "対応していないシステムです（%@）。Linux x86_64 と ARM64 のみ対応しています"
+  },
+  "remote.status.cannotVerify": {
+    "zh-Hant": "主機上沒有驗證檔案的工具（sha256sum、shasum 或 openssl）",
+    "zh-Hans": "主机上没有校验文件的工具（sha256sum、shasum 或 openssl）",
+    "en": "The host has no tool to verify files (sha256sum, shasum or openssl)",
+    "ja": "ホストにファイルを検証するツール（sha256sum、shasum、openssl）がありません"
+  },
+  "remote.status.uploadFailed": {
+    "zh-Hant": "無法把小程式傳到主機上",
+    "zh-Hans": "无法把小程序传到主机上",
+    "en": "Couldn’t copy the helper to the host",
+    "ja": "ヘルパーをホストへ転送できませんでした"
+  },
+  "remote.status.notExecutable": {
+    "zh-Hant": "無法在遠端資料夾執行程式 — 請改用其他資料夾",
+    "zh-Hans": "无法在远程文件夹运行程序 — 请改用其他文件夹",
+    "en": "Programs can’t run in the remote folder — choose another folder",
+    "ja": "リモートのフォルダでプログラムを実行できません。別のフォルダを指定してください"
+  },
+  "remote.status.versionMismatch": {
+    "zh-Hant": "版本不相符 — 請更新 Agent Speed",
+    "zh-Hans": "版本不匹配 — 请更新 Agent Speed",
+    "en": "Version mismatch — update Agent Speed",
+    "ja": "バージョンが一致しません。Agent Speed をアップデートしてください"
+  },
+  "remote.status.protocolError": {
+    "zh-Hant": "收到無法辨識的資料",
+    "zh-Hans": "收到无法识别的数据",
+    "en": "Received data it couldn’t read",
+    "ja": "読み取れないデータを受信しました"
+  },
+  "remote.status.exited": {
+    "zh-Hant": "連線意外結束",
+    "zh-Hans": "连接意外结束",
+    "en": "The connection ended unexpectedly",
+    "ja": "接続が予期せず終了しました"
+  },
+  "remote.status.sshMissing": {
+    "zh-Hant": "找不到 /usr/bin/ssh",
+    "zh-Hans": "找不到 /usr/bin/ssh",
+    "en": "/usr/bin/ssh is missing",
+    "ja": "/usr/bin/ssh が見つかりません"
+  },
+  "remote.status.invalidDestination": {
+    "zh-Hant": "目的地無效 — 請編輯這台主機",
+    "zh-Hans": "目标无效 — 请编辑这台主机",
+    "en": "Invalid destination — edit this host",
+    "ja": "接続先が無効です。このホストを編集してください"
+  },
+  "remote.status.networkOff": {
+    "zh-Hant": "網路已關閉",
+    "zh-Hans": "网络已关闭",
+    "en": "Network access is off",
+    "ja": "ネットワーク接続はオフです"
+  },
+  "remote.status.disabled": {
+    "zh-Hant": "已停用",
+    "zh-Hans": "已停用",
+    "en": "Off",
+    "ja": "オフ"
+  },
+  "remote.status.historyTooLarge": {
+    "zh-Hant": "這台主機的用量歷史太多，無法同步",
+    "zh-Hans": "这台主机的用量历史太多，无法同步",
+    "en": "This host has too much usage history to sync",
+    "ja": "このホストの使用履歴が多すぎるため同期できません"
+  },
+  "remote.status.lastError": {
+    "zh-Hant": "上次錯誤：%@",
+    "zh-Hans": "上次错误：%@",
+    "en": "Last error: %@",
+    "ja": "前回のエラー：%@"
+  },
+  "remote.status.exitCode": {
+    "zh-Hant": "結束代碼 %d",
+    "zh-Hans": "退出代码 %d",
+    "en": "Exit status %d",
+    "ja": "終了ステータス %d"
+  },
+  "remote.status.relay": {
+    "zh-Hant": "小程式 %@ · %@",
+    "zh-Hans": "小程序 %@ · %@",
+    "en": "Helper %@ · %@",
+    "ja": "ヘルパー %@ · %@"
+  },
+  "remote.clock.skewed": {
+    "zh-Hant": "遠端時鐘相差 %d 秒，已自動校正",
+    "zh-Hans": "远程时钟相差 %d 秒，已自动校正",
+    "en": "The host’s clock is %d s off; corrected automatically",
+    "ja": "ホストの時計が %d 秒ずれています。自動で補正済みです"
+  },
+  "remote.clock.skewedMinutes": {
+    "zh-Hant": "遠端時鐘相差 %d 分鐘，已自動校正",
+    "zh-Hans": "远程时钟相差 %d 分钟，已自动校正",
+    "en": "The host’s clock is %d min off; corrected automatically",
+    "ja": "ホストの時計が %d 分ずれています。自動で補正済みです"
+  },
+  "remote.word.connecting": {
+    "zh-Hant": "連線中",
+    "zh-Hans": "连接中",
+    "en": "Connecting",
+    "ja": "接続中"
+  },
+  "remote.word.retrying": {
+    "zh-Hant": "重試中",
+    "zh-Hans": "重试中",
+    "en": "Retrying",
+    "ja": "再試行中"
+  },
+  "remote.word.attention": {
+    "zh-Hant": "需要處理",
+    "zh-Hans": "需要处理",
+    "en": "Needs action",
+    "ja": "要対応"
+  },
+  "remote.word.offline": {
+    "zh-Hant": "離線",
+    "zh-Hans": "离线",
+    "en": "Offline",
+    "ja": "オフライン"
+  },
+  "remote.orb.offline": {
+    "zh-Hant": "主機離線",
+    "zh-Hans": "主机离线",
+    "en": "Host offline",
+    "ja": "ホストはオフライン"
+  },
+  "remote.sheet.add": {
+    "zh-Hant": "加入遠端主機",
+    "zh-Hans": "添加远程主机",
+    "en": "Add Remote Host",
+    "ja": "リモートホストを追加"
+  },
+  "remote.sheet.edit": {
+    "zh-Hant": "編輯「%@」",
+    "zh-Hans": "编辑“%@”",
+    "en": "Edit “%@”",
+    "ja": "「%@」を編集"
+  },
+  "remote.sheet.body": {
+    "zh-Hant": "輸入你在終端機裡 ssh 後面會打的內容，例如 ~/.ssh/config 中的 Host 名稱。",
+    "zh-Hans": "输入你在终端里 ssh 后面会输入的内容，例如 ~/.ssh/config 中的 Host 名称。",
+    "en": "Enter what you would type after ssh in Terminal, such as a Host from ~/.ssh/config.",
+    "ja": "ターミナルで ssh の後に入力するもの（~/.ssh/config の Host 名など）を入力してください。"
+  },
+  "remote.destination": {
+    "zh-Hant": "SSH 目的地",
+    "zh-Hans": "SSH 目标",
+    "en": "SSH Destination",
+    "ja": "SSH 接続先"
+  },
+  "remote.destination.placeholder": {
+    "zh-Hant": "devbox 或 user@server",
+    "zh-Hans": "devbox 或 user@server",
+    "en": "devbox or user@server",
+    "ja": "devbox または user@server"
+  },
+  "remote.name": {
+    "zh-Hant": "名稱",
+    "zh-Hans": "名称",
+    "en": "Name",
+    "ja": "名前"
+  },
+  "remote.advanced": {
+    "zh-Hant": "進階",
+    "zh-Hans": "高级",
+    "en": "Advanced",
+    "ja": "詳細設定"
+  },
+  "remote.relayFolder": {
+    "zh-Hant": "主機上的資料夾",
+    "zh-Hans": "主机上的文件夹",
+    "en": "Folder on the Host",
+    "ja": "ホスト上のフォルダ"
+  },
+  "remote.relayFolder.hint": {
+    "zh-Hant": "小程式與它的快取放在這裡。主目錄不允許執行程式（noexec）時，請改用其他資料夾。",
+    "zh-Hans": "小程序及其缓存放在这里。主目录不允许运行程序（noexec）时，请改用其他文件夹。",
+    "en": "The helper and its cache live here. Choose another folder if programs can’t run in your home folder (noexec).",
+    "ja": "ヘルパーとそのキャッシュの置き場所です。ホームフォルダでプログラムを実行できない（noexec）場合は別のフォルダを指定してください。"
+  },
+  "remote.test": {
+    "zh-Hant": "測試連線",
+    "zh-Hans": "测试连接",
+    "en": "Test Connection",
+    "ja": "接続をテスト"
+  },
+  "remote.test.running": {
+    "zh-Hant": "正在測試…",
+    "zh-Hans": "正在测试…",
+    "en": "Testing…",
+    "ja": "テスト中…"
+  },
+  "remote.test.ok": {
+    "zh-Hant": "可以連線 · %@",
+    "zh-Hans": "可以连接 · %@",
+    "en": "Reachable · %@",
+    "ja": "接続できます · %@"
+  },
+  "remote.addButton": {
+    "zh-Hant": "加入",
+    "zh-Hans": "添加",
+    "en": "Add",
+    "ja": "追加"
+  },
+  "remote.save": {
+    "zh-Hant": "儲存",
+    "zh-Hans": "保存",
+    "en": "Save",
+    "ja": "保存"
+  },
+  "remote.error.empty": {
+    "zh-Hant": "請輸入目的地",
+    "zh-Hans": "请输入目标",
+    "en": "Enter a destination",
+    "ja": "接続先を入力してください"
+  },
+  "remote.error.tooLong": {
+    "zh-Hant": "太長了（最多 %d 個字元）",
+    "zh-Hans": "太长了（最多 %d 个字符）",
+    "en": "Too long (at most %d characters)",
+    "ja": "長すぎます（最大 %d 文字）"
+  },
+  "remote.error.leadingDash": {
+    "zh-Hant": "不能以「-」開頭",
+    "zh-Hans": "不能以“-”开头",
+    "en": "Can’t start with “-”",
+    "ja": "「-」で始めることはできません"
+  },
+  "remote.error.forbiddenCharacter": {
+    "zh-Hant": "含有不允許的字元（空格、引號或 ; & | $ 等符號）",
+    "zh-Hans": "含有不允许的字符（空格、引号或 ; & | $ 等符号）",
+    "en": "Contains a character that isn’t allowed (spaces, quotes or symbols such as ; & | $)",
+    "ja": "使用できない文字（スペース、引用符、; & | $ などの記号）が含まれています"
+  },
+  "remote.error.folderCharacter": {
+    "zh-Hant": "只能使用英文字母、數字和 . _ - / ~",
+    "zh-Hans": "只能使用英文字母、数字和 . _ - / ~",
+    "en": "Use only letters, digits and . _ - / ~",
+    "ja": "英数字と . _ - / ~ のみ使用できます"
+  },
+  "remote.error.notAbsolute": {
+    "zh-Hant": "請以 ~/ 或 / 開頭",
+    "zh-Hans": "请以 ~/ 或 / 开头",
+    "en": "Start with ~/ or /",
+    "ja": "~/ または / で始めてください"
+  },
+  "remote.error.unsafeComponent": {
+    "zh-Hant": "不能包含「..」或「//」",
+    "zh-Hans": "不能包含“..”或“//”",
+    "en": "Can’t contain “..” or “//”",
+    "ja": "「..」や「//」は使用できません"
+  },
+  "remote.remove.confirm": {
+    "zh-Hant": "要移除「%@」嗎？",
+    "zh-Hans": "要移除“%@”吗？",
+    "en": "Remove “%@”?",
+    "ja": "「%@」を削除しますか？"
+  },
+  "remote.remove.files": {
+    "zh-Hant": "連線會立即中斷。小程式會留在主機的 %@，需要時可以自行刪除。",
+    "zh-Hans": "连接会立即断开。小程序会留在主机的 %@，需要时可以自行删除。",
+    "en": "The connection stops right away. The helper stays in %@ on the host; you can delete it there yourself.",
+    "ja": "接続はすぐに停止します。ヘルパーはホストの %@ に残ります。必要に応じて手動で削除できます。"
+  },
+  "remote.remove.deleteHistory": {
+    "zh-Hant": "同時刪除它的用量歷史",
+    "zh-Hans": "同时删除它的用量历史",
+    "en": "Also delete its usage history",
+    "ja": "使用履歴も削除する"
+  },
+  "remote.remove.button": {
+    "zh-Hant": "移除",
+    "zh-Hans": "移除",
+    "en": "Remove",
+    "ja": "削除"
+  },
+  "remote.a11y.onHost": {
+    "zh-Hant": "在 %@ 上執行",
+    "zh-Hans": "在 %@ 上运行",
+    "en": "running on %@",
+    "ja": "%@ で実行中"
+  },
+  "remote.card.host": {
+    "zh-Hant": "主機：%@",
+    "zh-Hans": "主机：%@",
+    "en": "Host: %@",
+    "ja": "ホスト：%@"
+  },
+  "remote.dashboard.hint": {
+    "zh-Hant": "顯示這台主機的用量歷史",
+    "zh-Hans": "显示这台主机的用量历史",
+    "en": "Show this host’s usage history",
+    "ja": "このホストの使用履歴を表示"
+  },
+  "remote.history.allHosts": {
+    "zh-Hant": "全部主機",
+    "zh-Hans": "全部主机",
+    "en": "All Hosts",
+    "ja": "すべてのホスト"
   }
 }

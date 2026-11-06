@@ -12,7 +12,8 @@ final class HistoryAnalyzer {
     /// 6: the copied prefix of paginated Codex sub-agents (METRICS 3.5). 7: the unpriced facts (METRICS 9.10).
     /// 8: the task records of the retired task score. 9: the performance records (METRICS 6.11).
     /// 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
-    static let analysisVersion: Int64 = 10
+    /// 11: Grok Build reasoning counted apart from its output (METRICS 4.12).
+    static let analysisVersion: Int64 = 11
     /// The current price table version of the last complete run; when it changes, files with unpriced responses are
     /// analysed again (METRICS 9.7).
     static let priceVersionKey = "priceTableVersion"
@@ -20,7 +21,11 @@ final class HistoryAnalyzer {
     static let openclawFamily = "openclaw"
     /// Meta key prefix of an analysed OpenClaw database's identity.
     static let openclawMetaPrefix = "openclaw:"
+    /// Meta key prefixes of an analysed OpenCode or ZCode database's identity, one per database (METRICS 2.1).
+    static let opencodeMetaPrefix = "opencode:"
+    static let zcodeMetaPrefix = "zcode:"
     static let hermesFamily = "hermes"
+    static let devinFamily = "devin"
     static let maxWorkers = 4
 
     struct Options: Sendable {
@@ -75,6 +80,8 @@ final class HistoryAnalyzer {
     /// The parent sidecar each Factory Droid session last found unreadable, carried from one analysis to the next
     /// (METRICS 4.16 Own counters); a relaunch starts without it.
     private var droidUnreadableParents: [String: DroidPaths.Signature] = [:]
+    /// Devin's databases as last read by this analyser (METRICS 4.17 *History*).
+    private let devinPlanner = DevinHistoryPlanner()
     /// Bumped whenever performance records are written.
     private(set) var perfVersion = 0
 
@@ -122,6 +129,27 @@ final class HistoryAnalyzer {
         var records: [ResponseRecord]
         var modified: Int64
         var previous: HistoryDatabase.Entry?
+        /// The dedupe owner of its database (METRICS 2.1).
+        var fileID: FileID
+    }
+
+    /// One OpenCode database with its sessions to analyse again.
+    private struct PlannedOpencodeDatabase {
+        var database: OpencodeDatabase
+        var sessions: [PlannedSession]
+        var metaKey: String
+        var identity: String
+        var fileID: FileID
+    }
+
+    /// A database of the source's list (OpenCode, ZCode) and whether it is unchanged since the last complete run.
+    private struct ListedDatabase {
+        var position: Int
+        var path: String
+        var stat: FileStat
+        var metaKey: String
+        var identity: String
+        var unchanged: Bool
     }
 
     /// One OpenClaw transcript window to analyse again (METRICS 4.14): its responses were read during planning.
@@ -160,12 +188,13 @@ final class HistoryAnalyzer {
     private struct Plan {
         var files: [PlannedFile] = []
         var discovered = 0
-        var opencode: (database: OpencodeDatabase, sessions: [PlannedSession], identity: String)?
-        var opencodeIdentity: String?
+        var opencode: [PlannedOpencodeDatabase] = []
         var zcode: [PlannedZcodeSession] = []
-        var zcodeIdentity: String?
+        /// Meta key → identity of every ZCode database read this run.
+        var zcodeIdentities: [String: String] = [:]
         var openclaw: [PlannedOpenClawDatabase] = []
         var hermes: [PlannedHermesFile] = []
+        var devin: [(entry: DevinHistoryEntry, previous: HistoryDatabase.Entry?)] = []
 
         var openclawWindows: Int { openclaw.reduce(0) { $0 + $1.windows.count } }
 
@@ -213,6 +242,17 @@ final class HistoryAnalyzer {
         }
         if configuration.readsHermes {
             planHermes(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing, into: &plan)
+        }
+        if configuration.readsDevin {
+            let version = options.analysisVersion
+            let reprices = repricing && entries.values.contains { $0.family == Self.devinFamily && $0.hasUnpriced }
+            let planned = devinPlanner.plan(roots: configuration.resolvedDevinRoots) { key, size, modified in
+                guard let previous = entries[key], !zoneChanged, !reprices else { return false }
+                return previous.family == Self.devinFamily && previous.version == version && previous.size == size
+                    && previous.modified == modified
+            }
+            plan.discovered += devinPlanner.discovered
+            plan.devin = planned.map { ($0, entries[$0.key]) }
         }
         return plan
     }
@@ -322,27 +362,57 @@ final class HistoryAnalyzer {
         }
     }
 
+    /// The databases of OpenCode's or ZCode's list that exist, with their identities (METRICS 2.1, 8).
+    private func listedDatabases(_ paths: [String], metaPrefix: String, options: Options, zoneChanged: Bool,
+                                 reprices: Bool) throws -> [ListedDatabase] {
+        var listed: [ListedDatabase] = []
+        for (position, path) in paths.enumerated() {
+            guard let stat = FileStat.stat(path), stat.isRegularFile else { continue }
+            let wal = FileStat.stat(path + "-wal")
+            let identity = [path, "\(stat.identity.device):\(stat.identity.inode)", "\(stat.size):\(stat.modifiedNs)",
+                            wal.map { "\($0.size):\($0.modifiedNs)" } ?? "-", "v\(options.analysisVersion)"].joined(separator: "|")
+            let metaKey = metaPrefix + path
+            let stored = try database.meta(metaKey)
+            let unchanged = !zoneChanged && !reprices && stored == identity
+            listed.append(ListedDatabase(position: position, path: path, stat: stat, metaKey: metaKey, identity: identity,
+                                         unchanged: unchanged))
+        }
+        return listed
+    }
+
+    /// ZCode's databases in list order. A changed database is read whole; a session an earlier database of the list
+    /// provides is left out (METRICS 2.1). An unchanged database is not opened: its sessions are the stored ones.
     private func planZcode(configuration: MonitorConfiguration, options: Options, zoneChanged: Bool,
                            repricing: Bool, into plan: inout Plan) throws {
-        let path = ZcodeDatabase.databasePath(forRoot: configuration.resolvedZcodeRoot)
-        guard let stat = FileStat.stat(path), stat.isRegularFile else { return }
-        plan.discovered += 1
-        let wal = FileStat.stat(path + "-wal")
-        let identity = [path, "\(stat.identity.device):\(stat.identity.inode)", "\(stat.size):\(stat.modifiedNs)",
-                        wal.map { "\($0.size):\($0.modifiedNs)" } ?? "-", "v\(options.analysisVersion)"].joined(separator: "|")
         let reprices = repricing && entries.values.contains { $0.family == "zcode" && $0.hasUnpriced }
-        if !zoneChanged, !reprices, try database.meta("zcode") == identity { return }
-        guard let source = try? ZcodeDatabase(path: path), let batch = try? source.read() else { return }
-        plan.zcodeIdentity = identity
-        let grouped = Dictionary(grouping: batch.rows, by: \.sessionId)
-        for session in batch.sessions.sorted(by: { $0.id < $1.id }) {
-            let key = source.agentId(session.id)
-            let records = (grouped[session.id] ?? []).compactMap(source.record)
-            plan.zcode.append(PlannedZcodeSession(path: key, records: records,
-                                                  modified: max(stat.modifiedNs, wal?.modifiedNs ?? 0), previous: entries[key]))
+        let paths = configuration.resolvedZcodeRoots.map(ZcodeDatabase.databasePath(forRoot:))
+        var seen: Set<String> = []
+        for listed in try listedDatabases(paths, metaPrefix: Self.zcodeMetaPrefix, options: options,
+                                          zoneChanged: zoneChanged, reprices: reprices) {
+            plan.discovered += 1
+            let prefix = listed.path + "#"
+            if listed.unchanged {
+                seen.formUnion(entries.keys.filter { $0.hasPrefix(prefix) }.map { String($0.dropFirst(prefix.count)) })
+                continue
+            }
+            guard let source = try? ZcodeDatabase(path: listed.path), let batch = try? source.read() else { continue }
+            plan.zcodeIdentities[listed.metaKey] = listed.identity
+            let wal = FileStat.stat(listed.path + "-wal")
+            let grouped = Dictionary(grouping: batch.rows, by: \.sessionId)
+            for session in batch.sessions.sorted(by: { $0.id < $1.id }) where seen.insert(session.id).inserted {
+                let key = source.agentId(session.id)
+                let records = (grouped[session.id] ?? []).compactMap(source.record)
+                plan.zcode.append(PlannedZcodeSession(path: key, records: records,
+                                                      modified: max(listed.stat.modifiedNs, wal?.modifiedNs ?? 0),
+                                                      previous: entries[key],
+                                                      fileID: TranscriptSession.zcodeFileID(listed.position)))
+            }
         }
     }
 
+    /// OpenCode's databases in list order (METRICS 2.1, 8): changed sessions of changed databases; a session an earlier
+    /// database of the list provides is left out. An unchanged database is opened only when a later one changed, to
+    /// learn its sessions.
     private func planOpencode(
         configuration: MonitorConfiguration,
         options: Options,
@@ -350,31 +420,37 @@ final class HistoryAnalyzer {
         repricing: Bool,
         into plan: inout Plan
     ) throws {
-        let path = OpencodeDatabase.databasePath(forRoot: configuration.resolvedOpencodeRoot)
-        guard let stat = FileStat.stat(path), stat.isRegularFile else { return }
-        plan.discovered += 1
-        let wal = FileStat.stat(path + "-wal")
-        let identity = [path, "\(stat.identity.device):\(stat.identity.inode)", "\(stat.size):\(stat.modifiedNs)",
-                        wal.map { "\($0.size):\($0.modifiedNs)" } ?? "-", "v\(options.analysisVersion)"].joined(separator: "|")
         let reprices = repricing && entries.contains { $0.value.family == Self.opencodeFamily && $0.value.hasUnpriced }
-        if !zoneChanged, !reprices, try database.meta("opencode") == identity { return }
-        // A busy, unreadable or unsupported database is tried again on the next run.
-        guard let opencode = try? OpencodeDatabase(path: path), let activity = try? opencode.sessionActivity(),
-              let infos = try? opencode.sessions() else { return }
-        plan.opencodeIdentity = identity
-        var sessions: [PlannedSession] = []
-        for info in infos.sorted(by: { $0.id < $1.id }) {
-            let rows = activity[info.id]
-            let modified = max(info.updatedMs, rows?.lastUpdatedMs ?? 0)
-            let previous = entries[OpencodeRules.agentId(session: info.id)]
-            let count = rows?.rows ?? 0
-            if let previous, !zoneChanged, previous.version == options.analysisVersion,
-               previous.size == count, previous.modified == modified, !(repricing && previous.hasUnpriced) {
-                continue
+        let paths = configuration.resolvedOpencodeRoots.map(OpencodeDatabase.databasePath(forRoot:))
+        let listed = try listedDatabases(paths, metaPrefix: Self.opencodeMetaPrefix, options: options,
+                                         zoneChanged: zoneChanged, reprices: reprices)
+        plan.discovered += listed.count
+        let lastChanged = listed.lastIndex { !$0.unchanged }
+        var seen: Set<String> = []
+        for (index, database) in listed.enumerated() {
+            guard let lastChanged, index <= lastChanged else { break }
+            // A busy, unreadable or unsupported database is tried again on the next run.
+            guard let opencode = try? OpencodeDatabase(path: database.path), let infos = try? opencode.sessions() else { continue }
+            let earlier = seen
+            seen.formUnion(infos.map(\.id))
+            if database.unchanged { continue }
+            guard let activity = try? opencode.sessionActivity() else { continue }
+            var sessions: [PlannedSession] = []
+            for info in infos.sorted(by: { $0.id < $1.id }) where !earlier.contains(info.id) {
+                let rows = activity[info.id]
+                let modified = max(info.updatedMs, rows?.lastUpdatedMs ?? 0)
+                let previous = entries[OpencodeRules.agentId(session: info.id)]
+                let count = rows?.rows ?? 0
+                if let previous, !zoneChanged, previous.version == options.analysisVersion,
+                   previous.size == count, previous.modified == modified, !(repricing && previous.hasUnpriced) {
+                    continue
+                }
+                sessions.append(PlannedSession(info: info, identity: (count, modified), previous: previous))
             }
-            sessions.append(PlannedSession(info: info, identity: (count, modified), previous: previous))
+            plan.opencode.append(PlannedOpencodeDatabase(database: opencode, sessions: sessions, metaKey: database.metaKey,
+                                                         identity: database.identity,
+                                                         fileID: TranscriptSession.opencodeFileID(database.position)))
         }
-        plan.opencode = (opencode, sessions, identity)
     }
 
     /// Transcript roots of the enabled sources (both Gemini CLI roots, every omp root that is not Pi's, every readable
@@ -408,13 +484,14 @@ final class HistoryAnalyzer {
         let repricing = !entries.isEmpty && storedPriceVersion != priceVersion
         let plan = try plan(configuration: configuration, options: options, zoneChanged: zoneChanged, repricing: repricing)
         report.filesDiscovered = plan.discovered
-        let sessions = plan.opencode?.sessions ?? []
+        let sessions = plan.opencode.flatMap(\.sessions)
         var state = Progress(filesTotal: plan.files.count + sessions.count + plan.zcode.count + plan.openclawWindows
-                                + plan.hermes.count, bytesTotal: plan.bytes)
+                                + plan.hermes.count + plan.devin.count, bytesTotal: plan.bytes)
         progress(state)
         func elapsedMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
 
-        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty {
+        if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty
+            && plan.devin.isEmpty {
             try finish(plan: plan, zone: zone, priceVersion: priceVersion)
             report.durationMs = elapsedMs()
             return report
@@ -422,7 +499,8 @@ final class HistoryAnalyzer {
 
         var deduper = Deduper.hashed()
         let replaced = Set(plan.files.compactMap(\.previous?.id) + sessions.compactMap(\.previous?.id) + plan.zcode.compactMap(\.previous?.id)
-            + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id))
+            + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id)
+            + plan.devin.compactMap(\.previous?.id))
         try database.loadKeys(excluding: replaced, into: &deduper)
         var labeler = DayLabeler(timeZone: options.timeZone)
         var pending: [(path: String, entry: HistoryDatabase.Entry, keys: [UInt64])] = []
@@ -519,10 +597,11 @@ final class HistoryAnalyzer {
             }
         }
 
-        var unreadSessions = 0
-        if let opencode = plan.opencode, !report.cancelled {
-            let fileID = TranscriptSession.opencodeFileID
+        var completeOpencode: Set<String> = []
+        for opencode in plan.opencode where !report.cancelled {
+            let fileID = opencode.fileID
             var database = opencode.database
+            var unreadSessions = 0
             for session in opencode.sessions {
                 // An immutable connection is only valid while OpenCode does not write (METRICS 4.5).
                 if database.isStale, let reopened = try? OpencodeDatabase(path: database.path) { database = reopened }
@@ -558,12 +637,13 @@ final class HistoryAnalyzer {
                 try flush(force: false)
                 progress(state)
             }
+            if unreadSessions == 0, !report.cancelled { completeOpencode.insert(opencode.metaKey) }
         }
 
         if !report.cancelled {
             for session in plan.zcode {
                 if isCancelled() { report.cancelled = true; break }
-                let records = session.records.filter { deduper.claim($0.key, for: TranscriptSession.zcodeFileID) != .otherFile }
+                let records = session.records.filter { deduper.claim($0.key, for: session.fileID) != .otherFile }
                 let keys = deduper.finishFile()
                 pendingPerf[session.path] = Self.perfRecords(responses: records, source: .zcode, timeZone: options.timeZone)
                 let entry = HistoryDatabase.Entry(id: session.previous?.id, family: "zcode", size: Int64(records.count),
@@ -648,10 +728,30 @@ final class HistoryAnalyzer {
             }
         }
 
+        if !report.cancelled {
+            // Devin: one entry per CLI session (METRICS 4.17).
+            for (planned, previous) in plan.devin {
+                if isCancelled() { report.cancelled = true; break }
+                let records = planned.records.filter { deduper.claim($0.key, for: planned.fileID) != .otherFile }
+                let keys = deduper.finishFile()
+                pendingPerf[planned.key] = Self.perfRecords(responses: records, source: .devin, timeZone: options.timeZone)
+                let entry = HistoryDatabase.Entry(id: previous?.id, family: Self.devinFamily, size: planned.size,
+                                                  modified: planned.modified, version: options.analysisVersion,
+                                                  days: DayAggregate.contributions(of: records, source: .devin,
+                                                                                   labeler: &labeler, pricing: pricing))
+                entries[planned.key] = entry
+                pending.append((planned.key, entry, keys))
+                report.sessionsAnalyzed += 1
+                state.filesDone += 1
+                try flush(force: false)
+                progress(state)
+            }
+        }
+
         try flush(force: true)
         try saveBindings()
         if !report.cancelled {
-            try finish(plan: plan, zone: zone, priceVersion: priceVersion, opencodeComplete: unreadSessions == 0)
+            try finish(plan: plan, zone: zone, priceVersion: priceVersion, completeOpencode: completeOpencode)
         }
         report.durationMs = elapsedMs()
         return report
@@ -702,11 +802,15 @@ final class HistoryAnalyzer {
         return (days, stat.size, stat.modifiedNs, recorder.rows)
     }
 
-    private func finish(plan: Plan, zone: String, priceVersion: String, opencodeComplete: Bool = true) throws {
+    /// `completeOpencode`: the OpenCode databases whose every planned session was read; nil when the run had nothing to
+    /// read, so every planned database is complete.
+    private func finish(plan: Plan, zone: String, priceVersion: String, completeOpencode: Set<String>? = nil) throws {
         try database.setMeta("timeZone", zone)
         try database.setMeta(Self.priceVersionKey, priceVersion)
-        if opencodeComplete, let identity = plan.opencodeIdentity { try database.setMeta("opencode", identity) }
-        if let identity = plan.zcodeIdentity { try database.setMeta("zcode", identity) }
+        for opencode in plan.opencode where completeOpencode?.contains(opencode.metaKey) ?? true {
+            try database.setMeta(opencode.metaKey, opencode.identity)
+        }
+        for (key, identity) in plan.zcodeIdentities { try database.setMeta(key, identity) }
         for planned in plan.openclaw { try database.setMeta(Self.openclawMetaPrefix + planned.path, planned.identity) }
     }
 
@@ -752,6 +856,11 @@ final class HistoryAnalyzer {
                     unpriced: UnpricedReading(requests: part?.requests ?? 0, noCostData: part?.noCostData ?? 0,
                                               facts: part?.facts ?? [], derived: part?.derived ?? 0))
             }
+    }
+
+    /// The day's stored live peak (all hosts and sources).
+    func peak(forDay day: String) -> Double? {
+        peaks[day]
     }
 
     /// Stores a day's live peak (all sources); returns true when it raised the stored value.

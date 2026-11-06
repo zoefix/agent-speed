@@ -302,8 +302,11 @@ def read_grok(path, seen=None):
             duration = millis(raw.get("apiDurationMs"))
             start = at - duration if duration is not None and 0 < duration <= 900000 else None
             inp, out = count(raw.get("inputTokens")), count(raw.get("outputTokens"))
+            reasoning = count(raw.get("reasoningTokens"))
+            if reasoning > out:
+                out = min(CAP, out + reasoning)
             output[key] = record(key, start, at,
-                dict(input=inp, output=out, reasoning=min(out, count(raw.get("reasoningTokens"))),
+                dict(input=inp, output=out, reasoning=min(out, reasoning),
                      cachedInput=min(inp, count(raw.get("cachedReadTokens"))),
                      cacheWriteInput=min(inp, count(raw.get("cacheCreationTokens")))),
                 name, requests=raw.get("modelCalls", 1))

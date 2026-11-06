@@ -2,6 +2,7 @@ using AgentSpeed.Core.Antigravity;
 using AgentSpeed.Core.Engine;
 using AgentSpeed.Core.IO;
 using AgentSpeed.Core.IO.Sqlite;
+using AgentSpeed.Core.Locations;
 using AgentSpeed.Core.Parsing;
 
 namespace AgentSpeed.Core.ZCode;
@@ -20,7 +21,9 @@ internal sealed class ZCodeUpdate
     public bool Changed => Responses.Count > 0 || Agents.Count > 0 || Removed.Count > 0;
 }
 
-internal sealed class ZCodeSource(string root, IDeduper deduper)
+/// <param name="claims">Shared with the source's other databases: a session one of them reads is skipped here (METRICS 2.1).</param>
+/// <param name="position">This database's position in the list, its claim owner.</param>
+internal sealed class ZCodeSource(string root, IDeduper deduper, SessionClaims? claims = null, int position = 0)
 {
     private readonly Dictionary<string, ParsedResponse> _emitted = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ZCodeAgent> _agents = new(StringComparer.Ordinal);
@@ -31,6 +34,8 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
     private long? _lastReadMs;
 
     internal Func<long> ClockMs { get; set; } = static () => Environment.TickCount64;
+
+    public string RootPath => root;
 
     public string DatabasePath => ZCodeDatabase.DatabasePath(root);
     public string WatchDirectory => Path.GetDirectoryName(DatabasePath) ?? string.Empty;
@@ -64,6 +69,7 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
         {
             update.Removed.AddRange(_agents.Keys);
             _agents.Clear();
+            claims?.ReleaseAll(position);
             _stamp = null;
             _lastReadMs = null;
         }
@@ -88,6 +94,11 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
             var rows = database.Read(_sinceMs);
             foreach (var group in rows.GroupBy(r => r.SessionId))
             {
+                if (!Claim(group.Key))
+                {
+                    continue;
+                }
+
                 var latest = group.MaxBy(r => r.StartedMs)!;
                 var last = group.Max(r => Math.Max(r.UpdatedMs, r.CompletedMs ?? r.StartedMs ?? 0));
                 var agent = new ZCodeAgent(latest.AgentId(DatabasePath), latest.SessionId, latest.ParentId, latest.CreatedMs,
@@ -120,6 +131,11 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
 
             foreach (var candidate in database.ReadAgents(_sinceMs))
             {
+                if (!Claim(candidate.SessionId))
+                {
+                    continue;
+                }
+
                 var agent = candidate;
                 if (_agents.TryGetValue(agent.Id, out var known))
                 {
@@ -163,6 +179,8 @@ internal sealed class ZCodeSource(string root, IDeduper deduper)
 
         return update;
     }
+
+    private bool Claim(string session) => claims?.Claim(session, position) ?? true;
 
     /// <summary>The facts of a session's latest row by <c>started_at</c>, a running one included, that is no auxiliary call.</summary>
     internal static ExecutionModes CurrentModes(IEnumerable<ZCodeRow> rows) => rows.LastOrDefault(r => !r.Auxiliary)?.Modes ?? ExecutionModes.Empty;

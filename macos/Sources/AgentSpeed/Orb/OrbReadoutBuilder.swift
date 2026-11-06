@@ -133,6 +133,7 @@ final class OrbReadoutBuilder {
 
     func add(into scene: inout OrbScene, _ frame: OrbFrame, layout: OrbReadoutLayout, palette: OrbReadoutPalette = .standard,
              clip: OrbTextClip = .none, pill: Bool = true) {
+        let layout = layout.at(diameter: frame.s)
         let lines = lines(frame, layout)
         let reduce = frame.effects.reduceMotion || frame.effects.level == .off
         if let p = unitSwitchProgress(at: frame.time, reduceMotion: reduce), let old = unitSwitch, !frame.unavailable {

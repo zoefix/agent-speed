@@ -1,38 +1,49 @@
 namespace AgentSpeed.Core.Engine;
 
 /// <summary>
-/// Today's measured output per source in one-second buckets (METRICS 6.6) and the measured peak of any source set
-/// (METRICS 6.8). A source gets buckets only once it has measured data today.
+/// Today's measured output per (host, source) cell in one-second buckets (METRICS 6.6) and the measured peak of any subset
+/// of cells (METRICS 6.8, DESIGN 13). A cell gets buckets only once it has measured data today. This computer's cells take
+/// the first slots in source order, so a subset of local data sums exactly as the per-source buckets always did.
 /// </summary>
 /// <remarks>
-/// Each requested set caches the peak trailing average per chunk. A change marks the chunks whose windows it touched in
-/// the cached sets that contain its source, so a set is rescanned only after one of its sources changed, and then only
+/// Each requested subset caches the peak trailing average per chunk. A change marks the chunks whose windows it touched in
+/// the cached subsets that contain its cell, so a subset is rescanned only after one of its cells changed, and then only
 /// those chunks.
 /// </remarks>
 internal sealed class SourceSeconds
 {
-    /// <summary>Sets beyond this are dropped oldest first; at most eight orbs ask at a time.</summary>
+    /// <summary>Subsets beyond this are dropped oldest first; at most eight orbs and eight boards ask at a time.</summary>
     public const int MaxCachedSets = 32;
 
     private const int ChunkSeconds = SecondSeries.ChunkSeconds;
 
     private static readonly int SourceCount = Enum.GetValues<SourceKind>().Length;
 
-    private readonly SecondSeries?[] _series = new SecondSeries?[SourceCount];
+    private readonly List<HostSource> _cells = [.. Enum.GetValues<SourceKind>().Select(HostSource.Local)];
+    private readonly Dictionary<HostSource, int> _slots = [];
+    private readonly List<SecondSeries?> _series = [.. Enumerable.Repeat<SecondSeries?>(null, SourceCount)];
     private readonly List<SetPeak> _sets = [];
-    private readonly double[]?[] _members = new double[SourceCount][];
+    private double[]?[] _members = new double[SourceCount][];
 
-    /// <summary>Sources whose buckets are allocated.</summary>
+    public SourceSeconds()
+    {
+        for (var i = 0; i < _cells.Count; i++)
+        {
+            _slots[_cells[i]] = i;
+        }
+    }
+
+    /// <summary>Sources whose buckets are allocated on any host.</summary>
     public SourceSet Allocated
     {
         get
         {
             var set = SourceSet.Empty;
-            for (var i = 0; i < SourceCount; i++)
+            for (var i = 0; i < _series.Count; i++)
             {
                 if (_series[i] is not null)
                 {
-                    set = set.With((SourceKind)i);
+                    set = set.With(_cells[i].Source);
                 }
             }
 
@@ -45,12 +56,20 @@ internal sealed class SourceSeconds
 
     public void Clear()
     {
-        Array.Clear(_series);
+        for (var i = 0; i < _series.Count; i++)
+        {
+            _series[i] = null;
+        }
+
         _sets.Clear();
     }
 
-    /// <summary>Adds (positive) or removes (negative) measured output of one source, like the all-sources buckets.</summary>
-    public void AddInterval(SourceKind source, long startMs, long endMs, double amount, long floorMs)
+    /// <summary>Adds (positive) or removes (negative) measured output of this computer's <paramref name="source"/>.</summary>
+    public void AddInterval(SourceKind source, long startMs, long endMs, double amount, long floorMs) =>
+        AddInterval(HostSource.Local(source), startMs, endMs, amount, floorMs);
+
+    /// <summary>Adds (positive) or removes (negative) measured output of one cell, like the all-sources buckets.</summary>
+    public void AddInterval(HostSource cell, long startMs, long endMs, double amount, long floorMs)
     {
         var from = Math.Max(startMs, floorMs);
         if (endMs <= startMs || amount == 0 || from >= endMs)
@@ -58,7 +77,24 @@ internal sealed class SourceSeconds
             return;
         }
 
-        ref var series = ref _series[(int)source];
+        if (!_slots.TryGetValue(cell, out var slot))
+        {
+            if (amount < 0)
+            {
+                return;
+            }
+
+            slot = _cells.Count;
+            _cells.Add(cell);
+            _slots[cell] = slot;
+            _series.Add(null);
+            if (_members.Length < _cells.Count)
+            {
+                Array.Resize(ref _members, _cells.Count * 2);
+            }
+        }
+
+        var series = _series[slot];
         if (series is null)
         {
             if (amount < 0)
@@ -66,7 +102,7 @@ internal sealed class SourceSeconds
                 return;
             }
 
-            series = new SecondSeries();
+            series = _series[slot] = new SecondSeries();
         }
 
         series.AddInterval(startMs, endMs, amount, floorMs);
@@ -76,7 +112,7 @@ internal sealed class SourceSeconds
         var lastChunk = SecondSeries.ChunkOf(SpeedMath.FloorDiv(endMs - 1, 1000) + 2);
         foreach (var set in _sets)
         {
-            if (!set.Sources.Contains(source))
+            if (!set.Key.Contains(cell))
             {
                 continue;
             }
@@ -88,10 +124,13 @@ internal sealed class SourceSeconds
         }
     }
 
+    /// <summary>The same for <paramref name="sources"/> on every host.</summary>
+    public double MeasuredPeak(SourceSet sources) => MeasuredPeak(new SubsetKey(sources));
+
     /// <summary>Maximum over today of the 3-bucket trailing average of the members' summed buckets.</summary>
-    public double MeasuredPeak(SourceSet sources)
+    public double MeasuredPeak(SubsetKey key)
     {
-        var set = Find(sources) ?? Cache(sources);
+        var set = Find(key) ?? Cache(key);
         if (set.Dirty.Count == 0)
         {
             return set.Peak;
@@ -99,7 +138,7 @@ internal sealed class SourceSeconds
 
         foreach (var chunk in set.Dirty)
         {
-            if (ChunkPeak(sources, chunk) is { } peak)
+            if (ChunkPeak(key, chunk) is { } peak)
             {
                 set.ChunkPeaks[chunk] = peak;
             }
@@ -122,11 +161,11 @@ internal sealed class SourceSeconds
         return best;
     }
 
-    private SetPeak? Find(SourceSet sources)
+    private SetPeak? Find(SubsetKey key)
     {
         foreach (var set in _sets)
         {
-            if (set.Sources == sources)
+            if (set.Key == key)
             {
                 return set;
             }
@@ -135,17 +174,17 @@ internal sealed class SourceSeconds
         return null;
     }
 
-    private SetPeak Cache(SourceSet sources)
+    private SetPeak Cache(SubsetKey key)
     {
         if (_sets.Count >= MaxCachedSets)
         {
             _sets.RemoveAt(0);
         }
 
-        var set = new SetPeak(sources);
-        foreach (var kind in sources)
+        var set = new SetPeak(key);
+        for (var slot = 0; slot < _cells.Count; slot++)
         {
-            if (_series[(int)kind] is { } series)
+            if (key.Contains(_cells[slot]) && _series[slot] is { } series)
             {
                 set.Dirty.UnionWith(series.ChunkKeys);
             }
@@ -159,13 +198,13 @@ internal sealed class SourceSeconds
     /// Peak of the trailing averages that end inside <paramref name="chunk"/>; null when no member has data there (such
     /// windows never exceed the window that ends at the last second with data).
     /// </summary>
-    private double? ChunkPeak(SourceSet sources, long chunk)
+    private double? ChunkPeak(SubsetKey key, long chunk)
     {
         var count = 0;
         double previous2 = 0, previous1 = 0;
-        foreach (var kind in sources)
+        for (var slot = 0; slot < _cells.Count; slot++)
         {
-            if (_series[(int)kind] is not { } series)
+            if (!key.Contains(_cells[slot]) || _series[slot] is not { } series)
             {
                 continue;
             }
@@ -210,9 +249,9 @@ internal sealed class SourceSeconds
         return best;
     }
 
-    private sealed class SetPeak(SourceSet sources)
+    private sealed class SetPeak(SubsetKey key)
     {
-        public SourceSet Sources { get; } = sources;
+        public SubsetKey Key { get; } = key;
 
         /// <summary>Peak trailing average per chunk with data.</summary>
         public Dictionary<long, double> ChunkPeaks { get; } = [];

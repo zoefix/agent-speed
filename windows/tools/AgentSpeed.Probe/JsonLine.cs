@@ -115,6 +115,7 @@ internal sealed class JsonLine
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
+        SourceKind.Devin => "devin",
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

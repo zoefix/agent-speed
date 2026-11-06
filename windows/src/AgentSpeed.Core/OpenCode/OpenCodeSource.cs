@@ -1,5 +1,6 @@
 using AgentSpeed.Core.IO;
 using AgentSpeed.Core.IO.Sqlite;
+using AgentSpeed.Core.Locations;
 using AgentSpeed.Core.Parsing;
 
 namespace AgentSpeed.Core.OpenCode;
@@ -47,6 +48,8 @@ internal sealed class OpenCodeSource : IDisposable
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private readonly IDeduper _deduper;
+    private readonly SessionClaims? _claims;
+    private readonly int _owner;
     private readonly Dictionary<string, Tracked> _sessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, string> _rowSessions = new(StringComparer.Ordinal);
     private readonly Dictionary<string, long> _watchedRows = new(StringComparer.Ordinal);
@@ -59,12 +62,16 @@ internal sealed class OpenCodeSource : IDisposable
     private long _newestRowUpdate;
     private bool _needsSeed;
 
-    public OpenCodeSource(string root, IDeduper deduper)
+    /// <param name="claims">Shared with the source's other databases: a session one of them reads is skipped here (METRICS 2.1).</param>
+    /// <param name="owner">This database's position in the list.</param>
+    public OpenCodeSource(string root, IDeduper deduper, SessionClaims? claims = null, int owner = 0)
     {
         RootPath = root;
         DatabasePath = OpenCodeDatabase.DatabasePath(root);
         WalPath = DatabasePath.Length > 0 ? DatabasePath + "-wal" : string.Empty;
         _deduper = deduper;
+        _claims = claims;
+        _owner = owner;
     }
 
     public string RootPath { get; }
@@ -152,6 +159,7 @@ internal sealed class OpenCodeSource : IDisposable
         var update = new OpenCodeUpdate { Reset = true };
         var previous = _sessions.Values.Where(s => s.State?.LastLineMs is not null).Select(s => s.Info.Id).ToList();
         _sessions.Clear();
+        _claims?.ReleaseAll(_owner);
         _rowSessions.Clear();
         _watchedRows.Clear();
         _createdCursor = null;
@@ -167,6 +175,11 @@ internal sealed class OpenCodeSource : IDisposable
                 foreach (var info in database.Sessions().OrderBy(s => s.Id, StringComparer.Ordinal))
                 {
                     _sessionCursor = Math.Max(_sessionCursor ?? info.UpdatedMs, info.UpdatedMs);
+                    if (!Claim(info.Id))
+                    {
+                        continue;
+                    }
+
                     if (info.UpdatedMs < threshold)
                     {
                         _sessions[info.Id] = new Tracked(info) { RowWatermark = info.UpdatedMs };
@@ -233,7 +246,7 @@ internal sealed class OpenCodeSource : IDisposable
                         advanced.Add(info.Id);
                     }
                 }
-                else
+                else if (Claim(info.Id))
                 {
                     _sessions[info.Id] = new Tracked(info);
                     advanced.Add(info.Id);
@@ -329,6 +342,7 @@ internal sealed class OpenCodeSource : IDisposable
             var tracked = _sessions[id];
             Release(tracked);
             _sessions.Remove(id);
+            _claims?.Release(id, _owner);
             var agent = OpenCodeRules.AgentId(id);
             update.Agents.Remove(agent);
             update.Removed.Add(agent);
@@ -387,10 +401,14 @@ internal sealed class OpenCodeSource : IDisposable
         }
 
         _sessions.Clear();
+        _claims?.ReleaseAll(_owner);
         _rowSessions.Clear();
         _watchedRows.Clear();
         return update;
     }
+
+    /// <summary>True when this database may read the session: no other database of the source reads it.</summary>
+    private bool Claim(string session) => _claims?.Claim(session, _owner) ?? true;
 
     private void Apply(List<OpenCodeRow> rows, string sessionId, OpenCodeUpdate update)
     {

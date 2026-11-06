@@ -26,6 +26,8 @@ public enum SourceKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case hermes
     /// Factory Droid (CLI `droid` and Factory Desktop): session transcripts with their settings files.
     case droid
+    /// Devin CLI (`devin`, Cognition): its session database.
+    case devin
 
     public var id: String { rawValue }
 }
@@ -128,6 +130,8 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
     public var perf: PerfEvaluation?
     /// What its recent tool calls say (METRICS 6.10).
     public var signals: WorkSignals
+    /// `local`, or the remote host the agent runs on (REMOTE 2.2).
+    public var host: String
 
     public init(
         id: String,
@@ -144,9 +148,11 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
         modes: ExecutionModes = .empty,
         intelligence: IntelligenceSums = .zero,
         perf: PerfEvaluation? = nil,
-        signals: WorkSignals = .none
+        signals: WorkSignals = .none,
+        host: String = RemoteHost.localId
     ) {
         self.id = id
+        self.host = host
         self.source = source
         self.project = project
         self.model = model
@@ -170,6 +176,9 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
 
     /// Live, resting or none (METRICS 6.9 *Values*).
     public var intelligenceForm: AgentIntelligence { AgentIntelligence(intelligence.score) }
+
+    /// The agent runs on this computer.
+    public var isLocal: Bool { host == RemoteHost.localId }
 }
 
 public struct SourceStatus: Identifiable, Equatable, Sendable {
@@ -178,8 +187,10 @@ public struct SourceStatus: Identifiable, Equatable, Sendable {
     public var configuredModes: ExecutionModes = .empty
     public var enabled: Bool
     public var rootPath: String
-    /// The source is detected: its root folder (WorkBuddy: the data folder) exists and is readable (METRICS 2).
+    /// The source is detected: its root folder (WorkBuddy: the data folder) exists and is readable (METRICS 2), on this
+    /// computer or on a connected remote host (DESIGN 13).
     public var available: Bool
+    /// Today's sessions on this computer and on every connected remote host.
     public var sessionCount: Int
     public var live: Rate
     public var today: TokenTotals
@@ -247,6 +258,8 @@ public struct ResponseSummary: Equatable, Sendable {
     /// Output tok/s, nil when the duration is unknown.
     public var speed: Double?
     public var endedAt: Date
+    /// `local`, or the remote host the response was read on.
+    public var host: String
 
     public init(
         source: SourceKind,
@@ -256,8 +269,10 @@ public struct ResponseSummary: Equatable, Sendable {
         totalTokens: Int,
         duration: TimeInterval?,
         speed: Double?,
-        endedAt: Date
+        endedAt: Date,
+        host: String = RemoteHost.localId
     ) {
+        self.host = host
         self.source = source
         self.project = project
         self.model = model
@@ -304,9 +319,9 @@ public struct SpeedSnapshot: Equatable, Sendable {
     public var history: [HistoryPoint]
     public var lastResponse: ResponseSummary?
     public var warnings: [MonitorWarning]
-    /// Today's measured output peak of every source set requested with `LiveMonitor.setSubsets` (METRICS 6.8): the
+    /// Today's measured output peak of every subset requested with `LiveMonitor.setSubsets` (METRICS 6.8): the
     /// maximum 3-bucket trailing average of the members' summed measured buckets, without the observed live part.
-    public var subsetPeaks: [SourceSet: Double]
+    public var subsetPeaks: [SubsetKey: Double]
     /// Local midnight at which this snapshot's "today" starts; `.distantPast` before the monitor reported one.
     public var dayStart: Date
     /// The live cost rate of every source (METRICS 9.5); subscription marks apply in the UI (9.4).
@@ -320,6 +335,12 @@ public struct SpeedSnapshot: Equatable, Sendable {
     /// Monotonic ms (`CLOCK_MONOTONIC`) at which the earliest read that changed the engine since the previous snapshot
     /// began; nil when no read changed anything (METRICS 11.9, Observations).
     public var observedAtMs: Int64?
+    /// This computer first, then every configured remote host in settings order (DESIGN 13); empty while no remote
+    /// host is configured.
+    public var hosts: [HostStatus] = []
+    /// The (host, source) cells with something to show, in `hosts` order and then source order; empty while no remote
+    /// host is configured. Per source they add up to `sources`.
+    public var hostSources: [HostSourceStatus] = []
 
     public init(
         timestamp: Date,
@@ -337,7 +358,7 @@ public struct SpeedSnapshot: Equatable, Sendable {
         history: [HistoryPoint],
         lastResponse: ResponseSummary?,
         warnings: [MonitorWarning],
-        subsetPeaks: [SourceSet: Double] = [:],
+        subsetPeaks: [SubsetKey: Double] = [:],
         dayStart: Date = .distantPast,
         liveCost: LiveCost = .zero,
         todayCost: CostTally = .zero,
@@ -397,35 +418,8 @@ public enum SpeedEvent: Equatable, Sendable {
 
 public struct MonitorConfiguration: Equatable, Sendable {
     public var enabledSources: Set<SourceKind>
-    /// Nil uses the default Codex sessions folder.
-    public var codexRoot: URL?
-    /// Nil uses the default Claude projects folder (shared by Claude Code and Claude Desktop).
-    public var claudeRoot: URL?
-    /// Nil uses the default DeepSeek Harness sessions folder.
-    public var dshRoot: URL?
-    /// Nil uses the default OpenCode data folder (the one that contains `opencode.db`).
-    public var opencodeRoot: URL?
-    /// Nil uses the default Gemini CLI home folder.
-    public var geminiRoot: URL?
-    /// One omp `sessions` folder; nil reads the default root and every named profile (METRICS 2, 4.7).
-    public var ompRoot: URL?
-    /// One Antigravity store folder (or its `conversations` folder); nil reads the three default stores (METRICS 4.8).
-    public var antigravityRoot: URL?
-    /// WorkBuddy's data folder (or its `projects` folder); nil reads `~/.workbuddy` (METRICS 4.9).
-    public var workbuddyRoot: URL?
-    /// WorkBuddy AI's data folder (or its `projects` folder); nil reads `~/.workbuddy-ai` (METRICS 4.9).
-    public var workbuddyAiRoot: URL?
-    public var zcodeRoot: URL?
-    public var kimiRoot: URL?
-    public var grokBuildRoot: URL?
-    /// One Pi sessions folder; nil reads `<agent dir>/sessions` and Pi's custom session folder (METRICS 2, 4.13).
-    public var piRoot: URL?
-    /// One OpenClaw state folder, agent folder or `openclaw-agent.sqlite`; nil reads every state folder (METRICS 2, 4.14).
-    public var openclawRoot: URL?
-    /// A Hermes Agent home or one of its `logs` folders; nil reads the automatic home (METRICS 2, 4.15).
-    public var hermesRoot: URL?
-    /// The `.factory` folder or its `sessions` folder; nil reads `~/.factory/sessions` (METRICS 2, 4.16).
-    public var droidRoot: URL?
+    /// Every source's location list (METRICS 2.1); a source without one reads its automatic roots.
+    public var locations: SourceLocations
     /// Tests: replaces the automatic roots of a family that are otherwise derived from the environment and the home
     /// folder (omp `sessions` roots, Antigravity store folders, WorkBuddy data folders).
     var automaticRoots: [TranscriptFamily: [URL]] = [:]
@@ -437,9 +431,14 @@ public struct MonitorConfiguration: Equatable, Sendable {
     var hermesHome: HermesHome?
     /// Tests: the zone Hermes's wall-clock times are read in, instead of this computer's (METRICS 4.15).
     var hermesTimeZone: TimeZone?
+    /// Tests: Devin's automatic root (its CLI database), instead of the process's own.
+    var devinAutomaticRoots: [DevinRoot]?
 
+    /// `locations`, with each named URL as that source's only user location (`[path]`, no automatic entry): the
+    /// one-folder form tests and the probe use.
     public init(
         enabledSources: Set<SourceKind> = Set(SourceKind.allCases),
+        locations: SourceLocations = SourceLocations(),
         codexRoot: URL? = nil,
         claudeRoot: URL? = nil,
         dshRoot: URL? = nil,
@@ -455,24 +454,22 @@ public struct MonitorConfiguration: Equatable, Sendable {
         piRoot: URL? = nil,
         openclawRoot: URL? = nil,
         hermesRoot: URL? = nil,
-        droidRoot: URL? = nil
+        droidRoot: URL? = nil,
+        devinRoot: URL? = nil
     ) {
         self.enabledSources = enabledSources
-        self.codexRoot = codexRoot
-        self.claudeRoot = claudeRoot
-        self.dshRoot = dshRoot
-        self.opencodeRoot = opencodeRoot
-        self.geminiRoot = geminiRoot
-        self.ompRoot = ompRoot
-        self.antigravityRoot = antigravityRoot
-        self.workbuddyRoot = workbuddyRoot
-        self.workbuddyAiRoot = workbuddyAiRoot
-        self.zcodeRoot = zcodeRoot
-        self.kimiRoot = kimiRoot
-        self.grokBuildRoot = grokBuildRoot
-        self.piRoot = piRoot
-        self.openclawRoot = openclawRoot
-        self.hermesRoot = hermesRoot
-        self.droidRoot = droidRoot
+        self.locations = locations
+        let single: [(TranscriptFolder, URL?)] = [
+            (.codex, codexRoot), (.claude, claudeRoot), (.dsh, dshRoot), (.opencode, opencodeRoot), (.gemini, geminiRoot),
+            (.omp, ompRoot), (.antigravity, antigravityRoot), (.workbuddy, workbuddyRoot), (.workbuddyAi, workbuddyAiRoot),
+            (.zcode, zcodeRoot), (.kimi, kimiRoot), (.grokBuild, grokBuildRoot), (.pi, piRoot), (.openclaw, openclawRoot),
+            (.hermes, hermesRoot), (.droid, droidRoot), (.devin, devinRoot),
+        ]
+        for case let (folder, url?) in single { self.locations[folder] = [.path(url.path)] }
+    }
+
+    /// Replaces a source's list with one user location (tests, the probe).
+    public mutating func setLocation(_ url: URL, for folder: TranscriptFolder) {
+        locations[folder] = [.path(url.path)]
     }
 }

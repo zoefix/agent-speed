@@ -13,6 +13,35 @@ public static class OrbNaming
         return orb.Name ?? AutomaticName(orb.Sources, localizer);
     }
 
+    /// <summary>The custom name, else the sources' name followed by the hosts' (DESIGN 13) over <paramref name="hosts"/> (this computer, then the remote hosts).</summary>
+    public static string DisplayName(OrbDefinition orb, Localizer localizer, IReadOnlyList<OrbHostChoice> hosts)
+    {
+        ArgumentNullException.ThrowIfNull(orb);
+        return orb.Name ?? AutomaticName(orb.Sources, localizer) + HostSuffix(orb.Hosts, hosts, localizer);
+    }
+
+    /// <summary>
+    /// <c> · &lt;host&gt;</c> for one host, <c> · &lt;first&gt; +N</c> (<c>orbs.name.more</c>) for several, in settings order; nothing for
+    /// all hosts, for ids this computer does not know, or while no remote host exists.
+    /// </summary>
+    public static string HostSuffix(OrbHosts selection, IReadOnlyList<OrbHostChoice> hosts, Localizer localizer)
+    {
+        ArgumentNullException.ThrowIfNull(hosts);
+        ArgumentNullException.ThrowIfNull(localizer);
+        if (!OrbHostChoice.PickerShown(hosts) || selection.IsAll)
+        {
+            return string.Empty;
+        }
+
+        var known = hosts.Where(h => selection.Tracks(h.Id)).ToList();
+        return known.Count switch
+        {
+            0 => string.Empty,
+            1 => " · " + known[0].Name,
+            _ => " · " + localizer.Format("orbs.name.more", known[0].Name, known.Count - 1),
+        };
+    }
+
     /// <summary>
     /// All sources → <c>orbs.sources.all</c>; one → its name; two → <c>orbs.name.pair</c>; three or more →
     /// <c>orbs.name.more</c> (the first and the number of the others). Unknown keys are ignored.

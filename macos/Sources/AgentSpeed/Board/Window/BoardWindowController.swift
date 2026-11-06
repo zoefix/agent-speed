@@ -2,15 +2,19 @@ import AgentSpeedOrbModel
 import AppKit
 
 /// One floating board (DESIGN 2c): its panel, the effects window riding above it, the content layers and effects
-/// driver, and the drag with magnetism and edge snapping shared with the orbs (boards and orbs avoid each other).
-/// The center is in screen points (AppKit, y up).
+/// driver, the drag with magnetism and edge snapping shared with the orbs (boards and orbs avoid each other), and the
+/// fade when idle, which dims both windows together. The center is in screen points (AppKit, y up).
 @MainActor
 final class BoardWindowController {
     let panel = BoardPanel()
     let effectsPanel = BoardEffectsPanel()
     let driver: BoardEffectsDriver
     let host: BoardHostView
+    /// Hover and drag, for the fade when idle (the orbs' dimmer reads it).
+    let interaction = OrbInteraction()
     private(set) var config: BoardConfig
+    /// Faded when idle: both windows at 45 % of the board's opacity.
+    private(set) var isDimmed = false
     private(set) var center: CGPoint
     var dark: Bool {
         didSet { if dark != oldValue { applyLook() } }
@@ -49,6 +53,7 @@ final class BoardWindowController {
     private var drag: OrbDragSession?
     private var shown = false
     private var contentStale = true
+    private var appliedOpacity: Double?
 
     init(config: BoardConfig, center: CGPoint, dark: Bool) {
         self.config = config
@@ -61,6 +66,7 @@ final class BoardWindowController {
         effectsPanel.contentView = driver.overlay
         animator.attach(to: host)
         animator.onChange = { [weak self] state in self?.place(at: state.center) }
+        host.onHoverChange = { [weak self] hovered in self?.setHovered(hovered) }
         host.onMouseDown = { [weak self] _ in self?.beginDrag() }
         host.onMouseDragged = { [weak self] _ in self?.continueDrag() }
         host.onMouseUp = { [weak self] event in self?.endDrag(event) }
@@ -93,6 +99,7 @@ final class BoardWindowController {
     func hide() {
         guard shown else { return }
         shown = false
+        setHovered(false)
         panel.removeChildWindow(effectsPanel)
         effectsPanel.orderOut(nil)
         panel.orderOut(nil)
@@ -101,7 +108,7 @@ final class BoardWindowController {
 
     /// A new board fades in where it was placed (DESIGN 2c `boards.add`, as a new orb appears).
     func fadeIn(duration: TimeInterval = 0.25) {
-        let alpha = CGFloat(min(max(config.opacity, 0), 1))
+        let alpha = windowAlpha
         panel.alphaValue = 0
         effectsPanel.alphaValue = 0
         NSAnimationContext.runAnimationGroup { context in
@@ -148,9 +155,45 @@ final class BoardWindowController {
         panel.apply(alwaysOnTop: config.alwaysOnTop, allSpaces: config.allSpaces)
         BoardPanel.apply(effectsPanel, alwaysOnTop: config.alwaysOnTop, allSpaces: config.allSpaces)
         panel.ignoresMouseEvents = config.clickThrough
-        let alpha = CGFloat(min(max(config.opacity, 0), 1))
-        panel.alphaValue = alpha
-        effectsPanel.alphaValue = alpha
+        if config.clickThrough { setHovered(false) }
+        // Only a new opacity sets the alpha, so an unrelated change never cuts a fade short.
+        if appliedOpacity != config.opacity {
+            appliedOpacity = config.opacity
+            setAlpha(windowAlpha, motion: nil)
+        }
+    }
+
+    // MARK: Fade when idle
+
+    private func setHovered(_ hovered: Bool) {
+        if interaction.isHovered != hovered { interaction.isHovered = hovered }
+    }
+
+    /// The board's opacity, × 45 % while it is faded when idle.
+    private var windowAlpha: CGFloat {
+        CGFloat(min(max(config.opacity, 0), 1)) * (isDimmed ? IdleFade.alpha : 1)
+    }
+
+    /// Fades the board and its effects to 45 % of its opacity, or brings them back (DESIGN 2, 2c *Fade when idle*).
+    func setDimmed(_ dimmed: Bool) {
+        guard dimmed != isDimmed else { return }
+        isDimmed = dimmed
+        setAlpha(windowAlpha, motion: IdleFade.motion(dimming: dimmed, reduceMotion: reduceMotion))
+    }
+
+    /// Both windows at `alpha`, animated by the window server (no frames of the board's own), or at once.
+    private func setAlpha(_ alpha: CGFloat, motion: IdleFade.Motion?) {
+        guard let motion, motion.duration > 0 else {
+            if panel.alphaValue != alpha { panel.alphaValue = alpha }
+            if effectsPanel.alphaValue != alpha { effectsPanel.alphaValue = alpha }
+            return
+        }
+        NSAnimationContext.runAnimationGroup { context in
+            context.duration = motion.duration
+            context.timingFunction = CAMediaTimingFunction(name: motion.timing)
+            panel.animator().alphaValue = alpha
+            effectsPanel.animator().alphaValue = alpha
+        }
     }
 
     /// The data behind the content changed (≤ 2 per second). `crossfade`: a live metrics switch changed (the hero
@@ -191,6 +234,7 @@ final class BoardWindowController {
     }
 
     private func beginDrag() {
+        interaction.isDragging = true
         animator.freezeCenter()
         drag = OrbDragSession(pointer: NSEvent.mouseLocation, center: animator.state.center)
     }
@@ -207,6 +251,7 @@ final class BoardWindowController {
     }
 
     private func endDrag(_ event: NSEvent) {
+        interaction.isDragging = false
         guard let session = drag else { return }
         drag = nil
         guard session.isMoving else {

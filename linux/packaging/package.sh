@@ -3,7 +3,9 @@
 # UPDATES 5) and agent-speed_<version>_<debarch>.deb (the same bundle under /opt/agent-speed).
 #   packaging/package.sh <build dir> <output dir> <version>
 # QMAKE must point at the qmake of the Qt the app was built with. linuxdeploy and its Qt plugin are fetched into
-# $AGENTSPEED_TOOLS (default ~/.cache/agent-speed-packaging).
+# $AGENTSPEED_TOOLS (default ~/.cache/agent-speed-packaging). Both relay executables (REMOTE 3.1) come from
+# $AGENTSPEED_RELAY_DIST (default linux/relay/dist, built by linux/relay/build-static.sh) and are installed as
+# usr/share/agent-speed/relay/agent-speed-relay-linux-<arch>, where the app looks for them.
 set -euo pipefail
 build=$(realpath "$1")
 out=$(mkdir -p "$2" && realpath "$2")
@@ -14,6 +16,13 @@ arch=$(uname -m)
 debarch=$([[ $arch == x86_64 ]] && echo amd64 || echo arm64)
 tools=${AGENTSPEED_TOOLS:-$HOME/.cache/agent-speed-packaging}
 : "${QMAKE:?set QMAKE to the qmake of the Qt the app was built with}"
+relays=${AGENTSPEED_RELAY_DIST:-$repo/linux/relay/dist}
+for relay_arch in x86_64 aarch64; do
+    if [[ ! -s "$relays/agent-speed-relay-linux-$relay_arch" ]]; then
+        echo "missing $relays/agent-speed-relay-linux-$relay_arch: build it with linux/relay/build-static.sh $relay_arch" >&2
+        exit 1
+    fi
+done
 
 mkdir -p "$tools"
 fetch() {
@@ -31,8 +40,13 @@ work=$(mktemp -d)
 trap 'rm -rf "$work"' EXIT
 appdir="$work/AppDir"
 DESTDIR="$appdir" cmake --install "$build" --prefix /usr >/dev/null
+for relay_arch in x86_64 aarch64; do
+    install -D -m 755 "$relays/agent-speed-relay-linux-$relay_arch" "$appdir/usr/share/agent-speed/relay/agent-speed-relay-linux-$relay_arch"
+done
 
 export APPIMAGE_EXTRACT_AND_RUN=1
+# The AppDir holds the other architecture's relay too, so appimagetool must be told which one the bundle is for.
+export ARCH="$arch"
 export QML_SOURCES_PATHS="$repo/linux/app/qml"
 export EXTRA_PLATFORM_PLUGINS="libqoffscreen.so"
 export EXTRA_QT_MODULES="svg"
@@ -71,6 +85,7 @@ Priority: optional
 Architecture: $debarch
 Installed-Size: $size
 Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3
+Recommends: openssh-client
 Maintainer: zoefix <277453498+zoefix@users.noreply.github.com>
 Homepage: https://github.com/zoefix/agent-speed
 Description: Live token speed of your AI coding agents

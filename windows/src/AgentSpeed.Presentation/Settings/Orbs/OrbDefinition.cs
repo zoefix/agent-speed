@@ -67,8 +67,14 @@ public sealed record OrbDefinition
     /// <summary>The traffic readout (DESIGN 2b <c>traffic</c>, 10); Add, Duplicate and Split copy it, Merge keeps the target's.</summary>
     public OrbTraffic Traffic { get; init; } = OrbTraffic.Sources;
 
+    /// <summary>The hosts it tracks (DESIGN 13); absent in the document = all.</summary>
+    public OrbHosts Hosts { get; init; } = OrbHosts.All;
+
     /// <summary>The engine's source set: null tracks every enabled source.</summary>
     public SourceSet? TrackedSources => Sources.Set;
+
+    /// <summary>The engine's host set: null tracks every host.</summary>
+    public IReadOnlySet<string>? TrackedHosts => Hosts.HostSet;
 
     public static string NewId() => Guid.NewGuid().ToString("D").ToUpperInvariant();
 
@@ -84,14 +90,10 @@ public sealed record OrbDefinition
         ? this with { RedlineTotal = CleanRedline(SpeedMetric.Total, redline) }
         : this with { RedlineOutput = CleanRedline(SpeedMetric.Output, redline) };
 
-    /// <summary>Another style; the size is clamped to its range (a 72 pt <c>minimal</c> becomes 96 pt).</summary>
-    public OrbDefinition WithStyle(OrbStyle style)
-    {
-        var defined = Enum.IsDefined(style) ? style : OrbStyle.Led;
-        return this with { Style = defined, Size = OrbStyles.ClampSize(defined, Size) };
-    }
+    /// <summary>Another style; the size stays, since every style shares one range.</summary>
+    public OrbDefinition WithStyle(OrbStyle style) => this with { Style = Enum.IsDefined(style) ? style : OrbStyle.Led };
 
-    public OrbDefinition WithSize(double size) => this with { Size = OrbStyles.ClampSize(Style, size) };
+    public OrbDefinition WithSize(double size) => this with { Size = OrbStyles.ClampSize(size) };
 
     /// <summary>The disc radius in physical pixels at a display scale.</summary>
     public double RadiusPx(double scale) => Size / 2 * scale;
@@ -104,7 +106,7 @@ public sealed record OrbDefinition
             Id = CleanId(Id) ?? NewId(),
             Name = CleanName(Name),
             Style = style,
-            Size = OrbStyles.ClampSize(style, Size),
+            Size = OrbStyles.ClampSize(Size),
             Opacity = CleanOpacity(Opacity),
             RedlineOutput = CleanRedline(SpeedMetric.Output, RedlineOutput),
             RedlineTotal = CleanRedline(SpeedMetric.Total, RedlineTotal),

@@ -55,11 +55,14 @@ struct GrokBuildLine: Sendable {
         func count(_ camel: String, _ snake: String) -> Int { HarnessJSON.count(value[camel] ?? value[snake]) }
         let input = count("inputTokens", "input_tokens")
         let duration = integer(value["apiDurationMs"] ?? value["api_duration_ms"])
-        let output = count("outputTokens", "output_tokens")
+        let reasoning = count("reasoningTokens", "reasoning_tokens")
+        // More reasoning than output means the provider counted it apart (METRICS 4.12, issue #51).
+        let reported = count("outputTokens", "output_tokens")
+        let output = reasoning > reported ? min(Int(TokenCount.ceiling), reported + reasoning) : reported
         return GrokBuildUsage(model: model, usage: TokenUsage(input: input,
             cachedInput: min(input, count("cachedReadTokens", "cache_read_input_tokens")),
             cacheWriteInput: min(input, count("cacheCreationTokens", "cache_creation_input_tokens")),
-            output: output, reasoning: min(output, count("reasoningTokens", "reasoning_tokens"))),
+            output: output, reasoning: min(output, reasoning)),
             durationMs: duration.flatMap { $0 > 0 && $0 <= ResponseTiming.maxIntervalMs ? $0 : nil },
             requestCount: min(100_000, max(1, count("modelCalls", "model_calls"))))
     }

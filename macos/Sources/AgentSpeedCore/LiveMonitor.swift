@@ -4,8 +4,8 @@ import Foundation
 @MainActor
 public final class LiveMonitor {
     public private(set) var configuration: MonitorConfiguration
-    /// Source sets whose measured peak each snapshot reports in `subsetPeaks` (METRICS 6.8).
-    public private(set) var subsets: Set<SourceSet> = []
+    /// Subsets whose measured peak each snapshot reports in `subsetPeaks` (METRICS 6.8).
+    public private(set) var subsets: Set<SubsetKey> = []
     /// Prices every response (METRICS 9); nil leaves costs unknown.
     public let pricing: PriceBook?
     private let store: SpeedStore
@@ -15,6 +15,10 @@ public final class LiveMonitor {
     public private(set) var perfHistory: [PerfDayRecord] = []
     /// Live reporting's watch epoch (METRICS 11.10), kept across restarts.
     public private(set) var reportWatch: Int?
+    /// The remote hosts' received state, kept across restarts (REMOTE 7).
+    let remoteFeed = RemoteFeed()
+    /// Follows the enabled sources and the report watch.
+    weak var remote: RemoteCoordinator?
 
     public init(store: SpeedStore, configuration: MonitorConfiguration = MonitorConfiguration(), pricing: PriceBook? = nil) {
         self.store = store
@@ -30,7 +34,8 @@ public final class LiveMonitor {
         let mailbox = SnapshotMailbox { [weak store] snapshot, events in
             store?.publishLive(snapshot, events: events)
         }
-        let core = MonitorCore(configuration: configuration, mailbox: mailbox, subsets: subsets, pricing: pricing)
+        let core = MonitorCore(configuration: configuration, mailbox: mailbox, subsets: subsets, pricing: pricing,
+                               remoteFeed: remoteFeed)
         self.mailbox = mailbox
         self.core = core
         core.start()
@@ -42,8 +47,10 @@ public final class LiveMonitor {
     /// off.
     public func setReportWatch(_ epoch: Int?) {
         guard epoch != reportWatch else { return }
+        let wasOn = reportWatch != nil
         reportWatch = epoch
         core?.setReportWatch(epoch)
+        if wasOn != (epoch != nil) { remote?.monitorSettingsChanged() }
     }
 
     /// The history store's performance records, as it last saved them (METRICS 6.11 *Baseline*).
@@ -59,9 +66,10 @@ public final class LiveMonitor {
         core = nil
     }
 
-    /// Requests `SpeedSnapshot.subsetPeaks` for these sets (one per floating orb that tracks a subset). Kept across
-    /// restarts and configuration changes; a running monitor publishes a fresh snapshot promptly when they change.
-    public func setSubsets(_ sets: Set<SourceSet>) {
+    /// Requests `SpeedSnapshot.subsetPeaks` for these subsets (one per floating orb or board that tracks a subset).
+    /// Kept across restarts and configuration changes; a running monitor publishes a fresh snapshot promptly when they
+    /// change.
+    public func setSubsets(_ sets: Set<SubsetKey>) {
         subsets = sets
         core?.setSubsets(sets)
     }
@@ -69,7 +77,9 @@ public final class LiveMonitor {
     /// Applies new settings; transcripts are read again when the roots or the enabled sources change.
     public func update(configuration: MonitorConfiguration) {
         let needsRescan = configuration.requiresRescan(comparedTo: self.configuration)
+        let sourcesChanged = configuration.enabledSources != self.configuration.enabledSources
         self.configuration = configuration
+        if sourcesChanged { remote?.monitorSettingsChanged() }
         guard needsRescan, isRunning else { return }
         stop()
         start()
@@ -87,20 +97,34 @@ public final class LiveMonitor {
     public nonisolated static var defaultKimiRoot: URL { TranscriptLocations.defaultKimiRoot }
     public nonisolated static var defaultGrokBuildRoot: URL { TranscriptLocations.defaultGrokBuildRoot }
 
-    /// Pi's automatic roots: `<agent dir>/sessions`, then Pi's own custom session folder when one is set (a configured
-    /// root replaces all of them).
+    /// Pi's automatic roots: `<agent dir>/sessions`, then Pi's own custom session folder when one is set (the automatic
+    /// entry of Pi's location list).
     public nonisolated static var defaultPiRoots: [URL] { TranscriptLocations.defaultPiRoots }
 
     /// OpenClaw's automatic roots: `$OPENCLAW_STATE_DIR`, else `~/.openclaw` and every `~/.openclaw-<profile>` folder
-    /// (a configured folder or database replaces all of them).
+    /// (the automatic entry of OpenClaw's location list).
     public nonisolated static var defaultOpenclawRoots: [URL] { TranscriptLocations.defaultOpenclawRoots }
 
-    /// The Hermes Agent home: `$HERMES_HOME` (the home of the profile it names), else `~/.hermes` (a configured home or
-    /// log folder replaces it).
+    /// The Hermes Agent home: `$HERMES_HOME` (the home of the profile it names), else `~/.hermes` (the automatic entry
+    /// of its location list).
     public nonisolated static var defaultHermesHome: URL { TranscriptLocations.defaultHermesHome }
 
-    /// Factory Droid's sessions folder, `~/.factory/sessions` (a configured folder replaces it).
+    /// Factory Droid's sessions folder, `~/.factory/sessions` (the automatic entry of its location list).
     public nonisolated static var defaultDroidRoot: URL { TranscriptLocations.defaultDroidRoot }
+
+    /// The Devin CLI's folder that holds `sessions.db`: `$CHISEL_SESSION_DB`'s folder, else the XDG data folder's
+    /// `devin/cli` (the automatic entry of its location list).
+    public nonisolated static var defaultDevinRoot: URL {
+        URL(fileURLWithPath: TranscriptLocations.defaultDevinRoots[0].displayFolder, isDirectory: true)
+    }
+
+    /// Whether a folder holds a Devin CLI database now: `sessions.db` in it or in its `cli` folder, or the automatic
+    /// entry's database of any name in it (`$CHISEL_SESSION_DB`, METRICS 4.17).
+    public nonisolated static func devinLocationExists(_ url: URL) -> Bool {
+        let folder = TranscriptDiscovery.normalizedRoot(url.path)
+        if DevinPaths.database(ofLocation: folder) != nil { return true }
+        return TranscriptLocations.defaultDevinRoots.contains { $0.displayFolder == folder && $0.database != nil }
+    }
 
     /// The sessions folder a configured Factory Droid folder names: its `sessions` folder when it has one (a `.factory`
     /// folder), else the folder itself (METRICS 4.16).
@@ -115,7 +139,7 @@ public final class LiveMonitor {
         TranscriptLocations.defaultDshRoot
     }
 
-    /// Gemini CLI's default `tmp` folders (a configured root replaces both).
+    /// Gemini CLI's default `tmp` folders (both are the automatic entry of its location list).
     public nonisolated static var defaultGeminiRoots: [URL] {
         TranscriptLocations.defaultGeminiRoots
     }
@@ -125,8 +149,8 @@ public final class LiveMonitor {
         TranscriptLocations.defaultOpencodeRoot
     }
 
-    /// omp's automatic `sessions` roots: the default root first, then one per named profile (a configured root
-    /// replaces all of them).
+    /// omp's automatic `sessions` roots: the default root first, then one per named profile (the automatic entry of
+    /// its location list).
     public nonisolated static var defaultOmpRoots: [URL] {
         TranscriptLocations.defaultOmpRoots
     }
@@ -136,7 +160,7 @@ public final class LiveMonitor {
         TranscriptLocations.defaultOmpRoots[0]
     }
 
-    /// Antigravity's store folders, each containing `conversations` (a configured store replaces all three).
+    /// Antigravity's store folders, each containing `conversations` (the automatic entry of its location list).
     public nonisolated static var defaultAntigravityStores: [URL] {
         TranscriptLocations.defaultAntigravityStores
     }

@@ -141,6 +141,7 @@ public sealed class OrbReadoutDraw
         }
 
         var s = ctx.Size;
+        layout = layout.At(s);
         _cellCount = 0;
         var valueLine = ctx.CenterY + Shift + layout.ValueBaseline * s;
         var unitLine = layout.UnitBaseline is { } unitBaseline ? ctx.CenterY + Shift + unitBaseline * s : valueLine;

@@ -172,7 +172,7 @@ Latin) at the 7 pt floor with its tracking tightened to 0 — the narrowest the 
 
 | Budget | `w7` | Guarantee |
 | --- | --- | --- |
-| Comfortable | ≤ 44.2 pt | fits every style at every size from 96 pt (`minimal` from 72 pt) |
+| Comfortable | ≤ 44.2 pt | fits every style at every size from 96 pt (`minimal` from 72 pt); on smaller orbs, down to the 64 pt floor, it may run past the label width, centered, never truncated |
 | Maximum | ≤ 51.5 pt | fits every style from the Small size preset (112 pt) up; on smaller orbs it may run past the label width, centered, never truncated |
 
 Up to six CJK characters are comfortable (42 pt) and seven reach the maximum (49 pt); in English about eight letters
@@ -298,6 +298,7 @@ White-hot core for highlights: `#FFF7D6`. With overdrive `o > 0`, highlights ble
 | OpenClaw | `#DE2E1F` lobster red |
 | Hermes Agent | `#B8860B` dark goldenrod |
 | Factory Droid | `#9E5F46` rust copper |
+| Devin | `#557F14` fern |
 
 Pink is `#EC4899`, not the lighter `#F472B6` (too close to coral and lilac); lime is `#84CC16`, not the lighter `#A3E635`, which nearly vanishes on light backgrounds.
 
@@ -325,6 +326,14 @@ crowded (coral, amber, rose, lobster red, dark goldenrod), so it keeps their hue
 and reads on both appearances (contrast against `#1E1E1E`: 3.3; against white: 5.0). Like every source it has no icon
 and no short name: its dot and `source.droid` "Factory Droid", in source order (METRICS 1) after Hermes Agent.
 
+Devin takes fern `#557F14`, a deep olive green (OKLCH L 0.55, C 0.14, h 130°). Green between omp's lime and the
+WorkBuddy jade is the one free stretch of the wheel; reds and pinks, near Cognition's own marks, are taken by OpenClaw,
+Kimi Code CLI and Antigravity (a raspberry `#BE185D` would be 0.11 from OpenClaw's red). Fern is at least 0.14 (OKLab)
+from every other source color and from the slate `#7C8798` (closest: WorkBuddy jade 0.145, Hermes Agent's dark
+goldenrod 0.154, Factory Droid's copper 0.162, slate 0.175; omp's lime 0.233) and reads on both appearances (contrast
+against `#1E1E1E`: 3.5; against white: 4.7). Like every source it has no icon and no short name: its dot and
+`source.devin` "Devin", in source order (METRICS 1) after Factory Droid.
+
 The two WorkBuddy editions share one app icon, teal-green (`#0EC8A8` → `#05C890`), which is nearly Codex mint (OKLab
 distance about 0.04; the closest existing pair, coral and amber, is 0.11 apart). So both take a darker member of that teal family,
 which keeps them related to each other and to the brand: jade at the brand's hue for WorkBuddy, and ocean, bluer
@@ -340,7 +349,7 @@ after Antigravity, the China edition first.
 
 A circular smoked-glass instrument. This section defines the shared frame and the default style, `led`; section 2a adds
 four more styles and section 2b lets the user float several orbs, each tracking its own sources. Diameter `S` (per orb,
-96–240 pt/DIP, `minimal` 64–240, default 148). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
+64–240 pt/DIP in every style, default 148). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
 the platform allows it. The orb follows the Appearance setting. The dark variant is described inline below; the
 light variant ("porcelain") changes only these tokens:
 
@@ -403,7 +412,11 @@ Layers, back to front:
 
 Idle state: value `0` in white 60 %, the title theme's idle label (`待機` for Vehicles, section 1), gauge dim, comet
 hidden, and every 6 s a slow light sweep runs along the unlit segments as a sign of life. Optional "fade when idle"
-(setting): after 60 s idle, fade the window to 45 % opacity; restore instantly on activity or hover.
+(setting, per orb, 2b; a board has the same switch and follows this rule, 2c): after 60 s idle (the window's live
+value in the idle tier of section 1 all that time, counted from launch at the earliest), fade the window to 45 % of
+its opacity over 0.6 s ease-in-out; restore instantly on activity (the tier leaves idle), hover or a drag, or when the
+switch is turned off, and fade again about 2 s after the pointer leaves. Reduce Motion: the fade is a cut too. The fade
+is the only motion it adds: once faded, an idle window draws no more than an idle one that is not faded.
 
 Hover: the orb scales to 1.03 (spring), the title label crossfades to a compact info line
 (`今日 1.2M · 3 個 agent`, counted over the orb's sources), and the cursor shows it is draggable. An orb tracking a
@@ -413,7 +426,7 @@ Interaction:
 - Drag anywhere on the disc to move. On release within 24 pt of a screen edge, snap to a 12 pt margin (spring); other
   orbs attract it magnetically (2b). Position (per orb, per display arrangement, 2b) persists.
 - Double-click: open the dashboard.
-- Right-click: the orb's context menu (2b) — style, sources, size (S / M / L presets 112 / 148 / 196), effects (Off /
+- Right-click: the orb's context menu (2b) — style, sources, size (S / M / L presets 112 / 148 / 196 and a slider), effects (Off /
   Soft / Standard / Max), always on top, click-through, add / duplicate / split / merge, hide, remove, settings, quit.
 - Click-through mode (per orb): the orb ignores all mouse events; it is controlled from the menu bar / taskbar.
 
@@ -576,8 +589,12 @@ OKLab L, stepped to ≥ 4.5:1 against the body); *hot* is `mix(heat(h), #FFF7D6,
   | `minimal` | 0.30 S · c + 0.07 S · 0.66 S | none | 0.098 S below the value · 0.068 S · 0.62 S | none | c − 0.25 S |
 
   - The value shrinks to its max width. Titles tighten, then shrink to 80 %, and are never truncated (section 1); the
-    hover info line shrinks to 70 %. Unit and title never go below 7 pt; below S = 64 (thumbnails, 2b and section 5)
-    only the value is drawn.
+    hover info line shrinks to 70 %. Unit and title never go below 7 pt. Below S = 96 the unit line is not drawn in
+    any style, as in `minimal`: held at that floor it would outgrow its gap (at 64 pt it runs into the value in
+    `needle` and `reactor`, and into the title in `led`, `liquid` and `reactor`). The title keeps its place, a money
+    value carries its symbol in front (section 9) and the value takes the unit's click (section 9, Switching); from
+    96 pt up every style is drawn exactly as its frame row says. Below S = 64 (thumbnails, 2b and section 5) only the
+    value is drawn.
   - **Odometer**: on a value change only the characters that changed roll, each clipped to its own character cell,
     travel 0.92 × the value size, 0.24 s ease-out (up when rising). Different lengths crossfade in 0.12 s. No roll with
     Off, Reduce Motion, `minimal` and S < 80 (the text simply updates).
@@ -837,8 +854,8 @@ thumbnails draw rotors A and C and the core only.
 
 ### 2a.5 `minimal` — Minimal ring
 
-Only the number, one thin progress ring and the title; almost nothing moves. The calmest style, and the one that stays
-clear at small sizes (it alone may go down to 64 pt).
+Only the number, one thin progress ring and the title; almost nothing moves. The calmest style, and the one made for
+the smallest orbs (64 pt, the floor of every style).
 
 Layers, back to front:
 
@@ -866,7 +883,7 @@ no frames at all.
 
 Reduce Motion: steady glow (no breathing), the gold tint and blink become 0.2 s crossfades. Increase Contrast: track
 × 2, ring width × 1.25, no glow. Windows high contrast: track in the theme's gray text color, ring in its highlight
-color. Sizes 64–240 pt; at S < 80 the title uses 7 pt and the ring keeps `w ≥ 2.5 pt`.
+color. At S < 80 the title uses 7 pt and the ring keeps `w ≥ 2.5 pt`.
 
 ### Frame policy and performance budget (normative for every style, `led` included)
 
@@ -985,7 +1002,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `name` | Custom name, 1–32 characters, trimmed; `null` = automatic: `orbs.sources.all` for all sources, the source name for one, `orbs.name.pair` for two, `orbs.name.more` (first source + count) for three or more, in source order (METRICS 1). |
 | `sources` | `"all"` (every enabled source, including sources detected or added later) or a non-empty array of METRICS 1 keys, stored in source order without duplicates. Unknown keys from a newer version are kept and ignored. |
 | `style` | `led` · `needle` · `liquid` · `reactor` · `minimal`; unknown → `led`. |
-| `size` | 96–240 pt/DIP (`minimal` 64–240), clamped when the style changes (a 72 pt `minimal` becomes 96 pt `needle`). |
+| `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1044,7 +1061,7 @@ be removed (Remove is disabled; the master switch hides it).
 - **Z-order**: all orbs use the window level of their `alwaysOnTop`; among orbs the last dragged or clicked is in front.
   Because snapping prevents overlap, the order rarely shows. Orbs never take keyboard focus (non-activating, as today).
 - **Click-through** and **fade when idle** are per orb. Fade uses the orb's own idle state (its sources idle for 60 s)
-  and multiplies its opacity.
+  and multiplies its opacity (section 2 has the rule; a board's fade is the same, on its own sources, 2c).
 - **Master switch**: hides or shows all orbs. Turning it on while every orb is individually hidden makes them all
   visible. The quick menu (menu bar / tray) keeps one item, `menu.showOrb` / `menu.hideOrb` with one orb and
   `menu.showOrbs` / `menu.hideOrbs` with several; with several orbs it adds a `settings.orb` submenu listing each orb
@@ -1093,8 +1110,8 @@ wallpapers, in tight rows, columns and clusters, with Latin, CJK, long and multi
   | `"always"` | on every orb |
   | `"never"` | on none |
 
-  Never drawn below S = 80 (`minimal` only: the plate would outweigh the orb's 7 pt title; the source chip still appears
-  on hover), nor while its orb is hidden.
+  Never drawn below S = 80 (the plate would outweigh the orb's 7 pt title; the source chip still appears on hover),
+  nor while its orb is hidden.
 - **Content**: colour dots, then the orb's name (custom `name`, else automatic; data model above).
   - Dots: one per tracked source in source order, at most three, each overlapping the previous by a third, the first in
     front, separated by a 1 pt ring in the plate color; source colors as the bezel (light: darkened 10 %). All sources:
@@ -1215,8 +1232,15 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    `orbs.unit.cost` (section 9), `orbs.traffic` ▸ `orbs.traffic.sources` / `orbs.traffic.machine` /
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
    plate shows (Name plate).
-4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196; `minimal` sizes below 96 are set in
-   Settings).
+4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196, checked when the size is one of them), a
+   separator, then a slider over the whole range (64–240 pt, 4 pt steps) with the value at its trailing edge
+   (`%d pt`, tabular digits, secondary text). The orb resizes live while the thumb moves, every step is stored like a
+   preset, and the presets' checks follow it. Keyboard (Windows, Linux): once the slider row has the focus, ← / → step
+   4 pt and ↑ / ↓ move on to the other rows. macOS: NSMenu stops navigating while a view in it holds the focus (and the
+   orb's menu belongs to an app that is usually not active), so the row never takes it and the arrow keys keep moving
+   between rows; the presets and Settings are the keyboard route there. Its accessible name is `settings.orb.size` and
+   its value the `%d pt` text; VoiceOver, Narrator and Orca increment and decrement it by 4 pt. The quick menu's size
+   item (one orb) is the same submenu.
 5. `menu.effects` ▸ Off / Soft / Standard / Max (global).
 6. Separator; `menu.alwaysOnTop`, `menu.clickThrough` (this orb).
 7. Separator; `orbs.add`; `menu.orb.duplicate`; `menu.orb.split` (enabled when the orb tracks two or more available
@@ -1286,7 +1310,7 @@ Persisted next to the orbs as one JSON value (key `boards`), written atomically 
 ```json
 { "version": 1,
   "boards": [ { "id": "…", "style": "neon", "size": "M", "sources": "all", "opacity": 1.0, "alwaysOnTop": true,
-                "clickThrough": false, "allSpaces": true, "visible": true,
+                "clickThrough": false, "fadeWhenIdle": false, "allSpaces": true, "visible": true,
                 "readouts": { "intelligence": true, "thinking": true, "cost": true } } ],
   "layouts": { "<arrangement key>": { "<board id>": { "display": "…", "xAnchor": "high", "x": 12, "yAnchor": "fraction", "y": 0.2 } } } }
 ```
@@ -1298,6 +1322,7 @@ Persisted next to the orbs as one JSON value (key `boards`), written atomically 
 | `size` | `S` 280 × 280, `M` 340 × 340 (default), `L` 420 × 420 pt/DIP; unknown → `M`. |
 | `sources` | As an orb's (2b): `"all"` or METRICS 1 keys; the board counts only those sources (METRICS 6.8). |
 | `opacity`, `alwaysOnTop`, `clickThrough`, `allSpaces`, `visible` | As an orb's. |
+| `fadeWhenIdle` | As an orb's (section 2, *fade when idle*), on the board's own idle state (*Interaction and window*, below); default `false`. Added in this version without a format change: a board saved by an earlier version, or a value that is not a boolean, reads as `false`, and older builds ignore the key. |
 | `readouts` | The live metrics switches (*Live metrics*, below): `intelligence`, `thinking`, `cost`; a missing field or key, or a value that is not a boolean, reads as `true`. A `rowCost` key saved by an earlier version is ignored and no longer written. |
 | `layouts` | As the orbs' (2b, arrangement keys, position records, at most 16 arrangements). |
 
@@ -1730,8 +1755,15 @@ memory the board owns (layer textures, swap chain or drawable surfaces, instance
   懸浮窗, Boards).
 - Settings → 懸浮窗 gains a Boards list under the orbs: one row per board (style preview thumbnail, style name,
   sources, visible switch) with add / remove, and an editor for style, size, sources, the live metrics switches
-  (*Live metrics*), opacity and the window toggles.
+  (*Live metrics*), opacity and the window toggles: `menu.alwaysOnTop`, `menu.clickThrough`, `settings.orb.fadeIdle`,
+  `settings.orb.allSpaces` (macOS), in the orb editor's order and with its captions (section 5).
   The quick menu gets `boards.show` / `boards.hide` (all boards) and `boards.add`.
+- **Fade when idle** (`fadeWhenIdle`, off for a new board): section 2's rule on the board's own idle state, its
+  `live_A` in the idle tier (the hero shows the idle label) for 60 s. The whole window fades as one, the rounded square
+  and the effects around it (bloom, comets, sparks), to 45 % of the board's opacity. Activity of its sources, the
+  pointer on the square (hover, a drag) and switching it off restore the board at once. Like the orb's, the switch is
+  in Settings only, not in the context menu. A faded idle board stays static (*Frame policy*): the 0.6 s fade is its
+  only motion.
 - Accessibility: a board is a list element labelled `a11y.board` (sources, value, title); each group row is an item
   labelled `a11y.board.row` (`第 1 名，tihu，每秒 7.88k 個 token，推理強度 xhigh，加速 Fast，100 個子 agent`); the live
   metrics add their words to both (*Live metrics*, Accessibility).
@@ -1780,6 +1812,17 @@ Windows only. macOS has no equivalent: the system places menu bar items and the 
   4 px × the taskbar's DPI scale before it, spanning the notification area's height when that is shorter than the
   taskbar. Other programs that draw on the taskbar (for example KuGou Music's taskbar lyrics) may claim the same spot,
   so the user can move the widget along the taskbar.
+- Other programs' windows on the taskbar: every visible window that another program hosts anywhere inside the taskbar
+  window (TrafficMonitor's `TrafficMonitorTaskbarWindow` beside the notification area, taskbar lyrics, other meters) is
+  kept clear by the same scaled gap. The shell's own parts and any Agent Speed widget are not counted, nor is a window
+  that does not cross the taskbar or covers more than half of its length (an overlay, not a neighbour). A spot that would
+  come within the gap of one moves toward the taskbar's start until the widget clears every one of them, so neighbours
+  in a row are passed together; without room before the limit below it moves back toward the notification area instead;
+  with room on neither side the widget is unavailable, as when the taskbar has no room. Drawing, the press that starts a
+  drag and the offset a drag stores all use this rule, so a widget dropped onto a neighbour stores the spot it actually
+  took. The widget's periodic check (every 2 s) looks again, so it follows when such a window appears, moves or goes
+  away. Matching every foreign window instead of a list of known programs needs no update for the next taskbar tool and
+  never mistakes the shell's own buttons for one.
 - Drag: press the left button on the widget and move the pointer along the taskbar (left/right; up/down on a vertical
   taskbar). Once the pointer has moved along the taskbar by more than the system drag distance (`SM_CXDRAG` /
   `SM_CYDRAG` at the taskbar's DPI), the press becomes a drag: the widget follows the pointer at once (no animation)
@@ -2057,6 +2100,7 @@ rows, section 10); the file name is `agent-speed-history-<code>-<first date>-<la
 | `openclaw` | `openclaw` |
 | `hermes` | `hermes` |
 | `droid` | `droid` |
+| `devin` | `devin` |
 
 Empty state (the range has neither token usage nor agent traffic, section 10): centered muted gauge glyph,
 `history.empty` and `history.empty.hint`. First launch after upgrading:
@@ -2442,8 +2486,9 @@ once; the glow blends two pre-blurred copies (σ 1.6 and 4.2 units) per frame in
 
 ## 5. Settings
 
-Native settings window (macOS: SwiftUI `Settings`/grouped `Form`, 600 pt wide so that the nine toolbar tabs fit in
-every language — the Japanese labels need at least 580 pt — and 680 pt for 一般 and 懸浮窗; Windows: Fluent WPF window
+Native settings window (macOS: SwiftUI `Settings`/grouped `Form`, 640 pt wide so that the ten toolbar tabs fit in
+every language — the Japanese labels need at least 628 pt, with the short tab labels `Remote` / `リモート` for 遠端主機
+— and 680 pt for 一般 and 懸浮窗; Windows: Fluent WPF window
 with Mica). Sections:
 
 - **一般 General** — Appearance (Auto / Light / Dark), Language (System / 繁體中文 / 简体中文 / English / 日本語),
@@ -2464,55 +2509,89 @@ with Mica). Sections:
 - **懸浮窗 Floating orbs** — the orb list and the per-orb editor (Floating orb pane, below).
 - **特效 Effects** — Intensity (Off / Soft / Standard / Max), Celebrate new peaks, Response pulses,
   **Preview effects** button: runs the demo driver for 20 s sweeping through every tier.
+  macOS adds, last, `mac.settings.effects.displaySync` (on by default) with the footnote
+  `mac.settings.effects.displaySync.hint`: the Metal layers of the orbs and boards present in step with the display's
+  refresh (`CAMetalLayer.displaySyncEnabled`). Off presents a frame as soon as it is drawn, as every build before the
+  switch did; on an M1 MacBook Pro that kept the built-in display's brightness from changing (issue #48). A change
+  applies from each surface's next frame.
 - **費用 Cost** — currency, live value unit, subscription marks, price table status (section 9).
 - **網路流量 Network Traffic** — measuring switch, tools, speed unit, the menu bar / taskbar readout and the per-agent
   measurement status; on Windows the optional helper service (section 10).
 - **API** (`settings.report`, the same short name in every language; the broadcast icon) — opt-in live reporting to
   an API the user chooses, for example a leaderboard service: service, username, API key, what is sent, status, pause
   and *Forget this device* (section 11, `spec/REPORTING.md`).
-- **資料來源 Data sources** — per source: toggle, detected path, status (`找到 128 個工作階段` / `未找到資料夾`),
-  Change…, Reset. Below the list: `history.open` and `history.clear` (with a confirmation dialog `history.clear.confirm`).
-  - omp: one row. The path is the default sessions root (METRICS 2); the status counts the sessions of the default
-    root and every named-profile root together. Change… picks one `sessions` folder and replaces all automatic roots;
-    Reset returns to them. Caption `settings.sources.ompHint`.
-  - Pi: one row after Grok Build: the path is the default sessions root (METRICS 2), the status counts the main
-    session files of every automatic root (`source.sessions`; sub-agent files are not sessions), Change… picks one
-    folder and replaces the automatic roots (`mac.settings.sources.choosePi` on macOS), Reset returns to them.
-    Caption `settings.sources.piHint`. An omp folder that is Pi's (METRICS 4.7) is counted under Pi only.
-  - OpenClaw: one row after Pi. The path lists the state folders found (`~/.openclaw`, then any `~/.openclaw-<profile>`;
-    METRICS 2, 4.14); the status counts the transcript windows of every agent database that are not sub-agents
-    (`source.sessions`). Change… picks one folder or database — a state folder, an agent folder (OpenClaw's
-    `agentDir`) or `openclaw-agent.sqlite` — and replaces the automatic roots (`mac.settings.sources.chooseOpenClaw`
-    on macOS, a file-or-folder picker); Reset returns to them. A database of OpenClaw 2026.7 or older (no session
-    tables) shows `warning.unsupportedFormat`. Caption `settings.sources.openclawHint`, which also says that turns
-    OpenClaw hands to Claude Code, Codex or ACP agents count under those agents.
-  - Hermes Agent: one row after OpenClaw. The path is the Hermes home (`~/.hermes`, Windows `%LOCALAPPDATA%\hermes`; METRICS 2,
-    4.15); the status counts today's main sessions (`source.sessions`; sub-agent sessions are not counted). Change…
-    picks a Hermes home or one `logs` folder and replaces the automatic home (`mac.settings.sources.chooseHermes` on
-    macOS); Reset returns to it. A home without logs (installed, never run) shows `source.sessions` with 0. Caption
-    `settings.sources.hermesHint`, which also says that turns of Hermes's Codex runtime count under Codex.
-  - Factory Droid: one row after Hermes Agent. The path is the sessions folder (`~/.factory/sessions`, Windows
-    `%USERPROFILE%\.factory\sessions`; METRICS 2, 4.16); the status counts today's main sessions (`source.sessions`;
-    Task-tool workers are not counted). Change… picks the `.factory` folder or its `sessions` folder and replaces the
-    automatic root (`mac.settings.sources.chooseDroid` on macOS); Reset returns to it. Caption
-    `settings.sources.droidHint`, which also says that token usage comes from each session's settings file, so a
-    call's tokens appear once droid saves them, and that sub-agents count on their own.
-  - Antigravity: one row. The path lists the stores found (`~/.gemini/antigravity-cli`, `antigravity`,
-    `antigravity-ide`); the status counts conversation databases (`source.sessions`). Change… picks one store folder
-    (or its `conversations` folder) and replaces all three; Reset returns to them. A chosen `*-backup` store is never
-    read (METRICS 4.8) and shows `source.folderMissing`. Caption `settings.sources.antigravityHint`.
-  - WorkBuddy and WorkBuddy AI: one row each, adjacent in source order, each with its own folder (two groups where a
-    platform groups rows by folder, as macOS does). The path is the data folder (`~/.workbuddy`, `~/.workbuddy-ai`);
-    the status counts main session files (`source.sessions`; sub-agent transcripts and cloud conversations are not
-    sessions here). Change… picks the data folder or its `projects` folder and replaces that source's folder only;
-    Reset returns to the default. A data folder without `projects` (installed, never used) shows `source.sessions`
-    with 0. Captions `settings.sources.workbuddyHint` and `settings.sources.workbuddyAiHint`, which also say that
-    cloud conversations are not counted (METRICS 4.9).
+- **資料來源 Data sources** — every source can read several folders (issue #45; the rules are METRICS 2.1). The pane
+  opens with the caption `settings.sources.locationsHint`. Then one group per location list (Claude Code and Claude
+  Desktop share one; WorkBuddy and WorkBuddy AI have one each): the source toggles, each with its status line
+  (`找到 128 個工作階段` / `未找到資料夾` / off / reading; the count covers every location), then one row per entry of
+  the list, then the actions row; the group's caption below. Below the groups: `history.open` and `history.clear` (with
+  a confirmation dialog `history.clear.confirm`). Mock (approved):
+
+  ```
+  Codex
+    ~/.codex/sessions        預設   🔍 ⊖
+    ~/work/codex/sessions           🔍 ⊖
+    [加入資料夾…]  [重設]
+  ```
+
+  - **Entry row**: folder icon (22 pt; a document icon for a database file), then the path abbreviated with `~`, one
+    line, middle-truncated, selectable, the full path as tooltip. The automatic entry names its default folders as
+    before lists existed — Gemini CLI both `tmp` folders on two lines, Antigravity the stores found (all three when
+    none is), OpenClaw the state folders found (`~/.openclaw` when none is), omp and Pi only their default root
+    although profiles and Pi's custom session folder are read too — and its first line ends with the badge
+    `settings.sources.default` (預設; caption weight, secondary on a faint capsule, an outline with increased
+    contrast); a user location has no badge. When nothing the entry reads exists, its icon and path are dimmed and a
+    second line `⚠ source.folderMissing` follows (an automatic entry with several folders dims only the missing ones).
+    Trailing: Show in Finder (magnifying glass; disabled when nothing exists) and Remove (minus circle; tooltip
+    `settings.sources.remove`, accessibility label `settings.sources.removeLocation` with the path; disabled on the
+    only entry, with the tooltip `settings.sources.keepOne`). The row's context menu repeats both. Accessibility: the
+    path column is one element labelled as the folder, valued with its paths, then 預設, then `source.folderMissing`
+    when missing; the two buttons follow it.
+  - **Actions row**, leading-aligned as in the mock: `settings.sources.add` (加入資料夾…) then `settings.sources.reset`
+    (重設). Add opens the folder picker of the platform with the source's message (the same picker, validation and
+    message as the single *Change…* of earlier versions; OpenClaw's also accepts `openclaw-agent.sqlite`). A pick the
+    list refuses (METRICS 2.1 *Editing*) changes nothing and says why in a sheet or dialog on Settings:
+    `settings.sources.alreadyListed`, `settings.sources.alreadyDefault` or `settings.sources.limit`, with the picked
+    path as its detail and one OK button. At 8 entries Add is disabled, and `settings.sources.limit` (最多可以加入 8 個
+    位置) reads at the trailing end of the row and as Add's tooltip. Reset is disabled while the list is the automatic
+    entry alone. Adding, removing and resetting animate the rows (none with reduce motion).
+  - What each automatic entry reads and what each source's status counts: omp the default root and every
+    named-profile root together (caption `settings.sources.ompHint`); Pi the main session files of its automatic roots
+    (`source.sessions`; sub-agent files are not sessions; caption `settings.sources.piHint`; an omp folder that is Pi's,
+    METRICS 4.7, is counted under Pi only); OpenClaw the transcript windows that are not sub-agents of every agent
+    database (a database of OpenClaw 2026.7 or older shows `warning.unsupportedFormat`; caption
+    `settings.sources.openclawHint`, which also says that turns OpenClaw hands to Claude Code, Codex or ACP agents count
+    under those agents); Hermes Agent today's main sessions (a home without logs shows `source.sessions` with 0; caption
+    `settings.sources.hermesHint`); Factory Droid today's main sessions (Task-tool workers are not counted; caption
+    `settings.sources.droidHint`); Devin the CLI sessions with a row today (METRICS 4.17; caption
+    `settings.sources.devinHint`); Antigravity conversation databases (a `*-backup` store is never read, METRICS 4.8,
+    and as a user location shows `source.folderMissing`; caption `settings.sources.antigravityHint`); WorkBuddy and
+    WorkBuddy AI main session files (a data folder without `projects` shows `source.sessions` with 0; captions
+    `settings.sources.workbuddyHint` and `settings.sources.workbuddyAiHint`, which also say that cloud conversations are
+    not counted). Pi, OpenClaw, Hermes Agent, Factory Droid and Devin sit in source order after Grok Build. Devin's
+    automatic entry names the CLI folder that holds `sessions.db` (`~/.local/share/devin/cli`); with `$CHISEL_SESSION_DB`
+    it names that database's folder and is found while that file exists, whatever its name.
+  - Add Folder… accepts what METRICS 2 names for the source: omp one `sessions` folder; Pi one folder
+    (`mac.settings.sources.choosePi` on macOS); OpenClaw a state folder, an agent folder (OpenClaw's `agentDir`) or
+    `openclaw-agent.sqlite` (a file-or-folder picker); Hermes Agent a Hermes home or one `logs` folder; Factory Droid
+    the `.factory` folder or its `sessions` folder; Devin the CLI folder that holds `sessions.db` or its `devin` data
+    folder (`mac.settings.sources.chooseDevin` on macOS);
+    Antigravity one store folder or its `conversations` folder;
+    WorkBuddy the data folder or its `projects` folder.
+  - **Storage**: one settings value `sourceLocations`, the JSON document
+    `{"version":1,"lists":{"codex":[{"automatic":true},{"path":"/Users/me/work/codex/sessions"}]}}` (macOS: data in
+    the app's defaults). A list that is the automatic entry alone is left out; lists of sources the build does not
+    know are kept as stored; unknown entries are skipped. The single-folder values of earlier versions (`codexRoot`,
+    `claudeRoot`, … `droidRoot` on macOS) are read only while `sourceLocations` is absent, to migrate (METRICS 2.1), and
+    are never written again.
+  - `settings.sources.change` (*Change…*) is retired by the list and removed from `strings.json`.
 - **關於 About** — version, GitHub link, license, privacy statement: read-only, local-only, no network, no telemetry,
   conversation content is never stored or displayed. With the cost feature: `privacy.statement` and the Network group
   with the master switch (section 9, `spec/NETWORK.md`). With traffic measuring: `privacy.traffic` follows
   (section 10). `privacy.perfScore` follows, always (section 12: what the performance score reads, what it keeps and
-  what live reporting may send). With live reporting: `privacy.report` follows, and the texts switch while reporting is
+  what live reporting may send). While remote hosts exist, `privacy.remote` follows it (section 13: the user's own SSH,
+  a read-only helper in `~/.cache/agent-speed` on the host, only numbers come back, nothing about hosts is reported).
+  With live reporting: `privacy.report` follows, and the texts switch while reporting is
   on (section 11); `privacy.perfScore` stays as it is: it already says that only live reporting with model sharing
   sends the score and the performance statistics.
 
@@ -2609,7 +2688,7 @@ accent color for selection, no extra borders. The pane scrolls when taller than 
      card's accessibility label is `orbs.preview.a11y`. Below the cards the selected style's name (semibold) and its
      description (`style.*.desc`).
    - **Size** — `menu.size.small` / `.medium` / `.large` presets (112 / 148 / 196) as a compact segmented control left of
-     a slider (96–240, `minimal` 64–240, step 4) with the value in pt. **Opacity** — slider 40–100 % with the value.
+     a slider (64–240, step 4) with the value in pt. **Opacity** — slider 40–100 % with the value.
    - `orbs.showName` popup — `orbs.showName.auto` with the current automatic result, a separator, `orbs.showName.on`,
      `orbs.showName.off` (2b Name plate); changing it fades the desktop plate in or out live.
    - Switches: `menu.alwaysOnTop`; `menu.clickThrough` with the platform hint (the orb is then controlled from the menu
@@ -2747,7 +2826,8 @@ the USD amount in secondary text: `NT$1,235（US$37.94）`. Test vectors: `spec/
 (`python3 spec/tools/prices.py` checks them with a reference formatter).
 
 The unit is `cost.unitPerSecond` (`%@/s` with the symbol: `US$/s`, `¥/s`). Where a unit can be hidden (menu bar
-`settings.bar.unit` off, `minimal` orbs), the rate carries the symbol in front instead, like an amount: `$0.0042`.
+`settings.bar.unit` off, `minimal` orbs and every orb below 96 pt, section 2a), the rate carries the symbol in front
+instead, like an amount: `$0.0042`.
 
 ### Orb
 
@@ -2772,8 +2852,9 @@ The unit is `cost.unitPerSecond` (`%@/s` with the symbol: `US$/s`, `¥/s`). Wher
      the system double-click interval has passed without a second click, so a double-click still opens the dashboard
      and never toggles; a drag that starts on the unit moves the orb. Hover over the hit area raises the unit text from
      55 % to 85 % with a 0.5 pt underline at 40 % (0.15 s) and shows `orbs.unit.toggleHint` as a tooltip after 0.8 s; the
-     cursor stays the drag cursor elsewhere on the disc and becomes the pointing hand over the unit. In `minimal` (no
-     unit line) the value is the hit area. Click-through orbs ignore clicks: use the menu bar / taskbar orb submenu.
+     cursor stays the drag cursor elsewhere on the disc and becomes the pointing hand over the unit. Without a unit
+     line (`minimal`, and every orb below 96 pt, 2a) the value is the hit area. Click-through orbs ignore clicks: use
+     the menu bar / taskbar orb submenu.
   2. **Context menu**: `orbs.unit` ▸ `orbs.unit.tokens` (`tok/s`) / `orbs.unit.cost` (`US$/s · API 等值`), check on
      the current one; placed after `orbs.sources` (2b item 3). The quick menu's per-orb submenu (2b master switch) has
      the same item.
@@ -4070,3 +4151,90 @@ never anything per request or per tool call (section 11, METRICS 11.10). So:
 Retired with the task score: every `task.*`, `a11y.task.*`, `history.tasks.*` and `a11y.history.tasks.*` string,
 `privacy.taskScore`, `report.section.models.taskScore` and `intel.disclaimer`; the proof states, state chips,
 predictions, the composition bar and the task comparison; `spec/prototypes/task-score/`.
+
+## 13. Remote hosts (遠端主機)
+
+Agents on other machines reached with SSH (`spec/REMOTE.md`) appear next to local ones. Everything here is invisible
+until the first host is added: no host label, picker, section or column exists while `remoteHosts` is empty and the
+history store holds no host rows. Strings: `remote.*`.
+
+### Principles
+
+- **One meter, many machines.** A host's agents count in the same live value, totals, titles and peaks as local
+  agents; the host is a second dimension next to the source, never a separate meter.
+- **Where it runs is a fact, not a badge.** Hosts are named in text (a row's secondary line, a picker), never with a
+  new color: colors stay the sources' (section 1). This Mac is `remote.local` (本機 / 本机 / This Mac / このMac).
+- **Honest status.** A host that cannot be seen says so in words, with the one thing the user can do about it.
+
+### Settings → 遠端主機 Remote Hosts
+
+A tenth tab after 資料來源 (`settings.remote`, SF Symbol `server.rack`; the window's width rule of section 5 grows to
+fit ten tabs in every language). Grouped `Form`:
+
+1. **Hosts** — one row per host, in the order added: status dot (8 pt: connected green `systemGreen`, connecting /
+   installing / seeding a breathing `secondaryLabel` dot, retrying `systemOrange`, needs the user `systemRed`, disabled
+   or network off hollow), name (semibold) and `destination` (secondary, monospaced digits, truncated in the middle),
+   the status line (secondary; below), and a trailing switch (`enabled`). The row's context menu and an ellipsis
+   button: *Edit…*, *Retry now* (only when not connected), *Copy SSH command* (`ssh <destination>`, for the
+   first-connection fingerprint check), *Remove…*. Empty state: `remote.empty` with a short how-it-works line.
+2. **Add Host…** (`remote.add`) below the list, disabled at 8 hosts (tooltip `remote.limit`).
+3. **Footnote** — `remote.footnote`: what is sent (numbers only, never conversation content), that the user's own
+   SSH configuration and keys are used, that a small read-only program is placed in `~/.cache/agent-speed` on the
+   host, and that only Linux (x86_64, ARM64) is supported.
+
+**Status line** (`remote.status.*`): 已連線 · 3 個 agent (`connected`, with today's main sessions on the host);
+連線中… / 正在安裝… / 讀取中 42 % (progress); 無法連線，10 秒後重試 (`unreachable`, counting down); 需要金鑰登入
+(`authFailed`: Agent Speed never asks for passwords — set up a key or agent); 尚未信任這台主機 — 請先在終端機執行
+`ssh devbox` (`hostKeyUnknown`); 不支援的系統 (`unsupportedSystem`, with the reported system); 無法在遠端資料夾執行
+程式 — 請改用其他資料夾 (`notExecutable`); `cannotVerify`, `uploadFailed`, `versionMismatch`, `protocolError`,
+`exited`, `sshMissing` each with one plain sentence; 網路已關閉 (`networkOff`); 已停用 (`disabled`). When the clock
+offset is at least 5 s, the connected line adds `remote.clock.skewed` (遠端時鐘相差 12 秒，已自動校正). While the host
+shows `historyTooLarge` (REMOTE 8.3), a note `remote.status.historyTooLarge` with an orange warning symbol sits under
+the line, whatever the connection status. Hovering the status shows the last error time and, for `exited`, the exit
+status.
+
+**Add / Edit sheet** (420 pt): `destination` text field (placeholder `devbox 或 user@server`, validated as you type
+with REMOTE 2.1, the error under the field), `name` (placeholder = the automatic name), a disclosure *Advanced* with
+`relayFolder` (placeholder `~/.cache/agent-speed`), and *Test Connection* which runs the probe of REMOTE 4.2 step 1 and
+shows its result inline (system and architecture, or the status sentence). Save is the default button; it is
+disabled while a field is invalid. Saving an enabled host connects it at once.
+
+**Remove** — a confirmation alert `remote.remove.confirm` (name), with a checkbox `remote.remove.deleteHistory`
+(off by default) and the informative text `remote.remove.files` (where the relay files stay on the host).
+
+### Orbs and boards
+
+- Both documents gain `hosts`: `"all"` (default, absent = all) or a non-empty array of host ids (`local` and remote
+  ids), stored in settings order (local first). Unknown ids are kept and ignored like unknown sources. An orb or
+  board counts the agents and responses whose host **and** source are both selected (METRICS 6.8 evaluated over
+  (host, source) cells).
+- The orb editor and the board editor show a **Hosts** section under Sources, only while remote hosts exist: an
+  *All Hosts* checkbox and one checkbox per host (local first) with its status dot; the last checked host cannot be
+  unchecked. Context menus gain a *Hosts* submenu next to *Sources* under the same condition.
+- Automatic names (2b) append ` · <host>` when `hosts` is one host, ` · <first> +N` for several; `all` adds nothing.
+- An orb whose selected hosts are all disconnected shows its sources' unavailable state (2b *Unavailable sources*)
+  with `remote.orb.offline` as the reason.
+- Split by source keeps the orb's `hosts`. Merge keeps the target's.
+
+### Menu bar and dashboard
+
+- The menu bar / taskbar widget always shows every host (like every source).
+- **Dashboard → Hosts** — a section between Sources and Agents, only while remote hosts exist: one row per host that
+  is connected or produced output today (local first): status dot, name, live tok/s (right) and today's output
+  tokens (secondary; with today's cost, section 9). A row is a button that opens the Usage History window filtered to
+  that host; hover and focus as Sources rows. A disconnected host's row shows its status word instead of the live
+  value.
+- **Agents** — a remote agent's secondary line becomes `model · source · host`; local agents are unchanged. The
+  accessibility label adds `remote.a11y.onHost` (host). The score card's facts add the host.
+
+### Usage History window
+
+- A host picker next to the source picker (`remote.history.allHosts`, `remote.local`, then every host with history,
+  removed hosts included under their last name), only while any host history exists. Source and host filters combine.
+  A dashboard host row opens the window on its host (all sources); the picker then also lists that host if it has no
+  history yet. The selected host is named after the source under the title (`Codex · devbox · 2026/10/7 – 11/5`).
+  Monochrome symbols, no color: `square.stack.3d.up` for all hosts, `laptopcomputer` for this Mac, `server.rack` for a
+  host. As the window narrows, the picker caps a long name (truncated in the middle), then shows only its symbol, and
+  at the minimum width with every control present the source picker shows only its dot; the tooltips keep the names.
+- The peak (METRICS 8) is shown only for all hosts and all sources.
+- CSV export adds a trailing `host` column (host name; `local` for this Mac) only while host history exists.

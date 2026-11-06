@@ -222,3 +222,20 @@ Avatar input stays local until upload: PNG/JPEG up to 10 MiB is re-encoded witho
 256×256 PNG up to 512 KiB. Profile JSON responses are bounded to 64 KiB; these separate limits do not raise
 the existing 16 KiB periodic report limit. Avatar URLs are website metadata; native clients download their
 own avatar through the signed API endpoint rather than following an arbitrary external image URL.
+
+## 7. Remote hosts (SSH)
+
+Only for hosts the user added in Settings → 遠端主機 (`spec/REMOTE.md`). The app runs the system OpenSSH client
+(`/usr/bin/ssh`) to each enabled host with the user's own SSH configuration; Agent Speed itself opens no socket and
+contacts no other machine for this feature.
+
+- **When**: while the host is enabled and the app runs: one long-lived SSH session per host, reconnecting with
+  back-off after failures (REMOTE 4.4). Nothing while the master switch `networkEnabled` is off (REMOTE 2.3).
+- **What is sent to the host**: the relay executable when the host does not have this version yet (REMOTE 4.2), the
+  enabled source keys, today's start time, the Mac's time zone (IANA id and TZif data) and the current public price
+  table (REMOTE 5.3). Nothing else about the Mac or its other hosts.
+- **What comes back**: token counts, times, model and provider ids, mode facts, project names, working directories,
+  transcript paths and tool names with input digests of that host's agents, and its daily aggregates (REMOTE 1, 5.4).
+  Never conversation content.
+- **Live reporting** (section 6) may include the hosts' agents in the speed, tokens and models it already sends; it
+  never sends a host name, destination, path or anything about the SSH connection.

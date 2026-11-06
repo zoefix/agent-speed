@@ -3,6 +3,8 @@ using System.Globalization;
 using System.Text;
 using System.Text.Json;
 using AgentSpeed.Core;
+using AgentSpeed.Core.Locations;
+using AgentSpeed.Presentation.Settings.Locations;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings.Boards;
@@ -77,6 +79,8 @@ public static class SettingsSerializer
             OrbsJson.Write(w, s.Orbs);
             w.WritePropertyName("boards");
             BoardsJson.Write(w, s.Boards);
+            w.WritePropertyName("remoteHosts");
+            Core.Remote.RemoteHostsJson.Write(w, s.RemoteHosts);
             w.WritePropertyName("titleThemes");
             TitleThemesJson.Write(w, s.TitleThemes);
 
@@ -104,23 +108,20 @@ public static class SettingsSerializer
             w.WriteBoolean("openclaw", s.OpenClawEnabled);
             w.WriteBoolean("hermes", s.HermesEnabled);
             w.WriteBoolean("droid", s.DroidEnabled);
-            WriteNullableString(w, "codexRoot", s.CodexRoot);
-            WriteNullableString(w, "claudeRoot", s.ClaudeRoot);
-            WriteNullableString(w, "dshRoot", s.DshRoot);
-            WriteNullableString(w, "opencodeRoot", s.OpenCodeRoot);
-            WriteNullableString(w, "geminiRoot", s.GeminiRoot);
-            WriteNullableString(w, "ompRoot", s.OmpRoot);
-            WriteNullableString(w, "antigravityRoot", s.AntigravityRoot);
-            WriteNullableString(w, "workbuddyRoot", s.WorkBuddyRoot);
-            WriteNullableString(w, "workbuddyAiRoot", s.WorkBuddyAiRoot);
-            WriteNullableString(w, "zcodeRoot", s.ZCodeRoot);
-            WriteNullableString(w, "kimiRoot", s.KimiRoot);
-            WriteNullableString(w, "grokBuildRoot", s.GrokBuildRoot);
-            WriteNullableString(w, "piRoot", s.PiRoot);
-            WriteNullableString(w, "openclawRoot", s.OpenClawRoot);
-            WriteNullableString(w, "hermesRoot", s.HermesRoot);
-            WriteNullableString(w, "droidRoot", s.DroidRoot);
+            w.WriteBoolean("devin", s.DevinEnabled);
+            // The single folders of an earlier version go back exactly as loaded, so a downgrade still finds them (METRICS 2.1).
+            foreach (var (folder, path) in s.LegacyRoots)
+            {
+                w.WriteString(folder.LegacyKey(), path);
+            }
+
             w.WriteEndObject();
+
+            if (s.StoredLocations is { } locations)
+            {
+                w.WritePropertyName("sourceLocations");
+                locations.Write(w);
+            }
 
             w.WriteStartObject("dashboard");
             w.WriteNumber("chartSeconds", s.ChartSeconds);
@@ -279,22 +280,9 @@ public static class SettingsSerializer
             OpenClawEnabled = ReadBool(sources, "openclaw", d.OpenClawEnabled),
             HermesEnabled = ReadBool(sources, "hermes", d.HermesEnabled),
             DroidEnabled = ReadBool(sources, "droid", d.DroidEnabled),
-            CodexRoot = ReadString(sources, "codexRoot"),
-            ClaudeRoot = ReadString(sources, "claudeRoot"),
-            DshRoot = ReadString(sources, "dshRoot"),
-            OpenCodeRoot = ReadString(sources, "opencodeRoot"),
-            GeminiRoot = ReadString(sources, "geminiRoot"),
-            OmpRoot = ReadString(sources, "ompRoot"),
-            AntigravityRoot = ReadString(sources, "antigravityRoot"),
-            WorkBuddyRoot = ReadString(sources, "workbuddyRoot"),
-            WorkBuddyAiRoot = ReadString(sources, "workbuddyAiRoot"),
-            ZCodeRoot = ReadString(sources, "zcodeRoot"),
-            KimiRoot = ReadString(sources, "kimiRoot"),
-            GrokBuildRoot = ReadString(sources, "grokBuildRoot"),
-            PiRoot = ReadString(sources, "piRoot"),
-            OpenClawRoot = ReadString(sources, "openclawRoot"),
-            HermesRoot = ReadString(sources, "hermesRoot"),
-            DroidRoot = ReadString(sources, "droidRoot"),
+            DevinEnabled = ReadBool(sources, "devin", d.DevinEnabled),
+            LegacyRoots = ReadLegacyRoots(sources),
+            StoredLocations = root.TryGetProperty("sourceLocations", out var locations) ? LocationLists.Read(locations) : null,
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),
             HistoryModeKind = ReadString(history, "modeKind") == "speed" ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
             HistoryPerfSort = ReadPerfSort(history is { } ph ? Child(ph, "perfSort") : null),
@@ -328,9 +316,13 @@ public static class SettingsSerializer
         // An absent value is a fresh install or an older version: Vehicles, no custom sets (DESIGN 1, Persistence).
         var titles = root.TryGetProperty("titleThemes", out var titlesValue) ? TitleThemesJson.Read(titlesValue) : null;
         var boards = root.TryGetProperty("boards", out var boardsValue) ? BoardsJson.Read(boardsValue) : BoardsDocument.Empty;
+        var remoteHosts = root.TryGetProperty("remoteHosts", out var hostsValue)
+            ? Core.Remote.RemoteHostsJson.Read(hostsValue)
+            : Core.Remote.RemoteHostsDocument.Empty;
         return validated with
         {
             Orbs = orbs ?? OrbsMigration.FromLegacy(validated), Boards = boards, TitleThemes = titles ?? TitleThemesDocument.Default,
+            RemoteHosts = remoteHosts,
         };
     }
 
@@ -410,6 +402,21 @@ public static class SettingsSerializer
         }
 
         return value.TryGetDouble(out var number) && double.IsFinite(number) ? number : fallback;
+    }
+
+    /// <summary>The single-folder values of earlier versions that are strings (<c>sources.codexRoot</c>, …).</summary>
+    private static LegacyLocations ReadLegacyRoots(JsonElement? sources)
+    {
+        var roots = LegacyLocations.Empty;
+        foreach (var folder in LocationFolders.All)
+        {
+            if (ReadString(sources, folder.LegacyKey()) is { } path)
+            {
+                roots = roots.With(folder, path);
+            }
+        }
+
+        return roots;
     }
 
     private static string? ReadString(JsonElement? parent, string name)

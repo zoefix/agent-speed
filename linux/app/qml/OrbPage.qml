@@ -353,6 +353,16 @@ SettingsPage {
         }
     }
 
+    // Hosts (DESIGN 13), only while remote hosts exist.
+    SettingsGroup {
+        visible: page.current !== null && hostsView.shown
+        title: S.tr2(S.rev, "remote.hosts")
+        HostPickerRows {
+            hosts: page.current ? page.current.hosts : "all"
+            onPicked: (hosts) => { if (page.current) orbs.setHosts(page.current.id, hosts) }
+        }
+    }
+
     // Style and unit.
     SettingsGroup {
         visible: page.current !== null
@@ -402,7 +412,7 @@ SettingsPage {
             Slider {
                 anchors.verticalCenter: parent.verticalCenter
                 width: 140
-                from: page.current ? page.current.minimumSize : 96
+                from: page.current ? page.current.minimumSize : 64
                 to: 240
                 stepSize: 4
                 snapMode: Slider.SnapAlways

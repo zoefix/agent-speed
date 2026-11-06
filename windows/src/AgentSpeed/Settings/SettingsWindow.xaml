@@ -49,6 +49,7 @@
                     <pages:TrafficPage x:Name="TrafficPage" DataContext="{Binding Traffic}" />
                     <pages:ReportPage x:Name="ReportPage" DataContext="{Binding Report}" />
                     <pages:SourcesPage x:Name="SourcesPage" />
+                    <pages:RemotePage x:Name="RemotePage" DataContext="{Binding Remote}" />
                     <pages:AboutPage x:Name="AboutPage" />
                 </Grid>
             </ScrollViewer>

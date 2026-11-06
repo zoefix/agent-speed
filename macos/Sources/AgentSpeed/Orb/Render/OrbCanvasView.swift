@@ -23,7 +23,12 @@ final class OrbCanvasView: NSView, OrbFrameClient {
     private(set) var framesDrawn = 0
     let encoder: OrbEncoder?
 
+    /// Every canvas presents in step with the display's refresh (`AppSettings.displaySync`); a canvas follows a change
+    /// at its next frame.
+    static var displaySync = true
+
     private var scene = OrbScene(capacity: 2048)
+    private var presentsInSync = OrbCanvasView.displaySync
     private var metalLayer: CAMetalLayer? { layer as? CAMetalLayer }
     nonisolated(unsafe) private var screenObserver: NSObjectProtocol?
     private var pendingDraw = false
@@ -55,9 +60,7 @@ final class OrbCanvasView: NSView, OrbFrameClient {
         layer.isOpaque = false
         layer.colorspace = CGColorSpace(name: CGColorSpace.sRGB)
         layer.maximumDrawableCount = 3
-        // Frames are already paced by the shared display link; presenting without the layer's own frame pacing saves
-        // a round of system work per frame. The window server composites the panel, so nothing tears.
-        layer.displaySyncEnabled = false
+        layer.displaySyncEnabled = presentsInSync
         layer.allowsNextDrawableTimeout = true
         return layer
     }
@@ -130,7 +133,7 @@ final class OrbCanvasView: NSView, OrbFrameClient {
 
     func renderFrame(at time: TimeInterval) {
         guard let encoder, sceneProvider != nil, bounds.width > 0, let metalLayer,
-              let drawable = metalLayer.nextDrawable() else { return }
+              let drawable = nextDrawable(of: metalLayer) else { return }
         let start = DispatchTime.now().uptimeNanoseconds
         guard let commandBuffer = encoder.beginFrame() else { return }
         encode(drawable, at: time, into: commandBuffer, joining: false)
@@ -144,8 +147,16 @@ final class OrbCanvasView: NSView, OrbFrameClient {
     /// owner's.
     private func renderFrame(at time: TimeInterval, joining commandBuffer: MTLCommandBuffer) {
         guard window != nil, sceneProvider != nil, bounds.width > 0, let metalLayer,
-              let drawable = metalLayer.nextDrawable() else { return }
+              let drawable = nextDrawable(of: metalLayer) else { return }
         encode(drawable, at: time, into: commandBuffer, joining: true)
+    }
+
+    private func nextDrawable(of layer: CAMetalLayer) -> CAMetalDrawable? {
+        if presentsInSync != Self.displaySync {
+            presentsInSync = Self.displaySync
+            layer.displaySyncEnabled = presentsInSync
+        }
+        return layer.nextDrawable()
     }
 
     private func encode(_ drawable: CAMetalDrawable, at time: TimeInterval, into commandBuffer: MTLCommandBuffer, joining: Bool) {

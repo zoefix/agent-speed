@@ -11,8 +11,10 @@ internal sealed partial class MonitorCore
     private readonly ConfiguredValues _configured = new();
     private readonly Dictionary<string, SessionStore> _workBuddySessions = new(PathComparer);
 
+    /// <summary>An agent takes the config files of the root it is read under (METRICS 2.1 Configured values).</summary>
     private ExecutionModes ConfiguredOf(TrackedFile tracked) =>
-        _configured.Of(tracked.Parser.Source, tracked.Root.Path, tracked.Parser.AgentId, tracked.Parser.Model);
+        _configured.Of(tracked.Parser.Source, tracked.Root.Path, tracked.Parser.AgentId, tracked.Parser.Model,
+            tracked.Root.Family == RootFamily.Gemini ? _locations.GeminiSettingsOf(tracked.Root.Path) : null);
 
     /// <summary>Checks the files; every agent a change touches is pushed again. True when a value changed.</summary>
     private bool RefreshAgentContext()

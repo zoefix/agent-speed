@@ -25,6 +25,14 @@
   </ItemGroup>
 
   <ItemGroup>
+    <!-- REMOTE 3.1: stand-ins for the relays the app embeds; aarch64's digest is deliberately wrong. -->
+    <EmbeddedResource Include="Remote/Resources/relay-x86_64" LogicalName="AgentSpeed.Relay.linux-x86_64" />
+    <EmbeddedResource Include="Remote/Resources/relay-x86_64.sha256" LogicalName="AgentSpeed.Relay.linux-x86_64.sha256" />
+    <EmbeddedResource Include="Remote/Resources/relay-aarch64" LogicalName="AgentSpeed.Relay.linux-aarch64" />
+    <EmbeddedResource Include="Remote/Resources/relay-aarch64.sha256" LogicalName="AgentSpeed.Relay.linux-aarch64.sha256" />
+  </ItemGroup>
+
+  <ItemGroup>
     <None Include="../../../spec/fixtures/**/*" LinkBase="spec/fixtures" CopyToOutputDirectory="Always" Visible="false" />
   </ItemGroup>
 </Project>

@@ -53,7 +53,7 @@ internal sealed class OpenClawSource
     private long _removedMalformedLines;
     private long _thresholdMs;
 
-    /// <param name="roots">The state folders (or the folder or database of the setting) to search.</param>
+    /// <param name="roots">The roots of the list to search: state folders, agent folders or databases.</param>
     /// <param name="rediscover">Resolves the roots again on every rediscovery (automatic profiles); null keeps them.</param>
     public OpenClawSource(IReadOnlyList<string> roots, Func<IReadOnlyList<string>>? rediscover, IDeduper deduper)
     {
@@ -65,7 +65,7 @@ internal sealed class OpenClawSource
     /// <summary>The roots as last resolved.</summary>
     public IReadOnlyList<string> Roots { get; private set; }
 
-    /// <summary>A state folder (or the folder or file of the setting) exists (METRICS 2).</summary>
+    /// <summary>A root of the list (a state folder, an agent folder or a database) exists (METRICS 2).</summary>
     public bool Available => Roots.Any(OpenClawPaths.Exists);
 
     /// <summary>A seeding read is in progress: actions read now are seeded (METRICS 6.10).</summary>

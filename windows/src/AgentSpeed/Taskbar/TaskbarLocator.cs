@@ -1,9 +1,14 @@
+using System.Collections.Immutable;
+using System.Runtime.CompilerServices;
+using System.Runtime.InteropServices;
 using AgentSpeed.Interop;
 using AgentSpeed.Presentation.Layout;
 
 namespace AgentSpeed.Taskbar;
 
-internal readonly record struct TaskbarGeometry(nint Taskbar, nint Tray, RECT TaskbarRect, RECT TrayRect, uint Dpi, bool Vertical)
+/// <param name="Occupied">Windows of other programs shown on the taskbar (for example TrafficMonitor), which the widget avoids.</param>
+internal readonly record struct TaskbarGeometry(nint Taskbar, nint Tray, RECT TaskbarRect, RECT TrayRect, uint Dpi, bool Vertical,
+    ImmutableArray<RECT> Occupied = default)
 {
     public double Scale => Dpi / 96.0;
 }
@@ -36,14 +41,72 @@ internal static class TaskbarLocator
             dpi = 96;
         }
 
-        return new TaskbarGeometry(taskbar, trayWindow, bar, tray, dpi, bar.Height > bar.Width);
+        return new TaskbarGeometry(taskbar, trayWindow, bar, tray, dpi, bar.Height > bar.Width, Occupants(taskbar, bar));
+    }
+
+    /// <summary>
+    /// The rectangles of visible windows that other programs host anywhere inside the taskbar (DESIGN 3, Position on the
+    /// taskbar): not the shell's own parts and not this app's (or another Agent Speed's) widget.
+    /// </summary>
+    private static unsafe ImmutableArray<RECT> Occupants(nint taskbar, RECT bar)
+    {
+        User32.GetWindowThreadProcessId(taskbar, out var shell);
+        var search = new OccupantSearch(shell, (uint)Environment.ProcessId, bar);
+        var handle = GCHandle.Alloc(search);
+        try
+        {
+            User32.EnumChildWindows(taskbar, &OccupantProc, GCHandle.ToIntPtr(handle));
+        }
+        finally
+        {
+            handle.Free();
+        }
+
+        return search.Found.ToImmutable();
+    }
+
+    [UnmanagedCallersOnly(CallConvs = [typeof(CallConvStdcall)])]
+    private static int OccupantProc(nint hwnd, nint data)
+    {
+        try
+        {
+            if (GCHandle.FromIntPtr(data).Target is OccupantSearch search)
+            {
+                search.Visit(hwnd);
+            }
+        }
+        catch
+        {
+            // Never let an exception cross the native boundary.
+        }
+
+        return 1;
+    }
+
+    private sealed class OccupantSearch(uint shell, uint self, RECT bar)
+    {
+        public ImmutableArray<RECT>.Builder Found { get; } = ImmutableArray.CreateBuilder<RECT>();
+
+        public void Visit(nint hwnd)
+        {
+            User32.GetWindowThreadProcessId(hwnd, out var process);
+            if (process == 0 || process == shell || process == self || !User32.IsWindowVisible(hwnd)
+                || !User32.GetWindowRect(hwnd, out var rect) || rect.IsEmpty
+                || rect.Right <= bar.Left || rect.Left >= bar.Right || rect.Bottom <= bar.Top || rect.Top >= bar.Bottom
+                || User32.GetClassName(hwnd) == TaskbarHost.WidgetClassName)
+            {
+                return;
+            }
+
+            Found.Add(rect);
+        }
     }
 
     /// <summary>Widget rectangle in screen coordinates, <paramref name="offset"/> physical pixels from the default spot.</summary>
     public static RECT? WidgetRect(TaskbarGeometry geometry, int length, double offset)
     {
         var (bar, tray, gap) = Layout(geometry);
-        var rect = PlacementMath.TaskbarWidget(bar, tray, length, gap, geometry.Vertical, offset);
+        var rect = PlacementMath.TaskbarWidget(bar, tray, length, gap, geometry.Vertical, offset, Occupied(geometry));
         if (rect is not { } r)
         {
             return null;
@@ -56,7 +119,7 @@ internal static class TaskbarLocator
     public static double? WidgetOffset(TaskbarGeometry geometry, int length, double offset)
     {
         var (bar, tray, gap) = Layout(geometry);
-        return PlacementMath.TaskbarWidgetOffset(bar, tray, length, gap, geometry.Vertical, offset);
+        return PlacementMath.TaskbarWidgetOffset(bar, tray, length, gap, geometry.Vertical, offset, Occupied(geometry));
     }
 
     /// <summary>True when the taskbar is slid off-screen (auto-hide) on its monitor.</summary>
@@ -114,6 +177,9 @@ internal static class TaskbarLocator
     }
 
     private static RectD ToRect(RECT r) => new(r.Left, r.Top, r.Width, r.Height);
+
+    private static RectD[] Occupied(TaskbarGeometry geometry) =>
+        geometry.Occupied.IsDefaultOrEmpty ? [] : [.. geometry.Occupied.Select(ToRect)];
 
     private static (RectD Bar, RectD Tray, double Gap) Layout(TaskbarGeometry geometry) => (
         ToRect(geometry.TaskbarRect),

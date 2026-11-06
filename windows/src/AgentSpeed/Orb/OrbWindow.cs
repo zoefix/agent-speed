@@ -58,13 +58,12 @@ internal sealed class OrbWindow : Window, IOrbWindow
     private Action? _moveDone;
     private bool _moving;
     private bool _following;
-    private double _lastFrame;
-    private bool _faded;
+    private MotionFrames _frames;
+    private readonly IdleFade _idleFade = new();
     private bool _hovering;
     private bool _discHover;
     private bool _plateHover;
     private DispatcherTimer? _hoverGrace;
-    private double _idleSince = double.NaN;
     private readonly List<IOrbAttachment> _attachments = [];
     private readonly List<(nint Handle, PixelRect Rect)> _batch = [];
 
@@ -321,7 +320,7 @@ internal sealed class OrbWindow : Window, IOrbWindow
         _options = options;
         if (!options.FadeWhenIdle)
         {
-            _faded = false;
+            _idleFade.Restore();
         }
 
         ApplyOpacity();
@@ -413,14 +412,9 @@ internal sealed class OrbWindow : Window, IOrbWindow
     /// <summary>The orb's own idle state drives "fade when idle" (its sources idle for 60 s).</summary>
     public void NoteActivity(bool active)
     {
-        if (active)
+        if (_idleFade.NoteActivity(active, _clock()))
         {
-            _idleSince = double.NaN;
-            Restore();
-        }
-        else if (double.IsNaN(_idleSince))
-        {
-            _idleSince = _clock();
+            ApplyOpacity();
         }
     }
 
@@ -641,18 +635,22 @@ internal sealed class OrbWindow : Window, IOrbWindow
 
     private void StartFrames()
     {
-        _lastFrame = _clock();
-        CompositionTarget.Rendering -= OnMotionFrame;
-        CompositionTarget.Rendering += OnMotionFrame;
+        if (_frames.Start(_clock()))
+        {
+            CompositionTarget.Rendering -= OnMotionFrame;
+            CompositionTarget.Rendering += OnMotionFrame;
+        }
     }
 
-    private void StopFrames() => CompositionTarget.Rendering -= OnMotionFrame;
+    private void StopFrames()
+    {
+        _frames.Stop();
+        CompositionTarget.Rendering -= OnMotionFrame;
+    }
 
     private void OnMotionFrame(object? sender, EventArgs e)
     {
-        var now = _clock();
-        var dt = Math.Clamp(now - _lastFrame, 0, 0.05);
-        _lastFrame = now;
+        var dt = _frames.Step(_clock());
         if (_following && _dragging)
         {
             _followX.Step(_dragTarget.X, dt);
@@ -858,30 +856,26 @@ internal sealed class OrbWindow : Window, IOrbWindow
     private void Housekeeping()
     {
         Surface.Paused = WindowEffects.IsCloaked(_hwnd);
-        if (_options.FadeWhenIdle && !_faded && !double.IsNaN(_idleSince) && _clock() - _idleSince >= 60 && Surface.Scene.HoverBlend < 0.01)
+        if (_idleFade.TryFade(_options.FadeWhenIdle, engaged: Surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, _clock()))
         {
-            _faded = true;
             ApplyOpacity(animated: true);
         }
     }
 
     private void Restore()
     {
-        if (!_faded)
+        if (_idleFade.Restore())
         {
-            return;
+            ApplyOpacity();
         }
-
-        _faded = false;
-        ApplyOpacity();
     }
 
     private void ApplyOpacity(bool animated = false)
     {
-        var target = (_options.Dimmed ? 0.55 : 1) * (_faded ? 0.45 : 1);
+        var target = (_options.Dimmed ? 0.55 : 1) * (_idleFade.Faded ? IdleFade.Factor : 1);
         if (animated && !_options.ReduceMotion)
         {
-            BeginAnimation(OpacityProperty, new DoubleAnimation(target, TimeSpan.FromSeconds(0.6))
+            BeginAnimation(OpacityProperty, new DoubleAnimation(target, TimeSpan.FromSeconds(IdleFade.FadeSeconds))
             {
                 EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
             });

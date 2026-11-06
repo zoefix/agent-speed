@@ -30,6 +30,7 @@ constexpr const char* kOpenClawFamily = "openclaw";
 constexpr const char* kOpenClawDatabaseFamily = "openclawDatabase";
 constexpr const char* kHermesFamily = "hermes";
 constexpr const char* kHermesLogFamily = "hermesLog";
+constexpr const char* kDevinFamily = "devin";
 
 const char* familyName(RootFamily family) {
     switch (family) {
@@ -49,6 +50,7 @@ const char* familyName(RootFamily family) {
         case RootFamily::OpenClaw: return "OpenClaw";
         case RootFamily::Hermes: return "Hermes";
         case RootFamily::Droid: return "Droid";
+        case RootFamily::Devin: return "Devin";
     }
     return "?";
 }
@@ -166,15 +168,22 @@ std::int64_t droidIdentity(const discovery::DiscoveredFile& file) {
 
 struct Analyzer::Work {
     std::vector<Planned> files;
+    // METRICS 2.1 History: every database of the list in list order, keyed by its path; `skip` holds the sessions
+    // an earlier database of the list provides.
     struct OpenCodeWork {
-        std::string path, identity;
+        std::string path, metaKey, identity;
+        std::set<std::string> skip;
+        bool done = false;
     };
-    std::optional<OpenCodeWork> openCode;
+    std::vector<OpenCodeWork> openCode;
     struct ZCodeWork {
         std::string path;
         std::int64_t size = 0, modified = 0;
+        std::set<std::string> skip;
+        std::string metaKey, identity;
+        bool done = false;
     };
-    std::optional<ZCodeWork> zcode;
+    std::vector<ZCodeWork> zcode;
     struct OpenClawWork {
         std::string path;
         sqlite::DatabaseStamp stamp;
@@ -185,6 +194,7 @@ struct Analyzer::Work {
         std::int64_t size = 0, writeNs = 0;
     };
     std::vector<HermesWork> hermes;
+    std::vector<DevinSession> devin;
     std::set<std::int64_t> replaced;
 };
 
@@ -280,10 +290,11 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
     planFiles(locations, enabled, zoneChanged, work, report);
     planOpenClaw(locations, enabled, zoneChanged, work, report);
     planHermes(locations, enabled, zoneChanged, work, report);
-    planZCode(locations, enabled, zoneChanged, work, report);
+    planZCode(locations, enabled, zoneChanged, zoneId, work, report);
     planOpenCode(locations, enabled, zoneChanged, zoneId, work, report);
-    report.filesPlanned = static_cast<int>(work.files.size() + work.openClaw.size() + work.hermes.size()) + (work.zcode ? 1 : 0) +
-                          (work.openCode ? 1 : 0);
+    planDevin(locations, enabled, zoneChanged, work, report);
+    report.filesPlanned = static_cast<int>(work.files.size() + work.openClaw.size() + work.hermes.size() + work.zcode.size() +
+                                           work.openCode.size() + work.devin.size());
     progress_ = progress;
     struct Reset {
         std::function<void(int, int)>& progress;
@@ -300,6 +311,7 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
         if (!report.cancelled) analyzeHermes(work, ledger, labeler, report);
         if (!report.cancelled) analyzeZCode(work, ledger, labeler, report);
         if (!report.cancelled) analyzeOpenCode(work, ledger, labeler, report);
+        if (!report.cancelled) analyzeDevin(work, ledger, labeler, report);
     } catch (...) {
         flush(pending_);
         throw;
@@ -309,15 +321,23 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
     if (!report.cancelled) {
         store_.setMeta("timeZone", zoneId);
         store_.setMeta("priceTableVersion", priceVersion);
-        if (work.openCode) store_.setMeta("opencode", work.openCode->identity);
+        for (const auto& database : work.openCode) {
+            if (database.done) store_.setMeta(database.metaKey, database.identity);
+        }
+        for (const auto& database : work.zcode) {
+            if (database.done) store_.setMeta(database.metaKey, database.identity);
+        }
     }
     return report;
 }
 
 void Analyzer::planFiles(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
     std::set<std::string> seen;
+    std::map<RootFamily, std::set<std::string>> resolved;
     for (const auto& [family, root] : locations.fileRoots()) {
         if (!familyEnabled(family, enabled) || root.empty()) continue;
+        // A root that resolves to an earlier root's folder is read once (METRICS 2.1 Reading).
+        if (fsx::isDirectory(root) && !resolved[family].insert(resolvedPath(root)).second) continue;
         std::vector<std::string> roots{root};
         if (family == RootFamily::Codex) {
             if (const auto parent = fsx::parentOf(root); !parent.empty()) roots.push_back(fsx::join(parent, "archived_sessions"));
@@ -400,141 +420,227 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
 
 void Analyzer::planOpenCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, const std::string& zoneId,
                             Work& work, Report& report) {
-    if (!enabled.contains(SourceKind::OpenCode) || locations.openCodeRoot.empty()) return;
-    const auto path = opencode::Database::databasePath(locations.openCodeRoot);
-    const auto database = fsx::statOf(path, true);
-    if (!database || !database->regular) return;
-    ++report.filesDiscovered;
-    const auto wal = fsx::statOf(path + "-wal", true);
-    const auto identity = path + "|" + std::to_string(database->length) + ":" + std::to_string(database->writeNs) + "|" +
-                          (wal ? std::to_string(wal->length) + ":" + std::to_string(wal->writeNs) : std::string("-")) + "|v" +
-                          std::to_string(kVersion) + "|" + zoneId;
+    if (!enabled.contains(SourceKind::OpenCode)) return;
     bool reprices = false;
     for (const auto& [p, e] : entries_) reprices |= repricing_ && e.family == kOpenCodeFamily && e.hasUnpriced();
-    if (!force && !reprices && store_.meta("opencode") == identity) return;
-    for (const auto& [p, e] : entries_) {
-        if (e.family == kOpenCodeFamily) work.replaced.insert(e.id);
+    std::vector<Work::OpenCodeWork> listed;
+    std::vector<bool> unchangedAt;
+    for (const auto& root : locations.openCodeRoots) {
+        const auto path = opencode::Database::databasePath(root);
+        const auto database = fsx::statOf(path, true);
+        if (!database || !database->regular) continue;
+        ++report.filesDiscovered;
+        const auto wal = fsx::statOf(path + "-wal", true);
+        Work::OpenCodeWork item;
+        item.path = path;
+        item.metaKey = std::string(kOpenCodeFamily) + ":" + path;
+        item.identity = path + "|" + std::to_string(database->length) + ":" + std::to_string(database->writeNs) + "|" +
+                        (wal ? std::to_string(wal->length) + ":" + std::to_string(wal->writeNs) : std::string("-")) + "|v" +
+                        std::to_string(kVersion) + "|" + zoneId;
+        unchangedAt.push_back(!force && !reprices && store_.meta(item.metaKey) == item.identity);
+        listed.push_back(std::move(item));
     }
-    work.openCode = Work::OpenCodeWork{path, identity};
+    const auto changed = std::find(unchangedAt.rbegin(), unchangedAt.rend(), false);
+    if (changed == unchangedAt.rend()) return;
+    const auto last = static_cast<std::size_t>(std::distance(changed, unchangedAt.rend())) - 1;
+    // An unchanged database earlier than a changed one is opened only to learn its sessions.
+    std::set<std::string> seen;
+    for (std::size_t i = 0; i <= last; ++i) {
+        std::vector<opencode::SessionInfo> sessions;
+        try {
+            sessions = opencode::Database::open(listed[i].path)->sessions();
+        } catch (...) {
+            // Busy, unreadable or unsupported: analysed on a later run.
+            continue;
+        }
+        auto& item = listed[i];
+        item.skip = seen;
+        for (const auto& info : sessions) seen.insert(info.id);
+        if (unchangedAt[i]) continue;
+        for (const auto& info : sessions) {
+            if (item.skip.contains(info.id)) continue;
+            if (const auto* previous = previousOf(opencode::agentId(info.id)); previous && previous->family == kOpenCodeFamily) {
+                work.replaced.insert(previous->id);
+            }
+        }
+        work.openCode.push_back(std::move(item));
+    }
 }
 
 void Analyzer::analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
-    if (!work.openCode) return;
-    std::unique_ptr<opencode::Database> database;
-    try {
-        database = opencode::Database::open(work.openCode->path);
-    } catch (...) {
-        ++report.filesUnreadable;
-        work.openCode.reset();
-        return;
-    }
-    try {
-        auto sessions = database->sessions();
-        std::sort(sessions.begin(), sessions.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
-        for (const auto& info : sessions) {
-            const auto agent = opencode::agentId(info.id);
-            std::map<std::string, ParsedResponse> latest;
-            std::vector<std::string> order;
-            std::int64_t lastUpdated = 0, rows = 0;
-            for (const auto& row : database->sessionRows(info.id)) {
-                ++rows;
-                lastUpdated = std::max(lastUpdated, row.timeUpdated);
-                const auto response = opencode::response(row, info);
-                if (!response) continue;
-                std::string owner;
-                if (ledger.tryClaim(row.id, agent, &owner) || owner == agent) {
-                    if (!latest.contains(row.id)) order.push_back(row.id);
-                    latest[row.id] = *response;
-                }
-            }
-            std::vector<ParsedResponse> responses;
-            for (const auto& id : order) responses.push_back(latest[id]);
-            StoredFile entry;
-            entry.path = agent;
-            entry.family = kOpenCodeFamily;
-            entry.size = rows;
-            entry.modified = std::max(info.updatedMs, lastUpdated);
-            entry.version = kVersion;
-            entry.days = contributionsOf(responses, SourceKind::OpenCode, labeler, *prices_);
-            entry.perf = emittedRecords(responses, SourceKind::OpenCode, labeler);
-            keep(std::move(entry), ledger.finish(agent));
-            ++report.sessionsAnalyzed;
+    for (auto& item : work.openCode) {
+        std::unique_ptr<opencode::Database> database;
+        try {
+            database = opencode::Database::open(item.path);
+        } catch (...) {
+            ++report.filesUnreadable;
+            continue;
         }
-    } catch (const sqlite::Error&) {
-        ++report.filesUnreadable;
-        work.openCode.reset();
+        try {
+            auto sessions = database->sessions();
+            std::sort(sessions.begin(), sessions.end(), [](const auto& a, const auto& b) { return a.id < b.id; });
+            for (const auto& info : sessions) {
+                if (item.skip.contains(info.id)) continue;
+                const auto agent = opencode::agentId(info.id);
+                std::map<std::string, ParsedResponse> latest;
+                std::vector<std::string> order;
+                std::int64_t lastUpdated = 0, rows = 0;
+                for (const auto& row : database->sessionRows(info.id)) {
+                    ++rows;
+                    lastUpdated = std::max(lastUpdated, row.timeUpdated);
+                    const auto response = opencode::response(row, info);
+                    if (!response) continue;
+                    std::string owner;
+                    if (ledger.tryClaim(row.id, agent, &owner) || owner == agent) {
+                        if (!latest.contains(row.id)) order.push_back(row.id);
+                        latest[row.id] = *response;
+                    }
+                }
+                std::vector<ParsedResponse> responses;
+                for (const auto& id : order) responses.push_back(latest[id]);
+                StoredFile entry;
+                entry.path = agent;
+                entry.family = kOpenCodeFamily;
+                entry.size = rows;
+                entry.modified = std::max(info.updatedMs, lastUpdated);
+                entry.version = kVersion;
+                entry.days = contributionsOf(responses, SourceKind::OpenCode, labeler, *prices_);
+                entry.perf = emittedRecords(responses, SourceKind::OpenCode, labeler);
+                keep(std::move(entry), ledger.finish(agent));
+                ++report.sessionsAnalyzed;
+            }
+            item.done = true;
+        } catch (const sqlite::Error&) {
+            ++report.filesUnreadable;
+        }
     }
 }
 
-void Analyzer::planZCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
-    if (!enabled.contains(SourceKind::ZCode) || locations.zcodeRoot.empty()) return;
-    const auto path = harness::zcodeDatabase(locations.zcodeRoot);
-    const auto stamp = sqlite::stampOf(path);
-    if (!stamp) return;
-    ++report.filesDiscovered;
-    bool changed = force;
-    bool any = false;
-    const auto prefix = path + "#";
-    for (const auto& [p, e] : entries_) {
-        if (e.family != kZCodeFamily || p.rfind(prefix, 0) != 0) continue;
-        any = true;
-        changed |= !unchanged(&e, kZCodeFamily, stamp->length(), stamp->lastWriteNs(), false);
+void Analyzer::planZCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, const std::string& zoneId,
+                         Work& work, Report& report) {
+    if (!enabled.contains(SourceKind::ZCode)) return;
+    // The sessions of the unchanged databases earlier in the list; changed ones add theirs while analysed.
+    std::set<std::string> seen;
+    for (const auto& root : locations.zcodeRoots) {
+        const auto path = harness::zcodeDatabase(root);
+        const auto stamp = sqlite::stampOf(path);
+        if (!stamp) continue;
+        ++report.filesDiscovered;
+        std::set<std::string> stored;
+        bool storedUnchanged = true, unpriced = false;
+        const auto prefix = path + "#";
+        for (const auto& [p, e] : entries_) {
+            if (e.family != kZCodeFamily || p.rfind(prefix, 0) != 0) continue;
+            stored.insert(p.substr(prefix.size()));
+            storedUnchanged &= unchanged(&e, kZCodeFamily, stamp->length(), stamp->lastWriteNs(), false);
+            unpriced |= e.hasUnpriced();
+        }
+        Work::ZCodeWork item{path, stamp->length(), stamp->lastWriteNs(), seen, std::string(kZCodeFamily) + ":" + path,
+                             path + "|" + std::to_string(stamp->length()) + ":" + std::to_string(stamp->lastWriteNs()) + "|v" +
+                                 std::to_string(kVersion) + "|" + zoneId};
+        // A database whose every session another database provides has no entries: its identity says it was read.
+        const bool same = store_.meta(item.metaKey) == item.identity || (!stored.empty() && storedUnchanged);
+        if (!force && !(repricing_ && unpriced) && same) {
+            seen.insert(stored.begin(), stored.end());
+            continue;
+        }
+        for (const auto& [p, e] : entries_) {
+            if (e.family == kZCodeFamily && p.rfind(prefix, 0) == 0) work.replaced.insert(e.id);
+        }
+        work.zcode.push_back(std::move(item));
     }
-    if (any && !changed) return;
-    for (const auto& [p, e] : entries_) {
-        if (e.family == kZCodeFamily && p.rfind(prefix, 0) == 0) work.replaced.insert(e.id);
-    }
-    work.zcode = Work::ZCodeWork{path, stamp->length(), stamp->lastWriteNs()};
 }
 
 void Analyzer::analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
-    if (!work.zcode) return;
-    std::vector<zcode::Row> rows;
-    try {
-        rows = zcode::Database::open(work.zcode->path).read();
-    } catch (const zcode::UnsupportedSchema&) {
-        return;
-    } catch (...) {
-        ++report.filesUnreadable;
-        return;
-    }
-    std::vector<std::string> order;
-    std::map<std::string, std::vector<const zcode::Row*>> sessions;
-    for (const auto& row : rows) {
-        auto& group = sessions[row.sessionId];
-        if (group.empty()) order.push_back(row.sessionId);
-        group.push_back(&row);
-    }
-    for (const auto& sessionId : order) {
-        const auto id = work.zcode->path + "#" + sessionId;
-        std::map<std::string, ParsedResponse> latest;
-        std::vector<std::string> keys;
-        for (const auto* row : sessions[sessionId]) {
-            const auto response = row->response(work.zcode->path);
-            if (!response) continue;
-            std::string owner;
-            if (ledger.tryClaim(response->key, id, &owner) || owner == id) {
-                if (!latest.contains(response->key)) keys.push_back(response->key);
-                latest[response->key] = *response;
-            }
+    std::set<std::string> analysed;
+    for (auto& database : work.zcode) {
+        std::vector<zcode::Row> rows;
+        try {
+            rows = zcode::Database::open(database.path).read();
+        } catch (const zcode::UnsupportedSchema&) {
+            continue;
+        } catch (...) {
+            ++report.filesUnreadable;
+            continue;
         }
+        std::vector<std::string> order;
+        std::map<std::string, std::vector<const zcode::Row*>> sessions;
+        for (const auto& row : rows) {
+            auto& group = sessions[row.sessionId];
+            if (group.empty()) order.push_back(row.sessionId);
+            group.push_back(&row);
+        }
+        for (const auto& sessionId : order) {
+            const auto id = database.path + "#" + sessionId;
+            // Another database of the list provides it: this database's former entry, if any, keeps nothing.
+            const bool skipped = database.skip.contains(sessionId) || analysed.contains(sessionId);
+            if (skipped && !previousOf(id)) continue;
+            std::map<std::string, ParsedResponse> latest;
+            std::vector<std::string> keys;
+            for (const auto* row : skipped ? std::vector<const zcode::Row*>{} : sessions[sessionId]) {
+                const auto response = row->response(database.path);
+                if (!response) continue;
+                std::string owner;
+                if (ledger.tryClaim(response->key, id, &owner) || owner == id) {
+                    if (!latest.contains(response->key)) keys.push_back(response->key);
+                    latest[response->key] = *response;
+                }
+            }
+            if (!skipped) analysed.insert(sessionId);
+            std::vector<ParsedResponse> responses;
+            for (const auto& key : keys) responses.push_back(latest[key]);
+            StoredFile entry;
+            entry.path = id;
+            entry.family = kZCodeFamily;
+            entry.size = database.size;
+            entry.modified = database.modified;
+            entry.version = kVersion;
+            entry.days = contributionsOf(responses, SourceKind::ZCode, labeler, *prices_);
+            entry.perf = emittedRecords(responses, SourceKind::ZCode, labeler);
+            keep(std::move(entry), ledger.finish(id));
+            advance(report);
+        }
+        database.done = true;
+    }
+}
+
+void Analyzer::planDevin(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
+    if (!enabled.contains(SourceKind::Devin)) return;
+    work.devin = devinPlanner_.plan(locations.devinRoots, [&](const std::string& key, std::int64_t size, std::int64_t modified) {
+        return unchanged(previousOf(key), kDevinFamily, size, modified, force);
+    });
+    report.filesDiscovered += devinPlanner_.discovered();
+    report.filesUnreadable += devinPlanner_.unreadable();
+    for (const auto& session : work.devin) {
+        if (const auto* previous = previousOf(session.key)) work.replaced.insert(previous->id);
+    }
+}
+
+// METRICS 4.17 History: one entry per CLI session; each database owns its calls' keys.
+void Analyzer::analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
+    for (auto& session : work.devin) {
         std::vector<ParsedResponse> responses;
-        for (const auto& key : keys) responses.push_back(latest[key]);
+        for (auto& response : session.responses) {
+            std::string owner;
+            if (ledger.tryClaim(response.key, session.database, &owner) || owner == session.database) responses.push_back(std::move(response));
+        }
         StoredFile entry;
-        entry.path = id;
-        entry.family = kZCodeFamily;
-        entry.size = work.zcode->size;
-        entry.modified = work.zcode->modified;
+        entry.path = session.key;
+        entry.family = kDevinFamily;
+        entry.size = session.size;
+        entry.modified = session.modified;
         entry.version = kVersion;
-        entry.days = contributionsOf(responses, SourceKind::ZCode, labeler, *prices_);
-        entry.perf = emittedRecords(responses, SourceKind::ZCode, labeler);
-        keep(std::move(entry), ledger.finish(id));
+        entry.days = contributionsOf(responses, SourceKind::Devin, labeler, *prices_);
+        entry.perf = emittedRecords(responses, SourceKind::Devin, labeler);
+        keep(std::move(entry), ledger.finish(session.database));
+        ++report.sessionsAnalyzed;
         advance(report);
+        if (pending_.size() >= 256) flush(pending_);
     }
 }
 
 void Analyzer::planOpenClaw(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
-    if (!enabled.contains(SourceKind::OpenClaw) || locations.openClawRoots.empty()) return;
+    if (!enabled.contains(SourceKind::OpenClaw)) return;
     for (const auto& path : paths::openClawDatabases(locations.openClawRoots)) {
         const auto stamp = sqlite::stampOf(path);
         if (!stamp) continue;
@@ -606,7 +712,7 @@ void Analyzer::analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& 
 }
 
 void Analyzer::planHermes(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
-    if (!enabled.contains(SourceKind::Hermes) || locations.hermesRoot.empty()) return;
+    if (!enabled.contains(SourceKind::Hermes)) return;
     for (const auto& folder : locations.hermesFolders()) {
         std::vector<Work::HermesWork> files;
         for (const auto& path : hermes::logFiles(folder)) {

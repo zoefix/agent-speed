@@ -27,6 +27,8 @@ Window {
     }
 
     property string source: "all"
+    // DESIGN 13: one host's rows ("" for every host); the picker exists only while host history exists.
+    property string host: ""
     property string range: "30d"
     // DESIGN 4b: 自訂 keeps its own dates.
     property string customFirst: ""
@@ -38,7 +40,10 @@ Window {
     readonly property var excluded: includeSubscriptions ? [] : subscribed
     // DESIGN 9 / 10 Usage history: the chart shows output, cost or traffic.
     property string metric: "output"
-    readonly property var trafficDays: H.trafficByDate(history.trafficRows, source, span[0], span[1], prefs.disabledSources, prefs.trafficIncludeTools)
+    // Agent traffic is this computer's own (REMOTE 7): a remote host has none.
+    readonly property bool remoteHost: host.length > 0 && host !== "local"
+    readonly property var trafficRows: remoteHost ? [] : history.trafficRows
+    readonly property var trafficDays: H.trafficByDate(trafficRows, source, span[0], span[1], prefs.disabledSources, prefs.trafficIncludeTools)
     readonly property var trafficTotal: {
         var t = { rx: 0, tx: 0 }
         for (var date in trafficDays) { t.rx += trafficDays[date].rx; t.tx += trafficDays[date].tx }
@@ -49,6 +54,8 @@ Window {
         if (metric !== "traffic" && total.output <= 0 && trafficTotal.rx + trafficTotal.tx > 0) metric = "traffic"
     }
     onSourceChanged: openOnTraffic()
+    onHostChanged: openOnTraffic()
+    onHostPickerShownChanged: if (!hostPickerShown) host = ""
     onRangeChanged: openOnTraffic()
     Component.onCompleted: {
         // Development aids: --history-metric=<output|cost|traffic>, --history-range=<today|…|all>, --history-popover (the
@@ -59,28 +66,66 @@ Window {
             if (arg.indexOf("--history-range=") === 0) range = arg.substr(16)
             if (arg === "--history-popover") devPopover = true
             if (arg === "--history-hover") devHover = true
+            if (arg.indexOf("--history-host=") === 0) host = arg.substr(15)
+            if (arg.indexOf("--history-csv=") === 0) devCsv = arg.substr(14)
         }
         openOnTraffic()
     }
+    // Development aid: --history-csv=<path> exports the view as the Export button would, once the rows are in.
+    property string devCsv: ""
     property bool devPopover: false
     property bool devHover: false
     Timer {
         interval: 300
         repeat: true
-        running: win.devPopover || win.devHover
+        running: win.devPopover || win.devHover || win.devCsv.length > 0
         onTriggered: {
+            if (win.devCsv.length > 0 && win.dayList.length > 0 && !history.analyzing) {
+                console.info("history csv", win.devCsv, history.exportCsv(win.devCsv, win.dayList.slice().reverse(), win.sourceCode(win.source), win.currency, win.rate, win.csvHost, !win.remoteHost))
+                win.devCsv = ""
+            }
             if (win.devPopover && win.total.unpriced > 0) { unpricedPopup.open(); win.devPopover = false }
             if (win.devHover && win.chartSeries.length > 1) { dailyChart.hover = win.chartSeries.length - 2; win.devHover = false }
         }
     }
+    // DESIGN 4b, 13: as the window narrows the toolbar tightens — the range segments, then the pickers and the export.
+    readonly property bool compact: width < 1000
+    readonly property bool tight: width < 860
     readonly property string today: H.iso(new Date())
     readonly property string currency: prefs.currency
     readonly property string rate: S.rev >= 0 && catalog.revision >= 0 ? catalog.rateFor(currency) : "1"
-    readonly property var rows: history.rows
+    // The peak (METRICS 8) is shown only for every host and every source.
+    readonly property var rows: host.length === 0 ? history.rows
+                                : history.rows.filter(function(r) { return r.host === host }).map(function(r) { return Object.assign({}, r, { peak: null }) })
+    // DESIGN 13 host picker: every host, this computer, then every host with history (removed hosts under their last
+    // name), plus the host the window was opened on.
+    readonly property bool hostPickerShown: history.hasHostHistory || remoteHost
+    readonly property var hostOptions: {
+        if (!hostPickerShown) return []
+        var list = [{ value: "*", label: S.tr2(S.rev, "remote.history.allHosts"), glyph: "stack" },
+                    { value: "local", label: hostsView.localName, glyph: "laptop" }]
+        var seen = { local: true }
+        var known = history.hosts
+        for (var i = 0; i < known.length; ++i) {
+            seen[known[i].id] = true
+            list.push({ value: known[i].id, label: known[i].name, glyph: "server" })
+        }
+        if (remoteHost && !seen[host]) list.push({ value: host, label: hostsView.nameOf(host), glyph: "server" })
+        return list
+    }
+    readonly property string hostName: host.length === 0 ? "" : host === "local" ? hostsView.localName : S.rev >= 0 ? hostsView.nameOf(host) : host
+    // The CSV's trailing `host` value while host history exists: the host's name, `local`, or `all`.
+    readonly property string csvHost: !hostPickerShown ? "" : host.length === 0 ? "all" : host === "local" ? "local" : hostName
+    readonly property var tooLarge: {
+        var out = []
+        var ids = history.tooLargeHosts
+        for (var i = 0; i < ids.length; ++i) if (host.length === 0 || ids[i] === host) out.push(hostsView.nameOf(ids[i]))
+        return out
+    }
 
     readonly property string firstDate: rows.length > 0 ? rows[0].date : today
     readonly property var span: range === "custom" && customFirst.length > 0 && customLast.length > 0 ? [customFirst, customLast] : H.bounds(range, firstDate)
-    readonly property var dayList: H.days(rows, source, span[0], span[1], history.trafficRows, prefs.disabledSources, prefs.trafficIncludeTools, excluded)
+    readonly property var dayList: H.days(rows, source, span[0], span[1], trafficRows, prefs.disabledSources, prefs.trafficIncludeTools, excluded)
     readonly property var total: H.totals(dayList)
     readonly property var previousSpan: {
         var n = H.dayCount(span[0], span[1])
@@ -96,9 +141,10 @@ Window {
     readonly property bool singleDay: span[0] === span[1]
     readonly property var sourcesWithHistory: {
         var seen = {}
-        for (var i = 0; i < rows.length; ++i) seen[rows[i].source] = true
+        var all = history.rows
+        for (var i = 0; i < all.length; ++i) seen[all[i].source] = true
         var order = ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid"]
+                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin"]
         return order.filter(function(s) { return seen[s] && prefs.disabledSources.indexOf(s) < 0 })
     }
     readonly property var chartSeries: {
@@ -111,8 +157,9 @@ Window {
         return out
     }
 
-    function present(sourceId) {
+    function present(sourceId, hostId) {
         if (sourceId !== undefined && sourceId.length > 0) source = sourceId
+        if (hostId !== undefined && hostId !== null && String(hostId).length > 0) host = String(hostId)
         show()
         raise()
         requestActivate()
@@ -123,7 +170,9 @@ Window {
     function rangeLabel() {
         var n = H.dayCount(span[0], span[1])
         var a = span[0].replace(/-/g, "/"), b = span[1].replace(/-/g, "/")
-        return (a === b ? a : a + " – " + b) + " · " + Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [total.activeDays])
+        // DESIGN 13: the selected host is named after the source (`Codex · devbox · 2026/10/7 – 11/5`).
+        var named = host.length === 0 ? "" : (source === "all" ? "" : S.tr2(S.rev, "source." + source) + " · ") + hostName + " · "
+        return named + (a === b ? a : a + " – " + b) + " · " + Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [total.activeDays])
     }
     function sourceCode(id) {
         var codes = { claudeCode: "claude-code", claudeDesktop: "claude-desktop", workbuddyAi: "workbuddy-ai" }
@@ -147,6 +196,8 @@ Window {
             Dropdown {
                 value: win.source
                 popupWidth: 230
+                labelMaxWidth: win.compact && win.hostPickerShown ? 100 : -1
+                accessibleName: S.tr2(S.rev, "settings.sources")
                 options: {
                     var list = [{ value: "all", label: S.tr2(S.rev, "history.allSources") }]
                     for (var i = 0; i < win.sourcesWithHistory.length; ++i) {
@@ -158,9 +209,21 @@ Window {
                 }
                 onActivated: (v) => win.source = v
             }
+            // DESIGN 13: the host picker next to the source picker; it caps a long name, then shows only its symbol.
+            Dropdown {
+                visible: win.hostPickerShown
+                value: win.host.length === 0 ? "*" : win.host
+                options: win.hostOptions
+                popupWidth: 240
+                labelMaxWidth: win.compact ? 110 : 180
+                iconOnly: win.tight
+                accessibleName: S.tr2(S.rev, "remote.hosts")
+                onActivated: (v) => win.host = v === "*" ? "" : v
+            }
             Item { Layout.fillWidth: true }
             Segmented {
                 value: win.range
+                segmentPadding: win.tight ? 8 : win.compact ? 14 : 22
                 options: [
                     { value: "today", label: S.tr2(S.rev, "history.range.today") },
                     { value: "yesterday", label: S.tr2(S.rev, "history.range.yesterday") },
@@ -253,12 +316,16 @@ Window {
             }
             Item { Layout.fillWidth: true }
             PillButton {
-                text: S.tr2(S.rev, "history.export")
+                text: win.tight ? "CSV" : S.tr2(S.rev, "history.export")
+                Accessible.name: S.tr2(S.rev, "history.export")
+                HoverHandler { id: exportHover; enabled: win.tight }
+                ToolTip.visible: win.tight && exportHover.hovered
+                ToolTip.text: S.tr2(S.rev, "history.export")
                 enabled: win.dayList.length > 0
                 onClicked: {
                     var name = "agent-speed-history-" + win.sourceCode(win.source) + "-" + win.span[0] + "-" + win.span[1] + ".csv"
                     var path = history.chooseCsvPath(name)
-                    if (path.length > 0) history.exportCsv(path, win.dayList.slice().reverse(), win.sourceCode(win.source), win.currency, win.rate)
+                    if (path.length > 0) history.exportCsv(path, win.dayList.slice().reverse(), win.sourceCode(win.source), win.currency, win.rate, win.csvHost, !win.remoteHost)
                 }
             }
         }
@@ -475,6 +542,7 @@ Window {
                 first: win.span[0]
                 last: win.span[1]
                 source: win.source
+                host: win.host
             }
 
             // Performance (DESIGN 12, 性能表現)
@@ -520,7 +588,7 @@ Window {
                     case "input": return H.compact(day.input)
                     case "cost": return day.hasCost ? (day.unpriced > 0 ? "≥" : "") + win.money(day.cost) : "–"
                     case "traffic":
-                        var t = history.trafficRows.length >= 0 ? history.trafficOf(day.date, win.source, prefs.trafficIncludeTools) : ({})
+                        var t = !win.remoteHost && history.trafficRows.length >= 0 ? history.trafficOf(day.date, win.source, prefs.trafficIncludeTools) : ({})
                         return t.recorded ? Format.fill(S.tr2(S.rev, "traffic.pair"), [t.rxText, t.txText]) : "–"
                     case "cacheHit": return day.input > 0 ? Math.round(day.cachedInput / day.input * 100) + "%" : "–"
                     case "speed": var sp = H.speed(day.measuredOutput, day.measuredMs); return sp >= 0 ? Format.speed(sp) : S.tr2(S.rev, "history.noSpeed")
@@ -685,7 +753,7 @@ Window {
             }
             // DESIGN 10: the range reaches back before traffic was recorded.
             Text {
-                visible: history.trafficSince.length > 0 && win.span[0] < history.trafficSince
+                visible: !win.remoteHost && history.trafficSince.length > 0 && win.span[0] < history.trafficSince
                 text: "·  " + Format.fill(S.tr2(S.rev, "history.traffic.since"), [history.trafficSince.replace(/-/g, "/")])
                 color: Theme.ink3
                 font.pixelSize: 11
@@ -711,8 +779,28 @@ Window {
                     source: win.source
                     excluded: win.excluded
                     view: win.range
+                    host: win.host
                     onClosed: unpricedLink.forceActiveFocus()
                 }
+            }
+            // REMOTE 8.3: a host whose history is too large to sync.
+            Glyph {
+                visible: win.tooLarge.length > 0
+                Layout.preferredWidth: 11
+                Layout.preferredHeight: 11
+                name: "warning"
+                color: Theme.dark ? "#FB923C" : "#E86A0C"
+            }
+            Text {
+                visible: win.tooLarge.length > 0
+                Layout.maximumWidth: 320
+                text: win.tooLarge.join(S.tr2(S.rev, "list.separator")) + ": " + S.tr2(S.rev, "remote.status.historyTooLarge")
+                color: Theme.ink2
+                font.pixelSize: 11
+                elide: Text.ElideMiddle
+                HoverHandler { id: tooLargeHover }
+                ToolTip.visible: tooLargeHover.hovered && truncated
+                ToolTip.text: text
             }
             Item { Layout.fillWidth: true }
             Text {

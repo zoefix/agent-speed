@@ -29,6 +29,8 @@ public:
     Q_INVOKABLE void set(const QString& id, const QString& key, const QVariant& value);
     Q_INVOKABLE void setReadout(const QString& id, const QString& readout, bool on);
     Q_INVOKABLE void setSources(const QString& id, const QVariant& sources);
+    // DESIGN 13: "all" or a list of host ids.
+    Q_INVOKABLE void setHosts(const QString& id, const QVariant& hosts);
     Q_INVOKABLE void setAllVisible(bool visible);
     void setPosition(const QString& id, QPoint topLeft);
 

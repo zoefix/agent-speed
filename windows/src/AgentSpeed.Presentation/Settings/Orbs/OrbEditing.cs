@@ -42,6 +42,7 @@ public static class OrbEditing
             Sources = free.IsEmpty ? OrbSources.All : OrbSources.Of(free.First()),
             RedlineOutput = null,
             RedlineTotal = null,
+            Hosts = OrbHosts.All,
         };
         return new OrbEditResult(Insert(document, added, template.Id), [id]);
     }
@@ -189,6 +190,25 @@ public static class OrbEditing
     }
 
     /// <summary>Changes the style and clamps the size to its range.</summary>
+    /// <summary>The hosts an orb counts (DESIGN 13).</summary>
+    public static OrbsDocument SetHosts(OrbsDocument document, string id, OrbHosts hosts) => Update(document, id, o => o with { Hosts = hosts });
+
+    /// <summary>The pickers' rule over the hosts this computer knows, in settings order; null when refused (the last host).</summary>
+    public static OrbsDocument? ToggleHost(OrbsDocument document, string id, string hostId, IReadOnlyList<string> known)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.Find(id)?.Hosts.Toggling(hostId, known) is { } next ? SetHosts(document, id, next) : null;
+    }
+
+    /// <summary>A host removed from the settings leaves every orb's selection; one left without hosts tracks all (REMOTE 2.4).</summary>
+    public static OrbsDocument RemovingHost(OrbsDocument document, string hostId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.Orbs.Any(o => !o.Hosts.IsAll && o.Hosts.Tracks(hostId))
+            ? document.WithOrbs(document.Orbs.Select(o => o with { Hosts = o.Hosts.Removing(hostId) }))
+            : document;
+    }
+
     public static OrbsDocument SetStyle(OrbsDocument document, string id, OrbStyle style) => Update(document, id, o => o.WithStyle(style));
 
     public static OrbsDocument SetSize(OrbsDocument document, string id, double size) => Update(document, id, o => o.WithSize(size));
@@ -309,6 +329,7 @@ public static class OrbEditing
         TitleTheme = template.TitleTheme,
         Unit = template.Unit,
         Traffic = template.Traffic,
+        Hosts = template.Hosts,
         Visible = true,
     };
 

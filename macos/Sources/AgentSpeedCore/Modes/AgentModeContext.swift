@@ -62,11 +62,14 @@ final class AgentModeContext {
     }
 
     private var rootFiles: [String: Watched<ExecutionModes>] = [:]
-    private var gemini: Watched<ConfiguredModes.GeminiEfforts>?
+    /// Gemini CLI's settings files by path, and the file of each Gemini root (several roots can share one).
+    private var gemini: [String: Watched<ConfiguredModes.GeminiEfforts>] = [:]
+    private var geminiFiles: [String: String] = [:]
     private var workBuddy: [String: WorkBuddyStore] = [:]
 
-    /// `roots`: the enabled roots; a disabled source's files are not read.
-    init(roots: [(family: TranscriptFamily, path: String)], geminiSettings: String) {
+    /// `roots`: the enabled roots; a disabled source's files are not read. `geminiSettings`: the settings file of each
+    /// Gemini CLI root (METRICS 2.1).
+    init(roots: [(family: TranscriptFamily, path: String)], geminiSettings: [String: String]) {
         for root in roots {
             switch root.family {
             case .codex:
@@ -81,7 +84,11 @@ final class AgentModeContext {
                                                read: ConfiguredModes.workBuddy(path:))
                 workBuddy[root.path] = WorkBuddyStore(path: (folder as NSString).appendingPathComponent("workbuddy.db"))
             case .gemini:
-                gemini = Watched(path: geminiSettings, empty: ConfiguredModes.GeminiEfforts(), read: ConfiguredModes.gemini(path:))
+                guard let file = geminiSettings[root.path] else { break }
+                geminiFiles[root.path] = file
+                if gemini[file] == nil {
+                    gemini[file] = Watched(path: file, empty: ConfiguredModes.GeminiEfforts(), read: ConfiguredModes.gemini(path:))
+                }
             default:
                 break
             }
@@ -92,14 +99,15 @@ final class AgentModeContext {
     func refresh(workBuddySessions: [String: Set<String>] = [:]) -> Bool {
         var changed = false
         for root in rootFiles.keys where rootFiles[root]?.refresh() == true { changed = true }
-        if gemini?.refresh() == true { changed = true }
+        for file in gemini.keys where gemini[file]?.refresh() == true { changed = true }
         for root in workBuddy.keys where workBuddy[root]?.refresh(sessions: workBuddySessions[root] ?? []) == true { changed = true }
         return changed
     }
 
-    /// The configured facts of an agent found under `root`; Gemini's depend on its model.
+    /// The configured facts of an agent found under `root`, from that root's files; Gemini's depend on its model.
     func configured(family: TranscriptFamily, root: String, model: String?) -> ExecutionModes {
-        family == .gemini ? gemini?.value.modes(model: model) ?? .empty : rootFiles[root]?.value ?? .empty
+        guard family == .gemini else { return rootFiles[root]?.value ?? .empty }
+        return geminiFiles[root].flatMap { gemini[$0] }?.value.modes(model: model) ?? .empty
     }
 
     /// The session-current fact of a WorkBuddy transcript.

@@ -102,9 +102,12 @@ internal struct GrokLine
     private static GrokUsage ReadUsage(JsonElement usage, string? model)
     {
         var input = Count(usage, "inputTokens");
-        var output = Count(usage, "outputTokens");
+        var reasoning = Count(usage, "reasoningTokens");
+        // More reasoning than output means the provider counted it apart (METRICS 4.12, issue #51).
+        var reported = Count(usage, "outputTokens");
+        var output = reasoning > reported ? Math.Min(TokenCounts.MaxValue, reported + reasoning) : reported;
         var tokens = new TokenCounts(input, Math.Min(input, Count(usage, "cachedReadTokens")),
-            Math.Min(input, Count(usage, "cacheCreationTokens")), output, Math.Min(output, Count(usage, "reasoningTokens")));
+            Math.Min(input, Count(usage, "cacheCreationTokens")), output, Math.Min(output, reasoning));
         return new GrokUsage(model, tokens, Count(usage, "apiDurationMs"), Math.Clamp(Count(usage, "modelCalls"), 1, 100_000));
     }
 }

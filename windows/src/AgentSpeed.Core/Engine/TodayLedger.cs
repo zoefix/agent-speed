@@ -24,6 +24,8 @@ internal sealed partial class TodayLedger
     private readonly Dictionary<UnpricedFact, long>[] _unpricedFacts =
         [.. Enum.GetValues<SourceKind>().Select(_ => new Dictionary<UnpricedFact, long>())];
     private readonly IReadOnlyList<UnpricedCount>?[] _sortedFacts = new IReadOnlyList<UnpricedCount>?[Enum.GetValues<SourceKind>().Length];
+    /// <summary>Today's totals, cost and unpriced models per (host, source) cell (DESIGN 13).</summary>
+    private readonly Dictionary<HostSource, CellDay> _cells = [];
     private double _validOutput;
     private double _validSeconds;
     private long _validCount;
@@ -88,6 +90,28 @@ internal sealed partial class TodayLedger
     /// <summary>Today's measured output peak of a source set (METRICS 6.8), without the observed live part.</summary>
     public double MeasuredPeakOutput(SourceSet sources) => _sourceOutput.MeasuredPeak(sources);
 
+    /// <summary>The same over the cells of <paramref name="key"/> (DESIGN 13).</summary>
+    public double MeasuredPeakOutput(SubsetKey key) => _sourceOutput.MeasuredPeak(key);
+
+    /// <summary>Today's part of every (host, source) cell with data.</summary>
+    public IReadOnlyDictionary<HostSource, CellDay> Cells => _cells;
+
+    /// <summary>The host whose response holds <paramref name="key"/> today; null when none does.</summary>
+    public string? HostOf(string key) => _entries.TryGetValue(key, out var entry) ? entry.Host : null;
+
+    /// <summary>The keys of today's responses read on <paramref name="host"/>.</summary>
+    public List<string> KeysOf(string host) => [.. _entries.Where(e => e.Value.Host == host).Select(e => e.Key)];
+
+    /// <summary>Takes a response out of today's totals (a host left, or its oldest responses were pruned).</summary>
+    public void Remove(string key)
+    {
+        if (_entries.Remove(key, out var previous))
+        {
+            Apply(previous, -1);
+            _unpriced.Remove(key);
+        }
+    }
+
     public (double Output, long? OutputAtMs, double Total) Peak()
     {
         var (output, at) = _output.TrailingPeak();
@@ -107,6 +131,7 @@ internal sealed partial class TodayLedger
         Array.Clear(_costPerSource);
         _costPerModel.Clear();
         _unpriced.Clear();
+        _cells.Clear();
         foreach (var facts in _unpricedFacts)
         {
             facts.Clear();
@@ -158,7 +183,7 @@ internal sealed partial class TodayLedger
             response.Final && SpeedMath.TryGetSpeedInterval(response, out var interval) ? interval : null,
             response.Model ?? string.Empty,
             response.CostMicroUsd, response.Requests, response.Modes,
-            UnpricedFact.Of(response.Model, response.Provider, response.Fast, !DayLabeler.HasDate(response.EndMs)));
+            UnpricedFact.Of(response.Model, response.Provider, response.Fast, !DayLabeler.HasDate(response.EndMs)), response.Host);
         Apply(entry, 1);
         _entries[response.Key] = entry;
         if (response.CostMicroUsd is not null)
@@ -182,6 +207,18 @@ internal sealed partial class TodayLedger
         {
             Unpriced.UnpricedFacts.Add(_unpricedFacts[(int)entry.Source], entry.Fact, sign * entry.Requests);
             _sortedFacts[(int)entry.Source] = null;
+        }
+
+        var cell = new HostSource(entry.Host, entry.Source);
+        var day = _cells.GetValueOrDefault(cell) ?? new CellDay();
+        day.Apply(entry.Tokens, entry.Cost, entry.Requests, entry.Model, sign);
+        if (day.IsEmpty)
+        {
+            _cells.Remove(cell);
+        }
+        else
+        {
+            _cells[cell] = day;
         }
 
         var modelKey = (entry.Source, entry.Model);
@@ -210,10 +247,10 @@ internal sealed partial class TodayLedger
         _validSeconds += sign * (interval.DurationMs / 1000.0);
         _output.AddInterval(interval.StartMs, interval.EndMs, sign * (double)entry.Tokens.Output, StartMs);
         _total.AddInterval(interval.StartMs, interval.EndMs, sign * (double)entry.Tokens.Total, StartMs);
-        _sourceOutput.AddInterval(entry.Source, interval.StartMs, interval.EndMs, sign * (double)entry.Tokens.Output, StartMs);
+        _sourceOutput.AddInterval(cell, interval.StartMs, interval.EndMs, sign * (double)entry.Tokens.Output, StartMs);
     }
 
-    private static TokenTotals Add(TokenTotals totals, in TokenCounts tokens, int sign, long requests) => new(
+    internal static TokenTotals Add(TokenTotals totals, in TokenCounts tokens, int sign, long requests) => new(
         totals.Requests + sign * requests,
         totals.Input + sign * tokens.Input,
         totals.CachedInput + sign * tokens.CachedInput,
@@ -224,5 +261,5 @@ internal sealed partial class TodayLedger
     /// <param name="Measured">The speed interval when the response is final and valid (METRICS 3.3).</param>
     /// <param name="Fact">What the response says about itself when it has no known cost (METRICS 9.10).</param>
     private readonly record struct Entry(SourceKind Source, TokenCounts Tokens, bool Final, Interval? Measured, string Model, long? Cost, long Requests,
-        ExecutionModes Modes, UnpricedFact Fact);
+        ExecutionModes Modes, UnpricedFact Fact, string Host);
 }

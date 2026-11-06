@@ -7,6 +7,7 @@
 #include <string>
 #include <vector>
 
+#include "agentspeed/devin_history.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/history.hpp"
 #include "agentspeed/history_store.hpp"
@@ -35,8 +36,9 @@ class Analyzer {
 public:
     // The parsers' analysis version: a change re-analyses every file.
     // 2: task records; 3: performance records instead (METRICS 6.11); 4: the effort and speed breakdowns
-    // (EXECUTION-MODES); 5: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
-    static constexpr int kVersion = 5;
+    // (EXECUTION-MODES); 5: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses;
+    // 6: Grok Build reasoning counted apart from its output (METRICS 4.12).
+    static constexpr int kVersion = 6;
 
     Analyzer(Store& store, std::shared_ptr<pricing::PriceBook> prices, std::shared_ptr<const TimeZone> hermesZone = nullptr);
 
@@ -69,19 +71,23 @@ private:
     void planFiles(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void planOpenCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, const std::string& zoneId, Work& work,
                       Report& report);
-    void planZCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
+    void planZCode(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, const std::string& zoneId, Work& work,
+                   Report& report);
     void planOpenClaw(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void planHermes(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
+    void planDevin(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report, const std::function<bool()>& cancelled);
     void analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeHermes(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
+    void analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void advance(Report& report);
     bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const;
     const StoredFile* previousOf(const std::string& path) const;
     StoredFile& keep(StoredFile file, std::vector<std::uint64_t> owned);
     std::map<std::string, droid::SidecarSignature> droidUnreadableParents_;
+    DevinPlanner devinPlanner_;
 
     Store& store_;
     std::shared_ptr<pricing::PriceBook> prices_;

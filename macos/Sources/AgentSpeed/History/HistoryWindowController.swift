@@ -26,10 +26,11 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
 
     var isVisible: Bool { window?.isVisible ?? false }
 
-    /// Shows the window filtered to `source` (all sources when nil).
-    func show(source: SourceKind?, metric: HistoryChartMetric? = nil) {
+    /// Shows the window filtered to `source` and `host` (all sources, all hosts when nil).
+    func show(source: SourceKind?, metric: HistoryChartMetric? = nil, host: String? = nil) {
         let (window, viewModel) = ensureWindow()
         viewModel.isOpen = true
+        viewModel.select(host: host)
         viewModel.select(source: source)
         if let metric { viewModel.select(metric: metric) }
         if viewModel.showsLiveDay { viewModel.refreshToday() }
@@ -124,7 +125,7 @@ final class HistoryWindowController: NSObject, NSWindowDelegate {
         guard !content.rows.isEmpty else { return }
         let l10n = model.l10n
         let data = HistoryCSV.encode(HistoryCSV.build(content.rows, source: content.source, money: content.money,
-                                                      traffic: content.columns.contains(.traffic)))
+                                                      traffic: content.columns.contains(.traffic), host: content.csvHost))
         let panel = NSSavePanel()
         panel.allowedContentTypes = [.commaSeparatedText]
         panel.nameFieldStringValue = HistoryCSV.fileName(content.range, source: content.source)

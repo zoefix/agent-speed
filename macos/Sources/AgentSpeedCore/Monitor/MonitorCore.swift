@@ -6,7 +6,7 @@ import os
 ///
 /// `@unchecked Sendable`: every mutable property is only touched on `queue`; the cancellation flag and the requested
 /// source sets are locked.
-final class MonitorCore: @unchecked Sendable {
+final class MonitorCore: RemoteFeedSink, @unchecked Sendable {
     static let publishInterval: DispatchTimeInterval = .milliseconds(500)
     static let pollInterval: DispatchTimeInterval = .seconds(1)
     static let rediscoveryInterval: DispatchTimeInterval = .seconds(10)
@@ -24,8 +24,10 @@ final class MonitorCore: @unchecked Sendable {
     /// Runs before each whole-file read on its queue; tests use it to make a read slow.
     private let wholeFileReadHook: (@Sendable (String) -> Void)?
     private let cancelled = OSAllocatedUnfairLock(initialState: false)
-    /// Source sets whose measured peak each snapshot reports (METRICS 6.8).
-    private let subsets: OSAllocatedUnfairLock<Set<SourceSet>>
+    /// Subsets whose measured peak each snapshot reports (METRICS 6.8).
+    private let subsets: OSAllocatedUnfairLock<Set<SubsetKey>>
+    /// The remote hosts' received state (REMOTE 7), kept by the owner across restarts.
+    private let remoteFeed: RemoteFeed?
 
     private var session: TranscriptSession?
     /// The stored performance history (METRICS 6.11), applied to every session this core creates.
@@ -41,12 +43,14 @@ final class MonitorCore: @unchecked Sendable {
     private var flushScheduled = false
     /// When the earliest read that changed the engine since the last snapshot began (METRICS 11.9, Observations).
     private var observedAtMs: Int64?
+    private var remotePublishScheduled = false
 
     init(
         configuration: MonitorConfiguration,
         mailbox: SnapshotMailbox,
-        subsets: Set<SourceSet> = [],
+        subsets: Set<SubsetKey> = [],
         pricing: PriceBook? = nil,
+        remoteFeed: RemoteFeed? = nil,
         rediscoveryInterval: DispatchTimeInterval = MonitorCore.rediscoveryInterval,
         wholeFileReadHook: (@Sendable (String) -> Void)? = nil
     ) {
@@ -55,6 +59,7 @@ final class MonitorCore: @unchecked Sendable {
         self.mailbox = mailbox
         rediscoveryEvery = rediscoveryInterval
         self.subsets = OSAllocatedUnfairLock(initialState: subsets)
+        self.remoteFeed = remoteFeed
         self.wholeFileReadHook = wholeFileReadHook
     }
 
@@ -96,7 +101,7 @@ final class MonitorCore: @unchecked Sendable {
         }
     }
 
-    func setSubsets(_ sets: Set<SourceSet>) {
+    func setSubsets(_ sets: Set<SubsetKey>) {
         let changed = subsets.withLock { current in
             guard current != sets else { return false }
             current = sets
@@ -115,7 +120,7 @@ final class MonitorCore: @unchecked Sendable {
         session.setPerfHistory(perfHistory)
         session.setReportWatch(reportWatch)
         self.session = session
-        guard session.hasAvailableRoot else {
+        guard session.hasAvailableRoot || remoteFeed?.hasHosts == true else {
             publishPlaceholder(.noSources, session: session)
             timers = [makeTimer(every: rediscoveryEvery) { [weak self] in self?.retryBootstrap() }]
             return
@@ -127,7 +132,7 @@ final class MonitorCore: @unchecked Sendable {
         guard let session, !isLive else { return }
         if session.piRootsChanged || session.openclawRootsChanged { return restart() }
         session.refreshAvailability()
-        guard session.hasAvailableRoot else { return }
+        guard session.hasAvailableRoot || remoteFeed?.hasHosts == true else { return }
         cancelTimers()
         seedAndGoLive(session)
     }
@@ -152,6 +157,8 @@ final class MonitorCore: @unchecked Sendable {
         guard !isCancelled else { return }
         // Seeding decodes hundreds of megabytes in parallel; hand the freed pages back instead of keeping them dirty.
         malloc_zone_pressure_relief(nil, 0)
+        // The hosts' received state joins as seeded, before the peak is established (REMOTE 7 *Monitor restart*).
+        if let remoteFeed { session.applyRemote(remoteFeed.attach(self)) }
 
         // Establish today's peak from the backlog so the first live tick cannot announce a stale record.
         let seededNow = Date()
@@ -177,6 +184,7 @@ final class MonitorCore: @unchecked Sendable {
     }
 
     private func teardown() {
+        remoteFeed?.detach(self)
         cancelTimers()
         watcher?.stop()
         watcher = nil
@@ -258,6 +266,28 @@ final class MonitorCore: @unchecked Sendable {
         updateWatcher()
         if changed {
             observe(began)
+            publish()
+        }
+    }
+
+    // MARK: - Remote hosts
+
+    func remoteFeed(_ changes: [RemoteFeedChange]) {
+        queue.async { [weak self] in self?.applyRemote(changes) }
+    }
+
+    /// A host's lines are applied between reads of local files; snapshots follow after a short debounce, so a burst
+    /// of lines costs one engine tick.
+    private func applyRemote(_ changes: [RemoteFeedChange]) {
+        guard let session, isLive else { return }
+        let began = Clock.monotonicMs()
+        guard session.applyRemote(changes) else { return }
+        observe(began)
+        guard !remotePublishScheduled else { return }
+        remotePublishScheduled = true
+        queue.asyncAfter(deadline: .now() + Self.changeDebounce) { [weak self] in
+            guard let self else { return }
+            remotePublishScheduled = false
             publish()
         }
     }

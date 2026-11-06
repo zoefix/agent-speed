@@ -5,7 +5,7 @@ import SwiftUI
 
 /// `--screenshots DIR` (debug builds): shows the real surfaces with sample data on screen and captures each window
 /// with `screencapture`, so system materials (Liquid Glass on macOS 26+) look exactly as in use. Light and dark;
-/// `AGENT_SPEED_LANGUAGE` (`en`, `ja`, …) the language, `AGENT_SPEED_SCREENS` picks groups (dashboard, settings, history, update; `orbpane` measures the floating orb pane's
+/// `AGENT_SPEED_LANGUAGE` (`en`, `ja`, …) the language, `AGENT_SPEED_SCREENS` picks groups (dashboard, settings, history, update; `sources` the location lists, see `SourcesPaneHarness`; `orbpane` measures the floating orb pane's
 /// CPU and captures it, see `OrbPaneHarness`; `titles` the title editor's, see `TitlesPaneHarness`), `AGENT_SPEED_HISTORY_CASES` history
 /// cases. Quits when done.
 @MainActor
@@ -30,6 +30,7 @@ enum ScreenshotHarness {
         Task { @MainActor in
             if groups.contains("dashboard") { await captureDashboard(model: model, into: directory) }
             if groups.contains("settings") { await captureSettings(model: model, into: directory) }
+            if groups.contains("sources") { await SourcesPaneHarness.run(model: model, into: directory) }
             if groups.contains("orbpane") { await OrbPaneHarness.run(model: model, into: directory) }
             if groups.contains("titles") { await TitlesPaneHarness.run(model: model, into: directory) }
             if groups.contains("history") { await captureHistory(model: model, into: directory) }

@@ -11,6 +11,9 @@ public enum SubsetState
 
     /// <summary>Every source is disabled or not detected, and at least one is not detected.</summary>
     AllNotFound,
+
+    /// <summary>Every selected host is a remote host that is not connected (DESIGN 13, <c>remote.orb.offline</c>).</summary>
+    HostsOffline,
 }
 
 /// <summary>What a floating orb tracking a source set shows for one snapshot (METRICS 6.8).</summary>
@@ -35,8 +38,8 @@ public sealed record SubsetReading(
     public Intelligence.IntelligenceSums Intelligence { get; init; }
 }
 
-/// <summary>Per-orb views of a snapshot (METRICS 6.8, DESIGN 2b).</summary>
-public static class OrbSubset
+/// <summary>Per-orb views of a snapshot (METRICS 6.8, DESIGN 2b); <c>OrbSubset.Hosts.cs</c> adds host subsets (DESIGN 13).</summary>
+public static partial class OrbSubset
 {
     /// <summary>
     /// The reading of an orb tracking <paramref name="sources"/>; null (all sources) returns exactly the snapshot's own
@@ -196,13 +199,13 @@ public static class OrbSubset
         return !status.Enabled || (!status.Available && status.Today.Requests == 0 && status.Live == Rate.Zero);
     }
 
-    private static List<AgentStatus> Filter(IReadOnlyList<AgentStatus> agents, SourceSet sources)
+    private static List<AgentStatus> Filter(IReadOnlyList<AgentStatus> agents, SourceSet sources, IReadOnlySet<string>? hosts = null)
     {
         var kept = new List<AgentStatus>(agents.Count);
         HashSet<string>? ids = null;
         foreach (var agent in agents)
         {
-            if (sources.Contains(agent.Source))
+            if (sources.Contains(agent.Source) && (hosts is null || hosts.Contains(agent.Host)))
             {
                 kept.Add(agent);
                 (ids ??= new HashSet<string>(StringComparer.Ordinal)).Add(agent.Id);

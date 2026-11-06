@@ -9,6 +9,7 @@ internal sealed partial class MonitorCore
     private readonly List<SourceRoot> _openClawWatchRoots = [];
     private OpenClawSource? _openClaw;
     private IReadOnlyList<string> _openClawRootPaths = [];
+    private IReadOnlyList<string> _openClawUserRoots = [];
     private bool _openClawAutomatic;
     private bool _codexAutomatic;
     private bool _openClawSeeded;
@@ -21,6 +22,7 @@ internal sealed partial class MonitorCore
     private void InitializeOpenClaw(SourceLocations locations)
     {
         _openClawRootPaths = locations.OpenClawRoots ?? [];
+        _openClawUserRoots = locations.OpenClawUserRoots;
         _openClawAutomatic = locations.OpenClawAutomatic;
         _codexAutomatic = locations.CodexAutomatic;
         if (_enabled.Contains(SourceKind.OpenClaw) && _openClawRootPaths.Count > 0)
@@ -30,10 +32,12 @@ internal sealed partial class MonitorCore
         }
     }
 
-    private IReadOnlyList<string> CurrentOpenClawRoots() =>
-        _openClawAutomatic ? SourceLocations.NormalizeAll(AutomaticOpenClawRoots()) : _openClawRootPaths;
+    /// <summary>The roots now: with the automatic entry the state folders found now, then the user locations (METRICS 2.1).</summary>
+    private IReadOnlyList<string> CurrentOpenClawRoots() => _openClawAutomatic
+        ? Locations.LocationPaths.Unique([.. AutomaticOpenClawRoots(), .. _openClawUserRoots])
+        : _openClawRootPaths;
 
-    /// <summary>One watched folder per state folder's <c>agents</c> folder (or the chosen agent folder or database folder).</summary>
+    /// <summary>One watched folder per state folder's <c>agents</c> folder (or a listed agent folder or database's folder).</summary>
     private void RefreshOpenClawWatchRoots()
     {
         if (_openClaw is null)
@@ -91,7 +95,7 @@ internal sealed partial class MonitorCore
 
     /// <summary>
     /// Agent-scoped Codex homes of agent databases that appeared while running join the Codex roots (METRICS 2, 4.14),
-    /// unless a Codex folder is chosen.
+    /// while the Codex list has its automatic entry.
     /// </summary>
     private void AddNewCodexHomeRoots()
     {
@@ -188,7 +192,11 @@ internal sealed partial class MonitorCore
         }
     }
 
-    /// <summary>The first state folder (or the setting) and whether any of them exists (METRICS 2, detection).</summary>
-    private (string Path, bool Available) OpenClawStatus() =>
-        (_openClawRootPaths.Count > 0 ? _openClawRootPaths[0] : string.Empty, _openClawRootPaths.Any(OpenClawPaths.Exists));
+    /// <summary>The first root that exists, else the first root, and whether any of them exists (METRICS 2.1, detection).</summary>
+    private (string Path, bool Available) OpenClawStatus()
+    {
+        var roots = _openClaw?.Roots ?? _openClawRootPaths;
+        var existing = roots.FirstOrDefault(OpenClawPaths.Exists);
+        return (existing ?? (roots.Count > 0 ? roots[0] : string.Empty), existing is not null);
+    }
 }

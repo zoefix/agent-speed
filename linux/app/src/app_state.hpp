@@ -20,6 +20,8 @@ public slots:
 signals:
     void snapshotChanged();
     void historyRequested(const QString& source);
+    // DESIGN 13: a dashboard host row opens the history on that host (all sources).
+    void hostHistoryRequested(const QString& host);
     void demoChanged(bool demo);
 
 private:

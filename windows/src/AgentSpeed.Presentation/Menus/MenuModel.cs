@@ -42,13 +42,23 @@ public abstract record MenuIcon
     public sealed record StatusDot(MenuStatusTone Tone) : MenuIcon;
 }
 
-/// <summary>The color of a status dot: reporting, quiet, in progress, needs the user.</summary>
+/// <summary>The color of a status dot: reporting, quiet, in progress, needs the user; a ring for something switched off.</summary>
 public enum MenuStatusTone
 {
     Green,
     Gray,
     Amber,
     Red,
+    Hollow,
+}
+
+/// <summary>A host row of a Hosts submenu (DESIGN 13): its status dot and, while it is not connected, its short word.</summary>
+public sealed record MenuHostState(Remote.RemoteDotKind Dot, string? Word)
+{
+    /// <summary>This computer is always connected; a remote host without a status yet is connecting.</summary>
+    public static MenuHostState Default(string hostId) => hostId == Core.Remote.RemoteHost.LocalId
+        ? new(Remote.RemoteDotKind.Connected, null)
+        : new(Remote.RemoteDotKind.Progress, null);
 }
 
 /// <summary>What the quick menu shows of live reporting while it is on and registered (DESIGN 11, Menu).</summary>
@@ -61,6 +71,25 @@ public abstract record MenuEntry;
 public sealed record MenuSeparator : MenuEntry
 {
     public static MenuSeparator Instance { get; } = new();
+}
+
+/// <summary>
+/// A continuous slider row (the size submenu's, DESIGN 2b, Context menu): it runs <see cref="Action"/> with every new
+/// stepped value while it moves and shows <see cref="ValueText"/> of it at its trailing edge. <see cref="CheckedRow"/>
+/// names the row of the same level that is checked for a value (−1 none), so the presets above follow the slider.
+/// </summary>
+public sealed record MenuSlider(string Label, double Value, double Minimum, double Maximum, double Step) : MenuEntry
+{
+    public required Func<double, MenuAction> Action { get; init; }
+
+    public required Func<double, string> ValueText { get; init; }
+
+    public Func<double, int>? CheckedRow { get; init; }
+
+    /// <summary>A requested value on the slider's steps (from its minimum) inside its range.</summary>
+    public double Snap(double value) => double.IsFinite(value)
+        ? Math.Clamp(Minimum + Math.Round((value - Minimum) / Step) * Step, Minimum, Maximum)
+        : Minimum;
 }
 
 /// <summary>One row. A row with a <see cref="Submenu"/> opens it; any other enabled row runs its <see cref="Action"/>.</summary>

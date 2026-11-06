@@ -1,7 +1,8 @@
 import Foundation
 import os
 
-/// Keeps the daily history (METRICS 8) up to date in the background and publishes it to a `HistoryStore`.
+/// Keeps the daily history (METRICS 8) up to date in the background and publishes it to a `HistoryStore`, with the
+/// remote hosts' days that `remote` receives (REMOTE 8.3).
 ///
 /// Analysis runs on a private utility-QoS queue and never touches the live monitor: at `start()`, every 10 minutes,
 /// shortly after local midnight, on `refresh()` and after `clear()`. When `liveStore` is given, the live monitor's
@@ -15,6 +16,8 @@ public final class HistoryService {
     public let storeURL: URL
     /// Shared with the live engine (METRICS 9.7).
     public let pricing: PriceBook
+    /// The remote hosts' daily history: `RemoteCoordinator.historySink`.
+    public let remote: RemoteHistorySync
     private let store: HistoryStore
     private weak var liveStore: SpeedStore?
     private var worker: HistoryWorker?
@@ -26,13 +29,15 @@ public final class HistoryService {
         configuration: MonitorConfiguration = MonitorConfiguration(),
         liveStore: SpeedStore? = nil,
         storeURL: URL = HistoryService.defaultStoreURL,
-        pricing: PriceBook = PriceBook()
+        pricing: PriceBook = PriceBook(),
+        remote: RemoteHistorySync = RemoteHistorySync()
     ) {
         self.store = store
         self.configuration = configuration
         self.liveStore = liveStore
         self.storeURL = storeURL
         self.pricing = pricing
+        self.remote = remote
     }
 
     /// `~/Library/Application Support/AgentSpeed/history.sqlite`. Debug builds use `history.sqlite` in the folder
@@ -64,15 +69,20 @@ public final class HistoryService {
 
     public func start() {
         guard worker == nil else { return }
-        let worker = HistoryWorker(storePath: storeURL.path, configuration: configuration, pricing: pricing) { [weak store] state, days in
-            store?.publish(state: state, days: days)
+        let worker = HistoryWorker(storePath: storeURL.path, configuration: configuration, pricing: pricing,
+                                   requestRemoteHistory: { [weak remote] in remote?.request(hostId: $0, digests: $1) }
+        ) { [weak store] state, days, hostNames in
+            store?.publish(state: state, days: days, hostNames: hostNames)
         } perf: { [weak store] records in
             store?.publish(perfRecords: records)
+        } remote: { [weak store] tooLarge in
+            store?.publish(remoteTooLarge: tooLarge)
         }
         self.worker = worker
         store.refreshHandler = { [weak self] showsProgress in self?.refresh(showsProgress: showsProgress) }
         store.clearHandler = { [weak self] in self?.clear() }
         worker.start()
+        remote.attach(worker)
         if liveStore != nil {
             let timer = Timer(timeInterval: Self.peakSampleInterval, repeats: true) { [weak self] _ in
                 MainActor.assumeIsolated { self?.samplePeak() }
@@ -88,6 +98,7 @@ public final class HistoryService {
         peakTimer?.invalidate()
         peakTimer = nil
         pricing.setBindingObserver(nil)
+        remote.attach(nil)
         worker?.stop()
         worker = nil
     }
@@ -105,7 +116,8 @@ public final class HistoryService {
         worker?.requestRun(visible: showsProgress)
     }
 
-    /// Deletes the store and analyses the current logs from scratch.
+    /// Deletes the store (the remote hosts' rows with it) and analyses the current logs from scratch; connected hosts
+    /// are asked for their days again.
     public func clear() {
         recordedPeak = nil
         worker?.clear()
@@ -126,8 +138,10 @@ public final class HistoryService {
 /// The history service's background half. Everything mutable is confined to `queue`, except the run request and
 /// generation, which are locked.
 final class HistoryWorker: @unchecked Sendable {
-    typealias Publisher = @MainActor @Sendable (HistoryState, [DailyUsage]?) -> Void
+    /// The state, the days when they are included, and then the remote hosts' names.
+    typealias Publisher = @MainActor @Sendable (HistoryState, [DailyUsage]?, [String: String]?) -> Void
     typealias PerfPublisher = @MainActor @Sendable ([PerfDayRecord]) -> Void
+    typealias RemotePublisher = @MainActor @Sendable (_ tooLarge: Set<String>) -> Void
 
     /// Runs touching at least this much are shown as `.analyzing` even when they were not asked for.
     static let visibleRunBytes: Int64 = 256 << 20
@@ -150,26 +164,39 @@ final class HistoryWorker: @unchecked Sendable {
     private let pricing: PriceBook
     private let publisher: Publisher
     private let perfPublisher: PerfPublisher
-    /// The analyzer's `perfVersion` last published; nil before the first.
-    private var publishedPerf: Int?
+    let remotePublisher: RemotePublisher
+    private struct PerfStamp: Equatable {
+        var local: Int
+        var remote: Int
+    }
+
+    /// The analyzer's `perfVersion` and the remote rows' version last published; nil before the first.
+    private var publishedPerf: PerfStamp?
     /// A binding save is queued (bindings arrive in bursts while a day's responses are priced).
     private let bindingSaveQueued = OSAllocatedUnfairLock(initialState: false)
-    private let queue = DispatchQueue(label: "app.agentspeed.history", qos: .utility)
+    let queue = DispatchQueue(label: "app.agentspeed.history", qos: .utility)
     private let control = OSAllocatedUnfairLock(initialState: Control())
+    /// The remote hosts' rows and syncs (REMOTE 8.3).
+    let remoteLedger = RemoteHistoryLedger()
+    let requestRemoteHistory: RemoteHistorySync.RequestHistory
 
     private var configuration: MonitorConfiguration
-    private var analyzer: HistoryAnalyzer?
+    private(set) var analyzer: HistoryAnalyzer?
     private var periodicTimer: DispatchSourceTimer?
     private var midnightTimer: DispatchSourceTimer?
-    private var lastState: HistoryState = .notLoaded
+    private(set) var lastState: HistoryState = .notLoaded
 
-    init(storePath: String, configuration: MonitorConfiguration, pricing: PriceBook, publisher: @escaping Publisher,
-         perf perfPublisher: @escaping PerfPublisher = { _ in }) {
+    init(storePath: String, configuration: MonitorConfiguration, pricing: PriceBook,
+         requestRemoteHistory: @escaping RemoteHistorySync.RequestHistory = { _, _ in }, publisher: @escaping Publisher,
+         perf perfPublisher: @escaping PerfPublisher = { _ in },
+         remote remotePublisher: @escaping RemotePublisher = { _ in }) {
         self.storePath = storePath
         self.configuration = configuration
         self.pricing = pricing
+        self.requestRemoteHistory = requestRemoteHistory
         self.publisher = publisher
         self.perfPublisher = perfPublisher
+        self.remotePublisher = remotePublisher
     }
 
     deinit {
@@ -230,10 +257,12 @@ final class HistoryWorker: @unchecked Sendable {
             control.withLock { $0.pendingClears -= 1 }
             analyzer = nil
             publishedPerf = nil
+            remoteLedger.reset()
             pricing.clearBindings()
             HistoryDatabase.delete(at: storePath)
             guard openAnalyzer() != nil else { return }
             post(.analyzing(progress: 0, filesDone: 0, filesTotal: 0), days: true)
+            resyncRemoteHosts()
             perform(visible: true)
         }
     }
@@ -266,10 +295,10 @@ final class HistoryWorker: @unchecked Sendable {
 
     // MARK: - Queue
 
-    private var isStopped: Bool { control.withLock { $0.stopped } }
+    var isStopped: Bool { control.withLock { $0.stopped } }
 
     @discardableResult
-    private func openAnalyzer() -> HistoryAnalyzer? {
+    func openAnalyzer() -> HistoryAnalyzer? {
         if let analyzer { return analyzer }
         guard !isStopped else { return nil }
         do {
@@ -278,7 +307,11 @@ final class HistoryWorker: @unchecked Sendable {
             // An unreadable or newer store is left untouched; this launch keeps its history in memory.
             analyzer = try? HistoryAnalyzer(database: HistoryDatabase.inMemory(), pricing: pricing)
         }
-        if analyzer == nil { post(.failed("The history store could not be opened."), days: false) }
+        if let analyzer {
+            remoteLedger.load(from: analyzer.database)
+        } else {
+            post(.failed("The history store could not be opened."), days: false)
+        }
         return analyzer
     }
 
@@ -312,25 +345,35 @@ final class HistoryWorker: @unchecked Sendable {
         }
     }
 
-    private func post(_ state: HistoryState, days includeDays: Bool) {
+    /// The local days and every host's (REMOTE 8.3) of the enabled sources; remote rows carry the day's live peak too.
+    func post(_ state: HistoryState, days includeDays: Bool) {
         lastState = state
-        let days = includeDays ? analyzer?.days(sources: configuration.enabledSources) : nil
+        var days: [DailyUsage]?
+        var hostNames: [String: String]?
+        if includeDays, let analyzer {
+            let sources = configuration.enabledSources
+            days = RemoteHistoryMerge.days(local: analyzer.days(sources: sources),
+                                           remote: remoteLedger.rows.usage(sources: sources, peak: analyzer.peak(forDay:)))
+            hostNames = remoteLedger.rows.names
+        }
         let publisher = self.publisher
         let control = self.control
         DispatchQueue.main.async {
             guard !control.withLock({ $0.stopped }) else { return }
-            MainActor.assumeIsolated { publisher(state, days) }
+            MainActor.assumeIsolated { publisher(state, days, hostNames) }
         }
     }
 
-    /// The performance records of the enabled sources (METRICS 6.11), when records were written since the last
-    /// publication.
-    private func postPerf() {
-        guard let analyzer, publishedPerf != analyzer.perfVersion else { return }
-        guard let stored = try? analyzer.perfRecords() else { return }
-        publishedPerf = analyzer.perfVersion
+    /// The performance records of the enabled sources (METRICS 6.11), every host's pooled, when records were written
+    /// since the last publication.
+    func postPerf() {
+        guard let analyzer else { return }
+        let stamp = PerfStamp(local: analyzer.perfVersion, remote: remoteLedger.version)
+        guard publishedPerf != stamp, let stored = try? analyzer.perfRecords() else { return }
+        publishedPerf = stamp
         let sources = configuration.enabledSources
-        let records = stored.filter { sources.contains($0.source) }
+        let records = RemoteHistoryMerge.perf(local: stored.filter { sources.contains($0.source) },
+                                              remote: remoteLedger.rows.perfRecords(sources: sources))
         let publisher = perfPublisher
         let control = self.control
         DispatchQueue.main.async {

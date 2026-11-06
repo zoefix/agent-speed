@@ -9,7 +9,9 @@
 #include <optional>
 #include <vector>
 
+#include "agentspeed/host_subset.hpp"
 #include "agentspeed/monitor.hpp"
+#include "agentspeed/remote_feed.hpp"
 #include "agentspeed/report_body.hpp"
 #include "board/board_view.hpp"
 #include "orbs/orb_views.hpp"
@@ -32,6 +34,8 @@ struct WorkerOptions {
     bool totalMetric = false;
     std::vector<BoardSpec> boards;  // DESIGN 2c: every board's sources
     std::vector<OrbSpec> orbs;      // DESIGN 2b: every floating orb's sources
+    // REMOTE 7: the remote hosts' live side; every tick applies its changes, a new monitor its replay.
+    std::shared_ptr<agentspeed::remote::Feed> remoteFeed;
 };
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
@@ -120,9 +124,15 @@ private:
     agentspeed::report::TitleTracker title_;
     BoardViews boards_;
     OrbViews orbs_;
-    // The requested score sets, then one per board, then one per orb.
-    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> allSets() const;
-    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> orbSets() const;
+    // The requested score sets, then one per board, then one per orb (with their hosts, DESIGN 13).
+    std::vector<agentspeed::hosts::Subset> allSets() const;
+    std::vector<agentspeed::hosts::Subset> orbSets() const;
+    // The same by sources only (the demo snapshot).
+    std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sourceSets() const;
+    // REMOTE 7: the feed's changes since the last tick; true when they changed the engine.
+    bool applyRemote(qint64 now);
+    QVariantList hostsVariant(const agentspeed::Snapshot& snap) const;
+    QVariantList hostSourcesVariant(const agentspeed::Snapshot& snap) const;
     std::vector<BoardSpec> appliedBoards_;
     std::vector<OrbSpec> appliedOrbs_;
 };

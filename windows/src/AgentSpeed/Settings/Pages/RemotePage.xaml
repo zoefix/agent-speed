@@ -1,0 +1,149 @@
+<UserControl x:Class="AgentSpeed.Settings.Pages.RemotePage"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:AgentSpeed.Localization"
+             xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:history="clr-namespace:AgentSpeed.History"
+             xmlns:remote="clr-namespace:AgentSpeed.Settings.Remote"
+             Focusable="False">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <controls:InverseBoolToVisibilityConverter x:Key="Hidden" />
+
+        <Style x:Key="GroupBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <!-- A note under the status line: a small leading symbol at the text's first line. -->
+        <Style x:Key="NoteText" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="LineHeight" Value="17" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!-- Header: Hosts and the count against the limit -->
+        <DockPanel Margin="2,0,2,8">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource CaptionText}" VerticalAlignment="Bottom"
+                       Typography.NumeralAlignment="Tabular" Visibility="{Binding HasHosts, Converter={StaticResource Visible}}"
+                       AutomationProperties.Name="{Binding CountText}" />
+            <TextBlock Text="{loc:Loc remote.hosts}" Style="{StaticResource SectionHeaderText}" Margin="0" AutomationProperties.HeadingLevel="Level2" />
+        </DockPanel>
+
+        <!-- Empty state: what this page is for, and the way to add the first host -->
+        <Border Style="{StaticResource GroupBorder}" Padding="24,30,24,26" Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}">
+            <StackPanel HorizontalAlignment="Center" MaxWidth="460">
+                <Grid Width="52" Height="52" HorizontalAlignment="Center">
+                    <Ellipse Fill="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                    <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE968;" FontSize="24" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                               />
+                </Grid>
+                <TextBlock Text="{loc:Loc remote.empty}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" Margin="0,14,0,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <TextBlock Text="{loc:Loc remote.empty.hint.computer}" Style="{StaticResource CaptionText}" FontSize="13" LineHeight="19"
+                           TextAlignment="Center" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                <Button x:Name="EmptyAddButton" Content="{loc:Loc remote.add}" Command="{Binding AddCommand}" Style="{DynamicResource AccentButtonStyle}"
+                        HorizontalAlignment="Center" MinWidth="128" Margin="0,18,0,0" AutomationProperties.HelpText="{loc:Loc remote.empty.hint.computer}" />
+            </StackPanel>
+        </Border>
+
+        <!-- One row per host, in the order added; Add Host… under them -->
+        <Border Style="{StaticResource GroupBorder}" Visibility="{Binding HasHosts, Converter={StaticResource Visible}}">
+            <StackPanel>
+                <ItemsControl x:Name="HostList" ItemsSource="{Binding Rows}" Focusable="False" AutomationProperties.Name="{loc:Loc remote.hosts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type remote:RemoteHostRowViewModel}">
+                            <Grid x:Name="Row" Background="Transparent" ContextMenuOpening="OnRowContextMenuOpening" Tag="{Binding}">
+                                <Grid.ContextMenu>
+                                    <ContextMenu />
+                                </Grid.ContextMenu>
+                                <Grid.InputBindings>
+                                    <MouseBinding Gesture="LeftDoubleClick" Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  CommandParameter="{Binding}" />
+                                </Grid.InputBindings>
+                                <Rectangle x:Name="Divider" Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+                                <Grid Margin="16,12,12,12" MinHeight="40">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <controls:HostStatusDot Kind="{Binding Dot}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,7,0,0"
+                                                            ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <!-- The name keeps its room; a long destination is cut in the middle -->
+                                        <controls:KeepFirstPanel>
+                                            <TextBlock Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis" VerticalAlignment="Bottom"
+                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" ToolTip="{Binding Name}" ToolTipService.InitialShowDelay="900"
+                                                       x:Name="NameText" />
+                                            <history:MiddleTrimmedText Text="{Binding Destination}" FontSize="12" Margin="10,0,0,1" VerticalAlignment="Bottom"
+                                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" ToolTip="{Binding Destination}"
+                                                                       Visibility="{Binding ShowsDestination, Converter={StaticResource Visible}}" />
+                                        </controls:KeepFirstPanel>
+                                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionText}" FontSize="12" LineHeight="17" Margin="0,3,0,0"
+                                                   ToolTip="{Binding StatusTooltip}" AutomationProperties.LiveSetting="Polite" />
+                                        <DockPanel Margin="0,3,0,0" Visibility="{Binding HasClockNote, Converter={StaticResource Visible}}">
+                                            <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE823;" FontSize="11" VerticalAlignment="Top" Margin="0,3,6,0"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                            <TextBlock Text="{Binding ClockNote}" Style="{StaticResource NoteText}" />
+                                        </DockPanel>
+                                        <DockPanel Margin="0,3,0,0" Visibility="{Binding HasHistoryNote, Converter={StaticResource Visible}}">
+                                            <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE7BA;" FontSize="11" VerticalAlignment="Top" Margin="0,3,6,0"
+                                                       Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                                            <TextBlock Text="{Binding HistoryNote}" Style="{StaticResource NoteText}" />
+                                        </DockPanel>
+                                    </StackPanel>
+                                    <!-- After Copy SSH Command: a small confirmation above the actions, for a moment. -->
+                                    <Popup Grid.Column="2" IsOpen="{Binding ShowsCopied, Mode=OneWay}" PlacementTarget="{Binding ElementName=ActionsButton}"
+                                           Placement="Top" VerticalOffset="-4" AllowsTransparency="True" PopupAnimation="Fade" StaysOpen="True">
+                                        <Border Padding="8,4" CornerRadius="4" BorderThickness="1" Margin="0,0,0,2"
+                                                Background="{DynamicResource FlyoutBackground}" BorderBrush="{DynamicResource FlyoutBorderBrush}"
+                                                TextElement.FontFamily="{DynamicResource AppFontFamily}">
+                                            <StackPanel Orientation="Horizontal">
+                                                <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE73E;" FontSize="11" Margin="0,0,6,0"
+                                                                      Foreground="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                <TextBlock Text="{loc:Loc win.remote.copied}" FontSize="12" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                                           AutomationProperties.LiveSetting="Polite" />
+                                            </StackPanel>
+                                        </Border>
+                                    </Popup>
+                                    <Button x:Name="ActionsButton" Grid.Column="2" Style="{StaticResource SubtleButton}" Width="36" Height="32" VerticalAlignment="Center" Margin="0,0,8,0"
+                                            Click="OnActionsClick" Tag="{Binding}" ToolTip="{loc:Loc remote.actions}"
+                                            AutomationProperties.Name="{Binding ActionsName}" AutomationProperties.HelpText="{Binding AccessibleName}">
+                                        <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE712;" FontSize="16" />
+                                    </Button>
+                                    <CheckBox Grid.Column="3" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled, Mode=TwoWay}" VerticalAlignment="Center"
+                                              AutomationProperties.Name="{Binding ToggleName}" AutomationProperties.HelpText="{Binding StatusText}" />
+                                </Grid>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                                    <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                    <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Rectangle Style="{StaticResource Hairline}" />
+                <DockPanel Margin="16,10,12,10" MinHeight="32">
+                    <Button x:Name="AddButton" DockPanel.Dock="Right" Content="{loc:Loc remote.add}" Command="{Binding AddCommand}" MinWidth="112"
+                            VerticalAlignment="Center" ToolTip="{Binding AddTooltip}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.HelpText="{Binding AddTooltip}" />
+                    <TextBlock Text="{Binding LimitText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0"
+                               Visibility="{Binding CanAdd, Converter={StaticResource Hidden}}" />
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- What is sent, whose SSH is used, what is placed on the host, which systems work -->
+        <TextBlock Text="{loc:Loc remote.footnote}" Style="{StaticResource CaptionText}" LineHeight="18" Margin="2,12,2,0" />
+    </StackPanel>
+</UserControl>

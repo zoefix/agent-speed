@@ -6,11 +6,12 @@
 #include "agentspeed/monitor.hpp"
 #include "agentspeed/monitor_store.hpp"
 #include "agentspeed/openclaw.hpp"
-#include "agentspeed/opencode.hpp"
+#include "agentspeed/opencode_set.hpp"
 #include "agentspeed/tz.hpp"
-#include "agentspeed/zcode.hpp"
+#include "agentspeed/zcode_set.hpp"
 
-// The database and log sources (METRICS 4.5, 4.10, 4.14, 4.15): each keeps its own state and hands the monitor updates.
+// The database and log sources (METRICS 4.5, 4.10, 4.14, 4.15, 4.17): each keeps its own state and hands the monitor
+// updates.
 namespace agentspeed {
 
 std::shared_ptr<const TimeZone> localZone(const Environment& environment) {
@@ -24,25 +25,15 @@ std::shared_ptr<const TimeZone> localZone(const Environment& environment) {
 
 void Monitor::initSources() {
     const auto& l = config_.locations;
-    if (config_.enabled.contains(SourceKind::OpenCode) && !l.openCodeRoot.empty()) {
-        openCode_ = std::make_unique<opencode::Source>(l.openCodeRoot, deduper_);
+    if (config_.enabled.contains(SourceKind::OpenCode) && !l.openCodeRoots.empty()) {
+        openCode_ = std::make_unique<opencode::SourceSet>(l.openCodeRoots, deduper_);
     }
-    if (config_.enabled.contains(SourceKind::ZCode) && !l.zcodeRoot.empty()) {
-        zcode_ = std::make_unique<zcode::Source>(l.zcodeRoot, deduper_);
+    if (config_.enabled.contains(SourceKind::ZCode) && !l.zcodeRoots.empty()) {
+        zcode_ = std::make_unique<zcode::SourceSet>(l.zcodeRoots, deduper_);
     }
-    if (config_.enabled.contains(SourceKind::OpenClaw) && !l.openClawRoots.empty()) {
+    if (config_.enabled.contains(SourceKind::OpenClaw) && (l.openClawAutomatic || !l.openClawUserRoots.empty())) {
         openClaw_ = std::make_unique<openclaw::Source>(
-            [this] {
-                const auto& locations = config_.locations;
-                std::vector<std::string> roots;
-                if (locations.openClawAutomatic) {
-                    for (const auto& r : paths::openClawStateFolders(environment_, home_)) roots.push_back(paths::normalizeRoot(r));
-                } else {
-                    roots = locations.openClawRoots;
-                }
-                return paths::openClawDatabases(roots);
-            },
-            deduper_);
+            [this] { return paths::openClawDatabases(config_.locations.openClawRootsNow(environment_, home_)); }, deduper_);
         openClaw_->setObserverFactory([this](openclaw::Parser& parser) -> LineObserver* {
             auto& reader = windowActions_[parser.agentId()];
             reader = makeActions(parser.agentId(), SourceKind::OpenClaw);
@@ -50,14 +41,14 @@ void Monitor::initSources() {
             return reader.get();
         });
     }
-    if (config_.enabled.contains(SourceKind::Hermes) && !l.hermesRoot.empty()) {
-        hermes_ = std::make_unique<hermes::Source>(l.hermesRoot, l.hermesChosen, deduper_, zone_);
+    if (config_.enabled.contains(SourceKind::Hermes) && !l.hermesRoots.empty()) {
+        hermes_ = std::make_unique<hermes::Source>(l.hermesRoots, deduper_, zone_);
     }
+    initDevin();
 }
 
 void Monitor::seedSources(std::int64_t todayStartMs) {
     if (openCode_ && !openCodeSeeded_) {
-        openCode_->refreshAvailability();
         applyOpenCode(openCode_->seed(todayStartMs), true);
         openCodeSeeded_ = true;
     }
@@ -75,6 +66,7 @@ void Monitor::seedSources(std::int64_t todayStartMs) {
         partialHistory_ |= hermes_->partialHistory();
         hermesSeeded_ = true;
     }
+    seedDevin(todayStartMs);
 }
 
 bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t todayStartMs) {
@@ -82,7 +74,8 @@ bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t tod
     if (openCode_ && openCodeSeeded_) {
         if (discover) {
             const auto update = openCode_->rediscover(nowMs, todayStartMs);
-            changed |= applyOpenCode(update, update.reset);
+            changed |= applyOpenCode(update.seeded, true);
+            changed |= applyOpenCode(update.live, false);
         } else if (const auto update = openCode_->refreshIfChanged()) {
             changed |= applyOpenCode(*update, false);
         }
@@ -90,6 +83,7 @@ bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t tod
     if (zcode_ && zcodeSeeded_) changed |= applyZCode(zcode_->refresh(), false);
     if (openClaw_ && openClawSeeded_) changed |= applyOpenClaw(openClaw_->refresh(discover), false);
     if (hermes_ && hermesSeeded_) changed |= applyHermes(hermes_->refresh(discover), false);
+    changed |= refreshDevin(discover, todayStartMs);
     return changed;
 }
 
@@ -195,27 +189,45 @@ bool Monitor::applyHermes(const hermes::Update& update, bool seeded) {
     return pushed || update.changed || !update.responses.empty() || !update.removed.empty();
 }
 
+// METRICS 2.1 Detected, counted, named: detected when any root exists; the path is the first detected root, else the
+// first root.
 std::pair<std::string, bool> Monitor::sourceStatus(SourceKind kind) const {
     const auto& l = config_.locations;
+    const auto firstOf = [](const std::vector<std::string>& roots, auto exists) -> std::pair<std::string, bool> {
+        for (const auto& root : roots) {
+            if (exists(root)) return {root, true};
+        }
+        return {roots.empty() ? std::string() : roots.front(), false};
+    };
     switch (kind) {
-        case SourceKind::ZCode: return {l.zcodeRoot, zcode_ ? zcode_->available() : fsx::isRegularFile(harness::zcodeDatabase(l.zcodeRoot))};
-        case SourceKind::OpenClaw:
-            return {l.openClawRoots.empty() ? std::string() : l.openClawRoots.front(),
-                    std::any_of(l.openClawRoots.begin(), l.openClawRoots.end(), paths::openClawExists)};
-        case SourceKind::Hermes: return {l.hermesRoot, !l.hermesRoot.empty() && fsx::isDirectory(l.hermesRoot)};
-        case SourceKind::OpenCode: return {l.openCodeRoot, fsx::isRegularFile(opencode::Database::databasePath(l.openCodeRoot))};
+        case SourceKind::ZCode:
+            if (zcode_) return {zcode_->displayRoot(), zcode_->available()};
+            return firstOf(l.zcodeRoots, [](const std::string& r) { return fsx::isRegularFile(harness::zcodeDatabase(r)); });
+        case SourceKind::OpenCode:
+            if (openCode_) return {openCode_->displayRoot(), openCode_->databaseExists()};
+            return firstOf(l.openCodeRoots, [](const std::string& r) { return fsx::isRegularFile(opencode::Database::databasePath(r)); });
+        case SourceKind::OpenClaw: return firstOf(l.openClawRootsNow(environment_, home_), paths::openClawExists);
+        case SourceKind::Devin: return devinStatus();
+        case SourceKind::Hermes: {
+            std::vector<std::string> homes;
+            for (const auto& root : l.hermesRoots) homes.push_back(root.path);
+            return firstOf(homes, [](const std::string& r) { return fsx::isDirectory(r); });
+        }
         default: break;
     }
     const auto family = familyOf(kind);
-    std::string path;
-    bool available = false;
+    std::string first, detected;
     for (const auto& root : roots_) {
         if (root.family != family) continue;
-        if (path.empty()) path = root.path;
-        available |= root.available;
+        if (first.empty()) first = root.path;
+        if (detected.empty() && root.available) detected = root.path;
     }
-    if (family == RootFamily::Antigravity && !l.antigravityStores.empty()) path = l.antigravityStores.front();
-    return {path, available};
+    if (family == RootFamily::Antigravity) {
+        // The row names the store, not its `conversations` folder.
+        if (!detected.empty()) detected = fsx::parentOf(detected);
+        if (!l.antigravityStores.empty()) first = l.antigravityStores.front();
+    }
+    return {detected.empty() ? first : detected, !detected.empty()};
 }
 
 }  // namespace agentspeed

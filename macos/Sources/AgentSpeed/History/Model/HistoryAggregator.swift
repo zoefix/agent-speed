@@ -3,18 +3,28 @@ import Foundation
 
 /// Turns the stored per-source days (`DailyUsage`) into what the Usage History window shows.
 enum HistoryAggregator {
-    /// Days with data inside `range` for one source (every source when nil), oldest first. Records with an unreadable
-    /// day or without any usage are ignored. Peaks are kept only for the all-sources view (METRICS 8). The costs of
-    /// `excluded` sources add nothing (METRICS 9.4); their tokens count as usual.
-    static func daily(_ usage: [DailyUsage], source: SourceKind?, range: DayRange? = nil, excluded: Set<SourceKind> = []) -> [DaySummary] {
+    /// Days with data inside `range` for one source (every source when nil) on one host (every host when nil),
+    /// oldest first. Records with an unreadable day or without any usage are ignored. Peaks are kept only for the
+    /// all-sources, all-hosts view (METRICS 8, DESIGN 13). The costs of `excluded` sources add nothing (METRICS 9.4);
+    /// their tokens count as usual.
+    static func daily(_ usage: [DailyUsage], source: SourceKind?, host: String? = nil, range: DayRange? = nil,
+                      excluded: Set<SourceKind> = []) -> [DaySummary] {
         var groups: [DayKey: [DailyUsage]] = [:]
         for record in usage {
             if let source, record.source != source { continue }
+            if let host, record.host != host { continue }
             guard hasUsage(record), let day = DayKey(record.day) else { continue }
             if let range, !range.contains(day) { continue }
             groups[day, default: []].append(record)
         }
-        return groups.keys.sorted().map { summarize($0, groups[$0] ?? [], includePeak: source == nil, excluded: excluded) }
+        let includePeak = source == nil && host == nil
+        return groups.keys.sorted().map { summarize($0, groups[$0] ?? [], includePeak: includePeak, excluded: excluded) }
+    }
+
+    /// The records of one host; every record when nil.
+    static func records(_ usage: [DailyUsage], host: String?) -> [DailyUsage] {
+        guard let host else { return usage }
+        return usage.filter { $0.host == host }
     }
 
     static func totals(_ days: [DaySummary]) -> HistoryTotals {

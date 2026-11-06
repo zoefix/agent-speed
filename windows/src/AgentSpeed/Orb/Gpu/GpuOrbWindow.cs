@@ -23,7 +23,6 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 {
     private const double DragSlop = 3;
     private const double DragSettle = 0.12;
-    private const double FadeSeconds = 0.6;
 
     private readonly Func<double> _clock;
     private readonly OrbClock _orbClock;
@@ -52,13 +51,12 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     private Action? _moveDone;
     private bool _moving;
     private bool _following;
-    private double _lastFrame;
-    private bool _faded;
+    private MotionFrames _frames;
+    private readonly IdleFade _idleFade = new();
     private bool _hovering;
     private bool _discHover;
     private bool _plateHover;
     private DispatcherTimer? _hoverGrace;
-    private double _idleSince = double.NaN;
     private int _pixels = 1;
     private bool _closed;
 
@@ -66,9 +64,6 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     private bool _appearReduced;
     private double _vanishStart = double.NegativeInfinity;
     private double _vanishSeconds = 0.2;
-    private double _opacityFrom = 1;
-    private double _opacityTo = 1;
-    private double _opacityStart = double.NegativeInfinity;
     private double _opacity = 1;
 
     private readonly OrbUnitToggle _unitToggle = new();
@@ -221,7 +216,7 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
         _options = options;
         if (!options.FadeWhenIdle)
         {
-            _faded = false;
+            _idleFade.Restore();
         }
 
         ApplyOpacity();
@@ -319,14 +314,9 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 
     public void NoteActivity(bool active)
     {
-        if (active)
+        if (_idleFade.NoteActivity(active, _clock()))
         {
-            _idleSince = double.NaN;
-            Restore();
-        }
-        else if (double.IsNaN(_idleSince))
-        {
-            _idleSince = _clock();
+            ApplyOpacity();
         }
     }
 
@@ -368,7 +358,7 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
         _housekeeping.Stop();
         _passThroughPoll.Stop();
         _hoverGrace?.Stop();
-        _mover.Active = false;
+        StopFrames();
         _surface.Visible = false;
         _surface.Dispose();
         _host.Dispose();
@@ -647,17 +637,21 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 
     private void StartFrames()
     {
-        _lastFrame = _clock();
-        _mover.Active = true;
+        if (_frames.Start(_clock()))
+        {
+            _mover.Active = true;
+        }
     }
 
-    private void StopFrames() => _mover.Active = false;
+    private void StopFrames()
+    {
+        _frames.Stop();
+        _mover.Active = false;
+    }
 
     private void OnMotionFrame()
     {
-        var now = _clock();
-        var dt = Math.Clamp(now - _lastFrame, 0, 0.05);
-        _lastFrame = now;
+        var dt = _frames.Step(_clock());
         if (_following && _dragging)
         {
             _followX.Step(_dragTarget.X, dt);
@@ -844,55 +838,28 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     private void Housekeeping()
     {
         _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
-        if (_options.FadeWhenIdle && !_faded && !double.IsNaN(_idleSince) && _clock() - _idleSince >= 60 && _surface.Scene.HoverBlend < 0.01)
+        if (_idleFade.TryFade(_options.FadeWhenIdle, engaged: _surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, _clock()))
         {
-            _faded = true;
-            ApplyOpacity(animated: true);
+            ApplyOpacity();
         }
     }
 
     private void Restore()
     {
-        if (!_faded)
+        if (_idleFade.Restore())
         {
-            return;
+            ApplyOpacity();
         }
-
-        _faded = false;
-        ApplyOpacity();
     }
 
-    private void ApplyOpacity(bool animated = false)
+    private void ApplyOpacity()
     {
-        var target = (_options.Dimmed ? 0.55 : 1) * (_faded ? 0.45 : 1);
-        var now = _clock();
-        if (animated && !_options.ReduceMotion)
-        {
-            _opacityFrom = CurrentOpacity(now);
-            _opacityStart = now;
-        }
-        else
-        {
-            _opacityFrom = target;
-            _opacityStart = double.NegativeInfinity;
-        }
-
-        _opacityTo = target;
-        SetOpacity(CurrentOpacity(now));
+        SetOpacity(CurrentOpacity(_clock()));
         _surface.Kick();
     }
 
-    private double CurrentOpacity(double now)
-    {
-        var t = (now - _opacityStart) / FadeSeconds;
-        if (t >= 1 || t < 0)
-        {
-            return _opacityTo;
-        }
-
-        var eased = t < 0.5 ? 4 * t * t * t : 1 - Math.Pow(-2 * t + 2, 3) / 2;
-        return _opacityFrom + (_opacityTo - _opacityFrom) * eased;
-    }
+    // × 55 % while every source is unavailable, × the idle fade.
+    private double CurrentOpacity(double now) => (_options.Dimmed ? 0.55 : 1) * _idleFade.Value(now);
 
     private void SetOpacity(double opacity)
     {
@@ -907,7 +874,7 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     {
         var opacity = CurrentOpacity(now);
         SetOpacity(opacity);
-        var demand = double.IsFinite(_opacityStart) && now - _opacityStart < FadeSeconds ? FrameClass.Fps30 : FrameClass.None;
+        var demand = _idleFade.IsFading(now) ? FrameClass.Fps30 : FrameClass.None;
         var scale = 1.0;
         var appear = now - _appearStart;
         if (double.IsFinite(_appearStart) && appear >= 0 && appear < 0.5)

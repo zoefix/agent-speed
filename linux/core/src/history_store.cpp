@@ -487,6 +487,14 @@ void Store::clear() {
         db_.execute(std::string("DELETE FROM ") + table);
     }
     db_.execute("DELETE FROM meta WHERE key<>'schema'");
+    for (const char* table : {"remote_perf", "remote_days", "remote_hosts"}) {
+        if (db_.hasTables({table})) db_.execute(std::string("DELETE FROM ") + table);
+    }
+    for (const char* table : {"remote_stage_perf", "remote_stage_days"}) {
+        if (db_.scalarInt64(std::string("SELECT count(*) FROM sqlite_temp_master WHERE type = 'table' AND name = '") + table + "'") > 0) {
+            db_.execute(std::string("DELETE FROM temp.") + table);
+        }
+    }
 }
 
 }  // namespace agentspeed::history

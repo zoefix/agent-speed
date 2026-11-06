@@ -6,17 +6,35 @@ ColumnLayout {
     id: group
     property string title
     property string footnote
+    // A quiet caption at the title's right end (a count such as 2/8).
+    property string trailing
     default property alias rows: body.data
     Layout.fillWidth: true
     spacing: 6
 
-    Text {
+    RowLayout {
         visible: group.title.length > 0
-        text: group.title
-        color: Theme.ink2
-        font.pixelSize: 12
-        font.weight: Font.DemiBold
+        Layout.fillWidth: true
         Layout.leftMargin: 4
+        Layout.rightMargin: 4
+        Text {
+            Layout.fillWidth: true
+            text: group.title
+            color: Theme.ink2
+            font.pixelSize: 12
+            font.weight: Font.DemiBold
+            elide: Text.ElideRight
+            Accessible.role: Accessible.Heading
+            Accessible.name: text
+        }
+        Text {
+            visible: group.trailing.length > 0
+            text: group.trailing
+            color: Theme.ink3
+            font.pixelSize: 11
+            font.features: Theme.tabular
+            Accessible.ignored: true
+        }
     }
     Rectangle {
         Layout.fillWidth: true

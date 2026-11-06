@@ -1,6 +1,8 @@
 using System.Collections.Immutable;
 using System.Text.Json;
 using AgentSpeed.Core;
+using AgentSpeed.Core.Locations;
+using AgentSpeed.Presentation.Settings.Locations;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings;
@@ -41,15 +43,17 @@ public class SettingsSerializerTests
             AntigravityEnabled = false,
             WorkBuddyEnabled = false,
             WorkBuddyAiEnabled = true,
-            CodexRoot = Path.Combine(Path.GetTempPath(), "codex sessions"),
-            ClaudeRoot = Path.Combine(Path.GetTempPath(), "claude", "projects"),
-            DshRoot = Path.Combine(Path.GetTempPath(), "dsh", "sessions"),
-            OpenCodeRoot = Path.Combine(Path.GetTempPath(), "opencode data"),
-            GeminiRoot = Path.Combine(Path.GetTempPath(), ".gemini", "tmp"),
-            OmpRoot = Path.Combine(Path.GetTempPath(), ".omp", "profiles", "work", "agent", "sessions"),
-            AntigravityRoot = Path.Combine(Path.GetTempPath(), ".gemini", "antigravity-ide"),
-            WorkBuddyRoot = Path.Combine(Path.GetTempPath(), ".workbuddy"),
-            WorkBuddyAiRoot = Path.Combine(Path.GetTempPath(), ".workbuddy-ai", "projects"),
+            StoredLocations = LocationLists.Automatic
+                .With(LocationFolder.Codex, [DataLocation.Automatic, DataLocation.At(Temp("codex sessions"))])
+                .With(LocationFolder.Claude, [DataLocation.At(Temp("claude", "projects"))])
+                .With(LocationFolder.Dsh, [DataLocation.At(Temp("dsh", "sessions"))])
+                .With(LocationFolder.OpenCode, [DataLocation.At(Temp("opencode data"))])
+                .With(LocationFolder.Gemini, [DataLocation.Automatic, DataLocation.At(Temp(".gemini", "tmp"))])
+                .With(LocationFolder.Omp, [DataLocation.At(Temp(".omp", "profiles", "work", "agent", "sessions"))])
+                .With(LocationFolder.Antigravity, [DataLocation.At(Temp(".gemini", "antigravity-ide"))])
+                .With(LocationFolder.WorkBuddy, [DataLocation.At(Temp(".workbuddy"))])
+                .With(LocationFolder.WorkBuddyAi, [DataLocation.Automatic, DataLocation.At(Temp(".workbuddy-ai", "projects"))]),
+            LegacyRoots = LegacyLocations.Empty.With(LocationFolder.Dsh, Temp("old dsh")),
             ChartSeconds = 300,
             AgentsExpanded = true,
             HistoryWindow = new WindowFrame(-1600.5, 120.25, 1040, 720, Maximized: true),
@@ -57,6 +61,8 @@ public class SettingsSerializerTests
         })
         .WithOrbAnchor(@"\\.\DISPLAY2", new OrbAnchor(0.5, 0.125))
         .WithOrbAnchor("Display 1 \"quoted\" ü", new OrbAnchor(0.25, 0.75));
+
+    private static string Temp(params string[] parts) => Path.TrimEndingDirectorySeparator(Path.Combine([Path.GetTempPath(), .. parts]));
 
     internal static void AssertEquivalent(AppSettings expected, AppSettings actual)
     {
@@ -121,13 +127,18 @@ public class SettingsSerializerTests
 
         var sources = root.GetProperty("sources");
         Assert.False(sources.GetProperty("deepseek").GetBoolean());
-        Assert.Equal(Path.Combine(Path.GetTempPath(), "dsh", "sessions"), sources.GetProperty("dshRoot").GetString());
+        Assert.Equal(Temp("old dsh"), sources.GetProperty("dshRoot").GetString());
+        Assert.False(sources.TryGetProperty("codexRoot", out _), "an earlier single folder is written back only when it was loaded");
+        var lists = root.GetProperty("sourceLocations");
+        Assert.Equal(1, lists.GetProperty("version").GetInt32());
+        Assert.Equal(Temp("dsh", "sessions"), lists.GetProperty("lists").GetProperty("dsh")[0].GetProperty("path").GetString());
+        Assert.True(lists.GetProperty("lists").GetProperty("codex")[0].GetProperty("automatic").GetBoolean());
 
         using var defaults = JsonDocument.Parse(SettingsSerializer.Serialize(AppSettings.Default));
         var defaultSources = defaults.RootElement.GetProperty("sources");
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("codexRoot").ValueKind);
+        Assert.False(defaultSources.TryGetProperty("codexRoot", out _));
         Assert.True(defaultSources.GetProperty("deepseek").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("dshRoot").ValueKind);
+        Assert.False(defaults.RootElement.TryGetProperty("sourceLocations", out _), "a list never edited is not stored");
         Assert.False(defaults.RootElement.GetProperty("dashboard").GetProperty("agentsExpanded").GetBoolean());
         Assert.False(defaults.RootElement.GetProperty("orb").TryGetProperty("monitor", out _));
     }
@@ -217,12 +228,16 @@ public class SettingsSerializerTests
         Assert.Null(AppSettings.CleanPath(full + "\0evil"));
         Assert.Null(AppSettings.CleanPath(Path.Combine(Path.GetTempPath(), new string('a', AppSettings.MaxPathLength))));
 
-        var validated = (AppSettings.Default with { CodexRoot = "relative", ClaudeRoot = full, DshRoot = Path.Combine("..", "dsh") }).Validated();
-        Assert.Null(validated.CodexRoot);
-        Assert.Equal(full, validated.ClaudeRoot);
-        Assert.Null(validated.DshRoot);
-        Assert.Equal(full, (AppSettings.Default with { DshRoot = "  " + full + " " }).Validated().DshRoot);
-        Assert.Null(SettingsSerializer.Deserialize("""{ "sources": { "dshRoot": "relative/sessions" } }""").DshRoot);
+        var legacy = LegacyLocations.Empty.With(LocationFolder.Codex, "relative").With(LocationFolder.Claude, full)
+            .With(LocationFolder.Dsh, Path.Combine("..", "dsh"));
+        var validated = (AppSettings.Default with { LegacyRoots = legacy }).Validated();
+        Assert.Null(validated.LegacyRoots[LocationFolder.Codex]);
+        Assert.Equal(full, validated.LegacyRoots[LocationFolder.Claude]);
+        Assert.Null(validated.LegacyRoots[LocationFolder.Dsh]);
+        Assert.Equal(full, (AppSettings.Default with { LegacyRoots = LegacyLocations.Empty.With(LocationFolder.Dsh, "  " + full + " ") })
+            .Validated().LegacyRoots[LocationFolder.Dsh]);
+        Assert.Equal(LocationLists.AutomaticOnly,
+            SettingsSerializer.Deserialize("""{ "sources": { "dshRoot": "relative/sessions" } }""").Locations[LocationFolder.Dsh]);
     }
 
     [Fact]
@@ -283,23 +298,24 @@ public class SettingsSerializerTests
         Assert.True(settings.IsSourceEnabled(SourceKind.WorkBuddy));
         Assert.True(settings.IsSourceEnabled(SourceKind.WorkBuddyAi));
 
-        var config = (settings with { CodexRoot = Path.Combine(Path.GetTempPath(), "c") }).ToMonitorConfiguration();
+        var config = settings.WithLocations(LocationLists.Automatic.With(LocationFolder.Codex, [DataLocation.At(Temp("c"))])).ToMonitorConfiguration();
         Assert.True(config.EnabledSources.SetEquals(
         [
             SourceKind.Codex, SourceKind.ClaudeDesktop, SourceKind.DeepSeek, SourceKind.OpenCode, SourceKind.Gemini,
             SourceKind.Omp, SourceKind.Antigravity, SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.ZCode, SourceKind.Kimi, SourceKind.GrokBuild,
-            SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid,
+            SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid, SourceKind.Devin,
         ]));
-        Assert.Equal(Path.Combine(Path.GetTempPath(), "c"), config.CodexRoot);
-        Assert.Null(config.ClaudeRoot);
-        Assert.Null(config.DshRoot);
+        Assert.Equal([DataLocation.At(Temp("c"))], config.ListOf(LocationFolder.Codex));
+        Assert.Equal(LocationLists.AutomaticOnly, config.ListOf(LocationFolder.Claude));
+        Assert.Equal(LocationLists.AutomaticOnly, config.ListOf(LocationFolder.Dsh));
     }
 
     [Fact]
     public void DeepSeekToggleAndFolderReachTheMonitor()
     {
-        var dsh = Path.Combine(Path.GetTempPath(), "dsh", "sessions");
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.DeepSeek, false) with { DshRoot = dsh };
+        var dsh = Temp("dsh", "sessions");
+        var withDsh = LocationLists.Automatic.With(LocationFolder.Dsh, [DataLocation.At(dsh)]);
+        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.DeepSeek, false).WithLocations(withDsh);
         Assert.False(settings.DeepSeekEnabled);
         Assert.False(settings.IsSourceEnabled(SourceKind.DeepSeek));
         Assert.True(settings.WithSourceEnabled(SourceKind.DeepSeek, true).IsSourceEnabled(SourceKind.DeepSeek));
@@ -309,14 +325,14 @@ public class SettingsSerializerTests
         [
             SourceKind.Codex, SourceKind.ClaudeCode, SourceKind.ClaudeDesktop, SourceKind.OpenCode, SourceKind.Gemini,
             SourceKind.Omp, SourceKind.Antigravity, SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.ZCode, SourceKind.Kimi, SourceKind.GrokBuild,
-            SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid,
+            SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid, SourceKind.Devin,
         ]));
-        Assert.Equal(dsh, config.DshRoot);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { DshRoot = dsh }).ToMonitorConfiguration());
+        Assert.Equal([DataLocation.At(dsh)], config.ListOf(LocationFolder.Dsh));
+        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), AppSettings.Default.WithLocations(withDsh).ToMonitorConfiguration());
 
         var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings));
         Assert.False(back.DeepSeekEnabled);
-        Assert.Equal(dsh, back.DshRoot);
+        Assert.Equal([DataLocation.At(dsh)], back.Locations[LocationFolder.Dsh]);
     }
 
     [Theory]
@@ -419,7 +435,7 @@ public class SettingsSerializerTests
             """;
         var s = SettingsSerializer.Deserialize(json);
         Assert.True(s.DeepSeekEnabled);
-        Assert.Null(s.DshRoot);
+        Assert.Equal(LocationLists.AutomaticOnly, s.Locations[LocationFolder.Dsh]);
         Assert.False(s.ClaudeCodeEnabled);
         Assert.True(SettingsSerializer.Deserialize("{}").DeepSeekEnabled);
         Assert.True(s.ToMonitorConfiguration().EnabledSources.Contains(SourceKind.DeepSeek));
@@ -456,9 +472,9 @@ public class SettingsSerializerTests
         Assert.Empty(s.OrbAnchors);
         Assert.Equal(EffectsIntensity.Standard, s.Effects);
         Assert.False(s.CodexEnabled);
-        Assert.Null(s.CodexRoot);
+        Assert.Equal(0, s.LegacyRoots.Count);
         Assert.True(s.DeepSeekEnabled);
-        Assert.Null(s.DshRoot);
+        Assert.True(s.Locations.IsAutomaticOnly);
         Assert.Equal(120, s.ChartSeconds);
     }
 

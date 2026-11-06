@@ -13,6 +13,8 @@ protocol AppCommands: AnyObject {
     func showHistory(source: SourceKind?)
     /// Opens the Usage History window on `metric` (the dashboard's traffic rows open the traffic chart).
     func showHistory(source: SourceKind?, metric: HistoryChartMetric)
+    /// Opens the Usage History window filtered to one host (`local` or a remote host id; DESIGN 13), all sources.
+    func showHistory(host: String)
     /// The floating orbs' master switch (DESIGN 2b).
     func setOrbsVisible(_ visible: Bool)
     func resetOrbPosition(_ id: String)
@@ -73,6 +75,11 @@ final class AppModel {
     @ObservationIgnored weak var commands: AppCommands?
     @ObservationIgnored private(set) var monitor: LiveMonitor?
     @ObservationIgnored private(set) var historyService: HistoryService?
+    /// The remote hosts' connections (REMOTE); live runs only.
+    @ObservationIgnored private(set) var remoteHosts: RemoteHostsController?
+    /// The remote hosts' daily history (REMOTE 8.2, 8.3): the coordinator's history sink (held weakly there) and the
+    /// history service's remote side.
+    @ObservationIgnored let remoteHistory = RemoteHistorySync()
     /// Network traffic measuring (METRICS 10); live runs only.
     @ObservationIgnored private var trafficController: TrafficController?
     @ObservationIgnored private var historyStartTimer: Timer?
@@ -80,8 +87,8 @@ final class AppModel {
     @ObservationIgnored private var demoLoops = false
     @ObservationIgnored private var loops: [ObservationLoop] = []
     @ObservationIgnored private var appliedConfiguration: MonitorConfiguration?
-    @ObservationIgnored private var orbSubsets: Set<SourceSet> = []
-    @ObservationIgnored private var boardSubsets: Set<SourceSet> = []
+    @ObservationIgnored private var orbSubsets: Set<SubsetKey> = []
+    @ObservationIgnored private var boardSubsets: Set<SubsetKey> = []
 
     init(
         store: SpeedStore = SpeedStore(),
@@ -142,6 +149,10 @@ final class AppModel {
         })
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
+            OrbCanvasView.displaySync = self.settings.displaySync
+        })
+        loops.append(ObservationLoop { [weak self] in
+            guard let self else { return }
             self.gauge.redline = self.settings.redline
             let snapshot = self.store.snapshot
             self.gauge.ingest(self.value(of: snapshot.live), now: Clock.now)
@@ -193,6 +204,17 @@ final class AppModel {
         self.monitor = monitor
         appliedConfiguration = settings.monitorConfiguration
         monitor.setSubsets(orbSubsets.union(boardSubsets))
+        // The hosts reach the monitor's feed before it starts, so a Mac without local sources still goes live.
+        let remoteHosts = RemoteHostsController(monitor: monitor)
+        self.remoteHosts = remoteHosts
+        remoteHosts.coordinator.historySink = remoteHistory
+        loops.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            let document = self.settings.remoteHosts
+            let names = document.displayNames()
+            self.remoteHistory.setHosts(document.hosts.map { (id: $0.id, name: names[$0.id] ?? $0.automaticName) })
+        })
+        remoteHosts.start(settings: settings, prices: prices)
         monitor.start()
         report.perfWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
         report.activate()
@@ -246,7 +268,7 @@ final class AppModel {
         historyStartTimer?.invalidate()
         historyStartTimer = nil
         let service = HistoryService(store: history, configuration: settings.monitorConfiguration, liveStore: store,
-                                     pricing: priceBook)
+                                     pricing: priceBook, remote: remoteHistory)
         // The stored performance records give the score card its baselines (METRICS 6.11).
         history.perfRecordsHandler = { [weak self] records in self?.monitor?.setPerfHistory(records) }
         historyService = service
@@ -268,15 +290,15 @@ final class AppModel {
         history.clear()
     }
 
-    /// The source sets of the orbs tracking a subset, whose peaks the engine reports (METRICS 6.8).
-    func setOrbSubsets(_ sets: Set<SourceSet>) {
+    /// The subsets of the orbs tracking a subset, whose peaks the engine reports (METRICS 6.8).
+    func setOrbSubsets(_ sets: Set<SubsetKey>) {
         guard sets != orbSubsets else { return }
         orbSubsets = sets
         monitor?.setSubsets(orbSubsets.union(boardSubsets))
     }
 
-    /// The source sets of the boards tracking a subset (METRICS 6.8), reported with the orbs'.
-    func setBoardSubsets(_ sets: Set<SourceSet>) {
+    /// The subsets of the boards tracking a subset (METRICS 6.8), reported with the orbs'.
+    func setBoardSubsets(_ sets: Set<SubsetKey>) {
         guard sets != boardSubsets else { return }
         boardSubsets = sets
         monitor?.setSubsets(orbSubsets.union(boardSubsets))
@@ -291,6 +313,7 @@ final class AppModel {
         demo?.stop()
         historyStartTimer?.invalidate()
         historyService?.stop()
+        remoteHosts?.stop()
         monitor?.stop()
         loops.forEach { $0.cancel() }
         loops.removeAll()
@@ -343,7 +366,7 @@ enum DemoDriverRatio {
 
 /// Settings window panes (DESIGN section 5).
 enum SettingsPane: String, CaseIterable, Identifiable, Sendable {
-    case general, menuBar, orb, effects, cost, traffic, report, sources, about
+    case general, menuBar, orb, effects, cost, traffic, report, sources, remote, about
 
     var id: String { rawValue }
 
@@ -357,6 +380,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Sendable {
         case .traffic: "settings.traffic"
         case .report: "settings.report"
         case .sources: "settings.sources"
+        case .remote: "settings.remote"
         case .about: "settings.about"
         }
     }
@@ -367,6 +391,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Sendable {
         switch self {
         case .orb: "mac.settings.tab.orb"
         case .traffic: "mac.settings.tab.traffic"
+        case .remote: "mac.settings.tab.remote"
         default: titleKey
         }
     }
@@ -381,6 +406,7 @@ enum SettingsPane: String, CaseIterable, Identifiable, Sendable {
         case .traffic: "arrow.up.arrow.down"
         case .report: "dot.radiowaves.left.and.right"
         case .sources: "folder"
+        case .remote: "server.rack"
         case .about: "info.circle"
         }
     }

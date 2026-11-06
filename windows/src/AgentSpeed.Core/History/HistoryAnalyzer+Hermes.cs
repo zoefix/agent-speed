@@ -27,7 +27,7 @@ internal sealed partial class HistoryAnalyzer
 
     private void PlanHermes(Plan plan, SourceLocations locations, IReadOnlySet<SourceKind> enabled, bool zoneChanged, bool repricing, TimeZoneInfo zone)
     {
-        if (!enabled.Contains(SourceKind.Hermes) || locations.HermesRoot.Length == 0)
+        if (!enabled.Contains(SourceKind.Hermes) || locations.HermesRoots.Count == 0)
         {
             return;
         }

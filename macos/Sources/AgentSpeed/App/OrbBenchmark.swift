@@ -9,7 +9,8 @@ import Darwin
 /// Also counts heap allocations of warm frames per style. Writes `DIR/orb-bench.txt` and quits. Use a release build.
 ///
 /// `AGENT_SPEED_BENCH_STYLES` (comma separated) limits the styles, `AGENT_SPEED_BENCH_QUICK=1` runs only the single
-/// 148 pt orb scenarios, `AGENT_SPEED_BENCH_SECONDS` sets the measuring window (10).
+/// 148 pt orb scenarios, `AGENT_SPEED_BENCH_SECONDS` sets the measuring window (10), `AGENT_SPEED_BENCH_DISPLAY_SYNC=0`
+/// turns `displaySync` off.
 @MainActor
 final class OrbBenchmark {
     enum Check {
@@ -151,6 +152,9 @@ final class OrbBenchmark {
         defaults.set(Self.seed(benchCase, screen: screen, display: display).data(), forKey: OrbsController.documentKey)
         defaults.set(true, forKey: "orbsVisible")
         defaults.set("dark", forKey: "appearance")
+        if let sync = ProcessInfo.processInfo.environment["AGENT_SPEED_BENCH_DISPLAY_SYNC"] {
+            defaults.set(sync != "0", forKey: "displaySync")
+        }
         let model = AppModel(
             settings: AppSettings(defaults: defaults),
             updates: UpdateController(configuration: .current(environment: [:]), store: UpdateStore(defaults: defaults))

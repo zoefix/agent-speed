@@ -1,23 +1,28 @@
+using AgentSpeed.Core.Locations;
+
 namespace AgentSpeed.Core.Monitoring;
 
-/// <summary>Resolved root folders of every source (METRICS 2); empty strings stand for "not available".</summary>
-/// <param name="OmpRoots">omp <c>sessions</c> folders: the default root and every named profile, or the one chosen.</param>
+/// <summary>
+/// Resolved root folders of every source (METRICS 2): the union of each location list (METRICS 2.1). A single-root parameter
+/// is the family's first root, the roots after it are in <c>SourceLocations.Lists.cs</c>; empty strings stand for "none".
+/// </summary>
+/// <param name="OmpRoots">omp <c>sessions</c> folders: the default root and every named profile, then the user locations.</param>
 /// <param name="AntigravityStores">Antigravity store folders (or <c>conversations</c> folders); never a <c>*-backup</c> store.</param>
-/// <param name="OmpAutomatic">The omp roots follow the profiles on disk (no folder chosen), so new profiles join later.</param>
-/// <param name="WorkBuddyRoot">The WorkBuddy <c>projects</c> folder; empty when not available.</param>
-/// <param name="WorkBuddyAiRoot">The WorkBuddy AI <c>projects</c> folder; empty when not available.</param>
-/// <param name="PiRoots">Pi session folders: the default root and Pi's custom session folder, or the one chosen.</param>
-/// <param name="PiAutomatic">The Pi roots follow Pi's settings (no folder chosen), so a custom session folder set later joins.</param>
-/// <param name="OpenClawRoots">OpenClaw state folders (every automatic one), or the one chosen folder or database.</param>
-/// <param name="OpenClawAutomatic">The OpenClaw roots follow the profiles on disk (nothing chosen), so new profiles join later.</param>
+/// <param name="OmpAutomatic">The list has the automatic entry, so profiles created later join.</param>
+/// <param name="WorkBuddyRoot">The first WorkBuddy <c>projects</c> folder; empty when none.</param>
+/// <param name="WorkBuddyAiRoot">The first WorkBuddy AI <c>projects</c> folder; empty when none.</param>
+/// <param name="PiRoots">Pi session folders: the default root and Pi's custom session folder, then the user locations.</param>
+/// <param name="PiAutomatic">The list has the automatic entry, so a custom session folder set later joins.</param>
+/// <param name="OpenClawRoots">OpenClaw state folders (every automatic one), then the user locations (folders or databases).</param>
+/// <param name="OpenClawAutomatic">The list has the automatic entry, so new profiles join later.</param>
 /// <param name="CodexAutomatic">
-/// No Codex folder is chosen: the agent-scoped Codex home next to every OpenClaw agent database is a Codex root too
+/// The Codex list has the automatic entry: the agent-scoped Codex home next to every OpenClaw agent database is a Codex root too
 /// (METRICS 2, 4.14).
 /// </param>
-/// <param name="HermesRoot">The Hermes home (automatic), or the chosen home or log folder; empty when not available.</param>
-/// <param name="HermesChosen">The Hermes root is the user setting, which replaces the automatic home (METRICS 4.15).</param>
-/// <param name="DroidRoot">The Factory Droid sessions folder (automatic or from the setting); empty when not available.</param>
-internal sealed record SourceLocations(
+/// <param name="HermesRoot">The first Hermes root: the automatic home, or a user location (a home or a log folder).</param>
+/// <param name="HermesChosen">The first Hermes root is a user location (METRICS 4.15).</param>
+/// <param name="DroidRoot">The first Factory Droid sessions folder; empty when none.</param>
+internal sealed partial record SourceLocations(
     string CodexRoot,
     string ClaudeRoot,
     string DshRoot,
@@ -40,36 +45,75 @@ internal sealed record SourceLocations(
     bool HermesChosen = false,
     string DroidRoot = "")
 {
-    public static SourceLocations Resolve(MonitorConfiguration configuration) => new(
-        Normalize(configuration.CodexRoot ?? LiveMonitor.DefaultCodexRoot),
-        Normalize(configuration.ClaudeRoot ?? LiveMonitor.DefaultClaudeRoot),
-        Normalize(configuration.DshRoot ?? LiveMonitor.DefaultDshRoot),
-        Normalize(configuration.OpenCodeRoot ?? LiveMonitor.DefaultOpenCodeRoot),
-        configuration.GeminiRoot is { } gemini ? [Normalize(gemini)] : [.. LiveMonitor.DefaultGeminiRoots.Select(Normalize)],
-        configuration.OmpRoot is { } omp ? [Normalize(omp)] : NormalizeAll(LiveMonitor.DefaultOmpRoots),
-        NormalizeAll(LiveMonitor.AntigravityStores(configuration.AntigravityRoot)),
-        OmpAutomatic: configuration.OmpRoot is null,
-        WorkBuddyRoot: WorkBuddyRootOf(configuration.WorkBuddyRoot ?? LiveMonitor.DefaultWorkBuddyFolder),
-        WorkBuddyAiRoot: WorkBuddyRootOf(configuration.WorkBuddyAiRoot ?? LiveMonitor.DefaultWorkBuddyAiFolder),
-        ZCodeRoot: Normalize(configuration.ZCodeRoot ?? LiveMonitor.DefaultZCodeRoot),
-        KimiRoot: Normalize(Harnesses.HarnessPaths.SessionsOf(configuration.KimiRoot ?? LiveMonitor.DefaultKimiRoot)),
-        GrokBuildRoot: Normalize(Harnesses.HarnessPaths.SessionsOf(configuration.GrokBuildRoot ?? LiveMonitor.DefaultGrokBuildRoot)),
-        PiRoots: configuration.PiRoot is { } pi ? [Normalize(pi)] : NormalizeAll(LiveMonitor.DefaultPiRoots),
-        PiAutomatic: configuration.PiRoot is null,
-        OpenClawRoots: configuration.OpenClawRoot is { } openClaw ? NormalizeAll([openClaw]) : NormalizeAll(LiveMonitor.DefaultOpenClawRoots),
-        OpenClawAutomatic: configuration.OpenClawRoot is null,
-        CodexAutomatic: configuration.CodexRoot is null,
-        HermesRoot: Normalize(configuration.HermesRoot ?? LiveMonitor.DefaultHermesRoot),
-        HermesChosen: configuration.HermesRoot is not null,
-        DroidRoot: DroidRootOf(configuration.DroidRoot));
+    /// <summary>The roots of every source's location list, each list's union in list order (METRICS 2.1).</summary>
+    public static SourceLocations Resolve(MonitorConfiguration configuration)
+    {
+        List<string> Roots(LocationFolder folder) => LocationPaths.Unique(configuration.ListOf(folder)
+            .SelectMany(entry => entry.Path is { } path ? [LocationRoots.User(folder, path)] : LocationRoots.Automatic(folder)));
+        bool HasAutomatic(LocationFolder folder) => configuration.ListOf(folder).Any(entry => entry.IsAutomatic);
+
+        var codex = Roots(LocationFolder.Codex);
+        var claude = Roots(LocationFolder.Claude);
+        var dsh = Roots(LocationFolder.Dsh);
+        var workBuddy = Roots(LocationFolder.WorkBuddy);
+        var workBuddyAi = Roots(LocationFolder.WorkBuddyAi);
+        var kimi = Roots(LocationFolder.Kimi);
+        var grokBuild = Roots(LocationFolder.GrokBuild);
+        var droid = Roots(LocationFolder.Droid);
+        var openCode = DatabaseRoots(configuration, LocationFolder.OpenCode, OpenCode.OpenCodeDatabase.DatabasePath);
+        var zcode = DatabaseRoots(configuration, LocationFolder.ZCode, Harnesses.HarnessPaths.ZCodeDatabase);
+        var hermes = HermesRootsOf(configuration);
+        var openClawUser = LocationPaths.Unique(configuration.ListOf(LocationFolder.OpenClaw).Select(e => e.Path).OfType<string>());
+        return new SourceLocations(
+            First(codex),
+            First(claude),
+            First(dsh),
+            First(openCode),
+            Roots(LocationFolder.Gemini),
+            Roots(LocationFolder.Omp),
+            [.. Roots(LocationFolder.Antigravity).Where(store => !Antigravity.AntigravityPaths.IsBackupStore(store))],
+            OmpAutomatic: HasAutomatic(LocationFolder.Omp),
+            WorkBuddyRoot: First(workBuddy),
+            WorkBuddyAiRoot: First(workBuddyAi),
+            ZCodeRoot: First(zcode),
+            KimiRoot: First(kimi),
+            GrokBuildRoot: First(grokBuild),
+            PiRoots: Roots(LocationFolder.Pi),
+            PiAutomatic: HasAutomatic(LocationFolder.Pi),
+            OpenClawRoots: Roots(LocationFolder.OpenClaw),
+            OpenClawAutomatic: HasAutomatic(LocationFolder.OpenClaw),
+            CodexAutomatic: HasAutomatic(LocationFolder.Codex),
+            HermesRoot: hermes.Count > 0 ? hermes[0].Path : string.Empty,
+            HermesChosen: hermes.Count > 0 && hermes[0].Chosen,
+            DroidRoot: First(droid))
+        {
+            MoreCodexRoots = Rest(codex),
+            MoreClaudeRoots = Rest(claude),
+            MoreDshRoots = Rest(dsh),
+            MoreOpenCodeRoots = Rest(openCode),
+            MoreWorkBuddyRoots = Rest(workBuddy),
+            MoreWorkBuddyAiRoots = Rest(workBuddyAi),
+            MoreZCodeRoots = Rest(zcode),
+            MoreKimiRoots = Rest(kimi),
+            MoreGrokBuildRoots = Rest(grokBuild),
+            MoreDroidRoots = Rest(droid),
+            MoreHermesRoots = [.. hermes.Skip(1).Select(root => root.Path)],
+            OpenClawUserRoots = openClawUser,
+            GeminiSettings = GeminiSettingsOf(configuration),
+            DevinRoots = DevinRootsOf(configuration),
+        };
+    }
 
     /// <summary>The Factory Droid root for a setting: its <c>sessions</c> folder or the folder itself; null: the automatic root (METRICS 4.16).</summary>
     public static string DroidRootOf(string? setting) =>
         string.IsNullOrWhiteSpace(setting) ? Normalize(LiveMonitor.DefaultDroidRoot) : Normalize(Droid.DroidPaths.RootOf(Normalize(setting)));
 
-    /// <summary>The Hermes log folders now: the home's <c>logs</c> and every profile's, or the chosen folder's (METRICS 4.15).</summary>
+    /// <summary>
+    /// The Hermes log folders now, of every root in list order, each once: a home's <c>logs</c> and every profile's, a chosen
+    /// folder's (METRICS 4.15, 2.1).
+    /// </summary>
     public IReadOnlyList<string> HermesFolders() =>
-        HermesRoot.Length == 0 ? [] : NormalizeAll(Hermes.HermesPaths.FoldersOf(HermesRoot, HermesChosen));
+        LocationPaths.Unique(HermesRoots.SelectMany(root => Hermes.HermesPaths.FoldersOf(root.Path, root.Chosen)));
 
     /// <summary>Codex <c>archived_sessions</c>, the sibling of the sessions root (METRICS 8).</summary>
     public string CodexArchiveRoot => ArchiveRootOf(CodexRoot);
@@ -83,74 +127,50 @@ internal sealed record SourceLocations(
     }
 
     /// <summary>
-    /// The Codex roots OpenClaw adds while no Codex folder is chosen: <c>&lt;agent folder&gt;/codex-home/sessions</c> of every
-    /// agent database found now (METRICS 2, 4.14), without the main Codex root.
+    /// The Codex roots OpenClaw adds while the Codex list has its automatic entry: <c>&lt;agent folder&gt;/codex-home/sessions</c>
+    /// of every agent database found now (METRICS 2, 4.14), without a root the list names already.
     /// </summary>
-    public IReadOnlyList<string> CodexHomeRoots() => CodexAutomatic
-        ? [.. Distinct(OpenClaw.OpenClawPaths.CodexRoots(OpenClaw.OpenClawPaths.Databases(OpenClawRoots ?? [])).Select(Normalize))
-            .Where(root => !string.Equals(Path.TrimEndingDirectorySeparator(root), Path.TrimEndingDirectorySeparator(CodexRoot),
-                OperatingSystem.IsWindows() ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal))]
-        : [];
+    public IReadOnlyList<string> CodexHomeRoots()
+    {
+        if (!CodexAutomatic)
+        {
+            return [];
+        }
+
+        var listed = new HashSet<string>(MoreCodexRoots.Prepend(CodexRoot).Select(LocationPaths.Normalized), LocationPaths.Comparer);
+        return [.. CodexHomesOf(OpenClawRoots ?? []).Select(Normalize).Where(root => !listed.Contains(LocationPaths.Normalized(root)))];
+    }
 
     /// <summary>
-    /// Transcript roots in family order; Codex (OpenClaw's agent-scoped Codex homes), Gemini, omp and Pi may contribute several, Antigravity one <c>conversations</c>
-    /// folder per store, each WorkBuddy edition its <c>projects</c> folder, Factory Droid its sessions folder. A path listed twice within a family is returned
-    /// once; an omp root that is a Pi root or lies inside one is Pi's only (METRICS 4.7).
+    /// Transcript roots in family order, each family's in list order (METRICS 2.1): Codex (with OpenClaw's agent-scoped Codex
+    /// homes after the automatic root), Gemini, omp and Pi may have several, Antigravity one <c>conversations</c> folder per
+    /// store, WorkBuddy its <c>projects</c> folders. A root named twice, or resolving to the folder of an earlier root of its
+    /// family, is returned once; an omp root that is a Pi root or lies inside one is Pi's only (METRICS 4.7).
     /// </summary>
     public IEnumerable<(RootFamily Family, string Path)> FileRoots()
     {
         var piRoots = Distinct(PiRoots ?? []).ToList();
-        yield return (RootFamily.Codex, CodexRoot);
-        foreach (var home in CodexHomeRoots())
+        IEnumerable<(RootFamily, IEnumerable<string>)> families =
+        [
+            (RootFamily.Codex, [CodexRoot, .. CodexHomeRoots(), .. MoreCodexRoots]),
+            (RootFamily.Claude, [ClaudeRoot, .. MoreClaudeRoots]),
+            (RootFamily.DeepSeek, [DshRoot, .. MoreDshRoots]),
+            (RootFamily.Gemini, GeminiRoots),
+            (RootFamily.Omp, Pi.PiPaths.WithoutPi(OmpRoots ?? [], piRoots)),
+            (RootFamily.Antigravity, (AntigravityStores ?? []).Select(Antigravity.AntigravityPaths.ConversationsOf)),
+            (RootFamily.WorkBuddy, [WorkBuddyRoot, .. MoreWorkBuddyRoots]),
+            (RootFamily.WorkBuddyAi, [WorkBuddyAiRoot, .. MoreWorkBuddyAiRoots]),
+            (RootFamily.Kimi, [KimiRoot, .. MoreKimiRoots]),
+            (RootFamily.GrokBuild, [GrokBuildRoot, .. MoreGrokBuildRoots]),
+            (RootFamily.Pi, piRoots),
+            (RootFamily.Droid, [DroidRoot, .. MoreDroidRoots]),
+        ];
+        foreach (var (family, roots) in families)
         {
-            yield return (RootFamily.Codex, home);
-        }
-
-        yield return (RootFamily.Claude, ClaudeRoot);
-        yield return (RootFamily.DeepSeek, DshRoot);
-        foreach (var root in GeminiRoots)
-        {
-            yield return (RootFamily.Gemini, root);
-        }
-
-        foreach (var root in Distinct(Pi.PiPaths.WithoutPi(OmpRoots ?? [], piRoots)))
-        {
-            yield return (RootFamily.Omp, root);
-        }
-
-        foreach (var store in Distinct((AntigravityStores ?? []).Select(Antigravity.AntigravityPaths.ConversationsOf)))
-        {
-            yield return (RootFamily.Antigravity, store);
-        }
-
-        if (WorkBuddyRoot.Length > 0)
-        {
-            yield return (RootFamily.WorkBuddy, WorkBuddyRoot);
-        }
-
-        if (WorkBuddyAiRoot.Length > 0)
-        {
-            yield return (RootFamily.WorkBuddyAi, WorkBuddyAiRoot);
-        }
-
-        if (KimiRoot.Length > 0)
-        {
-            yield return (RootFamily.Kimi, KimiRoot);
-        }
-
-        if (GrokBuildRoot.Length > 0)
-        {
-            yield return (RootFamily.GrokBuild, GrokBuildRoot);
-        }
-
-        foreach (var root in piRoots)
-        {
-            yield return (RootFamily.Pi, root);
-        }
-
-        if (DroidRoot.Length > 0)
-        {
-            yield return (RootFamily.Droid, DroidRoot);
+            foreach (var root in Once(roots))
+            {
+                yield return (family, root);
+            }
         }
     }
 

@@ -166,6 +166,11 @@ enum TranscriptLocations {
     /// Factory Droid's sessions folder (METRICS 2, 4.16); no environment variable moves it.
     static var defaultDroidRoot: URL { DroidPaths.defaultRoot(home: home) }
 
+    /// Devin's automatic root (METRICS 2, 4.17): the CLI database.
+    static var defaultDevinRoots: [DevinRoot] {
+        DevinPaths.automaticRoots(environment: ProcessInfo.processInfo.environment, home: home.path)
+    }
+
     static func sessionsFolder(_ folder: URL) -> URL {
         folder.lastPathComponent == "sessions" ? folder : folder.appendingPathComponent("sessions", isDirectory: true)
     }
@@ -203,161 +208,5 @@ enum TranscriptLocations {
     private static func subdirectories(of folder: URL) -> [String] {
         guard let names = try? FileManager.default.contentsOfDirectory(atPath: folder.path) else { return [] }
         return names.filter { FileStat.lstat(folder.appendingPathComponent($0).path)?.isDirectory == true }
-    }
-}
-
-extension MonitorConfiguration {
-    /// The configured root of a transcript family, nil for the default.
-    func configuredRoot(for family: TranscriptFamily) -> URL? {
-        switch family {
-        case .codex: codexRoot
-        case .claude: claudeRoot
-        case .dsh: dshRoot
-        case .gemini: geminiRoot
-        case .omp: ompRoot
-        case .antigravity: antigravityRoot.map(TranscriptLocations.antigravityConversations)
-        case .workbuddy: workbuddyRoot.map(TranscriptLocations.workbuddyProjects)
-        case .workbuddyAi: workbuddyAiRoot.map(TranscriptLocations.workbuddyProjects)
-        case .kimi: kimiRoot.map(TranscriptLocations.sessionsFolder)
-        case .grokBuild: grokBuildRoot.map(TranscriptLocations.sessionsFolder)
-        case .pi: piRoot
-        case .droid: droidRoot.map(DroidPaths.sessionsFolder)
-        }
-    }
-
-    /// Every root of a family: the configured one, else the defaults.
-    func resolvedRoots(for family: TranscriptFamily) -> [String] {
-        let automatic = automaticRoots[family].map { urls in
-            switch family {
-            case .antigravity: urls.map(TranscriptLocations.antigravityConversations)
-            case .workbuddy, .workbuddyAi: urls.map(TranscriptLocations.workbuddyProjects)
-            case .kimi, .grokBuild: urls.map(TranscriptLocations.sessionsFolder)
-            default: urls
-            }
-        }
-        let fallback = family == .pi ? piHome?.roots : nil
-        var urls = configuredRoot(for: family).map { [$0] } ?? automatic ?? fallback ?? TranscriptLocations.defaultRoots(for: family)
-        if family == .codex, configuredRoot(for: .codex) == nil {
-            // OpenClaw's agent-scoped Codex homes are automatic Codex roots; a Codex setting replaces them too.
-            urls += openclawCodexRoots.map { URL(fileURLWithPath: $0, isDirectory: true) }
-        }
-        var roots: [String] = []
-        for url in urls {
-            let root = TranscriptDiscovery.normalizedRoot(url.path)
-            if !roots.contains(root) { roots.append(root) }
-        }
-        return roots
-    }
-
-    /// Gemini CLI's user settings: next to the `tmp` folder of a set root, else the file of the automatic home.
-    var resolvedGeminiSettings: String {
-        guard let root = configuredRoot(for: .gemini) ?? automaticRoots[.gemini]?.first else {
-            return TranscriptLocations.defaultGeminiSettings
-        }
-        let folder = TranscriptDiscovery.normalizedRoot(root.path)
-        let home = (folder as NSString).lastPathComponent == "tmp" ? (folder as NSString).deletingLastPathComponent : folder
-        return (home as NSString).appendingPathComponent("settings.json")
-    }
-
-    /// The first root of a family.
-    func resolvedRoot(for family: TranscriptFamily) -> String {
-        resolvedRoots(for: family)[0]
-    }
-
-    /// Whether a resolved root may be read at all: an Antigravity `*-backup` store never is (METRICS 4.8).
-    static func isReadable(root: String, family: TranscriptFamily) -> Bool {
-        family != .antigravity || TranscriptLocations.isReadableAntigravityRoot(root)
-    }
-
-    /// Every resolved root of every family, and whether it is read: never an Antigravity `*-backup` store, and never an
-    /// omp root that is a Pi root or lies inside one, which holds Pi's files (METRICS 4.7), also while Pi is off.
-    func allRoots() -> [(family: TranscriptFamily, path: String, readable: Bool)] {
-        let pi = resolvedRoots(for: .pi)
-        return TranscriptFamily.allCases.flatMap { family in
-            (family == .pi ? pi : resolvedRoots(for: family)).map { root in
-                (family, root, Self.isReadable(root: root, family: family, piRoots: pi))
-            }
-        }
-    }
-
-    static func isReadable(root: String, family: TranscriptFamily, piRoots: [String]) -> Bool {
-        isReadable(root: root, family: family) && (family != .omp || !PiHome.contains(piRoots, root))
-    }
-
-    /// OpenClaw's roots: the configured folder or database, else every state folder (METRICS 2, 4.14).
-    var resolvedOpenclawRoots: [String] {
-        let urls = openclawRoot.map { [$0] } ?? (openclawHome ?? .current).stateFolders
-        var roots: [String] = []
-        for url in urls {
-            let root = TranscriptDiscovery.normalizedRoot(url.path)
-            if !roots.contains(root) { roots.append(root) }
-        }
-        return roots
-    }
-
-    /// The agent-scoped Codex homes next to every OpenClaw agent database: automatic Codex roots (METRICS 2, 4.14),
-    /// also while OpenClaw itself is off.
-    var openclawCodexRoots: [String] {
-        var seen: Set<String> = []
-        return resolvedOpenclawRoots.flatMap(OpenClawHome.databases(in:))
-            .map(OpenClawHome.codexRoot(ofDatabase:))
-            .filter { seen.insert($0).inserted }
-    }
-
-    var readsOpenclaw: Bool { enabledSources.contains(.openclaw) }
-
-    /// The Hermes Agent home, or the folder of the setting (a home or one log folder), and whether it is the setting
-    /// (METRICS 2, 4.15).
-    var resolvedHermesRoot: (path: String, isSetting: Bool) {
-        if let hermesRoot { return (TranscriptDiscovery.normalizedRoot(hermesRoot.path), true) }
-        return ((hermesHome ?? .current).folder, false)
-    }
-
-    /// The log folders Hermes Agent's root names now: the home's own and every profile's, or the setting's.
-    var resolvedHermesFolders: [String] {
-        let root = resolvedHermesRoot
-        return root.isSetting ? HermesHome.settingFolders(root.path) : HermesHome.logFolders(ofHome: root.path)
-    }
-
-    /// The zone Hermes's wall-clock times are read in: this computer's, unless a test sets one.
-    var resolvedHermesTimeZone: TimeZone { hermesTimeZone ?? .autoupdatingCurrent }
-
-    var readsHermes: Bool { enabledSources.contains(.hermes) }
-
-    func reads(_ family: TranscriptFamily) -> Bool {
-        family.sources.contains { enabledSources.contains($0) }
-    }
-
-    var resolvedCodexRoot: String { resolvedRoot(for: .codex) }
-    var resolvedClaudeRoot: String { resolvedRoot(for: .claude) }
-    var resolvedDshRoot: String { resolvedRoot(for: .dsh) }
-
-    var resolvedOpencodeRoot: String {
-        TranscriptDiscovery.normalizedRoot((opencodeRoot ?? TranscriptLocations.defaultOpencodeRoot).path)
-    }
-
-    /// Codex archives finished sessions next to the sessions folder (METRICS 8).
-    var resolvedCodexArchiveRoot: String { Self.codexArchiveRoot(of: resolvedCodexRoot) }
-
-    /// The `archived_sessions` folder next to a Codex sessions root.
-    static func codexArchiveRoot(of root: String) -> String {
-        ((root as NSString).deletingLastPathComponent as NSString).appendingPathComponent("archived_sessions")
-    }
-
-    var readsCodex: Bool { reads(.codex) }
-    var readsClaude: Bool { reads(.claude) }
-    var readsDsh: Bool { reads(.dsh) }
-    var readsOpencode: Bool { enabledSources.contains(.opencode) }
-    var readsZcode: Bool { enabledSources.contains(.zcode) }
-    var resolvedZcodeRoot: String { TranscriptDiscovery.normalizedRoot((zcodeRoot ?? TranscriptLocations.defaultZcodeRoot).path) }
-
-    /// True when switching between the two configurations requires reading the transcripts again.
-    func requiresRescan(comparedTo other: MonitorConfiguration) -> Bool {
-        enabledSources != other.enabledSources
-            || TranscriptFamily.allCases.contains { resolvedRoots(for: $0) != other.resolvedRoots(for: $0) }
-            || resolvedOpencodeRoot != other.resolvedOpencodeRoot
-            || resolvedZcodeRoot != other.resolvedZcodeRoot
-            || resolvedOpenclawRoots != other.resolvedOpenclawRoots
-            || resolvedHermesRoot != other.resolvedHermesRoot
     }
 }

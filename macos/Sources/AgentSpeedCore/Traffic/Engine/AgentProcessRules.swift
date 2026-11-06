@@ -23,10 +23,10 @@ struct AgentProcessRules: Sendable {
     /// Desktop apps' own executables, never agent processes.
     private var desktopApps: [String] {
         platform.isWindows
-            ? ["%LOCALAPPDATA%/AnthropicClaude/"]
+            ? ["%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe"]
             : ["/Applications/Claude.app/Contents/MacOS/Claude", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT",
                "/Applications/Codex.app/Contents/MacOS/Codex", "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
-               "/Applications/Antigravity.app/Contents/MacOS/Antigravity"]
+               "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin"]
     }
 
     private static let desktopPackages = ["claude_", "openai.codex_", "openai.chatgpt"]
@@ -156,6 +156,8 @@ struct AgentProcessRules: Sendable {
         if isHermes(executable: executable, arguments: arguments) { return .hermes }
         // Factory Droid is one native executable for the CLI, its `droid exec` children and Factory Desktop's daemon.
         if name == "droid" { return .droid }
+        // Devin CLI, interactive or `devin acp` (which Devin Desktop starts for its local agent).
+        if name == "devin" { return .devin }
         // Only the embedded CodeBuddy Code CLI is the agent; the app, its helpers and its daemon are not.
         if let edition = workbuddyEdition(executable: executable, bundleIdentifier: bundleIdentifier),
            (arguments() ?? []).dropFirst().contains(where: { platform.normalize($0).contains(Self.workbuddyCLI) }) {

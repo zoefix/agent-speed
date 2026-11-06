@@ -19,6 +19,11 @@ qt_add_executable(agent-speed
     src/network_service.cpp
     src/catalog.cpp
     src/preferences.cpp
+    src/host_dot.cpp
+    src/remote_hosts_view.cpp
+    src/remote_service.cpp
+    src/remote_trace.cpp
+    src/source_locations_view.cpp
     src/report/report_account.cpp
     src/report/report_controller.cpp
     src/report/report_delivery.cpp
@@ -38,6 +43,7 @@ qt_add_executable(agent-speed
     src/orb/orb_accessible.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
+    src/orb/idle_fade.cpp
     src/orb/led_math.cpp
     src/orb/led_style.cpp
     src/orb/liquid_style.cpp
@@ -58,6 +64,7 @@ qt_add_executable(agent-speed
     src/orbs/orb_manager.cpp
     src/orbs/orb_views.cpp
     src/orbs/orbs_store.cpp
+    src/orbs/size_slider_action.cpp
     src/strings.cpp
     src/perf_card.cpp
     src/title_themes.cpp
@@ -126,6 +133,22 @@ set(agent_speed_qml
     qml/SourceRow.qml
     qml/Sync.js
     qml/Theme.qml
+    qml/remote/FieldError.qml
+    qml/remote/HostDot.qml
+    qml/remote/HostPickerRows.qml
+    qml/remote/HostRow.qml
+    qml/remote/RemoteHostMenu.qml
+    qml/remote/RemoteHostRow.qml
+    qml/remote/RemoteHostSheet.qml
+    qml/remote/RemotePage.qml
+    qml/remote/RemoveHostDialog.qml
+    qml/sources/DefaultBadge.qml
+    qml/sources/LocationActions.qml
+    qml/sources/LocationIcon.qml
+    qml/sources/LocationNotice.qml
+    qml/sources/LocationRow.qml
+    qml/sources/SourceGroup.qml
+    qml/sources/SourceToggleRow.qml
 )
 # Serve every file from the module root, so the implicit directory import sees the qmldir (and the Theme singleton).
 foreach(file IN LISTS agent_speed_qml)
@@ -150,6 +173,11 @@ qt_add_resources(agent-speed "strings"
     PREFIX "/"
     BASE "${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
     FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/strings.json"
+)
+
+qt_add_resources(agent-speed "strings-linux"
+    PREFIX "/"
+    FILES strings.linux.json
 )
 
 target_link_libraries(agent-speed PRIVATE

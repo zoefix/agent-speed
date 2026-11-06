@@ -36,8 +36,9 @@ final class HistoryDatabase {
         try self.init(path: path, migrating: true)
     }
 
-    /// Without `migrating`, a store of an older schema keeps its version and only gets `meta`, `day_traffic` and
-    /// `contribution_unpriced`; a new store always gets the full schema. A newer store throws before anything is changed.
+    /// Without `migrating`, a store of an older schema keeps its version and only gets `meta` and the side tables
+    /// created on every open (`day_traffic`, `contribution_unpriced`, `perf_records`, the remote hosts' tables); a new
+    /// store always gets the full schema. A newer store throws before anything is changed.
     private init(path: String, migrating: Bool) throws {
         self.path = path
         if path != ":memory:" {
@@ -57,6 +58,7 @@ final class HistoryDatabase {
         try connection.execute(Self.trafficTableSQL)
         try connection.execute(Self.unpricedTableSQL)
         try connection.execute(Self.perfRecordsTableSQL)
+        try createRemoteTables()
         try connection.execute(Self.retiredTablesSQL)
         if migrating || version == 0 { try connection.execute(Self.modeTableSQL) }
     }

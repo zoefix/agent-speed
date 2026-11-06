@@ -58,7 +58,8 @@ internal sealed class HistoryController : IDisposable
 
     /// <summary>Opens the window (or brings it forward) showing <paramref name="source"/>, or every source when null.</summary>
     /// <param name="traffic">Select the traffic metric (DESIGN 10).</param>
-    public void Open(SourceKind? source, bool traffic = false)
+    /// <param name="host">A dashboard host row opens the window on that host (DESIGN 13); every other way opens it on every host.</param>
+    public void Open(SourceKind? source, bool traffic = false, string? host = null)
     {
         if (_disposed)
         {
@@ -70,6 +71,8 @@ internal sealed class HistoryController : IDisposable
             var model = new HistoryViewModel(_hub, _loc, _cost, _dispatcher, SaveIncludeSubscriptions, Traffic,
                 () => _settings.Current.Traffic.IncludeTools, () => _settings.Current.EnabledSourceSet(),
                 () => Prices?.Current ?? Core.Pricing.PriceBook.Bundled, AppPaths.Version);
+            model.SetConfiguredHostNames(() => _settings.Current.RemoteHosts.DisplayNames());
+            model.SetHost(host);
             model.SetSource(source);
             model.RememberModeKind(_settings.Current.HistoryModeKind, kind => _settings.Update(s => s with { HistoryModeKind = kind }));
             model.RememberPerfSort(_settings.Current.HistoryPerfSort, sort => _settings.Update(s => s with { HistoryPerfSort = sort }));
@@ -94,6 +97,7 @@ internal sealed class HistoryController : IDisposable
         }
         else
         {
+            _model.SetHost(host);
             _model.SetSource(source);
             if (!_window.IsVisible)
             {
@@ -115,6 +119,12 @@ internal sealed class HistoryController : IDisposable
 
         _window.Activate();
     }
+
+    /// <summary>The open window's rows as its CSV export would write them (developer capture); null while closed.</summary>
+    public (string FileName, byte[] Bytes)? ExportCsv() => _model?.ExportCsv();
+
+    /// <summary>The remote hosts' names changed (a rename, an added or removed host): the host picker follows.</summary>
+    public void OnHostsChanged() => _model?.SetConfiguredHostNames(() => _settings.Current.RemoteHosts.DisplayNames());
 
     /// <summary>The include-tools setting or the enabled sources changed: the window's traffic counts change with them.</summary>
     public void OnTrafficSettingsChanged() => _model?.RefreshTraffic();

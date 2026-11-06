@@ -25,6 +25,8 @@ public enum BoardMenuModel {
         case styles(selected: BoardStyle)
         /// `orbs.sources` ▸ `orbs.sources.all`, separator, every source.
         case sources(all: Bool, entries: [SourceEntry])
+        /// `remote.hosts` ▸ `remote.hosts.all`, separator, every host (DESIGN 13; only while remote hosts exist).
+        case hosts(all: Bool, entries: [OrbHostEntry])
         /// `boards.readouts` ▸ the three live metrics switches, each with its check.
         case readouts(BoardReadouts)
         /// `menu.size` ▸ S / M / L.
@@ -42,20 +44,24 @@ public enum BoardMenuModel {
         case separator
     }
 
-    /// The context menu of `board`. `status` maps unavailable sources to their status key.
+    /// The context menu of `board`. `status` maps unavailable sources to their status key; `hosts` are this computer
+    /// and the remote hosts in settings order (the Hosts submenu appears only with a remote host).
     public static func context(_ board: BoardConfig, document: BoardsDocument,
-                               status: [SourceKind: String] = [:]) -> [Item] {
+                               status: [SourceKind: String] = [:], hosts: [OrbHostChoice] = []) -> [Item] {
         let entries = SourceKind.allCases.map { source in
             let checked = !board.sources.isAll && board.sources.tracks(source)
             return SourceEntry(source: source, checked: checked,
                                enabled: !checked || board.sources.toggling(source) != nil,
                                statusKey: status[source])
         }
+        let hostItems: [Item] = OrbHostChoice.pickerShown(hosts)
+            ? [.hosts(all: board.hosts.isAll, entries: board.hosts.entries(hosts))] : []
         return [
             .header(style: board.style, sources: board.sources),
             .separator,
             .styles(selected: board.style),
             .sources(all: board.sources.isAll, entries: entries),
+        ] + hostItems + [
             .readouts(board.readouts),
             .sizes(selected: board.size),
             .effects,

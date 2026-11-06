@@ -32,12 +32,33 @@ public static class BoardEditing
         return board.Sources.Unchecking(kind) is not null;
     }
 
+    /// <summary>The hosts a board counts (DESIGN 13).</summary>
+    public static BoardsDocument SetHosts(BoardsDocument document, string id, OrbHosts hosts) => Update(document, id, b => b with { Hosts = hosts });
+
+    /// <summary>The pickers' rule over the hosts this computer knows, in settings order; null when refused (the last host).</summary>
+    public static BoardsDocument? ToggleHost(BoardsDocument document, string id, string hostId, IReadOnlyList<string> known)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.Boards.FirstOrDefault(b => b.Id == id)?.Hosts.Toggling(hostId, known) is { } next ? SetHosts(document, id, next) : null;
+    }
+
+    /// <summary>A host removed from the settings leaves every board's selection; one left without hosts tracks all (REMOTE 2.4).</summary>
+    public static BoardsDocument RemovingHost(BoardsDocument document, string hostId)
+    {
+        ArgumentNullException.ThrowIfNull(document);
+        return document.Boards.Any(b => !b.Hosts.IsAll && b.Hosts.Tracks(hostId))
+            ? document with { Boards = [.. document.Boards.Select(b => b with { Hosts = b.Hosts.Removing(hostId) })] }
+            : document;
+    }
+
     public static BoardsDocument SetOpacity(BoardsDocument document, string id, double opacity) =>
         Update(document, id, b => b with { Opacity = OrbDefinition.CleanOpacity(opacity) });
 
     public static BoardsDocument SetAlwaysOnTop(BoardsDocument document, string id, bool value) => Update(document, id, b => b with { AlwaysOnTop = value });
 
     public static BoardsDocument SetClickThrough(BoardsDocument document, string id, bool value) => Update(document, id, b => b with { ClickThrough = value });
+
+    public static BoardsDocument SetFadeWhenIdle(BoardsDocument document, string id, bool value) => Update(document, id, b => b with { FadeWhenIdle = value });
 
     /// <summary>Turns one live metrics switch on or off (DESIGN 2c, Live metrics: Switches); the others stay as they are.</summary>
     public static BoardsDocument SetReadout(BoardsDocument document, string id, BoardReadout readout, bool on) =>

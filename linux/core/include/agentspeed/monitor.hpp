@@ -1,6 +1,8 @@
 #pragma once
 
 #include <cstdint>
+#include <deque>
+#include <functional>
 #include <map>
 #include <memory>
 #include <set>
@@ -8,11 +10,14 @@
 #include <vector>
 
 #include "agentspeed/dedupe.hpp"
+#include "agentspeed/devin_source.hpp"
 #include "agentspeed/discovery.hpp"
 #include "agentspeed/engine.hpp"
+#include "agentspeed/host_subset.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/actions.hpp"
 #include "agentspeed/mode_context.hpp"
+#include "agentspeed/remote_feed.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/report_perf.hpp"
@@ -21,11 +26,11 @@
 namespace agentspeed {
 
 namespace opencode {
-class Source;
+class SourceSet;
 struct Update;
 }
 namespace zcode {
-class Source;
+class SourceSet;
 struct Update;
 }
 namespace openclaw {
@@ -48,8 +53,10 @@ struct MonitorConfig {
     std::shared_ptr<pricing::PriceBook> prices;
 
     static std::set<SourceKind> allSources();
-    // METRICS 2 roots from the process environment and the user's folder settings.
-    static MonitorConfig fromEnvironment(const RootSettings& settings = {}, std::set<SourceKind> enabled = allSources());
+    // METRICS 2 roots from the process environment and the location lists (METRICS 2.1).
+    static MonitorConfig fromEnvironment(const LocationLists& lists = {}, std::set<SourceKind> enabled = allSources());
+    // The same sources read from the same roots: switching needs no new monitor.
+    bool readsSame(const MonitorConfig& other) const { return enabled == other.enabled && locations.readsSame(other.locations); }
 };
 
 // What the engine knows about one agent (METRICS 6.7).
@@ -63,6 +70,16 @@ struct AgentInfo {
     ExecutionModes modes;
     // A session-current fact and configured values (EXECUTION-MODES, Current values).
     ExecutionModes sessionModes, configuredModes;
+    // `local`, or the remote host the agent runs on (REMOTE 2.2).
+    std::string host = "local";
+};
+
+// A source row without the engine (REMOTE 5.2 `status`): detected, today's sessions and its own configured values.
+struct SourceState {
+    SourceKind source = SourceKind::Codex;
+    bool available = false;
+    int sessions = 0;
+    ExecutionModes configuredModes;
 };
 
 // Discovers every enabled source, reads it as METRICS 5 says and keeps what the engine needs. Single-threaded.
@@ -109,9 +126,34 @@ public:
     // The engine instance live reporting's counters belong to (METRICS 11.4).
     std::int64_t epoch() const { return epoch_; }
     // The source sets whose 性能 and 思考 every snapshot computes (nullopt: every enabled source).
-    void setScoreSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { scoreSets_ = std::move(sets); }
+    void setScoreSets(const std::vector<std::optional<std::vector<SourceKind>>>& sets) { setScoreSubsets(subsetsOf(sets)); }
     // The source sets of the floating orbs whose peakToday_A every snapshot computes (nullopt: peakToday).
-    void setPeakSets(std::vector<std::optional<std::vector<SourceKind>>> sets) { peakSets_ = std::move(sets); }
+    void setPeakSets(const std::vector<std::optional<std::vector<SourceKind>>>& sets) { setPeakSubsets(subsetsOf(sets)); }
+    // The same over (host, source) cells (DESIGN 13): a subset with hosts counts only those hosts' agents and responses.
+    void setScoreSubsets(std::vector<hosts::Subset> sets) { scoreSets_ = std::move(sets); }
+    void setPeakSubsets(std::vector<hosts::Subset> sets) { peakSets_ = std::move(sets); }
+
+    // REMOTE 7: applies the remote feed's changes (the hosts' agents, parents, responses, tools, statuses and source
+    // reports) between local reads. True when anything changed.
+    bool applyRemote(const std::vector<remote::FeedChange>& changes, std::int64_t nowMs);
+    // REMOTE 5.6: the responses held per remote host (tests lower it).
+    void setRemoteResponseLimit(std::size_t limit);
+
+    // The relay (REMOTE 5): every response the store takes (after the enabled filter) with its completion flag, every
+    // tool call whose first result was read (METRICS 11.10) and the startup backlog's files read of files planned.
+    void setResponseObserver(std::function<void(const ParsedResponse&, bool completion)> observer);
+    void setToolObserver(std::function<void(const std::string& agentId, SourceKind source, const work::Action& action)> observer) {
+        toolObserver_ = std::move(observer);
+    }
+    void setSeedProgress(std::function<void(std::size_t done, std::size_t total)> progress) { seedProgress_ = std::move(progress); }
+    // An agent's actions (METRICS 6.10 Storage) and working directory (10.6), when it has them.
+    const work::ActionReader* actionsFor(const std::string& id) const { return actionsOf(id); }
+    std::optional<std::string> cwdOf(const std::string& id) const;
+    // Every resolved parent link (METRICS 6.7): child id → parent id.
+    const std::map<std::string, std::string>& parents();
+    // Every enabled source's row, in source order, and the read warnings of a snapshot (`unfinalized` stays 0).
+    std::vector<SourceState> sourceStates(std::int64_t todayStartMs) const;
+    Warnings warnings() const;
 
 private:
     struct Root {
@@ -121,6 +163,8 @@ private:
         bool enabled = false;
         bool available = false;
         bool seeded = false;
+        // Resolves to the folder of an earlier root of the same family: read once, under that root (METRICS 2.1).
+        bool duplicate = false;
     };
     struct Tracked {
         std::size_t root = 0;
@@ -138,6 +182,8 @@ private:
         Alignment alignment;
     };
     class Store;
+    struct Remote;
+    static std::vector<hosts::Subset> subsetsOf(const std::vector<std::optional<std::vector<SourceKind>>>& sets);
 
     void addRoot(RootFamily family, const std::string& path);
     bool familyEnabled(RootFamily family) const;
@@ -162,7 +208,8 @@ private:
     void addNewOmpRoots();
     void addNewPiRoots();
     void addNewCodexHomeRoots();
-    void refreshAvailability();
+    // Detection and the duplicate rule for every root; true when any changed.
+    bool refreshAvailability();
 
     // Database and log sources (monitor_sources.cpp).
     void initSources();
@@ -172,6 +219,12 @@ private:
     bool applyZCode(const zcode::Update& update, bool seeded);
     bool applyOpenClaw(const openclaw::Update& update, bool seeded);
     bool applyHermes(const hermes::Update& update, bool seeded);
+    // Devin CLI (monitor_devin.cpp).
+    void initDevin();
+    void seedDevin(std::int64_t todayStartMs);
+    bool refreshDevin(bool discover, std::int64_t todayStartMs);
+    bool applyDevin(const devin::Update& update, bool seeded);
+    std::pair<std::string, bool> devinStatus() const;
     void upsert(const ParsedResponse& response, bool completion, bool seeded);
     std::pair<std::string, bool> sourceStatus(SourceKind kind) const;
 
@@ -184,7 +237,10 @@ private:
     std::map<std::string, std::unique_ptr<Tracked>> files_;
     std::map<std::string, AgentInfo> agents_;
     std::map<std::string, AgentLink> links_;
-    std::map<std::string, std::string> parents_;
+    // The resolved local links, and those merged with every remote host's (REMOTE 7).
+    std::map<std::string, std::string> localParents_, parents_;
+    bool remoteParentsChanged_ = false;
+    std::unique_ptr<Remote> remote_;
     ModeContext modeContext_;
     bool linksChanged_ = false;
     bool partialHistory_ = false;
@@ -192,24 +248,38 @@ private:
     std::int64_t removedMalformed_ = 0;
     std::int64_t lastRediscoveryMs_ = 0;
 
-    std::unique_ptr<opencode::Source> openCode_;
-    std::unique_ptr<zcode::Source> zcode_;
+    std::unique_ptr<opencode::SourceSet> openCode_;
+    std::unique_ptr<zcode::SourceSet> zcode_;
     std::unique_ptr<openclaw::Source> openClaw_;
     std::unique_ptr<hermes::Source> hermes_;
+    std::unique_ptr<devin::Source> devin_;
+    std::map<std::string, devin::Agent> devinPushed_;
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, std::uint64_t> openClawPushed_, hermesPushed_;
     std::map<std::string, std::unique_ptr<work::ActionReader>> windowActions_;
     std::unique_ptr<traffic::Service> traffic_ = std::make_unique<traffic::Service>();
     std::vector<traffic::AgentFacts> trafficAgents(std::int64_t nowMs);
     std::map<std::pair<SourceKind, std::string>, double> perfBaselines_;
-    std::vector<std::optional<std::vector<SourceKind>>> scoreSets_{std::nullopt};
-    std::vector<std::optional<std::vector<SourceKind>>> peakSets_;
+    std::vector<hosts::Subset> scoreSets_{hosts::Subset{}};
+    std::vector<hosts::Subset> peakSets_;
+    // DESIGN 13 (monitor_hosts.cpp): the source rows' remote parts, the hosts and their cells.
+    void addRemoteSources(Snapshot& snap) const;
+    void addHosts(Snapshot& snap, const std::vector<engine::Response>& responses, const std::vector<engine::Agent>& agents,
+                  std::int64_t nowMs, std::int64_t todayStartMs) const;
+    // Remote ingestion (monitor_remote.cpp).
+    void removeRemoteAgent(const std::string& id);
+    void removeHost(const std::string& host);
+    void setRemoteAgent(const remote::RemoteAgent& agent);
+    bool setRemoteParents(const std::string& host, const std::map<std::string, std::string>& links);
+    void remoteTool(const remote::RemoteTool& tool);
+    bool idleHost(const std::string& host);
+    const std::deque<work::Action>* remoteActions(const std::string& id) const;
     work::ActionReader* actionsOf(const std::string& id) const;
     // An agent's reader: tool results read live are counted for live reporting (METRICS 11.10).
     std::unique_ptr<work::ActionReader> makeActions(const std::string& id, SourceKind source);
     void scoreAgents(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
                      std::int64_t nowMs);
-    bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false;
+    bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false, devinSeeded_ = false;
     const std::int64_t epoch_;
     std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
     std::uint64_t reportCountersVersion_ = 0;
@@ -219,6 +289,8 @@ private:
     std::shared_ptr<const report::PerfRows> perfRows_ = std::make_shared<report::PerfRows>();
     std::uint64_t perfRowsVersion_ = UINT64_MAX;
     engine::Thinking lastThinking_;
+    std::function<void(const std::string&, SourceKind, const work::Action&)> toolObserver_;
+    std::function<void(std::size_t, std::size_t)> seedProgress_;
 };
 
 }  // namespace agentspeed

@@ -5,13 +5,15 @@ using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Monitoring;
 using AgentSpeed.Core.Pricing;
 using AgentSpeed.Core.Perf;
+using AgentSpeed.Core.Remote;
 
 namespace AgentSpeed.Core;
 
 /// <summary>
 /// Keeps the daily usage history (METRICS 8) and the performance records (6.11) on a below-normal-priority background thread and
-/// publishes them to a <see cref="HistoryHub"/>. Runs at start, every 10 minutes, after local midnight and on
-/// <see cref="HistoryHub.Refresh"/>; <see cref="HistoryHub.Clear"/> deletes the store and recomputes. Never touches the
+/// publishes them to a <see cref="HistoryHub"/>, with the remote hosts' days that <see cref="Remote"/> receives (REMOTE 8.3).
+/// Runs at start, every 10 minutes, after local midnight and on <see cref="HistoryHub.Refresh"/>; <see cref="HistoryHub.Clear"/>
+/// deletes the store (the hosts' rows with it), recomputes and asks connected hosts for their days again. Never touches the
 /// live monitor; <see cref="PerfRecordsUpdated"/> hands it the records its baselines come from.
 /// </summary>
 public sealed class HistoryService : IDisposable
@@ -43,9 +45,14 @@ public sealed class HistoryService : IDisposable
     private bool _bindingSaveRequested;
     private bool _disposed;
 
+    /// <summary>The state last published from the history thread, published again with changed remote rows.</summary>
+    private HistoryState _lastState = HistoryState.NotLoaded;
+
     /// <param name="pricing">Shared with the live engine (METRICS 9.7); null uses the bundled table.</param>
-    public HistoryService(HistoryHub hub, MonitorConfiguration configuration, string? storePath = null, PriceBook? pricing = null)
-        : this(hub, configuration, storePath, zone: null, options: null, pricing)
+    /// <param name="remote">The remote hosts' daily history; null creates one.</param>
+    public HistoryService(HistoryHub hub, MonitorConfiguration configuration, string? storePath = null, PriceBook? pricing = null,
+        RemoteHistorySync? remote = null)
+        : this(hub, configuration, storePath, zone: null, options: null, pricing, remote)
     {
     }
 
@@ -55,7 +62,8 @@ public sealed class HistoryService : IDisposable
         string? storePath,
         TimeZoneInfo? zone,
         HistoryOptions? options,
-        PriceBook? pricing = null)
+        PriceBook? pricing = null,
+        RemoteHistorySync? remote = null)
     {
         ArgumentNullException.ThrowIfNull(hub);
         ArgumentNullException.ThrowIfNull(configuration);
@@ -65,10 +73,14 @@ public sealed class HistoryService : IDisposable
         _zone = zone;
         _options = options ?? new HistoryOptions();
         Pricing = pricing ?? new PriceBook();
+        Remote = remote ?? new RemoteHistorySync();
     }
 
     /// <summary>Shared with the live engine (METRICS 9.7).</summary>
     public PriceBook Pricing { get; }
+
+    /// <summary>The remote hosts' daily history (REMOTE 8.3): the remote coordinator's history sink.</summary>
+    public RemoteHistorySync Remote { get; }
 
     /// <summary>
     /// Called on the history thread with the stored performance records of the enabled sources (METRICS 6.11
@@ -115,13 +127,17 @@ public sealed class HistoryService : IDisposable
             _hub.RefreshHandler = Refresh;
             _hub.ClearHandler = Clear;
             Pricing.Bound += RequestBindingSave;
-            _thread = new Thread(() => Run(stop.Token))
+            var zone = _zone;
+            var ledger = new RemoteHistoryLedger(_options.RemoteLimits, zone: () => RemoteZone.Current(zone).Id);
+            var remote = new RemoteHistoryWorker(Signal, Remote.Request, ledger);
+            _thread = new Thread(() => Run(stop.Token, remote))
             {
                 IsBackground = true,
                 Name = "Agent Speed history",
                 Priority = ThreadPriority.BelowNormal,
             };
             _thread.Start();
+            Remote.Attach(remote);
         }
     }
 
@@ -135,6 +151,11 @@ public sealed class HistoryService : IDisposable
             stop = _stop;
             _thread = null;
             _stop = null;
+            if (thread is not null)
+            {
+                Remote.Attach(null);
+            }
+
             Pricing.Bound -= RequestBindingSave;
             CancelRun();
             if (_hub.RefreshHandler == Refresh)
@@ -284,11 +305,12 @@ public sealed class HistoryService : IDisposable
         }
     }
 
-    private void Run(CancellationToken stopToken)
+    private void Run(CancellationToken stopToken, RemoteHistoryWorker remote)
     {
         HistoryStore? store = null;
         HistoryAnalyzer? analyzer = null;
         var first = true;
+        var resync = false;
         try
         {
             while (!stopToken.IsCancellationRequested)
@@ -311,6 +333,8 @@ public sealed class HistoryService : IDisposable
                         store?.Dispose();
                         store = null;
                         analyzer = null;
+                        remote.Ledger.Reset();
+                        resync = true;
                         Pricing.ClearBindings();
                         lock (HistoryStore.FileGate)
                         {
@@ -329,9 +353,15 @@ public sealed class HistoryService : IDisposable
                     {
                         store = HistoryStore.Open(_storePath);
                         analyzer = new HistoryAnalyzer(store, _options, Pricing);
+                        remote.Ledger.Load(store);
+                        if (resync)
+                        {
+                            resync = false;
+                            remote.Resync();
+                        }
                     }
 
-                    var completed = Analyze(analyzer, configuration, first, stopToken);
+                    var completed = Analyze(analyzer, configuration, first, remote, stopToken);
                     first &= !completed;
                 }
                 catch (OperationCanceledException) when (stopToken.IsCancellationRequested)
@@ -348,12 +378,17 @@ public sealed class HistoryService : IDisposable
                     store?.Dispose();
                     store = null;
                     analyzer = null;
-                    _hub.Publish(HistoryState.Failed(FailureMessage(e)));
+                    Publish(HistoryState.Failed(FailureMessage(e)));
                     nextDelay = RetryDelay;
                 }
 
                 var current = analyzer;
-                WaitForNextRun(nextDelay, stopToken, () => SaveBindings(current));
+                var currentStore = store;
+                WaitForNextRun(nextDelay, stopToken, () =>
+                {
+                    SaveBindings(current);
+                    ApplyRemote(remote, currentStore, current);
+                });
             }
         }
         finally
@@ -374,7 +409,8 @@ public sealed class HistoryService : IDisposable
     }
 
     /// <summary>One analysis run; false when it was cancelled before finishing.</summary>
-    private bool Analyze(HistoryAnalyzer analyzer, MonitorConfiguration configuration, bool first, CancellationToken stopToken)
+    private bool Analyze(HistoryAnalyzer analyzer, MonitorConfiguration configuration, bool first, RemoteHistoryWorker remote,
+        CancellationToken stopToken)
     {
         using var run = CancellationTokenSource.CreateLinkedTokenSource(stopToken);
         lock (_gate)
@@ -393,7 +429,7 @@ public sealed class HistoryService : IDisposable
             var zone = _zone ?? TimeZoneInfo.Local;
             if (first)
             {
-                PublishAll(HistoryState.Analyzing(0, 0, 0), analyzer, enabled);
+                PublishAll(HistoryState.Analyzing(0, 0, 0), analyzer, enabled, remote);
             }
 
             var started = Stopwatch.GetTimestamp();
@@ -414,11 +450,11 @@ public sealed class HistoryService : IDisposable
                 if (elapsed - lastDays >= PartialDaysInterval)
                 {
                     lastDays = elapsed;
-                    _hub.Publish(state, Days(analyzer, enabled));
+                    Publish(state, Days(analyzer, enabled, remote), HostNames(remote));
                 }
                 else
                 {
-                    _hub.Publish(state);
+                    Publish(state);
                 }
             });
 
@@ -428,7 +464,7 @@ public sealed class HistoryService : IDisposable
                 return false;
             }
 
-            PublishAll(HistoryState.Ready(DateTimeOffset.Now), analyzer, enabled);
+            PublishAll(HistoryState.Ready(DateTimeOffset.Now), analyzer, enabled, remote);
             if (report.BytesAnalyzed >= BigRunBytes)
             {
                 // A large analysis decoded gigabytes; return the freed memory instead of keeping it committed.
@@ -446,15 +482,27 @@ public sealed class HistoryService : IDisposable
         }
     }
 
-    /// <summary>The days with the performance records of the enabled sources, which also go to the live monitor.</summary>
-    private void PublishAll(HistoryState state, HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled)
+    /// <summary>
+    /// The days with the performance records of the enabled sources, which also go to the live monitor; every host's days and
+    /// records with them (REMOTE 8.3).
+    /// </summary>
+    private void PublishAll(HistoryState state, HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled, RemoteHistoryWorker remote)
     {
-        IReadOnlyList<PerfRecord> records = [.. analyzer.PerfRecords().Where(r => enabled.Contains(r.Source))];
-        _hub.Publish(state, Days(analyzer, enabled), records);
+        IReadOnlyList<PerfRecord> local = [.. analyzer.PerfRecords().Where(r => enabled.Contains(r.Source))];
+        var records = RemoteHistoryMerge.Perf(local, remote.Ledger.Rows.PerfRecords(enabled));
+        _lastState = state;
+        _hub.Publish(state, Days(analyzer, enabled, remote), records, HostNames(remote));
         PerfRecordsUpdated?.Invoke(records);
     }
 
-    private List<DailyUsage> Days(HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled)
+    private void Publish(HistoryState state, IReadOnlyList<DailyUsage>? days = null, IReadOnlyDictionary<string, string>? hostNames = null)
+    {
+        _lastState = state;
+        _hub.Publish(state, days, hostNames);
+    }
+
+    /// <summary>The local days and every host's of the enabled sources; remote rows carry the day's live peak too.</summary>
+    private IReadOnlyList<DailyUsage> Days(HistoryAnalyzer analyzer, IReadOnlySet<SourceKind> enabled, RemoteHistoryWorker remote)
     {
         Dictionary<string, double> live;
         lock (_livePeaks)
@@ -462,7 +510,45 @@ public sealed class HistoryService : IDisposable
             live = new Dictionary<string, double>(_livePeaks, StringComparer.Ordinal);
         }
 
-        return analyzer.Days(enabled, live);
+        return RemoteHistoryMerge.Days(analyzer.Days(enabled, live), remote.Ledger.Rows.Usage(enabled, day => analyzer.Peak(day, live)));
+    }
+
+    private static Dictionary<string, string> HostNames(RemoteHistoryWorker remote) =>
+        new(remote.Ledger.Rows.Names, StringComparer.Ordinal);
+
+    /// <summary>
+    /// The queued remote work, between analysis runs (REMOTE 8.3): changed rows publish the days again with the last state, and
+    /// the <c>historyTooLarge</c> hosts with them.
+    /// </summary>
+    private void ApplyRemote(RemoteHistoryWorker remote, HistoryStore? store, HistoryAnalyzer? analyzer)
+    {
+        RemoteHistoryDrain drain;
+        try
+        {
+            drain = remote.Drain(analyzer is null ? null : store);
+        }
+        catch (Exception e)
+        {
+            // Never let the background thread take the app down; the next sync sends the days again.
+            Trace.TraceWarning("Remote history could not be applied: {0}", e.GetType().Name);
+            return;
+        }
+
+        if (drain.Changed && analyzer is not null)
+        {
+            IReadOnlySet<SourceKind> enabled;
+            lock (_gate)
+            {
+                enabled = _configuration.EnabledSources;
+            }
+
+            PublishAll(_lastState, analyzer, enabled, remote);
+        }
+
+        if (drain.TooLargeChanged)
+        {
+            _hub.PublishRemoteTooLarge(remote.Ledger.TooLarge.ToHashSet(StringComparer.Ordinal));
+        }
     }
 
     private Dictionary<string, double> TakeLivePeaks()

@@ -16,7 +16,8 @@ class ModeContext {
 public:
     // A root of an enabled source; the files of a disabled source are never read.
     void addRoot(RootFamily family, const std::string& root);
-    void setGeminiSettings(const std::string& path) { gemini_.path = path; }
+    // The `settings.json` a Gemini CLI root's agents take (METRICS 2.1 Configured values).
+    void setGeminiSettings(const std::string& root, const std::string& path);
 
     // `workBuddySessions`: the main sessions of each WorkBuddy root. True when any value changed.
     bool refresh(const std::map<std::string, std::set<std::string>>& workBuddySessions = {});
@@ -57,7 +58,9 @@ private:
 
     std::map<std::string, Config> configs_;
     std::map<std::string, Store> stores_;
-    Gemini gemini_;
+    // Settings file → its values; root → its settings file.
+    std::map<std::string, Gemini> gemini_;
+    std::map<std::string, std::string> geminiRoots_;
 };
 
 }  // namespace agentspeed

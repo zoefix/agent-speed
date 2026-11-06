@@ -10,6 +10,7 @@
 
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/model.hpp"
+#include "agentspeed/session_claims.hpp"
 
 namespace agentspeed::sqlite {
 class Connection;
@@ -129,6 +130,12 @@ public:
     bool databaseExists() const { return databaseExists_; }
     std::vector<AgentState> agents() const;
 
+    // METRICS 2.1 Databases: shared by the databases of the list; a session another one reads is skipped.
+    void setClaims(SessionClaims* claims, int owner) {
+        claims_ = claims;
+        owner_ = owner;
+    }
+
     bool refreshAvailability();
     Update seed(std::int64_t todayStartMs);
     Update refresh();
@@ -160,6 +167,7 @@ private:
     void close(Status status);
     Update drop();
     void dropStaleImmutableConnection();
+    bool claim(const std::string& sessionId) { return !claims_ || claims_->claim(sessionId, owner_); }
 
     std::string root_;
     std::string databasePath_;
@@ -175,6 +183,8 @@ private:
     bool needsSeed_ = false;
     Status status_ = Status::Missing;
     bool databaseExists_ = false;
+    SessionClaims* claims_ = nullptr;
+    int owner_ = 0;
 };
 
 }  // namespace agentspeed::opencode

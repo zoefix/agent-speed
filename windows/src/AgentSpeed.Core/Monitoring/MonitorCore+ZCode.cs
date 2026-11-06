@@ -5,31 +5,43 @@ namespace AgentSpeed.Core.Monitoring;
 
 internal sealed partial class MonitorCore
 {
-    private ZCodeSource? _zcode;
-    private SourceRoot? _zcodeRoot;
-    private string _zcodeRootPath = string.Empty;
+    private readonly List<SourceRoot> _zcodeWatchRoots = [];
+    private ZCodeSourceSet? _zcode;
+    private IReadOnlyList<string> _zcodeRootPaths = [];
     private bool _zcodeSeeded;
+
+    internal ZCodeSourceSet? ZCode => _zcode;
 
     private void InitializeZCode(SourceLocations locations)
     {
-        _zcodeRootPath = locations.ZCodeRoot;
-        if (_enabled.Contains(SourceKind.ZCode) && locations.ZCodeRoot.Length > 0)
+        _zcodeRootPaths = locations.ZCodeRoots;
+        if (_enabled.Contains(SourceKind.ZCode) && _zcodeRootPaths.Count > 0)
         {
-            _zcode = new ZCodeSource(locations.ZCodeRoot, _deduper);
-            _zcodeRoot = new SourceRoot(RootFamily.ZCode, _zcode.WatchDirectory, enabled: true);
+            _zcode = new ZCodeSourceSet(_zcodeRootPaths, _deduper);
         }
     }
 
+    /// <summary>One watched folder per database folder; a database folder can change while its data folder fills in.</summary>
     private void RefreshZCodeAvailability()
     {
-        if (_zcode is not null)
+        if (_zcode is null)
         {
-            if (_zcodeRoot?.Path != _zcode.WatchDirectory)
-            {
-                _zcodeRoot = new SourceRoot(RootFamily.ZCode, _zcode.WatchDirectory, enabled: true);
-            }
+            return;
+        }
 
-            _zcodeRoot.Available = _zcode.Available;
+        var wanted = _zcode.WatchDirectories();
+        _zcodeWatchRoots.RemoveAll(root => !wanted.Contains(root.Path, PathComparer));
+        foreach (var path in wanted)
+        {
+            if (!_zcodeWatchRoots.Exists(root => PathComparer.Equals(root.Path, path)))
+            {
+                _zcodeWatchRoots.Add(new SourceRoot(RootFamily.ZCode, path, enabled: true));
+            }
+        }
+
+        foreach (var root in _zcodeWatchRoots)
+        {
+            root.Available = _zcode.Sources.Any(source => PathComparer.Equals(source.WatchDirectory, root.Path) && source.Available);
         }
     }
 
@@ -37,7 +49,11 @@ internal sealed partial class MonitorCore
     {
         if (_zcode is not null && !_zcodeSeeded)
         {
-            ApplyZCode(_zcode.Seed(todayStartMs), seeded: true);
+            foreach (var update in _zcode.Seed(todayStartMs))
+            {
+                ApplyZCode(update, seeded: true);
+            }
+
             _zcodeSeeded = true;
         }
     }
@@ -45,7 +61,13 @@ internal sealed partial class MonitorCore
     private bool RefreshZCode()
     {
         RefreshZCodeAvailability();
-        return _zcode is not null && ApplyZCode(_zcode.Refresh(), seeded: false);
+        var changed = false;
+        foreach (var update in _zcode?.Refresh() ?? [])
+        {
+            changed |= ApplyZCode(update, seeded: false);
+        }
+
+        return changed;
     }
 
     private bool ApplyZCode(ZCodeUpdate update, bool seeded)
@@ -78,5 +100,17 @@ internal sealed partial class MonitorCore
         }
 
         return update.Changed;
+    }
+
+    /// <summary>The first root whose database exists, else the first root, and whether any database exists (METRICS 2.1).</summary>
+    private (string Path, bool Available) ZCodeStatus()
+    {
+        if (_zcode is { } zcode)
+        {
+            return (zcode.DisplayRoot, zcode.Available);
+        }
+
+        var existing = _zcodeRootPaths.FirstOrDefault(root => SafeFileExists(ZCodeDatabase.DatabasePath(root)));
+        return (existing ?? (_zcodeRootPaths.Count > 0 ? _zcodeRootPaths[0] : string.Empty), existing is not null);
     }
 }

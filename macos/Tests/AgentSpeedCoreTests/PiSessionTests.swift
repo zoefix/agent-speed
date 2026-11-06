@@ -71,7 +71,7 @@ struct PiSessionTests {
 
     @Test func anOmpRootThatIsPisIsReadAsPiOnly() throws {
         var home = try Home(settings: nil)
-        home.configuration.ompRoot = home.directory.file(".pi/agent/sessions")
+        home.configuration.setLocation(home.directory.file(".pi/agent/sessions"), for: .omp)
         let relative = ".pi/agent/sessions/--w-halo--/2026-10-20T12-00-00-000Z_main.jsonl"
         try home.directory.write(relative, Self.header(Self.base, cwd: "/w/halo") + Self.assistant("a1", start: Self.base + 5, duration: 1000, output: 7))
         let session = TranscriptSession(configuration: home.configuration, clock: { Self.base + 10_000 })

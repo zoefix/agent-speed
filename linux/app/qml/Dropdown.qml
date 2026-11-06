@@ -7,12 +7,29 @@ Item {
     property var options: []
     property var value
     property int popupWidth: Math.max(width, 200)
+    // Options may carry a `glyph`, drawn before the label. `labelMaxWidth` caps the current label (truncated in the
+    // middle); `iconOnly` shows only the current option's glyph. `accessibleName` names the control itself.
+    property real labelMaxWidth: -1
+    property bool iconOnly: false
+    property string accessibleName
+    property string tooltip
     signal activated(var value)
-    implicitWidth: Math.max(140, label.implicitWidth + 44)
+    readonly property string currentGlyph: {
+        for (var i = 0; i < options.length; ++i) if (options[i].value === value) return options[i].glyph || ""
+        return ""
+    }
+    readonly property real glyphRoom: currentGlyph.length > 0 ? 20 : 0
+    implicitWidth: iconOnly && currentGlyph.length > 0 ? 54
+                   : Math.max(labelMaxWidth > 0 ? 0 : 140, (labelMaxWidth > 0 ? Math.min(label.implicitWidth, labelMaxWidth) : label.implicitWidth) + 44 + glyphRoom)
     implicitHeight: 28
     activeFocusOnTab: true
     Accessible.role: Accessible.ComboBox
-    Accessible.name: label.text
+    Accessible.name: accessibleName.length > 0 ? accessibleName : label.text
+    Accessible.description: accessibleName.length > 0 ? control.currentLabel : ""
+    HoverHandler { id: controlHover }
+    ToolTip.visible: controlHover.hovered && !popup.opened && (control.tooltip.length > 0 || (control.iconOnly || label.truncated) && control.currentLabel.length > 0)
+    ToolTip.delay: 600
+    ToolTip.text: control.tooltip.length > 0 ? control.tooltip : control.currentLabel
     Keys.onSpacePressed: popup.open()
     Keys.onReturnPressed: popup.open()
 
@@ -29,17 +46,29 @@ Item {
         border.color: Theme.accent
         Behavior on color { ColorAnimation { duration: 120 } }
     }
+    Glyph {
+        id: leading
+        visible: control.currentGlyph.length > 0
+        anchors.left: parent.left
+        anchors.leftMargin: 10
+        anchors.verticalCenter: parent.verticalCenter
+        width: 14
+        height: 14
+        name: control.currentGlyph
+        color: Theme.ink2
+    }
     Text {
         id: label
-        anchors.left: parent.left
-        anchors.leftMargin: 11
+        visible: !control.iconOnly || control.currentGlyph.length === 0
+        anchors.left: leading.visible ? leading.right : parent.left
+        anchors.leftMargin: leading.visible ? 6 : 11
         anchors.right: chevron.left
         anchors.rightMargin: 6
         anchors.verticalCenter: parent.verticalCenter
         text: control.currentLabel
         color: Theme.ink
         font.pixelSize: 12
-        elide: Text.ElideRight
+        elide: control.labelMaxWidth > 0 ? Text.ElideMiddle : Text.ElideRight
     }
     Glyph {
         id: chevron
@@ -63,6 +92,8 @@ Item {
         id: popup
         y: control.height + 4
         x: control.width - width
+        // Pushed inside the window when it would run past an edge (a wide list under a narrow control).
+        margins: 8
         width: control.popupWidth
         padding: 5
         implicitHeight: Math.min(list.contentHeight + 10, 320)
@@ -88,15 +119,27 @@ Item {
                     radius: 6
                     color: rowArea.containsMouse ? Theme.hover : "transparent"
                 }
-                Text {
+                Glyph {
+                    id: optionGlyph
+                    visible: (modelData.glyph || "").length > 0
                     anchors.left: parent.left
                     anchors.leftMargin: 10
+                    anchors.verticalCenter: parent.verticalCenter
+                    width: 14
+                    height: 14
+                    name: modelData.glyph || ""
+                    color: Theme.ink2
+                }
+                Text {
+                    anchors.left: optionGlyph.visible ? optionGlyph.right : parent.left
+                    anchors.leftMargin: optionGlyph.visible ? 8 : 10
                     anchors.right: check.left
+                    anchors.rightMargin: 6
                     anchors.verticalCenter: parent.verticalCenter
                     text: modelData.label
                     color: Theme.ink
                     font.pixelSize: 12
-                    elide: Text.ElideRight
+                    elide: optionGlyph.visible ? Text.ElideMiddle : Text.ElideRight
                 }
                 Glyph {
                     id: check

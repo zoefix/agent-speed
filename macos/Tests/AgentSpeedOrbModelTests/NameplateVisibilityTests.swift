@@ -81,6 +81,9 @@ struct NameplateVisibilityTests {
         (.minimal, 79.5, false),
         (.minimal, 80, true),
         (.minimal, 96, true),
+        (.led, 64, false),
+        (.reactor, 76, false),
+        (.liquid, 80, true),
         (.led, 96, true),
         (.needle, 240, true),
     ])

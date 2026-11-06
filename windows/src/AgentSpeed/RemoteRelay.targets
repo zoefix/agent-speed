@@ -1,0 +1,45 @@
+<Project>
+  <!-- REMOTE 3.1: the static Linux relays (linux/relay/build-static.sh) are embedded in the executable, both
+       architectures in every build (the host's architecture is unrelated to this computer's), with their SHA-256, as
+       AgentSpeed.Relay.linux-<arch> and AgentSpeed.Relay.linux-<arch>.sha256. The in-app updater replaces only the
+       executable, so the relays always match it. RelayDir holds agent-speed-relay-linux-x86_64 and -aarch64; a build
+       without them warns (remote hosts then fail with uploadFailed) and the app's publish fails (RequireRelay). -->
+  <PropertyGroup>
+    <RelayDir Condition="'$(RelayDir)' == ''">$(MSBuildThisFileDirectory)..\..\..\linux\relay\dist</RelayDir>
+    <_RelayRoot>$([MSBuild]::EnsureTrailingSlash('$(RelayDir)'))</_RelayRoot>
+  </PropertyGroup>
+
+  <ItemGroup>
+    <RelayExecutable Include="$(_RelayRoot)agent-speed-relay-linux-x86_64" Arch="x86_64" />
+    <RelayExecutable Include="$(_RelayRoot)agent-speed-relay-linux-aarch64" Arch="aarch64" />
+  </ItemGroup>
+
+  <Target Name="EmbedRemoteRelays" BeforeTargets="AssignTargetPaths">
+    <ItemGroup>
+      <_MissingRelay Include="@(RelayExecutable)" Condition="!Exists('%(FullPath)')" />
+      <_PresentRelay Include="@(RelayExecutable)" Condition="Exists('%(FullPath)')" />
+    </ItemGroup>
+    <Warning Condition="'@(_MissingRelay)' != '' and '$(_IsPublishing)' != 'true'"
+        Text="Remote relay not found: @(_MissingRelay->'%(FullPath)', ', '); it is not embedded, so this build cannot connect remote hosts. Build the relays with linux/relay/build-static.sh x86_64|aarch64, or set RelayDir to the folder that holds them." />
+    <GetFileHash Files="@(_PresentRelay)" Algorithm="SHA256" HashEncoding="hex" Condition="'@(_PresentRelay)' != ''">
+      <Output TaskParameter="Items" ItemName="_RelayHashed" />
+    </GetFileHash>
+    <ItemGroup>
+      <_RelayHashed>
+        <Sha256>$([System.String]::Copy('%(FileHash)').ToLowerInvariant())</Sha256>
+        <HashFile>$(IntermediateOutputPath)remote-relay/linux-%(Arch).sha256</HashFile>
+      </_RelayHashed>
+    </ItemGroup>
+    <MakeDir Directories="$(IntermediateOutputPath)remote-relay" Condition="'@(_RelayHashed)' != ''" />
+    <!-- Rewritten only when the hash changes, so unchanged relays do not force a recompile. -->
+    <WriteLinesToFile File="%(_RelayHashed.HashFile)" Lines="%(_RelayHashed.Sha256)" Overwrite="true" WriteOnlyWhenDifferent="true"
+        Condition="'@(_RelayHashed)' != ''" />
+    <ItemGroup>
+      <EmbeddedResource Include="@(_RelayHashed)" LogicalName="AgentSpeed.Relay.linux-%(_RelayHashed.Arch)" />
+      <EmbeddedResource Include="%(_RelayHashed.HashFile)" LogicalName="AgentSpeed.Relay.linux-%(_RelayHashed.Arch).sha256"
+          Condition="'@(_RelayHashed)' != ''" />
+      <FileWrites Include="%(_RelayHashed.HashFile)" Condition="'@(_RelayHashed)' != ''" />
+    </ItemGroup>
+    <Message Importance="high" Text="Embedding remote relay linux-%(_RelayHashed.Arch): %(_RelayHashed.Sha256)" Condition="'@(_RelayHashed)' != ''" />
+  </Target>
+</Project>

@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <functional>
 #include <map>
 #include <set>
@@ -11,6 +12,7 @@
 #include "agentspeed/monitor.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/pricing.hpp"
+#include "agentspeed/remote_messages.hpp"
 #include "agentspeed/report_perf.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/tz.hpp"
@@ -38,8 +40,45 @@ public:
         return pricing::UtcDay(ms + (zone_ ? zone_->offsetMs(ms) : 0)).label();
     }
 
+    void setObserver(std::function<void(const ParsedResponse&, bool)> observer) { observer_ = std::move(observer); }
+
     void onResponse(const ParsedResponse& r, bool completion) override {
         if (enabled_ && !enabled_->contains(r.source)) return;
+        // REMOTE 7: a key a remote host holds is ignored (the first arrival wins).
+        if (heldByOther(r.key, std::string(remote::kLocalHost))) return;
+        if (observer_) observer_(r, completion);
+        take(r, std::string(remote::kLocalHost), completion);
+    }
+
+    // REMOTE 7: a remote host's response, priced like a local one; a seeded one (before `ready`, a replay) raises no
+    // event and counts no live report.
+    void onRemoteResponse(const ParsedResponse& r, const std::string& host, bool completion, bool seeded) {
+        if (enabled_ && !enabled_->contains(r.source)) return;
+        if (heldByOther(r.key, host)) return;
+        const bool before = seeding_;
+        seeding_ = before || seeded;
+        take(r, host, completion);
+        seeding_ = before;
+    }
+
+    // A host removed from the settings: its responses leave every live value.
+    void removeHost(const std::string& host) {
+        for (auto it = byKey_.begin(); it != byKey_.end();) {
+            it = it->second.engine.host == host ? byKey_.erase(it) : std::next(it);
+        }
+        remoteCounts_.erase(host);
+    }
+
+    // REMOTE 5.6: the responses held per remote host (the oldest go first above it).
+    void setRemoteLimit(std::size_t limit) { remoteLimit_ = limit; }
+
+private:
+    bool heldByOther(const std::string& key, const std::string& host) const {
+        const auto it = byKey_.find(key);
+        return it != byKey_.end() && it->second.engine.host != host;
+    }
+
+    void take(const ParsedResponse& r, const std::string& host, bool completion) {
         if (completion && live_ && !seeding_ && r.endMs >= nowMs_ - kCompletionWindowMs) {
             Completion c;
             c.source = r.source;
@@ -47,12 +86,15 @@ public:
             if (r.startMs && r.endMs > *r.startMs) {
                 c.speed = static_cast<double>(r.tokens.output) * 1000.0 / static_cast<double>(r.endMs - *r.startMs);
             }
+            c.host = host;
             completions_.push_back(c);
         }
         if (r.provider) providers_[r.agentId] = *r.provider;
-        auto& slot = byKey_[r.key];
+        auto [found, inserted] = byKey_.try_emplace(r.key);
+        auto& slot = found->second;
         slot.parsed = r;
         engine::Response& e = slot.engine;
+        e.host = host;
         e.key = r.key;
         e.agentId = r.agentId;
         e.source = r.source;
@@ -78,7 +120,26 @@ public:
             slot.measured = true;
             if (perfLedger_ && ledger_.counted(r.key)) perfLedger_->response(r.agentId, {reportModelId(r.model, r.provider), r.source}, e);
         }
+        if (inserted && host != remote::kLocalHost) countRemote(host);
     }
+
+    // Above the limit the host's oldest responses go, one percent at a time.
+    void countRemote(const std::string& host) {
+        auto& count = remoteCounts_[host];
+        ++count;
+        if (count <= remoteLimit_) return;
+        const auto excess = count - remoteLimit_ + std::max<std::size_t>(1, remoteLimit_ / 100);
+        std::vector<std::pair<std::pair<std::int64_t, std::string>, std::string>> held;
+        for (const auto& [key, slot] : byKey_) {
+            if (slot.engine.host == host) held.push_back({{slot.engine.endMs, key}, key});
+        }
+        std::sort(held.begin(), held.end());
+        const auto drop = std::min(excess, held.size());
+        for (std::size_t k = 0; k < drop; ++k) byKey_.erase(held[k].second);
+        count -= drop;
+    }
+
+public:
 
     // The id a model is reported as (METRICS 11.3), by the current table.
     std::string reportModelId(const std::optional<std::string>& model, const std::optional<std::string>& provider) const {
@@ -112,7 +173,12 @@ public:
     void prune(std::int64_t nowMs, std::int64_t todayStartMs) {
         const auto keepFrom = std::min(todayStartMs, nowMs - kRetentionMs);
         for (auto it = byKey_.begin(); it != byKey_.end();) {
-            it = it->second.engine.endMs < keepFrom ? byKey_.erase(it) : std::next(it);
+            if (it->second.engine.endMs >= keepFrom) {
+                ++it;
+                continue;
+            }
+            if (const auto count = remoteCounts_.find(it->second.engine.host); count != remoteCounts_.end() && count->second > 0) --count->second;
+            it = byKey_.erase(it);
         }
         ledger_.prune(keepFrom);
     }
@@ -156,6 +222,9 @@ private:
     report::Ledger ledger_;
     report::PerfLedger* perfLedger_ = nullptr;
     std::function<ModeAttribution(const std::string&)> currentEffort_;
+    std::function<void(const ParsedResponse&, bool)> observer_;
+    std::map<std::string, std::size_t> remoteCounts_;
+    std::size_t remoteLimit_ = remote::limits::kResponses;
     bool live_ = false;
     bool seeding_ = false;
     std::int64_t nowMs_ = 0;

@@ -42,6 +42,11 @@ internal sealed class SourceOption(SourceKind? kind) : ObservableObject
     /// <summary>The name, with the tag when there is one.</summary>
     public string AccessibleName { get => _accessibleName; set => Set(ref _accessibleName, value); }
 
+    /// <summary>The closed picker shows only the dot (the toolbar is at its narrowest with the host picker, DESIGN 13).</summary>
+    public bool Compact { get => _compact; set => Set(ref _compact, value); }
+
+    private bool _compact;
+
     /// <summary>The picker's automation text: the name, with the tag of a subscription source.</summary>
     public override string ToString() => string.IsNullOrEmpty(_accessibleName) ? Name : _accessibleName;
 }

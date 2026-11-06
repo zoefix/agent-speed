@@ -45,6 +45,7 @@ internal sealed class CompositionSurface : IDisposable
     /// <summary>The render target for a frame of <paramref name="width"/> × <paramref name="height"/> pixels, or null when the device is gone.</summary>
     public ID3D11RenderTargetView? Begin(GpuDevice device, int width, int height)
     {
+        device.NoteSubmit();
         width = Math.Max(1, width);
         height = Math.Max(1, height);
         if (_generation != device.Generation || _swapChain is null)
@@ -86,8 +87,15 @@ internal sealed class CompositionSurface : IDisposable
             return PresentResult.Lost;
         }
 
+        var start = FrameStats.Enabled ? System.Diagnostics.Stopwatch.GetTimestamp() : 0;
         var result = _swapChain.Present(SyncInterval, PresentFlags.DoNotWait);
-        if (result.Code == Vortice.DXGI.ResultCode.WasStillDrawing.Code)
+        var busy = result.Code == Vortice.DXGI.ResultCode.WasStillDrawing.Code;
+        if (start != 0)
+        {
+            FrameStats.AddPresent(System.Diagnostics.Stopwatch.GetTimestamp() - start, busy);
+        }
+
+        if (busy)
         {
             return PresentResult.Busy;
         }

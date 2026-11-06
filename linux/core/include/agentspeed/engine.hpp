@@ -1,6 +1,7 @@
 #pragma once
 
 #include <cstdint>
+#include <functional>
 #include <map>
 #include <optional>
 #include <string>
@@ -26,6 +27,8 @@ struct Response {
     bool final = true;
     std::optional<std::int64_t> costMicroUsd;
     std::int64_t requestCount = 1;
+    // `local`, or the remote host the response was read on (REMOTE 2.2).
+    std::string host = "local";
 };
 
 struct Agent {
@@ -36,6 +39,7 @@ struct Agent {
     std::optional<std::int64_t> inFlightStartMs;
     std::optional<std::int64_t> lastLineMs;
     std::optional<std::string> parentId;
+    std::string host = "local";
 };
 
 constexpr std::int64_t kWindowMs = 3000;
@@ -88,6 +92,9 @@ TodayStats todayStats(const std::vector<Response>& responses, std::int64_t today
 // METRICS 6.8 peakToday_A: today's peak of the 3-bucket trailing average over the responses of `sources` only.
 double setPeak(const std::vector<Response>& responses, const std::vector<SourceKind>& sources, std::int64_t todayStart,
                std::int64_t now);
+// The same over the responses `member` accepts (a set of (host, source) cells, DESIGN 13).
+double setPeak(const std::vector<Response>& responses, const std::function<bool(const Response&)>& member, std::int64_t todayStart,
+               std::int64_t now);
 
 // METRICS 6.9 Live thinking: the weighted sums of the generating output tokens of the 3-second window and their
 // reasoning part, for the whole set, per agent and per raw model ("" when unknown).
@@ -104,6 +111,16 @@ struct Thinking {
     std::map<std::string, ThinkingWindow> perModel;
 };
 Thinking thinking(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now);
+
+// DESIGN 13 cells: the live values of a set split by host. Estimates take their references from the whole set, so the
+// parts add up to liveRate, liveCost and thinking of the set.
+struct HostPart {
+    LiveRate rate;
+    double estimatedOutput = 0;  // tok/s: the estimated part of rate.output
+    LiveCost cost;
+    ThinkingWindow thinking;
+};
+std::map<std::string, HostPart> liveByHost(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now);
 
 // DESIGN 2c groups: every root (no parent, or a parent that is not listed) with its descendants, the root first and
 // then depth first in list order, keyed by the root's id; roots in list order.

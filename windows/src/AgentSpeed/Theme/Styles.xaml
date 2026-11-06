@@ -142,6 +142,64 @@
         </Setter>
     </Style>
 
+    <!-- A host's status dot (DESIGN 13): 8 DIP; the in-progress dot breathes, resting half lit under reduced motion. -->
+    <Style TargetType="controls:HostStatusDot">
+        <Setter Property="Width" Value="8" />
+        <Setter Property="Height" Value="8" />
+        <Setter Property="VerticalAlignment" Value="Center" />
+        <Setter Property="HorizontalAlignment" Value="Center" />
+        <Setter Property="Template">
+            <Setter.Value>
+                <ControlTemplate TargetType="controls:HostStatusDot">
+                    <Ellipse x:Name="Dot" Fill="{DynamicResource SystemFillColorSuccessBrush}" StrokeThickness="0" SnapsToDevicePixels="False" />
+                    <ControlTemplate.Triggers>
+                        <Trigger Property="Kind" Value="Retrying">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                        </Trigger>
+                        <Trigger Property="Kind" Value="Attention">
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                        </Trigger>
+                        <Trigger Property="Kind" Value="Idle">
+                            <Setter TargetName="Dot" Property="Fill" Value="Transparent" />
+                            <Setter TargetName="Dot" Property="Stroke" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+                            <Setter TargetName="Dot" Property="StrokeThickness" Value="1.2" />
+                        </Trigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Kind" Value="Progress" />
+                                <Condition Property="ReduceMotion" Value="True" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Setter TargetName="Dot" Property="Opacity" Value="0.6" />
+                        </MultiTrigger>
+                        <MultiTrigger>
+                            <MultiTrigger.Conditions>
+                                <Condition Property="Kind" Value="Progress" />
+                                <Condition Property="ReduceMotion" Value="False" />
+                            </MultiTrigger.Conditions>
+                            <Setter TargetName="Dot" Property="Fill" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <MultiTrigger.EnterActions>
+                                <BeginStoryboard x:Name="Breathe">
+                                    <Storyboard RepeatBehavior="Forever" AutoReverse="True">
+                                        <DoubleAnimation Storyboard.TargetName="Dot" Storyboard.TargetProperty="Opacity" From="0.95" To="0.3"
+                                                         Duration="0:0:0.9">
+                                            <DoubleAnimation.EasingFunction>
+                                                <SineEase EasingMode="EaseInOut" />
+                                            </DoubleAnimation.EasingFunction>
+                                        </DoubleAnimation>
+                                    </Storyboard>
+                                </BeginStoryboard>
+                            </MultiTrigger.EnterActions>
+                            <MultiTrigger.ExitActions>
+                                <StopStoryboard BeginStoryboardName="Breathe" />
+                            </MultiTrigger.ExitActions>
+                        </MultiTrigger>
+                    </ControlTemplate.Triggers>
+                </ControlTemplate>
+            </Setter.Value>
+        </Setter>
+    </Style>
+
     <!-- Settings card: icon, title, description, control on the right -->
     <Style TargetType="controls:SettingsCard">
         <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />

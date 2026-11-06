@@ -85,7 +85,8 @@ final class TrafficCore: @unchecked Sendable {
     }
 
     func update(agents list: [AgentStatus]) {
-        let converted = list.map(TrafficAgent.init)
+        // A remote host's agents have no traffic on this computer (REMOTE 7 *Sources*).
+        let converted = list.filter(\.isLocal).map(TrafficAgent.init)
         queue.async { [self] in
             guard converted != agents else { return }
             agents = converted

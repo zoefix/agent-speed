@@ -55,7 +55,7 @@ final class BoardsController {
         })
         loops.append(ObservationLoop { [weak self] in
             guard let self, let model = self.model else { return }
-            model.setBoardSubsets(Set(self.document.boards.compactMap(\.sources.sourceSet)))
+            model.setBoardSubsets(Set(self.document.boards.compactMap { $0.sources.subsetKey(hosts: $0.hosts) }))
         })
         listener = model.store.addEventListener { [weak self] event in
             guard let self, case .newPeak = event else { return }
@@ -89,8 +89,10 @@ final class BoardsController {
 
     /// The board's sources in words: `orbs.sources.all` or the source names joined with `list.separator`.
     func sourcesText(of board: BoardConfig, l10n: Localizer) -> String {
-        board.sources.isAll ? l10n("orbs.sources.all")
+        let sources = board.sources.isAll ? l10n("orbs.sources.all")
             : board.sources.knownSources.map { l10n($0.titleKey) }.joined(separator: l10n("list.separator"))
+        // The hosts follow as in an orb's automatic name (DESIGN 13).
+        return sources + (model?.orbs.namer(l10n).hostSuffix(board.hosts) ?? "")
     }
 
     // MARK: Editing
@@ -124,9 +126,24 @@ final class BoardsController {
     func setSize(_ size: BoardSize, of id: String) { edit(id) { $0.setSize(size, of: id) } }
     func setSources(_ sources: OrbSourceSelection, of id: String) { edit(id) { $0.setSources(sources, of: id) } }
     func toggleSource(_ kind: SourceKind, of id: String) { edit(id) { $0.toggleSource(kind, of: id) } }
+    func setHosts(_ hosts: OrbHostSelection, of id: String) {
+        let order = model?.hostOrder ?? [RemoteHost.localId]
+        edit(id) { $0.setHosts(hosts.ordered(by: order), of: id) }
+    }
+    func toggleHost(_ hostId: String, of id: String) {
+        let order = model?.hostOrder ?? [RemoteHost.localId]
+        edit(id) { $0.toggleHost(hostId, known: order, of: id) }
+    }
+    /// A host removed from the settings leaves every board (REMOTE 2.4).
+    func removeHost(_ hostId: String) {
+        var next = document
+        next.removeHost(hostId)
+        setDocument(next)
+    }
     func setOpacity(_ opacity: Double, of id: String) { edit(id) { $0.setOpacity(opacity, of: id) } }
     func setAlwaysOnTop(_ value: Bool, of id: String) { edit(id) { $0.setAlwaysOnTop(value, of: id) } }
     func setClickThrough(_ value: Bool, of id: String) { edit(id) { $0.setClickThrough(value, of: id) } }
+    func setFadeWhenIdle(_ value: Bool, of id: String) { edit(id) { $0.setFadeWhenIdle(value, of: id) } }
     func setAllSpaces(_ value: Bool, of id: String) { edit(id) { $0.setAllSpaces(value, of: id) } }
     func setVisible(_ value: Bool, of id: String) { edit(id) { $0.setVisible(value, of: id) } }
     func setReadouts(_ readouts: BoardReadouts, of id: String) { edit(id) { $0.setReadouts(readouts, of: id) } }

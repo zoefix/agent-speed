@@ -109,6 +109,8 @@ struct DailyUsage {
     DayAggregate totals;
     std::optional<double> peak;
     std::optional<int> priceVersion;
+    // `local`, or the remote host whose relay computed the row (REMOTE 8.3).
+    std::string host = "local";
 };
 
 // The dedupe of a history analysis (METRICS 8): keys owned by files analysed before (settled, hashed) and the keys the

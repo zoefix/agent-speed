@@ -14,12 +14,12 @@ internal sealed class InverseBoolToVisibilityConverter : IValueConverter
         value is Visibility.Collapsed;
 }
 
-/// <summary>Collapses an element whose bound text is null or empty.</summary>
+/// <summary>Collapses an element whose bound text is null or empty; with the parameter <c>invert</c>, one whose text is not.</summary>
 [ValueConversion(typeof(string), typeof(Visibility))]
 internal sealed class TextToVisibilityConverter : IValueConverter
 {
     public object Convert(object value, Type targetType, object parameter, CultureInfo culture) =>
-        value is string { Length: > 0 } ? Visibility.Visible : Visibility.Collapsed;
+        (value is string { Length: > 0 }) != (parameter is "invert") ? Visibility.Visible : Visibility.Collapsed;
 
     public object ConvertBack(object value, Type targetType, object parameter, CultureInfo culture) =>
         Binding.DoNothing;

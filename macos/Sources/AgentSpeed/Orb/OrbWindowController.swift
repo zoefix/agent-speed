@@ -149,7 +149,8 @@ final class OrbWindowController {
         loops.append(ObservationLoop { [weak self] in self?.refreshNameplate() })
         dimmer = OrbWindowIdleDimmer(gauge: runtime.feed.gauge, enabled: { [weak self] in self?.config.fadeWhenIdle ?? false },
                                      interaction: interaction) { [weak self] dimmed in
-            self?.fader.setDimmed(dimmed)
+            guard let self else { return }
+            self.fader.setDimmed(dimmed, reduceMotion: self.model.accessibility.reduceMotion)
         }
         reporter = OrbAccessibilityReporter(model: model, runtime: runtime, host: host)
         installAccessibilityActions()
@@ -199,6 +200,7 @@ final class OrbWindowController {
         self.config = config
         applyConfiguration()
         if previous.sources != config.sources { showSourcesBriefly() }
+        if previous.fadeWhenIdle != config.fadeWhenIdle { dimmer?.refresh() }
     }
 
     private func applyConfiguration() {
@@ -427,7 +429,8 @@ final class OrbWindowController {
         let content = presenter.content
         guard content.showsReadout, !content.valueOnly, content.unavailableTitle == nil else { return nil }
         return OrbUnitToggle.hitRect(
-            layout: presenter.animator.renderer.readoutLayout, discDiameter: host.discDiameter * host.hoverScale,
+            layout: presenter.animator.renderer.readoutLayout.at(diameter: host.discDiameter),
+            discDiameter: host.discDiameter * host.hoverScale,
             in: host.bounds, unit: content.unit, value: presenter.animator.readout.odometer.current
         )
     }

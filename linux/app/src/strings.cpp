@@ -29,7 +29,10 @@ Strings::Strings(QObject* parent) : QObject(parent), language_(languageFor(QLoca
 }
 
 void Strings::setChoice(const QString& choice) {
-    const auto language = choice == QStringLiteral("system") || choice.isEmpty() ? languageFor(QLocale::system()) : choice;
+    // AGENT_SPEED_LANGUAGE (development) stands in for the system language.
+    const auto forced = qEnvironmentVariable("AGENT_SPEED_LANGUAGE");
+    const auto system = forced.isEmpty() ? languageFor(QLocale::system()) : forced;
+    const auto language = choice == QStringLiteral("system") || choice.isEmpty() ? system : choice;
     if (language == language_) return;
     language_ = language;
     load();
@@ -39,14 +42,17 @@ void Strings::setChoice(const QString& choice) {
 
 void Strings::load() {
     table_.clear();
-    QFile file(QStringLiteral(":/strings.json"));
-    if (!file.open(QIODevice::ReadOnly)) return;
-    const auto root = QJsonDocument::fromJson(file.readAll()).object();
-    for (auto it = root.begin(); it != root.end(); ++it) {
-        const auto entry = it.value().toObject();
-        auto value = entry.value(language_).toString();
-        if (value.isEmpty()) value = entry.value(QStringLiteral("en")).toString();
-        table_.insert(it.key(), value);
+    // The shared table, then the Linux-only texts.
+    for (const auto& name : {QStringLiteral(":/strings.json"), QStringLiteral(":/strings.linux.json")}) {
+        QFile file(name);
+        if (!file.open(QIODevice::ReadOnly)) continue;
+        const auto root = QJsonDocument::fromJson(file.readAll()).object();
+        for (auto it = root.begin(); it != root.end(); ++it) {
+            const auto entry = it.value().toObject();
+            auto value = entry.value(language_).toString();
+            if (value.isEmpty()) value = entry.value(QStringLiteral("en")).toString();
+            table_.insert(it.key(), value);
+        }
     }
 }
 

@@ -55,6 +55,7 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 - **網路流量**——各 agent 或整台電腦的上傳／下載速度，以兩行小字顯示在懸浮窗上，選單列／工作列與面板也看得到，用量歷史記錄每天的流量。Windows 若要看各 agent 的流量，需要安裝一次選用的小型輔助服務（需系統管理員同意）。
 - **稱號主題**——九套速度稱號：「交通工具」「動物」「蒲福風級」「宇宙」「修真境界」「武學境界」「魔法位階」「遊戲段位」「工程師職涯」，也能自訂最多 8 組。選交通工具以外的主題時，面板圓圈會顯示發光的稱號徽章。
 - **用量歷史**——從最早的紀錄開始，每天的輸出與輸入 token、請求數、平均速度與峰值、費用與網路流量，可依來源，以今天、昨天或任意日期區間繪成圖表，並看各模型的速度、匯出 CSV。只保存每日彙總，即使工具刪除了舊紀錄，歷史也不會消失。
+- **遠端主機（選用）**——在本機同時看見透過 SSH 在遠端 Linux 伺服器上工作的 agent：沿用你自己的 SSH 設定與金鑰，自動在遠端放一個唯讀的小程式，只傳回 token 數、時間和模型，從不傳送對話內容；懸浮窗、看板、面板和用量歷史都能依主機分開看或合併看。
 - **即時上報（選用）**——預設關閉；想參與的話，可以用你取的使用者名稱，把即時數字分享給你選的 API，例如 [Codex Radar](https://codexradar.com/) 的速蹬天梯。從不傳送對話內容、檔案或專案名稱，詳見[隱私](#隱私)。
 - **執行模式**——依可靠紀錄顯示 Standard／Fast／Ultrafast，以及各 agent 的加速卡、模型變體或路由選擇，分清設定預設與未知；歷史可另行匯出模式 CSV，沿用既有測速公式。
 - **頭像與多設備（選用 API 擴充）**——預覽、更換、移除頭像，以一次性配對碼經原設備核准後合併身分；每台設備保留自己的金鑰，解除不影響已入帳歷史。接收端須支援[新版 API 結構](spec/report-schema.json)。
@@ -105,6 +106,8 @@ Claude Desktop 一般聊天對話不會存在本機，因此無法統計；WorkB
 唯讀、只在本機運作，沒有遙測、不需帳號。Agent Speed 只會自動發出三種網路請求，而且都不會傳送任何關於你的資料：向 GitHub Releases 檢查更新、每天從本專案下載公開的模型價格表（GitHub，以 jsDelivr 為備援），以及只有在你選擇以美元以外的貨幣顯示費用時，每天下載公開匯率（open.er-api.com，以 fawazahmed0 currency API 和 Frankfurter 為備援）。每位使用者下載的都是同一份檔案，所以伺服器無從得知你的貨幣、模型或用量。設定裡的一個開關就能關閉所有網路連線，此時費用改用 App 內建的價格表與匯率。Agent Speed 從不儲存或顯示對話內容，只顯示 token 數量、模型名稱、專案資料夾名稱等資訊。用量歷史只保存每日總計（含每日的 API 等值費用）和各模型每天的性能統計，存在你電腦上的一個小型資料庫（`~/Library/Application Support/AgentSpeed`、`%LOCALAPPDATA%\AgentSpeed`），可在設定中清除。更新在安裝前會以該版本發布的 SHA-256 校驗碼驗證；校驗碼與版本一起發布，因此能攔下損壞或遭竄改的下載檔，但無法防範儲存庫本身遭入侵。價格表是依嚴格規則檢查的純資料，沒有數位簽章。
 
 網路流量：Agent Speed 只在本機計算各程式收發的位元組數，從不讀取內容、網址或連線對象；只有在你開啟即時上報（見下文）時，才會把 agent 的位元組數傳送給你選擇的服務。在 Windows 上，要顯示各 agent 的流量需要安裝選用的輔助服務；它以權限受限的「本機服務」帳戶執行，只統計每個程式的位元組數，安裝和移除各需要一次系統管理員確認（[詳細說明](spec/WINDOWS-SERVICE.md)）。
+
+遠端主機（選用）：你在設定中加入的每台 Linux 主機，Agent Speed 會以系統內建的 `ssh` 和你自己的 SSH 設定連線（從不儲存或詢問密碼），第一次連線時把與本版相符的唯讀小程式放到遠端的 `~/.cache/agent-speed`，以 SHA-256 核對後執行。它用與本機相同的規則讀取那台主機上的紀錄，只傳回 token 數、時間、模型、專案資料夾名稱與每日彙總，從不傳送對話內容；它不開任何網路連線，只會寫入自己的資料夾（用量歷史快取與時區檔）。網路總開關關閉時不會連線。
 
 推理強度與加速：大多數 agent 會把這兩項寫進上面的紀錄。其他情況下，Agent Speed 會以唯讀方式多讀幾個欄位，絕不讀對話內容。三個資料庫：OpenClaw 的 `trajectory_runtime_events`（只取 `trace.metadata` 列，由查詢條件篩選，其中也只留 think level 與 fast mode；壓縮的列只在記憶體中解開，用完即丟）、WorkBuddy 的 `workbuddy.db`（只讀 `sessions.id` 與 `sessions.thought_level`）、Hermes Agent 的 `state.db`（只讀該工作階段的 `model_config.reasoning_config`）。開啟這些檔案時不會建立 `-wal` 或 `-shm`，Hermes 的資料庫也只會短暫開啟。設定檔各讀一項：Codex `config.toml`（`service_tier`）、Gemini CLI `~/.gemini/settings.json`（符合該 agent 模型的 override 中的 `thinkingLevel` 或 `thinkingBudget`）、Antigravity `~/.gemini/config/config.json`（`vertexServiceTier`）、WorkBuddy `settings.json`（`reasoningEffort`）、Hermes Agent `config.yaml`（`agent.reasoning_effort`、`agent.service_tier`）。只存在於設定檔的值會加上「設定值」標記，因為 agent 不一定實際使用它；這類值不會計入歷史或統計，也不會上報。哪裡都沒有記錄的值就維持未知，絕不猜測。
 

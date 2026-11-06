@@ -33,6 +33,24 @@ public extension BoardsDocument {
         return true
     }
 
+    /// The hosts a board counts (DESIGN 13).
+    mutating func setHosts(_ hosts: OrbHostSelection, of id: String) {
+        edit(id) { $0.hosts = hosts }
+    }
+
+    /// The pickers' rule over the hosts this computer knows, in settings order; false when refused (the last host).
+    @discardableResult
+    mutating func toggleHost(_ hostId: String, known: [String], of id: String) -> Bool {
+        guard let next = board(id)?.hosts.toggling(hostId, known: known) else { return false }
+        setHosts(next, of: id)
+        return true
+    }
+
+    /// A host removed from the settings leaves every board's selection; one left without hosts tracks all (REMOTE 2.4).
+    mutating func removeHost(_ hostId: String) {
+        for index in boards.indices { boards[index].hosts = boards[index].hosts.removing(hostId) }
+    }
+
     mutating func setOpacity(_ opacity: Double, of id: String) {
         edit(id) { $0.opacity = opacity }
     }
@@ -43,6 +61,10 @@ public extension BoardsDocument {
 
     mutating func setClickThrough(_ value: Bool, of id: String) {
         edit(id) { $0.clickThrough = value }
+    }
+
+    mutating func setFadeWhenIdle(_ value: Bool, of id: String) {
+        edit(id) { $0.fadeWhenIdle = value }
     }
 
     mutating func setAllSpaces(_ value: Bool, of id: String) {

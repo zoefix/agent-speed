@@ -3,8 +3,8 @@ import AppKit
 import SwiftUI
 
 /// Usage History renders for `--render-previews`: the real window (toolbar included) in both appearances, at the
-/// default and the minimum size, for all sources and one source, empty and while analysing, plus the whole
-/// scrolling column with the table.
+/// default and the minimum size, for all sources and one source, empty and while analysing, with remote hosts' history
+/// and the host picker, plus the whole scrolling column with the table.
 @MainActor
 enum HistoryPreviews {
     struct Case {
@@ -33,6 +33,9 @@ enum HistoryPreviews {
         var disabled: Set<SourceKind> = []
         /// DESIGN 12: the performance records of 性能表現 (none while the first analysis of this version runs).
         var perf = true
+        /// DESIGN 13: remote hosts' history (the host picker shows) and the host filter.
+        var hosts = false
+        var host: String?
     }
 
     enum Days { case full, none, recent(Int) }
@@ -111,7 +114,49 @@ enum HistoryPreviews {
         Case(name: "traffic-only-yesterday", source: .antigravity, range: .yesterday, tokenless: .antigravity),
         Case(name: "traffic-only-table-ja", source: .antigravity, language: .ja, tall: true, tokenless: .antigravity),
         Case(name: "traffic-disabled", metric: .traffic, disabled: [.claudeCode, .antigravity]),
+        // Remote hosts (DESIGN 13): every host, one host with one source, this Mac at the minimum width with the
+        // subscriptions checkbox, the longest name, and a removed host's table.
+        Case(name: "hosts", hosts: true),
+        Case(name: "hosts-ja", source: .codex, language: .ja, hosts: true, host: RemotePreviews.ids[0]),
+        Case(name: "hosts-local-min", size: HistoryWindowController.minimumSize, metric: .cost, marked: [.claudeDesktop],
+             hosts: true, host: RemoteHost.localId),
+        Case(name: "hosts-local-min-ja", size: HistoryWindowController.minimumSize, language: .ja, marked: [.claudeDesktop],
+             hosts: true, host: RemoteHost.localId),
+        Case(name: "hosts-long-en", range: .days7, language: .en, hosts: true, host: RemotePreviews.ids[2]),
+        Case(name: "hosts-removed-table", range: .days90, sort: .date, tall: true, hosts: true, host: removedHost),
     ]
+
+    /// A host removed from the settings whose history stays under its last name.
+    static let removedHost = "5E1A2B3C-0000-4111-8222-933344445555"
+
+    /// The remote hosts' stored names (the settings hold none while history previews render).
+    static let hostNames = [RemotePreviews.ids[0]: "devbox", RemotePreviews.ids[2]: "Build Farm · ap-northeast-1 (CI)",
+                            removedHost: "old-thinkpad"]
+
+    /// Copies of some local days on three hosts: devbox works most days with two sources, the build farm on weekdays
+    /// with Codex, and the removed laptop stopped a month ago.
+    static func withHosts(_ days: [DailyUsage], today: DayKey) -> [DailyUsage] {
+        func copies(_ host: String, sources: Set<SourceKind>, keep: (Int) -> Bool) -> [DailyUsage] {
+            days.compactMap { usage in
+                guard sources.contains(usage.source), let day = DayKey(usage.day) else { return nil }
+                let ago = DayRange(day, today).count - 1
+                guard keep(ago) else { return nil }
+                var copy = usage
+                copy.host = host
+                copy.peak = nil
+                return copy
+            }
+        }
+        let remote = copies(RemotePreviews.ids[0], sources: [.codex, .claudeCode]) { $0 % 3 != 1 }
+            + copies(RemotePreviews.ids[2], sources: [.codex]) { $0 % 7 < 5 && $0 < 60 }
+            + copies(removedHost, sources: [.claudeCode]) { $0 >= 30 && $0 < 75 && $0 % 2 == 0 }
+        return (days + remote).sorted { lhs, rhs in
+            if lhs.day != rhs.day { return lhs.day < rhs.day }
+            if lhs.source != rhs.source { return lhs.source.rawValue < rhs.source.rawValue }
+            if lhs.isLocal != rhs.isLocal { return lhs.isLocal }
+            return lhs.host < rhs.host
+        }
+    }
 
     /// Deterministic rates for previews (the shape of an open.er-api.com response).
     static let previewRates = ExchangeRateSet(
@@ -159,7 +204,7 @@ enum HistoryPreviews {
         model.settings.enabledSources = Set(SourceKind.allCases)
         model.settings.storage.removeObject(forKey: HistoryViewModel.includeSubscriptionsKey)
         model.rates.preview(rates: nil, currency: "USD")
-        model.history.publish(state: .notLoaded, days: [])
+        model.history.publish(state: .notLoaded, days: [], hostNames: [:])
     }
 
     /// The unknown-prices popover (DESIGN 9) over facts like this Mac's and the Windows box's: router aliases and an
@@ -251,15 +296,17 @@ enum HistoryPreviews {
             all.filter { DayKey($0.day).map { $0 >= DayKey(now, calendar: calendar).adding(days: -count) } ?? false }
         }
         let kept = stored.filter { $0.source != item.tokenless && !item.disabled.contains($0.source) }
-        let days = unpriced ? withUnpricedFacts(kept, today: DayKey(now, calendar: calendar)) : kept
+        let today = DayKey(now, calendar: calendar)
+        let priced = unpriced ? withUnpricedFacts(kept, today: today) : kept
+        let days = item.hosts ? withHosts(priced, today: today) : priced
         model.settings.enabledSources = Set(SourceKind.allCases).subtracting(item.disabled)
         let state: HistoryState = switch item.state {
         case .ready: .ready(updatedAt: now.addingTimeInterval(-240))
         case .analyzing(let progress, let done, let total): .analyzing(progress: progress, filesDone: done, filesTotal: total)
         case .notLoaded: .notLoaded
         }
-        model.history.publish(state: state, days: days)
-        let perf = days.isEmpty || !item.perf ? [] : PerfPreviewData.historyRecords(today: DayKey(now, calendar: calendar))
+        model.history.publish(state: state, days: days, hostNames: item.hosts ? hostNames : [:])
+        let perf = days.isEmpty || !item.perf ? [] : PerfPreviewData.historyRecords(today: today)
         model.history.publish(perfRecords: perf.filter { !item.disabled.contains($0.source) })
         TrafficPreviewData.publish(into: model.traffic, now: now)
         model.settings.currency = item.currency
@@ -270,14 +317,13 @@ enum HistoryPreviews {
                                          traffic: model.traffic)
         viewModel.select(metric: item.metric)
         viewModel.select(source: item.source)
+        viewModel.select(host: item.host)
         if item.range == .custom, let (start, end) = item.custom {
-            let today = DayKey(now, calendar: calendar)
             viewModel.applyCustom(from: today.adding(days: -start), to: today.adding(days: -end))
         } else {
             viewModel.select(range: item.range)
         }
         if let sort = item.sort { viewModel.toggleSort(sort) }
-        let today = DayKey(now, calendar: calendar)
         if let ago = item.hoverDaysAgo { viewModel.interaction.hover(today.adding(days: -ago), from: .chart) }
         viewModel.interaction.selection = Set(item.selectDaysAgo.map { today.adding(days: -$0) })
         return viewModel

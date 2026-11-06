@@ -13,7 +13,9 @@ using AgentSpeed.Presentation.Orb.Names;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Orbs;
 using AgentSpeed.Presentation.Titles;
+using AgentSpeed.Remote;
 using AgentSpeed.Services;
+using AgentSpeed.Settings.Remote;
 using AgentSpeed.Theme;
 using AgentSpeed.Titles;
 
@@ -120,6 +122,7 @@ internal sealed class OrbsPaneViewModel : ObservableObject
     private TitleThemesService? _titles;
     private IReadOnlyList<string> _titleLabels = [];
     private IReadOnlyList<OrbTitleThemeChoice> _titleChoices = [];
+    private RemoteHostsModel? _remote;
 
     public OrbsPaneViewModel(SettingsService settings, OrbManager manager, SpeedModel speed, Localizer loc)
     {
@@ -191,6 +194,21 @@ internal sealed class OrbsPaneViewModel : ObservableObject
             }
         });
         ToggleAdvancedCommand = new RelayCommand(() => AdvancedExpanded = !AdvancedExpanded);
+        HostPicker = new HostPickerViewModel(
+            hosts =>
+            {
+                if (SelectedId is { } id)
+                {
+                    Update(d => OrbEditing.SetHosts(d, id, hosts));
+                }
+            },
+            host =>
+            {
+                if (SelectedId is { } id && _remote is { } remote)
+                {
+                    Update(d => OrbEditing.ToggleHost(d, id, host, remote.Order));
+                }
+            });
 
         _settings.Changed += (_, _) => Sync();
         _manager.UndoChanged += (_, _) =>
@@ -207,6 +225,29 @@ internal sealed class OrbsPaneViewModel : ObservableObject
     public ObservableCollection<OrbSourceRowViewModel> SourceRows { get; } = [];
 
     public ObservableCollection<OrbStyleCardViewModel> StyleCards { get; } = [];
+
+    /// <summary>The editor's Hosts section (DESIGN 13), shown while remote hosts exist.</summary>
+    public HostPickerViewModel HostPicker { get; }
+
+    /// <summary>The remote hosts (DESIGN 13); set by the app. Names gain their hosts and the Hosts section appears with the first host.</summary>
+    public RemoteHostsModel? RemoteHosts
+    {
+        get => _remote;
+        set
+        {
+            if (_remote is not null || value is null)
+            {
+                return;
+            }
+
+            _remote = value;
+            value.Changed += (_, _) => RefreshHostPicker();
+            Sync();
+        }
+    }
+
+    /// <summary>This computer and the remote hosts for the automatic names; empty without remote hosts.</summary>
+    private IReadOnlyList<OrbHostChoice> HostChoices => _remote?.Choices(_loc) ?? [];
 
     /// <summary>The custom redline's title list, in the selected orb's theme (DESIGN 1, Where the theme applies).</summary>
     public ObservableCollection<TitleLadderRow> TitleLadder { get; } = [];
@@ -406,7 +447,7 @@ internal sealed class OrbsPaneViewModel : ObservableObject
 
     public bool HasSelection => _selected is not null && Orb is not null;
 
-    public string EditorTitle => Orb is { } orb ? OrbNaming.DisplayName(orb, _loc) : string.Empty;
+    public string EditorTitle => Orb is { } orb ? OrbNaming.DisplayName(orb, _loc, HostChoices) : string.Empty;
 
     public IReadOnlyList<Brush> EditorDots => Orb?.TrackedSources is { } set
         ? set.Select(k => (Brush)MediaColors.Frozen(MediaColors.ToColor(HeatPalette.SourceColor(k)))).ToArray()
@@ -440,7 +481,7 @@ internal sealed class OrbsPaneViewModel : ObservableObject
 
     public string SelectedStyleDescription => Orb is { } orb ? _loc["style." + OrbStyles.Key(orb.Style) + ".desc"] : string.Empty;
 
-    public double SizeMinimum => Orb is { } orb ? OrbStyles.MinSizeFor(orb.Style) : OrbStyles.MinSize;
+    public double SizeMinimum => OrbStyles.MinSize;
 
     public double SizeValue
     {
@@ -596,7 +637,9 @@ internal sealed class OrbsPaneViewModel : ObservableObject
     public string AdvancedSummary =>
         string.Join(_loc["list.separator"], _loc["orbs.name"], _loc["titles.theme"], _loc["settings.redline"]);
 
-    public string NamePlaceholder => Orb is { } orb ? _loc.Format("orbs.name.auto", OrbNaming.AutomaticName(orb.Sources, _loc)) : string.Empty;
+    public string NamePlaceholder => Orb is { } orb
+        ? _loc.Format("orbs.name.auto", OrbNaming.AutomaticName(orb.Sources, _loc) + OrbNaming.HostSuffix(orb.Hosts, HostChoices, _loc))
+        : string.Empty;
 
     /// <summary>The custom name as typed; empty is automatic. Applied on every change (trimmed, 1–32 characters).</summary>
     public string NameText
@@ -820,7 +863,7 @@ internal sealed class OrbsPaneViewModel : ObservableObject
                 }
 
                 row.Definition = orb;
-                row.Name = OrbNaming.DisplayName(orb, _loc);
+                row.Name = OrbNaming.DisplayName(orb, _loc, HostChoices);
                 row.Detail = _loc.Format("orbs.row.detail", _loc["style." + OrbStyles.Key(orb.Style)], (int)Math.Round(orb.Size));
                 row.IsShown = orb.Visible;
             }
@@ -857,13 +900,13 @@ internal sealed class OrbsPaneViewModel : ObservableObject
         }
 
         UpdateSourceStatuses();
+        RefreshHostPicker();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(EditorTitle));
         OnPropertyChanged(nameof(EditorDots));
         OnPropertyChanged(nameof(AllSources));
         OnPropertyChanged(nameof(SelectedStyleName));
         OnPropertyChanged(nameof(SelectedStyleDescription));
-        OnPropertyChanged(nameof(SizeMinimum));
         OnPropertyChanged(nameof(SizeValue));
         OnPropertyChanged(nameof(SizeText));
         OnPropertyChanged(nameof(SizePresetIndex));
@@ -932,6 +975,16 @@ internal sealed class OrbsPaneViewModel : ObservableObject
         {
             row.Refresh(_loc, S.Metric, redline, _dark, theme);
         }
+    }
+
+    private void RefreshHostPicker()
+    {
+        if (_remote is { } remote)
+        {
+            HostPicker.Refresh(Orb?.Hosts ?? OrbHosts.All, remote, _loc);
+        }
+
+        HostPicker.ReduceMotion = _reduceMotion;
     }
 
     private void UpdateSourceStatuses()

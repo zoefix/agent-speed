@@ -28,7 +28,7 @@ PYTHON_HOST = re.compile(r"python(?:w|[0-9][0-9.]*)?")
 HERMES_MARKERS = ("hermes_bootstrap", "hermes_cli", "acp_adapter")
 HERMES_SCRIPTS = {"hermes", "hermes-agent", "hermes-acp"}
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid")
+           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin")
 
 
 # ---------------------------------------------------------------------------------------------------- formatting
@@ -106,8 +106,8 @@ CLAUDE_DESKTOP_APP = {
 DESKTOP_APPS = {
     "macos": ["/Applications/Claude.app/Contents/MacOS/Claude", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT",
               "/Applications/Codex.app/Contents/MacOS/Codex", "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
-              "/Applications/Antigravity.app/Contents/MacOS/Antigravity"],
-    "windows": ["%LOCALAPPDATA%/AnthropicClaude/"],
+              "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin"],
+    "windows": ["%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe"],
 }
 # Windows desktop apps by location: an executable directly in the `app` folder of their packages. The CLIs a package
 # bundles deeper (`app/resources/codex.exe`) follow the rows.
@@ -213,6 +213,8 @@ def match_source(env: Env, proc: dict, ancestors: list[dict]) -> str | None:
         return "hermes"
     if name == "droid":
         return "droid"
+    if name == "devin":
+        return "devin"
     edition = WORKBUDDY_APPS[env.platform].get(proc.get("bundle") if env.platform == "macos" else name)
     if edition and any(WORKBUDDY_CLI in env.norm(a) for a in args[1:]):
         return edition

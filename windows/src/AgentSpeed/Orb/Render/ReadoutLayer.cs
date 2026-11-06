@@ -84,7 +84,7 @@ internal sealed class ReadoutLayer
     public void Configure(OrbRenderContext context, OrbReadoutLayout layout, ReadoutPalette palette, ReadoutTexts texts)
     {
         _context = context;
-        _layout = layout;
+        _layout = layout.At(context.Size);
         _palette = palette;
         _texts = texts;
         _valueSize = layout.ValueSize * context.Size;

@@ -9,7 +9,9 @@ using AgentSpeed.Presentation.Menus;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Boards;
 using AgentSpeed.Presentation.Settings.Orbs;
+using AgentSpeed.Remote;
 using AgentSpeed.Services;
+using AgentSpeed.Settings.Remote;
 using AgentSpeed.Settings.OrbsPane;
 
 namespace AgentSpeed.Settings.BoardsPane;
@@ -70,6 +72,8 @@ internal sealed class BoardsPaneViewModel : ObservableObject
     private string? _selectNext;
     private bool _syncing;
     private bool _dark = true;
+    private bool _reduceMotion;
+    private RemoteHostsModel? _remote;
 
     /// <param name="add"><c>boards.add</c> next to the selected board (its id, or null).</param>
     /// <param name="remove">Removes a board after asking.</param>
@@ -117,9 +121,58 @@ internal sealed class BoardsPaneViewModel : ObservableObject
                 Update(d => BoardEditing.SetStyle(d, id, card.Style));
             }
         });
+        HostPicker = new HostPickerViewModel(
+            hosts =>
+            {
+                if (SelectedId is { } id)
+                {
+                    Update(d => BoardEditing.SetHosts(d, id, hosts));
+                }
+            },
+            host =>
+            {
+                if (SelectedId is { } id && _remote is { } remote)
+                {
+                    Update(d => BoardEditing.ToggleHost(d, id, host, remote.Order));
+                }
+            });
         _settings.Changed += (_, _) => Sync();
         Sync();
     }
+
+    /// <summary>The editor's Hosts section (DESIGN 13), shown while remote hosts exist.</summary>
+    public HostPickerViewModel HostPicker { get; }
+
+    /// <summary>The remote hosts (DESIGN 13); set by the app.</summary>
+    public RemoteHostsModel? RemoteHosts
+    {
+        get => _remote;
+        set
+        {
+            if (_remote is not null || value is null)
+            {
+                return;
+            }
+
+            _remote = value;
+            value.Changed += (_, _) => RefreshHostPicker();
+            Sync();
+        }
+    }
+
+    public bool ReduceMotion
+    {
+        get => _reduceMotion;
+        set
+        {
+            if (Set(ref _reduceMotion, value))
+            {
+                HostPicker.ReduceMotion = value;
+            }
+        }
+    }
+
+    private IReadOnlyList<OrbHostChoice> HostChoices => _remote?.Choices(_loc) ?? [];
 
     public ObservableCollection<BoardRowViewModel> Rows { get; } = [];
 
@@ -159,7 +212,7 @@ internal sealed class BoardsPaneViewModel : ObservableObject
 
     public bool HasSelection => Board is not null;
 
-    public string EditorTitle => Board is { } board ? BoardMenuModel.Title(board, _loc) : string.Empty;
+    public string EditorTitle => Board is { } board ? BoardMenuModel.Title(board, _loc, HostChoices) : string.Empty;
 
     public bool AllSources
     {
@@ -230,6 +283,20 @@ internal sealed class BoardsPaneViewModel : ObservableObject
     }
 
     public string ClickThroughHint => _loc["win.settings.clickThrough.description"];
+
+    public bool FadeWhenIdle
+    {
+        get => Board?.FadeWhenIdle ?? false;
+        set
+        {
+            if (SelectedId is { } id && !_syncing)
+            {
+                Update(d => BoardEditing.SetFadeWhenIdle(d, id, value));
+            }
+        }
+    }
+
+    public string FadeHint => _loc["win.settings.fadeIdle.description"];
 
     /// <summary>The selected board's live metrics switches (the style cards' thumbnails show them).</summary>
     public BoardReadouts Readouts => Board?.Readouts ?? BoardReadouts.All;
@@ -320,8 +387,8 @@ internal sealed class BoardsPaneViewModel : ObservableObject
                 }
 
                 row.Name = BoardRowText.Name(board, _loc);
-                row.Detail = BoardRowText.Detail(board, _loc);
-                row.AccessibleName = BoardRowText.Accessible(board, _loc);
+                row.Detail = BoardRowText.Detail(board, _loc, HostChoices);
+                row.AccessibleName = BoardRowText.Accessible(board, _loc, HostChoices);
                 row.IsShown = board.Visible;
                 row.Style = board.Style;
                 row.Readouts = board.Readouts;
@@ -385,6 +452,7 @@ internal sealed class BoardsPaneViewModel : ObservableObject
             _syncing = wasSyncing;
         }
 
+        RefreshHostPicker();
         OnPropertyChanged(nameof(HasSelection));
         OnPropertyChanged(nameof(EditorTitle));
         OnPropertyChanged(nameof(AllSources));
@@ -395,9 +463,18 @@ internal sealed class BoardsPaneViewModel : ObservableObject
         OnPropertyChanged(nameof(OpacityText));
         OnPropertyChanged(nameof(AlwaysOnTop));
         OnPropertyChanged(nameof(ClickThrough));
+        OnPropertyChanged(nameof(FadeWhenIdle));
         OnPropertyChanged(nameof(Readouts));
         OnPropertyChanged(nameof(ReadoutIntelligence));
         OnPropertyChanged(nameof(ReadoutThinking));
         OnPropertyChanged(nameof(ReadoutCost));
+    }
+
+    private void RefreshHostPicker()
+    {
+        if (_remote is { } remote)
+        {
+            HostPicker.Refresh(Board?.Hosts ?? OrbHosts.All, remote, _loc);
+        }
     }
 }

@@ -103,7 +103,7 @@ struct DroidTests {
         var configuration = MonitorConfiguration(droidRoot: URL(fileURLWithPath: "/Volumes/x/.factory/", isDirectory: true))
         #expect(configuration.resolvedRoots(for: .droid) == ["/Volumes/x/.factory"], "no sessions folder there: itself")
         #expect(configuration.requiresRescan(comparedTo: MonitorConfiguration()))
-        configuration.droidRoot = nil
+        configuration.locations.reset(.droid)
         #expect(!configuration.requiresRescan(comparedTo: MonitorConfiguration()))
     }
 
@@ -491,7 +491,7 @@ struct DroidTests {
     // MARK: - Source
 
     @Test func sourceOrderAndProcessRow() {
-        #expect(SourceKind.allCases.last == .droid)
+        #expect(SourceKind.allCases.suffix(2) == [.droid, .devin], "Devin is appended after Droid")
         #expect(SourceKind.allCases.firstIndex(of: .droid) == SourceKind.allCases.firstIndex(of: .hermes)! + 1)
         #expect(SourceSet(.droid).rawValue == 1 << 16)
         #expect(TranscriptFamily(.droid) == .droid && TranscriptFamily.droid.sources == [.droid])

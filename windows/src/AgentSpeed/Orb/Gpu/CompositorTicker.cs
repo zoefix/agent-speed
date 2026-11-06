@@ -29,6 +29,7 @@ internal sealed unsafe class CompositorTicker : IDisposable
     private volatile bool _disposed;
     private volatile int _pending;
     private volatile int _urgent = 1;
+    private long _postedAt;
     private long _divisors = 1L << 1;
     private long _count;
     private nint _window;
@@ -51,6 +52,7 @@ internal sealed unsafe class CompositorTicker : IDisposable
         }
 
         Source = _waitForClock is not null ? "compositor clock" : "vblank";
+        FrameStats.Attach();
         _thread = new Thread(Run) { IsBackground = true, Name = "Orb frame clock", Priority = ThreadPriority.AboveNormal };
         _thread.Start();
     }
@@ -204,6 +206,7 @@ internal sealed unsafe class CompositorTicker : IDisposable
 
                 if (Interlocked.CompareExchange(ref _pending, 1, 0) == 0 && _window != 0)
                 {
+                    Interlocked.Exchange(ref _postedAt, Stopwatch.GetTimestamp());
                     User32.PostMessage(_window, TickMessage, 0, 0);
                 }
             }
@@ -235,10 +238,26 @@ internal sealed unsafe class CompositorTicker : IDisposable
     private void OnTick()
     {
         _pending = 0;
-        if (_running)
+        if (!_running)
+        {
+            return;
+        }
+
+        var device = GpuDevice.Shared;
+        device?.BeginTick();
+        if (!FrameStats.Enabled)
         {
             _tick(Count);
+            device?.EndTick();
+            return;
         }
+
+        var start = Stopwatch.GetTimestamp();
+        var input = OrbNative.InputPending();
+        FrameStats.BeginTick();
+        _tick(Count);
+        device?.EndTick();
+        FrameStats.EndTick(start, Interlocked.Read(ref _postedAt), input);
     }
 
     private static void EnsureClass()

@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:AgentSpeed.Localization"
              xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:remote="clr-namespace:AgentSpeed.Settings.Remote"
              xmlns:pane="clr-namespace:AgentSpeed.Settings.OrbsPane"
              xmlns:tt="clr-namespace:AgentSpeed.Settings.TitleThemes"
              xmlns:boards="clr-namespace:AgentSpeed.Settings.BoardsPane"
@@ -239,6 +240,8 @@
                     </ItemsControl>
                 </StackPanel>
             </Border>
+
+            <remote:HostPickerSection DataContext="{Binding HostPicker}" />
 
             <!-- Style -->
             <TextBlock Text="{loc:Loc orbs.style}" Style="{StaticResource SectionHeaderText}" Margin="2,22,0,8" AutomationProperties.HeadingLevel="Level3" />

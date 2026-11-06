@@ -4,150 +4,218 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:AgentSpeed.Localization"
              xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:history="clr-namespace:AgentSpeed.History"
+             xmlns:settings="clr-namespace:AgentSpeed.Settings"
+             xmlns:sources="clr-namespace:AgentSpeed.Settings.Sources"
              Focusable="False">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <controls:InverseBoolToVisibilityConverter x:Key="Hidden" />
+
+        <Style x:Key="GroupBorder" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="8" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <!-- Show in File Explorer and Remove: quiet icon buttons that keep a 32 px target. -->
+        <Style x:Key="RowIconButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="Width" Value="34" />
+            <Setter Property="Height" Value="32" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="ToolTipService.ShowOnDisabled" Value="True" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="500" />
+        </Style>
+
+        <!-- One source of the group: its color, name and status line, and its switch. -->
+        <DataTemplate x:Key="ToggleRow" DataType="{x:Type settings:SourceSettingsRow}">
+            <Grid>
+                <Rectangle x:Name="Divider" Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+                <Grid Margin="16,11,16,11" MinHeight="40">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Ellipse Width="8" Height="8" Fill="{Binding Dot}" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="1,7,0,0" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="{Binding Name}" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" />
+                        <TextBlock Text="{Binding Status}" Style="{StaticResource CaptionText}" Margin="0,2,0,0" AutomationProperties.LiveSetting="Polite" />
+                    </StackPanel>
+                    <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding Enabled, Mode=TwoWay}" VerticalAlignment="Center"
+                              AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="{Binding Status}" />
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                    <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- One folder line: the path cut in the middle when it does not fit, then the 預設 badge on the automatic entry's first line. -->
+        <DataTemplate x:Key="PathLine" DataType="{x:Type sources:LocationLineViewModel}">
+            <controls:ShrinkFirstPanel Background="Transparent" ToolTip="{Binding FullPath}" ToolTipService.InitialShowDelay="600">
+                <history:MiddleTrimmedText x:Name="Path" Text="{Binding Display}" FontSize="14" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <Border x:Name="Badge" Margin="8,0,0,0" Padding="7,1,7,2" CornerRadius="9" VerticalAlignment="Center" BorderThickness="1"
+                        Background="{DynamicResource SubtleFillColorSecondaryBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                        Visibility="{Binding ShowsBadge, Converter={StaticResource Visible}}">
+                    <TextBlock Text="{Binding DataContext.BadgeText, RelativeSource={RelativeSource AncestorType=ItemsControl}}" FontSize="11"
+                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Border>
+            </controls:ShrinkFirstPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Dimmed}" Value="True">
+                    <Setter TargetName="Path" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- One entry of the list (DESIGN 5): icon, path(s), missing state, Show in File Explorer and Remove. -->
+        <DataTemplate x:Key="LocationRow" DataType="{x:Type sources:LocationRowViewModel}">
+            <Grid x:Name="Row" Background="Transparent" RenderTransformOrigin="0.5,0">
+                <Grid.RenderTransform>
+                    <TranslateTransform x:Name="Shift" />
+                </Grid.RenderTransform>
+                <Grid.ContextMenu>
+                    <ContextMenu>
+                        <MenuItem Header="{Binding RevealText}" Command="{Binding RevealCommand}" />
+                        <MenuItem Header="{Binding CopyText}" Command="{Binding CopyCommand}" />
+                        <Separator />
+                        <MenuItem Header="{Binding RemoveText}" Command="{Binding RemoveCommand}" />
+                    </ContextMenu>
+                </Grid.ContextMenu>
+                <Rectangle x:Name="Divider" Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+                <Grid Margin="16,8,10,8" MinHeight="40">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="32" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <Grid x:Name="Icon" Width="20" Height="20" HorizontalAlignment="Left" VerticalAlignment="Center">
+                        <Image Source="{Binding Icon}" Width="20" Height="20" RenderOptions.BitmapScalingMode="HighQuality"
+                               Visibility="{Binding HasIcon, Converter={StaticResource Visible}}" />
+                        <TextBlock Style="{StaticResource SymbolIcon}" Text="{Binding FallbackGlyph}" FontSize="18"
+                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                   Visibility="{Binding HasIcon, Converter={StaticResource Hidden}}" />
+                    </Grid>
+                    <sources:LocationPathPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,12,0" AutomationProperties.Name="{Binding AccessibleName}">
+                        <ItemsControl ItemsSource="{Binding Lines}" ItemTemplate="{StaticResource PathLine}" Focusable="False" IsTabStop="False">
+                            <ItemsControl.ItemContainerStyle>
+                                <Style TargetType="ContentPresenter">
+                                    <Setter Property="Margin" Value="0,1,0,1" />
+                                </Style>
+                            </ItemsControl.ItemContainerStyle>
+                        </ItemsControl>
+                        <StackPanel Orientation="Horizontal" Margin="0,3,0,1" Visibility="{Binding IsMissing, Converter={StaticResource Visible}}">
+                            <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE7BA;" FontSize="12" Margin="0,1,6,0"
+                                                  Foreground="{DynamicResource SystemFillColorCautionBrush}" />
+                            <TextBlock Text="{Binding MissingText}" Style="{StaticResource CaptionText}" TextWrapping="NoWrap" />
+                        </StackPanel>
+                    </sources:LocationPathPanel>
+                    <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                        <Button Style="{StaticResource RowIconButton}" Command="{Binding RevealCommand}" ToolTip="{Binding RevealText}"
+                                AutomationProperties.Name="{Binding RevealName}">
+                            <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE838;" FontSize="15" Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                        </Button>
+                        <Button x:Name="RemoveButton" Style="{StaticResource RowIconButton}" Command="{Binding RemoveCommand}" Margin="2,0,0,0"
+                                ToolTip="{Binding RemoveTooltip}" AutomationProperties.Name="{Binding RemoveName}"
+                                AutomationProperties.HelpText="{Binding RemoveTooltip}">
+                            <!-- A minus in a ring (DESIGN 5: minus circle), drawn with the symbol font so it stays crisp. -->
+                            <Grid>
+                                <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xEA3A;" FontSize="16"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                                <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE738;" FontSize="8"
+                                           Foreground="{Binding Foreground, RelativeSource={RelativeSource AncestorType=Button}}" />
+                            </Grid>
+                        </Button>
+                    </StackPanel>
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                    <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsMissing}" Value="True">
+                    <Setter TargetName="Icon" Property="Opacity" Value="0.45" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsNew}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Row" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.22">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                                <DoubleAnimation Storyboard.TargetName="Shift" Storyboard.TargetProperty="Y" From="-6" To="0" Duration="0:0:0.22">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsLeaving}" Value="True">
+                    <DataTrigger.EnterActions>
+                        <BeginStoryboard x:Name="Leave">
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="Row" Storyboard.TargetProperty="Opacity" To="0" Duration="0:0:0.16">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseIn" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </DataTrigger.EnterActions>
+                    <DataTrigger.ExitActions>
+                        <StopStoryboard BeginStoryboardName="Leave" />
+                    </DataTrigger.ExitActions>
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+    </UserControl.Resources>
+
     <StackPanel>
-        <ItemsControl ItemsSource="{Binding Sources}" Focusable="False">
+        <TextBlock Text="{Binding SourcesPane.Caption}" Style="{StaticResource CaptionText}" FontSize="13" LineHeight="20" Margin="2,0,2,16" />
+
+        <ItemsControl x:Name="Groups" ItemsSource="{Binding SourcesPane.Groups}" Focusable="False" IsTabStop="False">
             <ItemsControl.ItemTemplate>
-                <DataTemplate>
-                    <controls:SettingsCard Header="{Binding Name}" Description="{Binding Status}" Icon="&#xE9D9;">
-                        <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding Enabled, Mode=TwoWay}" AutomationProperties.Name="{Binding Name}" />
-                    </controls:SettingsCard>
+                <DataTemplate DataType="{x:Type sources:SourceGroupViewModel}">
+                    <StackPanel Margin="0,0,0,20">
+                        <Border Style="{StaticResource GroupBorder}" AutomationProperties.Name="{Binding GroupName}">
+                            <StackPanel>
+                                <ItemsControl ItemsSource="{Binding Toggles}" ItemTemplate="{StaticResource ToggleRow}" Focusable="False" IsTabStop="False" />
+                                <Rectangle Style="{StaticResource Hairline}" />
+                                <ItemsControl ItemsSource="{Binding Entries}" ItemTemplate="{StaticResource LocationRow}" Focusable="False" IsTabStop="False"
+                                              Tag="{Binding}" />
+                                <Rectangle Style="{StaticResource Hairline}" />
+                                <!-- Add Folder… and Reset, leading; at the limit the limit reads at the trailing end. -->
+                                <DockPanel Margin="16,10,16,12">
+                                    <TextBlock DockPanel.Dock="Right" Text="{Binding LimitText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                                               TextWrapping="NoWrap" Margin="12,0,0,0" Visibility="{Binding CanAdd, Converter={StaticResource Hidden}}" />
+                                    <StackPanel Orientation="Horizontal">
+                                        <Button x:Name="AddButton" Content="{Binding AddText}" Command="{Binding AddCommand}" MinWidth="112"
+                                                ToolTip="{Binding AddTooltip}" ToolTipService.ShowOnDisabled="True"
+                                                AutomationProperties.HelpText="{Binding AddTooltip}" />
+                                        <Button x:Name="ResetButton" Content="{Binding ResetText}" Command="{Binding ResetCommand}" MinWidth="80" Margin="8,0,0,0" />
+                                    </StackPanel>
+                                </DockPanel>
+                            </StackPanel>
+                        </Border>
+                        <TextBlock Text="{Binding Footnote}" Style="{StaticResource CaptionText}" LineHeight="17" Margin="2,8,2,0"
+                                   Visibility="{Binding HasFootnote, Converter={StaticResource Visible}}" />
+                    </StackPanel>
                 </DataTemplate>
             </ItemsControl.ItemTemplate>
         </ItemsControl>
 
-        <TextBlock Text="{loc:Loc win.settings.sources.folders}" Style="{StaticResource SectionHeaderText}" Margin="2,20,0,8" />
-        <controls:SettingsCard Header="{loc:Loc source.codex}" Icon="&#xE8B7;" Description="{Binding CodexPath}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding CodexStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeCodexCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetCodexCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <controls:SettingsCard Header="{loc:Loc win.settings.sources.claude}" Icon="&#xE8B7;" Description="{Binding ClaudePath}">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding ClaudeStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeClaudeCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetClaudeCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.sharedRoot}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.deepseek}" Icon="&#xE8B7;" Description="{Binding DshPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding DshStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeDshCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetDshCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.dshHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.opencode}" Icon="&#xE8B7;" Description="{Binding OpenCodePath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding OpenCodeStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeOpenCodeCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetOpenCodeCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.opencodeHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.gemini}" Icon="&#xE8B7;" Description="{Binding GeminiPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding GeminiStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeGeminiCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetGeminiCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.geminiHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.omp}" Icon="&#xE8B7;" Description="{Binding OmpPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding OmpStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeOmpCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetOmpCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.ompHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.antigravity}" Icon="&#xE8B7;" Description="{Binding AntigravityPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding AntigravityStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeAntigravityCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetAntigravityCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.antigravityHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.workbuddy}" Icon="&#xE8B7;" Description="{Binding WorkBuddyPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding WorkBuddyStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeWorkBuddyCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetWorkBuddyCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.workbuddyHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.workbuddyAi}" Icon="&#xE8B7;" Description="{Binding WorkBuddyAiPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding WorkBuddyAiStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeWorkBuddyAiCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetWorkBuddyAiCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.workbuddyAiHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-
-        <controls:SettingsCard Header="{loc:Loc source.zcode}" Icon="&#xE8B7;" Description="{Binding ZCodePath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding ZCodeStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeZCodeCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetZCodeCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.zcodeHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.kimi}" Icon="&#xE8B7;" Description="{Binding KimiPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding KimiStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeKimiCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetKimiCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.kimiHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.grokBuild}" Icon="&#xE8B7;" Description="{Binding GrokBuildPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding GrokBuildStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeGrokBuildCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetGrokBuildCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.grokBuildHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.pi}" Icon="&#xE8B7;" Description="{Binding PiPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding PiStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangePiCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetPiCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.piHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.openclaw}" Icon="&#xE8B7;" Description="{Binding OpenClawPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding OpenClawStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeOpenClawCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetOpenClawCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.openclawHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.hermes}" Icon="&#xE8B7;" Description="{Binding HermesPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding HermesStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeHermesCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetHermesCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.hermesHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-        <controls:SettingsCard Header="{loc:Loc source.droid}" Icon="&#xE8B7;" Description="{Binding DroidPath}" Margin="0,12,0,4">
-            <StackPanel Orientation="Horizontal">
-                <TextBlock Text="{Binding DroidStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0" TextWrapping="NoWrap" />
-                <Button Content="{loc:Loc settings.sources.change}" Command="{Binding ChangeDroidCommand}" MinWidth="88" />
-                <Button Content="{loc:Loc settings.sources.reset}" Command="{Binding ResetDroidCommand}" Margin="8,0,0,0" MinWidth="72" />
-            </StackPanel>
-        </controls:SettingsCard>
-        <TextBlock Text="{loc:Loc settings.sources.droidHint}" Style="{StaticResource CaptionText}" Margin="2,6,0,0" />
-
         <controls:SettingsCard Header="{loc:Loc history.title}" Description="{loc:Loc history.privacy}" Icon="&#xE81C;" ContentBelow="True"
-                               Margin="0,24,0,4">
+                               Margin="0,4,0,4">
             <StackPanel Orientation="Horizontal" HorizontalAlignment="Left">
                 <Button Content="{loc:Loc history.open}" Command="{Binding OpenHistoryCommand}" MinWidth="104" />
                 <Button Content="{loc:Loc history.clear}" Command="{Binding ClearHistoryCommand}" MinWidth="104" Margin="8,0,0,0" />

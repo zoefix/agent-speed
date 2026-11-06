@@ -15,6 +15,6 @@ inline QColor sourceColor(const QString& id) {
         {QStringLiteral("zcode"), 0x466BFF},     {QStringLiteral("kimi"), 0xE16F8A},
         {QStringLiteral("grokBuild"), 0x8290A6}, {QStringLiteral("pi"), 0xA855F7},
         {QStringLiteral("openclaw"), 0xDE2E1F},  {QStringLiteral("hermes"), 0xB8860B},
-        {QStringLiteral("droid"), 0x9E5F46}};
+        {QStringLiteral("droid"), 0x9E5F46},     {QStringLiteral("devin"), 0x557F14}};
     return QColor(colors.value(id, 0x7C8798));
 }

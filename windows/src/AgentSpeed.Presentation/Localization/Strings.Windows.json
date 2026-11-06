@@ -270,16 +270,28 @@
     "en": "A 20-second demo that sweeps through every tier.",
     "ja": "20 秒のデモですべての段階のエフェクトを順に表示します。"
   },
-  "win.settings.sources.claude": {
-    "zh-Hant": "Claude Code 與 Claude Desktop",
-    "zh-Hans": "Claude Code 与 Claude Desktop",
-    "en": "Claude Code and Claude Desktop",
-    "ja": "Claude Code と Claude Desktop"
+  "win.common.ok": {
+    "zh-Hant": "確定",
+    "zh-Hans": "确定",
+    "en": "OK",
+    "ja": "OK"
   },
-  "win.settings.sources.folders": {
+  "win.settings.sources.reveal": {
+    "zh-Hant": "在檔案總管中顯示",
+    "zh-Hans": "在文件资源管理器中显示",
+    "en": "Show in File Explorer",
+    "ja": "エクスプローラーで表示"
+  },
+  "win.settings.sources.copyPath": {
+    "zh-Hant": "複製路徑",
+    "zh-Hans": "复制路径",
+    "en": "Copy Path",
+    "ja": "パスをコピー"
+  },
+  "win.settings.sources.folder": {
     "zh-Hant": "資料夾",
     "zh-Hans": "文件夹",
-    "en": "Folders",
+    "en": "Folder",
     "ja": "フォルダ"
   },
   "win.settings.taskbar.floating": {
@@ -335,5 +347,23 @@
     "zh-Hans": "显示这个看板",
     "en": "Show This Board",
     "ja": "このボードを表示"
+  },
+  "win.remote.local": {
+    "zh-Hant": "本機",
+    "zh-Hans": "本机",
+    "en": "This PC",
+    "ja": "この PC"
+  },
+  "win.remote.status.sshMissing": {
+    "zh-Hant": "找不到 OpenSSH 用戶端 — 請在「設定 › 系統 › 選用功能」中新增",
+    "zh-Hans": "找不到 OpenSSH 客户端 — 请在“设置 › 系统 › 可选功能”中添加",
+    "en": "OpenSSH Client isn’t installed — add it in Settings › System › Optional features",
+    "ja": "OpenSSH クライアントがありません — 「設定 › システム › オプション機能」で追加してください"
+  },
+  "win.remote.copied": {
+    "zh-Hant": "已拷貝",
+    "zh-Hans": "已复制",
+    "en": "Copied",
+    "ja": "コピーしました"
   }
 }

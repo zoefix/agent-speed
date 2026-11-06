@@ -18,7 +18,15 @@ internal sealed partial class ConfirmDialog : Window
     }
 
     /// <summary>Shows the dialog modally; true when the user chose <paramref name="confirm"/>.</summary>
-    public static bool Show(Window? owner, string windowTitle, string heading, string body, string confirm, string cancel)
+    public static bool Show(Window? owner, string windowTitle, string heading, string body, string confirm, string cancel) =>
+        ShowWithOption(owner, windowTitle, heading, body, confirm, cancel, null).Confirmed;
+
+    /// <summary>
+    /// Shows the dialog modally with a checkbox <paramref name="option"/> (off) when it is not null; whether the user chose
+    /// <paramref name="confirm"/>, and the checkbox's state then.
+    /// </summary>
+    public static (bool Confirmed, bool Option) ShowWithOption(Window? owner, string windowTitle, string heading, string body, string confirm,
+        string cancel, string? option)
     {
         var dialog = new ConfirmDialog
         {
@@ -29,6 +37,13 @@ internal sealed partial class ConfirmDialog : Window
         dialog.Body.Text = body;
         dialog.ConfirmButton.Content = confirm;
         dialog.CancelButton.Content = cancel;
+        if (option is not null)
+        {
+            dialog.OptionLabel.Text = option;
+            dialog.Option.Visibility = Visibility.Visible;
+            AutomationProperties.SetName(dialog.Option, option);
+        }
+
         AutomationProperties.SetName(dialog, heading);
         AutomationProperties.SetHelpText(dialog, body);
         if (AppIconSource.Frame(32) is { } icon)
@@ -45,7 +60,8 @@ internal sealed partial class ConfirmDialog : Window
             dialog.WindowStartupLocation = WindowStartupLocation.CenterScreen;
         }
 
-        return dialog.ShowDialog() == true;
+        var confirmed = dialog.ShowDialog() == true;
+        return (confirmed, confirmed && dialog.Option.IsChecked == true);
     }
 
     private void OnConfirm(object sender, RoutedEventArgs e) => DialogResult = true;

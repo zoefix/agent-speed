@@ -15,6 +15,8 @@ public:
     // "UTC" and "Etc/UTC" are built in; "" or "localtime" is /etc/localtime; anything else /usr/share/zoneinfo/<id>.
     // nullptr when the zone cannot be read.
     static std::shared_ptr<const TimeZone> load(const std::string& id);
+    // A zone from the bytes of a TZif file; nullptr when they are not one.
+    static std::shared_ptr<const TimeZone> fromData(const std::string& data);
     static std::shared_ptr<const TimeZone> utc();
     // UTC offset in milliseconds at the instant (positive east of Greenwich).
     std::int64_t offsetMs(std::int64_t unixMs) const;

@@ -40,6 +40,12 @@ struct EffectsPane: View {
                         .fixedSize(horizontal: false, vertical: true)
                 }
             }
+
+            Section {
+                SettingToggle(title: l10n("mac.settings.effects.displaySync"), isOn: $settings.displaySync)
+            } footer: {
+                SectionFootnote(l10n("mac.settings.effects.displaySync.hint"))
+            }
         }
         .settingsForm()
     }

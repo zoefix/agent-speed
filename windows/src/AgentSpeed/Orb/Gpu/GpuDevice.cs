@@ -137,6 +137,46 @@ internal sealed class GpuDevice : IDisposable
         timer.Start();
     }
 
+    /// <summary>
+    /// False while the GPU still runs the previous tick's frames (a busy GPU): the frames of this tick are skipped instead of
+    /// queued behind them, so Present never waits for the GPU on the UI thread.
+    /// </summary>
+    public bool CanSubmit { get; private set; } = true;
+
+    private bool _tickPending;
+    private bool _submitted;
+
+    /// <summary>Before a tick's frames.</summary>
+    public void BeginTick()
+    {
+        _submitted = false;
+        // A removed device may never finish the query: submit so the failed present recovers it.
+        CanSubmit = !_tickPending || _resources is not { } r || r.Context.IsDataAvailable(r.TickDone, AsyncGetDataFlags.DoNotFlush)
+            || IsLost;
+        if (CanSubmit)
+        {
+            _tickPending = false;
+        }
+    }
+
+    /// <summary>A frame of this tick goes to the GPU: the end of the tick waits for it.</summary>
+    public void NoteSubmit() => _submitted = true;
+
+    /// <summary>After a tick's frames: marks the end of their GPU work.</summary>
+    public void EndTick()
+    {
+        // A tick that drew nothing has nothing to wait for. Its query would stay unsignalled until the driver flushes on its
+        // own (up to 2 s on an idle GPU), holding back the first frame after a quiet spell (a board's idle fade).
+        if (_tickPending || !CanSubmit || !_submitted || _resources is not { } r)
+        {
+            return;
+        }
+
+        r.Context.End(r.TickDone);
+        r.Context.Flush();
+        _tickPending = true;
+    }
+
     /// <summary>True when the device was removed or reset (checked after a failed present or map).</summary>
     public bool IsLost => _resources is null || _resources.Device.DeviceRemovedReason.Failure;
 
@@ -151,6 +191,7 @@ internal sealed class GpuDevice : IDisposable
         AppLog.Warn($"The orb's Direct3D device was lost ({_resources?.Device.DeviceRemovedReason}); recreating it.");
         _resources?.Dispose();
         _resources = null;
+        _tickPending = false;
         try
         {
             _resources = Resources.Create();
@@ -267,6 +308,9 @@ internal sealed class GpuDevice : IDisposable
 
         public ID3D11ShaderResourceView Palette { get; private set; } = null!;
 
+        /// <summary>Signalled once the GPU finished a tick's frames.</summary>
+        public ID3D11Query TickDone { get; private set; } = null!;
+
         public ID3D11Buffer? Instances { get; set; }
 
         public int InstanceCapacity { get; set; }
@@ -346,6 +390,7 @@ internal sealed class GpuDevice : IDisposable
             LiquidPass = Device.CreateBuffer(16, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
             LedParams = Device.CreateBuffer(OrbLedUniforms.Size, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
             Palette = CreatePalette();
+            TickDone = Device.CreateQuery(QueryType.Event);
         }
 
         private static InputElementDescription[] InstanceElements(int count)
@@ -398,6 +443,7 @@ internal sealed class GpuDevice : IDisposable
         {
             Context.ClearState();
             Context.Flush();
+            TickDone?.Dispose();
             Instances?.Dispose();
             Texts?.Dispose();
             Layers?.Dispose();

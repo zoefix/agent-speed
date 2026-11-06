@@ -20,10 +20,11 @@ internal sealed class ConfiguredValues
     public int Version { get; private set; }
 
     /// <param name="root">The folder the agent's transcript was found under.</param>
-    public ExecutionModes Of(SourceKind source, string root, string agentId, string? model) => source switch
+    /// <param name="geminiSettings">Gemini CLI's settings file of that root (METRICS 2.1); null takes <see cref="GeminiSettingsPath"/>.</param>
+    public ExecutionModes Of(SourceKind source, string root, string agentId, string? model, string? geminiSettings = null) => source switch
     {
         SourceKind.Codex => Get(CodexConfiguredModes.ConfigPath(root), Codex).Modes,
-        SourceKind.Gemini => Get(GeminiSettingsPath(root), Gemini).ByModel.GetValueOrDefault(model ?? string.Empty) ?? ExecutionModes.Empty,
+        SourceKind.Gemini => Get(geminiSettings ?? GeminiSettingsPath(root), Gemini).ByModel.GetValueOrDefault(model ?? string.Empty) ?? ExecutionModes.Empty,
         SourceKind.Antigravity when AntigravityConfigPath(agentId) is { } path => Get(path, Antigravity).Modes,
         SourceKind.WorkBuddy or SourceKind.WorkBuddyAi => Get(WorkBuddySettingsPath(root), WorkBuddy).Modes,
         _ => ExecutionModes.Empty,

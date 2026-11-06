@@ -167,7 +167,7 @@ struct CurrentValueTests {
     @Test func geminiSettingsFollowASetRoot() {
         var configuration = MonitorConfiguration()
         configuration.automaticRoots[.gemini] = [URL(fileURLWithPath: "/fixtures/gemini/tmp")]
-        #expect(configuration.resolvedGeminiSettings == "/fixtures/gemini/settings.json")
+        #expect(configuration.resolvedGeminiSettings == ["/fixtures/gemini/tmp": "/fixtures/gemini/settings.json"])
     }
 
     // MARK: - Reading

@@ -22,6 +22,15 @@ std::string home(const std::function<std::optional<std::string>(const std::strin
 std::vector<std::string> logFolders(const std::string& home);
 std::vector<std::string> settingFolders(const std::string& setting);
 std::vector<std::string> logFiles(const std::string& folder);
+
+// A root of the location list (METRICS 2.1): the automatic home, or a user location (a home or one `logs` folder).
+struct Root {
+    std::string path;
+    bool isSetting = false;
+
+    std::vector<std::string> logFolders() const { return isSetting ? settingFolders(path) : hermes::logFolders(path); }
+    bool operator==(const Root&) const = default;
+};
 bool isLogName(std::string_view name);
 std::optional<std::string> configPath(const std::string& folder, bool windows = false);
 
@@ -126,7 +135,10 @@ struct Update : ResponseSink {
 // The live side: every log set's files followed by identity across rotations.
 class Source {
 public:
-    Source(std::string root, bool chosen, Deduper& deduper, std::shared_ptr<const TimeZone> zone);
+    // The log folders of every root, each once (METRICS 2.1 Databases).
+    Source(std::vector<Root> roots, Deduper& deduper, std::shared_ptr<const TimeZone> zone);
+    Source(std::string root, bool chosen, Deduper& deduper, std::shared_ptr<const TimeZone> zone)
+        : Source(std::vector<Root>{{std::move(root), chosen}}, deduper, std::move(zone)) {}
     Update seed(std::int64_t todayStartMs);
     Update refresh(bool discover);
     std::vector<LogSet*> sets() const;
@@ -159,8 +171,7 @@ private:
         Tracked& tracked, const std::string& path, std::int64_t listedWriteNs, std::optional<std::int64_t> thresholdMs,
         Update& update);
 
-    std::string root_;
-    bool chosen_;
+    std::vector<Root> roots_;
     Deduper& deduper_;
     std::shared_ptr<const TimeZone> zone_;
     std::vector<std::unique_ptr<Tracked>> sets_;

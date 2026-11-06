@@ -12,6 +12,8 @@ final class BoardHostView: NSView {
     /// The pointer moved over the board or left it (hover tooltips and row tint).
     var onMouseMoved: ((NSEvent) -> Void)?
     var onMouseExited: ((NSEvent) -> Void)?
+    /// The pointer entered (true) or left (false) the board.
+    var onHoverChange: ((Bool) -> Void)?
     /// A key while the board has the keyboard focus; true when it was handled.
     var onKeyDown: ((NSEvent) -> Bool)?
     /// The rows take keyboard focus (keyboard navigation on, DESIGN 12 *Keyboard*): the view takes the key events.
@@ -111,8 +113,15 @@ final class BoardHostView: NSView {
     override func mouseDragged(with event: NSEvent) { onMouseDragged?(event) }
     override func mouseUp(with event: NSEvent) { onMouseUp?(event) }
     override func rightMouseDown(with event: NSEvent) { onRightMouseDown?(event) }
-    override func mouseMoved(with event: NSEvent) { onMouseMoved?(event) }
-    override func mouseExited(with event: NSEvent) { onMouseExited?(event) }
+    override func mouseEntered(with event: NSEvent) { onHoverChange?(true) }
+    override func mouseMoved(with event: NSEvent) {
+        onHoverChange?(true)
+        onMouseMoved?(event)
+    }
+    override func mouseExited(with event: NSEvent) {
+        onHoverChange?(false)
+        onMouseExited?(event)
+    }
 
     override func updateTrackingAreas() {
         super.updateTrackingAreas()

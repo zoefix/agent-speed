@@ -142,14 +142,15 @@ public class OrbSettingsTests
     }
 
     [Theory]
-    [InlineData(", \"size\": 10", 96)]
+    [InlineData(", \"size\": 10", 64)]
     [InlineData(", \"size\": 1000", 240)]
     [InlineData(", \"size\": \"big\"", 148)]
     [InlineData(", \"size\": 150.4", 150)]
     [InlineData(", \"style\": \"minimal\", \"size\": 10", 64)]
     [InlineData(", \"style\": \"minimal\", \"size\": 72", 72)]
-    [InlineData(", \"style\": \"led\", \"size\": 72", 96)]
-    public void SizesAreClampedPerStyle(string fields, double expected)
+    [InlineData(", \"style\": \"led\", \"size\": 72", 72)]
+    [InlineData(", \"style\": \"reactor\", \"size\": 64", 64)]
+    public void SizesAreClampedToTheSharedRange(string fields, double expected)
     {
         Assert.Equal(expected, WithOrbsJson(OneOrb(fields)).Orbs.Orbs[0].Size);
     }
@@ -623,15 +624,15 @@ public class OrbSettingsTests
     }
 
     [Fact]
-    public void StyleChangesClampTheSize()
+    public void StyleChangesKeepTheSize()
     {
         var orb = new OrbDefinition(IdA) { Style = OrbStyle.Minimal, Size = 72 };
         Assert.Equal(72, orb.Validated().Size);
         var needle = orb.WithStyle(OrbStyle.Needle);
         Assert.Equal(OrbStyle.Needle, needle.Style);
-        Assert.Equal(96, needle.Size);
-        Assert.Equal(96, needle.WithStyle(OrbStyle.Minimal).Size);
-        Assert.Equal(64, needle.WithStyle(OrbStyle.Minimal).WithSize(10).Size);
+        Assert.Equal(72, needle.Size);
+        Assert.All(OrbStyles.All, style => Assert.Equal(72, orb.WithStyle(style).Validated().Size));
+        Assert.Equal(64, needle.WithSize(10).Size);
         Assert.Equal(240, orb.WithSize(500).Size);
         Assert.Equal(OrbStyle.Led, orb.WithStyle((OrbStyle)99).Style);
     }
@@ -693,9 +694,9 @@ public class OrbSettingsTests
     public void SourceKeysAreTheMetricsKeysInSourceOrder()
     {
         Assert.Equal(
-            ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid"],
+            ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin"],
             Enum.GetValues<SourceKind>().Select(OrbSources.KeyOf));
-        Assert.Equal(["openclaw", "hermes", "droid"], OrbSources.Of(SourceSet.Everything).ToKeys()!.TakeLast(3));
+        Assert.Equal(["hermes", "droid", "devin"], OrbSources.Of(SourceSet.Everything).ToKeys()!.TakeLast(3));
         Assert.False(OrbSources.TryParseKey("workbuddy-ai", out _));
         Assert.False(OrbSources.TryParseKey("WorkBuddy", out _));
     }

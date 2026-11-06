@@ -64,6 +64,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     private SpeedModel _speed = null!;
     private PreviewService _preview = null!;
     private LiveMonitor? _monitor;
+    private RemoteHostsService? _remote;
     private ShellMessageWindow? _shell;
     private TrayIcon? _tray;
     private TaskbarWidget? _taskbar;
@@ -147,6 +148,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         _speed = new SpeedModel(_hub, _ui);
         _speed.Configure(Settings.Metric, Settings.Redline);
         _preview = new PreviewService(_hub, _ui);
+        CreateRemoteHosts();
 
         _shell = new ShellMessageWindow();
         _shell.TaskbarCreated += (_, _) => _taskbar?.Reembed();
@@ -286,6 +288,11 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                         return reportTarget;
                     }
 
+                    if (target == "dialog")
+                    {
+                        return RemoteCaptureTarget(target);
+                    }
+
                     if (target == "history")
                     {
                         // An open window is captured as the ops left it (op history-all, op history-<source>).
@@ -388,15 +395,24 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _settingsModel ??= new SettingsViewModel(_settings, _preview, _loc, initial => SettingsWindow.PickFolder(_settingsWindow, initial),
                 _updates, OpenUpdate, () => OpenHistory(), ConfirmClearHistory, ClearHistory, _cost) { TitleService = _titles };
             _settingsModel.Report ??= CreateReportPane();
+            _settingsModel.Remote ??= CreateRemotePane();
             _settingsModel.Traffic ??= new TrafficPaneViewModel(_settings, _traffic, _traffic.Helper, _loc,
                 () => _settingsWindow is { } window ? new System.Windows.Interop.WindowInteropHelper(window).Handle : 0,
                 ConfirmRemoveHelper);
             if (_settingsModel.Orbs is null && _orbs is not null)
             {
-                _settingsModel.Orbs = new Settings.OrbsPane.OrbsPaneViewModel(_settings, _orbs, _speed, _loc) { TitleService = _titles };
+                _settingsModel.Orbs = new Settings.OrbsPane.OrbsPaneViewModel(_settings, _orbs, _speed, _loc)
+                {
+                    TitleService = _titles,
+                    RemoteHosts = _remoteHosts,
+                };
             }
 
-            _settingsModel.Boards ??= new Settings.BoardsPane.BoardsPaneViewModel(_settings, _speed, _loc, AddBoard, RemoveBoard) { DarkTheme = _theme.IsDark };
+            _settingsModel.Boards ??= new Settings.BoardsPane.BoardsPaneViewModel(_settings, _speed, _loc, AddBoard, RemoveBoard)
+            {
+                DarkTheme = _theme.IsDark,
+                RemoteHosts = _remoteHosts,
+            };
 
             _settingsModel.ReduceMotion = _theme.ReduceMotion;
             _settingsModel.DarkTheme = _theme.IsDark;
@@ -483,6 +499,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         Try(() => _preview.Stop());
         Try(() => _pinnedSpeeds?.Dispose());
         Try(() => _heroTour?.Dispose());
+        Try(() => _remote?.Dispose());
         Try(() => _monitor?.Dispose());
         Try(() => _taskbar?.Dispose());
         Try(() => _tray?.Dispose());
@@ -523,11 +540,34 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         try
         {
             _monitor = new LiveMonitor(_hub, Settings.ToMonitorConfiguration(), _cost.Book);
+            RequestSubsets(Settings);
             _monitor.Start();
         }
         catch (Exception ex)
         {
             AppLog.Error("The live monitor failed to start.", ex);
+        }
+
+        StartRemoteHosts();
+    }
+
+    /// <summary>The remote hosts (REMOTE 2.1): connections follow the settings from now on.</summary>
+    private void StartRemoteHosts()
+    {
+        if (_monitor is null)
+        {
+            return;
+        }
+
+        try
+        {
+            _remote = new RemoteHostsService(_monitor, AppPaths.Version, _cost.Book);
+            _remote.Apply(Settings);
+            _remoteHosts?.Attach(_remote);
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("The remote hosts failed to start.", ex);
         }
     }
 
@@ -910,6 +950,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _dashboard.SettingsRequested += (_, _) => OpenSettings();
             _dashboard.SourcesRequested += (_, _) => OpenSettings("sources");
             _dashboard.HistoryRequested += (_, source) => OpenHistory(source);
+            _dashboard.HostHistoryRequested += (_, host) => ShowHostHistory(host);
             _dashboard.QuitRequested += (_, _) => Quit();
             _dashboard.OrbToggled += (_, visible) => _settings.Update(s => s.WithShowOrbs(visible));
             _dashboard.RangeChanged += (_, seconds) => _settings.Update(s => s with { ChartSeconds = seconds });
@@ -1024,7 +1065,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         _historyStarted = true;
         try
         {
-            _historyService = new HistoryService(_historyHub, Settings.ToMonitorConfiguration(), pricing: _cost.Book)
+            _historyService = new HistoryService(_historyHub, Settings.ToMonitorConfiguration(), pricing: _cost.Book, remote: _remote?.History)
             {
                 PerfRecordsUpdated = records => _monitor?.SetPerfRecords(records),
             };
@@ -1091,6 +1132,28 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _speed.Configure(current.Metric, current.Redline);
         }
 
+        if (previous.Orbs != current.Orbs || previous.Boards != current.Boards)
+        {
+            RequestSubsets(current);
+        }
+
+        if (previous.RemoteHosts != current.RemoteHosts)
+        {
+            _history?.OnHostsChanged();
+        }
+
+        if (previous.RemoteHosts != current.RemoteHosts || previous.NetworkEnabled != current.NetworkEnabled)
+        {
+            try
+            {
+                _remote?.Apply(current);
+            }
+            catch (Exception ex)
+            {
+                AppLog.Error("Updating the remote hosts failed.", ex);
+            }
+        }
+
         if (!previous.ToMonitorConfiguration().Equals(current.ToMonitorConfiguration()))
         {
             try
@@ -1139,6 +1202,11 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     /// </summary>
     private void RunTitleCaptureOperation(string op)
     {
+        if (RunRemoteCaptureOperation(op))
+        {
+            return;
+        }
+
         if (op.StartsWith("page-", StringComparison.Ordinal))
         {
             _capturePage = op[5..];
@@ -1431,8 +1499,21 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             return null;
         }
 
+        if (kind is "menu-host" or "menu-orb-hosts" or "menu-board-hosts")
+        {
+            if (RemoteCaptureMenu(kind) is not { } hostsMenu)
+            {
+                return null;
+            }
+
+            var origin = Monitors.Primary() is { } screen ? new POINT(screen.WorkArea.Left + 400, screen.WorkArea.Top + 200) : new POINT(400, 200);
+            _menu.Show(hostsMenu, origin);
+            return hostsMenu;
+        }
+
         var menu = kind == "menu-orb" && Settings.Orbs.Orbs.FirstOrDefault() is { } orb
-            ? OrbMenu.Build(this, orb.Id, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable)
+            ? OrbMenu.Build(this, orb.Id, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable,
+                _remoteHosts?.MenuStates(_loc))
             : AppMenu.Build(this, Settings, _loc, _updates.Available, SourceAvailability.From(_speed.Snapshot.Sources), SourceTrafficAvailable,
                 ReportMenuState());
         if (menu is null)
@@ -1453,7 +1534,8 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         }
 
         HideTooltip();
-        if (OrbMenu.Build(this, orbId, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable) is { } menu)
+        if (OrbMenu.Build(this, orbId, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable,
+                _remoteHosts?.MenuStates(_loc)) is { } menu)
         {
             _menu.Show(menu);
         }
@@ -1476,7 +1558,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     public void RemoveOrb(string orbId)
     {
         if (Settings.Orbs.Find(orbId) is not { } orb
-            || !OrbMenu.ConfirmRemove(null, OrbNaming.DisplayName(orb, _loc), _loc))
+            || !OrbMenu.ConfirmRemove(null, OrbNaming.DisplayName(orb, _loc, Presentation.Remote.RemoteHostStates.Choices(Settings.RemoteHosts, _loc)), _loc))
         {
             return;
         }

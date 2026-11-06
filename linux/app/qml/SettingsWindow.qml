@@ -21,6 +21,7 @@ Window {
         { glyph: "chart", key: "settings.traffic" },
         { glyph: "broadcast", key: "settings.report" },
         { glyph: "folder", key: "settings.sources" },
+        { glyph: "server", key: "settings.remote" },
         { glyph: "info", key: "settings.about" }
     ]
 
@@ -143,6 +144,7 @@ Window {
             TrafficPage {}
             ApiPage {}
             SourcesPage {}
+            RemotePage {}
             AboutPage {}
         }
     }

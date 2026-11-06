@@ -1,6 +1,8 @@
 #!/usr/bin/env bash
 # Builds self-contained single-file Agent Speed for Windows (x64 and ARM64) from macOS, Linux or WSL.
-# Output: dist/AgentSpeed-Windows-x64.zip and dist/AgentSpeed-Windows-arm64.zip, each containing AgentSpeed.exe.
+# Output: dist/AgentSpeed-Windows-x64.zip and dist/AgentSpeed-Windows-arm64.zip, each containing AgentSpeed.exe, which
+# embeds both remote relays agent-speed-relay-linux-{x86_64,aarch64} (spec/REMOTE.md 3.1) taken from RELAY_DIR (default
+# linux/relay/dist, built by linux/relay/build-static.sh).
 # The traffic helper (spec/WINDOWS-SERVICE.md) is NativeAOT and can only be compiled on Windows (publish.ps1), so these
 # builds carry no helper unless TRAFFIC_HELPER_DIR points at prebuilt win-x64/ and win-arm64/AgentSpeedTrafficHelper.exe.
 set -euo pipefail
@@ -27,6 +29,17 @@ if ! command -v dotnet >/dev/null 2>&1 && [[ -x "$HOME/.dotnet/dotnet" ]]; then
 fi
 command -v dotnet >/dev/null 2>&1 || { echo "error: the .NET 10 SDK (dotnet) is required" >&2; exit 1; }
 command -v zip >/dev/null 2>&1 || { echo "error: zip is required" >&2; exit 1; }
+
+RELAY_DIR="${RELAY_DIR:-$ROOT/linux/relay/dist}"
+for ARCH in x86_64 aarch64; do
+  RELAY="$RELAY_DIR/agent-speed-relay-linux-$ARCH"
+  [[ -f "$RELAY" ]] || { echo "error: missing remote relay $RELAY; build it with linux/relay/build-static.sh $ARCH, or set RELAY_DIR" >&2; exit 1; }
+  [[ "$(head -c 4 "$RELAY" | od -An -tx1 | tr -d ' \n')" == "7f454c46" ]] || { echo "error: $RELAY is not a Linux executable" >&2; exit 1; }
+  LC_ALL=C grep -q -x -F "$VERSION" <(LC_ALL=C tr -c '[:print:]' '\n' < "$RELAY") \
+    || { echo "error: $RELAY was not built from version $VERSION; rebuild it with linux/relay/build-static.sh $ARCH" >&2; exit 1; }
+done
+RELAY_DIR="$(cd "$RELAY_DIR" && pwd)"
+echo "==> Embedding the remote relays $VERSION from $RELAY_DIR"
 
 WORK="$(mktemp -d "${TMPDIR:-/tmp}/agentspeed-publish.XXXXXX")"
 cleanup() { rm -rf "$WORK"; }
@@ -81,6 +94,7 @@ for ARCH in x64 arm64; do
     -p:Version="$FILE_VERSION" \
     -p:InformationalVersion="$VERSION" \
     -p:ContinuousIntegrationBuild=true \
+    -p:RelayDir="$RELAY_DIR" \
     ${HELPER_ARGS[@]+"${HELPER_ARGS[@]}"} \
     -nologo
 

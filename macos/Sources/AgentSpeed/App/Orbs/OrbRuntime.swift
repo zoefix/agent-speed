@@ -24,12 +24,16 @@ final class OrbRuntime {
 
     /// The orb's sources as a set for the engine; nil for all sources.
     var sourceSet: SourceSet? { config.sources.sourceSet }
+    /// The orb's hosts; nil for every host.
+    var hostSet: Set<String>? { config.hosts.hostSet }
+    /// The engine's subset of the orb; nil for every source on every host.
+    var subsetKey: SubsetKey? { config.sources.subsetKey(hosts: config.hosts) }
 
     var isUnavailable: Bool { feed.unavailableTitleKey != nil }
 
     /// Applies an edited configuration; a new source set recomputes the peak and stays quiet for 60 s.
     func update(config: OrbConfig) {
-        let sourcesChanged = config.sources != self.config.sources
+        let sourcesChanged = config.sources != self.config.sources || config.hosts != self.config.hosts
         let readoutChanged = config.traffic != self.config.traffic
         self.config = config
         if sourcesChanged { trackerArmed = false }
@@ -43,7 +47,7 @@ final class OrbRuntime {
     func ingest(_ snapshot: SpeedSnapshot, settings: AppSettings, cost: CostDisplay?, isPreviewing: Bool, now: TimeInterval) {
         let metric = settings.metric
         let set = isPreviewing ? nil : sourceSet
-        let reading = OrbSubset.reading(snapshot, sources: set)
+        let reading = OrbSubset.reading(snapshot, sources: set, hosts: isPreviewing ? nil : hostSet)
         self.reading = reading
         updateMoney(snapshot, reading: reading, cost: cost, isPreviewing: isPreviewing)
         let redline = redline(for: metric, settings: settings)
@@ -54,13 +58,14 @@ final class OrbRuntime {
         case .available: nil
         case .allDisabled: "source.disabled"
         case .allNotFound: "source.notFound"
+        case .hostsOffline: "remote.orb.offline"
         }
         if feed.unavailableTitleKey != unavailableKey { feed.unavailableTitleKey = unavailableKey }
         feed.gauge.ingest(unavailableKey == nil ? reading.live.value(for: metric) : 0, now: now)
         let today = metric == .output ? reading.today.output : reading.today.total
         feed.set(generating: reading.generatingSources, todayTokens: today, agentCount: reading.agents.count)
         updateBezel(unavailable: isPreviewing ? [] : reading.unavailable)
-        trackPeak(snapshot: snapshot, set: set, isPreviewing: isPreviewing)
+        trackPeak(snapshot: snapshot, key: subsetKey, isPreviewing: isPreviewing)
         if config.traffic == .intelligence {
             lineQuiet.apply(score: PerfSetReading(score: reading.intelligence.score, agents: reading.agents),
                             thinking: reading.intelligence.thinking, generating: !reading.generatingSources.isEmpty, at: now)
@@ -100,7 +105,8 @@ final class OrbRuntime {
             if feed.money != nil { feed.money = nil }
             return
         }
-        var costReading = OrbSubset.cost(snapshot, sources: isPreviewing ? nil : sourceSet, billable: cost.billable)
+        var costReading = OrbSubset.cost(snapshot, sources: isPreviewing ? nil : sourceSet,
+                                         hosts: isPreviewing ? nil : hostSet, billable: cost.billable)
         if isPreviewing {
             costReading = CostReading(microUsdPerSecond: reading.live.output * Self.previewMicroUsdPerToken,
                                       liveOutput: reading.live.output)
@@ -119,22 +125,23 @@ final class OrbRuntime {
 
     /// Delivers an engine event if it concerns this orb (METRICS 6.8, Events).
     func handle(_ event: SpeedEvent, isPreviewing: Bool) {
-        guard OrbSubset.accepts(event, sources: isPreviewing ? nil : sourceSet) else { return }
+        guard OrbSubset.accepts(event, sources: isPreviewing ? nil : sourceSet, hosts: isPreviewing ? nil : hostSet)
+        else { return }
         switch event {
         case .responseCompleted(let response): feed.emit(.response(output: response.outputTokens, speed: response.speed))
         case .newPeak: feed.emit(.newPeak)
         }
     }
 
-    private func trackPeak(snapshot: SpeedSnapshot, set: SourceSet?, isPreviewing: Bool) {
-        guard let set, !isPreviewing, case .running = snapshot.state else { return }
+    private func trackPeak(snapshot: SpeedSnapshot, key: SubsetKey?, isPreviewing: Bool) {
+        guard let key, !isPreviewing, case .running = snapshot.state else { return }
         let nowMs = Int64((snapshot.timestamp.timeIntervalSince1970 * 1000).rounded())
         if !trackerArmed {
             tracker.restart(nowMs: nowMs)
             trackerArmed = true
         }
         let dayStartMs = Int64((snapshot.dayStart.timeIntervalSince1970 * 1000).rounded())
-        let fired = tracker.update(liveOutput: reading.live.output, measuredPeakOutput: snapshot.subsetPeaks[set],
+        let fired = tracker.update(liveOutput: reading.live.output, measuredPeakOutput: snapshot.subsetPeaks[key],
                                    dayStartMs: dayStartMs, nowMs: nowMs)
         if fired { feed.emit(.newPeak) }
     }

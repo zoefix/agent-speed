@@ -5,6 +5,7 @@ import Foundation
 struct InFlightEstimate: Sendable {
     var agentId: String
     var source: SourceKind
+    var host = RemoteHost.localId
     var startMs: Int64
     var endMs: Int64?
     var reference: SpeedEstimate
@@ -147,6 +148,8 @@ struct LiveWindow: Sendable {
     private(set) var intelligenceByAgent: [String: IntelligenceSums] = [:]
     /// The model sums (METRICS 6.9 *Model sums*), by raw model and provider; they add up to `intelligence`.
     private(set) var intelligenceByModel: [LiveModelKey: IntelligenceSums] = [:]
+    /// The live values per (host, source) cell; empty unless the window was asked for them.
+    private(set) var byCell: [HostSource: EngineCell] = [:]
 
     /// `latestEnds` holds the latest end of any stored response per agent; an estimate starts no earlier, so a
     /// response that is still being written is never counted twice.
@@ -158,7 +161,8 @@ struct LiveWindow: Sendable {
         agents: [String: EngineAgent],
         latestEnds: [String: Int64],
         references: SpeedReferences,
-        providers: [String: String] = [:]
+        providers: [String: String] = [:],
+        cells tracksCells: Bool = false
     ) {
         let windowStart = nowMs - SpeedEngine.liveWindowMs
         let seconds = Double(SpeedEngine.liveWindowMs) / 1000
@@ -172,6 +176,7 @@ struct LiveWindow: Sendable {
         var sourceIntelligence: [SourceKind: IntelligenceSums] = [:]
         var agentIntelligence: [String: IntelligenceSums] = [:]
         var modelIntelligence: [LiveModelKey: IntelligenceSums] = [:]
+        var cells = LiveCells()
 
         func addIntelligence(output: Double, reasoning: Double, source: SourceKind, agentId: String, model: LiveModelKey) {
             sourceIntelligence[source, default: .zero].add(output: output, reasoning: reasoning, from: source)
@@ -196,6 +201,14 @@ struct LiveWindow: Sendable {
                 sourceCost[response.record.source, default: .zero]
                     .add(LiveCost(microUsdPerSecond: Double(microUsd) * share, knownOutput: tokens.output))
             }
+            if tracksCells {
+                let cell = HostSource(host: response.record.host, source: response.record.source)
+                cells.add(tokens, estimated: false, cell: cell)
+                cells.addIntelligence(output: tokens.output, reasoning: response.reasoning * share, cell: cell)
+                if let microUsd = response.record.costMicroUsd {
+                    cells.addCost(LiveCost(microUsdPerSecond: Double(microUsd) * share, knownOutput: tokens.output), cell: cell)
+                }
+            }
         }
 
         func addEstimate(_ estimate: InFlightEstimate) {
@@ -215,6 +228,15 @@ struct LiveWindow: Sendable {
             if let costRate = estimate.reference.costRate {
                 sourceCost[estimate.source, default: .zero].add(LiveCost(microUsdPerSecond: costRate * overlap, knownOutput: tokens.output))
             }
+            if tracksCells {
+                let cell = HostSource(host: estimate.host, source: estimate.source)
+                cells.add(tokens, estimated: true, cell: cell)
+                cells.addIntelligence(output: tokens.output, reasoning: tokens.output * estimate.reference.reasoningShare,
+                                      cell: cell)
+                if let costRate = estimate.reference.costRate {
+                    cells.addCost(LiveCost(microUsdPerSecond: costRate * overlap, knownOutput: tokens.output), cell: cell)
+                }
+            }
         }
 
         for response in unmeasured {
@@ -223,8 +245,9 @@ struct LiveWindow: Sendable {
                 ?? EngineAgent(id: record.agentId, source: record.source, project: "", model: record.model)
             guard let reference = references.estimate(for: agent) else { continue }
             addEstimate(InFlightEstimate(
-                agentId: record.agentId, source: record.source, startMs: response.startMs, endMs: response.endMs,
-                reference: reference, model: LiveModelKey(model: record.model, provider: record.provider)
+                agentId: record.agentId, source: record.source, host: record.host, startMs: response.startMs,
+                endMs: response.endMs, reference: reference,
+                model: LiveModelKey(model: record.model, provider: record.provider)
             ))
         }
 
@@ -236,7 +259,7 @@ struct LiveWindow: Sendable {
             else { continue }
             let start = max(inFlightStart, latestEnds[agent.id] ?? inFlightStart)
             addEstimate(InFlightEstimate(
-                agentId: agent.id, source: agent.source, startMs: start, endMs: nil, reference: reference,
+                agentId: agent.id, source: agent.source, host: agent.host, startMs: start, endMs: nil, reference: reference,
                 model: LiveModelKey(model: agent.model, provider: providers[agent.id])
             ))
         }
@@ -263,6 +286,7 @@ struct LiveWindow: Sendable {
         bySource = sourceTokens.mapValues { Rate(output: $0.output / seconds, total: $0.total / seconds) }
         estimatedBySource = estimatedSourceTokens.mapValues { Rate(output: $0.output / seconds, total: $0.total / seconds) }
         byAgent = agentTokens.mapValues { Rate(output: $0.output / seconds, total: $0.total / seconds) }
+        if tracksCells { byCell = cells.cells(seconds: seconds) }
     }
 }
 

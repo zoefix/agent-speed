@@ -106,7 +106,7 @@ public sealed class HarnessFixtureTests
             core.Seed(start + 30_000_000, start, CancellationToken.None);
             var (snapshot, _) = core.BuildSnapshot(start + 30_000_000, start, MonitorState.Running, observeLive: false);
             Assert.Equal(16, snapshot.Today.Requests);
-            Assert.Equal(1875, snapshot.Today.Output);
+            Assert.Equal(2475, snapshot.Today.Output);
             Assert.Equal(2, core.SessionCount(SourceKind.ZCode, start));
             Assert.Equal(3, core.SessionCount(SourceKind.Kimi, start));
             Assert.Contains(snapshot.Agents, a => a.Source == SourceKind.Kimi && a.IsSubagent && a.ParentId is not null);
@@ -120,14 +120,14 @@ public sealed class HarnessFixtureTests
             var report = history.Run(paths, enabled, TimeZoneInfo.Utc, CancellationToken.None);
             Assert.Equal(0, report.FilesUnreadable);
             Assert.Equal(16, history.Days().Sum(day => day.Totals.Requests));
-            Assert.Equal(1875, history.Days().Sum(day => day.Totals.Output));
+            Assert.Equal(2475, history.Days().Sum(day => day.Totals.Output));
             var repeated = history.Run(paths, enabled, TimeZoneInfo.Utc, CancellationToken.None);
             Assert.Equal(0, repeated.FilesPlanned);
         }
 
         using (var store = HistoryStore.Open(storePath))
         {
-            Assert.Equal(1875, new HistoryAnalyzer(store).Days().Sum(day => day.Totals.Output));
+            Assert.Equal(2475, new HistoryAnalyzer(store).Days().Sum(day => day.Totals.Output));
         }
     }
 

@@ -193,7 +193,7 @@ public sealed class OpenCodeTests : IDisposable
 
         Assert.Contains(new MonitorWarning.UnsupportedFormat(SourceKind.OpenCode), snapshot.Warnings);
         Assert.True(snapshot.Sources.Single(s => s.Kind == SourceKind.OpenCode).Available);
-        Assert.Equal(OpenCodeStatus.Unsupported, core.OpenCode!.Status);
+        Assert.Equal(OpenCodeStatus.Unsupported, core.OpenCode!.Sources[0].Status);
     }
 
     [Fact]

@@ -23,6 +23,9 @@ internal readonly record struct AgentInfo(
 
     public ExecutionModeAttribution CurrentEffort => ExecutionModes.Current(ExecutionModeKind.Effort, Modes, SessionModes, ConfiguredModes);
 
+    /// <summary><c>local</c>, or the remote host the agent runs on (REMOTE 2.2).</summary>
+    public string Host { get; init; } = Remote.RemoteHost.LocalId;
+
     /// <summary>The file's latest tool calls (METRICS 6.10), oldest first.</summary>
     public IReadOnlyList<Work.WorkAction> Work { get; init; } = [];
 }

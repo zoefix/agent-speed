@@ -24,6 +24,8 @@ final class HistoryViewModel {
     let interaction = HistoryInteraction()
 
     private(set) var source: SourceKind?
+    /// The host filter (DESIGN 13): every host when nil, else `local` or a remote host's id; combines with `source`.
+    private(set) var host: String?
     private(set) var rangeKind: HistoryRangeKind = .days30
     private(set) var customRange: DayRange?
     private(set) var sort = HistorySort()
@@ -61,7 +63,7 @@ final class HistoryViewModel {
         perfSort = PerfHistorySort(storageValue: cost.settings.storage.string(forKey: Self.perfSortKey))
         let today = DayKey(Date(), calendar: HistoryDates.calendar)
         let initial = HistoryContent.build(
-            usage: store.days, source: nil, rangeKind: .days30, customRange: nil, sort: HistorySort(), today: today, l10n: l10n,
+            usage: store.days, source: nil, hostNames: Self.hostNames(store, settings: cost.settings), rangeKind: .days30, customRange: nil, sort: HistorySort(), today: today, l10n: l10n,
             money: HistoryMoney(cost), costOptions: HistoryCostOptions(marked: cost.settings.subscriptionSources,
                                                                         includeSubscriptions: include),
             traffic: Self.historyTraffic(traffic, settings: cost.settings), prices: cost.prices.book.current
@@ -71,6 +73,8 @@ final class HistoryViewModel {
         dataLoop = ObservationLoop { [weak self] in
             guard let self else { return }
             _ = self.store.days
+            _ = self.store.hostNames
+            _ = self.cost.settings.remoteHosts
             _ = self.store.perfRecords
             _ = self.cost.prices.table
             _ = self.l10n.language
@@ -98,6 +102,14 @@ final class HistoryViewModel {
             rebuild()
         }
         followTraffic()
+    }
+
+    /// The host picker's choice (DESIGN 13), or the host a dashboard row opened the window on.
+    func select(host: String?) {
+        guard host != self.host else { return }
+        self.host = host
+        interaction.reset()
+        rebuild()
     }
 
     func select(range kind: HistoryRangeKind) {
@@ -186,13 +198,22 @@ final class HistoryViewModel {
             marked: cost.settings.subscriptionSources, includeSubscriptions: includeSubscriptions, metric: chartMetric
         )
         let next = HistoryContent.build(
-            usage: store.days, source: source, rangeKind: rangeKind, customRange: customRange, sort: sort,
+            usage: store.days, source: source, host: host, hostNames: hostNames, rangeKind: rangeKind, customRange: customRange, sort: sort,
             today: today, l10n: l10n, money: HistoryMoney(cost), costOptions: options,
             traffic: Self.historyTraffic(traffic, settings: cost.settings), prices: cost.prices.book.current
         )
         if next != content { content = next }
         let nextPerf = PerfHistoryContent.build(store.perfRecords, range: next.range, source: source, today: today)
         if nextPerf != perf { perf = nextPerf }
+    }
+
+    /// The remote hosts' names: the settings' for configured hosts, the last stored one for removed hosts.
+    private var hostNames: [String: String] { Self.hostNames(store, settings: cost.settings) }
+
+    private static func hostNames(_ store: HistoryStore, settings: AppSettings) -> [String: String] {
+        let configured = settings.remoteHosts.displayNames()
+        guard !configured.isEmpty else { return store.hostNames }
+        return store.hostNames.merging(configured) { _, current in current }
     }
 
     /// Disabled sources' rows are left out (METRICS 10.5, DESIGN 10); this computer's rows stay.

@@ -1,5 +1,7 @@
 using System.Collections.Immutable;
 using AgentSpeed.Core;
+using AgentSpeed.Core.Locations;
+using AgentSpeed.Presentation.Settings.Locations;
 using AgentSpeed.Presentation.Chart;
 using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Hero;
@@ -188,50 +190,30 @@ public sealed record AppSettings
 
     public bool DroidEnabled { get; init; } = true;
 
-    /// <summary>Null uses the default Codex sessions folder.</summary>
-    public string? CodexRoot { get; init; }
+    public bool DevinEnabled { get; init; } = true;
 
-    /// <summary>Null uses the default Claude projects folder.</summary>
-    public string? ClaudeRoot { get; init; }
+    /// <summary>
+    /// The stored <c>sourceLocations</c> value (DESIGN 5, METRICS 2.1); null while it is absent, and then the lists come from
+    /// <see cref="LegacyRoots"/>.
+    /// </summary>
+    public LocationLists? StoredLocations { get; init; }
 
-    /// <summary>Null uses the default DeepSeek Harness sessions folder.</summary>
-    public string? DshRoot { get; init; }
+    /// <summary>
+    /// The single-folder values of earlier versions as loaded (<c>sources.codexRoot</c>, … <c>sources.droidRoot</c>): read only
+    /// while <see cref="StoredLocations"/> is absent, to migrate, and written back unchanged, never edited, so a downgrade
+    /// restores the single folder (METRICS 2.1 Migration).
+    /// </summary>
+    public LegacyLocations LegacyRoots { get; init; } = LegacyLocations.Empty;
 
-    /// <summary>Null uses the default OpenCode data folder (the one that contains opencode.db).</summary>
-    public string? OpenCodeRoot { get; init; }
+    /// <summary>Every source's location list: the stored value, else the single folders of an earlier version as <c>[folder]</c>.</summary>
+    public LocationLists Locations => StoredLocations ?? LocationLists.FromLegacy(LegacyRoots);
 
-    /// <summary>Null uses the default Gemini CLI <c>tmp</c> folder.</summary>
-    public string? GeminiRoot { get; init; }
-
-    /// <summary>One omp <c>sessions</c> folder; null reads the default root and every named profile.</summary>
-    public string? OmpRoot { get; init; }
-
-    /// <summary>One Antigravity store folder (or its <c>conversations</c> folder); null reads the three default stores.</summary>
-    public string? AntigravityRoot { get; init; }
-
-    /// <summary>The WorkBuddy data folder (or its <c>projects</c> folder); null uses <c>~/.workbuddy</c>.</summary>
-    public string? WorkBuddyRoot { get; init; }
-
-    /// <summary>The WorkBuddy AI data folder (or its <c>projects</c> folder); null uses <c>~/.workbuddy-ai</c>.</summary>
-    public string? WorkBuddyAiRoot { get; init; }
-
-    public string? ZCodeRoot { get; init; }
-
-    public string? KimiRoot { get; init; }
-
-    public string? GrokBuildRoot { get; init; }
-
-    /// <summary>One Pi sessions folder; null reads Pi's default root and the custom session folder of its settings.</summary>
-    public string? PiRoot { get; init; }
-
-    /// <summary>One OpenClaw state folder, agent folder or database; null reads every automatic state folder.</summary>
-    public string? OpenClawRoot { get; init; }
-
-    /// <summary>A Hermes home or one <c>logs</c> folder; null reads the automatic Hermes home and its profiles.</summary>
-    public string? HermesRoot { get; init; }
-
-    /// <summary>The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder; null uses <c>~/.factory/sessions</c>.</summary>
-    public string? DroidRoot { get; init; }
+    /// <summary>The lists after an edit; from then on the earlier single-folder values are no longer read.</summary>
+    public AppSettings WithLocations(LocationLists lists)
+    {
+        ArgumentNullException.ThrowIfNull(lists);
+        return this with { StoredLocations = lists };
+    }
 
     public int ChartSeconds { get; init; } = 120;
 
@@ -274,8 +256,11 @@ public sealed record AppSettings
     /// <summary>Release tag a notification was already shown for (one notification per version).</summary>
     public string? NotifiedVersion { get; init; }
 
-    /// <summary>NETWORK 1 master switch: off, nothing is ever requested (updates, prices, rates).</summary>
+    /// <summary>NETWORK 1 master switch: off, nothing is ever requested (updates, prices, rates) and no <c>ssh</c> runs (REMOTE 2.3).</summary>
     public bool NetworkEnabled { get; init; } = true;
+
+    /// <summary>The remote hosts (settings value <c>remoteHosts</c>, REMOTE 2.1).</summary>
+    public Core.Remote.RemoteHostsDocument RemoteHosts { get; init; } = Core.Remote.RemoteHostsDocument.Empty;
 
     /// <summary>Currency, live unit, subscriptions and the price-table sync (DESIGN 9).</summary>
     public CostSettings Cost { get; init; } = CostSettings.Default;
@@ -305,6 +290,7 @@ public sealed record AppSettings
         SourceKind.OpenClaw => OpenClawEnabled,
         SourceKind.Hermes => HermesEnabled,
         SourceKind.Droid => DroidEnabled,
+        SourceKind.Devin => DevinEnabled,
         _ => false,
     };
 
@@ -342,16 +328,14 @@ public sealed record AppSettings
         SourceKind.OpenClaw => this with { OpenClawEnabled = enabled },
         SourceKind.Hermes => this with { HermesEnabled = enabled },
         SourceKind.Droid => this with { DroidEnabled = enabled },
+        SourceKind.Devin => this with { DevinEnabled = enabled },
         _ => this,
     };
 
     public MonitorConfiguration ToMonitorConfiguration()
     {
         var enabled = Enum.GetValues<SourceKind>().Where(IsSourceEnabled).ToHashSet();
-        return new MonitorConfiguration(enabled, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, OmpRoot, AntigravityRoot,
-            WorkBuddyRoot: WorkBuddyRoot, WorkBuddyAiRoot: WorkBuddyAiRoot,
-            ZCodeRoot: ZCodeRoot, KimiRoot: KimiRoot, GrokBuildRoot: GrokBuildRoot, PiRoot: PiRoot,
-            OpenClawRoot: OpenClawRoot, HermesRoot: HermesRoot, DroidRoot: DroidRoot);
+        return new MonitorConfiguration(enabled) { Locations = Locations };
     }
 
     /// <summary>The master switch; turning it on while every orb is individually hidden makes them all visible.</summary>
@@ -377,6 +361,17 @@ public sealed record AppSettings
     }
 
     /// <summary>Returns a copy with every value inside its valid range.</summary>
+    /// <summary>
+    /// Removing a host (REMOTE 2.4): it leaves <see cref="RemoteHosts"/> and every orb and board selection (one left without a
+    /// host tracks all hosts). Its history is a separate decision (<c>RemoteHistorySync.DeleteHistory</c>).
+    /// </summary>
+    public AppSettings WithoutRemoteHost(string hostId) => this with
+    {
+        RemoteHosts = RemoteHosts.Removing(hostId),
+        Orbs = OrbEditing.RemovingHost(Orbs, hostId),
+        Boards = BoardEditing.RemovingHost(Boards, hostId),
+    };
+
     public AppSettings Validated() => this with
     {
         Appearance = Enum.IsDefined(Appearance) ? Appearance : AppearanceMode.Auto,
@@ -389,22 +384,7 @@ public sealed record AppSettings
         OrbSize = double.IsFinite(OrbSize) ? Math.Clamp(Math.Round(OrbSize), MinOrbSize, MaxOrbSize) : DefaultOrbSize,
         OrbOpacity = double.IsFinite(OrbOpacity) ? Math.Clamp(OrbOpacity, MinOrbOpacity, MaxOrbOpacity) : MaxOrbOpacity,
         Effects = Enum.IsDefined(Effects) ? Effects : EffectsIntensity.Standard,
-        CodexRoot = CleanPath(CodexRoot),
-        ClaudeRoot = CleanPath(ClaudeRoot),
-        DshRoot = CleanPath(DshRoot),
-        OpenCodeRoot = CleanPath(OpenCodeRoot),
-        GeminiRoot = CleanPath(GeminiRoot),
-        OmpRoot = CleanPath(OmpRoot),
-        AntigravityRoot = CleanPath(AntigravityRoot),
-        WorkBuddyRoot = CleanPath(WorkBuddyRoot),
-        WorkBuddyAiRoot = CleanPath(WorkBuddyAiRoot),
-        ZCodeRoot = CleanPath(ZCodeRoot),
-        KimiRoot = CleanPath(KimiRoot),
-        GrokBuildRoot = CleanPath(GrokBuildRoot),
-        PiRoot = CleanPath(PiRoot),
-        OpenClawRoot = CleanPath(OpenClawRoot),
-        HermesRoot = CleanPath(HermesRoot),
-        DroidRoot = CleanPath(DroidRoot),
+        LegacyRoots = (LegacyRoots ?? LegacyLocations.Empty).Cleaned(),
         HistoryWindow = WindowFrame.ValidHistory(HistoryWindow),
         HistoryModeKind = HistoryModeKind == ExecutionModeKind.Speed ? ExecutionModeKind.Speed : ExecutionModeKind.Effort,
         HistoryPerfSort = HistoryPerfSort ?? History.Perf.PerfSort.Default,

@@ -12,8 +12,10 @@ namespace AgentSpeed.Menus;
 internal static class BoardMenu
 {
     /// <summary>The menu of <paramref name="boardId"/>; null when no such board exists.</summary>
-    public static ContextMenu? Build(IAppCommands commands, string boardId, AppSettings settings, SourceAvailability sources, Localizer loc) =>
-        BoardMenuModel.Build(boardId, settings, sources, loc) is { } level ? MenuBuilder.Build(level, commands, loc) : null;
+    /// <param name="hosts">Each host's dot and word for the Hosts submenu (DESIGN 13).</param>
+    public static ContextMenu? Build(IAppCommands commands, string boardId, AppSettings settings, SourceAvailability sources, Localizer loc,
+        IReadOnlyDictionary<string, MenuHostState>? hosts = null) =>
+        BoardMenuModel.Build(boardId, settings, sources, loc, hosts) is { } level ? MenuBuilder.Build(level, commands, loc) : null;
 
     /// <summary><c>boards.remove.confirm</c>, naming the board by its style and sources; true to remove.</summary>
     public static bool ConfirmRemove(Window? owner, BoardDefinition board, Localizer loc)

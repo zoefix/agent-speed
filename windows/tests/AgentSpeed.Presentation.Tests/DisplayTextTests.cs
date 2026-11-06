@@ -167,6 +167,7 @@ public class DisplayTextTests
     [InlineData(SourceKind.OpenClaw, "source.openclaw", "OpenClaw")]
     [InlineData(SourceKind.Hermes, "source.hermes", "Hermes Agent")]
     [InlineData(SourceKind.Droid, "source.droid", "Factory Droid")]
+    [InlineData(SourceKind.Devin, "source.devin", "Devin")]
     public void EverySourceHasItsOwnName(SourceKind source, string key, string english)
     {
         Assert.Equal(key, DisplayText.SourceKey(source));

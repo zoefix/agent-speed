@@ -100,6 +100,21 @@ internal sealed class AgentRow : ObservableObject, IPerfCardRow
 
     public string Detail { get => _detail; set => Set(ref _detail, value); }
 
+    /// <summary>A remote agent's host after its detail (DESIGN 13); empty for this computer's agents.</summary>
+    public string HostName
+    {
+        get => _hostName;
+        set
+        {
+            if (Set(ref _hostName, value))
+            {
+                OnPropertyChanged(nameof(HasHost));
+            }
+        }
+    }
+
+    public bool HasHost => _hostName.Length > 0;
+
     /// <summary>The agent's traffic today (<c> · ↓ 2.10 MB</c>, DESIGN 10): it stays whole while the detail truncates.</summary>
     public string DetailSuffix { get => _detailSuffix; set => Set(ref _detailSuffix, value); }
 
@@ -161,6 +176,7 @@ internal sealed class AgentRow : ObservableObject, IPerfCardRow
     private string _cardDescription = string.Empty;
     private PerfForm _intelligenceForm = PerfForm.None;
     private string _intelligenceAccessibleName = string.Empty;
+    private string _hostName = string.Empty;
 }
 
 /// <summary>One source of today's cost in the ⓘ popup: colour dot, name, amount and a thin share bar.</summary>
@@ -441,6 +457,7 @@ internal sealed partial class DashboardViewModel : ObservableObject
         HasEstimate = snapshot.LiveEstimatedShare > 0.001 || snapshot.History.Count > 0 && snapshot.History[^1].Estimated.ValueFor(metric) > 0.05;
 
         UpdateSources(snapshot, metric, loc, unit);
+        UpdateHosts(snapshot, metric, loc, unit);
         _lastAgents = snapshot.Agents;
         _lastMetric = metric;
         _lastLoc = loc;
@@ -615,8 +632,15 @@ internal sealed partial class DashboardViewModel : ObservableObject
             var looping = WorkText.Looping(agent.Work, loc);
             row.IsLooping = looping is not null;
 
-            // The row's former tooltip lines are its score card's facts: effort and speed, a top rung's detail, traffic.
+            // The row's former tooltip lines are its score card's facts: the host, effort and speed, a top rung's detail, traffic.
             var facts = new List<string>();
+            var hostName = RemoteHostName(agent);
+            row.HostName = hostName ?? string.Empty;
+            if (hostName is not null)
+            {
+                facts.Add(loc.Format("remote.card.host", hostName));
+            }
+
             var capsule = EffortCapsule.Of(agent);
             row.Capsule = capsule;
             if (capsule.IsKnown)
@@ -667,9 +691,10 @@ internal sealed partial class DashboardViewModel : ObservableObject
 
             row.Indent = new Thickness(rows[i].Indent * TreeConnectors.LevelWidth, 0, 0, 0);
             row.Guides = rows[i].Guides;
+            var detailSpoken = hostName is null ? $"{row.Detail}{row.DetailSuffix}" : $"{row.Detail}, {loc.Format("remote.a11y.onHost", hostName)}{row.DetailSuffix}";
             var accessible = row.LiveKind == LiveValueKind.Number
-                ? string.Create(CultureInfo.InvariantCulture, $"{row.Project}, {row.Detail}{row.DetailSuffix}, {phase}, {row.LiveAccessibleName}")
-                : string.Create(CultureInfo.InvariantCulture, $"{row.Project}, {row.Detail}{row.DetailSuffix}, {phase}");
+                ? string.Create(CultureInfo.InvariantCulture, $"{row.Project}, {detailSpoken}, {phase}, {row.LiveAccessibleName}")
+                : string.Create(CultureInfo.InvariantCulture, $"{row.Project}, {detailSpoken}, {phase}");
             accessible = intelligence.Spoken.Length > 0 ? $"{accessible}, {intelligence.Spoken}" : accessible;
             accessible = capsule.IsKnown ? $"{accessible}, {capsule.AccessibilityText(loc)}" : accessible;
             row.AccessibleName = looping is null ? accessible : $"{accessible}, {looping}";

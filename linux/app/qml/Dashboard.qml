@@ -60,6 +60,22 @@ Window {
 
     ListModel { id: sourceModel }
     ListModel { id: agentModel }
+    // DESIGN 13 Dashboard → Hosts, only while remote hosts exist.
+    ListModel { id: hostModel }
+    function applyHosts() {
+        var rows = []
+        var raw = hostsView.dashboard
+        for (var h = 0; h < raw.length; ++h) {
+            var r = raw[h]
+            rows.push({ key: r.key, name: r.name, dot: r.dot, connected: r.connected, word: r.word || "", live: r.live || 0,
+                        liveText: r.liveText || "0", todayText: r.todayText || "0", todayCostText: r.todayCostText || "" })
+        }
+        Sync.sync(hostModel, rows, "key")
+    }
+    Connections {
+        target: hostsView
+        function onDashboardChanged() { root.applyHosts() }
+    }
 
     function applySnapshot() {
         var s = appState.snapshot
@@ -80,7 +96,7 @@ Window {
             var a = shown[j]
             var detail = a.model ? a.model + " · " + a.sourceName : a.sourceName
             agents.push({
-                key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, phase: a.phase,
+                key: a.id, source: a.source, project: a.project || a.sourceName, detail: detail, hostName: a.hostName || "", phase: a.phase,
                 live: a.live, depth: a.depth, continues: facts[j].continues, hasChildren: facts[j].hasChildren,
                 rails: facts[j].rails, effort: a.effort || "", effortLevel: a.effortLevel, effortTop: a.effortTop,
                 effortConfigured: a.effortConfigured, speedConfigured: a.speedConfigured, modesA11y: a.modesA11y || "",
@@ -229,7 +245,10 @@ Window {
         target: appState
         function onSnapshotChanged() { root.applySnapshot() }
     }
-    Component.onCompleted: applySnapshot()
+    Component.onCompleted: {
+        applySnapshot()
+        applyHosts()
+    }
 
     Shortcut {
         sequence: "Escape"
@@ -500,6 +519,30 @@ Window {
                         add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
                         remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
                         displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
+                    }
+
+                    // Hosts (DESIGN 13): between Sources and Agents, while remote hosts exist.
+                    Hairline { visible: hostsSection.visible }
+                    ColumnLayout {
+                        id: hostsSection
+                        visible: hostsView.shown && hostModel.count > 0
+                        Layout.fillWidth: true
+                        spacing: 0
+                        SectionHeader {
+                            text: S.tr2(S.rev, "remote.hosts")
+                            trailing: S.tr2(S.rev, "unit.tokS")
+                        }
+                        ListView {
+                            id: hostList
+                            Layout.fillWidth: true
+                            Layout.preferredHeight: contentHeight
+                            interactive: false
+                            model: hostModel
+                            delegate: HostRow { width: hostList.width }
+                            add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }
+                            remove: Transition { NumberAnimation { property: "opacity"; to: 0; duration: 180 } }
+                            displaced: Transition { NumberAnimation { property: "y"; duration: 220; easing.type: Easing.OutCubic } }
+                        }
                     }
 
                     Hairline {}

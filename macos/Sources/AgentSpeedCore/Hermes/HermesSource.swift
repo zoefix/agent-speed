@@ -67,10 +67,8 @@ final class HermesSource {
         var folder: String { parser.folder }
     }
 
-    /// The Hermes home, or the folder of the user setting.
-    let root: String
-    /// True when `root` is the user setting (a home or one log folder).
-    let isSetting: Bool
+    /// The Hermes homes and user locations of the source's list (METRICS 2.1), in list order.
+    let roots: [HermesRoot]
     private let timeZone: TimeZone
     private let limits: TranscriptSession.ReadingLimits
     private var sets: [String: LogSet] = [:]
@@ -82,21 +80,31 @@ final class HermesSource {
     private(set) var filesRead = 0
     private(set) var bytesRead: Int64 = 0
 
-    init(root: String, isSetting: Bool, timeZone: TimeZone, limits: TranscriptSession.ReadingLimits = .standard) {
-        self.root = root
-        self.isSetting = isSetting
+    init(roots: [HermesRoot], timeZone: TimeZone, limits: TranscriptSession.ReadingLimits = .standard) {
+        self.roots = roots
         self.timeZone = timeZone
         self.limits = limits
     }
 
+    /// One root: the home (`isSetting` false) or a user location.
+    convenience init(root: String, isSetting: Bool, timeZone: TimeZone, limits: TranscriptSession.ReadingLimits = .standard) {
+        self.init(roots: [HermesRoot(path: root, isSetting: isSetting)], timeZone: timeZone, limits: limits)
+    }
+
     // MARK: - Availability
 
-    /// The home (or the folder of the setting) exists (METRICS 2); a home without logs counts.
-    var detected: Bool { FileStat.stat(root)?.isDirectory == true }
+    /// A home or user location exists (METRICS 2); a home without logs counts.
+    var detected: Bool { roots.contains { FileStat.stat($0.path)?.isDirectory == true } }
 
-    /// The log folders to read now: the setting's, else the home's (METRICS 2, 4.15).
+    /// The row's path: the first root that exists, else the first root.
+    var displayRoot: String {
+        (roots.first { FileStat.stat($0.path)?.isDirectory == true } ?? roots.first)?.path ?? ""
+    }
+
+    /// The log folders to read now: every root's, each once (METRICS 2, 2.1, 4.15).
     var logFolders: [String] {
-        isSetting ? HermesHome.settingFolders(root) : HermesHome.logFolders(ofHome: root)
+        var seen: Set<String> = []
+        return roots.flatMap(\.logFolders).filter { seen.insert($0).inserted }
     }
 
     var watchedDirectories: [String] {

@@ -159,7 +159,10 @@ std::shared_ptr<const TimeZone> TimeZone::load(const std::string& id) {
     }
     std::ifstream in(path, std::ios::binary);
     if (!in) return nullptr;
-    const std::string data((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>());
+    return fromData(std::string((std::istreambuf_iterator<char>(in)), std::istreambuf_iterator<char>()));
+}
+
+std::shared_ptr<const TimeZone> TimeZone::fromData(const std::string& data) {
     auto zone = std::make_shared<TimeZone>();
     if (!parse(data, *zone)) return nullptr;
     return zone;
@@ -168,7 +171,11 @@ std::shared_ptr<const TimeZone> TimeZone::load(const std::string& id) {
 bool TimeZone::parse(const std::string& d, TimeZone& z) {
     auto header = [&](std::size_t at, std::int64_t counts[6]) {
         if (d.size() < at + 44 || d.compare(at, 4, "TZif") != 0) return false;
-        for (int k = 0; k < 6; ++k) counts[k] = readBig(d, at + 20 + 4 * static_cast<std::size_t>(k), 4);
+        for (int k = 0; k < 6; ++k) {
+            counts[k] = readBig(d, at + 20 + 4 * static_cast<std::size_t>(k), 4);
+            // Counts beyond the data cannot be real; they also keep the block arithmetic below in range.
+            if (counts[k] < 0 || counts[k] > static_cast<std::int64_t>(d.size())) return false;
+        }
         return true;
     };
     std::int64_t c[6];  // isutcnt, isstdcnt, leapcnt, timecnt, typecnt, charcnt

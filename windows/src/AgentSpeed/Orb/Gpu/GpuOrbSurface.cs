@@ -270,7 +270,7 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
 
     /// <summary>
     /// Whether a canvas point (DIP from the window's top-left) is on the unit's hit area (DESIGN 9 Switching): the unit text,
-    /// or the value in <c>minimal</c>, grown to at least 44 × 20 and clipped to the disc.
+    /// or the value without a unit line (<c>minimal</c>, orbs below 96 DIP), grown to at least 44 × 20 and clipped to the disc.
     /// </summary>
     public bool IsOnUnit(double x, double y)
     {
@@ -279,7 +279,7 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
             return false;
         }
 
-        var layout = style.Readout;
+        var layout = style.Readout.At(ctx.Size);
         var width = layout.UnitSize is null ? _orb.Readout.ValueWidth : _orb.Readout.UnitWidth;
         if (_orb.UnitOnDial && layout.UnitSize is not null)
         {
@@ -385,6 +385,12 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
         _surface ??= new CompositionSurface(Hwnd);
         try
         {
+            if (!_device.CanSubmit)
+            {
+                FrameStats.AddSkip();
+                return Skip();
+            }
+
             var target = _surface.Begin(_device, _pixels, _pixels);
             if (target is not null && OrbGpuRenderer.Draw(_device, _orb.List, target, _pixels, _pixels))
             {
@@ -393,16 +399,7 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
                     case PresentResult.Shown:
                         return true;
                     case PresentResult.Busy:
-                        // The compositor has not taken the previous frame yet: the next frame presents instead (asked for
-                        // now only when the orb would otherwise stay static).
-                        FramesBusy++;
-                        _forcePresent = true;
-                        if (_demand == FrameClass.None)
-                        {
-                            _clock.Kick(this);
-                        }
-
-                        return false;
+                        return Skip();
                 }
             }
         }
@@ -414,6 +411,22 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
         if (_device.IsLost)
         {
             Recover();
+        }
+
+        return false;
+    }
+
+    /// <summary>
+    /// The compositor has not taken the previous frame yet, or the GPU is still busy: the next frame presents instead
+    /// (asked for now only when the orb would otherwise stay static).
+    /// </summary>
+    private bool Skip()
+    {
+        FramesBusy++;
+        _forcePresent = true;
+        if (_demand == FrameClass.None)
+        {
+            _clock.Kick(this);
         }
 
         return false;

@@ -11,6 +11,7 @@
 #include <vector>
 
 #include "orb/gauge.hpp"
+#include "orb/idle_fade.hpp"
 #include "orb/readout.hpp"
 #include "orb/renderer.hpp"
 #include "orb/shared_layers.hpp"
@@ -133,6 +134,7 @@ private:
     void applyFlags();
     void applyShape();
     void applyOpacity();
+    void updateFade();
     void setStyle(const QString& style);
     void setDiameter(double diameter);
     // `guides` receives the alignment guides (facing disc edges) of the snapped position.
@@ -201,7 +203,6 @@ private:
     QString info_;
     QString unavailable_;  // "", "disabled" or "notFound"
     QStringList unavailableSources_;
-    double lastActive_ = -1e9;  // the last tick with a live value (fade when idle)
     QString labelText_;
     QString hint_;
     double labelAt_ = -1e9;
@@ -241,7 +242,8 @@ private:
     bool shown_ = false;
     double opacity_ = 1;
     bool fadeWhenIdle_ = false;
-    bool idleFaded_ = false;
+    IdleFade idleFade_;
+    IdleFadeMotion fadeMotion_{[this] { applyOpacity(); }};
     QStringList sources_;  // empty: all sources
     QString unit_ = QStringLiteral("tokens");
     QString theme_;

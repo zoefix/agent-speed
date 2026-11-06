@@ -67,6 +67,21 @@ public class OrbSharedTests
         Assert.Equal(7, OrbReadoutLayout.TextSize(0.062, 80));
 
     [Fact]
+    public void BelowNinetySixPointsNoStyleDrawsAUnitLineAndTheTitleStays()
+    {
+        foreach (var style in OrbStyles.All)
+        {
+            var layout = OrbReadoutLayout.For(style);
+            Assert.Equal(style != OrbStyle.Minimal, layout.At(96).UnitSize is not null);
+            Assert.Equal(style != OrbStyle.Minimal, OrbReadoutLayout.HasUnitLine(style, 96));
+            Assert.False(OrbReadoutLayout.HasUnitLine(style, 92));
+            Assert.Null(layout.At(92).UnitSize);
+            Assert.Equal(layout.TitleBaseline, layout.At(64).TitleBaseline, 9);
+            Assert.Equal(layout.ValueBaseline, layout.At(64).ValueBaseline);
+        }
+    }
+
+    [Fact]
     public void ReadoutZoneFadesParticlesBehindTheText()
     {
         Assert.Equal(ReadoutZone.Floor, ReadoutZone.Fade(0, ReadoutZone.CenterY), 6);

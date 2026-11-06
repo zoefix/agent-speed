@@ -88,11 +88,13 @@ struct GrokBuildParser: Sendable {
             state.setPhase(.generating, at: time, inFlightStartMs: pendingStartMs ?? time)
         case "agent_message_chunk", "agent_thought_chunk", "response_started":
             state.setPhase(.generating, at: time, inFlightStartMs: pendingStartMs ?? time)
-        case "tool_call": state.setPhase(.tools, at: time)
-        case "tool_call_update":
-            if line.status == "completed" {
+        case "tool_call", "tool_call_update":
+            // A finished tool hands the turn back to the model (METRICS 4.12, issue #52).
+            if line.status == "completed" || line.status == "failed" {
                 pendingStartMs = time
                 state.setPhase(.generating, at: time, inFlightStartMs: time)
+            } else {
+                state.setPhase(.tools, at: time)
             }
         case "turn_completed":
             let prompt = line.promptId ?? line.eventId ?? "\(sessionId):\(time)"

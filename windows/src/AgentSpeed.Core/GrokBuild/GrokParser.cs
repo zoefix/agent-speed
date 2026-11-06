@@ -78,11 +78,24 @@ internal sealed class GrokParser : TranscriptParser<GrokLine>
             case "user_message_chunk":
             case "agent_message_chunk":
             case "agent_thought_chunk":
+            case "response_started":
                 SetPhase(AgentPhase.Generating, time, InFlightStartMs ?? time);
+                break;
+            case "turn_cancelled":
+            case "turn_failed":
+                SetPhase(AgentPhase.Idle, time, null);
                 break;
             case "tool_call":
             case "tool_call_update":
-                SetPhase(line.ToolStatus is "completed" or "failed" ? AgentPhase.Generating : AgentPhase.Tools, time, null);
+                // A finished tool hands the turn back to the model (METRICS 4.12, issue #52).
+                if (line.ToolStatus is "completed" or "failed")
+                {
+                    SetPhase(AgentPhase.Generating, time, time);
+                }
+                else
+                {
+                    SetPhase(AgentPhase.Tools, time, null);
+                }
                 break;
             case "turn_completed":
                 if (!_metadataSeen && line.Usage is { Count: > 0 })

@@ -23,7 +23,6 @@ class Preferences : public QObject {
     Q_PROPERTY(QStringList subscriptions READ subscriptions WRITE setSubscriptions NOTIFY subscriptionsChanged)
     Q_PROPERTY(bool includeSubscriptions READ includeSubscriptions WRITE setIncludeSubscriptions NOTIFY includeSubscriptionsChanged)
     Q_PROPERTY(QStringList disabledSources READ disabledSources NOTIFY sourcesChanged)
-    Q_PROPERTY(QVariantMap folders READ folders NOTIFY sourcesChanged)
     Q_PROPERTY(bool networkEnabled READ networkEnabled WRITE setNetworkEnabled NOTIFY networkEnabledChanged)
     Q_PROPERTY(bool syncPrices READ syncPrices WRITE setSyncPrices NOTIFY syncPricesChanged)
     Q_PROPERTY(bool autoCheckUpdates READ autoCheckUpdates WRITE setAutoCheckUpdates NOTIFY autoCheckUpdatesChanged)
@@ -59,7 +58,10 @@ public:
     bool includeSubscriptions() const;
     void setIncludeSubscriptions(bool value);
     QStringList disabledSources() const;
-    QVariantMap folders() const;
+    // METRICS 2.1, DESIGN 5 Storage: the location lists, stored as one JSON value `sourceLocations`. While it is absent
+    // the single folders of earlier versions (`sources/folders`) are read as [folder]; they are never written again.
+    agentspeed::LocationLists sourceLocations() const;
+    void setSourceLocations(const agentspeed::LocationLists& lists);
     bool networkEnabled() const;
     void setNetworkEnabled(bool value);
     bool syncPrices() const;
@@ -73,11 +75,12 @@ public:
     void setTrafficIncludeTools(bool value);
     QString trafficUnit() const;
     void setTrafficUnit(const QString& value);
+    // REMOTE 2.1: the remote hosts document (`remoteHosts`) as JSON text; empty when none was saved.
+    QString remoteHosts() const;
+    void setRemoteHosts(const QString& json);
 
     Q_INVOKABLE bool sourceEnabled(const QString& source) const;
     Q_INVOKABLE void setSourceEnabled(const QString& source, bool enabled);
-    // A chosen folder replaces the automatic roots of that source (METRICS 2); an empty path resets it.
-    Q_INVOKABLE void setFolder(const QString& source, const QString& path);
     Q_INVOKABLE bool subscribed(const QString& source) const;
     Q_INVOKABLE void setSubscribed(const QString& source, bool value);
 
@@ -102,6 +105,7 @@ signals:
     void syncPricesChanged();
     void trafficChanged();
     void autoCheckUpdatesChanged();
+    void remoteHostsChanged();
 
 private:
     template <typename T>

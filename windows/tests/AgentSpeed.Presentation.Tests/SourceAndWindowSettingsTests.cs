@@ -1,6 +1,8 @@
 using System.Text.Json;
 using AgentSpeed.Core;
+using AgentSpeed.Core.Locations;
 using AgentSpeed.Presentation.Settings;
+using AgentSpeed.Presentation.Settings.Locations;
 using AgentSpeed.Presentation.Settings.Orbs;
 
 namespace AgentSpeed.Presentation.Tests;
@@ -48,146 +50,99 @@ public class SourceAndWindowSettingsTests
         }
     }
 
-    [Fact]
-    public void OpenCodeAndGeminiFoldersReachTheMonitorAndRoundTrip()
+    private static AppSettings With(AppSettings settings, params (LocationFolder Folder, string Path)[] lists) =>
+        settings.WithLocations(lists.Aggregate(settings.Locations, (all, list) => all.With(list.Folder, [DataLocation.At(list.Path)])));
+
+    private static IReadOnlyList<DataLocation> Only(string path) => [DataLocation.At(path)];
+
+    /// <summary>The folders of a settings file's stored lists, by list name.</summary>
+    private static string ListedPath(JsonElement root, string list) =>
+        root.GetProperty("sourceLocations").GetProperty("lists").GetProperty(list)[0].GetProperty("path").GetString()!;
+
+    [Theory]
+    [InlineData(SourceKind.OpenCode, SourceKind.Gemini)]
+    [InlineData(SourceKind.Omp, SourceKind.Antigravity)]
+    public void FoldersOfTwoSourcesReachTheMonitorAndRoundTrip(SourceKind off, SourceKind on)
     {
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.OpenCode, false) with { OpenCodeRoot = OpenCode, GeminiRoot = Gemini };
+        string PathOf(SourceKind kind) => kind switch
+        {
+            SourceKind.OpenCode => OpenCode,
+            SourceKind.Gemini => Gemini,
+            SourceKind.Omp => Omp,
+            _ => Antigravity,
+        };
+
+        var (offFolder, onFolder) = (LocationFolders.Of(off), LocationFolders.Of(on));
+        var settings = With(AppSettings.Default.WithSourceEnabled(off, false), (offFolder, PathOf(off)), (onFolder, PathOf(on)));
         var config = settings.ToMonitorConfiguration();
-        Assert.Equal(OpenCode, config.OpenCodeRoot);
-        Assert.Equal(Gemini, config.GeminiRoot);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { GeminiRoot = Gemini }).ToMonitorConfiguration());
+        Assert.DoesNotContain(off, config.EnabledSources);
+        Assert.Contains(on, config.EnabledSources);
+        Assert.Equal(Only(PathOf(off)), config.ListOf(offFolder));
+        Assert.Equal(Only(PathOf(on)), config.ListOf(onFolder));
+        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), With(AppSettings.Default, (onFolder, PathOf(on))).ToMonitorConfiguration());
 
         var json = SettingsSerializer.Serialize(settings);
         using (var document = JsonDocument.Parse(json))
         {
             var sources = document.RootElement.GetProperty("sources");
-            Assert.False(sources.GetProperty("opencode").GetBoolean());
-            Assert.True(sources.GetProperty("gemini").GetBoolean());
-            Assert.Equal(OpenCode, sources.GetProperty("opencodeRoot").GetString());
-            Assert.Equal(Gemini, sources.GetProperty("geminiRoot").GetString());
+            Assert.False(sources.GetProperty(OrbSources.KeyOf(off)).GetBoolean());
+            Assert.True(sources.GetProperty(OrbSources.KeyOf(on)).GetBoolean());
+            Assert.Equal(PathOf(off), ListedPath(document.RootElement, offFolder.Key()));
+            Assert.Equal(PathOf(on), ListedPath(document.RootElement, onFolder.Key()));
+            Assert.False(sources.TryGetProperty(offFolder.LegacyKey(), out _), "lists never write the single-folder keys");
         }
 
         var back = SettingsSerializer.Deserialize(json);
-        Assert.False(back.OpenCodeEnabled);
-        Assert.True(back.GeminiEnabled);
-        Assert.Equal(OpenCode, back.OpenCodeRoot);
-        Assert.Equal(Gemini, back.GeminiRoot);
+        Assert.False(back.IsSourceEnabled(off));
+        Assert.True(back.IsSourceEnabled(on));
+        Assert.Equal(settings.Locations, back.Locations);
     }
 
-    [Fact]
-    public void OlderFilesKeepOpenCodeAndGeminiOnWithDefaultFolders()
+    [Theory]
+    [InlineData("""{ "version": 1, "sources": { "codex": true, "deepseek": false } }""")]
+    [InlineData("""{ "version": 1, "sources": { "codex": true, "opencode": false, "gemini": true, "geminiRoot": null } }""")]
+    [InlineData("""{ "version": 1, "sources": { "codex": true, "omp": false, "antigravity": true, "antigravityRoot": null } }""")]
+    public void OlderFilesKeepNewerSourcesOnWithTheirAutomaticRoots(string json)
     {
-        var s = SettingsSerializer.Deserialize("""{ "version": 1, "sources": { "codex": true, "deepseek": false } }""");
-        Assert.True(s.OpenCodeEnabled);
+        var s = SettingsSerializer.Deserialize(json);
         Assert.True(s.GeminiEnabled);
-        Assert.Null(s.OpenCodeRoot);
-        Assert.Null(s.GeminiRoot);
-        Assert.Null(s.HistoryWindow);
-    }
-
-    [Fact]
-    public void OmpAndAntigravityFoldersReachTheMonitorAndRoundTrip()
-    {
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.Omp, false) with { OmpRoot = Omp, AntigravityRoot = Antigravity };
-        var config = settings.ToMonitorConfiguration();
-        Assert.DoesNotContain(SourceKind.Omp, config.EnabledSources);
-        Assert.Contains(SourceKind.Antigravity, config.EnabledSources);
-        Assert.Equal(Omp, config.OmpRoot);
-        Assert.Equal(Antigravity, config.AntigravityRoot);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { OmpRoot = Omp }).ToMonitorConfiguration());
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(),
-            (AppSettings.Default with { AntigravityRoot = Antigravity }).ToMonitorConfiguration());
-
-        var json = SettingsSerializer.Serialize(settings);
-        using (var document = JsonDocument.Parse(json))
-        {
-            var sources = document.RootElement.GetProperty("sources");
-            Assert.False(sources.GetProperty("omp").GetBoolean());
-            Assert.True(sources.GetProperty("antigravity").GetBoolean());
-            Assert.Equal(Omp, sources.GetProperty("ompRoot").GetString());
-            Assert.Equal(Antigravity, sources.GetProperty("antigravityRoot").GetString());
-        }
-
-        var back = SettingsSerializer.Deserialize(json);
-        Assert.False(back.OmpEnabled);
-        Assert.True(back.AntigravityEnabled);
-        Assert.Equal(Omp, back.OmpRoot);
-        Assert.Equal(Antigravity, back.AntigravityRoot);
-
-        using var defaults = JsonDocument.Parse(SettingsSerializer.Serialize(AppSettings.Default));
-        var defaultSources = defaults.RootElement.GetProperty("sources");
-        Assert.True(defaultSources.GetProperty("omp").GetBoolean());
-        Assert.True(defaultSources.GetProperty("antigravity").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("ompRoot").ValueKind);
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("antigravityRoot").ValueKind);
-    }
-
-    [Fact]
-    public void OlderFilesKeepOmpAndAntigravityOnWithDefaultFolders()
-    {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "opencode": false, "gemini": true, "geminiRoot": null } }
-            """);
-        Assert.True(s.OmpEnabled);
         Assert.True(s.AntigravityEnabled);
-        Assert.Null(s.OmpRoot);
-        Assert.Null(s.AntigravityRoot);
-        Assert.False(s.OpenCodeEnabled);
-
+        Assert.True(s.WorkBuddyEnabled);
+        Assert.True(s.WorkBuddyAiEnabled);
+        Assert.True(s.Locations.IsAutomaticOnly);
+        Assert.Null(s.HistoryWindow);
         var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.Omp, config.EnabledSources);
         Assert.Contains(SourceKind.Antigravity, config.EnabledSources);
-        Assert.Null(config.OmpRoot);
-        Assert.Null(config.AntigravityRoot);
+        Assert.Contains(SourceKind.WorkBuddyAi, config.EnabledSources);
+        Assert.All(LocationFolders.All, folder => Assert.Equal(LocationLists.AutomaticOnly, config.ListOf(folder)));
     }
 
     [Fact]
     public void WorkBuddyFoldersReachTheMonitorAndRoundTrip()
     {
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.WorkBuddy, false) with
-        {
-            WorkBuddyRoot = WorkBuddy,
-            WorkBuddyAiRoot = WorkBuddyAiProjects,
-        };
+        var settings = With(AppSettings.Default.WithSourceEnabled(SourceKind.WorkBuddy, false),
+            (LocationFolder.WorkBuddy, WorkBuddy), (LocationFolder.WorkBuddyAi, WorkBuddyAiProjects));
         Assert.False(settings.WorkBuddyEnabled);
         Assert.True(settings.WorkBuddyAiEnabled);
 
         var config = settings.ToMonitorConfiguration();
         Assert.DoesNotContain(SourceKind.WorkBuddy, config.EnabledSources);
         Assert.Contains(SourceKind.WorkBuddyAi, config.EnabledSources);
-        Assert.Equal(WorkBuddy, config.WorkBuddyRoot);
-        Assert.Equal(WorkBuddyAiProjects, config.WorkBuddyAiRoot);
+        Assert.Equal(Only(WorkBuddy), config.ListOf(LocationFolder.WorkBuddy));
+        Assert.Equal(Only(WorkBuddyAiProjects), config.ListOf(LocationFolder.WorkBuddyAi));
         var defaults = AppSettings.Default.ToMonitorConfiguration();
-        var china = (AppSettings.Default with { WorkBuddyRoot = WorkBuddy }).ToMonitorConfiguration();
-        var international = (AppSettings.Default with { WorkBuddyAiRoot = WorkBuddy }).ToMonitorConfiguration();
+        var china = With(AppSettings.Default, (LocationFolder.WorkBuddy, WorkBuddy)).ToMonitorConfiguration();
+        var international = With(AppSettings.Default, (LocationFolder.WorkBuddyAi, WorkBuddy)).ToMonitorConfiguration();
         Assert.NotEqual(defaults, china);
         Assert.NotEqual(defaults, international);
         Assert.NotEqual(china, international);
-        Assert.Null(china.WorkBuddyAiRoot);
-        Assert.Null(international.WorkBuddyRoot);
+        Assert.Equal(LocationLists.AutomaticOnly, china.ListOf(LocationFolder.WorkBuddyAi));
+        Assert.Equal(LocationLists.AutomaticOnly, international.ListOf(LocationFolder.WorkBuddy));
 
-        var json = SettingsSerializer.Serialize(settings);
-        using (var document = JsonDocument.Parse(json))
-        {
-            var sources = document.RootElement.GetProperty("sources");
-            Assert.False(sources.GetProperty("workbuddy").GetBoolean());
-            Assert.True(sources.GetProperty("workbuddyAi").GetBoolean());
-            Assert.Equal(WorkBuddy, sources.GetProperty("workbuddyRoot").GetString());
-            Assert.Equal(WorkBuddyAiProjects, sources.GetProperty("workbuddyAiRoot").GetString());
-        }
-
-        var back = SettingsSerializer.Deserialize(json);
+        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings));
         Assert.False(back.WorkBuddyEnabled);
         Assert.True(back.WorkBuddyAiEnabled);
-        Assert.Equal(WorkBuddy, back.WorkBuddyRoot);
-        Assert.Equal(WorkBuddyAiProjects, back.WorkBuddyAiRoot);
-
-        using var defaultDocument = JsonDocument.Parse(SettingsSerializer.Serialize(AppSettings.Default));
-        var defaultSources = defaultDocument.RootElement.GetProperty("sources");
-        Assert.True(defaultSources.GetProperty("workbuddy").GetBoolean());
-        Assert.True(defaultSources.GetProperty("workbuddyAi").GetBoolean());
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("workbuddyRoot").ValueKind);
-        Assert.Equal(JsonValueKind.Null, defaultSources.GetProperty("workbuddyAiRoot").ValueKind);
+        Assert.Equal(settings.Locations, back.Locations);
     }
 
     [Fact]
@@ -195,36 +150,12 @@ public class SourceAndWindowSettingsTests
     {
         Assert.Equal(".workbuddy", Path.GetFileName(LiveMonitor.DefaultWorkBuddyFolder));
         Assert.Equal(".workbuddy-ai", Path.GetFileName(LiveMonitor.DefaultWorkBuddyAiFolder));
-        var d = AppSettings.Default;
-        Assert.Equal(LiveMonitor.DefaultWorkBuddyFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddy, d.WorkBuddyRoot));
-        Assert.Equal(LiveMonitor.DefaultWorkBuddyAiFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, d.WorkBuddyAiRoot));
-
-        var changed = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(d with { WorkBuddyAiRoot = WorkBuddyAiProjects }));
-        Assert.Equal(LiveMonitor.DefaultWorkBuddyFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddy, changed.WorkBuddyRoot));
-        Assert.Equal(Path.GetDirectoryName(WorkBuddyAiProjects), LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, changed.WorkBuddyAiRoot));
+        Assert.Equal(LiveMonitor.DefaultWorkBuddyFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddy, null));
+        Assert.Equal(LiveMonitor.DefaultWorkBuddyAiFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, null));
+        Assert.Equal(Path.GetDirectoryName(WorkBuddyAiProjects), LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, WorkBuddyAiProjects));
         Assert.Equal(WorkBuddy, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddy, WorkBuddy));
-
-        var reset = changed with { WorkBuddyAiRoot = null };
-        Assert.Equal(LiveMonitor.DefaultWorkBuddyAiFolder, LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, reset.WorkBuddyAiRoot));
-    }
-
-    [Fact]
-    public void OlderFilesKeepBothWorkBuddyEditionsOnWithDefaultFolders()
-    {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "omp": false, "antigravity": true, "antigravityRoot": null } }
-            """);
-        Assert.True(s.WorkBuddyEnabled);
-        Assert.True(s.WorkBuddyAiEnabled);
-        Assert.Null(s.WorkBuddyRoot);
-        Assert.Null(s.WorkBuddyAiRoot);
-        Assert.False(s.OmpEnabled);
-
-        var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.WorkBuddy, config.EnabledSources);
-        Assert.Contains(SourceKind.WorkBuddyAi, config.EnabledSources);
-        Assert.Null(config.WorkBuddyRoot);
-        Assert.Null(config.WorkBuddyAiRoot);
+        Assert.Equal([LiveMonitor.DefaultWorkBuddyFolder], AutomaticLocations.All(LocationFolder.WorkBuddy));
+        Assert.Equal([LiveMonitor.DefaultWorkBuddyAiFolder], AutomaticLocations.All(LocationFolder.WorkBuddyAi));
     }
 
     [Theory]
@@ -234,37 +165,6 @@ public class SourceAndWindowSettingsTests
     [InlineData("""
         { "sources": { "workbuddy": null, "workbuddyAi": [], "workbuddyRoot": "", "workbuddyAiRoot": "   " } }
         """)]
-    public void InvalidWorkBuddyValuesFallBackPerField(string json)
-    {
-        var s = SettingsSerializer.Deserialize(json);
-        Assert.True(s.WorkBuddyEnabled);
-        Assert.True(s.WorkBuddyAiEnabled);
-        Assert.Null(s.WorkBuddyRoot);
-        Assert.Null(s.WorkBuddyAiRoot);
-    }
-
-    [Fact]
-    public void WorkBuddyPathsAreCleaned()
-    {
-        var s = (AppSettings.Default with { WorkBuddyRoot = $"  {WorkBuddy}  ", WorkBuddyAiRoot = $"{WorkBuddyAiProjects}\0" }).Validated();
-        Assert.Equal(WorkBuddy, s.WorkBuddyRoot);
-        Assert.Null(s.WorkBuddyAiRoot);
-        Assert.Null((AppSettings.Default with { WorkBuddyRoot = Path.Combine("relative", ".workbuddy") }).Validated().WorkBuddyRoot);
-        Assert.Null((AppSettings.Default with { WorkBuddyAiRoot = Path.Combine("relative", "projects") }).Validated().WorkBuddyAiRoot);
-    }
-
-    [Fact]
-    public void AChosenBackupStoreIsKeptForTheMonitorToSkip()
-    {
-        var backup = Path.Combine(Path.GetTempPath(), ".gemini", "antigravity-backup");
-        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(AppSettings.Default with { AntigravityRoot = backup }));
-        Assert.Equal(backup, back.AntigravityRoot);
-        Assert.Equal(backup, back.ToMonitorConfiguration().AntigravityRoot);
-        Assert.Empty(LiveMonitor.AntigravityStores(backup));
-        Assert.Equal([Antigravity], LiveMonitor.AntigravityStores(Antigravity));
-    }
-
-    [Theory]
     [InlineData("""
         { "sources": { "opencode": "no", "gemini": 0, "omp": "off", "antigravity": 1,
           "opencodeRoot": 5, "geminiRoot": "relative/tmp", "ompRoot": 7, "antigravityRoot": "relative/store" } }
@@ -276,23 +176,35 @@ public class SourceAndWindowSettingsTests
     public void InvalidSourceValuesFallBackPerField(string json)
     {
         var s = SettingsSerializer.Deserialize(json);
-        Assert.True(s.OpenCodeEnabled);
-        Assert.True(s.GeminiEnabled);
-        Assert.True(s.OmpEnabled);
-        Assert.True(s.AntigravityEnabled);
-        Assert.Null(s.OpenCodeRoot);
-        Assert.Null(s.GeminiRoot);
-        Assert.Null(s.OmpRoot);
-        Assert.Null(s.AntigravityRoot);
+        Assert.All(Enum.GetValues<SourceKind>(), kind => Assert.True(s.IsSourceEnabled(kind)));
+        Assert.Equal(0, s.LegacyRoots.Count);
+        Assert.True(s.Locations.IsAutomaticOnly);
     }
 
     [Fact]
-    public void OmpAndAntigravityPathsAreCleaned()
+    public void EarlierSingleFoldersAreCleanedLikeBefore()
     {
-        var s = (AppSettings.Default with { OmpRoot = $"  {Omp}  ", AntigravityRoot = $"{Antigravity}\0" }).Validated();
-        Assert.Equal(Omp, s.OmpRoot);
-        Assert.Null(s.AntigravityRoot);
-        Assert.Null((AppSettings.Default with { OmpRoot = Path.Combine("relative", "sessions") }).Validated().OmpRoot);
+        var legacy = LegacyLocations.Empty.With(LocationFolder.WorkBuddy, $"  {WorkBuddy}  ").With(LocationFolder.WorkBuddyAi, $"{WorkBuddyAiProjects}\0")
+            .With(LocationFolder.Omp, $"  {Omp}  ").With(LocationFolder.Antigravity, Path.Combine("relative", "store"));
+        var s = (AppSettings.Default with { LegacyRoots = legacy }).Validated();
+        Assert.Equal(WorkBuddy, s.LegacyRoots[LocationFolder.WorkBuddy]);
+        Assert.Null(s.LegacyRoots[LocationFolder.WorkBuddyAi]);
+        Assert.Equal(Omp, s.LegacyRoots[LocationFolder.Omp]);
+        Assert.Null(s.LegacyRoots[LocationFolder.Antigravity]);
+        Assert.Equal(Only(WorkBuddy), s.Locations[LocationFolder.WorkBuddy]);
+        Assert.Equal(Only(Omp), s.Locations[LocationFolder.Omp]);
+        Assert.Equal(LocationLists.AutomaticOnly, s.Locations[LocationFolder.Antigravity]);
+    }
+
+    [Fact]
+    public void AChosenBackupStoreIsKeptForTheMonitorToSkip()
+    {
+        var backup = Path.Combine(Path.GetTempPath(), ".gemini", "antigravity-backup");
+        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(With(AppSettings.Default, (LocationFolder.Antigravity, backup))));
+        Assert.Equal(Only(backup), back.Locations[LocationFolder.Antigravity]);
+        Assert.Equal(Only(backup), back.ToMonitorConfiguration().ListOf(LocationFolder.Antigravity));
+        Assert.Empty(LiveMonitor.AntigravityStores(backup));
+        Assert.Equal([Antigravity], LiveMonitor.AntigravityStores(Antigravity));
     }
 
     [Fact]

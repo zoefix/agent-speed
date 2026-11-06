@@ -179,10 +179,11 @@ enum HistoryLogicChecks {
         check("an OpenClaw database chosen as the folder stays a file", openclawDatabaseSetting())
         check("csv source id of Hermes Agent", HistoryCSV.sourceID(.hermes) == "hermes")
         check("settings saved before Hermes Agent load with it on and its home", hermesSettingsUpgrade())
-        check("a Hermes logs folder chosen in Sources replaces the home", hermesFolderSetting())
+        check("a Hermes logs folder added in Sources is read next to the home", hermesFolderSetting())
         check("csv source id of Factory Droid", HistoryCSV.sourceID(.droid) == "droid")
+        check("csv source id of Devin", HistoryCSV.sourceID(.devin) == "devin")
         check("settings saved before Factory Droid load with it on and its sessions folder", droidSettingsUpgrade())
-        check("a Factory Droid folder chosen in Sources replaces ~/.factory/sessions", droidFolderSetting())
+        check("a Factory Droid folder added in Sources is read next to ~/.factory/sessions", droidFolderSetting())
         let risky = DaySummary(
             day: today, requests: 0, input: 0, cachedInput: 0, cacheWriteInput: 0, output: 0, reasoning: 0,
             measuredOutput: 0, measuredMs: 0, unfinalized: 0, agents: 0, peak: nil,
@@ -401,9 +402,10 @@ enum HistoryLogicChecks {
         defaults.set(before, forKey: "knownSources")
         defaults.set("/Users/dev/.omp/agent/sessions", forKey: "ompRoot")
         let settings = AppSettings(defaults: defaults)
-        return settings.isEnabled(.pi) && !settings.isEnabled(.gemini) && settings.piRoot == nil
-            && settings.monitorConfiguration.piRoot == nil && settings.ompRoot?.path == "/Users/dev/.omp/agent/sessions"
-            && TranscriptFolder.pi.urls(in: settings) == LiveMonitor.defaultPiRoots
+        return settings.isEnabled(.pi) && !settings.isEnabled(.gemini) && settings.sourceLocations[.pi] == [.automatic]
+            && settings.monitorConfiguration.locations[.pi] == [.automatic]
+            && settings.sourceLocations[.omp] == [.path("/Users/dev/.omp/agent/sessions")]
+            && TranscriptFolder.pi.entries(in: settings).map(\.urls) == [LiveMonitor.defaultPiRoots]
     }
 
     /// Settings saved by a version before OpenClaw: OpenClaw starts enabled and reads every state folder.
@@ -416,9 +418,8 @@ enum HistoryLogicChecks {
         defaults.set(before.filter { $0 != "omp" }, forKey: "enabledSources")
         defaults.set(before, forKey: "knownSources")
         let settings = AppSettings(defaults: defaults)
-        return settings.isEnabled(.openclaw) && !settings.isEnabled(.omp) && settings.openclawRoot == nil
-            && settings.monitorConfiguration.openclawRoot == nil
-            && TranscriptFolder.openclaw.urls(in: settings) == LiveMonitor.defaultOpenclawRoots
+        return settings.isEnabled(.openclaw) && !settings.isEnabled(.omp) && settings.sourceLocations[.openclaw] == [.automatic]
+            && TranscriptFolder.openclaw.entries(in: settings).map(\.urls) == [LiveMonitor.defaultOpenclawRoots]
     }
 
     /// Settings saved by a version before Hermes Agent: it starts enabled and reads the automatic home.
@@ -431,25 +432,27 @@ enum HistoryLogicChecks {
         defaults.set(before.filter { $0 != "pi" }, forKey: "enabledSources")
         defaults.set(before, forKey: "knownSources")
         let settings = AppSettings(defaults: defaults)
-        return settings.isEnabled(.hermes) && !settings.isEnabled(.pi) && settings.hermesRoot == nil
-            && settings.monitorConfiguration.hermesRoot == nil
-            && TranscriptFolder.hermes.urls(in: settings) == [LiveMonitor.defaultHermesHome]
+        return settings.isEnabled(.hermes) && !settings.isEnabled(.pi) && settings.sourceLocations[.hermes] == [.automatic]
+            && TranscriptFolder.hermes.entries(in: settings).map(\.urls) == [[LiveMonitor.defaultHermesHome]]
             && SourceKind.hermes.transcriptFolder == .hermes
     }
 
-    /// A Hermes `logs` folder picked in Sources is stored and passed to the monitor; Reset returns to the home.
+    /// A Hermes `logs` folder added in Sources is stored next to the home and passed to the monitor; Reset returns to
+    /// the home alone.
     private static func hermesFolderSetting() -> Bool {
         let suite = "AgentSpeedHermesFolderCheck"
         UserDefaults.standard.removePersistentDomain(forName: suite)
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
         guard let defaults = UserDefaults(suiteName: suite) else { return false }
         let folder = URL(fileURLWithPath: "/Users/dev/.hermes/profiles/work/logs", isDirectory: true)
-        TranscriptFolder.hermes.setURL(folder, in: AppSettings(defaults: defaults))
+        let added = TranscriptFolder.hermes.add(folder, in: AppSettings(defaults: defaults)) == .added
         let reloaded = AppSettings(defaults: defaults)
-        let chosen = reloaded.hermesRoot?.path == folder.path && reloaded.monitorConfiguration.hermesRoot?.path == folder.path
-            && TranscriptFolder.hermes.shownURLs(in: reloaded) == [folder]
-        TranscriptFolder.hermes.setURL(nil, in: reloaded)
-        return chosen && AppSettings(defaults: defaults).hermesRoot == nil && !TranscriptFolder.hermes.acceptsDatabaseFile
+        let chosen = reloaded.sourceLocations[.hermes] == [.automatic, .path(folder.path)]
+            && reloaded.monitorConfiguration.locations[.hermes] == [.automatic, .path(folder.path)]
+            && TranscriptFolder.hermes.entries(in: reloaded).last?.shownURLs.map(\.path) == [folder.path]
+        TranscriptFolder.hermes.reset(in: reloaded)
+        return added && chosen && AppSettings(defaults: defaults).sourceLocations[.hermes] == [.automatic]
+            && !TranscriptFolder.hermes.acceptsDatabaseFile
     }
 
     /// Settings saved by a version before Factory Droid: it starts enabled and reads `~/.factory/sessions`.
@@ -462,43 +465,43 @@ enum HistoryLogicChecks {
         defaults.set(before.filter { $0 != "hermes" }, forKey: "enabledSources")
         defaults.set(before, forKey: "knownSources")
         let settings = AppSettings(defaults: defaults)
-        return settings.isEnabled(.droid) && !settings.isEnabled(.hermes) && settings.droidRoot == nil
-            && settings.monitorConfiguration.droidRoot == nil
-            && TranscriptFolder.droid.urls(in: settings) == [LiveMonitor.defaultDroidRoot]
+        return settings.isEnabled(.droid) && !settings.isEnabled(.hermes) && settings.sourceLocations[.droid] == [.automatic]
+            && TranscriptFolder.droid.entries(in: settings).map(\.urls) == [[LiveMonitor.defaultDroidRoot]]
             && SourceKind.droid.transcriptFolder == .droid
     }
 
-    /// A moved `.factory` folder picked in Sources is stored and passed to the monitor; picking the automatic sessions
-    /// folder, or Reset, returns to it.
+    /// A moved `.factory` folder added in Sources is stored and passed to the monitor; with the automatic entry removed,
+    /// adding the automatic sessions folder brings it back; Reset returns to it alone.
     private static func droidFolderSetting() -> Bool {
         let suite = "AgentSpeedDroidFolderCheck"
         UserDefaults.standard.removePersistentDomain(forName: suite)
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
         guard let defaults = UserDefaults(suiteName: suite) else { return false }
         let folder = URL(fileURLWithPath: "/Volumes/work/dev/.factory", isDirectory: true)
-        TranscriptFolder.droid.setURL(folder, in: AppSettings(defaults: defaults))
+        let added = TranscriptFolder.droid.add(folder, in: AppSettings(defaults: defaults)) == .added
         let reloaded = AppSettings(defaults: defaults)
-        let chosen = reloaded.droidRoot?.path == folder.path && reloaded.monitorConfiguration.droidRoot?.path == folder.path
-            && TranscriptFolder.droid.shownURLs(in: reloaded) == [folder]
-        TranscriptFolder.droid.setURL(LiveMonitor.defaultDroidRoot, in: reloaded)
-        let automatic = AppSettings(defaults: defaults).droidRoot == nil
-        TranscriptFolder.droid.setURL(folder, in: reloaded)
-        TranscriptFolder.droid.setURL(nil, in: reloaded)
-        return chosen && automatic && AppSettings(defaults: defaults).droidRoot == nil
-            && !TranscriptFolder.droid.acceptsDatabaseFile
+        let chosen = reloaded.monitorConfiguration.locations[.droid] == [.automatic, .path(folder.path)]
+        let covered = TranscriptFolder.droid.add(LiveMonitor.defaultDroidRoot, in: reloaded) == .alreadyAutomatic
+        TranscriptFolder.droid.remove(.automatic, in: reloaded)
+        let alone = AppSettings(defaults: defaults).sourceLocations[.droid] == [.path(folder.path)]
+        let restored = TranscriptFolder.droid.add(LiveMonitor.defaultDroidRoot, in: reloaded) == .restoredAutomatic
+            && AppSettings(defaults: defaults).sourceLocations[.droid] == [.automatic, .path(folder.path)]
+        TranscriptFolder.droid.reset(in: reloaded)
+        return added && chosen && covered && alone && restored
+            && AppSettings(defaults: defaults).sourceLocations[.droid] == [.automatic] && !TranscriptFolder.droid.acceptsDatabaseFile
     }
 
-    /// `openclaw-agent.sqlite` picked in Sources is stored and read back as that file, not as a folder.
+    /// `openclaw-agent.sqlite` stored by an earlier version as the folder becomes that file's location.
     private static func openclawDatabaseSetting() -> Bool {
         let suite = "AgentSpeedOpenClawDatabaseCheck"
         UserDefaults.standard.removePersistentDomain(forName: suite)
         defer { UserDefaults.standard.removePersistentDomain(forName: suite) }
         guard let defaults = UserDefaults(suiteName: suite) else { return false }
         let database = "/Users/dev/.openclaw/agents/main/agent/openclaw-agent.sqlite"
-        AppSettings(defaults: defaults).openclawRoot = URL(fileURLWithPath: database, isDirectory: false)
+        defaults.set(database, forKey: "openclawRoot")
         let reloaded = AppSettings(defaults: defaults)
-        return reloaded.openclawRoot?.path == database && reloaded.openclawRoot?.hasDirectoryPath == false
-            && reloaded.monitorConfiguration.openclawRoot?.path == database
+        return reloaded.sourceLocations[.openclaw] == [.path(database)]
+            && reloaded.monitorConfiguration.locations[.openclaw] == [.path(database)]
             && TranscriptFolder.openclaw.acceptsDatabaseFile && !TranscriptFolder.pi.acceptsDatabaseFile
     }
 }

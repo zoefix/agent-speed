@@ -2,16 +2,21 @@
 .SYNOPSIS
   Builds self-contained single-file Agent Speed for Windows (x64 and ARM64).
 .DESCRIPTION
-  Output: dist\AgentSpeed-Windows-x64.zip and dist\AgentSpeed-Windows-arm64.zip, each containing AgentSpeed.exe.
+  Output: dist\AgentSpeed-Windows-x64.zip and dist\AgentSpeed-Windows-arm64.zip, each containing AgentSpeed.exe, which
+  embeds both remote relays agent-speed-relay-linux-x86_64 and -aarch64 (spec/REMOTE.md 3.1).
   The traffic helper (spec/WINDOWS-SERVICE.md) is published first with NativeAOT for each architecture and embedded in
   AgentSpeed.exe; this needs the Visual Studio C++ build tools including the ARM64 tools. AGENT_SPEED_NO_HELPER=1
   builds without it (per-process traffic is then unavailable in that build).
 .PARAMETER Version
   Version to stamp (defaults to the repository VERSION file, then 1.0.0).
+.PARAMETER RelayDir
+  Folder with agent-speed-relay-linux-x86_64 and agent-speed-relay-linux-aarch64 of that version (defaults to
+  RELAY_DIR, then linux\relay\dist, built by linux/relay/build-static.sh).
 #>
 [CmdletBinding()]
 param(
-    [string] $Version
+    [string] $Version,
+    [string] $RelayDir
 )
 
 $ErrorActionPreference = 'Stop'
@@ -33,6 +38,26 @@ if ($Version -notmatch '^[0-9]+\.[0-9]+\.[0-9]+([-+][0-9A-Za-z.-]+)?$') { throw 
 $fileVersion = ($Version -split '[-+]')[0]
 
 if (-not (Get-Command dotnet -ErrorAction SilentlyContinue)) { throw 'The .NET 10 SDK (dotnet) is required.' }
+
+if (-not $RelayDir) { $RelayDir = $env:RELAY_DIR }
+if (-not $RelayDir) { $RelayDir = Join-Path $root 'linux\relay\dist' }
+$latin1 = [Text.Encoding]::GetEncoding(28591)
+$versionPattern = '(?<![\x20-\x7e])' + [regex]::Escape($Version) + '(?![\x20-\x7e])'
+foreach ($arch in @('x86_64', 'aarch64')) {
+    $relay = Join-Path $RelayDir "agent-speed-relay-linux-$arch"
+    if (-not (Test-Path -LiteralPath $relay -PathType Leaf)) {
+        throw "Missing remote relay $relay. Build it with linux/relay/build-static.sh $arch, or pass -RelayDir."
+    }
+    $bytes = [IO.File]::ReadAllBytes((Resolve-Path -LiteralPath $relay).Path)
+    if ($bytes.Length -lt 4 -or $bytes[0] -ne 0x7f -or $bytes[1] -ne 0x45 -or $bytes[2] -ne 0x4c -or $bytes[3] -ne 0x46) {
+        throw "$relay is not a Linux executable."
+    }
+    if ($latin1.GetString($bytes) -notmatch $versionPattern) {
+        throw "$relay was not built from version $Version. Rebuild it with linux/relay/build-static.sh $arch."
+    }
+}
+$RelayDir = (Resolve-Path -LiteralPath $RelayDir).Path
+Write-Host "==> Embedding the remote relays $Version from $RelayDir"
 
 # Uncompressed single-file starts ~600 ms faster and uses about half the private memory (no in-memory
 # decompression); the zip is ~60 MB either way. AGENT_SPEED_COMPRESS=1 shrinks the exe to ~65 MB instead of ~150 MB.
@@ -97,6 +122,7 @@ try {
             "-p:Version=$fileVersion" `
             "-p:InformationalVersion=$Version" `
             -p:ContinuousIntegrationBuild=true `
+            "-p:RelayDir=$RelayDir" `
             @helperArgs `
             -nologo
         if ($LASTEXITCODE -ne 0) { throw "dotnet publish failed for $rid" }

@@ -1,9 +1,11 @@
 #pragma once
 
 #include <QObject>
+#include <QStringList>
 #include <QVariantList>
 #include <QVariantMap>
 #include <atomic>
+#include <functional>
 #include <map>
 #include <memory>
 #include <mutex>
@@ -12,6 +14,7 @@
 #include "agentspeed/history_analyzer.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/perf_history.hpp"
+#include "agentspeed/remote_history.hpp"
 #include "monitor_worker.hpp"
 
 class QTimer;
@@ -25,9 +28,12 @@ Q_DECLARE_METATYPE(PerfRecords)
 Q_DECLARE_METATYPE(PerfBaselines)
 
 // The stored aggregates behind the day rows: their mode breakdowns (EXECUTION-MODES) and unpriced facts (METRICS 9.10).
+// `days` holds every host's rows (REMOTE 8.3), `unpriced` every host's facts merged; `hostUnpriced` each host's own
+// (`local` included) while host history exists.
 struct HistoryDetail {
     std::vector<agentspeed::history::DailyUsage> days;
     std::vector<agentspeed::unpriced::Part> unpriced;
+    std::map<std::string, std::vector<agentspeed::unpriced::Part>> hostUnpriced;
 };
 using HistoryDetails = std::shared_ptr<const HistoryDetail>;
 Q_DECLARE_METATYPE(HistoryDetails)
@@ -36,8 +42,12 @@ namespace agentspeed::pricing {
 class PriceBook;
 }
 
+// Sends a `history` request to a host's relay (REMOTE 8.2): "<day>/<source>" → digest of every day held for it.
+using RemoteHistoryRequester = std::function<void(const std::string& host, const std::map<std::string, std::string>& digests)>;
+
 // Runs the daily history analysis (METRICS 8) on its own thread: at launch, every 10 minutes and at midnight, and on
-// request; records live peaks; publishes the day rows for the history window.
+// request; records live peaks; keeps the remote hosts' days (REMOTE 8.2, 8.3); publishes the day rows for the history
+// window.
 class HistoryWorker : public QObject {
     Q_OBJECT
 public:
@@ -47,6 +57,17 @@ public:
     // Thread-safe: the locations and sources the next analysis reads.
     void setScope(agentspeed::SourceLocations locations, std::set<agentspeed::SourceKind> enabled);
     void cancel() { cancelled_ = true; }
+
+    // Thread-safe, in order: what the history sync needs of a host's events (status changes, historyDue, the history
+    // lines and a historyFailed error). Events that arrive before `start` wait for it.
+    void receiveRemote(agentspeed::remote::HostEvent event);
+    // Thread-safe: the settings' hosts with their display names; stored hosts take the new names, removed ones keep
+    // their rows and last name (REMOTE 2.2).
+    void setRemoteHosts(std::map<std::string, std::string> names);
+    // Thread-safe: deletes a host's daily history (REMOTE 2.4 Also delete its usage history).
+    void deleteRemoteHost(std::string id);
+    // Thread-safe: how `historyDue` is answered, and how connected hosts are asked again after Clear history.
+    void setRemoteRequester(RemoteHistoryRequester requester);
 
 public slots:
     void start();
@@ -66,10 +87,18 @@ signals:
     // Today's traffic saved by an earlier launch (METRICS 10.8), and every day's rows for the window.
     void trafficRestored(TrafficRows rows);
     void trafficReady(const QVariantList& rows, const QString& since);
+    // The hosts with history ({id, name}; removed hosts under their last name), by name.
+    void hostsReady(const QVariantList& hosts);
+    // REMOTE 8.3 Bounds: the hosts whose last history batch was discarded (`historyTooLarge`) until a sync succeeds.
+    void remoteTooLarge(const QStringList& hosts);
 
 private:
     void publish();
     void publishTraffic();
+    void applyRemote(const agentspeed::remote::HostEvent& event);
+    void applyEffect(const agentspeed::remote::HistoryEffect& effect);
+    void requestRemote(const std::string& host, const std::map<std::string, std::string>& digests);
+    void publishTooLarge();
 
     std::shared_ptr<agentspeed::pricing::PriceBook> prices_;
     QString storePath_;
@@ -82,6 +111,10 @@ private:
     QTimer* timer_ = nullptr;
     qint64 lastDayStart_ = 0;
     qint64 lastRunMs_ = 0;
+    agentspeed::remote::HistoryLedger ledger_;
+    bool remoteReady_ = false;
+    std::mutex requesterMutex_;
+    RemoteHistoryRequester requester_;
 };
 
 // The history for QML: day rows, the analysis state and formatting helpers.
@@ -96,6 +129,11 @@ class HistoryModel : public QObject {
     Q_PROPERTY(int filesDone READ filesDone NOTIFY progressChanged)
     Q_PROPERTY(int filesTotal READ filesTotal NOTIFY progressChanged)
     Q_PROPERTY(int detailRevision READ detailRevision NOTIFY detailsChanged)
+    // DESIGN 13: the hosts with history ({id, name}, by name; removed hosts under their last name) and whether any
+    // exists (the host picker and the CSV `host` column appear only then). Every row carries `host` and `hostName`.
+    Q_PROPERTY(QVariantList hosts READ hosts NOTIFY hostsChanged)
+    Q_PROPERTY(bool hasHostHistory READ hasHostHistory NOTIFY hostsChanged)
+    Q_PROPERTY(QStringList tooLargeHosts READ tooLargeHosts NOTIFY tooLargeHostsChanged)
 public:
     explicit HistoryModel(const Strings* strings = nullptr, QObject* parent = nullptr) : QObject(parent), strings_(strings) {}
     void setPrices(std::shared_ptr<agentspeed::pricing::PriceBook> prices) { prices_ = std::move(prices); }
@@ -103,13 +141,17 @@ public:
     int filesTotal() const { return filesTotal_; }
     int detailRevision() const { return detailRevision_; }
     // DESIGN 4b 3b: one row per value of `kind` (effort | speed) over [first, last] for a source or all, in display
-    // order with the unknown bucket last; each row carries its top three models.
-    Q_INVOKABLE QVariantMap modeSection(const QString& first, const QString& last, const QString& source, const QString& kind) const;
-    // The mode CSV of EXECUTION-MODES for the same days; returns false when the file cannot be written.
-    Q_INVOKABLE bool exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source) const;
+    // order with the unknown bucket last; each row carries its top three models. `host` (empty: every host) combines
+    // with the source (DESIGN 13).
+    Q_INVOKABLE QVariantMap modeSection(const QString& first, const QString& last, const QString& source, const QString& kind,
+                                        const QString& host = QString()) const;
+    // The mode CSV of EXECUTION-MODES for the same days (one row per day and source, every host summed unless `host`);
+    // returns false when the file cannot be written.
+    Q_INVOKABLE bool exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source,
+                                   const QString& host = QString()) const;
     // DESIGN 9 Unknown prices: the groups of METRICS 9.10 under the current price table, and the text to copy.
     Q_INVOKABLE QVariantMap unpricedView(const QString& first, const QString& last, const QString& source, const QStringList& excluded,
-                                         const QString& view) const;
+                                         const QString& view, const QString& host = QString()) const;
     Q_INVOKABLE bool copyText(const QString& text) const;
     int perfRevision() const { return perfRevision_; }
     QVariantList trafficRows() const { return trafficRows_; }
@@ -123,10 +165,15 @@ public:
     QVariantList rows() const { return rows_; }
     bool analyzing() const { return analyzing_; }
     qint64 updatedMs() const { return updatedMs_; }
+    QVariantList hosts() const { return hosts_; }
+    bool hasHostHistory() const { return !hosts_.isEmpty(); }
+    QStringList tooLargeHosts() const { return tooLargeHosts_; }
 
-    // DESIGN 4b CSV: the rows shown, locale-independent; returns false when the file cannot be written.
+    // DESIGN 4b CSV: the rows shown, locale-independent; returns false when the file cannot be written. A non-empty
+    // `host` (the selected host's name, `local` for this computer) adds the trailing `host` column (DESIGN 13);
+    // without `localTraffic` (a remote host) the traffic columns stay empty.
     Q_INVOKABLE bool exportCsv(const QString& path, const QVariantList& rows, const QString& sourceCode, const QString& currency,
-                               const QString& rate) const;
+                               const QString& rate, const QString& host = QString(), bool localTraffic = true) const;
     Q_INVOKABLE QString chooseCsvPath(const QString& suggestedName) const;
     Q_INVOKABLE QString money(qint64 microUsd, const QString& currency, const QString& rate, const QString& language) const;
     // A byte total as METRICS 10.11 formats it.
@@ -139,6 +186,8 @@ public slots:
     void applyTraffic(const QVariantList& rows, const QString& since);
     void applyProgress(int done, int total);
     void applyDetails(HistoryDetails details);
+    void applyHosts(const QVariantList& hosts);
+    void applyTooLarge(const QStringList& hosts);
 
 signals:
     void rowsChanged();
@@ -147,6 +196,8 @@ signals:
     void trafficChanged();
     void progressChanged();
     void detailsChanged();
+    void hostsChanged();
+    void tooLargeHostsChanged();
     void refreshRequested();
     void clearRequested();
 
@@ -168,5 +219,7 @@ private:
     std::shared_ptr<agentspeed::pricing::PriceBook> prices_;
     HistoryDetails details_;
     int detailRevision_ = 0;
+    QVariantList hosts_;
+    QStringList tooLargeHosts_;
     int filesDone_ = 0, filesTotal_ = 0;
 };

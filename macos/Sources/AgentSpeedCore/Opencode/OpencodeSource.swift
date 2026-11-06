@@ -73,11 +73,21 @@ final class OpencodeSource {
     private var createdCursor: Int64?
     private var sessionCursor: Int64?
     private var newestRowUpdate: Int64 = 0
+    /// Shared with the source's other databases: a session one of them reads is skipped here (METRICS 2.1).
+    private let claims: SessionClaims?
+    private let owner: Int
 
-    init(root: String, fileID: FileID) {
+    init(root: String, fileID: FileID, claims: SessionClaims? = nil, owner: Int = 0) {
         rootPath = root
         databasePath = OpencodeDatabase.databasePath(forRoot: root)
         self.fileID = fileID
+        self.claims = claims
+        self.owner = owner
+    }
+
+    /// False when another database of the source reads this session.
+    private func claims(_ session: String) -> Bool {
+        claims?.claim(session, by: owner) ?? true
     }
 
     // MARK: - Availability
@@ -163,6 +173,7 @@ final class OpencodeSource {
         update.reset = true
         let removed = sessions.keys.map(OpencodeRules.agentId)
         sessions = [:]
+        claims?.releaseAll(by: owner)
         rowSessions = [:]
         watchedRows = [:]
         createdCursor = nil
@@ -179,6 +190,7 @@ final class OpencodeSource {
             createdCursor = try database.maxCreatedMs() ?? 0
             for info in try database.sessions().sorted(by: { $0.id < $1.id }) {
                 sessionCursor = max(sessionCursor ?? info.updatedMs, info.updatedMs)
+                guard claims(info.id) else { continue }
                 guard info.updatedMs >= threshold else {
                     sessions[info.id] = TrackedSession(info: info, rowWatermark: info.updatedMs)
                     continue
@@ -212,7 +224,7 @@ final class OpencodeSource {
                     sessions[info.id] = tracked
                     update.agents[OpencodeRules.agentId(session: info.id)] = recomputeState(info.id)
                     if moved { advanced.append(info.id) }
-                } else {
+                } else if claims(info.id) {
                     sessions[info.id] = TrackedSession(info: info)
                     advanced.append(info.id)
                 }
@@ -260,6 +272,7 @@ final class OpencodeSource {
         guard status == .ready, let database, let all = try? database.sessions() else { return update }
         let present = Set(all.map(\.id))
         for id in sessions.keys where !present.contains(id) {
+            claims?.release(id, by: owner)
             if let rows = sessions.removeValue(forKey: id)?.rows.keys {
                 for row in rows { rowSessions[row] = nil; watchedRows[row] = nil }
             }

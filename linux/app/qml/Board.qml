@@ -156,7 +156,7 @@ Item {
     // DESIGN 2c Live metrics, Accessibility: the label goes on with the readouts that are switched on.
     function spokenLabel() {
         var parts = [Format.fill(S.tr2(S.rev, "a11y.board"), [spec.sources === "all" || !spec.sources ? S.tr2(S.rev, "orbs.sources.all") : "",
-                                                           view.liveText || "0", titleText(view.titleLevel || 0)])]
+                                                           view.liveText || "0", view.offline ? view.offlineText : titleText(view.titleLevel || 0)])]
         var intel = view.intel || {}
         var thinking = showThinking && view.thinkingText ? view.thinkingText : ""
         if (showIntel) {
@@ -512,8 +512,8 @@ Item {
                         id: heroTitle
                         x: liveMark.visible ? liveMark.width + 8 : 0
                         width: parent.width - x
-                        text: board.titleText(board.view.titleLevel || 0)
-                        color: (board.view.titleLevel || 0) > 0 ? board.heatColor : board.ink3
+                        text: board.view.offline ? board.view.offlineText : board.titleText(board.view.titleLevel || 0)
+                        color: !board.view.offline && (board.view.titleLevel || 0) > 0 ? board.heatColor : board.ink3
                         font.pixelSize: 12
                         font.weight: Font.Bold
                         font.letterSpacing: board.style === "glass" ? 0.4 : 0.8
@@ -1576,7 +1576,8 @@ Item {
         }
     }
 
-    // Drag anywhere to move; the right button opens the context menu.
+    // Drag anywhere to move; the right button opens the context menu. The pointer on the square brings a board faded when
+    // idle back (DESIGN 2c).
     MouseArea {
         x: 40
         y: 40
@@ -1588,10 +1589,35 @@ Item {
             if (mouse.button === Qt.RightButton) contextMenu.popup()
             else boardWindows.startMove(board.boardId)
         }
+        HoverHandler {
+            onHoveredChanged: boardWindows.setHovered(board.boardId, hovered)
+        }
     }
 
+    // DESIGN 13: the Hosts submenu (after Style) shows only while remote hosts exist.
+    readonly property bool hostsShown: hostsView.shown
+    Component.onCompleted: {
+        // Development aid: --board-menu opens the context menu and its Hosts submenu (for --board-snapshot).
+        if (Qt.application.arguments.indexOf("--board-menu") >= 0) devMenu.start()
+    }
+    Timer {
+        id: devMenu
+        interval: 2500
+        onTriggered: {
+            contextMenu.popup(board, 24, 24)
+            if (hostsShown) hostsMenu.popup(board, 24 + contextMenu.width - 4, 24 + 3 * 28)
+        }
+    }
+
+    FontMetrics { id: hostMenuMetrics }
     Menu {
         id: contextMenu
+        onAboutToShow: {
+            const item = contextMenu.itemAt(3)
+            if (!item) return
+            item.visible = board.hostsShown
+            item.height = board.hostsShown ? item.implicitHeight : 0
+        }
         MenuItem {
             enabled: false
             text: S.tr2(S.rev, "boards.style." + board.style) + " · " + (board.spec.sources === "all" || !board.spec.sources ? S.tr2(S.rev, "orbs.sources.all") : board.spec.sources.length)
@@ -1607,6 +1633,59 @@ Item {
                     checkable: true
                     checked: board.style === modelData
                     onTriggered: boardStore.set(board.boardId, "style", modelData)
+                }
+            }
+        }
+        Menu {
+            id: hostsMenu
+            title: S.tr2(S.rev, "remote.hosts")
+            readonly property var current: board.spec.hosts === undefined ? "all" : board.spec.hosts
+            // Sized from the entries before it opens: items created by the Repeater come too late for its placement.
+            readonly property var shownEntries: hostsView.shown && hostsView.choices.length > 0 ? hostsView.entries(current) : []
+            width: {
+                var widest = hostMenuMetrics.advanceWidth(S.tr2(S.rev, "remote.hosts.all"))
+                for (var i = 0; i < shownEntries.length; ++i) {
+                    var e = shownEntries[i]
+                    widest = Math.max(widest, hostMenuMetrics.advanceWidth(e.word.length > 0 ? e.name + " — " + e.word : e.name) + 14)
+                }
+                return Math.min(360, Math.ceil(widest) + 64)
+            }
+            MenuItem {
+                text: S.tr2(S.rev, "remote.hosts.all")
+                checkable: true
+                checked: hostsMenu.current === "all"
+                onTriggered: boardStore.setHosts(board.boardId, "all")
+            }
+            MenuSeparator {}
+            Repeater {
+                model: hostsMenu.shownEntries
+                MenuItem {
+                    id: hostItem
+                    required property var modelData
+                    text: modelData.word.length > 0 ? modelData.name + " — " + modelData.word : modelData.name
+                    checkable: true
+                    checked: modelData.checked
+                    enabled: modelData.enabled
+                    onTriggered: {
+                        const next = hostsView.toggled(hostsMenu.current, modelData.id)
+                        if (next !== null && next !== undefined) boardStore.setHosts(board.boardId, next)
+                    }
+                    contentItem: Row {
+                        leftPadding: hostItem.indicator ? hostItem.indicator.width + hostItem.spacing : 0
+                        spacing: 8
+                        HostDot {
+                            anchors.verticalCenter: parent.verticalCenter
+                            size: 6
+                            kind: hostItem.modelData.dot
+                        }
+                        Text {
+                            anchors.verticalCenter: parent.verticalCenter
+                            text: hostItem.text
+                            font: hostItem.font
+                            color: hostItem.highlighted ? hostItem.palette.highlightedText : hostItem.palette.windowText
+                            opacity: hostItem.enabled ? 1 : 0.5
+                        }
+                    }
                 }
             }
         }

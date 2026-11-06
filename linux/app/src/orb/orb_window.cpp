@@ -182,7 +182,6 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
     }
     opacity_ = config.opacity;
     fadeWhenIdle_ = config.fadeWhenIdle;
-    if (!fadeWhenIdle_) idleFaded_ = false;
     const QStringList sources = config.sources.value_or(QStringList());
     const QString theme = config.titleTheme.value_or(QString());
     const bool changed = sources != sources_ || config.unit != unit_ || theme != theme_ || config.traffic != traffic_ ||
@@ -194,6 +193,7 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
     traffic_ = config.traffic;
     gauge_.setRedline(redline);
     applyOpacity();
+    updateFade();
     updateLabel();
     if (unitChanged) announceUnit();
     if (changed) requestFrame();
@@ -229,15 +229,19 @@ void OrbWindow::setHighlighted(bool on) {
     requestFrame();
 }
 
-// The orb's opacity, × 55 % while every source is unavailable, × 45 % after 60 s idle when it fades (DESIGN 2, 2b).
+// The orb's opacity, × 55 % while every source is unavailable, × the fade when idle (DESIGN 2, 2b).
 void OrbWindow::applyOpacity() {
-    double opacity = opacity_ * (unavailable_.isEmpty() ? 1.0 : 0.55);
-    if (idleFaded_ && !hovered_) opacity *= 0.45;
-    if (std::abs(QWindow::opacity() - opacity) > 0.005) setOpacity(opacity);
+    const double opacity = opacity_ * (unavailable_.isEmpty() ? 1.0 : 0.55) * fadeMotion_.factor();
+    if (std::abs(QWindow::opacity() - opacity) > 0.0005) setOpacity(opacity);
+}
+
+// Fade when idle (DESIGN 2): the orb's tier idle for 60 s; activity, hover or a drag brings it back at once.
+void OrbWindow::updateFade() {
+    if (idleFade_.update(fadeWhenIdle_, gauge_.tier() == Tier::Idle, hovered_ || dragging_, now())) fadeMotion_.setFaded(idleFade_.faded());
 }
 
 void OrbWindow::setDiameter(double diameter) {
-    diameter = std::clamp(diameter, styleKind_ == StyleKind::Minimal ? 64.0 : 96.0, 240.0);
+    diameter = std::clamp(diameter, 64.0, 240.0);
     if (std::abs(diameter - diameter_) < 0.01) return;
     const QPointF discCenter = QPointF(position()) + center();
     diameter_ = diameter;
@@ -270,8 +274,8 @@ void OrbWindow::setTitles(const TitleThemes* titles) {
     if (titles_) connect(titles_, &TitleThemes::changed, this, [this] { requestFrame(); });
 }
 
-// The outgoing and incoming instruments crossfade for 0.25 s (DESIGN 2a, Style change); a size below 96 pt only
-// `minimal` allows grows back.
+// The outgoing and incoming instruments crossfade for 0.25 s (DESIGN 2a, Style change); every style shares one size
+// range, so the size stays.
 void OrbWindow::setStyle(const QString& key) {
     const StyleKind kind = styleFromKey(key);
     if (kind == styleKind_) return;
@@ -283,7 +287,6 @@ void OrbWindow::setStyle(const QString& key) {
     bodyDirty_ = true;
     bodyCrossfade_ = true;
     resumeStyle_ = true;
-    if (kind != StyleKind::Minimal && diameter_ < 96) setDiameter(96);
     requestFrame();
 }
 
@@ -393,13 +396,8 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         if (!row.value(QStringLiteral("status")).toString().isEmpty()) unavailableSources_.push_back(row.value(QStringLiteral("source")).toString());
     }
     gauge_.update(unavailable_.isEmpty() ? snap.value(QStringLiteral("liveOutput")).toDouble() : 0.0, t);
-    // Fade when idle: after 60 s without a live value, back at once on activity.
-    if (gauge_.tier() != Tier::Idle || lastActive_ < -1e8) lastActive_ = t;
-    const bool faded = fadeWhenIdle_ && gauge_.tier() == Tier::Idle && t - lastActive_ >= 60;
-    if (faded != idleFaded_ || dimChanged) {
-        idleFaded_ = faded;
-        applyOpacity();
-    }
+    updateFade();
+    if (dimChanged) applyOpacity();
     const auto e = effects();
     bool events = false;
     for (const auto& item : snap.value(QStringLiteral("completions")).toList()) {
@@ -431,7 +429,11 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         // DESIGN 9 Orb: the live cost rate of the orb's sources; – when nothing is priced, 0 for subscriptions only.
         const bool unknown = snap.value(QStringLiteral("costUnknown")).toBool();
         const bool subscriptions = snap.value(QStringLiteral("costSubscriptionOnly")).toBool();
-        valueText_ = unknown ? QStringLiteral("–") : subscriptions ? QStringLiteral("0") : snap.value(QStringLiteral("costNumber")).toString();
+        // Without a unit line (`minimal`, orbs below 96 pt) the value carries the symbol.
+        const bool unitLine = styleKind_ != StyleKind::Minimal && diameter_ >= ReadoutLayout::kUnitFloor;
+        valueText_ = unknown         ? QStringLiteral("–")
+                     : subscriptions ? QStringLiteral("0")
+                                     : snap.value(unitLine ? QStringLiteral("costNumber") : QStringLiteral("costInline")).toString();
         atLeast_ = !unknown && !subscriptions && snap.value(QStringLiteral("costPartial")).toBool() && valueText_ != QLatin1String("0");
         if (subscriptions) {
             info_ = strings_.t(QStringLiteral("cost.subscriptionOnly"));
@@ -702,7 +704,10 @@ void OrbWindow::renderFrame() {
     content.rolls = e.level > 0 && diameter_ >= 80;
     content.unit = unit_ == QLatin1String("cost") ? fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {costSymbol_}) : strings_.t(QStringLiteral("unit.tokS"));
     content.unitHover = unitHoverAmount_;
-    content.title = unavailable_.isEmpty() ? titleText(gauge_.title()) : strings_.t(QStringLiteral("source.") + unavailable_);
+    // DESIGN 13: an orb whose selected hosts are all offline says so.
+    content.title = unavailable_.isEmpty()                         ? titleText(gauge_.title())
+                    : unavailable_ == QLatin1String("hostsOffline") ? strings_.t(QStringLiteral("remote.orb.offline"))
+                                                                    : strings_.t(QStringLiteral("source.") + unavailable_);
     content.previousTitle = titleText(gauge_.previousTitle());
     content.titleChangedAt = gauge_.titleChangedAt();
     content.titleHeat = f.heat;
@@ -798,15 +803,16 @@ void OrbWindow::setHovered(bool hovered) {
     hovered_ = hovered;
     hoverChangedAt_ = now();
     setCursor(hovered ? Qt::OpenHandCursor : Qt::ArrowCursor);
-    applyOpacity();
+    updateFade();
     emit hoverChanged(id_, hovered);
     requestFrame();
 }
 
-// The unit line (the value in `minimal`), grown to at least 44 × 20 pt: a single click toggles tok/s and money.
+// The unit line (the value without one: `minimal`, orbs below 96 pt), grown to at least 44 × 20 pt: a single click
+// toggles tok/s and money.
 bool OrbWindow::onUnit(QPointF local) const {
-    const auto& layout = style_->readoutLayout();
     const double s = diameter_;
+    const auto layout = style_->readoutLayout().at(s);
     const QPointF c = center();
     QRectF area;
     if (layout.unitSize > 0) {
@@ -1078,7 +1084,9 @@ void OrbWindow::updateLabel() {
     const bool money = unit_ == QLatin1String("cost");
     const QString amount = atLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {valueText_}) : valueText_;
     const QString currency = strings_.t(QStringLiteral("currency.") + (currency_.isEmpty() ? QStringLiteral("USD") : currency_));
-    if (!unavailable_.isEmpty()) {
+    if (unavailable_ == QLatin1String("hostsOffline")) {
+        label = (name_.isEmpty() ? QString() : name_ + separator) + strings_.t(QStringLiteral("remote.orb.offline"));
+    } else if (!unavailable_.isEmpty()) {
         label = fill(strings_.t(QStringLiteral("a11y.orb.unavailable")), {name_});
     } else if (money && valueText_ == QStringLiteral("–")) {
         const QString unknown = fill(strings_.t(QStringLiteral("a11y.orb.costUnknown")), {title});

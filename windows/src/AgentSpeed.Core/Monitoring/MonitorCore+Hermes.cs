@@ -8,7 +8,7 @@ internal sealed partial class MonitorCore
     private readonly Dictionary<string, int> _hermesPushed = new(StringComparer.Ordinal);
     private readonly List<SourceRoot> _hermesWatchRoots = [];
     private HermesSource? _hermes;
-    private string _hermesRootPath = string.Empty;
+    private IReadOnlyList<(string Path, bool Chosen)> _hermesRoots = [];
     private bool _hermesSeeded;
 
     internal HermesSource? Hermes => _hermes;
@@ -27,10 +27,10 @@ internal sealed partial class MonitorCore
 
     private void InitializeHermes(SourceLocations locations, TimeZoneInfo? zone)
     {
-        _hermesRootPath = locations.HermesRoot;
-        if (_enabled.Contains(SourceKind.Hermes) && locations.HermesRoot.Length > 0)
+        _hermesRoots = locations.HermesRoots;
+        if (_enabled.Contains(SourceKind.Hermes) && _hermesRoots.Count > 0)
         {
-            _hermes = new HermesSource(locations.HermesRoot, locations.HermesChosen, _deduper, zone ?? TimeZoneInfo.Local);
+            _hermes = new HermesSource(_hermesRoots, _deduper, zone ?? TimeZoneInfo.Local);
             RefreshHermesWatchRoots();
         }
     }
@@ -133,6 +133,15 @@ internal sealed partial class MonitorCore
         return true;
     }
 
-    /// <summary>The Hermes home (or the chosen folder) and whether it exists (METRICS 2, detection; DESIGN 5).</summary>
-    private (string Path, bool Available) HermesStatus() => (_hermesRootPath, _hermes?.Available ?? HermesPaths.Exists(_hermesRootPath));
+    /// <summary>The first root that exists, else the first root, and whether any exists (METRICS 2.1, detection; DESIGN 5).</summary>
+    private (string Path, bool Available) HermesStatus()
+    {
+        if (_hermes is { } hermes)
+        {
+            return (hermes.Root, hermes.Available);
+        }
+
+        var existing = _hermesRoots.Where(root => HermesPaths.Exists(root.Path)).Select(root => root.Path).FirstOrDefault();
+        return (existing ?? (_hermesRoots.Count > 0 ? _hermesRoots[0].Path : string.Empty), existing is not null);
+    }
 }

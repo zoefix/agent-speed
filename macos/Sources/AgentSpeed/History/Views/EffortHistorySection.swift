@@ -15,8 +15,10 @@ struct EffortHistorySection: View {
     private var kind: ExecutionModeKind { kindValue == ExecutionModeKind.speed.rawValue ? .speed : .effort }
 
     private var days: [DailyUsage] {
-        model.store.days.filter { day in
-            (model.source == nil || day.source == model.source) && DayKey(day.day).map(model.content.range.contains) == true
+        let host = model.content.host
+        return model.store.days.filter { day in
+            (model.source == nil || day.source == model.source) && (host == nil || day.host == host)
+                && DayKey(day.day).map(model.content.range.contains) == true
         }
     }
 

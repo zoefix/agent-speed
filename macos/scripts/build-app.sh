@@ -28,6 +28,9 @@ Options:
   --output DIR      Output directory (default: <repo>/dist).
   --binary PATH     Package an existing universal executable instead of
                     running swift build.
+  --relay-dir DIR   Folder with agent-speed-relay-linux-x86_64 and
+                    agent-speed-relay-linux-aarch64 (default:
+                    <repo>/linux/relay/dist, built by linux/relay/build-static.sh).
   -h, --help        Show this help.
 
 Outputs:
@@ -55,6 +58,7 @@ VERSION=""
 BUILD_NUMBER=""
 OUTPUT_DIR="$REPO_ROOT/dist"
 PREBUILT_BINARY=""
+RELAY_DIR="$REPO_ROOT/linux/relay/dist"
 
 while [[ $# -gt 0 ]]; do
     case "$1" in
@@ -66,6 +70,8 @@ while [[ $# -gt 0 ]]; do
         --output=*) OUTPUT_DIR="${1#*=}"; shift ;;
         --binary) need_value "$@"; PREBUILT_BINARY="$2"; shift 2 ;;
         --binary=*) PREBUILT_BINARY="${1#*=}"; shift ;;
+        --relay-dir) need_value "$@"; RELAY_DIR="$2"; shift 2 ;;
+        --relay-dir=*) RELAY_DIR="${1#*=}"; shift ;;
         -h|--help) usage; exit 0 ;;
         *) die "Unknown argument: $1" "Run with --help for usage." ;;
     esac
@@ -84,7 +90,18 @@ BUILD_NUMBER="${BUILD_NUMBER:-$VERSION}"
     || die "Invalid build number \"$BUILD_NUMBER\"." "Expected up to three numbers separated by dots, e.g. 42 or 1.2.3."
 
 [[ "$(uname -s)" == "Darwin" ]] || die "This script must run on macOS."
-for tool in swift lipo vtool xcrun codesign plutil ditto xattr; do
+
+RELAY_ARCHS=(x86_64 aarch64)
+for arch in "${RELAY_ARCHS[@]}"; do
+    relay="$RELAY_DIR/agent-speed-relay-linux-$arch"
+    [[ -f "$relay" ]] \
+        || die "Missing remote relay $relay." "Build it with linux/relay/build-static.sh $arch, or pass --relay-dir."
+    [[ "$(head -c 4 "$relay" | od -An -tx1 | tr -d ' \n')" == "7f454c46" ]] \
+        || die "$relay is not a Linux executable."
+    LC_ALL=C grep -a -q -x -F "$VERSION" <(strings -a "$relay") \
+        || die "$relay was not built from version $VERSION." "Rebuild it with linux/relay/build-static.sh $arch."
+done
+for tool in swift lipo vtool xcrun codesign plutil ditto xattr strings od; do
     command -v "$tool" >/dev/null 2>&1 || die "Required tool \"$tool\" was not found." "Install Xcode or the Xcode Command Line Tools."
 done
 [[ -f "$PLIST_TEMPLATE" ]] || die "Info.plist template not found at $PLIST_TEMPLATE."
@@ -161,6 +178,13 @@ plutil -lint -s "$APP_DIR/Contents/Info.plist" || die "The generated Info.plist 
 printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cp "$ICON_FILE" "$APP_DIR/Contents/Resources/AgentSpeed.icns"
 info "Contents/MacOS/$EXECUTABLE, Info.plist, PkgInfo, Resources/AgentSpeed.icns"
+
+mkdir -p "$APP_DIR/Contents/Resources/relay"
+for arch in "${RELAY_ARCHS[@]}"; do
+    cp "$RELAY_DIR/agent-speed-relay-linux-$arch" "$APP_DIR/Contents/Resources/relay/"
+    chmod 644 "$APP_DIR/Contents/Resources/relay/agent-speed-relay-linux-$arch"
+done
+info "Resources/relay/agent-speed-relay-linux-{${RELAY_ARCHS[*]// /,}}"
 
 step "Signing (ad hoc)"
 xattr -cr "$APP_DIR" 2>/dev/null || true

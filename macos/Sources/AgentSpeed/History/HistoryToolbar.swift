@@ -2,13 +2,16 @@ import AgentSpeedCore
 import AppKit
 import SwiftUI
 
-/// The window's unified toolbar (DESIGN 4b, item 1): source picker leading, range control centered, CSV export
-/// trailing. Native AppKit items, kept in sync with the view model and the app language. It never wraps or hides an
-/// item in the overflow menu: as the window narrows it tightens the range segments, shows export as an icon, then
-/// shortens the range labels (`Fit.ladder`).
+/// The window's unified toolbar (DESIGN 4b, item 1): source picker leading (with the host picker of DESIGN 13 while
+/// host history exists), range control centered, CSV export trailing. Native AppKit items, kept in sync with the view
+/// model and the app language. It never wraps or hides an item in the overflow menu: as the window narrows it tightens
+/// the range segments, shows export as an icon, caps the host picker's names, shows the subscriptions toggle as an
+/// icon, shortens the range labels, then shows the host picker and at last the source picker as symbols
+/// (`Fit.ladder`).
 @MainActor
 final class HistoryToolbar: NSObject, NSToolbarDelegate {
     private static let sourceID = NSToolbarItem.Identifier("history.source")
+    private static let hostID = NSToolbarItem.Identifier("history.host")
     private static let subscriptionsID = NSToolbarItem.Identifier("history.subscriptions")
     private static let rangeID = NSToolbarItem.Identifier("history.range")
     private static let exportID = NSToolbarItem.Identifier("history.export")
@@ -24,6 +27,10 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         var iconExport = false
         /// The `history.includeSubscriptions` checkbox becomes an icon toggle, its label kept as the tooltip.
         var iconSubscriptions = false
+        /// How much room the host picker's names get; the header always names the selected host.
+        var host = HostLook.full
+        /// With the host picker there, the source picker shows only its color dot (the header names the source).
+        var iconSource = false
 
         /// Least given up first.
         static let ladder: [Fit] = [
@@ -31,10 +38,27 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
             Fit(segmentPadding: 8),
             Fit(iconExport: true),
             Fit(segmentPadding: 8, iconExport: true),
-            Fit(segmentPadding: 8, iconExport: true, iconSubscriptions: true),
-            Fit(shortLabels: true, iconExport: true, iconSubscriptions: true),
-            Fit(shortLabels: true, segmentPadding: 4, iconExport: true, iconSubscriptions: true),
+            Fit(segmentPadding: 8, iconExport: true, host: .compact),
+            Fit(segmentPadding: 8, iconExport: true, iconSubscriptions: true, host: .compact),
+            Fit(shortLabels: true, iconExport: true, iconSubscriptions: true, host: .compact),
+            Fit(shortLabels: true, segmentPadding: 4, iconExport: true, iconSubscriptions: true, host: .compact),
+            Fit(shortLabels: true, segmentPadding: 4, iconExport: true, iconSubscriptions: true, host: .icon),
+            Fit(shortLabels: true, segmentPadding: 4, iconExport: true, iconSubscriptions: true, host: .icon, iconSource: true),
         ]
+    }
+
+    /// The host picker's name: up to `maxWidth` (truncated in the middle; the menu shows it whole), or only the
+    /// symbol, the name kept in the tooltip.
+    private enum HostLook: Equatable {
+        case full, compact, icon
+
+        var maxWidth: CGFloat {
+            switch self {
+            case .full: 168
+            case .compact: 120
+            case .icon: .infinity
+            }
+        }
     }
 
     /// Room the toolbar needs beyond its items: the gaps between them and the trailing margin.
@@ -46,9 +70,18 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
     private let model: HistoryViewModel
     private let onExport: () -> Void
     private let sourcePopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    private let hostPopup = NSPopUpButton(frame: .zero, pullsDown: false)
+    /// How a popup places its item's image by default.
+    private let imagePosition = NSPopUpButton(frame: .zero, pullsDown: false).imagePosition
+    /// The toolbar sizes items by their constraints, so the host picker's width is one.
+    private lazy var hostWidthConstraint = hostPopup.widthAnchor.constraint(equalToConstant: 120)
     private let rangeControl = NSSegmentedControl()
     private let subscriptionsButton = NSButton(checkboxWithTitle: "", target: nil, action: nil)
     private var sourceItem: NSToolbarItem?
+    private var hostItem: NSToolbarItem?
+    /// The hosts the host menu was built for (`nil` = every host first), and its language.
+    private var shownHosts: [HistoryHost?] = []
+    private var shownHostLanguage: AppLanguage?
     private var subscriptionsItem: NSToolbarItem?
     /// Marked subscription sources and the language the source menu was built for.
     private var shownMarks: Set<SourceKind> = []
@@ -80,6 +113,12 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         sourcePopup.bezelStyle = .toolbar
         sourcePopup.target = self
         sourcePopup.action = #selector(sourceChanged(_:))
+
+        hostPopup.bezelStyle = .toolbar
+        hostPopup.target = self
+        hostPopup.action = #selector(hostChanged(_:))
+        (hostPopup.cell as? NSPopUpButtonCell)?.lineBreakMode = .byTruncatingMiddle
+        hostWidthConstraint.isActive = true
 
         rangeControl.segmentCount = Self.ranges.count
         rangeControl.trackingMode = .selectOne
@@ -113,7 +152,7 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        toolbarDefaultItemIdentifiers(toolbar) + [Self.subscriptionsID]
+        toolbarDefaultItemIdentifiers(toolbar) + [Self.hostID, Self.subscriptionsID]
     }
 
     /// Items are added as the toolbar joins a window; fit it once it is there.
@@ -132,6 +171,10 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
             item.view = sourcePopup
             item.visibilityPriority = .high
             sourceItem = item
+        case Self.hostID:
+            item.view = hostPopup
+            item.visibilityPriority = .high
+            hostItem = item
         case Self.rangeID:
             item.view = rangeControl
             item.visibilityPriority = .high
@@ -165,9 +208,11 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
             shownMarks = marks
             rebuildSourceMenu(sources, l10n: l10n)
         }
+        syncHosts(content.hosts, selected: content.host, l10n: l10n)
         syncSubscriptions(offered: content.offersSubscriptionToggle, l10n: l10n)
         if let index = shownSources.firstIndex(of: model.source), sourcePopup.selectedTag() != index {
             sourcePopup.selectItem(withTag: index)
+            applySourceFit()
         }
         if language != shownLanguage {
             shownLanguage = language
@@ -189,7 +234,10 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         rangeControl.setAccessibilityLabel(l10n("mac.history.range"))
         sourcePopup.setAccessibilityLabel(l10n("dashboard.sources"))
         sourceItem?.label = l10n("dashboard.sources")
-        sourceItem?.toolTip = l10n("dashboard.sources")
+        applySourceFit()
+        hostPopup.setAccessibilityLabel(l10n("remote.hosts"))
+        hostItem?.label = l10n("remote.hosts")
+        applyHostFit()
         rangeItem?.label = l10n("mac.history.range")
         let export = l10n("history.export")
         exportItem?.label = export
@@ -204,8 +252,26 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         Self.configure(subscriptionsButton, icon: fit.iconSubscriptions, l10n: l10n)
         subscriptionsItem?.label = l10n("history.includeSubscriptions")
         subscriptionsItem?.toolTip = l10n("history.includeSubscriptions")
-        sourcePopup.sizeToFit()
         rangeControl.sizeToFit()
+    }
+
+    /// The source picker's name, or only its color dot with the name as the tooltip (`Fit.iconSource`).
+    private func applySourceFit() {
+        let l10n = model.l10n
+        let icon = fit.iconSource && hostItem != nil
+        sourcePopup.imagePosition = icon ? .imageOnly : imagePosition
+        let title = l10n("dashboard.sources")
+        sourceItem?.toolTip = icon ? "\(title): \(sourcePopup.titleOfSelectedItem ?? "")" : title
+        sourcePopup.sizeToFit()
+    }
+
+    /// The source picker's width with names or with dots only.
+    private func sourceWidth(icon: Bool) -> CGFloat {
+        let current = sourcePopup.imagePosition
+        sourcePopup.imagePosition = icon ? .imageOnly : imagePosition
+        let width = sourcePopup.intrinsicContentSize.width
+        sourcePopup.imagePosition = current
+        return ceil(width)
     }
 
     /// A checkbox with `history.includeSubscriptions`, or an icon toggle when the toolbar is tight.
@@ -241,8 +307,9 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
     private func placeSubscriptions(offered: Bool) {
         let index = toolbar.items.firstIndex { $0.itemIdentifier == Self.subscriptionsID }
         guard let source = toolbar.items.firstIndex(where: { $0.itemIdentifier == Self.sourceID }) else { return }
+        let host = toolbar.items.firstIndex { $0.itemIdentifier == Self.hostID }
         if offered, index == nil {
-            toolbar.insertItem(withItemIdentifier: Self.subscriptionsID, at: source + 1)
+            toolbar.insertItem(withItemIdentifier: Self.subscriptionsID, at: (host ?? source) + 1)
             refit()
         } else if !offered, let index {
             toolbar.removeItem(at: index)
@@ -290,6 +357,9 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         if Fit.ladder[index] != fit {
             fit = Fit.ladder[index]
             applyLabels(l10n)
+        } else if hostItem != nil {
+            // The toolbar sets its own control size once the item is in it.
+            applyHostFit()
         }
         DispatchQueue.main.async { [weak self] in self?.checkOverflow() }
     }
@@ -299,6 +369,7 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
     private func checkOverflow() {
         guard let window, let visible = toolbar.visibleItems?.map(\.itemIdentifier), fit != Fit.ladder.last else { return }
         let wanted = [Self.sourceID, Self.rangeID, Self.exportID] + (subscriptionsItem == nil ? [] : [Self.subscriptionsID])
+            + (hostItem == nil ? [] : [Self.hostID])
         guard !wanted.allSatisfy(visible.contains),
               let index = Fit.ladder.firstIndex(of: fit) else { return }
         learnedSlack = max(learnedSlack, requiredWidths(model.l10n)[index] - window.frame.width + 8)
@@ -326,9 +397,15 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         let textExport = ceil((l10n("history.export") as NSString).size(withAttributes: [.font: font]).width) + 28
         let checkbox = ceil((l10n("history.includeSubscriptions") as NSString).size(withAttributes: [.font: font]).width) + 34
         let offered = subscriptionsItem != nil
+        let hosts = hostItem != nil
+        let hostWidths = [HostLook.full, .compact, .icon].map { ($0, hostWidth($0) + 8) }
+        let sourceFull = hosts ? sourceWidth(icon: false) : sourcePopup.frame.width
+        let sourceIcon = hosts ? sourceWidth(icon: true) : sourceFull
         return zip(Fit.ladder, ranges).map { candidate, range in
             let subscriptions: CGFloat = offered ? (candidate.iconSubscriptions ? Self.iconExportWidth : checkbox) + 8 : 0
-            return leading + sourcePopup.frame.width + subscriptions + range
+            let host = hosts ? hostWidths.first { $0.0 == candidate.host }?.1 ?? 0 : 0
+            let source = candidate.iconSource ? sourceIcon : sourceFull
+            return leading + source + host + subscriptions + range
                 + (candidate.iconExport ? Self.iconExportWidth : textExport) + Self.gaps
         }
     }
@@ -352,7 +429,7 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         sourcePopup.menu = menu
         shownSources = sources
         if let index = sources.firstIndex(of: model.source) { sourcePopup.selectItem(withTag: index) }
-        sourcePopup.sizeToFit()
+        applySourceFit()
     }
 
     /// A small dot in the source color; for all sources, a dot split between the sources' colors.
@@ -383,12 +460,115 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         return image
     }
 
+    // MARK: Hosts
+
+    /// Shows the host picker while host history exists (DESIGN 13) and mirrors the choice; like the subscriptions
+    /// checkbox, the item is inserted or removed on the next turn.
+    private func syncHosts(_ hosts: [HistoryHost], selected: String?, l10n: Localizer) {
+        let entries: [HistoryHost?] = hosts.isEmpty ? [] : [nil] + hosts.map { Optional($0) }
+        if entries != shownHosts || l10n.language != shownHostLanguage {
+            shownHostLanguage = l10n.language
+            rebuildHostMenu(entries, l10n: l10n)
+        }
+        if let index = shownHosts.firstIndex(where: { $0?.id == selected }), hostPopup.selectedTag() != index {
+            hostPopup.selectItem(withTag: index)
+            applyHostFit()
+        }
+        let offered = !hosts.isEmpty
+        DispatchQueue.main.async { [weak self] in self?.placeHosts(offered: offered) }
+    }
+
+    private func placeHosts(offered: Bool) {
+        let index = toolbar.items.firstIndex { $0.itemIdentifier == Self.hostID }
+        guard let source = toolbar.items.firstIndex(where: { $0.itemIdentifier == Self.sourceID }) else { return }
+        if offered, index == nil {
+            toolbar.insertItem(withItemIdentifier: Self.hostID, at: source + 1)
+        } else if !offered, let index {
+            toolbar.removeItem(at: index)
+            hostItem = nil
+        } else {
+            return
+        }
+        applySourceFit()
+        refit()
+    }
+
+    /// `remote.history.allHosts`, then This Mac and every host with history by name.
+    private func rebuildHostMenu(_ entries: [HistoryHost?], l10n: Localizer) {
+        let menu = NSMenu()
+        for (index, host) in entries.enumerated() {
+            let item = NSMenuItem(title: Self.title(host, l10n: l10n), action: nil, keyEquivalent: "")
+            item.image = Self.hostSymbol(host)
+            item.tag = index
+            menu.addItem(item)
+            if host == nil, entries.count > 1 { menu.addItem(.separator()) }
+        }
+        hostPopup.menu = menu
+        shownHosts = entries
+        if let index = entries.firstIndex(where: { $0?.id == model.content.host }) { hostPopup.selectItem(withTag: index) }
+        applyHostFit()
+    }
+
+    private static func title(_ host: HistoryHost?, l10n: Localizer) -> String {
+        guard let host else { return l10n("remote.history.allHosts") }
+        return host.isLocal ? l10n("remote.local") : (host.name ?? host.id)
+    }
+
+    /// Every host, this Mac or a remote host, in the monochrome symbols of Settings → 遠端主機 (hosts get no color).
+    private static func hostSymbol(_ host: HistoryHost?) -> NSImage? {
+        let name = host.map { $0.isLocal ? "laptopcomputer" : "server.rack" } ?? "square.stack.3d.up"
+        let image = NSImage(systemSymbolName: name, accessibilityDescription: nil)?
+            .withSymbolConfiguration(NSImage.SymbolConfiguration(pointSize: 11, weight: .regular))
+        image?.isTemplate = true
+        return image
+    }
+
+    /// The picker's title at the current fit: the host's name (names reach 32 characters, so the width is capped and a
+    /// longer one truncated), or only its symbol; the tooltip names the host whenever the picker does not.
+    private func applyHostFit() {
+        let l10n = model.l10n
+        let index = hostPopup.selectedTag()
+        let selected = shownHosts.indices.contains(index) ? shownHosts[index] : nil
+        let name = Self.title(selected, l10n: l10n)
+        let icon = fit.host == .icon
+        hostPopup.imagePosition = icon ? .imageOnly : imagePosition
+        let natural = naturalHostWidth(icon: icon)
+        let width = min(fit.host.maxWidth, natural)
+        hostPopup.toolTip = icon || natural > width ? "\(l10n("remote.hosts")): \(name)" : l10n("remote.hosts")
+        hostItem?.toolTip = hostPopup.toolTip
+        if hostWidthConstraint.constant != width { hostWidthConstraint.constant = width }
+        hostPopup.setFrameSize(NSSize(width: width, height: hostPopup.frame.height))
+    }
+
+    /// The picker's width at `look`.
+    private func hostWidth(_ look: HostLook) -> CGFloat {
+        min(look.maxWidth, naturalHostWidth(icon: look == .icon))
+    }
+
+    /// The picker's own width (its longest host, as the source picker sizes to its longest source), with names or
+    /// with symbols only.
+    private func naturalHostWidth(icon: Bool) -> CGFloat {
+        let current = hostPopup.imagePosition
+        hostPopup.imagePosition = icon ? .imageOnly : imagePosition
+        let width = hostPopup.intrinsicContentSize.width
+        hostPopup.imagePosition = current
+        return ceil(width)
+    }
+
     // MARK: Actions
+
+    @objc private func hostChanged(_ sender: NSPopUpButton) {
+        let index = sender.selectedTag()
+        guard shownHosts.indices.contains(index) else { return }
+        model.select(host: shownHosts[index]?.id)
+        applyHostFit()
+    }
 
     @objc private func sourceChanged(_ sender: NSPopUpButton) {
         let index = sender.selectedTag()
         guard shownSources.indices.contains(index) else { return }
         model.select(source: shownSources[index])
+        applySourceFit()
     }
 
     @objc private func rangeChanged(_ sender: NSSegmentedControl) {

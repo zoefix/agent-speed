@@ -265,6 +265,12 @@ internal sealed class BoardSurface : IOrbFrameClient, IDisposable
         _surface ??= new CompositionSurface(Hwnd);
         try
         {
+            if (!_device.CanSubmit)
+            {
+                FrameStats.AddSkip();
+                return Skip();
+            }
+
             var target = _surface.Begin(_device, _pixels, _pixels);
             if (target is not null && _frame.Draw(_device, target, _pixels))
             {
@@ -273,14 +279,7 @@ internal sealed class BoardSurface : IOrbFrameClient, IDisposable
                     case PresentResult.Shown:
                         return true;
                     case PresentResult.Busy:
-                        FramesBusy++;
-                        _forcePresent = true;
-                        if (_demand == FrameClass.None)
-                        {
-                            _clock.Kick(this);
-                        }
-
-                        return false;
+                        return Skip();
                 }
             }
         }
@@ -292,6 +291,19 @@ internal sealed class BoardSurface : IOrbFrameClient, IDisposable
         if (_device.IsLost)
         {
             Recover();
+        }
+
+        return false;
+    }
+
+    /// <summary>The compositor has not taken the previous frame yet, or the GPU is still busy: the next frame presents instead.</summary>
+    private bool Skip()
+    {
+        FramesBusy++;
+        _forcePresent = true;
+        if (_demand == FrameClass.None)
+        {
+            _clock.Kick(this);
         }
 
         return false;

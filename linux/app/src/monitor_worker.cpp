@@ -81,10 +81,17 @@ void MonitorWorker::startMonitor(qint64 now) {
     monitor_->restoreTraffic(carried);
     monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setPerfBaselines(baselines_);
-    monitor_->setScoreSets(allSets());
-    monitor_->setPeakSets(orbSets());
+    monitor_->setScoreSubsets(allSets());
+    monitor_->setPeakSubsets(orbSets());
     monitor_->start(now, localMidnightMs(now));
+    // A new monitor takes every host's received state as seeded, without reconnecting (REMOTE 7 Monitor restart).
+    if (options_.remoteFeed) monitor_->applyRemote(options_.remoteFeed->attach(), now);
     lastPollMs_ = now;
+}
+
+bool MonitorWorker::applyRemote(qint64 now) {
+    if (!options_.remoteFeed || !monitor_) return false;
+    return monitor_->applyRemote(options_.remoteFeed->take(), now);
 }
 
 void MonitorWorker::setDemo(bool demo) {
@@ -121,7 +128,7 @@ QVariantMap MonitorWorker::trafficVariant(const agentspeed::Snapshot& snap) cons
     std::vector<Row> rows;
     double agentsRx = 0, agentsTx = 0;
     bool agentsKnown = false;
-    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Droid); ++k) {
+    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Devin); ++k) {
         const auto kind = static_cast<agentspeed::SourceKind>(k);
         if (!options_.config.enabled.contains(kind)) continue;
         Row row{QString::fromUtf8(agentspeed::sourceId(kind)), 0, 0, 0, 0};
@@ -193,11 +200,16 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     map.insert(QStringLiteral("tools"), snap.tools);
     map.insert(QStringLiteral("demo"), snap.demo);
 
+    std::map<std::string, QString> hostNames;
+    for (const auto& host : snap.hosts) hostNames[host.id] = QString::fromStdString(host.name);
     QVariantList agents;
     for (const auto& a : snap.agents) {
         const auto source = sourceKey(a.source);
         QVariantMap row;
         row.insert(QStringLiteral("id"), QString::fromStdString(a.id));
+        // DESIGN 13: `local`, or the remote host with its display name (empty for this computer).
+        row.insert(QStringLiteral("host"), QString::fromStdString(a.host));
+        row.insert(QStringLiteral("hostName"), a.host == agentspeed::hosts::kLocal ? QString() : hostNames[a.host]);
         row.insert(QStringLiteral("source"), source);
         row.insert(QStringLiteral("sourceName"), strings_->t(QStringLiteral("source.") + source));
         row.insert(QStringLiteral("project"), a.project ? QString::fromStdString(*a.project) : QString());
@@ -233,6 +245,13 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("status"), status);
         perf_card::cell(a, *strings_, row);
         auto card = perf_card::card(a, *strings_, strings_->t(QStringLiteral("source.") + source));
+        // DESIGN 13: a remote agent's card names its host first.
+        if (a.host != agentspeed::hosts::kLocal) {
+            auto facts = card.value(QStringLiteral("facts")).toStringList();
+            facts.prepend(strings_->fmt(QStringLiteral("remote.card.host"), {hostNames[a.host]}));
+            card.insert(QStringLiteral("facts"), facts);
+            card.insert(QStringLiteral("a11y"), card.value(QStringLiteral("a11y")).toString() + QLatin1Char('\n') + facts.front());
+        }
         // DESIGN 10: an agent tree with attributed traffic today shows its download after the detail line.
         if (const auto it = snap.traffic.agentsToday.find(a.id); snap.traffic.enabled && it != snap.traffic.agentsToday.end()) {
             const auto rx = it->second.rxSelf + (options_.trafficIncludeTools ? it->second.rxTools : 0);
@@ -313,6 +332,8 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         unpriced += s.unpricedRequests;
     }
     map.insert(QStringLiteral("sources"), sources);
+    map.insert(QStringLiteral("hosts"), hostsVariant(snap));
+    map.insert(QStringLiteral("hostSources"), hostSourcesVariant(snap));
     const double knownShare = weight > 0 ? knownWeight / weight : 1;
     const auto liveMoney = agentspeed::money::format(agentspeed::money::ratePerSecond(liveCost, rate), currency, language, Form::Rate);
     const auto todayMoney = agentspeed::money::format(agentspeed::money::amount(todayCost, rate), currency, language, Form::Amount);
@@ -365,6 +386,87 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
     return map;
 }
 
+// DESIGN 13 Dashboard → Hosts and the settings status line: every host's status facts and its cells' sums; empty
+// while no remote host is configured.
+QVariantList MonitorWorker::hostsVariant(const agentspeed::Snapshot& snap) const {
+    using agentspeed::money::Form;
+    const auto& currency = agentspeed::money::CurrencyTable::bundled().currencyOrUsd(options_.currency.toStdString());
+    const auto rate = Decimal::parse(options_.rate.toStdString()).value_or(Decimal(1));
+    const auto language = options_.language.toStdString();
+    const auto optionalMs = [](const std::optional<std::int64_t>& ms) { return ms ? QVariant(static_cast<qint64>(*ms)) : QVariant(); };
+    QVariantList out;
+    for (const auto& h : snap.hosts) {
+        QVariantMap row;
+        row.insert(QStringLiteral("id"), QString::fromStdString(h.id));
+        row.insert(QStringLiteral("name"), QString::fromStdString(h.name));
+        row.insert(QStringLiteral("local"), h.local());
+        row.insert(QStringLiteral("connected"), h.connected);
+        row.insert(QStringLiteral("listed"), h.listed());
+        if (h.remote) {
+            const auto& r = *h.remote;
+            row.insert(QStringLiteral("status"), QString::fromUtf8(r.status.name().data(), static_cast<qsizetype>(r.status.name().size())));
+            row.insert(QStringLiteral("inProgress"), r.status.inProgress());
+            row.insert(QStringLiteral("needsUser"), r.status.needsUser());
+            row.insert(QStringLiteral("retrying"), r.status.retrying());
+            row.insert(QStringLiteral("fraction"), r.status.fraction);
+            row.insert(QStringLiteral("system"), QString::fromStdString(r.status.system));
+            row.insert(QStringLiteral("exitStatus"), r.status.exitStatus);
+            row.insert(QStringLiteral("relayProtocol"), static_cast<qint64>(r.status.relayProtocol));
+            row.insert(QStringLiteral("retryAtMs"), optionalMs(r.retryAtMs));
+            row.insert(QStringLiteral("lastErrorAtMs"), optionalMs(r.lastErrorAtMs));
+            row.insert(QStringLiteral("clockOffsetMs"), optionalMs(r.clockOffsetMs));
+            row.insert(QStringLiteral("clockSkewed"), r.clockSkewed());
+            row.insert(QStringLiteral("relayVersion"), r.relayVersion ? QString::fromStdString(*r.relayVersion) : QString());
+            row.insert(QStringLiteral("relayArch"), r.relayArch ? QString::fromStdString(*r.relayArch) : QString());
+            row.insert(QStringLiteral("historyTooLarge"), r.historyTooLarge);
+        } else {
+            row.insert(QStringLiteral("status"), h.local() ? QStringLiteral("connected") : QString());
+        }
+        row.insert(QStringLiteral("live"), h.liveOutput);
+        row.insert(QStringLiteral("liveText"), format::speed(h.liveOutput));
+        row.insert(QStringLiteral("liveTotal"), h.liveTotal);
+        row.insert(QStringLiteral("liveEstimated"), h.liveEstimated);
+        row.insert(QStringLiteral("today"), static_cast<qint64>(h.todayOutput));
+        row.insert(QStringLiteral("todayText"), format::tokens(h.todayOutput));
+        row.insert(QStringLiteral("todayRequests"), static_cast<qint64>(h.todayRequests));
+        row.insert(QStringLiteral("todayCost"), static_cast<qint64>(h.todayCostMicroUsd));
+        row.insert(QStringLiteral("unpriced"), static_cast<qint64>(h.unpricedRequests));
+        const auto cost = agentspeed::money::format(agentspeed::money::amount(h.todayCostMicroUsd, rate), currency, language, Form::Amount);
+        row.insert(QStringLiteral("todayCostText"), h.todayCostMicroUsd == 0 && h.unpricedRequests > 0
+                                                        ? QStringLiteral("–")
+                                                        : QString::fromStdString((h.unpricedRequests > 0 ? "≥" : "") + cost.text));
+        row.insert(QStringLiteral("sessions"), h.sessions);
+        out.push_back(row);
+    }
+    return out;
+}
+
+QVariantList MonitorWorker::hostSourcesVariant(const agentspeed::Snapshot& snap) const {
+    QVariantList out;
+    for (const auto& c : snap.hostSources) {
+        QVariantMap row;
+        row.insert(QStringLiteral("host"), QString::fromStdString(c.host));
+        row.insert(QStringLiteral("source"), sourceKey(c.source));
+        row.insert(QStringLiteral("available"), c.available);
+        row.insert(QStringLiteral("unsupported"), c.unsupported);
+        row.insert(QStringLiteral("sessions"), c.sessions);
+        row.insert(QStringLiteral("live"), c.liveOutput);
+        row.insert(QStringLiteral("liveTotal"), c.liveTotal);
+        row.insert(QStringLiteral("liveEstimated"), c.liveEstimated);
+        row.insert(QStringLiteral("liveThinking"), c.thinking.liveThinking());
+        row.insert(QStringLiteral("today"), static_cast<qint64>(c.todayOutput));
+        row.insert(QStringLiteral("todayText"), format::tokens(c.todayOutput));
+        row.insert(QStringLiteral("todayRequests"), static_cast<qint64>(c.todayRequests));
+        row.insert(QStringLiteral("todayCost"), static_cast<qint64>(c.todayCostMicroUsd));
+        row.insert(QStringLiteral("unpriced"), static_cast<qint64>(c.unpricedRequests));
+        QStringList models;
+        for (const auto& m : c.unpricedModels) models.push_back(QString::fromStdString(m));
+        row.insert(QStringLiteral("unpricedModels"), models);
+        out.push_back(row);
+    }
+    return out;
+}
+
 void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<agentspeed::Completion>& completions, qint64 now,
                             qint64 todayStart) {
     QVariantMap map = toVariant(snap);
@@ -402,6 +504,7 @@ void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<
         event.insert(QStringLiteral("source"), sourceKey(c.source));
         event.insert(QStringLiteral("output"), static_cast<qint64>(c.output));
         event.insert(QStringLiteral("speed"), c.speed ? *c.speed : -1.0);
+        event.insert(QStringLiteral("host"), QString::fromStdString(c.host));
         events.push_back(event);
     }
     map.insert(QStringLiteral("completions"), events);
@@ -452,7 +555,7 @@ void MonitorWorker::tick() {
         if (pendingSets_) {
             sets_ = std::move(*pendingSets_);
             pendingSets_.reset();
-            if (monitor_) monitor_->setScoreSets(allSets());
+            if (monitor_) monitor_->setScoreSubsets(allSets());
         }
         if (pendingReprice_ && monitor_) {
             monitor_->repriceToday();
@@ -467,8 +570,8 @@ void MonitorWorker::tick() {
     if (monitor_ && (options_.boards != appliedBoards_ || options_.orbs != appliedOrbs_)) {
         appliedBoards_ = options_.boards;
         appliedOrbs_ = options_.orbs;
-        monitor_->setScoreSets(allSets());
-        monitor_->setPeakSets(orbSets());
+        monitor_->setScoreSubsets(allSets());
+        monitor_->setPeakSubsets(orbSets());
     }
     {
         std::lock_guard lock(optionsMutex_);
@@ -481,7 +584,7 @@ void MonitorWorker::tick() {
     const qint64 previous = lastTickMs_;
     lastTickMs_ = now;
     if (demo_) {
-        publish(agentspeed::demoSnapshot(now, todayStart, allSets()), agentspeed::demoCompletions(previous, now), now, todayStart);
+        publish(agentspeed::demoSnapshot(now, todayStart, sourceSets()), agentspeed::demoCompletions(previous, now), now, todayStart);
         return;
     }
     if (monitor_ && now - lastTrafficSaveMs_ >= 60'000) {
@@ -496,6 +599,12 @@ void MonitorWorker::tick() {
         lastPollMs_ = now;
         completions = monitor_->takeCompletions();
     }
+    // The hosts' lines arrive between local reads (REMOTE 7); applying them is an observation like a read.
+    if (const auto applyStart = steadyMs(); applyRemote(now)) {
+        if (!observed) observed = applyStart;
+        auto remote = monitor_->takeCompletions();
+        completions.insert(completions.end(), remote.begin(), remote.end());
+    }
     const auto snap = monitor_->snapshot(now, todayStart);
     publish(snap, completions, now, todayStart);
     const auto traffic = agentspeed::report::TrafficSample::from(snap.traffic, options_.trafficIncludeTools, options_.config.enabled, monitor_->epoch());
@@ -509,15 +618,22 @@ void MonitorWorker::setReportWatch(bool on, qint64 responses, qint64 calls) {
     watchCalls_ = calls;
 }
 
-std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::allSets() const {
-    auto sets = sets_;
-    for (const auto& board : options_.boards) sets.push_back(board.sources);
-    for (const auto& orb : options_.orbs) sets.push_back(orb.sources);
+std::vector<agentspeed::hosts::Subset> MonitorWorker::allSets() const {
+    std::vector<agentspeed::hosts::Subset> sets;
+    for (const auto& sources : sets_) sets.push_back({sources, std::nullopt});
+    for (const auto& board : options_.boards) sets.push_back({board.sources, board.hosts});
+    for (const auto& orb : options_.orbs) sets.push_back({orb.sources, orb.hosts});
     return sets;
 }
 
-std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::orbSets() const {
+std::vector<agentspeed::hosts::Subset> MonitorWorker::orbSets() const {
+    std::vector<agentspeed::hosts::Subset> sets;
+    for (const auto& orb : options_.orbs) sets.push_back({orb.sources, orb.hosts});
+    return sets;
+}
+
+std::vector<std::optional<std::vector<agentspeed::SourceKind>>> MonitorWorker::sourceSets() const {
     std::vector<std::optional<std::vector<agentspeed::SourceKind>>> sets;
-    for (const auto& orb : options_.orbs) sets.push_back(orb.sources);
+    for (const auto& subset : allSets()) sets.push_back(subset.sources);
     return sets;
 }

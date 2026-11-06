@@ -1,5 +1,7 @@
 #pragma once
 
+#include <QImage>
+#include <QList>
 #include <QObject>
 #include <QPointer>
 #include <QTimer>
@@ -7,14 +9,17 @@
 #include <QVariantMap>
 #include <map>
 #include <memory>
+#include <utility>
 
 #include "orbs/orb_views.hpp"
 #include "orbs/orbs_store.hpp"
 
 class Preferences;
+class RemoteHostsView;
 class Strings;
 class TitleThemes;
 class NamePlate;
+class QMenu;
 namespace orb {
 class OrbWindow;
 struct Disc;
@@ -45,6 +50,8 @@ public:
     OrbManager(const Strings& strings, const Preferences& prefs, OrbsStore& store, QObject* parent = nullptr);
     ~OrbManager() override;
     void setTitles(const TitleThemes* titles);
+    // DESIGN 13: the hosts' names (automatic names, the Hosts submenu); renames re-sync the windows.
+    void setHostsView(const RemoteHostsView* hosts);
     // Shows the orbs where they were (call once the windows may appear).
     void start();
 
@@ -71,9 +78,13 @@ public:
     // The source chip (folded into the plate while one shows) for `seconds`.
     void showChip(const QString& id, double seconds);
     void forceDark(bool on);
+    // Development aid: the orb's context menu and its Hosts and Size submenus as pictures, by name (menu, hosts, size).
+    QList<std::pair<QString, QImage>> menuPictures(const QString& id);
 
     Q_INVOKABLE void set(const QString& id, const QString& key, const QVariant& value);
     Q_INVOKABLE void setSource(const QString& id, const QString& source, bool on);
+    // DESIGN 13: "all" or the host ids the orb tracks.
+    Q_INVOKABLE void setHosts(const QString& id, const QVariant& hosts);
     Q_INVOKABLE void add(const QString& from);
     Q_INVOKABLE void duplicate(const QString& id);
     Q_INVOKABLE void remove(const QString& id);
@@ -129,10 +140,12 @@ private:
     bool fits(QPointF center, double radius, const QString& except) const;
     std::vector<orb::Disc> discs(const QString& except) const;
     void showMenu(const QString& id, QPoint global);
+    QMenu* buildMenu(const QString& id);
     void showBanner(const QString& text);
     QStringList detected() const;
     QString nameOf(const OrbConfig& config) const;
     QString sourceName(const QString& key) const;
+    void addHostsMenu(QMenu* menu, const OrbConfig& config);
     int redlineOf(const OrbConfig& config) const;
     int visibleCount() const;
     OrbConfig childOf(const OrbConfig& from) const;
@@ -142,6 +155,7 @@ private:
     const Preferences& prefs_;
     OrbsStore& store_;
     const TitleThemes* titles_ = nullptr;
+    const RemoteHostsView* hosts_ = nullptr;
     std::map<QString, Orb> orbs_;
     QVariantList sourceRows_;
     bool shown_ = true;

@@ -50,7 +50,7 @@ struct OrbSubsetTests {
             agent("claude-sub", .claudeCode, .generating, parent: "claude-root"),
             agent("codex-idle", .codex, .idle),
         ]
-        snapshot.subsetPeaks = [SourceSet([.claudeCode, .claudeDesktop, .gemini]): 42]
+        snapshot.subsetPeaks = [SubsetKey(SourceSet([.claudeCode, .claudeDesktop, .gemini])): 42]
         return snapshot
     }
 
@@ -160,7 +160,7 @@ struct OrbSubsetTests {
         let output = engine.advance(nowMs: Self.base, todayStartMs: Self.today, emitsEvents: false, subsets: [codex, claude, both])
         #expect(output.sourceLiveEstimated[.codex]?.output == 100)
         #expect(output.sourceLiveEstimated[.claudeCode] == nil)
-        #expect(Set(output.subsetPeaks.keys) == [codex, claude, both])
+        #expect(Set(output.subsetPeaks.keys) == Set([codex, claude, both].map { SubsetKey($0) }))
         #expect(abs((output.subsetPeaks[codex] ?? 0) - 100) < 1e-4)
         #expect(abs((output.subsetPeaks[claude] ?? 0) - 100) < 1e-4)
         #expect(abs((output.subsetPeaks[both] ?? 0) - 100) < 1e-4, "measured only; the observed 200 tok/s is the tracker's")
@@ -183,7 +183,7 @@ struct OrbSubsetTests {
     @Test func emptyLedgerReportsZeroPeaks() {
         var engine = SpeedEngine()
         let output = engine.advance(nowMs: Self.base, todayStartMs: Self.today, emitsEvents: false, subsets: [SourceSet(.codex)])
-        #expect(output.subsetPeaks == [SourceSet(.codex): 0])
+        #expect(output.subsetPeaks == [SubsetKey(SourceSet(.codex)): 0])
         #expect(engine.advance(nowMs: Self.base + 500, todayStartMs: Self.today, emitsEvents: false).subsetPeaks.isEmpty)
     }
 
@@ -214,7 +214,7 @@ struct OrbSubsetTests {
             #expect(a.lastResponse == b.lastResponse)
             #expect(a.events == b.events)
             #expect(a.subsetPeaks.isEmpty)
-            #expect(Set(b.subsetPeaks.keys) == subsets)
+            #expect(Set(b.subsetPeaks.keys) == Set(subsets.map { SubsetKey($0) }))
         }
     }
 

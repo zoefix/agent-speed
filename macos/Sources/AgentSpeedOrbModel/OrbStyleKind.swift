@@ -11,16 +11,6 @@ public enum OrbStyleKind: String, CaseIterable, Codable, Sendable, Identifiable 
         self = OrbStyleKind(rawValue: raw) ?? .led
     }
 
-    /// Allowed diameters: `minimal` alone may go down to 64 pt.
-    public var sizeRange: ClosedRange<Double> {
-        self == .minimal ? OrbSizes.minimalRange : OrbSizes.range
-    }
-
-    public func clampSize(_ size: Double) -> Double {
-        guard size.isFinite else { return OrbSizes.default.clampedToRange(sizeRange) }
-        return size.clampedToRange(sizeRange)
-    }
-
     public var titleKey: String { "style.\(rawValue)" }
     public var descriptionKey: String { "style.\(rawValue).desc" }
 }
@@ -30,9 +20,13 @@ public enum OrbSizes {
     /// S / M / L presets of the context menu and Settings.
     public static let presets: [Double] = [112, 148, 196]
     public static let `default`: Double = 148
-    /// Slider step in Settings.
+    /// Slider step in Settings and the context menu.
     public static let step: Double = 4
-    public static let range: ClosedRange<Double> = 96...240
-    public static let minimalRange: ClosedRange<Double> = 64...240
+    /// One range for every style, so changing the style never resizes an orb.
+    public static let range: ClosedRange<Double> = 64...240
     public static let opacityRange: ClosedRange<Double> = 0.4...1
+
+    public static func clamp(_ size: Double) -> Double {
+        (size.isFinite ? size : self.default).clampedToRange(range)
+    }
 }

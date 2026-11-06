@@ -9,4 +9,6 @@
   <ItemGroup>
     <ProjectReference Include="../../src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
   </ItemGroup>
+  <!-- The remote watch uploads the relays, embedded like the app's (REMOTE 3.1). -->
+  <Import Project="../../src/AgentSpeed/RemoteRelay.targets" />
 </Project>

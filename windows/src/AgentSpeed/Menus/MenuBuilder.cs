@@ -75,6 +75,12 @@ internal static class MenuBuilder
             case MenuAction.ToggleOrbSource a:
                 commands.ToggleOrbSource(a.OrbId, a.Source);
                 break;
+            case MenuAction.SetOrbAllHosts a:
+                commands.SetOrbAllHosts(a.OrbId);
+                break;
+            case MenuAction.ToggleOrbHost a:
+                commands.ToggleOrbHost(a.OrbId, a.HostId);
+                break;
             case MenuAction.SetOrbSize a:
                 commands.SetOrbSize(a.OrbId, a.Size);
                 break;
@@ -120,6 +126,12 @@ internal static class MenuBuilder
             case MenuAction.ToggleBoardSource a:
                 commands.ToggleBoardSource(a.BoardId, a.Source);
                 break;
+            case MenuAction.SetBoardAllHosts a:
+                commands.SetBoardAllHosts(a.BoardId);
+                break;
+            case MenuAction.ToggleBoardHost a:
+                commands.ToggleBoardHost(a.BoardId, a.HostId);
+                break;
             case MenuAction.SetBoardSize a:
                 commands.SetBoardSize(a.BoardId, a.Size);
                 break;
@@ -159,8 +171,38 @@ internal static class MenuBuilder
         var trailingColumn = level.ReservesTrailingColumn;
         foreach (var entry in level.Entries)
         {
-            items.Add(entry is MenuRow row ? Item(row, iconColumn, trailingColumn, commands) : new Separator());
+            items.Add(entry switch
+            {
+                MenuRow row => Item(row, iconColumn, trailingColumn, commands),
+                MenuSlider slider => SliderItem(slider, items, iconColumn, trailingColumn, commands),
+                _ => new Separator(),
+            });
         }
+    }
+
+    /// <summary>A slider row; every new value runs its action and moves the check of the level's rows (the presets).</summary>
+    private static MenuSliderItem SliderItem(MenuSlider slider, ItemCollection level, bool iconColumn, bool trailingColumn,
+        IAppCommands commands)
+    {
+        var item = new MenuSliderItem(slider, value =>
+        {
+            Run(slider.Action(value), commands);
+            if (slider.CheckedRow is not { } checkedRow)
+            {
+                return;
+            }
+
+            var index = checkedRow(value);
+            var rows = level.OfType<MenuItem>().Where(i => i.IsCheckable).ToList();
+            for (var i = 0; i < rows.Count; i++)
+            {
+                rows[i].IsChecked = i == index;
+            }
+        });
+        item.SetResourceReference(FrameworkElement.StyleProperty, ItemStyleKey);
+        MenuChrome.SetIconColumn(item, iconColumn);
+        MenuChrome.SetTrailingColumn(item, trailingColumn);
+        return item;
     }
 
     private static MenuItem Item(MenuRow row, bool iconColumn, bool trailingColumn, IAppCommands commands)
@@ -221,10 +263,17 @@ internal static class MenuBuilder
         _ => null,
     };
 
-    /// <summary>A 7 DIP dot in the status color; the row's text always says what it means.</summary>
+    /// <summary>A 7 DIP dot in the status color (a ring for something switched off); the row's text always says what it means.</summary>
     private static Ellipse StatusDot(MenuStatusTone tone)
     {
         var dot = new Ellipse { Width = 7, Height = 7, HorizontalAlignment = HorizontalAlignment.Center, VerticalAlignment = VerticalAlignment.Center };
+        if (tone == MenuStatusTone.Hollow)
+        {
+            dot.StrokeThickness = 1.1;
+            dot.SetResourceReference(Shape.StrokeProperty, "TextFillColorTertiaryBrush");
+            return dot;
+        }
+
         dot.SetResourceReference(Shape.FillProperty, tone switch
         {
             MenuStatusTone.Green => "SystemFillColorSuccessBrush",

@@ -39,6 +39,10 @@ internal sealed class SourceSettingsRow(SourceKind kind) : ObservableObject
 
     public SourceKind Kind { get; } = kind;
 
+    /// <summary>The source's color (DESIGN 1, Source colors).</summary>
+    public System.Windows.Media.Brush Dot { get; } =
+        Theme.MediaColors.Frozen(Theme.MediaColors.ToColor(Presentation.Colors.HeatPalette.SourceColor(kind)));
+
     public string Name { get => _name; set => Set(ref _name, value); }
 
     public bool Enabled { get => _enabled; set => Set(ref _enabled, value); }
@@ -89,7 +93,6 @@ internal sealed class SettingsViewModel : ObservableObject
 {
     private readonly SettingsService _settings;
     private readonly PreviewService _preview;
-    private readonly Func<string?, string?> _pickFolder;
     private readonly UpdateService _updates;
     private Localizer _loc;
     private NavItem _selected;
@@ -112,7 +115,6 @@ internal sealed class SettingsViewModel : ObservableObject
         _settings = settings;
         _preview = preview;
         _loc = localizer;
-        _pickFolder = pickFolder;
         _updates = updates;
         Cost = new CostPaneViewModel(settings, cost);
 
@@ -124,6 +126,7 @@ internal sealed class SettingsViewModel : ObservableObject
         Pages.Add(new NavItem("traffic", "", "settings.traffic"));
         Pages.Add(new NavItem("report", "\uEC05", "settings.report"));
         Pages.Add(new NavItem("sources", "", "settings.sources"));
+        Pages.Add(new NavItem("remote", "\uE968", "settings.remote"));
         Pages.Add(new NavItem("about", "", "settings.about"));
         _selected = Pages[0];
 
@@ -141,48 +144,6 @@ internal sealed class SettingsViewModel : ObservableObject
         }
 
         PreviewCommand = new RelayCommand(StartPreview, () => !_preview.IsRunning);
-        ChangeCodexCommand = new RelayCommand(() => ChangeFolder(CodexPath, (s, path) => s with { CodexRoot = path }));
-        ChangeClaudeCommand = new RelayCommand(() => ChangeFolder(ClaudePath, (s, path) => s with { ClaudeRoot = path }));
-        ChangeDshCommand = new RelayCommand(() => ChangeFolder(DshPath, (s, path) => s with { DshRoot = path }));
-        ResetCodexCommand = new RelayCommand(() => _settings.Update(s => s with { CodexRoot = null }), () => _settings.Current.CodexRoot is not null);
-        ResetClaudeCommand = new RelayCommand(() => _settings.Update(s => s with { ClaudeRoot = null }), () => _settings.Current.ClaudeRoot is not null);
-        ResetDshCommand = new RelayCommand(() => _settings.Update(s => s with { DshRoot = null }), () => _settings.Current.DshRoot is not null);
-        ChangeOpenCodeCommand = new RelayCommand(() => ChangeFolder(OpenCodePath, (s, path) => s with { OpenCodeRoot = path }));
-        ChangeGeminiCommand = new RelayCommand(() => ChangeFolder(GeminiPath, (s, path) => s with { GeminiRoot = path }));
-        ResetOpenCodeCommand = new RelayCommand(() => _settings.Update(s => s with { OpenCodeRoot = null }), () => _settings.Current.OpenCodeRoot is not null);
-        ResetGeminiCommand = new RelayCommand(() => _settings.Update(s => s with { GeminiRoot = null }), () => _settings.Current.GeminiRoot is not null);
-        ChangeOmpCommand = new RelayCommand(() => ChangeFolder(OmpPath, (s, path) => s with { OmpRoot = path }));
-        ChangeAntigravityCommand = new RelayCommand(() =>
-            ChangeFolder(AntigravityFolders.FirstOrDefault() ?? string.Empty, (s, path) => s with { AntigravityRoot = path }));
-        ResetOmpCommand = new RelayCommand(() => _settings.Update(s => s with { OmpRoot = null }), () => _settings.Current.OmpRoot is not null);
-        ResetAntigravityCommand = new RelayCommand(() => _settings.Update(s => s with { AntigravityRoot = null }),
-            () => _settings.Current.AntigravityRoot is not null);
-        ChangeWorkBuddyCommand = new RelayCommand(() => ChangeFolder(WorkBuddyPath, (s, path) => s with { WorkBuddyRoot = path }));
-        ChangeWorkBuddyAiCommand = new RelayCommand(() => ChangeFolder(WorkBuddyAiPath, (s, path) => s with { WorkBuddyAiRoot = path }));
-        ResetWorkBuddyCommand = new RelayCommand(() => _settings.Update(s => s with { WorkBuddyRoot = null }),
-            () => _settings.Current.WorkBuddyRoot is not null);
-        ResetWorkBuddyAiCommand = new RelayCommand(() => _settings.Update(s => s with { WorkBuddyAiRoot = null }),
-            () => _settings.Current.WorkBuddyAiRoot is not null);
-        ChangeZCodeCommand = new RelayCommand(() => ChangeFolder(ZCodePath, (s, path) => s with { ZCodeRoot = path }));
-        ResetZCodeCommand = new RelayCommand(() => _settings.Update(s => s with { ZCodeRoot = null }),
-            () => _settings.Current.ZCodeRoot is not null);
-        ChangeKimiCommand = new RelayCommand(() => ChangeFolder(KimiPath, (s, path) => s with { KimiRoot = path }));
-        ResetKimiCommand = new RelayCommand(() => _settings.Update(s => s with { KimiRoot = null }),
-            () => _settings.Current.KimiRoot is not null);
-        ChangeGrokBuildCommand = new RelayCommand(() => ChangeFolder(GrokBuildPath, (s, path) => s with { GrokBuildRoot = path }));
-        ResetGrokBuildCommand = new RelayCommand(() => _settings.Update(s => s with { GrokBuildRoot = null }),
-            () => _settings.Current.GrokBuildRoot is not null);
-        ChangePiCommand = new RelayCommand(() => ChangeFolder(PiPath, (s, path) => s with { PiRoot = path }));
-        ResetPiCommand = new RelayCommand(() => _settings.Update(s => s with { PiRoot = null }), () => _settings.Current.PiRoot is not null);
-        ChangeOpenClawCommand = new RelayCommand(() => ChangeFolder(OpenClawFolder, (s, path) => s with { OpenClawRoot = path }));
-        ResetOpenClawCommand = new RelayCommand(() => _settings.Update(s => s with { OpenClawRoot = null }),
-            () => _settings.Current.OpenClawRoot is not null);
-        ChangeHermesCommand = new RelayCommand(() => ChangeFolder(HermesPath, (s, path) => s with { HermesRoot = path }));
-        ResetHermesCommand = new RelayCommand(() => _settings.Update(s => s with { HermesRoot = null }),
-            () => _settings.Current.HermesRoot is not null);
-        ChangeDroidCommand = new RelayCommand(() => ChangeFolder(DroidPath, (s, path) => s with { DroidRoot = path }));
-        ResetDroidCommand = new RelayCommand(() => _settings.Update(s => s with { DroidRoot = null }),
-            () => _settings.Current.DroidRoot is not null);
         ResetTaskbarPositionCommand = new RelayCommand(() => _settings.Update(s => s with { TaskbarOffset = 0 }),
             () => _settings.Current.TaskbarOffset > 0);
         OpenHistoryCommand = new RelayCommand(openHistory);
@@ -213,11 +174,15 @@ internal sealed class SettingsViewModel : ObservableObject
             TitleLadder.Add(new TitleLadderRow(SpeedTitles.Scaled[i].Title, i));
         }
 
+        SourcesPane = new Sources.SourcesPaneViewModel(settings, localizer, pickFolder, Sources);
         Relocalize(localizer);
         Sync();
     }
 
     public ObservableCollection<NavItem> Pages { get; } = new();
+
+    /// <summary>Settings → 資料來源: the location list of every source (DESIGN 5, METRICS 2.1).</summary>
+    public Sources.SourcesPaneViewModel SourcesPane { get; }
 
     public ObservableCollection<SourceSettingsRow> Sources { get; } = new();
 
@@ -241,6 +206,24 @@ internal sealed class SettingsViewModel : ObservableObject
     }
 
     private ReportPaneViewModel? _report;
+
+    /// <summary>Settings → 遠端主機 (DESIGN 13); set by the app.</summary>
+    public Remote.RemoteHostsPaneViewModel? Remote
+    {
+        get => _remote;
+        set
+        {
+            if (Set(ref _remote, value) && value is not null)
+            {
+                value.ReduceMotion = _reduceMotion;
+            }
+        }
+    }
+
+    private Remote.RemoteHostsPaneViewModel? _remote;
+
+    /// <summary>Any remote host is configured: About adds <c>privacy.remote</c> (DESIGN 13).</summary>
+    public bool HasRemoteHosts => !S.RemoteHosts.Hosts.IsEmpty;
 
     /// <summary>The speed titles that scale with the redline, climbing (DESIGN section 5, General).</summary>
     public ObservableCollection<TitleLadderRow> TitleLadder { get; } = new();
@@ -294,71 +277,6 @@ internal sealed class SettingsViewModel : ObservableObject
 
     public RelayCommand PreviewCommand { get; }
 
-
-    public RelayCommand ChangeCodexCommand { get; }
-
-    public RelayCommand ChangeClaudeCommand { get; }
-
-    public RelayCommand ChangeDshCommand { get; }
-
-    public RelayCommand ResetCodexCommand { get; }
-
-    public RelayCommand ResetClaudeCommand { get; }
-
-    public RelayCommand ResetDshCommand { get; }
-
-    public RelayCommand ChangeOpenCodeCommand { get; }
-
-    public RelayCommand ChangeGeminiCommand { get; }
-
-    public RelayCommand ResetOpenCodeCommand { get; }
-
-    public RelayCommand ResetGeminiCommand { get; }
-
-    public RelayCommand ChangeOmpCommand { get; }
-
-    public RelayCommand ChangeAntigravityCommand { get; }
-
-    public RelayCommand ResetOmpCommand { get; }
-
-    public RelayCommand ResetAntigravityCommand { get; }
-
-    public RelayCommand ChangeWorkBuddyCommand { get; }
-
-    public RelayCommand ChangeWorkBuddyAiCommand { get; }
-
-    public RelayCommand ResetWorkBuddyCommand { get; }
-
-    public RelayCommand ResetWorkBuddyAiCommand { get; }
-
-    public RelayCommand ChangeZCodeCommand { get; }
-
-    public RelayCommand ResetZCodeCommand { get; }
-
-    public RelayCommand ChangeKimiCommand { get; }
-
-    public RelayCommand ResetKimiCommand { get; }
-
-    public RelayCommand ChangeGrokBuildCommand { get; }
-
-    public RelayCommand ResetGrokBuildCommand { get; }
-
-    public RelayCommand ChangePiCommand { get; }
-
-    public RelayCommand ResetPiCommand { get; }
-
-    public RelayCommand ChangeOpenClawCommand { get; }
-
-    public RelayCommand ResetOpenClawCommand { get; }
-
-    public RelayCommand ChangeHermesCommand { get; }
-
-    public RelayCommand ResetHermesCommand { get; }
-
-    public RelayCommand ChangeDroidCommand { get; }
-
-    public RelayCommand ResetDroidCommand { get; }
-
     public RelayCommand OpenHistoryCommand { get; }
 
     /// <summary>Asks for confirmation, then clears the stored history.</summary>
@@ -375,9 +293,6 @@ internal sealed class SettingsViewModel : ObservableObject
     public RelayCommand OpenUpdateCommand { get; }
 
     private AppSettings S => _settings.Current;
-
-    private IReadOnlyList<string> AntigravityFolders =>
-        SourceFolders.Antigravity(S.AntigravityRoot, LiveMonitor.DefaultAntigravityStores, Directory.Exists);
 
     public int AppearanceIndex
     {
@@ -508,6 +423,7 @@ internal sealed class SettingsViewModel : ObservableObject
         set
         {
             Set(ref _reduceMotion, value);
+            SourcesPane.ReduceMotion = value;
             if (Orbs is not null)
             {
                 Orbs.ReduceMotion = value;
@@ -517,136 +433,22 @@ internal sealed class SettingsViewModel : ObservableObject
             {
                 TitleThemes.ReduceMotion = value;
             }
+
+            if (Remote is not null)
+            {
+                Remote.ReduceMotion = value;
+            }
+
+            if (Boards is not null)
+            {
+                Boards.ReduceMotion = value;
+            }
         }
     }
 
     public bool IsPreviewing => _preview.IsRunning;
 
     public string PreviewButtonText => _preview.IsRunning ? _loc["settings.effects.previewing"] : _loc["settings.effects.preview"];
-
-    public string CodexPath => S.CodexRoot ?? LiveMonitor.DefaultCodexRoot;
-
-    public string ClaudePath => S.ClaudeRoot ?? LiveMonitor.DefaultClaudeRoot;
-
-    public string DshPath => S.DshRoot ?? LiveMonitor.DefaultDshRoot;
-
-    public bool CodexIsCustom => S.CodexRoot is not null;
-
-    public bool ClaudeIsCustom => S.ClaudeRoot is not null;
-
-    public bool DshIsCustom => S.DshRoot is not null;
-
-    /// <summary>The folder that contains opencode.db.</summary>
-    public string OpenCodePath => S.OpenCodeRoot ?? LiveMonitor.DefaultOpenCodeRoot;
-
-    /// <summary>One Gemini CLI <c>tmp</c> folder.</summary>
-    public string GeminiPath => S.GeminiRoot ?? LiveMonitor.DefaultGeminiRoot;
-
-    public bool OpenCodeIsCustom => S.OpenCodeRoot is not null;
-
-    public bool GeminiIsCustom => S.GeminiRoot is not null;
-
-    public string OpenCodeStatus => StatusFor(SourceKind.OpenCode);
-
-    public string GeminiStatus => StatusFor(SourceKind.Gemini);
-
-    /// <summary>The default omp <c>sessions</c> root (named profiles are read too), or the one chosen folder.</summary>
-    public string OmpPath => S.OmpRoot ?? LiveMonitor.DefaultOmpRoot;
-
-    /// <summary>The chosen Antigravity folder, else the default stores found, one per line.</summary>
-    public string AntigravityPath => string.Join(Environment.NewLine, AntigravityFolders);
-
-    public bool OmpIsCustom => S.OmpRoot is not null;
-
-    public bool AntigravityIsCustom => S.AntigravityRoot is not null;
-
-    public string OmpStatus => StatusFor(SourceKind.Omp);
-
-    public string AntigravityStatus => StatusFor(SourceKind.Antigravity);
-
-    /// <summary>The WorkBuddy data folder: the default, the chosen one, or the parent of a chosen <c>projects</c> folder.</summary>
-    public string WorkBuddyPath => LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddy, S.WorkBuddyRoot);
-
-    /// <summary>The WorkBuddy AI data folder, like <see cref="WorkBuddyPath"/>.</summary>
-    public string WorkBuddyAiPath => LiveMonitor.WorkBuddyDataFolder(SourceKind.WorkBuddyAi, S.WorkBuddyAiRoot);
-
-    public bool WorkBuddyIsCustom => S.WorkBuddyRoot is not null;
-
-    public bool WorkBuddyAiIsCustom => S.WorkBuddyAiRoot is not null;
-
-    /// <summary>Main session files with a line today; an installed but unused app shows 0 (DESIGN 5).</summary>
-    public string WorkBuddyStatus => StatusFor(SourceKind.WorkBuddy);
-
-    public string WorkBuddyAiStatus => StatusFor(SourceKind.WorkBuddyAi);
-
-    public string ZCodePath => S.ZCodeRoot ?? LiveMonitor.DefaultZCodeRoot;
-
-    public string ZCodeStatus => StatusFor(SourceKind.ZCode);
-
-    public string KimiPath => S.KimiRoot ?? LiveMonitor.DefaultKimiRoot;
-
-    public string KimiStatus => StatusFor(SourceKind.Kimi);
-
-    public string GrokBuildPath => S.GrokBuildRoot ?? LiveMonitor.DefaultGrokBuildRoot;
-
-    public string GrokBuildStatus => StatusFor(SourceKind.GrokBuild);
-
-    /// <summary>Pi's default sessions root (its custom session folder is read too), or the one chosen folder.</summary>
-    public string PiPath => S.PiRoot ?? LiveMonitor.DefaultPiRoot;
-
-    /// <summary>Main session files of every Pi root with a line today; sub-agent files are not sessions (DESIGN 5).</summary>
-    public string PiStatus => StatusFor(SourceKind.Pi);
-
-    /// <summary>The chosen OpenClaw folder or database, else the state folders found (<c>~/.openclaw</c> first), one per line.</summary>
-    public string OpenClawPath => S.OpenClawRoot
-        ?? (LiveMonitor.DefaultOpenClawRoots.Where(Directory.Exists).ToList() is { Count: > 0 } found
-            ? string.Join(Environment.NewLine, found)
-            : LiveMonitor.DefaultOpenClawRoot);
-
-    /// <summary>Transcript windows of every agent database with an entry today that are not sub-agents (DESIGN 5).</summary>
-    public string OpenClawStatus => StatusFor(SourceKind.OpenClaw);
-
-    // The picker starts in the chosen folder (a chosen database: its agent folder), else the default state folder.
-    private string OpenClawFolder => S.OpenClawRoot is { } chosen && File.Exists(chosen)
-        ? Path.GetDirectoryName(chosen) ?? chosen
-        : S.OpenClawRoot ?? LiveMonitor.DefaultOpenClawRoot;
-
-    /// <summary>The Hermes home (<c>%LOCALAPPDATA%\hermes</c> unless <c>%HERMES_HOME%</c> says otherwise), or the chosen home or <c>logs</c> folder.</summary>
-    public string HermesPath => S.HermesRoot ?? LiveMonitor.DefaultHermesRoot;
-
-    /// <summary>Today's main sessions of every profile; a home without logs shows 0 (DESIGN 5).</summary>
-    public string HermesStatus => StatusFor(SourceKind.Hermes);
-
-    /// <summary>The Factory Droid sessions folder: the default, or the chosen folder's <c>sessions</c> folder (or the folder itself).</summary>
-    public string DroidPath => LiveMonitor.DroidRoot(S.DroidRoot);
-
-    /// <summary>Today's main sessions; Task-tool workers are not counted (DESIGN 5).</summary>
-    public string DroidStatus => StatusFor(SourceKind.Droid);
-
-    public string CodexStatus => StatusFor(SourceKind.Codex);
-
-    public string DshStatus => StatusFor(SourceKind.DeepSeek);
-
-    public string ClaudeStatus
-    {
-        get
-        {
-            var code = _snapshot.Sources.FirstOrDefault(s => s.Kind == SourceKind.ClaudeCode);
-            var desktop = _snapshot.Sources.FirstOrDefault(s => s.Kind == SourceKind.ClaudeDesktop);
-            if (code is null && desktop is null)
-            {
-                return string.Empty;
-            }
-
-            var available = (code?.Available ?? false) || (desktop?.Available ?? false);
-            if (!available)
-            {
-                return _loc["source.folderMissing"];
-            }
-
-            return _loc.Format("source.sessions", (code?.SessionCount ?? 0) + (desktop?.SessionCount ?? 0));
-        }
-    }
 
     public string VersionText => _loc.Format("settings.about.version", AppPaths.Version);
 
@@ -742,11 +544,13 @@ internal sealed class SettingsViewModel : ObservableObject
         }
 
         RefreshTitleLadder();
+        SourcesPane?.Relocalize(localizer);
         Orbs?.Relocalize(localizer);
         Boards?.Relocalize(localizer);
         TitleThemes?.Relocalize(localizer);
         Cost.Relocalize();
         Traffic?.Relocalize(localizer);
+        Remote?.Relocalize(localizer);
         OnPropertyChanged(string.Empty);
     }
 
@@ -756,6 +560,7 @@ internal sealed class SettingsViewModel : ObservableObject
         Orbs?.UpdateLive();
         Cost.UpdateLive(snapshot);
         Traffic?.Refresh();
+        Remote?.UpdateLive();
         if (_taskbarPresence != presence)
         {
             _taskbarPresence = presence;
@@ -768,25 +573,11 @@ internal sealed class SettingsViewModel : ObservableObject
             row.Status = StatusFor(row.Kind);
         }
 
-        OnPropertyChanged(nameof(CodexStatus));
-        OnPropertyChanged(nameof(ClaudeStatus));
-        OnPropertyChanged(nameof(DshStatus));
-        OnPropertyChanged(nameof(OpenCodeStatus));
-        OnPropertyChanged(nameof(GeminiStatus));
-        OnPropertyChanged(nameof(OmpStatus));
-        OnPropertyChanged(nameof(AntigravityStatus));
-        OnPropertyChanged(nameof(AntigravityPath));
-        OnPropertyChanged(nameof(WorkBuddyStatus));
-        OnPropertyChanged(nameof(WorkBuddyAiStatus));
-        OnPropertyChanged(nameof(ZCodeStatus));
-        OnPropertyChanged(nameof(KimiStatus));
-        OnPropertyChanged(nameof(GrokBuildStatus));
-        OnPropertyChanged(nameof(PiStatus));
-        OnPropertyChanged(nameof(OpenClawStatus));
-        OnPropertyChanged(nameof(OpenClawPath));
-        OnPropertyChanged(nameof(HermesStatus));
-        OnPropertyChanged(nameof(DroidStatus));
-        OnPropertyChanged(nameof(DroidPath));
+        if (PageKey == "sources")
+        {
+            SourcesPane.RefreshIfDue();
+        }
+
         OnPropertyChanged(nameof(UpdateLastCheckedText));
     }
 
@@ -826,7 +617,28 @@ internal sealed class SettingsViewModel : ObservableObject
             return _loc["source.disabled"];
         }
 
-        return status.Available ? _loc.Format("source.sessions", status.SessionCount) : _loc["source.folderMissing"];
+        var (available, sessions) = OnThisComputer(status);
+        return available ? _loc.Format("source.sessions", sessions) : _loc["source.folderMissing"];
+    }
+
+    /// <summary>
+    /// A source's state on this computer: with remote hosts, <c>Sources</c> adds every connected host, while this page is
+    /// about this computer's own folders (DESIGN 13).
+    /// </summary>
+    private (bool Available, int Sessions) OnThisComputer(SourceStatus? status)
+    {
+        if (status is null)
+        {
+            return (false, 0);
+        }
+
+        if (_snapshot.Hosts.Count <= 1)
+        {
+            return (status.Available, status.SessionCount);
+        }
+
+        var local = _snapshot.HostSources.FirstOrDefault(c => c.Cell == HostSource.Local(status.Kind));
+        return local is null ? (false, 0) : (local.Available, local.SessionCount);
     }
 
     private void Apply(Func<AppSettings, AppSettings> change)
@@ -849,6 +661,7 @@ internal sealed class SettingsViewModel : ObservableObject
                 row.Enabled = S.IsSourceEnabled(row.Kind);
             }
 
+            SourcesPane?.Sync();
             RefreshTitleLadder();
             OnPropertyChanged(string.Empty);
 
@@ -875,17 +688,6 @@ internal sealed class SettingsViewModel : ObservableObject
         var s = S;
         var redline = s.Metric == SpeedMetric.Total ? s.RedlineTotal / 24 : s.RedlineOutput;
         _preview.Start(redline);
-    }
-
-    private void ChangeFolder(string current, Func<AppSettings, string, AppSettings> apply)
-    {
-        var picked = _pickFolder(Directory.Exists(current) ? current : null);
-        if (string.IsNullOrWhiteSpace(picked) || !Path.IsPathFullyQualified(picked))
-        {
-            return;
-        }
-
-        _settings.Update(s => apply(s, picked));
     }
 
     private static void OpenUrl(string url)

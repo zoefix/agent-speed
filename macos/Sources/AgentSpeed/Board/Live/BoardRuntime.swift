@@ -23,7 +23,7 @@ final class BoardRuntime {
     init(config: BoardConfig) {
         id = config.id
         self.config = config
-        live = BoardLive(sources: config.sources)
+        live = BoardLive(sources: config.sources, hosts: config.hosts)
     }
 
     var layoutMetrics: BoardLayoutMetrics { BoardLayoutMetrics(BoardGeometry(config.style, config.size, readouts: config.readouts)) }
@@ -33,6 +33,7 @@ final class BoardRuntime {
         if config.readouts.thinking, !self.config.readouts.thinking { thinkingFold = BoardThinkingFold() }
         self.config = config
         live.setSources(config.sources)
+        live.setHosts(config.hosts)
     }
 
     /// The engine's all-sources `newPeak`; an all-sources board celebrates it on its next tick.
@@ -92,6 +93,7 @@ final class BoardRuntime {
         case .available: nil
         case .allDisabled: "source.disabled"
         case .allNotFound: "source.notFound"
+        case .hostsOffline: "remote.orb.offline"
         }
         let title = unavailableKey.map { l10n($0) }
             ?? model.titles.text(gauge.title, in: model.titles.theme(forOrb: nil), l10n: l10n)
@@ -139,7 +141,8 @@ final class BoardRuntime {
     /// show anything.
     private func costReading(model: AppModel, snapshot: SpeedSnapshot, previewing: Bool) -> CostReading? {
         guard !previewing, frame.state == .available else { return nil }
-        return OrbSubset.cost(snapshot, sources: config.sources.sourceSet, billable: model.cost.billable)
+        return OrbSubset.cost(snapshot, sources: config.sources.sourceSet, hosts: config.hosts.hostSet,
+                              billable: model.cost.billable)
     }
 
     /// Today's cost of the board's billable sources (DESIGN 9), as the dashboard writes it; nil when nothing is

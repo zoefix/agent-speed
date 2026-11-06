@@ -10,6 +10,9 @@ enum HistoryCSV {
         "agents", "unfinalized", "models", "cost_usd", "unpriced_requests", "price_version",
     ]
 
+    /// The trailing column while host history exists (DESIGN 13).
+    static let hostColumn = "host"
+
     /// Traffic bytes (DESIGN 10): own and tools per source row, empty before measuring began.
     static let trafficColumns = ["traffic_rx_bytes", "traffic_tx_bytes", "traffic_rx_tools_bytes", "traffic_tx_tools_bytes"]
 
@@ -40,13 +43,16 @@ enum HistoryCSV {
         case .openclaw: "openclaw"
         case .hermes: "hermes"
         case .droid: "droid"
+        case .devin: "devin"
         }
     }
 
     /// Costs are every source's (subscription exclusion does not apply to the CSV): `cost_usd` exact with 6 decimals,
-    /// empty for a day without cost data; `cost_<code>` with the currency's digits + 2 at the rate in use.
-    static func build(_ rows: [DaySummary], source: SourceKind?, money: HistoryMoney = .usd, traffic: Bool = false) -> String {
-        let header = header(money: money, traffic: traffic)
+    /// empty for a day without cost data; `cost_<code>` with the currency's digits + 2 at the rate in use. `host`
+    /// (`HistoryContent.csvHost`) adds a trailing `host` column with that value on every row (DESIGN 13).
+    static func build(_ rows: [DaySummary], source: SourceKind?, money: HistoryMoney = .usd, traffic: Bool = false,
+                      host: String? = nil) -> String {
+        let header = header(money: money, traffic: traffic) + (host == nil ? [] : [hostColumn])
         var text = header.joined(separator: ",") + "\r\n"
         let id = sourceID(source)
         for row in rows {
@@ -70,14 +76,17 @@ enum HistoryCSV {
                 fields += [day.map { String($0.own.rx) } ?? "", day.map { String($0.own.tx) } ?? "",
                            day.map { String($0.tools.rx) } ?? "", day.map { String($0.tools.tx) } ?? ""]
             }
+            if let host { fields.append(host) }
             text += fields.map(field).joined(separator: ",") + "\r\n"
             // This computer's traffic of the date: a row of its own carrying only the two byte columns.
             if traffic, let machine = row.traffic?.machine {
+                let end = header.count - (host == nil ? 0 : 1)
                 var machineFields = Array(repeating: "", count: header.count)
                 machineFields[0] = row.day.description
                 machineFields[1] = "machine"
-                machineFields[header.count - 4] = String(machine.rx)
-                machineFields[header.count - 3] = String(machine.tx)
+                machineFields[end - 4] = String(machine.rx)
+                machineFields[end - 3] = String(machine.tx)
+                if host != nil { machineFields[end] = HistoryHosts.csvValue(RemoteHost.localId, hosts: []) }
                 text += machineFields.map(field).joined(separator: ",") + "\r\n"
             }
         }

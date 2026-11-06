@@ -22,6 +22,12 @@ enum OrbMenus {
         menu.addItem(.separator())
         menu.addItem(styleItem(model: model, orb: orb))
         menu.addItem(sourcesItem(model: model, orb: orb))
+        let hosts = model.hostChoices
+        if OrbHostChoice.pickerShown(hosts) {
+            menu.addItem(HostMenus.item(model: model, all: orb.hosts.isAll, entries: orb.hosts.entries(hosts),
+                                        setAll: { [weak model] in model?.orbs.setHosts(.all, of: id) },
+                                        toggle: { [weak model] host in model?.orbs.toggleHost(host, of: id) }))
+        }
         menu.addItem(unitItem(model: model, orb: orb))
         menu.addItem(trafficItem(model: model, orb: orb))
         menu.addItem(showNameItem(model: model, orb: orb))
@@ -190,15 +196,28 @@ enum OrbMenus {
         return text
     }
 
+    /// `menu.size` ▸ the S / M / L presets, a separator and the continuous size slider (DESIGN 2b).
     private static func sizeItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
-        let item = NSMenuItem(title: model.l10n("menu.size"), action: nil, keyEquivalent: "")
+        let l10n = model.l10n
+        let item = NSMenuItem(title: l10n("menu.size"), action: nil, keyEquivalent: "")
         let submenu = NSMenu()
-        for preset in OrbSizePreset.allCases {
-            let state: NSControl.StateValue = abs(orb.size - preset.diameter) < 0.5 ? .on : .off
-            submenu.addItem(ActionMenuItem(model.l10n(preset.titleKey), state: state) { [weak model] in
-                model?.orbs.setSize(preset.diameter, of: orb.id)
-            })
+        submenu.autoenablesItems = false
+        func state(_ preset: OrbSizePreset, _ size: Double) -> NSControl.StateValue {
+            abs(size - preset.diameter) < 0.5 ? .on : .off
         }
+        let presets = OrbSizePreset.allCases.map { preset in
+            ActionMenuItem(l10n(preset.titleKey), state: state(preset, orb.size)) { [weak model] in
+                model?.orbs.setSize(preset.diameter, of: orb.id)
+            }
+        }
+        presets.forEach(submenu.addItem)
+        submenu.addItem(.separator())
+        let slider = OrbSizeSliderItem(size: orb.size, label: l10n("settings.orb.size"),
+                                       valueText: { l10n("mac.settings.orb.sizeValue", $0) }) { [weak model] size in
+            model?.orbs.setSize(size, of: orb.id)
+            for (item, preset) in zip(presets, OrbSizePreset.allCases) { item.state = state(preset, size) }
+        }
+        submenu.addItem(slider)
         item.submenu = submenu
         return item
     }

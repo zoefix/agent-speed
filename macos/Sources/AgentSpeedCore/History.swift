@@ -35,12 +35,14 @@ public struct ModelUsage: Equatable, Sendable, Identifiable {
     }
 }
 
-/// One source's aggregates for one local calendar day (METRICS 8).
+/// One source's aggregates for one local calendar day (METRICS 8) on one host (REMOTE 8.3).
 public struct DailyUsage: Equatable, Sendable, Identifiable {
-    public var id: String { "\(day)/\(source.rawValue)" }
+    public var id: String { isLocal ? "\(day)/\(source.rawValue)" : "\(day)/\(source.rawValue)/\(host)" }
     /// Local calendar date, `YYYY-MM-DD`.
     public var day: String
     public var source: SourceKind
+    /// `local` (`RemoteHost.localId`) or the id of the remote host whose relay reported the row (REMOTE 2.2).
+    public var host: String
     public var totals: TokenTotals
     public var measuredOutput: Int
     public var measuredMs: Int64
@@ -71,10 +73,12 @@ public struct DailyUsage: Equatable, Sendable, Identifiable {
         cost: CostTally? = nil,
         priceVersion: Int? = nil,
         modeUsage: [ExecutionModeUsage] = [],
-        unpriced: UnpricedReading? = nil
+        unpriced: UnpricedReading? = nil,
+        host: String = RemoteHost.localId
     ) {
         self.day = day
         self.source = source
+        self.host = host
         self.totals = totals
         self.measuredOutput = measuredOutput
         self.measuredMs = measuredMs
@@ -105,6 +109,9 @@ public struct DailyUsage: Equatable, Sendable, Identifiable {
     public var averageSpeed: Double? {
         measuredMs > 0 ? Double(measuredOutput) / (Double(measuredMs) / 1000) : nil
     }
+
+    /// Analysed on this computer.
+    public var isLocal: Bool { host == RemoteHost.localId }
 }
 
 public enum HistoryState: Equatable, Sendable {
@@ -119,8 +126,14 @@ public enum HistoryState: Equatable, Sendable {
 @Observable
 public final class HistoryStore {
     public private(set) var state: HistoryState = .notLoaded
-    /// Every stored day of every source, sorted by day then source.
+    /// Every stored day of every source and host, sorted by day, source, then host (this computer first).
     public private(set) var days: [DailyUsage] = []
+    /// The last name of every remote host with stored history, by id (REMOTE 8.3); hosts removed from the settings
+    /// keep theirs.
+    public private(set) var hostNames: [String: String] = [:]
+    /// Remote hosts whose last history batch exceeded the bounds and was discarded (`historyTooLarge`, REMOTE 8.3),
+    /// until a sync of theirs succeeds.
+    public private(set) var remoteTooLarge: Set<String> = []
     /// The stored performance records of the enabled sources (METRICS 6.11), per day, source and model: the History
     /// window's 性能表現 and the score card's baselines.
     public private(set) var perfRecords: [PerfDayRecord] = []
@@ -133,11 +146,18 @@ public final class HistoryStore {
 
     public init() {}
 
-    public func publish(state: HistoryState, days: [DailyUsage]? = nil) {
+    public func publish(state: HistoryState, days: [DailyUsage]? = nil, hostNames: [String: String]? = nil) {
         self.state = state
         if let days {
             self.days = days
         }
+        if let hostNames, hostNames != self.hostNames {
+            self.hostNames = hostNames
+        }
+    }
+
+    public func publish(remoteTooLarge: Set<String>) {
+        if remoteTooLarge != self.remoteTooLarge { self.remoteTooLarge = remoteTooLarge }
     }
 
     public func publish(perfRecords: [PerfDayRecord]) {

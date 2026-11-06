@@ -17,6 +17,9 @@ struct BoardsSettings: View {
             BoardSourcesSection(model: model, board: board) {
                 BoardEditorHeading(model: model, board: board)
             }
+            HostPickerSection(model: model, selection: board.hosts,
+                              set: { model.boards.setHosts($0, of: board.id) },
+                              toggle: { model.boards.toggleHost($0, of: board.id) })
             BoardStyleSection(model: model, board: board)
             BoardReadoutsSection(model: model, board: board)
             BoardLookSection(model: model, board: board)

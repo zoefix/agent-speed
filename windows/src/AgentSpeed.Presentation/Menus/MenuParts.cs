@@ -1,6 +1,9 @@
+using System.Globalization;
 using AgentSpeed.Core;
 using AgentSpeed.Presentation.Localization;
+using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Orb.Names;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Orbs;
 
@@ -35,19 +38,33 @@ internal static class MenuParts
     public static MenuIcon? DotsOf(OrbSources tracked, SourceAvailability sources) =>
         tracked.Set is { } set ? new MenuIcon.Dots([.. set.Select(k => new SourceDot(k, sources.Available.Contains(k)))]) : null;
 
-    /// <summary><c>menu.size</c> ▸ small / medium / large for one orb.</summary>
+    /// <summary>
+    /// <c>menu.size</c> ▸ small / medium / large, a separator and a slider over the whole range in 4 DIP steps (DESIGN 2b,
+    /// Context menu) for one orb; the presets' check follows the slider.
+    /// </summary>
     public static MenuRow SizeMenu(OrbDefinition orb, Localizer localizer, bool enabled = true)
     {
         var presets = AppSettings.OrbSizePresets;
         var current = OrbMenuModel.PresetIndex(orb.Size);
-        var rows = new List<MenuEntry>(presets.Count);
+        var rows = new List<MenuEntry>(presets.Count + 2);
         for (var i = 0; i < presets.Count; i++)
         {
             rows.Add(Toggle(localizer[SizeKeys[i]], i == current, new MenuAction.SetOrbSize(orb.Id, presets[i])));
         }
 
+        var id = orb.Id;
+        rows.Add(MenuSeparator.Instance);
+        rows.Add(new MenuSlider(localizer["settings.orb.size"], orb.Size, OrbStyles.MinSize, OrbStyles.MaxSize, OrbStyles.SizeStep)
+        {
+            Action = size => new MenuAction.SetOrbSize(id, size),
+            ValueText = SizeText,
+            CheckedRow = OrbMenuModel.PresetIndex,
+        });
         return Submenu(localizer["menu.size"], rows, enabled);
     }
+
+    /// <summary>An orb size as the slider rows show it (<c>148 pt</c>).</summary>
+    public static string SizeText(double size) => string.Create(CultureInfo.InvariantCulture, $"{size:0} pt");
 
     /// <summary>
     /// <c>orbs.showName</c>, checked when the orb's name plate shows; choosing it stores the opposite for this orb.
@@ -91,6 +108,40 @@ internal static class MenuParts
         }
 
         return Submenu(localizer["orbs.sources"], rows);
+    }
+
+    /// <summary>
+    /// <c>remote.hosts</c> ▸ <c>remote.hosts.all</c>, a separator, then this computer and every remote host in settings order
+    /// with its status dot and, while it is not connected, its word (DESIGN 13); the last tracked host cannot be unchecked.
+    /// Null while no remote host exists.
+    /// </summary>
+    public static MenuRow? HostsMenu(OrbHosts tracked, MenuAction all, Func<string, MenuAction> toggle, AppSettings settings,
+        IReadOnlyDictionary<string, MenuHostState>? states, Localizer localizer)
+    {
+        ArgumentNullException.ThrowIfNull(settings);
+        var choices = RemoteHostStates.Choices(settings.RemoteHosts, localizer);
+        if (!OrbHostChoice.PickerShown(choices))
+        {
+            return null;
+        }
+
+        var rows = new List<MenuEntry>
+        {
+            Toggle(localizer["remote.hosts.all"], tracked.IsAll, all),
+            MenuSeparator.Instance,
+        };
+        foreach (var entry in tracked.Entries(choices))
+        {
+            var state = states?.GetValueOrDefault(entry.Id) ?? MenuHostState.Default(entry.Id);
+            rows.Add(Toggle(entry.Name, entry.Checked, toggle(entry.Id), entry.Enabled) with
+            {
+                Icon = new MenuIcon.StatusDot(RemoteDots.Tone(state.Dot)),
+                Detail = state.Word,
+                ToolTip = entry.Enabled ? null : localizer["remote.hosts.lastOne"],
+            });
+        }
+
+        return Submenu(localizer["remote.hosts"], rows);
     }
 
     /// <summary><c>menu.effects</c> ▸ Off / Soft / Standard / Max (global).</summary>

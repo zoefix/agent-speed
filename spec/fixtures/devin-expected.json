@@ -1,0 +1,461 @@
+{
+ "_comment": "Devin CLI (METRICS 4.17), checked by spec/tools/devin_reference.py. Paths are relative to the fixtures folder. Each scenario reads its `locations` (user locations, list order) completely, as history does; agents not listed have no responses. `history` is the scenario's UTC day totals of the listed responses.",
+ "version": 2,
+ "resolve": {
+  "devin/share/devin": "devin/share/devin/cli/sessions.db",
+  "devin/share/devin/cli": "devin/share/devin/cli/sessions.db",
+  "devin/second": "devin/second/sessions.db",
+  "devin/Devin": null,
+  "devin/Devin/User/acp-events": null,
+  "devin/missing": null
+ },
+ "scenarios": {
+  "one": {
+   "locations": [
+    "devin/share/devin",
+    "devin/Devin"
+   ],
+   "databases": [
+    "devin/share/devin/cli/sessions.db"
+   ],
+   "agents": {
+    "devin/share/devin/cli/sessions.db#aurora-lantern": {
+     "project": "aurora",
+     "cwdPath": "/Users/dev/projects/aurora",
+     "model": "swe-1-6",
+     "phase": "generating",
+     "inFlightStartMs": 1792490520000,
+     "lastLineMs": 1792490520000,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:aurora-lantern:request:req-a1",
+       "agentId": "devin/share/devin/cli/sessions.db#aurora-lantern",
+       "startMs": 1792490400800,
+       "endMs": 1792490405000,
+       "firstMs": 1792490401900,
+       "input": 9400,
+       "cachedInput": 8000,
+       "cacheWriteInput": 200,
+       "cacheWrite1hInput": 0,
+       "output": 340,
+       "reasoning": 0,
+       "model": "swe-1-6",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:aurora-lantern:request:req-a2",
+       "agentId": "devin/share/devin/cli/sessions.db#aurora-lantern",
+       "startMs": 1792490407500,
+       "endMs": 1792490410000,
+       "firstMs": 1792490408400,
+       "input": 9400,
+       "cachedInput": 9100,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 90,
+       "reasoning": 0,
+       "model": "swe-1-6",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#copper-meadow": {
+     "project": "ledger",
+     "cwdPath": "C:\\Users\\dev\\work\\ledger",
+     "model": "gpt-5-6-sol-max",
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490880750,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:copper-meadow:row:9",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": 1792490699700,
+       "endMs": 1792490700000,
+       "firstMs": null,
+       "input": 12,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 7,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:copper-meadow:row:12",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": null,
+       "endMs": 1792490820000,
+       "firstMs": null,
+       "input": 5,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 2,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:copper-meadow:request:req-c5",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": 1792490878750,
+       "endMs": 1792490880750,
+       "firstMs": null,
+       "input": 1,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 1,
+       "reasoning": 0,
+       "model": "gpt-5-6-sol-max",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#quiet-harbor": {
+     "project": "harbor",
+     "cwdPath": "/Users/dev/projects/harbor",
+     "model": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792491030000,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:quiet-harbor:request:req-q1",
+       "agentId": "devin/share/devin/cli/sessions.db#quiet-harbor",
+       "startMs": null,
+       "endMs": 1792491000000,
+       "firstMs": null,
+       "input": 50,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 20,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#night-owl": {
+     "project": "night-owl",
+     "cwdPath": null,
+     "model": "swe-1-7",
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792491600000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "devin:night-owl:request:req-o1",
+       "agentId": "devin/share/devin/cli/sessions.db#night-owl",
+       "startMs": 1792491599100,
+       "endMs": 1792491600000,
+       "firstMs": null,
+       "input": 70,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 30,
+       "reasoning": 0,
+       "model": "swe-1-7",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    }
+   },
+   "history": {
+    "2026-10-20": {
+     "requests": 7,
+     "input": 18938,
+     "cachedInput": 17100,
+     "cacheWriteInput": 200,
+     "output": 490,
+     "reasoning": 0,
+     "measuredOutput": 468,
+     "measuredMs": 10100,
+     "agents": 4,
+     "models": {
+      "swe-1-6": {
+       "requests": 2,
+       "output": 430
+      },
+      "claude-sonnet-4-5": {
+       "requests": 2,
+       "output": 9
+      },
+      "gpt-5-6-sol-max": {
+       "requests": 1,
+       "output": 1
+      },
+      "": {
+       "requests": 1,
+       "output": 20
+      },
+      "swe-1-7": {
+       "requests": 1,
+       "output": 30
+      }
+     }
+    }
+   }
+  },
+  "two": {
+   "locations": [
+    "devin/share/devin",
+    "devin/second"
+   ],
+   "databases": [
+    "devin/share/devin/cli/sessions.db",
+    "devin/second/sessions.db"
+   ],
+   "agents": {
+    "devin/share/devin/cli/sessions.db#aurora-lantern": {
+     "project": "aurora",
+     "cwdPath": "/Users/dev/projects/aurora",
+     "model": "swe-1-6",
+     "phase": "generating",
+     "inFlightStartMs": 1792490520000,
+     "lastLineMs": 1792490520000,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:aurora-lantern:request:req-a1",
+       "agentId": "devin/share/devin/cli/sessions.db#aurora-lantern",
+       "startMs": 1792490400800,
+       "endMs": 1792490405000,
+       "firstMs": 1792490401900,
+       "input": 9400,
+       "cachedInput": 8000,
+       "cacheWriteInput": 200,
+       "cacheWrite1hInput": 0,
+       "output": 340,
+       "reasoning": 0,
+       "model": "swe-1-6",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:aurora-lantern:request:req-a2",
+       "agentId": "devin/share/devin/cli/sessions.db#aurora-lantern",
+       "startMs": 1792490407500,
+       "endMs": 1792490410000,
+       "firstMs": 1792490408400,
+       "input": 9400,
+       "cachedInput": 9100,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 90,
+       "reasoning": 0,
+       "model": "swe-1-6",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#copper-meadow": {
+     "project": "ledger",
+     "cwdPath": "C:\\Users\\dev\\work\\ledger",
+     "model": "gpt-5-6-sol-max",
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490880750,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:copper-meadow:row:9",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": 1792490699700,
+       "endMs": 1792490700000,
+       "firstMs": null,
+       "input": 12,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 7,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:copper-meadow:row:12",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": null,
+       "endMs": 1792490820000,
+       "firstMs": null,
+       "input": 5,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 2,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "devin:copper-meadow:request:req-c5",
+       "agentId": "devin/share/devin/cli/sessions.db#copper-meadow",
+       "startMs": 1792490878750,
+       "endMs": 1792490880750,
+       "firstMs": null,
+       "input": 1,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 1,
+       "reasoning": 0,
+       "model": "gpt-5-6-sol-max",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#quiet-harbor": {
+     "project": "harbor",
+     "cwdPath": "/Users/dev/projects/harbor",
+     "model": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792491030000,
+     "malformedLines": 1,
+     "responses": [
+      {
+       "key": "devin:quiet-harbor:request:req-q1",
+       "agentId": "devin/share/devin/cli/sessions.db#quiet-harbor",
+       "startMs": null,
+       "endMs": 1792491000000,
+       "firstMs": null,
+       "input": 50,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 20,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/share/devin/cli/sessions.db#night-owl": {
+     "project": "night-owl",
+     "cwdPath": null,
+     "model": "swe-1-7",
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792491600000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "devin:night-owl:request:req-o1",
+       "agentId": "devin/share/devin/cli/sessions.db#night-owl",
+       "startMs": 1792491599100,
+       "endMs": 1792491600000,
+       "firstMs": null,
+       "input": 70,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 30,
+       "reasoning": 0,
+       "model": "swe-1-7",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "devin/second/sessions.db#north-wind": {
+     "project": "north",
+     "cwdPath": "/Users/dev/projects/north",
+     "model": "swe-1-7",
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792492803000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "devin:north-wind:request:req-n1",
+       "agentId": "devin/second/sessions.db#north-wind",
+       "startMs": 1792492801500,
+       "endMs": 1792492803000,
+       "firstMs": 1792492801800,
+       "input": 400,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 60,
+       "reasoning": 0,
+       "model": "swe-1-7",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    }
+   },
+   "history": {
+    "2026-10-20": {
+     "requests": 8,
+     "input": 19338,
+     "cachedInput": 17100,
+     "cacheWriteInput": 200,
+     "output": 550,
+     "reasoning": 0,
+     "measuredOutput": 528,
+     "measuredMs": 11600,
+     "agents": 5,
+     "models": {
+      "swe-1-6": {
+       "requests": 2,
+       "output": 430
+      },
+      "claude-sonnet-4-5": {
+       "requests": 2,
+       "output": 9
+      },
+      "gpt-5-6-sol-max": {
+       "requests": 1,
+       "output": 1
+      },
+      "": {
+       "requests": 1,
+       "output": 20
+      },
+      "swe-1-7": {
+       "requests": 2,
+       "output": 90
+      }
+     }
+    }
+   }
+  }
+ }
+}

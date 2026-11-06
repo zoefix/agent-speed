@@ -64,6 +64,7 @@ public struct BoardLive: Sendable {
     public static let punchMinimum = 20.0
 
     public private(set) var sources: OrbSourceSelection
+    public private(set) var hosts: OrbHostSelection
     public private(set) var frame = BoardLiveFrame()
     private var ranking = BoardRanking()
     private var history = BoardHistory()
@@ -74,14 +75,26 @@ public struct BoardLive: Sendable {
     private var lastValue: Double?
     private var observedTotal = (dayStartMs: Int64(0), value: 0.0)
 
-    public init(sources: OrbSourceSelection) {
+    public init(sources: OrbSourceSelection, hosts: OrbHostSelection = .all) {
         self.sources = sources
+        self.hosts = hosts
     }
 
     /// A new source set starts over: ranking, history and peak, with 60 s of quiet.
     public mutating func setSources(_ sources: OrbSourceSelection) {
         guard sources != self.sources else { return }
         self.sources = sources
+        startOver()
+    }
+
+    /// A new host set starts over like a new source set (DESIGN 13).
+    public mutating func setHosts(_ hosts: OrbHostSelection) {
+        guard hosts != self.hosts else { return }
+        self.hosts = hosts
+        startOver()
+    }
+
+    private mutating func startOver() {
         ranking.reset()
         history.reset()
         armed = false
@@ -96,8 +109,9 @@ public struct BoardLive: Sendable {
     public mutating func ingest(_ snapshot: SpeedSnapshot, metric: SpeedMetric, layout: BoardLayoutMetrics,
                                 expanded: String? = nil, engineNewPeak: Bool = false,
                                 previewing: Bool = false) -> BoardLiveFrame {
-        let set = previewing ? nil : sources.sourceSet
-        let reading = OrbSubset.reading(snapshot, sources: set)
+        let set = previewing ? nil : sources.subsetKey(hosts: hosts)
+        let reading = OrbSubset.reading(snapshot, sources: previewing ? nil : sources.sourceSet,
+                                        hosts: previewing ? nil : hosts.hostSet)
         let available = reading.state == .available
         let value = available ? max(0, reading.live.value(for: metric)) : 0
         let nowMs = Int64((snapshot.timestamp.timeIntervalSince1970 * 1000).rounded())

@@ -47,7 +47,7 @@ internal sealed partial class AppController : IBoardHost
         }
 
         HideTooltip();
-        if (BoardMenu.Build(this, boardId, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc) is { } menu)
+        if (BoardMenu.Build(this, boardId, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, _remoteHosts?.MenuStates(_loc)) is { } menu)
         {
             _menu.Show(menu);
         }

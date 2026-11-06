@@ -242,7 +242,7 @@ public class OrbEditingTests
     public void SingleOrbEditsAreClampedAndKeepTheId()
     {
         var doc = new OrbsDocument([new OrbDefinition("x") { Style = OrbStyle.Minimal, Size = 72 }]);
-        Assert.Equal(96, OrbEditing.SetStyle(doc, "x", OrbStyle.Liquid).Find("x")!.Size);
+        Assert.Equal(72, OrbEditing.SetStyle(doc, "x", OrbStyle.Liquid).Find("x")!.Size);
         Assert.Equal(64, OrbEditing.SetSize(doc, "x", 10).Find("x")!.Size);
         Assert.Equal(0.4, OrbEditing.SetOpacity(doc, "x", 0.1).Find("x")!.Opacity);
         Assert.False(OrbEditing.SetAlwaysOnTop(doc, "x", false).Find("x")!.AlwaysOnTop);
@@ -289,7 +289,7 @@ public class OrbEditingTests
         Assert.Equal("Claude Code", OrbNaming.AutomaticName(OrbSources.Of(SourceKind.ClaudeCode), en));
         Assert.Equal("Claude Code + Claude Desktop", OrbNaming.AutomaticName(OrbSources.FromKeys(["claudeDesktop", "claudeCode"]), en));
         Assert.Equal("Codex +2", OrbNaming.AutomaticName(OrbSources.Of(Three), en));
-        Assert.Equal("Codex +16", OrbNaming.AutomaticName(OrbSources.Of(SourceSet.Everything), en));
+        Assert.Equal("Codex +17", OrbNaming.AutomaticName(OrbSources.Of(SourceSet.Everything), en));
         Assert.Equal("Main", OrbNaming.DisplayName(Template, en));
         Assert.Equal("Gemini CLI", OrbNaming.DisplayName(new OrbDefinition("x") { Sources = OrbSources.Of(SourceKind.Gemini) }, en));
         Assert.Equal("Codex, Claude Code, Gemini CLI", OrbNaming.SourceList(Three, en));

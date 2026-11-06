@@ -57,6 +57,12 @@ bool ModeContext::Store::refresh(const std::set<std::string>& sessions) {
     return changed;
 }
 
+void ModeContext::setGeminiSettings(const std::string& root, const std::string& path) {
+    if (root.empty() || path.empty()) return;
+    geminiRoots_[root] = path;
+    gemini_[path].path = path;
+}
+
 void ModeContext::addRoot(RootFamily family, const std::string& root) {
     if (root.empty() || configs_.contains(root)) return;
     switch (family) {
@@ -81,7 +87,7 @@ void ModeContext::addRoot(RootFamily family, const std::string& root) {
 bool ModeContext::refresh(const std::map<std::string, std::set<std::string>>& workBuddySessions) {
     bool changed = false;
     for (auto& [root, config] : configs_) changed |= config.refresh();
-    changed |= gemini_.refresh();
+    for (auto& [path, gemini] : gemini_) changed |= gemini.refresh();
     static const std::set<std::string> none;
     for (auto& [root, store] : stores_) {
         const auto sessions = workBuddySessions.find(root);
@@ -91,7 +97,11 @@ bool ModeContext::refresh(const std::map<std::string, std::set<std::string>>& wo
 }
 
 ExecutionModes ModeContext::configured(RootFamily family, const std::string& root, const std::optional<std::string>& model) const {
-    if (family == RootFamily::Gemini) return gemini_.value.modes(model);
+    if (family == RootFamily::Gemini) {
+        const auto file = geminiRoots_.find(root);
+        if (file == geminiRoots_.end()) return {};
+        return gemini_.at(file->second).value.modes(model);
+    }
     const auto it = configs_.find(root);
     return it == configs_.end() ? ExecutionModes() : it->second.value;
 }

@@ -69,7 +69,7 @@ public enum PerfFormula {
     public static let minimumSamples = 3
 
     /// Sources whose logs say when the first content was written (METRICS 4.1, 4.2).
-    static let latencySources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop]
+    static let latencySources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop, .devin]
     /// Sources with tool calls (METRICS 6.10).
     static let actionSources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop, .omp, .pi, .openclaw, .droid]
 

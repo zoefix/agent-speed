@@ -10,7 +10,6 @@
 
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
-#include "agentspeed/harness.hpp"
 #include "agentspeed/hermes.hpp"
 #include "agentspeed/json.hpp"
 #include "agentspeed/path_text.hpp"
@@ -48,14 +47,6 @@ std::vector<std::string> plainSubfolders(const std::string& folder) {
     }
     std::sort(names.begin(), names.end());
     return names;
-}
-
-std::vector<std::string> normalizeAll(const std::vector<std::string>& roots) {
-    std::vector<std::string> out;
-    for (const auto& r : roots) {
-        if (auto n = paths::normalizeRoot(r); !n.empty()) out.push_back(n);
-    }
-    return out;
 }
 
 std::string ompConfigFolder(const Environment& environment, const std::string& home) {
@@ -118,6 +109,7 @@ RootFamily familyOf(SourceKind source) {
         case SourceKind::OpenClaw: return RootFamily::OpenClaw;
         case SourceKind::Hermes: return RootFamily::Hermes;
         case SourceKind::Droid: return RootFamily::Droid;
+        case SourceKind::Devin: return RootFamily::Devin;
         default: return RootFamily::Claude;
     }
 }
@@ -232,11 +224,12 @@ std::vector<std::string> openClawDatabases(const std::string& root) {
 }
 
 std::vector<std::string> openClawDatabases(const std::vector<std::string>& roots) {
+    // Each database once, also when two roots reach it through a symbolic link (METRICS 2.1 Databases).
     std::set<std::string> seen;
     std::vector<std::string> out;
     for (const auto& r : roots) {
         for (auto& d : openClawDatabases(r)) {
-            if (seen.insert(d).second) out.push_back(std::move(d));
+            if (seen.insert(resolvedPath(d)).second) out.push_back(std::move(d));
         }
     }
     return out;
@@ -331,7 +324,7 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         case RootFamily::OpenCode: return fsx::join(env("XDG_DATA_HOME").value_or(home + "/.local/share"), "opencode");
         case RootFamily::Gemini: return fsx::join(env("GEMINI_CLI_HOME").value_or(home), ".gemini/tmp");
         case RootFamily::Omp: return paths::ompDefaultRoot(environment, home);
-        case RootFamily::Antigravity: return home + "/.gemini";
+        case RootFamily::Antigravity: return home + "/.gemini/antigravity-cli";
         case RootFamily::WorkBuddy: return home + "/.workbuddy";
         case RootFamily::WorkBuddyAi: return home + "/.workbuddy-ai";
         case RootFamily::ZCode: {
@@ -347,77 +340,9 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         }
         case RootFamily::Hermes: return hermes::home(environment, false, home);
         case RootFamily::Droid: return droid::defaultRoot(home);
+        case RootFamily::Devin: return devin::Root::database(devin::automaticDatabase(environment, home)).displayFolder();
     }
     return {};
-}
-
-SourceLocations SourceLocations::resolve(const RootSettings& s, const Environment& environment, const std::string& home) {
-    using paths::normalizeRoot;
-    const auto automatic = [&](SourceKind source) { return defaultRoot(source, environment, home); };
-    SourceLocations l;
-    l.codexRoot = normalizeRoot(s.codex.value_or(automatic(SourceKind::Codex)));
-    l.claudeRoot = normalizeRoot(s.claude.value_or(automatic(SourceKind::ClaudeCode)));
-    l.dshRoot = normalizeRoot(s.dsh.value_or(automatic(SourceKind::Deepseek)));
-    l.openCodeRoot = normalizeRoot(s.openCode.value_or(automatic(SourceKind::OpenCode)));
-    l.geminiRoots = s.gemini ? normalizeAll({*s.gemini}) : normalizeAll({automatic(SourceKind::Gemini)});
-    l.ompRoots = s.omp ? normalizeAll({*s.omp}) : normalizeAll(paths::ompRoots(environment, home));
-    l.antigravityStores = normalizeAll(paths::antigravityStores(home + "/.gemini", s.antigravity));
-    l.ompAutomatic = !s.omp;
-    const auto workBuddy = [&](const std::optional<std::string>& setting, SourceKind source) {
-        const auto folder = setting.value_or(automatic(source));
-        return trimSpaces(folder).empty() ? std::string() : normalizeRoot(paths::workBuddyProjectsOf(folder));
-    };
-    l.workBuddyRoot = workBuddy(s.workBuddy, SourceKind::WorkBuddy);
-    l.workBuddyAiRoot = workBuddy(s.workBuddyAi, SourceKind::WorkBuddyAi);
-    l.zcodeRoot = normalizeRoot(s.zcode.value_or(automatic(SourceKind::ZCode)));
-    l.kimiRoot = normalizeRoot(harness::sessionsOf(s.kimi.value_or(automatic(SourceKind::Kimi))));
-    l.grokBuildRoot = normalizeRoot(harness::sessionsOf(s.grokBuild.value_or(automatic(SourceKind::GrokBuild))));
-    l.piRoots = s.pi ? normalizeAll({*s.pi}) : normalizeAll(paths::piRoots(environment, home));
-    l.piAutomatic = !s.pi;
-    l.openClawRoots = s.openClaw ? normalizeAll({*s.openClaw}) : normalizeAll(paths::openClawStateFolders(environment, home));
-    l.openClawAutomatic = !s.openClaw;
-    l.codexAutomatic = !s.codex;
-    l.hermesRoot = normalizeRoot(s.hermes.value_or(automatic(SourceKind::Hermes)));
-    l.hermesChosen = s.hermes.has_value();
-    l.droidRoot = s.droid && !trimSpaces(*s.droid).empty() ? normalizeRoot(droid::rootOf(normalizeRoot(*s.droid)))
-                                                           : normalizeRoot(automatic(SourceKind::Droid));
-    return l;
-}
-
-std::vector<std::string> SourceLocations::codexHomeRoots() const {
-    if (!codexAutomatic) return {};
-    std::vector<std::string> out;
-    const auto main = fsx::trimTrailing(codexRoot);
-    for (const auto& root : distinct(normalizeAll(paths::openClawCodexRoots(paths::openClawDatabases(openClawRoots))))) {
-        if (fsx::trimTrailing(root) != main) out.push_back(root);
-    }
-    return out;
-}
-
-std::vector<std::string> SourceLocations::hermesFolders() const {
-    if (hermesRoot.empty()) return {};
-    return normalizeAll(hermesChosen ? hermes::settingFolders(hermesRoot) : hermes::logFolders(hermesRoot));
-}
-
-std::vector<std::pair<RootFamily, std::string>> SourceLocations::fileRoots() const {
-    std::vector<std::pair<RootFamily, std::string>> roots;
-    const auto pis = distinct(piRoots);
-    roots.emplace_back(RootFamily::Codex, codexRoot);
-    for (const auto& home : codexHomeRoots()) roots.emplace_back(RootFamily::Codex, home);
-    roots.emplace_back(RootFamily::Claude, claudeRoot);
-    roots.emplace_back(RootFamily::DeepSeek, dshRoot);
-    for (const auto& r : geminiRoots) roots.emplace_back(RootFamily::Gemini, r);
-    for (const auto& r : distinct(paths::withoutPi(ompRoots, pis))) roots.emplace_back(RootFamily::Omp, r);
-    std::vector<std::string> conversations;
-    for (const auto& store : antigravityStores) conversations.push_back(paths::antigravityConversationsOf(store));
-    for (const auto& r : distinct(conversations)) roots.emplace_back(RootFamily::Antigravity, r);
-    if (!workBuddyRoot.empty()) roots.emplace_back(RootFamily::WorkBuddy, workBuddyRoot);
-    if (!workBuddyAiRoot.empty()) roots.emplace_back(RootFamily::WorkBuddyAi, workBuddyAiRoot);
-    if (!kimiRoot.empty()) roots.emplace_back(RootFamily::Kimi, kimiRoot);
-    if (!grokBuildRoot.empty()) roots.emplace_back(RootFamily::GrokBuild, grokBuildRoot);
-    for (const auto& r : pis) roots.emplace_back(RootFamily::Pi, r);
-    if (!droidRoot.empty()) roots.emplace_back(RootFamily::Droid, droidRoot);
-    return roots;
 }
 
 }  // namespace agentspeed

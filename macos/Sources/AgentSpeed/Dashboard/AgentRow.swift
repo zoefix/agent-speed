@@ -19,6 +19,8 @@ struct AgentRow: View {
 
     /// Below this a truncated detail would show only a clipped sliver of its first glyph, so it steps aside.
     static let minimumDetail: CGFloat = 20
+    /// The most a remote agent's ` · host` takes of the detail line; a longer name truncates in the middle.
+    static let hostWidth: CGFloat = 96
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.dashboardScoreCards) private var cards
@@ -32,6 +34,9 @@ struct AgentRow: View {
         let project = agent.project.isEmpty ? sourceName : agent.project
         // Model first: when space runs out the source name truncates, and the badge color still carries it.
         let detail = [agent.model, sourceName].compactMap { $0?.isEmpty == false ? $0 : nil }.joined(separator: " · ")
+        // A remote agent's host follows (DESIGN 13), kept readable while the model and source give way.
+        let hostName = Self.hostName(of: agent, model: model)
+        let hostSuffix = hostName.map { " · " + $0 }
         // Attributed traffic today (DESIGN 10, Agents): the line ends with `· ↓ 2.10 MB`, kept whole while the model and
         // source names give way; both directions in the tooltip.
         let traffic = agentTraffic
@@ -76,6 +81,13 @@ struct AgentRow: View {
                         .truncationMode(.tail)
                         .opacity(detailFits ? 1 : 0)
                         .onGeometryChange(for: Bool.self) { $0.size.width >= readable } action: { detailFits = $0 }
+                    if let hostSuffix {
+                        Text(hostSuffix)
+                            .lineLimit(1)
+                            .truncationMode(.middle)
+                            .frame(maxWidth: Self.hostWidth, alignment: .leading)
+                            .fixedSize(horizontal: true, vertical: false)
+                    }
                     if let trafficSuffix {
                         Text(trafficSuffix)
                             .lineLimit(1)
@@ -112,7 +124,8 @@ struct AgentRow: View {
         .accessibilityElement(children: .ignore)
         // 性能 follows the live value; the label ends with the capsule's effort and speed lines (DESIGN 4).
         .accessibilityLabel(
-            [projectLabel, looping, detail, received, live.accessibilityText,
+            [projectLabel, looping, detail, hostName.map { l10n("remote.a11y.onHost", $0) }, received,
+             live.accessibilityText,
              AgentSignalText.intelligenceAccessibility(score, l10n),
              modeLines.isEmpty ? nil : capsule.accessibilityText(l10n)]
                 .compactMap { $0?.isEmpty == false ? $0 : nil }
@@ -134,6 +147,11 @@ struct AgentRow: View {
         (detail as NSString).size(withAttributes: [.font: NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular)]).width
     }
 
+    /// The remote host a remote agent runs on; nil for this Mac's agents.
+    static func hostName(of agent: AgentStatus, model: AppModel) -> String? {
+        agent.isLocal ? nil : model.remoteHostName(agent.host)
+    }
+
     /// Today's traffic attributed to this agent's tree (roots only; sub-agents run inside their parent's process).
     private var agentTraffic: TrafficBytes? { Self.traffic(of: agent, model: model) }
 
@@ -149,7 +167,8 @@ struct AgentRow: View {
     static func facts(of agent: AgentStatus, model: AppModel) -> [String] {
         let l10n = model.l10n
         let capsule = EffortCapsule(agent.current, l10n)
-        var lines = capsule.effort != nil || capsule.speed != nil ? capsule.tooltipLines(l10n) : []
+        var lines = hostName(of: agent, model: model).map { [l10n("remote.card.host", $0)] } ?? []
+        if capsule.effort != nil || capsule.speed != nil { lines += capsule.tooltipLines(l10n) }
         if let traffic = traffic(of: agent, model: model) {
             lines.append(l10n("traffic.agent.tooltip", TrafficText(model: model).pair(traffic)))
         }

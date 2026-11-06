@@ -42,6 +42,7 @@ public static class BoardsJson
             writer.WriteNumber("opacity", board.Opacity);
             writer.WriteBoolean("alwaysOnTop", board.AlwaysOnTop);
             writer.WriteBoolean("clickThrough", board.ClickThrough);
+            writer.WriteBoolean("fadeWhenIdle", board.FadeWhenIdle);
             writer.WriteBoolean("allSpaces", board.AllSpaces);
             writer.WriteBoolean("visible", board.Visible);
             writer.WriteStartObject("readouts");
@@ -51,6 +52,7 @@ public static class BoardsJson
             }
 
             writer.WriteEndObject();
+            OrbsJson.WriteHosts(writer, board.Hosts);
             writer.WriteEndObject();
         }
 
@@ -100,9 +102,11 @@ public static class BoardsJson
                 Opacity = OrbsJson.ReadNumber(element, "opacity") ?? OrbDefinition.MaxOpacity,
                 AlwaysOnTop = OrbsJson.ReadBool(element, "alwaysOnTop", true),
                 ClickThrough = OrbsJson.ReadBool(element, "clickThrough", false),
+                FadeWhenIdle = OrbsJson.ReadBool(element, "fadeWhenIdle", false),
                 AllSpaces = OrbsJson.ReadBool(element, "allSpaces", true),
                 Visible = OrbsJson.ReadBool(element, "visible", true),
                 Readouts = ReadReadouts(element),
+                Hosts = OrbsJson.ReadHosts(element),
             }.Validated());
         }
 

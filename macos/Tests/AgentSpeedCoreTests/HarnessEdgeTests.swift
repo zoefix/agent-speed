@@ -13,6 +13,28 @@ struct HarnessEdgeTests {
         """
     }
 
+    @Test func aGrokToolEndHandsTheTurnBackWithANewInFlightStart() {
+        var parser = GrokBuildParser(agentId: "/nonexistent/sessions/work/s1/updates.jsonl", fileID: 0)
+        var deduper = Deduper()
+        func feed(_ seconds: Int64, _ update: String) {
+            let line = #"{"timestamp":\#(seconds),"method":"session/update","params":{"update":{"sessionUpdate":\#(update)}}}"#
+            Data(line.utf8).withUnsafeBytes { parser.consume(GrokBuildLine.extract($0), deduper: &deduper) { _ in } }
+        }
+        feed(1_792_497_600, #""tool_call","status":"in_progress""#)
+        #expect(parser.state.phase == .tools && parser.state.inFlightStartMs == nil)
+        feed(1_792_497_605, #""tool_call_update","status":"completed""#)
+        #expect(parser.state.phase == .generating && parser.state.inFlightStartMs == 1_792_497_605_000)
+        feed(1_792_497_650, #""agent_thought_chunk""#)
+        #expect(parser.state.inFlightStartMs == 1_792_497_605_000)
+        feed(1_792_497_660, #""tool_call","status":"pending""#)
+        feed(1_792_497_661, #""tool_call_update","status":"failed""#)
+        #expect(parser.state.phase == .generating && parser.state.inFlightStartMs == 1_792_497_661_000)
+        feed(1_792_497_670, #""turn_cancelled""#)
+        #expect(parser.state.phase == .idle && parser.state.inFlightStartMs == nil)
+        feed(1_792_497_680, #""response_started""#)
+        #expect(parser.state.phase == .generating && parser.state.inFlightStartMs == 1_792_497_680_000)
+    }
+
     @Test func lateGrokSummaryFlushesIndependentUsageWithoutAnotherTranscriptLine() throws {
         let directory = try TempDirectory()
         let wire = "sessions/work/one/updates.jsonl"
@@ -96,8 +118,9 @@ struct HarnessEdgeTests {
         var extracted: GrokBuildLine?
         Data(grok.utf8).withUnsafeBytes { if case .line(let line) = GrokBuildLine.extract($0) { extracted = line } }
         let batch = try #require(extracted?.batches.first)
-        #expect(batch.usage.input == 12 && batch.usage.output == 300 && batch.usage.cachedInput == 2)
-        #expect(batch.usage.reasoning == 300 && batch.requestCount == 12 && batch.durationMs == 2)
+        // Reasoning above the output was counted apart and is added, within the field cap (METRICS 4.12).
+        #expect(batch.usage.input == 12 && batch.usage.output == 1_000_000_000_000 && batch.usage.cachedInput == 2)
+        #expect(batch.usage.reasoning == 1_000_000_000_000 && batch.requestCount == 12 && batch.durationMs == 2)
     }
 
     @Test func pendingGrokUsageIsBoundedAndMetadataSymlinksAreNotRead() throws {

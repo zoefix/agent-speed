@@ -1,4 +1,5 @@
 using System.Collections.ObjectModel;
+using AgentSpeed.Core.Locations;
 
 namespace AgentSpeed.Core;
 
@@ -37,6 +38,9 @@ public enum SourceKind
 
     /// <summary>Factory Droid: session transcripts with their settings files, one agent per transcript, METRICS 4.16.</summary>
     Droid,
+
+    /// <summary>Devin CLI (Cognition): its SQLite session database, one agent per session, METRICS 4.17.</summary>
+    Devin,
 }
 
 public enum AgentPhase
@@ -63,6 +67,10 @@ public readonly record struct TokenTotals(
     public long Total => Input + Output;
 
     public static TokenTotals Zero => default;
+
+    public static TokenTotals operator +(TokenTotals a, TokenTotals b) => new(
+        a.Requests + b.Requests, a.Input + b.Input, a.CachedInput + b.CachedInput, a.CacheWriteInput + b.CacheWriteInput,
+        a.Output + b.Output, a.Reasoning + b.Reasoning);
 }
 
 public readonly record struct Rate(double Output = 0, double Total = 0)
@@ -115,6 +123,12 @@ public sealed record AgentStatus(
 
     /// <summary>What the agent's recent tool calls say (METRICS 6.10).</summary>
     public Work.WorkSignals Work { get; init; } = Core.Work.WorkSignals.None;
+
+    /// <summary><c>local</c>, or the remote host the agent runs on (REMOTE 2.2).</summary>
+    public string Host { get; init; } = Remote.RemoteHost.LocalId;
+
+    /// <summary>The agent runs on this computer.</summary>
+    public bool IsLocal => Host == Remote.RemoteHost.LocalId;
 }
 
 /// <param name="Available">The root folder exists and is readable.</param>
@@ -159,7 +173,11 @@ public sealed record ResponseSummary(
     long TotalTokens,
     TimeSpan? Duration,
     double? Speed,
-    DateTimeOffset EndedAt);
+    DateTimeOffset EndedAt)
+{
+    /// <summary><c>local</c>, or the remote host the response was read on.</summary>
+    public string Host { get; init; } = Remote.RemoteHost.LocalId;
+}
 
 public enum MonitorStateKind
 {
@@ -238,6 +256,30 @@ public sealed record SpeedSnapshot(
     /// </summary>
     public long? ObservedAtMs { get; init; }
 
+    /// <summary>
+    /// Today's measured output peak of every subset with hosts requested with
+    /// <see cref="LiveMonitor.SetSubsets(IReadOnlyCollection{SubsetKey})"/> (DESIGN 13: METRICS 6.8 over the selected hosts'
+    /// cells); subsets of every host are in <see cref="SubsetPeaks"/>.
+    /// </summary>
+    public IReadOnlyDictionary<SubsetKey, double> HostSubsetPeaks { get; init; } = ReadOnlyDictionary<SubsetKey, double>.Empty;
+
+    /// <summary>
+    /// This computer first, then every configured remote host in settings order (DESIGN 13); empty while no remote host is
+    /// configured.
+    /// </summary>
+    public IReadOnlyList<HostStatus> Hosts { get; init; } = [];
+
+    /// <summary>
+    /// The (host, source) cells with something to show, in <see cref="Hosts"/> order and then source order; empty while no
+    /// remote host is configured. Per source they add up to <see cref="Sources"/>.
+    /// </summary>
+    public IReadOnlyList<HostSourceStatus> HostSources { get; init; } = [];
+
+    /// <summary>The measured peak of <paramref name="key"/> from <see cref="SubsetPeaks"/> or <see cref="HostSubsetPeaks"/>; null when not requested.</summary>
+    public double? MeasuredPeak(SubsetKey key) => key.HasHosts
+        ? HostSubsetPeaks.TryGetValue(key, out var hostPeak) ? hostPeak : null
+        : SubsetPeaks.TryGetValue(key.Sources, out var peak) ? peak : null;
+
     public static SpeedSnapshot Empty { get; } = new(
         DateTimeOffset.MinValue,
         MonitorState.Starting(0),
@@ -263,19 +305,24 @@ public abstract record SpeedEvent
     public sealed record NewPeak(double Value) : SpeedEvent;
 }
 
-/// <param name="CodexRoot">Null uses the default Codex sessions folder.</param>
-/// <param name="ClaudeRoot">Null uses the default Claude projects folder (shared by Claude Code and Claude Desktop).</param>
-/// <param name="DshRoot">Null uses the default DeepSeek Harness sessions folder.</param>
-/// <param name="OpenCodeRoot">Null uses the default OpenCode data folder (the one that contains opencode.db).</param>
-/// <param name="GeminiRoot">Null uses the default Gemini CLI home folder.</param>
-/// <param name="OmpRoot">One omp <c>sessions</c> folder; null scans the default root and every named profile.</param>
-/// <param name="AntigravityRoot">One Antigravity store folder (or its <c>conversations</c> folder); null reads all three stores.</param>
-/// <param name="WorkBuddyRoot">The WorkBuddy data folder or its <c>projects</c> folder; null uses <c>~/.workbuddy</c>.</param>
-/// <param name="WorkBuddyAiRoot">The WorkBuddy AI data folder or its <c>projects</c> folder; null uses <c>~/.workbuddy-ai</c>.</param>
-/// <param name="PiRoot">One Pi sessions folder; null reads Pi's default root and the custom session folder of its settings.</param>
-/// <param name="OpenClawRoot">An OpenClaw state folder, agent folder or database; null reads every automatic state folder.</param>
-/// <param name="HermesRoot">A Hermes home or one <c>logs</c> folder; null reads the automatic Hermes home and its profiles.</param>
-/// <param name="DroidRoot">The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder; null uses <c>~/.factory/sessions</c>.</param>
+/// <summary>
+/// What the monitor reads: the enabled sources and every source's location list (<see cref="Locations"/>, METRICS 2.1). The
+/// single-folder parameters are a convenience (tests, the probe): a non-null one is that folder's whole list, <c>[path]</c>.
+/// </summary>
+/// <param name="CodexRoot">One Codex sessions folder in place of the Codex list; null reads the list.</param>
+/// <param name="ClaudeRoot">One Claude projects folder (Claude Code and Claude Desktop) in place of the Claude list.</param>
+/// <param name="DshRoot">One DeepSeek Harness sessions folder in place of its list.</param>
+/// <param name="OpenCodeRoot">One OpenCode data folder (the one that contains opencode.db) or the database in place of its list.</param>
+/// <param name="GeminiRoot">One Gemini CLI <c>tmp</c> folder in place of its list.</param>
+/// <param name="OmpRoot">One omp <c>sessions</c> folder (without profiles) in place of its list.</param>
+/// <param name="AntigravityRoot">One Antigravity store folder (or its <c>conversations</c> folder) in place of its list.</param>
+/// <param name="WorkBuddyRoot">The WorkBuddy data folder or its <c>projects</c> folder in place of its list.</param>
+/// <param name="WorkBuddyAiRoot">The WorkBuddy AI data folder or its <c>projects</c> folder in place of its list.</param>
+/// <param name="PiRoot">One Pi sessions folder (without Pi's custom session folder) in place of its list.</param>
+/// <param name="OpenClawRoot">An OpenClaw state folder, agent folder or database in place of its list.</param>
+/// <param name="HermesRoot">A Hermes home or one <c>logs</c> folder in place of its list.</param>
+/// <param name="DroidRoot">The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder in place of its list.</param>
+/// <param name="DevinRoot">A Devin CLI folder that holds <c>sessions.db</c>, or its <c>devin</c> data folder, in place of its list.</param>
 public sealed record MonitorConfiguration(
     IReadOnlySet<SourceKind> EnabledSources,
     string? CodexRoot = null,
@@ -293,33 +340,58 @@ public sealed record MonitorConfiguration(
     string? PiRoot = null,
     string? OpenClawRoot = null,
     string? HermesRoot = null,
-    string? DroidRoot = null)
+    string? DroidRoot = null,
+    string? DevinRoot = null)
 {
     public static MonitorConfiguration Default { get; } =
         new(new HashSet<SourceKind>(Enum.GetValues<SourceKind>()));
 
+    /// <summary>Every source's location list (METRICS 2.1); remote hosts never use them (REMOTE 3.3).</summary>
+    public LocationLists Locations { get; init; } = LocationLists.Automatic;
+
+    /// <summary>The list a folder is read from: its single-folder parameter as <c>[path]</c> when set, else its list.</summary>
+    public IReadOnlyList<DataLocation> ListOf(LocationFolder folder) =>
+        SingleRoot(folder) is { Length: > 0 } path ? [DataLocation.At(path)] : Locations[folder];
+
+    private string? SingleRoot(LocationFolder folder) => folder switch
+    {
+        LocationFolder.Codex => CodexRoot,
+        LocationFolder.Claude => ClaudeRoot,
+        LocationFolder.Dsh => DshRoot,
+        LocationFolder.OpenCode => OpenCodeRoot,
+        LocationFolder.Gemini => GeminiRoot,
+        LocationFolder.Omp => OmpRoot,
+        LocationFolder.Antigravity => AntigravityRoot,
+        LocationFolder.WorkBuddy => WorkBuddyRoot,
+        LocationFolder.WorkBuddyAi => WorkBuddyAiRoot,
+        LocationFolder.ZCode => ZCodeRoot,
+        LocationFolder.Kimi => KimiRoot,
+        LocationFolder.GrokBuild => GrokBuildRoot,
+        LocationFolder.Pi => PiRoot,
+        LocationFolder.OpenClaw => OpenClawRoot,
+        LocationFolder.Hermes => HermesRoot,
+        LocationFolder.Droid => DroidRoot,
+        LocationFolder.Devin => DevinRoot,
+        _ => null,
+    };
+
     public bool Equals(MonitorConfiguration? other) =>
         other is not null
         && EnabledSources.SetEquals(other.EnabledSources)
-        && CodexRoot == other.CodexRoot
-        && ClaudeRoot == other.ClaudeRoot
-        && DshRoot == other.DshRoot
-        && OpenCodeRoot == other.OpenCodeRoot
-        && GeminiRoot == other.GeminiRoot
-        && OmpRoot == other.OmpRoot
-        && AntigravityRoot == other.AntigravityRoot
-        && WorkBuddyRoot == other.WorkBuddyRoot
-        && WorkBuddyAiRoot == other.WorkBuddyAiRoot
-        && ZCodeRoot == other.ZCodeRoot
-        && KimiRoot == other.KimiRoot
-        && GrokBuildRoot == other.GrokBuildRoot
-        && PiRoot == other.PiRoot
-        && OpenClawRoot == other.OpenClawRoot
-        && HermesRoot == other.HermesRoot
-        && DroidRoot == other.DroidRoot;
+        && LocationFolders.All.All(folder => ListOf(folder).SequenceEqual(other.ListOf(folder)));
 
-    public override int GetHashCode() => HashCode.Combine(
-        HashCode.Combine(EnabledSources.Count, CodexRoot, ClaudeRoot, DshRoot, OpenCodeRoot, GeminiRoot, OmpRoot, AntigravityRoot),
-        WorkBuddyRoot,
-        WorkBuddyAiRoot, ZCodeRoot, KimiRoot, GrokBuildRoot, PiRoot, HashCode.Combine(OpenClawRoot, HermesRoot, DroidRoot));
+    public override int GetHashCode()
+    {
+        var hash = new HashCode();
+        hash.Add(EnabledSources.Count);
+        foreach (var folder in LocationFolders.All)
+        {
+            foreach (var entry in ListOf(folder))
+            {
+                hash.Add(entry);
+            }
+        }
+
+        return hash.ToHashCode();
+    }
 }

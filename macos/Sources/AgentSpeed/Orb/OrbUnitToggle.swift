@@ -50,7 +50,7 @@ final class OrbUnitToggle {
         pending = nil
     }
 
-    /// The hit area in the host view (y up): the unit line, or the value for a style without one (`minimal`).
+    /// The hit area in the host view (y up): the unit line, or the value without one (`minimal`, small orbs).
     static func hitRect(layout: OrbReadoutLayout, discDiameter: CGFloat, in bounds: NSRect, unit: String, value: String) -> NSRect {
         let s = discDiameter
         let center = NSPoint(x: bounds.midX, y: bounds.midY)

@@ -253,6 +253,7 @@ Update Source::refresh(bool force) {
         currentRows_.clear();
         stamp_.reset();
         lastReadMs_.reset();
+        if (claims_) claims_->releaseAll(owner_);
     }
     lastPath_ = path;
     identity_ = identity;
@@ -275,6 +276,7 @@ Update Source::refresh(bool force) {
             group.push_back(&row);
         }
         for (const auto& sessionId : order) {
+            if (!claim(sessionId)) continue;
             const auto& group = groups[sessionId];
             const Row* latest = group.front();
             std::int64_t last = 0;
@@ -320,6 +322,7 @@ Update Source::refresh(bool force) {
             }
         }
         for (auto agent : database.readAgents(sinceMs_)) {
+            if (!claim(agent.sessionId)) continue;
             if (const auto known = agents_.find(agent.id); known != agents_.end()) {
                 if (agent.lastMs < known->second.lastMs) continue;
                 if (!agent.model) agent.model = known->second.model;

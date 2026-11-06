@@ -25,14 +25,18 @@ public static class HistoryCsv
     /// <summary>The <c>source</c> of the row that carries this computer's traffic of a date.</summary>
     public const string MachineSource = "machine";
 
+    /// <summary>The trailing column while host history exists (DESIGN 13).</summary>
+    public const string HostColumn = "host";
+
     /// <summary>
     /// The header: <see cref="Columns"/>, then <c>cost_&lt;code&gt;</c> (lower-case) for a non-USD display currency (DESIGN 9),
-    /// then <see cref="TrafficColumns"/> once traffic was measured.
+    /// then <see cref="TrafficColumns"/> once traffic was measured, then <see cref="HostColumn"/> while host history exists.
     /// </summary>
-    public static IReadOnlyList<string> Header(HistoryMoney? money, bool traffic = false)
+    public static IReadOnlyList<string> Header(HistoryMoney? money, bool traffic = false, bool host = false)
     {
         IReadOnlyList<string> header = money?.CsvColumn is { } column ? [.. Columns, column] : Columns;
-        return traffic ? [.. header, .. TrafficColumns] : header;
+        header = traffic ? [.. header, .. TrafficColumns] : header;
+        return host ? [.. header, HostColumn] : header;
     }
 
     /// <summary>Stable identifier of a source (or <c>all</c>) for the <c>source</c> column and file names.</summary>
@@ -56,6 +60,7 @@ public static class HistoryCsv
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
+        SourceKind.Devin => "devin",
         _ => "unknown",
     };
 
@@ -64,13 +69,17 @@ public static class HistoryCsv
     /// with 6 decimals, empty for a day without cost data; <c>cost_&lt;code&gt;</c> with the currency's digits + 2 at the rate
     /// in use (<paramref name="money"/> null or USD: no such column). With <paramref name="traffic"/> every row adds its
     /// traffic bytes (empty before measuring began), and each date with this computer's traffic adds a row of its own,
-    /// <c>source = machine</c>, carrying only <c>traffic_rx_bytes</c> and <c>traffic_tx_bytes</c>.
+    /// <c>source = machine</c>, carrying only <c>traffic_rx_bytes</c> and <c>traffic_tx_bytes</c>. <paramref name="host"/>
+    /// (<see cref="HistoryHostView.CsvHost"/>) adds a trailing <c>host</c> column with that value on every row, <c>local</c> on
+    /// this computer's traffic rows (DESIGN 13).
     /// </summary>
-    public static string Build(IEnumerable<DaySummary> rows, SourceKind? source, HistoryMoney? money = null, bool traffic = false)
+    public static string Build(IEnumerable<DaySummary> rows, SourceKind? source, HistoryMoney? money = null, bool traffic = false,
+        string? host = null)
     {
         ArgumentNullException.ThrowIfNull(rows);
         var converted = money is { IsUsd: false } ? money : null;
-        var header = Header(converted, traffic);
+        var header = Header(converted, traffic, host is not null);
+        var trafficEnd = header.Count - (host is null ? 0 : 1);
         var builder = new StringBuilder();
         builder.AppendJoin(',', header).Append("\r\n");
         var id = SourceId(source);
@@ -110,15 +119,25 @@ public static class HistoryCsv
                 Field(builder, day is null ? string.Empty : Integer(day.Tools.Tx));
             }
 
+            if (host is not null)
+            {
+                Field(builder, host);
+            }
+
             builder.Append("\r\n");
             if (traffic && row.Traffic?.Machine is { } machine)
             {
                 Field(builder, HistoryRanges.FormatDay(row.Day), first: true);
                 Field(builder, MachineSource);
-                for (var i = 2; i < header.Count; i++)
+                for (var i = 2; i < trafficEnd; i++)
                 {
-                    var at = i - (header.Count - TrafficColumns.Count);
+                    var at = i - (trafficEnd - TrafficColumns.Count);
                     Field(builder, at == 0 ? Integer(machine.Rx) : at == 1 ? Integer(machine.Tx) : string.Empty);
+                }
+
+                if (host is not null)
+                {
+                    Field(builder, HistoryHosts.LocalCsvValue);
                 }
 
                 builder.Append("\r\n");

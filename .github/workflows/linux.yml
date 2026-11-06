@@ -2,6 +2,7 @@ name: Linux
 
 # The Linux desktop version: core tests on every push and pull request; on a vX.Y.Z tag, the AppImage and the .deb of
 # both architectures are attached to that release with their own checksum files (UPDATES 1, SHA256SUMS-Linux-<arch>.txt).
+# Every package carries both static relay executables for remote hosts (REMOTE 3.1), built by the relay job.
 # Run it by hand with an existing release tag to build the packages again and attach them to that release.
 on:
   push:
@@ -37,8 +38,29 @@ jobs:
           cmake --build build
           ctest --test-dir build --output-on-failure
 
+  relay:
+    name: Remote relay (${{ matrix.arch }})
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - arch: x86_64
+            runner: ubuntu-24.04
+          - arch: aarch64
+            runner: ubuntu-24.04-arm
+    runs-on: ${{ matrix.runner }}
+    steps:
+      - uses: actions/checkout@v4
+      - name: Build static relay
+        run: linux/relay/build-static.sh ${{ matrix.arch }}
+      - uses: actions/upload-artifact@v4
+        with:
+          name: linux-relay-${{ matrix.arch }}
+          path: linux/relay/dist/agent-speed-relay-linux-${{ matrix.arch }}
+          if-no-files-found: error
+
   package:
-    needs: test
+    needs: [test, relay]
     strategy:
       fail-fast: false
       matrix:
@@ -94,10 +116,17 @@ jobs:
           cmake -S linux -B build -G Ninja -DCMAKE_BUILD_TYPE=Release -DAGENTSPEED_BUILD_TESTS=OFF -DAGENTSPEED_BUILD_APP=ON \
             -DAGENTSPEED_VERSION="${{ steps.version.outputs.value }}" -DCMAKE_PREFIX_PATH="$QT_ROOT_DIR"
           cmake --build build
+      - uses: actions/download-artifact@v4
+        with:
+          pattern: linux-relay-*
+          path: linux/relay/dist
+          merge-multiple: true
       - name: Package
         env:
           QMAKE: ${{ env.QT_ROOT_DIR }}/bin/qmake
-        run: linux/packaging/package.sh build dist "${{ steps.version.outputs.value }}"
+        run: |
+          chmod 755 linux/relay/dist/agent-speed-relay-linux-*
+          linux/packaging/package.sh build dist "${{ steps.version.outputs.value }}"
       - uses: actions/upload-artifact@v4
         with:
           name: agent-speed-linux-${{ matrix.host }}

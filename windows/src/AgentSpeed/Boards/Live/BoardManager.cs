@@ -9,6 +9,7 @@ using AgentSpeed.Presentation.Boards.Effects;
 using AgentSpeed.Presentation.Boards.Live;
 using AgentSpeed.Presentation.Boards.Scene;
 using AgentSpeed.Presentation.Cost;
+using AgentSpeed.Presentation.Heat;
 using AgentSpeed.Presentation.Layout;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Settings;
@@ -307,7 +308,7 @@ internal sealed class BoardManager : IDisposable
         var board = entry.Definition;
         var config = (Style: board.Style, Size: board.Size,
             Policy: new BoardEffectsPolicy(settings.Effects, _theme.ReduceMotion, _theme.HighContrast, settings.CelebratePeaks),
-            Options: new BoardWindowOptions(board.AlwaysOnTop, board.ClickThrough, board.Opacity, _theme.ReduceMotion));
+            Options: new BoardWindowOptions(board.AlwaysOnTop, board.ClickThrough, board.Opacity, _theme.ReduceMotion, board.FadeWhenIdle));
         if (entry.Config == config)
         {
             return;
@@ -388,8 +389,10 @@ internal sealed class BoardManager : IDisposable
     private void Push(Entry entry, BoardTick tick, BoardTexts texts, double now)
     {
         entry.Window.Apply(tick);
+        entry.Window.NoteActivity(tick.Tier != SpeedTier.Idle);
         var automation = entry.Window.Automation;
-        automation.Name = BoardAccessibility.Board(entry.Definition, tick, texts.SpokenTitle(entry.Feed.Data.Title), _loc);
+        var spokenTitle = entry.Feed.Feed.Reading.State == SubsetState.HostsOffline ? tick.Title : texts.SpokenTitle(entry.Feed.Data.Title);
+        automation.Name = BoardAccessibility.Board(entry.Definition, tick, spokenTitle, _loc);
         automation.SetRows([.. BoardAccessibility.Items(tick).Select(e => (e.Key, BoardAccessibility.Row(e, _loc)))]);
         if (entry.Announcer.NewLeader(tick, now, _loc) is { } text)
         {

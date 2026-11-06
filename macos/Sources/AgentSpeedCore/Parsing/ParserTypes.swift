@@ -23,6 +23,8 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
     public var fast: Bool
     /// Integer micro-USD (METRICS 9.3), set by pricing; nil while unpriced or when the price is unknown.
     public var costMicroUsd: Int64?
+    /// `local`, or the id of the remote host the response was read on (REMOTE 2.2).
+    public var host: String
 
     /// A final response with a valid interval contributes measured speed.
     public var isMeasured: Bool { isFinal && ResponseTiming.effectiveStart(startMs: startMs, endMs: endMs) != nil }
@@ -41,9 +43,11 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
         costMicroUsd: Int64? = nil,
         requestCount: Int = 1,
         modes: ExecutionModes = .empty,
-        firstMs: Int64? = nil
+        firstMs: Int64? = nil,
+        host: String = RemoteHost.localId
     ) {
         self.key = key
+        self.host = host
         self.firstMs = firstMs
         self.source = source
         self.agentId = agentId

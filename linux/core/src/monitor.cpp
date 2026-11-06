@@ -10,14 +10,15 @@
 #include "agentspeed/gemini_parser.hpp"
 #include "agentspeed/grok_parser.hpp"
 #include "agentspeed/hermes.hpp"
+#include "agentspeed/monitor_remote.hpp"
 #include "agentspeed/monitor_store.hpp"
 #include "agentspeed/openclaw.hpp"
-#include "agentspeed/opencode.hpp"
+#include "agentspeed/opencode_set.hpp"
 #include "agentspeed/parents.hpp"
 #include "agentspeed/price_book.hpp"
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/tz.hpp"
-#include "agentspeed/zcode.hpp"
+#include "agentspeed/zcode_set.hpp"
 
 namespace agentspeed {
 
@@ -47,21 +48,21 @@ std::int64_t nextEpoch() {
 
 std::set<SourceKind> MonitorConfig::allSources() {
     std::set<SourceKind> all;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Droid); ++k) all.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) all.insert(static_cast<SourceKind>(k));
     return all;
 }
 
-MonitorConfig MonitorConfig::fromEnvironment(const RootSettings& settings, std::set<SourceKind> enabled) {
+MonitorConfig MonitorConfig::fromEnvironment(const LocationLists& lists, std::set<SourceKind> enabled) {
     MonitorConfig config;
     const auto environment = processEnvironment();
-    config.locations = SourceLocations::resolve(settings, environment, userHome(environment));
+    config.locations = SourceLocations::resolve(lists, environment, userHome(environment));
     config.enabled = std::move(enabled);
     return config;
 }
 
 Monitor::Monitor(MonitorConfig config)
     : config_(std::move(config)), environment_(processEnvironment()), home_(userHome(environment_)),
-      store_(std::make_unique<Store>()), epoch_(nextEpoch()) {
+      store_(std::make_unique<Store>()), remote_(std::make_unique<Remote>()), epoch_(nextEpoch()) {
     store_->setEnabled(&config_.enabled);
     store_->setPerfLedger(&perfLedger_);
     if (!config_.prices) config_.prices = std::make_shared<pricing::PriceBook>();
@@ -69,7 +70,7 @@ Monitor::Monitor(MonitorConfig config)
     store_->setPricing(config_.prices, zone_);
     store_->setCurrentEffort([this](const std::string& agentId) { return currentEffort(agentId); });
     if (familyEnabled(RootFamily::Gemini)) {
-        modeContext_.setGeminiSettings(paths::geminiSettingsOf(config_.locations.geminiRoots, environment_, home_));
+        for (const auto& [root, settings] : config_.locations.geminiSettings) modeContext_.setGeminiSettings(root, settings);
     }
     for (const auto& [family, path] : config_.locations.fileRoots()) addRoot(family, path);
     initSources();
@@ -97,6 +98,7 @@ bool Monitor::familyEnabled(RootFamily family) const {
         case RootFamily::OpenClaw: return e.contains(SourceKind::OpenClaw);
         case RootFamily::Hermes: return e.contains(SourceKind::Hermes);
         case RootFamily::Droid: return e.contains(SourceKind::Droid);
+        case RootFamily::Devin: return e.contains(SourceKind::Devin);
     }
     return false;
 }
@@ -114,8 +116,17 @@ void Monitor::addRoot(RootFamily family, const std::string& path) {
     roots_.push_back(std::move(root));
 }
 
-void Monitor::refreshAvailability() {
-    for (auto& root : roots_) root.available = !root.detectionPath.empty() && fsx::isDirectory(root.detectionPath);
+bool Monitor::refreshAvailability() {
+    bool changed = false;
+    std::map<RootFamily, std::set<std::string>> resolved;
+    for (auto& root : roots_) {
+        const bool exists = !root.detectionPath.empty() && fsx::isDirectory(root.detectionPath);
+        const bool duplicate = exists && !resolved[root.family].insert(resolvedPath(root.path)).second;
+        changed |= root.duplicate != duplicate || root.available != (exists && !duplicate);
+        root.duplicate = duplicate;
+        root.available = exists && !duplicate;
+    }
+    return changed;
 }
 
 void Monitor::start(std::int64_t nowMs, std::int64_t todayStartMs) {
@@ -175,12 +186,11 @@ std::optional<Monitor::Plan> Monitor::planInitialRead(Tracked& file, const disco
 }
 
 void Monitor::seedRoots(std::int64_t todayStartMs) {
+    refreshAvailability();
     std::vector<Plan> plans;
     for (std::size_t r = 0; r < roots_.size(); ++r) {
         auto& root = roots_[r];
-        if (!root.enabled || root.seeded) continue;
-        root.available = !root.detectionPath.empty() && fsx::isDirectory(root.detectionPath);
-        if (!root.available) continue;
+        if (!root.enabled || root.seeded || !root.available) continue;
         for (const auto& found : discovery::enumerate(root.path, root.family)) {
             if (files_.contains(found.path)) continue;
             auto& file = track(r, found.path);
@@ -192,9 +202,10 @@ void Monitor::seedRoots(std::int64_t todayStartMs) {
     std::sort(plans.begin(), plans.end(), [](const Plan& a, const Plan& b) {
         return a.writeNs != b.writeNs ? a.writeNs < b.writeNs : a.file->tailer->path() < b.file->tailer->path();
     });
-    for (const auto& plan : plans) {
-        plan.file->tailer->startAt(plan.startOffset, plan.alignment);
-        readLive(*plan.file, true);
+    for (std::size_t k = 0; k < plans.size(); ++k) {
+        plans[k].file->tailer->startAt(plans[k].startOffset, plans[k].alignment);
+        readLive(*plans[k].file, true);
+        if (seedProgress_) seedProgress_(k + 1, plans.size());
     }
 }
 
@@ -327,12 +338,18 @@ ModeAttribution Monitor::currentEffort(const std::string& agentId) const {
 }
 
 void Monitor::resolveParents() {
-    if (!linksChanged_) return;
+    if (!linksChanged_ && !remoteParentsChanged_) return;
+    if (linksChanged_) {
+        std::vector<AgentLink> links;
+        links.reserve(links_.size());
+        for (const auto& [id, link] : links_) links.push_back(link);
+        localParents_ = parent_links::resolve(links);
+    }
     linksChanged_ = false;
-    std::vector<AgentLink> links;
-    links.reserve(links_.size());
-    for (const auto& [id, link] : links_) links.push_back(link);
-    parents_ = parent_links::resolve(links);
+    remoteParentsChanged_ = false;
+    parents_ = localParents_;
+    // Remote ids are prefixed per host, so no host's links meet another's.
+    for (const auto& [host, links] : remote_->parents) parents_.insert(links.begin(), links.end());
 }
 
 std::optional<std::string> Monitor::parentOf(const std::string& agentId) {
@@ -340,6 +357,31 @@ std::optional<std::string> Monitor::parentOf(const std::string& agentId) {
     const auto it = parents_.find(agentId);
     return it == parents_.end() ? std::nullopt : std::optional<std::string>(it->second);
 }
+
+const std::map<std::string, std::string>& Monitor::parents() {
+    resolveParents();
+    return parents_;
+}
+
+std::optional<std::string> Monitor::cwdOf(const std::string& id) const {
+    if (const auto it = files_.find(id); it != files_.end()) return it->second->parser->cwdPath();
+    if (devin_) {
+        if (auto cwd = devin_->cwdOf(id)) return cwd;
+    }
+    const auto remote = remote_->cwds.find(id);
+    return remote == remote_->cwds.end() ? std::nullopt : remote->second;
+}
+
+std::vector<hosts::Subset> Monitor::subsetsOf(const std::vector<std::optional<std::vector<SourceKind>>>& sets) {
+    std::vector<hosts::Subset> out;
+    out.reserve(sets.size());
+    for (const auto& sources : sets) out.push_back({sources, std::nullopt});
+    return out;
+}
+
+void Monitor::setRemoteResponseLimit(std::size_t limit) { store_->setRemoteLimit(limit); }
+
+void Monitor::setResponseObserver(std::function<void(const ParsedResponse&, bool)> observer) { store_->setObserver(std::move(observer)); }
 
 std::optional<std::pair<std::int64_t, std::int64_t>> Monitor::stampOf(const Tracked& file) const {
     const auto& path = file.tailer->path();
@@ -380,6 +422,8 @@ bool Monitor::poll(std::int64_t nowMs, std::int64_t todayStartMs) {
 std::vector<traffic::AgentFacts> Monitor::trafficAgents(std::int64_t nowMs) {
     std::vector<traffic::AgentFacts> out;
     for (const auto& [id, info] : agents_) {
+        // REMOTE 7: per-agent traffic is local only.
+        if (info.host != remote::kLocalHost) continue;
         traffic::AgentFacts f;
         f.id = id;
         f.source = info.source;
@@ -387,6 +431,8 @@ std::vector<traffic::AgentFacts> Monitor::trafficAgents(std::int64_t nowMs) {
         if (const auto file = files_.find(id); file != files_.end()) {
             f.transcript = id;
             f.cwdPath = file->second->parser->cwdPath();
+        } else if (info.source == SourceKind::Devin && devin_) {
+            f.cwdPath = devin_->cwdOf(id);
         }
         const bool stale = info.lastLineMs && nowMs - *info.lastLineMs > 300'000;
         if (info.phase != Phase::Idle && !stale) f.active.emplace_back(nowMs, nowMs);
@@ -425,12 +471,20 @@ bool Monitor::rediscover(std::int64_t nowMs, std::int64_t todayStartMs) {
     if (restartRequested_) return changed;
     addNewOmpRoots();
     addNewCodexHomeRoots();
+    changed |= refreshAvailability();
     for (std::size_t r = 0; r < roots_.size(); ++r) {
         if (!roots_[r].enabled) continue;
-        const bool available = !roots_[r].detectionPath.empty() && fsx::isDirectory(roots_[r].detectionPath);
-        changed |= available != roots_[r].available;
-        roots_[r].available = available;
-        if (!available) continue;
+        if (roots_[r].duplicate) {
+            std::vector<std::string> covered;
+            for (const auto& [path, file] : files_) {
+                if (file->root == r) covered.push_back(path);
+            }
+            for (const auto& path : covered) remove(path);
+            changed |= !covered.empty();
+            roots_[r].seeded = false;
+            continue;
+        }
+        if (!roots_[r].available) continue;
         if (!roots_[r].seeded) {
             seedRoots(todayStartMs);
             changed = true;
@@ -500,8 +554,7 @@ void Monitor::addNewCodexHomeRoots() {
     for (const auto& r : roots_) {
         if (r.family == RootFamily::Codex) known.insert(fsx::trimTrailing(r.path));
     }
-    const auto roots = config_.locations.openClawAutomatic ? paths::openClawStateFolders(environment_, home_) : config_.locations.openClawRoots;
-    for (const auto& root : paths::openClawCodexRoots(paths::openClawDatabases(roots))) {
+    for (const auto& root : paths::openClawCodexRoots(paths::openClawDatabases(config_.locations.openClawRootsNow(environment_, home_)))) {
         const auto normalized = paths::normalizeRoot(root);
         if (known.insert(fsx::trimTrailing(normalized)).second) addRoot(RootFamily::Codex, normalized);
     }
@@ -517,10 +570,12 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
         }
         return count;
     }
+    // Devin: the sessions with a row today (METRICS 2, 4.17).
+    if (kind == SourceKind::Devin) return devin_ ? devin_->activeSessionCount(todayStartMs) : 0;
     if (kind == SourceKind::OpenCode || kind == SourceKind::ZCode || kind == SourceKind::OpenClaw) {
         int count = 0;
         for (const auto& [id, agent] : agents_) {
-            if (agent.source != kind || !agent.lastLineMs || *agent.lastLineMs < todayStartMs) continue;
+            if (agent.source != kind || agent.host != remote::kLocalHost || !agent.lastLineMs || *agent.lastLineMs < todayStartMs) continue;
             // OpenCode counts every session; ZCode and OpenClaw their main sessions (METRICS 2).
             if (kind == SourceKind::OpenCode || !agent.isSubagent) ++count;
         }
@@ -534,6 +589,25 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
         if (p.source() == kind && p.lastLineMs() && *p.lastLineMs() >= todayStartMs && !(mainOnly && p.isSubagent())) ++count;
     }
     return count;
+}
+
+std::vector<SourceState> Monitor::sourceStates(std::int64_t todayStartMs) const {
+    std::vector<SourceState> out;
+    for (const auto kind : MonitorConfig::allSources()) {
+        if (!config_.enabled.contains(kind)) continue;
+        SourceState state;
+        state.source = kind;
+        state.available = sourceStatus(kind).second;
+        state.sessions = sessionCount(kind, todayStartMs);
+        // As the source's settings row: the first detected root's config file; Gemini CLI's depend on the model.
+        const auto family = familyOf(kind);
+        if (family != RootFamily::Gemini) {
+            const auto root = std::find_if(roots_.begin(), roots_.end(), [&](const Root& r) { return r.family == family && r.enabled && r.available; });
+            if (root != roots_.end()) state.configuredModes = modeContext_.configured(family, root->path, std::nullopt);
+        }
+        out.push_back(std::move(state));
+    }
+    return out;
 }
 
 std::vector<Completion> Monitor::takeCompletions() { return store_->takeCompletions(); }

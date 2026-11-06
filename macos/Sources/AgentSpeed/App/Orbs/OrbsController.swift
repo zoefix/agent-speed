@@ -104,7 +104,7 @@ final class OrbsController {
         })
         loops.append(ObservationLoop { [weak self] in
             guard let self, let model = self.model else { return }
-            model.setOrbSubsets(Set(self.document.orbs.compactMap(\.sources.sourceSet)))
+            model.setOrbSubsets(Set(self.document.orbs.compactMap { $0.sources.subsetKey(hosts: $0.hosts) }))
         })
         loops.append(ObservationLoop { [weak self] in
             guard let self, let model = self.model else { return }
@@ -198,7 +198,8 @@ final class OrbsController {
             sourceName: { names[$0] ?? $0.rawValue },
             allSources: l10n("orbs.sources.all"),
             pair: { String(format: pair, $0, $1) },
-            more: { String(format: more, $0, $1) }
+            more: { String(format: more, $0, $1) },
+            hosts: model?.hostChoices ?? []
         )
     }
 
@@ -211,7 +212,7 @@ final class OrbsController {
     /// The automatic name of an orb (Settings placeholder).
     func automaticName(of id: String) -> String {
         guard let model, let orb = document.orb(id) else { return "" }
-        return namer(model.l10n).automaticName(orb.sources)
+        return namer(model.l10n).automaticName(orb.sources, hosts: orb.hosts)
     }
 
     /// The colour dots of an orb: its known sources with their availability; empty for all sources.
@@ -312,6 +313,26 @@ final class OrbsController {
     func toggleSource(_ kind: SourceKind, of id: String) {
         guard let orb = document.orb(id), let next = orb.sources.toggling(kind) else { return }
         setSources(next, of: id)
+    }
+
+    /// The hosts an orb counts (DESIGN 13), kept in settings order.
+    func setHosts(_ selection: OrbHostSelection, of id: String) {
+        let ordered = selection.ordered(by: model?.hostOrder ?? [RemoteHost.localId])
+        guard document.orb(id)?.hosts != ordered else { return }
+        setDocument(OrbEditing.setHosts(ordered, of: id, in: document))
+        onChange?(.sourcesChanged(id: id))
+    }
+
+    /// As sources: all ↔ one host, toggling within an explicit set, never the last known host.
+    func toggleHost(_ hostId: String, of id: String) {
+        guard let orb = document.orb(id),
+              let next = orb.hosts.toggling(hostId, known: model?.hostOrder ?? [RemoteHost.localId]) else { return }
+        setHosts(next, of: id)
+    }
+
+    /// A host removed from the settings leaves every orb (REMOTE 2.4).
+    func removeHost(_ hostId: String) {
+        setDocument(OrbEditing.removingHost(hostId, from: document))
     }
 
     func setStyle(_ style: OrbStyleKind, of id: String) {

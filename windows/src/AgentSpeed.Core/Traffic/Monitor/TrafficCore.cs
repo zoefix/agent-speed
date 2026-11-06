@@ -476,7 +476,9 @@ internal sealed class TrafficCore : IDisposable
         }
 
         _appliedAgents = pending;
-        var converted = pending.Select(TrafficAgent.From).ToList();
+
+        // A remote host's agents have no traffic on this computer (REMOTE 7 Sources).
+        var converted = pending.Where(a => a.IsLocal).Select(TrafficAgent.From).ToList();
         if (!converted.SequenceEqual(_agents))
         {
             _agents = converted;

@@ -44,7 +44,7 @@ public sealed class BoardLiveFeed
     {
         ArgumentNullException.ThrowIfNull(board);
         _board = board;
-        _feed.Configure(board.TrackedSources, metric, redline, nowMs, created);
+        _feed.Configure(board.TrackedSources, metric, redline, nowMs, created, board.TrackedHosts);
     }
 
     /// <summary>Applies an engine snapshot: the hero every time, the ranking at most once per engine tick.</summary>
@@ -100,17 +100,19 @@ public sealed class BoardLiveFeed
 
         var history = new double[BoardTick.HistorySeconds];
         _feed.CopyHistory(history);
-        return new BoardTick(data.Value, SpeedFormat.Speed(data.Value), data.Tier, data.Redline, metric, data.Generating > 0, entries, data.Events,
-            data.NewPeak)
+        // Every selected host offline (DESIGN 13): the hero says so in place of its title, and its value rests at a dash.
+        var offline = _feed.Reading.State == SubsetState.HostsOffline;
+        return new BoardTick(data.Value, offline ? "–" : SpeedFormat.Speed(data.Value), data.Tier, data.Redline, metric, data.Generating > 0,
+            entries, data.Events, data.NewPeak)
         {
-            Title = texts.Title(data.Title),
+            Title = offline ? texts.Localizer["remote.orb.offline"] : texts.Title(data.Title),
             GeneratingCount = data.Generating,
             ToolsCount = data.Tools,
             History = history,
             PeakToday = data.PeakToday,
             TodayOutput = data.TodayOutput,
             TodayText = texts.Today(data.TodayOutput),
-            CostText = texts.TodayCost(_snapshot, board.TrackedSources),
+            CostText = texts.TodayCost(board.TrackedHosts is { } hosts ? OrbSubset.Restricted(_snapshot, hosts) : _snapshot, board.TrackedSources),
             PeakText = texts.Peak(data.PeakToday),
             Expanded = open,
             Readouts = readouts,

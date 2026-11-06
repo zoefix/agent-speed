@@ -21,8 +21,11 @@ internal sealed record ParsedResponse(
 {
     public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
 
-    /// <summary>When the response's first content was written (METRICS 3.3); null for every source but Claude and Codex.</summary>
+    /// <summary>When the response's first content was written, or its first token arrived (METRICS 3.3); null for every source but Claude, Codex and Devin.</summary>
     public long? FirstMs { get; init; }
+
+    /// <summary><c>local</c>, or the id of the remote host the response was read on (REMOTE 2.2).</summary>
+    public string Host { get; init; } = Remote.RemoteHost.LocalId;
 
     public long Requests => Math.Clamp(RequestCount, 0, TokenCounts.MaxValue);
 }

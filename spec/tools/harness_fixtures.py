@@ -238,8 +238,9 @@ def grok(root):
         return dict(inputTokens=inp, outputTokens=out, cachedReadTokens=cached, cacheCreationTokens=0,
                     reasoningTokens=reasoning, totalTokens=inp + out, modelCalls=calls, apiDurationMs=duration)
     first = bucket(1500, 300, 400, 30, 2, 6000)
-    a, b = bucket(1200, 250, 300, 25, 1, 3000), bucket(800, 150, 0, 15, 1, 2000)
-    second = bucket(2000, 400, 300, 40, 2, 5000)
+    # grok-4.6 here reports reasoning apart from its output (Chat Completions), so it is added (METRICS 4.12).
+    a, b = bucket(1200, 250, 300, 25, 1, 3000), bucket(800, 150, 0, 600, 1, 2000)
+    second = bucket(2000, 400, 300, 625, 2, 5000)
     rows = [update("user_message_chunk", 60000, method="session/update", content=dict(type="text", text="Synthetic prompt")),
         update("subagent_spawned", 60500, subagent_id="g-child", child_session_id="g-child",
                parent_session_id="g-main", parent_prompt_id="g-p1", subagent_type="general-purpose", description="Synthetic task"),
@@ -275,7 +276,7 @@ def grok(root):
     expected_first["requestCount"] = 2
     main_rows = [expected_first,
                  response("grok:g-p2:grok-4.5", 72000, 75000, 1200, 250, 300, reasoning=25, model="grok-4.5", provider=None),
-                 response("grok:g-p2:grok-4.6", 73000, 75000, 800, 150, reasoning=15, model="grok-4.6", provider=None)]
+                 response("grok:g-p2:grok-4.6", 73000, 75000, 800, 750, reasoning=600, model="grok-4.6", provider=None)]
     return dict(root="grok/sessions", files=[
         dict(path=main, project="comet", isSubagent=False, parentFile=None, responses=main_rows,
              **mode_block(main_rows, attributed("high", "selected"))),

@@ -1,0 +1,49 @@
+<UserControl x:Class="AgentSpeed.Settings.Remote.HostPickerSection"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:AgentSpeed.Localization"
+             xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:remote="clr-namespace:AgentSpeed.Settings.Remote"
+             Focusable="False">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <controls:TextToVisibilityConverter x:Key="HasText" />
+    </UserControl.Resources>
+
+    <!-- Hosts (DESIGN 13): under Sources, only while remote hosts exist -->
+    <StackPanel Visibility="{Binding IsShown, Converter={StaticResource Visible}}" Margin="0,22,0,0">
+        <TextBlock Text="{loc:Loc remote.hosts}" Style="{StaticResource SectionHeaderText}" AutomationProperties.HeadingLevel="Level3" />
+        <Border Background="{DynamicResource CardBackgroundFillColorDefaultBrush}" BorderBrush="{DynamicResource CardStrokeColorDefaultBrush}"
+                BorderThickness="1" CornerRadius="8" SnapsToDevicePixels="True" Padding="14,6,14,6">
+            <StackPanel>
+                <CheckBox IsChecked="{Binding AllHosts, Mode=TwoWay}" Margin="0,4,0,6" AutomationProperties.Name="{loc:Loc remote.hosts.all}"
+                          AutomationProperties.HelpText="{loc:Loc remote.hosts.allHint}">
+                    <StackPanel Margin="4,0,0,0">
+                        <TextBlock Text="{loc:Loc remote.hosts.all}" FontSize="13" />
+                        <TextBlock Text="{loc:Loc remote.hosts.allHint}" Style="{StaticResource CaptionText}" FontSize="11" />
+                    </StackPanel>
+                </CheckBox>
+                <Rectangle Style="{StaticResource Hairline}" Margin="0,2,0,2" />
+                <ItemsControl ItemsSource="{Binding Rows}" Focusable="False" AutomationProperties.Name="{loc:Loc remote.hosts}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type remote:HostPickerRowViewModel}">
+                            <DockPanel Margin="0,3,0,3" ToolTip="{Binding Tooltip}" ToolTipService.ShowOnDisabled="True">
+                                <TextBlock DockPanel.Dock="Right" Text="{Binding Word}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                                           TextWrapping="NoWrap" Margin="12,0,0,0" Visibility="{Binding Word, Converter={StaticResource HasText}}" />
+                                <CheckBox IsChecked="{Binding IsChecked, Mode=OneWay}" IsEnabled="{Binding IsEnabled}" Click="OnHostClick"
+                                          AutomationProperties.Name="{Binding Name}" AutomationProperties.HelpText="{Binding Word}">
+                                    <StackPanel Orientation="Horizontal" Margin="4,0,0,0">
+                                        <controls:HostStatusDot Kind="{Binding Dot}" Margin="0,0,8,0"
+                                                                ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                        <TextBlock Text="{Binding Name}" FontSize="13" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+                                    </StackPanel>
+                                </CheckBox>
+                            </DockPanel>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+            </StackPanel>
+        </Border>
+    </StackPanel>
+</UserControl>

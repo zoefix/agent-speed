@@ -149,13 +149,25 @@ public enum OrbEditing {
         update(id, in: doc) { $0.sources = selection }
     }
 
-    /// Changes the style and clamps the size to its range.
+    /// The hosts an orb counts (DESIGN 13).
+    public static func setHosts(_ selection: OrbHostSelection, of id: String, in doc: OrbsDocument) -> OrbsDocument {
+        update(id, in: doc) { $0.hosts = selection }
+    }
+
+    /// A host removed from the settings leaves every orb's selection; one left without hosts tracks all (REMOTE 2.4).
+    public static func removingHost(_ hostId: String, from doc: OrbsDocument) -> OrbsDocument {
+        var next = doc
+        for index in next.orbs.indices { next.orbs[index].hosts = next.orbs[index].hosts.removing(hostId) }
+        return next
+    }
+
+    /// Changes the style; the size stays, since every style shares one range.
     public static func setStyle(_ style: OrbStyleKind, of id: String, in doc: OrbsDocument) -> OrbsDocument {
-        update(id, in: doc) { $0 = $0.withStyle(style) }
+        update(id, in: doc) { $0.style = style }
     }
 
     public static func setSize(_ size: Double, of id: String, in doc: OrbsDocument) -> OrbsDocument {
-        update(id, in: doc) { $0.size = $0.style.clampSize(size) }
+        update(id, in: doc) { $0.size = OrbSizes.clamp(size) }
     }
 
     public static func setOpacity(_ opacity: Double, of id: String, in doc: OrbsDocument) -> OrbsDocument {

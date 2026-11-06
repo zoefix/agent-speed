@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <set>
 
+#include "agentspeed/host_subset.hpp"
 #include "agentspeed/modes.hpp"
 #include "agentspeed/money.hpp"
 #include "format.hpp"
@@ -66,7 +67,7 @@ void capsule(const AgentRow& a, QVariantMap& row) {
 
 }  // namespace
 
-QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vector<BoardSpec>& boards, const BoardContext& c, std::size_t setOffset) {
+QVariantMap BoardViews::compute(const agentspeed::Snapshot& full, const std::vector<BoardSpec>& boards, const BoardContext& c, std::size_t setOffset) {
     using agentspeed::money::Decimal;
     using agentspeed::money::Form;
     const auto& currencies = agentspeed::money::CurrencyTable::bundled();
@@ -78,6 +79,9 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
     for (std::size_t index = 0; index < boards.size(); ++index) {
         const auto& spec = boards[index];
         alive.insert(spec.id);
+        // DESIGN 13: a board of some hosts reads their (host, source) cells and agents.
+        const agentspeed::Snapshot restrictedSnap = spec.hosts ? agentspeed::hosts::restricted(full, *spec.hosts) : agentspeed::Snapshot{};
+        const auto& snap = spec.hosts ? restrictedSnap : full;
         auto& state = states_[spec.id];
         const auto inSet = [&](SourceKind kind) {
             if (spec.sources) return std::find(spec.sources->begin(), spec.sources->end(), kind) != spec.sources->end();
@@ -112,7 +116,7 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
             state.peak = 0;
         }
         state.peak = std::max(state.peak, live);
-        const double peak = spec.sources ? state.peak : std::max(snap.peakToday, live);
+        const double peak = spec.sources || spec.hosts ? state.peak : std::max(snap.peakToday, live);
         // newPeak_A (METRICS 6.8): 1 tok/s above the peak before this tick, at least 20, 60 s apart, never in the
         // board's first 60 s.
         if (state.firstMs == 0) state.firstMs = c.steadyMs;
@@ -125,8 +129,12 @@ QVariantMap BoardViews::compute(const agentspeed::Snapshot& snap, const std::vec
         state.peakBefore = peak;
 
         QVariantMap view;
+        // DESIGN 13: a board whose selected hosts are all offline says so instead of its title.
+        const bool offline = spec.hosts && agentspeed::hosts::isOffline(full, *spec.hosts);
+        view.insert(QStringLiteral("offline"), offline);
+        view.insert(QStringLiteral("offlineText"), offline && c.strings ? c.strings->t(QStringLiteral("remote.orb.offline")) : QString());
         view.insert(QStringLiteral("live"), live);
-        view.insert(QStringLiteral("liveText"), format::speed(live));
+        view.insert(QStringLiteral("liveText"), offline ? QStringLiteral("–") : format::speed(live));
         view.insert(QStringLiteral("heat"), heat::of(live, c.redline));
         view.insert(QStringLiteral("titleLevel"), state.title.level());
         QVariantList history;

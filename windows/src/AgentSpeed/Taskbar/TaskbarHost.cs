@@ -30,7 +30,9 @@ internal abstract record TaskbarSignal
 /// </summary>
 internal sealed unsafe class TaskbarHost : IDisposable
 {
-    private const string ClassName = "AgentSpeed.TaskbarWidget";
+    /// <summary>The widget's window class; another Agent Speed's widget on the taskbar is never avoided.</summary>
+    public const string WidgetClassName = "AgentSpeed.TaskbarWidget";
+    private const string ClassName = WidgetClassName;
     private const int MaxPresentFailures = 3;
     private const long ShrinkDelayMs = 6000;
 

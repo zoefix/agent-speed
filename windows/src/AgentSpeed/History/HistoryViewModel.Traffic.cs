@@ -23,8 +23,8 @@ internal sealed partial class HistoryViewModel
     /// <summary>Each day of the range with its traffic (days before measuring began left out).</summary>
     public IReadOnlyDictionary<DateOnly, DayTraffic> TrafficDays { get; private set; } = NoTrafficDays;
 
-    /// <summary>Traffic was ever measured: the table shows its column and the CSV its bytes.</summary>
-    public bool ShowsTraffic => _traffic.IsMeasured;
+    /// <summary>Traffic was ever measured: the table shows its column and the CSV its bytes; a remote host has none (REMOTE 7).</summary>
+    public bool ShowsTraffic => _hosts.HasTraffic && _traffic.IsMeasured;
 
     /// <summary>The range's displayed traffic in the chart header with the traffic metric (<c>traffic.pair</c>).</summary>
     public string TrafficTotal
@@ -100,7 +100,7 @@ internal sealed partial class HistoryViewModel
     /// </summary>
     private HistoryTraffic CurrentTraffic()
     {
-        if (_trafficHub is not { } hub)
+        if (_trafficHub is not { } hub || !_hosts.HasTraffic)
         {
             return HistoryTraffic.None;
         }

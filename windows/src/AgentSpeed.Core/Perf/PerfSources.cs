@@ -3,9 +3,12 @@ namespace AgentSpeed.Core.Perf;
 /// <summary>What each source records for the performance score (METRICS 6.9 <i>Absent components</i>).</summary>
 public static class PerfSources
 {
-    /// <summary>Claude (both) and Codex log when a response's first content was written (METRICS 3.3 <c>firstMs</c>).</summary>
+    /// <summary>
+    /// Claude (both) and Codex log when a response's first content was written, Devin when its first token arrived (METRICS 3.3
+    /// <c>firstMs</c>).
+    /// </summary>
     public static bool RecordsLatency(SourceKind source) =>
-        source is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.ClaudeDesktop;
+        source is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.ClaudeDesktop or SourceKind.Devin;
 
     /// <summary>The sources whose tool calls are actions (METRICS 6.10).</summary>
     public static bool RecordsActions(SourceKind source) =>

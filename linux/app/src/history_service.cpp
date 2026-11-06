@@ -17,6 +17,7 @@
 
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
+#include "agentspeed/remote_protocol.hpp"
 #include "agentspeed/tz.hpp"
 #include "format.hpp"
 #include "perf_card.hpp"
@@ -44,9 +45,49 @@ std::optional<agentspeed::SourceKind> sourceOf(const QString& id) {
     return agentspeed::sourceFromId(id.toStdString());
 }
 
+// `host` empty: every host (DESIGN 13: source and host filters combine).
 bool inView(const agentspeed::history::DailyUsage& day, const std::string& first, const std::string& last,
-            std::optional<agentspeed::SourceKind> source) {
-    return day.key.day >= first && day.key.day <= last && (!source || day.key.source == *source);
+            std::optional<agentspeed::SourceKind> source, const std::string& host = {}) {
+    return day.key.day >= first && day.key.day <= last && (!source || day.key.source == *source) && (host.empty() || day.host == host);
+}
+
+// METRICS 9.10 Reading of the remote hosts' days: a relay's day is one merged contribution of the current analysis.
+std::map<std::string, std::vector<agentspeed::unpriced::Part>> remoteParts(const std::vector<agentspeed::history::DailyUsage>& days) {
+    std::map<std::string, std::vector<agentspeed::unpriced::Part>> byHost;
+    for (const auto& day : days) {
+        if (day.host == agentspeed::remote::kLocalHost) continue;
+        agentspeed::unpriced::Stored stored;
+        stored.fileVersion = agentspeed::history::Analyzer::kVersion;
+        stored.requests = day.totals.requests;
+        stored.unpriced = day.totals.unpricedRequests;
+        for (const auto& [model, totals] : day.totals.models) {
+            if (totals.unpricedRequests && *totals.unpricedRequests > 0) stored.models[model] = *totals.unpricedRequests;
+        }
+        for (const auto& [fact, n] : day.totals.unpriced) {
+            stored.side.push_back({fact.model, fact.provider, fact.fast, n, agentspeed::history::Analyzer::kVersion});
+        }
+        auto part = agentspeed::unpriced::readPart(stored);
+        part.day = day.key.day;
+        part.source = day.key.source;
+        byHost[day.host].push_back(std::move(part));
+    }
+    for (auto& [host, parts] : byHost) parts = agentspeed::unpriced::mergeParts(parts);
+    return byHost;
+}
+
+// The days of every host summed per (day, source), or one host's (the mode CSV keeps one row per day and source).
+std::vector<agentspeed::history::DailyUsage> modeDays(const std::vector<agentspeed::history::DailyUsage>& days, const std::string& first,
+                                                      const std::string& last, std::optional<agentspeed::SourceKind> source,
+                                                      const std::string& host) {
+    std::map<agentspeed::history::DayKey, agentspeed::history::DailyUsage> merged;
+    for (const auto& day : days) {
+        if (!inView(day, first, last, source, host)) continue;
+        auto [it, inserted] = merged.try_emplace(day.key, day);
+        if (!inserted) it->second.totals.merge(day.totals);
+    }
+    std::vector<agentspeed::history::DailyUsage> out;
+    for (auto& [key, day] : merged) out.push_back(std::move(day));
+    return out;
 }
 
 // The app line of the copied diagnostics (METRICS 9.10 Text) names Linux and its kernel's major version.
@@ -58,8 +99,11 @@ agentspeed::unpriced::App appLine() {
 
 }  // namespace
 
+// The remote rows remember the zone they were computed in (REMOTE 8.3): the id the connections send in `start.zone`.
 HistoryWorker::HistoryWorker(std::shared_ptr<agentspeed::pricing::PriceBook> prices, QString storePath)
-    : prices_(std::move(prices)), storePath_(std::move(storePath)) {}
+    : prices_(std::move(prices)), storePath_(std::move(storePath)),
+      ledger_({}, agentspeed::remote::HistorySyncState::kFlushBytes,
+               [] { return agentspeed::remote::currentZone(QString::fromUtf8(QTimeZone::systemTimeZoneId()).toStdString()).id; }) {}
 
 HistoryWorker::~HistoryWorker() = default;
 
@@ -76,6 +120,14 @@ void HistoryWorker::start() {
     } catch (const std::exception& error) {
         qWarning("history store unavailable: %s", error.what());
         return;
+    }
+    // REMOTE 8.3: the hosts' side tables are created on open, without a schema change.
+    try {
+        store_->ensureRemoteTables();
+        ledger_.load(*store_);
+        remoteReady_ = true;
+    } catch (const std::exception&) {
+        qWarning("remote history unavailable");
     }
     publish();
     try {
@@ -134,8 +186,76 @@ void HistoryWorker::analyze() {
 void HistoryWorker::clear() {
     if (!analyzer_) return;
     analyzer_->clear();
+    ledger_.reset();
     publish();
+    publishTooLarge();
+    // The hosts' rows went too: every connected host is asked for all of its days (REMOTE 8.3).
+    if (remoteReady_) {
+        for (const auto& host : ledger_.connectedHosts()) requestRemote(host, {});
+    }
     analyze();
+}
+
+void HistoryWorker::receiveRemote(agentspeed::remote::HostEvent event) {
+    QMetaObject::invokeMethod(
+        this, [this, event = std::make_shared<const agentspeed::remote::HostEvent>(std::move(event))] { applyRemote(*event); },
+        Qt::QueuedConnection);
+}
+
+void HistoryWorker::setRemoteHosts(std::map<std::string, std::string> names) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, names = std::move(names)]() mutable {
+            applyEffect(ledger_.setHosts(std::move(names), remoteReady_ ? store_.get() : nullptr));
+        },
+        Qt::QueuedConnection);
+}
+
+void HistoryWorker::deleteRemoteHost(std::string id) {
+    QMetaObject::invokeMethod(
+        this,
+        [this, id = std::move(id)] {
+            if (remoteReady_) applyEffect(ledger_.deleteHost(id, *store_));
+        },
+        Qt::QueuedConnection);
+}
+
+void HistoryWorker::setRemoteRequester(RemoteHistoryRequester requester) {
+    std::lock_guard lock(requesterMutex_);
+    requester_ = std::move(requester);
+}
+
+void HistoryWorker::applyRemote(const agentspeed::remote::HostEvent& event) {
+    if (!remoteReady_) return;
+    applyEffect(ledger_.receive(event, *store_));
+}
+
+void HistoryWorker::applyEffect(const agentspeed::remote::HistoryEffect& effect) {
+    using Kind = agentspeed::remote::HistoryEffect::Kind;
+    switch (effect.kind) {
+        case Kind::None: break;
+        case Kind::Changed:
+            publish();
+            publishTooLarge();
+            break;
+        case Kind::TooLargeChanged: publishTooLarge(); break;
+        case Kind::Request: requestRemote(effect.host, effect.digests); break;
+    }
+}
+
+void HistoryWorker::requestRemote(const std::string& host, const std::map<std::string, std::string>& digests) {
+    RemoteHistoryRequester requester;
+    {
+        std::lock_guard lock(requesterMutex_);
+        requester = requester_;
+    }
+    if (requester) requester(host, digests);
+}
+
+void HistoryWorker::publishTooLarge() {
+    QStringList hosts;
+    for (const auto& host : ledger_.tooLarge()) hosts.push_back(QString::fromStdString(host));
+    emit remoteTooLarge(hosts);
 }
 
 void HistoryWorker::recordPeak(const QString& day, double peak) {
@@ -173,11 +293,33 @@ void HistoryWorker::publish() {
     auto details = std::make_shared<HistoryDetail>();
     details->days = analyzer_->days();
     details->unpriced = analyzer_->unpricedParts();
+    // REMOTE 8.3: every host's rows join the local analysis, each with the day's live peak.
+    const auto& remoteRows = ledger_.rows();
+    if (!remoteRows.empty()) {
+        const auto peaks = store_->peaks();
+        const auto peakOf = [&peaks](const std::string& day) -> std::optional<double> {
+            const auto it = peaks.find(day);
+            return it == peaks.end() ? std::nullopt : std::optional<double>(it->second);
+        };
+        details->days = agentspeed::remote::mergeDays(std::move(details->days), remoteRows.usage(nullptr, peakOf));
+        details->hostUnpriced = remoteParts(details->days);
+        auto all = details->unpriced;
+        for (const auto& [host, parts] : details->hostUnpriced) all.insert(all.end(), parts.begin(), parts.end());
+        details->hostUnpriced[std::string(agentspeed::remote::kLocalHost)] = std::move(details->unpriced);
+        details->unpriced = agentspeed::unpriced::mergeParts(all);
+    }
+    const auto nameOf = [&remoteRows](const std::string& host) {
+        if (host == agentspeed::remote::kLocalHost) return QString();
+        const auto it = remoteRows.names().find(host);
+        return QString::fromStdString(it == remoteRows.names().end() ? host : it->second);
+    };
     for (const auto& day : details->days) {
         const auto& t = day.totals;
         QVariantMap row;
         row.insert(QStringLiteral("date"), QString::fromStdString(day.key.day));
         row.insert(QStringLiteral("source"), QString::fromUtf8(agentspeed::sourceId(day.key.source)));
+        row.insert(QStringLiteral("host"), QString::fromStdString(day.host));
+        row.insert(QStringLiteral("hostName"), nameOf(day.host));
         row.insert(QStringLiteral("requests"), static_cast<qint64>(t.requests));
         row.insert(QStringLiteral("input"), static_cast<qint64>(t.input));
         row.insert(QStringLiteral("cachedInput"), static_cast<qint64>(t.cachedInput));
@@ -205,13 +347,23 @@ void HistoryWorker::publish() {
         row.insert(QStringLiteral("models"), models);
         rows.push_back(row);
     }
+    QVariantList hosts;
+    for (const auto& host : remoteRows.hosts()) hosts.push_back(QVariantMap{{QStringLiteral("id"), QString::fromStdString(host)}, {QStringLiteral("name"), nameOf(host)}});
+    std::stable_sort(hosts.begin(), hosts.end(), [](const QVariant& a, const QVariant& b) {
+        const auto x = a.toMap(), y = b.toMap();
+        const int order = x.value(QStringLiteral("name")).toString().compare(y.value(QStringLiteral("name")).toString(), Qt::CaseInsensitive);
+        return order != 0 ? order < 0 : x.value(QStringLiteral("id")).toString() < y.value(QStringLiteral("id")).toString();
+    });
+    emit hostsReady(hosts);
     emit daysReady(rows, QDateTime::currentMSecsSinceEpoch());
     emit detailsReady(std::move(details));
-    // METRICS 6.11 Reading: a day's record of a (source, model) is the sum over files.
+    // METRICS 6.11 Reading: a day's record of a (source, model) is the sum over files; every host's records are pooled
+    // (the baseline compares a model with itself across the user's machines, REMOTE 8.3).
     std::map<std::tuple<std::string, agentspeed::SourceKind, std::string>, agentspeed::perf::Record> sums;
     for (const auto& r : analyzer_->perfRecords()) sums[{r.day, r.source, r.model}].add(r.record);
-    auto records = std::make_shared<std::vector<agentspeed::perf::DayRecord>>();
-    for (const auto& [key, record] : sums) records->push_back({std::get<0>(key), std::get<1>(key), std::get<2>(key), record});
+    std::vector<agentspeed::perf::DayRecord> local;
+    for (const auto& [key, record] : sums) local.push_back({std::get<0>(key), std::get<1>(key), std::get<2>(key), record});
+    auto records = std::make_shared<std::vector<agentspeed::perf::DayRecord>>(agentspeed::remote::mergePerf(local, remoteRows.perfRecords()));
     const auto today = QDate::currentDate().toString(Qt::ISODate).toStdString();
     PerfBaselines baselines;
     for (const auto& r : *records) {
@@ -227,6 +379,18 @@ void HistoryModel::applyRows(const QVariantList& rows, qint64 updatedMs) {
     rows_ = rows;
     updatedMs_ = updatedMs;
     emit rowsChanged();
+}
+
+void HistoryModel::applyHosts(const QVariantList& hosts) {
+    if (hosts == hosts_) return;
+    hosts_ = hosts;
+    emit hostsChanged();
+}
+
+void HistoryModel::applyTooLarge(const QStringList& hosts) {
+    if (hosts == tooLargeHosts_) return;
+    tooLargeHosts_ = hosts;
+    emit tooLargeHostsChanged();
 }
 
 void HistoryModel::setAnalyzing(bool running) {
@@ -248,7 +412,9 @@ QString HistoryModel::chooseCsvPath(const QString& suggestedName) const {
 }
 
 bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, const QString& sourceCode, const QString& currency,
-                             const QString& rate) const {
+                             const QString& rate, const QString& host, bool localTraffic) const {
+    // A JS null (no peak, no cost) is no value.
+    const auto present = [](const QVariant& v) { return v.isValid() && !v.isNull(); };
     if (path.isEmpty()) return false;
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
@@ -263,6 +429,9 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
                        QStringLiteral("cost_") + currency.toLower(), QStringLiteral("unpriced_requests"),
                        QStringLiteral("traffic_rx_bytes"), QStringLiteral("traffic_tx_bytes"), QStringLiteral("traffic_rx_tools_bytes"),
                        QStringLiteral("traffic_tx_tools_bytes")};
+    // DESIGN 13: the trailing `host` column while host history exists.
+    if (!host.isEmpty()) header << QStringLiteral("host");
+    const int trafficEnd = static_cast<int>(header.size()) - (host.isEmpty() ? 0 : 1);
     QByteArray out("\xEF\xBB\xBF");
     out += header.join(QLatin1Char(',')).toUtf8() + "\r\n";
     for (const auto& value : rows) {
@@ -290,19 +459,21 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
             QString::number(measuredOutput),
             QString::number(measuredMs),
             measuredMs > 0 ? oneDecimal(static_cast<double>(measuredOutput) * 1000.0 / static_cast<double>(measuredMs)) : QString(),
-            row.value(QStringLiteral("peak")).isValid() ? oneDecimal(row.value(QStringLiteral("peak")).toDouble()) : QString(),
+            present(row.value(QStringLiteral("peak"))) ? oneDecimal(row.value(QStringLiteral("peak")).toDouble()) : QString(),
             QString::number(row.value(QStringLiteral("agents")).toInt()),
             QString::number(row.value(QStringLiteral("unfinalized")).toLongLong()),
             models.join(QStringLiteral("; ")),
-            cost.isValid() ? QString::fromStdString(agentspeed::money::csvUsd(cost.toLongLong())) : QString(),
-            cost.isValid() ? QString::fromStdString(agentspeed::money::csv(cost.toLongLong(), r, c.digits)) : QString(),
-            row.value(QStringLiteral("unpriced")).isValid() ? QString::number(row.value(QStringLiteral("unpriced")).toLongLong()) : QString(),
+            present(cost) ? QString::fromStdString(agentspeed::money::csvUsd(cost.toLongLong())) : QString(),
+            present(cost) ? QString::fromStdString(agentspeed::money::csv(cost.toLongLong(), r, c.digits)) : QString(),
+            present(row.value(QStringLiteral("unpriced"))) ? QString::number(row.value(QStringLiteral("unpriced")).toLongLong()) : QString(),
         };
         // DESIGN 10 CSV: the day's traffic of the row's source(s), empty before measuring began; then this computer's row.
         const auto date = row.value(QStringLiteral("date")).toString();
         const auto t = trafficSums(date, sourceCode == QLatin1String("all") ? QString() : row.value(QStringLiteral("source")).toString());
-        const bool recorded = !trafficSince_.isEmpty() && date >= trafficSince_;
+        // A remote host has no agent traffic (REMOTE 7): its rows leave the traffic empty and no machine row follows.
+        const bool recorded = localTraffic && !trafficSince_.isEmpty() && date >= trafficSince_;
         for (const auto v : {t.rx, t.tx, t.rxTools, t.txTools}) fields << (recorded ? QString::number(v) : QString());
+        if (!host.isEmpty()) fields << host;
         for (auto& field : fields) field = csvField(field);
         out += fields.join(QLatin1Char(',')).toUtf8() + "\r\n";
         if (recorded) {
@@ -310,8 +481,9 @@ bool HistoryModel::exportCsv(const QString& path, const QVariantList& rows, cons
             QStringList machine(header.size());
             machine[0] = date;
             machine[1] = QStringLiteral("machine");
-            machine[header.size() - 4] = QString::number(m.rx);
-            machine[header.size() - 3] = QString::number(m.tx);
+            machine[trafficEnd - 4] = QString::number(m.rx);
+            machine[trafficEnd - 3] = QString::number(m.tx);
+            if (!host.isEmpty()) machine[trafficEnd] = QString::fromUtf8(agentspeed::remote::kLocalHost.data(), agentspeed::remote::kLocalHost.size());
             out += machine.join(QLatin1Char(',')).toUtf8() + "\r\n";
         }
     }
@@ -368,7 +540,8 @@ void HistoryModel::applyDetails(HistoryDetails details) {
     emit detailsChanged();
 }
 
-QVariantMap HistoryModel::modeSection(const QString& first, const QString& last, const QString& source, const QString& kindName) const {
+QVariantMap HistoryModel::modeSection(const QString& first, const QString& last, const QString& source, const QString& kindName,
+                                      const QString& host) const {
     using namespace agentspeed;
     QVariantMap out;
     QVariantList rows;
@@ -382,8 +555,9 @@ QVariantMap HistoryModel::modeSection(const QString& first, const QString& last,
     std::map<std::string, Sum> byMode;
     std::int64_t output = 0;
     if (details_) {
+        const auto onHost = host.toStdString();
         for (const auto& day : details_->days) {
-            if (!inView(day, from, to, only)) continue;
+            if (!inView(day, from, to, only, onHost)) continue;
             for (const auto& row : history::modeBreakdown(day.totals)) {
                 if (row.key.kind != kind) continue;
                 auto& sum = byMode[row.key.mode];
@@ -434,14 +608,12 @@ QVariantMap HistoryModel::modeSection(const QString& first, const QString& last,
     return out;
 }
 
-bool HistoryModel::exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source) const {
+bool HistoryModel::exportModeCsv(const QString& path, const QString& first, const QString& last, const QString& source,
+                                 const QString& host) const {
     if (path.isEmpty() || !details_) return false;
-    const auto only = sourceOf(source);
-    const auto from = first.toStdString(), to = last.toStdString();
+    const auto merged = modeDays(details_->days, first.toStdString(), last.toStdString(), sourceOf(source), host.toStdString());
     std::vector<agentspeed::history::ModeCsvDay> days;
-    for (const auto& day : details_->days) {
-        if (inView(day, from, to, only)) days.push_back({day.key.day, day.key.source, &day.totals});
-    }
+    for (const auto& day : merged) days.push_back({day.key.day, day.key.source, &day.totals});
     QFile file(path);
     if (!file.open(QIODevice::WriteOnly | QIODevice::Truncate)) return false;
     const auto text = agentspeed::history::modeCsv(days);
@@ -449,7 +621,7 @@ bool HistoryModel::exportModeCsv(const QString& path, const QString& first, cons
 }
 
 QVariantMap HistoryModel::unpricedView(const QString& first, const QString& last, const QString& source, const QStringList& excludedIds,
-                                       const QString& view) const {
+                                       const QString& view, const QString& host) const {
     using namespace agentspeed;
     QVariantMap out;
     QVariantList groups;
@@ -462,7 +634,14 @@ QVariantMap HistoryModel::unpricedView(const QString& first, const QString& last
             if (const auto kind = sourceFromId(id.toStdString())) excluded.insert(*kind);
         }
         const auto from = first.toStdString(), to = last.toStdString();
-        const auto found = unpriced::aggregate(details_->unpriced, *table, from, to, only, excluded);
+        // One host's facts while host history exists; this computer's are the local ones.
+        const auto* parts = &details_->unpriced;
+        if (!host.isEmpty() && !details_->hostUnpriced.empty()) {
+            static const std::vector<unpriced::Part> kNone;
+            const auto it = details_->hostUnpriced.find(host.toStdString());
+            parts = it == details_->hostUnpriced.end() ? &kNone : &it->second;
+        }
+        const auto found = unpriced::aggregate(*parts, *table, from, to, only, excluded);
         for (const auto& g : found) {
             count += g.unpriced;
             pricedNow += g.pricedNow;

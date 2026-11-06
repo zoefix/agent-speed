@@ -43,6 +43,7 @@ sys.dont_write_bytecode = True
 sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import prices as pricing  # noqa: E402
 import harness_reference as harnesses  # noqa: E402
+import devin_reference as devin  # noqa: E402
 import unpriced as diagnostics  # noqa: E402
 import execution_modes_reference as modes  # noqa: E402
 import tool_actions  # noqa: E402
@@ -3553,11 +3554,11 @@ def thinking_groups(agents):
 
 def perf_parents(states):
     """6.7 parent links (OpenClaw windows link inside their database, 4.14; Hermes Agent has none, 4.15)."""
-    parents = resolve_parents([s for s in states if s.source not in ("openclaw", "hermes", "antigravity")])
+    parents = resolve_parents([s for s in states if s.source not in ("openclaw", "hermes", "antigravity", "devin")])
     for s in states:
         if s.source == "openclaw":
             parents[s.path] = s.parent_session
-        elif s.source == "hermes":
+        elif s.source in ("hermes", "devin"):
             parents[s.path] = None
     ag = [s for s in states if s.source == "antigravity"]
     if ag:
@@ -3732,6 +3733,7 @@ def check_fixtures():
     failures += ["prices: " + e for e in pricing.check_cases()]
     failures += ["unpriced: " + e for e in diagnostics.check_cases()]
     failures += ["harnesses: " + e for e in harnesses.check_fixtures(root)]
+    failures += devin.check_fixtures(root)
     attribution = json.load(open(os.path.join(root, "model-attribution-cases.json"), encoding="utf-8"))
     failures += ["model attribution: " + e for e in check_model_attribution(attribution)]
     created = sorted(set(tree()) - set(files_before))
@@ -4500,7 +4502,7 @@ def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=()
 
 def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None, devin_locations=()):
     """Today's responses as the engine seeds them (the `--dump-today` rows), with files and bytes read; `agents_out`
     receives the parser state of every seeded agent (METRICS 6.9)."""
     index = pricing.Index(pricing.load(table))
@@ -4573,18 +4575,28 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
             rows.append(dict(record, source=source, agentId=agent,
                              costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
                              **harness_modes[record["key"]]))
+    devin_agents = devin.collect(devin_locations, since_ms=today_start - 15 * 60_000)
+    if agents_out is not None:
+        agents_out += devin_agents.values()
+    for agent in devin_agents.values():
+        for record in agent.responses.values():
+            if record["endMs"] >= today_start:
+                rows.append(dict(record, source="devin", agentId=agent.id, requestCount=1,
+                                 costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
+                                 effort=None, speed=None))
     rows.sort(key=lambda r: (r["endMs"], r["key"]))
     return rows, read_files, read_bytes
 
 
 def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None, devin_locations=()):
     started = time.time()
     seeded = []
     rows, read_files, read_bytes = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores,
                                               wb_roots, table, zcode_root, kimi_root, grok_root, pi_dirs, openclaw_dbs,
-                                              codex_roots, hermes_dirs, droid_roots, agents_out=seeded)
+                                              codex_roots, hermes_dirs, droid_roots, agents_out=seeded,
+                                              devin_locations=devin_locations)
     for r in rows:
         print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
     now = now_ms if now_ms is not None else int(time.time() * 1000)
@@ -4606,7 +4618,7 @@ def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
 def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), omp_dirs=(), ag_stores=(),
                 wb_roots=(), include_archived=True, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(),
                 openclaw_dbs=(), codex_roots=None, hermes_dirs=(), hermes_tz=None, droid_roots=(), droid_memory=None,
-                droid_skipped=None, perf_out=None):
+                droid_skipped=None, perf_out=None, devin_locations=()):
     """Parses every log completely (METRICS 8) and returns all responses with their source and agent. A Droid session
     whose parent counters are unknown is skipped (listed in `droid_skipped`); `droid_memory` keeps the signatures of
     unreadable parent sidecars from one analysis to the next (METRICS 4.16 Own counters). `perf_out` receives every
@@ -4653,6 +4665,7 @@ def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), 
         if perf_out is not None:
             perf_out += perf_agents(hs.agents.values())
     collected = harnesses.collect(zcode_root, kimi_root, grok_root)
+    collected += devin.records(devin_locations)
     out += collected
     if perf_out is not None:
         by_agent = OrderedDict()
@@ -4762,6 +4775,9 @@ def main():
                         help="OpenClaw state folder, agent folder or openclaw-agent.sqlite (replaces the automatic roots)")
     parser.add_argument("--droid", default=None,
                         help="Factory Droid .factory folder or its sessions folder (replaces the automatic root)")
+    parser.add_argument("--devin", action="append", default=None,
+                        help="Devin CLI location: the cli folder that holds sessions.db or its devin data folder, or @auto "
+                             "for the automatic database (repeatable; replaces the automatic entry unless @auto is given)")
     parser.add_argument("--write-history-fixture", action="store_true")
     parser.add_argument("--prices", default=pricing.TABLE, help="price table for --dump-history (METRICS 9)")
     parser.add_argument("--dump-unpriced", action="store_true", help="unpriced diagnostics text (METRICS 9.10)")
@@ -4797,6 +4813,7 @@ def main():
     openclaw_dbs = [db for r in ([args.openclaw] if args.openclaw else openclaw_state_dirs()) for db in discover_openclaw(r)]
     codex_roots = [args.codex] if args.codex else None
     droid_roots = [droid_root(setting=args.droid)] if args.droid else [droid_root(home)]
+    devin_locations = args.devin or ["@auto"]
     if args.write_history_fixture:
         write_history_fixture()
         return
@@ -4816,14 +4833,14 @@ def main():
             rows, _, _ = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                                     args.prices, zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs,
                                     openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                                    droid_roots=droid_roots)
+                                    droid_roots=droid_roots, devin_locations=devin_locations)
             parts = diagnostics.live_parts([(r["source"], r) for r in rows], first)
         else:
             parts = diagnostics.history_parts(daily_history(
                 collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                             zcode_root=zcode_root, kimi_root=kimi_root, grok_root=grok_root, pi_dirs=pi_dirs,
                             openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                            droid_roots=droid_roots),
+                            droid_roots=droid_roots, devin_locations=devin_locations),
                 day_pricing=pricing.DayPricing([pricing.load(args.prices)])))
         dump_unpriced(parts, args.prices, view, first, last, args.source)
         return
@@ -4833,7 +4850,7 @@ def main():
                                          ag_stores, wb_roots, zcode_root=zcode_root, kimi_root=kimi_root,
                                          grok_root=grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
                                          codex_roots=codex_roots, hermes_dirs=hermes_dirs, droid_roots=droid_roots,
-                                         perf_out=agents),
+                                         perf_out=agents, devin_locations=devin_locations),
                              tz=timezone.utc if args.utc else None,
                              day_pricing=pricing.DayPricing([pricing.load(args.prices)]))
         for row in rows:
@@ -4846,7 +4863,7 @@ def main():
     elif args.dump_today:
         dump_today(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, args.prices,
                    zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs, codex_roots=codex_roots,
-                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now)
+                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now, devin_locations=devin_locations)
     else:
         parser.print_help()
 

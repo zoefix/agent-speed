@@ -156,8 +156,8 @@ struct HarnessFixtureTests {
         #expect(output.todayBySource[.zcode]?.input == 8280 && output.todayBySource[.zcode]?.output == 840)
         #expect(output.todayBySource[.kimi]?.requests == 5)
         #expect(output.todayBySource[.kimi]?.input == 600 && output.todayBySource[.kimi]?.output == 335)
-        #expect(output.todayBySource[.grokBuild]?.requests == 4 && output.todayBySource[.grokBuild]?.output == 700)
-        #expect(output.today.requests == 16 && output.today.output == 1875)
+        #expect(output.todayBySource[.grokBuild]?.requests == 4 && output.todayBySource[.grokBuild]?.output == 1300)
+        #expect(output.today.requests == 16 && output.today.output == 2475)
         let context = SnapshotContext(session: session, todayStartMs: Self.dayStart)
         #expect(context.sources[.zcode]?.sessionCount == 2)
         #expect(context.sources[.kimi]?.sessionCount == 3)
@@ -247,10 +247,10 @@ struct HarnessFixtureTests {
         #expect(session.rediscover(todayStartMs: Self.dayStart) && session.hasAvailableRoot)
         #expect(session.responses.count == 7)
         var moved = configuration
-        moved.zcodeRoot = directory.file("other")
+        moved.setLocation(directory.file("other"), for: .zcode)
         #expect(moved.requiresRescan(comparedTo: configuration))
         moved = configuration
-        moved.kimiRoot = directory.file("custom-kimi")
+        moved.setLocation(directory.file("custom-kimi"), for: .kimi)
         #expect(moved.requiresRescan(comparedTo: configuration))
         #expect(TranscriptNames.kimiSession.accepts(relativeComponents: ["work", "sid", "agents", "main", "wire.jsonl"]))
         #expect(!TranscriptNames.kimiSession.accepts(relativeComponents: ["work", "sid", "tools", "wire.jsonl"]))

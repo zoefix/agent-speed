@@ -46,6 +46,11 @@ internal sealed partial class HistoryWindow : Window
     private bool? _subscriptionsOffered;
     private double _subscriptionsWidth;
     private double _pickerWidth = HistoryToolbar.PickerMinWidth;
+    private double _hostPickerWidth = HistoryToolbar.HostPickerMinWidth;
+
+    /// <summary>The host picker around its name: the 16 DIP symbol, its 9 DIP gap, the box's padding and drop-down chevron.</summary>
+    private const double HostPickerChrome = 16 + 9 + 50;
+    private HostPickerMode? _hostMode;
     private int? _hoverIndex;
     private double _dividerTarget;
 
@@ -87,6 +92,11 @@ internal sealed partial class HistoryWindow : Window
         ExportButton.SizeChanged += (_, _) => UpdateToolbar();
         RangeGroup.SizeChanged += (_, _) => UpdateToolbar();
         SourcePicker.SizeChanged += (_, _) => UpdateToolbar();
+        HostPicker.SizeChanged += (_, _) => UpdateToolbar();
+        HostPicker.SelectionChanged += (_, _) => Dispatcher.BeginInvoke(UpdateToolbar, System.Windows.Threading.DispatcherPriority.Loaded);
+        HostPicker.IsVisibleChanged += (_, _) => UpdateToolbar();
+        model.SourceOptions.CollectionChanged += (_, _) => Dispatcher.BeginInvoke(UpdateToolbar, System.Windows.Threading.DispatcherPriority.Loaded);
+        model.HostOptions.CollectionChanged += (_, _) => Dispatcher.BeginInvoke(UpdateToolbar, System.Windows.Threading.DispatcherPriority.Loaded);
         SubscriptionsGroup.IsVisibleChanged += (_, _) => UpdateToolbar();
         SubscriptionsCheck.SizeChanged += (_, _) => UpdateToolbar();
         ContentRendered += OnContentRendered;
@@ -757,9 +767,17 @@ internal sealed partial class HistoryWindow : Window
         var exportIcon = ExportLabel.Visibility == Visibility.Visible
             ? ExportButton.ActualWidth - ExportLabel.ActualWidth - ExportLabel.Margin.Left
             : ExportButton.ActualWidth;
-        if (!HistoryToolbar.NarrowsPicker(_density))
+        var hosts = HostPicker.IsVisible;
+        if (!HistoryToolbar.NarrowsPicker(_density) && _hostMode is null or HostPickerMode.Name)
         {
             _pickerWidth = SourcePicker.ActualWidth;
+        }
+
+        if (hosts)
+        {
+            // The picker's natural width from the selected host's name: its symbol, the gap, the name and the box's chrome.
+            var name = _model.SelectedHostOption?.Name ?? string.Empty;
+            _hostPickerWidth = TextWidth(name, HostPicker.FontFamily, HostPicker.FontSize, FontWeights.Normal) + HostPickerChrome;
         }
 
         var offered = _model.OffersSubscriptions;
@@ -777,14 +795,29 @@ internal sealed partial class HistoryWindow : Window
         var items = RangeItems.Children.OfType<ToggleButton>().ToArray();
         var labels = items.Select(item => TextWidth(item.Content as string ?? string.Empty, item.FontFamily, item.FontSize, FontWeights.SemiBold))
             .ToArray();
-        var density = HistoryToolbar.Fit(Toolbar.ActualWidth, labels, _pickerWidth, exportIcon, exportLabel, subscriptionsLabel,
-            subscriptionsIcon);
-        if (density == _density && offered == _subscriptionsOffered)
+        var fit = hosts
+            ? HistoryToolbar.FitWithHosts(Toolbar.ActualWidth, labels, _pickerWidth, _hostPickerWidth, exportIcon, exportLabel, subscriptionsLabel,
+                subscriptionsIcon)
+            : new ToolbarFit(HistoryToolbar.Fit(Toolbar.ActualWidth, labels, _pickerWidth, exportIcon, exportLabel, subscriptionsLabel,
+                subscriptionsIcon), HostPickerMode.Name);
+        var density = fit.Density;
+        HostPickerMode? hostMode = hosts ? fit.Hosts : null;
+        ApplyCompact(fit, hosts);
+        if (hosts)
+        {
+            HostPicker.Width = HistoryToolbar.FittedHostPickerWidth(Toolbar.ActualWidth, fit, labels, _pickerWidth, _hostPickerWidth, exportIcon,
+                exportLabel, subscriptionsLabel, subscriptionsIcon);
+            HostPicker.ToolTip = fit.ShowsHostName ? null : _model.SelectedHostOption?.Name;
+        }
+
+        if (density == _density && offered == _subscriptionsOffered && hostMode == _hostMode)
         {
             return;
         }
 
         _density = density;
+        _hostMode = hostMode;
+        ApplyHostPicker(fit, hosts);
         _subscriptionsOffered = offered;
         var labelled = HistoryToolbar.ShowsSubscriptionsLabel(density);
         SubscriptionsCheck.Visibility = labelled ? Visibility.Visible : Visibility.Collapsed;
@@ -802,8 +835,35 @@ internal sealed partial class HistoryWindow : Window
         var margin = HistoryToolbar.RangeMargin(density);
         RangeGroup.Margin = new Thickness(margin, 0, margin, 0);
         var narrow = HistoryToolbar.NarrowsPicker(density);
-        SourcePicker.MinWidth = narrow ? HistoryToolbar.CompactPickerWidth : HistoryToolbar.PickerMinWidth;
-        SourcePicker.MaxWidth = narrow ? HistoryToolbar.CompactPickerWidth : HistoryToolbar.PickerMaxWidth;
+        var sourceDot = hosts && !fit.ShowsSourceName;
+        SourcePicker.MinWidth = sourceDot ? HistoryToolbar.SymbolPickerWidth : narrow ? HistoryToolbar.CompactPickerWidth : HistoryToolbar.PickerMinWidth;
+        SourcePicker.MaxWidth = sourceDot ? HistoryToolbar.SymbolPickerWidth : narrow ? HistoryToolbar.CompactPickerWidth : HistoryToolbar.PickerMaxWidth;
+    }
+
+    /// <summary>The closed pickers show their names, or only the host's symbol and the source's dot (every option, also new ones).</summary>
+    private void ApplyCompact(ToolbarFit fit, bool hosts)
+    {
+        foreach (var option in _model.HostOptions)
+        {
+            option.Compact = hosts && !fit.ShowsHostName;
+        }
+
+        foreach (var option in _model.SourceOptions)
+        {
+            option.Compact = hosts && !fit.ShowsSourceName;
+        }
+    }
+
+    /// <summary>
+    /// The host picker as the toolbar narrows (DESIGN 13): its name capped, then only its symbol, then the source picker only
+    /// its dot; the tooltips keep the names.
+    /// </summary>
+    private void ApplyHostPicker(ToolbarFit fit, bool hosts)
+    {
+        var showsName = !hosts || fit.ShowsHostName;
+        HostPicker.Margin = new Thickness(HistoryToolbar.HostGap(fit.Density), 0, 0, 0);
+        HostPicker.ToolTip = showsName ? null : _model.SelectedHostOption?.Name;
+        SourcePicker.ToolTip = hosts && !fit.ShowsSourceName ? _model.SelectedSource?.AccessibleName : null;
     }
 
     private double TextWidth(string text, FontFamily family, double size, FontWeight weight) =>

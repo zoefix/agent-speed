@@ -12,6 +12,8 @@ struct OrbConfig {
     QString id;
     std::optional<QString> name;          // custom name; nullopt: automatic
     std::optional<QStringList> sources;   // nullopt: every enabled source
+    // DESIGN 13: host ids (`local` first, unknown ids kept); nullopt: every host.
+    std::optional<QStringList> hosts;
     QString style = QStringLiteral("led");
     double size = 148;
     double opacity = 1;
@@ -28,8 +30,13 @@ struct OrbConfig {
 
     static OrbConfig fromJson(const QJsonObject& object);
     QJsonObject toJson() const;
-    double minimumSize() const { return style == QLatin1String("minimal") ? 64 : 96; }
+    // One size range for every style (DESIGN 2b `size`), so changing the style never resizes an orb.
+    static constexpr double kMinSize = 64, kMaxSize = 240;
     bool tracksAll() const { return !sources.has_value(); }
+    bool tracksAllHosts() const { return !hosts.has_value(); }
+    // `"all"`, one id, or an array of ids; anything else or an empty list is every host.
+    static std::optional<QStringList> hostsFromJson(const QJsonValue& value);
+    static QJsonValue hostsToJson(const std::optional<QStringList>& hosts);
 };
 
 // Where an orb sits on one display: edge-docked distance or a fraction of the usable area, per axis.

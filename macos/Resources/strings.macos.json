@@ -84,18 +84,6 @@
     "en": "%@ tok/s",
     "ja": "%@ tok/s"
   },
-  "mac.settings.sources.default": {
-    "zh-Hant": "預設位置",
-    "zh-Hans": "默认位置",
-    "en": "Default location",
-    "ja": "デフォルトの場所"
-  },
-  "mac.settings.sources.custom": {
-    "zh-Hant": "自訂位置",
-    "zh-Hans": "自定位置",
-    "en": "Custom location",
-    "ja": "カスタムの場所"
-  },
   "mac.settings.sources.chooseCodex": {
     "zh-Hant": "選擇 Codex 的 sessions 資料夾",
     "zh-Hans": "选择 Codex 的 sessions 文件夹",
@@ -239,6 +227,18 @@
     "zh-Hans": "用 20 秒依次展示每个速度阶段。",
     "en": "A 20-second sweep through every speed tier.",
     "ja": "20 秒間ですべての速度段階を順に表示します。"
+  },
+  "mac.settings.effects.displaySync": {
+    "zh-Hant": "與螢幕更新同步",
+    "zh-Hans": "与屏幕刷新同步",
+    "en": "Sync with display refresh",
+    "ja": "画面のリフレッシュに同期"
+  },
+  "mac.settings.effects.displaySync.hint": {
+    "zh-Hant": "懸浮窗和看板配合螢幕更新顯示每一格畫面。部分 Mac 關閉後，內建螢幕的亮度可能調不動。",
+    "zh-Hans": "悬浮窗和看板配合屏幕刷新显示每一帧画面。部分 Mac 关闭后，内建屏幕的亮度可能调不动。",
+    "en": "Floating orbs and boards show each frame in step with the display's refresh. On some Macs, turning this off can keep the built-in display's brightness from changing.",
+    "ja": "フローティングオーブとボードは、画面のリフレッシュに合わせて各フレームを表示します。一部の Mac では、オフにすると内蔵ディスプレイの明るさを変えられなくなることがあります。"
   },
   "mac.settings.sources.folder": {
     "zh-Hant": "資料夾",
@@ -564,10 +564,22 @@
     "en": "Choose Factory Droid's .factory folder or its sessions folder",
     "ja": "Factory Droid の .factory フォルダまたは sessions フォルダを選択"
   },
+  "mac.settings.sources.chooseDevin": {
+    "zh-Hant": "選擇 Devin CLI 的 cli 資料夾（含 sessions.db）或上一層的 devin 資料夾",
+    "zh-Hans": "选择 Devin CLI 的 cli 文件夹（含 sessions.db）或上一层的 devin 文件夹",
+    "en": "Choose Devin CLI's cli folder (with sessions.db) or the devin folder above it",
+    "ja": "Devin CLI の cli フォルダ（sessions.db を含む）またはその上の devin フォルダを選択"
+  },
   "mac.update.relaunching": {
     "zh-Hant": "正在重新啟動…",
     "zh-Hans": "正在重新启动…",
     "en": "Relaunching…",
     "ja": "再起動中…"
+  },
+  "mac.settings.tab.remote": {
+    "zh-Hant": "遠端主機",
+    "zh-Hans": "远程主机",
+    "en": "Remote",
+    "ja": "リモート"
   }
 }

@@ -47,19 +47,19 @@ Environment only(std::string name, std::string value) {
 
 SourceLocations locationsIn(const std::string& copy) {
     SourceLocations l;
-    l.codexRoot = copy + "/codex/sessions";
-    l.claudeRoot = copy + "/claude/projects";
-    l.dshRoot = copy + "/dsh/sessions";
-    l.openCodeRoot = copy + "/opencode";
+    l.codexRoots = {copy + "/codex/sessions"};
+    l.claudeRoots = {copy + "/claude/projects"};
+    l.dshRoots = {copy + "/dsh/sessions"};
+    l.openCodeRoots = {copy + "/opencode"};
     l.geminiRoots = {copy + "/gemini/tmp"};
     l.ompRoots = paths::ompRoots(only("PI_CONFIG_DIR", "omp"), copy);
     l.antigravityStores = paths::antigravityStores(copy + "/antigravity", std::nullopt);
-    l.workBuddyRoot = paths::workBuddyProjectsOf(copy + "/workbuddy/.workbuddy");
-    l.workBuddyAiRoot = paths::workBuddyProjectsOf(copy + "/workbuddy/.workbuddy-ai");
+    l.workBuddyRoots = {paths::workBuddyProjectsOf(copy + "/workbuddy/.workbuddy")};
+    l.workBuddyAiRoots = {paths::workBuddyProjectsOf(copy + "/workbuddy/.workbuddy-ai")};
     l.piRoots = paths::piRoots(only("PI_CODING_AGENT_DIR", copy + "/pi/agent"), copy);
     l.openClawRoots = paths::openClawStateFolders([](const std::string&) { return std::nullopt; }, copy + "/openclaw");
-    l.hermesRoot = copy + "/hermes/home";
-    l.droidRoot = droid::defaultRoot(copy + "/droid");
+    l.hermesRoots = {{copy + "/hermes/home", false}};
+    l.droidRoots = {droid::defaultRoot(copy + "/droid")};
     return l;
 }
 

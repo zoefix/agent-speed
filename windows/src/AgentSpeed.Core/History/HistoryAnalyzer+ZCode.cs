@@ -10,44 +10,56 @@ internal sealed partial class HistoryAnalyzer
 {
     private sealed record PlannedZCodeSession(string Id, List<ParsedResponse> Responses, long Size, long Modified, StoredFile? Previous);
 
+    /// <summary>
+    /// ZCode's databases in list order (METRICS 2.1, 8): every database is read whole; a session an earlier database of the
+    /// list provides is left out, and unchanged sessions keep their entries (<c>&lt;database&gt;#&lt;session&gt;</c>).
+    /// </summary>
     private void PlanZCode(Plan plan, SourceLocations locations, IReadOnlySet<SourceKind> enabled, bool zoneChanged, bool repricing,
         CancellationToken cancellationToken)
     {
-        if (!enabled.Contains(SourceKind.ZCode) || locations.ZCodeRoot.Length == 0)
+        if (!enabled.Contains(SourceKind.ZCode))
         {
             return;
         }
 
-        var path = ZCodeDatabase.DatabasePath(locations.ZCodeRoot);
-        if (AntigravityStamp.Of(path) is not { } stamp)
+        var seen = new HashSet<string>(StringComparer.Ordinal);
+        foreach (var path in locations.ZCodeRoots.Select(ZCodeDatabase.DatabasePath).Where(p => p.Length > 0))
         {
-            return;
-        }
-
-        try
-        {
-            using var database = ZCodeDatabase.Open(path);
-            foreach (var group in database.Read(cancellationToken: cancellationToken).GroupBy(r => r.SessionId))
+            if (AntigravityStamp.Of(path) is not { } stamp)
             {
-                var id = path + "#" + group.Key;
-                plan.Discovered++;
-                var previous = _entries.GetValueOrDefault(id);
-                if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == "zcode"
-                    && previous.Size == stamp.Length && previous.Modified == stamp.LastWriteUtc.Ticks && !(repricing && previous.HasUnpriced))
-                {
-                    continue;
-                }
-
-                plan.ZCodeSessions.Add(new PlannedZCodeSession(id,
-                    [.. group.Select(row => row.Response(path)).OfType<ParsedResponse>()], stamp.Length, stamp.LastWriteUtc.Ticks, previous));
+                continue;
             }
-        }
-        catch (InvalidDataException)
-        {
-        }
-        catch (Exception error) when (error is SqliteException or IOException or UnauthorizedAccessException)
-        {
-            plan.ZCodeFailed = true;
+
+            try
+            {
+                using var database = ZCodeDatabase.Open(path);
+                foreach (var group in database.Read(cancellationToken: cancellationToken).GroupBy(r => r.SessionId))
+                {
+                    if (!seen.Add(group.Key))
+                    {
+                        continue;
+                    }
+
+                    var id = path + "#" + group.Key;
+                    plan.Discovered++;
+                    var previous = _entries.GetValueOrDefault(id);
+                    if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == "zcode"
+                        && previous.Size == stamp.Length && previous.Modified == stamp.LastWriteUtc.Ticks && !(repricing && previous.HasUnpriced))
+                    {
+                        continue;
+                    }
+
+                    plan.ZCodeSessions.Add(new PlannedZCodeSession(id,
+                        [.. group.Select(row => row.Response(path)).OfType<ParsedResponse>()], stamp.Length, stamp.LastWriteUtc.Ticks, previous));
+                }
+            }
+            catch (InvalidDataException)
+            {
+            }
+            catch (Exception error) when (error is SqliteException or IOException or UnauthorizedAccessException)
+            {
+                plan.ZCodeFailures++;
+            }
         }
     }
 

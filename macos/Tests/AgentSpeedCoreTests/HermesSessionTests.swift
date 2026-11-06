@@ -273,7 +273,7 @@ struct HermesSessionTests {
         try home.write("profiles/work/config.yaml", "model:\n  openai_runtime: codex_app_server\n")
         func keys(_ root: URL) -> [String] {
             var configuration = home.configuration
-            configuration.hermesRoot = root
+            configuration.setLocation(root, for: .hermes)
             let session = TranscriptSession(configuration: configuration, clock: { Self.base + 30_000 })
             _ = session.seed(todayStartMs: Self.base - 3_600_000)
             return session.responses.map(\.key).sorted()
@@ -283,7 +283,7 @@ struct HermesSessionTests {
         #expect(keys(home.directory.file("nowhere")).isEmpty)
 
         var configuration = home.configuration
-        configuration.hermesRoot = home.hermes.appendingPathComponent("profiles/work/logs")
+        configuration.setLocation(home.hermes.appendingPathComponent("profiles/work/logs"), for: .hermes)
         #expect(configuration.requiresRescan(comparedTo: home.configuration))
         let session = TranscriptSession(configuration: configuration, clock: { Self.base + 30_000 })
         _ = session.seed(todayStartMs: Self.base - 3_600_000)

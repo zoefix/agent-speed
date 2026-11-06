@@ -356,6 +356,7 @@ Update Source::seed(std::int64_t todayStartMs) {
     sessionCursor_.reset();
     newestRowUpdate_ = 0;
     needsSeed_ = false;
+    if (claims_) claims_->releaseAll(owner_);
     if (database_) {
         const std::int64_t threshold = todayStartMs - kStartupLookbackMs;
         try {
@@ -364,6 +365,7 @@ Update Source::seed(std::int64_t todayStartMs) {
             std::sort(infos.begin(), infos.end(), [](const SessionInfo& a, const SessionInfo& b) { return a.id < b.id; });
             for (const auto& info : infos) {
                 sessionCursor_ = std::max(sessionCursor_.value_or(info.updatedMs), info.updatedMs);
+                if (!claim(info.id)) continue;
                 Tracked tracked;
                 tracked.info = info;
                 if (info.updatedMs < threshold) {
@@ -404,7 +406,7 @@ Update Source::refresh() {
                 tracked.info = info;
                 if (!tracked.rows.empty()) update.agents[agentId(info.id)] = replayTracked(tracked);
                 if (moved) advanced.push_back(info.id);
-            } else {
+            } else if (claim(info.id)) {
                 Tracked tracked;
                 tracked.info = info;
                 sessions_[info.id] = std::move(tracked);
@@ -461,6 +463,7 @@ Update Source::rediscover(std::int64_t nowMs, std::int64_t todayStartMs) {
             continue;
         }
         release(it->second);
+        if (claims_) claims_->release(it->first, owner_);
         const auto agent = agentId(it->first);
         update.agents.erase(agent);
         update.removed.push_back(agent);
@@ -501,6 +504,7 @@ Update Source::drop() {
     sessions_.clear();
     rowSessions_.clear();
     watchedRows_.clear();
+    if (claims_) claims_->releaseAll(owner_);
     return update;
 }
 

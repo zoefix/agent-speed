@@ -1,4 +1,5 @@
 using AgentSpeed.Presentation.Localization;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Boards;
 using AgentSpeed.Presentation.Settings.Orbs;
@@ -131,7 +132,7 @@ public static class QuickMenuModel
         Submenu(localizer["settings.orb"], orbs.Select(orb =>
         {
             var shown = settings.ShowOrbs && orb.Visible;
-            return (MenuEntry)(Submenu(OrbNaming.DisplayName(orb, localizer),
+            return (MenuEntry)(Submenu(OrbNaming.DisplayName(orb, localizer, RemoteHostStates.Choices(settings.RemoteHosts, localizer)),
             [
                 Toggle(localizer["orbs.visible"], shown, new MenuAction.SetOrbVisible(orb.Id, !shown)),
                 Toggle(localizer["menu.clickThrough"], orb.ClickThrough, new MenuAction.SetOrbClickThrough(orb.Id, !orb.ClickThrough)),

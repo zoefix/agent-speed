@@ -108,6 +108,52 @@
             </DockPanel>
         </DataTemplate>
 
+        <!-- The closed source picker: as the list, or only its dot once the toolbar is at its narrowest with the host picker. -->
+        <DataTemplate x:Key="SourceOptionBoxTemplate" DataType="{x:Type history:SourceOption}">
+            <DockPanel LastChildFill="True" AutomationProperties.Name="{Binding AccessibleName}" ToolTip="{Binding AccessibleName}">
+                <history:SourceDot DockPanel.Dock="Left" Width="10" Height="10" VerticalAlignment="Center" Colors="{Binding Colors}" />
+                <Border x:Name="TagChip" DockPanel.Dock="Right" Margin="8,0,0,0" Padding="6,0,6,1" CornerRadius="8" VerticalAlignment="Center"
+                        Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                        BorderBrush="{DynamicResource ControlStrokeColorDefaultBrush}" BorderThickness="1"
+                        Visibility="{Binding HasTag, Converter={StaticResource Visible}}">
+                    <TextBlock Text="{Binding Tag}" FontSize="11" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Border>
+                <TextBlock x:Name="NameText" Text="{Binding Name}" Margin="9,0,0,0" VerticalAlignment="Center" TextTrimming="CharacterEllipsis" />
+            </DockPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Compact}" Value="True">
+                    <Setter TargetName="NameText" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="TagChip" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <history:PickerTemplateSelector x:Key="SourceOptionTemplates" ItemTemplate="{StaticResource SourceOptionTemplate}"
+                                        BoxTemplate="{StaticResource SourceOptionBoxTemplate}" />
+
+        <!-- The host picker (DESIGN 13): a monochrome symbol and the host; a long name is cut in the middle, and the closed
+             picker keeps only the symbol at the narrowest toolbar (the tooltip keeps the name). -->
+        <DataTemplate x:Key="HostOptionTemplate" DataType="{x:Type history:HostOption}">
+            <DockPanel LastChildFill="True" AutomationProperties.Name="{Binding Name}">
+                <controls:SymbolGlyph DockPanel.Dock="Left" Style="{StaticResource SymbolIcon}" Text="{Binding Glyph}" FontSize="14" Width="16"
+                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <history:MiddleTrimmedText Text="{Binding Name}" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </DockPanel>
+        </DataTemplate>
+        <DataTemplate x:Key="HostOptionBoxTemplate" DataType="{x:Type history:HostOption}">
+            <DockPanel LastChildFill="True" AutomationProperties.Name="{Binding Name}" ToolTip="{Binding Name}">
+                <controls:SymbolGlyph DockPanel.Dock="Left" Style="{StaticResource SymbolIcon}" Text="{Binding Glyph}" FontSize="14" Width="16"
+                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <history:MiddleTrimmedText x:Name="NameText" Text="{Binding Name}" Margin="9,0,0,0" VerticalAlignment="Center" />
+            </DockPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding Compact}" Value="True">
+                    <Setter TargetName="NameText" Property="Visibility" Value="Collapsed" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+        <history:PickerTemplateSelector x:Key="HostOptionTemplates" ItemTemplate="{StaticResource HostOptionTemplate}"
+                                        BoxTemplate="{StaticResource HostOptionBoxTemplate}" />
+
         <!-- The compact include-subscriptions toggle: an icon chip, raised while on; the label is its tooltip and name. -->
         <Style x:Key="IconToggle" TargetType="ToggleButton">
             <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
@@ -484,7 +530,13 @@
                 <ComboBox x:Name="SourcePicker" MinWidth="{x:Static layout:HistoryToolbar.PickerMinWidth}"
                           MaxWidth="{x:Static layout:HistoryToolbar.PickerMaxWidth}" VerticalAlignment="Center"
                           ItemsSource="{Binding SourceOptions}" SelectedItem="{Binding SelectedSource, Mode=TwoWay}"
-                          ItemTemplate="{StaticResource SourceOptionTemplate}" AutomationProperties.Name="{loc:Loc dashboard.sources}" />
+                          ItemTemplateSelector="{StaticResource SourceOptionTemplates}" AutomationProperties.Name="{loc:Loc dashboard.sources}" />
+                <!-- Hosts (DESIGN 13): only while any host history exists; combines with the source filter. -->
+                <ComboBox x:Name="HostPicker" Margin="8,0,0,0" Width="{x:Static layout:HistoryToolbar.HostPickerMinWidth}" VerticalAlignment="Center"
+                          ItemsSource="{Binding HostOptions}" SelectedItem="{Binding SelectedHostOption, Mode=TwoWay}"
+                          ItemTemplateSelector="{StaticResource HostOptionTemplates}" AutomationProperties.Name="{loc:Loc remote.hosts}"
+                          AutomationProperties.HelpText="{Binding SelectedHostOption.Name}"
+                          Visibility="{Binding ShowsHostPicker, Converter={StaticResource Visible}}" />
                 <!-- Shown while a source is marked as a subscription (DESIGN 9); an icon toggle once the toolbar narrows. -->
                 <Grid x:Name="SubscriptionsGroup" Margin="{x:Static history:HistoryWindow.SubscriptionsMargin}" VerticalAlignment="Center"
                       Visibility="{Binding OffersSubscriptions, Converter={StaticResource Visible}}">

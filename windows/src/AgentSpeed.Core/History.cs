@@ -1,5 +1,7 @@
 using System.Collections.ObjectModel;
+using AgentSpeed.Core.History;
 using AgentSpeed.Core.Perf;
+using AgentSpeed.Core.Remote;
 using AgentSpeed.Core.Unpriced;
 
 namespace AgentSpeed.Core;
@@ -16,7 +18,7 @@ public sealed record ModelUsage(string Model, long Requests, long Output, long M
     public double? AverageSpeed => MeasuredMs > 0 ? MeasuredOutput / (MeasuredMs / 1000.0) : null;
 }
 
-/// <summary>One source's aggregates for one local calendar day (METRICS 8).</summary>
+/// <summary>One source's aggregates for one local calendar day (METRICS 8) on one host (REMOTE 8.3).</summary>
 /// <param name="Day">Local calendar date, <c>YYYY-MM-DD</c>.</param>
 /// <param name="Peak">Only for days observed live.</param>
 public sealed record DailyUsage(
@@ -40,6 +42,15 @@ public sealed record DailyUsage(
 
     /// <summary>The day's unpriced facts after <i>Reading</i> (METRICS 9.10), in the fact order.</summary>
     public UnpricedReading Unpriced { get; init; } = UnpricedReading.None;
+
+    /// <summary><see cref="RemoteHost.LocalId"/> or the id of the remote host whose relay reported the row (REMOTE 2.2).</summary>
+    public string Host { get; init; } = RemoteHost.LocalId;
+
+    /// <summary>Analysed on this computer.</summary>
+    public bool IsLocal => Host == RemoteHost.LocalId;
+
+    /// <summary><c>day/source</c>, with <c>/host</c> for a remote host's row: unique among the published days.</summary>
+    public string Id => IsLocal ? $"{Day}/{SourceNames.Of(Source)}" : $"{Day}/{SourceNames.Of(Source)}/{Host}";
 
     /// <summary>Output tok/s over the day's measured responses.</summary>
     public double? AverageSpeed => MeasuredMs > 0 ? MeasuredOutput / (MeasuredMs / 1000.0) : null;
@@ -86,11 +97,23 @@ public sealed class HistoryHub
 
     public HistoryState State { get; private set; } = HistoryState.NotLoaded;
 
-    /// <summary>Every stored day of every source, sorted by day then source.</summary>
+    /// <summary>Every stored day of every source and host, sorted by day, source, then host (this computer first).</summary>
     public IReadOnlyList<DailyUsage> Days { get; private set; } = [];
 
-    /// <summary>The stored performance records of the enabled sources (METRICS 6.11), by day, source and model.</summary>
+    /// <summary>
+    /// The stored performance records of the enabled sources (METRICS 6.11), by day, source and model; with remote rows,
+    /// every host's records pooled per day, source and model (REMOTE 8.3).
+    /// </summary>
     public IReadOnlyList<PerfRecord> PerfRecords { get; private set; } = [];
+
+    /// <summary>The last name of every remote host with stored history, by id (REMOTE 8.3); hosts removed from the settings keep theirs.</summary>
+    public IReadOnlyDictionary<string, string> HostNames { get; private set; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
+    /// <summary>
+    /// Remote hosts whose last history batch exceeded the bounds and was discarded (<c>historyTooLarge</c>, REMOTE 8.3),
+    /// until a sync of theirs succeeds.
+    /// </summary>
+    public IReadOnlySet<string> RemoteTooLarge { get; private set; } = new HashSet<string>(StringComparer.Ordinal);
 
     public event EventHandler? Changed;
 
@@ -98,19 +121,23 @@ public sealed class HistoryHub
 
     public Action? ClearHandler { get; set; }
 
-    public void Publish(HistoryState state, IReadOnlyList<DailyUsage>? days = null) => Post(() =>
-    {
-        State = state;
-        if (days is not null)
+    /// <param name="hostNames">The remote hosts' names when they come with the days (<see cref="HostNames"/>).</param>
+    public void Publish(HistoryState state, IReadOnlyList<DailyUsage>? days = null, IReadOnlyDictionary<string, string>? hostNames = null) =>
+        Post(() =>
         {
-            Days = days;
-        }
+            State = state;
+            if (days is not null)
+            {
+                Days = days;
+            }
 
-        Changed?.Invoke(this, EventArgs.Empty);
-    });
+            SetHostNames(hostNames);
+            Changed?.Invoke(this, EventArgs.Empty);
+        });
 
     /// <summary>The days together with the performance records (METRICS 6.11).</summary>
-    public void Publish(HistoryState state, IReadOnlyList<DailyUsage> days, IReadOnlyList<PerfRecord> perfRecords)
+    public void Publish(HistoryState state, IReadOnlyList<DailyUsage> days, IReadOnlyList<PerfRecord> perfRecords,
+        IReadOnlyDictionary<string, string>? hostNames = null)
     {
         ArgumentNullException.ThrowIfNull(days);
         ArgumentNullException.ThrowIfNull(perfRecords);
@@ -119,6 +146,23 @@ public sealed class HistoryHub
             State = state;
             Days = days;
             PerfRecords = perfRecords;
+            SetHostNames(hostNames);
+            Changed?.Invoke(this, EventArgs.Empty);
+        });
+    }
+
+    /// <summary>The hosts that show <c>historyTooLarge</c> (REMOTE 8.3); <see cref="Changed"/> is raised only when they change.</summary>
+    public void PublishRemoteTooLarge(IReadOnlySet<string> hosts)
+    {
+        ArgumentNullException.ThrowIfNull(hosts);
+        Post(() =>
+        {
+            if (RemoteTooLarge.SetEquals(hosts))
+            {
+                return;
+            }
+
+            RemoteTooLarge = hosts;
             Changed?.Invoke(this, EventArgs.Empty);
         });
     }
@@ -134,6 +178,15 @@ public sealed class HistoryHub
     public void Refresh() => RefreshHandler?.Invoke();
 
     public void Clear() => ClearHandler?.Invoke();
+
+    private void SetHostNames(IReadOnlyDictionary<string, string>? names)
+    {
+        if (names is not null && (names.Count != HostNames.Count
+            || names.Any(n => !HostNames.TryGetValue(n.Key, out var known) || known != n.Value)))
+        {
+            HostNames = names;
+        }
+    }
 
     private void Post(Action action)
     {

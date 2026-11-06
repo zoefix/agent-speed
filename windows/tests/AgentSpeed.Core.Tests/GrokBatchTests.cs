@@ -78,11 +78,34 @@ public sealed class GrokBatchTests
         Assert.Equal(AgentPhase.Generating, parser.Phase);
         Feed(parser, sink, """{"timestamp":1001,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call","status":"in_progress"}}}""");
         Assert.Equal(AgentPhase.Tools, parser.Phase);
+        Assert.Null(parser.InFlightStartMs);
         Feed(parser, sink, """{"timestamp":1002,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call_update","status":"completed"}}}""");
         Assert.Equal(AgentPhase.Generating, parser.Phase);
-        Feed(parser, sink, """{"timestamp":1003,"method":"_x.ai/session/update","params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"no-model","usage":null}}}""");
+        Assert.Equal(1_002_000, parser.InFlightStartMs);
+        Feed(parser, sink, """{"timestamp":1003,"method":"session/update","params":{"update":{"sessionUpdate":"agent_thought_chunk"}}}""");
+        Assert.Equal(1_002_000, parser.InFlightStartMs);
+        Feed(parser, sink, """{"timestamp":1004,"method":"_x.ai/session/update","params":{"update":{"sessionUpdate":"turn_completed","prompt_id":"no-model","usage":null}}}""");
         Assert.Equal(AgentPhase.Idle, parser.Phase);
         Assert.Empty(sink.Latest);
+    }
+
+    [Fact]
+    public void AFailedToolHandsTheTurnBackAndACancelledTurnEndsIt()
+    {
+        using var temp = new TempDirectory();
+        var parser = Parser(temp);
+        var sink = new RecordingSink();
+        Feed(parser, sink, """{"timestamp":2000,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call","status":"pending"}}}""");
+        Assert.Equal(AgentPhase.Tools, parser.Phase);
+        Feed(parser, sink, """{"timestamp":2004,"method":"session/update","params":{"update":{"sessionUpdate":"tool_call_update","status":"failed"}}}""");
+        Assert.Equal(AgentPhase.Generating, parser.Phase);
+        Assert.Equal(2_004_000, parser.InFlightStartMs);
+        Feed(parser, sink, """{"timestamp":2010,"method":"_x.ai/session/update","params":{"update":{"sessionUpdate":"turn_cancelled"}}}""");
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+        Assert.Null(parser.InFlightStartMs);
+        Feed(parser, sink, """{"timestamp":2020,"method":"_x.ai/session/update","params":{"update":{"sessionUpdate":"response_started"}}}""");
+        Assert.Equal(AgentPhase.Generating, parser.Phase);
+        Assert.Equal(2_020_000, parser.InFlightStartMs);
     }
 
     [Fact]

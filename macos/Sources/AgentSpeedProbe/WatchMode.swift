@@ -1,19 +1,46 @@
 import AgentSpeedCore
+import CryptoKit
 import Foundation
 
-/// `--watch N`: runs the live monitor and prints one compact snapshot per second.
+/// `--watch N`: runs the live monitor and prints one compact snapshot per second; with `--remote` it also watches
+/// those SSH hosts (REMOTE) and prints their status and each agent's host, and with `--history` their synced days.
 @MainActor
 enum WatchMode {
-    static func run(configuration: MonitorConfiguration, seconds: Int) {
+    static func run(configuration: MonitorConfiguration, seconds: Int, remotes: [String] = [], history: Bool = false,
+                    historyStore: String? = nil) {
         let store = SpeedStore()
         let monitor = LiveMonitor(store: store, configuration: configuration)
+        var coordinator: RemoteCoordinator?
+        var remoteHistory: RemoteHistoryProbe?
+        if !remotes.isEmpty {
+            let remote = RemoteCoordinator(monitor: monitor)
+            remote.update(hosts: RemoteHostsDocument(hosts: remotes.map { RemoteHost(id: stableId($0), destination: $0) }),
+                          networkEnabled: true, priceTable: PriceBook.bundled.data)
+            coordinator = remote
+            if history {
+                remoteHistory = RemoteHistoryProbe(coordinator: remote, configuration: configuration, storePath: historyStore)
+            }
+        }
         monitor.start()
         let started = Date()
         for second in 1...seconds {
             RunLoop.main.run(until: started.addingTimeInterval(TimeInterval(second)))
-            FileHandle.standardOutput.write(Data((line(for: store.snapshot) + "\n").utf8))
+            var text = line(for: store.snapshot)
+            if let remoteHistory { text = String(text.dropLast()) + ",\"remoteHistory\":" + remoteHistory.summary + "}" }
+            FileHandle.standardOutput.write(Data((text + "\n").utf8))
         }
+        coordinator?.stop()
+        remoteHistory?.stop()
         monitor.stop()
+    }
+
+    /// The same host id for a destination in every run, so a kept history store recognises its host.
+    static func stableId(_ destination: String) -> String {
+        var bytes = Array(SHA256.hash(data: Data(destination.utf8)).prefix(16))
+        bytes[6] = bytes[6] & 0x0F | 0x50
+        bytes[8] = bytes[8] & 0x3F | 0x80
+        return UUID(uuid: (bytes[0], bytes[1], bytes[2], bytes[3], bytes[4], bytes[5], bytes[6], bytes[7], bytes[8],
+                           bytes[9], bytes[10], bytes[11], bytes[12], bytes[13], bytes[14], bytes[15])).uuidString
     }
 
     static func line(for snapshot: SpeedSnapshot) -> String {
@@ -35,6 +62,7 @@ enum WatchMode {
         let agents = snapshot.agents.map { agent -> String in
             var item = JSONLine()
             item.add("id", (agent.id as NSString).lastPathComponent)
+            if !snapshot.hosts.isEmpty { item.add("host", hostName(agent.host, in: snapshot)) }
             item.add("source", agent.source.rawValue)
             item.add("phase", agent.phase.rawValue)
             item.add("live", agent.live.output)
@@ -65,7 +93,25 @@ enum WatchMode {
         today.add("reasoning", snapshot.today.reasoning)
         line.add("today", raw: today.text)
         line.add("peak", raw: rate(snapshot.peakToday))
+        if !snapshot.hosts.isEmpty { line.add("hosts", raw: JSONLine.array(snapshot.hosts.map(host))) }
         return line.text
+    }
+
+    /// One host: its status, clock offset, live value, today's output and main sessions.
+    private static func host(_ host: HostStatus) -> String {
+        var item = JSONLine()
+        item.add("name", host.name)
+        item.add("status", host.remote?.status.code ?? (host.isLocal ? "local" : "unknown"))
+        if let offset = host.clockOffsetMs { item.add("clockOffsetMs", Int64?.some(offset)) }
+        item.add("live", host.live.output)
+        item.add("todayOutput", host.today.output)
+        item.add("todayRequests", host.today.requests)
+        item.add("sessions", host.sessions)
+        return item.text
+    }
+
+    private static func hostName(_ id: String, in snapshot: SpeedSnapshot) -> String {
+        snapshot.hosts.first { $0.id == id }?.name ?? id
     }
 
     private static func rate(_ rate: Rate) -> String {

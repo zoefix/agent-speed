@@ -51,6 +51,11 @@ internal static class Program
             return Boards.Harness.BoardWindowHarness.Run(boardWindow);
         }
 
+        if (Environment.GetEnvironmentVariable("AGENT_SPEED_BOARD_FADE") is { Length: > 0 } boardFade)
+        {
+            return Boards.Harness.BoardFadeHarness.Run(boardFade);
+        }
+
         using var instance = Acquire(launch);
         if (instance is null)
         {

@@ -1,4 +1,5 @@
 using AgentSpeed.Core;
+using AgentSpeed.Core.Locations;
 using AgentSpeed.Core.Reporting;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.History;
@@ -10,133 +11,70 @@ namespace AgentSpeed.Presentation.Tests;
 
 public sealed class HarnessSourceSettingsTests
 {
+    private static AppSettings WithFolder(AppSettings settings, LocationFolder folder, string path) =>
+        settings.WithLocations(settings.Locations.With(folder, [DataLocation.At(path)]));
+
+    private static IReadOnlyList<DataLocation> Only(string path) => [DataLocation.At(path)];
+
     [Fact]
     public void NewSourceFoldersAndTogglesRoundTripAndReachTheMonitorIndependently()
     {
-        var settings = AppSettings.Default with
-        {
-            ZCodeRoot = Path.Combine(Path.GetTempPath(), ".zcode", "cli", "db"),
-            KimiRoot = Path.Combine(Path.GetTempPath(), ".kimi-code", "sessions"),
-            GrokBuildRoot = Path.Combine(Path.GetTempPath(), ".grok", "sessions"),
-        };
+        var zcode = Path.Combine(Path.GetTempPath(), ".zcode", "cli", "db");
+        var kimi = Path.Combine(Path.GetTempPath(), ".kimi-code", "sessions");
+        var grok = Path.Combine(Path.GetTempPath(), ".grok", "sessions");
+        var settings = WithFolder(WithFolder(WithFolder(AppSettings.Default, LocationFolder.ZCode, zcode), LocationFolder.Kimi, kimi),
+            LocationFolder.GrokBuild, grok);
         settings = settings.WithSourceEnabled(SourceKind.Kimi, false);
         var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings));
-        Assert.Equal(settings.ZCodeRoot, back.ZCodeRoot);
-        Assert.Equal(settings.KimiRoot, back.KimiRoot);
-        Assert.Equal(settings.GrokBuildRoot, back.GrokBuildRoot);
+        Assert.Equal(settings.Locations, back.Locations);
         var config = back.ToMonitorConfiguration();
-        Assert.Equal(settings.ZCodeRoot, config.ZCodeRoot);
-        Assert.Equal(settings.KimiRoot, config.KimiRoot);
-        Assert.Equal(settings.GrokBuildRoot, config.GrokBuildRoot);
+        Assert.Equal(Only(zcode), config.ListOf(LocationFolder.ZCode));
+        Assert.Equal(Only(kimi), config.ListOf(LocationFolder.Kimi));
+        Assert.Equal(Only(grok), config.ListOf(LocationFolder.GrokBuild));
         Assert.DoesNotContain(SourceKind.Kimi, config.EnabledSources);
         Assert.Contains(SourceKind.ZCode, config.EnabledSources);
         Assert.Contains(SourceKind.GrokBuild, config.EnabledSources);
         Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), config);
     }
 
-    [Fact]
-    public void ThePiFolderAndToggleRoundTripAndReachTheMonitor()
+    [Theory]
+    [InlineData(SourceKind.Pi, "pi-sessions")]
+    [InlineData(SourceKind.OpenClaw, ".openclaw/agents/main/agent/openclaw-agent.sqlite")]
+    [InlineData(SourceKind.Hermes, "hermes-home")]
+    [InlineData(SourceKind.Droid, ".factory")]
+    [InlineData(SourceKind.Devin, "devin/cli")]
+    public void ALocationAndToggleRoundTripAndReachTheMonitor(SourceKind kind, string relative)
     {
-        var folder = Path.Combine(Path.GetTempPath(), "pi-sessions");
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.Pi, false) with { PiRoot = $"  {folder}  " };
+        var folder = LocationFolders.Of(kind);
+        var path = Path.Combine([Path.GetTempPath(), .. relative.Split('/')]);
+        var settings = WithFolder(AppSettings.Default.WithSourceEnabled(kind, false), folder, path);
         var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.Validated()));
 
-        Assert.Equal((false, folder), (back.PiEnabled, back.PiRoot));
+        Assert.False(back.IsSourceEnabled(kind));
+        Assert.Equal(Only(Path.TrimEndingDirectorySeparator(Path.GetFullPath(path))), back.Locations[folder]);
         var config = back.ToMonitorConfiguration();
-        Assert.Equal(folder, config.PiRoot);
-        Assert.DoesNotContain(SourceKind.Pi, config.EnabledSources);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { PiRoot = folder }).ToMonitorConfiguration());
-        Assert.Null((AppSettings.Default with { PiRoot = Path.Combine("relative", "sessions") }).Validated().PiRoot);
+        Assert.Equal(back.Locations[folder], config.ListOf(folder));
+        Assert.DoesNotContain(kind, config.EnabledSources);
+        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), WithFolder(AppSettings.Default, folder, path).ToMonitorConfiguration());
+        Assert.Equal(LocationLists.AutomaticOnly, WithFolder(AppSettings.Default, folder, Path.Combine("relative", "x")).Locations[folder]);
     }
 
-    [Fact]
-    public void OlderSettingsFilesKeepPiOnWithItsAutomaticRoots()
+    [Theory]
+    [InlineData(SourceKind.Pi, """{ "version": 1, "sources": { "codex": true, "omp": false, "grokBuild": true, "grokBuildRoot": null } }""")]
+    [InlineData(SourceKind.OpenClaw, """{ "version": 1, "sources": { "codex": true, "pi": false, "piRoot": null } }""")]
+    [InlineData(SourceKind.Hermes, """{ "version": 1, "sources": { "codex": true, "openclaw": false, "openclawRoot": null } }""")]
+    [InlineData(SourceKind.Droid, """{ "version": 1, "sources": { "codex": true, "hermes": false, "hermesRoot": null } }""")]
+    [InlineData(SourceKind.Devin, """{ "version": 1, "sources": { "codex": true, "droid": false, "droidRoot": null } }""")]
+    public void OlderSettingsFilesKeepANewSourceOnWithItsAutomaticRoots(SourceKind kind, string json)
     {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "omp": false, "grokBuild": true, "grokBuildRoot": null } }
-            """);
+        var s = SettingsSerializer.Deserialize(json);
 
-        Assert.True(s.PiEnabled);
-        Assert.Null(s.PiRoot);
+        Assert.True(s.IsSourceEnabled(kind));
+        Assert.Equal(LocationLists.AutomaticOnly, s.Locations[LocationFolders.Of(kind)]);
         var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.Pi, config.EnabledSources);
-        Assert.Null(config.PiRoot);
-    }
-
-    [Fact]
-    public void TheOpenClawFolderAndToggleRoundTripAndReachTheMonitor()
-    {
-        var database = Path.Combine(Path.GetTempPath(), ".openclaw", "agents", "main", "agent", "openclaw-agent.sqlite");
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.OpenClaw, false) with { OpenClawRoot = $"  {database}  " };
-        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.Validated()));
-
-        Assert.Equal((false, database), (back.OpenClawEnabled, back.OpenClawRoot));
-        var config = back.ToMonitorConfiguration();
-        Assert.Equal(database, config.OpenClawRoot);
-        Assert.DoesNotContain(SourceKind.OpenClaw, config.EnabledSources);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(),
-            (AppSettings.Default with { OpenClawRoot = database }).ToMonitorConfiguration());
-        Assert.Null((AppSettings.Default with { OpenClawRoot = Path.Combine("relative", ".openclaw") }).Validated().OpenClawRoot);
-    }
-
-    [Fact]
-    public void TheHermesFolderAndToggleRoundTripAndReachTheMonitor()
-    {
-        var home = Path.Combine(Path.GetTempPath(), "hermes-home");
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.Hermes, false) with { HermesRoot = $"  {home}  " };
-        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.Validated()));
-
-        Assert.Equal((false, home), (back.HermesEnabled, back.HermesRoot));
-        var config = back.ToMonitorConfiguration();
-        Assert.Equal(home, config.HermesRoot);
-        Assert.DoesNotContain(SourceKind.Hermes, config.EnabledSources);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { HermesRoot = home }).ToMonitorConfiguration());
-        Assert.Null((AppSettings.Default with { HermesRoot = Path.Combine("relative", "logs") }).Validated().HermesRoot);
-    }
-
-    [Fact]
-    public void OlderSettingsFilesKeepHermesOnWithItsAutomaticHome()
-    {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "openclaw": false, "openclawRoot": null } }
-            """);
-
-        Assert.True(s.HermesEnabled);
-        Assert.Null(s.HermesRoot);
-        var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.Hermes, config.EnabledSources);
-        Assert.Null(config.HermesRoot);
-    }
-
-    [Fact]
-    public void TheDroidFolderAndToggleRoundTripAndReachTheMonitor()
-    {
-        var factory = Path.Combine(Path.GetTempPath(), ".factory");
-        var settings = AppSettings.Default.WithSourceEnabled(SourceKind.Droid, false) with { DroidRoot = $"  {factory}  " };
-        var back = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.Validated()));
-
-        Assert.Equal((false, factory), (back.DroidEnabled, back.DroidRoot));
-        Assert.True(back.HermesEnabled);
-        var config = back.ToMonitorConfiguration();
-        Assert.Equal(factory, config.DroidRoot);
-        Assert.DoesNotContain(SourceKind.Droid, config.EnabledSources);
-        Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), (AppSettings.Default with { DroidRoot = factory }).ToMonitorConfiguration());
-        Assert.Null((AppSettings.Default with { DroidRoot = Path.Combine("relative", "sessions") }).Validated().DroidRoot);
-    }
-
-    [Fact]
-    public void OlderSettingsFilesKeepDroidOnWithItsAutomaticRoot()
-    {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "hermes": false, "hermesRoot": null } }
-            """);
-
-        Assert.True(s.DroidEnabled);
-        Assert.Null(s.DroidRoot);
-        var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.Droid, config.EnabledSources);
-        Assert.DoesNotContain(SourceKind.Hermes, config.EnabledSources);
-        Assert.Null(config.DroidRoot);
+        Assert.Contains(kind, config.EnabledSources);
+        Assert.Equal(LocationLists.AutomaticOnly, config.ListOf(LocationFolders.Of(kind)));
+        Assert.Null(s.StoredLocations);
     }
 
     [Fact]
@@ -155,20 +93,6 @@ public sealed class HarnessSourceSettingsTests
         Assert.Equal([".factory", "sessions"], LiveMonitor.DefaultDroidRoot.Split(Path.DirectorySeparatorChar)[^2..]);
     }
 
-    [Fact]
-    public void OlderSettingsFilesKeepOpenClawOnWithItsAutomaticRoots()
-    {
-        var s = SettingsSerializer.Deserialize("""
-            { "version": 1, "sources": { "codex": true, "pi": false, "piRoot": null } }
-            """);
-
-        Assert.True(s.OpenClawEnabled);
-        Assert.Null(s.OpenClawRoot);
-        var config = s.ToMonitorConfiguration();
-        Assert.Contains(SourceKind.OpenClaw, config.EnabledSources);
-        Assert.Null(config.OpenClawRoot);
-    }
-
     [Theory]
     [InlineData(SourceKind.ZCode, "zcode")]
     [InlineData(SourceKind.Kimi, "kimi")]
@@ -177,6 +101,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.OpenClaw, "openclaw")]
     [InlineData(SourceKind.Hermes, "hermes")]
     [InlineData(SourceKind.Droid, "droid")]
+    [InlineData(SourceKind.Devin, "devin")]
     public void EverySurfaceUsesTheSameStableSourceIdentifier(SourceKind kind, string id)
     {
         Assert.Equal(id, ReportBody.SourceId(kind));

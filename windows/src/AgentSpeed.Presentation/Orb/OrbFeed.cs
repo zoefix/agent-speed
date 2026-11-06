@@ -28,6 +28,12 @@ public sealed class OrbFeed
     /// <summary>The tracked sources; null for all sources.</summary>
     public SourceSet? Sources { get; private set; }
 
+    /// <summary>The tracked hosts (DESIGN 13); null for every host.</summary>
+    public IReadOnlySet<string>? Hosts { get; private set; }
+
+    /// <summary>Every source on every host: the engine's own values and its <c>NewPeak</c>.</summary>
+    public bool TracksEverything => Sources is null && Hosts is null;
+
     public SpeedMetric Metric { get; private set; } = SpeedMetric.Output;
 
     public double Redline { get; private set; } = HeatMath.DefaultRedline;
@@ -58,7 +64,7 @@ public sealed class OrbFeed
     public bool IsUnavailable => Reading.State != SubsetState.Available;
 
     /// <summary>Today's peak output of the orb's sources (METRICS 6.8 <c>peakToday_A</c>).</summary>
-    public double PeakToday => Sources is null ? Reading.MeasuredPeakOutput ?? 0 : _peak.PeakTodayOutput;
+    public double PeakToday => TracksEverything ? Reading.MeasuredPeakOutput ?? 0 : _peak.PeakTodayOutput;
 
     public double? NextDeadline => (_tier.NextDeadline, _title.NextDeadline) switch
     {
@@ -67,13 +73,14 @@ public sealed class OrbFeed
     };
 
     /// <summary>
-    /// Sets the sources, metric and redline. A change of the source set while running restarts the orb's peak and
-    /// silences its celebration for 60 s (METRICS 6.8); the first configuration (app start) does not.
+    /// Sets the sources, hosts, metric and redline. A change of the source or host set while running restarts the orb's peak
+    /// and silences its celebration for 60 s (METRICS 6.8); the first configuration (app start) does not.
     /// </summary>
-    public void Configure(SourceSet? sources, SpeedMetric metric, double redline, long nowMs, bool created = false)
+    public void Configure(SourceSet? sources, SpeedMetric metric, double redline, long nowMs, bool created = false, IReadOnlySet<string>? hosts = null)
     {
-        var changed = _configured && sources != Sources;
+        var changed = _configured && (sources != Sources || !SameHosts(hosts, Hosts));
         Sources = sources;
+        Hosts = hosts;
         Metric = metric;
         Redline = HeatMath.ClampRedline(metric, redline);
         if (changed || created)
@@ -88,16 +95,16 @@ public sealed class OrbFeed
     public bool Update(SpeedSnapshot snapshot, double nowSeconds)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
-        Reading = OrbSubset.Reading(snapshot, Sources);
+        Reading = OrbSubset.Reading(snapshot, Sources, Hosts);
         Money = Unit == OrbUnit.Cost && Cost is { } cost
-            ? cost.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, cost.Billable), Reading.Agents.Count)
+            ? cost.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, cost.Billable), Reading.Agents.Count)
             : null;
         var value = Reading.Live.ValueFor(Metric);
         Value = double.IsFinite(value) && value > 0 ? value : 0;
         _tier.Update(Value, Redline, nowSeconds);
         _title.Update(Value, Redline, nowSeconds);
 
-        if (Sources is null || snapshot.Timestamp == DateTimeOffset.MinValue)
+        if (TracksEverything || snapshot.Timestamp == DateTimeOffset.MinValue)
         {
             return false;
         }
@@ -128,5 +135,11 @@ public sealed class OrbFeed
     }
 
     /// <summary>Whether an engine event belongs to this orb (completions of its sources; the all-sources new peak).</summary>
-    public bool Accepts(SpeedEvent speedEvent) => OrbSubset.Accepts(speedEvent, Sources);
+    public bool Accepts(SpeedEvent speedEvent) => OrbSubset.Accepts(speedEvent, Sources, Hosts);
+
+    /// <summary>The subset whose measured peak the monitor must report for this orb (<c>LiveMonitor.SetSubsets</c>); null for everything.</summary>
+    public SubsetKey? SubsetKey => TracksEverything ? null : new SubsetKey(Sources ?? SourceSet.Everything, Hosts);
+
+    private static bool SameHosts(IReadOnlySet<string>? a, IReadOnlySet<string>? b) =>
+        a is null ? b is null : b is not null && a.SetEquals(b);
 }

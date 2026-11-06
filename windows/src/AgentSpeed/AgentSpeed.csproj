@@ -87,4 +87,12 @@
     </ItemGroup>
     <Message Importance="high" Text="Embedding traffic helper %(_TrafficHelperHashed.Rid): %(_TrafficHelperHashed.Sha256)" />
   </Target>
+
+  <!-- REMOTE 3.1: both Linux relays are embedded with their SHA-256 (RemoteRelay.targets); publishing fails without them. -->
+  <Import Project="RemoteRelay.targets" />
+
+  <Target Name="RequireRelay" BeforeTargets="PrepareForPublish" DependsOnTargets="EmbedRemoteRelays">
+    <Error Condition="'@(_MissingRelay)' != ''"
+        Text="Cannot publish Agent Speed without the remote relays (REMOTE 3.1). Missing: @(_MissingRelay->'%(FullPath)', ', '). Build them with linux/relay/build-static.sh x86_64|aarch64, or set RelayDir to the folder that holds agent-speed-relay-linux-x86_64 and agent-speed-relay-linux-aarch64." />
+  </Target>
 </Project>

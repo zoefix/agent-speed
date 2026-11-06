@@ -17,6 +17,8 @@ struct DayLedger: Sendable {
     private(set) var costByModel: [SourceKind: [String: CostTally]] = [:]
     /// Requests of today's responses without a known cost, per source and fact (METRICS 9.10 *Live*).
     private(set) var unpricedFacts: [SourceKind: [UnpricedFactKey: Int]] = [:]
+    /// Today's totals and cost per (host, source) cell (DESIGN 13).
+    private(set) var cells: [HostSource: CellDay] = [:]
     private var validOutput = 0
     private var validDurationMs: Int64 = 0
     private var outputBuckets: [Double]
@@ -57,6 +59,9 @@ struct DayLedger: Sendable {
         totals.add(record.usage, sign: sign, requestCount: record.requestCount)
         bySource[record.source, default: TokenTotals()].add(record.usage, sign: sign, requestCount: record.requestCount)
         if !record.isFinal { unfinalized += sign * record.requestCount }
+        let cell = HostSource(host: record.host, source: record.source)
+        cells[cell, default: CellDay()].apply(record, sign: sign)
+        if cells[cell]?.isEmpty == true { cells[cell] = nil }
         cost.add(record.costMicroUsd, sign: sign, requestCount: record.requestCount)
         costBySource[record.source, default: CostTally()].add(record.costMicroUsd, sign: sign, requestCount: record.requestCount)
         let model = record.model ?? ""
@@ -83,7 +88,7 @@ struct DayLedger: Sendable {
             }
         }
         cachedPeak = nil
-        sourceSeconds.apply(timed, source: record.source, sign: sign)
+        sourceSeconds.apply(timed, cell: cell, sign: sign)
     }
 
     /// Maximum 3-bucket trailing average of the measured one-second buckets.
@@ -109,9 +114,14 @@ struct DayLedger: Sendable {
         return peak
     }
 
-    /// Maximum 3-bucket trailing average of today's measured output summed over `set` (METRICS 6.8).
+    /// Maximum 3-bucket trailing average of today's measured output summed over the cells of `key` (METRICS 6.8).
+    mutating func measuredPeakOutput(for key: SubsetKey) -> Double {
+        sourceSeconds.measuredPeak(for: key)
+    }
+
+    /// The same for `set` on every host.
     mutating func measuredPeakOutput(for set: SourceSet) -> Double {
-        sourceSeconds.measuredPeak(for: set)
+        sourceSeconds.measuredPeak(for: SubsetKey(set))
     }
 
     /// Sources that have per-second buckets today.

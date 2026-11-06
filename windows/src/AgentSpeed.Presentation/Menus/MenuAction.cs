@@ -46,6 +46,12 @@ public abstract record MenuAction
 
     public sealed record ToggleOrbSource(string OrbId, SourceKind Source) : MenuAction;
 
+    /// <summary>The orb tracks every host again (DESIGN 13).</summary>
+    public sealed record SetOrbAllHosts(string OrbId) : MenuAction;
+
+    /// <summary>Checks or unchecks one host of the orb (<c>local</c> or a remote host id; never the last one).</summary>
+    public sealed record ToggleOrbHost(string OrbId, string HostId) : MenuAction;
+
     public sealed record SetOrbSize(string OrbId, double Size) : MenuAction;
 
     public sealed record SetOrbAlwaysOnTop(string OrbId, bool On) : MenuAction;
@@ -78,6 +84,10 @@ public abstract record MenuAction
     public sealed record SetBoardAllSources(string BoardId) : MenuAction;
 
     public sealed record ToggleBoardSource(string BoardId, SourceKind Source) : MenuAction;
+
+    public sealed record SetBoardAllHosts(string BoardId) : MenuAction;
+
+    public sealed record ToggleBoardHost(string BoardId, string HostId) : MenuAction;
 
     public sealed record SetBoardSize(string BoardId, BoardSize Size) : MenuAction;
 

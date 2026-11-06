@@ -70,6 +70,8 @@ internal sealed unsafe class OrbHostWindow : IDisposable
 
     public nint Handle { get; private set; }
 
+    public static bool IsOrbWindow(nint hwnd) => Windows.ContainsKey(hwnd);
+
     public bool IsVisible => Handle != 0 && User32.IsWindowVisible(Handle);
 
     public void Show()

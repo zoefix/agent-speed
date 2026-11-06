@@ -1,5 +1,6 @@
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Orb;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Orbs;
 using static AgentSpeed.Presentation.Menus.MenuParts;
@@ -18,7 +19,9 @@ public static class OrbMenuModel
     /// <summary>The menu of <paramref name="orbId"/>; null when no such orb exists.</summary>
     /// <param name="sources">Source availability (split, the sources' secondary text and faded dots).</param>
     /// <param name="sourceTraffic">Per-process traffic can be measured now (else the sources choice says it is unavailable).</param>
-    public static MenuLevel? Build(string orbId, AppSettings settings, SourceAvailability sources, Localizer localizer, bool sourceTraffic = true)
+    /// <param name="hosts">Each host's dot and word for the Hosts submenu (DESIGN 13), by id.</param>
+    public static MenuLevel? Build(string orbId, AppSettings settings, SourceAvailability sources, Localizer localizer, bool sourceTraffic = true,
+        IReadOnlyDictionary<string, MenuHostState>? hosts = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -38,12 +41,16 @@ public static class OrbMenuModel
             ? new MenuRow(localizer["menu.hideOrb"]) { Action = new MenuAction.SetShowOrbs(false) }
             : new MenuRow(localizer["menu.orb.hide"]) { Action = new MenuAction.SetOrbVisible(id, false) };
 
+        var hostsMenu = HostsMenu(orb.Hosts, new MenuAction.SetOrbAllHosts(id), host => new MenuAction.ToggleOrbHost(id, host), settings, hosts,
+            localizer);
+        var name = OrbNaming.DisplayName(orb, localizer, RemoteHostStates.Choices(settings.RemoteHosts, localizer));
         return new MenuLevel(
         [
-            new MenuRow(OrbNaming.DisplayName(orb, localizer)) { Icon = DotsOf(orb, sources), IsHeader = true, IsEnabled = false },
+            new MenuRow(name) { Icon = DotsOf(orb, sources), IsHeader = true, IsEnabled = false },
             MenuSeparator.Instance,
             StyleMenu(orb, localizer),
             SourcesMenu(orb, sources, localizer),
+            .. hostsMenu is null ? Array.Empty<MenuEntry>() : [hostsMenu],
             UnitMenu(orb, settings, localizer),
             TrafficMenu(orb, settings, localizer, sourceTraffic),
             ShowNameToggle(orb, settings, localizer),

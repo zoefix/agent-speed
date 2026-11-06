@@ -121,10 +121,14 @@ struct EditingTests {
         #expect(OrbEditing.merge(Self.document(1), keeping: "o0") == nil)
     }
 
-    @Test func setStyleClampsTheSize() {
+    @Test func setStyleKeepsTheSize() {
         let doc = OrbsDocument(orbs: [OrbConfig(id: "a", style: .minimal, size: 64)])
-        #expect(OrbEditing.setStyle(.needle, of: "a", in: doc).orbs[0].size == 96)
-        #expect(OrbEditing.setSize(30, of: "a", in: doc).orbs[0].size == 64)
+        for style in OrbStyleKind.allCases {
+            let orb = OrbEditing.setStyle(style, of: "a", in: doc).orbs[0]
+            #expect(orb.style == style)
+            #expect(orb.size == 64)
+        }
+        #expect(OrbEditing.setSize(30, of: "a", in: OrbEditing.setStyle(.needle, of: "a", in: doc)).orbs[0].size == 64)
         #expect(OrbEditing.setSize(300, of: "a", in: doc).orbs[0].size == 240)
     }
 

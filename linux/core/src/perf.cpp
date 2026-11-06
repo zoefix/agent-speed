@@ -101,7 +101,8 @@ std::string_view formId(Form form) {
 }
 
 bool recordsLatency(SourceKind source) {
-    return source == SourceKind::Codex || source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop;
+    return source == SourceKind::Codex || source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop ||
+           source == SourceKind::Devin;
 }
 bool recordsReasoning(SourceKind source) { return source != SourceKind::Deepseek; }
 bool recordsCache(SourceKind source) { return source != SourceKind::Hermes; }

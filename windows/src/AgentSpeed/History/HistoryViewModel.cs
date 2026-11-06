@@ -411,7 +411,7 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
 
     /// <summary>The rows as they are shown, as CSV bytes for Excel, with a suggested file name.</summary>
     public (string FileName, byte[] Bytes) ExportCsv() =>
-        (HistoryCsv.FileName(Range, _source), HistoryCsv.Encode(HistoryCsv.Build(Rows, _source, Money, ShowsTraffic)));
+        (HistoryCsv.FileName(Range, _source), HistoryCsv.Encode(HistoryCsv.Build(Rows, _source, Money, ShowsTraffic, _hosts.CsvHost)));
 
     public (string FileName, byte[] Bytes) ExportModesCsv() =>
         (ExecutionModeCsv.FileName(Range, _source), HistoryCsv.Encode(ExecutionModeCsv.Build(Rows)));
@@ -527,7 +527,8 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
     {
         _lastRecompute = Environment.TickCount64;
         Today = DateOnly.FromDateTime(DateTime.Now);
-        var usage = _hub.Days;
+        var all = _hub.Days;
+        var usage = SelectHost(all);
         var options = new HistoryCostOptions(_cost.Settings.Subscriptions, _includeSubscriptions, _metric);
         var excluded = options.Excluded(_source);
         // Recorded agent traffic is history too (DESIGN 10): its days count for the bounds, the rows and the picker.
@@ -545,7 +546,7 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
             : HistoryBars.From(Days, Range, _source, _metric, Money);
         Rows = HistoryTable.Sort(Days, _sortColumn, _sortDescending);
         IsEmpty = Days.Count == 0;
-        Subtitle = HistoryText.RangeSubtitle(Range, Today, _loc);
+        Subtitle = WithHost(HistoryText.RangeSubtitle(Range, Today, _loc));
         IsSingleDay = Range.IsSingleDay;
         IsInProgress = Range.IsSingleDay && Range.Start == Today;
         OffersSubscriptions = options.OffersSubscriptionToggle;
@@ -573,7 +574,8 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
         Legend = Bars.Order.Count == 0 && _source is { } empty
             ? [new LegendItem(_loc[DisplayText.SourceKey(empty)], HeatPalette.SourceColor(empty).ToBrush())]
             : Bars.Order.Select(s => new LegendItem(_loc[DisplayText.SourceKey(s)], HeatPalette.SourceColor(s).ToBrush())).ToArray();
-        UpdateSources(usage);
+        UpdateSources(all);
+        UpdateHostOptions();
         UpdateState();
         UpdatePerformance();
         UpdateLiveDayTimer();
@@ -683,9 +685,9 @@ internal sealed partial class HistoryViewModel : ObservableObject, IDisposable
         _ => a ?? b,
     };
 
-    /// <summary>A stored peak is the day's overall peak, so a single source never shows it (METRICS 8).</summary>
+    /// <summary>A stored peak is the day's overall peak, so a single source or host never shows it (METRICS 8, DESIGN 13).</summary>
     private IReadOnlyList<DaySummary> WithoutSourcePeaks(IReadOnlyList<DaySummary> days) =>
-        _source is null ? days : days.Select(d => d.Peak is null ? d : d with { Peak = null }).ToArray();
+        _source is null && _hosts.ShowsPeak ? days : days.Select(d => d.Peak is null ? d : d with { Peak = null }).ToArray();
 
     private void UpdateSources(IReadOnlyList<DailyUsage> usage)
     {

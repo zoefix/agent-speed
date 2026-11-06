@@ -28,7 +28,7 @@ final class OpenClawSource {
         }
     }
 
-    /// Window ids for deduplication count down from here; transcript files count up from 0.
+    /// Window ids for deduplication count up from here, below the database sources' ids; transcript files count up from 0.
     static let firstFileID: FileID = .min
 
     private struct TrackedWindow {
@@ -371,7 +371,8 @@ final class OpenClawSource {
     private func fileID(_ agentId: String) -> FileID {
         if let id = fileIDs[agentId] { return id }
         let id = nextFileID
-        nextFileID = nextFileID == -3 ? Self.firstFileID : nextFileID &+ 1
+        // The ids just below 0 belong to the OpenCode and ZCode databases.
+        nextFileID = nextFileID == TranscriptSession.lowestDatabaseFileID - 1 ? Self.firstFileID : nextFileID &+ 1
         fileIDs[agentId] = id
         return id
     }

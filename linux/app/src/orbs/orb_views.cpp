@@ -3,6 +3,7 @@
 #include <QVariantList>
 #include <algorithm>
 
+#include "agentspeed/host_subset.hpp"
 #include "agentspeed/money.hpp"
 #include "agentspeed/traffic.hpp"
 #include "format.hpp"
@@ -46,6 +47,7 @@ static void addCost(QVariantMap& map, const agentspeed::Snapshot& snap, const st
     const auto today = agentspeed::money::format(agentspeed::money::amount(todayCost, rate), currency, language, Form::Amount);
     map.insert(QStringLiteral("costNumber"), QString::fromStdString(live.number));
     map.insert(QStringLiteral("costSymbol"), QString::fromStdString(live.symbol));
+    map.insert(QStringLiteral("costInline"), QString::fromStdString(agentspeed::money::withSymbol(live.symbol, live.number)));
     map.insert(QStringLiteral("costPartial"), liveCost > 0 && knownShare < 0.995);
     map.insert(QStringLiteral("costUnknown"), liveOutput > 0 && knownShare <= 0);
     map.insert(QStringLiteral("costSubscriptionOnly"), anyEnabled && !anyBillable);
@@ -66,10 +68,11 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
         map.insert(QStringLiteral("scoreSets"), scoreSet.isValid() ? QVariantList{scoreSet} : QVariantList{});
         State state = states_.contains(orb.id) ? states_[orb.id] : State{};
         const bool created = !states_.contains(orb.id);
-        const bool edited = !created && state.sources != orb.sources;
+        const bool edited = !created && (state.sources != orb.sources || state.hosts != orb.hosts);
         state.sources = orb.sources;
+        state.hosts = orb.hosts;
 
-        if (!orb.sources) {
+        if (!orb.sources && !orb.hosts) {
             // An all-sources orb gets exactly the all-sources values.
             for (const char* key : {"liveOutput", "liveText", "agents", "completions", "todayOutputText", "traffic", "newPeak"}) {
                 map.insert(QString::fromLatin1(key), all.value(QString::fromLatin1(key)));
@@ -85,18 +88,32 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
             continue;
         }
 
+        // DESIGN 13: an orb of some hosts reads their (host, source) cells; with every selected host offline its
+        // sources are unavailable for that reason.
+        const agentspeed::Snapshot restrictedSnap = orb.hosts ? agentspeed::hosts::restricted(snap, *orb.hosts) : agentspeed::Snapshot{};
+        const auto& view = orb.hosts ? restrictedSnap : snap;
+        const bool offline = orb.hosts && agentspeed::hosts::isOffline(snap, *orb.hosts);
+        const auto inSet = [&](SourceKind kind) { return !orb.sources || contains(*orb.sources, kind); };
+        const auto onHost = [&](const QString& host) {
+            return !orb.hosts || std::find(orb.hosts->begin(), orb.hosts->end(), host.toStdString()) != orb.hosts->end();
+        };
+
         // Live value, today's output and availability over the enabled sources of the set.
-        const auto& set = *orb.sources;
         double live = 0, liveOutput = 0;
         std::int64_t today = 0;
         bool anyAvailable = false, anyEnabled = false;
         QVariantList sourceStates;
-        for (const auto& row : snap.sources) {
-            if (!contains(set, row.source)) continue;
+        QStringList keys;
+        for (const auto& row : view.sources) {
+            if (!inSet(row.source)) continue;
+            keys.push_back(keyOf(row.source));
             const bool detected = row.available || row.todayOutput > 0;
             QVariantMap s;
             s.insert(QStringLiteral("source"), keyOf(row.source));
-            s.insert(QStringLiteral("status"), !row.enabled ? QStringLiteral("disabled") : !detected ? QStringLiteral("notFound") : QString());
+            s.insert(QStringLiteral("status"), !row.enabled ? QStringLiteral("disabled")
+                                               : offline    ? QStringLiteral("hostsOffline")
+                                               : !detected  ? QStringLiteral("notFound")
+                                                            : QString());
             sourceStates.push_back(s);
             anyEnabled = anyEnabled || row.enabled;
             if (!row.enabled) continue;
@@ -105,23 +122,30 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
             liveOutput += row.liveOutput;
             today += row.todayOutput;
         }
-        const bool unavailable = !anyAvailable;
-        map.insert(QStringLiteral("unavailable"), !unavailable ? QString() : !anyEnabled ? QStringLiteral("disabled") : QStringLiteral("notFound"));
+        const bool unavailable = offline || !anyAvailable;
+        map.insert(QStringLiteral("unavailable"), !unavailable ? QString()
+                                                  : offline    ? QStringLiteral("hostsOffline")
+                                                  : !anyEnabled ? QStringLiteral("disabled")
+                                                                : QStringLiteral("notFound"));
         map.insert(QStringLiteral("sourceStates"), sourceStates);
         map.insert(QStringLiteral("liveOutput"), live);
         map.insert(QStringLiteral("liveText"), unavailable ? QStringLiteral("–") : format::speed(live));
         map.insert(QStringLiteral("todayOutputText"), format::tokens(today));
 
-        QStringList keys;
-        for (const auto kind : set) keys.push_back(keyOf(kind));
         QVariantList agents;
         for (const auto& item : all.value(QStringLiteral("agents")).toList()) {
-            if (keys.contains(item.toMap().value(QStringLiteral("source")).toString())) agents.push_back(item);
+            const auto agent = item.toMap();
+            if (keys.contains(agent.value(QStringLiteral("source")).toString()) && onHost(agent.value(QStringLiteral("host")).toString())) {
+                agents.push_back(item);
+            }
         }
         map.insert(QStringLiteral("agents"), agents);
         QVariantList events;
         for (const auto& item : all.value(QStringLiteral("completions")).toList()) {
-            if (keys.contains(item.toMap().value(QStringLiteral("source")).toString())) events.push_back(item);
+            const auto event = item.toMap();
+            if (keys.contains(event.value(QStringLiteral("source")).toString()) && onHost(event.value(QStringLiteral("host")).toString())) {
+                events.push_back(item);
+            }
         }
         map.insert(QStringLiteral("completions"), events);
 
@@ -141,14 +165,14 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
         state.peak = std::max({state.peak, enginePeak, liveOutput});
         map.insert(QStringLiteral("newPeak"), newPeak);
 
-        // The traffic of the orb's own sources (DESIGN 10, sources mode); this computer's stays as it is.
+        // The traffic of the orb's own sources (DESIGN 10, sources mode); this computer's stays as it is. A host's agents
+        // have no traffic (REMOTE 7).
         QVariantMap traffic = all.value(QStringLiteral("traffic")).toMap();
         double rx = 0, tx = 0;
         bool known = false;
-        for (const auto kind : set) {
-            const auto it = snap.traffic.sources.find(kind);
-            if (it == snap.traffic.sources.end()) continue;
-            const auto& r = c.trafficIncludeTools ? it->second.withTools : it->second.selfOnly;
+        for (const auto& [kind, rates] : snap.traffic.sources) {
+            if (!inSet(kind) || !onHost(QString::fromUtf8(agentspeed::hosts::kLocal))) continue;
+            const auto& r = c.trafficIncludeTools ? rates.withTools : rates.selfOnly;
             if (!r) continue;
             rx += r->rx;
             tx += r->tx;
@@ -160,7 +184,7 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
         traffic.insert(QStringLiteral("agentsRxText"), QString::fromStdString(agentspeed::traffic::formatRate(rx, c.trafficBits)));
         traffic.insert(QStringLiteral("agentsTxText"), QString::fromStdString(agentspeed::traffic::formatRate(tx, c.trafficBits)));
         map.insert(QStringLiteral("traffic"), traffic);
-        addCost(map, snap, orb.sources, c);
+        addCost(map, view, orb.sources, c);
         out.push_back(map);
         kept[orb.id] = state;
     }

@@ -3,6 +3,8 @@ import Foundation
 /// The engine's view of one agent (one transcript file).
 struct EngineAgent: Equatable, Sendable {
     var id: String
+    /// `local`, or the remote host the agent runs on (REMOTE 2.2).
+    var host = RemoteHost.localId
     var source: SourceKind
     var project: String
     /// The transcript's full working directory (METRICS 10.6); nil when it names none.
@@ -137,8 +139,10 @@ struct EngineOutput: Sendable {
     var todayUnpricedFacts: [SourceKind: [UnpricedFact]] = [:]
     var peakToday: Rate
     var peakTodayAtMs: Int64?
-    /// Today's measured output peak of every requested source set (METRICS 6.8).
-    var subsetPeaks: [SourceSet: Double]
+    /// Today's measured output peak of every requested subset (METRICS 6.8).
+    var subsetPeaks: [SubsetKey: Double]
+    /// Live values and today's totals per (host, source) cell; empty unless the engine tracks cells (DESIGN 13).
+    var cells: [HostSource: EngineCell] = [:]
     /// The local midnight the output's "today" starts at.
     var todayStartMs: Int64
     var lastResponse: ResponseSummary?

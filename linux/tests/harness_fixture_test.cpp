@@ -185,3 +185,32 @@ TEST(HarnessFixtures, GrokBatchesExcludeChildRollupsAndForkCopies) {
     ASSERT_TRUE(expected.ok);
     replayFiles<GrokParser>(expected.root()["grok"], false, [](GrokParser& parser, Latest& sink) { parser.beginBatch(sink); });
 }
+
+TEST(HarnessFixtures, GrokToolEndHandsTheTurnBackWithANewInFlightStart) {
+    Deduper deduper;
+    GrokParser parser("/nonexistent/sessions/work/s1/updates.jsonl", deduper);
+    Latest sink;
+    const auto feed = [&](std::int64_t seconds, const std::string& update) {
+        parser.feed("{\"timestamp\":" + std::to_string(seconds) +
+                        ",\"method\":\"session/update\",\"params\":{\"update\":{\"sessionUpdate\":" + update + "}}}",
+                    sink);
+    };
+    feed(1792497600, "\"tool_call\",\"status\":\"in_progress\"");
+    EXPECT_EQ(parser.phase(), Phase::Tools);
+    EXPECT_FALSE(parser.inFlightStartMs());
+    feed(1792497605, "\"tool_call_update\",\"status\":\"completed\"");
+    EXPECT_EQ(parser.phase(), Phase::Generating);
+    EXPECT_EQ(parser.inFlightStartMs(), 1792497605000);
+    feed(1792497650, "\"agent_thought_chunk\"");
+    EXPECT_EQ(parser.inFlightStartMs(), 1792497605000);
+    feed(1792497660, "\"tool_call\",\"status\":\"pending\"");
+    feed(1792497661, "\"tool_call_update\",\"status\":\"failed\"");
+    EXPECT_EQ(parser.phase(), Phase::Generating);
+    EXPECT_EQ(parser.inFlightStartMs(), 1792497661000);
+    feed(1792497670, "\"turn_cancelled\"");
+    EXPECT_EQ(parser.phase(), Phase::Idle);
+    EXPECT_FALSE(parser.inFlightStartMs());
+    feed(1792497680, "\"response_started\"");
+    EXPECT_EQ(parser.phase(), Phase::Generating);
+    EXPECT_EQ(parser.inFlightStartMs(), 1792497680000);
+}

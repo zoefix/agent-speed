@@ -11,6 +11,7 @@
 
 #include "agentspeed/configured_modes.hpp"
 #include "agentspeed/fs_util.hpp"
+#include "agentspeed/location_lists.hpp"
 #include "agentspeed/rfc3339.hpp"
 #include "agentspeed/text.hpp"
 
@@ -778,15 +779,19 @@ void LogSet::call(const std::string& sessionId, const std::string& message, cons
     sink.onResponse(r, true);
 }
 
-Source::Source(std::string root, bool chosen, Deduper& deduper, std::shared_ptr<const TimeZone> zone)
-    : root_(std::move(root)), chosen_(chosen), deduper_(deduper), zone_(std::move(zone)) {
+Source::Source(std::vector<Root> roots, Deduper& deduper, std::shared_ptr<const TimeZone> zone)
+    : roots_(std::move(roots)), deduper_(deduper), zone_(std::move(zone)) {
     folders_ = folders();
 }
 
 std::vector<std::string> Source::folders() const {
-    auto list = chosen_ ? settingFolders(root_) : logFolders(root_);
-    for (auto& f : list) {
-        while (f.size() > 1 && f.back() == '/') f.pop_back();
+    std::vector<std::string> list;
+    std::set<std::string> seen;
+    for (const auto& root : roots_) {
+        for (auto f : root.logFolders()) {
+            while (f.size() > 1 && f.back() == '/') f.pop_back();
+            if (seen.insert(resolvedPath(f)).second) list.push_back(std::move(f));
+        }
     }
     return list;
 }

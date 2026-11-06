@@ -23,9 +23,18 @@ Item {
         anchors.fill: parent
         radius: height / 2
         color: toggle.checked ? Theme.accent : (Theme.dark ? Qt.rgba(1, 1, 1, 0.16) : Qt.rgba(0, 0, 0, 0.14))
-        border.width: toggle.activeFocus ? 2 : 0
-        border.color: Qt.lighter(Theme.accent, 1.3)
         Behavior on color { ColorAnimation { duration: 160 } }
+        // The keyboard focus ring sits outside the track, so it shows on the accent fill too.
+        Rectangle {
+            visible: toggle.activeFocus
+            anchors.fill: parent
+            anchors.margins: -3
+            radius: height / 2
+            color: "transparent"
+            border.width: 2
+            border.color: Theme.accent
+            opacity: 0.85
+        }
         Rectangle {
             width: 18
             height: 18

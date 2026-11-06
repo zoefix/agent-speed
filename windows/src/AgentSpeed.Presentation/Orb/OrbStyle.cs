@@ -10,12 +10,14 @@ public enum OrbStyle
     Minimal,
 }
 
-/// <summary>Persisted keys, string keys and size limits of the orb styles.</summary>
+/// <summary>Persisted keys, string keys and the size limits every style shares (DESIGN 2, 2b).</summary>
 public static class OrbStyles
 {
-    public const double MinSize = 96;
-    public const double MinimalMinSize = 64;
+    public const double MinSize = 64;
     public const double MaxSize = 240;
+
+    /// <summary>The step of the size sliders (Settings and the context menu).</summary>
+    public const double SizeStep = 4;
 
     public static IReadOnlyList<OrbStyle> All { get; } = [OrbStyle.Led, OrbStyle.Needle, OrbStyle.Liquid, OrbStyle.Reactor, OrbStyle.Minimal];
 
@@ -39,9 +41,6 @@ public static class OrbStyles
         _ => OrbStyle.Led,
     };
 
-    public static double MinSizeFor(OrbStyle style) => style == OrbStyle.Minimal ? MinimalMinSize : MinSize;
-
-    /// <summary>Clamps a size to the style's range (a 72 pt <c>minimal</c> becomes 96 pt in any other style).</summary>
-    public static double ClampSize(OrbStyle style, double size) =>
-        double.IsFinite(size) ? Math.Clamp(Math.Round(size), MinSizeFor(style), MaxSize) : 148;
+    /// <summary>Clamps a size to the shared range, so changing the style never resizes an orb.</summary>
+    public static double ClampSize(double size) => double.IsFinite(size) ? Math.Clamp(Math.Round(size), MinSize, MaxSize) : 148;
 }

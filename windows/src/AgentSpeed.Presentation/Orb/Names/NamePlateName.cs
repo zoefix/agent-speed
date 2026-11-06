@@ -45,8 +45,11 @@ public sealed record NamePlateName
     public static NamePlateName Plain(string text) =>
         new(text ?? string.Empty, null, 0, "%@ +%d", CultureInfo.InvariantCulture);
 
-    /// <summary>The name of an orb: its custom name, else the automatic one with its shortening steps.</summary>
-    public static NamePlateName For(OrbDefinition orb, Localizer localizer)
+    /// <summary>
+    /// The name of an orb: its custom name, else the automatic one with its shortening steps; with a host suffix (DESIGN 13,
+    /// <paramref name="hosts"/>) the automatic name is kept whole and only ellipsized.
+    /// </summary>
+    public static NamePlateName For(OrbDefinition orb, Localizer localizer, IReadOnlyList<OrbHostChoice>? hosts = null)
     {
         ArgumentNullException.ThrowIfNull(orb);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -56,6 +59,12 @@ public sealed record NamePlateName
         }
 
         var full = OrbNaming.AutomaticName(orb.Sources, localizer);
+        var suffix = hosts is null ? string.Empty : OrbNaming.HostSuffix(orb.Hosts, hosts, localizer);
+        if (suffix.Length > 0)
+        {
+            return Plain(full + suffix);
+        }
+
         if (orb.Sources.Set is not { Count: >= 2 } set)
         {
             return Plain(full);

@@ -24,7 +24,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
 
     /// Nil for sources that are not read from transcript files: OpenCode, ZCode and OpenClaw keep databases
     /// (`OpencodeSource`, `ZcodeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
-    /// (`HermesSource`).
+    /// (`HermesSource`); Devin reads a database and event files together (`DevinSource`).
     init?(_ source: SourceKind) {
         switch source {
         case .codex: self = .codex
@@ -39,7 +39,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: self = .grokBuild
         case .pi: self = .pi
         case .droid: self = .droid
-        case .opencode, .zcode, .openclaw, .hermes: return nil
+        case .opencode, .zcode, .openclaw, .hermes, .devin: return nil
         }
     }
 

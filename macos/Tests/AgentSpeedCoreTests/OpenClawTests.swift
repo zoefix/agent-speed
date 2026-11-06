@@ -174,7 +174,7 @@ struct OpenClawTests {
 
         configuration.enabledSources = [.codex]
         #expect(configuration.resolvedRoots(for: .codex) == codexRoots, "Codex homes stay Codex roots while OpenClaw is off")
-        configuration.codexRoot = URL(fileURLWithPath: "/data/codex/sessions")
+        configuration.setLocation(URL(fileURLWithPath: "/data/codex/sessions"), for: .codex)
         #expect(configuration.resolvedRoots(for: .codex) == ["/data/codex/sessions"], "a Codex setting replaces every root")
     }
 
@@ -194,7 +194,7 @@ struct OpenClawTests {
         configuration.openclawHome = OpenClawHome(environment: ["OPENCLAW_STATE_DIR": "/srv/elsewhere"], home: URL(fileURLWithPath: "/u"))
         #expect(configuration.resolvedOpenclawRoots == [main])
         #expect(configuration.openclawCodexRoots == [((main as NSString).deletingLastPathComponent as NSString).appendingPathComponent("codex-home/sessions")])
-        configuration.openclawRoot = nil
+        configuration.locations.reset(.openclaw)
         #expect(configuration.resolvedOpenclawRoots == ["/srv/elsewhere"])
         #expect(configuration.requiresRescan(comparedTo: MonitorConfiguration(openclawRoot: URL(fileURLWithPath: main))))
     }

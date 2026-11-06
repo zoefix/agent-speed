@@ -6,18 +6,18 @@ namespace AgentSpeed.Presentation.History;
 public static class HistoryAggregator
 {
     /// <summary>
-    /// Days with data inside <paramref name="range"/> for one source (or every source when null), oldest first.
-    /// Records with an unreadable day or without any usage are ignored. The costs of <paramref name="excluded"/> sources add
-    /// nothing (METRICS 9.4); their tokens count as usual.
+    /// Days with data inside <paramref name="range"/> for one source (or every source when null) on one host (every host when
+    /// null, DESIGN 13), oldest first; the hosts of a day add up. Records with an unreadable day or without any usage are
+    /// ignored. The costs of <paramref name="excluded"/> sources add nothing (METRICS 9.4); their tokens count as usual.
     /// </summary>
     public static IReadOnlyList<DaySummary> Daily(IEnumerable<DailyUsage> usage, SourceKind? source, DayRange? range = null,
-        SourceSet excluded = default)
+        SourceSet excluded = default, string? host = null)
     {
         ArgumentNullException.ThrowIfNull(usage);
         var groups = new SortedDictionary<DateOnly, List<DailyUsage>>();
         foreach (var record in usage)
         {
-            if (record is null || (source is { } only && record.Source != only) || !HasUsage(record)
+            if (record is null || (source is { } only && record.Source != only) || (host is not null && record.Host != host) || !HasUsage(record)
                 || !HistoryRanges.TryParseDay(record.Day, out var day) || (range is { } r && !r.Contains(day)))
             {
                 continue;

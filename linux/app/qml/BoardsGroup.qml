@@ -15,7 +15,8 @@ ColumnLayout {
         return list.length > 0 ? list[0] : null
     }
     readonly property var sourceIds: ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
-                                      "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid"]
+                                      "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid",
+                                      "devin"]
 
     SettingsGroup {
         title: S.tr2(S.rev, "boards.title")
@@ -154,6 +155,14 @@ ColumnLayout {
                 }
             }
         }
+        // Hosts (DESIGN 13), only while remote hosts exist.
+        HostPickerRows {
+            visible: hostsView.shown
+            title: S.tr2(S.rev, "remote.hosts")
+            lastDivider: true
+            hosts: group.current ? group.current.hosts : "all"
+            onPicked: (hosts) => { if (group.current) boardStore.setHosts(group.current.id, hosts) }
+        }
         SettingsRow {
             label: S.tr2(S.rev, "boards.readouts")
             caption: S.tr2(S.rev, "boards.readouts.hint")
@@ -191,11 +200,19 @@ ColumnLayout {
         }
         SettingsRow {
             label: S.tr2(S.rev, "menu.clickThrough")
-            divider: false
             ToggleSwitch {
                 label: S.tr2(S.rev, "menu.clickThrough")
                 checked: group.current ? group.current.clickThrough : false
                 onToggled: (on) => boardStore.set(group.current.id, "clickThrough", on)
+            }
+        }
+        SettingsRow {
+            label: S.tr2(S.rev, "settings.orb.fadeIdle")
+            divider: false
+            ToggleSwitch {
+                label: S.tr2(S.rev, "settings.orb.fadeIdle")
+                checked: group.current ? group.current.fadeWhenIdle : false
+                onToggled: (on) => boardStore.set(group.current.id, "fadeWhenIdle", on)
             }
         }
     }

@@ -29,7 +29,7 @@ struct BoardLiveTests {
         snapshot.live = Rate(output: sources.reduce(0) { $0 + $1.live.output }, total: sources.reduce(0) { $0 + $1.live.total })
         snapshot.today = TokenTotals(requests: sources.count, output: sources.reduce(0) { $0 + $1.today.output })
         snapshot.peakToday = peak
-        snapshot.subsetPeaks = subsetPeaks
+        snapshot.subsetPeaks = Dictionary(uniqueKeysWithValues: subsetPeaks.map { (SubsetKey($0.key), $0.value) })
         snapshot.dayStart = Date(timeIntervalSince1970: 0)
         return snapshot
     }

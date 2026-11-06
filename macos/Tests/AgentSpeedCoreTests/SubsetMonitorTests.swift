@@ -19,8 +19,8 @@ struct SubsetMonitorTests {
         #expect(store.snapshot.subsetPeaks.isEmpty)
         #expect(store.snapshot.dayStart == Calendar.current.startOfDay(for: store.snapshot.timestamp))
 
-        let codex = SourceSet(.codex)
-        let claude = SourceSet([.claudeCode, .claudeDesktop])
+        let codex = SubsetKey(SourceSet(.codex))
+        let claude = SubsetKey(SourceSet([.claudeCode, .claudeDesktop]))
         monitor.setSubsets([codex, claude])
         #expect(monitor.subsets == [codex, claude])
         #expect(await LiveMonitorTests.waitUntil { Set(store.snapshot.subsetPeaks.keys) == [codex, claude] })

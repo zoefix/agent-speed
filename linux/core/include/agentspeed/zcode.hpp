@@ -11,6 +11,7 @@
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/model.hpp"
 #include "agentspeed/modes.hpp"
+#include "agentspeed/session_claims.hpp"
 #include "agentspeed/sqlite.hpp"
 
 // METRICS 4.10: ZCode's SQLite database (`model_usage` rows per request, `session` and `message` for agents).
@@ -90,6 +91,11 @@ public:
 
     Update seed(std::int64_t todayStartMs);
     Update refresh(bool force = false);
+    // METRICS 2.1 Databases: shared by the databases of the list; a session another one reads is skipped.
+    void setClaims(SessionClaims* claims, int owner) {
+        claims_ = claims;
+        owner_ = owner;
+    }
 
     // Monotonic milliseconds; replaceable in tests.
     std::function<std::int64_t()> clockMs;
@@ -113,6 +119,9 @@ private:
     std::int64_t sinceMs_ = 0;
     std::optional<std::int64_t> lastReadMs_;
     bool unsupported_ = false, unreadable_ = false;
+    SessionClaims* claims_ = nullptr;
+    int owner_ = 0;
+    bool claim(const std::string& sessionId) { return !claims_ || claims_->claim(sessionId, owner_); }
 };
 
 }  // namespace agentspeed::zcode

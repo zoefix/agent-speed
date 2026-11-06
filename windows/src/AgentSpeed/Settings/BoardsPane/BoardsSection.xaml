@@ -4,6 +4,7 @@
              xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
              xmlns:loc="clr-namespace:AgentSpeed.Localization"
              xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:remote="clr-namespace:AgentSpeed.Settings.Remote"
              xmlns:pane="clr-namespace:AgentSpeed.Settings.OrbsPane"
              xmlns:boards="clr-namespace:AgentSpeed.Settings.BoardsPane"
              Focusable="False">
@@ -183,6 +184,8 @@
                 </StackPanel>
             </Border>
 
+            <remote:HostPickerSection DataContext="{Binding HostPicker}" />
+
             <!-- Style -->
             <TextBlock Text="{loc:Loc boards.style}" Style="{StaticResource SectionHeaderText}" Margin="2,22,0,8" AutomationProperties.HeadingLevel="Level3" />
             <Border Style="{StaticResource GroupBorder}" Padding="14,14,6,6">
@@ -263,6 +266,9 @@
                 </controls:SettingsCard>
                 <controls:SettingsCard Header="{loc:Loc menu.clickThrough}" Icon="&#xE7C9;" Description="{Binding ClickThroughHint}">
                     <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ClickThrough, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc menu.clickThrough}" />
+                </controls:SettingsCard>
+                <controls:SettingsCard Header="{loc:Loc settings.orb.fadeIdle}" Icon="&#xE708;" Description="{Binding FadeHint}">
+                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding FadeWhenIdle, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc settings.orb.fadeIdle}" />
                 </controls:SettingsCard>
             </StackPanel>
         </StackPanel>

@@ -12,12 +12,15 @@ struct SourcesPane: View {
         let l10n = model.l10n
         Form {
             ForEach(TranscriptFolder.allCases, id: \.self) { folder in
-                let kinds = SourceKind.allCases.filter { $0.transcriptFolder == folder }
                 Section {
-                    ForEach(kinds) { kind in
+                    ForEach(folder.sources) { kind in
                         SourceToggleRow(kind: kind, model: model)
                     }
-                    SourceFolderRow(folder: folder, model: model)
+                    SourceLocationList(folder: folder, model: model)
+                } header: {
+                    if folder == TranscriptFolder.allCases.first {
+                        SectionFootnote(l10n("settings.sources.locationsHint"))
+                    }
                 } footer: {
                     if let key = folder.footnoteKey {
                         SectionFootnote(l10n(key))
@@ -51,30 +54,6 @@ struct SourcesPane: View {
     }
 }
 
-extension SourceKind {
-    /// The folder a source is read from.
-    var transcriptFolder: TranscriptFolder {
-        switch self {
-        case .codex: .codex
-        case .claudeCode, .claudeDesktop: .claude
-        case .deepseek: .dsh
-        case .opencode: .opencode
-        case .gemini: .gemini
-        case .omp: .omp
-        case .antigravity: .antigravity
-        case .workbuddy: .workbuddy
-        case .workbuddyAi: .workbuddyAi
-        case .zcode: .zcode
-        case .kimi: .kimi
-        case .grokBuild: .grokBuild
-        case .pi: .pi
-        case .openclaw: .openclaw
-        case .hermes: .hermes
-        case .droid: .droid
-        }
-    }
-}
-
 /// What the settings window says about one source.
 enum SourceState: Equatable {
     case checking
@@ -95,6 +74,12 @@ enum SourceState: Equatable {
         }
         guard let status = snapshot.sources.first(where: { $0.kind == kind }), status.enabled else {
             self = snapshot.state == .noSources ? .missing : .checking
+            return
+        }
+        // DESIGN 13: `sources` adds every connected host; this pane is about this Mac's own folders.
+        if snapshot.hosts.count > 1 {
+            let local = snapshot.hostSources.first { $0.cell.host == RemoteHost.localId && $0.cell.source == kind }
+            self = local.map { $0.available ? .sessions($0.sessionCount) : .missing } ?? .missing
             return
         }
         self = status.available ? .sessions(status.sessionCount) : .missing
@@ -168,110 +153,78 @@ private struct SourceStatusLabel: View {
     }
 }
 
-/// The folder a source reads from: abbreviated path (Gemini CLI lists both default folders, Antigravity the stores
-/// found), default/custom badge, and Show in Finder / Reset / Change….
-private struct SourceFolderRow: View {
+/// A source's location list (DESIGN 5, METRICS 2.1): one row per entry, then Add Folder… and Reset. A pick that is in
+/// the list already, that the automatic entry reads already, or beyond the limit changes nothing and says why.
+private struct SourceLocationList: View {
     let folder: TranscriptFolder
     let model: AppModel
     @State private var host = HostWindow()
 
-    private static let folderIcon = NSWorkspace.shared.icon(for: .folder)
-
     var body: some View {
         let settings = model.settings
         let l10n = model.l10n
-        let urls = folder.urls(in: settings)
-        let shown = folder.shownURLs(in: settings)
-        let url = urls.first(where: folder.isReadable) ?? urls.first(where: folder.locationExists) ?? shown[0]
-        let isCustom = folder.customURL(in: settings) != nil
-        let readable = urls.contains(where: folder.isReadable)
-        let exists = folder.locationExists(url)
-        let paths = shown.map(TranscriptFolder.displayPath)
-        HStack(spacing: Spacing.s) {
-            Image(nsImage: Self.folderIcon)
-                .resizable()
-                .frame(width: 28, height: 28)
-                .opacity(readable ? 1 : 0.45)
-                .accessibilityHidden(true)
-            VStack(alignment: .leading, spacing: 3) {
-                VStack(alignment: .leading, spacing: 3) {
-                    ForEach(Array(shown.enumerated()), id: \.offset) { _, candidate in
-                        Text(verbatim: TranscriptFolder.displayPath(candidate))
-                            .lineLimit(1)
-                            .truncationMode(.middle)
-                            .textSelection(.enabled)
-                            .foregroundStyle(shown.count > 1 && !folder.isReadable(candidate) ? AnyShapeStyle(.secondary) : AnyShapeStyle(.primary))
-                            .help(candidate.path)
-                    }
+        let entries = folder.entries(in: settings)
+        let locations = settings.sourceLocations
+        ForEach(entries) { entry in
+            SourceLocationRow(folder: folder, entry: entry, canRemove: locations.canRemove(from: folder), l10n: l10n) {
+                withAnimation(model.accessibility.reduceMotion ? nil : Motion.layout) {
+                    folder.remove(entry.location, in: settings)
                 }
-                .accessibilityElement(children: .ignore)
-                .accessibilityLabel(l10n("mac.settings.sources.folder"))
-                .accessibilityValue(Text(verbatim: paths.joined(separator: ", ")))
-                LocationBadge(isCustom: isCustom, l10n: l10n)
             }
-            Spacer(minLength: Spacing.xs)
-            folderButtons(url: url, exists: exists, isCustom: isCustom, l10n: l10n)
         }
-        .background(WindowReader(host: host))
-        .contextMenu {
-            Button(l10n("mac.settings.sources.reveal")) {
-                NSWorkspace.shared.activateFileViewerSelecting([url])
+        SourceLocationActions(canAdd: locations.canAdd(to: folder), canReset: locations.canReset(folder), l10n: l10n,
+                              onAdd: { choose(startingAt: entries.last?.revealURL ?? folder.defaultURL) },
+                              onReset: {
+                                  withAnimation(model.accessibility.reduceMotion ? nil : Motion.layout) {
+                                      folder.reset(in: settings)
+                                  }
+                              })
+            .background(WindowReader(host: host))
+    }
+
+    private func choose(startingAt start: URL) {
+        let l10n = model.l10n
+        let window = host.window ?? NSApp.keyWindow
+        FolderChooser.choose(
+            message: l10n(folder.chooseMessageKey),
+            prompt: l10n("mac.settings.sources.choosePrompt"),
+            startingAt: start,
+            window: window,
+            acceptsDatabaseFile: folder.acceptsDatabaseFile
+        ) { chosen in
+            var outcome = SourceLocations.AddOutcome.invalid
+            withAnimation(model.accessibility.reduceMotion ? nil : Motion.layout) {
+                outcome = folder.add(chosen, in: model.settings)
             }
-            .disabled(!exists)
+            explain(outcome, chosen: chosen, window: window)
         }
     }
 
-    private func folderButtons(url: URL, exists: Bool, isCustom: Bool, l10n: Localizer) -> some View {
-        let settings = model.settings
-        let revealTitle = l10n("mac.settings.sources.reveal")
-        return HStack(spacing: Spacing.xs) {
-            Button {
-                NSWorkspace.shared.activateFileViewerSelecting([url])
-            } label: {
-                Image(systemName: "magnifyingglass")
-            }
-            .buttonStyle(.borderless)
-            .help(revealTitle)
-            .accessibilityLabel(revealTitle)
-            .disabled(!exists)
-            Button(l10n("settings.sources.reset")) {
-                folder.setURL(nil, in: settings)
-            }
-            .disabled(!isCustom)
-            Button(l10n("settings.sources.change")) {
-                FolderChooser.choose(
-                    message: l10n(folder.chooseMessageKey),
-                    prompt: l10n("mac.settings.sources.choosePrompt"),
-                    startingAt: url,
-                    window: host.window ?? NSApp.keyWindow,
-                    acceptsDatabaseFile: folder.acceptsDatabaseFile
-                ) { chosen in
-                    folder.setURL(chosen, in: settings)
-                }
+    /// Why a pick changed nothing, as a sheet on Settings.
+    private func explain(_ outcome: SourceLocations.AddOutcome, chosen: URL, window: NSWindow?) {
+        let l10n = model.l10n
+        let message: String
+        switch outcome {
+        case .added, .restoredAutomatic: return
+        case .invalid:
+            NSSound.beep()
+            return
+        case .alreadyListed: message = l10n("settings.sources.alreadyListed")
+        case .alreadyAutomatic: message = l10n("settings.sources.alreadyDefault")
+        case .full: message = l10n("settings.sources.limit", SourceLocations.maxEntries)
+        }
+        let alert = NSAlert()
+        alert.alertStyle = .informational
+        alert.messageText = message
+        alert.informativeText = TranscriptFolder.displayPath(chosen)
+        alert.addButton(withTitle: l10n("mac.update.ok"))
+        // After the open panel's own sheet has ended.
+        DispatchQueue.main.async {
+            if let window {
+                alert.beginSheetModal(for: window)
+            } else {
+                alert.runModal()
             }
         }
-        .fixedSize()
-    }
-}
-
-private struct LocationBadge: View {
-    let isCustom: Bool
-    let l10n: Localizer
-    @Environment(\.colorSchemeContrast) private var contrast
-
-    var body: some View {
-        Text(l10n(isCustom ? "mac.settings.sources.custom" : "mac.settings.sources.default"))
-            .font(.caption.weight(.medium))
-            .foregroundStyle(isCustom ? AnyShapeStyle(.primary) : AnyShapeStyle(.secondary))
-            .padding(.horizontal, 6)
-            .padding(.vertical, 1)
-            .background {
-                Capsule().fill(isCustom ? Color.accentColor.opacity(0.18) : Color.primary.opacity(0.07))
-            }
-            .overlay {
-                if contrast == .increased {
-                    Capsule().strokeBorder(Color.primary.opacity(0.35), lineWidth: 1)
-                }
-            }
     }
 }

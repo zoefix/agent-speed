@@ -1,9 +1,11 @@
 #include "board/board_windows.hpp"
 
+#include <QElapsedTimer>
 #include <QGuiApplication>
 #include <QQmlEngine>
 #include <QQuickItem>
 #include <QScreen>
+#include <cmath>
 #include <set>
 
 #include "board/board_store.hpp"
@@ -14,6 +16,17 @@ BoardWindows::BoardWindows(BoardStore& store, QQmlEngine& engine, QObject* paren
 }
 
 BoardWindows::~BoardWindows() = default;
+
+namespace {
+double now() {
+    static const QElapsedTimer clock = [] {
+        QElapsedTimer started;
+        started.start();
+        return started;
+    }();
+    return static_cast<double>(clock.nsecsElapsed()) / 1e9;
+}
+}  // namespace
 
 int BoardWindows::side(const QString& size) { return size == QLatin1String("S") ? 280 : size == QLatin1String("L") ? 420 : 340; }
 
@@ -44,6 +57,7 @@ void BoardWindows::sync() {
         const int edge = side(size);
         if (!slot) {
             slot = std::make_unique<Board>();
+            slot->motion = std::make_unique<IdleFadeMotion>([board = slot.get()] { applyOpacity(*board); });
             slot->view = std::make_unique<QQuickView>(&engine_, nullptr);
             auto* view = slot->view.get();
             view->setColor(Qt::transparent);
@@ -94,7 +108,11 @@ void BoardWindows::sync() {
             view->setPosition(center - QPoint(view->width() / 2, view->height() / 2));
             slot->size = size;
         }
-        view->setOpacity(spec.value(QStringLiteral("opacity")).toDouble());
+        slot->opacity = spec.value(QStringLiteral("opacity")).toDouble();
+        slot->fadeWhenIdle = spec.value(QStringLiteral("fadeWhenIdle")).toBool();
+        if (through) slot->hovered = false;
+        applyOpacity(*slot);
+        updateFade(*slot);
         if (auto* root = view->rootObject()) root->setProperty("spec", spec);
         if (!view->isVisible()) view->show();
         ++index;
@@ -105,12 +123,35 @@ void BoardWindows::sync() {
 void BoardWindows::apply(const QVariantMap& views) {
     views_ = views;
     for (const auto& [id, board] : boards_) {
-        if (auto* root = board->view->rootObject()) root->setProperty("view", views.value(id, QVariantMap()));
+        const auto view = views.value(id).toMap();
+        if (auto* root = board->view->rootObject()) root->setProperty("view", view);
+        // The board's tier: idle while its title is the idle label (DESIGN 1, below 0.5 tok/s for 3 s).
+        if (!view.isEmpty()) board->idle = view.value(QStringLiteral("titleLevel")).toInt() == 0;
+        updateFade(*board);
     }
 }
 
 void BoardWindows::startMove(const QString& id) {
+    setHovered(id, true);
     if (auto* w = window(id)) w->startSystemMove();
+}
+
+void BoardWindows::setHovered(const QString& id, bool hovered) {
+    const auto it = boards_.find(id);
+    if (it == boards_.end() || it->second->hovered == hovered) return;
+    it->second->hovered = hovered;
+    updateFade(*it->second);
+}
+
+// DESIGN 2c Fade when idle: the orbs' rule on the board's own idle state; the window's opacity carries it.
+void BoardWindows::updateFade(Board& board) {
+    if (board.fade.update(board.fadeWhenIdle, board.idle, board.hovered, now())) board.motion->setFaded(board.fade.faded());
+}
+
+void BoardWindows::applyOpacity(Board& board) {
+    if (!board.view) return;
+    const double opacity = board.opacity * board.motion->factor();
+    if (std::abs(board.view->opacity() - opacity) > 0.0005) board.view->setOpacity(opacity);
 }
 
 void BoardWindows::openMenu(const QString& id) { Q_UNUSED(id); }

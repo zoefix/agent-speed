@@ -31,6 +31,7 @@ internal static class Watch
         var runningWall = TimeSpan.Zero;
         using (var monitor = new LiveMonitor(hub, configuration))
         {
+            using var remote = options.Remotes.Count > 0 ? new RemoteWatch(monitor, options) : null;
             monitor.Start();
             for (var second = 1; second <= options.WatchSeconds; second++)
             {
@@ -48,7 +49,13 @@ internal static class Watch
                     runningWall = started.Elapsed;
                 }
 
-                output.Line(Line(snapshot));
+                var text = Line(snapshot);
+                if (remote?.HistorySummary() is { } history)
+                {
+                    text = text[..^1] + ",\"remoteHistory\":" + history + "}";
+                }
+
+                output.Line(text);
                 output.Flush();
             }
         }
@@ -80,21 +87,23 @@ internal static class Watch
                 break;
         }
 
-        var agents = s.Agents.Select(a => new JsonLine()
-            .Add("id", Path.GetFileName(a.Id))
+        var agents = s.Agents.Select(a => (s.Hosts.Count > 0 ? new JsonLine().Add("host", HostName(a.Host, s)) : new JsonLine())
+            .Add("id", Path.GetFileName(a.Id.Replace('/', Path.DirectorySeparatorChar)))
             .Add("source", JsonLine.SourceName(a.Source))
             .Add("phase", JsonLine.PhaseName(a.Phase))
             .Add("live", a.Live.Output)
             .Add("parent", a.ParentId is null ? null : Path.GetFileName(a.ParentId))
             .Text);
-        return line
+        line = line
             .Raw("live", JsonLine.Rate(s.Live))
             .Add("estimatedShare", s.LiveEstimatedShare)
             .Add("generating", s.GeneratingCount)
             .Add("tools", s.ToolsCount)
             .Raw("agents", JsonLine.Array(agents))
             .Raw("today", JsonLine.Totals(s.Today))
-            .Raw("peak", JsonLine.Rate(s.PeakToday))
-            .Text;
+            .Raw("peak", JsonLine.Rate(s.PeakToday));
+        return s.Hosts.Count > 0 ? line.Raw("hosts", JsonLine.Array(s.Hosts.Select(RemoteWatch.Host))).Text : line.Text;
     }
+
+    private static string HostName(string id, SpeedSnapshot snapshot) => snapshot.Hosts.FirstOrDefault(h => h.Id == id)?.Name ?? id;
 }

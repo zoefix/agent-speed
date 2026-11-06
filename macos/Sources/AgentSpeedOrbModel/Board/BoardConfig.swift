@@ -11,11 +11,15 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
     public var opacity: Double
     public var alwaysOnTop: Bool
     public var clickThrough: Bool
+    /// Fade when idle (DESIGN 2, 2c); off for a new board and for one saved before the switch existed.
+    public var fadeWhenIdle: Bool
     /// macOS only.
     public var allSpaces: Bool
     public var visible: Bool
     /// The live metrics switches (DESIGN 2c Live metrics); every one on for a new board.
     public var readouts: BoardReadouts
+    /// The hosts it tracks (DESIGN 13); absent in the document = all.
+    public var hosts: OrbHostSelection
 
     public init(
         id: String,
@@ -25,9 +29,11 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
         opacity: Double = 1,
         alwaysOnTop: Bool = true,
         clickThrough: Bool = false,
+        fadeWhenIdle: Bool = false,
         allSpaces: Bool = true,
         visible: Bool = true,
-        readouts: BoardReadouts = .all
+        readouts: BoardReadouts = .all,
+        hosts: OrbHostSelection = .all
     ) {
         self.id = id
         self.style = style
@@ -36,15 +42,17 @@ public struct BoardConfig: Equatable, Hashable, Identifiable, Sendable {
         self.opacity = OrbConfig.cleanOpacity(opacity)
         self.alwaysOnTop = alwaysOnTop
         self.clickThrough = clickThrough
+        self.fadeWhenIdle = fadeWhenIdle
         self.allSpaces = allSpaces
         self.visible = visible
         self.readouts = readouts
+        self.hosts = hosts
     }
 }
 
 extension BoardConfig: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, style, size, sources, opacity, alwaysOnTop, clickThrough, allSpaces, visible, readouts
+        case id, style, size, sources, opacity, alwaysOnTop, clickThrough, fadeWhenIdle, allSpaces, visible, readouts, hosts
     }
 
     public init(from decoder: Decoder) throws {
@@ -64,9 +72,11 @@ extension BoardConfig: Codable {
             opacity: value(Double.self, .opacity) ?? 1,
             alwaysOnTop: value(Bool.self, .alwaysOnTop) ?? true,
             clickThrough: value(Bool.self, .clickThrough) ?? false,
+            fadeWhenIdle: value(Bool.self, .fadeWhenIdle) ?? false,
             allSpaces: value(Bool.self, .allSpaces) ?? true,
             visible: value(Bool.self, .visible) ?? true,
-            readouts: value(BoardReadouts.self, .readouts) ?? .all
+            readouts: value(BoardReadouts.self, .readouts) ?? .all,
+            hosts: value(OrbHostSelection.self, .hosts) ?? .all
         )
     }
 
@@ -79,8 +89,10 @@ extension BoardConfig: Codable {
         try container.encode(opacity, forKey: .opacity)
         try container.encode(alwaysOnTop, forKey: .alwaysOnTop)
         try container.encode(clickThrough, forKey: .clickThrough)
+        try container.encode(fadeWhenIdle, forKey: .fadeWhenIdle)
         try container.encode(allSpaces, forKey: .allSpaces)
         try container.encode(visible, forKey: .visible)
         try container.encode(readouts, forKey: .readouts)
+        if !hosts.isAll { try container.encode(hosts, forKey: .hosts) }
     }
 }

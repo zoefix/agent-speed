@@ -185,9 +185,10 @@ enum OrbContentBuilder {
             bezel: feed.bezel,
             unavailableTitle: feed.unavailableTitleKey.map { l10n($0) },
             money: money.map {
-                // `minimal` has no unit line, so its value carries the symbol (DESIGN 9).
-                OrbMoneyText(number: style == .minimal ? $0.inline : $0.number, value: $0.value, atLeast: $0.atLeast,
-                             unknown: $0.unknown)
+                // Without a unit line (`minimal`, small orbs) the value carries the symbol (DESIGN 9).
+                let unitLine = OrbReadoutLayout.hasUnitLine(style: style, diameter: diameter)
+                return OrbMoneyText(number: unitLine ? $0.number : $0.inline, value: $0.value, atLeast: $0.atLeast,
+                                    unknown: $0.unknown)
             },
             lines: showsReadout ? feed.lines : nil
         )

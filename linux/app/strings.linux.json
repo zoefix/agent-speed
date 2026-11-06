@@ -1,0 +1,21 @@
+{
+  "_comment": "Linux-only texts, merged over spec/strings.json at load (as Windows keeps Strings.Windows.json).",
+  "linux.ok": {
+    "zh-Hant": "好",
+    "zh-Hans": "好",
+    "en": "OK",
+    "ja": "OK"
+  },
+  "linux.settings.sources.folder": {
+    "zh-Hant": "資料夾",
+    "zh-Hans": "文件夹",
+    "en": "Folder",
+    "ja": "フォルダ"
+  },
+  "linux.settings.sources.reveal": {
+    "zh-Hant": "在檔案管理員中顯示",
+    "zh-Hans": "在文件管理器中显示",
+    "en": "Show in File Manager",
+    "ja": "ファイルマネージャで表示"
+  }
+}

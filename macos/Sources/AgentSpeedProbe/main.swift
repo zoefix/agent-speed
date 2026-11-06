@@ -20,7 +20,8 @@ case .dumpUnpriced(let options):
         table: arguments.priceTable()
     )
 case .watch(let seconds):
-    WatchMode.run(configuration: arguments.configuration, seconds: seconds)
+    WatchMode.run(configuration: arguments.configuration, seconds: seconds, remotes: arguments.remotes,
+                  history: arguments.remoteHistory, historyStore: arguments.historyStore)
 case .traffic(let seconds):
     TrafficMode.run(
         configuration: arguments.configuration, seconds: seconds, interval: arguments.trafficInterval,

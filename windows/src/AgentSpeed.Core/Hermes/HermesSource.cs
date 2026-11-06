@@ -40,29 +40,50 @@ internal sealed class HermesSource
         OperatingSystem.IsWindows() ? StringComparer.OrdinalIgnoreCase : StringComparer.Ordinal;
 
     private readonly IDeduper _deduper;
-    private readonly bool _chosen;
+    private readonly IReadOnlyList<(string Path, bool Chosen)> _roots;
     private readonly List<TrackedSet> _sets = [];
     private readonly HashSet<string> _unreadable = new(PathComparer);
     private List<string> _folders;
     private TimeZoneInfo _zone;
     private long _removedMalformedLines;
 
-    /// <param name="root">The automatic Hermes home, or the chosen home or log folder.</param>
-    /// <param name="chosen">The root is the user setting (a home or one log folder).</param>
+    /// <param name="root">The automatic Hermes home, or a user location (a home or one log folder).</param>
+    /// <param name="chosen">The root is a user location.</param>
     /// <param name="zone">The zone whose rules convert the logs' wall times.</param>
     public HermesSource(string root, bool chosen, IDeduper deduper, TimeZoneInfo zone)
+        : this([(root, chosen)], deduper, zone)
     {
-        Root = root;
-        _chosen = chosen;
+    }
+
+    /// <param name="roots">Every root of the list in list order: the automatic home (not chosen) or a user location (METRICS 2.1).</param>
+    /// <param name="zone">The zone whose rules convert the logs' wall times.</param>
+    public HermesSource(IReadOnlyList<(string Path, bool Chosen)> roots, IDeduper deduper, TimeZoneInfo zone)
+    {
+        _roots = roots;
         _deduper = deduper;
         _zone = zone;
         _folders = Folders();
     }
 
-    public string Root { get; }
+    /// <summary>The first root that exists, else the first root: the path the source reports (METRICS 2.1).</summary>
+    public string Root
+    {
+        get
+        {
+            foreach (var root in _roots)
+            {
+                if (HermesPaths.Exists(root.Path))
+                {
+                    return root.Path;
+                }
+            }
 
-    /// <summary>The Hermes home (or the chosen folder) exists: installed, maybe never run (METRICS 2, DESIGN 5).</summary>
-    public bool Available => HermesPaths.Exists(Root);
+            return _roots.Count > 0 ? _roots[0].Path : string.Empty;
+        }
+    }
+
+    /// <summary>Any root (a Hermes home or a user location) exists: installed, maybe never run (METRICS 2, DESIGN 5).</summary>
+    public bool Available => _roots.Any(root => HermesPaths.Exists(root.Path));
 
     /// <summary>This computer's zone rules at the time of reading; later lines use a changed zone.</summary>
     public TimeZoneInfo Zone
@@ -174,8 +195,13 @@ internal sealed class HermesSource
         return update;
     }
 
-    private List<string> Folders() =>
-        [.. HermesPaths.FoldersOf(Root, _chosen).Select(f => Path.TrimEndingDirectorySeparator(f))];
+    /// <summary>The log folders of every root in list order, each once (METRICS 2.1).</summary>
+    private List<string> Folders()
+    {
+        var seen = new HashSet<string>(PathComparer);
+        return [.. _roots.SelectMany(root => HermesPaths.FoldersOf(root.Path, root.Chosen))
+            .Select(f => Path.TrimEndingDirectorySeparator(f)).Where(seen.Add)];
+    }
 
     private TrackedSet Add(string folder)
     {

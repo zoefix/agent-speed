@@ -13,6 +13,8 @@ Rectangle {
     property string first: ""
     property string last: ""
     property string source: "all"
+    // DESIGN 13: one host's days ("" for every host).
+    property string host: ""
 
     Settings {
         id: remembered
@@ -21,7 +23,7 @@ Rectangle {
     }
 
     readonly property string kind: remembered.modeKind === "speed" ? "speed" : "effort"
-    readonly property var view: history.detailRevision >= 0 && S.rev >= 0 && first.length > 0 ? history.modeSection(first, last, source, kind) : ({ rows: [], known: false })
+    readonly property var view: history.detailRevision >= 0 && S.rev >= 0 && first.length > 0 ? history.modeSection(first, last, source, kind, host) : ({ rows: [], known: false })
     readonly property var rows: view.rows || []
     readonly property real requestsWidth: 70
     readonly property real outputWidth: 70
@@ -83,7 +85,7 @@ Rectangle {
                     var codes = { claudeCode: "claude-code", claudeDesktop: "claude-desktop", workbuddyAi: "workbuddy-ai" }
                     var code = section.source === "all" ? "all" : (codes[section.source] || section.source)
                     var path = history.chooseCsvPath("agent-speed-modes-" + code + "-" + section.first + "-" + section.last + ".csv")
-                    if (path.length > 0) history.exportModeCsv(path, section.first, section.last, section.source)
+                    if (path.length > 0) history.exportModeCsv(path, section.first, section.last, section.source, section.host)
                 }
             }
         }

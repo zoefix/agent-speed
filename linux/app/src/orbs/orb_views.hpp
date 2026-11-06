@@ -5,14 +5,17 @@
 #include <QVariantMap>
 #include <map>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "agentspeed/snapshot.hpp"
 
-// One floating orb as the worker sees it (DESIGN 2b): its id and sources (nullopt: every enabled source).
+// One floating orb as the worker sees it (DESIGN 2b): its id, sources (nullopt: every enabled source) and hosts
+// (DESIGN 13; nullopt: every host).
 struct OrbSpec {
     QString id;
     std::optional<std::vector<agentspeed::SourceKind>> sources;
+    std::optional<std::vector<std::string>> hosts;
     bool operator==(const OrbSpec&) const = default;
 };
 
@@ -41,6 +44,7 @@ public:
 private:
     struct State {
         std::optional<std::vector<agentspeed::SourceKind>> sources;
+        std::optional<std::vector<std::string>> hosts;
         double peak = -1;
         qint64 day = 0;
         qint64 lastEventMs = 0;

@@ -1,5 +1,6 @@
 using AgentSpeed.Presentation.Boards;
 using AgentSpeed.Presentation.Localization;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Presentation.Settings.Boards;
 using AgentSpeed.Presentation.Settings.Orbs;
@@ -23,7 +24,9 @@ public static class BoardMenuModel
     ];
 
     /// <summary>The menu of <paramref name="boardId"/>; null when no such board exists.</summary>
-    public static MenuLevel? Build(string boardId, AppSettings settings, SourceAvailability sources, Localizer localizer)
+    /// <param name="hosts">Each host's dot and word for the Hosts submenu (DESIGN 13), by id.</param>
+    public static MenuLevel? Build(string boardId, AppSettings settings, SourceAvailability sources, Localizer localizer,
+        IReadOnlyDictionary<string, MenuHostState>? hosts = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -34,13 +37,19 @@ public static class BoardMenuModel
         }
 
         var id = board.Id;
+        var hostsMenu = HostsMenu(board.Hosts, new MenuAction.SetBoardAllHosts(id), host => new MenuAction.ToggleBoardHost(id, host), settings,
+            hosts, localizer);
         return new MenuLevel(
         [
-            new MenuRow(Title(board, localizer)) { Icon = DotsOf(board.Sources, sources), IsHeader = true, IsEnabled = false },
+            new MenuRow(Title(board, localizer, RemoteHostStates.Choices(settings.RemoteHosts, localizer)))
+            {
+                Icon = DotsOf(board.Sources, sources), IsHeader = true, IsEnabled = false,
+            },
             MenuSeparator.Instance,
             Submenu(localizer["boards.style"], BoardStyles.All.Select(style =>
                 (MenuEntry)Toggle(StyleName(style, localizer), board.Style == style, new MenuAction.SetBoardStyle(id, style)))),
             SourcesMenu(board.Sources, new MenuAction.SetBoardAllSources(id), kind => new MenuAction.ToggleBoardSource(id, kind), sources, localizer),
+            .. hostsMenu is null ? Array.Empty<MenuEntry>() : [hostsMenu],
             ReadoutsMenu(board, localizer),
             Submenu(localizer["menu.size"], Sizes.Select(s =>
                 (MenuEntry)Toggle(localizer[s.Key], board.Size == s.Size, new MenuAction.SetBoardSize(id, s.Size)))),
@@ -80,12 +89,16 @@ public static class BoardMenuModel
         };
     }
 
-    /// <summary>The header: the style's name and the board's sources (<c>霓虹座艙 · 全部來源</c>).</summary>
-    public static string Title(BoardDefinition board, Localizer localizer)
+    /// <summary>
+    /// The header: the style's name, the board's sources and, while remote hosts exist, its hosts
+    /// (<c>霓虹座艙 · 全部來源 · devbox +1</c>; <paramref name="hosts"/> from <see cref="RemoteHostStates.Choices"/>).
+    /// </summary>
+    public static string Title(BoardDefinition board, Localizer localizer, IReadOnlyList<OrbHostChoice>? hosts = null)
     {
         ArgumentNullException.ThrowIfNull(board);
         ArgumentNullException.ThrowIfNull(localizer);
-        return StyleName(board.Style, localizer) + " · " + OrbNaming.AutomaticName(board.Sources, localizer);
+        return StyleName(board.Style, localizer) + " · " + OrbNaming.AutomaticName(board.Sources, localizer)
+            + (hosts is null ? string.Empty : OrbNaming.HostSuffix(board.Hosts, hosts, localizer));
     }
 
     public static string StyleName(BoardStyle style, Localizer localizer)

@@ -6,6 +6,7 @@
 #include <deque>
 #include <map>
 #include <optional>
+#include <string>
 #include <vector>
 
 #include "agentspeed/board.hpp"
@@ -14,10 +15,12 @@
 
 class Strings;
 
-// One board as the worker sees it: its id and sources (nullopt: every enabled source).
+// One board as the worker sees it: its id, sources (nullopt: every enabled source) and hosts (DESIGN 13; nullopt:
+// every host).
 struct BoardSpec {
     QString id;
     std::optional<std::vector<agentspeed::SourceKind>> sources;
+    std::optional<std::vector<std::string>> hosts;
     bool operator==(const BoardSpec&) const = default;
 };
 

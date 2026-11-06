@@ -38,7 +38,7 @@ public class OrbMenuModelTests
     private static MenuLevel Sub(MenuLevel level, string key) => Row(level, key).Submenu!;
 
     private static string[] Outline(MenuLevel level) =>
-        [.. level.Entries.Select(e => e is MenuRow row ? row.Label : Separator)];
+        [.. level.Entries.Select(e => e switch { MenuRow row => row.Label, MenuSlider slider => "slider " + slider.Label, _ => Separator })];
 
     private static string[] Labels(params string[] keys) => [.. keys.Select(k => k == Separator ? Separator : En[k])];
 
@@ -177,7 +177,7 @@ public class OrbMenuModelTests
         Assert.Equal(new MenuAction.SetOrbAllSources("a"), sources.Rows.First().Action);
         Assert.IsType<MenuSeparator>(sources.Entries[1]);
         Assert.Equal(Enum.GetValues<SourceKind>().Select(k => En[DisplayText.SourceKey(k)]), sources.Rows.Skip(1).Select(r => r.Label));
-        Assert.Equal(["OpenClaw", "Hermes Agent", "Factory Droid"], sources.Rows.TakeLast(3).Select(r => r.Label));
+        Assert.Equal(["Hermes Agent", "Factory Droid", "Devin"], sources.Rows.TakeLast(3).Select(r => r.Label));
 
         foreach (var kind in Enum.GetValues<SourceKind>())
         {
@@ -249,7 +249,8 @@ public class OrbMenuModelTests
         Assert.Equal(new MenuAction.SetOrbStyle("a", OrbStyle.Liquid), styles.Rows.Single(r => r.Label == En["style.liquid"]).Action);
 
         var sizes = Sub(menu, "menu.size");
-        Assert.Equal(Labels("menu.size.small", "menu.size.medium", "menu.size.large"), Outline(sizes));
+        Assert.Equal([.. Labels("menu.size.small", "menu.size.medium", "menu.size.large", Separator), "slider " + En["settings.orb.size"]],
+            Outline(sizes));
         Assert.Equal([En["menu.size.medium"]], sizes.Rows.Where(r => r.IsChecked).Select(r => r.Label));
         Assert.Equal(
             [new MenuAction.SetOrbSize("a", 112), new MenuAction.SetOrbSize("a", 148), new MenuAction.SetOrbSize("a", 196)],
@@ -272,6 +273,22 @@ public class OrbMenuModelTests
     [InlineData(72, -1)]
     public void ASizeChecksItsNearestPresetWithinEight(double size, int expected) =>
         Assert.Equal(expected, OrbMenuModel.PresetIndex(size));
+
+    [Fact]
+    public void TheSizeSliderCoversTheWholeRangeInFourPointSteps()
+    {
+        var slider = Sub(OrbMenu(With(Orb("a") with { Style = OrbStyle.Reactor, Size = 92 }), "a"), "menu.size").Entries.OfType<MenuSlider>().Single();
+
+        Assert.Equal((En["settings.orb.size"], 92.0, 64.0, 240.0, 4.0), (slider.Label, slider.Value, slider.Minimum, slider.Maximum, slider.Step));
+        Assert.Equal("92 pt", slider.ValueText(92));
+        Assert.Equal(new MenuAction.SetOrbSize("a", 136), slider.Action(136));
+        Assert.Equal([64.0, 64, 100, 100, 104, 240, 240, 64], new[] { 10, 64, 101, 101.9, 102, 239, 400, double.NaN }.Select(slider.Snap));
+        Assert.Equal(1, slider.CheckedRow!(148));
+        Assert.Equal(-1, slider.CheckedRow(92));
+
+        var quick = Sub(QuickMenu(With(Orb("solo") with { Size = 64 })), "menu.size").Entries.OfType<MenuSlider>().Single();
+        Assert.Equal(64, quick.Value);
+    }
 
     [Fact]
     public void WindowTogglesActOnThisOrb()

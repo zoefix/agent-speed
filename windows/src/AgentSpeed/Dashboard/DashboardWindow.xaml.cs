@@ -101,6 +101,9 @@ internal sealed partial class DashboardWindow : Window
     /// <summary>A source row (that source) or the Today header's history button (null, all sources) was clicked.</summary>
     public event EventHandler<SourceKind?>? HistoryRequested;
 
+    /// <summary>A Hosts row: the Usage History window on that host, every source (DESIGN 13).</summary>
+    public event EventHandler<string>? HostHistoryRequested;
+
     public event EventHandler? QuitRequested;
 
     public event EventHandler<bool>? OrbToggled;
@@ -685,6 +688,15 @@ internal sealed partial class DashboardWindow : Window
     }
 
     private void OnHistory(object sender, RoutedEventArgs e) => RequestHistory(null);
+
+    private void OnHostRow(object sender, RoutedEventArgs e)
+    {
+        if (sender is FrameworkElement { DataContext: HostRow row })
+        {
+            Dismiss();
+            HostHistoryRequested?.Invoke(this, row.Id);
+        }
+    }
 
     private void OnTrafficRow(object sender, RoutedEventArgs e)
     {

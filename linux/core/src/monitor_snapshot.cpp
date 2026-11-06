@@ -5,11 +5,12 @@
 #include "agentspeed/engine.hpp"
 #include "agentspeed/hermes.hpp"
 #include "agentspeed/monitor.hpp"
+#include "agentspeed/monitor_remote.hpp"
 #include "agentspeed/monitor_store.hpp"
 #include "agentspeed/openclaw.hpp"
-#include "agentspeed/opencode.hpp"
+#include "agentspeed/opencode_set.hpp"
 #include "agentspeed/price_book.hpp"
-#include "agentspeed/zcode.hpp"
+#include "agentspeed/zcode_set.hpp"
 
 // The engine tick (METRICS 6): live rate, today, history buckets, the agents list and the source rows.
 namespace agentspeed {
@@ -33,6 +34,7 @@ std::unique_ptr<work::ActionReader> Monitor::makeActions(const std::string& id, 
         if (!config_.enabled.contains(source)) return;
         const report::ModelKey key{store_->reportModelId(action.model, store_->providerOf(id)), source};
         perfLedger_.call(id, key, action, clockMs_, action.seeded);
+        if (toolObserver_) toolObserver_(id, source, action);
     });
     return reader;
 }
@@ -53,7 +55,8 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
         }
         const auto& info = agents_.at(row.id);
         const auto* reader = actionsOf(row.id);
-        const auto& actions = reader ? reader->actions() : kNoActions;
+        const auto* remoteOwn = reader ? nullptr : remoteActions(row.id);
+        const auto& actions = reader ? reader->actions() : remoteOwn ? *remoteOwn : kNoActions;
         AgentPerf value;
         value.score = perf::evaluate(info.source, info.phase, info.lastLineMs, byAgent[row.id], actions, nowMs);
         if (value.score.score) {
@@ -65,31 +68,31 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
         row.perf = std::move(value);
     }
 
-    for (const auto& sources : scoreSets_) {
-        const auto inSet = [&](SourceKind kind) { return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end(); };
+    for (const auto& subset : scoreSets_) {
         ScoreSet set;
-        set.sources = sources;
+        set.sources = subset.sources;
+        set.hosts = subset.hosts;
         std::vector<perf::Valued> members;
         for (const auto& a : snap.agents) {
-            if (!inSet(a.source)) continue;
+            if (!subset.contains(a.source, a.host)) continue;
             members.push_back(values[a.id]);
             if (a.phase == Phase::Generating) set.generating = true;
         }
         set.value = perf::highest(members);
         for (const auto& a : snap.agents) {
-            if (!inSet(a.source) || !a.perf) continue;
+            if (!subset.contains(a.source, a.host) || !a.perf) continue;
             if (set.value.form != perf::Form::None && a.perf->score.form == set.value.form) ++set.scored;
             if (set.value.agent && a.id == *set.value.agent) set.provisional = a.perf->score.provisional;
         }
         engine::ThinkingWindow window = thinking.total;
-        if (sources) {
+        if (subset.sources || subset.hosts) {
             std::vector<engine::Response> ownResponses;
             std::vector<engine::Agent> ownAgents;
             for (const auto& r : recent) {
-                if (inSet(r.source)) ownResponses.push_back(r);
+                if (subset.contains(r.source, r.host)) ownResponses.push_back(r);
             }
             for (const auto& a : agents) {
-                if (inSet(a.source)) ownAgents.push_back(a);
+                if (subset.contains(a.source, a.host)) ownAgents.push_back(a);
             }
             window = engine::thinking(ownResponses, ownAgents, nowMs).total;
         }
@@ -181,6 +184,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         a.phase = info.phase;
         a.inFlightStartMs = info.inFlightStartMs;
         a.lastLineMs = info.lastLineMs;
+        a.host = info.host;
         if (const auto parent = parents_.find(id); parent != parents_.end()) a.parentId = parent->second;
         agents.push_back(std::move(a));
     }
@@ -234,6 +238,7 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         row.liveOutput = rate.output;
         row.liveTotal = rate.total;
         row.depth = depth[id];
+        row.host = info.host;
         row.subagent = info.isSubagent;
         row.parentId = self.parentId;
         row.lastLineMs = info.lastLineMs;
@@ -292,51 +297,75 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         }
         snap.sources.push_back(std::move(row));
     }
-    // METRICS 6.8: only enabled sources count; the live value of the set joins its peak.
+    snap.unpricedToday = unpriced::liveParts(store_->today(todayStartMs), store_->localDate(nowMs));
+    snap.warnings = warnings();
+    snap.warnings.unfinalized = today.unfinalized;
+    addRemoteSources(snap);
+    if (remote_->tracking()) addHosts(snap, responses, agents, nowMs, todayStartMs);
+    // METRICS 6.8: only enabled sources count; the live value of the set joins its peak. With hosts, over the cells of
+    // the selected hosts (DESIGN 13).
     for (const auto& set : peakSets_) {
-        if (!set) {
+        if (!set.sources && !set.hosts) {
             snap.peakSets.push_back(snap.peakToday);
             continue;
         }
-        std::vector<SourceKind> enabled;
         double setLive = 0;
-        for (const auto& row : snap.sources) {
-            if (!row.enabled || std::find(set->begin(), set->end(), row.source) == set->end()) continue;
-            enabled.push_back(row.source);
-            setLive += row.liveOutput;
+        if (!set.hosts) {
+            for (const auto& row : snap.sources) {
+                if (row.enabled && set.containsSource(row.source)) setLive += row.liveOutput;
+            }
+        } else if (remote_->tracking()) {
+            for (const auto& cell : snap.hostSources) {
+                if (set.contains(cell.source, cell.host)) setLive += cell.liveOutput;
+            }
+        } else if (set.containsHost(std::string(remote::kLocalHost))) {
+            for (const auto& row : snap.sources) {
+                if (row.enabled && set.containsSource(row.source)) setLive += row.liveOutput;
+            }
         }
-        snap.peakSets.push_back(std::max(engine::setPeak(responses, enabled, todayStartMs, nowMs), setLive));
+        const auto member = [&](const engine::Response& r) { return config_.enabled.contains(r.source) && set.contains(r.source, r.host); };
+        snap.peakSets.push_back(std::max(engine::setPeak(responses, member, todayStartMs, nowMs), setLive));
     }
+    return snap;
+}
 
-    snap.unpricedToday = unpriced::liveParts(store_->today(todayStartMs), store_->localDate(nowMs));
-    snap.warnings.partialHistory = partialHistory_;
+Warnings Monitor::warnings() const {
+    Warnings w;
+    w.partialHistory = partialHistory_;
     std::int64_t malformed = removedMalformed_;
     int unreadable = 0;
     for (const auto& [path, file] : files_) {
         malformed += file->parser->malformedLines();
         unreadable += file->unreadable ? 1 : 0;
         if (const auto* conversation = dynamic_cast<const antigravity::Parser*>(file->parser.get()); conversation && conversation->unsupported()) {
-            if (std::find(snap.warnings.unsupported.begin(), snap.warnings.unsupported.end(), SourceKind::Antigravity) ==
-                snap.warnings.unsupported.end()) {
-                snap.warnings.unsupported.push_back(SourceKind::Antigravity);
+            if (std::find(w.unsupported.begin(), w.unsupported.end(), SourceKind::Antigravity) == w.unsupported.end()) {
+                w.unsupported.push_back(SourceKind::Antigravity);
             }
         }
     }
     if (openClaw_) malformed += openClaw_->malformedLines();
     if (hermes_) malformed += hermes_->malformedLines();
     if (openCode_) {
-        if (openCode_->status() == opencode::Status::Unreadable) ++unreadable;
-        if (openCode_->status() == opencode::Status::Unsupported) snap.warnings.unsupported.push_back(SourceKind::OpenCode);
+        bool unsupported = false;
+        for (const auto& source : openCode_->sources()) {
+            if (source->status() == opencode::Status::Unreadable) ++unreadable;
+            unsupported |= source->status() == opencode::Status::Unsupported;
+        }
+        if (unsupported) w.unsupported.push_back(SourceKind::OpenCode);
     }
     if (zcode_) {
-        if (zcode_->unreadable()) ++unreadable;
-        if (zcode_->unsupported()) snap.warnings.unsupported.push_back(SourceKind::ZCode);
+        for (const auto& source : zcode_->sources()) unreadable += source->unreadable() ? 1 : 0;
+        if (zcode_->unsupported()) w.unsupported.push_back(SourceKind::ZCode);
     }
-    if (openClaw_ && openClaw_->unsupported()) snap.warnings.unsupported.push_back(SourceKind::OpenClaw);
-    snap.warnings.malformedLines = malformed;
-    snap.warnings.unreadableFiles = unreadable;
-    snap.warnings.unfinalized = today.unfinalized;
-    return snap;
+    if (openClaw_ && openClaw_->unsupported()) w.unsupported.push_back(SourceKind::OpenClaw);
+    if (devin_) {
+        malformed += devin_->malformedRows();
+        unreadable += devin_->unreadableCount();
+        if (devin_->unsupported()) w.unsupported.push_back(SourceKind::Devin);
+    }
+    w.malformedLines = malformed;
+    w.unreadableFiles = unreadable;
+    return w;
 }
 
 }  // namespace agentspeed

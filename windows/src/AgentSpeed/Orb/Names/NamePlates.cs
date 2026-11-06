@@ -66,8 +66,9 @@ internal sealed class NamePlates
                 NamePlateRules.Shows(orb.Definition, settings));
         }
 
+        var hosts = Presentation.Remote.RemoteHostStates.Choices(settings.RemoteHosts, _loc);
         NamePlateLayout Fit(int i, double budget) =>
-            NamePlateContent.Plate(orbs[i].Definition, availability, _loc, new NamePlateMetrics(orbs[i].Definition.Size), budget, type.Measure);
+            NamePlateContent.Plate(orbs[i].Definition, availability, _loc, new NamePlateMetrics(orbs[i].Definition.Size), budget, type.Measure, hosts);
 
         var placed = NamePlatePlacement.Resolve(subjects, (i, budget) => Fit(i, budget).Width);
         var seen = new HashSet<string>(StringComparer.Ordinal);

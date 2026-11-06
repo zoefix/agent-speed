@@ -41,6 +41,9 @@ public struct LegacyOrbSettings: Equatable, Sendable {
 /// opacity and toggles, sitting exactly where the old orb would have been placed. The old keys are read only, never
 /// written again, so a downgrade restores the single orb.
 public enum OrbsMigration {
+    /// The single-orb version's sizes: a stored size outside them was drawn at the nearest end.
+    static let legacySizes: ClosedRange<Double> = 96...240
+
     public static func migrate(
         _ legacy: LegacyOrbSettings,
         id: String,
@@ -51,7 +54,7 @@ public enum OrbsMigration {
             id: id,
             sources: .all,
             style: .led,
-            size: legacy.size,
+            size: legacy.size.isFinite ? legacy.size.clampedToRange(legacySizes) : OrbSizes.default,
             opacity: legacy.opacity,
             alwaysOnTop: legacy.alwaysOnTop,
             clickThrough: legacy.clickThrough,

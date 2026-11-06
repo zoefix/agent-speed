@@ -21,10 +21,21 @@ final class ZcodeSource {
     private var watermark: Int64?
     private var needsRead = true
     private let fileID: FileID
+    /// Shared with the source's other databases: a session one of them reads is skipped here (METRICS 2.1).
+    private let claims: SessionClaims?
+    private let owner: Int
+    private var claimed: Set<String> = []
 
-    init(root: String, fileID: FileID) {
+    init(root: String, fileID: FileID, claims: SessionClaims? = nil, owner: Int = 0) {
         rootPath = root
         self.fileID = fileID
+        self.claims = claims
+        self.owner = owner
+    }
+
+    private func releaseClaims(keeping kept: Set<String> = []) {
+        for session in claimed.subtracting(kept) { claims?.release(session, by: owner) }
+        claimed.formIntersection(kept)
     }
 
     var exists: Bool { status != .missing }
@@ -82,6 +93,7 @@ final class ZcodeSource {
             update.removedAgents = Array(states.keys)
             states = [:]
             parentLinks = [:]
+            releaseClaims()
             return update
         }
         if let stat, current?.identity != stat.identity {
@@ -98,7 +110,10 @@ final class ZcodeSource {
             needsRead = false
             var next: [String: AgentState] = [:]
             var links: [String: String] = [:]
+            var present: Set<String> = []
             for session in batch.sessions {
+                guard claims?.claim(session.id, by: owner) ?? true else { continue }
+                present.insert(session.id)
                 let id = database.agentId(session.id)
                 var state = states[id] ?? AgentState(source: .zcode)
                 state.thread = SessionThread(id: session.id, parentId: session.parentId, createdMs: session.createdMs)
@@ -142,6 +157,8 @@ final class ZcodeSource {
                 state.setPhase(message.phase, at: message.phaseSinceMs ?? time, inFlightStartMs: message.inFlightStartMs)
                 next[id] = state
             }
+            releaseClaims(keeping: present)
+            claimed = present
             for id in states.keys where next[id] == nil { update.removedAgents.append(id) }
             update.agents = next.filter { states[$0.key] != $0.value }
             if let watermark { emitted = emitted.filter { $0.value.endMs >= watermark - 2 * 3600_000 } }

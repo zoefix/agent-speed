@@ -13,9 +13,11 @@ Popup {
     property string source: "all"
     property var excluded: []
     property string view: "30d"
+    // DESIGN 13: one host's facts ("" for every host).
+    property string host: ""
 
     readonly property var report: opened && history.detailRevision >= 0 && catalog.revision >= 0 && S.rev >= 0
-                                  ? history.unpricedView(first, last, source, excluded, view) : ({ groups: [], count: 0, pricedNow: 0, text: "" })
+                                  ? history.unpricedView(first, last, source, excluded, view, host) : ({ groups: [], count: 0, pricedNow: 0, text: "" })
     readonly property string localeName: S.language === "en" ? "en_US" : S.language.replace("-", "_")
 
     width: 380

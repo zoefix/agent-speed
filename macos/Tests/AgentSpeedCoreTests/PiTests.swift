@@ -81,7 +81,7 @@ struct PiTests {
         var configuration = MonitorConfiguration(piRoot: URL(fileURLWithPath: "/data/pi/", isDirectory: true))
         configuration.piHome = PiHome(environment: ["PI_CODING_AGENT_SESSION_DIR": "/srv/env"], home: URL(fileURLWithPath: "/home/dev"))
         #expect(configuration.resolvedRoots(for: .pi) == ["/data/pi"])
-        configuration.piRoot = nil
+        configuration.locations.reset(.pi)
         #expect(configuration.resolvedRoots(for: .pi) == ["/home/dev/.pi/agent/sessions", "/srv/env"])
     }
 
@@ -103,7 +103,7 @@ struct PiTests {
         #expect(!HistoryAnalyzer.roots(configuration).contains { $0.0 == .omp })
         configuration.enabledSources.remove(.pi)
         #expect(!HistoryAnalyzer.roots(configuration).contains { $0.0 == .omp }, "Pi's files stay Pi's while Pi is off")
-        configuration.ompRoot = URL(fileURLWithPath: home + "/.omp/agent/sessions", isDirectory: true)
+        configuration.setLocation(URL(fileURLWithPath: home + "/.omp/agent/sessions", isDirectory: true), for: .omp)
         #expect(configuration.allRoots().first { $0.family == .omp }?.readable == true)
     }
 

@@ -32,13 +32,14 @@ public static class NamePlateContent
     }
 
     /// <summary>The name plate fitted into <paramref name="budget"/> (pt): dots, then the name shortened as needed.</summary>
+    /// <param name="hosts">This computer and the remote hosts (DESIGN 13): an automatic name then ends with its hosts.</param>
     public static NamePlateLayout Plate(OrbDefinition orb, SourceAvailability availability, Localizer localizer, NamePlateMetrics metrics,
-        double budget, NamePlateMeasure measure)
+        double budget, NamePlateMeasure measure, IReadOnlyList<OrbHostChoice>? hosts = null)
     {
         ArgumentNullException.ThrowIfNull(orb);
         ArgumentNullException.ThrowIfNull(measure);
         var dots = Dots(orb.Sources, availability);
-        var name = NamePlateName.For(orb, localizer);
+        var name = NamePlateName.For(orb, localizer, hosts);
         var cjk = name.IsCjk;
         var fit = name.Fit(metrics.TextBudget(dots.Length, budget), t => NamePlateLayout.TextWidth(t, cjk, metrics, measure));
         var line = new NamePlateLine([new NamePlateRun(dots, fit.Text, NamePlateInk.Primary, cjk)]);

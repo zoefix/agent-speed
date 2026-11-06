@@ -7,6 +7,8 @@ Item {
     required property string key
     required property string project
     required property string detail
+    // DESIGN 13: a remote agent's host (empty for this computer's agents).
+    required property string hostName
     required property string phase
     required property string source
     required property real live
@@ -38,7 +40,8 @@ Item {
     signal cardRequested()
     readonly property string separator: S.language === "ja" ? "、" : S.language === "en" ? ", " : "，"
     Accessible.role: Accessible.ListItem
-    Accessible.name: [depth > 0 ? project + separator + S.tr2(S.rev, "agents.subagent") : project, detail, status,
+    Accessible.name: [depth > 0 ? project + separator + S.tr2(S.rev, "agents.subagent") : project, detail,
+                      hostName.length > 0 ? S.tr2(S.rev, "remote.a11y.onHost").replace("%@", hostName) : "", status,
                       live >= 0.05 ? liveText + " " + S.tr2(S.rev, "unit.tokS") : "", perf >= 0 ? perfA11y : "", modesA11y]
                      .filter(function(t) { return t.length > 0 }).join(separator)
     Accessible.description: S.tr2(S.rev, "a11y.perf.card")
@@ -137,15 +140,26 @@ Item {
                 elide: Text.ElideRight
             }
         }
-        // The detail truncates first; the traffic suffix stays whole (DESIGN 4).
+        // The detail truncates first; the host (at most 96, truncated in the middle) and the traffic suffix stay
+        // readable (DESIGN 4, 13).
         Row {
             width: parent.width
             Text {
-                width: Math.min(implicitWidth, parent.width - suffix.width)
+                width: Math.min(implicitWidth, parent.width - suffix.width - host.width)
                 text: row.detail
                 color: Theme.ink2
                 font.pixelSize: 12
                 elide: Text.ElideRight
+            }
+            Text {
+                id: host
+                visible: row.hostName.length > 0
+                width: visible ? Math.min(implicitWidth, hostMetrics.advanceWidth(" · ") + 96) : 0
+                text: " · " + row.hostName
+                color: Theme.ink2
+                font.pixelSize: 12
+                elide: Text.ElideMiddle
+                FontMetrics { id: hostMetrics; font: host.font }
             }
             Text {
                 id: suffix

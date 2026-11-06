@@ -12,6 +12,8 @@ import AppKit
 /// - `levels-<level>`: the row at the redline (12 s from 25 s);
 /// - `hero-<style>[-light][-<level>][-rm]`: one style at 240 pt climbing to the redline (16 s from 22 s);
 /// - `still-<style>-<seconds>[-light]`: a single PNG of one style at a moment of the tour;
+/// - `strip-<seconds>[-light][-s<size>]`: a single PNG of the five styles side by side at a moment of the tour, at
+///   148 pt or the given size (the smallest orbs of DESIGN 2a);
 /// - `fx-<tok/s>[-light][-<level>][-rm][-peak][-zap][-s<size>]`: a single PNG of `led` at R = 2000 tok/s after 6 s at
 ///   that speed, for side-by-side review with the v1.4 prototype's still frames (`OrbFrameHarness+Led`).
 /// `AGENT_SPEED_ORB_FPS` (30) and `AGENT_SPEED_ORB_SECONDS` limit the clips.
@@ -22,6 +24,7 @@ enum OrbFrameHarness {
             case row
             case hero(OrbStyleKind)
             case still(OrbStyleKind, Double)
+            case strip(Double)
             case fx(LedStill)
         }
 
@@ -32,6 +35,8 @@ enum OrbFrameHarness {
         let reduceMotion: Bool
         let start: Double
         let duration: Double
+        /// The row's diameter (`-s<size>`).
+        let size: CGFloat
 
         init?(_ name: String) {
             let parts = name.split(separator: "-").map(String.init)
@@ -40,6 +45,7 @@ enum OrbFrameHarness {
             dark = !parts.contains("light")
             level = parts.contains("max") ? .max : parts.contains("soft") ? .soft : parts.contains("off") ? .off : .standard
             reduceMotion = parts.contains("rm")
+            size = parts.dropFirst().compactMap { $0.hasPrefix("s") ? Double($0.dropFirst()) : nil }.first.map { CGFloat($0) } ?? 148
             switch first {
             case "row":
                 kind = .row
@@ -57,6 +63,11 @@ enum OrbFrameHarness {
             case "still":
                 guard parts.count > 2, let style = OrbStyleKind(rawValue: parts[1]), let at = Double(parts[2]) else { return nil }
                 kind = .still(style, at)
+                start = at
+                duration = 0
+            case "strip":
+                guard parts.count > 1, let at = Double(parts[1]) else { return nil }
+                kind = .strip(at)
                 start = at
                 duration = 0
             case "fx":
@@ -102,7 +113,7 @@ enum OrbFrameHarness {
             let started = Date()
             let count = record(clip, model: model, fps: fps, seconds: min(limit ?? .infinity, clip.duration), into: frames, directory: directory)
             report += String(format: "%@: %d frames in %.1f s\n", clip.name, count, Date().timeIntervalSince(started))
-            if case .still = clip.kind {
+            if clip.duration == 0 {
                 try? FileManager.default.removeItem(at: frames)
                 continue
             }
@@ -130,8 +141,8 @@ enum OrbFrameHarness {
             return stage
         }
         switch clip.kind {
-        case .row:
-            let s: CGFloat = 148
+        case .row, .strip:
+            let s = clip.size
             let width = max(1.5 * s, 170)
             size = CGSize(width: width * 5, height: 1.5 * s + 46)
             for (index, style) in OrbStyleKind.allCases.enumerated() {
@@ -147,6 +158,11 @@ enum OrbFrameHarness {
         }
         defer { cells.forEach { $0.stage.stop() } }
 
+        let tourHover = switch clip.kind {
+        case .row: clip.start == 0
+        case .strip: true
+        default: false
+        }
         var random = OrbRandom(seed: 99)
         var tourTime = 0.0
         let dt = 1.0 / 60
@@ -158,7 +174,7 @@ enum OrbFrameHarness {
                 fire = (reference.value * random.range(0.5...1.3), Int(random.range(80...6000)))
             }
             for cell in cells {
-                if case .row = clip.kind, clip.start == 0 { cell.stage.hovered = tourTime >= 50.5 && tourTime < 52.6 }
+                if tourHover { cell.stage.hovered = tourTime >= 50.5 && tourTime < 52.6 }
                 cell.stage.step(dt) { _ in OrbTour.value(at: tourTime.truncatingRemainder(dividingBy: OrbTour.length)) }
                 if let fire { cell.stage.animatorPulse(speed: fire.0, output: fire.1) }
                 cell.stage.newPeakRule(tourTime: tourTime)
@@ -172,7 +188,7 @@ enum OrbFrameHarness {
             if total > 0 { for _ in 0..<stepsPerFrame { advance() } }
             guard let image = compose(cells, size: size, dark: clip.dark) else { continue }
             let url: URL
-            if case .still = clip.kind {
+            if clip.duration == 0 {
                 url = directory.appendingPathComponent("\(clip.name).png")
             } else {
                 url = frames.appendingPathComponent(String(format: "f%05d.png", index))

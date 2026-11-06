@@ -231,6 +231,12 @@ Canvas {
             ctx.lineWidth = 1.6
             ctx.beginPath(); ctx.moveTo(3.5, 8); ctx.lineTo(12.5, 8); ctx.stroke()
             break
+        case "minusCircle":
+            ctx.lineWidth = 1.3
+            ctx.beginPath(); ctx.arc(8, 8, 6.4, 0, Math.PI * 2); ctx.stroke()
+            ctx.lineWidth = 1.5
+            ctx.beginPath(); ctx.moveTo(5, 8); ctx.lineTo(11, 8); ctx.stroke()
+            break
         case "copy":
             ctx.lineWidth = 1.3
             ctx.beginPath(); ctx.roundedRect(5.5, 5.5, 8, 8, 1.8, 1.8); ctx.stroke()
@@ -243,6 +249,41 @@ Canvas {
             ctx.beginPath(); ctx.arc(8, 9, 6, Math.PI * 0.8, Math.PI * 2.2, false); ctx.stroke()
             ctx.beginPath(); ctx.moveTo(8, 9); ctx.lineTo(5.4, 6.6); ctx.stroke()
             ctx.beginPath(); ctx.arc(8, 9, 1.2, 0, Math.PI * 2); ctx.fill()
+            break
+        // DESIGN 13: a host (server.rack), this computer (laptopcomputer) and every host (square.stack.3d.up).
+        case "server":
+            ctx.lineWidth = 1.3
+            for (var u = 0; u < 3; ++u) {
+                var top = 2.2 + u * 4.1
+                ctx.beginPath(); ctx.roundedRect(2.4, top, 11.2, 3.4, 1.1, 1.1); ctx.stroke()
+                ctx.beginPath(); ctx.arc(4.9, top + 1.7, 0.75, 0, Math.PI * 2); ctx.fill()
+                ctx.beginPath(); ctx.moveTo(8.2, top + 1.7); ctx.lineTo(11.4, top + 1.7); ctx.stroke()
+            }
+            break
+        case "laptop":
+            ctx.lineWidth = 1.3
+            ctx.beginPath(); ctx.roundedRect(3.4, 3.4, 9.2, 6.8, 1.2, 1.2); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(1.4, 12.6); ctx.lineTo(14.6, 12.6); ctx.stroke()
+            break
+        case "stack":
+            ctx.lineWidth = 1.3
+            ctx.beginPath(); ctx.moveTo(8, 2.4); ctx.lineTo(14, 5.4); ctx.lineTo(8, 8.4); ctx.lineTo(2, 5.4); ctx.closePath(); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(2, 8.2); ctx.lineTo(8, 11.2); ctx.lineTo(14, 8.2); ctx.stroke()
+            ctx.beginPath(); ctx.moveTo(2, 10.9); ctx.lineTo(8, 13.9); ctx.lineTo(14, 10.9); ctx.stroke()
+            break
+        case "ellipsis":
+            ctx.lineWidth = 1.2
+            ctx.beginPath(); ctx.arc(8, 8, 6.6, 0, Math.PI * 2); ctx.stroke()
+            for (var e = -1; e <= 1; ++e) { ctx.beginPath(); ctx.arc(8 + e * 3, 8, 0.95, 0, Math.PI * 2); ctx.fill() }
+            break
+        case "warning":
+            ctx.beginPath()
+            ctx.moveTo(8, 1.6); ctx.lineTo(15.1, 14.2); ctx.lineTo(0.9, 14.2); ctx.closePath()
+            ctx.fill()
+            ctx.globalCompositeOperation = "destination-out"
+            ctx.lineWidth = 1.7
+            ctx.beginPath(); ctx.moveTo(8, 6); ctx.lineTo(8, 9.6); ctx.stroke()
+            ctx.beginPath(); ctx.arc(8, 11.9, 0.95, 0, Math.PI * 2); ctx.fill()
             break
         }
     }

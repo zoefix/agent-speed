@@ -4,8 +4,9 @@ import AppKit
 import SwiftUI
 
 /// `--render-previews` group `boards`: Settings → 懸浮窗's Boards list and editor (empty and with three boards), the
-/// boards' menus as they are built (context, quick and the orb menu's add), and each style's content for the live
-/// feed's tick, light and dark. Nothing touches the user's boards: the preview model has its own settings suite.
+/// boards' menus as they are built (context, quick and the orb menu's add), each style's content for the live feed's
+/// tick, and a board at its opacity beside the same board faded when idle, light and dark. Nothing touches the user's
+/// boards: the preview model has its own settings suite.
 @MainActor
 enum BoardSettingsPreviews {
     static func render(model: AppModel, into directory: URL) {
@@ -26,6 +27,7 @@ enum BoardSettingsPreviews {
         boards.setVisible(false, of: timing)
         // The glass board's editor shows independent switches: 思考 off.
         boards.setReadouts(BoardReadouts(intelligence: true, thinking: false, cost: true), of: glass)
+        boards.setFadeWhenIdle(true, of: glass)
         boards.settingsSelection = glass
         for step in 1...3 {
             PreviewRenderer.publish(model, snapshot: PreviewData.snapshot(
@@ -58,6 +60,17 @@ enum BoardSettingsPreviews {
             }
         }
         writeMetricTexts(model, ids: [neon, glass, timing], into: directory)
+        // A board fades only at rest: below 0.5 tok/s for 3 s and the hold, then the idle title.
+        PreviewRenderer.publish(model, speed: 0, agents: .grouped)
+        RunLoop.main.run(until: Date().addingTimeInterval(4))
+        PreviewRenderer.publish(model, speed: 0, agents: .grouped)
+        settle()
+        if let runtime = boards.runtime(neon), let tick = runtime.tick {
+            for dark in [false, true] {
+                writeFade(tick, config: runtime.config, dark: dark, model: model,
+                          to: directory.appendingPathComponent("boards-fade-\(dark ? "dark" : "light").png"))
+            }
+        }
         for id in [neon, glass, timing] { boards.remove(id) }
     }
 
@@ -121,6 +134,40 @@ enum BoardSettingsPreviews {
 
     /// The tick drawn by its style's content builder, composited as the board's layers would be.
     private static func writeContent(_ tick: BoardTick, config: BoardConfig, dark: Bool, model: AppModel, to url: URL) {
+        guard let image = contentImage(tick, config: config, dark: dark, model: model) else { return }
+        PreviewSnapshot.write(image, to: url)
+    }
+
+    /// DESIGN 2c *Fade when idle*: on a desktop-like backdrop, the board at its opacity and the same board faded to
+    /// 45 % of it, as the window server composites the two windows.
+    private static func writeFade(_ tick: BoardTick, config: BoardConfig, dark: Bool, model: AppModel, to url: URL) {
+        guard let board = contentImage(tick, config: config, dark: dark, model: model) else { return }
+        let side = CGFloat(config.size.side)
+        let gap: CGFloat = 40
+        let size = CGSize(width: side * 2 + gap * 3, height: side + gap * 2)
+        let scale: CGFloat = 2
+        let space = CGColorSpace(name: CGColorSpace.sRGB)!
+        guard let context = CGContext(data: nil, width: Int(size.width * scale), height: Int(size.height * scale),
+                                      bitsPerComponent: 8, bytesPerRow: 0, space: space,
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+        context.scaleBy(x: scale, y: scale)
+        let colors = dark ? [RGBColor(hex: 0x1B2340), RGBColor(hex: 0x3A2B4F), RGBColor(hex: 0x10141F)]
+            : [RGBColor(hex: 0xC9D8EE), RGBColor(hex: 0xF1E3D3), RGBColor(hex: 0xDCE6F2)]
+        if let gradient = CGGradient(colorsSpace: space, colors: colors.map(\.cgColor) as CFArray, locations: [0, 0.55, 1]) {
+            context.drawLinearGradient(gradient, start: .zero, end: CGPoint(x: size.width, y: size.height), options: [])
+        }
+        let opacity = CGFloat(config.opacity)
+        for (index, alpha) in [opacity, opacity * IdleFade.alpha].enumerated() {
+            context.saveGState()
+            context.setAlpha(alpha)
+            context.draw(board, in: CGRect(x: gap + CGFloat(index) * (side + gap), y: gap, width: side, height: side))
+            context.restoreGState()
+        }
+        guard let image = context.makeImage() else { return }
+        PreviewSnapshot.write(image, to: url)
+    }
+
+    private static func contentImage(_ tick: BoardTick, config: BoardConfig, dark: Bool, model: AppModel) -> CGImage? {
         let side = CGFloat(config.size.side)
         let builder = BoardContentBuilders.make(style: config.style, size: config.size, dark: dark, l10n: model.l10n, capsule: nil)
         let layout = builder.layout(tick)
@@ -128,7 +175,7 @@ enum BoardSettingsPreviews {
         let space = CGColorSpace(name: CGColorSpace.sRGB)!
         guard let context = CGContext(data: nil, width: Int(side * scale), height: Int(side * scale), bitsPerComponent: 8,
                                       bytesPerRow: 0, space: space,
-                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return }
+                                      bitmapInfo: CGImageAlphaInfo.premultipliedLast.rawValue) else { return nil }
         context.scaleBy(x: scale, y: scale)
         context.translateBy(x: 0, y: side)
         context.scaleBy(x: 1, y: -1)
@@ -154,8 +201,7 @@ enum BoardSettingsPreviews {
             context.restoreGState()
         }
         NSGraphicsContext.restoreGraphicsState()
-        guard let image = context.makeImage() else { return }
-        PreviewSnapshot.write(image, to: url)
+        return context.makeImage()
     }
 }
 

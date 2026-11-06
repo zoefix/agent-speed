@@ -7,6 +7,7 @@
         xmlns:dash="clr-namespace:AgentSpeed.Dashboard"
         xmlns:modes="clr-namespace:AgentSpeed.Modes"
         xmlns:perf="clr-namespace:AgentSpeed.Perf"
+        xmlns:history="clr-namespace:AgentSpeed.History"
         Title="{loc:Loc app.name}"
         Width="368"
         WindowStyle="SingleBorderWindow"
@@ -296,6 +297,60 @@
                     <TextBlock Text="{loc:Loc dashboard.sources.empty}" Style="{StaticResource CaptionText}" Margin="0,4,0,4"
                                TextWrapping="Wrap" Visibility="{Binding HasListedSources, Converter={StaticResource Hidden}}" />
 
+                    <!-- Hosts (DESIGN 13): between Sources and Agents while remote hosts exist; a row opens the history on its host -->
+                    <StackPanel Visibility="{Binding ShowsHosts, Converter={StaticResource Visible}}">
+                        <Rectangle Style="{StaticResource Hairline}" Margin="0,12,0,12" />
+                        <TextBlock Text="{loc:Loc remote.hosts}" Style="{StaticResource BodyStrongText}" Margin="0,0,0,6" />
+                        <ItemsControl ItemsSource="{Binding Hosts}" Focusable="False" AutomationProperties.Name="{loc:Loc remote.hosts}">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type dash:HostRow}">
+                                    <Grid Height="30">
+                                        <dash:SourceRowButton Style="{StaticResource SourceRowButton}" Click="OnHostRow" Tag="{Binding Id}" ShowChevron="True"
+                                                              ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                              ToolTip="{loc:Loc remote.dashboard.hint}" ToolTipService.InitialShowDelay="900"
+                                                              AutomationProperties.Name="{Binding AccessibleName}"
+                                                              AutomationProperties.HelpText="{loc:Loc remote.dashboard.hint}">
+                                            <Grid>
+                                                <Grid.ColumnDefinitions>
+                                                    <ColumnDefinition Width="18" />
+                                                    <ColumnDefinition Width="*" />
+                                                </Grid.ColumnDefinitions>
+                                                <controls:HostStatusDot Kind="{Binding Dot}" HorizontalAlignment="Left"
+                                                                        ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                <history:MiddleTrimmedText x:Name="HostName" Grid.Column="1" Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"
+                                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" ToolTip="{Binding Name}" />
+                                            </Grid>
+                                            <dash:SourceRowButton.Trailing>
+                                                <Grid>
+                                                    <Grid.ColumnDefinitions>
+                                                        <ColumnDefinition Width="Auto" />
+                                                        <ColumnDefinition Width="86" />
+                                                    </Grid.ColumnDefinitions>
+                                                    <TextBlock Text="{Binding TodayText}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                               Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                    <dash:LiveValue Grid.Column="1" Text="{Binding LiveText}" Kind="{Binding LiveKind}"
+                                                                    TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                    Visibility="{Binding ShowsLive, Converter={StaticResource Visible}}"
+                                                                    AutomationProperties.Name="{Binding LiveAccessibleName}"
+                                                                    ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                    <TextBlock Grid.Column="1" Text="{Binding Word}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                               Visibility="{Binding ShowsWord, Converter={StaticResource Visible}}" />
+                                                </Grid>
+                                            </dash:SourceRowButton.Trailing>
+                                        </dash:SourceRowButton>
+                                    </Grid>
+                                    <DataTemplate.Triggers>
+                                        <DataTrigger Binding="{Binding IsConnected}" Value="False">
+                                            <Setter TargetName="HostName" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </DataTrigger>
+                                    </DataTemplate.Triggers>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                    </StackPanel>
+
                     <!-- Agents -->
                     <Rectangle Style="{StaticResource Hairline}" Margin="0,12,0,12" />
                     <!-- Column captions over the intelligence cell and the live value, while rows exist (DESIGN 4, Header). -->
@@ -358,7 +413,13 @@
                                                 <!-- The detail truncates; the traffic suffix after it stays whole (DESIGN 4, Room). -->
                                                 <controls:ShrinkFirstPanel TextElement.FontSize="12" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
                                                     <TextBlock Text="{Binding Detail}" TextTrimming="CharacterEllipsis" />
-                                                    <TextBlock Text="{Binding DetailSuffix}" Typography.NumeralAlignment="Tabular" />
+                                                    <!-- A remote agent's host stays readable (at most 96 DIP, cut in the middle) while the detail gives way (DESIGN 13). -->
+                                                    <StackPanel Orientation="Horizontal">
+                                                        <TextBlock Text=" · " Visibility="{Binding HasHost, Converter={StaticResource Visible}}" />
+                                                        <history:MiddleTrimmedText Text="{Binding HostName}" MaxWidth="96" VerticalAlignment="Center"
+                                                                                   Visibility="{Binding HasHost, Converter={StaticResource Visible}}" />
+                                                        <TextBlock Text="{Binding DetailSuffix}" Typography.NumeralAlignment="Tabular" />
+                                                    </StackPanel>
                                                 </controls:ShrinkFirstPanel>
                                             </StackPanel>
                                             <dash:PhaseBadge Grid.Column="1" Phase="{Binding Phase}" Color="{Binding Color}"

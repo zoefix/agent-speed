@@ -2,7 +2,9 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(ZSTD REQUIRED IMPORTED_TARGET libzstd)
 pkg_check_modules(BROTLI REQUIRED IMPORTED_TARGET libbrotlidec)
 pkg_check_modules(SQLITE REQUIRED IMPORTED_TARGET sqlite3)
-pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
+if(AGENTSPEED_STATIC)
+    set(OPENSSL_USE_STATIC_LIBS TRUE)
+endif()
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
 
 set(AGENTSPEED_PRICES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/prices.json")
@@ -23,7 +25,8 @@ add_custom_command(
     DEPENDS "${AGENTSPEED_CURRENCIES}" "${CMAKE_CURRENT_SOURCE_DIR}/../cmake/embed.cmake"
     VERBATIM)
 
-add_library(agentspeed_core STATIC
+# Parsers, monitor, history and prices: everything the relay (REMOTE 3.1) needs, without reporting, the demo or ICU.
+add_library(agentspeed_base STATIC
     "${AGENTSPEED_PRICES_CPP}"
     "${AGENTSPEED_CURRENCIES_CPP}"
     src/actions.cpp
@@ -33,7 +36,11 @@ add_library(agentspeed_core STATIC
     src/codex_parser.cpp
     src/configured_modes.cpp
     src/dedupe.cpp
-    src/demo.cpp
+    src/devin_database.cpp
+    src/devin_history.cpp
+    src/devin_message.cpp
+    src/devin_paths.cpp
+    src/devin_source.cpp
     src/discovery.cpp
     src/droid.cpp
     src/dsh_parser.cpp
@@ -46,21 +53,29 @@ add_library(agentspeed_core STATIC
     src/hermes.cpp
     src/history.cpp
     src/history_analyzer.cpp
+    src/history_remote_store.cpp
     src/history_store.cpp
     src/json.cpp
     src/kimi_parser.cpp
     src/line_splitter.cpp
+    src/location_editing.cpp
+    src/location_lists.cpp
+    src/location_resolve.cpp
     src/locations.cpp
     src/model.cpp
     src/modes.cpp
     src/money.cpp
     src/mode_context.cpp
     src/monitor.cpp
+    src/monitor_devin.cpp
+    src/monitor_hosts.cpp
+    src/monitor_remote.cpp
     src/monitor_snapshot.cpp
     src/monitor_sources.cpp
     src/omp_parser.cpp
     src/openclaw.cpp
     src/opencode.cpp
+    src/opencode_set.cpp
     src/parents.cpp
     src/path_text.cpp
     src/perf.cpp
@@ -69,21 +84,11 @@ add_library(agentspeed_core STATIC
     src/price_book.cpp
     src/price_validator.cpp
     src/pricing.cpp
-    src/report/crypto.cpp
-    src/report/discovery.cpp
-    src/report/profile.cpp
-    src/report/protocol.cpp
-    src/report/reply.cpp
-    src/report/scheduler.cpp
-    src/report/service.cpp
     src/report/perf.cpp
-    src/report/stream.cpp
     src/report/values.cpp
-    src/report/window.cpp
-    src/report/body.cpp
-    src/report/mode_rows.cpp
     src/report/json_writer.cpp
-    src/report/usernames.cpp
+    src/remote/messages.cpp
+    src/remote/status.cpp
     src/rfc3339.cpp
     src/tailer.cpp
     src/traffic.cpp
@@ -97,7 +102,59 @@ add_library(agentspeed_core STATIC
     src/unpriced.cpp
     src/workbuddy_parser.cpp
     src/zcode.cpp
+    src/zcode_set.cpp
     src/zstd_frames.cpp
 )
-target_include_directories(agentspeed_core PUBLIC include)
-target_link_libraries(agentspeed_core PUBLIC PkgConfig::ZSTD PkgConfig::BROTLI PkgConfig::SQLITE OpenSSL::Crypto PkgConfig::ICU)
+target_include_directories(agentspeed_base PUBLIC include)
+if(AGENTSPEED_STATIC)
+    target_link_libraries(agentspeed_base PUBLIC ${ZSTD_STATIC_LDFLAGS} ${BROTLI_STATIC_LDFLAGS} ${SQLITE_STATIC_LDFLAGS} OpenSSL::Crypto)
+else()
+    target_link_libraries(agentspeed_base PUBLIC PkgConfig::ZSTD PkgConfig::BROTLI PkgConfig::SQLITE OpenSSL::Crypto)
+endif()
+
+# The desktop app's core: the base plus live reporting and the demo driver.
+if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
+    pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
+    add_library(agentspeed_core STATIC
+        src/demo.cpp
+        src/host_selection.cpp
+        src/host_subset.cpp
+        src/location_entries.cpp
+        src/remote/clock.cpp
+        src/remote/connection.cpp
+        src/remote/connection_check.cpp
+        src/remote/connection_session.cpp
+        src/remote/coordinator.cpp
+        src/remote/decoder.cpp
+        src/remote/decoder_agent.cpp
+        src/remote/decoder_history.cpp
+        src/remote/encoder.cpp
+        src/remote/event_loop.cpp
+        src/remote/feed.cpp
+        src/remote/framer.cpp
+        src/remote/history_batch.cpp
+        src/remote/history_ledger.cpp
+        src/remote/history_rows.cpp
+        src/remote/host.cpp
+        src/remote/hub.cpp
+        src/remote/presentation.cpp
+        src/remote/probe.cpp
+        src/remote/process.cpp
+        src/remote/relay_bundle.cpp
+        src/remote/ssh.cpp
+        src/remote/zone.cpp
+        src/report/crypto.cpp
+        src/report/discovery.cpp
+        src/report/profile.cpp
+        src/report/protocol.cpp
+        src/report/reply.cpp
+        src/report/scheduler.cpp
+        src/report/service.cpp
+        src/report/stream.cpp
+        src/report/window.cpp
+        src/report/body.cpp
+        src/report/mode_rows.cpp
+        src/report/usernames.cpp
+    )
+    target_link_libraries(agentspeed_core PUBLIC agentspeed_base PkgConfig::ICU)
+endif()

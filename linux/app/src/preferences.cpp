@@ -84,10 +84,36 @@ void Preferences::setIncludeSubscriptions(bool value) {
 }
 
 QStringList Preferences::disabledSources() const { return settings_.value(QStringLiteral("sources/disabled")).toStringList(); }
-QVariantMap Preferences::folders() const { return settings_.value(QStringLiteral("sources/folders")).toMap(); }
+
+agentspeed::LocationLists Preferences::sourceLocations() const {
+    const auto stored = settings_.value(QStringLiteral("sourceLocations"));
+    if (stored.isValid()) {
+        if (auto lists = agentspeed::LocationLists::fromDocument(stored.toString().toStdString())) return std::move(*lists);
+    }
+    std::map<agentspeed::RootFamily, std::string> legacy;
+    const auto folders = settings_.value(QStringLiteral("sources/folders")).toMap();
+    for (auto it = folders.begin(); it != folders.end(); ++it) {
+        const auto kind = agentspeed::sourceFromId(it.key().toStdString());
+        const auto path = it.value().toString().trimmed();
+        if (kind && !path.isEmpty()) legacy.emplace(agentspeed::familyOf(*kind), path.toStdString());
+    }
+    return agentspeed::LocationLists::fromLegacy(legacy);
+}
+
+void Preferences::setSourceLocations(const agentspeed::LocationLists& lists) {
+    if (settings_.contains(QStringLiteral("sourceLocations")) && lists == sourceLocations()) return;
+    settings_.setValue(QStringLiteral("sourceLocations"), QString::fromStdString(lists.document()));
+    emit sourcesChanged();
+}
 
 bool Preferences::networkEnabled() const { return settings_.value(QStringLiteral("network/enabled"), true).toBool(); }
 void Preferences::setNetworkEnabled(bool value) { store("network/enabled", value, &Preferences::networkEnabledChanged); }
+
+QString Preferences::remoteHosts() const { return settings_.value(QStringLiteral("remoteHosts")).toString(); }
+void Preferences::setRemoteHosts(const QString& json) {
+    store("remoteHosts", json, &Preferences::remoteHostsChanged);
+    settings_.sync();
+}
 
 bool Preferences::syncPrices() const { return settings_.value(QStringLiteral("network/syncPrices"), true).toBool(); }
 void Preferences::setSyncPrices(bool value) { store("network/syncPrices", value, &Preferences::syncPricesChanged); }
@@ -117,19 +143,6 @@ void Preferences::setSourceEnabled(const QString& source, bool enabled) {
     emit sourcesChanged();
 }
 
-void Preferences::setFolder(const QString& source, const QString& path) {
-    auto map = folders();
-    const auto trimmed = path.trimmed();
-    if (trimmed.isEmpty() ? !map.contains(source) : map.value(source).toString() == trimmed) return;
-    if (trimmed.isEmpty()) {
-        map.remove(source);
-    } else {
-        map.insert(source, trimmed);
-    }
-    settings_.setValue(QStringLiteral("sources/folders"), map);
-    emit sourcesChanged();
-}
-
 bool Preferences::subscribed(const QString& source) const { return subscriptions().contains(source); }
 
 void Preferences::setSubscribed(const QString& source, bool value) {
@@ -145,34 +158,11 @@ void Preferences::setSubscribed(const QString& source, bool value) {
 
 agentspeed::MonitorConfig Preferences::monitorConfig() const {
     using agentspeed::SourceKind;
-    agentspeed::RootSettings roots;
-    const auto map = folders();
-    const auto folder = [&](SourceKind kind) -> std::optional<std::string> {
-        const auto value = map.value(QString::fromUtf8(agentspeed::sourceId(kind))).toString();
-        if (value.isEmpty()) return std::nullopt;
-        return value.toStdString();
-    };
-    roots.codex = folder(SourceKind::Codex);
-    roots.claude = folder(SourceKind::ClaudeCode);
-    roots.dsh = folder(SourceKind::Deepseek);
-    roots.openCode = folder(SourceKind::OpenCode);
-    roots.gemini = folder(SourceKind::Gemini);
-    roots.omp = folder(SourceKind::Omp);
-    roots.antigravity = folder(SourceKind::Antigravity);
-    roots.workBuddy = folder(SourceKind::WorkBuddy);
-    roots.workBuddyAi = folder(SourceKind::WorkBuddyAi);
-    roots.zcode = folder(SourceKind::ZCode);
-    roots.kimi = folder(SourceKind::Kimi);
-    roots.grokBuild = folder(SourceKind::GrokBuild);
-    roots.pi = folder(SourceKind::Pi);
-    roots.openClaw = folder(SourceKind::OpenClaw);
-    roots.hermes = folder(SourceKind::Hermes);
-    roots.droid = folder(SourceKind::Droid);
     auto enabled = agentspeed::MonitorConfig::allSources();
     for (const auto& id : disabledSources()) {
         if (const auto kind = agentspeed::sourceFromId(id.toStdString())) enabled.erase(*kind);
     }
     // Claude Code and Claude Desktop share one root and one switch.
     if (!enabled.contains(SourceKind::ClaudeCode)) enabled.erase(SourceKind::ClaudeDesktop);
-    return agentspeed::MonitorConfig::fromEnvironment(roots, enabled);
+    return agentspeed::MonitorConfig::fromEnvironment(sourceLocations(), enabled);
 }

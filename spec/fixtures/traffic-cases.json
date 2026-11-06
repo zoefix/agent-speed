@@ -927,6 +927,67 @@
         "exec",
         "review"
        ]
+      },
+      {
+       "pid": 1520,
+       "ppid": 1500,
+       "start": 9700,
+       "exe": "/Users/dev/.local/bin/devin",
+       "args": [
+        "devin"
+       ]
+      },
+      {
+       "pid": 1521,
+       "ppid": 1520,
+       "start": 9710,
+       "exe": "/bin/zsh",
+       "args": [
+        "/bin/zsh",
+        "-c",
+        "swift build"
+       ]
+      },
+      {
+       "pid": 1522,
+       "ppid": 1,
+       "start": 9720,
+       "exe": "/Applications/Devin.app/Contents/MacOS/Devin"
+      },
+      {
+       "pid": 1523,
+       "ppid": 1522,
+       "start": 9730,
+       "exe": "/Applications/Devin.app/Contents/Frameworks/Devin Helper (Plugin).app/Contents/MacOS/Devin Helper (Plugin)"
+      },
+      {
+       "pid": 1524,
+       "ppid": 1523,
+       "start": 9740,
+       "exe": "/opt/homebrew/bin/devin",
+       "args": [
+        "devin",
+        "acp"
+       ]
+      },
+      {
+       "pid": 1525,
+       "ppid": 1524,
+       "start": 9750,
+       "exe": "/usr/bin/git",
+       "args": [
+        "git",
+        "diff"
+       ]
+      },
+      {
+       "pid": 1526,
+       "ppid": 1500,
+       "start": 9760,
+       "exe": "/usr/local/bin/devinfo",
+       "args": [
+        "devinfo"
+       ]
       }
      ]
     }
@@ -1018,7 +1079,14 @@
      "1509": "droid/tool",
      "1510": null,
      "1511": null,
-     "1512": "codex/agent"
+     "1512": "codex/agent",
+     "1520": "devin/agent",
+     "1521": "devin/tool",
+     "1522": null,
+     "1523": null,
+     "1524": "devin/agent",
+     "1525": "devin/tool",
+     "1526": null
     }
    }
   },
@@ -1406,6 +1474,42 @@
        "ppid": 950,
        "start": 4670,
        "exe": "C:\\tools\\droidcam\\DroidCam.exe"
+      },
+      {
+       "pid": 970,
+       "ppid": 950,
+       "start": 4700,
+       "exe": "C:\\Users\\dev\\.local\\bin\\devin.exe",
+       "args": [
+        "devin.exe",
+        "-p",
+        "fix the build"
+       ]
+      },
+      {
+       "pid": 971,
+       "ppid": 4,
+       "start": 4710,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\Devin\\Devin.exe"
+      },
+      {
+       "pid": 972,
+       "ppid": 971,
+       "start": 4720,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\Devin\\resources\\app\\bin\\devin.exe",
+       "args": [
+        "devin.exe",
+        "acp"
+       ]
+      },
+      {
+       "pid": 973,
+       "ppid": 972,
+       "start": 4730,
+       "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+       "args": [
+        "powershell.exe"
+       ]
       }
      ]
     }
@@ -1452,7 +1556,11 @@
      "964": "droid/agent",
      "965": null,
      "966": "droid/agent",
-     "967": null
+     "967": null,
+     "970": "devin/agent",
+     "971": null,
+     "972": "devin/agent",
+     "973": "devin/tool"
     }
    }
   },

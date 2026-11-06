@@ -23,12 +23,15 @@ GrokUsage readUsage(const json::Value& usage, std::optional<std::string> model) 
     GrokUsage result;
     result.model = std::move(model);
     const auto input = usage["inputTokens"].count();
-    const auto output = usage["outputTokens"].count();
+    const auto reasoning = usage["reasoningTokens"].count();
+    // More reasoning than output means the provider counted it apart (METRICS 4.12, issue #51).
+    const auto reported = usage["outputTokens"].count();
+    const auto output = reasoning > reported ? std::min(TokenCounts::kMax, reported + reasoning) : reported;
     result.tokens.input = input;
     result.tokens.cachedInput = std::min(input, usage["cachedReadTokens"].count());
     result.tokens.cacheWriteInput = std::min(input, usage["cacheCreationTokens"].count());
     result.tokens.output = output;
-    result.tokens.reasoning = std::min(output, usage["reasoningTokens"].count());
+    result.tokens.reasoning = std::min(output, reasoning);
     result.durationMs = usage["apiDurationMs"].count();
     result.requests = std::clamp<std::int64_t>(usage["modelCalls"].count(), 1, 100'000);
     return result;
@@ -149,11 +152,16 @@ void GrokParser::apply(const Line& line, ResponseSink& sink) {
     setModel(line.model);
     touch(time);
     const auto& type = line.type;
-    if (type == "user_message_chunk" || type == "agent_message_chunk" || type == "agent_thought_chunk") {
+    if (type == "user_message_chunk" || type == "agent_message_chunk" || type == "agent_thought_chunk" ||
+        type == "response_started") {
         setPhase(Phase::Generating, time, inFlightStartMs() ? inFlightStartMs() : std::optional<std::int64_t>(time));
     } else if (type == "tool_call" || type == "tool_call_update") {
-        const bool done = line.toolStatus == "completed" || line.toolStatus == "failed";
-        setPhase(done ? Phase::Generating : Phase::Tools, time, std::nullopt);
+        // A finished tool hands the turn back to the model (METRICS 4.12, issue #52).
+        if (line.toolStatus == "completed" || line.toolStatus == "failed") {
+            setPhase(Phase::Generating, time, time);
+        } else {
+            setPhase(Phase::Tools, time, std::nullopt);
+        }
     } else if (type == "turn_completed") {
         if (!metadataSeen_ && line.usage && !line.usage->empty()) {
             for (const auto& bucket : *line.usage) {
@@ -170,6 +178,8 @@ void GrokParser::apply(const Line& line, ResponseSink& sink) {
             return;
         }
         emitUsage(line, time, sink);
+        setPhase(Phase::Idle, time, std::nullopt);
+    } else if (type == "turn_cancelled" || type == "turn_failed") {
         setPhase(Phase::Idle, time, std::nullopt);
     }
 }

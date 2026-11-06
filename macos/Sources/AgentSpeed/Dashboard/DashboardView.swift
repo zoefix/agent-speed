@@ -1,7 +1,7 @@
 import AgentSpeedCore
 import SwiftUI
 
-/// The menu bar dashboard (DESIGN section 4): hero, live chart, sources, agents, today and footer.
+/// The menu bar dashboard (DESIGN section 4): hero, live chart, sources, hosts (DESIGN 13), agents, today and footer.
 struct DashboardView: View {
     let model: AppModel
     /// Tallest the popover may be on its screen; beyond it the sections under the hero scroll.
@@ -131,6 +131,11 @@ private struct DashboardDetails: View {
             LiveChartSection(model: model)
             SectionDivider()
             SourcesSection(model: model)
+            if HostsSection.isShown(model) {
+                SectionDivider()
+                HostsSection(model: model)
+                    .transition(.opacity)
+            }
             SectionDivider()
             AgentsSection(model: model)
             SectionDivider()
@@ -148,5 +153,6 @@ private struct DashboardDetails: View {
         }
         .animation(model.dashboardMotion, value: warnings.isEmpty)
         .animation(model.dashboardMotion, value: model.settings.trafficEnabled)
+        .animation(model.dashboardMotion, value: HostsSection.isShown(model))
     }
 }

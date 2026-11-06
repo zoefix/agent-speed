@@ -99,12 +99,13 @@ public static class PlacementMath
     /// <summary>
     /// Taskbar widget rectangle in screen pixels (DESIGN 3, Position on the taskbar): its trailing edge
     /// <paramref name="gap"/> plus <paramref name="offset"/> before the notification area (left of it, or above it when
-    /// vertical), spanning the taskbar's thickness. The offset is limited as <see cref="TaskbarWidgetOffset"/> says;
-    /// null when even the default spot lacks room.
+    /// vertical), spanning the taskbar's thickness. The offset is limited and clears <paramref name="occupied"/> as
+    /// <see cref="TaskbarWidgetOffset"/> says; null when the widget has no room.
     /// </summary>
-    public static RectD? TaskbarWidget(RectD taskbar, RectD tray, double length, double gap, bool vertical, double offset = 0)
+    public static RectD? TaskbarWidget(RectD taskbar, RectD tray, double length, double gap, bool vertical, double offset = 0,
+        IReadOnlyList<RectD>? occupied = null)
     {
-        if (TaskbarWidgetOffset(taskbar, tray, length, gap, vertical, offset) is not { } shift)
+        if (TaskbarWidgetOffset(taskbar, tray, length, gap, vertical, offset, occupied) is not { } shift)
         {
             return null;
         }
@@ -130,9 +131,12 @@ public static class PlacementMath
     /// <summary>
     /// The offset (whole pixels) the taskbar widget takes for a requested one: from 0 (the default spot) up to where its
     /// far edge reaches the first <see cref="TaskbarPosition.ReservedStart"/> of the taskbar, which stays clear for a
-    /// left-aligned Start button and the first app buttons. Null when the widget does not fit even at the default spot.
+    /// left-aligned Start button and the first app buttons. A spot that comes within <paramref name="gap"/> of a window of
+    /// another program on the taskbar (<paramref name="occupied"/>) moves past it toward the taskbar's start, or, without
+    /// room there, toward the notification area. Null when no spot fits.
     /// </summary>
-    public static double? TaskbarWidgetOffset(RectD taskbar, RectD tray, double length, double gap, bool vertical, double offset)
+    public static double? TaskbarWidgetOffset(RectD taskbar, RectD tray, double length, double gap, bool vertical, double offset,
+        IReadOnlyList<RectD>? occupied = null)
     {
         if (taskbar.IsEmpty || !(length > 0) || !double.IsFinite(length))
         {
@@ -149,7 +153,83 @@ public static class PlacementMath
         }
 
         var requested = double.IsFinite(offset) ? Math.Round(offset, MidpointRounding.AwayFromZero) : 0;
-        return Math.Clamp(requested, 0, Math.Floor(room));
+        var shift = Math.Clamp(requested, 0, Math.Floor(room));
+        var spans = OccupiedSpans(taskbar, vertical, occupied);
+        return spans.Count == 0 ? shift : ClearShift(spans, TaskbarWidgetEnd(taskbar, tray, gap, vertical), length, gap, shift, Math.Floor(room));
+    }
+
+    /// <summary>
+    /// The stretches of the taskbar's length that other programs' windows cover. A window that does not cross the taskbar,
+    /// or covers more than half of its length (an overlay rather than a neighbour), is left out.
+    /// </summary>
+    private static List<(double Start, double End)> OccupiedSpans(RectD taskbar, bool vertical, IReadOnlyList<RectD>? occupied)
+    {
+        var spans = new List<(double Start, double End)>();
+        if (occupied is null)
+        {
+            return spans;
+        }
+
+        var barStart = vertical ? taskbar.Y : taskbar.X;
+        var barEnd = vertical ? taskbar.Bottom : taskbar.Right;
+        foreach (var rect in occupied)
+        {
+            var crosses = vertical
+                ? rect.X < taskbar.Right && rect.Right > taskbar.X
+                : rect.Y < taskbar.Bottom && rect.Bottom > taskbar.Y;
+            var start = Math.Max(barStart, vertical ? rect.Y : rect.X);
+            var end = Math.Min(barEnd, vertical ? rect.Bottom : rect.Right);
+            if (crosses && end > start && end - start <= (barEnd - barStart) / 2)
+            {
+                spans.Add((start, end));
+            }
+        }
+
+        return spans;
+    }
+
+    /// <summary>
+    /// The nearest shift from <paramref name="shift"/> whose widget keeps <paramref name="gap"/> to every span: first toward
+    /// the taskbar's start (up to <paramref name="max"/>), then toward the notification area (down to 0); null without one.
+    /// </summary>
+    private static double? ClearShift(List<(double Start, double End)> spans, double end, double length, double gap, double shift, double max)
+    {
+        for (var s = shift; s <= max;)
+        {
+            if (Overlap(spans, end - s - length, end - s, gap) is not { } hit)
+            {
+                return s;
+            }
+
+            s = Math.Ceiling(end - hit.Start + gap);
+        }
+
+        for (var s = shift; s >= 0;)
+        {
+            if (Overlap(spans, end - s - length, end - s, gap) is not { } hit)
+            {
+                return s;
+            }
+
+            s = Math.Floor(end - hit.End - gap - length);
+        }
+
+        return null;
+    }
+
+    /// <summary>The extent (lowest start, highest end) of the spans that come within <paramref name="gap"/> of [far, near].</summary>
+    private static (double Start, double End)? Overlap(List<(double Start, double End)> spans, double far, double near, double gap)
+    {
+        (double Start, double End)? hit = null;
+        foreach (var (start, end) in spans)
+        {
+            if (start < near + gap && end > far - gap)
+            {
+                hit = hit is { } h ? (Math.Min(h.Start, start), Math.Max(h.End, end)) : (start, end);
+            }
+        }
+
+        return hit;
     }
 
     /// <summary>The widget's trailing edge at the default spot: the gap before the notification area, else the taskbar's end.</summary>

@@ -214,7 +214,7 @@ struct HistoryView: View {
     }
 }
 
-/// `用量歷史` with the source and the resolved range spelled out under it.
+/// `用量歷史` with the source, the host (DESIGN 13) and the resolved range spelled out under it.
 struct HistoryHeader: View {
     let content: HistoryContent
     let l10n: Localizer
@@ -234,6 +234,14 @@ struct HistoryHeader: View {
                         .accessibilityHidden(true)
                     Text(l10n(source.titleKey))
                         .foregroundStyle(.primary)
+                    Text(verbatim: "·")
+                        .accessibilityHidden(true)
+                }
+                if let host = content.hostName(l10n) {
+                    Text(verbatim: host)
+                        .foregroundStyle(.primary)
+                        .truncationMode(.middle)
+                        .layoutPriority(-1)
                     Text(verbatim: "·")
                         .accessibilityHidden(true)
                 }

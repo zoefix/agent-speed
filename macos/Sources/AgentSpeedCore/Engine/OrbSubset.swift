@@ -8,6 +8,8 @@ public enum SubsetState: Equatable, Sendable {
     case allDisabled
     /// Every source is disabled or not detected, and at least one is not detected.
     case allNotFound
+    /// Every selected host is a remote host that is not connected (DESIGN 13, `remote.orb.offline`).
+    case hostsOffline
 }
 
 /// What a floating orb tracking a source set shows for one snapshot (METRICS 6.8).
@@ -222,8 +224,8 @@ public enum OrbSubset {
         !status.enabled || (!status.available && status.today.requests == 0 && status.live == .zero)
     }
 
-    private static func filtered(_ agents: [AgentStatus], to sources: SourceSet) -> [AgentStatus] {
-        var kept = agents.filter { sources.contains($0.source) }
+    static func filtered(_ agents: [AgentStatus], to sources: SourceSet, hosts: Set<String>? = nil) -> [AgentStatus] {
+        var kept = agents.filter { sources.contains($0.source) && (hosts?.contains($0.host) ?? true) }
         let ids = Set(kept.map(\.id))
         for index in kept.indices where kept[index].parentId.map({ !ids.contains($0) }) ?? false {
             kept[index].parentId = nil
@@ -231,7 +233,7 @@ public enum OrbSubset {
         return kept
     }
 
-    private static func generatingSources(of agents: [AgentStatus]) -> [SourceKind] {
+    static func generatingSources(of agents: [AgentStatus]) -> [SourceKind] {
         agents.filter { $0.phase == .generating }.map(\.source)
     }
 }

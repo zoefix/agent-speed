@@ -76,6 +76,7 @@ Agent agentOf(const Response& r, const std::vector<Agent>& agents) {
     fallback.id = r.agentId;
     fallback.model = r.model;
     fallback.source = r.source;
+    fallback.host = r.host;
     return fallback;
 }
 
@@ -116,49 +117,48 @@ std::optional<Speed> estimatedSpeed(const std::vector<const Response*>& valid, s
     return std::nullopt;
 }
 
-LiveRate liveRate(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+namespace {
+
+// The window's measured and estimated tokens, each part handed to `add(host, measuredOut, measuredTotal, estimatedOut,
+// estimatedTotal)` in order.
+template <typename Add>
+void rateParts(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now, Add&& add) {
     const std::int64_t w0 = now - kWindowMs;
     const auto parts = split(responses);
-    double measuredOut = 0, measuredTot = 0, estimatedOut = 0, estimatedTot = 0;
     for (const auto* r : parts.valid) {
         const auto [s, e] = *interval(*r);
         const double frac = overlap(w0, now, s, e) / static_cast<double>(e - s);
-        measuredOut += static_cast<double>(r->output) * frac;
-        measuredTot += static_cast<double>(r->output + r->input) * frac;
+        add(r->host, static_cast<double>(r->output) * frac, static_cast<double>(r->output + r->input) * frac, 0.0, 0.0);
     }
     for (const auto* r : parts.unmeasured) {
         const auto sp = estimatedSpeed(parts.valid, now, agentOf(*r, agents));
         if (!sp) continue;
         const auto [s, e] = *interval(*r);
         const double secs = overlap(w0, now, s, e) / 1000.0;
-        estimatedOut += sp->output * secs;
-        estimatedTot += sp->total * secs;
+        add(r->host, 0.0, 0.0, sp->output * secs, sp->total * secs);
     }
     for (const auto& a : agents) {
         if (!estimatesInFlight(a, now)) continue;
         const auto sp = estimatedSpeed(parts.valid, now, a);
         if (!sp) continue;
         const double secs = overlap(w0, now, estimateStart(a, responses), now) / 1000.0;
-        estimatedOut += sp->output * secs;
-        estimatedTot += sp->total * secs;
+        add(a.host, 0.0, 0.0, sp->output * secs, sp->total * secs);
     }
-    const double window = static_cast<double>(kWindowMs) / 1000.0;
-    const double denom = measuredOut + estimatedOut;
-    return {(measuredOut + estimatedOut) / window, (measuredTot + estimatedTot) / window,
-            denom > 0 ? estimatedOut / denom : 0.0};
 }
 
-LiveCost liveCost(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+// The window's cost and its token weights: `add(host, cost, knownTokens, allTokens)`.
+template <typename Add>
+void costParts(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now, Add&& add) {
     const std::int64_t w0 = now - kWindowMs;
     const auto parts = split(responses);
-    double cost = 0, knownTokens = 0, allTokens = 0;
     for (const auto* r : parts.valid) {
         const auto [s, e] = *interval(*r);
         const double frac = overlap(w0, now, s, e) / static_cast<double>(e - s);
-        allTokens += static_cast<double>(r->output) * frac;
+        const double tokens = static_cast<double>(r->output) * frac;
         if (r->costMicroUsd) {
-            cost += static_cast<double>(*r->costMicroUsd) * frac;
-            knownTokens += static_cast<double>(r->output) * frac;
+            add(r->host, static_cast<double>(*r->costMicroUsd) * frac, tokens, tokens);
+        } else {
+            add(r->host, 0.0, 0.0, tokens);
         }
     }
     std::vector<std::pair<Agent, double>> estimates;
@@ -174,7 +174,6 @@ LiveCost liveCost(const std::vector<Response>& responses, const std::vector<Agen
         const auto refs = referenceSet(parts.valid, now, agent);
         if (refs.empty()) continue;
         const double tokens = speedOf(refs)->output * secs;
-        allTokens += tokens;
         double knownCost = 0, knownSecs = 0;
         bool anyKnown = false;
         for (const auto* r : refs) {
@@ -185,10 +184,36 @@ LiveCost liveCost(const std::vector<Response>& responses, const std::vector<Agen
             knownCost += static_cast<double>(*r->costMicroUsd);
         }
         if (anyKnown && knownSecs > 0) {
-            cost += knownCost / knownSecs * secs;
-            knownTokens += tokens;
+            add(agent.host, knownCost / knownSecs * secs, tokens, tokens);
+        } else {
+            add(agent.host, 0.0, 0.0, tokens);
         }
     }
+}
+
+}  // namespace
+
+LiveRate liveRate(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+    double measuredOut = 0, measuredTot = 0, estimatedOut = 0, estimatedTot = 0;
+    rateParts(responses, agents, now, [&](const std::string&, double mo, double mt, double eo, double et) {
+        measuredOut += mo;
+        measuredTot += mt;
+        estimatedOut += eo;
+        estimatedTot += et;
+    });
+    const double window = static_cast<double>(kWindowMs) / 1000.0;
+    const double denom = measuredOut + estimatedOut;
+    return {(measuredOut + estimatedOut) / window, (measuredTot + estimatedTot) / window,
+            denom > 0 ? estimatedOut / denom : 0.0};
+}
+
+LiveCost liveCost(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+    double cost = 0, knownTokens = 0, allTokens = 0;
+    costParts(responses, agents, now, [&](const std::string&, double c, double known, double all) {
+        cost += c;
+        knownTokens += known;
+        allTokens += all;
+    });
     const double window = static_cast<double>(kWindowMs) / 1000.0;
     return {cost / window, allTokens > 0 ? knownTokens / allTokens : 1.0};
 }
@@ -324,6 +349,15 @@ double setPeak(const std::vector<Response>& responses, const std::vector<SourceK
     return todayStats(subset, todayStart, now).peak;
 }
 
+double setPeak(const std::vector<Response>& responses, const std::function<bool(const Response&)>& member, std::int64_t todayStart,
+               std::int64_t now) {
+    std::vector<Response> subset;
+    for (const auto& r : responses) {
+        if (r.endMs >= todayStart && member(r)) subset.push_back(r);
+    }
+    return todayStats(subset, todayStart, now).peak;
+}
+
 void ThinkingWindow::add(SourceKind source, double w, double r) {
     weight += w;
     if (source != SourceKind::Deepseek) {
@@ -349,20 +383,17 @@ double reasoningShare(const std::vector<const Response*>& responses) {
 
 }  // namespace
 
-Thinking thinking(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
-    Thinking out;
-    const auto add = [&](const std::string& agentId, SourceKind source, double weight, double reasoning,
-                         const std::optional<std::string>& model) {
-        out.total.add(source, weight, reasoning);
-        out.perAgent[agentId].add(source, weight, reasoning);
-        out.perModel[model.value_or("")].add(source, weight, reasoning);
-    };
+namespace {
+
+// The window's thinking weights: `add(host, agentId, source, weight, reasoning, model)`.
+template <typename Add>
+void thinkingParts(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now, Add&& add) {
     const std::int64_t w0 = now - kWindowMs;
     const auto parts = split(responses);
     for (const auto* r : parts.valid) {
         const auto [s, e] = *interval(*r);
         const double share = overlap(w0, now, s, e) / static_cast<double>(e - s);
-        add(r->agentId, r->source, static_cast<double>(r->output) * share,
+        add(r->host, r->agentId, r->source, static_cast<double>(r->output) * share,
             static_cast<double>(std::min(r->reasoning, r->output)) * share, r->model);
     }
     const auto estimate = [&](const Agent& agent, double seconds, const std::optional<std::string>& model) {
@@ -370,7 +401,7 @@ Thinking thinking(const std::vector<Response>& responses, const std::vector<Agen
         const auto speed = refs.empty() ? std::nullopt : speedOf(refs);
         if (!speed || seconds <= 0) return;
         const double weight = speed->output * seconds;
-        add(agent.id, agent.source, weight, weight * reasoningShare(refs), model);
+        add(agent.host, agent.id, agent.source, weight, weight * reasoningShare(refs), model);
     };
     for (const auto* r : parts.unmeasured) {
         const auto [s, e] = *interval(*r);
@@ -379,6 +410,53 @@ Thinking thinking(const std::vector<Response>& responses, const std::vector<Agen
     for (const auto& a : agents) {
         if (!estimatesInFlight(a, now)) continue;
         estimate(a, overlap(w0, now, estimateStart(a, responses), now) / 1000.0, a.model);
+    }
+}
+
+}  // namespace
+
+Thinking thinking(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+    Thinking out;
+    thinkingParts(responses, agents, now,
+                  [&](const std::string&, const std::string& agentId, SourceKind source, double weight, double reasoning,
+                      const std::optional<std::string>& model) {
+                      out.total.add(source, weight, reasoning);
+                      out.perAgent[agentId].add(source, weight, reasoning);
+                      out.perModel[model.value_or("")].add(source, weight, reasoning);
+                  });
+    return out;
+}
+
+std::map<std::string, HostPart> liveByHost(const std::vector<Response>& responses, const std::vector<Agent>& agents, std::int64_t now) {
+    struct Sums {
+        double measuredOut = 0, measuredTot = 0, estimatedOut = 0, estimatedTot = 0, cost = 0, knownTokens = 0, allTokens = 0;
+    };
+    std::map<std::string, Sums> sums;
+    std::map<std::string, HostPart> out;
+    rateParts(responses, agents, now, [&](const std::string& host, double mo, double mt, double eo, double et) {
+        auto& s = sums[host];
+        s.measuredOut += mo;
+        s.measuredTot += mt;
+        s.estimatedOut += eo;
+        s.estimatedTot += et;
+    });
+    costParts(responses, agents, now, [&](const std::string& host, double c, double known, double all) {
+        auto& s = sums[host];
+        s.cost += c;
+        s.knownTokens += known;
+        s.allTokens += all;
+    });
+    thinkingParts(responses, agents, now,
+                  [&](const std::string& host, const std::string&, SourceKind source, double weight, double reasoning,
+                      const std::optional<std::string>&) { out[host].thinking.add(source, weight, reasoning); });
+    const double window = static_cast<double>(kWindowMs) / 1000.0;
+    for (const auto& [host, s] : sums) {
+        auto& part = out[host];
+        const double denom = s.measuredOut + s.estimatedOut;
+        part.rate = {(s.measuredOut + s.estimatedOut) / window, (s.measuredTot + s.estimatedTot) / window,
+                     denom > 0 ? s.estimatedOut / denom : 0.0};
+        part.estimatedOutput = s.estimatedOut / window;
+        part.cost = {s.cost / window, s.allTokens > 0 ? s.knownTokens / s.allTokens : 1.0};
     }
     return out;
 }

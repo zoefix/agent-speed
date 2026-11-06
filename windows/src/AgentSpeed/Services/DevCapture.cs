@@ -93,17 +93,16 @@ internal sealed partial class DevCapture
                 case "orbs":
                     CaptureOrbs(parts[1], parts.Length > 2 ? parts[2] : "#202020");
                     break;
-                case "menu-tray" or "menu-orb":
+                case "menu-tray" or "menu-orb" or "menu-host" or "menu-orb-hosts" or "menu-board-hosts":
                     CaptureMenu(parts[0], parts[1]);
                     break;
                 case "op":
                     Operation?.Invoke(parts[1]);
                     break;
-                case "settings":
-                    CaptureElement(parts[1], parts.Length > 2 ? parts[2] : "#202020");
-                    break;
-                case "dashboard" or "history" or "report-consent" or "report-preview" or "report-invite":
-                    CaptureElement(parts[1], parts.Length > 2 ? parts[2] : "#202020", parts[0]);
+                case "settings" or "dashboard" or "history" or "dialog" or "report-consent" or "report-preview" or "report-invite":
+                    var tokens = parts.Length > 2 ? parts[2].Split(' ', StringSplitOptions.RemoveEmptyEntries) : [];
+                    var renderScale = tokens.FirstOrDefault(o => o is "1x" or "2x" or "3x") is { } x ? x[0] - '0' : 1;
+                    CaptureElement(parts[1], tokens.FirstOrDefault(o => o.StartsWith('#')) ?? "#202020", parts[0], renderScale);
                     break;
                 case "taskbar":
                     var options = parts.Length > 2 ? parts[2].Split(' ', StringSplitOptions.RemoveEmptyEntries) : [];
@@ -267,7 +266,8 @@ internal sealed partial class DevCapture
         return target;
     }
 
-    private void CaptureElement(string name, string backdrop, string target = "settings")
+    /// <param name="renderScale">Renders the element's vectors at this many pixels per DIP on top of its own DPI (the 2x path).</param>
+    private void CaptureElement(string name, string backdrop, string target = "settings", int renderScale = 1)
     {
         if (_element(target) is not { } element)
         {
@@ -279,14 +279,14 @@ internal sealed partial class DevCapture
             ((DispatcherTimer)sender!).Stop();
             element.UpdateLayout();
             var dpi = VisualTreeHelper.GetDpi(element);
-            var width = (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX);
-            var height = (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY);
+            var width = (int)Math.Ceiling(element.ActualWidth * dpi.DpiScaleX * renderScale);
+            var height = (int)Math.Ceiling(element.ActualHeight * dpi.DpiScaleY * renderScale);
             if (width <= 0 || height <= 0)
             {
                 return;
             }
 
-            var content = new RenderTargetBitmap(width, height, dpi.PixelsPerInchX, dpi.PixelsPerInchY, PixelFormats.Pbgra32);
+            var content = new RenderTargetBitmap(width, height, dpi.PixelsPerInchX * renderScale, dpi.PixelsPerInchY * renderScale, PixelFormats.Pbgra32);
             content.Render(element);
             var visual = new DrawingVisual();
             using (var dc = visual.RenderOpen())

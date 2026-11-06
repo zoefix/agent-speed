@@ -179,6 +179,10 @@ internal static unsafe partial class User32
     [LibraryImport(Dll, SetLastError = true)]
     internal static partial uint GetWindowThreadProcessId(nint hWnd, out uint lpdwProcessId);
 
+    [LibraryImport(Dll)]
+    [return: MarshalAs(UnmanagedType.Bool)]
+    internal static partial bool EnumChildWindows(nint hWndParent, delegate* unmanaged[Stdcall]<nint, nint, int> lpEnumFunc, nint lParam);
+
     [LibraryImport(Dll, SetLastError = true)]
     [return: MarshalAs(UnmanagedType.Bool)]
     internal static partial bool ChangeWindowMessageFilterEx(nint hwnd, uint message, uint action, nint pChangeFilterStruct);

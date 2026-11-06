@@ -3,8 +3,6 @@ import AppKit
 /// Owns the panel's alpha: fade in/out for the visibility setting and the dimmed state of "fade when idle".
 @MainActor
 final class OrbWindowFader {
-    static let dimmedAlpha: CGFloat = 0.45
-
     private weak var panel: NSWindow?
     private(set) var isShown = false
     private(set) var isDimmed = false
@@ -44,15 +42,12 @@ final class OrbWindowFader {
         }
     }
 
-    func setDimmed(_ dimmed: Bool) {
+    func setDimmed(_ dimmed: Bool, reduceMotion: Bool = false) {
         guard dimmed != isDimmed else { return }
         isDimmed = dimmed
         guard isShown else { return }
-        if dimmed {
-            fade(to: targetAlpha, duration: 0.6, timing: .easeInEaseOut)
-        } else {
-            fade(to: targetAlpha, duration: 0.12, timing: .easeOut)
-        }
+        let motion = IdleFade.motion(dimming: dimmed, reduceMotion: reduceMotion)
+        fade(to: targetAlpha, duration: motion.duration, timing: motion.timing)
     }
 
     func setFactor(_ factor: CGFloat) {
@@ -77,7 +72,7 @@ final class OrbWindowFader {
         panel.orderFrontRegardless()
     }
 
-    private var targetAlpha: CGFloat { isShown ? (isDimmed ? Self.dimmedAlpha : 1) * factor : 0 }
+    private var targetAlpha: CGFloat { isShown ? (isDimmed ? IdleFade.alpha : 1) * factor : 0 }
 
     private func fade(
         to alpha: CGFloat,
@@ -102,30 +97,35 @@ final class OrbWindowFader {
     }
 }
 
-/// Dims the orb after 60 s of idle speed (setting "fade when idle", per orb, from the orb's own gauge). Event driven:
-/// one one-shot timer for the exact moment the dim is due, recomputed whenever the tier, the setting or the pointer
-/// state changes.
+/// Dims an orb or a board after 60 s of idle speed (setting "fade when idle", per window, from the window's own gauge;
+/// the rule is `IdleFade`). Event driven: one one-shot timer for the exact moment the dim is due, recomputed whenever
+/// the tier or the pointer state changes, and on `refresh()` when the setting changes.
 @MainActor
 final class OrbWindowIdleDimmer {
-    static let idleDelay: TimeInterval = 60
-    /// Dims again this long after the pointer leaves an orb that has been idle for a while.
-    static let leaveDelay: TimeInterval = 1.5
-
     private let gauge: LiveGauge
     private let enabled: @MainActor () -> Bool
     private let interaction: OrbInteraction
     private let apply: (Bool) -> Void
-    private let armedAt = Clock.now
+    private let now: @MainActor () -> TimeInterval
+    private let armedAt: TimeInterval
     private var pointerLeftAt: TimeInterval = -.infinity
     private var wasEngaged = false
     private var timer: Timer?
     private var loop: ObservationLoop?
 
-    init(gauge: LiveGauge, enabled: @escaping @MainActor () -> Bool, interaction: OrbInteraction, apply: @escaping (Bool) -> Void) {
+    init(
+        gauge: LiveGauge,
+        enabled: @escaping @MainActor () -> Bool,
+        interaction: OrbInteraction,
+        now: @escaping @MainActor () -> TimeInterval = { Clock.now },
+        apply: @escaping (Bool) -> Void
+    ) {
         self.gauge = gauge
         self.enabled = enabled
         self.interaction = interaction
+        self.now = now
         self.apply = apply
+        armedAt = now()
         loop = ObservationLoop { [weak self] in self?.evaluate() }
     }
 
@@ -135,23 +135,27 @@ final class OrbWindowIdleDimmer {
         timer = nil
     }
 
+    /// Decides again (the switch changed; the setting is not observed).
+    func refresh() {
+        evaluate()
+    }
+
     private func evaluate() {
         let enabled = enabled()
         let idle = gauge.tier == .idle
         let engaged = interaction.isHovered || interaction.isDragging
-        let now = Clock.now
+        let now = self.now()
         if engaged != wasEngaged {
             wasEngaged = engaged
             if !engaged { pointerLeftAt = now }
         }
         timer?.invalidate()
         timer = nil
-        guard enabled, idle, !engaged else {
+        guard let due = IdleFade.due(enabled: enabled, idle: idle, engaged: engaged, lastActive: now - gauge.idleDuration(at: now),
+                                     armedAt: armedAt, pointerLeftAt: pointerLeftAt) else {
             apply(false)
             return
         }
-        let lastActive = now - gauge.idleDuration(at: now)
-        let due = max(lastActive + Self.idleDelay, armedAt + Self.idleDelay, pointerLeftAt + Self.leaveDelay)
         if now >= due {
             apply(true)
             return

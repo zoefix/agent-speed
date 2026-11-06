@@ -81,16 +81,22 @@ public sealed class BoardFeed
     /// <summary>When the tier or title hold ends without new data (the window asks again then).</summary>
     public double? NextDeadline => _feed.NextDeadline;
 
-    public void Configure(SourceSet? sources, SpeedMetric metric, double redline, long nowMs, bool created = false)
+    public void Configure(SourceSet? sources, SpeedMetric metric, double redline, long nowMs, bool created = false, IReadOnlySet<string>? hosts = null)
     {
-        if (sources != _feed.Sources || metric != _feed.Metric)
+        if (sources != _feed.Sources || metric != _feed.Metric || !(hosts is null ? _feed.Hosts is null : _feed.Hosts is not null && hosts.SetEquals(_feed.Hosts)))
         {
             _ranking.Reset();
             _order = [];
         }
 
-        _feed.Configure(sources, metric, redline, nowMs, created);
+        _feed.Configure(sources, metric, redline, nowMs, created, hosts);
     }
+
+    /// <summary>The tracked hosts (DESIGN 13); null for every host.</summary>
+    public IReadOnlySet<string>? Hosts => _feed.Hosts;
+
+    /// <summary>The subset whose measured peak the monitor must report for this board; null for everything.</summary>
+    public SubsetKey? SubsetKey => _feed.SubsetKey;
 
     /// <summary>
     /// Applies a snapshot: the hero values every time, the ranking at most once per engine tick. A subset board's own new
@@ -127,7 +133,7 @@ public sealed class BoardFeed
         {
             Intelligence = reading.Intelligence,
             Score = Highest(reading.Agents),
-            Cost = OrbSubset.Cost(snapshot, _feed.Sources, counted),
+            Cost = OrbSubset.Cost(snapshot, _feed.Sources, _feed.Hosts, counted),
         };
         return Data;
     }

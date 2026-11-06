@@ -121,7 +121,43 @@ public static class OrbsJson
 
         writer.WriteString("unit", OrbUnits.Key(orb.Unit));
         writer.WriteString("traffic", OrbTraffics.Key(orb.Traffic));
+        WriteHosts(writer, orb.Hosts);
         writer.WriteEndObject();
+    }
+
+    /// <summary>DESIGN 13 <c>hosts</c>: written only when it is not all (absent = all).</summary>
+    internal static void WriteHosts(Utf8JsonWriter writer, OrbHosts hosts)
+    {
+        if (hosts.IsAll)
+        {
+            return;
+        }
+
+        writer.WriteStartArray("hosts");
+        foreach (var id in hosts.Ids)
+        {
+            writer.WriteStringValue(id);
+        }
+
+        writer.WriteEndArray();
+    }
+
+    /// <summary><c>"all"</c>, a single id or an array of ids; anything else is all hosts.</summary>
+    internal static OrbHosts ReadHosts(JsonElement element)
+    {
+        if (!element.TryGetProperty("hosts", out var hosts))
+        {
+            return OrbHosts.All;
+        }
+
+        return hosts.ValueKind switch
+        {
+            JsonValueKind.String => hosts.GetString() is "all" or null ? OrbHosts.All : OrbHosts.Normalized([hosts.GetString()]),
+            JsonValueKind.Array => OrbHosts.Normalized(hosts.EnumerateArray()
+                .Take(OrbHosts.MaxIdsRead)
+                .Select(k => k.ValueKind == JsonValueKind.String ? k.GetString() : null)),
+            _ => OrbHosts.All,
+        };
     }
 
     private static OrbDefinition? ReadOrb(JsonElement element)
@@ -150,6 +186,7 @@ public static class OrbsJson
             TitleTheme = ReadString(element, "titleTheme", OrbDefinition.MaxIdLength),
             Unit = OrbUnits.Parse(ReadString(element, "unit", 32)),
             Traffic = OrbTraffics.Parse(ReadString(element, "traffic", 32)),
+            Hosts = ReadHosts(element),
         }.Validated();
     }
 

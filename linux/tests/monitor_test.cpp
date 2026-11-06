@@ -31,6 +31,7 @@ MonitorConfig fixtureConfig(std::set<SourceKind> enabled) {
     s.openClaw = fixturePath("openclaw/.openclaw");
     s.hermes = fixturePath("hermes/home");
     s.droid = fixturePath("droid/.factory");
+    s.devin = fixturePath("devin/share/devin");
     MonitorConfig config;
     config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");
     config.enabled = std::move(enabled);
@@ -51,7 +52,7 @@ TEST(Monitor, HarnessesReachTheLiveMonitor) {
     monitor.start(now, kDayStart);
     const auto snap = monitor.snapshot(now, kDayStart);
     EXPECT_EQ(snap.todayRequests, 16);
-    EXPECT_EQ(snap.todayOutput, 1875);
+    EXPECT_EQ(snap.todayOutput, 2475);
     EXPECT_EQ(monitor.sessionCount(SourceKind::ZCode, kDayStart), 2);
     EXPECT_EQ(monitor.sessionCount(SourceKind::Kimi, kDayStart), 3);
     const auto subagentWithParent = [&](SourceKind kind) {
