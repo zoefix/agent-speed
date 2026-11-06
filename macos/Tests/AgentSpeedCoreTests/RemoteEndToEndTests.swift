@@ -45,16 +45,17 @@ struct RemoteEndToEndTests {
 
     """
 
-    static func waitUntil(_ condition: () -> Bool) -> Bool {
+    /// Polls without holding a thread of the shared pool, so other tests' async work keeps running meanwhile.
+    static func waitUntil(_ condition: () -> Bool) async -> Bool {
         let deadline = Date().addingTimeInterval(20)
         while Date() < deadline {
             if condition() { return true }
-            Thread.sleep(forTimeInterval: 0.02)
+            try? await Task.sleep(for: .milliseconds(20))
         }
         return condition()
     }
 
-    @Test func installsRunsAndStopsTheRelay() throws {
+    @Test func installsRunsAndStopsTheRelay() async throws {
         let root = try TempDirectory()
         let home = root.file("home")
         let stubs = root.file("stubs")
@@ -80,13 +81,13 @@ struct RemoteEndToEndTests {
             let connection = RemoteConnection(host: RemoteHost(destination: "devbox"), settings: settings,
                                               environment: environment, eventQueue: events.queue, onEvent: events.handler)
             connection.start()
-            #expect(Self.waitUntil { events.statuses().contains(.connected) }, "round \(round): \(events.statuses())")
+            #expect(await Self.waitUntil { events.statuses().contains(.connected) }, "round \(round): \(events.statuses())")
             let installing = events.statuses().contains { if case .installing = $0 { true } else { false } }
             #expect(installing == (round == 0))
             #expect(events.messages.map(\.0).contains(.ready))
-            #expect(Self.waitUntil { events.lastStatus?.clockOffsetMs.map { abs($0) < 2_000 } == true })
+            #expect(await Self.waitUntil { events.lastStatus?.clockOffsetMs.map { abs($0) < 2_000 } == true })
             connection.stop(finalStatus: .disabled)
-            #expect(Self.waitUntil { events.statuses().last == .disabled })
+            #expect(await Self.waitUntil { events.statuses().last == .disabled })
         }
 
         let folder = home.appendingPathComponent(".cache/agent-speed")
@@ -97,7 +98,7 @@ struct RemoteEndToEndTests {
         #expect(try FileManager.default.attributesOfItem(atPath: folder.path)[.posixPermissions] as? Int == 0o700)
     }
 
-    @Test func pipedProcessDeliversOutputBeforeExitAndSurvivesAClosedPipe() throws {
+    @Test func pipedProcessDeliversOutputBeforeExitAndSurvivesAClosedPipe() async throws {
         let output = LockedValue(Data())
         let errors = LockedValue(Data())
         let status = LockedValue<Int32?>(nil)
@@ -116,28 +117,28 @@ struct RemoteEndToEndTests {
             handlers: handlers
         )
         process.write(Data("hello\n".utf8), completion: nil)
-        #expect(Self.waitUntil { status.value != nil })
+        #expect(await Self.waitUntil { status.value != nil })
         #expect(status.value == 7)
         #expect(String(decoding: outputAtExit.value, as: UTF8.self) == "got hello\n")
         #expect(String(decoding: errors.value, as: UTF8.self) == "oops\n")
 
         let written = LockedValue<Bool?>(nil)
         process.write(Data(repeating: 0x41, count: 1 << 20)) { ok in written.value = ok }
-        #expect(Self.waitUntil { written.value != nil })
+        #expect(await Self.waitUntil { written.value != nil })
         #expect(written.value == false)
         process.closeInput()
         process.terminate()
         process.kill()
     }
 
-    @Test func terminateEndsALongRunningProcess() throws {
+    @Test func terminateEndsALongRunningProcess() async throws {
         let status = LockedValue<Int32?>(nil)
         let process = try ProcessRemoteTransport().launch(
             RemoteProcessRequest(executable: "/bin/sleep", arguments: ["30"], environment: [:]),
             handlers: RemoteProcessHandlers(stdout: { _ in }, stderr: { _ in }, exit: { status.value = $0 })
         )
         process.terminate()
-        #expect(Self.waitUntil { status.value != nil })
+        #expect(await Self.waitUntil { status.value != nil })
         #expect(status.value == 128 + SIGTERM)
     }
 }
