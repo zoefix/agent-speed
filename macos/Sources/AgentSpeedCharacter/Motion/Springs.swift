@@ -32,7 +32,7 @@ public struct SecondOrder: Sendable {
     public mutating func update(_ dt: Double, _ x: Double) -> Double {
         let xd = (x - xp) / dt
         xp = x
-        let k2 = max(self.k2, dt * dt / 2 + dt * k1 / 2, dt * k1)
+        let k2 = max(max(self.k2, dt * dt / 2 + dt * k1 / 2), dt * k1)
         y += dt * yd
         yd += dt * (x + k3 * xd - y - k1 * yd) / k2
         return y

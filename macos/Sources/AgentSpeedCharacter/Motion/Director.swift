@@ -67,6 +67,8 @@ public struct CharacterDirector: Sendable {
     var breathPhase = 0.0
     public private(set) var time = 0.0
     var hands: [HandActor] = []
+    /// Actions started so far (gestures and hand fidgets); starting one allocates its curves.
+    var motionStarts = 0
     /// The parameters of the last update, by slot; `present` marks the ones written this frame.
     public private(set) var values: [Double]
     var present: [Bool]
@@ -141,6 +143,7 @@ public struct CharacterDirector: Sendable {
         let motion = spec.bind { space.slot($0) }
         let hard = motion.entries.map { e in CharacterDirector.hard.contains { e.name.hasPrefix($0) } }
         gesture = Playing(motion: motion, hard: hard)
+        motionStarts += 1
         lastGesture = gid
         recent = Array((recent + [gid]).suffix(3))
         return true
@@ -217,7 +220,7 @@ public struct CharacterDirector: Sendable {
         }
         g.t += dt
         let m = g.motion
-        g.w = min(1.0, g.t / m.fade, max(0.0, (m.duration - g.t) / m.fade))
+        g.w = min(min(1.0, g.t / m.fade), max(0.0, (m.duration - g.t) / m.fade))
         let local = m.localTime(g.t)
         for (i, entry) in m.entries.enumerated() {
             let v = entry.curve(local)
@@ -263,7 +266,9 @@ public struct CharacterDirector: Sendable {
             arm += values[side.forearm]
             arm += values[side.lift]
             arm += values[side.bend]
+            let idle = hands[h].action == nil
             hands[h].update(dt, time: time, band: band ?? .idle, beat: 60 / beat.bpm, arm: arm, rng: &rng)
+            if idle, hands[h].action != nil { motionStarts += 1 }
             for i in 0..<5 { write(side.fingers[i], values[side.fingers[i]] + hands[h].fingers[i]) }
             write(side.spread, values[side.spread] + hands[h].spread)
             write(side.wrist, values[side.wrist] + hands[h].wrist)
