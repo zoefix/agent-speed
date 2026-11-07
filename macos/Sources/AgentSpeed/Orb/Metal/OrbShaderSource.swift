@@ -511,6 +511,7 @@ enum OrbShaderSource {
         float4 gradient; // top y, bottom y (points), mode (1 gradient, 2 `led` value: a black backing blurred over x × the
                          // glow radius and the chromatic split under the glow), quad inset (points: the outer band where
                          // nothing is drawn)
+        float4 rotation; // angle (radians, clockwise on screen) about the pivot x, y (points); clips stay unrotated
     };
 
     struct TextOut {
@@ -526,8 +527,15 @@ enum OrbShaderSource {
         float2 uv = (inset + (corners[vid] * 0.5 + 0.5) * (item.rect.zw - 2.0 * inset)) / item.rect.zw;
         float2 point = item.rect.xy + uv * item.rect.zw;
         point.x += item.params.x * (item.params.y - point.y);
+        float2 drawn = point;
+        if (item.rotation.x != 0.0) {
+            float2 d = point - item.rotation.yz;
+            float c = cos(item.rotation.x);
+            float s = sin(item.rotation.x);
+            drawn = item.rotation.yz + float2(d.x * c - d.y * s, d.x * s + d.y * c);
+        }
         TextOut out;
-        out.position = orb_clip_position(point, uniforms);
+        out.position = orb_clip_position(drawn, uniforms);
         out.uv = uv;
         out.canvas = point;
         return out;

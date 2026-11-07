@@ -26,6 +26,8 @@ enum OrbFrameHarness {
             case still(OrbStyleKind, Double)
             case strip(Double)
             case fx(LedStill)
+            /// The `character` style alone over the tour (or from `-t<seconds>`), its disc 2 S.
+            case character
         }
 
         let name: String
@@ -75,6 +77,10 @@ enum OrbFrameHarness {
                 kind = .fx(still)
                 start = 0
                 duration = 0
+            case "character":
+                kind = .character
+                start = parts.dropFirst().compactMap { $0.hasPrefix("t") ? Double($0.dropFirst()) : nil }.first ?? 0
+                duration = OrbTour.length - start
             default:
                 return nil
             }
@@ -151,6 +157,15 @@ enum OrbFrameHarness {
             }
         case .fx:
             return 0
+        case .character:
+            CharacterAssets.shared.synchronous = true
+            let disc = 2 * clip.size
+            size = CGSize(width: disc * 1.5, height: disc * 1.5)
+            let character = stage(.character, disc)
+            character.feed.characterID = model.characters.installed.first?.id
+            character.feed.vendors = VendorReading(rates: ["anthropic": 1], fastestModel: "Claude Opus 4.5",
+                                                   fastestVendor: "anthropic")
+            cells.append(Cell(stage: character, center: CGPoint(x: disc * 0.75, y: disc * 0.75), label: nil))
         case .hero(let style), .still(let style, _):
             let big: CGFloat = 240
             size = CGSize(width: big * 1.8, height: big * 1.6)

@@ -206,6 +206,8 @@ struct OrbTextInstance {
     var fill2: SIMD4<Float> = .zero
     /// Gradient top y, bottom y (points), enabled, quad inset (points).
     var gradient: SIMD4<Float> = .zero
+    /// Rotation (radians, clockwise on screen) about a pivot x, y (points); 0 for upright text. Clips stay unrotated.
+    var rotation: SIMD4<Float> = .zero
 }
 
 /// Where a text quad may draw.
@@ -241,6 +243,15 @@ enum OrbTextClip: Equatable {
 struct OrbTextDraw {
     let texture: OrbTextTexture
     var instance: OrbTextInstance
+    /// Depth layer in the scene (`OrbScene.layer`): texts draw after the shapes of their own layer.
+    var layer = 0
+
+    /// The same text turned by `angle` radians (clockwise on screen) about `pivot`.
+    func rotated(_ angle: Double, about pivot: CGPoint) -> OrbTextDraw {
+        var copy = self
+        copy.instance.rotation = SIMD4(Float(angle), Float(pivot.x), Float(pivot.y), 0)
+        return copy
+    }
 
     /// Places the text with its baseline at `baseline` and its advance starting at `x`.
     init(_ texture: OrbTextTexture, x: CGFloat, baseline: CGFloat, color: RGBColor, glow: RGBColor? = nil,

@@ -1,6 +1,8 @@
+import AgentSpeedCharacter
 import AgentSpeedHero
 import AgentSpeedOrbModel
 import CoreGraphics
+import Metal
 import simd
 
 /// One instanced shape for the orb shaders (layout matches `Instance` in `OrbShaderSource`).
@@ -256,6 +258,12 @@ struct OrbScene {
         case liquid(Int32)
         /// The `led` per-pixel fields in a mode (0 the silk core, 1 the corona and warp streaks).
         case ledField(Int32, OrbBlend)
+        /// A skinned character (`characterMeshes[index]`, DESIGN 2a.6).
+        case characterMesh(Int)
+        /// Soft lights of the character style (`characterDots[start..<start + count]`).
+        case characterDots(OrbBlend)
+        /// Atlas sprites of the character style (petals): `characterSpriteBatches[index]`.
+        case characterSprites(Int)
     }
 
     struct Batch {
@@ -268,6 +276,8 @@ struct OrbScene {
         var count: Int
         /// Drawn after the texts (the `led` digit lightning).
         var overlay = false
+        /// Depth layer: layers draw in order, each its shapes, then its texts, then its overlay shapes.
+        var layer = 0
     }
 
     /// Drawn first, over the body and under everything else (DESIGN 4c, Placement).
@@ -296,6 +306,18 @@ struct OrbScene {
     var center: CGPoint = .zero
     /// Pixels per point of the target, for text rasterization.
     var backingScale: CGFloat = 2
+    /// Depth layer of batches and texts added from now on (0 for every style but `character`, whose readouts pass
+    /// behind and in front of her).
+    var layer = 0
+    /// The highest layer used this frame.
+    private(set) var maxLayer = 0
+    /// The `character` style's meshes, lights and sprites, referenced by its passes.
+    private(set) var characterMeshes: ContiguousArray<CharacterMeshDraw> = []
+    private(set) var characterBones: ContiguousArray<SIMD4<Float>> = []
+    private(set) var characterOpacities: ContiguousArray<Float> = []
+    private(set) var characterDots: ContiguousArray<CharacterDot> = []
+    private(set) var characterSprites: ContiguousArray<CharacterSprite> = []
+    private(set) var characterSpriteBatches: ContiguousArray<CharacterSpriteBatch> = []
 
     init(capacity: Int = 0) {
         instances.reserveCapacity(capacity)
@@ -315,6 +337,67 @@ struct OrbScene {
         clipFeather = 0
         contentScale = 1
         overlay = false
+        layer = 0
+        maxLayer = 0
+        if !characterMeshes.isEmpty || !characterDots.isEmpty || !characterSprites.isEmpty {
+            characterMeshes.removeAll(keepingCapacity: true)
+            characterBones.removeAll(keepingCapacity: true)
+            characterOpacities.removeAll(keepingCapacity: true)
+            characterDots.removeAll(keepingCapacity: true)
+            characterSprites.removeAll(keepingCapacity: true)
+            characterSpriteBatches.removeAll(keepingCapacity: true)
+        }
+    }
+
+    var hasCharacterLayers: Bool { !characterMeshes.isEmpty || !characterDots.isEmpty || !characterSprites.isEmpty }
+
+    /// Adds a skinned character: `world` bone transforms and `opacities` per part are copied (alpha scaled by the
+    /// style crossfade).
+    mutating func addCharacterMesh(_ pose: CharacterPoseGPU, atlas: MTLTexture, world: [Affine2], opacities: [Double],
+                                   placement: SIMD4<Float>, feet: SIMD2<Float>, alpha: Float) {
+        let firstBone = characterBones.count
+        for m in world {
+            characterBones.append(SIMD4(Float(m.a), Float(m.b), Float(m.tx), 0))
+            characterBones.append(SIMD4(Float(m.c), Float(m.d), Float(m.ty), 0))
+        }
+        let firstOpacity = characterOpacities.count
+        for o in opacities { characterOpacities.append(Float(o)) }
+        var placement = placement
+        placement.w = alpha * alphaScale
+        characterMeshes.append(CharacterMeshDraw(pose: pose, atlas: atlas, firstBone: firstBone, boneCount: world.count,
+                                                 firstOpacity: firstOpacity, opacityCount: opacities.count,
+                                                 placement: placement, feet: feet))
+        appendBatch(.characterMesh(characterMeshes.count - 1), start: 0, count: 0)
+    }
+
+    /// Adds soft lights; consecutive calls with the same blend join one batch.
+    mutating func addCharacterDot(_ dot: CharacterDot, blend: OrbBlend) {
+        var dot = dot
+        if alphaScale < 1 { dot.color.w *= alphaScale }
+        if let last = batches.indices.last, batches[last].pass == .characterDots(blend), batches[last].layer == layer,
+           batches[last].start + batches[last].count == characterDots.count {
+            batches[last].count += 1
+        } else {
+            appendBatch(.characterDots(blend), start: characterDots.count, count: 1)
+        }
+        characterDots.append(dot)
+    }
+
+    /// Adds atlas sprites of one texture as one batch.
+    mutating func addCharacterSprites<S: Sequence>(_ sprites: S, atlas: MTLTexture) where S.Element == CharacterSprite {
+        let start = characterSprites.count
+        for var sprite in sprites {
+            if alphaScale < 1 { sprite.extra.y *= alphaScale }
+            characterSprites.append(sprite)
+        }
+        guard characterSprites.count > start else { return }
+        characterSpriteBatches.append(CharacterSpriteBatch(atlas: atlas, start: start, count: characterSprites.count - start))
+        appendBatch(.characterSprites(characterSpriteBatches.count - 1), start: 0, count: 0)
+    }
+
+    private mutating func appendBatch(_ pass: Pass, start: Int, count: Int) {
+        maxLayer = max(maxLayer, layer)
+        batches.append(Batch(pass: pass, clip: 0, start: start, count: count, overlay: overlay, layer: layer))
     }
 
     mutating func add(_ instance: OrbInstance, blend: OrbBlend) {
@@ -323,12 +406,13 @@ struct OrbScene {
         let clip = Float(clipRadius)
         let feather = Float(clipFeather)
         if let last = batches.indices.last, batches[last].pass == .shapes(blend), batches[last].clip == clip,
-           batches[last].feather == feather, batches[last].overlay == overlay,
+           batches[last].feather == feather, batches[last].overlay == overlay, batches[last].layer == layer,
            batches[last].start + batches[last].count == instances.count {
             batches[last].count += 1
         } else {
+            maxLayer = max(maxLayer, layer)
             batches.append(Batch(pass: .shapes(blend), clip: clip, feather: feather, start: instances.count, count: 1,
-                                 overlay: overlay))
+                                 overlay: overlay, layer: layer))
         }
         instances.append(instance)
     }
@@ -373,6 +457,8 @@ struct OrbScene {
             text.instance.color.w *= alphaScale
             text.instance.glow.w *= alphaScale
         }
+        text.layer = layer
+        maxLayer = max(maxLayer, layer)
         texts.append(text)
     }
 

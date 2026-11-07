@@ -26,6 +26,8 @@ public struct CharacterDirector: Sendable {
     ]
     static let hard = ["Var.", "Lift.", "Bend.", "Spin", "PosX"]
     static let stage = 0.55
+    /// Actions that leave the ground or travel, skipped while `grounded` (Reduce Motion).
+    static let airborne: Set<String> = ["hop", "jump", "hops", "spin", "step", "run", "jumpjoy"]
 
     struct GrooveLayer: Sendable {
         var band: SpeedBand
@@ -47,6 +49,8 @@ public struct CharacterDirector: Sendable {
     public private(set) var book: CharacterSide
     public let orb: Double
     public let celebrate: Bool
+    /// Skips the actions that leave the ground (DESIGN 2a.6, Reduce Motion).
+    public var grounded = false
     var rng: Rng
     var beat = Beat()
     var grooves: [GrooveLayer] = []
@@ -121,6 +125,7 @@ public struct CharacterDirector: Sendable {
 
     mutating func spec(_ gid: String) -> MotionSpec? {
         if Gestures.arm.contains(gid) || Gestures.combos.contains(gid) { return nil }
+        if grounded, CharacterDirector.airborne.contains(gid) { return nil }
         if gid == "jumpjoy" {
             return can("PosY", "Squash") ? Moves.jump(out, book, arms: true) : nil
         }

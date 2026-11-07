@@ -40,7 +40,7 @@ let package = Package(
         ),
         .executableTarget(
             name: "AgentSpeed",
-            dependencies: ["AgentSpeedCore", "AgentSpeedHero", "AgentSpeedOrbModel"],
+            dependencies: ["AgentSpeedCore", "AgentSpeedHero", "AgentSpeedOrbModel", "AgentSpeedCharacter"],
             path: "Sources/AgentSpeed"
         ),
         .executableTarget(
@@ -70,7 +70,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentSpeedAppTests",
-            dependencies: ["AgentSpeed", "AgentSpeedCore"],
+            dependencies: ["AgentSpeed", "AgentSpeedCore", "AgentSpeedCharacter"],
             path: "Tests/AgentSpeedAppTests"
         ),
     ]

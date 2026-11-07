@@ -30,6 +30,7 @@ public struct SecondOrder: Sendable {
 
     @discardableResult
     public mutating func update(_ dt: Double, _ x: Double) -> Double {
+        guard dt > 0 else { return y }
         let xd = (x - xp) / dt
         xp = x
         let k2 = max(max(self.k2, dt * dt / 2 + dt * k1 / 2), dt * k1)

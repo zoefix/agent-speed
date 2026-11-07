@@ -42,6 +42,15 @@ public struct HudBody: Sendable, Equatable {
     public var spin: Double
     public var alpha: Double
 
+    public init(x: Double, y: Double, depth: Double, scale: Double, spin: Double, alpha: Double) {
+        self.x = x
+        self.y = y
+        self.depth = depth
+        self.scale = scale
+        self.spin = spin
+        self.alpha = alpha
+    }
+
     public var inFront: Bool { depth >= 0 }
 }
 
@@ -104,6 +113,10 @@ public struct CharacterHud: Sendable {
     var speed = 0.0
     var heat = 0.0
     var intensity = 0.0
+    /// Multiplies the ember rate (0 turns embers off: Soft and Off effects; 1.6 at Max).
+    public var emberRate = 1.0
+    /// Fixed places of the bodies (speed, model, info) instead of their orbits (Reduce Motion), nil to orbit.
+    public var parked: [HudBody]?
     var time = 0.0
 
     public init(seed: UInt64 = 5, unit: Double = 1) {
@@ -164,10 +177,14 @@ public struct CharacterHud: Sendable {
         }
         let (cx, cy) = center.update(dt, time, l.orbitCenter.x, l.orbitCenter.y)
         bodies.removeAll(keepingCapacity: true)
-        for orbit in orbits! {
-            let p = orbit.at(time, cx, cy)
-            bodies.append(HudBody(x: p.x, y: p.y, depth: p.depth, scale: 0.82 + 0.2 * (p.depth + 1) / 2,
-                                  spin: orbit.spin(time), alpha: 0.55 + 0.45 * (p.depth + 1) / 2))
+        if let parked, parked.count == BodyKind.allCases.count {
+            bodies.append(contentsOf: parked)
+        } else {
+            for orbit in orbits! {
+                let p = orbit.at(time, cx, cy)
+                bodies.append(HudBody(x: p.x, y: p.y, depth: p.depth, scale: 0.82 + 0.2 * (p.depth + 1) / 2,
+                                      spin: orbit.spin(time), alpha: 0.55 + 0.45 * (p.depth + 1) / 2))
+            }
         }
         if let age = peakAge {
             let s = bodies[BodyKind.speed.rawValue]
@@ -274,7 +291,7 @@ public struct CharacterHud: Sendable {
     }
 
     mutating func updateEmbers(_ dt: Double, _ g: (cx: Double, cy: Double, rx: Double, ry: Double), _ u: Double) {
-        let rate = 70 * max(0.0, (heat - 0.6) / 0.4) * intensity
+        let rate = 70 * max(0.0, (heat - 0.6) / 0.4) * intensity * emberRate
         let n = Int(rate * dt + rng.random())
         for _ in 0..<n {
             let a = rng.uniform(0, 2 * Double.pi)

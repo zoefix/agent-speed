@@ -50,6 +50,19 @@ public struct CharacterPerformer: Sendable {
     public private(set) var events: [PerformerEvent] = []
     /// Set on the frame an exit turn reaches edge-on (see `CharacterStage`).
     public private(set) var exitReached = false
+    /// How much of the director's motion shows, 0…1 (DESIGN 2a.6 effects: Off 0 keeps only breathing and blinks,
+    /// Soft 0.5).
+    public var amplitude = 1.0
+    /// Reduce Motion: no airborne actions, and pose swaps crossfade over `crossfadeDuration` instead of turning.
+    public var calm = false {
+        didSet { director.grounded = calm }
+    }
+    public static let crossfadeDuration = 0.3
+    /// During a calm swap: the outgoing pose, its last transforms and opacities, and the crossfade progress 0 → 1.
+    public private(set) var fadingPose: Int?
+    public private(set) var fadingWorld: [Affine2] = []
+    public private(set) var fadingOpacities: [Double] = []
+    public private(set) var fadeProgress = 1.0
 
     var physics: [CharacterPhysics]
     var slotMaps: [[Int]]
@@ -151,6 +164,23 @@ public struct CharacterPerformer: Sendable {
                          orbitCenter: (fx, fy - 0.52 * h + 0.6 * lift), characterHeight: h, unit: unit)
     }
 
+    /// Pulls every motion parameter toward its rest value by `amplitude`, keeping breathing and blinks.
+    mutating func damp() {
+        let space = director.space
+        for i in values.indices where i != slots.breath && i != slots.eyeOpen[0] && i != slots.eyeOpen[1] {
+            let rest = space.params[i]?.default ?? 0
+            values[i] = rest + (values[i] - rest) * amplitude
+        }
+    }
+
+    /// Starts this character in the pose of `level`, facing the viewer (a calm character change).
+    public mutating func enterAtRest(level: Int) {
+        activePose = poseIndex(for: SpeedBand(level: level))
+        let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
+        director.setLevel(level)
+        director.setSides(out: book.other, book: book)
+    }
+
     /// Advances one frame at speed level 0...13.
     public mutating func step(_ dt: Double, level: Int) {
         events.removeAll(keepingCapacity: true)
@@ -160,8 +190,22 @@ public struct CharacterPerformer: Sendable {
         for e in director.events where e == .petals { events.append(.petals) }
         director.events.removeAll(keepingCapacity: true)
         for i in values.indices { values[i] = director.values[i] }
+        if amplitude < 1 { damp() }
+        if fadingPose != nil {
+            fadeProgress = min(1, fadeProgress + dt / CharacterPerformer.crossfadeDuration)
+            if fadeProgress >= 1 { fadingPose = nil }
+        }
 
-        if pendingExit, !poseSwitch.isRunning {
+        if calm, !pendingExit, let band = director.band, poseIndex(for: band) != activePose, !poseSwitch.isRunning {
+            fadingPose = activePose
+            fadingWorld = world
+            fadingOpacities = opacities
+            fadeProgress = 0
+            activePose = poseIndex(for: band)
+            let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
+            director.setSides(out: book.other, book: book)
+            events.append(.poseSwapped(band: pack.poses[activePose].band))
+        } else if pendingExit, !poseSwitch.isRunning {
             poseSwitch.request(CharacterPerformer.exitTarget)
             pendingExit = false
         } else if !pendingExit, let band = director.band {
@@ -215,8 +259,36 @@ public struct CharacterStage: Sendable {
         current.requestExit()
     }
 
+    /// Reduce Motion: a character change crossfades over `CharacterPerformer.crossfadeDuration` instead of turning;
+    /// passed on to the performers with `amplitude`.
+    public var calm = false
+    public var amplitude = 1.0
+    /// During a calm character change: the outgoing character and the crossfade progress 0 → 1.
+    public private(set) var outgoing: CharacterPerformer?
+    public private(set) var outgoingFade = 1.0
+
     public mutating func step(_ dt: Double, level: Int) {
         swapped = false
+        if current.calm != calm { current.calm = calm }
+        current.amplitude = amplitude
+        if var o = outgoing {
+            o.amplitude = amplitude
+            o.step(dt, level: level)
+            outgoing = o
+        }
+        if outgoing != nil {
+            outgoingFade = min(1, outgoingFade + dt / CharacterPerformer.crossfadeDuration)
+            if outgoingFade >= 1 { outgoing = nil }
+        }
+        if calm, var next = incoming {
+            next.calm = true
+            next.enterAtRest(level: level)
+            outgoing = current
+            outgoingFade = 0
+            current = next
+            incoming = nil
+            swapped = true
+        }
         current.step(dt, level: level)
         if current.exitReached, var next = incoming {
             next.enterEdgeOn(level: level)
