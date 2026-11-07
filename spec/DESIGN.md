@@ -2519,7 +2519,8 @@ with Mica). Sections:
   measurement status; on Windows the optional helper service (section 10).
 - **API** (`settings.report`, the same short name in every language; the broadcast icon) — opt-in live reporting to
   an API the user chooses, for example a leaderboard service: service, username, API key, what is sent, status, pause
-  and *Forget this device* (section 11, `spec/REPORTING.md`).
+  and *Forget this device* (section 11, `spec/REPORTING.md`). A segmented control on top switches to 區域網路, the local
+  network feed for devices on the user's network (section 14, `spec/LAN.md`).
 - **資料來源 Data sources** — every source can read several folders (issue #45; the rules are METRICS 2.1). The pane
   opens with the caption `settings.sources.locationsHint`. Then one group per location list (Claude Code and Claude
   Desktop share one; WorkBuddy and WorkBuddy AI have one each): the source toggles, each with its status line
@@ -2591,6 +2592,7 @@ with Mica). Sections:
   (section 10). `privacy.perfScore` follows, always (section 12: what the performance score reads, what it keeps and
   what live reporting may send). While remote hosts exist, `privacy.remote` follows it (section 13: the user's own SSH,
   a read-only helper in `~/.cache/agent-speed` on the host, only numbers come back, nothing about hosts is reported).
+  While the local network server is on or any target exists, `privacy.lan` follows (section 14).
   With live reporting: `privacy.report` follows, and the texts switch while reporting is
   on (section 11); `privacy.perfScore` stays as it is: it already says that only live reporting with model sharing
   sends the score and the performance statistics.
@@ -4238,3 +4240,77 @@ disabled while a field is invalid. Saving an enabled host connects it at once.
   at the minimum width with every control present the source picker shows only its dot; the tooltips keep the names.
 - The peak (METRICS 8) is shown only for all hosts and all sources.
 - CSV export adds a trailing `host` column (host name; `local` for this Mac) only while host history exists.
+
+## 14. Local network (區域網路)
+
+The local network feed of `spec/LAN.md`: devices on the user's network read the live speed from this computer, and the
+app sends it to devices the user added. Off by default; subject to the network master switch (NETWORK 8).
+
+### Settings → API → 區域網路
+
+The API pane (section 11) gains, above its groups, a two-segment control `lan.segment.report` (即時上報) /
+`lan.segment.lan` (區域網路), centered, 300 pt wide (macOS `Picker(.segmented)`, Windows the Fluent segmented
+`SelectorBar`, Linux the QML segmented control used elsewhere). The pane shows the chosen segment's groups; the
+window title and toolbar tab stay `settings.report`. The choice is kept while the app runs (not persisted) and starts
+on 即時上報. Switching crossfades the groups (0.2 s; none with Reduce Motion). The 區域網路 segment, top to bottom:
+
+1. **Devices read** (header `lan.server`) — the switch `lan.server.enabled` with the caption `lan.server.hint`; on
+   Windows also `win.lan.firewall` (Windows asks once whether to allow the connection; choose private networks). With
+   the network master switch off the switch is disabled and the caption becomes `settings.network.offHint`. Turning it
+   on creates the access key if there is none (LAN 2.1). While on, these rows follow (they expand in, 0.2 s):
+   - **Status** — a dot and one line: green `lan.server.status.connected` / `.connected.one` with the number of
+     devices (distinct peer addresses with an open stream or an authorized request in the last 10 s), a breathing
+     secondary dot with `lan.server.status.listening` while there are none, orange `lan.server.status.portInUse`
+     (port) while the port is taken, red `lan.server.status.failed` for any other listening error, hollow
+     `lan.server.status.networkOff`.
+   - **Access key** (`lan.key`) — the key in groups of four (`K7Q4-M2X9-PT3D`), 13 pt monospaced medium, selectable.
+     Trailing: an icon button `lan.key.copy` (SF Symbol `doc.on.doc`; for 1.5 s after a copy it shows
+     `checkmark` and the tooltip `lan.key.copied`) and the borderless button `lan.key.regenerate`, which asks
+     `lan.key.regenerate.confirm` with the informative text `lan.key.regenerate.detail` (default button Cancel; the
+     confirming button is `lan.key.regenerate` without its ellipsis). A new
+     key closes the open connections at once (LAN 4.4).
+   - **Address** (`lan.addresses`) — one line per IPv4 address of this computer that is local (LAN 2.3) and not
+     loopback, on an interface that is up, in interface order, at most three: `192.168.1.20:7247`, 13 pt monospaced,
+     secondary, selectable; refreshed when the network changes. None: `lan.addresses.none`. Trailing on each line a
+     pull-down `lan.copy` with `lan.copy.http` (`http://192.168.1.20:7247/v1/live?key=K7Q4-M2X9-PT3D`),
+     `lan.copy.ws` (`ws://…/v1/stream?key=…`) and `lan.copy.tcp` (`192.168.1.20:7247`).
+   - **Port** (`lan.port`) — a 72 pt numeric field, applied on Return or when focus leaves; an invalid value shows
+     `lan.port.invalid` in red under the field and is not applied. Changing it restarts the server (LAN 4.1).
+2. **Send to devices** (header `lan.targets`) — one row per target in the order added, as the host rows of section 13:
+   status dot (green `ok`; orange `unreachable`, `httpStatus`, `failed`; red `notLocal`, `notFound`; breathing
+   secondary while waiting for the first send; hollow `off`, `networkOff`), the name (semibold; the address when the
+   name is empty), the secondary line `UDP · 192.168.1.50:7247` or `HTTP · http://…` (monospaced, truncated in the
+   middle; just `UDP` or `HTTP` when the name is empty, since the title already is the address), the status line and a trailing switch (`enabled`, accessibility label `lan.target.enabled`). The row's
+   context menu and an ellipsis button: `lan.target.edit`, `lan.target.remove` (alert `lan.target.remove.confirm`,
+   confirmed with `remote.remove.button`).
+   Empty: `lan.targets.empty` with `lan.targets.empty.hint`. Below the list `lan.targets.add`, disabled at 8 targets
+   (tooltip `lan.targets.limit`).
+   **Status line** (`lan.target.status.*`): `ok` 已送出 · 剛剛 (with `time.justNow` / `time.secondsAgo` /
+   `time.minutesAgo`, refreshed every second), `waiting`, `notFound`, `notLocal`, `unreachable` (counting down to
+   the next attempt), `httpStatus` (the code), `failed`, `networkOff`, `off`. On macOS the targets group's caption is
+   `mac.lan.localNetwork` (macOS asks once for local network access; where to change it).
+3. **Footnote** — `lan.footnote` (what is sent and what never is, local addresses only, plain text, Bonjour
+   discovery) and a link button `lan.docs` to `https://github.com/zoefix/agent-speed/blob/main/spec/LAN.md`.
+
+**Add / Edit sheet** (420 pt), laid out as the host sheet of section 13: the header (a 30 pt accent tile with the
+SF Symbol `dot.radiowaves.left.and.right`, the title `lan.sheet.add` or `lan.sheet.edit` with the target's name, and
+`lan.sheet.body`), then `lan.target.kind` — a segmented control UDP / HTTP with the caption
+`lan.target.kind.udp.hint` or `lan.target.kind.http.hint`; `lan.target.address` (placeholder
+`lan.target.address.placeholder.udp` / `.http`, validated as typed with a 0.3 s debounce by LAN 5.1: `port` errors
+show `lan.target.address.port`, `https` shows `lan.target.address.https`, anything else `lan.target.address.invalid`;
+a UDP address whose host is `255.255.255.255` or an IPv4 address ending in `.255` shows the info note
+`lan.target.broadcast`); `lan.target.name` (placeholder `lan.target.name.placeholder`); `lan.target.key` (a plain
+text field, caption `lan.target.key.hint`). `lan.target.test` sends the current frame once to the address in the
+fields (the feed builds one if it is not running) and shows the result inline as a status line: `lan.target.test.ok`
+or the status sentence — for `unreachable` the plain `remote.status.unreachable`, since a test does not retry. Save is the default button, disabled while the address is invalid; saving an enabled target
+sends to it from the next tick. The buttons are `history.cancel` and `remote.save` (editing) or `remote.addButton`;
+while a test runs the result line shows `remote.test.running` with a small progress indicator.
+
+### About
+
+While the server is on or any target exists, `privacy.lan` follows `privacy.remote` (section 5, About).
+
+### Accessibility
+
+The segmented control is one group with two options. Status dots are decorative; their status is in the text. The
+copy buttons have the labels `lan.key.copy` and `lan.copy`. The access key is read as the groups it shows.

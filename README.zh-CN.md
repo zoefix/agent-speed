@@ -56,6 +56,7 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 - **称号主题**——九套速度称号：「交通工具」「动物」「蒲福风级」「宇宙」「修真境界」「武学境界」「魔法位阶」「游戏段位」「工程师生涯」，也能自定义最多 8 组。选择交通工具以外的主题时，面板圆圈会显示发光的称号徽章。
 - **用量历史**——从最早的记录开始，每天的输出与输入 token、请求数、平均速度与峰值、费用与网络流量，可按来源，以今天、昨天或任意日期区间绘成图表，并查看各模型的速度、导出 CSV。只保存每日汇总，即使工具删除了旧记录，历史也不会消失。
 - **远程主机（可选）**——在本机同时看见通过 SSH 在远程 Linux 服务器上工作的 agent：沿用你自己的 SSH 配置与密钥，自动在远程放置一个只读的小程序，只传回 token 数、时间和模型，从不传送对话内容；悬浮窗、看板、面板和用量历史都能按主机分开看或合并看。
+- **局域网（可选）**——把实时速度显示在自制的桌面屏幕、智能家居或脚本上：局域网设备带上访问码，就能通过 HTTP、WebSocket 或 TCP 读取；也可以让应用通过 UDP（含广播）或 HTTP POST 主动发送到你添加的设备。只有速度数字，只在局域网内；详见[开发者文档](spec/LAN.md)。
 - **实时上报（可选）**——默认关闭；想参与的话，可以用你取的用户名，把实时数字分享给你选择的 API，例如 [Codex Radar](https://codexradar.com/) 的速蹬天梯。从不发送对话内容、文件或项目名称，详见[隐私](#隐私)。
 - **执行模式**——依据可靠记录显示 Standard／Fast／Ultrafast，以及各 agent 的加速卡、模型变体或路由选择，区分默认设置与未知；历史可单独导出模式 CSV，沿用既有测速公式。
 - **头像与多设备（可选 API 扩展）**——预览、更换、移除头像，通过一次性配对码由原设备批准后合并身份；每台设备保留自己的密钥，解绑不影响已入账历史。接收端须支持[新版 API 结构](spec/report-schema.json)。
@@ -109,6 +110,8 @@ Claude Desktop 普通聊天对话不会保存在本机，因此无法统计；Wo
 
 远程主机（可选）：对你在设置中添加的每台 Linux 主机，Agent Speed 会用系统自带的 `ssh` 和你自己的 SSH 配置连接（从不保存或询问密码），首次连接时把与本版本一致的只读小程序放到远程的 `~/.cache/agent-speed`，以 SHA-256 核对后运行。它用与本机相同的规则读取那台主机上的记录，只传回 token 数、时间、模型、项目文件夹名称与每日汇总，从不传送对话内容；它不建立任何网络连接，只写入自己的文件夹（用量历史缓存与时区文件）。网络总开关关闭时不会连接。
 
+局域网（可选）：只在你于“设置 → API → 局域网”开启后运行。局域网内带上访问码的设备可以从一个端口读取实时速度（Bonjour 名称 `_agentspeed._tcp`），应用也会把速度发送到你添加的地址；仅限局域网地址，从不经过代理服务器。发送的只有输出速度、估算比例、工作中的 session 数、一分钟的速度曲线和这台电脑的名称，从不包含对话内容、模型、项目、路径或费用；数据在局域网内以明文传输。网络总开关关闭时，端口会关闭，也不会发送任何数据。
+
 推理强度与加速：大多数 agent 会把这两项写进上面的记录。其他情况下，Agent Speed 会以只读方式多读几个字段，绝不读取对话内容。三个数据库：OpenClaw 的 `trajectory_runtime_events`（只取 `trace.metadata` 行，由查询条件筛选，其中也只保留 think level 与 fast mode；压缩的行只在内存中解开，用完即丢）、WorkBuddy 的 `workbuddy.db`（只读 `sessions.id` 与 `sessions.thought_level`）、Hermes Agent 的 `state.db`（只读该会话的 `model_config.reasoning_config`）。打开这些文件时不会创建 `-wal` 或 `-shm`，Hermes 的数据库也只会短暂打开。配置文件各读一项：Codex `config.toml`（`service_tier`）、Gemini CLI `~/.gemini/settings.json`（匹配该 agent 模型的 override 中的 `thinkingLevel` 或 `thinkingBudget`）、Antigravity `~/.gemini/config/config.json`（`vertexServiceTier`）、WorkBuddy `settings.json`（`reasoningEffort`）、Hermes Agent `config.yaml`（`agent.reasoning_effort`、`agent.service_tier`）。只存在于配置文件的值会加上“配置值”标记，因为 agent 不一定实际使用它；这类值不会计入历史或统计，也不会上报。哪里都没有记录的值就保持未知，绝不猜测。
 
 性能分数：Agent Speed 依响应的时间与 token 数，以及工具调用的开始与结束时间、是否出错，计算每个 agent 的性能分数，从不依据提示词、命令或文件的内容；用量历史只保存各模型每天的汇总数字。只有在你开启实时上报、保留模型分享，而且服务支持时，才会把当前的分数和各模型的性能统计（输出与耗时总和、首段延迟分布、思考、缓存、工具调用的次数、耗时与失败数，以及活跃时间）发送给该服务，供排名与统计分析；从不发送单个请求或工具调用的数据，也不含提示词、命令、路径或时间点。
@@ -147,7 +150,7 @@ dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ```sh
 cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
 cmake --build build && ctest --test-dir build
-linux/packaging/package.sh build dist 1.6.2   # → AppImage 与 .deb
+linux/packaging/package.sh build dist 1.6.3   # → AppImage 与 .deb
 ```
 </details>
 

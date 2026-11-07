@@ -1,0 +1,34 @@
+<UserControl x:Class="AgentSpeed.Settings.Pages.ApiPage"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:AgentSpeed.Localization"
+             xmlns:pages="clr-namespace:AgentSpeed.Settings.Pages"
+             xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             Focusable="False">
+    <UserControl.Resources>
+        <!-- The pane's two segments: a little taller than the compact segmented rows, the same Fluent look. -->
+        <Style x:Key="PaneSegment" TargetType="RadioButton" BasedOn="{StaticResource SegmentedItem}">
+            <Setter Property="Height" Value="30" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="HorizontalAlignment" Value="Stretch" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!-- 即時上報 | 區域網路, centered, 300 wide (DESIGN 14); the window title and tab stay API -->
+        <controls:SegmentedGroup Style="{StaticResource SegmentedContainer}" Width="300" HorizontalAlignment="Center" Margin="0,0,0,20"
+                                 AutomationProperties.Name="{loc:Loc settings.report}">
+            <UniformGrid Columns="2">
+                <RadioButton x:Name="ReportSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.report}"
+                             IsChecked="{Binding ApiShowsReport, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc lan.segment.report}" />
+                <RadioButton x:Name="LanSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.lan}"
+                             IsChecked="{Binding ApiShowsLan, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc lan.segment.lan}" />
+            </UniformGrid>
+        </controls:SegmentedGroup>
+        <Grid>
+            <pages:ReportPage x:Name="ReportSegment" DataContext="{Binding Report}" />
+            <pages:LanPage x:Name="LanSegment" DataContext="{Binding Lan}" Visibility="Collapsed" />
+        </Grid>
+    </StackPanel>
+</UserControl>

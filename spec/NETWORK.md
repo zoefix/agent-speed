@@ -4,7 +4,8 @@ Agent Speed reads local logs and works fully offline. It makes exactly three kin
 optional, all HTTPS `GET`, none of them carrying anything about the user: the update check (`spec/UPDATES.md`), the
 daily price-table sync (section 3) and the daily exchange rates (section 4). A fourth kind exists only when the user
 turns it on: live reporting (section 6, `spec/REPORTING.md`), the one feature that sends data about the user's
-activity, to a service the user chose. Both platforms implement exactly this behaviour; anything not listed here is
+activity, to a service the user chose. Two more work only on the user's own machines and network, also only when
+turned on: remote hosts over SSH (section 7) and the local network feed (section 8, `spec/LAN.md`). Both platforms implement exactly this behaviour; anything not listed here is
 never requested.
 
 ## 1. Common rules
@@ -36,6 +37,7 @@ never requested.
 | Price table (3) | `raw.githubusercontent.com`, `cdn.jsdelivr.net` | 60 s after launch, then daily, manual | 1 MiB |
 | Exchange rates (4) | `open.er-api.com`, `cdn.jsdelivr.net`, `latest.currency-api.pages.dev`, `api.frankfurter.dev` | only while a non-USD currency is selected: 30 s after launch or on selection, then daily, manual | 256 KiB |
 | Live reporting (6) | the service URL and the API host the user confirmed | only while the user has it on: every 5 s while agents work, a heartbeat while idle, nothing when quiet | 64 KiB discovery, 16 KiB API |
+| Local network (8) | none: local addresses only (LAN 2.3) | only while the user has the server or a target on: answers devices; sends to targets as the speed changes | 8 KiB request head, 16 KiB frame |
 
 ## 2. Update check
 
@@ -239,3 +241,20 @@ contacts no other machine for this feature.
   Never conversation content.
 - **Live reporting** (section 6) may include the hosts' agents in the speed, tokens and models it already sends; it
   never sends a host name, destination, path or anything about the SSH connection.
+
+## 8. Local network
+
+Only while the user turns it on in Settings → API → 區域網路 (`spec/LAN.md`, DESIGN 14). Nothing while the master
+switch `networkEnabled` is off (LAN 2.2).
+
+- **Server**: one TCP port (default 7247) on every interface, answering only peers with a local address (LAN 2.3)
+  that present the access key; advertised as `_agentspeed._tcp` over Bonjour / DNS-SD / Avahi. It answers `GET`
+  requests and streams; nothing a peer sends changes the app.
+- **Targets**: UDP datagrams and HTTP `POST` requests to the addresses the user added, only when every address they
+  resolve to is local; no proxy, no redirects, no TLS.
+- **What is sent**: the frame of LAN 3: live output speed, its estimated share and agent counts overall and per
+  source, a one-minute speed history, the computer's name and two random ids. Never conversation content, models,
+  projects, paths, hosts, costs or anything that identifies the user beyond the computer's name.
+- **Plain text**: anyone who can watch the local network traffic can read frames and the access key; a broadcast
+  target reaches every device on the network. The UI says so (`lan.footnote`).
+- **Live reporting and remote hosts** are unaffected: the feed sends nothing to a service and nothing about hosts.

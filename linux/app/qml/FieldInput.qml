@@ -12,6 +12,8 @@ Item {
     property bool passEscape: false
     property string accessibleName
     property string accessibleDescription
+    property int maximumLength: 32767
+    property var validator: null
     readonly property bool focused: input.activeFocus
     signal edited(string text)
     signal committed(string text)
@@ -58,6 +60,8 @@ Item {
         clip: true
         selectByMouse: true
         echoMode: field.secret ? TextInput.Password : TextInput.Normal
+        maximumLength: field.maximumLength
+        validator: field.validator
         activeFocusOnTab: true
         Accessible.name: field.accessibleName
         Accessible.description: field.accessibleDescription

@@ -93,7 +93,7 @@ internal sealed partial class DevCapture
                 case "orbs":
                     CaptureOrbs(parts[1], parts.Length > 2 ? parts[2] : "#202020");
                     break;
-                case "menu-tray" or "menu-orb" or "menu-host" or "menu-orb-hosts" or "menu-board-hosts":
+                case "menu-tray" or "menu-orb" or "menu-host" or "menu-orb-hosts" or "menu-board-hosts" or "menu-lan":
                     CaptureMenu(parts[0], parts[1]);
                     break;
                 case "op":

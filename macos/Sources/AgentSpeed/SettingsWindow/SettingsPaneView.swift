@@ -30,7 +30,7 @@ struct SettingsPaneView: View {
         case .effects: EffectsPane(model: model)
         case .cost: CostPane(model: model)
         case .traffic: TrafficPane(model: model)
-        case .report: ReportPane(model: model)
+        case .report: ApiPane(model: model)
         case .sources: SourcesPane(model: model)
         case .remote: RemoteHostsPane(model: model)
         case .about: AboutPane(model: model)

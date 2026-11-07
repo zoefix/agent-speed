@@ -20,6 +20,7 @@
 #include "catalog.hpp"
 #include "flyout.hpp"
 #include "history_service.hpp"
+#include "lan/lan_controller.hpp"
 #include "graphics.hpp"
 #include "monitor_worker.hpp"
 #include "network_service.hpp"
@@ -242,6 +243,9 @@ int main(int argc, char* argv[]) {
     RemoteHostsView hostsView(remote, prefs, state, historyModel, strings);
     // DESIGN 5 資料來源: every source's location list.
     SourceLocationsView locations(prefs);
+    // DESIGN 14: the local network feed, fed by every engine tick (demo mode included), under the master switch; it
+    // outlives the QML engine that reads it.
+    LanController lan(prefs, strings);
     QQmlApplicationEngine engine;
     const bool popup = tray.available() || !snapshotPath.isEmpty();
     engine.setInitialProperties({{QStringLiteral("flyout"), popup}});
@@ -274,6 +278,9 @@ int main(int argc, char* argv[]) {
     ReportController report(prefs, strings, prices, QStandardPaths::writableLocation(QStandardPaths::AppDataLocation));
     engine.rootContext()->setContextProperty(QStringLiteral("report"), &report);
     QObject::connect(worker, &MonitorWorker::reportTick, &report, &ReportController::onTick);
+    engine.rootContext()->setContextProperty(QStringLiteral("lan"), &lan);
+    QObject::connect(worker, &MonitorWorker::lanTick, &lan, &LanController::onTick);
+    QObject::connect(&app, &QCoreApplication::aboutToQuit, &lan, &LanController::shutdown);
     report.setWatchSink([worker, &remote](bool on, qint64 responses, qint64 calls) {
         worker->setReportWatch(on, responses, calls);
         remote.setWatch(on);
@@ -425,6 +432,7 @@ int main(int argc, char* argv[]) {
     const auto arguments = app.arguments();
     network.start();
     report.start();
+    lan.start();
     // Development aid: --report-selftest=<http://127.0.0.1:port> reports to a local reference server.
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--report-selftest=")) && !report.startSelfTest(arg.mid(18))) qWarning("report selftest: loopback http only");

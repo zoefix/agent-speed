@@ -6749,5 +6749,395 @@
     "zh-Hans": "全部主机",
     "en": "All Hosts",
     "ja": "すべてのホスト"
+  },
+  "lan.segment.report": {
+    "zh-Hant": "即時上報",
+    "zh-Hans": "实时上报",
+    "en": "Live Reporting",
+    "ja": "ライブレポート"
+  },
+  "lan.segment.lan": {
+    "zh-Hant": "區域網路",
+    "zh-Hans": "局域网",
+    "en": "Local Network",
+    "ja": "ローカルネットワーク"
+  },
+  "lan.server": {
+    "zh-Hant": "讓裝置讀取",
+    "zh-Hans": "让设备读取",
+    "en": "Devices Read",
+    "ja": "デバイスから読み取る"
+  },
+  "lan.server.enabled": {
+    "zh-Hant": "允許區網裝置讀取即時速度",
+    "zh-Hans": "允许局域网设备读取实时速度",
+    "en": "Let devices on this network read the live speed",
+    "ja": "このネットワークのデバイスにライブ速度の読み取りを許可"
+  },
+  "lan.server.hint": {
+    "zh-Hant": "裝置可以用 HTTP、WebSocket 或 TCP 連到這台電腦，帶上存取碼讀取速度。",
+    "zh-Hans": "设备可以通过 HTTP、WebSocket 或 TCP 连接到这台电脑，带上访问码读取速度。",
+    "en": "Devices connect to this computer over HTTP, WebSocket or TCP and read the speed with the access key.",
+    "ja": "デバイスは HTTP、WebSocket または TCP でこのコンピュータに接続し、アクセスキーを使って速度を読み取ります。"
+  },
+  "lan.server.status.listening": {
+    "zh-Hant": "等待裝置連線",
+    "zh-Hans": "等待设备连接",
+    "en": "Waiting for devices",
+    "ja": "デバイスの接続を待っています"
+  },
+  "lan.server.status.connected": {
+    "zh-Hant": "已連線 · %d 台裝置",
+    "zh-Hans": "已连接 · %d 台设备",
+    "en": "Connected · %d devices",
+    "ja": "接続中 · %d 台"
+  },
+  "lan.server.status.connected.one": {
+    "zh-Hant": "已連線 · %d 台裝置",
+    "zh-Hans": "已连接 · %d 台设备",
+    "en": "Connected · %d device",
+    "ja": "接続中 · %d 台"
+  },
+  "lan.server.status.portInUse": {
+    "zh-Hant": "連接埠 %d 已被其他程式使用，30 秒後重試",
+    "zh-Hans": "端口 %d 已被其他程序占用，30 秒后重试",
+    "en": "Port %d is used by another app — retrying in 30 s",
+    "ja": "ポート %d は他のアプリが使用中です。30 秒後に再試行します"
+  },
+  "lan.server.status.failed": {
+    "zh-Hant": "無法開啟連接埠",
+    "zh-Hans": "无法打开端口",
+    "en": "Can’t open the port",
+    "ja": "ポートを開けません"
+  },
+  "lan.server.status.networkOff": {
+    "zh-Hant": "網路已關閉",
+    "zh-Hans": "网络已关闭",
+    "en": "Network access is off",
+    "ja": "ネットワーク接続はオフです"
+  },
+  "lan.key": {
+    "zh-Hant": "存取碼",
+    "zh-Hans": "访问码",
+    "en": "Access Key",
+    "ja": "アクセスキー"
+  },
+  "lan.key.copy": {
+    "zh-Hant": "拷貝存取碼",
+    "zh-Hans": "复制访问码",
+    "en": "Copy Access Key",
+    "ja": "アクセスキーをコピー"
+  },
+  "lan.key.copied": {
+    "zh-Hant": "已拷貝",
+    "zh-Hans": "已复制",
+    "en": "Copied",
+    "ja": "コピーしました"
+  },
+  "lan.key.regenerate": {
+    "zh-Hant": "重新產生…",
+    "zh-Hans": "重新生成…",
+    "en": "Regenerate…",
+    "ja": "再生成…"
+  },
+  "lan.key.regenerate.confirm": {
+    "zh-Hant": "要重新產生存取碼嗎？",
+    "zh-Hans": "要重新生成访问码吗？",
+    "en": "Regenerate the access key?",
+    "ja": "アクセスキーを再生成しますか？"
+  },
+  "lan.key.regenerate.detail": {
+    "zh-Hant": "目前連線的裝置會立刻中斷，之後要改用新的存取碼。",
+    "zh-Hans": "当前连接的设备会立即断开，之后需要改用新的访问码。",
+    "en": "Connected devices are disconnected at once and must use the new key.",
+    "ja": "接続中のデバイスはすぐに切断され、新しいキーが必要になります。"
+  },
+  "lan.addresses": {
+    "zh-Hant": "位址",
+    "zh-Hans": "地址",
+    "en": "Address",
+    "ja": "アドレス"
+  },
+  "lan.addresses.none": {
+    "zh-Hant": "這台電腦目前沒有區網位址",
+    "zh-Hans": "这台电脑当前没有局域网地址",
+    "en": "This computer has no local network address right now",
+    "ja": "このコンピュータには現在ローカルネットワークのアドレスがありません"
+  },
+  "lan.copy": {
+    "zh-Hant": "拷貝",
+    "zh-Hans": "复制",
+    "en": "Copy",
+    "ja": "コピー"
+  },
+  "lan.copy.http": {
+    "zh-Hant": "拷貝 HTTP 網址（含存取碼）",
+    "zh-Hans": "复制 HTTP 网址（含访问码）",
+    "en": "Copy HTTP URL (with Key)",
+    "ja": "HTTP の URL をコピー（キー付き）"
+  },
+  "lan.copy.ws": {
+    "zh-Hant": "拷貝 WebSocket 網址（含存取碼）",
+    "zh-Hans": "复制 WebSocket 网址（含访问码）",
+    "en": "Copy WebSocket URL (with Key)",
+    "ja": "WebSocket の URL をコピー（キー付き）"
+  },
+  "lan.copy.tcp": {
+    "zh-Hant": "拷貝 TCP 位址",
+    "zh-Hans": "复制 TCP 地址",
+    "en": "Copy TCP Address",
+    "ja": "TCP アドレスをコピー"
+  },
+  "lan.port": {
+    "zh-Hant": "連接埠",
+    "zh-Hans": "端口",
+    "en": "Port",
+    "ja": "ポート"
+  },
+  "lan.port.invalid": {
+    "zh-Hant": "請輸入 1024 到 65535 之間的數字",
+    "zh-Hans": "请输入 1024 到 65535 之间的数字",
+    "en": "Enter a number from 1024 to 65535",
+    "ja": "1024〜65535 の数値を入力してください"
+  },
+  "lan.targets": {
+    "zh-Hant": "主動送到裝置",
+    "zh-Hans": "主动发送到设备",
+    "en": "Send to Devices",
+    "ja": "デバイスへ送信"
+  },
+  "lan.targets.empty": {
+    "zh-Hant": "尚未加入裝置",
+    "zh-Hans": "尚未添加设备",
+    "en": "No devices yet",
+    "ja": "デバイスはまだありません"
+  },
+  "lan.targets.empty.hint": {
+    "zh-Hant": "加入裝置的位址，速度一有變化，app 就會主動送過去，適合自製的桌面螢幕或智慧家庭。",
+    "zh-Hans": "添加设备的地址，速度一有变化，应用就会主动发送过去，适合自制的桌面屏幕或智能家居。",
+    "en": "Add a device’s address, and the app sends the speed to it as it changes — for a homemade desk display or a smart home hub.",
+    "ja": "デバイスのアドレスを追加すると、速度が変わるたびにアプリが送信します。自作のデスクディスプレイやスマートホームに。"
+  },
+  "lan.targets.add": {
+    "zh-Hant": "加入裝置…",
+    "zh-Hans": "添加设备…",
+    "en": "Add Device…",
+    "ja": "デバイスを追加…"
+  },
+  "lan.targets.limit": {
+    "zh-Hant": "最多可以加入 %d 個裝置",
+    "zh-Hans": "最多可以添加 %d 个设备",
+    "en": "You can add up to %d devices",
+    "ja": "追加できるデバイスは最大 %d 台です"
+  },
+  "lan.target.edit": {
+    "zh-Hant": "編輯…",
+    "zh-Hans": "编辑…",
+    "en": "Edit…",
+    "ja": "編集…"
+  },
+  "lan.target.remove": {
+    "zh-Hant": "移除…",
+    "zh-Hans": "移除…",
+    "en": "Remove…",
+    "ja": "削除…"
+  },
+  "lan.target.remove.confirm": {
+    "zh-Hant": "要移除「%@」嗎？",
+    "zh-Hans": "要移除“%@”吗？",
+    "en": "Remove “%@”?",
+    "ja": "「%@」を削除しますか？"
+  },
+  "lan.target.enabled": {
+    "zh-Hant": "送到「%@」",
+    "zh-Hans": "发送到“%@”",
+    "en": "Send to %@",
+    "ja": "「%@」へ送信"
+  },
+  "lan.target.kind": {
+    "zh-Hant": "傳送方式",
+    "zh-Hans": "发送方式",
+    "en": "Method",
+    "ja": "送信方法"
+  },
+  "lan.target.kind.udp.hint": {
+    "zh-Hant": "速度一變就送出，至少每秒一次。裝置端的程式最簡單；填廣播位址就能送給整個網路。",
+    "zh-Hans": "速度一变就发送，至少每秒一次。设备端的程序最简单；填写广播地址即可发送给整个网络。",
+    "en": "Sent as the speed changes, at least once a second. The simplest for a device; a broadcast address reaches the whole network.",
+    "ja": "速度が変わるたびに送信し、少なくとも 1 秒に 1 回送ります。デバイス側の実装が最も簡単で、ブロードキャストアドレスならネットワーク全体に届きます。"
+  },
+  "lan.target.kind.http.hint": {
+    "zh-Hant": "以 POST 送出，最多每秒一次，閒置時每 10 秒一次。適合 webhook 與智慧家庭。",
+    "zh-Hans": "以 POST 发送，最多每秒一次，空闲时每 10 秒一次。适合 webhook 与智能家居。",
+    "en": "Sent as a POST, at most once a second and every 10 s while idle. For webhooks and smart home hubs.",
+    "ja": "POST で送信します。最大 1 秒に 1 回、待機中は 10 秒ごとです。Webhook やスマートホームに。"
+  },
+  "lan.target.address": {
+    "zh-Hant": "位址",
+    "zh-Hans": "地址",
+    "en": "Address",
+    "ja": "アドレス"
+  },
+  "lan.target.address.placeholder.udp": {
+    "zh-Hant": "192.168.1.50:7247",
+    "zh-Hans": "192.168.1.50:7247",
+    "en": "192.168.1.50:7247",
+    "ja": "192.168.1.50:7247"
+  },
+  "lan.target.address.placeholder.http": {
+    "zh-Hant": "http://192.168.1.50/agent-speed",
+    "zh-Hans": "http://192.168.1.50/agent-speed",
+    "en": "http://192.168.1.50/agent-speed",
+    "ja": "http://192.168.1.50/agent-speed"
+  },
+  "lan.target.address.invalid": {
+    "zh-Hant": "位址格式不正確",
+    "zh-Hans": "地址格式不正确",
+    "en": "This address isn’t valid",
+    "ja": "アドレスの形式が正しくありません"
+  },
+  "lan.target.address.port": {
+    "zh-Hant": "請加上連接埠，例如 :7247",
+    "zh-Hans": "请加上端口，例如 :7247",
+    "en": "Add a port, for example :7247",
+    "ja": "ポートを付けてください（例：:7247）"
+  },
+  "lan.target.address.https": {
+    "zh-Hant": "只支援 http://：區網裝置之間不加密",
+    "zh-Hans": "仅支持 http://：局域网设备之间不加密",
+    "en": "Only http:// is supported: local devices aren’t encrypted",
+    "ja": "http:// のみ対応しています（ローカルのデバイス間は暗号化されません）"
+  },
+  "lan.target.name": {
+    "zh-Hant": "名稱",
+    "zh-Hans": "名称",
+    "en": "Name",
+    "ja": "名前"
+  },
+  "lan.target.name.placeholder": {
+    "zh-Hant": "選填",
+    "zh-Hans": "选填",
+    "en": "Optional",
+    "ja": "任意"
+  },
+  "lan.target.key": {
+    "zh-Hant": "金鑰",
+    "zh-Hans": "密钥",
+    "en": "Key",
+    "ja": "キー"
+  },
+  "lan.target.key.hint": {
+    "zh-Hant": "選填。填了金鑰，每一份資料都會附上簽章，裝置可以確認資料來自這台電腦。",
+    "zh-Hans": "选填。填写密钥后，每一份数据都会附上签名，设备可以确认数据来自这台电脑。",
+    "en": "Optional. With a key, every frame carries a signature, so the device can check it came from this computer.",
+    "ja": "任意。キーを設定すると各データに署名が付き、デバイスはこのコンピュータから届いたことを確認できます。"
+  },
+  "lan.target.broadcast": {
+    "zh-Hant": "廣播會送給這個網路上的所有裝置。",
+    "zh-Hans": "广播会发送给这个网络上的所有设备。",
+    "en": "A broadcast reaches every device on this network.",
+    "ja": "ブロードキャストはこのネットワーク上のすべてのデバイスに届きます。"
+  },
+  "lan.target.test": {
+    "zh-Hant": "傳送一次測試",
+    "zh-Hans": "发送一次测试",
+    "en": "Send Test",
+    "ja": "テスト送信"
+  },
+  "lan.target.test.ok": {
+    "zh-Hant": "已送出",
+    "zh-Hans": "已发送",
+    "en": "Sent",
+    "ja": "送信しました"
+  },
+  "lan.target.status.ok": {
+    "zh-Hant": "已送出 · %@",
+    "zh-Hans": "已发送 · %@",
+    "en": "Sent · %@",
+    "ja": "送信済み · %@"
+  },
+  "lan.target.status.waiting": {
+    "zh-Hant": "等待第一次傳送",
+    "zh-Hans": "等待首次发送",
+    "en": "Waiting to send",
+    "ja": "送信待ち"
+  },
+  "lan.target.status.notFound": {
+    "zh-Hant": "找不到這個名稱",
+    "zh-Hans": "找不到这个名称",
+    "en": "Can’t find this name",
+    "ja": "この名前が見つかりません"
+  },
+  "lan.target.status.notLocal": {
+    "zh-Hant": "不是區網位址，不會傳送",
+    "zh-Hans": "不是局域网地址，不会发送",
+    "en": "Not a local network address — nothing is sent",
+    "ja": "ローカルネットワークのアドレスではないため送信しません"
+  },
+  "lan.target.status.unreachable": {
+    "zh-Hant": "無法連線，%d 秒後重試",
+    "zh-Hans": "无法连接，%d 秒后重试",
+    "en": "Can’t connect — retrying in %d s",
+    "ja": "接続できません。%d 秒後に再試行します"
+  },
+  "lan.target.status.httpStatus": {
+    "zh-Hant": "裝置回應 %d",
+    "zh-Hans": "设备响应 %d",
+    "en": "The device answered %d",
+    "ja": "デバイスの応答：%d"
+  },
+  "lan.target.status.failed": {
+    "zh-Hant": "傳送失敗",
+    "zh-Hans": "发送失败",
+    "en": "Couldn’t send",
+    "ja": "送信できませんでした"
+  },
+  "lan.target.status.networkOff": {
+    "zh-Hant": "網路已關閉",
+    "zh-Hans": "网络已关闭",
+    "en": "Network access is off",
+    "ja": "ネットワーク接続はオフです"
+  },
+  "lan.target.status.off": {
+    "zh-Hant": "已停用",
+    "zh-Hans": "已停用",
+    "en": "Off",
+    "ja": "オフ"
+  },
+  "lan.footnote": {
+    "zh-Hant": "只會送出速度數字（tok/s、估算比例、工作中的 session 數）和這台電腦的名稱，不含對話內容、模型、專案名稱或路徑，也只送到區網內的位址。資料以明文傳送，同一個網路上能監看流量的人也看得到。裝置可以用 Bonjour 搜尋 _agentspeed._tcp 找到這台電腦。",
+    "zh-Hans": "只会发送速度数字（tok/s、估算比例、工作中的 session 数）和这台电脑的名称，不含对话内容、模型、项目名称或路径，也只发送到局域网内的地址。数据以明文传输，同一网络中能监听流量的人也能看到。设备可以通过 Bonjour 搜索 _agentspeed._tcp 找到这台电脑。",
+    "en": "Only speed numbers (tok/s, the estimated share, working sessions) and this computer’s name are sent — never conversation content, models, project names or paths — and only to local network addresses. They travel as plain text, so anyone who can watch this network’s traffic can read them. Devices can find this computer by browsing Bonjour for _agentspeed._tcp.",
+    "ja": "送信するのは速度の数値（tok/s、推定の割合、作業中のセッション数）とこのコンピュータの名前だけで、会話の内容、モデル、プロジェクト名、パスは含まれず、送信先もローカルネットワーク内のアドレスに限られます。データは平文で送られるため、このネットワークの通信を監視できる人には読めます。デバイスは Bonjour で _agentspeed._tcp を検索するとこのコンピュータを見つけられます。"
+  },
+  "lan.docs": {
+    "zh-Hant": "開發者說明",
+    "zh-Hans": "开发者文档",
+    "en": "Developer Guide",
+    "ja": "開発者向けガイド"
+  },
+  "privacy.lan": {
+    "zh-Hant": "區域網路：開啟後，區網內的裝置可以用存取碼讀取即時速度，app 也會把速度送到你加入的裝置。只包含速度數字和這台電腦的名稱，只在區網內，以明文傳送。",
+    "zh-Hans": "局域网：开启后，局域网内的设备可以用访问码读取实时速度，应用也会把速度发送到你添加的设备。只包含速度数字和这台电脑的名称，只在局域网内，以明文传输。",
+    "en": "Local network: when you turn it on, devices on your network can read the live speed with an access key, and the app sends it to devices you add. Only speed numbers and this computer’s name, only on the local network, as plain text.",
+    "ja": "ローカルネットワーク：オンにすると、ネットワーク内のデバイスがアクセスキーでライブ速度を読み取れるようになり、追加したデバイスにもアプリが速度を送信します。速度の数値とこのコンピュータの名前だけを、ローカルネットワーク内で平文で送ります。"
+  },
+  "lan.sheet.add": {
+    "zh-Hant": "加入裝置",
+    "zh-Hans": "添加设备",
+    "en": "Add Device",
+    "ja": "デバイスを追加"
+  },
+  "lan.sheet.edit": {
+    "zh-Hant": "編輯「%@」",
+    "zh-Hans": "编辑“%@”",
+    "en": "Edit “%@”",
+    "ja": "「%@」を編集"
+  },
+  "lan.sheet.body": {
+    "zh-Hant": "速度一有變化，app 就會把資料送到這個位址；只能填區網內的位址。",
+    "zh-Hans": "速度一有变化，应用就会把数据发送到这个地址；只能填写局域网内的地址。",
+    "en": "The app sends the speed to this address as it changes. It must be on your local network.",
+    "ja": "速度が変わるたびに、アプリがこのアドレスへ送信します。ローカルネットワーク内のアドレスに限ります。"
   }
 }

@@ -120,6 +120,17 @@ if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
         src/host_selection.cpp
         src/host_subset.cpp
         src/location_entries.cpp
+        src/lan/access.cpp
+        src/lan/address.cpp
+        src/lan/datagram.cpp
+        src/lan/feed.cpp
+        src/lan/frame.cpp
+        src/lan/history.cpp
+        src/lan/push.cpp
+        src/lan/request_head.cpp
+        src/lan/respond.cpp
+        src/lan/settings.cpp
+        src/lan/websocket.cpp
         src/remote/clock.cpp
         src/remote/connection.cpp
         src/remote/connection_check.cpp

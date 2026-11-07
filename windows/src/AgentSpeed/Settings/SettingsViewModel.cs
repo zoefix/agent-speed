@@ -225,6 +225,45 @@ internal sealed class SettingsViewModel : ObservableObject
     /// <summary>Any remote host is configured: About adds <c>privacy.remote</c> (DESIGN 13).</summary>
     public bool HasRemoteHosts => !S.RemoteHosts.Hosts.IsEmpty;
 
+    /// <summary>Settings → API → 區域網路 (DESIGN 14); set by the app.</summary>
+    public Lan.LanPaneViewModel? Lan
+    {
+        get => _lan;
+        set
+        {
+            if (Set(ref _lan, value) && value is not null)
+            {
+                value.ReduceMotion = _reduceMotion;
+            }
+        }
+    }
+
+    private Lan.LanPaneViewModel? _lan;
+
+    /// <summary>The API pane shows 區域網路; kept while the app runs, never stored, 即時上報 at launch (DESIGN 14).</summary>
+    public bool ApiShowsLan
+    {
+        get => _apiShowsLan;
+        set
+        {
+            if (Set(ref _apiShowsLan, value))
+            {
+                OnPropertyChanged(nameof(ApiShowsReport));
+            }
+        }
+    }
+
+    public bool ApiShowsReport
+    {
+        get => !_apiShowsLan;
+        set => ApiShowsLan = !value;
+    }
+
+    private bool _apiShowsLan;
+
+    /// <summary>The local network server is on or a target exists: About adds <c>privacy.lan</c> (DESIGN 14).</summary>
+    public bool HasLanFeature => S.Lan.IsInUse;
+
     /// <summary>The speed titles that scale with the redline, climbing (DESIGN section 5, General).</summary>
     public ObservableCollection<TitleLadderRow> TitleLadder { get; } = new();
 
@@ -439,6 +478,11 @@ internal sealed class SettingsViewModel : ObservableObject
                 Remote.ReduceMotion = value;
             }
 
+            if (Lan is not null)
+            {
+                Lan.ReduceMotion = value;
+            }
+
             if (Boards is not null)
             {
                 Boards.ReduceMotion = value;
@@ -551,6 +595,7 @@ internal sealed class SettingsViewModel : ObservableObject
         Cost.Relocalize();
         Traffic?.Relocalize(localizer);
         Remote?.Relocalize(localizer);
+        Lan?.Relocalize(localizer);
         OnPropertyChanged(string.Empty);
     }
 

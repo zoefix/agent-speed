@@ -262,6 +262,9 @@ public sealed record AppSettings
     /// <summary>The remote hosts (settings value <c>remoteHosts</c>, REMOTE 2.1).</summary>
     public Core.Remote.RemoteHostsDocument RemoteHosts { get; init; } = Core.Remote.RemoteHostsDocument.Empty;
 
+    /// <summary>The local network feed (settings value <c>lan</c>, LAN 2.1).</summary>
+    public Core.Lan.LanSettings Lan { get; init; } = Core.Lan.LanSettings.Default;
+
     /// <summary>Currency, live unit, subscriptions and the price-table sync (DESIGN 9).</summary>
     public CostSettings Cost { get; init; } = CostSettings.Default;
 

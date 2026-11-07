@@ -18,6 +18,10 @@ add_executable(agentspeed_tests
     history_test.cpp
     host_subset_test.cpp
     json_test.cpp
+    lan_address_test.cpp
+    lan_frame_test.cpp
+    lan_protocol_test.cpp
+    lan_settings_test.cpp
     money_test.cpp
     model_attribution_test.cpp
     monitor_test.cpp
@@ -67,13 +71,19 @@ gtest_discover_tests(agentspeed_tests)
 
 # The app's settings side (DESIGN 5 Storage, METRICS 2.1 Editing) needs Qt: built only with the app.
 if(AGENTSPEED_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Widgets)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/devin_settings_test.cpp
+        app/lan_loopback_test.cpp
         app/orb_size_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
+        ../app/src/lan/lan_connection.cpp
+        ../app/src/lan/lan_http_post.cpp
+        ../app/src/lan/lan_net.cpp
+        ../app/src/lan/lan_server.cpp
+        ../app/src/lan/lan_targets.cpp
         ../app/src/orb/idle_fade.cpp
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
@@ -82,7 +92,7 @@ if(AGENTSPEED_BUILD_APP)
     )
     set_target_properties(agentspeed_app_tests PROPERTIES AUTOMOC ON)
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
-    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Widgets GTest::gtest_main)
+    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Network Qt6::Widgets GTest::gtest_main)
     target_compile_definitions(agentspeed_app_tests PRIVATE
         AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
         AGENTSPEED_APP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../app")

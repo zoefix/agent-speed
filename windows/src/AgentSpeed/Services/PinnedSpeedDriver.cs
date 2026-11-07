@@ -123,8 +123,17 @@ internal sealed class PinnedSpeedDriver : IDisposable
             agents.Count(a => a.Phase == AgentPhase.Tools),
             _history.ToArray(),
             null,
-            []));
+            [])
+        {
+            Report = ReportFacts(agents),
+        });
     }
+
+    /// <summary>The agent counts live reporting and the local network feed read (METRICS 11.2), per source.</summary>
+    private static Core.Reporting.ReportLiveFacts ReportFacts(IReadOnlyList<AgentStatus> agents) => new(
+        agents.GroupBy(a => a.Source).ToDictionary(g => g.Key, g => new Core.Reporting.ReportAgentCounts(
+            g.Count(a => a.Phase == AgentPhase.Generating), g.Count(a => a.Phase == AgentPhase.Tools), g.Count())),
+        new Dictionary<Core.Reporting.ReportModelKey, int>(), Core.Reporting.ReportCounters.Zero);
 
     /// <param name="Thinking">The reasoning share of its output while it generates.</param>
     private sealed record PinnedAgent(
