@@ -31,6 +31,8 @@ final class CharacterRenderer: CharacterLayerProvider {
     private var agents: [(Double, Double, Double)] = []
     private var parked: [HudBody] = []
     private var order = CharacterHud.BodyKind.allCases
+    /// The last pack looked up, so a frame does not hash the pack folder again.
+    private var lastPack: (folder: URL, version: Int, loaded: LoadedCharacter)?
     private static var seeds: UInt64 = 7
 
     // MARK: CharacterLayerProvider
@@ -40,7 +42,13 @@ final class CharacterRenderer: CharacterLayerProvider {
             stage = nil
             return
         }
-        guard let pack = CharacterAssets.shared.pack(installed) else {
+        let pack: LoadedCharacter
+        if let cached = lastPack, cached.folder == installed.folder, cached.version == installed.manifest.packVersion {
+            pack = cached.loaded
+        } else if let loaded = CharacterAssets.shared.pack(installed) {
+            pack = loaded
+            lastPack = (installed.folder, installed.manifest.packVersion, loaded)
+        } else {
             loading = true
             return
         }
@@ -54,18 +62,19 @@ final class CharacterRenderer: CharacterLayerProvider {
             loaded[pack.pack.id] = pack
             stage?.switchTo(Self.performer(pack.pack))
         }
-        guard var stage else { return }
-        stage.calm = frame.effects.reduceMotion
-        stage.amplitude = switch frame.effects.level {
+        guard self.stage != nil else { return }
+        // Mutated in place: a local copy would make every array of the stage copy itself on write.
+        self.stage!.calm = frame.effects.reduceMotion
+        self.stage!.amplitude = switch frame.effects.level {
         case .off: 0
         case .soft: 0.5
         default: 1
         }
-        stage.step(dt, level: frame.speedLevel)
+        self.stage!.step(dt, level: frame.speedLevel)
+        guard let stage = self.stage else { return }
         if loaded.count > 1, stage.incoming == nil, stage.outgoing == nil {
             loaded = [stage.current.pack.id: loaded[stage.current.pack.id] ?? pack]
         }
-        self.stage = stage
 
         let g = geometry(frame, stage.current)
         let particles = frame.effects.particles
@@ -156,7 +165,19 @@ final class CharacterRenderer: CharacterLayerProvider {
         if frame.effects.level == .off || frame.effects.reduceMotion {
             return isBusy(frame) ? .fps30 : .none
         }
-        return frame.isIdle || frame.unavailable ? .fps30 : .fps60
+        return Self.frameClass(band: stage?.current.band, acting: isBusy(frame) || stage?.current.isActing == true,
+                               unavailable: frame.unavailable)
+    }
+
+    /// Calm breathing and swaying need few frames; anything she acts out gets 60 (DESIGN 2a.6, Frame policy).
+    nonisolated static func frameClass(band: SpeedBand?, acting: Bool, unavailable: Bool) -> OrbFrameClass {
+        if acting { return .fps60 }
+        if unavailable { return .fps15 }
+        switch band {
+        case .idle, nil: return .fps15
+        case .cruise: return .fps30
+        default: return .fps60
+        }
     }
 
     func isBusy(_ frame: OrbFrame) -> Bool {

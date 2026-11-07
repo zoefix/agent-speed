@@ -132,6 +132,9 @@ public struct CharacterPerformer: Sendable {
     public var activePlacement: PosePlacement { placements[activePose] }
     public var band: SpeedBand? { director.band }
     public var intensity: Double { director.intensity }
+    /// True while she acts out something (a gesture, a move, a hand fidget aside) or turns to swap poses: the frames
+    /// that need the full 60 fps.
+    public var isActing: Bool { director.activeGesture != nil || poseSwitch.isRunning || fadingPose != nil }
 
     /// The character's sideways and upward travel this frame (side steps, hops), in idle canvas pixels (y down).
     public var bodyOffset: (dx: Double, dy: Double) {

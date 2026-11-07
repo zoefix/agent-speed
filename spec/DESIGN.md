@@ -929,7 +929,8 @@ and knees; each tumbles by ±5°. With no live model the model chip shows the la
 Motion: CHARACTERS 5 drives every parameter from the orb's level (the director, grooves per band, actions, hand
 acting, springs). Pulse accent: the ripple of layer 6. New peak: the pill and rays of layer 7. Title change: the
 title chip crossfades and slides 14 pt (0.35 s). Tier change: the pose swap of CHARACTERS 6 when the band's pose
-differs, else the ring flashes. Idle: her idle groove (breathing, glances, blinks, hand ripple) at 30 fps.
+differs, else the ring flashes. Idle: her idle groove (breathing, glances, blinks, hand ripple) at 15 fps, 60 while
+she acts out a gesture or move.
 
 | Effects | `character` |
 | --- | --- |
@@ -958,8 +959,8 @@ never used above 72.
 
 | State | `led` | `needle` | `liquid` | `reactor` | `minimal` | `character` |
 | --- | --- | --- | --- | --- | --- | --- |
-| Idle, not hovered | static; 30 fps during the 0.9 s sweep every 6 s | static; 30 fps sweep | static; 30 fps for the 1.2 s bubble | static; 30 fps sweep | static, never animates | 30 fps (she breathes and glances) |
-| Cruise, boost (`h < 0.45`) | 30 fps | 30 fps; 60 while the needle turns > 90°/s | 30 fps | 30 fps | 30 fps while a spring settles, else static | 60 fps |
+| Idle, not hovered | static; 30 fps during the 0.9 s sweep every 6 s | static; 30 fps sweep | static; 30 fps for the 1.2 s bubble | static; 30 fps sweep | static, never animates | 15 fps while she only breathes and glances; 60 while she acts (a gesture, a move, a pose swap) |
+| Cruise, boost (`h < 0.45`) | 30 fps | 30 fps; 60 while the needle turns > 90°/s | 30 fps | 30 fps | 30 fps while a spring settles, else static | cruise band 30 fps, boost band 60; 60 while she acts |
 | Overdrive, redline | 60 fps | 60 fps | 60 fps (Soft: 30) | 60 fps | as above; 15 fps for the redline breathing | 60 fps |
 | Transitions (title, peak, pulse, hover, style change) | 60 fps for their duration | 60 | 60 | 60 | 30 | 60 |
 | Off or Reduce Motion | on change only: a value tick (≤ 2/s) renders the spring at 30 fps until it settles (change < 0.001), then stops | same | same | same | same | 30 fps while a pose crossfades or a spring settles, else static |
@@ -990,9 +991,14 @@ the orb's own ≈ 0.1–0.2 ms, so the budget is a frame-count budget: keep the 
 present a frame that would be identical to the previous one.
 | GPU time per orb frame (S = 240, 2× / 200 %) | ≤ 1.0 ms | ≤ 1.0 ms |
 | Memory per orb (surfaces, buffers, atlases) | ≤ 12 MB | ≤ 12 MB |
-| `character`: idle (30 fps), one orb | ≤ 3 % | ≤ 4 % |
+| `character`: idle (15 fps between actions, 60 while she acts), one orb | ≤ 3 % | ≤ 4 % |
+| `character`: cruise to redline (60 fps while she acts, which is most of the time) | ≤ 6.5 % | ≤ 8 % |
 | `character`: GPU time per frame (S = 240, 2×) | ≤ 2.0 ms | ≤ 2.0 ms |
 | `character`: memory per orb | ≤ 48 MB | ≤ 48 MB |
+
+The character's own work is small (performer step and scene ≈ 0.1–0.2 ms of CPU, warm frames allocate nothing); its
+budget is higher only because she is drawn at 60 fps whenever she moves, and each presented frame costs the system
+≈ 0.5 ms of CPU (measured on an M5 Pro at 120 Hz: led at redline 3.8 %, `character` at redline 4.3 %, at cruise 5.9 %).
 
 Targets are part of the definition of done: each platform ships a benchmark harness that drives every style through
 the scenario of the prototype (idle → climb → redline → overdrive → back) and reports these numbers.

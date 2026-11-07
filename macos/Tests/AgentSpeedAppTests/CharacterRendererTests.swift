@@ -78,3 +78,15 @@ import Testing
         #expect(scene.maxLayer == 0 && scene.layer == 0 && scene.characterDots.isEmpty)
     }
 }
+
+@Suite("Character frame class")
+struct CharacterFrameClassTests {
+    @Test func calmBandsDrawFewFramesAndActingDrawsSixty() {
+        #expect(CharacterRenderer.frameClass(band: .idle, acting: false, unavailable: false) == .fps15)
+        #expect(CharacterRenderer.frameClass(band: .cruise, acting: false, unavailable: false) == .fps30)
+        #expect(CharacterRenderer.frameClass(band: .boost, acting: false, unavailable: false) == .fps60)
+        #expect(CharacterRenderer.frameClass(band: .redline, acting: false, unavailable: false) == .fps60)
+        #expect(CharacterRenderer.frameClass(band: .idle, acting: true, unavailable: false) == .fps60)
+        #expect(CharacterRenderer.frameClass(band: nil, acting: false, unavailable: true) == .fps15)
+    }
+}
