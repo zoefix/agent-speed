@@ -509,8 +509,8 @@ enum OrbShaderSource {
         float4 fill2;  // gradient.z 1: a vertical gradient's bottom color (straight alpha); 2 (the `led` value): chromatic
                        // split offset (points), its alpha, unused, dark backing alpha
         float4 gradient; // top y, bottom y (points), mode (1 gradient, 2 `led` value: a black backing blurred over x × the
-                         // glow radius and the chromatic split under the glow), quad inset (points: the outer band where
-                         // nothing is drawn)
+                         // glow radius and the chromatic split under the glow, 3 outline: x points wide in fill2's
+                         // color, over the glow), quad inset (points: the outer band where nothing is drawn)
         float4 rotation; // angle (radians, clockwise on screen) about the pivot x, y (points); clips stay unrotated
     };
 
@@ -569,8 +569,9 @@ enum OrbShaderSource {
         }
         float coverage = glyphs.sample(linear_sampler, in.uv).a;
         float4 fill = item.color;
-        bool backing = item.gradient.z > 1.5;
-        if (item.gradient.z > 0.5 && !backing) {
+        bool backing = item.gradient.z > 1.5 && item.gradient.z < 2.5;
+        bool outlined = item.gradient.z > 2.5;
+        if (item.gradient.z > 0.5 && item.gradient.z < 1.5) {
             float t = clamp((in.canvas.y - item.gradient.x) / max(item.gradient.y - item.gradient.x, 0.0001), 0.0, 1.0);
             fill = mix(item.color, item.fill2, t);
         }
@@ -617,6 +618,20 @@ enum OrbShaderSource {
         }
         rgb = item.glow.rgb * glow_alpha + rgb * (1.0 - glow_alpha);
         alpha = glow_alpha + alpha * (1.0 - glow_alpha);
+        if (outlined) {
+            // The glyph dilated by the outline width: the largest coverage on two rings of 16 taps.
+            float2 reach = item.gradient.x / item.rect.zw;
+            float grown = coverage;
+            for (int k = 0; k < 16; k++) {
+                float angle = float(k) * 0.3926990817;
+                float2 d = float2(cos(angle), sin(angle)) * reach;
+                grown = max(grown, glyphs.sample(linear_sampler, in.uv + d).a);
+                grown = max(grown, glyphs.sample(linear_sampler, in.uv + d * 0.5).a);
+            }
+            float edge = clamp(grown * 1.25, 0.0, 1.0) * item.fill2.a;
+            rgb = item.fill2.rgb * edge + rgb * (1.0 - edge);
+            alpha = edge + alpha * (1.0 - edge);
+        }
         rgb = fill.rgb * text_alpha + rgb * (1.0 - text_alpha);
         alpha = text_alpha + alpha * (1.0 - text_alpha);
         alpha *= keep;

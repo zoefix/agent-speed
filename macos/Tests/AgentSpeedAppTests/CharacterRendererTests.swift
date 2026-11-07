@@ -1,6 +1,7 @@
 @testable import AgentSpeed
 import AgentSpeedCharacter
 import Foundation
+import Metal
 import Testing
 
 /// The pure parts of the `character` renderer: the GPU vertex layout and packing, atlas resolution steps, the
@@ -88,5 +89,73 @@ struct CharacterFrameClassTests {
         #expect(CharacterRenderer.frameClass(band: .redline, acting: false, unavailable: false) == .fps60)
         #expect(CharacterRenderer.frameClass(band: .idle, acting: true, unavailable: false) == .fps60)
         #expect(CharacterRenderer.frameClass(band: nil, acting: false, unavailable: true) == .fps15)
+    }
+}
+
+@Suite("Character lightning")
+struct CharacterLightningTests {
+    private func digits(_ text: String) -> [Odometer.Digit] {
+        text.map { Odometer.Digit(current: $0, previous: nil, t: 1) }
+    }
+
+    @Test func strikesOnlyWhenDigitsChange() {
+        var lightning = CharacterLightning()
+        lightning.update(1.0 / 60, digits: digits("39"), heat: 0.5, strength: .standard)
+        #expect(!lightning.isActive)
+        lightning.update(1.0 / 60, digits: digits("39"), heat: 0.5, strength: .standard)
+        #expect(!lightning.isActive)
+        lightning.update(1.0 / 60, digits: digits("38"), heat: 0.5, strength: .standard)
+        #expect(lightning.strikes.count == 1)
+        #expect(lightning.strikes[0].low == 0 && lightning.strikes[0].high == 0 && !lightning.strikes[0].bridge)
+        lightning.update(1.0 / 60, digits: digits("102"), heat: 0.5, strength: .standard)
+        let wide = lightning.strikes[1]
+        #expect(wide.low == 0 && wide.high == 2 && wide.bridge)
+        #expect(lightning.flash(fromRight: 2) > 0)
+    }
+
+    @Test func strikesFadeOutAndStopTheBusyFrames() {
+        var lightning = CharacterLightning()
+        lightning.update(1.0 / 60, digits: digits("5"), heat: 1, strength: .max)
+        lightning.update(1.0 / 60, digits: digits("6"), heat: 1, strength: .max)
+        #expect(lightning.isActive)
+        for _ in 0..<30 { lightning.update(1.0 / 60, digits: digits("6"), heat: 1, strength: .max) }
+        #expect(!lightning.isActive)
+        #expect(lightning.flash(fromRight: 0) == 0)
+    }
+
+    @Test func strengthSetsTheBolts() {
+        var lightning = CharacterLightning()
+        lightning.update(1.0 / 60, digits: digits("99"), heat: 1, strength: .standard)
+        lightning.update(1.0 / 60, digits: digits("100"), heat: 1, strength: .standard)
+        let strike = lightning.strikes[0]
+        #expect(lightning.boltCount(strike, strength: .flashOnly) == 0)
+        #expect(lightning.boltCount(strike, strength: .off) == 0)
+        #expect(lightning.boltCount(strike, strength: .standard) == 4)
+        #expect(lightning.boltCount(strike, strength: .max) == 5)
+        var count = 0
+        while lightning.bolt(strike, index: count, strength: .standard, digitCount: 3, advance: 10, cap: 14) {
+            #expect(lightning.path.count >= 9)
+            #expect(lightning.path.allSatisfy { abs($0.x) < 30 && abs($0.y) < 40 })
+            count += 1
+        }
+        #expect(count == 4)
+    }
+
+    @Test func reduceMotionFlashesWithoutBolts() {
+        let reduced = OrbEffects(level: .standard, reduceMotion: true, surface: .floating)
+        #expect(CharacterRenderer.lightningStrength(reduced, small: false) == .flashOnly)
+        let off = OrbEffects(level: .off, reduceMotion: false, surface: .floating)
+        #expect(CharacterRenderer.lightningStrength(off, small: false) == .off)
+    }
+
+    @Test @MainActor func outlinedTextUsesTheOutlineMode() throws {
+        guard let device = MTLCreateSystemDefaultDevice(),
+              let glyphs = device.makeTexture(descriptor: .texture2DDescriptor(pixelFormat: .rgba8Unorm, width: 1, height: 1,
+                                                                               mipmapped: false)) else { return }
+        let texture = OrbTextTexture(texture: glyphs, size: CGSize(width: 10, height: 12), baseline: 10, advance: 8, padding: 1)
+        let draw = OrbTextDraw(texture, x: 0, baseline: 10, color: .white).outlined(.black, width: 1.5)
+        #expect(draw.instance.gradient.z == 3)
+        #expect(draw.instance.gradient.x == 1.5)
+        #expect(draw.instance.fill2.w == 1)
     }
 }

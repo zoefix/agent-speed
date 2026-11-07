@@ -86,6 +86,12 @@ public struct Odometer: Sendable {
         public var previous: Character?
         /// 0 when the digit just changed, 1 when its roll is done.
         public var t: Double
+
+        public init(current: Character?, previous: Character?, t: Double) {
+            self.current = current
+            self.previous = previous
+            self.t = t
+        }
     }
 
     public static let hold = 0.2

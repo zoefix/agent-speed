@@ -921,10 +921,24 @@ Layers, back to front (conventions of 2a with `S` replaced by `D`):
    speed body, with 24 rays).
 
 The readouts are three bodies on Kepler orbits (CHARACTERS 8): **speed** (rolling digits sampled 5 times a second,
-size 0.068 D, white 96 % on a soft dark plate so it stays legible over her dress, the unit and the speed title chip
-below), **model** (a glass chip with the vendor's accent dot and the fastest model's name) and **agents** (a glass chip
-with today's tokens and the number of agents). Periods 38–52 s, eccentricity 0.2–0.26, heights at her chest, head
-and knees; each tumbles by ±5°. With no live model the model chip shows the last one.
+size 0.068 D, the unit and the speed title chip below), **model** (a glass chip with the vendor's accent dot and the
+fastest model's name) and **agents** (a glass chip with today's tokens and the number of agents). Periods 38–52 s,
+eccentricity 0.2–0.26, heights at her chest, head and knees; each tumbles by ±5°. With no live model the model chip
+shows the last one.
+
+The speed has no plate; it stays legible over her dress and any wallpaper by its ink. Digits are the value color
+(white 96 % on dark, `#0B0D12` 92 % on light) with an outline 0.06 × the text size in the opposite tone (near-black
+90 % on dark, white 95 % on light; 0.085 × and opaque with Increase Contrast) and a soft halo of the same tone (radius
+0.1 ×, 45 %); the unit has the same outline. A changed digit rolls: the old one slides up out of a one-digit window as
+the new one slides in from below, a full window apart, so the two never overlap (0.12 s, ease-out). **Lightning**:
+when digits change, each changed digit crackles: an arc of 9 points around its ellipse (0.6 advance × 0.8 cap) with a
+jagged radius (±20 %), sweeping 1.2–2.2 rad, at most three digits; when more than the last digit changes, a 12-point
+arc also jumps over the changed digits. Bolts are three-stroke polylines (glow 0.22, mid 0.09, core 0.04 × the text
+size; electric `#8CD1FF` blended 20 % toward the heat color with a white-hot core on dark, `#4D8CFF` with a `#1F4DF2`
+core on light), redrawn in a new shape 30 times a second, flickering (55–100 %), fading over 0.2 s (units only) or
+0.3 s, strength `0.35 + 0.65 h`; the changed digits' halo flares electric (90 %, radius 0.18 ×) with them. Soft: one
+crackle per digit and no arc, 0.7 × the life (also below S = 96); Max: one more crackle from `h` 0.54 up; Off: none;
+Reduce Motion: the flare only, no bolts. While a bolt lives the orb draws at 60 fps.
 
 Motion: CHARACTERS 5 drives every parameter from the orb's level (the director, grooves per band, actions, hand
 acting, springs). Pulse accent: the ripple of layer 6. New peak: the pill and rays of layer 7. Title change: the

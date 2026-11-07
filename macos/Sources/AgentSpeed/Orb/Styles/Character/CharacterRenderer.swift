@@ -31,6 +31,8 @@ final class CharacterRenderer: CharacterLayerProvider {
     private var agents: [(Double, Double, Double)] = []
     private var parked: [HudBody] = []
     private var order = CharacterHud.BodyKind.allCases
+    private var lightning = CharacterLightning()
+    private var bolt: [SIMD2<Double>] = []
     /// The last pack looked up, so a frame does not hash the pack folder again.
     private var lastPack: (folder: URL, version: Int, loaded: LoadedCharacter)?
     private static var seeds: UInt64 = 7
@@ -93,6 +95,8 @@ final class CharacterRenderer: CharacterLayerProvider {
         hud.emberRate = particles ? frame.effects.particleRate : 0
         hud.update(dt, time: hudTime, speed: frame.unavailable ? 0 : frame.readoutValue, heat: frame.instrumentHeat,
                    intensity: stage.current.intensity, title: frame.content.unavailableTitle ?? frame.content.titleLabel)
+        lightning.update(dt, digits: hud.odometer.digits, heat: frame.instrumentHeat,
+                         strength: Self.lightningStrength(frame.effects, small: frame.isSmallCharacter))
         let metrics = CharacterReadoutMetrics(disc: frame.s)
         let advance = OrbTextCache.shared.texture("0", style: metrics.digitStyle, language: frame.content.language,
                                                   scale: 2).map { Double($0.advance) * 0.95 } ?? Double(metrics.value) * 0.6
@@ -181,6 +185,7 @@ final class CharacterRenderer: CharacterLayerProvider {
     }
 
     func isBusy(_ frame: OrbFrame) -> Bool {
+        if lightning.isActive { return true }
         guard let stage else { return loading }
         return loading || stage.outgoing != nil || stage.incoming != nil || stage.current.fadingPose != nil
             || hud.peakAge != nil || !petals.items.isEmpty
@@ -314,18 +319,50 @@ final class CharacterRenderer: CharacterLayerProvider {
         }
     }
 
+    nonisolated static func lightningStrength(_ effects: OrbEffects, small: Bool) -> CharacterLightning.Strength {
+        if effects.level == .off { return .off }
+        if effects.reduceMotion { return .flashOnly }
+        switch effects.level {
+        case .soft: return .soft
+        case .max: return small ? .standard : .max
+        default: return small ? .soft : .standard
+        }
+    }
+
+    /// The bolts of every live strike, as glowing three-stroke polylines under the digits.
+    private func drawLightning(_ p: CharacterBodyPainter, _ frame: OrbFrame, digitCount: Int, advance: CGFloat, cap: CGFloat,
+                               into scene: inout OrbScene) {
+        guard lightning.isActive else { return }
+        let strength = Self.lightningStrength(frame.effects, small: frame.isSmallCharacter)
+        let ink = CharacterInk(frame, contrast: p.contrast)
+        let value = p.metrics.value
+        let heat = frame.labelColor(frame.instrumentHeat)
+        let colors = ink.bolt(heat: heat)
+        for strike in lightning.strikes {
+            let envelope = lightning.envelope(strike) * strike.power * p.alpha
+            guard envelope > 0.01 else { continue }
+            var index = 0
+            while lightning.bolt(strike, index: index, strength: strength, digitCount: digitCount, advance: Double(advance),
+                                 cap: Double(cap)) {
+                bolt.removeAll(keepingCapacity: true)
+                for point in lightning.path {
+                    let c = p.point(CGFloat(point.x), CGFloat(point.y))
+                    bolt.append(SIMD2(Double(c.x), Double(c.y)))
+                }
+                scene.addPolyline(bolt, origin: .zero, glowColor: colors.glow, coreColor: colors.core,
+                                  outer: OrbStroke(width: 0.22 * value * p.scale, alpha: 0.3 * envelope),
+                                  mid: OrbStroke(width: 0.09 * value * p.scale, alpha: 0.6 * envelope),
+                                  core: OrbStroke(width: 0.04 * value * p.scale, alpha: envelope), blend: frame.glowBlend)
+                index += 1
+            }
+        }
+    }
+
     private func drawSpeed(_ p: CharacterBodyPainter, _ frame: OrbFrame, into scene: inout OrbScene) {
         let m = p.metrics
         let q = m.q
         let width = CGFloat(hud.speedWidth)
         let heat = frame.instrumentHeat
-        // A soft plate keeps the digits legible over her dress; the heat glow sits on it.
-        let plate = frame.dark ? SIMD4<Float>(0.02, 0.025, 0.045, Float((p.contrast ? 0.9 : 0.62) * p.alpha))
-            : SIMD4<Float>(1, 1, 1, Float((p.contrast ? 0.95 : 0.7) * p.alpha))
-        let platePoint = p.point(0, 40 * q)
-        scene.addCharacterDot(CharacterDot(x: Float(platePoint.x), y: Float(platePoint.y),
-                                           rx: Float((width * 0.8 + 70 * q) * p.scale), ry: Float(120 * q * p.scale),
-                                           color: plate, softness: 1), blend: .over)
         let glow = frame.labelColor(heat)
         let glowAlpha = (0.12 + 0.5 * max(0, heat - 0.3)) * p.alpha
         scene.addCharacterDot(CharacterDot(x: Float(p.center.x), y: Float(p.center.y),
@@ -335,33 +372,49 @@ final class CharacterRenderer: CharacterLayerProvider {
 
         let style = m.digitStyle
         let cap = OrbTextCache.shared.capHeight(style)
+        let ink = CharacterInk(frame, contrast: p.contrast)
         let valueColor = frame.isIdle || frame.unavailable ? frame.tokens.idleValueText : frame.tokens.valueText
         if let text = staticValue(frame) {
             if let texture = OrbTextCache.shared.texture(text, style: style, language: p.language, scale: scene.backingScale) {
-                scene.add(p.text(texture, centerX: 0, baseline: cap / 2, color: valueColor.opacity(p.alpha)))
+                scene.add(p.text(texture, centerX: 0, baseline: cap / 2, color: valueColor.opacity(p.alpha),
+                                 glow: ink.shadow.opacity(ink.shadowAlpha * p.alpha), glowRadius: 0.1 * m.value)
+                    .outlined(ink.outline.opacity(ink.outline.alpha * p.alpha), width: ink.width(m.value) * p.scale))
             }
         } else {
             let digits = hud.odometer.digits
             let advance = digits.isEmpty ? 0 : width / CGFloat(digits.count)
-            let line = cap * 1.3
-            let clip = OrbTextClip.rect(CGRect(x: p.center.x - (width / 2 + 4) * p.scale, y: p.center.y - line / 2 * p.scale,
-                                               width: (width + 8) * p.scale, height: line * p.scale))
+            drawLightning(p, frame, digitCount: digits.count, advance: advance, cap: cap, into: &scene)
+            // The window holds one digit and its outline; a rolling digit travels a full window, so the incoming one
+            // starts out of sight below and the outgoing one ends out of sight above.
+            let pad = ink.width(m.value) + 1
+            let half = cap * 0.62 + pad
+            let line = 2 * half
+            let clip = OrbTextClip.rect(CGRect(x: p.center.x - (width / 2 + pad) * p.scale, y: p.center.y - half * p.scale,
+                                               width: (width + 2 * pad) * p.scale, height: line * p.scale))
             for (i, digit) in digits.enumerated() {
                 let ox = -width / 2 + advance * (CGFloat(i) + 0.5)
                 let ease = 1 - pow(1 - digit.t, 3)
+                let flash = lightning.flash(fromRight: digits.count - 1 - i)
+                let halo = ink.halo(flash: flash, heat: glow)
+                // The old digit slides up and out as the new one slides in from below, one line apart, so the two never
+                // overlap.
                 func roll(_ ch: Character?, _ dy: Double, _ a: Double) {
-                    guard let ch, let texture = OrbTextCache.shared.texture(ch, style: style, language: p.language,
-                                                                            scale: scene.backingScale) else { return }
-                    scene.add(p.text(texture, centerX: ox, baseline: cap / 2 + CGFloat(dy) * 0.8 * line,
-                                     color: valueColor.opacity(a * p.alpha), clip: clip))
+                    guard a > 0.01, let ch, let texture = OrbTextCache.shared.texture(ch, style: style, language: p.language,
+                                                                                     scale: scene.backingScale) else { return }
+                    scene.add(p.text(texture, centerX: ox, baseline: cap / 2 + CGFloat(dy) * line,
+                                     color: valueColor.opacity(a * p.alpha), glow: halo.color.opacity(halo.alpha * a * p.alpha),
+                                     glowRadius: halo.radius * m.value, clip: clip)
+                        .outlined(ink.outline.opacity(ink.outline.alpha * a * p.alpha), width: ink.width(m.value) * p.scale))
                 }
-                roll(digit.previous, -ease, 1 - 0.6 * ease)
-                roll(digit.current, 1 - ease, 0.4 + 0.6 * ease)
+                roll(digit.previous, -ease, 1 - ease)
+                roll(digit.current, 1 - ease, ease)
             }
         }
-        if let unit = p.texture(frame.content.unit, size: m.unit, weight: .medium, scene: scene) {
-            let unitCap = OrbTextCache.shared.capHeight(OrbTextStyle(size: m.unit, weight: .medium, tracking: 0, padding: 1))
-            scene.add(p.text(unit, centerX: 0, baseline: 50 * q + unitCap, color: frame.tokens.secondaryText.opacity(p.alpha)))
+        if let unit = OrbTextCache.shared.texture(frame.content.unit, style: m.unitStyle, language: p.language,
+                                                  scale: scene.backingScale * max(1, p.scale)) {
+            let unitCap = OrbTextCache.shared.capHeight(m.unitStyle)
+            scene.add(p.text(unit, centerX: 0, baseline: 50 * q + unitCap, color: frame.tokens.secondaryText.opacity(p.alpha))
+                .outlined(ink.outline.opacity(ink.outline.alpha * 0.85 * p.alpha), width: ink.width(m.unit) * p.scale))
         }
         let titleColor = frame.labelColor(heat)
         let e = 1 - pow(1 - hud.titleProgress, 3)

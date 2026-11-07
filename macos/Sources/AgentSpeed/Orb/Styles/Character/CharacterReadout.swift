@@ -22,7 +22,11 @@ struct CharacterReadoutMetrics {
         peak = max(8, 0.022 * d)
     }
 
-    var digitStyle: OrbTextStyle { OrbTextStyle(size: value, weight: .bold, monospacedDigits: true, tracking: 0, padding: 2) }
+    /// Room for the outline and the flash glow around each digit.
+    var digitStyle: OrbTextStyle {
+        OrbTextStyle(size: value, weight: .bold, monospacedDigits: true, tracking: 0, padding: (0.2 * value).rounded(.up) + 1)
+    }
+    var unitStyle: OrbTextStyle { OrbTextStyle(size: unit, weight: .medium, tracking: 0, padding: (0.25 * unit).rounded(.up) + 1) }
 }
 
 /// Draws one floating readout body: its pieces are laid out around the body center, scaled by the body's depth scale
@@ -47,9 +51,9 @@ struct CharacterBodyPainter {
     }
 
     func text(_ texture: OrbTextTexture, centerX ox: CGFloat, baseline oy: CGFloat, color: RGBColor,
-              clip: OrbTextClip = .none) -> OrbTextDraw {
+              glow: RGBColor? = nil, glowRadius: CGFloat = 0, clip: OrbTextClip = .none) -> OrbTextDraw {
         var draw = OrbTextDraw(texture, x: center.x + ox - texture.advance / 2, baseline: center.y + oy, color: color,
-                               scale: scale, pivot: center, clip: clip)
+                               glow: glow, glowRadius: glowRadius * scale, scale: scale, pivot: center, clip: clip)
         if spin != 0 { draw = draw.rotated(spin, about: center) }
         return draw
     }
@@ -81,5 +85,46 @@ struct CharacterBodyPainter {
         }
         scene.add(text(texture, centerX: textX, baseline: oy + capHeight / 2, color: color.opacity(alpha)))
         return half.height * 2
+    }
+}
+
+/// The ink of the floating speed (DESIGN 2a.6): digits with an outline in the opposite tone and a soft halo, so they
+/// read over her dress and any wallpaper without a plate; a changed digit's halo flares electric with the lightning.
+struct CharacterInk {
+    let dark: Bool
+    let contrast: Bool
+
+    init(_ frame: OrbFrame, contrast: Bool) {
+        dark = frame.dark
+        self.contrast = contrast
+    }
+
+    var outline: RGBColor {
+        dark ? RGBColor(red: 0.02, green: 0.025, blue: 0.045).opacity(contrast ? 1 : 0.9)
+            : RGBColor(red: 1, green: 1, blue: 1).opacity(contrast ? 1 : 0.95)
+    }
+
+    var shadow: RGBColor { dark ? RGBColor(red: 0, green: 0, blue: 0.02) : RGBColor(red: 1, green: 1, blue: 1) }
+    var shadowAlpha: Double { contrast ? 0.6 : 0.45 }
+
+    /// Outline width for text of `size` points.
+    func width(_ size: CGFloat) -> CGFloat { size * (contrast ? 0.085 : 0.06) }
+
+    private var electric: RGBColor {
+        dark ? RGBColor(red: 0.55, green: 0.82, blue: 1) : RGBColor(red: 0.25, green: 0.5, blue: 1)
+    }
+
+    /// The digit's halo: the soft shadow at rest, flaring to an electric glow (wider) while it flashes.
+    func halo(flash: Double, heat: RGBColor) -> (color: RGBColor, alpha: Double, radius: CGFloat) {
+        let k = min(max(flash, 0), 1)
+        let e = electric.mix(heat, 0.2)
+        let color = shadow.mix(e, k)
+        return (color, max(shadowAlpha * (1 - k), 0.9 * k), 0.1 + 0.08 * CGFloat(k))
+    }
+
+    /// Bolt colors: an electric glow with a white-hot core on dark glass; deeper blues over light wallpapers.
+    func bolt(heat: RGBColor) -> (glow: RGBColor, core: RGBColor) {
+        dark ? (electric.mix(heat, 0.2), RGBColor(red: 0.95, green: 0.98, blue: 1))
+            : (RGBColor(red: 0.3, green: 0.55, blue: 1), RGBColor(red: 0.12, green: 0.3, blue: 0.95))
     }
 }

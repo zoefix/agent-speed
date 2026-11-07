@@ -147,7 +147,8 @@ Per orb, the setting `character` is `auto` (default) or a pack id.
 ## 8. Floating readouts
 
 Around the character, on Kepler orbits seen slightly from above (`characters/reference/orbits.py`, fixture
-`orbits.json`): the speed (rolling digits sampled five times a second, the unit and the speed title), the model chip
+`orbits.json`): the speed (rolling digits sampled five times a second, outlined, with lightning when they change,
+the unit and the speed title), the model chip
 (vendor dot and model name) and the agent line (agents and today's tokens). Bodies in front of the character draw over
 her, bigger and brighter; behind her they draw under her. At her feet a ring of 96 lights is the gauge, filled in the
 heat colors with a comet; agents are lights orbiting her waist; response pulses ripple out from the ring; embers rise

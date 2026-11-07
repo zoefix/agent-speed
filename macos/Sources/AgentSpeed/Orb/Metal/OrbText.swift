@@ -202,9 +202,9 @@ struct OrbTextInstance {
     var params: SIMD4<Float>
     /// Clip rect: min x, min y, max x, max y (points); a band: center x, center y, half width, slope.
     var clip: SIMD4<Float>
-    /// Bottom color of a vertical gradient fill (when `gradient.z` is 1).
+    /// Bottom color of a vertical gradient fill (when `gradient.z` is 1); the outline color (when it is 3).
     var fill2: SIMD4<Float> = .zero
-    /// Gradient top y, bottom y (points), enabled, quad inset (points).
+    /// Gradient top y, bottom y (points), mode (1 gradient, 2 `led` backing, 3 outline), quad inset (points).
     var gradient: SIMD4<Float> = .zero
     /// Rotation (radians, clockwise on screen) about a pivot x, y (points); 0 for upright text. Clips stay unrotated.
     var rotation: SIMD4<Float> = .zero
@@ -289,6 +289,16 @@ struct OrbTextDraw {
         }
         copy.instance.gradient.z = 2
         copy.instance.fill2 = SIMD4(Float(offset), Float(chroma.clamped(to: 0...1)), 0, Float(alpha.clamped(to: 0...1)))
+        return copy
+    }
+
+    /// An outline `width` points wide in `color` under the glyph and over its glow (the `character` speed). The texture
+    /// needs a padding of at least the width plus the glow radius.
+    func outlined(_ color: RGBColor, width: CGFloat) -> OrbTextDraw {
+        var copy = self
+        copy.instance.gradient.x = Float(max(0, width))
+        copy.instance.gradient.z = 3
+        copy.instance.fill2 = color.simd
         return copy
     }
 
