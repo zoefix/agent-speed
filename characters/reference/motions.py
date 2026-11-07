@@ -108,11 +108,11 @@ GESTURES = {
     "open": (3.4, "read", None),
 }
 POOLS = {
-    "idle": ["open", "chin", "hairtuck", "hug", "yawn"],
-    "cruise": ["wave", "hug", "present", "hairtuck", "hum"],
-    "boost": ["idea", "peace", "hip", "wave", "hum"],
-    "overdrive": ["fist", "present", "hip", "idea"],
-    "redline": ["fist", "raise", "peace"],
+    "idle": ["open", "chin", "hairtuck", "hug", "yawn", "lookaround", "tilt"],
+    "cruise": ["wave", "hug", "present", "hairtuck", "hum", "nod", "tilt", "giggle"],
+    "boost": ["idea", "peace", "hip", "wave", "hum", "nod", "giggle", "doubletake"],
+    "overdrive": ["fist", "present", "hip", "idea", "doubletake", "nod"],
+    "redline": ["fist", "raise", "peace", "giggle"],
 }
 CELEBRATE = ["peace", "fist", "raise", "wave"]
 BAND_FACE = {"idle": None, "cruise": "smile", "boost": "smile", "overdrive": "determined", "redline": "happy"}
@@ -172,6 +172,42 @@ def arm_gesture(meta, hold, flourish, expression):
     return Motion(meta["id"], t7, curves, loop=False, fade=0.12, expression=expression)
 
 
+HEAD_GESTURES = {"nod", "shake", "tilt", "lookaround", "giggle", "doubletake"}
+
+
+def head_gesture(name):
+    if name == "nod":
+        return Motion("nod", 1.1, {"AngleY": [(0, 0), (0.18, 0.4), (0.38, -0.15), (0.58, 0.35), (0.8, -0.05), (1.1, 0)],
+                                   "EyeOpen.left": [(0, 1), (0.2, 0.7), (0.6, 0.7), (1.1, 1)],
+                                   "EyeOpen.right": [(0, 1), (0.2, 0.7), (0.6, 0.7), (1.1, 1)]},
+                      loop=False, fade=0.12, expression="smile")
+    if name == "shake":
+        return Motion("shake", 1.3, {"AngleX": [(0, 0)] + oscillate(0.1, 1.1, 0.42, 0.4) + [(1.3, 0)],
+                                     "AngleY": [(0, 0), (0.2, -0.15), (1.1, -0.15), (1.3, 0)]},
+                      loop=False, fade=0.12)
+    if name == "tilt":
+        return Motion("tilt", 2.2, {"AngleZ": [(0, 0), (0.35, 0.7), (1.8, 0.65), (2.2, 0)],
+                                    "AngleX": [(0, 0), (0.35, 0.25), (1.8, 0.25), (2.2, 0)],
+                                    "EyeBallX": [(0, 0), (0.3, 0.5), (1.8, 0.5), (2.2, 0)]},
+                      loop=False, fade=0.2, expression="smile")
+    if name == "lookaround":
+        return Motion("lookaround", 2.8, {
+            "EyeBallX": [(0, 0), (0.2, -0.9), (0.9, -0.9), (1.1, 0.9), (2.2, 0.9), (2.8, 0)],
+            "AngleX": [(0, 0), (0.45, -0.55), (1.0, -0.55), (1.6, 0.55), (2.3, 0.5), (2.8, 0)],
+            "AngleY": [(0, 0), (0.45, 0.1), (1.3, -0.05), (2.3, 0.1), (2.8, 0)],
+        }, loop=False, fade=0.2)
+    if name == "giggle":
+        return Motion("giggle", 1.6, {"BodyAngleZ": [(0, 0)] + oscillate(0.1, 1.4, 0.17, 0.12) + [(1.6, 0)],
+                                      "AngleY": [(0, 0), (0.2, -0.25), (1.4, -0.2), (1.6, 0)],
+                                      "AngleZ": [(0, 0), (0.2, 0.3), (1.4, 0.3), (1.6, 0)],
+                                      "Breath": [(0, 0), (0.3, 1), (1.6, 0.3)]},
+                      loop=False, fade=0.12, expression="happy")
+    return Motion("doubletake", 1.5, {"AngleX": [(0, 0), (0.15, 0.35), (0.35, 0.3), (0.5, -0.1), (0.65, 0.6), (1.2, 0.5), (1.5, 0)],
+                                      "AngleY": [(0, 0), (0.6, 0.35), (1.2, 0.3), (1.5, 0)],
+                                      "EyeBallX": [(0, 0), (0.6, 0.8), (1.2, 0.8), (1.5, 0)]},
+                  loop=False, fade=0.1, expression="surprised")
+
+
 def face_gesture(name, duration=2.4):
     if name == "yawn":
         return Motion("yawn", duration, {
@@ -221,6 +257,8 @@ class Director:
         self.body.append({"motion": self.body_motions[name], "t": 0.0, "w": 0.0 if self.body else 1.0, "target": 1.0})
 
     def _gesture(self, gid):
+        if gid in HEAD_GESTURES:
+            return head_gesture(gid)
         if gid in ("yawn", "hum"):
             if gid == "yawn" and "sleepy" not in self.faces:
                 return None

@@ -175,7 +175,8 @@ def main(argv=None):
     dt = 1 / args.fps
     reel = []
     if args.reel:
-        gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + ["yawn", "hum"]
+        gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + ["yawn", "hum", "nod", "shake", "tilt",
+                                                                             "lookaround", "giggle", "doubletake"]
         reel = [(1.0 + 3.6 * i, g) for i, g in enumerate(gestures)]
         args.seconds = 1.0 + 3.6 * len(gestures) + 1.0
     frames = int(args.seconds * args.fps)
