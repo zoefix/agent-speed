@@ -45,7 +45,7 @@ def rng_cases():
         items = list(range(10))
         g.shuffle(items)
         g2 = Rng(seed)
-        cases.append({"seed": str(seed), "u64": u64, "random": r(floats, 17), "uniform_2_5": r(Rng(seed).uniform(2, 5), 17),
+        cases.append({"seed": str(seed), "u64": u64, "random": floats, "uniform_2_5": Rng(seed).uniform(2, 5),
                       "shuffle10": items, "sample_abcde_3": g2.sample("abcde", 3)})
     return {"about": "SplitMix64; u64 values are decimal strings", "cases": cases}
 
