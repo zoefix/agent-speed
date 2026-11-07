@@ -54,6 +54,8 @@ public struct SpringTuning: Sendable, Equatable {
     /// (prefix or exact id, tuning); the first match wins, nil leaves a parameter raw. "@" matches any id holding it.
     static let table: [(String, SpringTuning?)] = [
         ("SkirtFlare", SpringTuning(2.0, 0.45, 0)),
+        ("TailSwish", SpringTuning(2.4, 0.5, 0)), ("Tail", nil), ("WingFlap", SpringTuning(3.0, 0.5, 0)),
+        ("EarTwitch", SpringTuning(7.0, 0.4, 0)),
         ("Var.", nil), ("Mouth.", nil), ("EyeOpen.", nil), ("EyeBall", nil), ("Breath", nil), ("Wind", nil),
         ("Spin", nil), ("PosY", nil), ("Squash", nil), ("Hair", nil), ("Skirt", nil),
         ("Lift.", SpringTuning(6.0, 0.85, 0)), ("Bend.", SpringTuning(6.0, 0.85, 0)),

@@ -77,7 +77,7 @@ class Textures:
         return self.get(("digit", ch, size), lambda: _text(ch, _font(DIGITS_FONT, size, b"Bold"), (250, 251, 253, 246)))
 
     def label(self, text, size, color, weight=b"Medium"):
-        font = _font(CJK_FONT if any(ord(c) > 0x2E80 for c in text) else DIGITS_FONT, size, weight)
+        font = _font(CJK_FONT if any(ord(c) > 0x2000 for c in text) else DIGITS_FONT, size, weight)
         return self.get(("label", text, size, color), lambda: _text(text, font, color))
 
     def chip(self, text, size, color, fill, rim, dot=None):

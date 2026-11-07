@@ -82,7 +82,7 @@ public struct CharacterPerformer: Sendable {
         let idle = pack.poses[0].rig
         let book = CharacterSide(rawValue: idle.landmarks.objectSide ?? "") ?? .left
         let director = CharacterDirector(params: params, seed: seed, out: book.other, book: book, orb: orb,
-                                         celebrate: false)
+                                         celebrate: false, profile: pack.manifest.motion ?? MotionProfile())
         self.director = director
         let space = director.space
         slots = Slots(space)
@@ -151,7 +151,7 @@ public struct CharacterPerformer: Sendable {
         activePose = poseIndex(for: SpeedBand(level: level))
         let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
         director.setLevel(level)
-        director.setSides(out: book.other, book: book)
+        director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
         poseSwitch.enterEdgeOn()
     }
 
@@ -181,7 +181,7 @@ public struct CharacterPerformer: Sendable {
         activePose = poseIndex(for: SpeedBand(level: level))
         let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
         director.setLevel(level)
-        director.setSides(out: book.other, book: book)
+        director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
     }
 
     /// Advances one frame at speed level 0...13.
@@ -199,14 +199,16 @@ public struct CharacterPerformer: Sendable {
             if fadeProgress >= 1 { fadingPose = nil }
         }
 
-        if calm, !pendingExit, let band = director.band, poseIndex(for: band) != activePose, !poseSwitch.isRunning {
+        // Reduce Motion, and a character in a chair, crossfade poses instead of turning.
+        if calm || director.profile.seated, !pendingExit, let band = director.band, poseIndex(for: band) != activePose,
+           !poseSwitch.isRunning {
             fadingPose = activePose
             fadingWorld = world
             fadingOpacities = opacities
             fadeProgress = 0
             activePose = poseIndex(for: band)
             let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
-            director.setSides(out: book.other, book: book)
+            director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
             events.append(.poseSwapped(band: pack.poses[activePose].band))
         } else if pendingExit, !poseSwitch.isRunning {
             poseSwitch.request(CharacterPerformer.exitTarget)
@@ -228,7 +230,7 @@ public struct CharacterPerformer: Sendable {
             } else {
                 activePose = target
                 let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
-                director.setSides(out: book.other, book: book)
+                director.setSides(out: book.other, book: book, poseBand: pack.poses[target].band)
                 events.append(.poseSwapped(band: pack.poses[target].band))
             }
         }

@@ -1,0 +1,46 @@
+{
+ "id": "deepseek",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "DeepSeek 娘",
+  "zh-Hans": "DeepSeek 娘",
+  "en": "DeepSeek-chan",
+  "ja": "DeepSeekちゃん"
+ },
+ "vendors": [
+  "deepseek"
+ ],
+ "accent": "#4D6BFE",
+ "artist": {
+  "name": "ZipZipPipe (original character: 上善无形)",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/deepseek"
+ },
+ "license": "CC BY-NC-SA 4.0 (https://creativecommons.org/licenses/by-nc-sa/4.0/). Original character: 上善无形; illustration: ZipZipPipe; rigged and posed for AgentSpeed.",
+ "motion": {
+  "tempo": 0.85,
+  "energy": 0.9,
+  "sway": 1.4,
+  "bounce": 0.6,
+  "gap": 1.2,
+  "idle": "rest",
+  "particles": "bubbles",
+  "signature": [
+   "floatbob",
+   "tailswish",
+   "stretch",
+   "yawn",
+   "sway"
+  ],
+  "hands": [
+   "flex",
+   "regrip"
+  ],
+  "exclude": [
+   "run"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "tail": true
+ }
+}

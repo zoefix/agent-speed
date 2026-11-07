@@ -51,7 +51,7 @@ public struct ParamSpace: Sendable {
     public static let vocabulary: [String] = {
         var names = ["AngleX", "AngleY", "AngleZ", "BodyAngleZ", "BodySway", "Breath", "EyeOpen.left", "EyeOpen.right",
                      "EyeBallX", "EyeBallY", "Wind", "PosX", "PosY", "Squash", "Lean", "Spin", "Hip", "SkirtFlare",
-                     "FootLift", "FootPoint"]
+                     "FootLift", "FootPoint", "TailSwish", "WingFlap", "EarTwitch.left", "EarTwitch.right"]
         for side in CharacterSide.allCases {
             let s = side.rawValue
             names += ["Shoulder.\(s)", "Arm.\(s)", "Forearm.\(s)", "Lift.\(s)", "Bend.\(s)", "Wrist.\(s)", "Spread.\(s)"]
@@ -77,6 +77,7 @@ struct Slots: Sendable {
 
     let angleX, angleY, angleZ, bodyAngleZ, bodySway, breath, eyeBallX, eyeBallY, wind: Int
     let posX, posY, squash, lean, spin, hip, skirtFlare, footLift, footPoint: Int
+    let tailSwish, wingFlap: Int
     let eyeOpen: [Int]
     let left: Side
     let right: Side
@@ -88,6 +89,7 @@ struct Slots: Sendable {
         eyeBallX = s("EyeBallX"); eyeBallY = s("EyeBallY"); wind = s("Wind")
         posX = s("PosX"); posY = s("PosY"); squash = s("Squash"); lean = s("Lean"); spin = s("Spin"); hip = s("Hip")
         skirtFlare = s("SkirtFlare"); footLift = s("FootLift"); footPoint = s("FootPoint")
+        tailSwish = s("TailSwish"); wingFlap = s("WingFlap")
         eyeOpen = [s("EyeOpen.left"), s("EyeOpen.right")]
         func side(_ x: String) -> Side {
             Side(shoulder: s("Shoulder.\(x)"), arm: s("Arm.\(x)"), forearm: s("Forearm.\(x)"), lift: s("Lift.\(x)"),

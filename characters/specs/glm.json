@@ -1,0 +1,44 @@
+{
+ "id": "glm",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "GLM 娘",
+  "zh-Hans": "GLM 娘",
+  "en": "GLM-chan",
+  "ja": "GLMちゃん"
+ },
+ "vendors": [
+  "zhipu"
+ ],
+ "accent": "#3E6BFF",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/glm"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.95,
+  "energy": 0.95,
+  "sway": 1.1,
+  "bounce": 0.7,
+  "gap": 1.0,
+  "idle": "read",
+  "particles": "foxfire",
+  "signature": [
+   "tailswish",
+   "tilt",
+   "lookaround",
+   "spin",
+   "eartwitch"
+  ],
+  "hands": [
+   "flex",
+   "fan"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "tail": true,
+  "ears": true
+ }
+}

@@ -112,7 +112,7 @@ def split_pairs(layers, center_x, min_share=0.03):
         for side, mask in (("left", dist_l <= dist_r), ("right", dist_l > dist_r)):
             rgba = layer.rgba.copy()
             rgba[..., 3] = np.where(mask, rgba[..., 3], 0)
-            out.append(Layer(f"{layer.tag}.{side}", layer.tag, rgba, side))
+            out.append(Layer(f"{layer.name}.{side}", layer.tag, rgba, side))
     return out
 
 

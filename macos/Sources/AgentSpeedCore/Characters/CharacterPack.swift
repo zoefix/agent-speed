@@ -268,17 +268,31 @@ public enum CharacterVendors {
     /// Resellers whose models belong to another vendor's character; the source decides instead.
     static let resellers: Set<String> = ["opencode"]
 
+    /// Model families the price table does not name a vendor for, by the start of the id's last path segment.
+    static let families: [(prefix: String, vendor: String)] = [
+        ("doubao", "bytedance"), ("seed-", "bytedance"), ("ui-tars", "bytedance"), ("llama", "meta"),
+        ("sonar", "perplexity"), ("pplx", "perplexity"), ("r1-1776", "perplexity"), ("ernie", "baidu"),
+        ("hunyuan", "tencent"), ("rwkv", "rwkv"),
+    ]
+
     /// The vendor and display name of a model: the price table's provider and name when the id resolves, else the
-    /// source's vendor and the raw id.
+    /// vendor of its model family, else the source's vendor, with the raw id.
     public static func resolve(model: String?, source: SourceKind, prices: PriceTable?) -> (vendor: String?, name: String?) {
         if let prices, case .priced(let index, _) = prices.resolver.resolve(model: model, provider: nil),
            prices.models.indices.contains(index) {
             let entry = prices.models[index]
-            let vendor = resellers.contains(entry.provider) ? fallback(for: source) : entry.provider
+            let vendor = resellers.contains(entry.provider) ? family(of: model) ?? fallback(for: source) : entry.provider
             return (vendor, entry.name)
         }
         let raw = model?.trimmingCharacters(in: .whitespacesAndNewlines)
-        return (fallback(for: source), raw?.isEmpty == false ? raw : nil)
+        return (family(of: raw) ?? fallback(for: source), raw?.isEmpty == false ? raw : nil)
+    }
+
+    /// `meta-llama/Llama-3.3-70B` → `meta`, `doubao-seed-1.6` → `bytedance`; nil for any other id.
+    public static func family(of model: String?) -> String? {
+        guard let model, let last = model.split(separator: "/").last else { return nil }
+        let id = last.trimmingCharacters(in: .whitespacesAndNewlines).lowercased()
+        return families.first { id.hasPrefix($0.prefix) }?.vendor
     }
 
     public static func fallback(for source: SourceKind) -> String? {

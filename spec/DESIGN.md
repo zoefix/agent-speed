@@ -917,8 +917,15 @@ Layers, back to front (conventions of 2a with `S` replaced by `D`):
 5. **The character**: the skinned pose of the current band (CHARACTERS 3, 6), drawn as textured triangle meshes.
 6. **Ring and agent lights, front half**, response ripples (the ring growing to 1.42 × and fading over 0.9 s,
    strength from `log10(output)`), embers rising from the ring at redline.
-7. **Readouts in front of her**, then petals blown by the wind (from boost up) and the new-peak pill (gold, above the
-   speed body, with 24 rays).
+7. **Readouts in front of her**, then her particles (CHARACTERS 8, Particles; the rest of them draw behind her,
+   after layer 4) and the new-peak pill (gold, above the speed body, with 24 rays). Each character has her own kind:
+   Claude's petals blown by the wind from boost up; bubbles rising and swaying (DeepSeek), twinkling four-point
+   sparkles or stars, music notes floating up (Kimi), embers from her feet (Grok), blue foxfire wisps (GLM),
+   tumbling confetti from above (MiniMax), `Z z` drifting from her head only while she rests (Llama), pages and
+   blossoms blown sideways (文心, Qwen), feathers and snow falling. Dots are soft ellipses in her accent's tints or the
+   kind's own colors; stars, wisps and embers add up on dark glass and are laid over on light; notes and `Z` are
+   bold glyphs. Take-offs, wing flaps, pounces and pose swaps throw out a puff of 14. The slow drift rides the
+   band's frame rate (15 fps at idle); puffs and wind-blown petals ask for 60.
 
 The readouts are three bodies on Kepler orbits (CHARACTERS 8): **speed** (rolling digits sampled 5 times a second,
 size 0.068 D, the unit and the speed title chip below), **model** (a glass chip with the vendor's accent dot and the
@@ -949,7 +956,7 @@ she acts out a gesture or move.
 | Effects | `character` |
 | --- | --- |
 | Off | the character at rest pose with breathing only, readouts parked (not orbiting), no particles |
-| Soft | grooves and actions at half amplitude, no embers or petals |
+| Soft | grooves and actions at half amplitude, no embers or particles |
 | Standard | as described |
 | Max | Standard with 1.6 × particle rates |
 

@@ -229,5 +229,84 @@ def peek(out, book, orb):
     return Motion("peek", d, curves, fade=0.2, expression="surprised")
 
 
+def tailswish(out, book):
+    d = 1.6
+    curves = {"TailSwish": [(0, 0)] + oscillate(0.1, d - 0.15, 0.7, 0.9) + [(d, 0)],
+              "Hip": [(0, 0)] + oscillate(0.1, d - 0.15, 0.7, 0.18, phase=math.pi) + [(d, 0)],
+              "AngleZ": [(0, 0), (0.3, 0.15), (d - 0.3, 0.15), (d, 0)]}
+    return Motion("tailswish", d, curves)
+
+
+def wingflap(out, book):
+    d = 1.5
+    curves = {"WingFlap": [(0, 0), (0.2, -0.25), (0.42, 1.0), (0.62, -0.1), (0.84, 0.9), (1.06, -0.05), (1.3, 0.3),
+                           (d, 0)],
+              "PosY": [(0, 0), (0.42, 0.03), (0.62, 0.0), (0.84, 0.035), (1.06, 0.0), (d, 0)],
+              "Squash": [(0, 0), (0.2, -0.15), (0.42, 0.12), (0.62, -0.05), (0.84, 0.1), (d, 0)],
+              **_both("Shoulder", [(0, 0), (0.42, 0.3), (0.84, 0.25), (d, 0)])}
+    return Motion("wingflap", d, curves, events=[(0.42, "petals")])
+
+
+def eartwitch(out, book):
+    d = 1.0
+
+    def flick(t0):
+        return [(0, 0), (t0, 0), (t0 + 0.06, 1.0), (t0 + 0.14, -0.35), (t0 + 0.24, 0.15), (t0 + 0.36, 0), (d, 0)]
+
+    curves = {"EarTwitch.left": flick(0.08), "EarTwitch.right": flick(0.3),
+              "AngleZ": [(0, 0), (0.2, 0.12), (0.6, -0.08), (d, 0)],
+              "EyeBallX": [(0, 0), (0.2, 0.5), (0.6, -0.3), (d, 0)]}
+    return Motion("eartwitch", d, curves)
+
+
+def floatbob(out, book):
+    """Drifting as if under water: a slow bob and sway, the arms floating up."""
+    d = 3.4
+    curves = {"PosY": [(0, 0)] + oscillate(0.2, d - 0.3, 1.6, 0.035, base=0.03) + [(d, 0)],
+              "Lean": _swing(d, 1.7, 0.18),
+              "AngleZ": _swing(d, 3.2, 0.3),
+              "Hip": _swing(d, 1.7, 0.22, phase=math.pi),
+              f"Arm.{out}": _swing(d, 1.6, 0.15, base=0.3, ease=0.5),
+              f"Arm.{book}": _swing(d, 1.6, 0.1, base=0.2, phase=math.pi, ease=0.5),
+              "SkirtFlare": [(0, 0), (0.5, 0.3), (d - 0.5, 0.3), (d, 0)],
+              "TailSwish": _swing(d, 1.7, 0.5),
+              "AngleY": [(0, 0), (0.6, 0.15), (d - 0.6, 0.15), (d, 0)]}
+    return Motion("floatbob", d, curves, fade=0.25, expression="smile")
+
+
+def pounce(out, book, orb):
+    """A crouch, a wiggle, then a small hop toward the orb, paw first."""
+    d = 1.25
+    curves = {"Squash": [(0, 0), (0.3, -0.6), (0.5, -0.62), (0.56, 0.4), (0.76, 0.1), (0.86, -0.45), (1.0, 0.1), (d, 0)],
+              "PosY": [(0, 0), (0.5, 0)] + ballistic(0.54, 0.32, 0.22) + [(d, 0)],
+              "Lean": [(0, 0), (0.3, 0.3 * orb), (0.5, 0.35 * orb), (0.7, 0.1 * orb), (d, 0)],
+              f"Arm.{out}": [(0, 0), (0.3, -0.1), (0.6, 0.55), (0.9, 0.2), (d, 0)],
+              f"Forearm.{out}": [(0, 0), (0.3, 0.2), (0.6, -0.4), (d, 0)],
+              f"Arm.{book}": [(0, 0), (0.6, 0.3), (d, 0)],
+              "AngleY": [(0, 0), (0.3, -0.3), (0.6, 0.25), (0.9, -0.1), (d, 0)],
+              "FootPoint": [(0, 0), (0.54, 0.2), (0.6, 1.0), (0.84, 0.8), (0.86, 0), (d, 0)],
+              "SkirtFlare": [(0, 0), (0.7, 0.5), (0.9, 0.6), (d, 0)],
+              "TailSwish": [(0, 0), (0.3, -0.6), (0.6, 0.9), (d, 0)]}
+    return Motion("pounce", d, curves, expression="happy", events=[(0.56, "petals")])
+
+
+def swagger(out, book):
+    """Chin up, weight on one hip, a shrug of the free shoulder: smug."""
+    d = 1.9
+    curves = {"Hip": [(0, 0), (0.4, 0.6), (1.4, 0.6), (d, 0)],
+              "BodyAngleZ": [(0, 0), (0.4, -0.35), (1.4, -0.3), (d, 0)],
+              "Lean": [(0, 0), (0.4, -0.15), (1.4, -0.12), (d, 0)],
+              "AngleZ": [(0, 0), (0.45, 0.35), (1.4, 0.3), (d, 0)],
+              "AngleY": [(0, 0), (0.45, 0.2), (1.4, 0.2), (d, 0)],
+              f"Shoulder.{out}": [(0, 0), (0.4, 0.5), (0.8, 0.2), (1.2, 0.5), (d, 0)],
+              f"Arm.{out}": [(0, 0), (0.4, 0.2), (1.4, 0.2), (d, 0)],
+              "EyeBallX": [(0, 0), (0.45, 0.6), (1.4, 0.6), (d, 0)]}
+    return Motion("swagger", d, curves, expression="determined")
+
+
 MOVES = {"hop": hop, "jump": jump, "hops": hops, "spin": spin, "curtsy": curtsy, "tiptoe": tiptoe, "foottap": foottap,
          "sway": sway, "run": run, "stretch": stretch, "bow": bow}
+# Moves of the motion profiles (spec/CHARACTERS.md): the rig parameters each needs, any one of them for ears.
+PROFILE_MOVES = {"tailswish": (tailswish, ("TailSwish",)), "wingflap": (wingflap, ("WingFlap",)),
+                 "eartwitch": (eartwitch, ("EarTwitch.left", "EarTwitch.right")), "floatbob": (floatbob, ("PosY",)),
+                 "swagger": (swagger, ("Hip",))}

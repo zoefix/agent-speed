@@ -11,6 +11,11 @@ struct HandActor: Sendable {
     let side: CharacterSide
     var holds: Bool
     let phase: Double
+    /// The character's fidget sets for the free hand (empty: flex, fan, count, drum).
+    var freeSets: [String] = []
+    /// The pose's hand set, played back to back (`setMode`).
+    var mode: String?
+    var modeAction = false
     var action: Motion?
     var t = 0.0
     var next: Double
@@ -103,13 +108,118 @@ struct HandActor: Sendable {
         return MotionSpec("drum", t + 0.2, c)
     }
 
+    /// Fingering a transverse flute: index, middle and ring fingers lift and press through a fixed tune.
+    static func flute(_ beat: Double) -> MotionSpec {
+        let pattern: [[Int]] = [[1], [1, 2], [2, 3], [1, 3], [2], [1, 2, 3], [3], [1, 2]]
+        let step = 0.5 * beat
+        var keys: [Int: [(Double, Double)]] = [1: [(0, 0)], 2: [(0, 0)], 3: [(0, 0)]]
+        for (k, lifted) in pattern.enumerated() {
+            let t = 0.05 + Double(k) * step
+            for i in [1, 2, 3] {
+                let v = lifted.contains(i) ? -0.3 : 0.12
+                keys[i]! += [(t + 0.06, v), (t + step - 0.04, v)]
+            }
+        }
+        let end = 0.05 + Double(pattern.count) * step + 0.1
+        var c = CurveSet()
+        for i in [1, 2, 3] { c.set("F\(i)", keys[i]! + [(end, 0)]) }
+        c.set("W", [(0, 0)] + Keys.oscillate(0.05, end - 0.05, 4 * step, 0.08) + [(end, 0)])
+        return MotionSpec("flute", end, c)
+    }
+
+    static func fanflutter(_ beat: Double) -> MotionSpec {
+        let d = 0.9
+        var c = CurveSet()
+        c.set("W", [(0, 0)] + Keys.oscillate(0.05, d - 0.05, 0.18, 0.35) + [(d, 0)])
+        c.set("S", [(0, 0), (0.2, 0.15), (0.7, 0.15), (d, 0)])
+        return MotionSpec("fanflutter", d + 0.5 * beat, c)
+    }
+
+    static func abacus(_ beat: Double) -> MotionSpec {
+        let step = max(0.5 * beat, 0.24)
+        var f1: [(Double, Double)] = [(0, 0)], f0: [(Double, Double)] = [(0, 0)]
+        for k in 0..<6 {
+            let t = 0.05 + Double(k) * step
+            f1 += [(t, 0.0), (t + 0.05, 0.5), (t + 0.11, -0.12), (t + 0.2, 0.0)]
+            if k % 2 == 0 { f0 += [(t, 0.0), (t + 0.06, 0.25), (t + 0.16, 0.0)] }
+        }
+        let end = 0.05 + 6 * step + 0.1
+        var c = CurveSet()
+        c.set("F1", f1 + [(end, 0)])
+        c.set("F0", f0 + [(end, 0)])
+        c.set("W", [(0, 0)] + Keys.oscillate(0.05, end - 0.05, 2 * step, 0.05) + [(end, 0)])
+        return MotionSpec("abacus", end, c)
+    }
+
+    static func sleeveflop(_ beat: Double) -> MotionSpec {
+        let d = 2.4
+        let droop: [(Double, Double)] = [(0, 0), (0.4, 0.2), (d - 0.4, 0.2), (d, 0)]
+        var c = CurveSet()
+        c.set("W", [(0, 0)] + Keys.oscillate(0.1, d - 0.1, 1.6, 0.3) + [(d, 0)])
+        for i in [1, 2, 3, 4] { c.set("F\(i)", droop) }
+        return MotionSpec("sleeveflop", d, c)
+    }
+
+    static func ripple(_ beat: Double) -> MotionSpec {
+        var c = CurveSet()
+        c.set("S", [(0, 0), (2.0, 0)])
+        return MotionSpec("ripple", 2.0, c)
+    }
+
+    /// Every hand set by name (motions/hands.py, make).
+    static let sets = ["tap", "regrip", "lift", "flex", "fan", "count", "drum", "flute", "fanflutter", "abacus",
+                       "sleeveflop", "ripple"]
+
+    static func make(_ name: String, _ beat: Double) -> MotionSpec {
+        switch name {
+        case "tap": tap(beat)
+        case "regrip": regrip()
+        case "lift": lift()
+        case "flex": flex()
+        case "fan": fan()
+        case "count": count(beat)
+        case "drum": drum(beat)
+        case "flute": flute(beat)
+        case "fanflutter": fanflutter(beat)
+        case "abacus": abacus(beat)
+        case "sleeveflop": sleeveflop(beat)
+        default: ripple(beat)
+        }
+    }
+
+    /// Which hands a pose's hand set plays on: both, the hand holding the object, or the free one.
+    static func modeSides(_ name: String) -> String {
+        switch name {
+        case "flute", "sleeveflop", "ripple": "both"
+        case "fanflutter", "tap", "regrip", "lift": "holder"
+        default: "free"
+        }
+    }
+
+    var modeOn: Bool {
+        guard let mode else { return false }
+        let sides = HandActor.modeSides(mode)
+        return sides == "both" || (sides == "holder") == holds
+    }
+
+    /// The pose's hand set: played back to back on the hands it belongs to, from the next action on.
+    mutating func setMode(_ mode: String?) {
+        self.mode = mode
+        if modeOn, action == nil { next = min(next, 0) }
+    }
+
     mutating func choose(_ band: SpeedBand, _ beat: Double, _ rng: inout Rng) -> Motion {
+        if modeOn, let mode { return HandActor.bind(HandActor.make(mode, beat)) }
         if holds {
             switch rng.index(3) {
             case 0: return HandActor.bind(HandActor.tap(beat))
             case 1: return HandActor.bind(HandActor.regrip())
             default: return HandActor.bind(HandActor.lift())
             }
+        }
+        if !freeSets.isEmpty {
+            let options = freeSets.map { HandActor.make($0, beat) }
+            return HandActor.bind(options[rng.index(options.count)])
         }
         let busy = band == .boost || band == .overdrive || band == .redline
         switch rng.index(busy ? 4 : 2) {
@@ -152,23 +262,25 @@ struct HandActor: Sendable {
 
         next -= dt * HandActor.busyness(band)
         if action == nil, next <= 0 {
+            modeAction = modeOn
             action = choose(band, beat, &rng)
             t = 0
         }
         if let motion = action {
             t += dt
             let local = motion.localTime(t)
+            let wristScale = modeAction || !holds ? 1.0 : 0.3
             for entry in motion.entries {
                 let v = entry.curve(local)
                 switch entry.slot {
-                case HandActor.wristSlot: wrist += v * (holds ? 0.3 : 1.0)
+                case HandActor.wristSlot: wrist += v * wristScale
                 case HandActor.spreadSlot: spread += v
                 default: fingers[entry.slot] += v
                 }
             }
             if t >= motion.duration {
                 action = nil
-                next = rng.uniform(1.6, 4.2)
+                next = modeOn ? 0 : rng.uniform(1.6, 4.2)
             }
         }
     }

@@ -42,6 +42,16 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 .venv/bin/python -m unittest characters.tests.test_reference
 ```
 
+Every other character builds the same way with her spec, which brings the rig hints (tail, wings, recovery of art
+See-Through missed) and, for the stage, her motion profile, particles and accent:
+
+```bash
+.venv/bin/python -m characters.rig.build --psd deepseek.psd --reference deepseek.png --name deepseek \
+    --out characters/build/deepseek --spec characters/specs/deepseek.json
+.venv/bin/python -m characters.reference.stage --package characters/build/deepseek \
+    --spec characters/specs/deepseek.json --out deepseek-stage.mp4
+```
+
 ## Package format (version 1)
 
 `rig.json` coordinates are canvas pixels with y pointing down; rotations are degrees, clockwise on screen.

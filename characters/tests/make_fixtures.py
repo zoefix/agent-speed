@@ -194,9 +194,59 @@ def director_cases():
             "params": list(params.values()), "schedule": schedule, "cases": out}
 
 
+PROFILES = [
+    {"name": "flutist", "seed": 11, "sides": ("right", "left"),
+     "profile": {"tempo": 0.8, "energy": 0.8, "sway": 1.2, "bounce": 0.4, "gap": 1.3, "idle": "rest",
+                 "signature": ["sway", "hum", "tiptoe", "curtsy", "wingflap"], "hands": ["ripple", "flex"],
+                 "poseHands": {"cruise": "flute", "boost": "flute"}, "exclude": ["run", "hops", "jump", "jumpjoy"]}},
+    {"name": "seated", "seed": 5, "sides": ("left", "right"),
+     "profile": {"tempo": 0.8, "energy": 0.75, "sway": 0.6, "bounce": 0.0, "gap": 1.3, "idle": "read",
+                 "seated": True, "talk": False, "signature": ["nod", "tilt", "yawn", "hum", "spin"],
+                 "hands": ["ripple", "flex"], "poseHands": {"cruise": "abacus", "redline": "fanflutter"}}},
+    {"name": "cat", "seed": 23, "sides": ("right", "left"),
+     "profile": {"tempo": 1.15, "energy": 1.15, "sway": 1.0, "bounce": 1.3, "gap": 0.85, "idle": "rest",
+                 "signature": ["hop", "hops", "tilt", "eartwitch", "tailswish", "pounce", "floatbob", "swagger"],
+                 "hands": ["flex", "fan", "count", "sleeveflop"]}},
+]
+# The pose on screen per time (seconds): the side change a pose swap makes, with its band for the hand set.
+POSE_SIDES = [(6.0, "cruise"), (12.0, "boost"), (18.0, "overdrive"), (24.0, "redline"), (30.0, "boost"),
+              (35.0, "cruise"), (39.0, "idle")]
+
+
+def director_profile_cases():
+    params = json.loads((Path(__file__).parent / "director_params.json").read_text())
+    for pid, lo, default in (("TailSwish", -1, 0), ("WingFlap", -1, 0), ("EarTwitch.left", -1, 0),
+                             ("EarTwitch.right", -1, 0)):
+        params.append({"id": pid, "min": lo, "max": 1, "default": default})
+    params = {p["id"]: p for p in params}
+    schedule = [(0, 0), (5, 2), (11, 6), (17, 10), (23, 13), (29, 7), (34, 1), (38, 0)]
+    out = []
+    for case in PROFILES:
+        arm_out, arm_book = case["sides"]
+        d = Director(params, (), seed=case["seed"], arm_out=arm_out, arm_book=arm_book, orb=-1.0, celebrate=False,
+                     profile=case["profile"])
+        frames, sides = [], list(POSE_SIDES)
+        for n in range(60 * 42):
+            t = n / 60
+            level = [lv for start, lv in schedule if t >= start][-1]
+            d.set_level(level)
+            if sides and t >= sides[0][0]:
+                d.set_sides(arm_out, arm_book, pose_band=sides.pop(0)[1])
+            values = d.update(1 / 60)
+            if n % 10 == 0:
+                frames.append({"n": n, "level": level, "gesture": d.last_gesture if d.gesture else None,
+                               "values": {k: round(v, 7) for k, v in sorted(values.items())}})
+        out.append({"name": case["name"], "seed": case["seed"], "armOut": arm_out, "armBook": arm_book, "orb": -1.0,
+                    "profile": case["profile"], "frames": frames})
+    return {"about": "As director.json, with a motion profile per case; at each poseSides time (before that step's "
+                     "update, after set_level) set_sides(armOut, armBook, poseBand) runs once.",
+            "params": list(params.values()), "schedule": schedule, "poseSides": POSE_SIDES, "cases": out}
+
+
 FILES = {"rng.json": rng_cases, "curves.json": curve_cases, "springs.json": spring_cases, "orbits.json": orbit_cases,
          "rig.json": rig_cases, "physics.json": physics_cases, "odometer.json": odometer_cases,
-         "switch.json": switch_cases, "director.json": director_cases}
+         "switch.json": switch_cases, "director.json": director_cases,
+         "director-profiles.json": director_profile_cases}
 
 
 def main(argv=None):

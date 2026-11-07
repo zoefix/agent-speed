@@ -26,13 +26,19 @@ public enum SpeedBand: String, Sendable, CaseIterable, Codable, Comparable {
     }
 }
 
-/// The beat clock: its tempo eases toward the band's.
+/// The beat clock: its tempo eases toward the band's, scaled by the character's tempo.
 struct Beat: Sendable {
-    var bpm = SpeedBand.idle.bpm
+    let tempo: Double
+    var bpm: Double
     var phase = 0.0
 
+    init(tempo: Double = 1) {
+        self.tempo = tempo
+        bpm = SpeedBand.idle.bpm * tempo
+    }
+
     mutating func update(_ dt: Double, _ band: SpeedBand) {
-        bpm += (band.bpm - bpm) * min(1.0, dt * 1.2)
+        bpm += (band.bpm * tempo - bpm) * min(1.0, dt * 1.2)
         phase += dt * bpm / 60
     }
 }
@@ -48,9 +54,20 @@ enum Groove {
     static func hit(_ b: Double) -> Double { pow(1 - abs(sin(Double.pi * b)), 4.0) }
 
     static func emit(_ band: SpeedBand, _ b: Double, _ t: Double, _ s: Slots, out o: Slots.Side, book k: Slots.Side,
-                     into out: inout Out) {
+                     rest: Bool = false, into out: inout Out) {
         out.removeAll(keepingCapacity: true)
         switch band {
+        case .idle where rest:
+            let shift = sin(2 * Double.pi * t / 7.5)
+            out.append((s.angleY, -0.08 + 0.05 * sin(t * 0.9)))
+            out.append((s.angleZ, 0.1 * sin(t * 0.5)))
+            out.append((s.angleX, -0.15))
+            out.append((s.eyeBallX, 0.3 * sin(t * 0.7)))
+            out.append((s.eyeBallY, -0.1))
+            out.append((k.arm, 0.06))
+            out.append((s.hip, 0.25 * shift))
+            out.append((s.bodyAngleZ, -0.12 * shift))
+            out.append((s.lean, 0.04 * shift))
         case .idle:
             let shift = sin(2 * Double.pi * t / 7.5)
             out.append((s.angleY, -0.55 + 0.05 * sin(t * 0.9)))

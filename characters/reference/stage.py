@@ -114,7 +114,12 @@ def main(argv=None):
     ap.add_argument("--size", default="1350x1350")
     ap.add_argument("--model", default="Claude Opus")
     ap.add_argument("--vendor-color", default="217,119,87")
+    ap.add_argument("--spec", help="the character's spec (characters/specs/<id>.json): motion profile and accent")
     args = ap.parse_args(argv)
+    spec = json.loads(Path(args.spec).read_text()) if args.spec else {}
+    motion = spec.get("motion", {})
+    if spec.get("accent"):
+        args.vendor_color = ",".join(str(int(spec["accent"][i:i + 2], 16)) for i in (1, 3, 5))
 
     w, h = (int(v) for v in args.size.split("x"))
     unit = h / 1350
@@ -122,8 +127,8 @@ def main(argv=None):
     renderer = Renderer((w, h), atlas, Rig(doc).parts)
     base = Pose(args.package, renderer)
     poses = {"idle": base}
-    for spec in args.pose:
-        band, path = spec.split("=", 1)
+    for item in args.pose:
+        band, path = item.split("=", 1)
         poses[band] = Pose(path, renderer, base=base)
     lm = base.lm
     extent = np.concatenate([np.array(p["vertices"]).reshape(-1, 2) for p in base.doc["parts"]])
@@ -140,15 +145,21 @@ def main(argv=None):
     for pose in poses.values():
         params.update(pose.rig.params)
     bg = renderer.texture(desktop((w, h)))
-    petal = renderer.texture(petal_sprite(base.doc, base.atlas), mipmaps=True)
+    kind = motion.get("particles", "petals")
+    try:
+        petal = renderer.texture(petal_sprite(base.doc, base.atlas), mipmaps=True)
+    except StopIteration:
+        petal, kind = None, (kind if kind != "petals" else "sparkles")
     hud = Hud(renderer, unit)
     book = lm.get("objectSide") or "left"
     free = "right" if book == "left" else "left"
-    director = Director(params, (), arm_out=free, arm_book=book, orb=1.0, celebrate=False)
+    director = Director(params, (), arm_out=free, arm_book=book, orb=1.0, celebrate=False, profile=motion)
     tracker = LevelTracker()
     switch = Switch()
+    seated = bool(motion.get("seated"))
+    fading, fade = None, 1.0
     active = base
-    petals = effects.Petals((0.05 * w, 0.1 * h, 0.95 * w, 0.85 * h), wind_sign=1.0)
+    petals = effects.Particles(kind, (0.05 * w, 0.1 * h, 0.95 * w, 0.85 * h), accent=spec.get("accent"), wind_sign=1.0)
     vendor = tuple(int(v) for v in args.vendor_color.split(","))
     rng = random.Random(9)
     next_pulse, peak = 2.0, 0.0
@@ -174,13 +185,21 @@ def main(argv=None):
         director.set_level(level)
         values = director.update(dt)
         wanted = pose_for(band_of(level))
-        if wanted is not active:
-            switch.request(wanted)
-        swapped = switch.update(dt, values)
+        if seated:
+            # A character in a chair never turns: the poses crossfade instead.
+            fade = min(1.0, fade + dt / 0.3)
+            swapped = wanted if wanted is not active and fade >= 1.0 else None
+            if swapped is not None:
+                fading, fade = active, 0.0
+        else:
+            if wanted is not active:
+                switch.request(wanted)
+            swapped = switch.update(dt, values)
         if swapped is not None:
             active = swapped
             book_side = active.lm.get("objectSide") or book
-            director.set_sides("right" if book_side == "left" else "left", book_side)
+            band = next(b for b, p in poses.items() if p is active)
+            director.set_sides("right" if book_side == "left" else "left", book_side, pose_band=band)
             petals.burst(feet_screen[0] + values.get("PosX", 0.0) * POS_X * fw * scale0, feet_screen[1] - 0.55 * char_h)
         for pose in poses.values():
             out = pose.physics.step(dt, values)
@@ -213,15 +232,30 @@ def main(argv=None):
 
         info = (args.model, f"{len(agents)} 個 agent · 今日 1.2M tokens", vendor)
         hud.orbit_bodies(dt, (fx, fy - 0.52 * char_h + 0.6 * dy), char_h)
+        def particles(front):
+            if petal is not None:
+                renderer.sprites(petal, petals.sprites(front))
+            renderer.dots(petals.dots(front), additive=petals.additive)
+            for glyph, x, y, size, angle, alpha, rgb in petals.glyphs(front):
+                color = tuple(int(255 * c) for c in rgb) + (255,)
+                tex, tw, th = hud.tex.label(glyph, max(8, int(size * unit)), color, weight=b"Bold")
+                renderer.sprites(tex, np.array([[x, y, tw, th, angle, alpha]], np.float32))
+
         renderer.begin((0, 0, 0, 1))
         renderer.image(bg, 0, 0, w, h)
         hud.draw_back(dt, ground, waist, agents)
         hud.draw_bodies(dt, False, *info)
-        renderer.sprites(petal, petals.instances(front=False))
-        renderer.character(posed, scale, offset, active.rig.opacities(values), which=active.which)
+        particles(False)
+        if fading is not None and fade < 1.0:
+            out_posed = fading.rig.pose(values)
+            fs, fo = placement(fading)
+            renderer.character(out_posed, fs, fo, [o * (1 - fade) for o in fading.rig.opacities(values)],
+                               which=fading.which)
+        alpha = fade if fading is not None else 1.0
+        renderer.character(posed, scale, offset, [o * alpha for o in active.rig.opacities(values)], which=active.which)
         hud.draw_front(dt, ground, waist, agents)
         hud.draw_bodies(dt, True, *info)
-        renderer.sprites(petal, petals.instances(front=True))
+        particles(True)
         sx, sy = hud.placed["speed"][:2]
         hud.draw_peak(dt, (min(max(sx, 0.18 * w), 0.82 * w), sy - 0.13 * char_h))
         frame = renderer.finish()

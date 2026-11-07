@@ -11,8 +11,9 @@ from ..rng import Rng
 from .curves import merge
 from .gestures import COMBOS, FACE_GESTURES, GESTURES, HEAD_GESTURES, arm_gesture, combo, face_gesture, head_gesture
 from .hands import HandActor
-from .moves import MOVES, jump, peek, sidestep
-from .rhythm import GROOVES, Beat
+from .moves import MOVES, PROFILE_MOVES, jump, peek, pounce, sidestep
+from .profile import SEATED_FREEZE, MotionProfile
+from .rhythm import Beat, groove_for, groove_scale
 from .springs import Springs
 
 LEVELS_PER_BAND = [(0, "idle"), (1, "cruise"), (5, "boost"), (9, "overdrive"), (12, "redline")]
@@ -43,14 +44,16 @@ def band_of(level):
 
 
 class Director:
-    def __init__(self, rig_params, variants=(), seed=7, arm_out="right", arm_book="left", orb=-1.0, celebrate=True):
+    def __init__(self, rig_params, variants=(), seed=7, arm_out="right", arm_book="left", orb=-1.0, celebrate=True,
+                 profile=None):
         self.params = rig_params
         self.out, self.book, self.orb, self.celebrate = arm_out, arm_book, orb, celebrate
+        self.profile = profile if isinstance(profile, MotionProfile) else MotionProfile(profile)
         self.meta = {v["id"]: v for v in variants}
         self.faces = {k: v for k, v in self.meta.items() if v["kind"] == "face"}
         self.rng = Rng(seed)
         self.springs = Springs()
-        self.beat = Beat()
+        self.beat = Beat(self.profile.tempo)
         self.grooves = []
         self.gesture = None
         self.next_gesture = 2.0
@@ -68,17 +71,23 @@ class Director:
         self.gaze, self.gaze_target, self.gaze_at = [0.0, 0.0], [0.0, 0.0], 0.8
         self.breath_phase = 0.0
         self.time = 0.0
-        self.hands = [HandActor(side, side == arm_book, self.rng, phase=k * 1.7)
+        self.hands = [HandActor(side, side == arm_book, self.rng, phase=k * 1.7, sets=self.profile.hands)
                       for k, side in enumerate(("left", "right")) if f"Finger.{side}.0" in rig_params]
+        self.pose_band = "idle"
+        for hand in self.hands:
+            hand.set_mode(self.profile.pose_hands.get(self.pose_band))
 
-    def set_sides(self, arm_out, arm_book):
-        """Which arm swings free and which holds the object, for a new pose."""
+    def set_sides(self, arm_out, arm_book, pose_band=None):
+        """Which arm swings free and which holds the object, for a new pose (of `pose_band`, for its hand set)."""
         self.out, self.book = arm_out, arm_book
+        if pose_band is not None:
+            self.pose_band = pose_band
         for hand in self.hands:
             hand.holds = hand.side == arm_book
+            hand.set_mode(self.profile.pose_hands.get(self.pose_band))
         for layer in self.grooves:
             layer["target"] = 0.0
-        self.grooves.append({"fn": GROOVES[self.band], "w": 0.0, "target": 1.0})
+        self.grooves.append({"fn": groove_for(self.band, self.profile), "w": 0.0, "target": 1.0})
 
     def _can(self, *pids):
         return all(p in self.params for p in pids)
@@ -114,17 +123,22 @@ class Director:
             return sidestep(out, book, self.rng.choice(targets) - self.stage_x)
         if gid == "peek":
             return peek(out, book, self.orb) if self._can("Lean") else None
+        if gid == "pounce":
+            return pounce(out, book, self.orb) if self._can("PosY", "Squash") else None
+        if gid in PROFILE_MOVES:
+            make, needs = PROFILE_MOVES[gid]
+            return make(out, book) if any(p in self.params for p in needs) else None
         if gid in MOVES:
             return MOVES[gid](out, book) if self._can("PosY", "Squash") else None
         if gid in HEAD_GESTURES:
             return head_gesture(gid)
         if gid in FACE_GESTURES:
             needs = "sleepy" if gid == "yawn" else "talk"
-            return face_gesture(gid) if needs in self.faces else None
+            return face_gesture(gid) if needs in self.faces or gid in self.profile.signature else None
         return None
 
     def _start_gesture(self, gid):
-        motion = self._gesture(gid)
+        motion = self._gesture(gid) if self.profile.allows(gid) else None
         if motion is None:
             return False
         self.gesture = {"motion": motion, "t": 0.0, "w": 0.0, "fired": 0}
@@ -135,10 +149,18 @@ class Director:
                 self.springs.snap(pid, v)
         return True
 
+    def _idle_share(self, pid):
+        g = self.gesture
+        return 1.0 - g["w"] if g is not None and pid in g["motion"].curves else 1.0
+
+    def _clamp(self, pid, v):
+        p = self.params[pid]
+        return max(p["min"], min(p["max"], v))
+
     def _play_groove(self, band):
         for layer in self.grooves:
             layer["target"] = 0.0
-        self.grooves.append({"fn": GROOVES[band], "w": 0.0 if self.grooves else 1.0, "target": 1.0})
+        self.grooves.append({"fn": groove_for(band, self.profile), "w": 0.0 if self.grooves else 1.0, "target": 1.0})
 
     def set_level(self, level):
         band = band_of(level)
@@ -167,6 +189,7 @@ class Director:
         total = {}
         for layer in self.grooves:
             for pid, v in layer["fn"](self.beat.phase, self.time, self.out, self.book).items():
+                v *= groove_scale(pid, self.profile)
                 acc = total.setdefault(pid, [0.0, 0.0])
                 acc[0] += v * layer["w"]
                 acc[1] += layer["w"]
@@ -177,7 +200,7 @@ class Director:
     def _apply_gesture(self, dt, values):
         if self.gesture is None:
             if self.time >= self.next_gesture:
-                pool = [g for g in POOLS[self.band] if g not in self.recent]
+                pool = [g for g in self.profile.pool(POOLS[self.band], self.band) if g not in self.recent]
                 self.rng.shuffle(pool)
                 for gid in pool:
                     if self._start_gesture(gid):
@@ -196,7 +219,8 @@ class Director:
         if g["t"] >= m.duration:
             self.stage_x += m.travel
             self.gesture = None
-            self.next_gesture = self.time + self.rng.uniform(*GAPS[self.band])
+            lo, hi = GAPS[self.band]
+            self.next_gesture = self.time + self.rng.uniform(lo * self.profile.gap, hi * self.profile.gap)
             return None
         return m
 
@@ -223,6 +247,16 @@ class Director:
         values["AngleZ"] = values.get("AngleZ", 0) + amp * 0.8 * math.sin(t * 0.61 + 2.1)
         values["BodySway"] = values.get("BodySway", 0) + (0.15 + 0.3 * s) * math.sin(t * (0.9 + 1.6 * s))
         values["Wind"] = min(1.0, s ** 1.2 * 1.05)
+        # The idle swish and flutter give way to an action that moves the tail or the wings.
+        idle = {"TailSwish": (0.18 + 0.3 * s) * self.profile.sway * math.sin(math.pi * self.beat.phase + 0.5),
+                "WingFlap": 0.12 * math.sin(2 * math.pi * self.breath_phase)}
+        for pid, v in idle.items():
+            if pid in self.params:
+                values[pid] = self._clamp(pid, values.get(pid, 0.0) + self._idle_share(pid) * v)
+        if self.profile.seated:
+            for pid in SEATED_FREEZE:
+                if pid in self.params:
+                    values[pid] = self.params[pid]["default"]
         self.springs.apply(dt, values)
 
         self.gaze_at -= dt
@@ -253,7 +287,7 @@ class Director:
             values[self.faces[fid]["param"]] = self.face_weights[fid]
 
         mouth = self.face
-        if gesture is not None and gesture.talk and "talk" in self.faces:
+        if gesture is not None and gesture.talk and self.profile.talk and "talk" in self.faces:
             self.talk_next -= dt
             if self.talk_next <= 0:
                 self.talk_open = not self.talk_open

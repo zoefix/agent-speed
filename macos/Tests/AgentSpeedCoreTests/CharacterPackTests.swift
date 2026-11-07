@@ -217,6 +217,23 @@ extension PackFixture {
         #expect(reading.fastestModel != nil && reading.fastestModel != "gpt-5.1-codex")
     }
 
+    @Test func modelFamiliesNameTheirVendor() {
+        let cases: [(String?, String?)] = [
+            ("doubao-seed-1.6", "bytedance"), ("seed-oss-36b", "bytedance"), ("bytedance/UI-TARS-1.5-7B", "bytedance"),
+            ("meta-llama/Llama-3.3-70B-Instruct", "meta"), ("llama3.2:latest", "meta"), ("sonar-pro", "perplexity"),
+            ("pplx-70b-online", "perplexity"), ("perplexity/r1-1776", "perplexity"), ("ERNIE-4.5-Turbo", "baidu"),
+            ("hunyuan-t1-latest", "tencent"), ("rwkv-7-world", "rwkv"), ("codellama-13b", nil), ("seedream", nil),
+            ("jev", nil), (nil, nil), ("", nil),
+        ]
+        for (model, vendor) in cases {
+            #expect(CharacterVendors.family(of: model) == vendor, "\(model ?? "nil")")
+        }
+        let reading = VendorReading(agents: [agent(.omp, "meta-llama/llama-4-maverick", 20), agent(.gemini, "ernie-x1", 8)],
+                                    prices: nil)
+        #expect(reading.rates == ["meta": 20, "baidu": 8])
+        #expect(reading.fastestVendor == "meta")
+    }
+
     @Test func unknownModelsFallBackToTheSourcesVendor() {
         let reading = VendorReading(agents: [agent(.gemini, "some-future-model", 12), agent(.kimi, nil, 0)], prices: nil)
         #expect(reading.rates == ["google": 12])

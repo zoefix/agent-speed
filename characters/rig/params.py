@@ -129,7 +129,44 @@ def build(lm, bone_names):
         drivers.append(linear("Skirt", "skirt", "rotate", -5))
         physics.append(chain("skirt", lm["waist"], [lm["hem"] - lm["waist"][1]], ["Skirt"], [5], fw,
                              stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
+    appendage_controls(lm, has, fw, params, drivers, physics)
     return params, drivers, physics
+
+
+# Tail: the swish turns the root and its middle; the chain's follow-through bends each segment (degrees per unit).
+TAIL_SWISH = (16.0, 10.0)
+TAIL_BEND = (8.0, 12.0, 16.0)
+WING_FLAP, WING_SPREAD = 14.0, 0.08
+EAR_TWITCH = 12.0
+
+
+def appendage_controls(lm, has, fw, params, drivers, physics):
+    """Parameters, drivers and physics of tails, wings and animal ears (spec/CHARACTERS.md, Appendages)."""
+    if has("tail1") and "tail" in lm:
+        t = lm["tail"]
+        params += [param("TailSwish"), param("TailBend1"), param("TailBend2"), param("TailBend3")]
+        drivers += [linear("TailSwish", "tail1", "rotate", TAIL_SWISH[0]),
+                    linear("TailSwish", "tail2", "rotate", TAIL_SWISH[1])]
+        drivers += [linear(f"TailBend{i + 1}", bone, "rotate", -d) for i, (bone, d) in
+                    enumerate(zip(("tail1", "tail2", "tail3"), TAIL_BEND))]
+        lengths = [t["length"] / 3] * 3
+        spec = chain("tail", t["root"], lengths, ["TailBend1", "TailBend2", "TailBend3"], list(TAIL_BEND), fw,
+                     stiffness=28, damping=5.0, wind=0.7, head=0.0, hip=HIP_X)
+        spec["inputs"].append({"param": "TailSwish", "x": 0.5 * fw})
+        physics.append(spec)
+    wings = [s for s in ("left", "right") if has(f"wing.{s}")]
+    if wings:
+        params.append(param("WingFlap"))
+        for side in wings:
+            sign = 1.0 if side == "left" else -1.0
+            drivers += [linear("WingFlap", f"wing.{side}", "rotate", sign * WING_FLAP),
+                        drive("WingFlap", f"wing.{side}", "scaleX", [(-1, -WING_SPREAD), (0, 0), (1, WING_SPREAD)])]
+    for side in ("left", "right"):
+        if has(f"ear.{side}"):
+            sign = -1.0 if side == "left" else 1.0
+            params.append(param(f"EarTwitch.{side}"))
+            drivers += [linear(f"EarTwitch.{side}", f"ear.{side}", "rotate", sign * EAR_TWITCH),
+                        drive(f"EarTwitch.{side}", f"ear.{side}", "scaleY", [(-1, 0.04), (0, 0), (1, -0.08)])]
 
 
 def hand_drivers(side, hand):

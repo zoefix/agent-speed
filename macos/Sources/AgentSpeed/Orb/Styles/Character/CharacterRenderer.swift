@@ -6,7 +6,7 @@ import Metal
 import simd
 
 /// Draws one `character` orb (DESIGN 2a.6, CHARACTERS 3–8): the skinned character of the chosen pack, its pose and
-/// character swaps, the ring of lights, the agent lights, the petals and the readouts orbiting her.
+/// character swaps, the ring of lights, the agent lights, her particles and the readouts orbiting her.
 @MainActor
 final class CharacterRenderer: CharacterLayerProvider {
     /// The character's height × D and her feet below the disc center × D.
@@ -23,7 +23,8 @@ final class CharacterRenderer: CharacterLayerProvider {
     private var stage: CharacterStage?
     private var loaded: [String: LoadedCharacter] = [:]
     private var hud = CharacterHud(seed: 5, unit: 1)
-    private var petals = CharacterPetals()
+    private var particles = CharacterParticles()
+    private var particleDots: [CharacterDot] = []
     private var hudTime = 0.0
     private var loading = false
     private var lastModel: String?
@@ -79,20 +80,26 @@ final class CharacterRenderer: CharacterLayerProvider {
         }
 
         let g = geometry(frame, stage.current)
-        let particles = frame.effects.particles
-        for event in stage.current.events where particles {
+        let enabled = frame.effects.particles
+        if let shown = loaded[stage.current.pack.id] {
+            particles.use(shown.pack, hasSprite: shown.petals.contains { $0 != nil })
+        }
+        for event in stage.current.events where enabled {
             switch event {
             case .petals, .poseSwapped:
-                petals.burst(x: g.feet.x + g.bodyDX, y: g.feet.y - 0.55 * g.height, unit: g.unit)
+                particles.burst(x: g.feet.x + g.bodyDX, y: g.feet.y - 0.55 * g.height, unit: g.unit)
             }
         }
         let side = 2 * Double(frame.center.x)
-        petals.update(dt, intensity: particles ? stage.current.intensity : 0,
-                      area: (0.05 * side, 0.1 * side, 0.95 * side, 0.85 * side), unit: g.unit,
-                      rate: frame.effects.particleRate)
+        // Petals blow across the whole stage; the other kinds start around her (CHARACTERS, Particles).
+        let area = particles.isPetals ? (0.05 * side, 0.1 * side, 0.95 * side, 0.85 * side)
+            : (g.feet.x - 0.625 * g.height, g.feet.y - 1.083 * g.height, g.feet.x + 0.625 * g.height,
+               g.feet.y - 0.042 * g.height)
+        particles.update(dt, intensity: enabled ? stage.current.intensity : 0, area: area, unit: g.unit,
+                         rate: enabled ? frame.effects.particleRate : 0)
 
         hudTime += dt
-        hud.emberRate = particles ? frame.effects.particleRate : 0
+        hud.emberRate = enabled ? frame.effects.particleRate : 0
         hud.update(dt, time: hudTime, speed: frame.unavailable ? 0 : frame.readoutValue, heat: frame.instrumentHeat,
                    intensity: stage.current.intensity, title: frame.content.unavailableTitle ?? frame.content.titleLabel)
         lightning.update(dt, digits: hud.odometer.digits, heat: frame.instrumentHeat,
@@ -131,9 +138,8 @@ final class CharacterRenderer: CharacterLayerProvider {
         scene.layer = Layer.behind
         addDots(hud.back, frame: frame, into: &scene)
         let activeAtlas = atlas(current, stage.current, pose: stage.current.activePose, g: g, scene: scene, now: now)
-        if let atlas = activeAtlas, let uv = current.petals[stage.current.activePose] {
-            scene.addCharacterSprites(petals.sprites(front: false, uv: uv, alpha: frame.alpha), atlas: atlas)
-        }
+        drawParticles(front: false, atlas: activeAtlas, uv: current.petals[stage.current.activePose], frame: frame,
+                      g: g, into: &scene)
         var behindLayer = Layer.behind
         for kind in order where !body(kind, frame, g).inFront {
             scene.layer = behindLayer
@@ -148,9 +154,8 @@ final class CharacterRenderer: CharacterLayerProvider {
         drawCharacter(current, stage.current, alpha: stage.outgoing == nil ? 1 : stage.outgoingFade, frame: frame,
                       scene: &scene, now: now)
         addDots(hud.front, frame: frame, into: &scene)
-        if let atlas = activeAtlas, let uv = current.petals[stage.current.activePose] {
-            scene.addCharacterSprites(petals.sprites(front: true, uv: uv, alpha: frame.alpha), atlas: atlas)
-        }
+        drawParticles(front: true, atlas: activeAtlas, uv: current.petals[stage.current.activePose], frame: frame,
+                      g: g, into: &scene)
 
         var frontLayer = Layer.inFront
         for kind in order where body(kind, frame, g).inFront {
@@ -188,7 +193,7 @@ final class CharacterRenderer: CharacterLayerProvider {
         if lightning.isActive { return true }
         guard let stage else { return loading }
         return loading || stage.outgoing != nil || stage.incoming != nil || stage.current.fadingPose != nil
-            || hud.peakAge != nil || !petals.items.isEmpty
+            || hud.peakAge != nil || particles.isLively
     }
 
     func pulse(at time: TimeInterval, strength: Double, heat: Double) {
@@ -262,6 +267,39 @@ final class CharacterRenderer: CharacterLayerProvider {
         scene.addCharacterMesh(gpu, atlas: atlas, world: world, opacities: opacities,
                                placement: SIMD4(Float(g.feet.x), Float(g.feet.y), Float(g.pointsPerPixel * placement.scale), 1),
                                feet: SIMD2(Float(placement.feet.x), Float(placement.feet.y)), alpha: Float(alpha))
+    }
+
+    /// Her particles on one side: petals sample the atlas, the other kinds are soft dots (glows add up on dark glass and
+    /// are laid over on light) or glyphs.
+    private func drawParticles(front: Bool, atlas: MTLTexture?, uv: SIMD4<Float>?, frame: OrbFrame, g: Geometry,
+                               into scene: inout OrbScene) {
+        guard !particles.items.isEmpty else { return }
+        guard let kind = particles.kind else {
+            if let atlas, let uv {
+                scene.addCharacterSprites(particles.sprites(front: front, uv: uv, alpha: frame.alpha), atlas: atlas)
+            }
+            return
+        }
+        if kind.look != .glyph {
+            particleDots.removeAll(keepingCapacity: true)
+            particles.dots(front: front, alpha: frame.alpha, into: &particleDots)
+            let blend: OrbBlend = kind.additive && frame.dark ? .additive : .over
+            for dot in particleDots { scene.addCharacterDot(dot, blend: blend) }
+            return
+        }
+        let style = OrbTextStyle(size: CGFloat(particles.glyphCeiling(unit: g.unit).rounded(.up)), weight: .bold,
+                                 tracking: 0, padding: 1)
+        let cap = OrbTextCache.shared.capHeight(style)
+        for p in particles.glyphs(front: front) where p.alpha > 0.01 {
+            guard let texture = OrbTextCache.shared.texture(p.glyph, style: style, language: frame.content.language,
+                                                            scale: scene.backingScale) else { continue }
+            let center = CGPoint(x: p.x, y: p.y)
+            let color = RGBColor(red: Double(p.color.x), green: Double(p.color.y), blue: Double(p.color.z))
+            let draw = OrbTextDraw(texture, x: center.x - texture.advance / 2, baseline: center.y + cap / 2,
+                                   color: color.opacity(p.alpha * frame.alpha), scale: CGFloat(p.size) / style.size,
+                                   pivot: center)
+            scene.add(p.angle == 0 ? draw : draw.rotated(p.angle, about: center))
+        }
     }
 
     /// The readout's lights: additive on dark glass, laid over on light; unlit (white) ring lights take the unlit token's

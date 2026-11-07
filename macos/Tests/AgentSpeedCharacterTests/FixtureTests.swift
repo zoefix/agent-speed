@@ -216,4 +216,47 @@ func close(_ a: Double, _ b: Double, _ tolerance: Double = 1e-6) -> Bool {
         #expect(next == frames.count)
         #expect(mismatches.isEmpty, "\(mismatches.prefix(20).joined(separator: "\n"))")
     }
+
+    @Test(arguments: [0, 1, 2])
+    func directorProfilesMatchTheReference(_ index: Int) throws {
+        let doc = try Fixture.json("director-profiles.json")
+        let params = try JSONDecoder().decode([CharacterParam].self,
+                                              from: JSONSerialization.data(withJSONObject: doc["params"]!))
+        let schedule = (doc["schedule"] as! [[NSNumber]]).map { ($0[0].doubleValue, $0[1].intValue) }
+        var sides = (doc["poseSides"] as! [[Any]]).map { (($0[0] as! NSNumber).doubleValue, $0[1] as! String) }
+        let c = (doc["cases"] as! [[String: Any]])[index]
+        let profile = try JSONDecoder().decode(MotionProfile.self,
+                                               from: JSONSerialization.data(withJSONObject: c["profile"]!))
+        let out = CharacterSide(rawValue: c["armOut"] as! String)!, book = CharacterSide(rawValue: c["armBook"] as! String)!
+        var d = CharacterDirector(params: params, seed: UInt64((c["seed"] as! NSNumber).intValue), out: out, book: book,
+                                  orb: (c["orb"] as! NSNumber).doubleValue, celebrate: false, profile: profile)
+        let frames = c["frames"] as! [[String: Any]]
+        var next = 0
+        var mismatches: [String] = []
+        for n in 0..<(60 * 42) {
+            let t = Double(n) / 60
+            let level = schedule.last { t >= $0.0 }!.1
+            d.setLevel(level)
+            if let first = sides.first, t >= first.0 {
+                d.setSides(out: out, book: book, poseBand: SpeedBand(rawValue: first.1)!)
+                sides.removeFirst()
+            }
+            d.update(1.0 / 60)
+            guard next < frames.count, (frames[next]["n"] as! Int) == n else { continue }
+            let frame = frames[next]
+            next += 1
+            if d.activeGesture != frame["gesture"] as? String {
+                mismatches.append("n=\(n) gesture \(d.activeGesture ?? "-") != \(frame["gesture"] as? String ?? "-")")
+            }
+            for (k, v) in frame["values"] as! [String: NSNumber] {
+                let mine = d.value(k)!
+                if abs(mine - v.doubleValue) > 1e-4 {
+                    mismatches.append("n=\(n) \(k) \(mine) != \(v.doubleValue)")
+                }
+            }
+            if mismatches.count > 20 { break }
+        }
+        #expect(next == frames.count)
+        #expect(mismatches.isEmpty, "\(c["name"] as! String): \(mismatches.prefix(20).joined(separator: "\n"))")
+    }
 }

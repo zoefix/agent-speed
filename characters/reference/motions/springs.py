@@ -9,6 +9,7 @@ import math
 # (prefix or exact id, frequency Hz, damping ratio, response); the first match wins, None leaves a parameter raw.
 TUNING = [
     ("SkirtFlare", (2.0, 0.45, 0.0)),
+    ("TailSwish", (2.4, 0.5, 0.0)), ("Tail", None), ("WingFlap", (3.0, 0.5, 0.0)), ("EarTwitch", (7.0, 0.4, 0.0)),
     ("Var.", None), ("Mouth.", None), ("EyeOpen.", None), ("EyeBall", None), ("Breath", None), ("Wind", None),
     ("Spin", None), ("PosY", None), ("Squash", None), ("Hair", None), ("Skirt", None),
     ("Lift.", (6.0, 0.85, 0.0)), ("Bend.", (6.0, 0.85, 0.0)),

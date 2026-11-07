@@ -9,10 +9,11 @@ The optional manifest lists pose and expression variants:
 """
 import argparse
 import json
+from pathlib import Path
 
 import numpy as np
 
-from . import atlas, hands, layers, mesh, package, params, pose, skeleton, variants
+from . import appendages, atlas, hands, layers, mesh, package, params, pose, skeleton, variants
 
 
 def landmark_summary(lm):
@@ -23,11 +24,36 @@ def landmark_summary(lm):
                    for k, a in lm["arms"].items()}
     out["eyes"] = lm["eyes"]
     out["objectSide"] = lm.get("objectSide")
-    for key in ("backHair", "lock"):
+    for key in ("backHair", "lock", "tail", "wings", "animalEars"):
         if key in lm:
             out[key] = lm[key]
     out["hands"] = {side: hands.summary(h) for side, h in lm.get("hands", {}).items()}
     return json.loads(json.dumps(out, default=float))
+
+
+def add_appendages(parts, lm, bones):
+    """Finds the tail, the wings and animal ears, adds their bones and their landmarks to `lm`."""
+    tail = next((p for p in parts if p.tag == "tail"), None)
+    tail_lm = appendages.tail_landmarks(tail, parts, lm["waist"]) if tail is not None else None
+    if tail_lm is not None:
+        parent = "lower"
+        for name, pivot in zip(appendages.TAIL_BONES, tail_lm["pivots"]):
+            bones.append(skeleton.Bone(name, parent, pivot))
+            parent = name
+        lm["tail"] = {k: tail_lm[k] for k in ("root", "pivots", "ends", "length")}
+    wings = [p for p in parts if p.tag == "wings"]
+    spine = (lm["neck"][0], lm["chin"] + 0.45 * (lm["waist"][1] - lm["chin"]))
+    wing_lm = appendages.wing_landmarks(wings, spine) if wings else {}
+    for side, w in wing_lm.items():
+        bones.append(skeleton.Bone(f"wing.{side}", "chest", w["root"]))
+    if wing_lm:
+        lm["wings"] = wing_lm
+    ear_lm = appendages.animal_ears(parts, lm["face"])
+    for side, e in ear_lm.items():
+        bones.append(skeleton.Bone(f"ear.{side}", "side", e["base"]))
+    if ear_lm:
+        lm["animalEars"] = {side: {k: e[k] for k in ("base", "tip")} for side, e in ear_lm.items()}
+    return tail_lm, wing_lm, ear_lm, spine
 
 
 def split_hands(parts, found, reference, sam):
@@ -80,10 +106,15 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
+    ap.add_argument("--spec", help="the character's spec: its `rig` hints (recover, tail, wings, ears, staticObjects)")
     args = ap.parse_args(argv)
+    hints = json.loads(Path(args.spec).read_text()).get("rig", {}) if args.spec else {}
 
     size, parts = layers.load_psd(args.psd)
     reference = layers.load_reference(args.reference, size)
+    recovered = appendages.recover_missing(parts, reference, hints) if hints.get("recover") else []
+    if recovered:
+        print(f"recovered from the art no layer covered: {', '.join(recovered)}")
     layers.reproject(parts, reference)
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
@@ -102,11 +133,14 @@ def main(argv=None):
     bones = skeleton.bones(lm)
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)
+    tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones)
     objects = next((p for p in parts if p.tag == "objects"), None)
     object_attach = skeleton.attach_object(objects, lm) if objects is not None else None
     if object_attach and object_attach.split(".", 1)[1] in lm["hands"]:
         object_attach = "hand." + object_attach.split(".", 1)[1]
     object_side = object_attach.split(".", 1)[1] if object_attach else None
+    if hints.get("staticObjects"):
+        object_attach = "lower"
     lm["objectSide"] = object_side
 
     loaded = []
@@ -141,6 +175,12 @@ def main(argv=None):
         vertices, triangles = built
         if layer.tag == "hand":
             influences = hands.weights(vertices, lm["hands"][layer.side])
+        elif layer.tag == "tail" and tail_lm is not None:
+            influences = appendages.tail_weights(vertices, tail_lm)
+        elif layer.tag == "wings" and wing_lm:
+            influences = appendages.wing_weights(vertices, wing_lm, spine)
+        elif layer.tag == "ears" and layer.side in ear_lm and ear_lm[layer.side]["layer"] == layer.name:
+            influences = [(f"ear.{layer.side}", np.ones(len(vertices)))]
         elif layer.tag == "backdrop":
             influences = skeleton.weights_by_owner(vertices, patch_tags[layer.name], lm)
         elif v is not None and v.kind == "arm":

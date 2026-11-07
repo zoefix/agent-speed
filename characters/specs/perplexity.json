@@ -1,0 +1,42 @@
+{
+ "id": "perplexity",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Perplexity 娘",
+  "zh-Hans": "Perplexity 娘",
+  "en": "Perplexity-chan",
+  "ja": "Perplexityちゃん"
+ },
+ "vendors": [
+  "perplexity"
+ ],
+ "accent": "#20B8CD",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/perplexity"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.95,
+  "energy": 0.95,
+  "sway": 0.9,
+  "bounce": 0.6,
+  "gap": 1.1,
+  "idle": "rest",
+  "particles": "stars",
+  "signature": [
+   "lookaround",
+   "peek",
+   "tilt",
+   "nod",
+   "doubletake"
+  ],
+  "hands": [
+   "count",
+   "flex"
+  ]
+ },
+ "rig": {
+  "recover": true
+ }
+}

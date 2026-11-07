@@ -362,3 +362,179 @@ class FixtureTests(unittest.TestCase):
     def test_shared_fixtures_match_the_reference_player(self):
         from characters.tests.make_fixtures import main
         self.assertEqual(main(["--check"]), 0, "run python3 -m characters.tests.make_fixtures")
+
+
+def body_params(*extra):
+    params = {}
+    for pid in ("AngleX", "AngleY", "AngleZ", "BodyAngleZ", "BodySway", "EyeBallX", "EyeBallY", "PosX", "PosY",
+                "Squash", "Lean", "Hip", "Arm.left", "Arm.right", "Forearm.left", "Forearm.right", "Shoulder.left",
+                "Shoulder.right") + extra:
+        params[pid] = {"id": pid, "min": -1, "max": 1, "default": 0}
+    for pid in ("Breath", "Wind", "Spin", "SkirtFlare", "FootLift", "FootPoint"):
+        params[pid] = {"id": pid, "min": 0, "max": 1, "default": 0}
+    return params
+
+
+class ProfileTests(unittest.TestCase):
+    def play(self, profile, seconds=150, extra=()):
+        d = Director(body_params(*extra), arm_out="right", arm_book="left", orb=-1.0, profile=profile)
+        played, frames = set(), []
+        for n in range(60 * seconds):
+            d.set_level(min(13, (n // 600) % 15))
+            frames.append(d.update(1 / 60))
+            played.add(d.last_gesture)
+        return played, frames
+
+    def test_without_a_profile_the_pools_are_claudes(self):
+        from characters.reference.motions.director import POOLS
+        from characters.reference.motions.profile import MotionProfile
+        for band, base in POOLS.items():
+            self.assertEqual(MotionProfile().pool(base, band), list(base))
+            self.assertEqual(MotionProfile({}).pool(base, band), list(base))
+
+    def test_signature_actions_weigh_three_times_inside_their_bands(self):
+        from characters.reference.motions.director import POOLS
+        from characters.reference.motions.profile import MotionProfile
+        p = MotionProfile({"signature": ["tailswish", "yawn", "spin", "nonsense"], "exclude": ["run"]})
+        self.assertEqual(p.pool(POOLS["redline"], "redline").count("tailswish"), 3)
+        self.assertEqual(p.pool(POOLS["redline"], "redline").count("spin"), 3)
+        self.assertNotIn("yawn", p.pool(POOLS["redline"], "redline"))
+        self.assertEqual(p.pool(POOLS["idle"], "idle").count("yawn"), 3)
+        self.assertNotIn("run", p.pool(POOLS["overdrive"], "overdrive"))
+        self.assertEqual(p.signature, ["tailswish", "yawn", "spin"])
+
+    def test_numbers_are_clamped(self):
+        from characters.reference.motions.profile import MotionProfile
+        p = MotionProfile({"tempo": 0, "gap": -3, "energy": 99, "sway": "fast", "bounce": float("nan")})
+        self.assertEqual((p.tempo, p.gap, p.energy, p.sway, p.bounce), (0.25, 0.25, 4.0, 1.0, 1.0))
+
+    def test_a_seated_character_keeps_her_seat(self):
+        from characters.reference.motions.profile import SEATED_FREEZE, SEATED_SKIP
+        played, frames = self.play({"seated": True, "signature": ["spin", "nod", "hop"]})
+        self.assertFalse(played & SEATED_SKIP)
+        self.assertIn("nod", played)
+        for values in frames:
+            for pid in SEATED_FREEZE:
+                if pid in values:
+                    self.assertEqual(values[pid], 0.0, pid)
+
+    def test_a_silent_character_never_hums_or_giggles(self):
+        played, _ = self.play({"talk": False, "signature": ["hum", "giggle", "nod"]})
+        self.assertFalse(played & {"hum", "giggle"})
+        self.assertIn("nod", played)
+
+    def test_tail_wings_and_ears_move_and_stay_in_range(self):
+        extra = ("TailSwish", "WingFlap", "EarTwitch.left", "EarTwitch.right")
+        played, frames = self.play({"signature": ["tailswish", "wingflap", "eartwitch", "pounce", "floatbob"]},
+                                   extra=extra)
+        self.assertTrue({"tailswish", "wingflap", "eartwitch"} & played)
+        for pid in extra:
+            series = [v.get(pid, 0.0) for v in frames]
+            self.assertGreater(max(series) - min(series), 0.05, pid)
+            # Only the springs' follow-through may pass the range a little; the rig clamps it.
+            self.assertTrue(all(abs(v) <= 1.1 and math.isfinite(v) for v in series), pid)
+
+    def test_a_slower_tempo_slows_the_beat(self):
+        from characters.reference.motions.rhythm import Beat
+        slow, fast = Beat(0.5), Beat(1.0)
+        for _ in range(600):
+            slow.update(1 / 60, "boost")
+            fast.update(1 / 60, "boost")
+        self.assertAlmostEqual(slow.bpm / fast.bpm, 0.5, places=6)
+
+
+class AppendageTests(unittest.TestCase):
+    def scene(self):
+        from characters.rig.layers import Layer
+        h = w = 200
+        ref = np.ones((h, w, 3), np.float32)
+
+        def layer(name, x0, y0, x1, y1, shade):
+            rgba = np.zeros((h, w, 4), np.float32)
+            rgba[y0:y1, x0:x1] = (shade, shade, shade, 1.0)
+            ref[y0:y1, x0:x1] = shade
+            return Layer(name, name, rgba)
+
+        parts = [layer("topwear", 80, 60, 120, 160, 0.5), layer("face", 85, 20, 115, 55, 0.8)]
+        ref[120:135, 120:175] = 0.2
+        return parts, ref
+
+    def test_art_no_layer_covers_becomes_the_tail(self):
+        from characters.rig.appendages import recover_missing
+        parts, ref = self.scene()
+        self.assertEqual(recover_missing(parts, ref, {"tail": True}), ["tail"])
+        tail = next(p for p in parts if p.tag == "tail")
+        self.assertGreater(tail.alpha[127, 150], 0.99)
+        self.assertEqual(tail.alpha[127, 190], 0.0)
+        self.assertLess(parts.index(tail), [p.tag for p in parts].index("topwear"))
+        parts, ref = self.scene()
+        self.assertEqual(recover_missing(parts, ref, {}), ["extra"])
+
+    def test_the_tail_chain_runs_from_the_body_to_the_tip(self):
+        from characters.rig.appendages import recover_missing, tail_landmarks, tail_weights
+        parts, ref = self.scene()
+        recover_missing(parts, ref, {"tail": True})
+        tail = next(p for p in parts if p.tag == "tail")
+        lm = tail_landmarks(tail, parts, (100, 110))
+        self.assertLess(abs(lm["root"][0] - 120), 4)
+        xs = [p[0] for p in lm["pivots"]]
+        self.assertEqual(xs, sorted(xs))
+        self.assertGreater(lm["length"], 45)
+        vertices = np.array([lm["root"], [140, 127], [160, 127], [176, 127]], np.float64)
+        weights = dict(tail_weights(vertices, lm))
+        np.testing.assert_allclose(sum(weights.values()), 1.0, atol=1e-9)
+        self.assertGreater(weights["lower"][0], 0.99)
+        self.assertGreater(weights["tail3"][-1], 0.9)
+
+    def test_wings_turn_about_their_roots_beside_the_spine(self):
+        from characters.rig.appendages import wing_landmarks, wing_weights
+        from characters.rig.layers import Layer
+        rgba = np.zeros((200, 200, 4), np.float32)
+        rgba[60:120, 30:95, 3] = 1
+        rgba[60:120, 105:170, 3] = 1
+        lm = wing_landmarks([Layer("wings", "wings", rgba)], (100, 80))
+        self.assertEqual(set(lm), {"left", "right"})
+        self.assertLess(lm["left"]["root"][0], 100)
+        self.assertGreater(lm["right"]["root"][0], 100)
+        roots = [lm["left"]["root"], lm["right"]["root"]]
+        weights = dict(wing_weights(np.array([[40.0, 90.0], [160.0, 90.0]] + roots), lm, (100, 80)))
+        np.testing.assert_allclose(sum(weights.values()), 1.0, atol=1e-9)
+        self.assertGreater(weights["wing.left"][0], 0.9)
+        self.assertGreater(weights["wing.right"][1], 0.9)
+        self.assertGreater(min(weights["chest"][2:]), 0.99)
+
+    def test_animal_ears_sit_above_the_face(self):
+        from characters.rig.appendages import animal_ears
+        from characters.rig.layers import Layer
+        top = np.zeros((200, 200, 4), np.float32)
+        top[5:30, 70:85, 3] = 1
+        side = np.zeros((200, 200, 4), np.float32)
+        side[40:60, 60:70, 3] = 1
+        ears = animal_ears([Layer("ears.left", "ears", top, "left"), Layer("ears.right", "ears", side, "right")],
+                           (75, 25, 125, 75))
+        self.assertEqual(set(ears), {"left"})
+        self.assertEqual(ears["left"]["base"][1], 29)
+
+
+class ParticleTests(unittest.TestCase):
+    def test_every_kind_emits_and_draws(self):
+        from characters.reference.effects import PARTICLES, Particles
+        for kind in PARTICLES:
+            p = Particles(kind, (0, 0, 600, 900), accent="#4D6BFE")
+            for _ in range(240):
+                p.update(1 / 60, 0.0 if kind == "zzz" else 1.0)
+            self.assertTrue(p.items, kind)
+            rows = len(p.dots(True)) + len(p.dots(False))
+            glyphs = len(p.glyphs(True)) + len(p.glyphs(False))
+            self.assertTrue(glyphs == len(p.items) if PARTICLES[kind]["look"] == "glyph" else rows > 0, kind)
+
+    def test_sleepy_kinds_drift_only_at_rest(self):
+        from characters.reference.effects import Particles
+        p = Particles("zzz", (0, 0, 600, 900))
+        for _ in range(300):
+            p.update(1 / 60, 1.0)
+        self.assertFalse(p.items)
+
+    def test_unknown_kinds_are_petals(self):
+        from characters.reference.effects import Particles
+        self.assertEqual(Particles("lasers", (0, 0, 10, 10)).kind, "petals")

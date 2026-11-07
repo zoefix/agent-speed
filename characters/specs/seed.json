@@ -1,0 +1,43 @@
+{
+ "id": "seed",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Seed 娘",
+  "zh-Hans": "Seed 娘",
+  "en": "Seed-chan",
+  "ja": "Seedちゃん"
+ },
+ "vendors": [
+  "bytedance"
+ ],
+ "accent": "#4E8DF5",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/seed"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 1.2,
+  "energy": 1.25,
+  "sway": 0.9,
+  "bounce": 1.4,
+  "gap": 0.8,
+  "idle": "rest",
+  "particles": "sparkles",
+  "signature": [
+   "hop",
+   "hops",
+   "run",
+   "jump",
+   "giggle"
+  ],
+  "hands": [
+   "flex",
+   "count",
+   "drum"
+  ]
+ },
+ "rig": {
+  "recover": true
+ }
+}

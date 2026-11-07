@@ -26,6 +26,29 @@ public struct PackManifest: Decodable, Sendable, Equatable {
     /// Band raw value → folder inside the pack.
     public var poses: [String: String]
     public var preview: String
+    /// The character's motion personality; nil moves like Claude.
+    public var motion: MotionProfile?
+
+    enum CodingKeys: String, CodingKey {
+        case format, version, id, packVersion, name, vendors, accent, artist, license, minApp, poses, preview, motion
+    }
+
+    public init(from decoder: Decoder) throws {
+        let c = try decoder.container(keyedBy: CodingKeys.self)
+        format = try c.decode(String.self, forKey: .format)
+        version = try c.decode(Int.self, forKey: .version)
+        id = try c.decode(String.self, forKey: .id)
+        packVersion = try c.decode(Int.self, forKey: .packVersion)
+        name = try c.decode([String: String].self, forKey: .name)
+        vendors = try c.decode([String].self, forKey: .vendors)
+        accent = try c.decode(String.self, forKey: .accent)
+        artist = try? c.decodeIfPresent(Artist.self, forKey: .artist)
+        license = try? c.decodeIfPresent(String.self, forKey: .license)
+        minApp = try? c.decodeIfPresent(String.self, forKey: .minApp)
+        poses = try c.decode([String: String].self, forKey: .poses)
+        preview = try c.decode(String.self, forKey: .preview)
+        motion = try? c.decodeIfPresent(MotionProfile.self, forKey: .motion)
+    }
 
     /// Whether an app of `version` (dotted numbers) can play the pack.
     public func playable(byApp version: String) -> Bool {

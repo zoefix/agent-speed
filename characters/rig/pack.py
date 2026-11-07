@@ -23,7 +23,11 @@ CATALOG = "agent-speed-character-catalog"
 VERSION = 1
 BANDS = ("idle", "cruise", "boost", "overdrive", "redline")
 LANGUAGES = ("zh-Hant", "zh-Hans", "en", "ja")
-SPEC_KEYS = {"id", "packVersion", "name", "vendors", "accent", "artist", "license", "minApp"}
+SPEC_KEYS = {"id", "packVersion", "name", "vendors", "accent", "artist", "license", "minApp", "motion", "rig"}
+# Build hints for characters.rig.build --spec; not part of the manifest.
+BUILD_ONLY = {"rig"}
+MOTION_KEYS = {"tempo", "energy", "sway", "bounce", "gap", "idle", "seated", "talk", "signature", "exclude", "hands",
+               "poseHands", "particles"}
 
 
 def load_spec(path):
@@ -34,6 +38,9 @@ def load_spec(path):
     unknown = set(spec) - SPEC_KEYS
     if unknown:
         raise ValueError(f"{path}: unknown keys {sorted(unknown)}")
+    unknown = set(spec.get("motion", {})) - MOTION_KEYS
+    if unknown:
+        raise ValueError(f"{path}: unknown motion keys {sorted(unknown)}")
     if set(spec["name"]) != set(LANGUAGES):
         raise ValueError(f"{path}: name needs exactly {LANGUAGES}")
     if not spec["id"].replace("-", "").isalnum() or spec["id"].lower() != spec["id"]:
@@ -77,7 +84,7 @@ def build(spec, poses, out_dir):
             shutil.copy2(Path(poses[band]) / name, target / name)
         manifest_poses[band] = f"poses/{band}"
     preview(poses["idle"]).save(root / "preview.png", optimize=True)
-    manifest = {"format": FORMAT, "version": VERSION, **{k: spec[k] for k in SPEC_KEYS if k in spec},
+    manifest = {"format": FORMAT, "version": VERSION, **{k: spec[k] for k in SPEC_KEYS - BUILD_ONLY if k in spec},
                 "poses": manifest_poses, "preview": "preview.png"}
     (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
 

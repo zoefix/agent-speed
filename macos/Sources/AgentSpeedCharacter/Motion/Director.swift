@@ -27,7 +27,7 @@ public struct CharacterDirector: Sendable {
     static let hard = ["Var.", "Lift.", "Bend.", "Spin", "PosX"]
     static let stage = 0.55
     /// Actions that leave the ground or travel, skipped while `grounded` (Reduce Motion).
-    static let airborne: Set<String> = ["hop", "jump", "hops", "spin", "step", "run", "jumpjoy"]
+    static let airborne: Set<String> = ["hop", "jump", "hops", "spin", "step", "run", "jumpjoy", "pounce"]
 
     struct GrooveLayer: Sendable {
         var band: SpeedBand
@@ -45,6 +45,12 @@ public struct CharacterDirector: Sendable {
 
     public let space: ParamSpace
     let slots: Slots
+    public let profile: MotionProfile
+    /// The band of the pose on screen, for its hand set.
+    public private(set) var poseBand: SpeedBand = .idle
+    /// Groove scale per slot (the profile's bounce, sway and energy) and the slots a seated character never moves.
+    private let grooveScale: [Double]
+    private let frozen: [Int]
     public private(set) var out: CharacterSide
     public private(set) var book: CharacterSide
     public let orb: Double
@@ -85,9 +91,14 @@ public struct CharacterDirector: Sendable {
     public var activeGesture: String? { gesture == nil ? nil : lastGesture }
 
     public init(params: [CharacterParam], seed: UInt64 = 7, out: CharacterSide = .right, book: CharacterSide = .left,
-                orb: Double = -1, celebrate: Bool = true) {
+                orb: Double = -1, celebrate: Bool = true, profile: MotionProfile = MotionProfile()) {
         space = ParamSpace(params: params)
         slots = Slots(space)
+        self.profile = profile
+        let space = self.space
+        grooveScale = space.names.map { profile.grooveScale($0) }
+        frozen = profile.seated ? MotionProfile.seatedFreeze.compactMap { space.isParam($0) ? space.slot($0) : nil } : []
+        beat = Beat(tempo: profile.tempo)
         self.out = out
         self.book = book
         self.orb = orb
@@ -104,7 +115,10 @@ public struct CharacterDirector: Sendable {
         grooveTouched.reserveCapacity(32)
         events.reserveCapacity(8)
         for (k, side) in CharacterSide.allCases.enumerated() where space.isParam("Finger.\(side.rawValue).0") {
-            hands.append(HandActor(side: side, holds: side == book, phase: Double(k) * 1.7, rng: &rng))
+            var hand = HandActor(side: side, holds: side == book, phase: Double(k) * 1.7, rng: &rng)
+            hand.freeSets = profile.hands
+            hand.setMode(profile.poseHands[SpeedBand.idle.rawValue])
+            hands.append(hand)
         }
     }
 
@@ -112,11 +126,15 @@ public struct CharacterDirector: Sendable {
     var springLive: [Bool]
     private var grooveSeen: [Bool]
 
-    /// Which arm swings free and which holds the object, for a new pose.
-    public mutating func setSides(out: CharacterSide, book: CharacterSide) {
+    /// Which arm swings free and which holds the object, for a new pose (of `poseBand`, for its hand set).
+    public mutating func setSides(out: CharacterSide, book: CharacterSide, poseBand: SpeedBand? = nil) {
         self.out = out
         self.book = book
-        for i in hands.indices { hands[i].holds = hands[i].side == book }
+        if let poseBand { self.poseBand = poseBand }
+        for i in hands.indices {
+            hands[i].holds = hands[i].side == book
+            hands[i].setMode(profile.poseHands[self.poseBand.rawValue])
+        }
         for i in grooves.indices { grooves[i].target = 0 }
         grooves.append(GrooveLayer(band: band ?? .idle, w: 0, target: 1))
     }
@@ -136,14 +154,19 @@ public struct CharacterDirector: Sendable {
             return Moves.sidestep(out, book, rng.choice(targets) - stageX)
         }
         if gid == "peek" { return can("Lean") ? Moves.peek(out, book, orb) : nil }
+        if gid == "pounce" { return can("PosY", "Squash") ? Moves.pounce(out, book, orb) : nil }
+        if let needs = Moves.profile[gid] {
+            return needs.contains { space.isParam($0) } ? Moves.profileMove(gid, out: out, book: book) : nil
+        }
         if Moves.names.contains(gid) { return can("PosY", "Squash") ? Moves.make(gid, out: out, book: book) : nil }
         if Gestures.head.contains(gid) { return Gestures.headGesture(gid) }
+        if Gestures.face.contains(gid), profile.signature.contains(gid) { return Gestures.faceGesture(gid) }
         return nil
     }
 
     @discardableResult
     mutating func startGesture(_ gid: String) -> Bool {
-        guard let spec = spec(gid) else { return false }
+        guard profile.allows(gid), let spec = spec(gid) else { return false }
         let space = self.space
         let motion = spec.bind { space.slot($0) }
         let hard = motion.entries.map { e in CharacterDirector.hard.contains { e.name.hasPrefix($0) } }
@@ -153,6 +176,8 @@ public struct CharacterDirector: Sendable {
         recent = Array((recent + [gid]).suffix(3))
         return true
     }
+
+    var restIdle: Bool { profile.idle == "rest" }
 
     mutating func playGroove(_ band: SpeedBand) {
         for i in grooves.indices { grooves[i].target = 0 }
@@ -188,8 +213,9 @@ public struct CharacterDirector: Sendable {
         grooveTouched.removeAll(keepingCapacity: true)
         let o = slots.side(out), k = slots.side(book)
         for layer in grooves {
-            Groove.emit(layer.band, beat.phase, time, slots, out: o, book: k, into: &grooveOut)
-            for (slot, v) in grooveOut {
+            Groove.emit(layer.band, beat.phase, time, slots, out: o, book: k, rest: restIdle, into: &grooveOut)
+            for (slot, raw) in grooveOut {
+                let v = raw * grooveScale[slot]
                 if !grooveSeen[slot] {
                     grooveSeen[slot] = true
                     grooveTouched.append(slot)
@@ -213,10 +239,18 @@ public struct CharacterDirector: Sendable {
         present[slot] = true
     }
 
+    /// Adds an idle motion of an appendage, scaled down while an action drives the same parameter, within its range.
+    mutating func addIdle(_ slot: Int, _ v: Double) {
+        guard let p = space.params[slot] else { return }
+        var share = 1.0
+        if let g = gesture, g.motion.entries.contains(where: { $0.slot == slot }) { share = 1 - g.w }
+        write(slot, min(max(values[slot] + share * v, p.min), p.max))
+    }
+
     mutating func applyGesture(_ dt: Double) -> Motion? {
         guard var g = gesture else {
             if time >= nextGesture {
-                var pool = CharacterDirector.pools[band!]!.filter { !recent.contains($0) }
+                var pool = profile.pool(CharacterDirector.pools[band!]!, band!).filter { !recent.contains($0) }
                 rng.shuffle(&pool)
                 for gid in pool where startGesture(gid) { break }
                 nextGesture = time + 1.0
@@ -239,7 +273,7 @@ public struct CharacterDirector: Sendable {
             stageX += m.travel
             gesture = nil
             let gap = CharacterDirector.gaps[band!]!
-            nextGesture = time + rng.uniform(gap.0, gap.1)
+            nextGesture = time + rng.uniform(gap.0 * profile.gap, gap.1 * profile.gap)
             return nil
         }
         gesture = g
@@ -287,6 +321,12 @@ public struct CharacterDirector: Sendable {
         write(slots.angleZ, values[slots.angleZ] + amp * 0.8 * sin(t * 0.61 + 2.1))
         write(slots.bodySway, values[slots.bodySway] + (0.15 + 0.3 * s) * sin(t * (0.9 + 1.6 * s)))
         write(slots.wind, min(1.0, pow(s, 1.2) * 1.05))
+        // The idle swish and flutter give way to an action that moves the tail or the wings.
+        if space.isParam(slots.tailSwish) {
+            addIdle(slots.tailSwish, (0.18 + 0.3 * s) * profile.sway * sin(Double.pi * beat.phase + 0.5))
+        }
+        if space.isParam(slots.wingFlap) { addIdle(slots.wingFlap, 0.12 * sin(2 * Double.pi * breathPhase)) }
+        for slot in frozen { write(slot, space.params[slot]!.default) }
         applySprings(dt)
 
         gazeAt -= dt
