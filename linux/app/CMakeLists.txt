@@ -1,4 +1,4 @@
-find_package(Qt6 6.5 REQUIRED COMPONENTS Core Gui Network OpenGL WebSockets Widgets Qml Quick QuickControls2)
+find_package(Qt6 6.5 REQUIRED COMPONENTS Core DBus Gui Network OpenGL WebSockets Widgets Qml Quick QuickControls2)
 find_package(PkgConfig REQUIRED)
 pkg_check_modules(XCB REQUIRED IMPORTED_TARGET xcb xcb-shape)
 qt_standard_project_setup(REQUIRES 6.5)
@@ -15,6 +15,14 @@ qt_add_executable(agent-speed
     src/format.cpp
     src/graphics.cpp
     src/heat.cpp
+    src/lan/lan_connection.cpp
+    src/lan/lan_controller.cpp
+    src/lan/lan_discovery.cpp
+    src/lan/lan_http_post.cpp
+    src/lan/lan_net.cpp
+    src/lan/lan_server.cpp
+    src/lan/lan_targets.cpp
+    src/lan/lan_view.cpp
     src/monitor_worker.cpp
     src/network_service.cpp
     src/catalog.cpp
@@ -133,6 +141,12 @@ set(agent_speed_qml
     qml/SourceRow.qml
     qml/Sync.js
     qml/Theme.qml
+    qml/lan/LanConfirmDialog.qml
+    qml/lan/LanCopyButton.qml
+    qml/lan/LanPane.qml
+    qml/lan/LanRow.qml
+    qml/lan/LanTargetRow.qml
+    qml/lan/LanTargetSheet.qml
     qml/remote/FieldError.qml
     qml/remote/HostDot.qml
     qml/remote/HostPickerRows.qml
@@ -181,7 +195,7 @@ qt_add_resources(agent-speed "strings-linux"
 )
 
 target_link_libraries(agent-speed PRIVATE
-    agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::WebSockets Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
+    agentspeed_core Qt6::Core Qt6::DBus Qt6::Gui Qt6::Network Qt6::OpenGL Qt6::WebSockets Qt6::Widgets Qt6::Qml Qt6::Quick Qt6::QuickControls2 PkgConfig::XCB)
 target_include_directories(agent-speed PRIVATE src)
 # The release version (a tag v1.6.0 builds 1.6.0); local builds keep the project's.
 set(AGENTSPEED_VERSION "${PROJECT_VERSION}" CACHE STRING "The version the app reports")

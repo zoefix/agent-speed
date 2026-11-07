@@ -3503,7 +3503,8 @@ while reporting is on, only by the `perfScore` extension with the `models` secti
 | `traffic.includesTools` | the `includeTools` setting |
 
 Per source (`sources[]`) every value is the same computation restricted to the source (6.3 and 9.5 per source; 10.7
-per source series). Per model (`models[].generating`): agents counted in `live.agents.generating` grouped by the
+per source series). The local network frame (`spec/LAN.md` 3) carries the `live` values and their per-source
+counterparts with these computations and the rounding of 11.7, at every tick, whether or not reporting is on. Per model (`models[].generating`): agents counted in `live.agents.generating` grouped by the
 resolved id (11.3) of the agent's current model (the model the agents list shows for it).
 
 ### 11.3 Model ids

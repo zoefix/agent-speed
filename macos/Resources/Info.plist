@@ -37,6 +37,12 @@
 	<true/>
 	<key>NSHighResolutionCapable</key>
 	<true/>
+	<key>NSBonjourServices</key>
+	<array>
+		<string>_agentspeed._tcp</string>
+	</array>
+	<key>NSLocalNetworkUsageDescription</key>
+	<string>When you turn it on in Settings → API → Local Network, Agent Speed lets devices on your network read the live speed and sends it to devices you add.</string>
 	<key>NSHumanReadableCopyright</key>
 	<string>© 2026 zoefix</string>
 	<key>NSPrincipalClass</key>

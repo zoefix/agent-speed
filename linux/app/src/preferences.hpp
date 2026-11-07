@@ -78,6 +78,9 @@ public:
     // REMOTE 2.1: the remote hosts document (`remoteHosts`) as JSON text; empty when none was saved.
     QString remoteHosts() const;
     void setRemoteHosts(const QString& json);
+    // LAN 2.1: the local network document (`lan`) as JSON text; empty when none was saved.
+    QString lan() const;
+    void setLan(const QString& json);
 
     Q_INVOKABLE bool sourceEnabled(const QString& source) const;
     Q_INVOKABLE void setSourceEnabled(const QString& source, bool enabled);
@@ -106,6 +109,7 @@ signals:
     void trafficChanged();
     void autoCheckUpdatesChanged();
     void remoteHostsChanged();
+    void lanChanged();
 
 private:
     template <typename T>

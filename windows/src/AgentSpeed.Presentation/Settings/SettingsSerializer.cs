@@ -81,6 +81,13 @@ public static class SettingsSerializer
             BoardsJson.Write(w, s.Boards);
             w.WritePropertyName("remoteHosts");
             Core.Remote.RemoteHostsJson.Write(w, s.RemoteHosts);
+            // LAN 2.1: written once it has an instance (the feed was set up); an untouched install has no `lan` value.
+            if (s.Lan.Instance is not null)
+            {
+                w.WritePropertyName("lan");
+                Core.Lan.LanSettingsJson.Write(w, s.Lan);
+            }
+
             w.WritePropertyName("titleThemes");
             TitleThemesJson.Write(w, s.TitleThemes);
 
@@ -319,10 +326,11 @@ public static class SettingsSerializer
         var remoteHosts = root.TryGetProperty("remoteHosts", out var hostsValue)
             ? Core.Remote.RemoteHostsJson.Read(hostsValue)
             : Core.Remote.RemoteHostsDocument.Empty;
+        var lan = root.TryGetProperty("lan", out var lanValue) ? Core.Lan.LanSettingsJson.Read(lanValue) : Core.Lan.LanSettings.Default;
         return validated with
         {
             Orbs = orbs ?? OrbsMigration.FromLegacy(validated), Boards = boards, TitleThemes = titles ?? TitleThemesDocument.Default,
-            RemoteHosts = remoteHosts,
+            RemoteHosts = remoteHosts, Lan = lan,
         };
     }
 

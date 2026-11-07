@@ -149,6 +149,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         _speed.Configure(Settings.Metric, Settings.Redline);
         _preview = new PreviewService(_hub, _ui);
         CreateRemoteHosts();
+        CreateLan();
 
         _shell = new ShellMessageWindow();
         _shell.TaskbarCreated += (_, _) => _taskbar?.Reembed();
@@ -224,6 +225,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _cost.Start();
             _traffic.Start();
             StartReporting();
+            StartLan();
             if (_launch.DemoSpeedValues is { Count: > 0 } speeds)
             {
                 HeroStats.Enabled = true;
@@ -290,7 +292,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
                     if (target == "dialog")
                     {
-                        return RemoteCaptureTarget(target);
+                        return LanCaptureTarget() ?? RemoteCaptureTarget(target);
                     }
 
                     if (target == "history")
@@ -396,6 +398,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                 _updates, OpenUpdate, () => OpenHistory(), ConfirmClearHistory, ClearHistory, _cost) { TitleService = _titles };
             _settingsModel.Report ??= CreateReportPane();
             _settingsModel.Remote ??= CreateRemotePane();
+            _settingsModel.Lan ??= CreateLanPane();
             _settingsModel.Traffic ??= new TrafficPaneViewModel(_settings, _traffic, _traffic.Helper, _loc,
                 () => _settingsWindow is { } window ? new System.Windows.Interop.WindowInteropHelper(window).Handle : 0,
                 ConfirmRemoveHelper);
@@ -491,6 +494,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         Try(() => _historyService?.Dispose());
         Try(() => _settingsModel?.Report?.Dispose());
         Try(() => _report?.Dispose());
+        Try(() => _lan?.Dispose());
         Try(() => _consentDialog?.CloseFromController());
         Try(() => _previewWindow?.Close());
         Try(() => _traffic?.Dispose());
@@ -1207,6 +1211,11 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             return;
         }
 
+        if (RunLanCaptureOperation(op))
+        {
+            return;
+        }
+
         if (op.StartsWith("page-", StringComparison.Ordinal))
         {
             _capturePage = op[5..];
@@ -1499,9 +1508,9 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             return null;
         }
 
-        if (kind is "menu-host" or "menu-orb-hosts" or "menu-board-hosts")
+        if (kind is "menu-host" or "menu-orb-hosts" or "menu-board-hosts" or "menu-lan")
         {
-            if (RemoteCaptureMenu(kind) is not { } hostsMenu)
+            if ((kind == "menu-lan" ? LanCaptureMenu() : RemoteCaptureMenu(kind)) is not { } hostsMenu)
             {
                 return null;
             }

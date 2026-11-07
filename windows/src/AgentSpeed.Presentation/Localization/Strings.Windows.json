@@ -365,5 +365,11 @@
     "zh-Hans": "已复制",
     "en": "Copied",
     "ja": "コピーしました"
+  },
+  "win.lan.firewall": {
+    "zh-Hant": "第一次開啟時，Windows 可能會詢問是否允許 Agent Speed 連線，請允許「私人網路」。",
+    "zh-Hans": "首次开启时，Windows 可能会询问是否允许 Agent Speed 连接，请允许“专用网络”。",
+    "en": "The first time, Windows may ask whether Agent Speed may accept connections: allow it on private networks.",
+    "ja": "初回は、Agent Speed の接続を許可するか Windows が確認することがあります。「プライベート ネットワーク」で許可してください。"
   }
 }

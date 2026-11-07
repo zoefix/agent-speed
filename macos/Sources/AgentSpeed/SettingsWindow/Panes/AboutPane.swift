@@ -66,11 +66,13 @@ struct AboutPane: View {
 
     /// DESIGN 11, About: while reporting is on no sentence claims that nothing is sent. The performance score's paragraph
     /// follows the traffic one either way (DESIGN 12): it says itself what only live reporting sends. The remote hosts'
-    /// paragraph follows it while hosts exist (DESIGN 13).
+    /// paragraph follows it while hosts exist (DESIGN 13), then the local network's while it is in use (DESIGN 14).
     private var privacyParagraphs: [String] {
         let l10n = model.l10n
         let report = model.report
-        let remote = model.hasRemoteHosts ? [l10n("privacy.remote")] : []
+        let lanDocument = model.settings.lan
+        let remote = (model.hasRemoteHosts ? [l10n("privacy.remote")] : [])
+            + (lanDocument.server.enabled || !lanDocument.targets.isEmpty ? [l10n("privacy.lan")] : [])
         guard report.isOn else {
             return [l10n("privacy.statement"), l10n("privacy.traffic"), l10n("privacy.perfScore")] + remote
                 + [l10n("privacy.report")]

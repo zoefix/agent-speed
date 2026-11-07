@@ -581,5 +581,17 @@
     "zh-Hans": "远程主机",
     "en": "Remote",
     "ja": "リモート"
+  },
+  "mac.lan.localNetwork": {
+    "zh-Hant": "macOS 會詢問一次是否允許 Agent Speed 存取區域網路，請選擇「允許」；之後可在「系統設定 → 隱私權與安全性 → 區域網路」更改。",
+    "zh-Hans": "macOS 会询问一次是否允许 Agent Speed 访问本地网络，请选择“允许”；之后可在“系统设置 → 隐私与安全性 → 本地网络”中更改。",
+    "en": "macOS asks once whether Agent Speed may access the local network: choose Allow. You can change it later in System Settings → Privacy & Security → Local Network.",
+    "ja": "macOS は Agent Speed のローカルネットワークへのアクセスを許可するか一度だけ確認します。「許可」を選んでください。あとから「システム設定 → プライバシーとセキュリティ → ローカルネットワーク」で変更できます。"
+  },
+  "mac.lan.usage": {
+    "zh-Hant": "在「設定 → API → 區域網路」開啟後，Agent Speed 會讓區網內的裝置讀取即時速度，並把速度送到你加入的裝置。",
+    "zh-Hans": "在“设置 → API → 局域网”开启后，Agent Speed 会让局域网内的设备读取实时速度，并把速度发送到你添加的设备。",
+    "en": "When you turn it on in Settings → API → Local Network, Agent Speed lets devices on your network read the live speed and sends it to devices you add.",
+    "ja": "「設定 → API → ローカルネットワーク」でオンにすると、Agent Speed はネットワーク内のデバイスにライブ速度を読み取らせ、追加したデバイスへ送信します。"
   }
 }

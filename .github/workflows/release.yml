@@ -19,6 +19,7 @@ jobs:
           python3 spec/tools/report_reference.py
           python3 spec/tools/execution_modes_reference.py
           python3 spec/tools/test_reporting_extensions.py
+          python3 spec/tools/lan_reference.py --check-fixtures
 
   relay:
     name: Remote relay (${{ matrix.arch }})
@@ -62,7 +63,7 @@ jobs:
         working-directory: macos
         run: |
           # As in ci.yml: the suites with network round trips run after the rest, on their own.
-          network='HTTPFetcherTests|Report(Discovery|DiscoveryFailure|EndToEnd|Invite|Profile|StreamEndToEnd)Tests'
+          network='HTTPFetcherTests|LanNetworkTests|Report(Discovery|DiscoveryFailure|EndToEnd|Invite|Profile|StreamEndToEnd)Tests'
           swift test --skip "$network" && swift test --filter "$network"
       - name: Test update relaunch
         timeout-minutes: 5

@@ -18,6 +18,9 @@ internal sealed class RevealDecorator : Decorator
 
     private bool _shown = true;
 
+    /// <summary>A fixed grow time with an ease-out curve instead of the spring (DESIGN 14: the server rows expand in 0.2 s).</summary>
+    public TimeSpan? GrowDuration { get; set; }
+
     /// <summary>How much of the child's height is revealed, 0–1.</summary>
     public double Progress
     {
@@ -68,7 +71,9 @@ internal sealed class RevealDecorator : Decorator
         {
             Opacity = 1;
             property = ProgressProperty;
-            animation = new DoubleAnimation(fromProgress, show ? 1 : 0, SpringEase.Duration) { EasingFunction = new SpringEase() };
+            animation = GrowDuration is { } grow
+                ? new DoubleAnimation(fromProgress, show ? 1 : 0, grow) { EasingFunction = new CubicEase { EasingMode = EasingMode.EaseOut } }
+                : new DoubleAnimation(fromProgress, show ? 1 : 0, SpringEase.Duration) { EasingFunction = new SpringEase() };
         }
 
         animation.FillBehavior = FillBehavior.Stop;

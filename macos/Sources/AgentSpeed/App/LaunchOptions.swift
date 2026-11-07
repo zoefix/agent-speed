@@ -35,6 +35,8 @@ struct LaunchOptions: Sendable {
     var nameplatesDemoDirectory: URL?
     /// `--report-e2e URL`: live reporting against a local reference server, see `ReportHarness`.
     var reportEndToEndURL: String?
+    /// `--lan-e2e`: the local network feed on synthetic values, see `LanHarness`.
+    var lanEndToEnd = false
     #endif
 
     static func parse(_ arguments: [String] = CommandLine.arguments) -> LaunchOptions {
@@ -95,6 +97,8 @@ struct LaunchOptions: Sendable {
                 }
             case "--report-e2e":
                 options.reportEndToEndURL = iterator.next()
+            case "--lan-e2e":
+                options.lanEndToEnd = true
             case "--screenshots", "--history-screenshots":
                 if let path = iterator.next() {
                     options.screenshotsDirectory = URL(fileURLWithPath: (path as NSString).expandingTildeInPath, isDirectory: true)

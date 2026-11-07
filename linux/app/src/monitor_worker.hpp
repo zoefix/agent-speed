@@ -45,6 +45,8 @@ Q_DECLARE_METATYPE(TrafficRows)
 struct ReportTick {
     std::shared_ptr<const agentspeed::report::Sample> sample;
     qint64 monotonicMs = 0;
+    // The wall clock of the tick, Unix ms (the local network frame's `at`, LAN 3.1).
+    qint64 wallMs = 0;
     // METRICS 11.9 Observations: when the read that changed the engine before this tick began.
     std::optional<qint64> observedMs;
 };
@@ -88,6 +90,8 @@ signals:
     void trafficSave(TrafficRows rows);
     // Every live tick (never in demo mode): what live reporting reads (METRICS 11.2).
     void reportTick(ReportTick tick);
+    // Every tick, demo mode included: what the local network feed reads (LAN 3, the same values).
+    void lanTick(ReportTick tick);
 
 private:
     void tick();

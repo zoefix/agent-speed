@@ -584,7 +584,10 @@ void MonitorWorker::tick() {
     const qint64 previous = lastTickMs_;
     lastTickMs_ = now;
     if (demo_) {
-        publish(agentspeed::demoSnapshot(now, todayStart, sourceSets()), agentspeed::demoCompletions(previous, now), now, todayStart);
+        const auto snap = agentspeed::demoSnapshot(now, todayStart, sourceSets());
+        publish(snap, agentspeed::demoCompletions(previous, now), now, todayStart);
+        const auto sample = std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, {}));
+        emit lanTick({sample, steadyMs(), now, std::nullopt});
         return;
     }
     if (monitor_ && now - lastTrafficSaveMs_ >= 60'000) {
@@ -608,7 +611,9 @@ void MonitorWorker::tick() {
     const auto snap = monitor_->snapshot(now, todayStart);
     publish(snap, completions, now, todayStart);
     const auto traffic = agentspeed::report::TrafficSample::from(snap.traffic, options_.trafficIncludeTools, options_.config.enabled, monitor_->epoch());
-    emit reportTick({std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs(), observed});
+    const ReportTick tick{std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs(), now, observed};
+    emit reportTick(tick);
+    emit lanTick(tick);
 }
 
 void MonitorWorker::setReportWatch(bool on, qint64 responses, qint64 calls) {

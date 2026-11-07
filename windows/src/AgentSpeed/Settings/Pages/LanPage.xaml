@@ -1,0 +1,296 @@
+<UserControl x:Class="AgentSpeed.Settings.Pages.LanPage"
+             x:ClassModifier="internal"
+             xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+             xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+             xmlns:loc="clr-namespace:AgentSpeed.Localization"
+             xmlns:controls="clr-namespace:AgentSpeed.Controls"
+             xmlns:history="clr-namespace:AgentSpeed.History"
+             xmlns:theme="clr-namespace:AgentSpeed.Theme"
+             xmlns:tt="clr-namespace:AgentSpeed.Settings.TitleThemes"
+             xmlns:lan="clr-namespace:AgentSpeed.Settings.Lan"
+             Focusable="False">
+    <UserControl.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <controls:InverseBoolToVisibilityConverter x:Key="Hidden" />
+        <controls:TextToVisibilityConverter x:Key="HasText" />
+        <controls:EnabledOpacityConverter x:Key="EnabledOpacity" />
+
+        <Style x:Key="GroupCard" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="4" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="Footnote" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="FontSize" Value="12" />
+            <Setter Property="LineHeight" Value="17" />
+        </Style>
+
+        <!-- The label column of the server's rows, one width for all of them (the longest label in the language). -->
+        <Style x:Key="RowLabel" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="Margin" Value="0,0,20,0" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+        </Style>
+
+        <Style x:Key="Mono" TargetType="TextBox" BasedOn="{StaticResource SelectableText}">
+            <Setter Property="FontFamily" Value="{x:Static theme:AppFonts.Monospace}" />
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="TextWrapping" Value="NoWrap" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+    </UserControl.Resources>
+
+    <StackPanel>
+        <!-- 1. Devices read: the server switch, then its status, access key, addresses and port while it is on -->
+        <TextBlock Text="{loc:Loc lan.server}" Style="{StaticResource SectionHeaderText}" Margin="2,0,0,8" AutomationProperties.HeadingLevel="Level2" />
+        <Border Style="{StaticResource GroupCard}">
+            <StackPanel Grid.IsSharedSizeScope="True">
+                <Grid Margin="16,14,16,14" MinHeight="40">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE968;" FontSize="20" Margin="2,1,18,0" VerticalAlignment="Top"
+                               Opacity="{Binding NetworkEnabled, Converter={StaticResource EnabledOpacity}}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                        <TextBlock Text="{loc:Loc lan.server.enabled}" Style="{StaticResource BodyText}"
+                                   Opacity="{Binding NetworkEnabled, Converter={StaticResource EnabledOpacity}}" />
+                        <TextBlock Text="{Binding ServerHint}" Style="{StaticResource Footnote}" Margin="0,2,0,0" />
+                        <DockPanel Margin="0,6,0,0" Visibility="{Binding NetworkEnabled, Converter={StaticResource Visible}}">
+                            <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xEA18;" FontSize="11" VerticalAlignment="Top" Margin="0,3,6,0"
+                                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <TextBlock Text="{loc:Loc win.lan.firewall}" Style="{StaticResource Footnote}" />
+                        </DockPanel>
+                    </StackPanel>
+                    <CheckBox x:Name="ServerSwitch" Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding ServerEnabled, Mode=TwoWay}"
+                              IsEnabled="{Binding NetworkEnabled}" VerticalAlignment="Center"
+                              AutomationProperties.Name="{loc:Loc lan.server.enabled}" AutomationProperties.HelpText="{Binding ServerHint}" />
+                </Grid>
+
+                <tt:RevealDecorator x:Name="ServerRows">
+                    <StackPanel>
+                        <!-- Status -->
+                        <Rectangle Style="{StaticResource Hairline}" />
+                        <Grid Margin="16,12,16,12" MinHeight="24">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="LanLabel" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{loc:Loc report.status}" Style="{StaticResource RowLabel}" />
+                            <StackPanel Grid.Column="1" Orientation="Horizontal" VerticalAlignment="Center">
+                                <controls:HostStatusDot Kind="{Binding ServerDot}" ReduceMotion="{Binding ReduceMotion}" Margin="0,1,9,0" />
+                                <TextBlock x:Name="ServerStatusLine" Text="{Binding ServerStatusText}" Style="{StaticResource BodyText}" FontSize="13"
+                                           VerticalAlignment="Center" Typography.NumeralAlignment="Tabular" AutomationProperties.LiveSetting="Polite" />
+                            </StackPanel>
+                        </Grid>
+
+                        <!-- Access key: in groups of four, selectable; copy and regenerate -->
+                        <Rectangle Style="{StaticResource Hairline}" />
+                        <Grid Margin="16,8,12,8" MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="LanLabel" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{loc:Loc lan.key}" Style="{StaticResource RowLabel}" />
+                            <TextBox x:Name="KeyText" Grid.Column="1" Text="{Binding KeyText, Mode=OneWay}" Style="{StaticResource Mono}" FontWeight="Medium"
+                                     Foreground="{DynamicResource TextFillColorPrimaryBrush}" AutomationProperties.Name="{Binding KeyAccessibleName}" />
+                            <Button x:Name="CopyKeyButton" Grid.Column="2" Style="{StaticResource SubtleButton}" Width="34" Height="32" Command="{Binding CopyKeyCommand}"
+                                    AutomationProperties.Name="{loc:Loc lan.key.copy}">
+                                <Button.ToolTip>
+                                    <ToolTip>
+                                        <TextBlock>
+                                            <TextBlock.Style>
+                                                <Style TargetType="TextBlock">
+                                                    <Setter Property="Text" Value="{loc:Loc lan.key.copy}" />
+                                                    <Style.Triggers>
+                                                        <DataTrigger Binding="{Binding KeyCopied}" Value="True">
+                                                            <Setter Property="Text" Value="{loc:Loc lan.key.copied}" />
+                                                        </DataTrigger>
+                                                    </Style.Triggers>
+                                                </Style>
+                                            </TextBlock.Style>
+                                        </TextBlock>
+                                    </ToolTip>
+                                </Button.ToolTip>
+                                <TextBlock FontSize="15">
+                                    <TextBlock.Style>
+                                        <Style TargetType="TextBlock" BasedOn="{StaticResource SymbolIcon}">
+                                            <Setter Property="Text" Value="&#xE8C8;" />
+                                            <Style.Triggers>
+                                                <DataTrigger Binding="{Binding KeyCopied}" Value="True">
+                                                    <Setter Property="Text" Value="&#xE73E;" />
+                                                    <Setter Property="Foreground" Value="{DynamicResource SystemFillColorSuccessBrush}" />
+                                                </DataTrigger>
+                                            </Style.Triggers>
+                                        </Style>
+                                    </TextBlock.Style>
+                                </TextBlock>
+                            </Button>
+                            <Button x:Name="RegenerateButton" Grid.Column="3" Style="{StaticResource LinkButton}" Content="{loc:Loc lan.key.regenerate}"
+                                    Command="{Binding RegenerateCommand}" FontSize="13" Margin="4,0,0,0" VerticalAlignment="Center" />
+                        </Grid>
+
+                        <!-- Address: this computer's local IPv4 addresses with the port; each copies three forms -->
+                        <Rectangle Style="{StaticResource Hairline}" />
+                        <Grid Margin="16,8,12,8" MinHeight="40">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="LanLabel" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <TextBlock Text="{loc:Loc lan.addresses}" Style="{StaticResource RowLabel}" VerticalAlignment="Top" Margin="0,7,20,0" />
+                            <ItemsControl Grid.Column="1" ItemsSource="{Binding Addresses}" Focusable="False" VerticalAlignment="Center"
+                                          Visibility="{Binding HasAddresses, Converter={StaticResource Visible}}" AutomationProperties.Name="{loc:Loc lan.addresses}">
+                                <ItemsControl.ItemTemplate>
+                                    <DataTemplate DataType="{x:Type lan:LanAddressRow}">
+                                        <DockPanel MinHeight="32">
+                                            <Button DockPanel.Dock="Right" Style="{StaticResource SubtleButton}" Height="30" Padding="10,0,8,0" Tag="{Binding}"
+                                                    Click="OnCopyAddress" AutomationProperties.Name="{loc:Loc lan.copy}" AutomationProperties.HelpText="{Binding Text}">
+                                                <StackPanel Orientation="Horizontal">
+                                                    <TextBlock Text="{loc:Loc lan.copy}" FontSize="13" VerticalAlignment="Center" />
+                                                    <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE70D;" FontSize="9" Margin="7,2,0,0" VerticalAlignment="Center"
+                                                               Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                </StackPanel>
+                                            </Button>
+                                            <TextBox Text="{Binding Text, Mode=OneWay}" Style="{StaticResource Mono}" AutomationProperties.Name="{Binding Text}" />
+                                        </DockPanel>
+                                    </DataTemplate>
+                                </ItemsControl.ItemTemplate>
+                            </ItemsControl>
+                            <TextBlock Grid.Column="1" Text="{loc:Loc lan.addresses.none}" Style="{StaticResource Footnote}" VerticalAlignment="Center"
+                                       Visibility="{Binding HasAddresses, Converter={StaticResource Hidden}}" />
+                        </Grid>
+
+                        <!-- Port: applied on Return or when focus leaves; an invalid value is not applied -->
+                        <Rectangle Style="{StaticResource Hairline}" />
+                        <Grid Margin="16,10,16,10" MinHeight="32">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" SharedSizeGroup="LanLabel" />
+                                <ColumnDefinition Width="*" />
+                                <ColumnDefinition Width="Auto" />
+                            </Grid.ColumnDefinitions>
+                            <Grid.RowDefinitions>
+                                <RowDefinition Height="Auto" />
+                                <RowDefinition Height="Auto" />
+                            </Grid.RowDefinitions>
+                            <TextBlock Text="{loc:Loc lan.port}" Style="{StaticResource RowLabel}" />
+                            <TextBox x:Name="PortBox" Grid.Column="2" Width="72" Text="{Binding PortText, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}"
+                                     MaxLength="5" TextAlignment="Right" FontSize="13" Typography.NumeralAlignment="Tabular" InputScope="Number"
+                                     PreviewTextInput="OnPortTextInput" KeyDown="OnPortKeyDown" LostKeyboardFocus="OnPortLostFocus"
+                                     AutomationProperties.Name="{loc:Loc lan.port}" AutomationProperties.ItemStatus="{Binding PortError}" />
+                            <StackPanel Grid.Row="1" Grid.ColumnSpan="3" Orientation="Horizontal" HorizontalAlignment="Right" Margin="0,8,0,0"
+                                        Visibility="{Binding PortError, Converter={StaticResource HasText}}">
+                                <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xEA39;" FontSize="12" Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+                                <TextBlock Text="{Binding PortError}" Style="{StaticResource Footnote}" Margin="6,0,0,0" VerticalAlignment="Center"
+                                           Foreground="{DynamicResource SystemFillColorCriticalBrush}" AutomationProperties.LiveSetting="Assertive" />
+                            </StackPanel>
+                        </Grid>
+                    </StackPanel>
+                </tt:RevealDecorator>
+            </StackPanel>
+        </Border>
+
+        <!-- 2. Send to devices -->
+        <DockPanel Margin="2,24,2,8">
+            <TextBlock DockPanel.Dock="Right" Text="{Binding CountText}" Style="{StaticResource CaptionText}" VerticalAlignment="Bottom"
+                       Typography.NumeralAlignment="Tabular" Visibility="{Binding HasTargets, Converter={StaticResource Visible}}" />
+            <TextBlock Text="{loc:Loc lan.targets}" Style="{StaticResource SectionHeaderText}" Margin="0" AutomationProperties.HeadingLevel="Level2" />
+        </DockPanel>
+
+        <!-- Empty: what targets are for, and the way to add the first one -->
+        <Border Style="{StaticResource GroupCard}" Padding="24,28,24,24" Visibility="{Binding IsEmpty, Converter={StaticResource Visible}}">
+            <StackPanel HorizontalAlignment="Center" MaxWidth="440">
+                <Grid Width="48" Height="48" HorizontalAlignment="Center">
+                    <Ellipse Fill="{DynamicResource SubtleFillColorSecondaryBrush}" />
+                    <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xEC05;" FontSize="22" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Grid>
+                <TextBlock Text="{loc:Loc lan.targets.empty}" FontSize="15" FontWeight="SemiBold" HorizontalAlignment="Center" TextAlignment="Center"
+                           TextWrapping="Wrap" Margin="0,12,0,0" Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                <TextBlock Text="{loc:Loc lan.targets.empty.hint}" Style="{StaticResource CaptionText}" FontSize="13" LineHeight="19"
+                           TextAlignment="Center" HorizontalAlignment="Center" Margin="0,6,0,0" />
+                <Button x:Name="EmptyAddButton" Content="{loc:Loc lan.targets.add}" Command="{Binding AddCommand}" Style="{DynamicResource AccentButtonStyle}"
+                        HorizontalAlignment="Center" MinWidth="128" Margin="0,18,0,0" AutomationProperties.HelpText="{loc:Loc lan.targets.empty.hint}" />
+            </StackPanel>
+        </Border>
+
+        <!-- One row per target in the order added, as the host rows; Add Device… under them -->
+        <Border Style="{StaticResource GroupCard}" Visibility="{Binding HasTargets, Converter={StaticResource Visible}}">
+            <StackPanel>
+                <ItemsControl x:Name="TargetList" ItemsSource="{Binding Targets}" Focusable="False" AutomationProperties.Name="{loc:Loc lan.targets}">
+                    <ItemsControl.ItemTemplate>
+                        <DataTemplate DataType="{x:Type lan:LanTargetRowViewModel}">
+                            <Grid x:Name="Row" Background="Transparent" ContextMenuOpening="OnRowContextMenuOpening" Tag="{Binding}">
+                                <Grid.ContextMenu>
+                                    <ContextMenu />
+                                </Grid.ContextMenu>
+                                <Grid.InputBindings>
+                                    <MouseBinding Gesture="LeftDoubleClick" Command="{Binding DataContext.EditCommand, RelativeSource={RelativeSource AncestorType=UserControl}}"
+                                                  CommandParameter="{Binding}" />
+                                </Grid.InputBindings>
+                                <Rectangle x:Name="Divider" Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+                                <Grid Margin="16,12,12,12" MinHeight="40">
+                                    <Grid.ColumnDefinitions>
+                                        <ColumnDefinition Width="20" />
+                                        <ColumnDefinition Width="*" />
+                                        <ColumnDefinition Width="Auto" />
+                                        <ColumnDefinition Width="Auto" />
+                                    </Grid.ColumnDefinitions>
+                                    <controls:HostStatusDot Kind="{Binding Dot}" VerticalAlignment="Top" HorizontalAlignment="Left" Margin="0,7,0,0"
+                                                            ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=UserControl}}" />
+                                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,16,0">
+                                        <TextBlock x:Name="NameText" Text="{Binding Name}" FontSize="14" FontWeight="SemiBold" TextTrimming="CharacterEllipsis"
+                                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" ToolTip="{Binding Name}" ToolTipService.InitialShowDelay="900" />
+                                        <history:MiddleTrimmedText Text="{Binding Address}" FontSize="12" Margin="0,2,0,0" HorizontalAlignment="Left"
+                                                                   FontFamily="{x:Static theme:AppFonts.Monospace}"
+                                                                   Foreground="{DynamicResource TextFillColorSecondaryBrush}" ToolTip="{Binding Address}" />
+                                        <TextBlock Text="{Binding StatusText}" Style="{StaticResource CaptionText}" FontSize="12" LineHeight="17" Margin="0,3,0,0"
+                                                   Typography.NumeralAlignment="Tabular" AutomationProperties.LiveSetting="Polite" />
+                                    </StackPanel>
+                                    <Button x:Name="ActionsButton" Grid.Column="2" Style="{StaticResource SubtleButton}" Width="36" Height="32" VerticalAlignment="Center"
+                                            Margin="0,0,8,0" Click="OnActionsClick" Tag="{Binding}" ToolTip="{loc:Loc remote.actions}"
+                                            AutomationProperties.Name="{Binding ActionsName}" AutomationProperties.HelpText="{Binding AccessibleName}">
+                                        <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE712;" FontSize="16" />
+                                    </Button>
+                                    <CheckBox Grid.Column="3" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsEnabled, Mode=TwoWay}" VerticalAlignment="Center"
+                                              AutomationProperties.Name="{Binding ToggleName}" AutomationProperties.HelpText="{Binding StatusText}" />
+                                </Grid>
+                            </Grid>
+                            <DataTemplate.Triggers>
+                                <DataTrigger Binding="{Binding RelativeSource={RelativeSource PreviousData}}" Value="{x:Null}">
+                                    <Setter TargetName="Divider" Property="Visibility" Value="Collapsed" />
+                                </DataTrigger>
+                                <DataTrigger Binding="{Binding IsEnabled}" Value="False">
+                                    <Setter TargetName="NameText" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                                </DataTrigger>
+                            </DataTemplate.Triggers>
+                        </DataTemplate>
+                    </ItemsControl.ItemTemplate>
+                </ItemsControl>
+                <Rectangle Style="{StaticResource Hairline}" />
+                <DockPanel Margin="16,10,12,10" MinHeight="32">
+                    <Button x:Name="AddButton" DockPanel.Dock="Right" Content="{loc:Loc lan.targets.add}" Command="{Binding AddCommand}" MinWidth="112"
+                            VerticalAlignment="Center" ToolTip="{Binding AddTooltip}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.HelpText="{Binding AddTooltip}" />
+                    <TextBlock Text="{Binding AddTooltip}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="0,0,12,0"
+                               Visibility="{Binding CanAdd, Converter={StaticResource Hidden}}" />
+                </DockPanel>
+            </StackPanel>
+        </Border>
+
+        <!-- 3. What is sent and what never is; the developer guide -->
+        <TextBlock Text="{loc:Loc lan.footnote}" Style="{StaticResource CaptionText}" LineHeight="18" Margin="2,14,2,0" />
+        <Button Style="{StaticResource LinkButton}" Command="{Binding DocsCommand}" Margin="-2,6,0,0" FontSize="13"
+                AutomationProperties.Name="{loc:Loc lan.docs}" ToolTip="{x:Static lan:LanPaneViewModel.DocsUrl}">
+            <StackPanel Orientation="Horizontal">
+                <TextBlock Text="{loc:Loc lan.docs}" VerticalAlignment="Center" />
+                <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE8A7;" FontSize="11" Margin="6,1,0,0" VerticalAlignment="Center"
+                           Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+            </StackPanel>
+        </Button>
+    </StackPanel>
+</UserControl>

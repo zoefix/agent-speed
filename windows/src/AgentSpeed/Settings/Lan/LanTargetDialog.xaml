@@ -1,0 +1,179 @@
+<Window x:Class="AgentSpeed.Settings.Lan.LanTargetDialog"
+        x:ClassModifier="internal"
+        xmlns="http://schemas.microsoft.com/winfx/2006/xaml/presentation"
+        xmlns:x="http://schemas.microsoft.com/winfx/2006/xaml"
+        xmlns:loc="clr-namespace:AgentSpeed.Localization"
+        xmlns:controls="clr-namespace:AgentSpeed.Controls"
+        xmlns:theme="clr-namespace:AgentSpeed.Theme"
+        Width="460"
+        SizeToContent="Height"
+        ResizeMode="NoResize"
+        WindowStartupLocation="CenterOwner"
+        ShowInTaskbar="False"
+        UseLayoutRounding="True"
+        Title="{Binding Title}"
+        FontFamily="{DynamicResource AppFontFamily}"
+        Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+        AutomationProperties.Name="{Binding Title}"
+        AutomationProperties.HelpText="{loc:Loc lan.sheet.body}">
+    <Window.Resources>
+        <BooleanToVisibilityConverter x:Key="Visible" />
+        <controls:TextToVisibilityConverter x:Key="HasText" />
+
+        <Style x:Key="Card" TargetType="Border">
+            <Setter Property="Background" Value="{DynamicResource CardBackgroundFillColorDefaultBrush}" />
+            <Setter Property="BorderBrush" Value="{DynamicResource CardStrokeColorDefaultBrush}" />
+            <Setter Property="BorderThickness" Value="1" />
+            <Setter Property="CornerRadius" Value="6" />
+            <Setter Property="SnapsToDevicePixels" Value="True" />
+        </Style>
+
+        <Style x:Key="FieldLabel" TargetType="TextBlock" BasedOn="{StaticResource BodyText}">
+            <Setter Property="FontSize" Value="13" />
+            <Setter Property="Margin" Value="0,0,0,6" />
+        </Style>
+
+        <Style x:Key="Placeholder" TargetType="TextBlock">
+            <Setter Property="IsHitTestVisible" Value="False" />
+            <Setter Property="Margin" Value="12,0,12,1" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="TextTrimming" Value="CharacterEllipsis" />
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+        </Style>
+
+        <Style x:Key="Hint" TargetType="TextBlock" BasedOn="{StaticResource CaptionText}">
+            <Setter Property="LineHeight" Value="17" />
+        </Style>
+
+        <!-- The segmented kind control, a little taller than the compact one of the settings rows. -->
+        <Style x:Key="KindItem" TargetType="RadioButton" BasedOn="{StaticResource SegmentedItem}">
+            <Setter Property="Height" Value="28" />
+            <Setter Property="MinWidth" Value="68" />
+            <Setter Property="FontSize" Value="13" />
+        </Style>
+    </Window.Resources>
+
+    <Grid>
+        <Grid.RowDefinitions>
+            <RowDefinition Height="Auto" />
+            <RowDefinition Height="Auto" />
+        </Grid.RowDefinitions>
+
+        <StackPanel Margin="24,22,24,22">
+            <!-- Header: the broadcast tile, the title and what the sheet is for -->
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="Auto" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <controls:AccentBadge Width="32" Height="32" CornerRadius="8" VerticalAlignment="Top" Margin="0,0,12,0">
+                    <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xEC05;" FontSize="16" Foreground="White" />
+                </controls:AccentBadge>
+                <TextBlock Grid.Column="1" Text="{Binding Title}" Style="{StaticResource SubtitleText}" TextWrapping="Wrap" VerticalAlignment="Center"
+                           TextTrimming="CharacterEllipsis" MaxHeight="56" AutomationProperties.HeadingLevel="Level1" />
+            </Grid>
+            <TextBlock Text="{loc:Loc lan.sheet.body}" Style="{StaticResource CaptionText}" FontSize="13" LineHeight="19" Margin="0,12,0,0" />
+
+            <!-- How to send -->
+            <Border Style="{StaticResource Card}" Margin="0,16,0,0" Padding="16,12,16,14">
+                <StackPanel>
+                    <DockPanel>
+                        <controls:SegmentedGroup DockPanel.Dock="Right" Style="{StaticResource SegmentedContainer}" VerticalAlignment="Center"
+                                                 AutomationProperties.Name="{loc:Loc lan.target.kind}">
+                            <StackPanel Orientation="Horizontal">
+                                <RadioButton x:Name="KindUdpButton" Style="{StaticResource KindItem}" GroupName="LanKind" Content="UDP"
+                                             IsChecked="{Binding KindUdp, Mode=TwoWay}" AutomationProperties.Name="UDP"
+                                             AutomationProperties.HelpText="{loc:Loc lan.target.kind.udp.hint}" />
+                                <RadioButton x:Name="KindHttpButton" Style="{StaticResource KindItem}" GroupName="LanKind" Content="HTTP"
+                                             IsChecked="{Binding KindHttp, Mode=TwoWay}" AutomationProperties.Name="HTTP"
+                                             AutomationProperties.HelpText="{loc:Loc lan.target.kind.http.hint}" />
+                            </StackPanel>
+                        </controls:SegmentedGroup>
+                        <TextBlock Text="{loc:Loc lan.target.kind}" Style="{StaticResource BodyText}" FontSize="13" VerticalAlignment="Center" />
+                    </DockPanel>
+                    <TextBlock Text="{Binding KindHint}" Style="{StaticResource Hint}" Margin="0,10,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Where, under which name, with which key -->
+            <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="16,14,16,16">
+                <StackPanel>
+                    <TextBlock Text="{loc:Loc lan.target.address}" Style="{StaticResource FieldLabel}" />
+                    <Grid>
+                        <TextBox x:Name="AddressBox" Text="{Binding Address, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="512"
+                                 FontFamily="{x:Static theme:AppFonts.Monospace}" FontSize="13"
+                                 AutomationProperties.Name="{loc:Loc lan.target.address}" AutomationProperties.HelpText="{Binding AddressPlaceholder}"
+                                 AutomationProperties.ItemStatus="{Binding AddressError}" />
+                        <TextBlock Text="{Binding AddressPlaceholder}" Style="{StaticResource Placeholder}" FontFamily="{x:Static theme:AppFonts.Monospace}"
+                                   FontSize="13" Visibility="{Binding Text, ElementName=AddressBox, Converter={StaticResource HasText}, ConverterParameter=invert}" />
+                    </Grid>
+                    <DockPanel Margin="0,6,0,0" Visibility="{Binding AddressError, Converter={StaticResource HasText}}">
+                        <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xEA39;" FontSize="12" VerticalAlignment="Top" Margin="0,2,6,0"
+                                              Foreground="{DynamicResource SystemFillColorCriticalBrush}" />
+                        <TextBlock Text="{Binding AddressError}" Style="{StaticResource Hint}" Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                   AutomationProperties.LiveSetting="Assertive" />
+                    </DockPanel>
+                    <DockPanel Margin="0,6,0,0" Visibility="{Binding IsBroadcast, Converter={StaticResource Visible}}">
+                        <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xE946;" FontSize="12" VerticalAlignment="Top" Margin="0,2,6,0"
+                                              Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{loc:Loc lan.target.broadcast}" Style="{StaticResource Hint}" AutomationProperties.LiveSetting="Polite" />
+                    </DockPanel>
+
+                    <TextBlock Text="{loc:Loc lan.target.name}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6" />
+                    <Grid>
+                        <TextBox x:Name="NameBox" Text="{Binding Name, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="64" FontSize="13"
+                                 AutomationProperties.Name="{loc:Loc lan.target.name}" AutomationProperties.HelpText="{loc:Loc lan.target.name.placeholder}" />
+                        <TextBlock Text="{loc:Loc lan.target.name.placeholder}" Style="{StaticResource Placeholder}" FontSize="13"
+                                   Visibility="{Binding Text, ElementName=NameBox, Converter={StaticResource HasText}, ConverterParameter=invert}" />
+                    </Grid>
+
+                    <TextBlock Text="{loc:Loc lan.target.key}" Style="{StaticResource FieldLabel}" Margin="0,14,0,6" />
+                    <TextBox x:Name="KeyBox" Text="{Binding Key, Mode=TwoWay, UpdateSourceTrigger=PropertyChanged}" MaxLength="128"
+                             FontFamily="{x:Static theme:AppFonts.Monospace}" FontSize="13"
+                             AutomationProperties.Name="{loc:Loc lan.target.key}" AutomationProperties.HelpText="{loc:Loc lan.target.key.hint}" />
+                    <TextBlock Text="{loc:Loc lan.target.key.hint}" Style="{StaticResource Hint}" Margin="0,8,0,0" />
+                </StackPanel>
+            </Border>
+
+            <!-- Send Test and its result inline -->
+            <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="16,12,16,12">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="Auto" />
+                        <ColumnDefinition Width="*" />
+                    </Grid.ColumnDefinitions>
+                    <Button x:Name="TestButton" Content="{loc:Loc lan.target.test}" Command="{Binding TestCommand}" MinWidth="120" VerticalAlignment="Center"
+                            ToolTip="{Binding TestUnavailableReason}" ToolTipService.ShowOnDisabled="True"
+                            AutomationProperties.HelpText="{Binding TestUnavailableReason}" />
+                    <Grid Grid.Column="1" Margin="12,0,0,0" VerticalAlignment="Center" MinHeight="20">
+                        <StackPanel Orientation="Horizontal" Visibility="{Binding IsTesting, Converter={StaticResource Visible}}">
+                            <controls:ProgressRing Width="14" Height="14" Thickness="2" Foreground="{DynamicResource AccentFillColorDefaultBrush}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding TestText}" Style="{StaticResource CaptionText}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                        </StackPanel>
+                        <DockPanel Visibility="{Binding HasTestResult, Converter={StaticResource Visible}}">
+                            <controls:SymbolGlyph x:Name="TestMark" Style="{StaticResource SymbolIcon}" FontSize="13" VerticalAlignment="Top" Margin="0,2,7,0" />
+                            <TextBlock x:Name="TestResultText" Text="{Binding TestText}" Style="{StaticResource CaptionText}" LineHeight="17" TextWrapping="Wrap"
+                                       VerticalAlignment="Center" AutomationProperties.LiveSetting="Polite" />
+                        </DockPanel>
+                    </Grid>
+                </Grid>
+            </Border>
+        </StackPanel>
+
+        <!-- Command area, as in a WinUI content dialog: the primary action on the left and default, Cancel on the right -->
+        <Border Grid.Row="1" Padding="24" BorderThickness="0,1,0,0" Background="{DynamicResource SubtleFillColorSecondaryBrush}"
+                BorderBrush="{DynamicResource DividerStrokeColorDefaultBrush}">
+            <Grid>
+                <Grid.ColumnDefinitions>
+                    <ColumnDefinition Width="*" />
+                    <ColumnDefinition Width="8" />
+                    <ColumnDefinition Width="*" />
+                </Grid.ColumnDefinitions>
+                <Button x:Name="SaveButton" Grid.Column="0" Height="32" FontSize="14" HorizontalAlignment="Stretch" IsDefault="True"
+                        Style="{DynamicResource AccentButtonStyle}" Content="{Binding SaveText}" IsEnabled="{Binding CanSave}" Click="OnSave" />
+                <Button x:Name="CancelButton" Grid.Column="2" Height="32" FontSize="14" HorizontalAlignment="Stretch" IsCancel="True"
+                        Content="{loc:Loc history.cancel}" />
+            </Grid>
+        </Border>
+    </Grid>
+</Window>

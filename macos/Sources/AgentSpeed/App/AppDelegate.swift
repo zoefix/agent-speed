@@ -74,6 +74,10 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
             ReportHarness.start(url: url)
             return
         }
+        if options.lanEndToEnd {
+            LanHarness.start()
+            return
+        }
         if let directory = options.screenshotsDirectory {
             ScreenshotHarness.run(into: directory, onlyHistory: options.screenshotsOnlyHistory)
             return

@@ -47,7 +47,7 @@
                     <pages:EffectsPage x:Name="EffectsPage" />
                     <pages:CostPage x:Name="CostPage" DataContext="{Binding Cost}" />
                     <pages:TrafficPage x:Name="TrafficPage" DataContext="{Binding Traffic}" />
-                    <pages:ReportPage x:Name="ReportPage" DataContext="{Binding Report}" />
+                    <pages:ApiPage x:Name="ReportPage" />
                     <pages:SourcesPage x:Name="SourcesPage" />
                     <pages:RemotePage x:Name="RemotePage" DataContext="{Binding Remote}" />
                     <pages:AboutPage x:Name="AboutPage" />

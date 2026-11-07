@@ -64,6 +64,8 @@ SettingsPage {
                       + S.tr2(S.rev, "privacy.report") + "\n\n" + S.tr2(S.rev, "privacy.perfScore")
                       // DESIGN 13: the remote hosts' paragraph while hosts exist.
                       + (hostsView.shown ? "\n\n" + S.tr2(S.rev, "privacy.remote") : "")
+                      // DESIGN 14: the local network's paragraph while the server is on or any target exists.
+                      + (lan.shown ? "\n\n" + S.tr2(S.rev, "privacy.lan") : "")
                 color: Theme.ink2
                 font.pixelSize: 12
                 lineHeight: 1.3

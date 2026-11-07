@@ -179,6 +179,18 @@ printf 'APPL????' > "$APP_DIR/Contents/PkgInfo"
 cp "$ICON_FILE" "$APP_DIR/Contents/Resources/AgentSpeed.icns"
 info "Contents/MacOS/$EXECUTABLE, Info.plist, PkgInfo, Resources/AgentSpeed.icns"
 
+# The local network permission prompt in the app's languages (DESIGN 14), from the macOS string table.
+python3 - "$MACOS_DIR/Resources/strings.macos.json" "$APP_DIR/Contents/Resources" <<'PY' || die "Could not write InfoPlist.strings."
+import json, pathlib, sys
+texts = json.load(open(sys.argv[1], encoding="utf-8"))["mac.lan.usage"]
+for language, text in texts.items():
+    folder = pathlib.Path(sys.argv[2]) / f"{language}.lproj"
+    folder.mkdir(parents=True, exist_ok=True)
+    escaped = text.replace("\\", "\\\\").replace('"', '\\"')
+    (folder / "InfoPlist.strings").write_text(f'"NSLocalNetworkUsageDescription" = "{escaped}";\n', encoding="utf-8")
+PY
+info "Resources/{en,zh-Hant,zh-Hans,ja}.lproj/InfoPlist.strings"
+
 mkdir -p "$APP_DIR/Contents/Resources/relay"
 for arch in "${RELAY_ARCHS[@]}"; do
     cp "$RELAY_DIR/agent-speed-relay-linux-$arch" "$APP_DIR/Contents/Resources/relay/"

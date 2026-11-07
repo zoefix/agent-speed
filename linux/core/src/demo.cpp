@@ -131,6 +131,13 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory,
         set.thinkingShare = set.liveThinking > 0 ? 0.35 : 0;
         snap.scoreSets.push_back(std::move(set));
     }
+    // METRICS 11.2: every demo agent is listed, so each one is active.
+    for (const auto& a : snap.agents) {
+        auto& counts = snap.report.agents[a.source];
+        ++counts.active;
+        if (a.phase == Phase::Generating) ++counts.generating;
+        if (a.phase == Phase::Tools) ++counts.tools;
+    }
     snap.liveOutput = codex + claude;
     snap.liveTotal = snap.liveOutput * 18.5;
     snap.estimatedShare = 0.12;

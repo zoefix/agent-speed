@@ -117,6 +117,9 @@ enum PreviewRenderer {
         if wants("remote") {
             RemotePreviews.render(model: model, into: directory)
         }
+        if wants("lan") {
+            LanPreviews.render(model: model, into: directory)
+        }
         if wants("cost") {
             CostPreviews.render(model: model, into: directory)
         }

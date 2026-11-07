@@ -115,6 +115,12 @@ void Preferences::setRemoteHosts(const QString& json) {
     settings_.sync();
 }
 
+QString Preferences::lan() const { return settings_.value(QStringLiteral("lan")).toString(); }
+void Preferences::setLan(const QString& json) {
+    store("lan", json, &Preferences::lanChanged);
+    settings_.sync();
+}
+
 bool Preferences::syncPrices() const { return settings_.value(QStringLiteral("network/syncPrices"), true).toBool(); }
 void Preferences::setSyncPrices(bool value) { store("network/syncPrices", value, &Preferences::syncPricesChanged); }
 bool Preferences::trafficEnabled() const { return settings_.value(QStringLiteral("traffic/enabled"), true).toBool(); }

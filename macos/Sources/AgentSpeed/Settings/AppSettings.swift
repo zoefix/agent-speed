@@ -95,6 +95,11 @@ final class AppSettings {
         didSet { if remoteHosts != oldValue { store(remoteHosts.data(), .remoteHosts) } }
     }
 
+    /// The local network feed (LAN 2.1), stored as one JSON value under `lan`.
+    var lan: LanDocument {
+        didSet { if lan != oldValue { store(lan.data(), .lan) } }
+    }
+
     /// The vehicle of the last speed title other than idle (DESIGN 4c, Idle), parked in the dashboard hero while idle,
     /// also across relaunches. Nil before any title was reached.
     var heroLastTitle: String? {
@@ -166,6 +171,7 @@ final class AppSettings {
         includeSubscriptions = defaults.object(forKey: Key.includeSubscriptions.rawValue) as? Bool ?? false
         heroLastTitle = defaults.string(forKey: Key.heroLastTitle.rawValue)
         remoteHosts = defaults.data(forKey: Key.remoteHosts.rawValue).flatMap(RemoteHostsDocument.init(data:)) ?? .empty
+        lan = defaults.data(forKey: Key.lan.rawValue).map(LanDocument.init(data:)) ?? .empty
         if !redlinesMigrated {
             // A stored former default now reads as the new default; persist it once so a later choice of 400 stays.
             if defaults.object(forKey: Key.redline.rawValue) != nil { store(redlineOutput, .redline) }
@@ -253,6 +259,7 @@ final class AppSettings {
         case networkEnabled, syncPrices, currency, liveUnit, subscriptionSources, includeSubscriptions
         case heroLastTitle
         case remoteHosts
+        case lan
     }
 }
 

@@ -64,6 +64,8 @@ final class AppModel {
     let traffic: TrafficStore
     /// Live reporting (DESIGN 11): off until the user confirms a service.
     let report: ReportController
+    /// The local network feed (DESIGN 14): off until the user turns on the server or adds a target.
+    let lan: LanController
     /// The menu bar intelligence block's thinking line, hidden after its rate has read 0 for 3 s (DESIGN 10).
     let barThinking = StatusItemThinkingHold()
 
@@ -116,6 +118,7 @@ final class AppModel {
         traffic = TrafficStore()
         report = ReportController(settings: settings, store: store, traffic: traffic, priceBook: priceBook,
                                   appData: Self.appDataDirectory)
+        lan = LanController(settings: settings, store: store)
         gauge.redline = settings.redline
     }
 
@@ -218,6 +221,7 @@ final class AppModel {
         monitor.start()
         report.perfWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
         report.activate()
+        lan.activate()
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let configuration = self.settings.monitorConfiguration
@@ -306,6 +310,7 @@ final class AppModel {
 
     func shutdown() {
         report.shutdown()
+        lan.shutdown()
         trafficController?.stop()
         trafficController = nil
         orbs.shutdown()
