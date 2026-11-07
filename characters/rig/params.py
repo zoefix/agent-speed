@@ -11,7 +11,7 @@ import math
 
 import numpy as np
 
-from .hands import CURL, SHORTEN, SPREAD
+from .hands import CURL, FIST, SHORTEN, SPREAD
 
 ARM_RANGES = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
 VARIANT_ARM_RANGE = 60.0
@@ -101,8 +101,9 @@ def build(lm, bone_names):
 
     for side, hand in lm.get("hands", {}).items():
         if has(f"hand.{side}"):
-            params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.5, 1.0)]
-            params += [param(f"Finger.{side}.{i}", -0.4, 1.0) for i in range(5)]
+            fist = hand["open"] < FIST
+            params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.1 if fist else -0.5, 0.1 if fist else 1.0)]
+            params += [param(f"Finger.{side}.{i}", -0.08 if fist else -0.4, 0.12 if fist else 1.0) for i in range(5)]
             drivers += hand_drivers(side, hand)
 
     if has("hairBack1"):
@@ -134,7 +135,7 @@ def build(lm, bone_names):
 def hand_drivers(side, hand):
     """Wrist turn, finger curl (rotation toward the palm plus the outer segments sliding toward the knuckles) and
     spread (each finger's base turning away from the middle finger)."""
-    out = [linear(f"Wrist.{side}", f"hand.{side}", "rotate", 24)]
+    out = [linear(f"Wrist.{side}", f"hand.{side}", "rotate", 16)]
     for i, f in enumerate(hand["fingers"]):
         pid, sign = f"Finger.{side}.{i}", hand["curl"][i]
         for j in range(3):

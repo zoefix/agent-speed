@@ -40,10 +40,11 @@ def split_hands(parts, found, reference, sam):
             mask = segment.hand_mask(reference, hand, sam)
             if mask is not None:
                 masks[side] = mask
-                cleared = hands.clear_ghosts(parts, mask, keep=f"handwear.{side}")
+                cleared = hands.clear_ghosts(parts, mask & hands.past_cut(mask.shape, hand), keep=f"handwear.{side}")
                 print(f"hand {side}: {int(mask.sum())} px from SAM, {cleared} px of other layers inpainted")
             else:
-                print(f"hand {side}: SAM found no clean mask, using the arm layer")
+                print(f"hand {side}: SAM found no clean mask, the hand stays part of its arm")
+        found = {side: hand for side, hand in found.items() if side in masks}
     out = []
     for layer in parts:
         hand = found.get(layer.side) if layer.tag == "handwear" else None
@@ -51,7 +52,7 @@ def split_hands(parts, found, reference, sam):
             out.append(layer)
             continue
         out += list(hands.split(layer, hand, masks.get(layer.side), reference))
-    return out
+    return out, found
 
 
 def ordered_parts(base, loaded):
@@ -97,7 +98,7 @@ def main(argv=None):
     for side, points in pose.hands(args.reference, size, (fx0 + fx1) / 2).items():
         if side in lm["arms"] and lm["arms"][side].get("tip") is not None:
             lm["hands"][side] = dict(hands.landmarks(points, lm["arms"][side]["elbow"]), side=side)
-    parts = split_hands(parts, lm["hands"], reference, args.sam)
+    parts, lm["hands"] = split_hands(parts, lm["hands"], reference, args.sam)
     bones = skeleton.bones(lm)
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)

@@ -71,6 +71,15 @@ class Director:
         self.hands = [HandActor(side, side == arm_book, self.rng, phase=k * 1.7)
                       for k, side in enumerate(("left", "right")) if f"Finger.{side}.0" in rig_params]
 
+    def set_sides(self, arm_out, arm_book):
+        """Which arm swings free and which holds the object, for a new pose."""
+        self.out, self.book = arm_out, arm_book
+        for hand in self.hands:
+            hand.holds = hand.side == arm_book
+        for layer in self.grooves:
+            layer["target"] = 0.0
+        self.grooves.append({"fn": GROOVES[self.band], "w": 0.0, "target": 1.0})
+
     def _can(self, *pids):
         return all(p in self.params for p in pids)
 

@@ -98,9 +98,16 @@ class Follow:
 
     def __init__(self, f=1.6, z=0.7, bob=(5.0, 3.6), phase=0.0):
         self.x, self.y = SecondOrder(f, z, 0.0), SecondOrder(f, z, 0.0)
-        self.bob, self.phase = bob, phase
+        self.bob, self.phase, self.placed = bob, phase, False
+
+    def snap(self, x, y):
+        self.x.snap(x)
+        self.y.snap(y)
+        self.placed = True
 
     def update(self, dt, t, tx, ty):
+        if not self.placed:
+            self.snap(tx, ty)
         amp, period = self.bob
         return (self.x.update(dt, tx) + 0.35 * amp * math.sin(2 * math.pi * t / (period * 1.7) + self.phase),
                 self.y.update(dt, ty) + amp * math.sin(2 * math.pi * t / period + self.phase))
@@ -108,9 +115,9 @@ class Follow:
 
 class Odometer:
     """Integer readout whose digits roll: a changed digit slides up out of view as the new one slides in. The value
-    is sampled about eight times a second, like an instrument, so a fast-changing speed still reads cleanly."""
+    is sampled five times a second, like an instrument, so a fast-changing speed still reads cleanly."""
 
-    HOLD = 0.125
+    HOLD = 0.2
 
     def __init__(self):
         self.value, self.digits, self.held, self.since = 0.0, [], 0, 1.0
@@ -128,7 +135,7 @@ class Odometer:
         for d, ch in zip(self.digits, text):
             if d["cur"] != ch:
                 d["prev"], d["cur"], d["t"] = d["cur"], ch, 0.0
-            d["t"] = min(1.0, d["t"] + dt / 0.18)
+            d["t"] = min(1.0, d["t"] + dt / 0.12)
         return text
 
 
@@ -153,6 +160,7 @@ class Hud:
 
     def peak(self):
         self.peak_t = 0.0
+        self.peak_pos.placed = False
 
     def update(self, dt, t, speed, title, h, fast):
         self.comet = (self.comet + dt / (6.0 - 5.3 * h)) % 1.0
@@ -303,7 +311,7 @@ class Hud:
             if title is None:
                 continue
             e = 1 - (1 - self.title_t) ** 3
-            a = e if k > 0 else 1 - e
+            a = max(0.0, (e - 0.3) / 0.7) if k > 0 else max(0.0, 1 - 2.5 * e)
             if a <= 0.01:
                 continue
             col = heat_color(h)

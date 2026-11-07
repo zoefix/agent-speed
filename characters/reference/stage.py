@@ -179,6 +179,8 @@ def main(argv=None):
         swapped = switch.update(dt, values)
         if swapped is not None:
             active = swapped
+            book_side = active.lm.get("objectSide") or book
+            director.set_sides("right" if book_side == "left" else "left", book_side)
             petals.burst(feet_screen[0] + values.get("PosX", 0.0) * POS_X * fw * scale0, feet_screen[1] - 0.55 * char_h)
         for pose in poses.values():
             out = pose.physics.step(dt, values)
@@ -216,10 +218,14 @@ def main(argv=None):
         renderer.character(posed, scale, offset, active.rig.opacities(values), which=active.which)
         hud.draw_front(dt, ground, waist, agents)
         renderer.sprites(petal, petals.instances(front=True))
-        hud.draw_readout(dt, (fx + 0.4 * char_h + 0.25 * dx, fy - 0.6 * char_h + 0.3 * dy))
-        hud.draw_model(dt, (fx - 0.27 * char_h + 0.25 * dx, fy - 0.95 * char_h + 0.3 * dy), args.model,
+        def inside(x, half):
+            return min(max(x, half), w - half)
+
+        readout = (inside(fx + 0.5 * char_h, 0.13 * w), fy - 0.62 * char_h + 0.3 * dy)
+        hud.draw_readout(dt, readout)
+        hud.draw_model(dt, (readout[0], readout[1] + 170 * unit), args.model,
                        f"{len(agents)} 個 agent · 今日 1.2M tokens", vendor)
-        hud.draw_peak(dt, (fx + 0.3 * char_h + 0.2 * dx, fy - 0.98 * char_h + 0.3 * dy))
+        hud.draw_peak(dt, (min(readout[0], 0.82 * w), readout[1] - 0.14 * char_h))
         frame = renderer.finish()
         cost.append((time.perf_counter() - started) * 1000)
         ff.stdin.write(frame.tobytes())

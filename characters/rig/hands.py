@@ -11,6 +11,7 @@ from .layers import Layer
 
 FINGERS = ("thumb", "index", "middle", "ring", "pinky")
 CURL = (14.0, 20.0, 16.0)
+FIST = 1.35
 SHORTEN = (0.0, 0.18, 0.22)
 SPREAD = (10.0, 6.0, 0.0, 5.0, 9.0)
 
@@ -37,8 +38,10 @@ def landmarks(points, elbow):
         curl.append(1.0 if _cross(d, palm - f[0]) > 0 else -1.0)
         delta = (_angle(d) - _angle(mid) + np.pi) % (2 * np.pi) - np.pi
         spread.append(0.0 if i == 2 else float(np.sign(delta) or 1.0))
+    reach = np.mean([np.linalg.norm(f[3] - wrist) for f in fingers[1:]])
+    knuckles = np.mean([np.linalg.norm(f[0] - wrist) for f in fingers[1:]])
     return {"wrist": wrist, "elbow": np.asarray(elbow, np.float64), "palm": palm, "fingers": fingers, "size": size,
-            "curl": curl, "spread": spread}
+            "curl": curl, "spread": spread, "open": float(reach / max(knuckles, 1e-6))}
 
 
 def _segments(hand):
@@ -82,7 +85,7 @@ def _capsules(shape, hand):
     return out
 
 
-def _past_cut(shape, hand):
+def past_cut(shape, hand):
     h, w = shape
     ys, xs = np.mgrid[0:h, 0:w]
     u = hand["palm"] - hand["wrist"]
@@ -92,23 +95,27 @@ def _past_cut(shape, hand):
 
 def split(layer, hand, mask=None, reference=None):
     """(arm layer, hand layer). With a precise `mask` and the original art the hand part is exactly the drawn hand
-    plus the ink line around it (SAM stops inside the outline); without, it is the arm layer near the hand bones. The cut sits just before the wrist and the hand part reaches
-    2 px back over the arm, so no seam opens between them."""
+    plus the ink line around it (SAM stops inside the outline), keeping the arm layer's own colors and soft edge where
+    it has them and never the paper behind the art; without, it is the arm layer near the hand bones. The cut sits just before the wrist and the hand part reaches
+    4 px back over the arm, so no seam opens between them."""
     shape = layer.alpha.shape
-    past = _past_cut(shape, hand)
+    past = past_cut(shape, hand)
     if mask is not None and reference is not None:
         ink = reference @ np.array([0.299, 0.587, 0.114], np.float32) < 0.6
         outline = ndimage.binary_dilation(mask, iterations=4) & ink
         inside = ndimage.binary_fill_holes(mask | outline) & past
+        paper = (reference.min(axis=2) > 0.975) & (layer.alpha < 0.5)
+        inside = (inside | (ndimage.binary_dilation(inside, iterations=2) & past & (layer.alpha > 0.01))) & ~paper
+        rim = inside & ndimage.binary_dilation(reference.min(axis=2) > 0.975, iterations=1) & (layer.alpha > 0.05)
         part = np.zeros_like(layer.rgba)
-        part[..., :3] = np.where(inside[..., None], reference, layer.rgba[..., :3])
-        alpha = ndimage.gaussian_filter(inside.astype(np.float32), 0.6)
-        part[..., 3] = np.where(inside, np.maximum(alpha, 0.5), 0.0)
+        part[..., :3] = np.where(rim[..., None], layer.rgba[..., :3], reference)
+        soft = np.maximum(ndimage.gaussian_filter(inside.astype(np.float32), 0.6), 0.5)
+        part[..., 3] = np.where(inside, np.where(rim, layer.alpha, soft), 0.0)
     else:
         inside = _capsules(shape, hand) & past & (layer.alpha > 0.01)
         part = layer.rgba.copy()
         part[..., 3] = np.where(inside, part[..., 3], 0.0)
-    band = ndimage.binary_dilation(inside, iterations=2) & ~past & (layer.alpha > 0.01)
+    band = ndimage.binary_dilation(inside, iterations=4) & ~past & (layer.alpha > 0.01)
     part[..., :3] = np.where(band[..., None], layer.rgba[..., :3], part[..., :3])
     part[..., 3] = np.where(band, layer.alpha, part[..., 3])
     arm = layer.rgba.copy()
@@ -117,11 +124,13 @@ def split(layer, hand, mask=None, reference=None):
 
 
 def clear_ghosts(parts, mask, keep):
-    """Layers other than the hand's own arm that took the hand's colors at reprojection get them inpainted away, so
-    a moving finger never leaves a copy of itself behind."""
+    """Other layers that took the hand's colors at reprojection give them up: a layer drawn above the hand (hair the
+    hand was in front of) turns transparent there, a layer below gets the hand inpainted away, so a moving finger
+    never leaves a copy of itself behind and nothing covers it."""
     import cv2
-    from .layers import owner_map
+    from .layers import DRAW_ORDER, owner_map
     owner = owner_map(parts)
+    above = {tag for tag in DRAW_ORDER[DRAW_ORDER.index("hand") + 1:]}
     ys, xs = np.nonzero(mask)
     if len(ys) == 0:
         return 0
@@ -133,6 +142,10 @@ def clear_ghosts(parts, mask, keep):
             continue
         ghost = (mask & (owner == i))[y0:y1, x0:x1]
         if not ghost.any():
+            continue
+        if layer.tag in above:
+            layer.rgba[y0:y1, x0:x1, 3] = np.where(ghost, 0.0, layer.rgba[y0:y1, x0:x1, 3])
+            cleared += int(ghost.sum())
             continue
         rgb = (np.clip(layer.rgba[y0:y1, x0:x1, :3], 0, 1) * 255).astype(np.uint8)
         fixed = cv2.inpaint(rgb, ndimage.binary_dilation(ghost, iterations=1).astype(np.uint8), 6, cv2.INPAINT_TELEA)
@@ -175,5 +188,5 @@ def bones(hand, bone_cls):
 
 
 def summary(hand):
-    return {"wrist": hand["wrist"].tolist(), "size": hand["size"],
+    return {"wrist": hand["wrist"].tolist(), "size": hand["size"], "open": hand["open"],
             "fingers": [f.tolist() for f in hand["fingers"]], "curl": hand["curl"], "spread": hand["spread"]}
