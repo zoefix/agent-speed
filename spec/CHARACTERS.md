@@ -1,6 +1,6 @@
 # Characters
 
-The `character` orb style (DESIGN 2a, Character) shows an animated anime character, one per model vendor, instead of
+The `character` orb style (DESIGN 2a.6) shows an animated anime character, one per model vendor, instead of
 a round instrument. This document is the contract between the offline tools in `characters/` and the native players
 on macOS, Windows and Linux: the downloadable pack, the catalog, how a rig is evaluated, how the character moves, the
 floating readouts, which character an orb shows, and the conformance fixtures.
@@ -142,7 +142,7 @@ Per orb, the setting `character` is `auto` (default) or a pack id.
   catalog order.
 - A vendor change is held for 3 s before the character changes (no flicker between two close vendors), then the swap
   of section 6 runs between the two characters.
-- No character installed: the style shows the empty state of DESIGN 2a, Character (a prompt to download one).
+- No character installed: the style shows the empty state of DESIGN 2a.6 (a prompt to download one).
 
 ## 8. Floating readouts
 
@@ -151,7 +151,7 @@ Around the character, on Kepler orbits seen slightly from above (`characters/ref
 (vendor dot and model name) and the agent line (agents and today's tokens). Bodies in front of the character draw over
 her, bigger and brighter; behind her they draw under her. At her feet a ring of 96 lights is the gauge, filled in the
 heat colors with a comet; agents are lights orbiting her waist; response pulses ripple out from the ring; embers rise
-at redline; a new peak pops a gold pill above the speed. See `characters/reference/hud.py` and DESIGN 2a, Character.
+at redline; a new peak pops a gold pill above the speed. See `characters/reference/hud.py` and DESIGN 2a.6.
 
 ## 9. Conformance
 

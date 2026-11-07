@@ -37,6 +37,7 @@ never requested.
 | Price table (3) | `raw.githubusercontent.com`, `cdn.jsdelivr.net` | 60 s after launch, then daily, manual | 1 MiB |
 | Exchange rates (4) | `open.er-api.com`, `cdn.jsdelivr.net`, `latest.currency-api.pages.dev`, `api.frankfurter.dev` | only while a non-USD currency is selected: 30 s after launch or on selection, then daily, manual | 256 KiB |
 | Live reporting (6) | the service URL and the API host the user confirmed | only while the user has it on: every 5 s while agents work, a heartbeat while idle, nothing when quiet | 64 KiB discovery, 16 KiB API |
+| Characters (CHARACTERS 2) | catalog and packs: `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` | catalog: when Settings shows the character list (at most every 10 min) and at most daily while a `character` orb exists; packs: only when the user presses Download or Update | 1 MiB catalog, 200 MiB pack (exact size and SHA-256 from the catalog) |
 | Local network (8) | none: local addresses only (LAN 2.3) | only while the user has the server or a target on: answers devices; sends to targets as the speed changes | 8 KiB request head, 16 KiB frame |
 
 ## 2. Update check

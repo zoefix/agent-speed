@@ -67,6 +67,19 @@ final class CharacterStyle: OrbStyleRenderer {
     func buildReadout(into scene: inout OrbScene, _ frame: OrbFrame, readout: OrbReadoutBuilder) {
         guard !providerDrew else { return }
         readout.add(into: &scene, frame, layout: readoutLayout)
+        if let character = frame.content.character, character.pack == nil, !frame.content.isThumbnail {
+            addEmptyLabel(character.emptyLabel, into: &scene, frame)
+        }
+    }
+
+    /// `character.empty` above the fallback readout while no character is installed (DESIGN 2a.6).
+    private func addEmptyLabel(_ text: String, into scene: inout OrbScene, _ frame: OrbFrame) {
+        let style = OrbTextStyle(size: max(7, 0.03 * frame.s), weight: .medium, tracking: 0)
+        guard let texture = OrbTextCache.shared.texture(text, style: style, language: frame.content.language,
+                                                        scale: scene.backingScale) else { return }
+        let baseline = frame.center.y + (readoutLayout.valueBaseline - readoutLayout.valueSize - 0.03) * frame.s
+        scene.add(OrbTextDraw(texture, centerX: frame.center.x, baseline: baseline,
+                              color: frame.tokens.secondaryText.opacity(frame.alpha)))
     }
 
     /// The gauge: lights on a flat ellipse at the feet, filled in the heat colors with a bright comet (CHARACTERS 8).
