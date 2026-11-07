@@ -28,6 +28,7 @@ enum TrafficOrbPreviews {
         case .liquid: 0.30 * redline
         case .reactor: 0.52 * redline
         case .minimal: 0.22 * redline
+        case .character: 0.30 * redline
         }
     }
 

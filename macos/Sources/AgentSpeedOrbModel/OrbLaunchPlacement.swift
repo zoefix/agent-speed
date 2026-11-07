@@ -24,7 +24,7 @@ public enum OrbLaunchPlacement {
         primary: OrbDisplayInfo?,
         placed: [OrbDisc] = []
     ) -> CGPoint? {
-        let radius = CGFloat(orb.size) / 2
+        let radius = CGFloat(orb.footprintDiameter) / 2
         let entries = OrbLayoutResolver.entries(document: document, arrangement: arrangement, previousArrangement: nil,
                                                 connected: displays.map(\.key), main: main)
         var center: CGPoint

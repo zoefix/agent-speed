@@ -1,9 +1,10 @@
+import AgentSpeedCore
 import AgentSpeedOrbModel
 import SwiftUI
 
-/// The five style cards (DESIGN 5, editor): each an animated preview by the real renderer at 64 pt over the style's
-/// name, one row (3 + 2 when narrow); the selected card carries an accent ring. ← / → move between cards. Below: the
-/// selected style's name and description.
+/// The six style cards (DESIGN 5, editor): each an animated preview by the real renderer at 64 pt over the style's
+/// name (the `character` card shows the character's portrait), one row (3 + 3 when narrow); the selected card carries
+/// an accent ring. ← / → move between cards. Below: the selected style's name and description.
 ///
 /// The cards' dynamic layers share one Metal layer (one present per frame for all five), drawn between the card
 /// backgrounds and their names.
@@ -23,7 +24,7 @@ struct OrbStyleCards: View {
     static let orbDiameter: CGFloat = 64
     private static let spacing: CGFloat = 12
     private static let cardHeight: CGFloat = 112
-    /// Five cards in one row from 560 pt of pane width, else 3 + 2 rows (DESIGN 5).
+    /// Six cards in one row from 560 pt of pane width, else 3 + 3 rows (DESIGN 5).
     private static let fitsOneRow = SettingsPaneView.width(for: .orb) >= 560
     nonisolated private static let space = "orbStyleCards"
 
@@ -64,7 +65,7 @@ struct OrbStyleCards: View {
 
     private var specs: [OrbPreviewSpec] {
         OrbStyleKind.allCases.compactMap { style in
-            guard let frame = orbFrames[style], let clip = cardFrames[style] else { return nil }
+            guard style != .character, let frame = orbFrames[style], let clip = cardFrames[style] else { return nil }
             return OrbPreviewSpec(id: style.rawValue, feed: feeds.feed(style), style: style, diameter: Self.orbDiameter,
                                   frame: frame, clip: clip, thumbnail: false, theme: model.titles.theme(forOrb: orb))
         }
@@ -83,11 +84,16 @@ struct OrbStyleCards: View {
                     ForEach(OrbStyleKind.allCases.prefix(3)) { card($0) }
                 }
                 HStack(spacing: Self.spacing) {
-                    ForEach(OrbStyleKind.allCases.suffix(2)) { card($0) }
-                    Color.clear.frame(maxWidth: .infinity, maxHeight: 1)
+                    ForEach(OrbStyleKind.allCases.suffix(3)) { card($0) }
                 }
             }
         }
+    }
+
+    /// The orb's locked character, else the first installed one.
+    private var cardCharacter: InstalledCharacter? {
+        let library = model.characters
+        return orb.character.flatMap(library.installed) ?? library.installed.first
     }
 
     private func move(_ delta: Int) {
@@ -102,10 +108,15 @@ struct OrbStyleCards: View {
         let selected = orb.style == style
         return ZStack(alignment: .top) {
             StyleCardBackground(selected: selected)
-            OrbPreviewView(model: model, feed: feeds.feed(style), style: style, diameter: Self.orbDiameter, cap: Self.cardRate,
-                           active: active, dynamic: false, theme: model.titles.theme(forOrb: orb))
-                .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { orbFrames[style] = $0 }
-                .padding(.top, -2)
+            if style == .character {
+                CharacterPortrait(pack: cardCharacter, height: 80)
+                    .padding(.top, 4)
+            } else {
+                OrbPreviewView(model: model, feed: feeds.feed(style), style: style, diameter: Self.orbDiameter, cap: Self.cardRate,
+                               active: active, dynamic: false, theme: model.titles.theme(forOrb: orb))
+                    .onGeometryChange(for: CGRect.self) { $0.frame(in: .named(Self.space)) } action: { orbFrames[style] = $0 }
+                    .padding(.top, -2)
+            }
         }
         .frame(maxWidth: .infinity)
         .frame(height: Self.cardHeight)

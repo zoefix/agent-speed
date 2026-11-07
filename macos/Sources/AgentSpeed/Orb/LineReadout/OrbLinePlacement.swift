@@ -32,6 +32,8 @@ struct OrbLinePlacement: Equatable {
     static let needle = OrbLinePlacement(nearestBaseline: 0.108, below: true, size: 0.046, fit: 0.285, thinkingUnit: false,
                                          hubReach: 0.223, scoreScale: 1.1)
     static let minimal = OrbLinePlacement(nearestBaseline: -0.228, below: false, size: 0.054, fit: 0.50, recenters: true)
+    /// Above the fallback readout of `character`, whose disc is twice the orb size.
+    static let character = OrbLinePlacement(nearestBaseline: -0.13, below: false, size: 0.026, fit: 0.36, recenters: true)
 
     static func of(_ style: OrbStyleKind) -> OrbLinePlacement {
         switch style {
@@ -40,6 +42,7 @@ struct OrbLinePlacement: Equatable {
         case .liquid: .liquid
         case .reactor: .reactor
         case .minimal: .minimal
+        case .character: .character
         }
     }
 

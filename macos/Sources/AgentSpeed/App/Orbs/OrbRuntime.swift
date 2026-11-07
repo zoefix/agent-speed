@@ -15,6 +15,7 @@ final class OrbRuntime {
     private var trackerArmed = false
     private var drawOnTimer: Timer?
     private var lineQuiet = OrbLineQuietRule()
+    private var characterSelection = CharacterSelection()
 
     init(config: OrbConfig) {
         id = config.id
@@ -44,7 +45,9 @@ final class OrbRuntime {
     }
 
     /// Feeds one snapshot (every engine tick). While the effects preview runs, every orb shows the demo.
-    func ingest(_ snapshot: SpeedSnapshot, settings: AppSettings, cost: CostDisplay?, isPreviewing: Bool, now: TimeInterval) {
+    func ingest(_ snapshot: SpeedSnapshot, settings: AppSettings, cost: CostDisplay?, isPreviewing: Bool, now: TimeInterval,
+                characters: OrbCharacterInputs? = nil) {
+        defer { if let characters { updateCharacter(characters, now: now) } }
         let metric = settings.metric
         let set = isPreviewing ? nil : sourceSet
         let reading = OrbSubset.reading(snapshot, sources: set, hosts: isPreviewing ? nil : hostSet)
@@ -89,6 +92,19 @@ final class OrbRuntime {
         let bits = settings.trafficUnit == .bits
         lineQuiet.apply(rate, bits: bits, at: now)
         publishLines(enabled ? .traffic(bits: bits) : nil)
+    }
+
+    /// The vendor reading and the character of a `character` orb (CHARACTERS 7); other styles keep neither.
+    private func updateCharacter(_ inputs: OrbCharacterInputs, now: TimeInterval) {
+        guard config.style == .character else {
+            if feed.vendors != VendorReading() { feed.vendors = VendorReading() }
+            if feed.characterID != nil { feed.characterID = nil }
+            return
+        }
+        let vendors = VendorReading(agents: reading.agents, prices: inputs.prices)
+        if feed.vendors != vendors { feed.vendors = vendors }
+        let id = characterSelection.update(locked: config.character, vendorRates: vendors.rates, installed: inputs.installed, at: now)
+        if feed.characterID != id { feed.characterID = id }
     }
 
     /// The intelligence readout (DESIGN 10) follows every engine tick in `ingest`; it needs no traffic measuring.

@@ -30,6 +30,8 @@ struct OrbContent {
     var isThumbnail = false
     /// The two-line readout while it is on for this orb (DESIGN 10).
     var lines: OrbLines?
+    /// The `character` style's character and readouts (CHARACTERS 7, 8); nil for other styles.
+    var character: OrbCharacterContent?
 
     /// Below 64 pt only the value is drawn (DESIGN 2a, Shared foundation).
     var valueOnly: Bool { diameter < 64 }
@@ -267,6 +269,7 @@ enum OrbStyles {
         case .liquid: LiquidStyle()
         case .reactor: ReactorStyle()
         case .minimal: MinimalStyle()
+        case .character: CharacterStyle()
         }
     }
 }

@@ -21,6 +21,7 @@ enum OrbMenus {
         menu.addItem(header)
         menu.addItem(.separator())
         menu.addItem(styleItem(model: model, orb: orb))
+        if orb.style == .character { menu.addItem(characterItem(model: model, orb: orb)) }
         menu.addItem(sourcesItem(model: model, orb: orb))
         let hosts = model.hostChoices
         if OrbHostChoice.pickerShown(hosts) {
@@ -91,6 +92,30 @@ enum OrbMenus {
                 model?.orbs.setStyle(style, of: orb.id)
             })
         }
+        item.submenu = submenu
+        return item
+    }
+
+    /// `characters.title` ▸ Auto, every installed character, then "Download more…" opening the orb's Settings
+    /// (DESIGN 2b, Context menu; CHARACTERS 7).
+    private static func characterItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
+        let l10n = model.l10n
+        let item = NSMenuItem(title: l10n("characters.title"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        submenu.addItem(ActionMenuItem(l10n("characters.auto"), state: orb.character == nil ? .on : .off) { [weak model] in
+            model?.orbs.setCharacter(nil, of: orb.id)
+        })
+        let installed = model.characters.installed
+        if !installed.isEmpty { submenu.addItem(.separator()) }
+        for pack in installed {
+            let name = OrbCharacterSection.name(pack.manifest.name, l10n.language)
+            submenu.addItem(ActionMenuItem(name, state: orb.character == pack.id ? .on : .off) { [weak model] in
+                model?.orbs.setCharacter(pack.id, of: orb.id)
+            })
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(ActionMenuItem(l10n("characters.more")) { [weak model] in model?.commands?.showOrbSettings(orb.id) })
         item.submenu = submenu
         return item
     }

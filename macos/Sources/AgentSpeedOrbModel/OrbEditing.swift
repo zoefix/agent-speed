@@ -42,7 +42,8 @@ public enum OrbEditing {
             titleTheme: template.titleTheme,
             unit: template.unit,
             traffic: template.traffic,
-            showName: template.showName
+            showName: template.showName,
+            character: template.character
         )
         return inserting(orb, after: template.id, in: doc)
     }
@@ -164,6 +165,11 @@ public enum OrbEditing {
     /// Changes the style; the size stays, since every style shares one range.
     public static func setStyle(_ style: OrbStyleKind, of id: String, in doc: OrbsDocument) -> OrbsDocument {
         update(id, in: doc) { $0.style = style }
+    }
+
+    /// A pack id, or nil to follow the fastest model vendor (CHARACTERS 7).
+    public static func setCharacter(_ character: String?, of id: String, in doc: OrbsDocument) -> OrbsDocument {
+        update(id, in: doc) { $0.character = OrbConfig.cleanCharacter(character) }
     }
 
     public static func setSize(_ size: Double, of id: String, in doc: OrbsDocument) -> OrbsDocument {

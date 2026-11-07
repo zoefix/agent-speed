@@ -155,7 +155,7 @@ struct DocumentCodingTests {
     }
 
     @Test func styleKeys() {
-        #expect(OrbStyleKind.allCases.map(\.rawValue) == ["led", "needle", "liquid", "reactor", "minimal"])
+        #expect(OrbStyleKind.allCases.map(\.rawValue) == ["led", "needle", "liquid", "reactor", "minimal", "character"])
         #expect(OrbStyleKind.needle.titleKey == "style.needle")
         #expect(OrbStyleKind.needle.descriptionKey == "style.needle.desc")
         #expect(OrbSizes.presets == [112, 148, 196])
