@@ -356,3 +356,9 @@ class OrbitTests(unittest.TestCase):
         depths = [o.at(t / 10, 0, 0)[2] for t in range(100)]
         self.assertLess(min(depths), -0.8)
         self.assertGreater(max(depths), 0.8)
+
+
+class FixtureTests(unittest.TestCase):
+    def test_shared_fixtures_match_the_reference_player(self):
+        from characters.tests.make_fixtures import main
+        self.assertEqual(main(["--check"]), 0, "run python3 -m characters.tests.make_fixtures")

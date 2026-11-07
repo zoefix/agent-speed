@@ -6,7 +6,6 @@ speed rises and a bright comet runs around it; its front half is drawn over her,
 lying on the floor. Agents are small lights orbiting her waist. Numbers roll digit by digit.
 """
 import math
-import random
 from functools import lru_cache
 
 import numpy as np
@@ -14,6 +13,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from .motions.springs import SecondOrder
 from .orbits import Orbit
+from .rng import Rng
 
 DIGITS_FONT = "/System/Library/Fonts/SFNS.ttf"
 CJK_FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
@@ -144,7 +144,7 @@ class Hud:
     def __init__(self, renderer, unit, seed=5):
         self.r, self.u = renderer, unit
         self.tex = Textures(renderer, unit)
-        self.rng = random.Random(seed)
+        self.rng = Rng(seed)
         self.center = Follow(1.1, 0.75, (0.0, 1.0), 0.0)
         self.peak_pos = Follow(2.0, 0.6, (3.0 * unit, 2.9), 0.7)
         self.orbits, self.placed = None, {}

@@ -1,0 +1,302 @@
+[
+{
+"id": "AngleX",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "AngleY",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "AngleZ",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "BodyAngleZ",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "BodySway",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Breath",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "EyeOpen.left",
+"min": 0,
+"max": 1,
+"default": 1
+},
+{
+"id": "EyeOpen.right",
+"min": 0,
+"max": 1,
+"default": 1
+},
+{
+"id": "EyeBallX",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "EyeBallY",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Wind",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "PosX",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "PosY",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Squash",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Lean",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Spin",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "Hip",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "SkirtFlare",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "FootLift",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "FootPoint",
+"min": 0,
+"max": 1,
+"default": 0.0
+},
+{
+"id": "Shoulder.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Shoulder.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Arm.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Forearm.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Lift.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Bend.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Arm.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Forearm.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Lift.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Bend.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Wrist.right",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Spread.right",
+"min": -0.5,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.right.0",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.right.1",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.right.2",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.right.3",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.right.4",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Wrist.left",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Spread.left",
+"min": -0.5,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.left.0",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.left.1",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.left.2",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.left.3",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Finger.left.4",
+"min": -0.4,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "HairBack1",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "HairBack2",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "HairLock1",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "HairLock2",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "Skirt",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+},
+{
+"id": "SkirtHem",
+"min": -1.0,
+"max": 1.0,
+"default": 0.0
+}
+]

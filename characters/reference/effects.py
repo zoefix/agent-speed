@@ -1,15 +1,16 @@
 """Speed effects: drifting petals carried by the wind and a warm glow at the top speeds."""
 import math
-import random
 
 import numpy as np
+
+from .rng import Rng
 
 
 class Petals:
     def __init__(self, area, wind_sign=1.0, seed=11):
         self.x0, self.y0, self.x1, self.y1 = area
         self.wind_sign = wind_sign
-        self.rng = random.Random(seed)
+        self.rng = Rng(seed)
         self.items = []
         self.carry = 0.0
 

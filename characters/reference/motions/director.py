@@ -6,8 +6,8 @@ give everything weight. Expressions change while the eyes are closed in a blink.
 around its spot, away from the orb, and it stays where it lands.
 """
 import math
-import random
 
+from ..rng import Rng
 from .curves import merge
 from .gestures import COMBOS, FACE_GESTURES, GESTURES, HEAD_GESTURES, arm_gesture, combo, face_gesture, head_gesture
 from .hands import HandActor
@@ -48,7 +48,7 @@ class Director:
         self.out, self.book, self.orb, self.celebrate = arm_out, arm_book, orb, celebrate
         self.meta = {v["id"]: v for v in variants}
         self.faces = {k: v for k, v in self.meta.items() if v["kind"] == "face"}
-        self.rng = random.Random(seed)
+        self.rng = Rng(seed)
         self.springs = Springs()
         self.beat = Beat()
         self.grooves = []
