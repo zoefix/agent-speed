@@ -117,6 +117,10 @@ def landmarks(layers):
     feet_x = (box(feet_src.alpha)[0] + box(feet_src.alpha)[2]) / 2 if feet_src else waist_x
     lm["feet"] = (feet_x, lowest)
     lm["hem"] = bottom[3] if bottom else lowest
+    lm["skirtMid"] = waist_y + 0.45 * (lm["hem"] - waist_y)
+    if "footwear" in named:
+        bx0, by0, bx1, by1 = box(named["footwear"].alpha, 0.3)
+        lm["foot"] = {"box": (bx0, by0, bx1, by1), "ankle": ((bx0 + bx1) / 2, by0)}
 
     lm["arms"] = {}
     for layer in tags.get("handwear", []):
@@ -157,8 +161,10 @@ def bones(lm):
     eyes_y = np.mean([e["pivot"][1] for e in lm["eyes"].values()]) if lm["eyes"] else fy0 + 0.55 * (fy1 - fy0)
     out = [
         Bone("root", None, lm["feet"]),
-        Bone("lower", "root", lm["feet"]),
+        Bone("turn", "root", (lm["waist"][0], lm["feet"][1])),
+        Bone("lower", "turn", lm["feet"]),
         Bone("skirt", "lower", lm["waist"]),
+        Bone("skirtHem", "skirt", (lm["waist"][0], lm["skirtMid"])),
         Bone("chest", "lower", lm["waist"]),
         Bone("head", "chest", lm["neck"]),
         Bone("face", "head", face_c),
@@ -177,8 +183,11 @@ def bones(lm):
         out.append(Bone("lock1", "chest", lm["lock"]["root"]))
         out.append(Bone("lock2", "lock1", lm["lock"]["mid"]))
     for side, arm in lm["arms"].items():
-        out.append(Bone(f"arm.{side}", "chest", arm["shoulder"]))
+        out.append(Bone(f"shoulder.{side}", "chest", arm["shoulder"]))
+        out.append(Bone(f"arm.{side}", f"shoulder.{side}", arm["shoulder"]))
         out.append(Bone(f"forearm.{side}", f"arm.{side}", arm["elbow"]))
+    if "foot" in lm:
+        out.append(Bone("foot", "turn", lm["foot"]["ankle"]))
     return out
 
 
@@ -224,7 +233,7 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
         arm = arm if arm is not None else lm["arms"][key]
         if arm.get("tip") is not None:
             chest, upper, fore = arm_weights(vertices, arm)
-            return [("chest", chest), (f"arm.{key}{suffix}", upper), (f"forearm.{key}{suffix}", fore)]
+            return [(f"shoulder.{key}", chest), (f"arm.{key}{suffix}", upper), (f"forearm.{key}{suffix}", fore)]
         field = arm["field"]
         xi = np.clip(x.astype(int), 0, field.shape[1] - 1)
         yi = np.clip(y.astype(int), 0, field.shape[0] - 1)
@@ -236,15 +245,21 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
         reach = arm["reach"]
         w_arm = smoothstep(0.0, 0.14 * reach, d)
         w_fore = smoothstep(0.38 * reach, 0.62 * reach, d)
-        return [("chest", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
+        return [(f"shoulder.{key}", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
                 (f"forearm.{key}{suffix}", w_arm * w_fore)]
     if tag == "objects" and attach:
         return [(attach, one)]
-    if tag in ("topwear", "neckwear", "wings", "tail", "objects", "handwear"):
+    if tag in ("footwear", "legwear") and "foot" in lm:
+        return [("foot", one)]
+    if tag == "topwear":
+        w_low = smoothstep(lm["waist"][1] - 0.3 * face_h, lm["waist"][1] + 0.1 * face_h, y)
+        return [("chest", 1 - w_low), ("lower", w_low)]
+    if tag in ("neckwear", "wings", "tail", "objects", "handwear"):
         return [("chest", one)]
     if tag == "bottomwear":
         w = smoothstep(lm["waist"][1], lm["hem"], y) ** 1.3
-        return [("lower", 1 - w), ("skirt", w)]
+        h = smoothstep(lm.get("skirtMid", lm["hem"]), lm["hem"], y) ** 1.2
+        return [("lower", 1 - w), ("skirt", w * (1 - h)), ("skirtHem", w * h)]
     return [("lower", one)]
 
 

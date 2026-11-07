@@ -154,7 +154,7 @@ class FillHiddenTests(unittest.TestCase):
         from characters.rig.skeleton import weights_by_owner
         tags = np.full((40, 40), "topwear", object)
         tags[:, 20:] = "face"
-        lm = {"face": (0, 0, 10, 10), "chin": 10}
+        lm = {"face": (0, 0, 10, 10), "chin": 10, "waist": (20, 30)}
         influences = dict(weights_by_owner(np.array([[5.0, 5.0], [30.0, 5.0]]), tags.astype(str), lm))
         np.testing.assert_allclose(influences["chest"], [1, 0])
         np.testing.assert_allclose(influences["face"], [0, 1])
@@ -190,13 +190,61 @@ class PhysicsTests(unittest.TestCase):
 
 class MotionTests(unittest.TestCase):
     def test_motion_curves_ease_between_keys_and_loop(self):
-        m = Motion("m", 2.0, {"Turn": [(0, 0), (1, 1), (2, 0)]})
+        m = Motion("m", 2.0, {"Turn": [(0, 0), (1, 1), (2, 0)]}, loop=True)
         self.assertAlmostEqual(m.sample(0.5)["Turn"], 0.5)
         self.assertAlmostEqual(m.sample(2.5)["Turn"], 0.5)
+
+    def test_curves_keep_holds_flat_and_never_overshoot(self):
+        from characters.reference.motions import Curve
+        c = Curve([(0, 0), (1, 1), (2, 1), (3, 0.2), (4, 0.6)])
+        xs = np.linspace(0, 4, 401)
+        ys = np.array([c(x) for x in xs])
+        np.testing.assert_allclose(ys[(xs >= 1) & (xs <= 2)], 1.0, atol=1e-9)
+        self.assertLessEqual(ys.max(), 1.0 + 1e-9)
+        self.assertGreaterEqual(ys.min(), -1e-9)
+        self.assertTrue(np.all(np.diff(ys[(xs >= 2) & (xs <= 3)]) <= 1e-12))
+
+    def test_springs_overshoot_then_settle_and_snap_in_place(self):
+        from characters.reference.motions import SecondOrder
+        s = SecondOrder(2.6, 0.55, 0.0)
+        ys = [s.update(1 / 60, 1.0) for _ in range(240)]
+        self.assertGreater(max(ys), 1.02)
+        self.assertAlmostEqual(ys[-1], 1.0, places=3)
+        s.snap(0.3)
+        self.assertAlmostEqual(s.update(1 / 60, 0.3), 0.3)
+
+    def test_moves_start_and_end_at_rest(self):
+        from characters.reference.motions import MOVES
+        for name, build in MOVES.items():
+            m = build("right", "left")
+            for pid, v in m.sample(0.0).items():
+                self.assertAlmostEqual(v, 0.0, msg=f"{name} {pid} start")
+            for pid, v in m.sample(m.duration).items():
+                if pid != "Spin":
+                    self.assertAlmostEqual(v, 0.0, msg=f"{name} {pid} end")
 
     def test_bands_follow_the_levels(self):
         self.assertEqual([band_of(n) for n in (0, 1, 5, 9, 12, 13)],
                          ["idle", "cruise", "boost", "overdrive", "redline", "redline"])
+
+    def test_director_keeps_a_full_body_rig_in_range_and_near_its_spot(self):
+        params = {}
+        for pid in ("AngleX", "AngleY", "AngleZ", "BodyAngleZ", "BodySway", "EyeBallX", "EyeBallY", "PosX", "PosY",
+                    "Squash", "Lean", "Hip", "Arm.left", "Arm.right", "Forearm.left", "Forearm.right",
+                    "Shoulder.left", "Shoulder.right"):
+            params[pid] = {"id": pid, "min": -1, "max": 1, "default": 0}
+        for pid in ("Breath", "Wind", "Spin", "SkirtFlare", "FootLift", "FootPoint"):
+            params[pid] = {"id": pid, "min": 0, "max": 1, "default": 0}
+        d = Director(params, arm_out="right", arm_book="left", orb=-1.0)
+        played = set()
+        for n in range(60 * 150):
+            d.set_level(min(13, (n // 600) % 15))
+            values = d.update(1 / 60)
+            played.add(d.last_gesture)
+            self.assertTrue(all(math.isfinite(v) for v in values.values()))
+            self.assertLessEqual(abs(values["PosX"]), 1.2)
+            self.assertGreaterEqual(d.stage_x, -1e-9)
+        self.assertTrue({"hop", "spin", "step", "sway"} & played)
 
     def test_director_output_stays_inside_parameter_ranges(self):
         rig = Rig(tiny_doc())

@@ -32,6 +32,15 @@ def write(out_dir, name, canvas, atlas, bones, params, drivers, physics, parts, 
     return out / "rig.json"
 
 
+def _exact_weights(weights):
+    """Rounds to 4 decimals and moves the rounding error onto each vertex's largest weight, so rows sum to 1."""
+    w = np.round(np.asarray(weights, np.float64), 4)
+    rows = np.arange(len(w))
+    top = np.argmax(w, axis=1)
+    w[rows, top] = np.round(w[rows, top] + 1 - w.sum(axis=1), 4)
+    return w
+
+
 def part_entry(layer, order, vertices, uv, triangles, bone_idx, weights):
     return {
         "name": layer.name,
@@ -42,7 +51,7 @@ def part_entry(layer, order, vertices, uv, triangles, bone_idx, weights):
         "triangles": triangles.ravel().tolist(),
         "influences": bone_idx.shape[1],
         "bones": bone_idx.ravel().tolist(),
-        "weights": np.round(weights, 4).ravel().tolist(),
+        "weights": _exact_weights(weights).ravel().tolist(),
     }
 
 

@@ -14,6 +14,7 @@ from PIL import Image, ImageDraw, ImageFont
 
 from ..rig import package
 from ..rig.layers import load_reference
+from ..rig.params import POS_X
 from . import effects
 from .motions import Director
 from .physics import Physics
@@ -29,8 +30,15 @@ TIMELINE = [(0, 0), (3, 0), (4, 14), (7, 22), (8, 60), (11, 75), (12, 150), (15,
 REEL_GAP = 0.9
 REEL_LABELS = {"wave": "揮手", "chin": "托腮思考", "peace": "比 YA", "fist": "握拳加油", "idea": "靈光一閃", "hip": "叉腰",
                "hairtuck": "撥頭髮", "present": "介紹手勢", "hug": "抱書", "raise": "舉書歡呼", "open": "翻書閱讀",
+               "cheer": "雙手歡呼", "hooray": "揮手歡呼", "eureka": "讀到靈感", "ponder": "邊讀邊想", "cuddle": "抱書比 YA",
+               "proud": "抱書叉腰", "hop": "跳一下", "jump": "大跳", "hops": "連跳", "jumpjoy": "跳起來歡呼",
+               "spin": "轉圈", "step": "側步移動", "curtsy": "屈膝行禮", "tiptoe": "踮腳", "foottap": "踏腳打拍子",
+               "sway": "擺臀跳舞", "run": "原地跑步", "stretch": "伸懶腰", "bow": "鞠躬", "peek": "偷看懸浮球",
                "yawn": "打哈欠", "hum": "哼歌", "nod": "點頭", "shake": "搖頭", "tilt": "歪頭", "lookaround": "東張西望",
                "giggle": "偷笑", "doubletake": "嚇一跳"}
+REEL_EXTRA = ["cheer", "hooray", "eureka", "ponder", "cuddle", "proud", "hop", "hops", "jump", "jumpjoy", "spin",
+              "step", "step", "curtsy", "tiptoe", "foottap", "sway", "run", "stretch", "bow", "peek", "yawn", "hum", "nod",
+              "shake", "tilt", "lookaround", "giggle", "doubletake"]
 DIGITS_FONT = "/System/Library/Fonts/SFNS.ttf"
 TITLE_FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
 
@@ -149,8 +157,8 @@ def main(argv=None):
             return
 
     w, h = (int(v) for v in args.size.split("x"))
-    orb_d = int(h * 0.5)
-    orb_c = (w * 0.26, h * 0.62)
+    orb_d = int(h * 0.44)
+    orb_c = (w * 0.26, h * 0.64)
     orb_bottom = orb_c[1] + orb_d / 2
     lm = doc["landmarks"]
     extent = np.concatenate([np.array(p["vertices"]).reshape(-1, 2) for p in doc["parts"]])
@@ -172,7 +180,8 @@ def main(argv=None):
     petals = effects.Petals((xs[0], screen((0, top_y))[1], xs[1], orb_bottom), wind_sign=1.0)
     book = lm.get("objectSide") or "left"
     free = "right" if book == "left" else "left"
-    director = Director(rig.params, rig.variants, arm_out=free, arm_book=book)
+    director = Director(rig.params, rig.variants, arm_out=free, arm_book=book, orb=-1.0)
+    shadow = renderer.texture(effects.shadow_texture())
     physics = Physics(doc["physics"], wind_sign=1.0)
     physics.reset(rig.defaults())
     tracker = LevelTracker()
@@ -189,8 +198,7 @@ def main(argv=None):
     dt = 1 / args.fps
     reel, reel_at, caption = [], 1.0, None
     if args.reel:
-        gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + ["yawn", "hum", "nod", "shake", "tilt",
-                                                                             "lookaround", "giggle", "doubletake"]
+        gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + REEL_EXTRA
         reel = [g for g in gestures if director._gesture(g) is not None]
         args.seconds = reel_at + sum(director._gesture(g).duration + REEL_GAP for g in reel)
         caption_font = ImageFont.truetype(TITLE_FONT, int(h * 0.036))
@@ -219,6 +227,10 @@ def main(argv=None):
         values = director.update(dt)
         values.update(physics.step(dt, values))
         posed = rig.pose(values)
+        for event in director.events:
+            if event == "petals":
+                petals.burst(chest[0] + values.get("PosX", 0.0) * POS_X * lm["faceWidth"] * scale, chest[1])
+        director.events.clear()
         petals.update(dt, director.intensity)
         evaluated = time.perf_counter()
 
@@ -229,6 +241,10 @@ def main(argv=None):
             size = 1.5 * orb_d
             renderer.image(glow, chest[0] - size / 2, chest[1] - size / 2, size, size, alpha=g,
                            premultiplied=True, additive=True)
+        foot_x, foot_y = screen((lm["feet"][0] + values.get("PosX", 0.0) * POS_X * lm["faceWidth"], lm["feet"][1]))
+        air = max(0.0, values.get("PosY", 0.0))
+        sw, sh = orb_d * 0.55 * (1 - 0.45 * air), orb_d * 0.09 * (1 - 0.45 * air)
+        renderer.image(shadow, foot_x - sw / 2, foot_y - sh * 0.55, sw, sh, alpha=0.55 * (1 - 0.6 * air))
         renderer.sprites(petal, petals.instances(front=False))
         renderer.character(posed, scale, offset, rig.opacities(values))
         renderer.sprites(petal, petals.instances(front=True))

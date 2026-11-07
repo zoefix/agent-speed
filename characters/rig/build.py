@@ -16,7 +16,9 @@ from . import atlas, layers, mesh, package, params, pose, skeleton, variants
 
 
 def landmark_summary(lm):
-    out = {k: lm[k] for k in ("face", "faceWidth", "chin", "neck", "waist", "feet", "hem")}
+    out = {k: lm[k] for k in ("face", "faceWidth", "chin", "neck", "waist", "feet", "hem", "skirtMid")}
+    if "foot" in lm:
+        out["foot"] = lm["foot"]
     out["arms"] = {k: {"shoulder": a["shoulder"], "elbow": a["elbow"], "hand": a["hand"], "pose": a.get("tip") is not None}
                    for k, a in lm["arms"].items()}
     out["eyes"] = lm["eyes"]
@@ -78,7 +80,7 @@ def main(argv=None):
             v = variants.load(spec, reference, size, lm, object_side, base_names)
             loaded.append(v)
             if v.kind == "arm":
-                bones.append(skeleton.Bone(f"arm.{v.side}@{v.id}", "chest", v.arm["shoulder"]))
+                bones.append(skeleton.Bone(f"arm.{v.side}@{v.id}", f"shoulder.{v.side}", v.arm["shoulder"]))
                 bones.append(skeleton.Bone(f"forearm.{v.side}@{v.id}", f"arm.{v.side}@{v.id}", v.arm["elbow"]))
     backdrops = [v.backdrop for v in loaded if v.backdrop is not None]
     patch_tags = {}

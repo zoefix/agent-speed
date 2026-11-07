@@ -1,14 +1,20 @@
 """Parameters, the bone channels they drive, and the physics chains that write the hair and skirt parameters.
 
+Whole-body parameters: PosX and PosY move the character (+1 is right and up), Squash stretches (+) or squashes (-)
+it over the feet, Lean tilts it over the feet, Spin (0..1) is one full paper-doll turn, Hip shifts the weight.
+
 Channels: rotate (degrees, clockwise on screen), x and y (canvas pixels), scaleX and scaleY (added to 1).
 """
 
+
+import math
 
 ARM_RANGES = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
 VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
 VARIANT_FOREARM_RANGE = 90.0
 BEND_RANGE = 90.0
+POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.45, 0.25
 
 
 def param(pid, lo=-1.0, hi=1.0, default=0.0):
@@ -51,7 +57,30 @@ def build(lm, bone_names):
         drive("Breath", "chest", "scaleY", [(0, 0), (1, 0.012)]),
         drive("Breath", "chest", "y", [(0, 0), (1, -0.8)]),
     ]
+    if has("turn"):
+        params += [param("PosX"), param("PosY"), param("Squash"), param("Lean"), param("Spin", 0, 1), param("Hip"),
+                   param("SkirtFlare", 0, 1)]
+        drivers += [
+            linear("PosX", "root", "x", POS_X * fw),
+            linear("PosY", "root", "y", -POS_Y * fw),
+            linear("Squash", "root", "scaleY", 0.1),
+            linear("Squash", "root", "scaleX", -0.06),
+            linear("Lean", "root", "rotate", 6),
+            drive("Spin", "turn", "scaleX", [(k / 16, math.cos(2 * math.pi * k / 16) - 1) for k in range(17)]),
+            linear("Hip", "lower", "x", HIP_X * fw),
+            linear("Hip", "chest", "x", -HIP_COUNTER * fw),
+            linear("Hip", "chest", "rotate", -1.5),
+            drive("SkirtFlare", "skirtHem", "scaleX", [(0, 0), (1, 0.14)]),
+            drive("SkirtFlare", "skirtHem", "scaleY", [(0, 0), (1, -0.03)]),
+        ]
+    if has("foot"):
+        params += [param("FootLift", 0, 1), param("FootPoint", 0, 1)]
+        drivers += [drive("FootLift", "foot", "y", [(0, 0), (1, -0.35 * fw)]),
+                    drive("FootPoint", "foot", "scaleY", [(0, 0), (1, 0.15)])]
     for side in ("left", "right"):
+        if has(f"shoulder.{side}"):
+            params.append(param(f"Shoulder.{side}"))
+            drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw))
         if has(f"eye.{side}"):
             drivers.append(drive(f"EyeOpen.{side}", f"eye.{side}", "scaleY", [(0, -0.9), (1, 0)]))
             drivers.append(linear("EyeBallX", f"iris.{side}", "x", 0.028 * fw))
@@ -78,15 +107,21 @@ def build(lm, bone_names):
         drivers += [linear("HairLock1", "lock1", "rotate", -20), linear("HairLock2", "lock2", "rotate", -24)]
         physics.append(chain("lock", lk["root"], [lk["mid"][1] - lk["root"][1], lk["end"] - lk["mid"][1]],
                              ["HairLock1", "HairLock2"], [20, 24], fw, stiffness=20, damping=5.0, wind=1.25))
-    if has("skirt"):
+    if has("skirtHem"):
+        params += [param("Skirt"), param("SkirtHem")]
+        drivers += [linear("Skirt", "skirt", "rotate", -5), linear("SkirtHem", "skirtHem", "rotate", -7)]
+        physics.append(chain("skirt", lm["waist"], [lm["skirtMid"] - lm["waist"][1], lm["hem"] - lm["skirtMid"]],
+                             ["Skirt", "SkirtHem"], [5, 7], fw, stiffness=45, damping=6.5, wind=0.4, head=0.0,
+                             hip=HIP_X))
+    elif has("skirt"):
         params.append(param("Skirt"))
         drivers.append(linear("Skirt", "skirt", "rotate", -5))
         physics.append(chain("skirt", lm["waist"], [lm["hem"] - lm["waist"][1]], ["Skirt"], [5], fw,
-                             stiffness=55, damping=7.5, wind=0.4, head=0.0))
+                             stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
     return params, drivers, physics
 
 
-def chain(name, anchor, lengths, outputs, degrees, fw, stiffness, damping, wind, head=1.0):
+def chain(name, anchor, lengths, outputs, degrees, fw, stiffness, damping, wind, head=1.0, hip=HIP_X - HIP_COUNTER):
     return {
         "name": name,
         "anchor": [float(anchor[0]), float(anchor[1])],
@@ -96,6 +131,10 @@ def chain(name, anchor, lengths, outputs, degrees, fw, stiffness, damping, wind,
             {"param": "AngleX", "x": -0.06 * fw * head},
             {"param": "BodyAngleZ", "x": 0.25 * fw},
             {"param": "BodySway", "x": 0.3 * fw},
+            {"param": "PosX", "x": POS_X * fw},
+            {"param": "PosY", "y": -POS_Y * fw},
+            {"param": "Hip", "x": hip * fw},
+            {"param": "Lean", "x": 0.5 * fw},
         ],
         "outputs": [{"param": p, "segment": i, "degrees": d} for i, (p, d) in enumerate(zip(outputs, degrees))],
         "stiffness": stiffness,

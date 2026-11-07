@@ -40,6 +40,18 @@ class Petals:
             alive.append(p)
         self.items = alive
 
+    def burst(self, x, y, count=14, speed=260):
+        """A puff of petals thrown out from (x, y), for spins and jumps."""
+        for _ in range(count):
+            a = self.rng.uniform(0, 2 * math.pi)
+            v = self.rng.uniform(0.4, 1.0) * speed
+            self.items.append({
+                "x": x, "y": y, "vx": math.cos(a) * v, "vy": math.sin(a) * v * 0.6 - 60,
+                "rot": self.rng.uniform(0, 360), "spin": self.rng.uniform(-300, 300),
+                "size": self.rng.uniform(14, 26), "age": 0.0, "life": self.rng.uniform(0.9, 1.6),
+                "front": self.rng.random() < 0.6, "phase": self.rng.uniform(0, 6.28),
+            })
+
     def instances(self, front):
         out = []
         for p in self.items:
@@ -55,6 +67,16 @@ class Petals:
 def glow_strength(intensity, time):
     base = max(0.0, (intensity - 0.55) / 0.45)
     return base * (0.75 + 0.25 * math.sin(time * 6.0)) * 0.7
+
+
+def shadow_texture(size=128):
+    yy, xx = np.mgrid[0:size, 0:size]
+    r = np.hypot(xx - size / 2 + 0.5, yy - size / 2 + 0.5) / (size / 2)
+    a = np.clip(1 - r, 0, 1) ** 1.6
+    rgba = np.zeros((size, size, 4), np.float32)
+    rgba[..., 3] = a
+    rgba[..., :3] = 0.05
+    return (rgba * 255).astype(np.uint8)
 
 
 def radial_texture(size=256, color=(1.0, 0.56, 0.24)):

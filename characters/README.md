@@ -17,6 +17,10 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   guess there, and each arm variant also carries its own copy of that area.
 - `reference/` is the reference player (rig evaluation, physics, motions, effects) and a preview renderer that films
   the character beside a mock orb while the speed climbs and falls.
+- `reference/motions/` drives the whole body: a groove per speed band on a beat clock (weight shifts, bounce, arm
+  swing), one action at a time (arm gestures, two-arm combos, hops, a spin, side steps, a curtsy, a sway dance,
+  running in place, head and face gestures), and second-order springs on top so every move overshoots and settles.
+  Curves pass through their keys on a monotone cubic (PCHIP).
 
 ## Run
 
@@ -40,7 +44,7 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 | `bones` | `name`, `parent` (listed before its children), `pivot`. A bone's local transform is translate(x, y) · translate(pivot) · rotate · scale · translate(−pivot); its world transform is the parent's world transform times its local one. |
 | `params` | `id`, `min`, `max`, `default`. |
 | `drivers` | `param`, `bone`, `channel` (`rotate`, `x`, `y`, `scaleX`, `scaleY`), `keys` [[value, amount], …], linear between keys and flat outside. Amounts of one channel add up; scale amounts are added to 1. |
-| `physics` | Pendulum chains: `anchor`, `segments` (lengths), `inputs` (anchor x per parameter unit), `outputs` (parameter = tanh(segment angle relative to the previous segment / `degrees`)), `stiffness`, `damping`, `wind`. |
+| `physics` | Pendulum chains: `anchor`, `segments` (lengths), `inputs` (anchor x and y per parameter unit), `outputs` (parameter = tanh(segment angle relative to the previous segment / `degrees`)), `stiffness`, `damping`, `wind`. |
 | `parts` | Draw `order`, `vertices`, `uv` (atlas pixels), `triangles`, `influences` per vertex with `bones` and `weights` (sum 1). A vertex is the weighted sum of its bones' world transforms applied to it. |
 | `partDrivers` | `param`, `part`, `keys` [[value, opacity], …]. A part's opacity is the product of its drivers (1 without any). |
 | `variants` | `id`, `kind` (`arm`, `face`), `param` (`Var.<id>`, 0 to 1). Arms add `side`, `front`, `arm`, `forearm`, `lead` (values the old arm's parameters move to before the swap) and `approach` (values the new arm starts from). Faces add `mouth` (`Mouth.<id>`) and `eyesClosed`. |

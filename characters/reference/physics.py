@@ -11,13 +11,14 @@ class Chain:
     def __init__(self, spec, wind_sign=-1.0):
         self.spec = spec
         self.lengths = np.array(spec["segments"], np.float64)
-        self.inputs = [(i["param"], i["x"]) for i in spec["inputs"]]
+        self.inputs = [(i["param"], i.get("x", 0.0), i.get("y", 0.0)) for i in spec["inputs"]]
         self.wind_sign = wind_sign
         self.reset()
 
     def anchor(self, values):
         ax, ay = self.spec["anchor"]
-        return np.array([ax + sum(values.get(p, 0.0) * k for p, k in self.inputs), ay])
+        return np.array([ax + sum(values.get(p, 0.0) * kx for p, kx, _ in self.inputs),
+                         ay + sum(values.get(p, 0.0) * ky for p, _, ky in self.inputs)])
 
     def reset(self, values=None):
         a = self.anchor(values or {})
