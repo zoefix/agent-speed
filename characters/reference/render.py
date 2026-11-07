@@ -99,12 +99,15 @@ class Renderer:
         self.sprite_vao.render(moderngl.TRIANGLES, vertices=6, instances=len(instances))
         self.ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
 
-    def character(self, posed, scale, offset, opacity=1.0):
+    def character(self, posed, scale, offset, opacities=None):
         self.atlas.use(0)
         self.mesh_prog["scale"].value = (scale, scale)
         self.mesh_prog["offset"].value = offset
-        self.mesh_prog["opacity"].value = opacity
-        for (pos, vao), verts in zip(self.meshes, posed):
+        opacities = opacities or [1.0] * len(posed)
+        for (pos, vao), verts, opacity in zip(self.meshes, posed, opacities):
+            if opacity < 0.002:
+                continue
+            self.mesh_prog["opacity"].value = opacity
             pos.write(verts.astype("f4").tobytes())
             vao.render(moderngl.TRIANGLES)
 

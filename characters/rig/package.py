@@ -9,7 +9,7 @@ FORMAT = "agent-speed-character"
 VERSION = 1
 
 
-def write(out_dir, name, canvas, atlas, bones, params, drivers, physics, parts, landmarks):
+def write(out_dir, name, canvas, atlas, bones, params, drivers, physics, parts, landmarks, part_drivers=(), variants=()):
     out = Path(out_dir)
     out.mkdir(parents=True, exist_ok=True)
     Image.fromarray(atlas, "RGBA").save(out / "atlas.png", optimize=True)
@@ -24,6 +24,8 @@ def write(out_dir, name, canvas, atlas, bones, params, drivers, physics, parts, 
         "params": params,
         "drivers": drivers,
         "physics": physics,
+        "partDrivers": list(part_drivers),
+        "variants": list(variants),
         "parts": parts,
     }
     (out / "rig.json").write_text(json.dumps(doc, separators=(",", ":")))

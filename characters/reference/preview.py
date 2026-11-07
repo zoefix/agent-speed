@@ -123,6 +123,8 @@ def main(argv=None):
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--seconds", type=float, default=TIMELINE[-1][0])
     ap.add_argument("--size", default="1280x760")
+    ap.add_argument("--reel", action="store_true", help="steady cruise speed; play every gesture and expression in turn")
+    ap.add_argument("--frame-every", type=float, default=0.5, help="seconds between saved frames")
     args = ap.parse_args(argv)
 
     doc, atlas = package.read(args.package)
@@ -154,7 +156,9 @@ def main(argv=None):
 
     xs = [screen((x, 0))[0] for x in (lm["face"][0] - 3 * lm["faceWidth"], lm["face"][2] + 3 * lm["faceWidth"])]
     petals = effects.Petals((xs[0], screen((0, top_y))[1], xs[1], orb_bottom), wind_sign=1.0)
-    director = Director(rig.params, arm_out="right", arm_book="left")
+    book = lm.get("objectSide") or "left"
+    free = "right" if book == "left" else "left"
+    director = Director(rig.params, rig.variants, arm_out=free, arm_book=book)
     physics = Physics(doc["physics"], wind_sign=1.0)
     physics.reset(rig.defaults())
     tracker = LevelTracker()
@@ -169,15 +173,27 @@ def main(argv=None):
         Path(args.frames).mkdir(parents=True, exist_ok=True)
 
     dt = 1 / args.fps
+    reel = []
+    if args.reel:
+        gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + ["yawn", "hum"]
+        reel = [(1.0 + 3.6 * i, g) for i, g in enumerate(gestures)]
+        args.seconds = 1.0 + 3.6 * len(gestures) + 1.0
     frames = int(args.seconds * args.fps)
     cost = []
     chest = screen((lm["waist"][0], lm["chin"] + 0.6 * (lm["waist"][1] - lm["chin"])))
     for n in range(frames):
         t = n * dt
         started = time.perf_counter()
-        v = speed_at(t)
-        level = tracker.update(v, dt)
-        director.set_level(level)
+        if args.reel:
+            v, level = 40.0, 3
+            director.set_level(level)
+            director.next_gesture = float("inf")
+            if reel and t >= reel[0][0]:
+                director._start_gesture(reel.pop(0)[1])
+        else:
+            v = speed_at(t)
+            level = tracker.update(v, dt)
+            director.set_level(level)
         values = director.update(dt)
         values.update(physics.step(dt, values))
         posed = rig.pose(values)
@@ -192,7 +208,7 @@ def main(argv=None):
             renderer.image(glow, chest[0] - size / 2, chest[1] - size / 2, size, size, alpha=g,
                            premultiplied=True, additive=True)
         renderer.sprites(petal, petals.instances(front=False))
-        renderer.character(posed, scale, offset)
+        renderer.character(posed, scale, offset, rig.opacities(values))
         renderer.sprites(petal, petals.instances(front=True))
         orb = renderer.texture(orb_image(orb_d, v, level, fonts))
         renderer.image(orb, orb_c[0] - orb_d / 2, orb_c[1] - orb_d / 2, orb_d, orb_d)
@@ -201,7 +217,7 @@ def main(argv=None):
         cost.append(((evaluated - started) * 1000, (time.perf_counter() - evaluated) * 1000))
         if ffmpeg:
             ffmpeg.stdin.write(frame.tobytes())
-        if args.frames and n % (args.fps // 2) == 0:
+        if args.frames and n % max(1, int(round(args.frame_every * args.fps))) == 0:
             Image.fromarray(frame[..., :3]).save(Path(args.frames) / f"f{n:05d}_lv{level:02d}.png")
     if ffmpeg:
         ffmpeg.stdin.close()

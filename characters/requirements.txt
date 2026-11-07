@@ -5,3 +5,5 @@ scikit-image>=0.25
 opencv-python>=4.13
 psd-tools>=1.14
 moderngl>=5.12
+rtmlib>=0.0.16
+onnxruntime>=1.20

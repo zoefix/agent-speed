@@ -4,6 +4,12 @@ Channels: rotate (degrees, clockwise on screen), x and y (canvas pixels), scaleX
 """
 
 
+ARM_RANGES = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
+VARIANT_ARM_RANGE = 60.0
+LIFT_RANGE = 60.0
+VARIANT_FOREARM_RANGE = 30.0
+
+
 def param(pid, lo=-1.0, hi=1.0, default=0.0):
     return {"id": pid, "min": lo, "max": hi, "default": default}
 
@@ -50,12 +56,12 @@ def build(lm, bone_names):
             drivers.append(linear("EyeBallX", f"iris.{side}", "x", 0.028 * fw))
             drivers.append(linear("EyeBallY", f"iris.{side}", "y", 0.018 * fw))
 
-    arm_range = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
     physics = []
-    for side, (upper, lower) in arm_range.items():
+    for side, (upper, lower) in ARM_RANGES.items():
         if has(f"arm.{side}"):
-            params += [param(f"Arm.{side}"), param(f"Forearm.{side}")]
+            params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}")]
             drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper))
+            drivers.append(linear(f"Lift.{side}", f"arm.{side}", "rotate", LIFT_RANGE))
             drivers.append(linear(f"Forearm.{side}", f"forearm.{side}", "rotate", lower))
 
     if has("hairBack1"):
@@ -94,3 +100,45 @@ def chain(name, anchor, lengths, outputs, degrees, fw, stiffness, damping, wind,
         "damping": damping,
         "wind": wind,
     }
+
+
+def _unit(x):
+    return round(max(-1.0, min(1.0, float(x))), 3)
+
+
+def variant_controls(variants, part_names):
+    """Parameters, bone drivers and part opacity drivers for pose and expression variants."""
+    params, drivers, part_drivers, meta = [], [], [], []
+    for v in variants:
+        p = f"Var.{v.id}"
+        mouth = f"Mouth.{v.id}"
+        params.append(param(p, 0, 1, 0))
+        if v.kind == "face":
+            params.append(param(mouth, 0, 1, 0))
+
+        def control(name):
+            return mouth if v.kind == "face" and name.split("@")[0].split(".")[0] == "mouth" else p
+
+        for part in v.parts:
+            part_drivers.append({"param": control(part.name), "part": part.name, "keys": [[0, 0], [1, 1]]})
+        for name in v.replaces:
+            if name in part_names:
+                part_drivers.append({"param": control(name), "part": name, "keys": [[0, 1], [1, 0]]})
+        entry = {"id": v.id, "kind": v.kind, "param": p}
+        if v.kind == "face":
+            entry.update({"mouth": mouth, "eyesClosed": not any(part.tag == "irides" for part in v.parts)})
+        if v.kind == "arm":
+            s = v.side
+            arm_p, fore_p = f"Arm.{s}@{v.id}", f"Forearm.{s}@{v.id}"
+            params += [param(arm_p), param(fore_p)]
+            drivers += [linear(arm_p, f"arm.{s}@{v.id}", "rotate", VARIANT_ARM_RANGE),
+                        linear(fore_p, f"forearm.{s}@{v.id}", "rotate", VARIANT_FOREARM_RANGE)]
+            entry.update({
+                "side": s, "front": bool(v.front), "arm": arm_p, "forearm": fore_p,
+                "lead": {f"Lift.{s}": _unit(v.lead_deg / LIFT_RANGE),
+                         f"Forearm.{s}": _unit(v.lead_fore_deg / ARM_RANGES[s][1])},
+                "approach": {arm_p: _unit(v.approach_deg / VARIANT_ARM_RANGE),
+                             fore_p: _unit(v.approach_fore_deg / VARIANT_FOREARM_RANGE)},
+            })
+        meta.append(entry)
+    return params, drivers, part_drivers, meta

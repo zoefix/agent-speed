@@ -5,6 +5,7 @@ Sides are image sides: "left" is the left half of the picture (the character's r
 from dataclasses import dataclass
 
 import numpy as np
+from scipy import ndimage
 from skimage.graph import MCP_Geometric
 
 
@@ -25,28 +26,63 @@ def smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-def find_arm(alpha):
+def find_arm(alpha, anchor=None):
+    """Shoulder, elbow and hand of an arm mask; `anchor` (the base shoulder) picks the shoulder of a raised arm."""
     mask = alpha > 0.3
     x0, y0, x1, y1 = (int(v) for v in box(alpha, 0.3))
     crop = mask[y0:y1, x0:x1]
-    top_rows = crop[: max(2, int(0.08 * crop.shape[0]))]
-    ty, tx = np.nonzero(top_rows)
-    shoulder = (x0 + tx.mean(), y0 + ty.mean())
-    cost = np.where(crop, 1.0, 1e4)
+    if anchor is None:
+        top_rows = crop[: max(2, int(0.08 * crop.shape[0]))]
+        ty, tx = np.nonzero(top_rows)
+        shoulder = (x0 + tx.mean(), y0 + ty.mean())
+    else:
+        pts = np.argwhere(crop)
+        near = pts[np.argsort(np.hypot(pts[:, 1] + x0 - anchor[0], pts[:, 0] + y0 - anchor[1]))[:40]]
+        shoulder = (x0 + near[:, 1].mean(), y0 + near[:, 0].mean())
+    bridged = ndimage.binary_closing(alpha[y0:y1, x0:x1] > 0.05, iterations=4) | crop
+    cost = np.where(bridged, 1.0, 40.0)
     mcp = MCP_Geometric(cost)
     start = (int(round(shoulder[1] - y0)), int(round(shoulder[0] - x0)))
     if not crop[start]:
         sy, sx = np.argwhere(crop)[np.argmin(np.hypot(*(np.argwhere(crop) - start).T))]
         start = (int(sy), int(sx))
     dist, _ = mcp.find_costs([start])
-    dist = np.where(crop & (dist < 1e4), dist, np.nan)
+    dist = np.where(crop, dist, np.nan)
     reach = float(np.nanmax(dist))
     near = np.abs(dist - 0.5 * reach) < 0.04 * reach
     ey, ex = np.nonzero(near)
     elbow = (x0 + ex.mean(), y0 + ey.mean())
+    hy, hx = np.nonzero(dist > 0.9 * reach)
+    hand = (x0 + hx.mean(), y0 + hy.mean())
     field = np.full(alpha.shape, np.nan, np.float32)
     field[y0:y1, x0:x1] = dist
-    return {"shoulder": shoulder, "elbow": elbow, "reach": reach, "field": field}
+    return {"shoulder": shoulder, "elbow": elbow, "hand": hand, "reach": reach, "field": field}
+
+
+def arm_from_joints(joints):
+    """Arm landmarks from pose joints; the hand tip extends the forearm past the wrist."""
+    sh, el, wr = (np.array(joints[k], np.float64) for k in ("shoulder", "elbow", "wrist"))
+    tip = wr + 0.6 * (wr - el)
+    reach = float(np.linalg.norm(el - sh) + np.linalg.norm(tip - el))
+    return {"shoulder": tuple(sh), "elbow": tuple(el), "wrist": tuple(wr), "hand": tuple(wr), "tip": tuple(tip),
+            "reach": reach, "field": None}
+
+
+def _segment(points, a, b):
+    ab = b - a
+    t = np.clip(((points - a) @ ab) / max(float(ab @ ab), 1e-9), 0, 1)
+    return np.linalg.norm(points - (a + t[:, None] * ab), axis=1), t
+
+
+def arm_weights(vertices, arm):
+    """(chest, upper arm, forearm) weights from the distance to the two arm segments."""
+    sh, el, tip = (np.array(arm[k], np.float64) for k in ("shoulder", "elbow", "tip"))
+    d_upper, t_upper = _segment(vertices, sh, el)
+    d_fore, _ = _segment(vertices, el, tip)
+    soft = 0.07 * max(float(np.linalg.norm(el - sh)), 1.0)
+    fore = 1 / (1 + np.exp(np.clip((d_fore - d_upper) / soft, -40, 40)))
+    attached = smoothstep(0.0, 0.22, t_upper)
+    return (1 - fore) * (1 - attached), (1 - fore) * attached, fore
 
 
 def landmarks(layers):
@@ -146,8 +182,11 @@ def bones(lm):
     return out
 
 
-def weights_for(layer, vertices, lm, attach=None):
-    """Returns [(bone, weight array)] for one part; weights sum to 1 per vertex."""
+def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
+    """Returns [(bone, weight array)] for one part; weights sum to 1 per vertex.
+
+    `arm` and `suffix` select a variant arm (its own landmarks and bones such as `arm.right@wave`).
+    """
     x, y = vertices[:, 0], vertices[:, 1]
     tag, side = layer.tag, layer.side
     fx0, fy0, fx1, fy1 = lm["face"]
@@ -180,9 +219,12 @@ def weights_for(layer, vertices, lm, attach=None):
         w_bangs = 1 - smoothstep(chin - 0.25 * face_h, chin + 0.45 * face_h, y)
         w_2 = smoothstep(lk["mid"][1] - 0.2 * face_h, lk["mid"][1] + 0.6 * face_h, y) * (1 - w_bangs)
         return [("bangs", w_bangs), ("lock1", 1 - w_bangs - w_2), ("lock2", w_2)]
-    if tag == "handwear" and (side or "single") in lm["arms"]:
+    if tag == "handwear" and (arm is not None or (side or "single") in lm["arms"]):
         key = side or "single"
-        arm = lm["arms"][key]
+        arm = arm if arm is not None else lm["arms"][key]
+        if arm.get("tip") is not None:
+            chest, upper, fore = arm_weights(vertices, arm)
+            return [("chest", chest), (f"arm.{key}{suffix}", upper), (f"forearm.{key}{suffix}", fore)]
         field = arm["field"]
         xi = np.clip(x.astype(int), 0, field.shape[1] - 1)
         yi = np.clip(y.astype(int), 0, field.shape[0] - 1)
@@ -194,7 +236,8 @@ def weights_for(layer, vertices, lm, attach=None):
         reach = arm["reach"]
         w_arm = smoothstep(0.0, 0.14 * reach, d)
         w_fore = smoothstep(0.38 * reach, 0.62 * reach, d)
-        return [("chest", 1 - w_arm), (f"arm.{key}", w_arm * (1 - w_fore)), (f"forearm.{key}", w_arm * w_fore)]
+        return [("chest", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
+                (f"forearm.{key}{suffix}", w_arm * w_fore)]
     if tag == "objects" and attach:
         return [(attach, one)]
     if tag in ("topwear", "neckwear", "wings", "tail", "objects", "handwear"):
@@ -212,10 +255,13 @@ def attach_object(layer, lm):
     ys, xs = np.nonzero(layer.alpha > 0.3)
     best, best_d = None, np.inf
     for key, arm in lm["arms"].items():
-        hand = np.argwhere(arm["field"] > 0.6 * arm["reach"])
-        if len(hand) == 0:
-            continue
-        cy, cx = hand.mean(axis=0)
+        if arm.get("wrist") is not None:
+            cx, cy = arm["wrist"]
+        else:
+            hand = np.argwhere(arm["field"] > 0.6 * arm["reach"])
+            if len(hand) == 0:
+                continue
+            cy, cx = hand.mean(axis=0)
         d = np.hypot(xs.mean() - cx, ys.mean() - cy)
         if d < best_d:
             best, best_d = f"forearm.{key}", d

@@ -32,7 +32,13 @@ class Rig:
                 "triangles": np.array(p["triangles"], np.int32).reshape(-1, 3),
                 "bones": np.array(p["bones"], np.int64).reshape(-1, k),
                 "weights": np.array(p["weights"], np.float64).reshape(-1, k),
+                "opacity": [],
             })
+        by_name = {part["name"]: part for part in self.parts}
+        for d in doc.get("partDrivers", []):
+            if d["part"] in by_name:
+                by_name[d["part"]]["opacity"].append((d["param"], np.array(d["keys"], np.float64)))
+        self.variants = doc.get("variants", [])
 
     def defaults(self):
         return {pid: p["default"] for pid, p in self.params.items()}
@@ -72,6 +78,16 @@ class Rig:
             v = part["vertices"]
             moved = np.einsum("nkij,nj->nki", m[..., :2, :2], v) + m[..., :2, 2]
             out.append((part["weights"][..., None] * moved).sum(axis=1))
+        return out
+
+    def opacities(self, values):
+        values = self.clamp(values)
+        out = []
+        for part in self.parts:
+            o = 1.0
+            for pid, keys in part["opacity"]:
+                o *= interpolate(keys, values[pid])
+            out.append(o)
         return out
 
     def pose(self, values):
