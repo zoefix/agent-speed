@@ -1,7 +1,7 @@
 """The floating readout of the character style: speed, title, model, agents and events drift around the character.
 
-Everything hangs off the character on springs, so it trails her when she hops or steps and settles a beat later, and
-each piece bobs on its own slow phase. A ring of lights at her feet is the gauge: it fills with the heat colors as the
+The speed, the model and the agent line orbit her like small moons (orbits.py): they pass in front of her and behind
+her, bigger and brighter in front, and the orbits' center trails her on a spring when she hops or steps. A ring of lights at her feet is the gauge: it fills with the heat colors as the
 speed rises and a bright comet runs around it; its front half is drawn over her, its back half behind, so it reads as
 lying on the floor. Agents are small lights orbiting her waist. Numbers roll digit by digit.
 """
@@ -13,6 +13,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from .motions.springs import SecondOrder
+from .orbits import Orbit
 
 DIGITS_FONT = "/System/Library/Fonts/SFNS.ttf"
 CJK_FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
@@ -144,9 +145,9 @@ class Hud:
         self.r, self.u = renderer, unit
         self.tex = Textures(renderer, unit)
         self.rng = random.Random(seed)
-        self.readout = Follow(1.4, 0.65, (5.0 * unit, 3.8), 0.0)
-        self.model = Follow(1.2, 0.7, (4.0 * unit, 4.6), 1.9)
+        self.center = Follow(1.1, 0.75, (0.0, 1.0), 0.0)
         self.peak_pos = Follow(2.0, 0.6, (3.0 * unit, 2.9), 0.7)
+        self.orbits, self.placed = None, {}
         self.odo = Odometer()
         self.width = SecondOrder(2.5, 0.8, 0.0)
         self.title, self.title_prev, self.title_t = None, None, 1.0
@@ -283,30 +284,71 @@ class Hud:
         self.r.dots(self._satellites(*waist, agents, front=True), additive=True)
         self.r.dots(self._ember_rows(front=True), additive=True)
 
-    def draw_readout(self, dt, anchor, unit_text="tok/s"):
+    def orbit_bodies(self, dt, center, char_h):
+        """Places the floating readouts on their orbits around the character's center."""
+        if self.orbits is None:
+            k = char_h
+            self.orbits = {
+                "speed": Orbit(0.4 * k, 0.2, 52.0, 0.35, 0.0, -0.06 * k, seed=0.4),
+                "model": Orbit(0.34 * k, 0.26, 38.0, 2.4, 0.9, -0.34 * k, seed=1.9),
+                "info": Orbit(0.38 * k, 0.22, 45.0, 4.3, -0.6, 0.22 * k, seed=3.1),
+            }
+        cx, cy = self.center.update(dt, self.t, *center)
+        self.placed = {}
+        for name, orbit in self.orbits.items():
+            x, y, depth = orbit.at(self.t, cx, cy)
+            scale = 0.82 + 0.2 * (depth + 1) / 2
+            alpha = 0.55 + 0.45 * (depth + 1) / 2
+            self.placed[name] = (x, y, depth, scale, orbit.spin(self.t), alpha)
+
+    def _put(self, tex, tw, th, x, y, ox, oy, scale, angle, alpha):
+        c, s = math.cos(angle), math.sin(angle)
+        px, py = x + (ox * c - oy * s) * scale, y + (ox * s + oy * c) * scale
+        self.r.sprites(tex, np.array([[px, py, tw * scale, th * scale, angle, alpha]], np.float32))
+
+    def draw_bodies(self, dt, front, model_name, info_line, dot):
+        bodies = sorted((v[2], k) for k, v in self.placed.items() if (v[2] >= 0) == front)
+        for _, name in bodies:
+            if name == "speed":
+                self._draw_speed(dt, *self.placed[name])
+            elif name == "model":
+                x, y, _, scale, angle, alpha = self.placed[name]
+                tex, tw, th = self.tex.chip(model_name, int(22 * self.u), (238, 242, 248, 240), (16, 18, 26, 150),
+                                            (255, 255, 255, 40), dot=dot)
+                self._put(tex, tw, th, x, y, 0, 0, scale, angle, alpha)
+            else:
+                x, y, _, scale, angle, alpha = self.placed[name]
+                tex, tw, th = self.tex.chip(info_line, int(17 * self.u), (214, 220, 232, 230), (16, 18, 26, 120),
+                                            (255, 255, 255, 28))
+                self._put(tex, tw, th, x, y, 0, 0, scale, angle, alpha)
+
+    def _draw_speed(self, dt, x, y, depth, scale, angle, alpha, unit_text="tok/s"):
         u, h = self.u, self.h
-        x, y = self.readout.update(dt, self.t, *anchor)
         text = self.odo.update(dt, self.speed)
         size = int(92 * u)
         adv = self.tex.digit("0", size)[1] * 0.9
         width = self.width.update(dt, adv * len(text))
         c = np.array(heat_color(h)) / 255
-        glow = 0.12 + 0.5 * max(0.0, h - 0.3)
-        self.r.dots(np.array([(x, y, width * 0.75 + 30 * u, 50 * u, *c, glow, 1.0)], np.float32), additive=True)
-        left = x - width / 2
+        glow = (0.12 + 0.5 * max(0.0, h - 0.3)) * alpha
+        self.r.dots(np.array([(x, y + 40 * u * scale, (width * 0.8 + 70 * u) * scale, 120 * u * scale,
+                               0.02, 0.025, 0.045, 0.62 * alpha, 1.0)], np.float32))
+        self.r.dots(np.array([(x, y, (width * 0.75 + 30 * u) * scale, 50 * u * scale, *c, glow, 1.0)], np.float32),
+                    additive=True)
         line = self.tex.digit("0", size)[2]
-        self.r.clip((left - 8 * u, y - 0.5 * line, left + width + 8 * u, y + 0.5 * line))
+        hw, hh = (width / 2 + 8 * u) * scale, 0.5 * line * scale
+        ca, sa = abs(math.cos(angle)), abs(math.sin(angle))
+        self.r.clip((x - hw * ca - hh * sa, y - hw * sa - hh * ca, x + hw * ca + hh * sa, y + hw * sa + hh * ca))
         for i, d in enumerate(self.odo.digits):
-            cx = left + adv * (i + 0.5)
+            ox = -width / 2 + adv * (i + 0.5)
             ease = 1 - (1 - d["t"]) ** 3
             for ch, dy, a in ((d["prev"], -ease, 1 - 0.6 * ease), (d["cur"], 1 - ease, 0.4 + 0.6 * ease)):
                 if ch is None:
                     continue
                 tex, tw, th = self.tex.digit(ch, size)
-                self.r.image(tex, cx - tw / 2, y - th / 2 + dy * 0.8 * th, tw, th, alpha=a)
+                self._put(tex, tw, th, x, y, ox, dy * 0.8 * th, scale, angle, a * alpha)
         self.r.clip(None)
         tex, tw, th = self.tex.label(unit_text, int(21 * u), (205, 212, 224, 170))
-        self.r.image(tex, x - tw / 2, y + 50 * u, tw, th)
+        self._put(tex, tw, th, x, y, 0, 50 * u + th / 2, scale, angle, alpha)
         for title, k in ((self.title_prev, -1), (self.title, 1)):
             if title is None:
                 continue
@@ -317,15 +359,7 @@ class Hud:
             col = heat_color(h)
             tex, tw, th = self.tex.chip(title, int(19 * u), col + (255,), (16, 18, 26, 150), col + (90,))
             off = (1 - e) * 14 * u if k > 0 else -e * 14 * u
-            self.r.image(tex, x - tw / 2, y + 86 * u + off, tw, th, alpha=a)
-
-    def draw_model(self, dt, anchor, name, line, dot):
-        x, y = self.model.update(dt, self.t, *anchor)
-        tex, tw, th = self.tex.chip(name, int(22 * self.u), (238, 242, 248, 240), (16, 18, 26, 150),
-                                    (255, 255, 255, 40), dot=dot)
-        self.r.image(tex, x - tw / 2, y - th / 2, tw, th)
-        tex2, tw2, th2 = self.tex.label(line, int(17 * self.u), (205, 212, 224, 170))
-        self.r.image(tex2, x - tw2 / 2, y + th / 2 + 4 * self.u, tw2, th2)
+            self._put(tex, tw, th, x, y, 0, 86 * u + th / 2 + off, scale, angle, a * alpha)
 
     def draw_peak(self, dt, anchor):
         if self.peak_t is None:

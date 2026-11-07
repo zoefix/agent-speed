@@ -18,7 +18,7 @@ VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
 VARIANT_FOREARM_RANGE = 90.0
 BEND_RANGE = 90.0
-POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.45, 0.25
+POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.17, 0.08
 
 
 def param(pid, lo=-1.0, hi=1.0, default=0.0):
@@ -73,7 +73,7 @@ def build(lm, bone_names):
             drive("Spin", "turn", "scaleX", [(k / 16, math.cos(2 * math.pi * k / 16) - 1) for k in range(17)]),
             linear("Hip", "lower", "x", HIP_X * fw),
             linear("Hip", "chest", "x", -HIP_COUNTER * fw),
-            linear("Hip", "chest", "rotate", -1.5),
+            linear("Hip", "chest", "rotate", -0.8),
             drive("SkirtFlare", "skirtHem", "scaleX", [(0, 0), (1, 0.14)]),
             drive("SkirtFlare", "skirtHem", "scaleY", [(0, 0), (1, -0.03)]),
         ]

@@ -21,7 +21,7 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   Segment Anything (ViT-B, `--sam` checkpoint) cuts the drawn hand out of its arm, so fingers curl, spread and trail
   the wrist without dragging the book or the dress along.
 - `reference/stage.py` films the character style: the character alone on the desktop with the speed, its title, the
-  model and the agents floating around her, a ring of lights at her feet as the gauge, and one illustration per speed
+  model and the agents orbiting her on Kepler orbits (in front of her and behind her), a ring of lights at her feet as the gauge, and one illustration per speed
   band swapped while she turns edge-on.
 - `reference/motions/` drives the whole body: a groove per speed band on a beat clock (weight shifts, bounce, arm
   swing), one action at a time (arm gestures, two-arm combos, hops, a spin, side steps, a curtsy, a sway dance,

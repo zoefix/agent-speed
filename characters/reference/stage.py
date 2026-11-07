@@ -111,7 +111,7 @@ def main(argv=None):
     ap.add_argument("--frame-every", type=float, default=0.5)
     ap.add_argument("--fps", type=int, default=60)
     ap.add_argument("--seconds", type=float, default=62)
-    ap.add_argument("--size", default="1080x1350")
+    ap.add_argument("--size", default="1350x1350")
     ap.add_argument("--model", default="Claude Opus")
     ap.add_argument("--vendor-color", default="217,119,87")
     args = ap.parse_args(argv)
@@ -129,7 +129,7 @@ def main(argv=None):
     extent = np.concatenate([np.array(p["vertices"]).reshape(-1, 2) for p in base.doc["parts"]])
     char_h = 0.72 * h
     scale0 = char_h / (lm["feet"][1] - extent[:, 1].min())
-    feet_screen = (0.4 * w, 0.88 * h)
+    feet_screen = (0.5 * w, 0.88 * h)
     fw = lm["faceWidth"]
 
     def placement(pose):
@@ -211,21 +211,19 @@ def main(argv=None):
         director.events.clear()
         petals.update(dt, director.intensity)
 
+        info = (args.model, f"{len(agents)} 個 agent · 今日 1.2M tokens", vendor)
+        hud.orbit_bodies(dt, (fx, fy - 0.52 * char_h + 0.6 * dy), char_h)
         renderer.begin((0, 0, 0, 1))
         renderer.image(bg, 0, 0, w, h)
         hud.draw_back(dt, ground, waist, agents)
+        hud.draw_bodies(dt, False, *info)
         renderer.sprites(petal, petals.instances(front=False))
         renderer.character(posed, scale, offset, active.rig.opacities(values), which=active.which)
         hud.draw_front(dt, ground, waist, agents)
+        hud.draw_bodies(dt, True, *info)
         renderer.sprites(petal, petals.instances(front=True))
-        def inside(x, half):
-            return min(max(x, half), w - half)
-
-        readout = (inside(fx + 0.5 * char_h, 0.13 * w), fy - 0.62 * char_h + 0.3 * dy)
-        hud.draw_readout(dt, readout)
-        hud.draw_model(dt, (readout[0], readout[1] + 170 * unit), args.model,
-                       f"{len(agents)} 個 agent · 今日 1.2M tokens", vendor)
-        hud.draw_peak(dt, (min(readout[0], 0.82 * w), readout[1] - 0.14 * char_h))
+        sx, sy = hud.placed["speed"][:2]
+        hud.draw_peak(dt, (min(max(sx, 0.18 * w), 0.82 * w), sy - 0.13 * char_h))
         frame = renderer.finish()
         cost.append((time.perf_counter() - started) * 1000)
         ff.stdin.write(frame.tobytes())

@@ -332,3 +332,27 @@ class StageTests(unittest.TestCase):
                 self.assertEqual(values.get("Spin", 0.0), 0.0)
         self.assertIsNotNone(swapped_at)
         self.assertLess(abs(m.cos(2 * m.pi * swapped_at)), 0.2)
+
+
+class OrbitTests(unittest.TestCase):
+    def test_kepler_orbit_moves_faster_near_the_center(self):
+        from characters.reference.orbits import eccentric_anomaly
+        e = 0.4
+
+        def plane(mean):
+            E = eccentric_anomaly(mean, e)
+            return np.array([math.cos(E) - e, math.sqrt(1 - e * e) * math.sin(E)])
+
+        near = np.linalg.norm(plane(0.01) - plane(0.0))
+        far = np.linalg.norm(plane(math.pi + 0.01) - plane(math.pi))
+        self.assertAlmostEqual(near / far, (1 + e) / (1 - e), places=2)
+        for mean in (0.3, 2.0, 5.5):
+            E = eccentric_anomaly(mean, e)
+            self.assertAlmostEqual(E - e * math.sin(E), mean, places=9)
+
+    def test_orbit_passes_in_front_and_behind(self):
+        from characters.reference.orbits import Orbit
+        o = Orbit(100.0, 0.2, 10.0, 0.0, 0.0, 0.0)
+        depths = [o.at(t / 10, 0, 0)[2] for t in range(100)]
+        self.assertLess(min(depths), -0.8)
+        self.assertGreater(max(depths), 0.8)
