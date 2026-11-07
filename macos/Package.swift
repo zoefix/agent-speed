@@ -30,6 +30,10 @@ let package = Package(
             path: "Sources/AgentSpeedHero"
         ),
         .target(
+            name: "AgentSpeedCharacter",
+            path: "Sources/AgentSpeedCharacter"
+        ),
+        .target(
             name: "AgentSpeedOrbModel",
             dependencies: ["AgentSpeedCore"],
             path: "Sources/AgentSpeedOrbModel"
@@ -53,6 +57,11 @@ let package = Package(
             name: "AgentSpeedHeroTests",
             dependencies: ["AgentSpeedHero"],
             path: "Tests/AgentSpeedHeroTests"
+        ),
+        .testTarget(
+            name: "AgentSpeedCharacterTests",
+            dependencies: ["AgentSpeedCharacter"],
+            path: "Tests/AgentSpeedCharacterTests"
         ),
         .testTarget(
             name: "AgentSpeedOrbModelTests",

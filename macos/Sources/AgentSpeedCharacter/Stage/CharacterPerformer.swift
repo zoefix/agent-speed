@@ -1,0 +1,229 @@
+import Foundation
+
+/// What happened in a performer's frame, for effects the renderer adds (petals, a sound, ...).
+public enum PerformerEvent: Sendable, Equatable {
+    case petals
+    /// The band's pose was swapped at the edge-on instant.
+    case poseSwapped(band: SpeedBand)
+}
+
+/// How a pose sits on screen relative to the idle pose (spec/CHARACTERS.md, Pose swap): its feet on the idle pose's
+/// feet, scaled so the face-to-feet distance matches.
+public struct PosePlacement: Sendable, Equatable {
+    /// Canvas pixels of this pose per canvas pixel of the idle pose.
+    public var scale: Double
+    /// The pose's feet in its own canvas.
+    public var feet: (x: Double, y: Double)
+
+    public static func == (a: PosePlacement, b: PosePlacement) -> Bool {
+        a.scale == b.scale && a.feet == b.feet
+    }
+
+    /// Screen position of a pose canvas point, given the idle pose's feet on screen and screen points per idle
+    /// canvas pixel.
+    public func screen(_ x: Double, _ y: Double, feetOnScreen: (Double, Double), pointsPerPixel: Double) -> (Double, Double) {
+        let k = pointsPerPixel * scale
+        return (feetOnScreen.0 + (x - feet.x) * k, feetOnScreen.1 + (y - feet.y) * k)
+    }
+}
+
+/// One character on stage: its poses, one director over the union of their parameters, physics per pose, the pose
+/// swap and the placement of each pose (characters/reference/stage.py). Step it once per frame with the speed level;
+/// then read `activePose`, `world` and `opacities` to draw. No heap allocation per frame except when an action starts.
+public struct CharacterPerformer: Sendable {
+    /// The reference's root travel per unit of PosX / PosY, in face widths (rig/params.py).
+    public static let posX = 3.0
+    public static let posY = 2.0
+
+    public let pack: CharacterPack
+    public private(set) var director: CharacterDirector
+    public private(set) var activePose = 0
+    public let placements: [PosePlacement]
+    /// The idle pose's height from the top of its art to its feet, in its canvas pixels.
+    public let idleHeight: Double
+    /// Parameter values by director slot after the last step (swap and physics applied).
+    public private(set) var values: [Double]
+    /// The active pose's rig parameters, bone transforms and part opacities after the last step.
+    public private(set) var rigValues: [Double]
+    public private(set) var world: [Affine2] = []
+    public private(set) var opacities: [Double] = []
+    public private(set) var events: [PerformerEvent] = []
+    /// Set on the frame an exit turn reaches edge-on (see `CharacterStage`).
+    public private(set) var exitReached = false
+
+    var physics: [CharacterPhysics]
+    var slotMaps: [[Int]]
+    var poseSwitch = PoseSwitch()
+    var pendingExit = false
+    let slots: Slots
+    let faceWidth: Double
+    static let exitTarget = -1
+
+    public init(pack: CharacterPack, seed: UInt64 = 7, orb: Double = 1) {
+        self.pack = pack
+        var params: [CharacterParam] = []
+        var seen = Set<String>()
+        for pose in pack.poses {
+            for p in pose.rig.params where seen.insert(p.id).inserted { params.append(p) }
+        }
+        let idle = pack.poses[0].rig
+        let book = CharacterSide(rawValue: idle.landmarks.objectSide ?? "") ?? .left
+        let director = CharacterDirector(params: params, seed: seed, out: book.other, book: book, orb: orb,
+                                         celebrate: false)
+        self.director = director
+        let space = director.space
+        slots = Slots(space)
+        values = [Double](repeating: 0, count: space.count)
+        physics = pack.poses.map { pose in
+            var p = CharacterPhysics(pose.rig.physics, windSign: 1) { name in
+                space.isParam(name) ? space.slot(name) : nil
+            }
+            p.reset(space.params.map { $0?.default ?? 0 })
+            return p
+        }
+        slotMaps = pack.poses.map { pose in pose.rig.params.map { space.slot($0.id)! } }
+        rigValues = []
+        func body(_ rig: CharacterRig) -> Double? {
+            guard let f = rig.landmarks.face, f.count == 4, let feet = rig.landmarks.feet, feet.count == 2 else { return nil }
+            return feet[1] - (f[1] + f[3]) / 2
+        }
+        let base = body(idle)
+        placements = pack.poses.map { pose in
+            let feet = pose.rig.landmarks.feet ?? [pose.rig.canvas.width / 2, pose.rig.canvas.height]
+            let scale = base.flatMap { b in body(pose.rig).map { b / $0 } } ?? 1
+            return PosePlacement(scale: scale, feet: (feet[0], feet.count > 1 ? feet[1] : pose.rig.canvas.height))
+        }
+        var top = Double.infinity
+        for part in idle.parts {
+            var i = 1
+            while i < part.vertices.count {
+                top = min(top, part.vertices[i])
+                i += 2
+            }
+        }
+        let feetY = idle.landmarks.feet?.last ?? idle.canvas.height
+        idleHeight = top.isFinite ? feetY - top : idle.canvas.height
+        faceWidth = idle.landmarks.faceWidth ?? idle.canvas.width / 10
+        events.reserveCapacity(8)
+        rigValues = [Double](repeating: 0, count: pack.poses.map(\.rig.params.count).max() ?? 0)
+    }
+
+    /// The pose index a band shows: its own, else the nearest lower band's.
+    public func poseIndex(for band: SpeedBand) -> Int {
+        var best = 0
+        for (i, pose) in pack.poses.enumerated() where pose.band <= band { best = i }
+        return best
+    }
+
+    public var activeRig: CharacterRig { pack.poses[activePose].rig }
+    public var activePlacement: PosePlacement { placements[activePose] }
+    public var band: SpeedBand? { director.band }
+    public var intensity: Double { director.intensity }
+
+    /// The character's sideways and upward travel this frame (side steps, hops), in idle canvas pixels (y down).
+    public var bodyOffset: (dx: Double, dy: Double) {
+        (values[slots.posX] * CharacterPerformer.posX * faceWidth, -values[slots.posY] * CharacterPerformer.posY * faceWidth)
+    }
+
+    /// Asks the character to turn edge-on so another one can take over (`CharacterStage`).
+    public mutating func requestExit() {
+        pendingExit = true
+    }
+
+    /// Starts this character on the edge-on instant in the pose of `level`, turning back toward the viewer.
+    public mutating func enterEdgeOn(level: Int) {
+        activePose = poseIndex(for: SpeedBand(level: level))
+        let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
+        director.setLevel(level)
+        director.setSides(out: book.other, book: book)
+        poseSwitch.enterEdgeOn()
+    }
+
+    /// The floating readout's geometry for this frame (characters/reference/stage.py): the idle pose's feet at
+    /// `feetOnScreen`, `pointsPerPixel` screen points per idle canvas pixel, `unit` points per reference unit.
+    public func hudLayout(feetOnScreen: (Double, Double), pointsPerPixel: Double, unit: Double) -> HudLayout {
+        let h = idleHeight * pointsPerPixel
+        let (dx, dy) = bodyOffset
+        let fx = feetOnScreen.0 + dx * pointsPerPixel, fy = feetOnScreen.1
+        let lift = dy * pointsPerPixel
+        return HudLayout(ground: (fx, fy + 6 * unit, 0.27 * h, 0.27 * h * 0.17),
+                         waist: (fx + 0.01 * h, fy - 0.6 * h + lift, 0.3 * h, 0.05 * h),
+                         orbitCenter: (fx, fy - 0.52 * h + 0.6 * lift), characterHeight: h, unit: unit)
+    }
+
+    /// Advances one frame at speed level 0...13.
+    public mutating func step(_ dt: Double, level: Int) {
+        events.removeAll(keepingCapacity: true)
+        exitReached = false
+        director.setLevel(level)
+        director.update(dt)
+        for e in director.events where e == .petals { events.append(.petals) }
+        director.events.removeAll(keepingCapacity: true)
+        for i in values.indices { values[i] = director.values[i] }
+
+        if pendingExit, !poseSwitch.isRunning {
+            poseSwitch.request(CharacterPerformer.exitTarget)
+            pendingExit = false
+        } else if !pendingExit, let band = director.band {
+            let wanted = poseIndex(for: band)
+            if wanted != activePose { poseSwitch.request(wanted) }
+        }
+        let (swap, output, swapped) = poseSwitch.update(dt)
+        if let o = output {
+            values[slots.spin] = o.spin
+            values[slots.squash] += o.squash
+            values[slots.posY] += o.posY
+            values[slots.skirtFlare] = max(values[slots.skirtFlare], o.skirtFlare)
+        }
+        if swapped, let target = swap {
+            if target == CharacterPerformer.exitTarget {
+                exitReached = true
+            } else {
+                activePose = target
+                let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
+                director.setSides(out: book.other, book: book)
+                events.append(.poseSwapped(band: pack.poses[target].band))
+            }
+        }
+        for i in physics.indices {
+            physics[i].step(dt, values)
+            if i == activePose { physics[i].write(into: &values) }
+        }
+        let map = slotMaps[activePose]
+        for (i, slot) in map.enumerated() { rigValues[i] = values[slot] }
+        let rig = activeRig
+        rig.worldTransforms(rigValues, into: &world)
+        rig.opacities(rigValues, into: &opacities)
+    }
+}
+
+/// The character an orb shows and the turn between two characters (spec/CHARACTERS.md, Which character): the current
+/// one turns edge-on, the next one takes over at that instant and turns back.
+public struct CharacterStage: Sendable {
+    public private(set) var current: CharacterPerformer
+    public private(set) var incoming: CharacterPerformer?
+    /// Set on the frame the incoming character took over.
+    public private(set) var swapped = false
+
+    public init(_ performer: CharacterPerformer) {
+        current = performer
+    }
+
+    /// Starts the turn to another character; a newer request replaces one still waiting.
+    public mutating func switchTo(_ next: CharacterPerformer) {
+        incoming = next
+        current.requestExit()
+    }
+
+    public mutating func step(_ dt: Double, level: Int) {
+        swapped = false
+        current.step(dt, level: level)
+        if current.exitReached, var next = incoming {
+            next.enterEdgeOn(level: level)
+            next.step(dt, level: level)
+            current = next
+            incoming = nil
+            swapped = true
+        }
+    }
+}
