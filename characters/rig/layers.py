@@ -13,6 +13,7 @@ DRAW_ORDER = [
 ]
 PAIRED = {"handwear", "ears", "eyewhite", "irides", "eyelash", "eyebrow"}
 NO_GROWTH = {"eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth", "eyewear", "earwear"}
+HIDDEN_TAGS = ("handwear", "objects")
 
 
 @dataclass
@@ -62,12 +63,18 @@ def coverage(layers):
     return 1 - np.prod([1 - layer.alpha for layer in layers], axis=0)
 
 
+def owner_map(layers):
+    """Index of the topmost mostly opaque layer per pixel, -1 where none is."""
+    owner = np.full(layers[0].alpha.shape, -1, np.int32)
+    for i, layer in enumerate(layers):
+        owner[layer.alpha > 0.5] = i
+    return owner
+
+
 def reproject(layers, reference, background=1.0):
     """Paints the original art onto the layer that owns each visible pixel, so the rest pose equals the original."""
     total = coverage(layers)
-    owner = np.full(total.shape, -1, np.int32)
-    for i, layer in enumerate(layers):
-        owner[layer.alpha > 0.5] = i
+    owner = owner_map(layers)
     interior = total > 0.95
     m = np.clip(total, 1e-3, 1)[..., None]
     unblended = np.clip((reference - background * (1 - m)) / m, 0, 1)
@@ -124,6 +131,68 @@ def grow_underlays(layers, radius=10):
         _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
         layer.rgba[..., :3] = np.where(grow[..., None], layer.rgba[iy, ix, :3], layer.rgba[..., :3])
         layer.rgba[..., 3] = np.where(grow, 1.0, layer.alpha)
+
+
+def _behind_arms(layers, margin):
+    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in HIDDEN_TAGS]
+    return hidden_ids, ndimage.binary_dilation(np.isin(owner_map(layers), hidden_ids), iterations=margin)
+
+
+def _revealed(backdrop, guard):
+    return ~ndimage.binary_dilation(backdrop["hidden"] > 0.02, iterations=guard)
+
+
+def fill_hidden(layers, backdrops, guard=4):
+    """Repaints what the arms and the held object cover with what the pose variants show there.
+
+    See-Through guesses the art behind an arm; once the arm moves that guess shows. Each backdrop is a variant image
+    split into layers and aligned to the base canvas. Every area behind an arm takes as much as it can from the one
+    variant that reveals most of it. Only pixels the arms cover fully, on layers drawn below them, change, so the
+    rest pose stays the same.
+    """
+    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in HIDDEN_TAGS]
+    behind = coverage([layers[i] for i in hidden_ids]) > 0.98
+    floor = min(hidden_ids)
+    index = {layer.name: i for i, layer in enumerate(layers)}
+    by_tag = {}
+    for i, layer in enumerate(layers):
+        by_tag.setdefault(layer.tag, i)
+    fallback = by_tag.get("topwear", floor - 1)
+    revealed = [_revealed(b, guard) for b in backdrops]
+    targets = []
+    for b in backdrops:
+        lookup = np.array([index.get(n, by_tag.get(t, -2)) for n, t in zip(b["names"], b["tags"])] + [-1], np.int32)
+        lookup = np.where(lookup >= floor, fallback, lookup)
+        targets.append(np.where(b["coverage"] > 0.02, lookup[b["owner"]], -1))
+    labels, count = ndimage.label(behind)
+    todo = behind.copy()
+    filled = 0
+    for k in range(1, count + 1):
+        area = labels == k
+        for i in sorted(range(len(backdrops)), key=lambda i: -int((area & revealed[i]).sum())):
+            free = area & todo & revealed[i] & (targets[i] != -2)
+            if not free.any():
+                continue
+            b, target = backdrops[i], np.where(free, targets[i], -3)
+            for j in range(floor):
+                layer = layers[j]
+                mine = target == j
+                layer.rgba[..., :3] = np.where(mine[..., None], b["rgb"], layer.rgba[..., :3])
+                layer.rgba[..., 3] = np.where(mine, b["coverage"], layer.alpha)
+                cleared = (target == -1) | ((target >= 0) & (target < j))
+                layer.rgba[..., 3] = np.where(cleared, 0.0, layer.alpha)
+            filled += int(free.sum())
+            todo &= ~free
+    return filled, int(todo.sum())
+
+
+def backdrop_patch(layers, backdrop, name, side, margin=3, guard=4):
+    """One variant's own art for the area its replaced arm used to cover, plus the tag that owns each pixel."""
+    _, behind = _behind_arms(layers, margin)
+    region = behind & _revealed(backdrop, guard)
+    alpha = np.where(region, backdrop["coverage"], 0.0).astype(np.float32)
+    tags = np.array(backdrop["tags"] + [""])[backdrop["owner"]]
+    return Layer(name, "backdrop", np.concatenate([backdrop["rgb"], alpha[..., None]], axis=2), side), tags
 
 
 def composite(layers, background=1.0):

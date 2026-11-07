@@ -268,6 +268,27 @@ def attach_object(layer, lm):
     return best
 
 
+@dataclass
+class _Probe:
+    tag: str
+    side: str | None = None
+
+
+def weights_by_owner(vertices, tag_map, lm):
+    """Weights for a patch that mixes several layers: each vertex follows the layer that owns its pixel."""
+    h, w = tag_map.shape
+    xi = np.clip(vertices[:, 0].astype(int), 0, w - 1)
+    yi = np.clip(vertices[:, 1].astype(int), 0, h - 1)
+    tags = tag_map[yi, xi]
+    tags = np.where(np.isin(tags, ["", "handwear", "objects"]), "topwear", tags)
+    acc = {}
+    for tag in np.unique(tags):
+        mine = tags == tag
+        for bone, weight in weights_for(_Probe(str(tag)), vertices, lm):
+            acc.setdefault(bone, np.zeros(len(vertices)))[mine] += np.broadcast_to(weight, mine.shape)[mine]
+    return list(acc.items())
+
+
 def pack_weights(influences, bone_index, max_influences=3):
     names = [name for name, _ in influences]
     w = np.stack([np.asarray(v, np.float64) for _, v in influences], axis=1)

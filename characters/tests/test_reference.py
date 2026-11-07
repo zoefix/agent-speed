@@ -95,6 +95,70 @@ class VariantTests(unittest.TestCase):
         self.assertTrue(meta[0]["eyesClosed"])
         self.assertEqual({p["id"] for p in params}, {"Var.smile", "Mouth.smile"})
 
+    def test_arm_swap_stays_nearly_opaque(self):
+        from characters.rig.layers import Layer
+        from characters.rig.params import variant_controls
+        from characters.rig.variants import Variant
+        v = Variant("wave", "arm", "right", [Layer("handwear.right@wave", "handwear", None, "right")],
+                    ["handwear.right"])
+        _, _, part_drivers, _ = variant_controls([v], {"handwear.right", "handwear.right@wave"})
+        keys = {d["part"]: np.array(d["keys"], float) for d in part_drivers}
+        for t in np.linspace(0, 1, 41):
+            new = np.interp(t, keys["handwear.right@wave"][:, 0], keys["handwear.right@wave"][:, 1])
+            old = np.interp(t, keys["handwear.right"][:, 0], keys["handwear.right"][:, 1])
+            self.assertGreaterEqual(1 - (1 - new) * (1 - old), 0.95)
+
+    def test_old_and_new_arm_meet_halfway(self):
+        from characters.rig.variants import _meet
+        for gap in (10.0, -40.0, 100.0, 170.0):
+            lead, approach = _meet(gap, 90, 90)
+            self.assertAlmostEqual(gap + lead - approach, 0.0)
+            self.assertLessEqual(abs(lead), 90)
+            self.assertLessEqual(abs(approach), 90)
+        lead, approach = _meet(200.0, 60, 60)
+        self.assertEqual((lead, approach), (-60.0, 60.0))
+
+
+class FillHiddenTests(unittest.TestCase):
+    def scene(self):
+        from characters.rig.layers import Layer
+        h = w = 40
+
+        def layer(name, tag, color, box):
+            rgba = np.zeros((h, w, 4), np.float32)
+            x0, y0, x1, y1 = box
+            rgba[y0:y1, x0:x1, :3] = color
+            rgba[y0:y1, x0:x1, 3] = 1
+            return Layer(name, tag, rgba)
+
+        body = layer("topwear", "topwear", (0.2, 0.2, 0.2), (5, 5, 35, 35))
+        arm = layer("handwear.right", "handwear", (0.9, 0.1, 0.1), (20, 10, 30, 30))
+        owner = np.full((h, w), -1, np.int32)
+        owner[2:38, 2:38] = 0
+        backdrop = {"names": ["topwear"], "tags": ["topwear"], "owner": owner,
+                    "rgb": np.full((h, w, 3), 0.6, np.float32), "coverage": (owner >= 0).astype(np.float32),
+                    "hidden": np.zeros((h, w), np.float32)}
+        return [body, arm], backdrop
+
+    def test_fill_repaints_only_what_the_arm_covers(self):
+        from characters.rig.layers import composite, fill_hidden
+        parts, backdrop = self.scene()
+        before = composite(parts)
+        filled, left = fill_hidden(parts, [backdrop], guard=0)
+        np.testing.assert_allclose(composite(parts), before)
+        self.assertEqual((filled, left), (200, 0))
+        np.testing.assert_allclose(parts[0].rgba[20, 25, :3], 0.6)
+        np.testing.assert_allclose(parts[0].rgba[20, 10, :3], 0.2)
+
+    def test_patch_weights_follow_the_owner_layer(self):
+        from characters.rig.skeleton import weights_by_owner
+        tags = np.full((40, 40), "topwear", object)
+        tags[:, 20:] = "face"
+        lm = {"face": (0, 0, 10, 10), "chin": 10}
+        influences = dict(weights_by_owner(np.array([[5.0, 5.0], [30.0, 5.0]]), tags.astype(str), lm))
+        np.testing.assert_allclose(influences["chest"], [1, 0])
+        np.testing.assert_allclose(influences["face"], [0, 1])
+
 
 class PhysicsTests(unittest.TestCase):
     def spec(self, wind=1.0):

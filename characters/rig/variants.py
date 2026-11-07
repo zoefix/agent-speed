@@ -12,10 +12,9 @@ import numpy as np
 
 from . import layers as L
 from . import pose, register, skeleton
+from .params import BEND_RANGE, LIFT_RANGE, VARIANT_ARM_RANGE, VARIANT_FOREARM_RANGE
 
 FACE_TAGS = ("eyewhite", "irides", "eyelash", "eyebrow", "mouth")
-ARM_RANGE = 60.0
-FOREARM_RANGE = 30.0
 
 
 @dataclass
@@ -32,6 +31,7 @@ class Variant:
     approach_deg: float = 0.0
     lead_fore_deg: float = 0.0
     approach_fore_deg: float = 0.0
+    backdrop: dict | None = None
 
 
 def load_manifest(path):
@@ -85,6 +85,24 @@ def _wrap(d):
     return (d + 180) % 360 - 180
 
 
+def _backdrop(ordered, owner):
+    rgb = np.zeros(owner.shape + (3,), np.float32)
+    for i, layer in enumerate(ordered):
+        mine = owner == i
+        rgb[mine] = layer.rgba[..., :3][mine]
+    return {"names": [layer.name for layer in ordered], "tags": [layer.tag for layer in ordered], "owner": owner,
+            "rgb": rgb, "coverage": L.coverage(ordered),
+            "hidden": L.coverage([layer for layer in ordered if layer.tag in L.HIDDEN_TAGS])}
+
+
+def _meet(gap, base_range, variant_range):
+    """Splits an angle gap (base minus variant) so the old arm turns toward the new one and the new one starts
+    where they meet; returns (base turn, variant offset)."""
+    approach = float(np.clip(gap / 2, -variant_range, variant_range))
+    lead = float(np.clip(approach - gap, -base_range, base_range))
+    return lead, float(np.clip(gap + lead, -variant_range, variant_range))
+
+
 def _rename(layer, vid):
     return L.Layer(f"{layer.name}@{vid}", layer.tag, layer.rgba, layer.side)
 
@@ -103,7 +121,8 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     top = skeleton.box(arm.alpha, 0.3)[1]
     front = spec.get("front", top < lm["chin"] + 0.3 * (fy1 - fy0))
     ordered = [layer for layer in vlayers if layer not in take] + take if front else vlayers
-    L.reproject(ordered, image)
+    owner = L.reproject(ordered, image)
+    backdrop = _backdrop(ordered, owner)
 
     base_arm = lm["arms"][side]
     joints = pose.arms(spec["image"], size, center_x, matrix).get(side)
@@ -114,11 +133,12 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     d_fore = _wrap(_wrap(_angle(base_arm["elbow"], base_arm["hand"]) - upper_b)
                    - _wrap(_angle(found["elbow"], found["hand"]) - upper_v))
     replaces = [f"handwear.{side}"] + (["objects"] if holds else [])
+    lead, approach = _meet(d_upper, LIFT_RANGE, VARIANT_ARM_RANGE)
+    lead_fore, approach_fore = _meet(d_fore, BEND_RANGE, VARIANT_FOREARM_RANGE)
+    report["gap_deg"] = [round(d_upper + lead - approach, 1), round(d_fore + lead_fore - approach_fore, 1)]
     return Variant(vid, "arm", side, [_rename(layer, vid) for layer in take], replaces, front, found, report,
-                   lead_deg=float(np.clip(-d_upper, -ARM_RANGE, ARM_RANGE)),
-                   approach_deg=float(np.clip(d_upper, -ARM_RANGE, ARM_RANGE)),
-                   lead_fore_deg=float(np.clip(-d_fore, -FOREARM_RANGE, FOREARM_RANGE)),
-                   approach_fore_deg=float(np.clip(d_fore, -FOREARM_RANGE, FOREARM_RANGE)))
+                   lead_deg=lead, approach_deg=approach, lead_fore_deg=lead_fore, approach_fore_deg=approach_fore,
+                   backdrop=backdrop)
 
 
 def face_variant(spec, base_reference, size, lm, base_names):

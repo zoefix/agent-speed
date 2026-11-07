@@ -34,7 +34,7 @@ def ordered_parts(base, loaded):
     top = float(len(base))
     for v in loaded:
         for k, layer in enumerate(v.parts):
-            if v.kind == "arm" and v.front:
+            if v.kind == "arm" and v.front and layer.tag != "backdrop":
                 top += 0.01
                 slots.append((top, layer, v))
                 continue
@@ -80,6 +80,19 @@ def main(argv=None):
             if v.kind == "arm":
                 bones.append(skeleton.Bone(f"arm.{v.side}@{v.id}", "chest", v.arm["shoulder"]))
                 bones.append(skeleton.Bone(f"forearm.{v.side}@{v.id}", f"arm.{v.side}@{v.id}", v.arm["elbow"]))
+    backdrops = [v.backdrop for v in loaded if v.backdrop is not None]
+    patch_tags = {}
+    if backdrops:
+        for v in loaded:
+            if v.backdrop is not None:
+                patch, patch_tags[f"backdrop.{v.side}@{v.id}"] = layers.backdrop_patch(
+                    parts, v.backdrop, f"backdrop.{v.side}@{v.id}", v.side)
+                v.parts.insert(0, patch)
+        filled, unknown = layers.fill_hidden(parts, backdrops)
+        print(f"behind the arms: {filled} px repainted from variants, {unknown} px left as See-Through guessed")
+        for v in loaded:
+            v.backdrop = None
+        rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
     bone_index = {b.name: i for i, b in enumerate(bones)}
 
     meshes, report = [], []
@@ -88,7 +101,9 @@ def main(argv=None):
         if built is None:
             continue
         vertices, triangles = built
-        if v is not None and v.kind == "arm":
+        if layer.tag == "backdrop":
+            influences = skeleton.weights_by_owner(vertices, patch_tags[layer.name], lm)
+        elif v is not None and v.kind == "arm":
             attach = f"forearm.{v.side}@{v.id}"
             influences = skeleton.weights_for(layer, vertices, lm, attach, arm=v.arm, suffix=f"@{v.id}")
         else:

@@ -26,6 +26,11 @@ TITLES = ["待機", "步行", "自行車", "電動自行車", "摩托車", "汽�
 HEAT = [(0.0, (61, 220, 132)), (0.35, (255, 213, 74)), (0.7, (255, 138, 61)), (1.0, (255, 59, 59))]
 TIMELINE = [(0, 0), (3, 0), (4, 14), (7, 22), (8, 60), (11, 75), (12, 150), (15, 170), (16, 330), (20, 420), (22, 60),
             (24, 10), (25, 0), (31, 0)]
+REEL_GAP = 0.9
+REEL_LABELS = {"wave": "揮手", "chin": "托腮思考", "peace": "比 YA", "fist": "握拳加油", "idea": "靈光一閃", "hip": "叉腰",
+               "hairtuck": "撥頭髮", "present": "介紹手勢", "hug": "抱書", "raise": "舉書歡呼", "open": "翻書閱讀",
+               "yawn": "打哈欠", "hum": "哼歌", "nod": "點頭", "shake": "搖頭", "tilt": "歪頭", "lookaround": "東張西望",
+               "giggle": "偷笑", "doubletake": "嚇一跳"}
 DIGITS_FONT = "/System/Library/Fonts/SFNS.ttf"
 TITLE_FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
 
@@ -54,7 +59,7 @@ class LevelTracker:
 
 def speed_at(t):
     xs, ys = zip(*TIMELINE)
-    return float(np.interp(t, xs, ys))
+    return float(np.interp(t % xs[-1], xs, ys))
 
 
 def heat_color(h):
@@ -84,6 +89,15 @@ def orb_image(diameter, value, level, fonts):
     return np.asarray(img)
 
 
+def caption_image(text, font):
+    w, h = int(font.size * (len(text) + 2)), int(font.size * 1.9)
+    img = Image.new("RGBA", (w, h), (0, 0, 0, 0))
+    d = ImageDraw.Draw(img)
+    d.rounded_rectangle((0, 0, w - 1, h - 1), radius=h // 2, fill=(12, 15, 22, 170))
+    d.text((w / 2, h / 2), text, font=font, fill=(240, 243, 248, 255), anchor="mm")
+    return np.asarray(img)
+
+
 def background(size):
     w, h = size
     y = np.linspace(0, 1, h)[:, None]
@@ -107,7 +121,7 @@ def petal_sprite(doc, atlas):
 def rest_check(rig, atlas, reference_path):
     renderer = Renderer(rig.canvas, atlas, rig.parts)
     renderer.begin((1, 1, 1, 1))
-    renderer.character(rig.pose(rig.defaults()), 1.0, (0.0, 0.0))
+    renderer.character(rig.pose(rig.defaults()), 1.0, (0.0, 0.0), rig.opacities(rig.defaults()))
     frame = renderer.finish()[..., :3].astype(np.float32) / 255
     ref = load_reference(reference_path, rig.canvas)
     diff = np.abs(frame - ref).mean(axis=2) * 255
@@ -173,12 +187,13 @@ def main(argv=None):
         Path(args.frames).mkdir(parents=True, exist_ok=True)
 
     dt = 1 / args.fps
-    reel = []
+    reel, reel_at, caption = [], 1.0, None
     if args.reel:
         gestures = [v["id"] for v in rig.variants if v["kind"] == "arm"] + ["yawn", "hum", "nod", "shake", "tilt",
                                                                              "lookaround", "giggle", "doubletake"]
-        reel = [(1.0 + 3.6 * i, g) for i, g in enumerate(gestures)]
-        args.seconds = 1.0 + 3.6 * len(gestures) + 1.0
+        reel = [g for g in gestures if director._gesture(g) is not None]
+        args.seconds = reel_at + sum(director._gesture(g).duration + REEL_GAP for g in reel)
+        caption_font = ImageFont.truetype(TITLE_FONT, int(h * 0.036))
     frames = int(args.seconds * args.fps)
     cost = []
     chest = screen((lm["waist"][0], lm["chin"] + 0.6 * (lm["waist"][1] - lm["chin"])))
@@ -189,8 +204,14 @@ def main(argv=None):
             v, level = 40.0, 3
             director.set_level(level)
             director.next_gesture = float("inf")
-            if reel and t >= reel[0][0]:
-                director._start_gesture(reel.pop(0)[1])
+            if director.gesture is not None:
+                reel_at = t + REEL_GAP
+            elif reel and t >= reel_at:
+                gid = reel.pop(0)
+                director._start_gesture(gid)
+                if caption is not None:
+                    caption.release()
+                caption = renderer.texture(caption_image(REEL_LABELS.get(gid, gid), caption_font))
         else:
             v = speed_at(t)
             level = tracker.update(v, dt)
@@ -214,12 +235,16 @@ def main(argv=None):
         orb = renderer.texture(orb_image(orb_d, v, level, fonts))
         renderer.image(orb, orb_c[0] - orb_d / 2, orb_c[1] - orb_d / 2, orb_d, orb_d)
         orb.release()
+        if caption is not None and director.gesture is not None:
+            cw, ch = caption.size
+            renderer.image(caption, orb_c[0] - cw / 2, h * 0.08, cw, ch, alpha=min(1.0, 4 * director.gesture["w"]))
         frame = renderer.finish()
         cost.append(((evaluated - started) * 1000, (time.perf_counter() - evaluated) * 1000))
         if ffmpeg:
             ffmpeg.stdin.write(frame.tobytes())
         if args.frames and n % max(1, int(round(args.frame_every * args.fps))) == 0:
-            Image.fromarray(frame[..., :3]).save(Path(args.frames) / f"f{n:05d}_lv{level:02d}.png")
+            tag = f"_{director.last_gesture}" if director.gesture is not None else ""
+            Image.fromarray(frame[..., :3]).save(Path(args.frames) / f"f{n:05d}_lv{level:02d}{tag}.png")
     if ffmpeg:
         ffmpeg.stdin.close()
         ffmpeg.wait()

@@ -7,7 +7,8 @@ Channels: rotate (degrees, clockwise on screen), x and y (canvas pixels), scaleX
 ARM_RANGES = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
 VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
-VARIANT_FOREARM_RANGE = 30.0
+VARIANT_FOREARM_RANGE = 90.0
+BEND_RANGE = 90.0
 
 
 def param(pid, lo=-1.0, hi=1.0, default=0.0):
@@ -59,10 +60,11 @@ def build(lm, bone_names):
     physics = []
     for side, (upper, lower) in ARM_RANGES.items():
         if has(f"arm.{side}"):
-            params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}")]
+            params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}"), param(f"Bend.{side}")]
             drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper))
             drivers.append(linear(f"Lift.{side}", f"arm.{side}", "rotate", LIFT_RANGE))
             drivers.append(linear(f"Forearm.{side}", f"forearm.{side}", "rotate", lower))
+            drivers.append(linear(f"Bend.{side}", f"forearm.{side}", "rotate", BEND_RANGE))
 
     if has("hairBack1"):
         bh = lm["backHair"]
@@ -119,11 +121,15 @@ def variant_controls(variants, part_names):
         def control(name):
             return mouth if v.kind == "face" and name.split("@")[0].split(".")[0] == "mouth" else p
 
+        # The new arm is mostly in before the old one fades, so the swap barely turns see-through.
+        fade_in, fade_out = [[0, 0], [1, 1]], [[0, 1], [1, 0]]
+        if v.kind == "arm":
+            fade_in, fade_out = [[0, 0], [0.6, 1]], [[0.4, 1], [1, 0]]
         for part in v.parts:
-            part_drivers.append({"param": control(part.name), "part": part.name, "keys": [[0, 0], [1, 1]]})
+            part_drivers.append({"param": control(part.name), "part": part.name, "keys": fade_in})
         for name in v.replaces:
             if name in part_names:
-                part_drivers.append({"param": control(name), "part": name, "keys": [[0, 1], [1, 0]]})
+                part_drivers.append({"param": control(name), "part": name, "keys": fade_out})
         entry = {"id": v.id, "kind": v.kind, "param": p}
         if v.kind == "face":
             entry.update({"mouth": mouth, "eyesClosed": not any(part.tag == "irides" for part in v.parts)})
@@ -136,7 +142,7 @@ def variant_controls(variants, part_names):
             entry.update({
                 "side": s, "front": bool(v.front), "arm": arm_p, "forearm": fore_p,
                 "lead": {f"Lift.{s}": _unit(v.lead_deg / LIFT_RANGE),
-                         f"Forearm.{s}": _unit(v.lead_fore_deg / ARM_RANGES[s][1])},
+                         f"Bend.{s}": _unit(v.lead_fore_deg / BEND_RANGE)},
                 "approach": {arm_p: _unit(v.approach_deg / VARIANT_ARM_RANGE),
                              fore_p: _unit(v.approach_fore_deg / VARIANT_FOREARM_RANGE)},
             })

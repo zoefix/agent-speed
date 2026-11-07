@@ -120,11 +120,11 @@ BAND_FACE = {"idle": None, "cruise": "smile", "boost": "smile", "overdrive": "de
 
 def arm_gesture(meta, hold, flourish, expression):
     var, arm, fore = meta["param"], meta["arm"], meta["forearm"]
-    t1, t2 = 0.2, 0.27
+    t1, t2 = 0.2, 0.3
     t3 = t2 + 0.3
     t4 = t3 + hold
     t5 = t4 + 0.22
-    t6 = t5 + 0.07
+    t6 = t5 + 0.1
     t7 = t6 + 0.32
     curves = {var: [(0, 0), (t1, 0), (t2, 1), (t5, 1), (t6, 0), (t7, 0)]}
     for pid, lead in meta["lead"].items():
@@ -330,7 +330,7 @@ class Director:
         fade = m.fade
         g["w"] = min(1.0, g["t"] / fade, max(0.0, (m.duration - g["t"]) / fade))
         for pid, v in m.sample(g["t"]).items():
-            hard = pid.startswith(("Var.", "Lift."))
+            hard = pid.startswith(("Var.", "Lift.", "Bend."))
             values[pid] = v if hard else values.get(pid, 0.0) * (1 - g["w"]) + v * g["w"]
         if g["t"] >= m.duration:
             self.gesture = None
