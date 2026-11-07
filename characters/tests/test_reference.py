@@ -61,6 +61,41 @@ class RigTests(unittest.TestCase):
             Rig(doc)
 
 
+class VariantTests(unittest.TestCase):
+    def test_part_opacity_is_the_product_of_its_drivers(self):
+        doc = tiny_doc()
+        doc["params"] += [{"id": "Var.a", "min": 0, "max": 1, "default": 0}, {"id": "Var.b", "min": 0, "max": 1, "default": 0}]
+        doc["partDrivers"] = [{"param": "Var.a", "part": "a", "keys": [[0, 1], [1, 0]]},
+                              {"param": "Var.b", "part": "a", "keys": [[0, 1], [1, 0]]}]
+        rig = Rig(doc)
+        self.assertAlmostEqual(rig.opacities({})[0], 1.0)
+        self.assertAlmostEqual(rig.opacities({"Var.a": 0.5, "Var.b": 0.5})[0], 0.25)
+
+    def test_arm_weights_follow_the_nearest_segment_even_when_folded(self):
+        from characters.rig.skeleton import arm_from_joints, arm_weights
+        arm = arm_from_joints({"shoulder": (0, 0), "elbow": (10, 100), "wrist": (40, 10)})
+        chest, upper, fore = arm_weights(np.array([[1.0, 2.0], [6.0, 60.0], [38.0, 20.0], [50.0, -20.0]]), arm)
+        np.testing.assert_allclose(chest + upper + fore, 1, atol=1e-9)
+        self.assertGreater(chest[0], 0.9)
+        self.assertGreater(upper[1], 0.9)
+        self.assertGreater(fore[2], 0.9)
+        self.assertGreater(fore[3], 0.9)
+
+    def test_face_variants_split_eyes_from_mouth(self):
+        from characters.rig.layers import Layer
+        from characters.rig.params import variant_controls
+        from characters.rig.variants import Variant
+        parts = [Layer("eyelash.left@smile", "eyelash", None, "left"), Layer("mouth@smile", "mouth", None)]
+        v = Variant("smile", "face", None, parts, ["eyelash.left", "mouth"])
+        params, _, part_drivers, meta = variant_controls([v], {"eyelash.left", "mouth", "eyelash.left@smile", "mouth@smile"})
+        by_part = {d["part"]: d["param"] for d in part_drivers}
+        self.assertEqual(by_part["mouth@smile"], "Mouth.smile")
+        self.assertEqual(by_part["mouth"], "Mouth.smile")
+        self.assertEqual(by_part["eyelash.left"], "Var.smile")
+        self.assertTrue(meta[0]["eyesClosed"])
+        self.assertEqual({p["id"] for p in params}, {"Var.smile", "Mouth.smile"})
+
+
 class PhysicsTests(unittest.TestCase):
     def spec(self, wind=1.0):
         return {"name": "hair", "anchor": [0, 0], "segments": [100, 100], "inputs": [{"param": "Sway", "x": 50}],
