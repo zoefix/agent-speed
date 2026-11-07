@@ -8,12 +8,12 @@ from scipy import ndimage
 
 DRAW_ORDER = [
     "back hair", "wings", "tail", "footwear", "legwear", "bottomwear", "neck", "topwear", "neckwear",
-    "objects", "handwear", "ears", "earwear", "face", "eyewhite", "irides", "eyelash", "eyebrow",
+    "objects", "handwear", "hand", "ears", "earwear", "face", "eyewhite", "irides", "eyelash", "eyebrow",
     "nose", "mouth", "eyewear", "front hair", "headwear",
 ]
 PAIRED = {"handwear", "ears", "eyewhite", "irides", "eyelash", "eyebrow"}
 NO_GROWTH = {"eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth", "eyewear", "earwear"}
-HIDDEN_TAGS = ("handwear", "objects")
+HIDDEN_TAGS = ("handwear", "hand", "objects")
 
 
 @dataclass

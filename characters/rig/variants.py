@@ -132,7 +132,7 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     d_upper = _wrap(upper_b - upper_v)
     d_fore = _wrap(_wrap(_angle(base_arm["elbow"], base_arm["hand"]) - upper_b)
                    - _wrap(_angle(found["elbow"], found["hand"]) - upper_v))
-    replaces = [f"handwear.{side}"] + (["objects"] if holds else [])
+    replaces = [f"handwear.{side}", f"hand.{side}"] + (["objects"] if holds else [])
     lead, approach = _meet(d_upper, LIFT_RANGE, VARIANT_ARM_RANGE)
     lead_fore, approach_fore = _meet(d_fore, BEND_RANGE, VARIANT_FOREARM_RANGE)
     report["gap_deg"] = [round(d_upper + lead - approach, 1), round(d_fore + lead_fore - approach_fore, 1)]

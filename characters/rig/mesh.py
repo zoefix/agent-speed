@@ -4,7 +4,7 @@ import numpy as np
 from scipy import ndimage
 from scipy.spatial import Delaunay
 
-FINE = {"eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth", "earwear", "ears", "eyewear"}
+FINE = {"eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth", "earwear", "ears", "eyewear", "hand"}
 MEDIUM = {"face", "headwear", "neck", "neckwear", "objects"}
 
 

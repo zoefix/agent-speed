@@ -12,7 +12,7 @@ import json
 
 import numpy as np
 
-from . import atlas, layers, mesh, package, params, pose, skeleton, variants
+from . import atlas, hands, layers, mesh, package, params, pose, skeleton, variants
 
 
 def landmark_summary(lm):
@@ -26,7 +26,32 @@ def landmark_summary(lm):
     for key in ("backHair", "lock"):
         if key in lm:
             out[key] = lm[key]
+    out["hands"] = {side: hands.summary(h) for side, h in lm.get("hands", {}).items()}
     return json.loads(json.dumps(out, default=float))
+
+
+def split_hands(parts, found, reference, sam):
+    """Cuts each detected hand out of its arm layer into its own part, drawn right above the arm. With a SAM
+    checkpoint the cut follows the drawn outline of the hand."""
+    masks = {}
+    if sam:
+        from . import segment
+        for side, hand in found.items():
+            mask = segment.hand_mask(reference, hand, sam)
+            if mask is not None:
+                masks[side] = mask
+                cleared = hands.clear_ghosts(parts, mask, keep=f"handwear.{side}")
+                print(f"hand {side}: {int(mask.sum())} px from SAM, {cleared} px of other layers inpainted")
+            else:
+                print(f"hand {side}: SAM found no clean mask, using the arm layer")
+    out = []
+    for layer in parts:
+        hand = found.get(layer.side) if layer.tag == "handwear" else None
+        if hand is None:
+            out.append(layer)
+            continue
+        out += list(hands.split(layer, hand, masks.get(layer.side), reference))
+    return out
 
 
 def ordered_parts(base, loaded):
@@ -53,6 +78,7 @@ def main(argv=None):
     ap.add_argument("--name", required=True)
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants")
+    ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     args = ap.parse_args(argv)
 
     size, parts = layers.load_psd(args.psd)
@@ -67,9 +93,18 @@ def main(argv=None):
     for side, joints in pose.arms(args.reference, size, (fx0 + fx1) / 2).items():
         if side in lm["arms"]:
             lm["arms"][side] = skeleton.arm_from_joints(joints)
+    lm["hands"] = {}
+    for side, points in pose.hands(args.reference, size, (fx0 + fx1) / 2).items():
+        if side in lm["arms"] and lm["arms"][side].get("tip") is not None:
+            lm["hands"][side] = dict(hands.landmarks(points, lm["arms"][side]["elbow"]), side=side)
+    parts = split_hands(parts, lm["hands"], reference, args.sam)
     bones = skeleton.bones(lm)
+    for hand in lm["hands"].values():
+        bones += hands.bones(hand, skeleton.Bone)
     objects = next((p for p in parts if p.tag == "objects"), None)
     object_attach = skeleton.attach_object(objects, lm) if objects is not None else None
+    if object_attach and object_attach.split(".", 1)[1] in lm["hands"]:
+        object_attach = "hand." + object_attach.split(".", 1)[1]
     object_side = object_attach.split(".", 1)[1] if object_attach else None
     lm["objectSide"] = object_side
 
@@ -103,7 +138,9 @@ def main(argv=None):
         if built is None:
             continue
         vertices, triangles = built
-        if layer.tag == "backdrop":
+        if layer.tag == "hand":
+            influences = hands.weights(vertices, lm["hands"][layer.side])
+        elif layer.tag == "backdrop":
             influences = skeleton.weights_by_owner(vertices, patch_tags[layer.name], lm)
         elif v is not None and v.kind == "arm":
             attach = f"forearm.{v.side}@{v.id}"

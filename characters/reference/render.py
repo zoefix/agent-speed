@@ -30,6 +30,27 @@ void main() {
     v_uv = corner + 0.5; v_alpha = alpha;
 }
 """
+DOT_VS = """
+#version 330
+uniform vec2 screen;
+in vec2 corner; in vec2 center; in vec2 size; in vec4 rgba; in float soft;
+out vec2 v_p; out vec4 v_rgba; out float v_soft;
+void main() {
+    vec2 p = center + corner * size * 2.0;
+    gl_Position = vec4(p.x / screen.x * 2.0 - 1.0, 1.0 - p.y / screen.y * 2.0, 0.0, 1.0);
+    v_p = corner * 2.0; v_rgba = rgba; v_soft = soft;
+}
+"""
+DOT_FS = """
+#version 330
+in vec2 v_p; in vec4 v_rgba; in float v_soft; out vec4 color;
+void main() {
+    float r = length(v_p);
+    float a = 1.0 - smoothstep(1.0 - v_soft, 1.0, r);
+    a = v_soft >= 0.99 ? pow(max(0.0, 1.0 - r), 2.0) : a;
+    color = vec4(v_rgba.rgb * v_rgba.a, v_rgba.a) * a;
+}
+"""
 SPRITE_FS = """
 #version 330
 uniform sampler2D tex; uniform int premultiplied; in vec2 v_uv; in float v_alpha; out vec4 color;
@@ -52,23 +73,23 @@ class Renderer:
         self.resolved = self.ctx.framebuffer(color_attachments=[self.ctx.texture((w, h), 4)])
         self.mesh_prog = self.ctx.program(vertex_shader=MESH_VS, fragment_shader=MESH_FS)
         self.sprite_prog = self.ctx.program(vertex_shader=SPRITE_VS, fragment_shader=SPRITE_FS)
-        self.atlas = self.texture(atlas_rgba, mipmaps=True)
-        self.mesh_prog["atlas"].value = (atlas_rgba.shape[1], atlas_rgba.shape[0])
         self.mesh_prog["screen"].value = size
         self.sprite_prog["screen"].value = size
-        self.meshes = []
-        for part in parts:
-            pos = self.ctx.buffer(reserve=part["vertices"].astype("f4").nbytes, dynamic=True)
-            uv = self.ctx.buffer(part["uv"].astype("f4").tobytes())
-            ibo = self.ctx.buffer(part["triangles"].astype("i4").tobytes())
-            vao = self.ctx.vertex_array(self.mesh_prog, [(pos, "2f", "pos"), (uv, "2f", "uv")], index_buffer=ibo)
-            self.meshes.append((pos, vao))
+        self.characters = []
+        self.add_character(atlas_rgba, parts)
         corners = np.array([-0.5, -0.5, 0.5, -0.5, 0.5, 0.5, -0.5, -0.5, 0.5, 0.5, -0.5, 0.5], "f4")
         self.corner_buf = self.ctx.buffer(corners.tobytes())
         self.instance_buf = self.ctx.buffer(reserve=6 * 4 * 4096, dynamic=True)
         self.sprite_vao = self.ctx.vertex_array(self.sprite_prog, [
             (self.corner_buf, "2f", "corner"),
             (self.instance_buf, "2f 2f 1f 1f/i", "center", "size", "angle", "alpha"),
+        ])
+        self.dot_prog = self.ctx.program(vertex_shader=DOT_VS, fragment_shader=DOT_FS)
+        self.dot_prog["screen"].value = size
+        self.dot_buf = self.ctx.buffer(reserve=9 * 4 * 8192, dynamic=True)
+        self.dot_vao = self.ctx.vertex_array(self.dot_prog, [
+            (self.corner_buf, "2f", "corner"),
+            (self.dot_buf, "2f 2f 4f 1f/i", "center", "size", "rgba", "soft"),
         ])
 
     def texture(self, rgba, mipmaps=False):
@@ -99,12 +120,45 @@ class Renderer:
         self.sprite_vao.render(moderngl.TRIANGLES, vertices=6, instances=len(instances))
         self.ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
 
-    def character(self, posed, scale, offset, opacities=None):
-        self.atlas.use(0)
+    def clip(self, box=None):
+        """Limits drawing to box (x0, y0, x1, y1) in screen pixels, or lifts the limit."""
+        if box is None:
+            self.ctx.scissor = None
+            return
+        x0, y0, x1, y1 = (int(round(v)) for v in box)
+        self.ctx.scissor = (x0, self.size[1] - y1, max(0, x1 - x0), max(0, y1 - y0))
+
+    def dots(self, instances, additive=False):
+        """Soft round dots: rows of (x, y, radius x, radius y, r, g, b, a, softness); softness 1 is a glow."""
+        if len(instances) == 0:
+            return
+        self.dot_buf.write(np.ascontiguousarray(instances, "f4").tobytes())
+        if additive:
+            self.ctx.blend_func = moderngl.ONE, moderngl.ONE
+        self.dot_vao.render(moderngl.TRIANGLES, vertices=6, instances=len(instances))
+        self.ctx.blend_func = moderngl.ONE, moderngl.ONE_MINUS_SRC_ALPHA
+
+    def add_character(self, atlas_rgba, parts):
+        """Uploads another character (atlas and meshes); returns its index for character(which=...)."""
+        atlas = self.texture(atlas_rgba, mipmaps=True)
+        meshes = []
+        for part in parts:
+            pos = self.ctx.buffer(reserve=part["vertices"].astype("f4").nbytes, dynamic=True)
+            uv = self.ctx.buffer(part["uv"].astype("f4").tobytes())
+            ibo = self.ctx.buffer(part["triangles"].astype("i4").tobytes())
+            vao = self.ctx.vertex_array(self.mesh_prog, [(pos, "2f", "pos"), (uv, "2f", "uv")], index_buffer=ibo)
+            meshes.append((pos, vao))
+        self.characters.append((atlas, (atlas_rgba.shape[1], atlas_rgba.shape[0]), meshes))
+        return len(self.characters) - 1
+
+    def character(self, posed, scale, offset, opacities=None, which=0):
+        atlas, atlas_size, meshes = self.characters[which]
+        atlas.use(0)
+        self.mesh_prog["atlas"].value = atlas_size
         self.mesh_prog["scale"].value = (scale, scale)
         self.mesh_prog["offset"].value = offset
         opacities = opacities or [1.0] * len(posed)
-        for (pos, vao), verts, opacity in zip(self.meshes, posed, opacities):
+        for (pos, vao), verts, opacity in zip(meshes, posed, opacities):
             if opacity < 0.002:
                 continue
             self.mesh_prog["opacity"].value = opacity

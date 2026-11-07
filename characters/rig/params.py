@@ -9,6 +9,10 @@ Channels: rotate (degrees, clockwise on screen), x and y (canvas pixels), scaleX
 
 import math
 
+import numpy as np
+
+from .hands import CURL, SHORTEN, SPREAD
+
 ARM_RANGES = {"left": (18, 22), "right": (-34, -30), "single": (18, 22)}
 VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
@@ -95,6 +99,12 @@ def build(lm, bone_names):
             drivers.append(linear(f"Forearm.{side}", f"forearm.{side}", "rotate", lower))
             drivers.append(linear(f"Bend.{side}", f"forearm.{side}", "rotate", BEND_RANGE))
 
+    for side, hand in lm.get("hands", {}).items():
+        if has(f"hand.{side}"):
+            params += [param(f"Wrist.{side}"), param(f"Spread.{side}", -0.5, 1.0)]
+            params += [param(f"Finger.{side}.{i}", -0.4, 1.0) for i in range(5)]
+            drivers += hand_drivers(side, hand)
+
     if has("hairBack1"):
         bh = lm["backHair"]
         params += [param("HairBack1"), param("HairBack2")]
@@ -119,6 +129,24 @@ def build(lm, bone_names):
         physics.append(chain("skirt", lm["waist"], [lm["hem"] - lm["waist"][1]], ["Skirt"], [5], fw,
                              stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
     return params, drivers, physics
+
+
+def hand_drivers(side, hand):
+    """Wrist turn, finger curl (rotation toward the palm plus the outer segments sliding toward the knuckles) and
+    spread (each finger's base turning away from the middle finger)."""
+    out = [linear(f"Wrist.{side}", f"hand.{side}", "rotate", 24)]
+    for i, f in enumerate(hand["fingers"]):
+        pid, sign = f"Finger.{side}.{i}", hand["curl"][i]
+        for j in range(3):
+            bone = f"finger.{side}.{i}.{j}"
+            out.append(drive(pid, bone, "rotate", [(-0.4, -0.4 * sign * CURL[j]), (0, 0), (1, sign * CURL[j])]))
+            if SHORTEN[j]:
+                dx, dy = (np.asarray(f[j], float) - np.asarray(f[j - 1], float)) * -SHORTEN[j]
+                out.append(drive(pid, bone, "x", [(-0.4, 0), (0, 0), (1, float(dx))]))
+                out.append(drive(pid, bone, "y", [(-0.4, 0), (0, 0), (1, float(dy))]))
+        if SPREAD[i]:
+            out.append(linear(f"Spread.{side}", f"finger.{side}.{i}.0", "rotate", hand["spread"][i] * SPREAD[i]))
+    return out
 
 
 def chain(name, anchor, lengths, outputs, degrees, fw, stiffness, damping, wind, head=1.0, hip=HIP_X - HIP_COUNTER):

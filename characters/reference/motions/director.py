@@ -10,6 +10,7 @@ import random
 
 from .curves import merge
 from .gestures import COMBOS, FACE_GESTURES, GESTURES, HEAD_GESTURES, arm_gesture, combo, face_gesture, head_gesture
+from .hands import HandActor
 from .moves import MOVES, jump, peek, sidestep
 from .rhythm import GROOVES, Beat
 from .springs import Springs
@@ -42,9 +43,9 @@ def band_of(level):
 
 
 class Director:
-    def __init__(self, rig_params, variants=(), seed=7, arm_out="right", arm_book="left", orb=-1.0):
+    def __init__(self, rig_params, variants=(), seed=7, arm_out="right", arm_book="left", orb=-1.0, celebrate=True):
         self.params = rig_params
-        self.out, self.book, self.orb = arm_out, arm_book, orb
+        self.out, self.book, self.orb, self.celebrate = arm_out, arm_book, orb, celebrate
         self.meta = {v["id"]: v for v in variants}
         self.faces = {k: v for k, v in self.meta.items() if v["kind"] == "face"}
         self.rng = random.Random(seed)
@@ -67,6 +68,8 @@ class Director:
         self.gaze, self.gaze_target, self.gaze_at = [0.0, 0.0], [0.0, 0.0], 0.8
         self.breath_phase = 0.0
         self.time = 0.0
+        self.hands = [HandActor(side, side == arm_book, self.rng, phase=k * 1.7)
+                      for k, side in enumerate(("left", "right")) if f"Finger.{side}.0" in rig_params]
 
     def _can(self, *pids):
         return all(p in self.params for p in pids)
@@ -138,7 +141,7 @@ class Director:
             self.band = band
             self._play_groove(band)
             if rising:
-                if self.gesture is None or self.gesture["t"] > 0.5 * self.gesture["motion"].duration:
+                if self.celebrate and (self.gesture is None or self.gesture["t"] > 0.5 * self.gesture["motion"].duration):
                     for gid in self.rng.sample(CELEBRATE, len(CELEBRATE)):
                         if self._start_gesture(gid):
                             break
@@ -197,6 +200,11 @@ class Director:
         self._blend_grooves(dt, values)
         gesture = self._apply_gesture(dt, values)
         values["PosX"] = values.get("PosX", 0.0) + self.stage_x
+        for hand in self.hands:
+            side = hand.side
+            arm = sum(values.get(f"{k}.{side}", 0.0) for k in ("Arm", "Forearm", "Lift", "Bend"))
+            for pid, v in hand.update(dt, self.time, self.band, 60 / self.beat.bpm, arm).items():
+                values[pid] = values.get(pid, 0.0) + v
 
         self.breath_phase += dt / (4.2 - 2.4 * s)
         values["Breath"] = max(values.get("Breath", 0.0), 0.5 - 0.5 * math.cos(2 * math.pi * self.breath_phase))

@@ -267,3 +267,68 @@ class MotionTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class HandTests(unittest.TestCase):
+    def hand(self):
+        from characters.rig import hands
+        pts = [(50, 100)]
+        for i, x in enumerate((30, 40, 50, 60, 70)):
+            pts += [(x, 90 - 10 * k) for k in range(4)]
+        return dict(hands.landmarks(np.array(pts, float), (50, 160)), side="right")
+
+    def test_hand_weights_sum_to_one_and_follow_the_forearm_at_the_cut(self):
+        from characters.rig import hands
+        h = self.hand()
+        verts = np.array([[50.0, 104.0], [50.0, 60.0], [70.0, 62.0]])
+        influences = dict(hands.weights(verts, h))
+        total = sum(influences.values())
+        np.testing.assert_allclose(total, 1, atol=1e-9)
+        self.assertGreater(influences["forearm.right"][0], 0.9)
+        self.assertGreater(influences["finger.right.2.1"][1] + influences["finger.right.2.2"][1], 0.6)
+
+    def test_split_moves_the_hand_out_of_the_arm_layer(self):
+        from characters.rig import hands
+        from characters.rig.layers import Layer
+        h = self.hand()
+        rgba = np.zeros((200, 200, 4), np.float32)
+        rgba[40:180, 25:75] = (1, 1, 1, 1)
+        arm, part = hands.split(Layer("handwear.right", "handwear", rgba, "right"), h)
+        self.assertEqual(arm.alpha[60, 50], 0)
+        self.assertEqual(part.alpha[60, 50], 1)
+        self.assertEqual(arm.alpha[170, 50], 1)
+        self.assertEqual(part.alpha[170, 50], 0)
+
+    def test_finger_curl_turns_toward_the_palm(self):
+        from characters.rig.params import hand_drivers
+        h = self.hand()
+        drivers = hand_drivers("right", h)
+        curl = [d for d in drivers if d["param"] == "Finger.right.2" and d["channel"] == "rotate"]
+        self.assertEqual(len(curl), 3)
+        self.assertTrue(all(d["keys"][-1][1] != 0 for d in curl))
+
+
+class StageTests(unittest.TestCase):
+    def test_odometer_holds_its_value_between_samples(self):
+        from characters.reference.hud import Odometer
+        odo = Odometer()
+        seen = set()
+        for k in range(60):
+            seen.add(odo.update(1 / 60, 100 + k))
+        self.assertLessEqual(len(seen), 10)
+
+    def test_switch_swaps_only_when_edge_on(self):
+        import math as m
+        from characters.reference.stage import Switch
+        s = Switch()
+        s.request("next")
+        swapped_at = None
+        for k in range(60):
+            values = {}
+            out = s.update(1 / 60, values)
+            if out is not None:
+                swapped_at = values["Spin"]
+            if k > 40:
+                self.assertEqual(values.get("Spin", 0.0), 0.0)
+        self.assertIsNotNone(swapped_at)
+        self.assertLess(abs(m.cos(2 * m.pi * swapped_at)), 0.2)

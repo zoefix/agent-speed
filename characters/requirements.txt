@@ -7,3 +7,5 @@ psd-tools>=1.14
 moderngl>=5.12
 rtmlib>=0.0.16
 onnxruntime>=1.20
+segment-anything>=1.0
+torch>=2.5

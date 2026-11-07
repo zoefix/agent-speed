@@ -17,6 +17,12 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   guess there, and each arm variant also carries its own copy of that area.
 - `reference/` is the reference player (rig evaluation, physics, motions, effects) and a preview renderer that films
   the character beside a mock orb while the speed climbs and falls.
+- Hands get a wrist bone and three bones per finger. A hand pose model (RTMPose hand) finds the joints on the art and
+  Segment Anything (ViT-B, `--sam` checkpoint) cuts the drawn hand out of its arm, so fingers curl, spread and trail
+  the wrist without dragging the book or the dress along.
+- `reference/stage.py` films the character style: the character alone on the desktop with the speed, its title, the
+  model and the agents floating around her, a ring of lights at her feet as the gauge, and one illustration per speed
+  band swapped while she turns edge-on.
 - `reference/motions/` drives the whole body: a groove per speed band on a beat clock (weight shifts, bounce, arm
   swing), one action at a time (arm gestures, two-arm combos, hops, a spin, side steps, a curtsy, a sway dance,
   running in place, head and face gestures), and second-order springs on top so every move overshoots and settles.
@@ -31,6 +37,8 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --rest-check claude.png
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --out claude.mp4
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --reel --out claude-actions.mp4
+.venv/bin/python -m characters.reference.stage --package characters/build/claude --pose boost=characters/build/claude-boost \
+    --out claude-stage.mp4
 .venv/bin/python -m unittest characters.tests.test_reference
 ```
 
