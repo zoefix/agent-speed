@@ -1,7 +1,7 @@
 import Foundation
 
 /// `manifest.json` of a character pack (spec/CHARACTERS.md, Character packs).
-public struct CharacterManifest: Decodable, Sendable, Equatable {
+public struct PackManifest: Decodable, Sendable, Equatable {
     public static let format = "agent-speed-character-pack"
     public static let version = 1
 
@@ -41,7 +41,7 @@ public struct CharacterManifest: Decodable, Sendable, Equatable {
 }
 
 /// Why a pack cannot be loaded.
-public enum CharacterPackError: Error, Equatable, Sendable {
+public enum PackLoadError: Error, Equatable, Sendable {
     case unsupported(format: String, version: Int)
     case badID(String)
     case unsafePath(String)
@@ -60,7 +60,7 @@ public struct CharacterPose: Sendable {
 /// An unpacked character pack: its manifest and one rig per band present (idle is required).
 public struct CharacterPack: Sendable {
     public let root: URL
-    public let manifest: CharacterManifest
+    public let manifest: PackManifest
     /// Present bands in band order; the first is idle.
     public let poses: [CharacterPose]
 
@@ -71,17 +71,17 @@ public struct CharacterPack: Sendable {
     /// `..`, no absolute paths, no symbolic links leading out), and rigs the player understands.
     public static func load(from root: URL) throws -> CharacterPack {
         let root = root.standardizedFileURL.resolvingSymlinksInPath()
-        let manifest: CharacterManifest
+        let manifest: PackManifest
         do {
-            manifest = try JSONDecoder().decode(CharacterManifest.self,
+            manifest = try JSONDecoder().decode(PackManifest.self,
                                                 from: Data(contentsOf: root.appendingPathComponent("manifest.json")))
         } catch {
-            throw CharacterPackError.unreadable("manifest.json")
+            throw PackLoadError.unreadable("manifest.json")
         }
-        guard manifest.format == CharacterManifest.format, manifest.version == CharacterManifest.version else {
-            throw CharacterPackError.unsupported(format: manifest.format, version: manifest.version)
+        guard manifest.format == PackManifest.format, manifest.version == PackManifest.version else {
+            throw PackLoadError.unsupported(format: manifest.format, version: manifest.version)
         }
-        guard isSafeID(manifest.id) else { throw CharacterPackError.badID(manifest.id) }
+        guard isSafeID(manifest.id) else { throw PackLoadError.badID(manifest.id) }
         _ = try resolve(manifest.preview, in: root)
         var poses: [CharacterPose] = []
         for band in SpeedBand.allCases {
@@ -92,18 +92,18 @@ public struct CharacterPack: Sendable {
             do {
                 doc = try RigDocument.decode(Data(contentsOf: rigURL))
             } catch {
-                throw CharacterPackError.unreadable("\(folder)/rig.json")
+                throw PackLoadError.unreadable("\(folder)/rig.json")
             }
             let rig: CharacterRig
             do {
                 rig = try CharacterRig(doc)
             } catch let error as CharacterRigError {
-                throw CharacterPackError.rig(band: band.rawValue, error)
+                throw PackLoadError.rig(band: band.rawValue, error)
             }
             let atlas = try resolve(rig.atlasFile, in: dir)
             poses.append(CharacterPose(band: band, rig: rig, atlasURL: atlas))
         }
-        guard poses.first?.band == .idle else { throw CharacterPackError.missingIdlePose }
+        guard poses.first?.band == .idle else { throw PackLoadError.missingIdlePose }
         return CharacterPack(root: root, manifest: manifest, poses: poses)
     }
 
@@ -116,10 +116,10 @@ public struct CharacterPack: Sendable {
         let parts = relative.split(separator: "/", omittingEmptySubsequences: false)
         guard !relative.isEmpty, !relative.hasPrefix("/"), !relative.contains("\\"),
               parts.allSatisfy({ !$0.isEmpty && $0 != "." && $0 != ".." })
-        else { throw CharacterPackError.unsafePath(relative) }
+        else { throw PackLoadError.unsafePath(relative) }
         let url = root.appendingPathComponent(relative).standardizedFileURL.resolvingSymlinksInPath()
         let base = root.path.hasSuffix("/") ? root.path : root.path + "/"
-        guard url.path.hasPrefix(base) else { throw CharacterPackError.unsafePath(relative) }
+        guard url.path.hasPrefix(base) else { throw PackLoadError.unsafePath(relative) }
         return url
     }
 }

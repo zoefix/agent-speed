@@ -86,19 +86,19 @@ enum TinyPack {
 
     @Test func refusesPacksThatAreUnsafeOrIncomplete() throws {
         let rig = try TinyPack.rigJSON()
-        #expect(throws: CharacterPackError.missingIdlePose) {
+        #expect(throws: PackLoadError.missingIdlePose) {
             try CharacterPack.load(from: TinyPack.make(bands: ["boost": rig]))
         }
-        #expect(throws: CharacterPackError.unsafePath("../outside")) {
+        #expect(throws: PackLoadError.unsafePath("../outside")) {
             try CharacterPack.load(from: TinyPack.make(bands: ["idle": rig]) { $0["poses"] = ["idle": "../outside"] })
         }
-        #expect(throws: CharacterPackError.unsafePath("/etc")) {
+        #expect(throws: PackLoadError.unsafePath("/etc")) {
             try CharacterPack.load(from: TinyPack.make(bands: ["idle": rig]) { $0["preview"] = "/etc" })
         }
-        #expect(throws: CharacterPackError.badID("Bad ID")) {
+        #expect(throws: PackLoadError.badID("Bad ID")) {
             try CharacterPack.load(from: TinyPack.make(bands: ["idle": rig], id: "Bad ID"))
         }
-        #expect(throws: CharacterPackError.unsupported(format: "agent-speed-character-pack", version: 2)) {
+        #expect(throws: PackLoadError.unsupported(format: "agent-speed-character-pack", version: 2)) {
             try CharacterPack.load(from: TinyPack.make(bands: ["idle": rig]) { $0["version"] = 2 })
         }
     }
@@ -110,7 +110,7 @@ enum TinyPack {
         try FileManager.default.createDirectory(at: outside, withIntermediateDirectories: true)
         try FileManager.default.removeItem(at: root.appendingPathComponent("preview.png"))
         try FileManager.default.createSymbolicLink(at: root.appendingPathComponent("preview.png"), withDestinationURL: outside)
-        #expect(throws: CharacterPackError.unsafePath("preview.png")) { try CharacterPack.load(from: root) }
+        #expect(throws: PackLoadError.unsafePath("preview.png")) { try CharacterPack.load(from: root) }
     }
 
     @Test func comparesTheMinimumAppVersion() throws {
