@@ -330,8 +330,9 @@ def skirt_weights(y, lm, face_h):
 
 
 def holding_side(layer, lm, reach, samples=4000):
-    """The side whose hand holds an object piece: the hand (wrist to fingertips, or the hand's own keypoints) that
-    comes within `reach` of the piece, nearest first; None when no hand does (a purse hanging from the waist)."""
+    """The side whose hand holds an object piece: the hand (wrist to fingertips, the hand's own keypoints, or the hand
+    point of an arm the pose model missed) that comes within `reach` of the piece, nearest first; None when no hand
+    does (a purse hanging from the waist)."""
     ys, xs = np.nonzero(layer.alpha > 0.3)
     if not len(xs):
         return None
@@ -339,9 +340,12 @@ def holding_side(layer, lm, reach, samples=4000):
     pts = np.stack([xs[::step], ys[::step]], axis=1).astype(np.float64)
     best, best_d = None, reach
     for key, arm in lm["arms"].items():
-        if arm.get("wrist") is None or arm.get("tip") is None:
+        if arm.get("wrist") is not None and arm.get("tip") is not None:
+            d = float(_segment(pts, np.array(arm["wrist"], np.float64), np.array(arm["tip"], np.float64))[0].min())
+        elif arm.get("hand") is not None:
+            d = float(np.linalg.norm(pts - np.array(arm["hand"], np.float64), axis=1).min())
+        else:
             continue
-        d = float(_segment(pts, np.array(arm["wrist"], np.float64), np.array(arm["tip"], np.float64))[0].min())
         hand = lm.get("hands", {}).get(key)
         if hand is not None:
             keys = np.concatenate([[hand["wrist"]], np.reshape(hand["fingers"], (-1, 2))]).astype(np.float64)

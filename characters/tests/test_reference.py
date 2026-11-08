@@ -661,6 +661,9 @@ class ObjectPieceTests(unittest.TestCase):
         lm = {"arms": arms, "hands": {}}
         self.assertEqual(holding_side(pieces[0], lm, 20), "left")
         self.assertIsNone(holding_side(pieces[1], lm, 20))
+        lone = {"arms": {"single": {"shoulder": (100, 100), "elbow": (150, 130), "hand": (150, 150), "wrist": None}},
+                "hands": {}}
+        self.assertEqual(holding_side(pieces[1], lone, 20), "single")
 
 
 class PropHintTests(unittest.TestCase):
