@@ -523,6 +523,24 @@ class AppendageTests(unittest.TestCase):
         self.assertEqual(ears["left"]["base"][1], 29)
 
 
+    def test_a_gap_layers_surround_goes_to_the_lowest_layer_around_it(self):
+        from characters.rig.appendages import fill_holes
+        from characters.rig.layers import Layer
+        ref = np.ones((400, 400, 3), np.float32)
+        ref[10:70, 10:70] = (0.1, 0.4, 0.45)
+        robe = np.zeros((400, 400, 4), np.float32)
+        robe[10:70, 10:66] = 1
+        robe[28:44, 28:44] = 0
+        straps = np.zeros((400, 400, 4), np.float32)
+        straps[24:48, 24:48] = 1
+        straps[28:44, 28:44] = 0
+        parts = [Layer("topwear", "topwear", robe), Layer("objects", "objects", straps)]
+        self.assertGreater(fill_holes(parts, ref), 0)
+        self.assertEqual(parts[0].alpha[36, 36], 1.0)
+        np.testing.assert_allclose(parts[0].rgba[36, 36, :3], (0.1, 0.4, 0.45))
+        self.assertEqual(parts[1].alpha[36, 36], 0.0)
+        self.assertEqual(parts[0].alpha[40, 68], 0.0)
+
 class WaistTests(unittest.TestCase):
     def layers(self, top, bottom):
         from characters.rig.layers import Layer

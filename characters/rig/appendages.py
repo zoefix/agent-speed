@@ -11,6 +11,8 @@ from skimage.graph import MCP_Geometric
 
 from .layers import DRAW_ORDER, Layer, coverage
 
+SQUARE = np.ones((3, 3), bool)
+
 TAIL_BONES = ("tail1", "tail2", "tail3")
 
 
@@ -94,6 +96,35 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         tags.add(tag)
         added.append(name)
     return added
+
+
+def fill_holes(parts, reference, bare=None, enclosed=0.9, touch=0.15, ring=3, max_share=0.002):
+    """Gives each patch of the art that no layer covers but layers surround (at least `enclosed` of a ring around it)
+    to the lowest layer that holds at least `touch` of that ring: a gap between belt straps shows the robe behind
+    them. Patches too small or thin for recover_missing would otherwise draw as white specks; larger ones it left out
+    on purpose stay out. Returns the pixels filled."""
+    covered = coverage(parts) > 0.5
+    labels, _ = ndimage.label(foreground(reference, bare=bare) & ~covered)
+    h, w = labels.shape
+    filled = 0
+    for i, found in enumerate(ndimage.find_objects(labels), 1):
+        if found is None:
+            continue
+        box = tuple(slice(max(s.start - ring, 0), min(s.stop + ring, n)) for s, n in zip(found, (h, w)))
+        hole = labels[box] == i
+        if hole.sum() > max_share * h * w:
+            continue
+        band = ndimage.binary_dilation(hole, SQUARE, iterations=ring) & ~hole
+        if covered[box][band].mean() < enclosed:
+            continue
+        owner = next((layer for layer in parts if (layer.alpha[box][band] > 0.5).mean() >= touch), None)
+        if owner is None:
+            continue
+        view = owner.rgba[box]
+        view[..., :3] = np.where(hole[..., None], reference[box], view[..., :3])
+        view[..., 3] = np.where(hole, 1.0, view[..., 3])
+        filled += int(hole.sum())
+    return filled
 
 
 def _geodesic(mask, start):

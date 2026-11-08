@@ -111,8 +111,11 @@ is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
   the face and `ears` beside it; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
   chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
-  the floor and stays out; a coloured one the matte also misses (a hologram) stays in. Packs without the
-  hint are built exactly as before.
+  the floor and stays out; a coloured one the matte also misses (a hologram) stays in. Then every remaining patch of
+  the figure no layer covers (opacity above 0.5), up to 0.2 % of the canvas, whose 3 px surrounding ring is at least
+  90 % covered goes to the lowest layer holding at least 15 % of that ring, opaque and painted from the art: a gap
+  between belt straps shows the robe behind them instead of a white speck. Packs without the hint are built exactly
+  as before.
 - **Bare paper** (build option `--matte`, an anime figure matte such as skytnt/anime-seg `isnetis.onnx`): generated
   art sits on white, which also shows through enclosed gaps (an axe blade, hair beside the body). Bare paper is every
   pixel whose darkest channel is above 0.96 and that the matte scores below 0.5, plus every enclosed (not touching the
