@@ -96,12 +96,18 @@ The rest pose (all defaults) reproduces the illustration exactly. Skinning may r
 move with the hand, such as a desk).
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
-  everything not white, with areas enclosed by line art filled; what no layer covers (2 px away from covered pixels,
-  opened by 2 px, blobs of at least 0.05 % of the canvas) becomes a layer of its own, opaque inside and as opaque as
-  the art is dark on its rim (darkness / 0.3). The largest blob below the chin is the tail with the `tail` hint and
-  no tail layer; with `wings`, the largest blob below the eyes and away from the head is the wings; blobs by the head
-  are `headwear` above the face and `ears` beside it; any other blob is `extra`, drawn with the tail. Packs without
-  the hint are built exactly as before.
+  everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away
+  from covered pixels, opened by 2 px, blobs of at least 0.05 % of the canvas) becomes a layer of its own, opaque
+  inside and as opaque as the art is dark on its rim (darkness / 0.3). The largest blob below the chin is the tail
+  with the `tail` hint and no tail layer; with `wings`, the largest blob below the eyes and away from the head is the
+  wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
+  the face and `ears` beside it; any other blob is `extra`, drawn with the tail. Packs without the hint are built
+  exactly as before.
+- **Bare paper** (build option `--matte`, an anime figure matte such as skytnt/anime-seg `isnetis.onnx`): generated
+  art sits on white, which also shows through enclosed gaps (an axe blade, hair beside the body). Bare paper is every
+  pixel whose darkest channel is above 0.96 and that the matte scores below 0.5, plus every enclosed (not touching the
+  border) area of such near-white pixels whose mean score is below 0.8. Every layer is transparent there, so white
+  clothing (high scores) stays and the gaps show the desktop.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =

@@ -28,11 +28,12 @@ def foreground(reference, darkness=0.05, bare=None):
     return filled if bare is None else filled & ~bare
 
 
-def recover_missing(parts, reference, hints, min_share=0.0005, bare=None):
+def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_limb=0.4):
     """Adds a layer for each sizeable blob of the art that no layer covers. With a `tail` hint the largest blob below
     the chin becomes the tail (when no layer is tagged tail), with `wings` the largest blob below the eyes becomes the
-    wings; blobs by the head become headwear (above the face) or ears (beside it), so they turn with the head; any
-    other blob joins the back as `extra`. Returns the names added."""
+    wings, either only when it is at least `min_limb` of the face's box (a scrap of dress must not flap); blobs by the
+    head become headwear (above the face) or ears (beside it), so they turn with the head; any other blob joins the
+    back as `extra`. Returns the names added."""
     h, w = reference.shape[:2]
     covered = coverage(parts) > 0.5
     missing = foreground(reference, bare=bare) & ~ndimage.binary_dilation(covered, iterations=2)
@@ -50,6 +51,7 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None):
     else:
         fx0, fx1, fy0, chin = 0.4 * w, 0.6 * w, 0.05 * h, 0.25 * h
     fw = fx1 - fx0
+    limb = min_limb * fw * (chin - fy0)
     blobs = sorted(keep, key=lambda i: -sizes[i - 1])
     added = []
     for i in blobs:
@@ -57,9 +59,10 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None):
         ys, xs = np.nonzero(blob)
         cy, cx = ys.mean(), xs.mean()
         by_head = cy < chin and fx0 - 1.2 * fw < cx < fx1 + 1.2 * fw
-        if hints.get("tail") and "tail" not in tags and cy > chin:
+        big = sizes[i - 1] >= limb
+        if hints.get("tail") and "tail" not in tags and cy > chin and big:
             tag = "tail"
-        elif hints.get("wings") and "wings" not in tags and cy > fy0 + 0.5 * (chin - fy0) and not by_head:
+        elif hints.get("wings") and "wings" not in tags and cy > fy0 + 0.5 * (chin - fy0) and not by_head and big:
             tag = "wings"
         elif by_head:
             tag = "headwear" if cy < fy0 else "ears"
