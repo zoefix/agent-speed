@@ -9,6 +9,7 @@ from functools import lru_cache
 
 import numpy as np
 from PIL import Image
+from scipy import ndimage
 
 SIDE = 1024
 
@@ -31,9 +32,18 @@ def figure(reference, model):
     return np.asarray(Image.fromarray(out.astype(np.float32)).resize((w, h), Image.BILINEAR), np.float32)
 
 
-def paper(reference, matte, white=0.96, cut=0.5):
-    """Near-white pixels the matte calls background."""
-    return (reference.min(axis=2) > white) & (matte < cut)
+def paper(reference, matte, white=0.96, cut=0.5, pocket=0.8):
+    """Near-white pixels the matte calls background, and whole enclosed near-white areas it leans towards calling
+    background (a small hole in a blade can score halfway)."""
+    near = reference.min(axis=2) > white
+    bare = near & (matte < cut)
+    labels, count = ndimage.label(near)
+    if count:
+        edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
+        mean = np.asarray(ndimage.mean(matte, labels, range(1, count + 1)))
+        enclosed = np.setdiff1d(1 + np.flatnonzero(mean < pocket), edge)
+        bare |= np.isin(labels, enclosed)
+    return bare
 
 
 def clear_paper(parts, bare):
