@@ -168,7 +168,12 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   hair (a strand hanging over the tail takes the tail with it) goes back to the tail: a watershed over the art's
   gradient grows the hair from its pixels above the chin and the tail from the hair within 3 px of the tail layer;
   what the tail reaches, from where it narrows below half its widest row down (a strand is narrow, a tail wide),
-  joins the tail when it is at least 2000 px and 80 % below the chin. A recovered `extra` blob no larger than the
+  joins the tail when it is at least 2000 px and 80 % below the chin. With a SAM checkpoint, the whole tail in the
+  art is found too, prompted by five points at the tail layer's thickest (the largest mask scored at least 0.8 that
+  holds 90 % of the tail layer and is at most 2.5 times its size); the back hair's pixels inside it, in pieces of at
+  least 500 px that touch the tail layer, join the tail (the top of a tail behind long hair), and the back hair is
+  repainted there. The tail is then made opaque inside its outline (eroded by 2 px), and wherever a layer behind it
+  was cleared, so its stitched pieces never show the backdrop through a hairline crack. A recovered `extra` blob no larger than the
   tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
   `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
   on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel

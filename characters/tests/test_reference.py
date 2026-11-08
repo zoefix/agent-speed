@@ -749,6 +749,23 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(hair.alpha[80, 100], 1.0)
         self.assertEqual(tail.alpha[80, 100], 0.0)
 
+    def test_the_top_of_a_tail_drawn_into_the_back_hair_goes_to_the_tail(self):
+        from characters.rig.layers import seal_tail, tail_from_back_hair
+        hair = self.layer("back hair", (0.2, 0.2, 0.3), (10, 150, 40, 160))
+        tail = self.layer("tail", (0.3, 0.3, 0.3), (120, 190, 100, 150))
+        tail.rgba[150:152, 110:140, 3] = 0.4
+        hair.rgba[90:120, 100:150, :3] = 0.3
+        mask = np.zeros((200, 200), bool)
+        mask[90:190, 100:150] = True
+        parts = [hair, tail]
+        self.assertEqual(tail_from_back_hair(parts, mask), 30 * 50)
+        self.assertEqual(tail.alpha[100, 125], 1.0)
+        self.assertEqual(hair.alpha[100, 125], 1.0)
+        self.assertLess(abs(hair.rgba[100, 125, 2] - 0.3), 0.06)
+        seal_tail(parts)
+        self.assertEqual(tail.alpha[151, 125], 1.0)
+        self.assertEqual(tail_from_back_hair(parts, None), 0)
+
     def test_a_copy_of_the_tail_in_the_back_hair_goes_and_a_tail_behind_the_skirt_stays(self):
         from characters.rig.layers import tail_alone
         ref = np.ones((200, 200, 3), np.float32)

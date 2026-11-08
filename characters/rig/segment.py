@@ -144,3 +144,24 @@ def prop_mask(reference, points, checkpoint, min_score=0.8, hole_share=0.05):
         sizes = ndimage.sum(holes, labels, range(1, count + 1))
         mask |= np.isin(labels, 1 + np.flatnonzero(sizes < hole_share * mask.sum()))
     return mask
+
+
+def tail_mask(reference, alpha, checkpoint, points=5, min_score=0.8, max_ratio=2.5, cover=0.9):
+    """The whole tail in the art, prompted by `points` on the tail layer (`alpha`, at its thickest): the largest mask
+    SAM scores at least `min_score` that holds `cover` of the tail layer and is at most `max_ratio` times its size,
+    or None. It finds the part of the tail the split drew into the hair."""
+    solid = alpha > 0.5
+    if not solid.any():
+        return None
+    depth = ndimage.distance_transform_edt(solid)
+    ys, xs = np.nonzero(depth > 0.6 * depth.max())
+    pick = np.linspace(0, len(ys) - 1, points).astype(int)
+    coords = np.array([(xs[i], ys[i]) for i in pick], np.float64)
+    predictor = _predictor(str(checkpoint))
+    predictor.set_image((np.clip(reference, 0, 1) * 255).astype(np.uint8))
+    masks, scores, _ = predictor.predict(point_coords=coords, point_labels=np.ones(len(coords)), multimask_output=True)
+    area = solid.sum()
+    fits = [m for m, score in zip(masks, scores) if score >= min_score and (m & solid).sum() >= cover * area
+            and m.sum() <= max_ratio * area]
+    return max(fits, key=lambda m: m.sum()) if fits else None
+

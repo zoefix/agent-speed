@@ -170,6 +170,13 @@ def main(argv=None):
     moved = layers.tail_from_hair(parts, reference, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
     if moved:
         print(f"tail drawn into the front hair given back to the tail: {moved} px")
+    tail_layer = next((p for p in parts if p.tag == "tail"), None)
+    if tail_layer is not None and args.sam:
+        from . import segment
+        moved = layers.tail_from_back_hair(parts, segment.tail_mask(reference, tail_layer.alpha, args.sam))
+        if moved:
+            print(f"tail drawn into the back hair given back to the tail: {moved} px")
+    layers.seal_tail(parts)
     parts, copies = layers.tail_alone(parts, reference)
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")

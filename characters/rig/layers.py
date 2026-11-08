@@ -217,7 +217,8 @@ def _smooth_fill(rgb, known, sigmas=(2, 4, 8, 16, 32, 64)):
 def _repaint_copy(layer, copy, part, close=15, pad=40):
     """Repaints what `layer` drew of another part at `copy`: filled smoothly from its surroundings inside the layer's
     own outline (its pixels without the copy, closed by `close` px, holes filled), transparent outside it where the
-    `part` itself is opaque (so its soft rim never shows the backdrop at rest)."""
+    `part` itself is opaque (so its soft rim never shows the backdrop at rest). Returns the pixels made
+    transparent."""
     h, w = copy.shape
     own = layer.alpha > 0.5
     outline = ndimage.binary_fill_holes(ndimage.binary_closing(own & ~copy, iterations=close))
@@ -228,7 +229,9 @@ def _repaint_copy(layer, copy, part, close=15, pad=40):
     view = layer.rgba[box]
     view[..., :3] = np.where(inside[..., None], filled, view[..., :3])
     view[..., 3] = np.where(inside, 1.0, view[..., 3])
-    layer.rgba[..., 3] = np.where(copy & ~outline & part, 0.0, layer.alpha)
+    cleared = copy & ~outline & part
+    layer.rgba[..., 3] = np.where(cleared, 0.0, layer.alpha)
+    return cleared
 
 
 def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, taper=0.5):
@@ -271,6 +274,43 @@ def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, 
     return int(piece.sum())
 
 
+def tail_from_back_hair(layers, mask, reach=3, min_px=500):
+    """Gives the tail what the split drew of it into the back hair (the top of a tail behind long hair), so it swings
+    with the rest: the back hair's pixels inside `mask` (segment.tail_mask) in pieces that touch the tail layer
+    (within `reach` px) and hold at least `min_px` join the tail, and the back hair is repainted there
+    (_repaint_copy). Returns the pixels moved."""
+    tail = next((layer for layer in layers if layer.tag == "tail"), None)
+    hair = next((layer for layer in layers if layer.tag == "back hair"), None)
+    if tail is None or hair is None or mask is None:
+        return 0
+    candidate = mask & (hair.alpha > 0.02) & ~(tail.alpha > 0.5)
+    labels, count = ndimage.label(candidate)
+    if not count:
+        return 0
+    near = ndimage.binary_dilation(tail.alpha > 0.5, iterations=reach)
+    sizes = np.asarray(ndimage.sum(candidate, labels, range(1, count + 1)))
+    touching = np.asarray(ndimage.maximum(near, labels, range(1, count + 1))) > 0
+    piece = np.isin(labels, 1 + np.flatnonzero(touching & (sizes >= min_px)))
+    if not piece.any():
+        return 0
+    tail.rgba[..., :3] = np.where(piece[..., None], hair.rgba[..., :3], tail.rgba[..., :3])
+    tail.rgba[..., 3] = np.where(piece, np.maximum(tail.alpha, hair.alpha), tail.alpha)
+    cleared = _repaint_copy(hair, piece, piece)
+    inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=1)
+    tail.rgba[..., 3] = np.where(cleared & inside, 1.0, tail.alpha)
+    return int(piece.sum())
+
+
+def seal_tail(layers, core=2):
+    """Makes the tail opaque inside its outline (eroded by `core` px): the pieces it was stitched from (a recovered
+    base, a piece from the hair) meet with soft edges, which would show the backdrop as a hairline crack."""
+    tail = next((layer for layer in layers if layer.tag == "tail"), None)
+    if tail is None:
+        return
+    inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
+    tail.rgba[..., 3] = np.where(inside, 1.0, tail.alpha)
+
+
 def tail_alone(layers, reference, share=0.5, min_px=2000):
     """Leaves the tail the only drawing of the tail. The split also paints the tail into the layers around it: a
     tail hanging in front of the skirt goes behind the skirt with a copy of it in the skirt, and a tail curling over
@@ -295,7 +335,8 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
             continue
         if k > index and layer.tag in FRONT_OF_TAIL and (shown & overlap).sum() >= share * overlap.sum():
             covered.append(k)
-            _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02), mask)
+            cleared = _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02), mask)
+            tail.rgba[..., 3] = np.where(cleared, 1.0, tail.alpha)
             repainted.append(layer.name)
         elif k < index:
             same = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail.rgba[..., :3]).mean(axis=2), 5) < 0.06
@@ -466,17 +507,20 @@ def fill_hidden_legs(layers, solid=0.3, shade=10, edge=2, reach=6):
     return repainted
 
 
-def grow_underlays(layers, radius=10):
-    """Extends each layer under the opaque layers above it, so moving parts never open gaps. Not under a tail or
-    wings: they swing far off, and what grew under them would show as fragments of the layer's edge."""
+def grow_underlays(layers, radius=10, seam=3):
+    """Extends each layer under the opaque layers above it, so moving parts never open gaps. Under a tail or wings
+    only by `seam` px, enough to back their soft edge: they swing far off, and more would show as fragments of the
+    layer's edge."""
     for i, layer in enumerate(layers):
         if layer.tag in NO_GROWTH or i == len(layers) - 1:
             continue
-        above = coverage([upper for upper in layers[i + 1:] if upper.tag not in ("tail", "wings")]) > 0.98
+        above = coverage(layers[i + 1:]) > 0.98
+        steady = coverage([upper for upper in layers[i + 1:] if upper.tag not in ("tail", "wings")]) > 0.98
         solid = layer.alpha > 0.5
         if not solid.any():
             continue
         grow = ndimage.binary_dilation(solid, iterations=radius) & above & ~solid
+        grow &= steady | ndimage.binary_dilation(solid, iterations=seam)
         if not grow.any():
             continue
         _, (iy, ix) = ndimage.distance_transform_edt(~solid, return_indices=True)
