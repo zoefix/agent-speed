@@ -231,6 +231,46 @@ def _repaint_copy(layer, copy, part, close=15, pad=40):
     layer.rgba[..., 3] = np.where(copy & ~outline & part, 0.0, layer.alpha)
 
 
+def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, taper=0.5):
+    """Gives the tail what the split drew of it into the front hair (a strand hanging from the head over the tail
+    takes the tail with it), along the art's ink lines: a watershed over the art's gradient grows the hair from its
+    pixels above the chin and the tail from the hair pixels within `core` px of the tail layer. What the tail reaches,
+    from where it narrows below `taper` of its widest row down, joins the tail layer when it is at least `min_px` and
+    `below` of it lies below the chin. Returns the pixels moved."""
+    tail = next((layer for layer in layers if layer.tag == "tail"), None)
+    hair = next((layer for layer in layers if layer.tag == "front hair"), None)
+    if tail is None or hair is None:
+        return 0
+    from skimage.segmentation import watershed
+    chin = face_box[3]
+    mask = hair.alpha > 0.02
+    near = ndimage.binary_dilation(tail.alpha > 0.5, iterations=core)
+    markers = np.zeros(mask.shape, np.int32)
+    markers[:int(chin)][mask[:int(chin)]] = 1
+    markers[mask & near & (markers == 0)] = 2
+    if not (markers == 2).any():
+        return 0
+    gradient = ndimage.gaussian_gradient_magnitude(reference.mean(axis=2), 1.2)
+    piece = (watershed(gradient, markers, mask=mask) == 2) & (hair.alpha > 0.02)
+    if not piece.any():
+        return 0
+    # A tail is wide where a strand of hair is narrow: going up from its widest row, the tail ends where the piece
+    # narrows below `taper` of that width; what is above stays hair.
+    widths = piece.sum(axis=1)
+    peak = int(np.argmax(widths))
+    top = peak
+    while top > 0 and widths[top - 1] >= taper * widths[peak]:
+        top -= 1
+    piece[:top] = False
+    ys = np.nonzero(piece)[0]
+    if piece.sum() < min_px or (ys > chin).mean() < below:
+        return 0
+    tail.rgba[..., :3] = np.where(piece[..., None], hair.rgba[..., :3], tail.rgba[..., :3])
+    tail.rgba[..., 3] = np.where(piece, np.maximum(tail.alpha, hair.alpha), tail.alpha)
+    hair.rgba[..., 3] = np.where(piece, 0.0, hair.alpha)
+    return int(piece.sum())
+
+
 def tail_alone(layers, reference, share=0.5, min_px=2000):
     """Leaves the tail the only drawing of the tail. The split also paints the tail into the layers around it: a
     tail hanging in front of the skirt goes behind the skirt with a copy of it in the skirt, and a tail curling over

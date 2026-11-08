@@ -164,7 +164,11 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   border) area of such near-white pixels whose mean score is below 0.8, or below 0.99 when most of the area is outside
   every layer of the split (opacity above 0.5): a gap framed by raised arms can score 0.93, but white clothing is in a
   layer. Every layer is transparent there, so white clothing (high scores) stays and the gaps show the desktop.
-- **One tail**: the split also paints the tail into the layers around it. A recovered `extra` blob no larger than the
+- **One tail**: the split also paints the tail into the layers around it. What it drew of the tail into the front
+  hair (a strand hanging over the tail takes the tail with it) goes back to the tail: a watershed over the art's
+  gradient grows the hair from its pixels above the chin and the tail from the hair within 3 px of the tail layer;
+  what the tail reaches, from where it narrows below half its widest row down (a strand is narrow, a tail wide),
+  joins the tail when it is at least 2000 px and 80 % below the chin. A recovered `extra` blob no larger than the
   tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
   `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
   on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel

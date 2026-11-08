@@ -167,6 +167,9 @@ def main(argv=None):
         print(f"fragments attached to the layer they were cut from: "
               f"{appendages.attach_fragments(parts, reference, bare=bare, figure=figure)}")
         print(f"holes between layers filled: {appendages.fill_holes(parts, reference, bare=bare)} px")
+    moved = layers.tail_from_hair(parts, reference, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
+    if moved:
+        print(f"tail drawn into the front hair given back to the tail: {moved} px")
     parts, copies = layers.tail_alone(parts, reference)
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
