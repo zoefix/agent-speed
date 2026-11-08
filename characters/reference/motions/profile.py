@@ -30,6 +30,10 @@ SEATED_FREEZE = ("PosX", "PosY", "Squash", "Lean", "Hip", "FootLift", "FootPoint
 SILENT_SKIP = {"hum", "giggle"}
 HAND_SETS = ("tap", "regrip", "lift", "flex", "fan", "count", "drum", "flute", "fanflutter", "abacus", "sleeveflop",
              "ripple")
+# Sets played on an instrument held in both hands: while one plays, the arms keep their pose so the hands never slide
+# along the instrument, and the body carries both with it.
+TWO_HANDED = {"flute"}
+ARM_PARAMS = ("Arm.", "Forearm.", "Shoulder.", "Lift.", "Bend.")
 # Which hands a pose's hand set plays on, back to back: both, the hand holding the object, or the free one.
 POSE_HAND_SIDES = {"flute": "both", "sleeveflop": "both", "ripple": "both", "fanflutter": "holder", "abacus": "free",
                    "tap": "holder", "regrip": "holder", "lift": "holder", "flex": "free", "fan": "free",

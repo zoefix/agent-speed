@@ -51,6 +51,9 @@ public struct CharacterDirector: Sendable {
     /// Groove scale per slot (the profile's bounce, sway and energy) and the slots a seated character never moves.
     private let grooveScale: [Double]
     private let frozen: [Int]
+    /// The arm slots, held at their defaults while the pose's hand set plays a two-handed instrument.
+    private let armSlots: [Int]
+    private var armsHeld = false
     public private(set) var out: CharacterSide
     public private(set) var book: CharacterSide
     public let orb: Double
@@ -98,6 +101,10 @@ public struct CharacterDirector: Sendable {
         let space = self.space
         grooveScale = space.names.map { profile.grooveScale($0) }
         frozen = profile.seated ? MotionProfile.seatedFreeze.compactMap { space.isParam($0) ? space.slot($0) : nil } : []
+        armSlots = space.names.indices.filter { i in
+            space.params[i] != nil && MotionProfile.armParams.contains { space.names[i].hasPrefix($0) }
+        }
+        armsHeld = profile.poseHands[SpeedBand.idle.rawValue].map(MotionProfile.twoHanded.contains) ?? false
         beat = Beat(tempo: profile.tempo)
         self.out = out
         self.book = book
@@ -135,6 +142,7 @@ public struct CharacterDirector: Sendable {
             hands[i].holds = hands[i].side == book
             hands[i].setMode(profile.poseHands[self.poseBand.rawValue])
         }
+        armsHeld = profile.poseHands[self.poseBand.rawValue].map(MotionProfile.twoHanded.contains) ?? false
         for i in grooves.indices { grooves[i].target = 0 }
         grooves.append(GrooveLayer(band: band ?? .idle, w: 0, target: 1))
     }
@@ -298,6 +306,9 @@ public struct CharacterDirector: Sendable {
         blendGrooves(dt)
         _ = applyGesture(dt)
         write(slots.posX, values[slots.posX] + stageX)
+        if armsHeld {
+            for slot in armSlots { write(slot, space.params[slot]!.default) }
+        }
         for h in hands.indices {
             let side = slots.side(hands[h].side)
             var arm = 0.0

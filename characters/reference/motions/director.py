@@ -12,7 +12,7 @@ from .curves import merge
 from .gestures import COMBOS, FACE_GESTURES, GESTURES, HEAD_GESTURES, arm_gesture, combo, face_gesture, head_gesture
 from .hands import HandActor
 from .moves import MOVES, PROFILE_MOVES, jump, peek, pounce, sidestep
-from .profile import SEATED_FREEZE, MotionProfile
+from .profile import ARM_PARAMS, SEATED_FREEZE, TWO_HANDED, MotionProfile
 from .rhythm import Beat, groove_for, groove_scale
 from .springs import Springs
 
@@ -76,6 +76,8 @@ class Director:
         self.pose_band = "idle"
         for hand in self.hands:
             hand.set_mode(self.profile.pose_hands.get(self.pose_band))
+        self.arm_params = [pid for pid in rig_params if pid.startswith(ARM_PARAMS)]
+        self.arms_held = self.profile.pose_hands.get(self.pose_band) in TWO_HANDED
 
     def set_sides(self, arm_out, arm_book, pose_band=None):
         """Which arm swings free and which holds the object, for a new pose (of `pose_band`, for its hand set)."""
@@ -85,6 +87,7 @@ class Director:
         for hand in self.hands:
             hand.holds = hand.side == arm_book
             hand.set_mode(self.profile.pose_hands.get(self.pose_band))
+        self.arms_held = self.profile.pose_hands.get(self.pose_band) in TWO_HANDED
         for layer in self.grooves:
             layer["target"] = 0.0
         self.grooves.append({"fn": groove_for(self.band, self.profile), "w": 0.0, "target": 1.0})
@@ -233,6 +236,9 @@ class Director:
         self._blend_grooves(dt, values)
         gesture = self._apply_gesture(dt, values)
         values["PosX"] = values.get("PosX", 0.0) + self.stage_x
+        if self.arms_held:
+            for pid in self.arm_params:
+                values[pid] = self.params[pid]["default"]
         for hand in self.hands:
             side = hand.side
             arm = sum(values.get(f"{k}.{side}", 0.0) for k in ("Arm", "Forearm", "Lift", "Bend"))

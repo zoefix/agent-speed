@@ -68,6 +68,10 @@ public struct MotionProfile: Sendable, Equatable, Decodable {
     static let seatedFreeze = ["PosX", "PosY", "Squash", "Lean", "Hip", "FootLift", "FootPoint", "BodySway",
                                "SkirtFlare"]
     static let silentSkip: Set<String> = ["hum", "giggle"]
+    /// Sets played on an instrument held in both hands: while one plays, the arms keep their pose so the hands never
+    /// slide along the instrument, and the body carries both with it.
+    static let twoHanded: Set<String> = ["flute"]
+    static let armParams = ["Arm.", "Forearm.", "Shoulder.", "Lift.", "Bend."]
 
     func allows(_ action: String) -> Bool {
         if exclude.contains(action) { return false }
