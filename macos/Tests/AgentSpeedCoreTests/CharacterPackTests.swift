@@ -234,6 +234,31 @@ extension PackFixture {
         #expect(reading.fastestVendor == "meta")
     }
 
+    /// Every roster character's spec names the vendor its models resolve to, so Auto picks her.
+    @Test func everyRosterCharacterIsPickedForItsModels() throws {
+        let specs = URL(fileURLWithPath: #filePath).deletingLastPathComponent().deletingLastPathComponent()
+            .deletingLastPathComponent().deletingLastPathComponent().appendingPathComponent("characters/specs")
+        var vendorsOf: [String: [String]] = [:]
+        for file in try FileManager.default.contentsOfDirectory(at: specs, includingPropertiesForKeys: nil)
+        where file.pathExtension == "json" {
+            let doc = try #require(try JSONSerialization.jsonObject(with: Data(contentsOf: file)) as? [String: Any])
+            vendorsOf[try #require(doc["id"] as? String)] = doc["vendors"] as? [String] ?? []
+        }
+        let cases: [(String, String)] = [
+            ("claude-opus-4-5", "claude"), ("gpt-5.1-codex", "gpt"), ("grok-4", "grok"), ("gemini-2.5-pro", "gemini"),
+            ("deepseek-chat", "deepseek"), ("kimi-k2-thinking", "kimi"), ("glm-4.6", "glm"),
+            ("qwen3-coder-plus", "qwen"), ("doubao-seed-1.6", "seed"), ("MiniMax-M2", "minimax"),
+            ("meta-llama/llama-4-maverick", "llama"), ("mistral-large-latest", "mistral"), ("sonar-pro", "perplexity"),
+            ("ernie-4.5-turbo", "wenxin"), ("hunyuan-t1-latest", "hunyuan"), ("rwkv-7-world", "rwkv"),
+        ]
+        for (model, id) in cases {
+            let vendor = VendorReading(agents: [agent(.omp, model, 30)], prices: PriceBook.bundled).fastestVendor
+            let standing = vendorsOf.filter { $0.value.contains(vendor ?? "") }.map(\.key)
+            #expect(standing == [id], "\(model) -> \(vendor ?? "nil") -> \(standing)")
+        }
+        #expect(vendorsOf["jev"] == [], "JEV stands for no model; she is shown only when locked")
+    }
+
     @Test func unknownModelsFallBackToTheSourcesVendor() {
         let reading = VendorReading(agents: [agent(.gemini, "some-future-model", 12), agent(.kimi, nil, 0)], prices: nil)
         #expect(reading.rates == ["google": 12])
