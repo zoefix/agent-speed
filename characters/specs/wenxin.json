@@ -38,6 +38,9 @@
  },
  "rig": {
   "recover": true,
-  "staticObjects": true
+  "staticObjects": true,
+  "props": {
+   "overdrive": {"points": [[0.418, 0.3672], [0.4258, 0.4492], [0.5391, 0.3555], [0.582, 0.4375]], "follow": "chest"}
+  }
  }
 }

@@ -266,6 +266,11 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
                 (f"forearm.{key}{suffix}", w_arm * w_fore)]
     if tag == "objects" and attach:
         return [(attach, one)]
+    if lm.get("seated") and tag in ("footwear", "legwear", "bottomwear"):
+        if tag == "bottomwear":
+            w_low = _below_waist(y, lm, face_h)
+            return [("chest", 1 - w_low), ("lower", w_low)]
+        return [("lower", one)]
     if tag in ("footwear", "legwear") and lm.get("legsInSkirt"):
         return skirt_weights(y, lm, face_h)
     if tag in ("footwear", "legwear") and "foot" in lm:

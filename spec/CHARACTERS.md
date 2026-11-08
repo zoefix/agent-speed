@@ -111,7 +111,12 @@ inside SAM's mask and as opaque as the layers were on the grown rim. Every layer
 pixels there, and so does the pixel's visible owner and every layer above it; what lies hidden below the owner stays
 (the body behind a hugged doll), unless it belongs to a piece of its layer (opacity above 0.12) that touches the
 mask and lies at least 60 % within 15 px of it: the split paints hair behind the doll's face as if it were a head.
-Such a piece leaves its layer and joins the prop. Like any object, the prop follows the hand nearest it.
+Such a piece leaves its layer and joins the prop. Like any object, the prop follows the hand nearest it, unless the
+band's entry is `{"points": [...], "follow": "chest" | "lower" | "head"}`: a book held up before the chest, which the
+split also paints into the top, moves with the chest so that copy never shows beside it. A seated character (motion
+`seated`) has no `foot` bone: legs and shoes follow `lower`, and the skirt blends from `chest` to `lower` at the
+waist like the top, so the director's frozen hips keep knees and ankles whole while the skirt physics has nothing to
+swing.
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away

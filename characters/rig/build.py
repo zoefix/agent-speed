@@ -82,6 +82,20 @@ def split_hands(parts, found, reference, sam):
     return out, found
 
 
+PROP_FOLLOW = ("chest", "lower", "head")
+
+
+def prop_hint(hints, band):
+    """The band's prop from the `props` hint: points, or {"points", "follow"} for a prop that moves with the body
+    (a book held up before the chest, which the split also paints into the top) instead of the nearest hand."""
+    prop = hints.get("props", {}).get(band) if band else None
+    if isinstance(prop, dict):
+        if prop.get("follow") not in (None,) + PROP_FOLLOW:
+            raise ValueError(f"props.{band}.follow must be one of {PROP_FOLLOW}")
+        return prop["points"], prop.get("follow")
+    return prop, None
+
+
 def object_bone(layer, lm):
     """The bone a held object follows: the hand nearest it, or its forearm when that hand has no rig."""
     bone = skeleton.attach_object(layer, lm)
@@ -120,11 +134,12 @@ def main(argv=None):
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
     args = ap.parse_args(argv)
-    hints = json.loads(Path(args.spec).read_text()).get("rig", {}) if args.spec else {}
+    character = json.loads(Path(args.spec).read_text()) if args.spec else {}
+    hints = character.get("rig", {})
 
     size, parts = layers.load_psd(args.psd)
     reference = layers.load_reference(args.reference, size)
-    points = hints.get("props", {}).get(args.band) if args.band else None
+    points, follow = prop_hint(hints, args.band)
     if points and args.sam:
         from . import segment
         prop = segment.prop_mask(reference, [(x * size[0], y * size[1]) for x, y in points], args.sam)
@@ -156,7 +171,10 @@ def main(argv=None):
     lm = skeleton.landmarks(parts, torso)
     if torso:
         lm["torsoLength"] = torso["length"]
-    if hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
+    if character.get("motion", {}).get("seated"):
+        lm.pop("foot", None)
+        lm["seated"] = True
+    elif hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
         lm.pop("foot", None)
         lm["legsInSkirt"] = True
     for side, joints in arm_joints.items():
@@ -176,6 +194,8 @@ def main(argv=None):
     object_side = first.split(".", 1)[1] if first else None
     if hints.get("staticObjects") and "objects" in object_attach:
         object_attach["objects"] = "lower"
+    if follow and "prop" in object_attach:
+        object_attach["prop"] = follow
     lm["objectSide"] = object_side
 
     loaded = []

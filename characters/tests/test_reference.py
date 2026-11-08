@@ -595,6 +595,18 @@ class WaistTests(unittest.TestCase):
         self.assertGreater(weights["skirtHem"][3], 0.99)
 
 
+    def test_a_seated_character_keeps_skirt_and_legs_with_her_hips(self):
+        from characters.rig.layers import Layer
+        from characters.rig.skeleton import weights_for
+        lm = {"face": (40, 0, 60, 20), "chin": 20, "waist": (50, 100), "hem": 200, "skirtMid": 145, "seated": True}
+        y = np.array([[50.0, 60.0], [50.0, 150.0], [50.0, 220.0]])
+        flat = np.zeros((1, 1, 4), np.float32)
+        legs = dict(weights_for(Layer("legwear", "legwear", flat), y, lm))
+        self.assertEqual(set(legs), {"lower"})
+        skirt = dict(weights_for(Layer("bottomwear", "bottomwear", flat), y, lm))
+        self.assertEqual(set(skirt), {"chest", "lower"})
+        self.assertGreater(skirt["lower"][2], 0.99)
+
 class PaperTests(unittest.TestCase):
     def test_enclosed_white_is_paper_unless_a_layer_or_a_sure_matte_claims_it(self):
         from characters.rig.matte import paper
@@ -617,6 +629,18 @@ class PaperTests(unittest.TestCase):
         self.assertTrue(paper(ref, loose, covered=np.ones((60, 60), bool))[30, 30])
         self.assertTrue(paper(ref, np.zeros((60, 60), np.float32))[0, 0])
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
+
+
+class PropHintTests(unittest.TestCase):
+    def test_a_prop_follows_the_hand_unless_it_names_a_body_bone(self):
+        from characters.rig.build import prop_hint
+        hints = {"props": {"idle": [[0.1, 0.2]], "boost": {"points": [[0.3, 0.4]], "follow": "chest"}}}
+        self.assertEqual(prop_hint(hints, "idle"), ([[0.1, 0.2]], None))
+        self.assertEqual(prop_hint(hints, "boost"), ([[0.3, 0.4]], "chest"))
+        self.assertEqual(prop_hint(hints, "cruise"), (None, None))
+        self.assertEqual(prop_hint(hints, None), (None, None))
+        with self.assertRaises(ValueError):
+            prop_hint({"props": {"idle": {"points": [], "follow": "tail1"}}}, "idle")
 
 
 class LayerTests(unittest.TestCase):
