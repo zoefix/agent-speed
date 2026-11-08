@@ -101,7 +101,17 @@ shoulders to the hips (a cape in the skirt layer, a coat to the knees): then it 
 `wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
 move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
 cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
-is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice).
+is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice),
+and `props` (per band, points in canvas fractions on a held object the split spreads over other layers, such as a
+doll it takes for a second head: its face in `face`, its eyes in `irides`, its hair in `back hair`; build option
+`--band` names the band). Each point asks SAM on its own; the smallest mask it scores at least 0.8 joins the object,
+closed by 3 px, with enclosed gaps under 5 % of it filled (eyes, a mouth) and larger ones left out (a hand across it).
+The mask, grown by 2 px, becomes one `objects` layer named `prop` in the objects slot of the draw order, opaque
+inside SAM's mask and as opaque as the layers were on the grown rim. Every layer drawn above that slot gives up its
+pixels there, and so does the pixel's visible owner and every layer above it; what lies hidden below the owner stays
+(the body behind a hugged doll), unless it belongs to a piece of its layer (opacity above 0.12) that touches the
+mask and lies at least 60 % within 15 px of it: the split paints hair behind the doll's face as if it were a head.
+Such a piece leaves its layer and joins the prop. Like any object, the prop follows the hand nearest it.
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away

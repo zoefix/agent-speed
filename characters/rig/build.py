@@ -82,6 +82,14 @@ def split_hands(parts, found, reference, sam):
     return out, found
 
 
+def object_bone(layer, lm):
+    """The bone a held object follows: the hand nearest it, or its forearm when that hand has no rig."""
+    bone = skeleton.attach_object(layer, lm)
+    if bone and bone.split(".", 1)[1] in lm["hands"]:
+        return "hand." + bone.split(".", 1)[1]
+    return bone
+
+
 def ordered_parts(base, loaded):
     """Base parts keep their order; variant parts sit right above what they replace, raised arms on top."""
     index = {layer.name: i for i, layer in enumerate(base)}
@@ -108,13 +116,20 @@ def main(argv=None):
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     ap.add_argument("--spec", help="the character's spec: its `rig` hints "
-                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt)")
+                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt, props)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
+    ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
     args = ap.parse_args(argv)
     hints = json.loads(Path(args.spec).read_text()).get("rig", {}) if args.spec else {}
 
     size, parts = layers.load_psd(args.psd)
     reference = layers.load_reference(args.reference, size)
+    points = hints.get("props", {}).get(args.band) if args.band else None
+    if points and args.sam:
+        from . import segment
+        prop = segment.prop_mask(reference, [(x * size[0], y * size[1]) for x, y in points], args.sam)
+        parts = layers.take_prop(parts, prop, reference)
+        print(f"prop: {int(prop.sum())} px from SAM moved into one object layer")
     bare = figure = None
     if args.matte:
         from . import matte
@@ -130,11 +145,10 @@ def main(argv=None):
               f"{appendages.attach_fragments(parts, reference, bare=bare, figure=figure)}")
         print(f"holes between layers filled: {appendages.fill_holes(parts, reference, bare=bare)} px")
     layers.reproject(parts, reference)
-    parts = layers.drop_empty(parts)
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
-    parts = layers.split_by_arms(parts, arm_joints)
+    parts = layers.drop_empty(layers.split_by_arms(parts, arm_joints))
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
@@ -154,13 +168,11 @@ def main(argv=None):
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)
     tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones, hints)
-    objects = next((p for p in parts if p.tag == "objects"), None)
-    object_attach = skeleton.attach_object(objects, lm) if objects is not None else None
-    if object_attach and object_attach.split(".", 1)[1] in lm["hands"]:
-        object_attach = "hand." + object_attach.split(".", 1)[1]
-    object_side = object_attach.split(".", 1)[1] if object_attach else None
-    if hints.get("staticObjects"):
-        object_attach = "lower"
+    object_attach = {p.name: object_bone(p, lm) for p in parts if p.tag == "objects"}
+    first = object_attach.get("objects", next(iter(object_attach.values()), None))
+    object_side = first.split(".", 1)[1] if first else None
+    if hints.get("staticObjects") and "objects" in object_attach:
+        object_attach["objects"] = "lower"
     lm["objectSide"] = object_side
 
     loaded = []
@@ -207,7 +219,7 @@ def main(argv=None):
             attach = f"forearm.{v.side}@{v.id}"
             influences = skeleton.weights_for(layer, vertices, lm, attach, arm=v.arm, suffix=f"@{v.id}")
         else:
-            attach = object_attach if layer.tag == "objects" else None
+            attach = object_attach.get(layer.name.split("@")[0]) if layer.tag == "objects" else None
             influences = skeleton.weights_for(layer, vertices, lm, attach)
         influences = [(b, w) for b, w in influences if b in bone_index]
         bone_idx, weights = skeleton.pack_weights(influences, bone_index)

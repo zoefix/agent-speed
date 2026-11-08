@@ -86,8 +86,45 @@ def reproject(layers, reference, background=1.0):
     return owner
 
 
+def take_prop(layers, mask, reference, name="prop", grow=2, reach=15, share=0.6):
+    """Moves a held object (segment.prop_mask, grown by `grow` px for its outline) out of the layers that draw it into
+    one `objects` layer, so it moves as one piece: opaque inside the mask (also where the split left the art out of
+    every layer), as opaque as the layers were on the grown rim. A layer gives up its pixels there when it draws above
+    the object's slot in the draw order, or is the visible owner of the pixel or above it; what lies hidden below the
+    owner stays (the body behind a hugged doll), unless it is a piece of the layer lying at least `share` within
+    `reach` px of the object: the split paints hair behind a doll's face as if it were a second head, which would
+    show once the doll moves. Such a piece joins the object. Returns the layers with the object in its slot."""
+    core = mask
+    if grow:
+        mask = ndimage.binary_dilation(mask, iterations=grow)
+    near = ndimage.binary_dilation(mask, iterations=reach)
+    total = np.where(core, 1.0, coverage(layers))
+    owner = owner_map(layers)
+    slot = next((k for k, layer in enumerate(layers)
+                 if DRAW_ORDER.index(layer.tag) > DRAW_ORDER.index("objects")), len(layers))
+    rgba = np.zeros_like(layers[0].rgba)
+    rgba[..., :3] = reference
+    rgba[..., 3] = np.where(mask, total, 0.0)
+    for k, layer in enumerate(layers):
+        give = mask & ((k >= slot) | (owner <= k))
+        labels, count = ndimage.label(layer.alpha > 0.12)
+        if count:
+            ids = np.arange(1, count + 1)
+            touching = np.asarray(ndimage.maximum(mask, labels, ids)) > 0
+            within = np.asarray(ndimage.mean(near, labels, ids)) >= share
+            piece = np.isin(labels, ids[touching & within])
+            piece = ndimage.binary_dilation(piece, iterations=1) & (layer.alpha > 0)
+            joins = piece & ~mask
+            rgba[..., :3] = np.where(joins[..., None], layer.rgba[..., :3], rgba[..., :3])
+            rgba[..., 3] = np.where(joins, np.maximum(rgba[..., 3], layer.alpha), rgba[..., 3])
+            give |= piece
+        layer.rgba[..., 3] = np.where(give, 0.0, layer.alpha)
+    return layers[:slot] + [Layer(name, "objects", rgba)] + layers[slot:]
+
+
 def drop_empty(layers, threshold=0.12):
-    """Layers left with nothing solid once the art is painted onto its owners: a faint nose the face covers."""
+    """Layers left with nothing solid once the art is painted onto its owners (a faint nose the face covers) or split
+    by the arms (a sleeve whose other half went with a held doll)."""
     return [layer for layer in layers if (layer.alpha > threshold).any()]
 
 

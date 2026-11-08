@@ -625,6 +625,50 @@ class LayerTests(unittest.TestCase):
         reproject(parts, np.full((40, 40, 3), 0.5, np.float32))
         self.assertEqual([p.name for p in drop_empty(parts)], ["face"])
 
+    def test_a_held_prop_leaves_the_layers_that_draw_it_but_not_what_hides_behind_it(self):
+        from characters.rig.layers import Layer, take_prop
+
+        def layer(name, *boxes):
+            rgba = np.zeros((40, 40, 4), np.float32)
+            for y0, y1, x0, x1 in boxes:
+                rgba[y0:y1, x0:x1] = 1
+            return Layer(name, name, rgba)
+        body = layer("topwear", (0, 40, 15, 40), (15, 40, 0, 15))
+        parts = [layer("back hair", (5, 15, 5, 15)), body, layer("face", (15, 25, 5, 15), (30, 35, 30, 35))]
+        mask = np.zeros((40, 40), bool)
+        mask[5:25, 5:15] = True
+        mask[2:5, 5:15] = True
+        parts = take_prop(parts, mask, np.full((40, 40, 3), 0.5, np.float32), grow=0, reach=2)
+        self.assertEqual([p.name for p in parts], ["back hair", "topwear", "prop", "face"])
+        self.assertEqual(parts[2].tag, "objects")
+        self.assertTrue((parts[2].alpha[mask] == 1).all())
+        self.assertEqual(parts[0].alpha[10, 10], 0.0)
+        self.assertEqual(parts[3].alpha[20, 10], 0.0)
+        self.assertEqual(parts[1].alpha[20, 10], 1.0)
+        self.assertEqual(parts[3].alpha[32, 32], 1.0)
+        self.assertEqual(parts[2].alpha[3, 10], 1.0)
+
+    def test_hair_painted_behind_a_held_doll_goes_with_the_doll(self):
+        from characters.rig.layers import Layer, take_prop
+        hair = np.zeros((80, 80, 4), np.float32)
+        hair[10:30, 10:30] = 1
+        hair[50:80, 0:80] = 1
+        hair[28:34, 12:14] = 1
+        face = np.zeros((80, 80, 4), np.float32)
+        face[12:28, 12:28] = 1
+        mask = np.zeros((80, 80), bool)
+        mask[12:28, 12:28] = True
+        parts = take_prop([Layer("back hair", "back hair", hair), Layer("face", "face", face)], mask,
+                          np.full((80, 80, 3), 0.5, np.float32), grow=0, reach=6)
+        hair_left, prop, face_left = parts
+        self.assertEqual(prop.name, "prop")
+        self.assertEqual(hair_left.alpha[11, 11], 0.0)
+        self.assertEqual(hair_left.alpha[33, 13], 0.0)
+        self.assertEqual(hair_left.alpha[60, 40], 1.0)
+        self.assertEqual(prop.alpha[11, 11], 1.0)
+        self.assertEqual(prop.alpha[33, 13], 1.0)
+        self.assertEqual(face_left.alpha[20, 20], 0.0)
+
 class ParticleTests(unittest.TestCase):
     def test_every_kind_emits_and_draws(self):
         from characters.reference.effects import PARTICLES, Particles

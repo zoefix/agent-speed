@@ -122,3 +122,25 @@ def _parted_fingers(predictor, best, hand, origin, ring, inside, crop, near_colo
     parted = (rim & best).sum() <= touch * rim.sum()
     return tips_mask if parted and color <= near_color else np.zeros_like(best)
 
+
+def prop_mask(reference, points, checkpoint, min_score=0.8, hole_share=0.05):
+    """Boolean canvas mask of a held object marked by `points` (canvas pixels) on it, such as a doll See-Through takes
+    for a second head and spreads over the face, hair, eye and arm layers. Each point asks SAM on its own, and the
+    smallest mask it scores at least `min_score` (the face of the doll, or its hair) joins the object; enclosed gaps
+    under `hole_share` of it (eyes, mouth) are filled, larger ones (a hand across it) stay out. Negative prompts on
+    the hands break SAM's masks into specks, so a hand pressed to the object can come along with it."""
+    predictor = _predictor(str(checkpoint))
+    predictor.set_image((np.clip(reference, 0, 1) * 255).astype(np.uint8))
+    mask = np.zeros(reference.shape[:2], bool)
+    for point in points:
+        masks, scores, _ = predictor.predict(point_coords=np.array([point], np.float64), point_labels=np.ones(1),
+                                             multimask_output=True)
+        sure = [m for m, score in zip(masks, scores) if score >= min_score]
+        mask |= min(sure, key=lambda m: m.sum()) if sure else masks[int(np.argmax(scores))]
+    mask = ndimage.binary_closing(mask, iterations=3)
+    holes = ndimage.binary_fill_holes(mask) & ~mask
+    labels, count = ndimage.label(holes)
+    if count:
+        sizes = ndimage.sum(holes, labels, range(1, count + 1))
+        mask |= np.isin(labels, 1 + np.flatnonzero(sizes < hole_share * mask.sum()))
+    return mask
