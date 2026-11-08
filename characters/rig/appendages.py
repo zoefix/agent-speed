@@ -28,12 +28,15 @@ def foreground(reference, darkness=0.05, bare=None):
     return filled if bare is None else filled & ~bare
 
 
-def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_limb=0.4):
+def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_limb=0.4, figure=None, min_figure=0.5,
+                    max_chroma=0.15):
     """Adds a layer for each sizeable blob of the art that no layer covers. With a `tail` hint the largest blob below
     the chin becomes the tail (when no layer is tagged tail), with `wings` the largest blob below the eyes becomes the
     wings, either only when it is at least `min_limb` of the face's box (a scrap of dress must not flap); blobs by the
     head become headwear (above the face) or ears (beside it), so they turn with the head; any other blob joins the
-    back as `extra`. Returns the names added."""
+    back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
+    `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
+    Returns the names added."""
     h, w = reference.shape[:2]
     covered = coverage(parts) > 0.5
     missing = foreground(reference, bare=bare) & ~ndimage.binary_dilation(covered, iterations=2)
@@ -43,6 +46,10 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         return []
     sizes = ndimage.sum(missing, labels, range(1, count + 1))
     keep = [i + 1 for i, s in enumerate(sizes) if s >= min_share * h * w]
+    if figure is not None and keep:
+        scores = np.atleast_1d(ndimage.mean(figure, labels, keep))
+        chroma = np.atleast_1d(ndimage.mean(reference.max(axis=2) - reference.min(axis=2), labels, keep))
+        keep = [i for i, score, c in zip(keep, scores, chroma) if score >= min_figure or c >= max_chroma]
     tags = {p.tag for p in parts}
     face = next((p for p in parts if p.tag == "face"), None)
     if face is not None:

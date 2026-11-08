@@ -469,6 +469,13 @@ class AppendageTests(unittest.TestCase):
         self.assertLess(parts.index(tail), [p.tag for p in parts].index("topwear"))
         parts, ref = self.scene()
         self.assertEqual(recover_missing(parts, ref, {}), ["extra"])
+        parts, ref = self.scene()
+        figure = np.ones(ref.shape[:2], np.float32)
+        figure[120:135, 120:175] = 0.05
+        self.assertEqual(recover_missing(parts, ref, {"tail": True}, figure=figure), [])
+        parts, ref = self.scene()
+        ref[120:135, 120:175] = (0.9, 0.3, 0.6)
+        self.assertEqual(recover_missing(parts, ref, {"tail": True}, figure=figure), ["tail"])
 
     def test_the_tail_chain_runs_from_the_body_to_the_tip(self):
         from characters.rig.appendages import recover_missing, tail_landmarks, tail_weights

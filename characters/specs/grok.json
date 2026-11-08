@@ -38,6 +38,7 @@
   ]
  },
  "rig": {
-  "recover": true
+  "recover": true,
+  "legsInSkirt": true
  }
 }

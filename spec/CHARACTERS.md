@@ -92,8 +92,10 @@ The rest pose (all defaults) reproduces the illustration exactly. Skinning may r
 
 `characters/rig/appendages.py` rigs tails, wings and animal ears from the See-Through layers. A character's spec
 (`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `recover`, `tail`,
-`wings`, `ears` (animal ears; horns and fins beside the head stay still without it) and `staticObjects` (a held object that does not
-move with the hand, such as a desk).
+`wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
+move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
+cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
+is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice).
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away
@@ -101,8 +103,10 @@ move with the hand, such as a desk).
   inside and as opaque as the art is dark on its rim (darkness / 0.3). The largest blob below the chin is the tail
   with the `tail` hint and no tail layer; with `wings`, the largest blob below the eyes and away from the head is the
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
-  the face and `ears` beside it; any other blob is `extra`, drawn with the tail. Packs without the hint are built
-  exactly as before.
+  the face and `ears` beside it; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
+  chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
+  the floor and stays out; a coloured one the matte also misses (a hologram) stays in. Packs without the
+  hint are built exactly as before.
 - **Bare paper** (build option `--matte`, an anime figure matte such as skytnt/anime-seg `isnetis.onnx`): generated
   art sits on white, which also shows through enclosed gaps (an axe blade, hair beside the body). Bare paper is every
   pixel whose darkest channel is above 0.96 and that the matte scores below 0.5, plus every enclosed (not touching the

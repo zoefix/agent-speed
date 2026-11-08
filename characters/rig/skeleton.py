@@ -254,6 +254,8 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
                 (f"forearm.{key}{suffix}", w_arm * w_fore)]
     if tag == "objects" and attach:
         return [(attach, one)]
+    if tag in ("footwear", "legwear") and lm.get("legsInSkirt"):
+        return skirt_weights(y, lm)
     if tag in ("footwear", "legwear") and "foot" in lm:
         return [("foot", one)]
     if tag == "topwear":
@@ -262,10 +264,16 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
     if tag in ("neckwear", "wings", "tail", "objects", "handwear"):
         return [("chest", one)]
     if tag == "bottomwear":
-        w = smoothstep(lm["waist"][1], lm["hem"], y) ** 1.3
-        h = smoothstep(lm.get("skirtMid", lm["hem"]), lm["hem"], y) ** 1.2
-        return [("lower", 1 - w), ("skirt", w * (1 - h)), ("skirtHem", w * h)]
+        return skirt_weights(y, lm)
     return [("lower", one)]
+
+
+def skirt_weights(y, lm):
+    """The skirt bends below the waist and swings most at the hem. Legs the art draws inside the skirt (sheer cloth,
+    a slit) take the same weights, so the two drawings of a leg never part."""
+    w = smoothstep(lm["waist"][1], lm["hem"], y) ** 1.3
+    h = smoothstep(lm.get("skirtMid", lm["hem"]), lm["hem"], y) ** 1.2
+    return [("lower", 1 - w), ("skirt", w * (1 - h)), ("skirtHem", w * h)]
 
 
 def attach_object(layer, lm):

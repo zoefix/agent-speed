@@ -107,19 +107,22 @@ def main(argv=None):
     ap.add_argument("--out", required=True)
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
-    ap.add_argument("--spec", help="the character's spec: its `rig` hints (recover, tail, wings, ears, staticObjects)")
+    ap.add_argument("--spec", help="the character's spec: its `rig` hints "
+                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     args = ap.parse_args(argv)
     hints = json.loads(Path(args.spec).read_text()).get("rig", {}) if args.spec else {}
 
     size, parts = layers.load_psd(args.psd)
     reference = layers.load_reference(args.reference, size)
-    bare = None
+    bare = figure = None
     if args.matte:
         from . import matte
-        bare = matte.paper(reference, matte.figure(reference, args.matte), covered=layers.coverage(parts) > 0.5)
+        figure = matte.figure(reference, args.matte)
+        bare = matte.paper(reference, figure, covered=layers.coverage(parts) > 0.5)
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
-    recovered = appendages.recover_missing(parts, reference, hints, bare=bare) if hints.get("recover") else []
+    recovered = (appendages.recover_missing(parts, reference, hints, bare=bare, figure=figure)
+                 if hints.get("recover") else [])
     if recovered:
         print(f"recovered from the art no layer covered: {', '.join(recovered)}")
     layers.reproject(parts, reference)
@@ -131,6 +134,9 @@ def main(argv=None):
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
     lm = skeleton.landmarks(parts)
+    if hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
+        lm.pop("foot", None)
+        lm["legsInSkirt"] = True
     for side, joints in arm_joints.items():
         if side in lm["arms"]:
             lm["arms"][side] = skeleton.arm_from_joints(joints)

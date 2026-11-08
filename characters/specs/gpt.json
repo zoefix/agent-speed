@@ -43,6 +43,7 @@
  "rig": {
   "recover": true,
   "tail": true,
-  "wings": true
+  "wings": true,
+  "legsInSkirt": true
  }
 }
