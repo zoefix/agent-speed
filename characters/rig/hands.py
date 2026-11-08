@@ -100,12 +100,17 @@ def split(layer, hand, mask=None, reference=None):
     4 px back over the arm, so no seam opens between them."""
     shape = layer.alpha.shape
     past = past_cut(shape, hand)
+    held_area = np.zeros(shape, bool)
     if mask is not None and reference is not None:
         ink = reference @ np.array([0.299, 0.587, 0.114], np.float32) < 0.6
         outline = ndimage.binary_dilation(mask, iterations=4) & ink
         inside = ndimage.binary_fill_holes(mask | outline) & past
+        # Filling the outline must not take in a held object (a flute between parted fingers and the palm, or across
+        # the fingers): thick areas outside SAM's hand or off the hand's hue stay with the layer that drew them.
+        held_area = held(inside & ~mask | off_hue(reference, inside, mask), hand["size"])
         paper = (reference.min(axis=2) > 0.975) & (layer.alpha < 0.5)
-        inside = (inside | (ndimage.binary_dilation(inside, iterations=2) & past & (layer.alpha > 0.01))) & ~paper
+        inside = (inside | (ndimage.binary_dilation(inside & ~held_area, iterations=2) & past & (layer.alpha > 0.01)))
+        inside &= ~paper & ~held_area
         rim = inside & ndimage.binary_dilation(reference.min(axis=2) > 0.975, iterations=1) & (layer.alpha > 0.05)
         part = np.zeros_like(layer.rgba)
         part[..., :3] = np.where(rim[..., None], layer.rgba[..., :3], reference)
@@ -118,12 +123,36 @@ def split(layer, hand, mask=None, reference=None):
         inside = _capsules(shape, hand) & past & (layer.alpha > 0.01)
         part = layer.rgba.copy()
         part[..., 3] = np.where(inside, part[..., 3], 0.0)
-    band = ndimage.binary_dilation(inside, iterations=4) & ~past & (layer.alpha > 0.01)
+    # The hand reaches 4 px over the arm wherever they meet (the cut and a cuff drawn over the wrist), so the
+    # mipmapped edge of the hand never shows through where the arm is cut away.
+    band = ndimage.binary_dilation(inside, iterations=4) & ~inside & ~held_area & (layer.alpha > 0.01)
     part[..., :3] = np.where(band[..., None], layer.rgba[..., :3], part[..., :3])
     part[..., 3] = np.where(band, layer.alpha, part[..., 3])
     arm = layer.rgba.copy()
     arm[..., 3] = np.where(inside, 0.0, arm[..., 3])
     return Layer(layer.name, layer.tag, arm, layer.side), Layer(f"hand.{hand['side']}", "hand", part, hand["side"])
+
+
+def off_hue(rgb, where, hand_mask, far=0.1):
+    """Pixels of `where` whose hue (red-green, yellow-blue) is far from the hand's median over `hand_mask`. Hue alone,
+    so shading on the skin never counts and a glove the color of the object keeps everything."""
+    rgb = np.asarray(rgb, np.float32)
+    chroma = np.stack([rgb[..., 0] - rgb[..., 1], 0.5 * (rgb[..., 0] + rgb[..., 1]) - rgb[..., 2]], axis=-1)
+    if not hand_mask.any():
+        return np.zeros(where.shape, bool)
+    return where & (np.linalg.norm(chroma - np.median(chroma[hand_mask], axis=0), axis=-1) > far)
+
+
+def held(candidates, size, share=0.03):
+    """The thick parts of `candidates`: at least `share` of the hand's size squared once thin lines are opened away,
+    so ink between the fingers and a painted nail stay with the hand."""
+    thick = ndimage.binary_opening(candidates, iterations=2)
+    labels, count = ndimage.label(thick)
+    if count == 0:
+        return np.zeros(candidates.shape, bool)
+    sizes = ndimage.sum(thick, labels, range(1, count + 1))
+    big = np.isin(labels, 1 + np.flatnonzero(sizes >= share * size * size))
+    return ndimage.binary_dilation(big, iterations=2) & candidates
 
 
 def clear_ghosts(parts, mask, keep):

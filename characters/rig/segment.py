@@ -11,6 +11,8 @@ from functools import lru_cache
 import numpy as np
 from scipy import ndimage
 
+from . import hands
+
 
 @lru_cache(maxsize=1)
 def _predictor(checkpoint):
@@ -87,6 +89,7 @@ def hand_mask(reference, hand, checkpoint):
         sizes = ndimage.sum(best, labels, range(1, count + 1))
         best = labels == (int(np.argmax(sizes)) + 1)
     best |= _parted_fingers(predictor, best, hand, origin, ring, inside, crop)
+    best &= ~hands.held(hands.off_hue(crop / 255, best, best), hand["size"])
     out = np.zeros((h, w), bool)
     out[y0:y1, x0:x1] = best
     return out
@@ -118,3 +121,4 @@ def _parted_fingers(predictor, best, hand, origin, ring, inside, crop, near_colo
     color = np.linalg.norm(np.median(rgb[tips_mask], axis=0) - np.median(rgb[best], axis=0))
     parted = (rim & best).sum() <= touch * rim.sum()
     return tips_mask if parted and color <= near_color else np.zeros_like(best)
+
