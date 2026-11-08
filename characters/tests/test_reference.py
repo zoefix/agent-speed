@@ -523,6 +523,36 @@ class AppendageTests(unittest.TestCase):
         self.assertEqual(ears["left"]["base"][1], 29)
 
 
+class WaistTests(unittest.TestCase):
+    def layers(self, top, bottom):
+        from characters.rig.layers import Layer
+
+        def layer(name, y0, y1, x0=40, x1=60):
+            rgba = np.zeros((200, 100, 4), np.float32)
+            rgba[y0:y1, x0:x1, 3] = 1
+            return Layer(name, name, rgba)
+        return [layer("face", 10, 30), layer("topwear", *top), layer("bottomwear", *bottom)]
+
+    def test_a_skirt_layer_from_the_shoulders_does_not_lift_the_waist(self):
+        from characters.rig.skeleton import landmarks
+        torso = {"shoulder": 40.0, "hip": 100.0}
+        tidy = landmarks(self.layers((35, 82), (78, 160)), torso)
+        self.assertAlmostEqual(tidy["waist"][1], 79.5, delta=1)
+        caped = landmarks(self.layers((35, 90), (40, 160)), torso)
+        self.assertAlmostEqual(caped["waist"][1], 40 + 0.65 * 60, delta=0.5)
+        self.assertAlmostEqual(landmarks(self.layers((35, 90), (40, 160)))["waist"][1], 64.5, delta=1)
+
+    def test_skirt_weights_follow_the_chest_above_the_waist_and_swing_at_the_hem(self):
+        from characters.rig.skeleton import skirt_weights
+        lm = {"waist": (50, 100), "hem": 200, "skirtMid": 145}
+        y = np.array([40.0, 100.0, 150.0, 200.0])
+        weights = dict(skirt_weights(y, lm, 50.0))
+        np.testing.assert_allclose(sum(weights.values()), 1.0, atol=1e-9)
+        self.assertGreater(weights["chest"][0], 0.99)
+        self.assertGreater(weights["lower"][1], 0.5)
+        self.assertGreater(weights["skirtHem"][3], 0.99)
+
+
 class PaperTests(unittest.TestCase):
     def test_enclosed_white_is_paper_unless_a_layer_or_a_sure_matte_claims_it(self):
         from characters.rig.matte import paper

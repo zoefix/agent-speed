@@ -90,7 +90,15 @@ def arm_weights(vertices, arm):
     return (1 - fore) * (1 - attached), (1 - fore) * attached, fore
 
 
-def landmarks(layers):
+# The waist sits this far from the shoulders to the hips (pose.torso) when the layers place it outside WAIST_RANGE.
+WAIST_SHARE = 0.65
+WAIST_RANGE = (0.5, 0.9)
+
+
+def landmarks(layers, torso=None):
+    """Face, waist, feet, arms and eyes from the layers. The waist is where the top meets the bottom, unless `torso`
+    (pose.torso) shows that lands off the body's waist: a skirt layer holding a cape from the shoulders, or a coat to
+    the knees."""
     named = {layer.name: layer for layer in layers}
     tags = {}
     for layer in layers:
@@ -116,6 +124,10 @@ def landmarks(layers):
         waist_y, waist_x = top[3], (top[0] + top[2]) / 2
     else:
         waist_y, waist_x = chin + 2.2 * face_h, neck_cx
+    if torso and torso["hip"] > torso["shoulder"]:
+        span = torso["hip"] - torso["shoulder"]
+        if not WAIST_RANGE[0] <= (waist_y - torso["shoulder"]) / span <= WAIST_RANGE[1]:
+            waist_y = torso["shoulder"] + WAIST_SHARE * span
     lm["waist"] = (waist_x, waist_y)
     lowest = max(box(layer.alpha)[3] for layer in layers)
     feet_src = named.get("footwear") or named.get("bottomwear")
@@ -255,25 +267,31 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
     if tag == "objects" and attach:
         return [(attach, one)]
     if tag in ("footwear", "legwear") and lm.get("legsInSkirt"):
-        return skirt_weights(y, lm)
+        return skirt_weights(y, lm, face_h)
     if tag in ("footwear", "legwear") and "foot" in lm:
         return [("foot", one)]
     if tag == "topwear":
-        w_low = smoothstep(lm["waist"][1] - 0.3 * face_h, lm["waist"][1] + 0.1 * face_h, y)
+        w_low = _below_waist(y, lm, face_h)
         return [("chest", 1 - w_low), ("lower", w_low)]
     if tag in ("neckwear", "wings", "tail", "objects", "handwear"):
         return [("chest", one)]
     if tag == "bottomwear":
-        return skirt_weights(y, lm)
+        return skirt_weights(y, lm, face_h)
     return [("lower", one)]
 
 
-def skirt_weights(y, lm):
-    """The skirt bends below the waist and swings most at the hem. Legs the art draws inside the skirt (sheer cloth,
-    a slit) take the same weights, so the two drawings of a leg never part."""
+def _below_waist(y, lm, face_h):
+    return smoothstep(lm["waist"][1] - 0.3 * face_h, lm["waist"][1] + 0.1 * face_h, y)
+
+
+def skirt_weights(y, lm, face_h):
+    """Above the waist the skirt layer (a cape from the shoulders) follows the chest as the top does; below it the
+    skirt bends and swings most at the hem. Legs the art draws inside the skirt (sheer cloth, a slit) take the same
+    weights, so the two drawings of a leg never part."""
+    low = _below_waist(y, lm, face_h)
     w = smoothstep(lm["waist"][1], lm["hem"], y) ** 1.3
     h = smoothstep(lm.get("skirtMid", lm["hem"]), lm["hem"], y) ** 1.2
-    return [("lower", 1 - w), ("skirt", w * (1 - h)), ("skirtHem", w * h)]
+    return [("chest", 1 - low), ("lower", low * (1 - w)), ("skirt", low * w * (1 - h)), ("skirtHem", low * w * h)]
 
 
 def attach_object(layer, lm):

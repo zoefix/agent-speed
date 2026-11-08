@@ -133,7 +133,7 @@ def main(argv=None):
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
-    lm = skeleton.landmarks(parts)
+    lm = skeleton.landmarks(parts, pose.torso(args.reference, size))
     if hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
         lm.pop("foot", None)
         lm["legsInSkirt"] = True

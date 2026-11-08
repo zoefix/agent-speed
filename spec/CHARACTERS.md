@@ -88,6 +88,12 @@ https://github.com/zoefix/agent-speed/releases/download/characters/catalog.json
 
 The rest pose (all defaults) reproduces the illustration exactly. Skinning may run on the CPU or the GPU.
 
+The build (`characters/rig`) bends the body at the waist: the top and the skirt layer weigh `chest` above it and
+`lower` below it, blending from 0.3 face heights above to 0.1 below, so a cape the skirt layer carries from the
+shoulders moves with the chest. The waist is halfway between the top's lower edge and the skirt's upper edge, unless
+the pose estimator finds both shoulders and both hips and that point lies outside 0.5–0.9 of the way from the
+shoulders to the hips (a cape in the skirt layer, a coat to the knees): then it is at 0.65 of the way.
+
 ### Appendages
 
 `characters/rig/appendages.py` rigs tails, wings and animal ears from the See-Through layers. A character's spec

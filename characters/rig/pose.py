@@ -1,6 +1,6 @@
 """Arm and hand joints from a whole-body pose estimator (RTMW via rtmlib), mapped onto the square character canvas.
 
-COCO-WholeBody order: shoulders 5/6, elbows 7/8, wrists 9/10; the person's left hand is 91-111, the right 112-132,
+COCO-WholeBody order: shoulders 5/6, elbows 7/8, wrists 9/10, hips 11/12; the person's left hand is 91-111, the right 112-132,
 each wrist, then thumb, index, middle, ring and pinky with four points from the base to the tip.
 """
 from functools import lru_cache
@@ -8,7 +8,7 @@ from functools import lru_cache
 import cv2
 import numpy as np
 
-SHOULDERS, ELBOWS, WRISTS = (5, 6), (7, 8), (9, 10)
+SHOULDERS, ELBOWS, WRISTS, HIPS = (5, 6), (7, 8), (9, 10), (11, 12)
 HANDS = (91, 112)
 MIN_SCORE = 1.5
 MIN_HAND_SCORE = 2.0
@@ -101,6 +101,18 @@ def arms(image_path, size, center_x, matrix=None):
         side = _side(pts[0], pts[1], center_x)
         out[side] = {"shoulder": tuple(pts[0]), "elbow": tuple(pts[1]), "wrist": tuple(pts[2]), "score": score}
     return out
+
+
+def torso(image_path, size, matrix=None):
+    """{"shoulder": y, "hip": y} of the shoulder and hip midpoints on the canvas, or None unless all four are found."""
+    found = _detect(str(image_path))
+    if found is None:
+        return None
+    k, s, image_size = found
+    if min(s[i] for i in SHOULDERS + HIPS) < MIN_SCORE:
+        return None
+    pts = cv2.transform(np.float64([[k[i] for i in SHOULDERS + HIPS]]), _to_canvas(image_size, size, None))[0]
+    return {"shoulder": float(pts[:2, 1].mean()), "hip": float(pts[2:, 1].mean())}
 
 
 def hands(image_path, size, center_x, matrix=None):
