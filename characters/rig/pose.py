@@ -98,14 +98,14 @@ def arms(image_path, size, center_x, matrix=None):
         if score < MIN_SCORE:
             continue
         pts = cv2.transform(np.float64([[k[sh], k[el], k[wr]]]), to_canvas)[0]
-        side = "left" if pts[0][0] < center_x else "right"
+        side = _side(pts[0], pts[1], center_x)
         out[side] = {"shoulder": tuple(pts[0]), "elbow": tuple(pts[1]), "wrist": tuple(pts[2]), "score": score}
     return out
 
 
 def hands(image_path, size, center_x, matrix=None):
     """{"left"|"right": 21 canvas points [wrist, thumb x4, index x4, middle x4, ring x4, pinky x4]} by the image side
-    of the hand's shoulder, so a hand reaching across the body (both hands on a flute) stays with its own arm."""
+    of the hand's upper arm, so a hand reaching across the body (both hands on a flute) stays with its own arm."""
     found = _detect(str(image_path))
     if found is None:
         return {}
@@ -114,7 +114,13 @@ def hands(image_path, size, center_x, matrix=None):
     out = {}
     for base, points in _refined_hands(str(image_path)).items():
         pts = cv2.transform(np.float64([points]), to_canvas)[0]
-        shoulder = cv2.transform(np.float64([[k[SHOULDERS[HANDS.index(base)]]]]), to_canvas)[0][0]
-        side = "left" if shoulder[0] < center_x else "right"
-        out[side] = pts
+        arm = HANDS.index(base)
+        shoulder, elbow = cv2.transform(np.float64([[k[SHOULDERS[arm]], k[ELBOWS[arm]]]]), to_canvas)[0]
+        out[_side(shoulder, elbow, center_x)] = pts
     return out
+
+
+def _side(shoulder, elbow, center_x):
+    """Image side of an arm by its upper arm, which rarely crosses the body's middle (a hand often does, and a
+    raised arm's shoulder can be placed on the neck)."""
+    return "left" if 0.5 * (shoulder[0] + elbow[0]) < center_x else "right"
