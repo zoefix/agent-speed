@@ -106,8 +106,9 @@ move with the hand, such as a desk).
 - **Bare paper** (build option `--matte`, an anime figure matte such as skytnt/anime-seg `isnetis.onnx`): generated
   art sits on white, which also shows through enclosed gaps (an axe blade, hair beside the body). Bare paper is every
   pixel whose darkest channel is above 0.96 and that the matte scores below 0.5, plus every enclosed (not touching the
-  border) area of such near-white pixels whose mean score is below 0.8. Every layer is transparent there, so white
-  clothing (high scores) stays and the gaps show the desktop.
+  border) area of such near-white pixels whose mean score is below 0.8, or below 0.99 when most of the area is outside
+  every layer of the split (opacity above 0.5): a gap framed by raised arms can score 0.93, but white clothing is in a
+  layer. Every layer is transparent there, so white clothing (high scores) stays and the gaps show the desktop.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =

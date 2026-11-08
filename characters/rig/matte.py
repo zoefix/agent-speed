@@ -32,17 +32,22 @@ def figure(reference, model):
     return np.asarray(Image.fromarray(out.astype(np.float32)).resize((w, h), Image.BILINEAR), np.float32)
 
 
-def paper(reference, matte, white=0.96, cut=0.5, pocket=0.8):
+def paper(reference, matte, white=0.96, cut=0.5, pocket=0.8, covered=None, unsure=0.99):
     """Near-white pixels the matte calls background, and whole enclosed near-white areas it leans towards calling
-    background (a small hole in a blade can score halfway)."""
+    background (a small hole in a blade can score halfway). With `covered` (where the split's layers are opaque), an
+    enclosed area no layer covers counts as paper unless the matte is sure it is figure: a gap framed by raised arms
+    can score as high as 0.93."""
     near = reference.min(axis=2) > white
     bare = near & (matte < cut)
     labels, count = ndimage.label(near)
     if count:
+        index = range(1, count + 1)
         edge = np.unique(np.concatenate([labels[0], labels[-1], labels[:, 0], labels[:, -1]]))
-        mean = np.asarray(ndimage.mean(matte, labels, range(1, count + 1)))
-        enclosed = np.setdiff1d(1 + np.flatnonzero(mean < pocket), edge)
-        bare |= np.isin(labels, enclosed)
+        mean = np.asarray(ndimage.mean(matte, labels, index))
+        loose = mean < pocket
+        if covered is not None:
+            loose |= (mean < unsure) & (np.asarray(ndimage.mean(covered, labels, index)) < 0.5)
+        bare |= np.isin(labels, np.setdiff1d(1 + np.flatnonzero(loose), edge))
     return bare
 
 

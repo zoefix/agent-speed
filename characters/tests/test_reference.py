@@ -516,6 +516,30 @@ class AppendageTests(unittest.TestCase):
         self.assertEqual(ears["left"]["base"][1], 29)
 
 
+class PaperTests(unittest.TestCase):
+    def test_enclosed_white_is_paper_unless_a_layer_or_a_sure_matte_claims_it(self):
+        from characters.rig.matte import paper
+        ref = np.ones((60, 60, 3), np.float32)
+        ref[10:50, 10:50] = 0.3
+        ref[20:40, 20:40] = 1.0
+        hole = (slice(20, 40), slice(20, 40))
+        unsure = np.ones((60, 60), np.float32)
+        unsure[hole] = 0.93
+        uncovered = np.ones((60, 60), bool)
+        uncovered[hole] = False
+        self.assertFalse(paper(ref, unsure)[30, 30])
+        self.assertTrue(paper(ref, unsure, covered=uncovered)[30, 30])
+        self.assertFalse(paper(ref, unsure, covered=np.ones((60, 60), bool))[30, 30])
+        sure = unsure.copy()
+        sure[hole] = 0.995
+        self.assertFalse(paper(ref, sure, covered=uncovered)[30, 30])
+        loose = unsure.copy()
+        loose[hole] = 0.6
+        self.assertTrue(paper(ref, loose, covered=np.ones((60, 60), bool))[30, 30])
+        self.assertTrue(paper(ref, np.zeros((60, 60), np.float32))[0, 0])
+        self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
+
+
 class ParticleTests(unittest.TestCase):
     def test_every_kind_emits_and_draws(self):
         from characters.reference.effects import PARTICLES, Particles

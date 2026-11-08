@@ -117,7 +117,7 @@ def main(argv=None):
     bare = None
     if args.matte:
         from . import matte
-        bare = matte.paper(reference, matte.figure(reference, args.matte))
+        bare = matte.paper(reference, matte.figure(reference, args.matte), covered=layers.coverage(parts) > 0.5)
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     recovered = appendages.recover_missing(parts, reference, hints, bare=bare) if hints.get("recover") else []
     if recovered:
