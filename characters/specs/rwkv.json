@@ -39,6 +39,6 @@
  "rig": {
   "recover": true,
   "rigidLower": true,
-  "skirtInArms": true
+  "bodyInArms": true
  }
 }

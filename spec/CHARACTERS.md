@@ -116,9 +116,12 @@ band's entry is `{"points": [...], "follow": "chest" | "lower" | "head"}`: a boo
 split also paints into the top, moves with the chest so that copy never shows beside it. A seated character (motion
 `seated`), or one with the hint `rigidLower`, has no `foot` bone: legs and shoes follow `lower`, and the skirt blends
 from `chest` to `lower` at the waist like the top, so knees and ankles stay whole and the skirt physics has nothing
-to swing (a harpy whose feather skirt the split scatters over her wing and arm layers). With the hint `skirtInArms`
-the arm layers ease over to `lower` below the waist (`smoothstep(waist + 0.2 face, waist + 1.2 face)`), so a skirt
-the split drew into an arm layer stays with the hips and only stretches when the arm moves.
+to swing (a harpy whose feather skirt the split scatters over her wing and arm layers). With the hint `bodyInArms`
+the arm layers give the body what the split drew of it into them: a vertex's body share is the larger of
+`smoothstep(waist + 0.2 face, waist + 1.2 face)` (a skirt) and, inside the torso (between the shoulders, softened by
+0.3 face widths, and below the chin), `smoothstep(0.45, 0.9)` of its distance to the arm's bones in face widths;
+that share follows the body like the top (`chest` to `lower` at the waist), so the front of a feather dress stays
+put and only stretches where it meets a moving arm.
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away

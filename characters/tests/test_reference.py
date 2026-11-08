@@ -607,16 +607,19 @@ class WaistTests(unittest.TestCase):
         self.assertEqual(set(skirt), {"chest", "lower"})
         self.assertGreater(skirt["lower"][2], 0.99)
 
-    def test_a_skirt_drawn_into_the_arm_layer_eases_over_to_the_hips(self):
+    def test_body_drawn_into_an_arm_layer_follows_the_body(self):
         from characters.rig.layers import Layer
         from characters.rig.skeleton import weights_for
-        arm = {"field": np.full((300, 100), 50.0), "shoulder": (50, 40), "reach": 100.0}
-        lm = {"face": (40, 0, 60, 20), "chin": 20, "waist": (50, 100), "arms": {"left": arm}, "skirtInArms": True}
-        v = np.array([[50.0, 60.0], [50.0, 200.0]])
+        left = {"shoulder": (60, 40), "elbow": (20, 60), "wrist": (0, 80), "tip": (-12, 92), "reach": 80.0}
+        right = {"shoulder": (140, 40), "elbow": (180, 60), "wrist": (200, 80), "tip": (212, 92), "reach": 80.0}
+        lm = {"face": (80, 0, 120, 30), "chin": 30, "waist": (100, 120), "arms": {"left": left, "right": right},
+              "bodyInArms": True}
+        v = np.array([[30.0, 55.0], [100.0, 90.0], [100.0, 200.0]])
         w = dict(weights_for(Layer("handwear.left", "handwear", np.zeros((1, 1, 4), np.float32), "left"), v, lm))
         np.testing.assert_allclose(sum(w.values()), 1.0)
-        self.assertLess(w["lower"][0], 1e-6)
-        self.assertGreater(w["lower"][1], 0.999)
+        self.assertLess(w["chest"][0] + w["lower"][0], 0.01)
+        self.assertGreater(w["chest"][1] + w["lower"][1], 0.99)
+        self.assertGreater(w["lower"][2], 0.99)
 
 class PaperTests(unittest.TestCase):
     def test_enclosed_white_is_paper_unless_a_layer_or_a_sure_matte_claims_it(self):

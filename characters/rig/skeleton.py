@@ -247,10 +247,10 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
         return [("bangs", w_bangs), ("lock1", 1 - w_bangs - w_2), ("lock2", w_2)]
     if tag == "handwear" and (arm is not None or (side or "single") in lm["arms"]):
         out = _arm_layer_weights(vertices, lm, side, arm, suffix)
-        if lm.get("skirtInArms"):
-            # The split drew the skirt into the arm layer: below the waist it eases over to the hips.
-            t = smoothstep(lm["waist"][1] + 0.2 * face_h, lm["waist"][1] + 1.2 * face_h, y)
-            out = [(bone, w * (1 - t)) for bone, w in out] + [("lower", t)]
+        if lm.get("bodyInArms"):
+            body = _body_share(vertices, lm, arm if arm is not None else lm["arms"][side or "single"])
+            w_low = _below_waist(y, lm, face_h)
+            out = [(bone, w * (1 - body)) for bone, w in out] + [("chest", body * (1 - w_low)), ("lower", body * w_low)]
         return out
     if tag == "objects" and attach:
         return [(attach, one)]
@@ -293,6 +293,26 @@ def _arm_layer_weights(vertices, lm, side, arm, suffix):
     w_fore = smoothstep(0.38 * reach, 0.62 * reach, d)
     return [(f"shoulder.{key}", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
             (f"forearm.{key}{suffix}", w_arm * w_fore)]
+
+
+def _body_share(vertices, lm, arm):
+    """How much of an arm layer's vertex is body the split drew into it: inside the torso (between the shoulders,
+    below the chin) and over 0.45 face widths from the arm's bones, or below the waist (a skirt)."""
+    x, y = vertices[:, 0], vertices[:, 1]
+    fx0, fy0, fx1, fy1 = lm["face"]
+    face_w, face_h = fx1 - fx0, fy1 - fy0
+    low = smoothstep(lm["waist"][1] + 0.2 * face_h, lm["waist"][1] + 1.2 * face_h, y)
+    if arm.get("tip") is None:
+        return low
+    sh, el, tip = (np.array(arm[k], np.float64) for k in ("shoulder", "elbow", "tip"))
+    d = np.minimum(_segment(vertices, sh, el)[0], _segment(vertices, el, tip)[0])
+    far = smoothstep(0.45 * face_w, 0.9 * face_w, d)
+    shoulders = sorted(a["shoulder"][0] for a in lm["arms"].values())
+    x0, x1 = (shoulders[0], shoulders[-1]) if len(shoulders) > 1 else (fx0, fx1)
+    m = 0.3 * face_w
+    inside = smoothstep(x0 - m, x0 + m, x) * (1 - smoothstep(x1 - m, x1 + m, x))
+    torso = inside * smoothstep(lm["chin"], lm["chin"] + 0.5 * face_h, y)
+    return np.maximum(far * torso, low)
 
 
 def _below_waist(y, lm, face_h):
