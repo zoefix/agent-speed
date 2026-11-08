@@ -59,8 +59,9 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     """Adds a layer for each sizeable blob of the art that no layer covers. With a `tail` hint the largest blob below
     the chin becomes the tail (when no layer is tagged tail), with `wings` the largest blob below the eyes becomes the
     wings, either only when it is at least `min_limb` of the face's box (a scrap of dress must not flap); blobs by the
-    head become headwear (above the face) or ears (beside it), so they turn with the head; any other blob joins the
-    back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
+    head become headwear (above the face) or ears (beside it), so they turn with the head; when the split made no
+    footwear, a blob reaching the bottom of the figure (within 2 % of the canvas) that touches the legwear is a shoe,
+    `footwear`, so it moves with the leg; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
     `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
     Returns the names added."""
     h, w = reference.shape[:2]
@@ -70,6 +71,9 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     keep = [i + 1 for i, s in enumerate(sizes) if s >= min_share * h * w]
     keep = _drawn(keep, labels, reference, figure, min_figure, max_chroma)
     tags = {p.tag for p in parts}
+    legs = [p.alpha > 0.5 for p in parts if p.tag == "legwear"] if "footwear" not in tags else []
+    rows = np.nonzero(foreground(reference, bare=bare).any(axis=1))[0]
+    bottom = rows.max() if len(rows) else h
     face = next((p for p in parts if p.tag == "face"), None)
     if face is not None:
         fys, fxs = np.nonzero(face.alpha > 0.5)
@@ -86,7 +90,11 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         cy, cx = ys.mean(), xs.mean()
         by_head = cy < chin and fx0 - 1.2 * fw < cx < fx1 + 1.2 * fw
         big = sizes[i - 1] >= limb
-        if hints.get("tail") and "tail" not in tags and cy > chin and big:
+        shoe = ys.max() >= bottom - 0.02 * h and any((ndimage.binary_dilation(blob, iterations=3) & leg).any()
+                                                      for leg in legs)
+        if shoe:
+            tag = "footwear"
+        elif hints.get("tail") and "tail" not in tags and cy > chin and big:
             tag = "tail"
         elif hints.get("wings") and "wings" not in tags and cy > fy0 + 0.5 * (chin - fy0) and not by_head and big:
             tag = "wings"
