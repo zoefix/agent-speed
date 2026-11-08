@@ -12,6 +12,9 @@ SHOULDERS, ELBOWS, WRISTS = (5, 6), (7, 8), (9, 10)
 HANDS = (91, 112)
 MIN_SCORE = 1.5
 MIN_HAND_SCORE = 2.0
+# Traced wrist to body wrist, and wrist to middle fingertip, as shares of the whole-body hand's extent.
+MAX_WRIST_STRAY = 0.5
+MIN_HAND_REACH = 0.15
 HAND_MODEL = ("https://download.openmmlab.com/mmpose/v1/projects/rtmposev1/onnx_sdk/"
               "rtmpose-m_simcc-hand5_pt-aic-coco_210e-256x256-74fb594_20230320.zip")
 
@@ -30,21 +33,28 @@ def _hand_model():
 
 @lru_cache(maxsize=8)
 def _refined_hands(image_path):
-    """The whole-body model places fingers loosely; a hand model run on each hand's crop traces them closely."""
+    """The whole-body model places fingers loosely; a hand model run on each hand's crop traces them closely. A hand
+    whose traced wrist strays from the body's wrist, or that collapses to a point, traced something else (a face, a
+    staff) and is dropped, so that arm keeps its hand."""
     found = _detect(image_path)
     if found is None:
         return {}
     k, s, _ = found
     img = cv2.imread(image_path)
     out = {}
-    for base in HANDS:
+    for base, wrist in zip(HANDS, WRISTS):
         if float(s[base:base + 21].mean()) < MIN_HAND_SCORE:
             continue
         pts = k[base:base + 21]
         (x0, y0), (x1, y1) = pts.min(axis=0), pts.max(axis=0)
-        pad = 0.25 * max(x1 - x0, y1 - y0)
+        extent = max(x1 - x0, y1 - y0)
+        pad = 0.25 * extent
         refined, _ = _hand_model()(img, bboxes=[[x0 - pad, y0 - pad, x1 + pad, y1 + pad]])
-        out[base] = refined[0]
+        hand = refined[0]
+        strays = np.linalg.norm(hand[0] - k[wrist]) > MAX_WRIST_STRAY * extent
+        collapsed = np.linalg.norm(hand[12] - hand[0]) < MIN_HAND_REACH * extent
+        if not (strays or collapsed):
+            out[base] = hand
     return out
 
 

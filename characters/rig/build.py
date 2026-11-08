@@ -107,12 +107,18 @@ def main(argv=None):
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     ap.add_argument("--spec", help="the character's spec: its `rig` hints (recover, tail, wings, ears, staticObjects)")
+    ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     args = ap.parse_args(argv)
     hints = json.loads(Path(args.spec).read_text()).get("rig", {}) if args.spec else {}
 
     size, parts = layers.load_psd(args.psd)
     reference = layers.load_reference(args.reference, size)
-    recovered = appendages.recover_missing(parts, reference, hints) if hints.get("recover") else []
+    bare = None
+    if args.matte:
+        from . import matte
+        bare = matte.paper(reference, matte.figure(reference, args.matte))
+        print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
+    recovered = appendages.recover_missing(parts, reference, hints, bare=bare) if hints.get("recover") else []
     if recovered:
         print(f"recovered from the art no layer covered: {', '.join(recovered)}")
     layers.reproject(parts, reference)

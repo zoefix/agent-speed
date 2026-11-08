@@ -43,11 +43,14 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 ```
 
 Every other character builds the same way with her spec, which brings the rig hints (tail, wings, recovery of art
-See-Through missed) and, for the stage, her motion profile, particles and accent:
+See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
+([skytnt/anime-seg](https://huggingface.co/skytnt/anime-seg) `isnetis.onnx`, `--matte`) tells the white paper that
+shows through an axe blade or between hair and body from white clothing, so neither the recovered art nor any layer
+draws it:
 
 ```bash
 .venv/bin/python -m characters.rig.build --psd deepseek.psd --reference deepseek.png --name deepseek \
-    --out characters/build/deepseek --spec characters/specs/deepseek.json
+    --out characters/build/deepseek --spec characters/specs/deepseek.json --sam sam_vit_b_01ec64.pth --matte isnetis.onnx
 .venv/bin/python -m characters.reference.stage --package characters/build/deepseek \
     --spec characters/specs/deepseek.json --out deepseek-stage.mp4
 ```

@@ -19,21 +19,23 @@ def _smoothstep(e0, e1, x):
     return t * t * (3 - 2 * t)
 
 
-def foreground(reference, darkness=0.05):
-    """The drawn figure on the white canvas: anything not white, with areas enclosed by line art filled in."""
+def foreground(reference, darkness=0.05, bare=None):
+    """The drawn figure on the white canvas: anything not white, with areas enclosed by line art filled in, except
+    the `bare` paper (matte.paper) that shows through it."""
     ink = (1 - reference.min(axis=2)) > darkness
     closed = ndimage.binary_closing(ink, iterations=3)
-    return ndimage.binary_fill_holes(closed)
+    filled = ndimage.binary_fill_holes(closed)
+    return filled if bare is None else filled & ~bare
 
 
-def recover_missing(parts, reference, hints, min_share=0.0005):
+def recover_missing(parts, reference, hints, min_share=0.0005, bare=None):
     """Adds a layer for each sizeable blob of the art that no layer covers. With a `tail` hint the largest blob below
     the chin becomes the tail (when no layer is tagged tail), with `wings` the largest blob below the eyes becomes the
     wings; blobs by the head become headwear (above the face) or ears (beside it), so they turn with the head; any
     other blob joins the back as `extra`. Returns the names added."""
     h, w = reference.shape[:2]
     covered = coverage(parts) > 0.5
-    missing = foreground(reference) & ~ndimage.binary_dilation(covered, iterations=2)
+    missing = foreground(reference, bare=bare) & ~ndimage.binary_dilation(covered, iterations=2)
     missing = ndimage.binary_opening(missing, iterations=2)
     labels, count = ndimage.label(missing)
     if count == 0:

@@ -69,7 +69,9 @@ def hand_mask(reference, hand, checkpoint):
         masks, scores, _ = predictor.predict(multimask_output=True, **prompt)
         candidates += [(m, float(score), min(inside(m, palm), inside(m, tips)), inside(m, ring))
                        for m, score in zip(masks, scores)]
-    fitting = [c for c in candidates if c[1] >= 0.8 and c[2] >= 0.75 and c[3] <= 0.1 and c[0].sum() > 0.05 * size * size]
+    reach = float((pts.max(axis=0) - pts.min(axis=0)).max())
+    fitting = [c for c in candidates if c[1] >= 0.8 and c[2] >= 0.75 and c[3] <= 0.1
+               and 0.05 * size * size < c[0].sum() < 2.0 * reach * reach]
     if not fitting:
         return None
     best = min(fitting, key=lambda c: c[0].sum())[0]
