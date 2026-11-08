@@ -162,9 +162,15 @@ enum OrbFrameHarness {
             let disc = 2 * clip.size
             size = CGSize(width: disc * 1.5, height: disc * 1.5)
             let character = stage(.character, disc)
-            character.feed.characterID = model.characters.installed.first?.id
-            character.feed.vendors = VendorReading(rates: ["anthropic": 1], fastestModel: "Claude Opus 4.5",
-                                                   fastestVendor: "anthropic")
+            // `AGENT_SPEED_ORB_CHARACTER` picks the pack and `AGENT_SPEED_ORB_MODEL` the model chip.
+            let environment = ProcessInfo.processInfo.environment
+            let installed = model.characters.installed
+            let pack = installed.first { $0.id == environment["AGENT_SPEED_ORB_CHARACTER"] } ?? installed.first
+            let vendor = pack?.manifest.vendors.first ?? "anthropic"
+            character.feed.characterID = pack?.id
+            character.feed.vendors = VendorReading(rates: [vendor: 1],
+                                                   fastestModel: environment["AGENT_SPEED_ORB_MODEL"] ?? "Claude Opus 4.5",
+                                                   fastestVendor: vendor)
             cells.append(Cell(stage: character, center: CGPoint(x: disc * 0.75, y: disc * 0.75), label: nil))
         case .hero(let style), .still(let style, _):
             let big: CGFloat = 240
