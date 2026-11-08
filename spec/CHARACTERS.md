@@ -172,17 +172,19 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   art is found too, prompted by five points at the tail layer's thickest (the largest mask scored at least 0.8 that
   holds 90 % of the tail layer and is at most 2.5 times its size); the back hair's pixels inside it, in pieces of at
   least 500 px that touch the tail layer, join the tail (the top of a tail behind long hair), and the back hair is
-  repainted there. The tail is then made opaque inside its outline (eroded by 2 px), and wherever a layer behind it
+  repainted there. The tail is then made opaque inside its outline (eroded by 2 px) where no layer drawn over it
+  hides it, and wherever a layer behind it
   was cleared, so its stitched pieces never show the backdrop through a hairline crack. A recovered `extra` blob no larger than the
   tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
   `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
   on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel
   difference, 5 px box, under 0.06), the tail is what shows, so it moves to just above those layers. A layer drawn
   under the tail whose paint matches the tail's on at least half of their overlap holds a copy too (the back hair
-  under a tail curling up). Each such copy, grown by 2 px, is repainted: inside the layer's own outline (its pixels
-  without the copy, closed by 15 px, holes filled) it takes a blur of the layer around it, from fine to coarse
-  (Gaussian, sigma 2 to 64, normalized by the blurred coverage); outside it, it turns transparent, for a layer over
-  the tail only where the tail is opaque (its soft rim keeps the clothes behind it).
+  under a tail curling up). Each such copy is repainted (for a layer over the tail the copy grown by 2 px, for one
+  under it everything the tail covers at over 0.05 opacity, its ink outline and soft edge too): inside the layer's
+  own outline (its pixels without the copy, closed by 15 px, holes filled) it takes a blur of the layer around it,
+  from fine to coarse (Gaussian, sigma 2 to 64, normalized by the blurred coverage); outside it, it turns
+  transparent, for a layer over the tail only where the tail is opaque (its soft rim keeps the clothes behind it).
 - **Hidden legs**: every `legwear` pixel the layers above hide (opacity over 0.5) takes the color of the nearest leg
   pixel that shows (over 10 px below the layers above, 2 px inside the outline) and is opaque where See-Through's
   guess is over 0.3 (ramping to it below), within a 45-degree cone above or below that pixel (6 px wider); the rest of

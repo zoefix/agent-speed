@@ -777,8 +777,8 @@ class TailCopyTests(unittest.TestCase):
         parts, repainted = tail_alone([hair, tail], ref)
         self.assertEqual([q.name for q in parts], ["back hair", "tail"])
         self.assertEqual(repainted, ["back hair"])
-        self.assertLess(hair.rgba[90, 110, 0], 0.6)
-        self.assertEqual(hair.alpha[90, 110], 1.0)
+        shows_copy = hair.alpha[90:160, 100:126] * (hair.rgba[90:160, 100:126, 0] > 0.6)
+        self.assertEqual(float(shows_copy.max()), 0.0)
         skirt = self.layer("bottomwear", (0.2, 0.2, 0.2), (100, 190, 60, 180))
         ref2 = ref.copy()
         ref2[100:190, 60:180] = 0.2

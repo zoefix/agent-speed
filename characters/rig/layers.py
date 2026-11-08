@@ -302,13 +302,17 @@ def tail_from_back_hair(layers, mask, reach=3, min_px=500):
 
 
 def seal_tail(layers, core=2):
-    """Makes the tail opaque inside its outline (eroded by `core` px): the pieces it was stitched from (a recovered
-    base, a piece from the hair) meet with soft edges, which would show the backdrop as a hairline crack."""
-    tail = next((layer for layer in layers if layer.tag == "tail"), None)
-    if tail is None:
+    """Makes the tail opaque inside its outline (eroded by `core` px) where it shows: the pieces it was stitched from
+    (a recovered base, a piece from the hair) meet with soft edges, which would show the backdrop as a hairline crack.
+    What layers drawn over it hide stays as it is (See-Through's dark guess there would show as a slab once the tail
+    swings out)."""
+    index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
+    if index is None:
         return
+    tail = layers[index]
     inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
-    tail.rgba[..., 3] = np.where(inside, 1.0, tail.alpha)
+    hidden = coverage(layers[index + 1:]) > 0.5 if index + 1 < len(layers) else np.zeros_like(inside)
+    tail.rgba[..., 3] = np.where(inside & ~hidden, 1.0, tail.alpha)
 
 
 def tail_alone(layers, reference, share=0.5, min_px=2000):
@@ -341,7 +345,8 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
         elif k < index:
             same = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail.rgba[..., :3]).mean(axis=2), 5) < 0.06
             if (same & overlap).sum() >= share * overlap.sum():
-                copy = ndimage.binary_dilation(same & overlap, iterations=2) & (layer.alpha > 0.02)
+                # Everything the tail covers, with its ink outline, which matches the tail's paint less.
+                copy = (tail.alpha > 0.05) & (layer.alpha > 0.02)
                 _repaint_copy(layer, copy, copy)
                 repainted.append(layer.name)
     if covered:
