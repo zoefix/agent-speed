@@ -577,6 +577,17 @@ class PaperTests(unittest.TestCase):
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
 
 
+class LayerTests(unittest.TestCase):
+    def test_a_layer_the_face_covers_entirely_is_dropped(self):
+        from characters.rig.layers import Layer, drop_empty, reproject
+        face = np.zeros((40, 40, 4), np.float32)
+        face[5:35, 5:35] = 1
+        nose = np.zeros((40, 40, 4), np.float32)
+        nose[18:20, 18:20, 3] = 0.2
+        parts = [Layer("face", "face", face), Layer("nose", "nose", nose)]
+        reproject(parts, np.full((40, 40, 3), 0.5, np.float32))
+        self.assertEqual([p.name for p in drop_empty(parts)], ["face"])
+
 class ParticleTests(unittest.TestCase):
     def test_every_kind_emits_and_draws(self):
         from characters.reference.effects import PARTICLES, Particles

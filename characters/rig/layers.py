@@ -86,6 +86,11 @@ def reproject(layers, reference, background=1.0):
     return owner
 
 
+def drop_empty(layers, threshold=0.12):
+    """Layers left with nothing solid once the art is painted onto its owners: a faint nose the face covers."""
+    return [layer for layer in layers if (layer.alpha > threshold).any()]
+
+
 def split_pairs(layers, center_x, min_share=0.03):
     """Splits paired parts (arms, eyes, ears) into image-left and image-right layers."""
     out = []

@@ -126,6 +126,7 @@ def main(argv=None):
     if recovered:
         print(f"recovered from the art no layer covered: {', '.join(recovered)}")
     layers.reproject(parts, reference)
+    parts = layers.drop_empty(parts)
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
