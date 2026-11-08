@@ -123,7 +123,6 @@ struct HandActor: Sendable {
         let end = 0.05 + Double(pattern.count) * step + 0.1
         var c = CurveSet()
         for i in [1, 2, 3] { c.set("F\(i)", keys[i]! + [(end, 0)]) }
-        c.set("W", [(0, 0)] + Keys.oscillate(0.05, end - 0.05, 4 * step, 0.08) + [(end, 0)])
         return MotionSpec("flute", end, c)
     }
 
@@ -248,7 +247,8 @@ struct HandActor: Sendable {
             fingers[i] = rest + amp * sin(2 * Double.pi * time / 3.4 - 0.55 * Double(i) + phase)
         }
         spread = 0.08 * sin(2 * Double.pi * time / 4.6 + 1.1 + phase)
-        wrist = (holds ? 0.03 : 0.09) * sin(2 * Double.pi * time / 5.3 + phase)
+        let sway = mode.map(MotionProfile.twoHanded.contains) == true ? 0.0 : (holds ? 0.03 : 0.09)
+        wrist = sway * sin(2 * Double.pi * time / 5.3 + phase)
 
         if let previousArm {
             let vel = (arm - previousArm) / max(dt, 1e-6)

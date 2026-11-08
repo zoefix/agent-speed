@@ -8,7 +8,7 @@ springs in springs.py add the overshoot, so motion rolls out from the shoulder t
 import math
 
 from .curves import Motion, oscillate
-from .profile import POSE_HAND_SIDES
+from .profile import POSE_HAND_SIDES, TWO_HANDED
 
 FINGERS = 5
 
@@ -75,7 +75,7 @@ def drum(beat, bars=2):
 
 def flute(beat):
     """Fingering a transverse flute: index, middle and ring fingers lift and press through a fixed tune, half a beat
-    per note, the wrist rocking with the phrase."""
+    per note. The wrist stays put, so the flute it holds with the head never swings into the mouth."""
     pattern = ((1,), (1, 2), (2, 3), (1, 3), (2,), (1, 2, 3), (3,), (1, 2))
     step = 0.5 * beat
     curves = {f"F{i}": [(0, 0)] for i in (1, 2, 3)}
@@ -87,7 +87,6 @@ def flute(beat):
     end = 0.05 + len(pattern) * step + 0.1
     for keys in curves.values():
         keys.append((end, 0))
-    curves["W"] = [(0, 0)] + oscillate(0.05, end - 0.05, 4 * step, 0.08) + [(end, 0)]
     return Motion("flute", end, curves)
 
 
@@ -175,7 +174,8 @@ class HandActor:
         out = {f"Finger.{s}.{i}": rest + (0.04 if self.holds else 0.07) * math.sin(
             2 * math.pi * time / 3.4 - 0.55 * i + self.phase) for i in range(FINGERS)}
         out[f"Spread.{s}"] = 0.08 * math.sin(2 * math.pi * time / 4.6 + 1.1 + self.phase)
-        out[f"Wrist.{s}"] = (0.03 if self.holds else 0.09) * math.sin(2 * math.pi * time / 5.3 + self.phase)
+        sway = 0.0 if self.mode in TWO_HANDED else (0.03 if self.holds else 0.09)
+        out[f"Wrist.{s}"] = sway * math.sin(2 * math.pi * time / 5.3 + self.phase)
 
         if self.prev_arm is not None:
             vel = (arm - self.prev_arm) / max(dt, 1e-6)

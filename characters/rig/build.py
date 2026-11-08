@@ -13,6 +13,7 @@ from pathlib import Path
 
 import numpy as np
 
+from ..reference.motions.profile import AT_MOUTH
 from . import appendages, atlas, hands, layers, mesh, package, params, pose, skeleton, variants
 
 
@@ -208,6 +209,11 @@ def main(argv=None):
             object_attach[name] = "lower"
     if follow and "prop" in object_attach:
         object_attach["prop"] = follow
+    if character.get("motion", {}).get("poseHands", {}).get(args.band) in AT_MOUTH:
+        # An instrument at the lips goes with the head; the director holds head and arms still while it plays.
+        for name, bone in object_attach.items():
+            if bone.split(".")[0] in ("hand", "forearm"):
+                object_attach[name] = "head"
     lm["objectSide"] = object_side
 
     loaded = []

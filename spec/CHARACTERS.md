@@ -230,7 +230,7 @@ in turn with a glance; **floatbob** (3.4 s, `PosY`): drifting as if under water,
 weight on one hip, a shrug.
 
 Hand sets of the profiles (`motions/hands.py`): **flute** (fingerings of three fingers every half beat, the wrist
-rocking), **fanflutter** (the hand holding the object waves it three times, a 0.6 s wave), **abacus** (the index flicks beads every half
+still), **fanflutter** (the hand holding the object waves it three times, a 0.6 s wave), **abacus** (the index flicks beads every half
 beat, at least 0.24 s apart, the thumb every other one), **sleeveflop** (hands flopping in long sleeves),
 **ripple** (a slow finger ripple). `poseHands` sets play on both hands (flute, sleeveflop, ripple), on the hand
 holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, flex, fan, count, drum).
@@ -238,7 +238,9 @@ holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, f
 `Lift.` and `Bend.` parameter keeps its default after the groove and the action (before the hands and the springs),
 so the hands never slide along the instrument and the body sways and bobs with both of them. The flute is also played
 at the lips: `AngleX`, `AngleY` and `AngleZ` keep their defaults too (after the idle head drift, before the springs),
-so the face never slides along the flute and the mouth never swallows it.
+so the face never slides along the flute and the mouth never swallows it. The build ties a held object to the `head`
+in a band whose `poseHands` set is played at the lips, the flute set rocks no wrist, and a hand in a two-handed set has
+no idle wrist sway: head, hands and flute all ride on the chest, and only the fingers move on the keys.
 
 Appendages move at rest too: `TailSwish += (0.18 + 0.3 s) · sway · sin(π · beat phase + 0.5)` and `WingFlap +=
 0.12 · sin(2π · breath phase)`, each scaled by `1 − w` while an action of weight `w` drives the same parameter and
