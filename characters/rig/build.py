@@ -97,11 +97,18 @@ def prop_hint(hints, band):
 
 
 def object_bone(layer, lm):
-    """The bone a held object follows: the hand nearest it, or its forearm when that hand has no rig."""
-    bone = skeleton.attach_object(layer, lm)
-    if bone and bone.split(".", 1)[1] in lm["hands"]:
-        return "hand." + bone.split(".", 1)[1]
-    return bone
+    """The bone an object follows: the hand holding it (within 0.6 face widths of it; for a prop, the hand nearest
+    it), or its forearm when that hand has no rig; an object no hand holds goes with the body, the hips below the
+    waist and the chest above."""
+    if layer.name.startswith("prop"):
+        bone = skeleton.attach_object(layer, lm)
+        side = bone.split(".", 1)[1] if bone else None
+    else:
+        side = skeleton.holding_side(layer, lm, 0.6 * lm["faceWidth"])
+    if side is None:
+        ys = np.nonzero(layer.alpha > 0.3)[0]
+        return "lower" if len(ys) and ys.mean() > lm["waist"][1] else "chest"
+    return f"hand.{side}" if side in lm["hands"] else f"forearm.{side}"
 
 
 def ordered_parts(base, loaded):
@@ -163,7 +170,7 @@ def main(argv=None):
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
-    parts = layers.drop_empty(layers.split_by_arms(parts, arm_joints))
+    parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints)))
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
@@ -190,11 +197,12 @@ def main(argv=None):
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)
     tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones, hints)
+    held = sorted(((float(p.alpha.sum()), object_bone(p, lm)) for p in parts if p.tag == "objects"), reverse=True)
+    object_side = next((bone.split(".", 1)[1] for _, bone in held if bone.split(".")[0] in ("hand", "forearm")), None)
     object_attach = {p.name: object_bone(p, lm) for p in parts if p.tag == "objects"}
-    first = object_attach.get("objects", next(iter(object_attach.values()), None))
-    object_side = first.split(".", 1)[1] if first else None
-    if hints.get("staticObjects") and "objects" in object_attach:
-        object_attach["objects"] = "lower"
+    for name in object_attach:
+        if hints.get("staticObjects") and not name.startswith("prop"):
+            object_attach[name] = "lower"
     if follow and "prop" in object_attach:
         object_attach["prop"] = follow
     lm["objectSide"] = object_side

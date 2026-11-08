@@ -122,6 +122,31 @@ def take_prop(layers, mask, reference, name="prop", grow=2, reach=15, share=0.6)
     return layers[:slot] + [Layer(name, "objects", rgba)] + layers[slot:]
 
 
+def split_objects(layers, min_share=0.05, bridge=4):
+    """Splits each objects layer the split made (not a prop) into its separate pieces (gaps up to 2 * `bridge` px
+    closed, pieces of at least `min_share` of the layer; smaller bits join the nearest piece), so a fan in one hand
+    and a purse in the other, or hanging from the waist, can each follow their own holder."""
+    out = []
+    for layer in layers:
+        if layer.tag != "objects" or layer.name.startswith("prop"):
+            out.append(layer)
+            continue
+        solid = layer.alpha > 0.3
+        labels, count = ndimage.label(ndimage.binary_closing(solid, iterations=bridge) | solid)
+        sizes = np.asarray(ndimage.sum(solid, labels, range(1, count + 1))) if count else np.zeros(0)
+        big = [i + 1 for i, size in enumerate(sizes) if size >= min_share * sizes.sum()]
+        if len(big) < 2:
+            out.append(layer)
+            continue
+        _, (iy, ix) = ndimage.distance_transform_edt(~np.isin(labels, big), return_indices=True)
+        piece = labels[iy, ix]
+        for k, i in enumerate(big):
+            rgba = layer.rgba.copy()
+            rgba[..., 3] = np.where(piece == i, rgba[..., 3], 0.0)
+            out.append(Layer(layer.name if k == 0 else f"{layer.name}{k + 1}", layer.tag, rgba))
+    return out
+
+
 def drop_empty(layers, threshold=0.12):
     """Layers left with nothing solid once the art is painted onto its owners (a faint nose the face covers) or split
     by the arms (a sleeve whose other half went with a held doll)."""

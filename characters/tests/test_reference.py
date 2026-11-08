@@ -645,6 +645,24 @@ class PaperTests(unittest.TestCase):
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
 
 
+class ObjectPieceTests(unittest.TestCase):
+    def test_a_fan_in_one_hand_and_a_purse_at_the_waist_part_ways(self):
+        from characters.rig.layers import Layer, split_objects
+        from characters.rig.skeleton import holding_side
+        rgba = np.zeros((200, 200, 4), np.float32)
+        rgba[20:60, 20:60, 3] = 1
+        rgba[140:180, 140:180, 3] = 1
+        rgba[62:64, 62:64, 3] = 1
+        pieces = split_objects([Layer("objects", "objects", rgba)])
+        self.assertEqual([p.name for p in pieces], ["objects", "objects2"])
+        self.assertEqual(pieces[0].alpha[63, 63], 1.0)
+        self.assertEqual(pieces[1].alpha[63, 63], 0.0)
+        arms = {"left": {"wrist": (10, 70), "tip": (30, 60)}, "right": {"wrist": (190, 20), "tip": (180, 10)}}
+        lm = {"arms": arms, "hands": {}}
+        self.assertEqual(holding_side(pieces[0], lm, 20), "left")
+        self.assertIsNone(holding_side(pieces[1], lm, 20))
+
+
 class PropHintTests(unittest.TestCase):
     def test_a_prop_follows_the_hand_unless_it_names_a_body_bone(self):
         from characters.rig.build import prop_hint

@@ -329,6 +329,28 @@ def skirt_weights(y, lm, face_h):
     return [("chest", 1 - low), ("lower", low * (1 - w)), ("skirt", low * w * (1 - h)), ("skirtHem", low * w * h)]
 
 
+def holding_side(layer, lm, reach, samples=4000):
+    """The side whose hand holds an object piece: the hand (wrist to fingertips, or the hand's own keypoints) that
+    comes within `reach` of the piece, nearest first; None when no hand does (a purse hanging from the waist)."""
+    ys, xs = np.nonzero(layer.alpha > 0.3)
+    if not len(xs):
+        return None
+    step = max(1, len(xs) // samples)
+    pts = np.stack([xs[::step], ys[::step]], axis=1).astype(np.float64)
+    best, best_d = None, reach
+    for key, arm in lm["arms"].items():
+        if arm.get("wrist") is None or arm.get("tip") is None:
+            continue
+        d = float(_segment(pts, np.array(arm["wrist"], np.float64), np.array(arm["tip"], np.float64))[0].min())
+        hand = lm.get("hands", {}).get(key)
+        if hand is not None:
+            keys = np.concatenate([[hand["wrist"]], np.reshape(hand["fingers"], (-1, 2))]).astype(np.float64)
+            d = min(d, float(np.min(np.linalg.norm(pts[:, None, :] - keys[None, :, :], axis=2))))
+        if d < best_d:
+            best, best_d = key, d
+    return best
+
+
 def attach_object(layer, lm):
     """The forearm whose hand is closest to an object (a held book, fan, staff)."""
     if not lm["arms"]:
