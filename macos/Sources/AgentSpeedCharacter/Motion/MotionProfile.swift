@@ -70,7 +70,7 @@ public struct MotionProfile: Sendable, Equatable, Decodable {
     static let silentSkip: Set<String> = ["hum", "giggle"]
     /// Sets played on an instrument held in both hands: while one plays, the arms keep their pose so the hands never
     /// slide along the instrument, and the body carries both with it.
-    static let twoHanded: Set<String> = ["flute"]
+    static let twoHanded: Set<String> = ["flute", "grip"]
     /// Sets played on an instrument at the lips: the head keeps its pose too, so the lips never slide along it.
     static let atMouth: Set<String> = ["flute"]
     static let headParams = ["AngleX", "AngleY", "AngleZ"]

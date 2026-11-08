@@ -35,7 +35,8 @@
    "flex"
   ],
   "poseHands": {
-   "cruise": "abacus"
+   "cruise": "abacus",
+   "redline": "grip"
   }
  },
  "rig": {

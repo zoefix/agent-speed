@@ -390,6 +390,19 @@ class ProfileTests(unittest.TestCase):
             played.add(d.last_gesture)
         return played, frames
 
+    def test_both_hands_grip_an_object_held_up_and_the_arms_keep_their_pose(self):
+        fingers = tuple(f"Finger.{side}.{i}" for side in ("left", "right") for i in range(5))
+        d = Director(body_params(*fingers), arm_out="right", arm_book="left", orb=-1.0,
+                     profile={"poseHands": {"idle": "grip"}})
+        played = set()
+        for n in range(60 * 20):
+            d.set_level(0)
+            values = d.update(1 / 60)
+            for side in ("left", "right"):
+                self.assertEqual(values[f"Arm.{side}"], 0.0)
+            played |= {h.action.name for h in d.hands if h.action is not None}
+        self.assertEqual(played, {"grip"})
+
     def test_the_head_keeps_still_while_a_flute_is_at_the_lips(self):
         fingers = tuple(f"Finger.{side}.{i}" for side in ("left", "right") for i in range(5))
         _, frames = self.play({"poseHands": {"idle": "flute"}}, seconds=20, extra=fingers)
@@ -694,6 +707,17 @@ class PaperTests(unittest.TestCase):
         self.assertTrue(paper(ref, loose, covered=np.ones((60, 60), bool))[30, 30])
         self.assertTrue(paper(ref, np.zeros((60, 60), np.float32))[0, 0])
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
+
+
+class EyePairTests(unittest.TestCase):
+    def test_the_open_eye_of_a_wink_takes_its_side(self):
+        from characters.rig.layers import Layer, split_pairs
+        rgba = np.zeros((100, 200, 4), np.float32)
+        rgba[40:50, 40:60, 3] = 1
+        arms = np.zeros((100, 200, 4), np.float32)
+        arms[60:90, 20:40, 3] = 1
+        parts = split_pairs([Layer("irides", "irides", rgba), Layer("handwear", "handwear", arms)], 100)
+        self.assertEqual([(p.name, p.side) for p in parts], [("irides.left", "left"), ("handwear", None)])
 
 
 class ObjectPieceTests(unittest.TestCase):

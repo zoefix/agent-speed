@@ -201,7 +201,8 @@ def drop_empty(layers, threshold=0.12):
 
 
 def split_pairs(layers, center_x, min_share=0.03):
-    """Splits paired parts (arms, eyes, ears) into image-left and image-right layers."""
+    """Splits paired parts (arms, eyes, ears) into image-left and image-right layers. A paired part found on one side
+    only (the open eye of a wink) takes that side, so it follows that eye; arms left whole go to split_by_arms."""
     out = []
     for layer in layers:
         if layer.tag not in PAIRED:
@@ -217,7 +218,11 @@ def split_pairs(layers, center_x, min_share=0.03):
         left_ids = [k for k, (_, cx) in zip(keep, centers) if cx < center_x]
         right_ids = [k for k, (_, cx) in zip(keep, centers) if cx >= center_x]
         if not left_ids or not right_ids:
-            out.append(layer)
+            if layer.tag == "handwear":
+                out.append(layer)
+            else:
+                side = "left" if left_ids else "right"
+                out.append(Layer(f"{layer.name}.{side}", layer.tag, layer.rgba, side))
             continue
         left_seed = np.isin(labels, left_ids)
         right_seed = np.isin(labels, right_ids)

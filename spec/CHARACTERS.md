@@ -236,9 +236,10 @@ weight on one hip, a shrug.
 Hand sets of the profiles (`motions/hands.py`): **flute** (fingerings of three fingers every half beat, the wrist
 still), **fanflutter** (the hand holding the object waves it three times, a 0.6 s wave), **abacus** (the index flicks beads every half
 beat, at least 0.24 s apart, the thumb every other one), **sleeveflop** (hands flopping in long sleeves),
-**ripple** (a slow finger ripple). `poseHands` sets play on both hands (flute, sleeveflop, ripple), on the hand
+**ripple** (a slow finger ripple), **grip** (both hands holding one object up, fingers 1–4 tightening by 0.1 over two
+beats). `poseHands` sets play on both hands (flute, sleeveflop, ripple, grip), on the hand
 holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, flex, fan, count, drum).
-**flute** holds an instrument in both hands: while the pose's set is flute, every `Arm.`, `Forearm.`, `Shoulder.`,
+**flute** and **grip** hold an object in both hands: while the pose's set is one of them, every `Arm.`, `Forearm.`, `Shoulder.`,
 `Lift.` and `Bend.` parameter keeps its default after the groove and the action (before the hands and the springs),
 so the hands never slide along the instrument and the body sways and bobs with both of them. The flute is also played
 at the lips: `AngleX`, `AngleY` and `AngleZ` keep their defaults too (after the idle head drift, before the springs),

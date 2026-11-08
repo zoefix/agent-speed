@@ -165,9 +165,18 @@ struct HandActor: Sendable {
         return MotionSpec("ripple", 2.0, c)
     }
 
+    /// Both hands holding one object up: the fingers tighten a little on every other beat, the wrists still, so
+    /// the hands never leave it and the body sways it from side to side.
+    static func grip(_ beat: Double) -> MotionSpec {
+        let d = 2 * beat
+        var c = CurveSet()
+        for i in [1, 2, 3, 4] { c.set("F\(i)", [(0, 0), (0.35 * d, 0.1), (0.6 * d, 0.1), (d, 0)]) }
+        return MotionSpec("grip", d, c)
+    }
+
     /// Every hand set by name (motions/hands.py, make).
     static let sets = ["tap", "regrip", "lift", "flex", "fan", "count", "drum", "flute", "fanflutter", "abacus",
-                       "sleeveflop", "ripple"]
+                       "sleeveflop", "ripple", "grip"]
 
     static func make(_ name: String, _ beat: Double) -> MotionSpec {
         switch name {
@@ -182,6 +191,7 @@ struct HandActor: Sendable {
         case "fanflutter": fanflutter(beat)
         case "abacus": abacus(beat)
         case "sleeveflop": sleeveflop(beat)
+        case "grip": grip(beat)
         default: ripple(beat)
         }
     }
@@ -189,7 +199,7 @@ struct HandActor: Sendable {
     /// Which hands a pose's hand set plays on: both, the hand holding the object, or the free one.
     static func modeSides(_ name: String) -> String {
         switch name {
-        case "flute", "sleeveflop", "ripple": "both"
+        case "flute", "sleeveflop", "ripple", "grip": "both"
         case "fanflutter", "tap", "regrip", "lift": "holder"
         default: "free"
         }

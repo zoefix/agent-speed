@@ -18,6 +18,8 @@ VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
 VARIANT_FOREARM_RANGE = 90.0
 BEND_RANGE = 90.0
+# How far the irises travel at EyeBall ±1, in face widths: a small glance, never sliding off to show the white.
+IRIS_TRAVEL = (0.017, 0.009)
 POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.17, 0.08
 
 
@@ -87,8 +89,8 @@ def build(lm, bone_names):
             drivers.append(linear(f"Shoulder.{side}", f"shoulder.{side}", "y", -0.07 * fw))
         if has(f"eye.{side}"):
             drivers.append(drive(f"EyeOpen.{side}", f"eye.{side}", "scaleY", [(0, -0.9), (1, 0)]))
-            drivers.append(linear("EyeBallX", f"iris.{side}", "x", 0.028 * fw))
-            drivers.append(linear("EyeBallY", f"iris.{side}", "y", 0.018 * fw))
+            drivers.append(linear("EyeBallX", f"iris.{side}", "x", IRIS_TRAVEL[0] * fw))
+            drivers.append(linear("EyeBallY", f"iris.{side}", "y", IRIS_TRAVEL[1] * fw))
 
     physics = []
     for side, (upper, lower) in ARM_RANGES.items():

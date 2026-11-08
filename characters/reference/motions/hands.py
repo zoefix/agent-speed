@@ -127,11 +127,19 @@ def ripple(beat):
     return Motion("ripple", 2.0, {"S": [(0, 0), (2.0, 0)]})
 
 
+def grip(beat):
+    """Both hands holding one object up: the fingers tighten a little on every other beat, the wrists still, so the
+    hands never leave it and the body sways it from side to side."""
+    d = 2 * beat
+    squeeze = [(0, 0), (0.35 * d, 0.1), (0.6 * d, 0.1), (d, 0)]
+    return Motion("grip", d, {f"F{i}": squeeze for i in (1, 2, 3, 4)})
+
+
 def make(name, beat):
     return {"tap": lambda: tap(beat), "regrip": regrip, "lift": lift, "flex": flex, "fan": fan,
             "count": lambda: count(beat), "drum": lambda: drum(beat), "flute": lambda: flute(beat),
             "fanflutter": lambda: fanflutter(beat), "abacus": lambda: abacus(beat),
-            "sleeveflop": lambda: sleeveflop(beat), "ripple": lambda: ripple(beat)}[name]()
+            "sleeveflop": lambda: sleeveflop(beat), "ripple": lambda: ripple(beat), "grip": lambda: grip(beat)}[name]()
 
 
 class HandActor:

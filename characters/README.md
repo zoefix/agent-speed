@@ -9,8 +9,9 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
 
 - `rig/` builds a package from a [See-Through](https://github.com/shitagaki-lab/see-through) PSD and the original
   illustration: semantic draw order, the original pixels reprojected onto the visible layer (the rest pose equals the
-  art), left/right split of arms and eyes, underlays grown beneath moving parts, meshes, bones, skinning weights,
-  parameters and physics chains.
+  art), left/right split of arms and eyes (the one open eye of a wink takes its side, so it turns with the head),
+  underlays grown beneath moving parts, meshes, bones, skinning weights, parameters and physics chains. The irises
+  travel 0.017 face widths across and 0.009 up and down at full glance, a small glance that never bares the white.
 - Pose and expression variants are ChatGPT images of the same character (a raised hand, a peace sign, a smile),
   aligned to the base art and split by See-Through. Their arms and faces become extra parts that swap in; the old and
   new arm turn to meet halfway so the swap is hidden. What the variants show behind the arms replaces See-Through's
