@@ -115,32 +115,36 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     return added
 
 
-def attach_fragments(parts, reference, bare=None, figure=None, min_share=0.0005, touch=0.15, enclosed=0.9, ring=3,
-                     min_figure=0.5, max_chroma=0.15):
+def attach_fragments(parts, reference, bare=None, figure=None, min_share=0.0005, touch=12, enclosed=0.9, ring=3,
+                     reach=12, min_figure=0.5, max_chroma=0.15):
     """Gives each blob too small for recover_missing that sticks out of the layers (not enclosed: fill_holes takes
-    those) to the layer holding most of a ring around it, when that is at least `touch` of the ring: See-Through
-    cuts parts at the edge of the box it splits the head in, so the top of a crown or a hair ornament belongs to no
-    layer. Opaque where it meets layers, as opaque as the art is dark where it meets the paper. Grey blobs the matte
-    calls background stay out, as in recover_missing. Returns how many it attached."""
+    those) to the layer holding most of a ring around it, when that layer holds at least `touch` pixels of the ring
+    (a long feather cut at its root meets the layer only there): See-Through cuts parts at the edge of the box it
+    splits the head in, so the top of a crown or a hair ornament belongs to no layer. The piece is the whole patch
+    of uncovered art the blob lies in (thin feather tips too), within `reach` px of the blob; opaque, and as opaque
+    as the art is dark on its 1 px rim against the paper. Grey blobs the matte calls background stay out, as in
+    recover_missing. Returns how many it attached."""
     labels, sizes, covered, art = _missing(parts, reference, bare)
     h, w = labels.shape
     small = _drawn([i + 1 for i, s in enumerate(sizes) if s < min_share * h * w], labels, reference, figure,
                    min_figure, max_chroma)
     darkness = np.clip((1 - reference.min(axis=2)) / 0.3, 0, 1)
+    loose, _ = ndimage.label(art & ~covered)
     objects = ndimage.find_objects(labels)
     attached = 0
     for i in small:
-        box = _around(objects[i - 1], 3 + 2 * ring, (h, w))
-        piece = ndimage.binary_dilation(labels[box] == i, SQUARE, iterations=3) & ~covered[box] & art[box]
+        box = _around(objects[i - 1], reach, (h, w))
+        ids = np.unique(loose[box][labels[box] == i])
+        piece = np.isin(loose[box], ids[ids > 0])
         band = ndimage.binary_dilation(piece, SQUARE, iterations=ring) & ~piece
         if covered[box][band].mean() >= enclosed:
             continue
-        held = [(layer.alpha[box][band] > 0.5).mean() for layer in parts]
+        held = [int((layer.alpha[box][band] > 0.5).sum()) for layer in parts]
         best = int(np.argmax(held))
         if held[best] < touch:
             continue
-        open_side = ndimage.binary_dilation(~(piece | covered[box]), SQUARE, iterations=ring)
-        alpha = np.where(open_side, darkness[box], 1.0)
+        rim = ndimage.binary_dilation(~(art[box] | covered[box]), SQUARE, iterations=1)
+        alpha = np.where(rim, darkness[box], 1.0)
         view = parts[best].rgba[box]
         view[..., :3] = np.where(piece[..., None], reference[box], view[..., :3])
         view[..., 3] = np.where(piece, np.maximum(view[..., 3], alpha), view[..., 3])

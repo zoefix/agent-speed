@@ -123,9 +123,10 @@ Such a piece leaves its layer and joins the prop. Like any object, the prop foll
   chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
   the floor and stays out; a coloured one the matte also misses (a hologram) stays in. A smaller blob (the same
   grey rule applies) that sticks out of the layers, its 3 px ring under 90 % covered, goes to the layer holding most
-  of that ring when that is at least 15 % of it: See-Through cuts parts at the edge of the box it splits the head in,
-  so the top of a crown belongs to no layer. It is opaque where it meets layers and as opaque as the art is dark
-  (darkness / 0.3) within 3 px of the paper. Then every remaining patch of
+  of that ring when that is at least 12 px of it (a long feather meets the layer only at its cut root): See-Through
+  cuts parts at the edge of the box it splits the head in, so the top of a crown belongs to no layer. The piece is
+  the whole patch of uncovered art the blob lies in, within 12 px of it, so thin tips come along; it is opaque, and
+  as opaque as the art is dark (darkness / 0.3) on its 1 px rim against the paper. Then every remaining patch of
   the figure no layer covers (opacity above 0.5), up to 0.2 % of the canvas, whose 3 px surrounding ring is at least
   90 % covered goes to the lowest layer holding at least 15 % of that ring, opaque and painted from the art: a gap
   between belt straps shows the robe behind them instead of a white speck. Packs without the hint are built exactly
