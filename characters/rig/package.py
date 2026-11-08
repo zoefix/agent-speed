@@ -28,7 +28,8 @@ def write(out_dir, name, canvas, atlas, bones, params, drivers, physics, parts, 
         "variants": list(variants),
         "parts": parts,
     }
-    (out / "rig.json").write_text(json.dumps(doc, separators=(",", ":")))
+    # A NaN would make the whole pack unreadable to the players: fail the build instead.
+    (out / "rig.json").write_text(json.dumps(doc, separators=(",", ":"), allow_nan=False))
     return out / "rig.json"
 
 

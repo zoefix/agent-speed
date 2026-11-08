@@ -47,9 +47,14 @@ def find_arm(alpha, anchor=None):
         sy, sx = np.argwhere(crop)[np.argmin(np.hypot(*(np.argwhere(crop) - start).T))]
         start = (int(sy), int(sx))
     dist, _ = mcp.find_costs([start])
-    dist = np.where(crop, dist, np.nan)
+    # Pieces the path cannot reach (a held book drawn apart from the sleeve) take no part in the arm's length.
+    dist = np.where(crop & np.isfinite(dist), dist, np.nan)
     reach = float(np.nanmax(dist))
-    near = np.abs(dist - 0.5 * reach) < 0.04 * reach
+    off = np.abs(dist - 0.5 * reach)
+    near = off < 0.04 * reach
+    if not near.any():
+        # The path jumped a gap past the half way: the pixels closest to it.
+        near = off <= np.partition(off[np.isfinite(off)], 19)[19]
     ey, ex = np.nonzero(near)
     elbow = (x0 + ex.mean(), y0 + ey.mean())
     hy, hx = np.nonzero(dist > 0.9 * reach)
