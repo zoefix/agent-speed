@@ -197,23 +197,38 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35):
 FRONT_OF_TAIL = ("legwear", "bottomwear", "topwear")
 
 
-def _repaint_copy(layer, copy, close=15, pad=40):
-    """Repaints what `layer` drew of another part at `copy`: transparent outside the layer's own outline (its pixels
-    without the copy, closed by `close` px, holes filled), inpainted from its surroundings inside it."""
-    import cv2
+def _smooth_fill(rgb, known, sigmas=(2, 4, 8, 16, 32, 64)):
+    """Fills the pixels not `known` with a blur of the known ones, from fine to coarse: smooth colors from the
+    surroundings, without the streaks a diffusion inpaint draws across a large area."""
+    out = rgb.copy()
+    todo = ~known
+    weight = known.astype(np.float32)
+    for sigma in sigmas:
+        if not todo.any():
+            break
+        w = ndimage.gaussian_filter(weight, sigma)
+        filled = np.stack([ndimage.gaussian_filter(rgb[..., c] * weight, sigma) for c in range(3)], axis=-1)
+        ok = todo & (w > 1e-3)
+        out[ok] = filled[ok] / w[ok][:, None]
+        todo &= ~ok
+    return out
+
+
+def _repaint_copy(layer, copy, part, close=15, pad=40):
+    """Repaints what `layer` drew of another part at `copy`: filled smoothly from its surroundings inside the layer's
+    own outline (its pixels without the copy, closed by `close` px, holes filled), transparent outside it where the
+    `part` itself is opaque (so its soft rim never shows the backdrop at rest)."""
     h, w = copy.shape
     own = layer.alpha > 0.5
     outline = ndimage.binary_fill_holes(ndimage.binary_closing(own & ~copy, iterations=close))
     ys, xs = np.nonzero(copy)
     box = (slice(max(ys.min() - pad, 0), min(ys.max() + pad, h)), slice(max(xs.min() - pad, 0), min(xs.max() + pad, w)))
-    rgb = (np.clip(layer.rgba[box][..., :3], 0, 1) * 255).astype(np.uint8)
-    unknown = (copy | ~own)[box].astype(np.uint8) * 255
-    filled = cv2.inpaint(rgb, unknown, 7, cv2.INPAINT_TELEA).astype(np.float32) / 255
+    filled = _smooth_fill(layer.rgba[box][..., :3], (own & ~copy)[box])
     inside = (copy & outline)[box]
     view = layer.rgba[box]
     view[..., :3] = np.where(inside[..., None], filled, view[..., :3])
     view[..., 3] = np.where(inside, 1.0, view[..., 3])
-    layer.rgba[..., 3] = np.where(copy & ~outline, 0.0, layer.alpha)
+    layer.rgba[..., 3] = np.where(copy & ~outline & part, 0.0, layer.alpha)
 
 
 def tail_alone(layers, reference, share=0.5, min_px=2000):
@@ -240,12 +255,13 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
             continue
         if k > index and layer.tag in FRONT_OF_TAIL and (shown & overlap).sum() >= share * overlap.sum():
             covered.append(k)
-            _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02))
+            _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02), mask)
             repainted.append(layer.name)
         elif k < index:
             same = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail.rgba[..., :3]).mean(axis=2), 5) < 0.06
             if (same & overlap).sum() >= share * overlap.sum():
-                _repaint_copy(layer, ndimage.binary_dilation(same & overlap, iterations=2) & (layer.alpha > 0.02))
+                copy = ndimage.binary_dilation(same & overlap, iterations=2) & (layer.alpha > 0.02)
+                _repaint_copy(layer, copy, copy)
                 repainted.append(layer.name)
     if covered:
         layers = [layer for k, layer in enumerate(layers) if k != index]
@@ -411,11 +427,12 @@ def fill_hidden_legs(layers, solid=0.3, shade=10, edge=2, reach=6):
 
 
 def grow_underlays(layers, radius=10):
-    """Extends each layer under the opaque layers above it, so moving parts never open gaps."""
+    """Extends each layer under the opaque layers above it, so moving parts never open gaps. Not under a tail or
+    wings: they swing far off, and what grew under them would show as fragments of the layer's edge."""
     for i, layer in enumerate(layers):
         if layer.tag in NO_GROWTH or i == len(layers) - 1:
             continue
-        above = coverage(layers[i + 1:]) > 0.98
+        above = coverage([upper for upper in layers[i + 1:] if upper.tag not in ("tail", "wings")]) > 0.98
         solid = layer.alpha > 0.5
         if not solid.any():
             continue

@@ -170,8 +170,10 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel
   difference, 5 px box, under 0.06), the tail is what shows, so it moves to just above those layers. A layer drawn
   under the tail whose paint matches the tail's on at least half of their overlap holds a copy too (the back hair
-  under a tail curling up). Each such copy is repainted: transparent outside the layer's own outline (its pixels
-  without the copy, closed by 15 px, holes filled), inpainted (Telea, radius 7) from the layer around it inside.
+  under a tail curling up). Each such copy, grown by 2 px, is repainted: inside the layer's own outline (its pixels
+  without the copy, closed by 15 px, holes filled) it takes a blur of the layer around it, from fine to coarse
+  (Gaussian, sigma 2 to 64, normalized by the blurred coverage); outside it, it turns transparent, for a layer over
+  the tail only where the tail is opaque (its soft rim keeps the clothes behind it).
 - **Hidden legs**: every `legwear` pixel the layers above hide (opacity over 0.5) takes the color of the nearest leg
   pixel that shows (over 10 px below the layers above, 2 px inside the outline) and is opaque where See-Through's
   guess is over 0.3 (ramping to it below), within a 45-degree cone above or below that pixel (6 px wider); the rest of
