@@ -139,7 +139,8 @@ put and only stretches where it meets a moving arm.
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
   the face and `ears` beside it; when the split made no footwear, a blob reaching the bottom of the figure (within
   2 % of the canvas) that touches the legwear is a shoe, `footwear`, checked first so a shoe is never taken for the
-  tail; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
+  tail; a blob no larger than the footwear with at least 15 % of a 4 px ring on it (a calf above a kicked-up slipper)
+  is `legwear`; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
   chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
   the floor and stays out; a coloured one the matte also misses (a hologram) stays in. A smaller blob (the same
   grey rule applies) that sticks out of the layers, its 3 px ring under 90 % covered, goes to the layer holding most
