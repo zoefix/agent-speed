@@ -92,7 +92,7 @@ The rest pose (all defaults) reproduces the illustration exactly. Skinning may r
 
 `characters/rig/appendages.py` rigs tails, wings and animal ears from the See-Through layers. A character's spec
 (`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `recover`, `tail`,
-`wings`, `ears` (animal ears, found from the layers without a hint) and `staticObjects` (a held object that does not
+`wings`, `ears` (animal ears; horns and fins beside the head stay still without it) and `staticObjects` (a held object that does not
 move with the hand, such as a desk).
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
@@ -118,7 +118,7 @@ move with the hand, such as a desk).
 - **Wings**: per image side, the bone `wing.<side>` (parent the chest) pivots at the wing pixel nearest the spine
   point (neck x, chin + 0.45 × chin-to-waist); a vertex weighs `smoothstep(0.03, 0.15, distance / reach)` on the
   wing of its side, the rest the chest. `WingFlap` turns them ±14° (both rise for +1) and widens them by 8 %.
-- **Animal ears**: an `ears` layer whose mass sits above the face top + 0.25 face height is an animal ear; its bone
+- **Animal ears** (with the `ears` hint): an `ears` layer whose mass sits above the face top + 0.25 face height is an animal ear; its bone
   `ear.<side>` (parent the head) pivots at its base (the lowest 15 % of the ear). `EarTwitch.<side>` turns it ±12°
   outward for +1 and squashes it by 8 % (stretches it by 4 % for −1).
 

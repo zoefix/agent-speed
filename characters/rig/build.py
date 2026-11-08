@@ -31,8 +31,9 @@ def landmark_summary(lm):
     return json.loads(json.dumps(out, default=float))
 
 
-def add_appendages(parts, lm, bones):
-    """Finds the tail, the wings and animal ears, adds their bones and their landmarks to `lm`."""
+def add_appendages(parts, lm, bones, hints):
+    """Finds the tail, the wings and (with the `ears` hint) animal ears, adds their bones and their landmarks to
+    `lm`."""
     tail = next((p for p in parts if p.tag == "tail"), None)
     tail_lm = appendages.tail_landmarks(tail, parts, lm["waist"]) if tail is not None else None
     if tail_lm is not None:
@@ -48,7 +49,7 @@ def add_appendages(parts, lm, bones):
         bones.append(skeleton.Bone(f"wing.{side}", "chest", w["root"]))
     if wing_lm:
         lm["wings"] = wing_lm
-    ear_lm = appendages.animal_ears(parts, lm["face"])
+    ear_lm = appendages.animal_ears(parts, lm["face"]) if hints.get("ears") else {}
     for side, e in ear_lm.items():
         bones.append(skeleton.Bone(f"ear.{side}", "side", e["base"]))
     if ear_lm:
@@ -139,7 +140,7 @@ def main(argv=None):
     bones = skeleton.bones(lm)
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)
-    tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones)
+    tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones, hints)
     objects = next((p for p in parts if p.tag == "objects"), None)
     object_attach = skeleton.attach_object(objects, lm) if objects is not None else None
     if object_attach and object_attach.split(".", 1)[1] in lm["hands"]:
