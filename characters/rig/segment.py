@@ -67,19 +67,54 @@ def hand_mask(reference, hand, checkpoint):
     candidates = []
     for prompt in prompts:
         masks, scores, _ = predictor.predict(multimask_output=True, **prompt)
-        candidates += [(m, float(score), min(inside(m, palm), inside(m, tips)), inside(m, ring))
+        candidates += [(m, float(score), inside(m, palm), inside(m, tips), inside(m, ring))
                        for m, score in zip(masks, scores)]
     reach = float((pts.max(axis=0) - pts.min(axis=0)).max())
-    fitting = [c for c in candidates if c[1] >= 0.8 and c[2] >= 0.75 and c[3] <= 0.1
-               and 0.05 * size * size < c[0].sum() < 2.0 * reach * reach]
-    if not fitting:
-        return None
-    best = min(fitting, key=lambda c: c[0].sum())[0]
+    clean = [c for c in candidates if c[1] >= 0.8 and c[4] <= 0.1 and 0.05 * size * size < c[0].sum() < 2.0 * reach * reach]
+    fitting = [c for c in clean if min(c[2], c[3]) >= 0.75]
+    if fitting:
+        best = min(fitting, key=lambda c: c[0].sum())[0]
+    else:
+        # An object across the hand (a flute over the knuckles or the fingers) leaves part of it outside every mask;
+        # parted fingertips are asked for below.
+        parted = [c for c in clean if max(c[2], c[3]) >= 0.75 and min(c[2], c[3]) >= 0.5]
+        if not parted:
+            return None
+        best = max(parted, key=lambda c: (round(c[2] + c[3], 2), -c[0].sum()))[0]
     best = ndimage.binary_opening(ndimage.binary_fill_holes(best), iterations=1)
     labels, count = ndimage.label(best)
     if count > 1:
         sizes = ndimage.sum(best, labels, range(1, count + 1))
         best = labels == (int(np.argmax(sizes)) + 1)
+    best |= _parted_fingers(predictor, best, hand, origin, ring, inside, crop)
     out = np.zeros((h, w), bool)
     out[y0:y1, x0:x1] = best
     return out
+
+
+def _parted_fingers(predictor, best, hand, origin, ring, inside, crop, near_color=30.0, touch=0.05):
+    """The fingertips an object across the hand (a flute) parts from the palm: SAM is asked for them on their own.
+    The answer counts only when it is truly parted (at most `touch` of its rim on the palm) and has the hand's color
+    (a book's spine behind curled fingers does not)."""
+    size = hand["size"]
+    near = ndimage.binary_dilation(best, iterations=3)
+    parted = [f for f in hand["fingers"] if inside(near, f[3][None]) < 0.5]
+    if not parted:
+        return np.zeros_like(best)
+    tips = np.array([q for f in parted for q in (f[2], 0.5 * (f[2] + f[3]), f[3])])
+    box = np.concatenate([tips.min(axis=0) - 0.12 * size, tips.max(axis=0) + 0.12 * size]) - np.tile(origin, 2)
+    masks, scores, _ = predictor.predict(box=box, point_coords=np.concatenate([tips, ring]) - origin,
+                                         point_labels=np.concatenate([np.ones(len(tips)), np.zeros(len(ring))]),
+                                         multimask_output=True)
+    fitting = [m for m, score in zip(masks, scores) if score >= 0.7 and inside(m, tips) >= 0.6
+               and inside(m, ring) <= 0.1 and m.sum() < 0.6 * size * size]
+    if not fitting:
+        return np.zeros_like(best)
+    tips_mask = min(fitting, key=lambda m: m.sum()) & ~best
+    if not tips_mask.any():
+        return np.zeros_like(best)
+    rim = ndimage.binary_dilation(tips_mask, iterations=2) & ~tips_mask
+    rgb = crop.astype(np.float32)
+    color = np.linalg.norm(np.median(rgb[tips_mask], axis=0) - np.median(rgb[best], axis=0))
+    parted = (rim & best).sum() <= touch * rim.sum()
+    return tips_mask if parted and color <= near_color else np.zeros_like(best)

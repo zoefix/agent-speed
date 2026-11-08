@@ -110,6 +110,9 @@ def split(layer, hand, mask=None, reference=None):
         part = np.zeros_like(layer.rgba)
         part[..., :3] = np.where(rim[..., None], layer.rgba[..., :3], reference)
         soft = np.maximum(ndimage.gaussian_filter(inside.astype(np.float32), 0.6), 0.5)
+        # Only the outline against the paper is soft; where the arm goes on (the cuff), the arm is cut away under the
+        # hand, so a soft edge there would let the desktop through.
+        soft = np.where(ndimage.binary_dilation((layer.alpha > 0.5) & ~inside, iterations=2), 1.0, soft)
         part[..., 3] = np.where(inside, np.where(rim, layer.alpha, soft), 0.0)
     else:
         inside = _capsules(shape, hand) & past & (layer.alpha > 0.01)

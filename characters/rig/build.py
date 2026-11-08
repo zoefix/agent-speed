@@ -125,11 +125,13 @@ def main(argv=None):
     layers.reproject(parts, reference)
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
+    arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
+    parts = layers.split_by_arms(parts, arm_joints)
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
     lm = skeleton.landmarks(parts)
-    for side, joints in pose.arms(args.reference, size, (fx0 + fx1) / 2).items():
+    for side, joints in arm_joints.items():
         if side in lm["arms"]:
             lm["arms"][side] = skeleton.arm_from_joints(joints)
     lm["hands"] = {}

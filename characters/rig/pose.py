@@ -104,15 +104,17 @@ def arms(image_path, size, center_x, matrix=None):
 
 
 def hands(image_path, size, center_x, matrix=None):
-    """{"left"|"right": 21 canvas points [wrist, thumb x4, index x4, middle x4, ring x4, pinky x4]} by image side."""
+    """{"left"|"right": 21 canvas points [wrist, thumb x4, index x4, middle x4, ring x4, pinky x4]} by the image side
+    of the hand's shoulder, so a hand reaching across the body (both hands on a flute) stays with its own arm."""
     found = _detect(str(image_path))
     if found is None:
         return {}
-    _, _, image_size = found
+    k, _, image_size = found
     to_canvas = _to_canvas(image_size, size, matrix)
     out = {}
     for base, points in _refined_hands(str(image_path)).items():
         pts = cv2.transform(np.float64([points]), to_canvas)[0]
-        side = "left" if pts[0][0] < center_x else "right"
+        shoulder = cv2.transform(np.float64([[k[SHOULDERS[HANDS.index(base)]]]]), to_canvas)[0][0]
+        side = "left" if shoulder[0] < center_x else "right"
         out[side] = pts
     return out

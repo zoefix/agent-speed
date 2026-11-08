@@ -116,6 +116,37 @@ def split_pairs(layers, center_x, min_share=0.03):
     return out
 
 
+def _segment_distance(xx, yy, a, b):
+    ab = b - a
+    t = np.clip(((xx - a[0]) * ab[0] + (yy - a[1]) * ab[1]) / max(float(ab @ ab), 1e-9), 0, 1)
+    return np.hypot(xx - (a[0] + t * ab[0]), yy - (a[1] + t * ab[1]))
+
+
+def split_by_arms(layers, arms):
+    """Splits the arm layer that split_pairs left whole (both sleeves drawn as one blob, as when both hands hold a
+    flute on one side) by the nearer of the two arms the pose model found (shoulder, elbow, wrist and half a forearm
+    past the wrist for the hand)."""
+    if not {"left", "right"} <= set(arms):
+        return layers
+    out = []
+    for layer in layers:
+        if layer.tag != "handwear" or layer.side is not None:
+            out.append(layer)
+            continue
+        yy, xx = np.mgrid[0:layer.alpha.shape[0], 0:layer.alpha.shape[1]].astype(np.float32)
+        dist = {}
+        for side in ("left", "right"):
+            shoulder, elbow, wrist = (np.asarray(arms[side][k], np.float64) for k in ("shoulder", "elbow", "wrist"))
+            reach = wrist + 0.5 * (wrist - elbow)
+            dist[side] = np.minimum.reduce([_segment_distance(xx, yy, a, b)
+                                            for a, b in ((shoulder, elbow), (elbow, wrist), (wrist, reach))])
+        for side, mask in (("left", dist["left"] <= dist["right"]), ("right", dist["left"] > dist["right"])):
+            rgba = layer.rgba.copy()
+            rgba[..., 3] = np.where(mask, rgba[..., 3], 0)
+            out.append(Layer(f"{layer.name}.{side}", layer.tag, rgba, side))
+    return out
+
+
 def grow_underlays(layers, radius=10):
     """Extends each layer under the opaque layers above it, so moving parts never open gaps."""
     for i, layer in enumerate(layers):
