@@ -92,10 +92,10 @@ def flute(beat):
 
 
 def fanflutter(beat):
-    """Quick flutters of the wrist holding a fan, then a short rest."""
-    d = 0.9
-    curves = {"W": [(0, 0)] + oscillate(0.05, d - 0.05, 0.18, 0.35) + [(d, 0)],
-              "S": [(0, 0), (0.2, 0.15), (0.7, 0.15), (d, 0)]}
+    """Three unhurried waves of the wrist holding a fan, then a short rest."""
+    d = 1.9
+    curves = {"W": [(0, 0)] + oscillate(0.1, d - 0.1, 0.6, 0.22) + [(d, 0)],
+              "S": [(0, 0), (0.3, 0.15), (d - 0.3, 0.15), (d, 0)]}
     return Motion("fanflutter", d + 0.5 * beat, curves)
 
 

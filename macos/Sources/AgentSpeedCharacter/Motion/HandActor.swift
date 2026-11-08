@@ -128,10 +128,10 @@ struct HandActor: Sendable {
     }
 
     static func fanflutter(_ beat: Double) -> MotionSpec {
-        let d = 0.9
+        let d = 1.9
         var c = CurveSet()
-        c.set("W", [(0, 0)] + Keys.oscillate(0.05, d - 0.05, 0.18, 0.35) + [(d, 0)])
-        c.set("S", [(0, 0), (0.2, 0.15), (0.7, 0.15), (d, 0)])
+        c.set("W", [(0, 0)] + Keys.oscillate(0.1, d - 0.1, 0.6, 0.22) + [(d, 0)])
+        c.set("S", [(0, 0), (0.3, 0.15), (d - 0.3, 0.15), (d, 0)])
         return MotionSpec("fanflutter", d + 0.5 * beat, c)
     }
 

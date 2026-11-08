@@ -221,7 +221,7 @@ in turn with a glance; **floatbob** (3.4 s, `PosY`): drifting as if under water,
 weight on one hip, a shrug.
 
 Hand sets of the profiles (`motions/hands.py`): **flute** (fingerings of three fingers every half beat, the wrist
-rocking), **fanflutter** (the hand holding the object flutters it), **abacus** (the index flicks beads every half
+rocking), **fanflutter** (the hand holding the object waves it three times, a 0.6 s wave), **abacus** (the index flicks beads every half
 beat, at least 0.24 s apart, the thumb every other one), **sleeveflop** (hands flopping in long sleeves),
 **ripple** (a slow finger ripple). `poseHands` sets play on both hands (flute, sleeveflop, ripple), on the hand
 holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, flex, fan, count, drum).
