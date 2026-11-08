@@ -236,7 +236,9 @@ beat, at least 0.24 s apart, the thumb every other one), **sleeveflop** (hands f
 holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, flex, fan, count, drum).
 **flute** holds an instrument in both hands: while the pose's set is flute, every `Arm.`, `Forearm.`, `Shoulder.`,
 `Lift.` and `Bend.` parameter keeps its default after the groove and the action (before the hands and the springs),
-so the hands never slide along the instrument and the body sways and bobs with both of them.
+so the hands never slide along the instrument and the body sways and bobs with both of them. The flute is also played
+at the lips: `AngleX`, `AngleY` and `AngleZ` keep their defaults too (after the idle head drift, before the springs),
+so the face never slides along the flute and the mouth never swallows it.
 
 Appendages move at rest too: `TailSwish += (0.18 + 0.3 s) · sway · sin(π · beat phase + 0.5)` and `WingFlap +=
 0.12 · sin(2π · breath phase)`, each scaled by `1 − w` while an action of weight `w` drives the same parameter and

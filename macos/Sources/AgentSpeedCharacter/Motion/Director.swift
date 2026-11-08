@@ -54,6 +54,9 @@ public struct CharacterDirector: Sendable {
     /// The arm slots, held at their defaults while the pose's hand set plays a two-handed instrument.
     private let armSlots: [Int]
     private var armsHeld = false
+    /// The head angle slots, held at their defaults while the pose's hand set plays an instrument at the lips.
+    private let headSlots: [Int]
+    private var headHeld = false
     public private(set) var out: CharacterSide
     public private(set) var book: CharacterSide
     public let orb: Double
@@ -105,6 +108,8 @@ public struct CharacterDirector: Sendable {
             space.params[i] != nil && MotionProfile.armParams.contains { space.names[i].hasPrefix($0) }
         }
         armsHeld = profile.poseHands[SpeedBand.idle.rawValue].map(MotionProfile.twoHanded.contains) ?? false
+        headSlots = MotionProfile.headParams.compactMap { space.isParam($0) ? space.slot($0) : nil }
+        headHeld = profile.poseHands[SpeedBand.idle.rawValue].map(MotionProfile.atMouth.contains) ?? false
         beat = Beat(tempo: profile.tempo)
         self.out = out
         self.book = book
@@ -143,6 +148,7 @@ public struct CharacterDirector: Sendable {
             hands[i].setMode(profile.poseHands[self.poseBand.rawValue])
         }
         armsHeld = profile.poseHands[self.poseBand.rawValue].map(MotionProfile.twoHanded.contains) ?? false
+        headHeld = profile.poseHands[self.poseBand.rawValue].map(MotionProfile.atMouth.contains) ?? false
         for i in grooves.indices { grooves[i].target = 0 }
         grooves.append(GrooveLayer(band: band ?? .idle, w: 0, target: 1))
     }
@@ -338,6 +344,9 @@ public struct CharacterDirector: Sendable {
         }
         if space.isParam(slots.wingFlap) { addIdle(slots.wingFlap, 0.12 * sin(2 * Double.pi * breathPhase)) }
         for slot in frozen { write(slot, space.params[slot]!.default) }
+        if headHeld {
+            for slot in headSlots { write(slot, space.params[slot]!.default) }
+        }
         applySprings(dt)
 
         gazeAt -= dt

@@ -33,6 +33,9 @@ HAND_SETS = ("tap", "regrip", "lift", "flex", "fan", "count", "drum", "flute", "
 # Sets played on an instrument held in both hands: while one plays, the arms keep their pose so the hands never slide
 # along the instrument, and the body carries both with it.
 TWO_HANDED = {"flute"}
+# Sets played on an instrument at the lips: the head keeps its pose too, so the lips never slide along it.
+AT_MOUTH = {"flute"}
+HEAD_PARAMS = ("AngleX", "AngleY", "AngleZ")
 ARM_PARAMS = ("Arm.", "Forearm.", "Shoulder.", "Lift.", "Bend.")
 # Which hands a pose's hand set plays on, back to back: both, the hand holding the object, or the free one.
 POSE_HAND_SIDES = {"flute": "both", "sleeveflop": "both", "ripple": "both", "fanflutter": "holder", "abacus": "free",

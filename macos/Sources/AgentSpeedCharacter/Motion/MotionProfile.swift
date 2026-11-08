@@ -71,6 +71,9 @@ public struct MotionProfile: Sendable, Equatable, Decodable {
     /// Sets played on an instrument held in both hands: while one plays, the arms keep their pose so the hands never
     /// slide along the instrument, and the body carries both with it.
     static let twoHanded: Set<String> = ["flute"]
+    /// Sets played on an instrument at the lips: the head keeps its pose too, so the lips never slide along it.
+    static let atMouth: Set<String> = ["flute"]
+    static let headParams = ["AngleX", "AngleY", "AngleZ"]
     static let armParams = ["Arm.", "Forearm.", "Shoulder.", "Lift.", "Bend."]
 
     func allows(_ action: String) -> Bool {

@@ -12,7 +12,7 @@ from .curves import merge
 from .gestures import COMBOS, FACE_GESTURES, GESTURES, HEAD_GESTURES, arm_gesture, combo, face_gesture, head_gesture
 from .hands import HandActor
 from .moves import MOVES, PROFILE_MOVES, jump, peek, pounce, sidestep
-from .profile import ARM_PARAMS, SEATED_FREEZE, TWO_HANDED, MotionProfile
+from .profile import ARM_PARAMS, AT_MOUTH, HEAD_PARAMS, SEATED_FREEZE, TWO_HANDED, MotionProfile
 from .rhythm import Beat, groove_for, groove_scale
 from .springs import Springs
 
@@ -78,6 +78,7 @@ class Director:
             hand.set_mode(self.profile.pose_hands.get(self.pose_band))
         self.arm_params = [pid for pid in rig_params if pid.startswith(ARM_PARAMS)]
         self.arms_held = self.profile.pose_hands.get(self.pose_band) in TWO_HANDED
+        self.head_held = self.profile.pose_hands.get(self.pose_band) in AT_MOUTH
 
     def set_sides(self, arm_out, arm_book, pose_band=None):
         """Which arm swings free and which holds the object, for a new pose (of `pose_band`, for its hand set)."""
@@ -88,6 +89,7 @@ class Director:
             hand.holds = hand.side == arm_book
             hand.set_mode(self.profile.pose_hands.get(self.pose_band))
         self.arms_held = self.profile.pose_hands.get(self.pose_band) in TWO_HANDED
+        self.head_held = self.profile.pose_hands.get(self.pose_band) in AT_MOUTH
         for layer in self.grooves:
             layer["target"] = 0.0
         self.grooves.append({"fn": groove_for(self.band, self.profile), "w": 0.0, "target": 1.0})
@@ -261,6 +263,10 @@ class Director:
                 values[pid] = self._clamp(pid, values.get(pid, 0.0) + self._idle_share(pid) * v)
         if self.profile.seated:
             for pid in SEATED_FREEZE:
+                if pid in self.params:
+                    values[pid] = self.params[pid]["default"]
+        if self.head_held:
+            for pid in HEAD_PARAMS:
                 if pid in self.params:
                     values[pid] = self.params[pid]["default"]
         self.springs.apply(dt, values)

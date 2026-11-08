@@ -390,6 +390,14 @@ class ProfileTests(unittest.TestCase):
             played.add(d.last_gesture)
         return played, frames
 
+    def test_the_head_keeps_still_while_a_flute_is_at_the_lips(self):
+        fingers = tuple(f"Finger.{side}.{i}" for side in ("left", "right") for i in range(5))
+        _, frames = self.play({"poseHands": {"idle": "flute"}}, seconds=20, extra=fingers)
+        moved = max(abs(f.get(pid, 0.0)) for f in frames[:600] for pid in ("AngleX", "AngleY", "AngleZ"))
+        self.assertLess(moved, 1e-9)
+        _, frames = self.play({}, seconds=20, extra=fingers)
+        self.assertGreater(max(abs(f.get("AngleX", 0.0)) for f in frames[:600]), 0.01)
+
     def test_without_a_profile_the_pools_are_claudes(self):
         from characters.reference.motions.director import POOLS
         from characters.reference.motions.profile import MotionProfile
