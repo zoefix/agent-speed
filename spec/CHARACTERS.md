@@ -236,8 +236,11 @@ flare, and returns to 0. A request while a swap runs is ignored; the next band c
 again. Each pose keeps its own physics, stepped every frame. The director's free and object arms follow the new
 pose's `objectSide`. Fixture `switch.json`.
 
-Poses are aligned on screen by the feet and scaled so that the distance from the face center to the feet matches the
-idle pose.
+Poses are aligned on screen by the feet and scaled to match the idle pose by the middle of three ratios (idle over
+pose): the distance from the face center to the feet, the diagonal of the face box, and `torsoLength` (shoulder to
+hip midpoints from the pose estimator, written by the build). Any one of them can be thrown off by the pose (legs
+tucked in a jump shorten face-to-feet, a turned or tilted face changes its box), and the other two outvote it. A pose
+without `torsoLength` (packs built before it) is scaled by the face-to-feet ratio alone.
 
 ## 7. Which character an orb shows
 

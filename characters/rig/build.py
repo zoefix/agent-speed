@@ -24,7 +24,7 @@ def landmark_summary(lm):
                    for k, a in lm["arms"].items()}
     out["eyes"] = lm["eyes"]
     out["objectSide"] = lm.get("objectSide")
-    for key in ("backHair", "lock", "tail", "wings", "animalEars"):
+    for key in ("torsoLength", "backHair", "lock", "tail", "wings", "animalEars"):
         if key in lm:
             out[key] = lm[key]
     out["hands"] = {side: hands.summary(h) for side, h in lm.get("hands", {}).items()}
@@ -152,7 +152,10 @@ def main(argv=None):
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 
-    lm = skeleton.landmarks(parts, pose.torso(args.reference, size))
+    torso = pose.torso(args.reference, size)
+    lm = skeleton.landmarks(parts, torso)
+    if torso:
+        lm["torsoLength"] = torso["length"]
     if hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
         lm.pop("foot", None)
         lm["legsInSkirt"] = True

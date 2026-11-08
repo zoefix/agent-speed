@@ -309,6 +309,11 @@ class HandTests(unittest.TestCase):
 
 
 class StageTests(unittest.TestCase):
+    def test_a_jump_with_tucked_legs_keeps_its_size_by_the_middle_ratio(self):
+        from characters.reference.stage import pose_scale
+        self.assertAlmostEqual(pose_scale((70, 28, 50), (40, 28, 48)), 50 / 48)
+        self.assertAlmostEqual(pose_scale((70, 28, None), (40, 28, None)), 70 / 40)
+
     def test_odometer_holds_its_value_between_samples(self):
         from characters.reference.hud import Odometer
         odo = Odometer()

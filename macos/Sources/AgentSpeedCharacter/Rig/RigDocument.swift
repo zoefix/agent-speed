@@ -78,6 +78,7 @@ public struct RigDocument: Decodable, Sendable {
         public var waist: [Double]?
         public var chin: Double?
         public var hem: Double?
+        public var torsoLength: Double?
         public var objectSide: String?
         public var hands: [String: Hand]?
     }

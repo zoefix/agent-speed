@@ -104,7 +104,8 @@ def arms(image_path, size, center_x, matrix=None):
 
 
 def torso(image_path, size, matrix=None):
-    """{"shoulder": y, "hip": y} of the shoulder and hip midpoints on the canvas, or None unless all four are found."""
+    """{"shoulder": y, "hip": y, "length": px} of the shoulder and hip midpoints on the canvas (length between them),
+    or None unless all four are found."""
     found = _detect(str(image_path))
     if found is None:
         return None
@@ -112,7 +113,8 @@ def torso(image_path, size, matrix=None):
     if min(s[i] for i in SHOULDERS + HIPS) < MIN_SCORE:
         return None
     pts = cv2.transform(np.float64([[k[i] for i in SHOULDERS + HIPS]]), _to_canvas(image_size, size, None))[0]
-    return {"shoulder": float(pts[:2, 1].mean()), "hip": float(pts[2:, 1].mean())}
+    shoulder, hip = pts[:2].mean(axis=0), pts[2:].mean(axis=0)
+    return {"shoulder": float(shoulder[1]), "hip": float(hip[1]), "length": float(np.linalg.norm(shoulder - hip))}
 
 
 def hands(image_path, size, center_x, matrix=None):

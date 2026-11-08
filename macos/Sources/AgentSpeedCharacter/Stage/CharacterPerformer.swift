@@ -96,14 +96,10 @@ public struct CharacterPerformer: Sendable {
         }
         slotMaps = pack.poses.map { pose in pose.rig.params.map { space.slot($0.id)! } }
         rigValues = []
-        func body(_ rig: CharacterRig) -> Double? {
-            guard let f = rig.landmarks.face, f.count == 4, let feet = rig.landmarks.feet, feet.count == 2 else { return nil }
-            return feet[1] - (f[1] + f[3]) / 2
-        }
-        let base = body(idle)
+        let base = CharacterPerformer.measures(idle)
         placements = pack.poses.map { pose in
             let feet = pose.rig.landmarks.feet ?? [pose.rig.canvas.width / 2, pose.rig.canvas.height]
-            let scale = base.flatMap { b in body(pose.rig).map { b / $0 } } ?? 1
+            let scale = CharacterPerformer.poseScale(base: base, pose: CharacterPerformer.measures(pose.rig))
             return PosePlacement(scale: scale, feet: (feet[0], feet.count > 1 ? feet[1] : pose.rig.canvas.height))
         }
         var top = Double.infinity
@@ -119,6 +115,26 @@ public struct CharacterPerformer: Sendable {
         faceWidth = idle.landmarks.faceWidth ?? idle.canvas.width / 10
         events.reserveCapacity(8)
         rigValues = [Double](repeating: 0, count: pack.poses.map(\.rig.params.count).max() ?? 0)
+    }
+
+    /// Face center to feet, face box diagonal, shoulders to hips (nil in packs built without it).
+    static func measures(_ rig: CharacterRig) -> [Double?] {
+        let lm = rig.landmarks
+        guard let f = lm.face, f.count == 4 else { return [nil, nil, lm.torsoLength] }
+        let body = lm.feet.flatMap { $0.count == 2 ? $0[1] - (f[1] + f[3]) / 2 : nil }
+        return [body, hypot(f[2] - f[0], f[3] - f[1]), lm.torsoLength]
+    }
+
+    /// How much a pose is scaled to match the idle pose: the middle of the three ratios of `measures`, so one that
+    /// the pose throws off (tucked legs in a jump, a turned face) is outvoted; face to feet alone without a torso.
+    static func poseScale(base: [Double?], pose: [Double?]) -> Double {
+        var ratios: [Double] = []
+        for (b, p) in zip(base, pose) {
+            if let b, let p, b > 0, p > 0 { ratios.append(b / p) }
+        }
+        if ratios.count == 3 { return ratios.sorted()[1] }
+        if let b = base.first ?? nil, let p = pose.first ?? nil, b > 0, p > 0 { return b / p }
+        return 1
     }
 
     /// The pose index a band shows: its own, else the nearest lower band's.

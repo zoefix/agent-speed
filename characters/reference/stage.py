@@ -57,9 +57,19 @@ class Pose:
         self.physics.reset(self.rig.defaults())
         self.atlas = atlas
 
-    def body(self):
+    def measures(self):
+        """Face center to feet, face box diagonal, shoulders to hips (None in packs built without it)."""
         fx0, fy0, fx1, fy1 = self.lm["face"]
-        return self.lm["feet"][1] - (fy0 + fy1) / 2
+        return self.lm["feet"][1] - (fy0 + fy1) / 2, math.hypot(fx1 - fx0, fy1 - fy0), self.lm.get("torsoLength")
+
+
+def pose_scale(base, pose):
+    """How much a pose is scaled to match the idle pose: the middle of the three ratios of `Pose.measures`, so one
+    that the pose throws off (tucked legs in a jump, a turned face) is outvoted; face to feet alone without a torso."""
+    ratios = [b / p for b, p in zip(base, pose) if b and p]
+    if len(ratios) == 3:
+        return sorted(ratios)[1]
+    return base[0] / pose[0]
 
 
 class Switch:
@@ -138,7 +148,7 @@ def main(argv=None):
     fw = lm["faceWidth"]
 
     def placement(pose):
-        s = scale0 * base.body() / pose.body()
+        s = scale0 * pose_scale(base.measures(), pose.measures())
         return s, (feet_screen[0] - pose.lm["feet"][0] * s, feet_screen[1] - pose.lm["feet"][1] * s)
 
     params = {}

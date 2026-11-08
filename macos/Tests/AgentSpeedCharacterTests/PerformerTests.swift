@@ -134,6 +134,22 @@ enum TinyPack {
         #expect(feet == (200, 300))
     }
 
+    @Test func aJumpWithTuckedLegsKeepsItsSizeByTheMiddleRatio() throws {
+        var idle = try TinyPack.rigJSON(feetY: 90, faceTop: 10)
+        var jump = try TinyPack.rigJSON(feetY: 60, faceTop: 10)
+        var lm = idle["landmarks"] as! [String: Any]
+        lm["torsoLength"] = 50
+        idle["landmarks"] = lm
+        lm = jump["landmarks"] as! [String: Any]
+        lm["torsoLength"] = 48
+        jump["landmarks"] = lm
+        let pack = try CharacterPack.load(from: TinyPack.make(bands: ["idle": idle, "redline": jump]))
+        let performer = CharacterPerformer(pack: pack)
+        #expect(abs(performer.placements[1].scale - 50.0 / 48.0) < 1e-12)
+        #expect(CharacterPerformer.poseScale(base: [70, 28, nil], pose: [40, 28, nil]) == 70.0 / 40.0)
+        #expect(CharacterPerformer.poseScale(base: [nil, 28, 50], pose: [nil, 28, 50]) == 1)
+    }
+
     @Test func swapsThePoseEdgeOnWhenTheBandChanges() throws {
         let rig = try TinyPack.rigJSON()
         var other = try TinyPack.rigJSON(objectSide: "right")
