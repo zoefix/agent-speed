@@ -541,6 +541,25 @@ class AppendageTests(unittest.TestCase):
         self.assertEqual(parts[1].alpha[36, 36], 0.0)
         self.assertEqual(parts[0].alpha[40, 68], 0.0)
 
+    def test_a_piece_cut_off_a_layer_goes_back_to_it_soft_where_it_meets_the_paper(self):
+        from characters.rig.appendages import attach_fragments
+        from characters.rig.layers import Layer
+        ref = np.ones((600, 600, 3), np.float32)
+        ref[40:60, 30:70] = 0.2
+        ref[30:40, 42:58] = 0.85
+        ref[200:210, 200:216] = 0.2
+        crown = np.zeros((600, 600, 4), np.float32)
+        crown[40:60, 30:70] = 1
+        hair = np.zeros((600, 600, 4), np.float32)
+        hair[60:100, 20:80] = 1
+        ref[60:100, 20:80] = 0.4
+        parts = [Layer("back hair", "back hair", hair), Layer("headwear", "headwear", crown)]
+        self.assertEqual(attach_fragments(parts, ref), 1)
+        self.assertEqual(parts[1].alpha[38, 50], 1.0)
+        self.assertAlmostEqual(float(parts[1].alpha[30, 50]), 0.5, places=4)
+        self.assertEqual(parts[0].alpha[35, 50], 0.0)
+        self.assertEqual(parts[1].alpha[205, 208], 0.0)
+
 class WaistTests(unittest.TestCase):
     def layers(self, top, bottom):
         from characters.rig.layers import Layer

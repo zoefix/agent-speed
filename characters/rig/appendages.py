@@ -30,6 +30,30 @@ def foreground(reference, darkness=0.05, bare=None):
     return filled if bare is None else filled & ~bare
 
 
+def _missing(parts, reference, bare):
+    """Blobs of the art no layer covers, 2 px clear of every layer and opened by 2 px: labels, sizes, the coverage
+    mask and the drawn figure (foreground)."""
+    covered = coverage(parts) > 0.5
+    art = foreground(reference, bare=bare)
+    missing = ndimage.binary_opening(art & ~ndimage.binary_dilation(covered, iterations=2), iterations=2)
+    labels, count = ndimage.label(missing)
+    return labels, np.asarray(ndimage.sum(missing, labels, range(1, count + 1))), covered, art
+
+
+def _drawn(ids, labels, reference, figure, min_figure, max_chroma):
+    """The blobs that are drawn figure: a grey blob the figure matte scores below `min_figure` on average is the
+    shadow drawn on the floor."""
+    if figure is None or not ids:
+        return ids
+    scores = np.atleast_1d(ndimage.mean(figure, labels, ids))
+    chroma = np.atleast_1d(ndimage.mean(reference.max(axis=2) - reference.min(axis=2), labels, ids))
+    return [i for i, score, c in zip(ids, scores, chroma) if score >= min_figure or c >= max_chroma]
+
+
+def _around(found, pad, shape):
+    return tuple(slice(max(s.start - pad, 0), min(s.stop + pad, n)) for s, n in zip(found, shape))
+
+
 def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_limb=0.4, figure=None, min_figure=0.5,
                     max_chroma=0.15):
     """Adds a layer for each sizeable blob of the art that no layer covers. With a `tail` hint the largest blob below
@@ -40,18 +64,11 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
     Returns the names added."""
     h, w = reference.shape[:2]
-    covered = coverage(parts) > 0.5
-    missing = foreground(reference, bare=bare) & ~ndimage.binary_dilation(covered, iterations=2)
-    missing = ndimage.binary_opening(missing, iterations=2)
-    labels, count = ndimage.label(missing)
-    if count == 0:
+    labels, sizes, _, _ = _missing(parts, reference, bare)
+    if not len(sizes):
         return []
-    sizes = ndimage.sum(missing, labels, range(1, count + 1))
     keep = [i + 1 for i, s in enumerate(sizes) if s >= min_share * h * w]
-    if figure is not None and keep:
-        scores = np.atleast_1d(ndimage.mean(figure, labels, keep))
-        chroma = np.atleast_1d(ndimage.mean(reference.max(axis=2) - reference.min(axis=2), labels, keep))
-        keep = [i for i, score, c in zip(keep, scores, chroma) if score >= min_figure or c >= max_chroma]
+    keep = _drawn(keep, labels, reference, figure, min_figure, max_chroma)
     tags = {p.tag for p in parts}
     face = next((p for p in parts if p.tag == "face"), None)
     if face is not None:
@@ -98,6 +115,39 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     return added
 
 
+def attach_fragments(parts, reference, bare=None, figure=None, min_share=0.0005, touch=0.15, enclosed=0.9, ring=3,
+                     min_figure=0.5, max_chroma=0.15):
+    """Gives each blob too small for recover_missing that sticks out of the layers (not enclosed: fill_holes takes
+    those) to the layer holding most of a ring around it, when that is at least `touch` of the ring: See-Through
+    cuts parts at the edge of the box it splits the head in, so the top of a crown or a hair ornament belongs to no
+    layer. Opaque where it meets layers, as opaque as the art is dark where it meets the paper. Grey blobs the matte
+    calls background stay out, as in recover_missing. Returns how many it attached."""
+    labels, sizes, covered, art = _missing(parts, reference, bare)
+    h, w = labels.shape
+    small = _drawn([i + 1 for i, s in enumerate(sizes) if s < min_share * h * w], labels, reference, figure,
+                   min_figure, max_chroma)
+    darkness = np.clip((1 - reference.min(axis=2)) / 0.3, 0, 1)
+    objects = ndimage.find_objects(labels)
+    attached = 0
+    for i in small:
+        box = _around(objects[i - 1], 3 + 2 * ring, (h, w))
+        piece = ndimage.binary_dilation(labels[box] == i, SQUARE, iterations=3) & ~covered[box] & art[box]
+        band = ndimage.binary_dilation(piece, SQUARE, iterations=ring) & ~piece
+        if covered[box][band].mean() >= enclosed:
+            continue
+        held = [(layer.alpha[box][band] > 0.5).mean() for layer in parts]
+        best = int(np.argmax(held))
+        if held[best] < touch:
+            continue
+        open_side = ndimage.binary_dilation(~(piece | covered[box]), SQUARE, iterations=ring)
+        alpha = np.where(open_side, darkness[box], 1.0)
+        view = parts[best].rgba[box]
+        view[..., :3] = np.where(piece[..., None], reference[box], view[..., :3])
+        view[..., 3] = np.where(piece, np.maximum(view[..., 3], alpha), view[..., 3])
+        attached += 1
+    return attached
+
+
 def fill_holes(parts, reference, bare=None, enclosed=0.9, touch=0.15, ring=3, max_share=0.002):
     """Gives each patch of the art that no layer covers but layers surround (at least `enclosed` of a ring around it)
     to the lowest layer that holds at least `touch` of that ring: a gap between belt straps shows the robe behind
@@ -110,7 +160,7 @@ def fill_holes(parts, reference, bare=None, enclosed=0.9, touch=0.15, ring=3, ma
     for i, found in enumerate(ndimage.find_objects(labels), 1):
         if found is None:
             continue
-        box = tuple(slice(max(s.start - ring, 0), min(s.stop + ring, n)) for s, n in zip(found, (h, w)))
+        box = _around(found, ring, (h, w))
         hole = labels[box] == i
         if hole.sum() > max_share * h * w:
             continue

@@ -111,7 +111,11 @@ is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
   the face and `ears` beside it; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
   chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
-  the floor and stays out; a coloured one the matte also misses (a hologram) stays in. Then every remaining patch of
+  the floor and stays out; a coloured one the matte also misses (a hologram) stays in. A smaller blob (the same
+  grey rule applies) that sticks out of the layers, its 3 px ring under 90 % covered, goes to the layer holding most
+  of that ring when that is at least 15 % of it: See-Through cuts parts at the edge of the box it splits the head in,
+  so the top of a crown belongs to no layer. It is opaque where it meets layers and as opaque as the art is dark
+  (darkness / 0.3) within 3 px of the paper. Then every remaining patch of
   the figure no layer covers (opacity above 0.5), up to 0.2 % of the canvas, whose 3 px surrounding ring is at least
   90 % covered goes to the lowest layer holding at least 15 % of that ring, opaque and painted from the art: a gap
   between belt straps shows the robe behind them instead of a white speck. Packs without the hint are built exactly

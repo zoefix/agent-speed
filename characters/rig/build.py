@@ -126,6 +126,8 @@ def main(argv=None):
     if recovered:
         print(f"recovered from the art no layer covered: {', '.join(recovered)}")
     if hints.get("recover"):
+        print(f"fragments attached to the layer they were cut from: "
+              f"{appendages.attach_fragments(parts, reference, bare=bare, figure=figure)}")
         print(f"holes between layers filled: {appendages.fill_holes(parts, reference, bare=bare)} px")
     layers.reproject(parts, reference)
     parts = layers.drop_empty(parts)
