@@ -709,6 +709,66 @@ class PaperTests(unittest.TestCase):
         self.assertFalse(paper(ref, unsure, covered=uncovered)[15, 15])
 
 
+class TailCopyTests(unittest.TestCase):
+    def layer(self, name, color, *boxes):
+        from characters.rig.layers import Layer
+        rgba = np.zeros((200, 200, 4), np.float32)
+        for y0, y1, x0, x1 in boxes:
+            rgba[y0:y1, x0:x1] = (*color, 1.0)
+        return Layer(name, name, rgba)
+
+    def test_a_tail_hanging_in_front_of_the_skirt_is_drawn_over_it_and_the_copy_goes(self):
+        from characters.rig.layers import tail_alone
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 40:180] = 0.2
+        ref[100:190, 100:124] = 0.9
+        skirt = self.layer("bottomwear", (0.2, 0.2, 0.2), (40, 160, 40, 180), (100, 190, 100, 124))
+        skirt.rgba[100:190, 100:124, :3] = 0.9
+        tail = self.layer("tail", (0.9, 0.9, 0.9), (100, 190, 100, 124))
+        parts, repainted = tail_alone([tail, skirt], ref)
+        self.assertEqual([q.name for q in parts], ["bottomwear", "tail"])
+        self.assertEqual(repainted, ["bottomwear"])
+        self.assertEqual(skirt.alpha[180, 110], 0.0)
+        self.assertEqual(skirt.alpha[130, 110], 1.0)
+        self.assertLess(skirt.rgba[130, 110, 0], 0.5)
+
+    def test_a_copy_of_the_tail_in_the_back_hair_goes_and_a_tail_behind_the_skirt_stays(self):
+        from characters.rig.layers import tail_alone
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[20:160, 40:180] = 0.3
+        ref[60:190, 100:126] = 0.8
+        hair = self.layer("back hair", (0.3, 0.3, 0.3), (20, 160, 40, 180))
+        hair.rgba[60:160, 100:126, :3] = 0.8
+        tail = self.layer("tail", (0.8, 0.8, 0.8), (60, 190, 100, 126))
+        parts, repainted = tail_alone([hair, tail], ref)
+        self.assertEqual([q.name for q in parts], ["back hair", "tail"])
+        self.assertEqual(repainted, ["back hair"])
+        self.assertLess(hair.rgba[90, 110, 0], 0.6)
+        self.assertEqual(hair.alpha[90, 110], 1.0)
+        skirt = self.layer("bottomwear", (0.2, 0.2, 0.2), (100, 190, 60, 180))
+        ref2 = ref.copy()
+        ref2[100:190, 60:180] = 0.2
+        tail2 = self.layer("tail", (0.8, 0.8, 0.8), (60, 180, 100, 160))
+        parts, repainted = tail_alone([tail2, skirt], ref2)
+        self.assertEqual([q.name for q in parts], ["tail", "bottomwear"])
+        self.assertEqual(repainted, [])
+
+
+class HiddenLegTests(unittest.TestCase):
+    def test_legs_under_the_skirt_take_the_colors_of_the_legs_that_show(self):
+        from characters.rig.layers import Layer, fill_hidden_legs
+        legs = np.zeros((200, 100, 4), np.float32)
+        legs[40:190, 30:70] = (0.4, 0.4, 0.45, 0.5)
+        legs[120:190, 35:65] = (0.95, 0.9, 0.9, 1.0)
+        skirt = np.zeros((200, 100, 4), np.float32)
+        skirt[20:120, 10:90] = (0.2, 0.2, 0.6, 1.0)
+        parts = [Layer("legwear", "legwear", legs), Layer("bottomwear", "bottomwear", skirt)]
+        self.assertGreater(fill_hidden_legs(parts), 0)
+        np.testing.assert_allclose(parts[0].rgba[80, 50], (0.95, 0.9, 0.9, 1.0))
+        np.testing.assert_allclose(parts[0].rgba[150, 50], (0.95, 0.9, 0.9, 1.0))
+        self.assertEqual(parts[0].alpha[10, 50], 0.0)
+
+
 class EyePairTests(unittest.TestCase):
     def test_the_open_eye_of_a_wink_takes_its_side(self):
         from characters.rig.layers import Layer, split_pairs

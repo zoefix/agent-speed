@@ -194,6 +194,65 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35):
     return out + seated, lifted
 
 
+FRONT_OF_TAIL = ("legwear", "bottomwear", "topwear")
+
+
+def _repaint_copy(layer, copy, close=15, pad=40):
+    """Repaints what `layer` drew of another part at `copy`: transparent outside the layer's own outline (its pixels
+    without the copy, closed by `close` px, holes filled), inpainted from its surroundings inside it."""
+    import cv2
+    h, w = copy.shape
+    own = layer.alpha > 0.5
+    outline = ndimage.binary_fill_holes(ndimage.binary_closing(own & ~copy, iterations=close))
+    ys, xs = np.nonzero(copy)
+    box = (slice(max(ys.min() - pad, 0), min(ys.max() + pad, h)), slice(max(xs.min() - pad, 0), min(xs.max() + pad, w)))
+    rgb = (np.clip(layer.rgba[box][..., :3], 0, 1) * 255).astype(np.uint8)
+    unknown = (copy | ~own)[box].astype(np.uint8) * 255
+    filled = cv2.inpaint(rgb, unknown, 7, cv2.INPAINT_TELEA).astype(np.float32) / 255
+    inside = (copy & outline)[box]
+    view = layer.rgba[box]
+    view[..., :3] = np.where(inside[..., None], filled, view[..., :3])
+    view[..., 3] = np.where(inside, 1.0, view[..., 3])
+    layer.rgba[..., 3] = np.where(copy & ~outline, 0.0, layer.alpha)
+
+
+def tail_alone(layers, reference, share=0.5, min_px=2000):
+    """Leaves the tail the only drawing of the tail. The split also paints the tail into the layers around it: a
+    tail hanging in front of the skirt goes behind the skirt with a copy of it in the skirt, and a tail curling over
+    the hair leaves a copy in the back hair; either copy shows once the tail swings. A clothing layer
+    (`FRONT_OF_TAIL`) drawn over the tail is in front of the tail only if the art shows the skirt there: where at least
+    `share` of their overlap (`min_px` or more) the tail layer's own paint matches the art, the tail is what shows, so
+    the tail moves to just above those layers and their copy is repainted. A layer drawn under the tail whose paint
+    matches the tail's on at least `share` of their overlap holds a copy too, which is repainted (_repaint_copy).
+    Returns the layers and the names of the layers whose copy was repainted."""
+    index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
+    if index is None:
+        return layers, []
+    tail = layers[index]
+    mask = tail.alpha > 0.5
+    shown = ndimage.uniform_filter(np.abs(tail.rgba[..., :3] - reference).mean(axis=2), 5) < 0.06
+    covered, repainted = [], []
+    for k, layer in enumerate(layers):
+        if k == index:
+            continue
+        overlap = mask & (layer.alpha > 0.5)
+        if overlap.sum() < min_px:
+            continue
+        if k > index and layer.tag in FRONT_OF_TAIL and (shown & overlap).sum() >= share * overlap.sum():
+            covered.append(k)
+            _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02))
+            repainted.append(layer.name)
+        elif k < index:
+            same = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail.rgba[..., :3]).mean(axis=2), 5) < 0.06
+            if (same & overlap).sum() >= share * overlap.sum():
+                _repaint_copy(layer, ndimage.binary_dilation(same & overlap, iterations=2) & (layer.alpha > 0.02))
+                repainted.append(layer.name)
+    if covered:
+        layers = [layer for k, layer in enumerate(layers) if k != index]
+        layers.insert(max(covered), tail)
+    return layers, repainted
+
+
 def drop_empty(layers, threshold=0.12):
     """Layers left with nothing solid once the art is painted onto its owners (a faint nose the face covers) or split
     by the arms (a sleeve whose other half went with a held doll)."""
@@ -281,12 +340,12 @@ def split_by_arms(layers, arms, reference=None, core=4.0):
 
 def split_body_from_arms(layers, arms, reference, face_box, core=4.0, inset=0.15, clear=0.35):
     """Cuts out of each arm layer the body the split drew into it (the front of a robe beside a wide sleeve), along
-    the art's ink lines: the arm grows from its bones (pixels within `core` px of shoulder-elbow-wrist), the body from
-    the torso (between the shoulders, `inset` face widths in from each, below the upper face, over `clear` face widths
-    from the arm's bones so a forearm across the chest seeds no body), over the art's gradient (a watershed), so a
-    sleeve stays with its arm up to the line that parts it from the robe. What the
-    body reaches becomes a `topwear` layer right after the arm, so it keeps its place in the draw order and moves with
-    the chest and hips. Returns the layers and the pixels moved."""
+    the art's ink lines: the arm grows from its bones (pixels within `core` px of shoulder, elbow, wrist and the hand,
+    0.6 forearms past the wrist as the rig's arm tip), the body from the torso (between the shoulders, `inset` face
+    widths in from each, below the upper face, over `clear` face widths from the arm's bones so a forearm or a hand
+    across the chest seeds no body), over the art's gradient (a watershed), so a sleeve stays with its arm up to the
+    line that parts it from the robe. What the body reaches becomes a `topwear` layer right after the arm, so it keeps
+    its place in the draw order and moves with the chest and hips. Returns the layers and the pixels moved."""
     if not {"left", "right"} <= set(arms):
         return layers, 0
     from skimage.segmentation import watershed
@@ -303,7 +362,9 @@ def split_body_from_arms(layers, arms, reference, face_box, core=4.0, inset=0.15
             continue
         mask = layer.alpha > 0.02
         shoulder, elbow, wrist = (np.asarray(arms[layer.side][k], np.float64) for k in ("shoulder", "elbow", "wrist"))
-        bone = np.minimum(_segment_distance(xx, yy, shoulder, elbow), _segment_distance(xx, yy, elbow, wrist))
+        tip = wrist + 0.6 * (wrist - elbow)
+        bone = np.minimum.reduce([_segment_distance(xx, yy, a, b)
+                                  for a, b in ((shoulder, elbow), (elbow, wrist), (wrist, tip))])
         markers = np.zeros(mask.shape, np.int32)
         markers[mask & (bone < core)] = 1
         markers[mask & torso & (bone >= max(4 * core, clear * face_w))] = 2
@@ -318,6 +379,35 @@ def split_body_from_arms(layers, arms, reference, face_box, core=4.0, inset=0.15
         out.append(Layer(f"{layer.name} body", "topwear", rgba))
         moved += int((body & (rgba[..., 3] > 0.5)).sum())
     return out, moved
+
+
+def fill_hidden_legs(layers, solid=0.3, shade=10, edge=2, reach=6):
+    """Repaints the legs the clothes above hide (the thighs under a skirt) from the legs that show: See-Through's
+    guess there is faint and edged in grey, and a hem that swings up shows it as a second pair of legs. Every hidden
+    leg pixel takes the color of the nearest leg pixel that shows (over `shade` px below the clothes, clear of the
+    shadow they cast, and `edge` px inside the outline), and is opaque where the guess is over `solid` (ramping to it
+    below), so the leg runs on up under the skirt in its own colors. Only what lies within a 45-degree cone above or
+    below that pixel (`reach` px wider) stays: a leg runs on up, a blocky guess beside it goes. Returns the pixels
+    repainted."""
+    repainted = 0
+    for i, leg in enumerate(layers):
+        if leg.tag != "legwear" or i == len(layers) - 1:
+            continue
+        above = coverage(layers[i + 1:]) > 0.5
+        shows = (leg.alpha > 0.5) & ~above
+        hidden = (leg.alpha > 0.02) & above
+        if not shows.any() or not hidden.any():
+            continue
+        source = ndimage.binary_erosion(shows, iterations=edge) & ~ndimage.binary_dilation(above, iterations=shade)
+        if not source.any():
+            source = shows
+        _, (iy, ix) = ndimage.distance_transform_edt(~source, return_indices=True)
+        yy, xx = np.mgrid[0:leg.alpha.shape[0], 0:leg.alpha.shape[1]]
+        along = np.abs(xx - ix) <= np.abs(yy - iy) + reach
+        leg.rgba[..., :3] = np.where(hidden[..., None], leg.rgba[iy, ix, :3], leg.rgba[..., :3])
+        leg.rgba[..., 3] = np.where(hidden, np.where(along, np.clip(leg.alpha / solid, 0, 1), 0.0), leg.alpha)
+        repainted += int(hidden.sum())
+    return repainted
 
 
 def grow_underlays(layers, radius=10):

@@ -164,6 +164,18 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   border) area of such near-white pixels whose mean score is below 0.8, or below 0.99 when most of the area is outside
   every layer of the split (opacity above 0.5): a gap framed by raised arms can score 0.93, but white clothing is in a
   layer. Every layer is transparent there, so white clothing (high scores) stays and the gaps show the desktop.
+- **One tail**: the split also paints the tail into the layers around it. A recovered `extra` blob no larger than the
+  tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
+  `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
+  on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel
+  difference, 5 px box, under 0.06), the tail is what shows, so it moves to just above those layers. A layer drawn
+  under the tail whose paint matches the tail's on at least half of their overlap holds a copy too (the back hair
+  under a tail curling up). Each such copy is repainted: transparent outside the layer's own outline (its pixels
+  without the copy, closed by 15 px, holes filled), inpainted (Telea, radius 7) from the layer around it inside.
+- **Hidden legs**: every `legwear` pixel the layers above hide (opacity over 0.5) takes the color of the nearest leg
+  pixel that shows (over 10 px below the layers above, 2 px inside the outline) and is opaque where See-Through's
+  guess is over 0.3 (ramping to it below), within a 45-degree cone above or below that pixel (6 px wider); the rest of
+  the guess goes. A hem that swings up then shows the leg running on in its own colors, not a faint grey second pair.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =
@@ -237,7 +249,8 @@ Hand sets of the profiles (`motions/hands.py`): **flute** (fingerings of three f
 still), **fanflutter** (the hand holding the object waves it three times, a 0.6 s wave), **abacus** (the index flicks beads every half
 beat, at least 0.24 s apart, the thumb every other one), **sleeveflop** (hands flopping in long sleeves),
 **ripple** (a slow finger ripple), **grip** (both hands holding one object up, fingers 1–4 tightening by 0.1 over two
-beats). `poseHands` sets play on both hands (flute, sleeveflop, ripple, grip), on the hand
+beats; also for fists held up as paws, which a turning forearm would stretch). `poseHands` sets play on both hands
+(flute, sleeveflop, ripple, grip), on the hand
 holding the object (fanflutter, tap, regrip, lift) or on the free one (abacus, flex, fan, count, drum).
 **flute** and **grip** hold an object in both hands: while the pose's set is one of them, every `Arm.`, `Forearm.`, `Shoulder.`,
 `Lift.` and `Bend.` parameter keeps its default after the groove and the action (before the hands and the springs),

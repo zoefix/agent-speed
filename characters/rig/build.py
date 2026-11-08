@@ -167,6 +167,9 @@ def main(argv=None):
         print(f"fragments attached to the layer they were cut from: "
               f"{appendages.attach_fragments(parts, reference, bare=bare, figure=figure)}")
         print(f"holes between layers filled: {appendages.fill_holes(parts, reference, bare=bare)} px")
+    parts, copies = layers.tail_alone(parts, reference)
+    if copies:
+        print(f"copies of the tail repainted in: {', '.join(copies)}")
     layers.reproject(parts, reference)
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
@@ -179,6 +182,7 @@ def main(argv=None):
     parts, hats = layers.lift_hats(parts, face_box)
     if hats:
         print(f"hats drawn into the top given to the head: {hats}")
+    print(f"hidden legs repainted from the legs that show: {layers.fill_hidden_legs(parts)} px")
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 

@@ -36,11 +36,16 @@
    "flex",
    "fan",
    "count"
-  ]
+  ],
+  "poseHands": {
+   "cruise": "grip"
+  }
  },
  "rig": {
   "recover": true,
   "tail": true,
-  "ears": true
+  "ears": true,
+  "rigidLower": true,
+  "bodyInArms": true
  }
 }

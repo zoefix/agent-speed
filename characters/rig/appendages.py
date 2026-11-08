@@ -71,7 +71,8 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     head become headwear (above the face) or ears (beside it), so they turn with the head; when the split made no
     footwear, a blob reaching the bottom of the figure (within 2 % of the canvas) that touches the legwear is a shoe,
     `footwear`, so it moves with the leg; a blob no larger than the footwear with at least 15 % of its rim on it (a
-    calf above a kicked-up slipper) is `legwear`; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
+    calf above a kicked-up slipper) is `legwear`; an `extra` blob no larger than the tail with at least 15 % of its
+    rim on the tail (its base, cut short) joins the tail layer; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
     `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
     Returns the names added."""
     h, w = reference.shape[:2]
@@ -122,6 +123,14 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         inner = ndimage.binary_erosion(blob, iterations=3)
         rim = np.clip((1 - reference.min(axis=2)) / 0.3, 0, 1)
         rgba[..., 3] = np.where(inner, 1.0, np.where(blob, rim, 0.0))
+        tail = next((p for p in parts if p.tag == "tail"), None)
+        if (tag == "extra" and tail is not None and sizes[i - 1] <= (tail.alpha > 0.5).sum()
+                and _touch(blob, [tail.alpha > 0.5]) >= 0.15):
+            # The rest of a tail the split cut short (its base, its tip) joins the tail, so it swings with it.
+            tail.rgba[..., :3] = np.where(blob[..., None], reference, tail.rgba[..., :3])
+            tail.rgba[..., 3] = np.maximum(tail.alpha, rgba[..., 3])
+            added.append(f"{tail.name}+")
+            continue
         names = {p.name for p in parts}
         name, n = tag, 1
         while name in names:
