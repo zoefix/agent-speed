@@ -73,6 +73,19 @@ def arm_from_joints(joints):
             "reach": reach, "field": None}
 
 
+def _one_foot_raised(feet, leg, share=0.15):
+    """Whether the shoes are separate feet whose soles differ by more than `share` of the leg (a foot kicked up
+    behind): one foot bone for both, pivoting between them, would tear the raised leg from the skirt."""
+    solid = np.any([f.alpha > 0.3 for f in feet], axis=0)
+    labels, count = ndimage.label(solid)
+    if count < 2:
+        return False
+    sizes = ndimage.sum(solid, labels, range(1, count + 1))
+    big = [i + 1 for i, size in enumerate(sizes) if size >= 0.15 * sizes.sum()]
+    soles = [np.nonzero(labels == i)[0].max() for i in big]
+    return len(soles) > 1 and max(soles) - min(soles) > share * leg
+
+
 def _segment(points, a, b):
     ab = b - a
     t = np.clip(((points - a) @ ab) / max(float(ab @ ab), 1e-9), 0, 1)
@@ -135,7 +148,7 @@ def landmarks(layers, torso=None):
     lm["feet"] = (feet_x, lowest)
     lm["hem"] = bottom[3] if bottom else lowest
     lm["skirtMid"] = waist_y + 0.45 * (lm["hem"] - waist_y)
-    if "footwear" in named:
+    if "footwear" in named and not _one_foot_raised(tags["footwear"], lowest - waist_y):
         bx0, by0, bx1, by1 = box(named["footwear"].alpha, 0.3)
         lm["foot"] = {"box": (bx0, by0, bx1, by1), "ankle": ((bx0 + bx1) / 2, by0)}
 

@@ -625,6 +625,19 @@ class WaistTests(unittest.TestCase):
         self.assertGreater(weights["skirtHem"][3], 0.99)
 
 
+    def test_no_foot_bone_when_one_foot_is_kicked_up(self):
+        from characters.rig.layers import Layer
+        from characters.rig.skeleton import _one_foot_raised
+
+        def feet(*boxes):
+            rgba = np.zeros((300, 200, 4), np.float32)
+            for y0, y1, x0, x1 in boxes:
+                rgba[y0:y1, x0:x1, 3] = 1
+            return [Layer("footwear", "footwear", rgba)]
+        self.assertFalse(_one_foot_raised(feet((260, 290, 40, 80), (262, 290, 120, 160)), 200))
+        self.assertTrue(_one_foot_raised(feet((260, 290, 40, 80), (180, 210, 120, 160)), 200))
+        self.assertFalse(_one_foot_raised(feet((260, 290, 40, 160)), 200))
+
     def test_a_seated_character_keeps_skirt_and_legs_with_her_hips(self):
         from characters.rig.layers import Layer
         from characters.rig.skeleton import weights_for
