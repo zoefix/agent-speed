@@ -140,6 +140,7 @@ enum OrbFrameHarness {
     private static func record(_ clip: Clip, model: AppModel, fps: Double, seconds: Double, into frames: URL, directory: URL) -> Int {
         let size: CGSize
         var cells: [Cell] = []
+        var castAt: (Double) -> Void = { _ in }
         func stage(_ style: OrbStyleKind, _ diameter: CGFloat) -> OrbPreviewStage {
             let stage = OrbPreviewStage(model: model, style: style, diameter: diameter, dark: clip.dark, level: clip.level,
                                         reduceMotion: clip.reduceMotion)
@@ -162,15 +163,26 @@ enum OrbFrameHarness {
             let disc = 2 * clip.size
             size = CGSize(width: disc * 1.5, height: disc * 1.5)
             let character = stage(.character, disc)
-            // `AGENT_SPEED_ORB_CHARACTER` picks the pack and `AGENT_SPEED_ORB_MODEL` the model chip.
+            // `AGENT_SPEED_ORB_CHARACTER` picks the pack (a comma list changes character every
+            // `AGENT_SPEED_ORB_CHARACTER_EVERY` seconds, 8 by default) and `AGENT_SPEED_ORB_MODEL` the model chip.
             let environment = ProcessInfo.processInfo.environment
             let installed = model.characters.installed
-            let pack = installed.first { $0.id == environment["AGENT_SPEED_ORB_CHARACTER"] } ?? installed.first
-            let vendor = pack?.manifest.vendors.first ?? "anthropic"
-            character.feed.characterID = pack?.id
-            character.feed.vendors = VendorReading(rates: [vendor: 1],
-                                                   fastestModel: environment["AGENT_SPEED_ORB_MODEL"] ?? "Claude Opus 4.5",
-                                                   fastestVendor: vendor)
+            let wanted = (environment["AGENT_SPEED_ORB_CHARACTER"] ?? "").split(separator: ",").map(String.init)
+            let packs = wanted.compactMap { id in installed.first { $0.id == id } }
+            let cast = packs.isEmpty ? Array(installed.prefix(1)) : packs
+            let every = environment["AGENT_SPEED_ORB_CHARACTER_EVERY"].flatMap(Double.init) ?? 8
+            let modelName = environment["AGENT_SPEED_ORB_MODEL"]
+            castAt = { time in
+                guard !cast.isEmpty else { return }
+                let pack = cast[Int(time / every) % cast.count]
+                guard character.feed.characterID != pack.id else { return }
+                let vendor = pack.manifest.vendors.first ?? "anthropic"
+                character.feed.characterID = pack.id
+                character.feed.vendors = VendorReading(rates: [vendor: 1],
+                                                       fastestModel: modelName ?? pack.manifest.name.en,
+                                                       fastestVendor: vendor)
+            }
+            castAt(0)
             cells.append(Cell(stage: character, center: CGPoint(x: disc * 0.75, y: disc * 0.75), label: nil))
         case .hero(let style), .still(let style, _):
             let big: CGFloat = 240
@@ -189,6 +201,7 @@ enum OrbFrameHarness {
         let dt = 1.0 / 60
         func advance() {
             tourTime += dt
+            castAt(tourTime)
             let reference = cells[0].stage
             var fire: (Double, Int)?
             if reference.gauge.tier != .idle, random.next() < (0.3 + 1.5 * reference.gauge.heat(at: reference.time)) * dt {
