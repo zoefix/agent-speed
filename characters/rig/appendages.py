@@ -50,6 +50,15 @@ def _drawn(ids, labels, reference, figure, min_figure, max_chroma):
     return [i for i, score, c in zip(ids, scores, chroma) if score >= min_figure or c >= max_chroma]
 
 
+def _touch(blob, masks, ring=4):
+    """Share of a ring around `blob` that lies on any of `masks`."""
+    band = ndimage.binary_dilation(blob, iterations=ring) & ~blob
+    on = np.zeros_like(band)
+    for m in masks:
+        on |= m
+    return float((band & on).sum()) / max(int(band.sum()), 1)
+
+
 def _around(found, pad, shape):
     return tuple(slice(max(s.start - pad, 0), min(s.stop + pad, n)) for s, n in zip(found, shape))
 
@@ -61,7 +70,8 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     wings, either only when it is at least `min_limb` of the face's box (a scrap of dress must not flap); blobs by the
     head become headwear (above the face) or ears (beside it), so they turn with the head; when the split made no
     footwear, a blob reaching the bottom of the figure (within 2 % of the canvas) that touches the legwear is a shoe,
-    `footwear`, so it moves with the leg; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
+    `footwear`, so it moves with the leg; a blob no larger than the footwear with at least 15 % of its rim on it (a
+    calf above a kicked-up slipper) is `legwear`; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
     `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
     Returns the names added."""
     h, w = reference.shape[:2]
@@ -72,6 +82,8 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     keep = _drawn(keep, labels, reference, figure, min_figure, max_chroma)
     tags = {p.tag for p in parts}
     legs = [p.alpha > 0.5 for p in parts if p.tag == "legwear"] if "footwear" not in tags else []
+    feet = [p.alpha > 0.5 for p in parts if p.tag == "footwear"]
+    feet_area = sum(int(f.sum()) for f in feet)
     rows = np.nonzero(foreground(reference, bare=bare).any(axis=1))[0]
     bottom = rows.max() if len(rows) else h
     face = next((p for p in parts if p.tag == "face"), None)
@@ -100,6 +112,8 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
             tag = "wings"
         elif by_head:
             tag = "headwear" if cy < fy0 else "ears"
+        elif feet and blob.sum() <= feet_area and _touch(blob, feet) >= 0.15:
+            tag = "legwear"
         else:
             tag = "extra"
         rgba = np.zeros((h, w, 4), np.float32)

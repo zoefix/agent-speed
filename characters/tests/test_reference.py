@@ -496,6 +496,22 @@ class AppendageTests(unittest.TestCase):
         parts = [layer("legwear", 60, 170, 90, 110), layer("face", 20, 50, 85, 115)]
         self.assertEqual(recover_missing(parts, ref, {"tail": True}), ["footwear"])
 
+    def test_a_calf_above_a_kicked_up_slipper_joins_the_leg(self):
+        from characters.rig.appendages import recover_missing
+        from characters.rig.layers import Layer
+        ref = np.ones((300, 300, 3), np.float32)
+        ref[20:50, 135:165] = 0.8
+        ref[120:150, 150:190] = 0.6
+        ref[150:200, 140:200] = 0.3
+        ref[60:105, 30:260] = 0.5
+        def layer(name, *boxes):
+            rgba = np.zeros((300, 300, 4), np.float32)
+            for y0, y1, x0, x1 in boxes:
+                rgba[y0:y1, x0:x1] = (0.5, 0.5, 0.5, 1.0)
+            return Layer(name, name, rgba)
+        parts = [layer("footwear", (150, 200, 140, 200)), layer("face", (20, 50, 135, 165))]
+        self.assertEqual(sorted(recover_missing(parts, ref, {})), ["extra", "legwear"])
+
     def test_the_tail_chain_runs_from_the_body_to_the_tip(self):
         from characters.rig.appendages import recover_missing, tail_landmarks, tail_weights
         parts, ref = self.scene()
