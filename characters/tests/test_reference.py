@@ -726,6 +726,29 @@ class LayerTests(unittest.TestCase):
         self.assertEqual(parts[3].alpha[32, 32], 1.0)
         self.assertEqual(parts[2].alpha[3, 10], 1.0)
 
+    def test_a_hat_drawn_into_the_top_goes_to_the_head_and_a_tossed_one_is_set_back_on_it(self):
+        from characters.rig.layers import Layer, lift_hats
+
+        def layer(name, tag, *boxes):
+            rgba = np.zeros((300, 200, 4), np.float32)
+            for y0, y1, x0, x1 in boxes:
+                rgba[y0:y1, x0:x1] = 1
+            return Layer(name, tag, rgba)
+        face = (80, 100, 120, 140)
+        for gap, seated in ((0, False), (30, True)):
+            hair = layer("front hair", "front hair", (90, 110, 70, 130))
+            top = layer("topwear", "topwear", (150, 250, 60, 140), (50 - gap, 90 - gap, 70, 130))
+            parts, lifted = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], face)
+            self.assertEqual(lifted, 1)
+            names = [q.name for q in parts]
+            hat = parts[names.index("hat")]
+            self.assertEqual(hat.tag, "headwear")
+            self.assertEqual(top.alpha[60 - gap, 100], 0.0)
+            self.assertEqual(top.alpha[200, 100], 1.0)
+            self.assertEqual(names.index("hat"), 3 if seated else 2)
+            ys = np.nonzero(hat.alpha[:, 100] > 0.5)[0]
+            self.assertGreaterEqual(ys.max(), 90 + (10 if seated else -1))
+
     def test_hair_painted_behind_a_held_doll_goes_with_the_doll(self):
         from characters.rig.layers import Layer, take_prop
         hair = np.zeros((80, 80, 4), np.float32)

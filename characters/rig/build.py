@@ -171,6 +171,9 @@ def main(argv=None):
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
     parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
+    parts, hats = layers.lift_hats(parts, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
+    if hats:
+        print(f"hats drawn into the top given to the head: {hats}")
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 

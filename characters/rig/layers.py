@@ -147,6 +147,53 @@ def split_objects(layers, min_share=0.05, bridge=4):
     return out
 
 
+HEAD_TAGS = ("face", "front hair", "back hair", "headwear")
+
+
+def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35):
+    """Gives the head what the split drew of it into the top: topwear above the upper `above` of the face (a white
+    beret the split takes for the white blouse) becomes a `headwear` layer named `hat`, so it turns with the head.
+    It keeps the top's place in the draw order while it sits on the head; a hat the art shows tossed above the head
+    (the median gap between its lower edge and the head's top, column by column, over a tenth of its height; a stray
+    strand of hair may still touch it) is set down on it, its lower `overlap` over the head's top, and drawn over the
+    hair.
+    Returns the layers and how many hats it lifted."""
+    fx0, fy0, fx1, fy1 = face_box
+    cut = int(fy0 + above * (fy1 - fy0))
+    head = np.zeros(layers[0].alpha.shape, bool)
+    for layer in layers:
+        if layer.tag in HEAD_TAGS:
+            head |= layer.alpha > 0.5
+    out, seated, lifted = [], [], 0
+    for layer in layers:
+        out.append(layer)
+        if layer.tag != "topwear":
+            continue
+        hat = np.zeros(layer.alpha.shape, bool)
+        hat[:cut] = layer.alpha[:cut] > 0.02
+        if (layer.alpha[:cut] > 0.5).sum() < min_px:
+            continue
+        rgba = layer.rgba.copy()
+        rgba[..., 3] = np.where(hat, rgba[..., 3], 0.0)
+        layer.rgba[..., 3] = np.where(hat, 0.0, layer.alpha)
+        lifted += 1
+        ys, xs = np.nonzero(hat)
+        gaps = []
+        for x in range(xs.min(), xs.max() + 1):
+            hat_rows, head_rows = np.nonzero(hat[:, x])[0], np.nonzero(head[:, x])[0]
+            if len(hat_rows) and len(head_rows):
+                gaps.append(head_rows.min() - hat_rows.max())
+        height = ys.max() - ys.min()
+        if not gaps or np.median(gaps) <= 0.1 * height:
+            out.append(Layer("hat", "headwear", rgba))
+            continue
+        dy = int(np.median(gaps) + overlap * height)
+        moved = np.zeros_like(rgba)
+        moved[dy:] = rgba[:rgba.shape[0] - dy]
+        seated.append(Layer("hat", "headwear", moved))
+    return out + seated, lifted
+
+
 def drop_empty(layers, threshold=0.12):
     """Layers left with nothing solid once the art is painted onto its owners (a faint nose the face covers) or split
     by the arms (a sleeve whose other half went with a held doll)."""
