@@ -130,7 +130,7 @@ def main(argv=None):
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     ap.add_argument("--spec", help="the character's spec: its `rig` hints "
-                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt, props)")
+                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt, rigidLower, skirtInArms, props)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
     args = ap.parse_args(argv)
@@ -171,15 +171,16 @@ def main(argv=None):
     lm = skeleton.landmarks(parts, torso)
     if torso:
         lm["torsoLength"] = torso["length"]
-    if character.get("motion", {}).get("seated"):
+    if character.get("motion", {}).get("seated") or hints.get("rigidLower"):
         lm.pop("foot", None)
-        lm["seated"] = True
+        lm["rigidLower"] = True
     elif hints.get("legsInSkirt") and any(p.tag == "bottomwear" for p in parts):
         lm.pop("foot", None)
         lm["legsInSkirt"] = True
     for side, joints in arm_joints.items():
         if side in lm["arms"]:
             lm["arms"][side] = skeleton.arm_from_joints(joints)
+    lm["skirtInArms"] = bool(hints.get("skirtInArms"))
     lm["hands"] = {}
     for side, points in pose.hands(args.reference, size, (fx0 + fx1) / 2).items():
         if side in lm["arms"] and lm["arms"][side].get("tip") is not None:

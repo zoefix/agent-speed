@@ -114,9 +114,11 @@ mask and lies at least 60 % within 15 px of it: the split paints hair behind the
 Such a piece leaves its layer and joins the prop. Like any object, the prop follows the hand nearest it, unless the
 band's entry is `{"points": [...], "follow": "chest" | "lower" | "head"}`: a book held up before the chest, which the
 split also paints into the top, moves with the chest so that copy never shows beside it. A seated character (motion
-`seated`) has no `foot` bone: legs and shoes follow `lower`, and the skirt blends from `chest` to `lower` at the
-waist like the top, so the director's frozen hips keep knees and ankles whole while the skirt physics has nothing to
-swing.
+`seated`), or one with the hint `rigidLower`, has no `foot` bone: legs and shoes follow `lower`, and the skirt blends
+from `chest` to `lower` at the waist like the top, so knees and ankles stay whole and the skirt physics has nothing
+to swing (a harpy whose feather skirt the split scatters over her wing and arm layers). With the hint `skirtInArms`
+the arm layers ease over to `lower` below the waist (`smoothstep(waist + 0.2 face, waist + 1.2 face)`), so a skirt
+the split drew into an arm layer stays with the hips and only stretches when the arm moves.
 
 - **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away

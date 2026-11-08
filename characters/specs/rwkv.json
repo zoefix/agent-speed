@@ -38,6 +38,7 @@
  },
  "rig": {
   "recover": true,
-  "wings": true
+  "rigidLower": true,
+  "skirtInArms": true
  }
 }

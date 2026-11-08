@@ -598,7 +598,7 @@ class WaistTests(unittest.TestCase):
     def test_a_seated_character_keeps_skirt_and_legs_with_her_hips(self):
         from characters.rig.layers import Layer
         from characters.rig.skeleton import weights_for
-        lm = {"face": (40, 0, 60, 20), "chin": 20, "waist": (50, 100), "hem": 200, "skirtMid": 145, "seated": True}
+        lm = {"face": (40, 0, 60, 20), "chin": 20, "waist": (50, 100), "hem": 200, "skirtMid": 145, "rigidLower": True}
         y = np.array([[50.0, 60.0], [50.0, 150.0], [50.0, 220.0]])
         flat = np.zeros((1, 1, 4), np.float32)
         legs = dict(weights_for(Layer("legwear", "legwear", flat), y, lm))
@@ -606,6 +606,17 @@ class WaistTests(unittest.TestCase):
         skirt = dict(weights_for(Layer("bottomwear", "bottomwear", flat), y, lm))
         self.assertEqual(set(skirt), {"chest", "lower"})
         self.assertGreater(skirt["lower"][2], 0.99)
+
+    def test_a_skirt_drawn_into_the_arm_layer_eases_over_to_the_hips(self):
+        from characters.rig.layers import Layer
+        from characters.rig.skeleton import weights_for
+        arm = {"field": np.full((300, 100), 50.0), "shoulder": (50, 40), "reach": 100.0}
+        lm = {"face": (40, 0, 60, 20), "chin": 20, "waist": (50, 100), "arms": {"left": arm}, "skirtInArms": True}
+        v = np.array([[50.0, 60.0], [50.0, 200.0]])
+        w = dict(weights_for(Layer("handwear.left", "handwear", np.zeros((1, 1, 4), np.float32), "left"), v, lm))
+        np.testing.assert_allclose(sum(w.values()), 1.0)
+        self.assertLess(w["lower"][0], 1e-6)
+        self.assertGreater(w["lower"][1], 0.999)
 
 class PaperTests(unittest.TestCase):
     def test_enclosed_white_is_paper_unless_a_layer_or_a_sure_matte_claims_it(self):

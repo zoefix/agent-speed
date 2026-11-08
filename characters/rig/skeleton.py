@@ -246,27 +246,15 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
         w_2 = smoothstep(lk["mid"][1] - 0.2 * face_h, lk["mid"][1] + 0.6 * face_h, y) * (1 - w_bangs)
         return [("bangs", w_bangs), ("lock1", 1 - w_bangs - w_2), ("lock2", w_2)]
     if tag == "handwear" and (arm is not None or (side or "single") in lm["arms"]):
-        key = side or "single"
-        arm = arm if arm is not None else lm["arms"][key]
-        if arm.get("tip") is not None:
-            chest, upper, fore = arm_weights(vertices, arm)
-            return [(f"shoulder.{key}", chest), (f"arm.{key}{suffix}", upper), (f"forearm.{key}{suffix}", fore)]
-        field = arm["field"]
-        xi = np.clip(x.astype(int), 0, field.shape[1] - 1)
-        yi = np.clip(y.astype(int), 0, field.shape[0] - 1)
-        d = field[yi, xi]
-        if np.isnan(d).any():
-            sx, sy = arm["shoulder"]
-            fallback = np.hypot(x - sx, y - sy)
-            d = np.where(np.isnan(d), fallback, d)
-        reach = arm["reach"]
-        w_arm = smoothstep(0.0, 0.14 * reach, d)
-        w_fore = smoothstep(0.38 * reach, 0.62 * reach, d)
-        return [(f"shoulder.{key}", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
-                (f"forearm.{key}{suffix}", w_arm * w_fore)]
+        out = _arm_layer_weights(vertices, lm, side, arm, suffix)
+        if lm.get("skirtInArms"):
+            # The split drew the skirt into the arm layer: below the waist it eases over to the hips.
+            t = smoothstep(lm["waist"][1] + 0.2 * face_h, lm["waist"][1] + 1.2 * face_h, y)
+            out = [(bone, w * (1 - t)) for bone, w in out] + [("lower", t)]
+        return out
     if tag == "objects" and attach:
         return [(attach, one)]
-    if lm.get("seated") and tag in ("footwear", "legwear", "bottomwear"):
+    if lm.get("rigidLower") and tag in ("footwear", "legwear", "bottomwear"):
         if tag == "bottomwear":
             w_low = _below_waist(y, lm, face_h)
             return [("chest", 1 - w_low), ("lower", w_low)]
@@ -283,6 +271,28 @@ def weights_for(layer, vertices, lm, attach=None, arm=None, suffix=""):
     if tag == "bottomwear":
         return skirt_weights(y, lm, face_h)
     return [("lower", one)]
+
+
+def _arm_layer_weights(vertices, lm, side, arm, suffix):
+    x, y = vertices[:, 0], vertices[:, 1]
+    key = side or "single"
+    arm = arm if arm is not None else lm["arms"][key]
+    if arm.get("tip") is not None:
+        chest, upper, fore = arm_weights(vertices, arm)
+        return [(f"shoulder.{key}", chest), (f"arm.{key}{suffix}", upper), (f"forearm.{key}{suffix}", fore)]
+    field = arm["field"]
+    xi = np.clip(x.astype(int), 0, field.shape[1] - 1)
+    yi = np.clip(y.astype(int), 0, field.shape[0] - 1)
+    d = field[yi, xi]
+    if np.isnan(d).any():
+        sx, sy = arm["shoulder"]
+        fallback = np.hypot(x - sx, y - sy)
+        d = np.where(np.isnan(d), fallback, d)
+    reach = arm["reach"]
+    w_arm = smoothstep(0.0, 0.14 * reach, d)
+    w_fore = smoothstep(0.38 * reach, 0.62 * reach, d)
+    return [(f"shoulder.{key}", 1 - w_arm), (f"arm.{key}{suffix}", w_arm * (1 - w_fore)),
+            (f"forearm.{key}{suffix}", w_arm * w_fore)]
 
 
 def _below_waist(y, lm, face_h):
