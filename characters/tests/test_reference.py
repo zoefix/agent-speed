@@ -786,6 +786,26 @@ class LayerTests(unittest.TestCase):
             ys = np.nonzero(hat.alpha[:, 100] > 0.5)[0]
             self.assertGreaterEqual(ys.max(), 90 + (10 if seated else -1))
 
+    def test_a_robe_front_drawn_into_the_arm_layer_goes_to_the_body_up_to_the_ink_line(self):
+        from characters.rig.layers import Layer, split_body_from_arms
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[60:190, 80:100] = 0.3
+        ref[60:190, 100:102] = 0.0
+        ref[60:190, 102:150] = 0.6
+        rgba = np.zeros((200, 200, 4), np.float32)
+        rgba[60:190, 80:150, 3] = 1
+        arm = Layer("handwear.right", "handwear", rgba, "right")
+        arms = {"left": {"shoulder": (40, 60), "elbow": (35, 120), "wrist": (32, 180)},
+                "right": {"shoulder": (140, 60), "elbow": (135, 120), "wrist": (132, 180)}}
+        parts, moved = split_body_from_arms([arm], arms, ref, (75, 10, 105, 40))
+        self.assertEqual([q.name for q in parts], ["handwear.right", "handwear.right body"])
+        self.assertGreater(moved, 1000)
+        self.assertEqual(parts[1].tag, "topwear")
+        self.assertEqual(parts[1].alpha[120, 90], 1.0)
+        self.assertEqual(parts[0].alpha[120, 90], 0.0)
+        self.assertEqual(parts[0].alpha[120, 125], 1.0)
+        self.assertEqual(parts[1].alpha[120, 125], 0.0)
+
     def test_hair_painted_behind_a_held_doll_goes_with_the_doll(self):
         from characters.rig.layers import Layer, take_prop
         hair = np.zeros((80, 80, 4), np.float32)

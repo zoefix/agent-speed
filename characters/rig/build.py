@@ -172,7 +172,11 @@ def main(argv=None):
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
     parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
-    parts, hats = layers.lift_hats(parts, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
+    face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
+    if hints.get("bodyInArms"):
+        parts, moved = layers.split_body_from_arms(parts, arm_joints, reference, face_box)
+        print(f"body drawn into the arms cut out along the ink lines: {moved} px")
+    parts, hats = layers.lift_hats(parts, face_box)
     if hats:
         print(f"hats drawn into the top given to the head: {hats}")
     layers.grow_underlays(parts)

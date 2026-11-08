@@ -274,6 +274,47 @@ def split_by_arms(layers, arms, reference=None, core=4.0):
     return out
 
 
+def split_body_from_arms(layers, arms, reference, face_box, core=4.0, inset=0.15, clear=0.35):
+    """Cuts out of each arm layer the body the split drew into it (the front of a robe beside a wide sleeve), along
+    the art's ink lines: the arm grows from its bones (pixels within `core` px of shoulder-elbow-wrist), the body from
+    the torso (between the shoulders, `inset` face widths in from each, below the upper face, over `clear` face widths
+    from the arm's bones so a forearm across the chest seeds no body), over the art's gradient (a watershed), so a
+    sleeve stays with its arm up to the line that parts it from the robe. What the
+    body reaches becomes a `topwear` layer right after the arm, so it keeps its place in the draw order and moves with
+    the chest and hips. Returns the layers and the pixels moved."""
+    if not {"left", "right"} <= set(arms):
+        return layers, 0
+    from skimage.segmentation import watershed
+    fx0, fy0, fx1, fy1 = face_box
+    face_w, face_h = fx1 - fx0, fy1 - fy0
+    xs = sorted(arms[side]["shoulder"][0] for side in ("left", "right"))
+    gradient = ndimage.gaussian_gradient_magnitude(reference.mean(axis=2), 1.2)
+    yy, xx = np.mgrid[0:reference.shape[0], 0:reference.shape[1]].astype(np.float32)
+    torso = (xx > xs[0] + inset * face_w) & (xx < xs[1] - inset * face_w) & (yy > fy0 + 0.5 * face_h)
+    out, moved = [], 0
+    for layer in layers:
+        out.append(layer)
+        if layer.tag != "handwear" or layer.side not in arms:
+            continue
+        mask = layer.alpha > 0.02
+        shoulder, elbow, wrist = (np.asarray(arms[layer.side][k], np.float64) for k in ("shoulder", "elbow", "wrist"))
+        bone = np.minimum(_segment_distance(xx, yy, shoulder, elbow), _segment_distance(xx, yy, elbow, wrist))
+        markers = np.zeros(mask.shape, np.int32)
+        markers[mask & (bone < core)] = 1
+        markers[mask & torso & (bone >= max(4 * core, clear * face_w))] = 2
+        if not (markers == 2).any():
+            continue
+        body = watershed(gradient, markers, mask=mask) == 2
+        if body.sum() < 200:
+            continue
+        rgba = layer.rgba.copy()
+        rgba[..., 3] = np.where(body, rgba[..., 3], 0.0)
+        layer.rgba[..., 3] = np.where(body, 0.0, layer.alpha)
+        out.append(Layer(f"{layer.name} body", "topwear", rgba))
+        moved += int((body & (rgba[..., 3] > 0.5)).sum())
+    return out, moved
+
+
 def grow_underlays(layers, radius=10):
     """Extends each layer under the opaque layers above it, so moving parts never open gaps."""
     for i, layer in enumerate(layers):
