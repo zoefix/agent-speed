@@ -186,7 +186,7 @@ public sealed class LiveMonitor : IDisposable
     /// <summary>Every automatic OpenClaw state folder: the override alone, else <c>.openclaw</c> and its profiles.</summary>
     public static IReadOnlyList<string> DefaultOpenClawRoots => OpenClaw.OpenClawPaths.AutomaticStateFolders();
 
-    /// <summary>The three Antigravity stores below <c>~/.gemini</c>: CLI, desktop app, IDE (METRICS 2, 4.8).</summary>
+    /// <summary>Native Antigravity stores and, on Windows, valid T3 Code ACP stores (METRICS 2, 4.8).</summary>
     public static IReadOnlyList<string> DefaultAntigravityStores => AntigravityPaths.DefaultStores(Path.Combine(UserHome, ".gemini"));
 
     /// <summary>The Antigravity folders read for a setting (null: the default stores); a <c>*-backup</c> store is never read.</summary>

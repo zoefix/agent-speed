@@ -131,6 +131,7 @@ public sealed class HistoryServiceTests : IDisposable
         _temp.Combine("dsh", "sessions"),
         _temp.Combine("opencode"),
         _temp.Combine("gemini", "tmp"),
+        AntigravityRoot: _temp.Combine("antigravity"),
         HermesRoot: _temp.Combine("hermes"),
         DroidRoot: _temp.Combine(".factory"));
 
