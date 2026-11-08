@@ -170,7 +170,7 @@ def main(argv=None):
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
-    parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints)))
+    parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
     layers.grow_underlays(parts)
     rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
 

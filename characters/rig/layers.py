@@ -189,10 +189,13 @@ def _segment_distance(xx, yy, a, b):
     return np.hypot(xx - (a[0] + t * ab[0]), yy - (a[1] + t * ab[1]))
 
 
-def split_by_arms(layers, arms):
+def split_by_arms(layers, arms, reference=None, core=4.0):
     """Splits the arm layer that split_pairs left whole (both sleeves drawn as one blob, as when both hands hold a
-    flute on one side) by the nearer of the two arms the pose model found (shoulder, elbow, wrist and half a forearm
-    past the wrist for the hand)."""
+    flute on one side) between the two arms the pose model found. With the `reference` art, each arm grows from its
+    bones (pixels within `core` px of shoulder-elbow-wrist) over the art's gradient (a watershed), so cloth stays with
+    the arm it is drawn continuous with and the split follows the ink lines: a wide sleeve hanging far below its own
+    forearm is not handed to the other hand in front of it. Pixels neither arm reaches, or every pixel without the
+    art, go to the nearer arm (shoulder, elbow, wrist and half a forearm past the wrist for the hand)."""
     if not {"left", "right"} <= set(arms):
         return layers
     out = []
@@ -201,15 +204,25 @@ def split_by_arms(layers, arms):
             out.append(layer)
             continue
         yy, xx = np.mgrid[0:layer.alpha.shape[0], 0:layer.alpha.shape[1]].astype(np.float32)
-        dist = {}
+        dist, bone = {}, {}
         for side in ("left", "right"):
             shoulder, elbow, wrist = (np.asarray(arms[side][k], np.float64) for k in ("shoulder", "elbow", "wrist"))
             reach = wrist + 0.5 * (wrist - elbow)
-            dist[side] = np.minimum.reduce([_segment_distance(xx, yy, a, b)
-                                            for a, b in ((shoulder, elbow), (elbow, wrist), (wrist, reach))])
-        for side, mask in (("left", dist["left"] <= dist["right"]), ("right", dist["left"] > dist["right"])):
+            segments = [_segment_distance(xx, yy, a, b) for a, b in ((shoulder, elbow), (elbow, wrist), (wrist, reach))]
+            dist[side] = np.minimum.reduce(segments)
+            bone[side] = np.minimum(segments[0], segments[1])
+        left = dist["left"] <= dist["right"]
+        if reference is not None:
+            from skimage.segmentation import watershed
+            mask = layer.alpha > 0.02
+            markers = np.zeros(mask.shape, np.int32)
+            markers[mask & (bone["left"] < core) & (bone["right"] >= core)] = 1
+            markers[mask & (bone["right"] < core) & (bone["left"] >= core)] = 2
+            grown = watershed(ndimage.gaussian_gradient_magnitude(reference.mean(axis=2), 1.2), markers, mask=mask)
+            left = np.where(grown == 1, True, np.where(grown == 2, False, left))
+        for side, keep in (("left", left), ("right", ~left)):
             rgba = layer.rgba.copy()
-            rgba[..., 3] = np.where(mask, rgba[..., 3], 0)
+            rgba[..., 3] = np.where(keep, rgba[..., 3], 0)
             out.append(Layer(f"{layer.name}.{side}", layer.tag, rgba, side))
     return out
 
