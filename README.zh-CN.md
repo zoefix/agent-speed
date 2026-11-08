@@ -87,7 +87,7 @@ Agent Speed 只读取 agent 本来就写在你电脑上的记录：
 | OpenCode（命令行与桌面版） | `~/.local/share/opencode/opencode.db`（或 `$XDG_DATA_HOME/opencode`） |
 | Gemini CLI | `~/.gemini/tmp`（或 `$GEMINI_CLI_HOME/.gemini/tmp`） |
 | omp（oh-my-pi） | `~/.omp/agent/sessions`，以及 `~/.omp/profiles` 里的每个配置文件（或 `$PI_CODING_AGENT_DIR/sessions`） |
-| Antigravity（`agy` 命令行、桌面版、IDE 与扩展） | `~/.gemini/antigravity-cli`、`~/.gemini/antigravity`、`~/.gemini/antigravity-ide`（其中的 `conversations` 文件夹） |
+| Antigravity（`agy` 命令行、桌面版、IDE 与扩展） | `~/.gemini/antigravity-cli`、`~/.gemini/antigravity`、`~/.gemini/antigravity-ide`（其中的 `conversations` 文件夹）；Windows 还会发现 `~/.t3/userdata/providers/antigravity/*/antigravity-acp` 存储目录 |
 | WorkBuddy（腾讯，国内版） | `~/.workbuddy/projects` |
 | WorkBuddy AI（国际版） | `~/.workbuddy-ai/projects` |
 | ZCode | `~/.zcode/cli/db/db.sqlite`（或 `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
