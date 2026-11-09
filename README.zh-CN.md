@@ -44,6 +44,16 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 加上 `--purge` / `-Purge` 会同时删除设置。Windows 也可以在「设置 → 应用」中卸载。
 </details>
 
+## AI 娘
+
+<p align="center"><img src="docs/images/characters.webp" width="900" alt="17 位 AI 娘的合照，每家模型一位"></p>
+
+在悬浮窗上右键，选「**样式 → 角色**」，桌面上就会站着一位 AI 娘，跟着 agent 的速度起舞：越快动作越大。共 17 位，每家模型一位：Claude、DeepSeek、Gemini、GLM、GPT、Grok、混元、JEV、Kimi、Llama、MiniMax、Mistral、Perplexity、Qwen、RWKV、Seed、文心。悬浮窗会换成当前最快的模型那一位，也可以固定一位。速度、性能、网络速度、费用和今日用量化成卡片浮在她身旁，不会被她挡住。第一次切换时，角色会从本项目的 Releases 下载，每一位都先核对大小与 SHA-256 才安装。
+
+<p align="center"><img src="docs/images/character-orbs.webp" width="900" alt="三个角色悬浮窗，身旁浮着速度、性能、网速、费用和今日卡片"></p>
+
+<p align="center"><sub>画师：ZipZipPipe（经授权使用）。DeepSeek 娘原创角色：上善无形（CC BY-NC-SA 4.0）。</sub></p>
+
 ## 功能
 
 - **悬浮窗**——烟熏玻璃质感的仪表，36 格 LED 表盘。速度一路攀升时，称号也跟着升级——从「步行」「自行车」到「高铁」「战斗机」，冲到红线就是「火箭」；表盘沿着热度光谱点亮、彗星绕圈疾驰、火花四溅、余烬升腾，每完成一次回应就释放一道冲击波；打破今日纪录还会庆祝。

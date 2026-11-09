@@ -44,6 +44,16 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 `--purge` / `-Purge` を付けると設定も削除します。Windows では「設定 → アプリ」からも削除できます。
 </details>
 
+## AI キャラクター
+
+<p align="center"><img src="docs/images/characters.webp" width="900" alt="モデルの開発元ごとに 1 人、17 人の AI キャラクターの集合写真"></p>
+
+オーブを右クリックして「**スタイル → キャラクター**」を選ぶと、デスクトップに AI キャラクターが立ち、agent の速度に合わせて踊ります。速いほど動きが大きくなります。全 17 人、モデルの開発元ごとに 1 人：Claude、DeepSeek、Gemini、GLM、GPT、Grok、混元、JEV、Kimi、Llama、MiniMax、Mistral、Perplexity、Qwen、RWKV、Seed、文心。オーブにはいちばん速いモデルのキャラクターが表示され、1 人に固定することもできます。速度、性能、ネットワーク速度、費用、今日の使用量はカードになって彼女のそばに浮かび、彼女に隠れることはありません。初めて切り替えたときに、このリポジトリの Releases からダウンロードされ、それぞれサイズと SHA-256 を確認してからインストールされます。
+
+<p align="center"><img src="docs/images/character-orbs.webp" width="900" alt="速度、性能、ネットワーク、費用、今日のカードを浮かべた 3 つのキャラクターオーブ"></p>
+
+<p align="center"><sub>イラスト：ZipZipPipe（許可を得て使用）。DeepSeek ちゃんの原作キャラクター：上善无形（CC BY-NC-SA 4.0）。</sub></p>
+
 ## 特長
 
 - **フローティングオーブ**——スモークガラスの計器と 36 セグメントの LED ゲージ。速度が上がるにつれて称号もランクアップ——「徒歩」「自転車」から「新幹線」「戦闘機」へ、レッドラインに達すれば「ロケット」。ゲージは熱のスペクトルに沿って点灯し、彗星がリングを駆け、火花が散り、残り火が舞い上がり、応答が完了するたびに衝撃波が広がります。今日のピークを更新するとお祝いします。

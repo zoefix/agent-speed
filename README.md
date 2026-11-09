@@ -49,6 +49,16 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 Add `--purge` / `-Purge` to remove settings as well. On Windows you can also uninstall from *Settings → Apps*.
 </details>
 
+## AI characters
+
+<p align="center"><img src="docs/images/characters.webp" width="900" alt="The 17 AI characters standing together, one for each model maker"></p>
+
+Right-click an orb and choose **Style → Character**: an AI character stands on your desktop and dances to your agents' speed — the faster they run, the bigger she moves. There are 17, one for each model maker: Claude, DeepSeek, Gemini, GLM, GPT, Grok, Hunyuan, JEV, Kimi, Llama, MiniMax, Mistral, Perplexity, Qwen, RWKV, Seed and Wenxin. The orb shows the one whose model is running fastest, or the one you choose. Speed, performance, network speed, cost and today's usage float beside her as cards, never hidden behind her. The characters download from this repository's releases the first time you switch, each checked against its size and SHA-256 before it is installed.
+
+<p align="center"><img src="docs/images/character-orbs.webp" width="900" alt="Three character orbs with their speed, performance, network, cost and today cards"></p>
+
+<p align="center"><sub>Art by ZipZipPipe, used with permission. DeepSeek-chan's original character by 上善无形 (CC BY-NC-SA 4.0).</sub></p>
+
 ## What you get
 
 - **Floating orb** — a smoked-glass instrument with a 36-segment LED gauge. As speed climbs, so does its title — from *Walking* and *Bicycle* through *Bullet Train* and *Fighter Jet* to *Rocket* at the redline — while the gauge sweeps through the heat spectrum, a comet races around the ring, sparks fly, embers rise and every finished response sends out a shockwave. Beat your daily peak and it celebrates.
