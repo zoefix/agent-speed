@@ -301,14 +301,14 @@ def tail_from_back_hair(layers, mask, reach=3, min_px=500):
     return int(piece.sum())
 
 
-def seal_tail(layers, reference, core=2, notch=15):
+def seal_tail(layers, reference, core=2, notch=15, rim=3):
     """Makes the tail whole where it shows. The pieces it was stitched from (a recovered base, a piece from the hair)
     meet with soft edges and leave notches between them, which show the backdrop as a crack once the tail swings over
     it. Notches up to about 2 * `notch` px across (the tail's outline closed by a disk of radius `notch`) are filled
     with the art as it shows there, so the rest pose is unchanged; then the tail is opaque inside its outline (eroded
     by `core` px).
-    What layers drawn over it hide stays as it is (See-Through's dark guess there would show as a slab once the tail
-    swings out)."""
+    What layers drawn over it hide keeps its opacity (See-Through's guess there would show as a slab once the tail
+    swings out) but takes a blur of the tail that shows, `rim` px inside its outline, so it is no dark band either."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
     if index is None:
         return
@@ -323,6 +323,17 @@ def seal_tail(layers, reference, core=2, notch=15):
     tail.rgba[..., 3] = np.where(gap, 1.0, tail.alpha)
     inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
     tail.rgba[..., 3] = np.where(inside & ~hidden, 1.0, tail.alpha)
+    # What the clothes hide of the tail is See-Through's guess, often dark; it shows once the tail swings out, so it
+    # takes a blur of the tail that shows, away from its outline.
+    covered = hidden & (tail.alpha > 0.05)
+    shows = ndimage.binary_erosion((tail.alpha > 0.5) & ~hidden, iterations=rim)
+    if covered.any() and shows.any():
+        ys, xs = np.nonzero(covered | shows)
+        h, w = covered.shape
+        box = (slice(max(ys.min() - 4, 0), min(ys.max() + 5, h)), slice(max(xs.min() - 4, 0), min(xs.max() + 5, w)))
+        view = tail.rgba[box]
+        colors = _smooth_fill(view[..., :3].copy(), shows[box])
+        view[..., :3] = np.where(covered[box][..., None], colors, view[..., :3])
 
 
 def tail_alone(layers, reference, share=0.5, min_px=2000):
@@ -522,17 +533,22 @@ def fill_hidden_legs(layers, solid=0.3, shade=10, edge=2, reach=6):
     return repainted
 
 
-def back_tail_root(layers, root, reach, pad=4):
-    """Fills what lies behind the tail near its root (within `reach` px) with the layers drawn under it, each taking
-    the part nearest its own pixels, in the colors of its nearest pixel: the tail swings away from the body there, and
-    what it uncovers shows the coat or the hair it hung over, not the backdrop. Returns the pixels filled."""
+def back_tail_root(layers, root, reach, band=25, rim=3, pad=4):
+    """Fills what lies behind the tail near its root (within `reach` px) with the layers drawn under it (not wings,
+    which swing too), each running on up to `band` px past its own pixels, the nearest layer first, in a smooth blur
+    of its colors away from its outline (_smooth_fill of its pixels `rim` px inside; copying its nearest pixel would
+    streak its ink lines): the tail swings away from the body there, and what it uncovers shows the coat or the hair
+    it hung over, not the backdrop. Returns the pixels filled."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
     if index is None or index == 0:
         return 0
-    tail, below = layers[index], layers[:index]
+    tail = layers[index]
+    below = [layer for layer in layers[:index] if layer.tag != "wings"]
+    if not below:
+        return 0
     h, w = tail.alpha.shape
     yy, xx = np.mgrid[0:h, 0:w]
-    zone = (tail.alpha > 0.05) & (np.hypot(xx - root[0], yy - root[1]) < reach) & (coverage(below) < 0.98)
+    zone = (tail.alpha > 0.05) & (np.hypot(xx - root[0], yy - root[1]) < reach) & (coverage(layers[:index]) < 0.98)
     if not zone.any():
         return 0
     ys, xs = np.nonzero(zone)
@@ -540,23 +556,23 @@ def back_tail_root(layers, root, reach, pad=4):
     box = (slice(max(ys.min() - r, 0), min(ys.max() + r, h)), slice(max(xs.min() - r, 0), min(xs.max() + r, w)))
     best = np.full(zone[box].shape, np.inf)
     owner = np.full(zone[box].shape, -1)
-    nearest = {}
     for k, layer in enumerate(below):
         solid = layer.alpha[box] > 0.5
         if not solid.any():
             continue
-        dist, idx = ndimage.distance_transform_edt(~solid, return_indices=True)
+        dist = ndimage.distance_transform_edt(~solid)
         closer = dist < best
         best = np.where(closer, dist, best)
         owner = np.where(closer, k, owner)
-        nearest[k] = idx
     filled = 0
-    for k, (iy, ix) in nearest.items():
-        pick = zone[box] & (owner == k) & (best < reach)
+    for k, layer in enumerate(below):
+        pick = zone[box] & (owner == k) & (best < band)
         if not pick.any():
             continue
-        view = below[k].rgba[box]
-        view[..., :3] = np.where(pick[..., None], view[iy, ix, :3], view[..., :3])
+        view = layer.rgba[box]
+        known = ndimage.binary_erosion(view[..., 3] > 0.5, iterations=rim)
+        colors = _smooth_fill(view[..., :3].copy(), known if known.any() else view[..., 3] > 0.5)
+        view[..., :3] = np.where(pick[..., None], colors, view[..., :3])
         view[..., 3] = np.where(pick, 1.0, view[..., 3])
         filled += int(pick.sum())
     return filled
