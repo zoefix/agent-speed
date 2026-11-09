@@ -6,6 +6,9 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     board_test.cpp
+    character_fixture_test.cpp
+    character_performer_test.cpp
+    character_wings_test.cpp
     current_values_test.cpp
     devin_fixture_test.cpp
     devin_source_test.cpp
@@ -68,6 +71,12 @@ endif()
 
 include(GoogleTest)
 gtest_discover_tests(agentspeed_tests)
+
+# Counts heap allocations through a replacement operator new, so it runs in a binary of its own.
+add_executable(agentspeed_character_alloc_tests character_alloc_test.cpp)
+target_link_libraries(agentspeed_character_alloc_tests PRIVATE agentspeed_character GTest::gtest_main)
+target_compile_definitions(agentspeed_character_alloc_tests PRIVATE AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
+gtest_discover_tests(agentspeed_character_alloc_tests)
 
 # The app's settings side (DESIGN 5 Storage, METRICS 2.1 Editing) needs Qt: built only with the app.
 if(AGENTSPEED_BUILD_APP)
