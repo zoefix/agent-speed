@@ -13,7 +13,7 @@ namespace {
 
 constexpr int kMaxArrangements = 16;
 const QStringList kStyles{QStringLiteral("led"), QStringLiteral("needle"), QStringLiteral("liquid"), QStringLiteral("reactor"),
-                          QStringLiteral("minimal")};
+                          QStringLiteral("minimal"), QStringLiteral("character")};
 const QStringList kTraffic{QStringLiteral("sources"), QStringLiteral("machine"), QStringLiteral("intelligence"), QStringLiteral("off")};
 
 std::optional<int> optionalInt(const QJsonValue& value) {
@@ -62,6 +62,53 @@ OrbConfig OrbConfig::fromJson(const QJsonObject& o) {
     c.traffic = traffic.isUndefined() ? QStringLiteral("sources") : kTraffic.contains(traffic.toString()) ? traffic.toString() : QStringLiteral("off");
     const auto showName = o.value(QStringLiteral("showName"));
     if (showName.isBool()) c.showName = showName.toBool();
+    if (const auto character = o.value(QStringLiteral("character")); character.isString()) {
+        c.character = cleanCharacter(character.toString());
+    }
+    c.characterReadouts = readoutsFromJson(o.value(QStringLiteral("characterReadouts")));
+    return c;
+}
+
+std::optional<QString> OrbConfig::cleanCharacter(const QString& id) {
+    const auto clean = agentspeed::character::cleanCharacterID(id.toStdString());
+    if (!clean) return std::nullopt;
+    return QString::fromStdString(*clean);
+}
+
+agentspeed::character::CharacterReadouts OrbConfig::readoutsFromJson(const QJsonValue& value) {
+    agentspeed::character::CharacterReadouts r;
+    if (!value.isObject()) return r;
+    const auto o = value.toObject();
+    for (const auto readout : agentspeed::character::kCharacterReadouts) {
+        const auto v = o.value(QLatin1String(agentspeed::character::key(readout)));
+        if (v.isBool()) r.set(readout, v.toBool());
+    }
+    return r;
+}
+
+QJsonObject OrbConfig::readoutsToJson(const agentspeed::character::CharacterReadouts& r) {
+    QJsonObject o;
+    for (const auto readout : agentspeed::character::kCharacterReadouts) {
+        o.insert(QLatin1String(agentspeed::character::key(readout)), r.get(readout));
+    }
+    return o;
+}
+
+OrbConfig OrbConfig::childOf(const OrbConfig& from, const QString& id) {
+    OrbConfig c;
+    c.id = id;
+    c.style = from.style;
+    c.size = from.size;
+    c.opacity = from.opacity;
+    c.alwaysOnTop = from.alwaysOnTop;
+    c.clickThrough = from.clickThrough;
+    c.fadeWhenIdle = from.fadeWhenIdle;
+    c.titleTheme = from.titleTheme;
+    c.unit = from.unit;
+    c.traffic = from.traffic;
+    c.showName = from.showName;
+    c.character = from.character;
+    c.characterReadouts = from.characterReadouts;
     return c;
 }
 
@@ -88,6 +135,10 @@ QJsonObject OrbConfig::toJson() const {
     o.insert(QStringLiteral("unit"), unit);
     o.insert(QStringLiteral("traffic"), traffic);
     o.insert(QStringLiteral("showName"), showName ? QJsonValue(*showName) : QJsonValue(QJsonValue::Null));
+    if (character) o.insert(QStringLiteral("character"), *character);
+    else o.remove(QStringLiteral("character"));
+    if (!characterReadouts.isDefault()) o.insert(QStringLiteral("characterReadouts"), readoutsToJson(characterReadouts));
+    else o.remove(QStringLiteral("characterReadouts"));
     return o;
 }
 

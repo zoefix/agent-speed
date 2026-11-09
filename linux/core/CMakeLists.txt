@@ -130,6 +130,7 @@ add_library(agentspeed_character STATIC
     src/character/pose_switch.cpp
     src/character/rhythm.cpp
     src/character/rig.cpp
+    src/character/selection.cpp
     src/character/springs.cpp
 )
 target_link_libraries(agentspeed_character PUBLIC agentspeed_base)

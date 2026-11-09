@@ -8,6 +8,7 @@ add_executable(agentspeed_tests
     board_test.cpp
     character_fixture_test.cpp
     character_performer_test.cpp
+    character_selection_test.cpp
     character_wings_test.cpp
     current_values_test.cpp
     devin_fixture_test.cpp
@@ -85,6 +86,7 @@ if(AGENTSPEED_BUILD_APP)
         app/board_fade_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
+        app/orb_character_test.cpp
         app/orb_size_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp

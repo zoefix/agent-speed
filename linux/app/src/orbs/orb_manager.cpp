@@ -506,21 +506,7 @@ void OrbManager::setHosts(const QString& id, const QVariant& hosts) {
 
 // Add, Duplicate and Split copy the look and the toggles; a new orb's sources are the first detected source no orb
 // tracks explicitly (else all sources).
-OrbConfig OrbManager::childOf(const OrbConfig& from) const {
-    OrbConfig c;
-    c.id = OrbsStore::newId();
-    c.style = from.style;
-    c.size = from.size;
-    c.opacity = from.opacity;
-    c.alwaysOnTop = from.alwaysOnTop;
-    c.clickThrough = from.clickThrough;
-    c.fadeWhenIdle = from.fadeWhenIdle;
-    c.titleTheme = from.titleTheme;
-    c.unit = from.unit;
-    c.traffic = from.traffic;
-    c.showName = from.showName;
-    return c;
-}
+OrbConfig OrbManager::childOf(const OrbConfig& from) const { return OrbConfig::childOf(from, OrbsStore::newId()); }
 
 void OrbManager::add(const QString& from) {
     const auto* source = store_.find(from.isEmpty() ? selected_ : from);
