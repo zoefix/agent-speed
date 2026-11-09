@@ -18,6 +18,17 @@ off are listed in `spec/NETWORK.md`; with that switch off, nothing in this docum
 - Asset downloads follow redirects, but every URL (initial and after redirects) must be `https` on `github.com`,
   `api.github.com`, `objects.githubusercontent.com` or `release-assets.githubusercontent.com`. Anything else aborts.
 - Asset size must be ≤ 300 MiB and must match `assets[].size`.
+- Windows fallback: if the REST API is rate-limited (403/429), unavailable or times out, try GitHub's public
+  `GET https://github.com/zoefix/agent-speed/releases/latest` redirect (`Accept: text/html`) and
+  `GET https://github.com/zoefix/agent-speed/releases.atom` (`Accept: application/atom+xml`). The redirect identifies
+  the latest stable tag; only that exact release's Atom entry supplies its title, notes and timestamp. Drafts and
+  pre-releases are never selected from the Atom feed. The feed has the same 2 MiB cap as the REST response, with
+  external XML entities and DTDs disabled. The fallback has its own 15 s deadline and uses the same proxy, HTTPS,
+  redirect allow-list and credential-free requests. It is never used for a local feed override.
+  Request only the headers of that tag's current-architecture Windows zip and `SHA256SUMS.txt` (GET with
+  `Accept: application/octet-stream`, bodies not read); their positive, bounded `Content-Length` values supply the
+  exact asset sizes. Missing or invalid metadata is a failed check, never an up-to-date result. Installation still
+  downloads and verifies both files normally, including exact sizes, SHA-256 and executable version.
 
 ## 2. Versions
 
