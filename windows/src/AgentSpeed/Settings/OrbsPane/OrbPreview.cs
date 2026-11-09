@@ -57,6 +57,23 @@ internal sealed class OrbPreview : FrameworkElement
     private readonly DispatcherTimer _loop;
     private readonly DispatcherTimer _settle;
     private readonly System.Diagnostics.Stopwatch _clock = System.Diagnostics.Stopwatch.StartNew();
+    public static readonly DependencyProperty CharacterIdProperty = DependencyProperty.Register(nameof(CharacterId), typeof(string),
+        typeof(OrbPreview), new PropertyMetadata(null, (d, _) => ((OrbPreview)d).InvalidateVisual()));
+
+    /// <summary>
+    /// The portrait of a <c>character</c> orb (DESIGN 5: the locked, else the first installed character's
+    /// <c>preview.png</c>), or null for a quiet silhouette; set by the app.
+    /// </summary>
+    public static Func<string?, ImageSource?>? CharacterPortrait { get; set; }
+
+    /// <summary>Installed characters changed: every character preview redraws.</summary>
+    public static event EventHandler? CharacterPortraitsChanged;
+
+    public static void NotifyCharacterPortraits() => CharacterPortraitsChanged?.Invoke(null, EventArgs.Empty);
+
+    /// <summary>The orb's locked character (null: Auto) for the <c>character</c> style's portrait.</summary>
+    public string? CharacterId { get => (string?)GetValue(CharacterIdProperty); set => SetValue(CharacterIdProperty, value); }
+
     private OrbStyleCardViewModel? _card;
     private UIElement? _hoverHost;
     private readonly TierTracker _tier = new(holdSeconds: 0.3);
@@ -85,6 +102,7 @@ internal sealed class OrbPreview : FrameworkElement
         DataContextChanged += (_, _) => TrackCard();
         Loaded += (_, _) =>
         {
+            CharacterPortraitsChanged += OnPortraitsChanged;
             TrackHover(true);
             TrackCard();
             Reconfigure();
@@ -92,6 +110,7 @@ internal sealed class OrbPreview : FrameworkElement
         };
         Unloaded += (_, _) =>
         {
+            CharacterPortraitsChanged -= OnPortraitsChanged;
             _loop.Stop();
             _settle.Stop();
             TrackHover(false);
@@ -122,7 +141,36 @@ internal sealed class OrbPreview : FrameworkElement
 
     public SpeedTitle Title { get => (SpeedTitle)GetValue(TitleProperty); set => SetValue(TitleProperty, value); }
 
-    protected override int VisualChildrenCount => _surface is null ? 0 : 1;
+    private void OnPortraitsChanged(object? sender, EventArgs e) => InvalidateVisual();
+
+    /// <summary>The <c>character</c> style shows her portrait, not a rendered orb (DESIGN 2a.6, LOD; DESIGN 5 style cards).</summary>
+    protected override void OnRender(DrawingContext drawingContext)
+    {
+        ArgumentNullException.ThrowIfNull(drawingContext);
+        if (StyleKind != OrbStyle.Character)
+        {
+            return;
+        }
+
+        var d = Diameter;
+        if (CharacterPortrait?.Invoke(CharacterId) is { } portrait && portrait.Height > 0)
+        {
+            var h = d * 1.1;
+            var w = h * portrait.Width / portrait.Height;
+            RenderOptions.SetBitmapScalingMode(this, BitmapScalingMode.HighQuality);
+            drawingContext.DrawImage(portrait, new Rect((d - w) / 2, d - h + d * 0.05, w, h));
+            return;
+        }
+
+        var ink = new SolidColorBrush(Dark ? Color.FromArgb(0x60, 0xFF, 0xFF, 0xFF) : Color.FromArgb(0x50, 0, 0, 0));
+        ink.Freeze();
+        var glyph = new FormattedText("\uE77B", System.Globalization.CultureInfo.InvariantCulture, FlowDirection.LeftToRight,
+            new Typeface(new FontFamily("Segoe Fluent Icons, Segoe MDL2 Assets"), FontStyles.Normal, FontWeights.Normal, FontStretches.Normal),
+            d * 0.6, ink, VisualTreeHelper.GetDpi(this).PixelsPerDip);
+        drawingContext.DrawText(glyph, new Point((d - glyph.Width) / 2, (d - glyph.Height) / 2));
+    }
+
+    protected override int VisualChildrenCount => _surface is null || StyleKind == OrbStyle.Character ? 0 : 1;
 
     protected override Visual GetVisualChild(int index) =>
         index == 0 && _surface is not null ? _surface : throw new ArgumentOutOfRangeException(nameof(index));
@@ -142,8 +190,16 @@ internal sealed class OrbPreview : FrameworkElement
 
     private void Reconfigure()
     {
+        InvalidateVisual();
         if (_surface is null || !IsLoaded)
         {
+            return;
+        }
+
+        if (StyleKind == OrbStyle.Character)
+        {
+            _surface.Paused = true;
+            _loop.Stop();
             return;
         }
 

@@ -705,14 +705,13 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 
     // ---- Hover and click-through ----
 
+    /// <summary>The disc, or the capsule around a character's body (DESIGN 2a.6), with the hover scale and a point of slack.</summary>
     private bool IsInsideDisc(int x, int y)
     {
         var scale = DisplayScale;
         var c = _pixels / 2.0;
-        var r = (_surface.Diameter * 0.5 * (1 + 0.03 * Math.Max(0, _surface.Scene.Hover)) + 1) * scale;
-        var dx = x - c;
-        var dy = y - c;
-        return dx * dx + dy * dy <= r * r;
+        var hover = 1 + 0.03 * Math.Max(0, _surface.Scene.Hover);
+        return OrbHitShape.Contains(_surface.InstrumentStyle, (x - c) / scale / hover, (y - c) / scale / hover, _surface.Diameter, 1 / hover);
     }
 
     private void UpdateHover(int x, int y)

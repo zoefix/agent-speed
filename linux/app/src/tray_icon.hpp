@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include <QObject>
 #include <QString>
 #include <QVariantList>
@@ -16,6 +18,8 @@ public:
     TrayIcon(const Strings& strings, bool demo, QObject* parent = nullptr);
     ~TrayIcon() override;
     bool available() const;
+    // Adds an orb's own items to its quick submenu (a `character` orb's character and readouts).
+    std::function<void(QMenu*, const QString&, const QVariantMap&)> orbExtras;
 
 public slots:
     void update(double liveOutput, const QString& compactText, const QString& tooltip);
@@ -83,4 +87,6 @@ private:
     const Strings& strings_;
     QString lastText_;
     int lastBand_ = -1;
+    // The single orb's own items, shown in the tray menu itself (deleted on the next update).
+    QMenu* singleExtras_ = nullptr;
 };

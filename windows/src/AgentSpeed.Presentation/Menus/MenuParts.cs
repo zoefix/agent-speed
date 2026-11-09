@@ -149,3 +149,6 @@ internal static class MenuParts
         Submenu(localizer["menu.effects"], EffectLevels.Select(e =>
             (MenuEntry)Toggle(localizer[e.Key], current == e.Level, new MenuAction.SetEffects(e.Level))));
 }
+
+/// <summary>An installed character for the menus: its pack id and localized name.</summary>
+public sealed record MenuCharacter(string Id, string Name);

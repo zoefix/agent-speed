@@ -321,6 +321,9 @@ internal sealed class GpuDevice : IDisposable
 
         public ID3D11Buffer? Layers { get; set; }
 
+        /// <summary>The character style's passes (DESIGN 2a.6); null when its shaders could not be made.</summary>
+        public CharacterGpu? Character { get; private set; }
+
         public int LayerCapacity { get; set; }
 
         public static Resources Create()
@@ -376,7 +379,7 @@ internal sealed class GpuDevice : IDisposable
             LedVertex = Device.CreateVertexShader(code.LedVertex);
             LedPixel = Device.CreatePixelShader(code.LedPixel);
             ShapeLayout = Device.CreateInputLayout(InstanceElements(6), code.ShapeVertex);
-            TextLayout = Device.CreateInputLayout(InstanceElements(8), code.TextVertex);
+            TextLayout = Device.CreateInputLayout(InstanceElements(9), code.TextVertex);
             LayerVertex = Device.CreateVertexShader(code.LayerVertex);
             LayerPixel = Device.CreatePixelShader(code.LayerPixel);
             LayerLayout = Device.CreateInputLayout(InstanceElements(5), code.LayerVertex);
@@ -391,6 +394,14 @@ internal sealed class GpuDevice : IDisposable
             LedParams = Device.CreateBuffer(OrbLedUniforms.Size, BindFlags.ConstantBuffer, ResourceUsage.Dynamic, CpuAccessFlags.Write);
             Palette = CreatePalette();
             TickDone = Device.CreateQuery(QueryType.Event);
+            try
+            {
+                Character = new CharacterGpu(Device, code);
+            }
+            catch (SharpGen.Runtime.SharpGenException ex)
+            {
+                AppLog.Warn("The character shaders could not be created.", ex);
+            }
         }
 
         private static InputElementDescription[] InstanceElements(int count)
@@ -444,6 +455,7 @@ internal sealed class GpuDevice : IDisposable
             Context.ClearState();
             Context.Flush();
             TickDone?.Dispose();
+            Character?.Dispose();
             Instances?.Dispose();
             Texts?.Dispose();
             Layers?.Dispose();

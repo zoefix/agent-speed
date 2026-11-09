@@ -26,6 +26,8 @@
 #include "network_service.hpp"
 #include "orb/orb_accessible.hpp"
 #include "orb/orb_window.hpp"
+#include "characters/character_library.hpp"
+#include "orbs/character_demo.hpp"
 #include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
 #include "hero/hero_item.hpp"
@@ -234,6 +236,16 @@ int main(int argc, char* argv[]) {
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
     OrbManager orbs(strings, prefs, orbStore);
+    // CHARACTERS 2: the installed character packs, the catalog and the downloads, under the master switch.
+    CharacterLibrary characters(CharacterLibrary::standardStore(QStringLiteral(AGENTSPEED_VERSION)),
+                                std::make_unique<NetworkCharacterTransport>(QByteArrayLiteral("AgentSpeed/" AGENTSPEED_VERSION " (Linux)")),
+                                &strings);
+    characters.networkEnabled = [&prefs] { return prefs.networkEnabled(); };
+    orbs.setCharacters(&characters);
+    QObject::connect(&prefs, &Preferences::networkEnabledChanged, &characters, [&] {
+        characters.networkChanged();
+        if (prefs.networkEnabled()) orbs.resumeCharacterDownloads();
+    });
     orb::PreviewItem::setUnit(strings.t(QStringLiteral("unit.tokS")));
     qmlRegisterType<orb::PreviewItem>("AgentSpeed.Orb", 1, 0, "OrbPreview");
     HeroItem::setContext(&themes, &strings);
@@ -255,6 +267,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orbs"), &orbs);
+    engine.rootContext()->setContextProperty(QStringLiteral("characters"), &characters);
     engine.rootContext()->setContextProperty(QStringLiteral("themes"), &themes);
     engine.rootContext()->setContextProperty(QStringLiteral("boardStore"), &boardStore);
     orbs.setTitles(&themes);
@@ -419,6 +432,11 @@ int main(int argc, char* argv[]) {
     QObject::connect(&orbs, &OrbManager::dashboardRequested, &flyout, &Flyout::toggle);
     QObject::connect(&orbs, &OrbManager::quitRequested, &app, quitApp);
     QObject::connect(&orbs, &OrbManager::settingsRequested, &app, [&] { openSettings(1); });
+    tray.orbExtras = [&orbs](QMenu* menu, const QString& id, const QVariantMap& orb) {
+        if (orb.value(QStringLiteral("style")).toString() != QLatin1String("character")) return;
+        orbs.addCharacterMenu(menu, id);
+        orbs.addReadoutsMenu(menu, id);
+    };
     const auto syncOrbMenu = [&] { tray.setOrbs(orbs.shown(), orbs.list()); };
     QObject::connect(&orbs, &OrbManager::listChanged, &tray, syncOrbMenu);
     QObject::connect(&orbs, &OrbManager::shownChanged, &tray, syncOrbMenu);
@@ -431,6 +449,10 @@ int main(int argc, char* argv[]) {
     syncOrbMenu();
     const auto arguments = app.arguments();
     network.start();
+    if (orbs.anyCharacterOrb()) {
+        characters.refreshInBackground();
+        orbs.resumeCharacterDownloads();
+    }
     report.start();
     lan.start();
     // Development aid: --report-selftest=<http://127.0.0.1:port> reports to a local reference server.
@@ -456,7 +478,23 @@ int main(int argc, char* argv[]) {
     // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal); --orb-size=<pt> its diameter.
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("traffic"), arg.mid(14));
-        if (arg.startsWith(QStringLiteral("--orb-style="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), arg.mid(12));
+        // AGENT_SPEED_ORB_CHARACTER locks the first orb to a character (as the macOS frame harness).
+        if (arg.startsWith(QStringLiteral("--orb-style=")) && qEnvironmentVariableIsSet("AGENT_SPEED_ORB_CHARACTER")) {
+            orbs.setCharacter(orbStore.orbs().front().id, qEnvironmentVariable("AGENT_SPEED_ORB_CHARACTER"));
+        }
+        // AGENT_SPEED_ORB_READOUTS: demo readings for character orbs, and the cards it switches on the first orb.
+        if (arg.startsWith(QStringLiteral("--orb-style=")) && character_demo::enabled()) {
+            const auto switches = character_demo::switches();
+            for (auto it = switches.begin(); it != switches.end(); ++it) {
+                orbs.setCharacterReadout(orbStore.orbs().front().id, it.key(), it.value().toBool());
+            }
+        }
+        // AGENT_SPEED_ORB_STYLE_DELAY (ms) switches the style later, once the orb shows live agents.
+        if (arg.startsWith(QStringLiteral("--orb-style="))) {
+            const QString key = arg.mid(12);
+            const int delay = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_STYLE_DELAY");
+            QTimer::singleShot(std::max(0, delay), &orbs, [&orbs, &orbStore, key] { orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), key); });
+        }
         if (arg.startsWith(QStringLiteral("--orb-size="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("size"), arg.mid(11).toInt());
         // --orb-hosts=<all|id[,id…]> sets the first orb's hosts (DESIGN 13).
         if (arg.startsWith(QStringLiteral("--orb-hosts="))) {
@@ -476,7 +514,8 @@ int main(int argc, char* argv[]) {
             });
         }
     }
-    // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
+    // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits;
+    // AGENT_SPEED_ORB_SHOT_MS and AGENT_SPEED_ORB_SHOTS change the interval and the count (a frame sequence).
     QString orbShots;
     for (const auto& arg : app.arguments()) {
         if (arg.startsWith(QStringLiteral("--orb-snapshots="))) orbShots = arg.mid(16);
@@ -487,9 +526,11 @@ int main(int argc, char* argv[]) {
         orbs.forceDark(app.arguments().contains(QStringLiteral("--orb-dark")));
         QObject::connect(&orbShotTimer, &QTimer::timeout, &app, [&] {
             if (auto* first = orbs.first()) first->snapshot().save(orbShots + QStringLiteral("-%1.png").arg(orbShot, 2, 10, QLatin1Char('0')));
-            if (++orbShot >= 16) QApplication::quit();
+            const int count = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_SHOTS");
+            if (++orbShot >= (count > 0 ? count : 16)) QApplication::quit();
         });
-        orbShotTimer.start(4000);
+        const int interval = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_SHOT_MS");
+        orbShotTimer.start(interval > 0 ? interval : 4000);
     }
     // Development aid: --plate-snapshots=<prefix> widens the first orb's plate to its chip after 3 s and saves the plate
     // every 50 ms for 0.8 s, then quits.
@@ -612,8 +653,8 @@ int main(int argc, char* argv[]) {
         });
     }
 
-    // Development aid: --orb-menu-snapshot=<prefix> saves the first orb's context menu and its Hosts and Size submenus
-    // (<prefix>-menu.png, -hosts.png, -size.png), then quits.
+    // Development aid: --orb-menu-snapshot=<prefix> saves the first orb's context menu and its Hosts, Size, Style and
+    // character submenus (<prefix>-menu.png, -hosts.png, -size.png, -style.png, …), then quits.
     for (const auto& arg : arguments) {
         if (!arg.startsWith(QStringLiteral("--orb-menu-snapshot="))) continue;
         QTimer::singleShot(2500, &app, [&, prefix = arg.mid(20)] {

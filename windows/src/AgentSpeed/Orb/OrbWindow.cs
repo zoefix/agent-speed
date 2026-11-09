@@ -706,10 +706,8 @@ internal sealed class OrbWindow : Window, IOrbWindow
     private bool IsInsideDisc(Point position)
     {
         var c = Surface.Diameter * 0.75;
-        var r = Surface.Diameter * 0.5 * (1 + 0.03 * Math.Max(0, Surface.Scene.Hover)) + 1;
-        var dx = position.X - c;
-        var dy = position.Y - c;
-        return dx * dx + dy * dy <= r * r;
+        var hover = 1 + 0.03 * Math.Max(0, Surface.Scene.Hover);
+        return Presentation.Orb.OrbHitShape.Contains(Surface.InstrumentStyle, (position.X - c) / hover, (position.Y - c) / hover, Surface.Diameter, 1 / hover);
     }
 
     private void UpdateHover(Point position)

@@ -49,6 +49,14 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     private SettingsService _settings = null!;
     private TitleThemesService _titles = null!;
     private CostService _cost = null!;
+    private Characters.CharacterService? _characters;
+
+    /// <summary>The installed characters in catalog order for the menus (DESIGN 2b, Context menu item 2).</summary>
+    public IReadOnlyList<Presentation.Menus.MenuCharacter> InstalledCharacters =>
+        _characters is { } characters
+            ? characters.Library.Packs.Select(p => new Presentation.Menus.MenuCharacter(p.Id,
+                characters.Library.InstalledPack(p.Id)?.Manifest.Name.For(_loc.LanguageCode) ?? p.Id)).ToArray()
+            : [];
     private Traffic.TrafficService _traffic = null!;
     private TaskbarState? _lastTaskbarState;
     private readonly ThinkingZeroHold _barThinking = new();
@@ -202,7 +210,26 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                 Orb.Gpu.OrbGpuRenderer.Timer = new Orb.Gpu.GpuTimer();
             }
         }
-        _orbs = new OrbManager(_ui, _orbClock, _settings, _theme, _speed, _loc, this) { Titles = _titles, Cost = _cost.Display };
+        _characters = new Characters.CharacterService(_ui, _settings, AppPaths.Version);
+        _orbs = new OrbManager(_ui, _orbClock, _settings, _theme, _speed, _loc, this)
+        {
+            Titles = _titles,
+            Cost = _cost.Display,
+            Characters = _characters,
+            Prices = () => _cost.Book.Current,
+        };
+        _characters.Changed += (_, _) =>
+        {
+            _orbs?.RefreshCharacters();
+            AgentSpeed.Settings.OrbsPane.OrbPreview.NotifyCharacterPortraits();
+        };
+        AgentSpeed.Settings.OrbsPane.OrbPreview.CharacterPortrait = id =>
+        {
+            var library = _characters?.Library;
+            var pack = (id is null ? null : library?.InstalledPack(id))
+                ?? (library?.Packs.FirstOrDefault() is { } first ? library.InstalledPack(first.Id) : null);
+            return pack is null ? null : AgentSpeed.Settings.OrbsPane.OrbsPaneViewModel.Portrait(pack);
+        };
         _orbs.Apply();
         StartBoards();
         _titles.Changed += (_, _) => OnTitlesChanged();
@@ -334,8 +361,29 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                             case "corner" when first is not null:
                                 _orbs?.MoveToNextCorner(first);
                                 break;
+                            case not null when first is not null && op.StartsWith("style-", StringComparison.Ordinal):
+                                var style = Presentation.Orb.OrbStyles.Parse(op[6..]);
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetStyle(s.Orbs, first, style) });
+                                break;
+                            case not null when first is not null && op.StartsWith("character-", StringComparison.Ordinal):
+                                var character = op[10..];
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetCharacter(s.Orbs, first, character == "auto" ? null : character) });
+                                break;
+                            case not null when first is not null && op.StartsWith("size-", StringComparison.Ordinal)
+                                && double.TryParse(op[5..], NumberStyles.Float, CultureInfo.InvariantCulture, out var size):
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetSize(s.Orbs, first, size) });
+                                break;
+                            case not null when first is not null && op.StartsWith("readout-", StringComparison.Ordinal):
+                                var parts = op[8..].Split('-');
+                                if (parts.Length == 2 && CharacterReadouts.All.FirstOrDefault(r => CharacterReadouts.Key(r) == parts[0]) is var readout
+                                    && CharacterReadouts.Key(readout) == parts[0])
+                                {
+                                    _settings.Update(s => s with { Orbs = OrbEditing.SetCharacterReadout(s.Orbs, first, readout, parts[1] == "on") });
+                                }
+
+                                break;
                             default:
-                                RunTitleCaptureOperation(op);
+                                RunTitleCaptureOperation(op!);
                                 break;
                         }
                     },
@@ -406,6 +454,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             {
                 _settingsModel.Orbs = new Settings.OrbsPane.OrbsPaneViewModel(_settings, _orbs, _speed, _loc)
                 {
+                    Characters = _characters,
                     TitleService = _titles,
                     RemoteHosts = _remoteHosts,
                 };
@@ -499,6 +548,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         Try(() => _previewWindow?.Close());
         Try(() => _traffic?.Dispose());
         Try(() => _cost.Dispose());
+        Try(() => _characters?.Dispose());
         Try(() => _settings.Flush());
         Try(() => _preview.Stop());
         Try(() => _pinnedSpeeds?.Dispose());
@@ -1114,6 +1164,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         _updates.OnSettingsChanged(previous, current);
         _cost.OnSettingsChanged(previous, current);
+        _characters?.OnSettingsChanged(previous, current);
         _traffic.OnSettingsChanged(previous, current);
         if (previous.Traffic.IncludeTools != current.Traffic.IncludeTools || previous.EnabledSourceSet() != current.EnabledSourceSet())
         {
@@ -1518,6 +1569,24 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             var origin = Monitors.Primary() is { } screen ? new POINT(screen.WorkArea.Left + 400, screen.WorkArea.Top + 200) : new POINT(400, 200);
             _menu.Show(hostsMenu, origin);
             return hostsMenu;
+        }
+
+        if (kind is "menu-orb-characters" or "menu-orb-readouts")
+        {
+            var label = _loc[kind == "menu-orb-characters" ? "characters.title" : "character.readouts"];
+            var level = Settings.Orbs.Orbs.FirstOrDefault() is { } first
+                ? OrbMenuModel.Build(first.Id, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable,
+                    _remoteHosts?.MenuStates(_loc), InstalledCharacters)
+                : null;
+            if (level?.Rows.FirstOrDefault(r => r.Label == label)?.Submenu is not { } submenu)
+            {
+                return null;
+            }
+
+            var subMenu = MenuBuilder.Build(submenu, this, _loc);
+            var place = Monitors.Primary() is { } screen ? new POINT(screen.WorkArea.Left + 400, screen.WorkArea.Top + 200) : new POINT(400, 200);
+            _menu.Show(subMenu, place);
+            return subMenu;
         }
 
         var menu = kind == "menu-orb" && Settings.Orbs.Orbs.FirstOrDefault() is { } orb

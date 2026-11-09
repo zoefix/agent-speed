@@ -179,9 +179,16 @@ void TrayIcon::setOrbs(bool shown, const QVariantList& orbs) {
     const bool several = orbs.size() > 1;
     clickThrough_->setVisible(!several);
     orbsItem_->setVisible(several);
+    delete singleExtras_;
+    singleExtras_ = nullptr;
     if (!several && !orbs.isEmpty()) {
         const auto o = orbs.front().toMap();
         singleOrb_ = o.value(QStringLiteral("id")).toString();
+        if (orbExtras) {
+            singleExtras_ = new QMenu(menu_);
+            orbExtras(singleExtras_, singleOrb_, o);
+            for (auto* action : singleExtras_->actions()) menu_->insertAction(clickThrough_, action);
+        }
         clickThrough_->setChecked(o.value(QStringLiteral("clickThrough")).toBool());
     }
     orbsMenu_->clear();
@@ -211,6 +218,7 @@ void TrayIcon::setOrbs(bool shown, const QVariantList& orbs) {
         through->setCheckable(true);
         through->setChecked(o.value(QStringLiteral("clickThrough")).toBool());
         connect(through, &QAction::triggered, this, [this, id](bool on) { emit orbEdit(id, QStringLiteral("clickThrough"), on); });
+        if (orbExtras) orbExtras(sub, id, o);
         sub->addAction(strings_.t(QStringLiteral("menu.orb.settings")), this, [this, id] { emit orbSettings(id); });
     }
     retranslate();

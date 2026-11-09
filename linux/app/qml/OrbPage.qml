@@ -14,6 +14,7 @@ SettingsPage {
         return list.length > 0 ? list[0] : null
     }
     function set(key, value) { if (current) orbs.set(current.id, key, value) }
+    readonly property bool character: current !== null && current.style === "character"
 
     // 1. Master group.
     SettingsGroup {
@@ -139,12 +140,38 @@ SettingsPage {
                             width: 44
                             height: 44
                             diameter: 38
-                            style: row.modelData.style
+                            visible: row.modelData.style !== "character"
+                            style: row.modelData.style === "character" ? "led" : row.modelData.style
                             dark: Theme.dark
                             fps: 15
                             liveValue: row.live.unavailable ? 0 : row.live.value
                             valueText: row.live.unavailable ? "–" : row.live.valueText
                             redline: row.modelData.redline
+                        }
+                        // DESIGN 2a.6 LOD: a `character` orb's thumbnail is her preview.png (a silhouette before one is installed).
+                        Item {
+                            visible: row.modelData.style === "character"
+                            x: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 44
+                            height: 44
+                            readonly property string preview: { characters.rows; return characters.previewFor(row.modelData.character) }
+                            Image {
+                                id: thumbPortrait
+                                anchors.fill: parent
+                                visible: parent.preview.length > 0 && status === Image.Ready
+                                source: parent.preview
+                                sourceSize.height: 88
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                                mipmap: true
+                                asynchronous: true
+                            }
+                            CharacterSilhouette {
+                                anchors.fill: parent
+                                visible: !thumbPortrait.visible
+                                color: Theme.ink3
+                            }
                         }
                         ColumnLayout {
                             anchors.left: thumb.right
@@ -376,10 +403,12 @@ SettingsPage {
                 y: 14
                 width: parent.width - 28
                 selected: page.current ? page.current.style : "led"
+                character: page.current ? page.current.character : ""
                 onPicked: (key) => page.set("style", key)
             }
         }
         SettingsRow {
+            visible: !page.character
             label: S.tr2(S.rev, "orbs.unit")
             divider: false
             Segmented {
@@ -391,6 +420,16 @@ SettingsPage {
                 onActivated: (v) => page.set("unit", v)
             }
         }
+    }
+
+    // A `character` orb: its character under the style cards, and its cards in place of the unit and readout.
+    CharacterSection {
+        visible: page.character
+        orb: page.current
+    }
+    CharacterReadoutsGroup {
+        visible: page.character
+        orb: page.current
     }
 
     // Size, opacity, name plate and window toggles.
@@ -467,6 +506,7 @@ SettingsPage {
             }
         }
         SettingsRow {
+            visible: !page.character
             label: S.tr2(S.rev, "orbs.traffic")
             caption: page.current && page.current.traffic === "intelligence" ? S.tr2(S.rev, "orbs.traffic.hint.intel") : S.tr2(S.rev, "orbs.traffic.hint")
             Dropdown {

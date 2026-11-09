@@ -13,6 +13,7 @@ struct TextIn
     float4 clip : INSTANCE5;     // clip rect min x, min y, max x, max y, or band center x, center y, half width, slope dx/dy
     float4 fill2 : INSTANCE6;    // bottom color of a vertical gradient (straight alpha)
     float4 gradient : INSTANCE7; // top y, bottom y, enabled, unused
+    float4 rotate : INSTANCE8;   // rotation (radians, clockwise on screen) about the pivot x, y; 0 upright
     uint vid : SV_VertexID;
 };
 
@@ -33,9 +34,16 @@ TextOut VsText(TextIn input)
 {
     float2 t = corners[input.vid] * 0.5 + 0.5;
     // Unsheared text lands on whole device pixels, so atlas texels map one to one (crisp at the resting scale).
-    float2 origin = input.params.x == 0.0 ? round(input.rect.xy * viewport.z) / viewport.z : input.rect.xy;
+    float2 origin = input.params.x == 0.0 && input.rotate.x == 0.0 ? round(input.rect.xy * viewport.z) / viewport.z : input.rect.xy;
     float2 p = origin + t * input.rect.zw;
     p.x += input.params.x * (input.params.y - p.y);
+    if (input.rotate.x != 0.0)
+    {
+        float c = cos(input.rotate.x);
+        float s = sin(input.rotate.x);
+        float2 d = p - input.rotate.yz;
+        p = input.rotate.yz + float2(d.x * c - d.y * s, d.x * s + d.y * c);
+    }
     TextOut output;
     output.position = orb_clip_position(p);
     output.uv = lerp(input.uv.xy, input.uv.zw, t);

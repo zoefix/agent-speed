@@ -2,15 +2,17 @@ import QtQuick
 import QtQuick.Layouts
 import AgentSpeed.Orb
 
-// DESIGN 5 Floating orb pane, `orbs.style`: five cards with a live preview each (the real renderer at 64 pt, Soft
+// DESIGN 5 Floating orb pane, `orbs.style`: six cards with a live preview each (the real renderer at 64 pt, Soft
 // effects, cruise → redline → cruise every 8 s, each card 1.6 s after the previous), the name below; the selected one
 // has a 2 pt accent ring and a faint accent fill. Arrow keys move between cards. Below: the name and description.
 ColumnLayout {
     id: picker
     property string selected: "led"
+    // The orb's locked character (empty: Auto), for the `character` card's portrait.
+    property string character: ""
     signal picked(string key)
-    readonly property var styles: ["led", "needle", "liquid", "reactor", "minimal"]
-    readonly property int columns: width >= 560 ? 5 : 3
+    readonly property var styles: ["led", "needle", "liquid", "reactor", "minimal", "character"]
+    readonly property int columns: width >= 560 ? 6 : 3
     Layout.fillWidth: true
     spacing: 12
 
@@ -44,14 +46,41 @@ ColumnLayout {
                 Behavior on color { ColorAnimation { duration: 140 } }
 
                 OrbPreview {
+                    visible: card.modelData !== "character"
                     anchors.horizontalCenter: parent.horizontalCenter
                     y: 4
                     width: 84
                     height: 80
                     diameter: 64
-                    style: card.modelData
+                    style: card.modelData === "character" ? "led" : card.modelData
                     offset: card.index * 1.6
                     dark: Theme.dark
+                }
+                // DESIGN 5: the `character` card shows the locked (else the first installed) character's preview.png,
+                // or a quiet silhouette when none is installed.
+                Item {
+                    visible: card.modelData === "character"
+                    anchors.horizontalCenter: parent.horizontalCenter
+                    y: 6
+                    width: 84
+                    height: 76
+                    readonly property string preview: { characters.rows; return characters.previewFor(picker.character) }
+                    Image {
+                        id: characterPortrait
+                        anchors.fill: parent
+                        visible: parent.preview.length > 0 && status === Image.Ready
+                        source: parent.preview
+                        sourceSize.height: 152
+                        fillMode: Image.PreserveAspectFit
+                        smooth: true
+                        mipmap: true
+                        asynchronous: true
+                    }
+                    CharacterSilhouette {
+                        anchors.fill: parent
+                        visible: !characterPortrait.visible
+                        color: Theme.ink3
+                    }
                 }
                 Text {
                     anchors.horizontalCenter: parent.horizontalCenter

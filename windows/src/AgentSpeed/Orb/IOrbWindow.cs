@@ -50,6 +50,18 @@ internal interface IOrbSurface
     /// </summary>
     void SetLines(Presentation.Orb.Lines.OrbLinesSample? sample, bool enabled);
 
+    /// <summary>The <c>character</c> style's character and cards (DESIGN 2a.6); other styles ignore it.</summary>
+    void SetCharacter(Presentation.Orb.OrbCharacterContent? content);
+
+    /// <summary>One engine tick of the <c>character</c> cards' values (network, 性能 and 思考, the cost rate).</summary>
+    void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating);
+
+    /// <summary>One traffic sample of the <c>character</c> network card (null while not measured).</summary>
+    void SetCharacterNetwork(Presentation.Orb.Lines.OrbLinesSample? network);
+
+    /// <summary>The character cards' spoken text (DESIGN 2a.6, Accessibility), or null.</summary>
+    string? CharacterSentence(Presentation.Localization.Localizer localizer, string currencyName);
+
     /// <summary>The two-line readout is visible now (the accessible label and the tooltip read it).</summary>
     bool LinesVisible { get; }
 

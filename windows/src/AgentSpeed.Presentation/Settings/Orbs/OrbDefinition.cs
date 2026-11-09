@@ -67,6 +67,18 @@ public sealed record OrbDefinition
     /// <summary>The traffic readout (DESIGN 2b <c>traffic</c>, 10); Add, Duplicate and Split copy it, Merge keeps the target's.</summary>
     public OrbTraffic Traffic { get; init; } = OrbTraffic.Sources;
 
+    /// <summary>
+    /// The <c>character</c> style's character (DESIGN 2b <c>character</c>): a pack id, or null = Auto, following the
+    /// fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto.
+    /// </summary>
+    public string? Character { get; init; }
+
+    /// <summary>The cards the <c>character</c> style floats beside her (DESIGN 2a.6, 2b <c>characterReadouts</c>).</summary>
+    public CharacterReadouts CharacterReadouts { get; init; } = CharacterReadouts.Default;
+
+    /// <summary>The footprint disc's diameter D in DIPs: the size, or twice it for <c>character</c> (DESIGN 2a.6).</summary>
+    public double Footprint => OrbStyles.FootprintDiameter(Style, Size);
+
     /// <summary>The hosts it tracks (DESIGN 13); absent in the document = all.</summary>
     public OrbHosts Hosts { get; init; } = OrbHosts.All;
 
@@ -95,8 +107,8 @@ public sealed record OrbDefinition
 
     public OrbDefinition WithSize(double size) => this with { Size = OrbStyles.ClampSize(size) };
 
-    /// <summary>The disc radius in physical pixels at a display scale.</summary>
-    public double RadiusPx(double scale) => Size / 2 * scale;
+    /// <summary>The footprint disc's radius in physical pixels at a display scale.</summary>
+    public double RadiusPx(double scale) => Footprint / 2 * scale;
 
     public OrbDefinition Validated()
     {
@@ -113,7 +125,19 @@ public sealed record OrbDefinition
             TitleTheme = CleanId(TitleTheme),
             Unit = Enum.IsDefined(Unit) ? Unit : OrbUnit.Tokens,
             Traffic = Enum.IsDefined(Traffic) ? Traffic : OrbTraffic.Off,
+            Character = CleanCharacter(Character),
+            CharacterReadouts = CharacterReadouts ?? CharacterReadouts.Default,
         };
+    }
+
+    /// <summary>A pack id (lowercase letters, digits and dashes, CHARACTERS 1); anything else means Auto (null).</summary>
+    public static string? CleanCharacter(string? id)
+    {
+        var trimmed = id?.Trim();
+        return trimmed is { Length: > 0 and <= 64 } && !trimmed.StartsWith('-') && !trimmed.EndsWith('-')
+            && trimmed.All(c => c is (>= 'a' and <= 'z') or (>= '0' and <= '9') or '-')
+            ? trimmed
+            : null;
     }
 
     /// <summary>0.4–1, rounded to 0.001 so the stored value survives the JSON round trip.</summary>

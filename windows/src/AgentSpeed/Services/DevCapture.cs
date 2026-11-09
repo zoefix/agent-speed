@@ -15,7 +15,7 @@ namespace AgentSpeed.Services;
 /// their screen positions over a backdrop, or a menu) into PNG files when a <c>capture.request</c> file appears in that
 /// folder. Rendering in-process means no screen capture and nothing of other windows is ever recorded. Request lines:
 /// <c>orbs name [#backdrop | @C:\path\to\image.png]</c> (an image covers the captured area, cropped to fill),
-/// <c>menu-tray name</c>, <c>menu-orb name</c>, <c>badge-sheet name [dark|light]</c> (the hero title badge of every theme
+/// <c>menu-tray name</c>, <c>menu-orb name</c> (<c>menu-orb-characters</c>, <c>menu-orb-readouts</c>: its submenus), <c>badge-sheet name [dark|light]</c> (the hero title badge of every theme
 /// but Vehicles at idle and levels 1–13), <c>badge-strip name [dark|light]</c> (its transitions at fixed τ),
 /// <c>dashboard name [#backdrop]</c> (the open dashboard's content) and <c>taskbar name [#backdrop] [dark|light] [2x]</c>
 /// (the widget as it draws now, rendered again in-process, optionally on a dark or light taskbar and at a given scale),
@@ -93,7 +93,8 @@ internal sealed partial class DevCapture
                 case "orbs":
                     CaptureOrbs(parts[1], parts.Length > 2 ? parts[2] : "#202020");
                     break;
-                case "menu-tray" or "menu-orb" or "menu-host" or "menu-orb-hosts" or "menu-board-hosts" or "menu-lan":
+                case "menu-tray" or "menu-orb" or "menu-host" or "menu-orb-hosts" or "menu-board-hosts" or "menu-lan" or "menu-orb-characters"
+                    or "menu-orb-readouts":
                     CaptureMenu(parts[0], parts[1]);
                     break;
                 case "op":

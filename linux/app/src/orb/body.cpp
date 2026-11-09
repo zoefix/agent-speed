@@ -17,6 +17,8 @@ QImage renderBody(double s, double side, double dpr, const Tokens& t, bool blurB
     QImage image(qMax(1, qCeil(side * dpr)), qMax(1, qCeil(side * dpr)), QImage::Format_RGBA8888_Premultiplied);
     image.setDevicePixelRatio(dpr);
     image.fill(Qt::transparent);
+    // `character` has no body: outside her and the readouts the window is transparent (DESIGN 2a.6).
+    if (style == StyleKind::Character) return image;
     QPainter p(&image);
     p.setRenderHint(QPainter::Antialiasing);
     const QPointF c(side / 2, side / 2);

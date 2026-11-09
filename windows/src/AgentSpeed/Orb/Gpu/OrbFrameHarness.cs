@@ -32,7 +32,7 @@ namespace AgentSpeed.Orb.Gpu;
 /// scale, <c>AGENT_SPEED_ORB_FRAMES_LANG</c> the language (zh-Hant, zh-Hans, en, ja), and
 /// <c>AGENT_SPEED_ORB_FRAMES_LINES=1</c> renders only the two-line readout's sheets.
 /// </summary>
-internal static class OrbFrameHarness
+internal static partial class OrbFrameHarness
 {
     private const double Redline = 2000;
     private const double Step = 1 / 60.0;
@@ -86,6 +86,17 @@ internal static class OrbFrameHarness
         GpuDevice.Shared.Current.Context.Flush();
         OrbGpuRenderer.Timer = new GpuTimer();
         using var target = new OffscreenTarget();
+        if (styles.Contains(OrbStyle.Character))
+        {
+            CharacterSheets(device, target, scale, strings, info, loc, directory, report);
+            styles = styles.Where(s => s != OrbStyle.Character).ToArray();
+            if (styles.Length == 0)
+            {
+                report.AppendLine(CultureInfo.InvariantCulture, $"atlas: {device.Atlas.Rasterized} strings rasterized");
+                File.WriteAllText(Path.Combine(directory, "orb-frames.txt"), report.ToString());
+                return 0;
+            }
+        }
         if (Environment.GetEnvironmentVariable("AGENT_SPEED_ORB_FRAMES_LINES") is { Length: > 0 })
         {
             LineSheets(device, target, styles, scale, strings, info, loc, directory, report);

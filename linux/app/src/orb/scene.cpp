@@ -133,10 +133,18 @@ Instance Instance::flare(QPointF center, double rotation, double tangential, dou
                 0, 0, static_cast<float>(radialWidth), static_cast<float>(tangentialWidth));
 }
 
+Instance Instance::softDot(QPointF center, double rx, double ry, double rotation, Rgba color, double softness) {
+    return make(SoftDot, center, rotation, static_cast<float>(rx), static_cast<float>(ry), 0, 0, color, color, 1, 0,
+                static_cast<float>(softness));
+}
+
 void Scene::reset() {
     instances_.clear();
     batches_.clear();
     texts_.clear();
+    meshVertices_.clear();
+    meshIndices_.clear();
+    meshes_.clear();
     hoverScale = 1;
     alphaScale = 1;
     clipRadius = clipFeather = 0;
@@ -185,8 +193,33 @@ void Scene::add(const TextDraw& text) {
     if (alphaScale < 1) {
         item.color = item.color.opacity(alphaScale);
         item.glowStrength *= alphaScale;
+        item.outlineColor = item.outlineColor.opacity(alphaScale);
     }
     texts_.push_back(item);
+}
+
+void Scene::addMesh(const QImage& atlas, const float* vertices, int vertexCount, const std::uint32_t* indices, int indexCount) {
+    if (atlas.isNull() || vertexCount <= 0 || indexCount <= 0) return;
+    const auto base = static_cast<std::uint32_t>(meshVertices_.size() / 5);
+    const std::size_t at = meshVertices_.size();
+    meshVertices_.resize(at + 5 * static_cast<std::size_t>(vertexCount));
+    std::copy(vertices, vertices + 5 * vertexCount, meshVertices_.begin() + static_cast<std::ptrdiff_t>(at));
+    if (alphaScale < 1) {
+        const float a = static_cast<float>(alphaScale);
+        for (std::size_t i = at + 4; i < meshVertices_.size(); i += 5) meshVertices_[i] *= a;
+    }
+    MeshDraw draw;
+    draw.atlas = atlas;
+    draw.firstIndex = static_cast<int>(meshIndices_.size());
+    draw.indexCount = indexCount;
+    const std::size_t from = meshIndices_.size();
+    meshIndices_.resize(from + static_cast<std::size_t>(indexCount));
+    for (int i = 0; i < indexCount; ++i) meshIndices_[from + static_cast<std::size_t>(i)] = base + indices[i];
+    Batch batch;
+    batch.kind = Batch::Kind::Mesh;
+    batch.mode = static_cast<int>(meshes_.size());
+    meshes_.push_back(std::move(draw));
+    batches_.push_back(batch);
 }
 
 void Scene::addUnder(const TextDraw& text) {

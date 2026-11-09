@@ -14,6 +14,7 @@
 #include "orbs/orb_views.hpp"
 #include "orbs/orbs_store.hpp"
 
+class CharacterLibrary;
 class Preferences;
 class RemoteHostsView;
 class Strings;
@@ -52,8 +53,13 @@ public:
     void setTitles(const TitleThemes* titles);
     // DESIGN 13: the hosts' names (automatic names, the Hosts submenu); renames re-sync the windows.
     void setHostsView(const RemoteHostsView* hosts);
+    // CHARACTERS 2, 7: the installed packs the `character` orbs show and download.
+    void setCharacters(CharacterLibrary* characters);
     // Shows the orbs where they were (call once the windows may appear).
     void start();
+    // While an orb uses the `character` style, download every pack not set aside (CHARACTERS 2, Automatic download).
+    void resumeCharacterDownloads();
+    bool anyCharacterOrb() const;
 
     QVariantList list() const;
     QVariantMap values() const;
@@ -83,6 +89,9 @@ public:
 
     Q_INVOKABLE void set(const QString& id, const QString& key, const QVariant& value);
     Q_INVOKABLE void setSource(const QString& id, const QString& source, bool on);
+    // DESIGN 2b `character` (empty: Auto) and one card of `characterReadouts` (`intelligence`, ... `model`).
+    Q_INVOKABLE void setCharacter(const QString& id, const QString& character);
+    Q_INVOKABLE void setCharacterReadout(const QString& id, const QString& key, bool on);
     // DESIGN 13: "all" or the host ids the orb tracks.
     Q_INVOKABLE void setHosts(const QString& id, const QVariant& hosts);
     Q_INVOKABLE void add(const QString& from);
@@ -141,6 +150,12 @@ private:
     std::vector<orb::Disc> discs(const QString& except) const;
     void showMenu(const QString& id, QPoint global);
     QMenu* buildMenu(const QString& id);
+public:
+    // DESIGN 2b Context menu items 2–3 for a `character` orb: `characters.title ▸` (Auto, the installed characters,
+    // `characters.more`) and `character.readouts ▸` (a check per card, the network scope); the tray's quick menu too.
+    void addCharacterMenu(QMenu* menu, const QString& id);
+    void addReadoutsMenu(QMenu* menu, const QString& id);
+private:
     void showBanner(const QString& text);
     QStringList detected() const;
     QString nameOf(const OrbConfig& config) const;
@@ -156,6 +171,7 @@ private:
     OrbsStore& store_;
     const TitleThemes* titles_ = nullptr;
     const RemoteHostsView* hosts_ = nullptr;
+    CharacterLibrary* characters_ = nullptr;
     std::map<QString, Orb> orbs_;
     QVariantList sourceRows_;
     bool shown_ = true;
