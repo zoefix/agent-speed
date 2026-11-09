@@ -99,4 +99,35 @@ import Testing
         #expect(OrbEditing.setCharacter(nil, of: "a", in: doc).orb("a")?.character == nil)
         #expect(OrbEditing.setCharacter("Not Valid", of: "a", in: doc).orb("a")?.character == nil)
     }
+
+    @Test func readoutsDefaultOnExceptTheModel() throws {
+        let orb = OrbConfig(id: "a", style: .character)
+        #expect(orb.characterReadouts == .default)
+        #expect(CharacterReadout.allCases.allSatisfy { orb.characterReadouts[$0] == ($0 != .model) })
+        let old = try JSONDecoder().decode(OrbConfig.self, from: Data(#"{"id": "a", "style": "character"}"#.utf8))
+        #expect(old.characterReadouts == .default)
+        let encoded = String(decoding: try JSONEncoder().encode(orb), as: UTF8.self)
+        #expect(!encoded.contains("characterReadouts"))
+    }
+
+    @Test func readoutsDecodeTolerantlyAndRoundTrip() throws {
+        let json = #"{"id": "a", "characterReadouts": {"model": true, "network": false, "cost": "yes"}}"#
+        let orb = try JSONDecoder().decode(OrbConfig.self, from: Data(json.utf8))
+        #expect(orb.characterReadouts == CharacterReadouts(model: true, network: false))
+        let again = try JSONDecoder().decode(OrbConfig.self, from: JSONEncoder().encode(orb))
+        #expect(again.characterReadouts == orb.characterReadouts)
+        let broken = try JSONDecoder().decode(OrbConfig.self, from: Data(#"{"id": "a", "characterReadouts": 3}"#.utf8))
+        #expect(broken.characterReadouts == .default)
+    }
+
+    @Test func editingSetsAndCopiesTheReadouts() throws {
+        var doc = OrbsDocument(orbs: [OrbConfig(id: "a", style: .character)])
+        doc = OrbEditing.setCharacterReadout(.model, true, of: "a", in: doc)
+        doc = OrbEditing.setCharacterReadout(.cost, false, of: "a", in: doc)
+        #expect(doc.orb("a")?.characterReadouts == CharacterReadouts(model: true, cost: false))
+        let added = try #require(OrbEditing.add(to: doc, copying: "a", availability: OrbAvailability(detected: []), newId: "b"))
+        #expect(added.orb("b")?.characterReadouts == doc.orb("a")?.characterReadouts)
+        let copy = try #require(OrbEditing.duplicate("a", in: doc, newId: "c"))
+        #expect(copy.orb("c")?.characterReadouts == doc.orb("a")?.characterReadouts)
+    }
 }

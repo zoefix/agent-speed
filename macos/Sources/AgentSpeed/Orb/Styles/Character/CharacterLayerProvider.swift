@@ -2,22 +2,28 @@ import AgentSpeedCore
 import AgentSpeedOrbModel
 import Foundation
 
-/// What a `character` orb shows besides the speed (CHARACTERS 7, 8): the chosen pack, the fastest model and the
-/// agent line. `pack` is nil while no character is installed.
+/// What a `character` orb shows besides the speed (CHARACTERS 7, 8; DESIGN 2a.6, Readouts): the chosen pack, the
+/// fastest model and the cards. `pack` is nil while no character is installed.
 struct OrbCharacterContent: Equatable {
     var pack: InstalledCharacter?
     /// The fastest generating model's display name and its vendor's name.
     var modelName: String?
     var vendorName: String?
-    /// The pack's accent color (vendor dot, glow tint).
+    /// The pack's accent color (vendor dot, the cards' edge).
     var accent: RGBColor?
-    /// `3 個 agent · 今日 1.2M tokens`.
-    var agentLine: String
+    /// The cards switched on, and their live values (nil before the orb's first reading).
+    var readouts: CharacterReadouts = .default
+    var readings: OrbCharacterReadings?
+    /// The agents card: `今日 1.2M` (nil before today's first token) and `3 個 agent` (nil without agents).
+    var todayLine: String?
+    var agentsLine: String?
+    /// `費用`, the cost card's glyph.
+    var costGlyph: String = ""
     /// Shown in place of the character while none is installed.
     var emptyLabel: String
 }
 
-/// The skinned character and its orbiting readouts (CHARACTERS 3–8, DESIGN 2a.6). `CharacterStyle` owns one per orb
+/// The skinned character and the readout cards beside her (CHARACTERS 3–8, DESIGN 2a.6). `CharacterStyle` owns one per orb
 /// and calls it every frame; until a provider is registered the style draws its fallback (the gauge ring and the
 /// standard readout).
 @MainActor

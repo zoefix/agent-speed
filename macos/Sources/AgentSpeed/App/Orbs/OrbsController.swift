@@ -359,9 +359,14 @@ final class OrbsController {
         setDocument(OrbEditing.setShowName(showName, of: id, in: document))
     }
 
+    /// A `character` orb keeps tok/s: its cost has a card of its own (DESIGN 2a.6).
     func toggleUnit(of id: String) {
-        guard let orb = document.orb(id) else { return }
+        guard let orb = document.orb(id), orb.style != .character else { return }
         setUnit(orb.unit.toggled, of: id)
+    }
+
+    func setCharacterReadout(_ readout: CharacterReadout, _ on: Bool, of id: String) {
+        setDocument(OrbEditing.setCharacterReadout(readout, on, of: id, in: document))
     }
 
     func setSize(_ size: Double, of id: String) {

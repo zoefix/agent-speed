@@ -63,6 +63,13 @@ struct CharacterBodyPainter {
                                     language: language, scale: scene.backingScale * max(1, scale))
     }
 
+    /// Half the size of `chip(_:size:...)` for `string` (no dot), unscaled; nil when it cannot be drawn.
+    static func chipHalfSize(_ string: String, size: CGFloat, language: AppLanguage, scale: CGFloat) -> CGSize? {
+        let style = OrbTextStyle(size: size, weight: .semibold, tracking: 0, padding: 1)
+        guard let texture = OrbTextCache.shared.texture(string, style: style, language: language, scale: scale) else { return nil }
+        return CGSize(width: texture.advance / 2 + 0.7 * size, height: OrbTextCache.shared.capHeight(style) / 2 + 0.55 * size)
+    }
+
     /// A glass chip centered at the local offset: rim, fill, an optional leading dot, then the text.
     func chip(_ string: String, size: CGFloat, at oy: CGFloat, text color: RGBColor, rim: RGBColor, dot: RGBColor? = nil,
               into scene: inout OrbScene) -> CGFloat {

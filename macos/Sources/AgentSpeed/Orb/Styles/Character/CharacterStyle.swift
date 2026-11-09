@@ -4,7 +4,7 @@ import SwiftUI
 
 /// `character` — an animated character instead of an instrument (DESIGN 2a.6). Its disc is twice the orb size; the
 /// character stands in it with her feet at 0.45 D below the center. The character, the ring of lights at her feet and
-/// the orbiting readouts come from the registered `CharacterLayerProvider`; without one (or while it cannot draw) the
+/// the readout cards beside her come from the registered `CharacterLayerProvider`; without one (or while it cannot draw) the
 /// style draws the ring and the standard readout.
 @MainActor
 final class CharacterStyle: OrbStyleRenderer {
@@ -70,6 +70,14 @@ final class CharacterStyle: OrbStyleRenderer {
         if let character = frame.content.character, character.pack == nil, !frame.content.isThumbnail {
             addEmptyLabel(character.emptyLabel, into: &scene, frame)
         }
+    }
+
+    /// The character's cards carry network speed and 性能 themselves (DESIGN 2a.6, Readouts); only the fallback draws
+    /// the two-line readout.
+    func buildLines(into scene: inout OrbScene, _ frame: OrbFrame, lines: OrbLineReadout) {
+        guard !providerDrew else { return }
+        lines.add(into: &scene, frame, placement: linePlacement,
+                  palette: .standard(dark: frame.dark, increaseContrast: frame.content.increaseContrast))
     }
 
     /// `character.empty` above the fallback readout while no character is installed (DESIGN 2a.6).

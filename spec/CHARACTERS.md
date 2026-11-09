@@ -338,13 +338,16 @@ Model families, by the start of the model id's last path segment, lowercased (`m
 
 ## 8. Floating readouts
 
-Around the character, on Kepler orbits seen slightly from above (`characters/reference/orbits.py`, fixture
-`orbits.json`): the speed (rolling digits sampled five times a second, outlined, with lightning when they change,
-the unit and the speed title), the model chip
-(vendor dot and model name) and the agent line (agents and today's tokens). Bodies in front of the character draw over
-her, bigger and brighter; behind her they draw under her. At her feet a ring of 96 lights is the gauge, filled in the
-heat colors with a comet; agents are lights orbiting her waist; response pulses ripple out from the ring; embers rise
-at redline; a new peak pops a gold pill above the speed. See `characters/reference/hud.py` and DESIGN 2a.6.
+Beside the character, never behind her: the speed (rolling digits sampled five times a second, outlined, with
+lightning when they change, the unit and the speed title) at her right at chest height; the facts — 性能 and 思考,
+network speed, 費用, today's tokens and agents — as glass cards in a column at her left from her shoulders down; and,
+when switched on, the model chip (vendor dot and model name) above her head. Each card keeps clear of her outline as
+drawn this frame (the skinned mesh), shows while it has something to say, and floats on its own slow figure of eight;
+when her left side has no room the column's last cards continue under the speed. The layout is `HudWings` and
+`CharacterPerformer.trace` in the macOS engine (DESIGN 2a.6, *Readouts*, is normative). At her feet a ring of 96 lights
+is the gauge, filled in the heat colors with a comet; agents are lights orbiting her waist; response pulses ripple out
+from the ring; embers rise at redline; a new peak pops a gold pill above the speed. See `characters/reference/hud.py`
+(its orbiting bodies are the earlier layout, kept for the films) and DESIGN 2a.6.
 
 ### Particles
 

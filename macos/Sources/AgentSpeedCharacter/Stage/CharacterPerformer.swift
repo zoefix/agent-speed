@@ -179,8 +179,7 @@ public struct CharacterPerformer: Sendable {
         let fx = feetOnScreen.0 + dx * pointsPerPixel, fy = feetOnScreen.1
         let lift = dy * pointsPerPixel
         return HudLayout(ground: (fx, fy + 6 * unit, 0.27 * h, 0.27 * h * 0.17),
-                         waist: (fx + 0.01 * h, fy - 0.6 * h + lift, 0.3 * h, 0.05 * h),
-                         orbitCenter: (fx, fy - 0.52 * h + 0.6 * lift), characterHeight: h, unit: unit)
+                         waist: (fx + 0.01 * h, fy - 0.6 * h + lift, 0.3 * h, 0.05 * h), characterHeight: h, unit: unit)
     }
 
     /// Pulls every motion parameter toward its rest value by `amplitude`, keeping breathing and blinks.

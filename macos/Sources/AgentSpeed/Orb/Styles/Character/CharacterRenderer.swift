@@ -6,7 +6,8 @@ import Metal
 import simd
 
 /// Draws one `character` orb (DESIGN 2a.6, CHARACTERS 3–8): the skinned character of the chosen pack, its pose and
-/// character swaps, the ring of lights, the agent lights, her particles and the readouts orbiting her.
+/// character swaps, the ring of lights, the agent lights, her particles and the readout cards floating beside her —
+/// the speed at her right, the facts in a column at her left, the model above her head, always in front of her.
 @MainActor
 final class CharacterRenderer: CharacterLayerProvider {
     /// The character's height × D and her feet below the disc center × D.
@@ -28,10 +29,17 @@ final class CharacterRenderer: CharacterLayerProvider {
     private var hudTime = 0.0
     private var loading = false
     private var lastModel: String?
-    /// Reused every frame: agent colors, parked bodies, readout bodies back to front.
+    /// Reused every frame: agent colors, her outline, skinned positions, card sizes and switches.
     private var agents: [(Double, Double, Double)] = []
-    private var parked: [HudBody] = []
-    private var order = CharacterHud.BodyKind.allCases
+    private var wings = HudWings()
+    private var silhouette: HudSilhouette?
+    private var scratch: [Double] = []
+    private var cardSizes = [(w: Double, h: Double)](repeating: (0, 0), count: HudCard.allCases.count)
+    private var cardShown = [Bool](repeating: false, count: HudCard.allCases.count)
+    /// The speed's digits center below its card's center (the card spans the digits down to the title chip).
+    private var speedDrop = 0.0
+    /// The last backing scale drawn at, for measuring text in `step`.
+    private var backing: CGFloat = 2
     private var lightning = CharacterLightning()
     private var bolt: [SIMD2<Double>] = []
     /// The last pack looked up, so a frame does not hash the pack folder again.
@@ -113,19 +121,13 @@ final class CharacterRenderer: CharacterLayerProvider {
                 agents.append((source.tint.red * 255, source.tint.green * 255, source.tint.blue * 255))
             }
         }
-        if frame.effects.reduceMotion || frame.effects.level == .off {
-            Self.park(&parked, g)
-            hud.parked = parked
-        } else if hud.parked != nil {
-            hud.parked = nil
-        }
-        hud.layout(dt, stage.current.hudLayout(feetOnScreen: (g.feet.x, g.feet.y), pointsPerPixel: g.pointsPerPixel,
-                                               unit: g.unit), agents: agents, digitAdvance: advance)
-        order.sort { a, b in
-            let bodies = hud.bodies
-            return bodies.count == 3 ? bodies[a.rawValue].depth < bodies[b.rawValue].depth : a.rawValue < b.rawValue
-        }
         if let model = character?.modelName { lastModel = model }
+        layoutCards(dt, frame, character: character, performer: stage.current, g: g)
+        let speed = wings.places[HudCard.speed.rawValue]
+        let speedTop = speed.y - wings.sizes[HudCard.speed.rawValue].h / 2
+        hud.layout(dt, stage.current.hudLayout(feetOnScreen: (g.feet.x, g.feet.y), pointsPerPixel: g.pointsPerPixel,
+                                               unit: g.unit), agents: agents, digitAdvance: advance,
+                   peakAt: (speed.x, speedTop - 1.1 * Double(metrics.peak)))
     }
 
     func build(into scene: inout OrbScene, _ frame: OrbFrame, character: OrbCharacterContent?) -> Bool {
@@ -140,12 +142,6 @@ final class CharacterRenderer: CharacterLayerProvider {
         let activeAtlas = atlas(current, stage.current, pose: stage.current.activePose, g: g, scene: scene, now: now)
         drawParticles(front: false, atlas: activeAtlas, uv: current.petals[stage.current.activePose], frame: frame,
                       g: g, into: &scene)
-        var behindLayer = Layer.behind
-        for kind in order where !body(kind, frame, g).inFront {
-            scene.layer = behindLayer
-            drawBody(kind, frame, character: character, g: g, into: &scene)
-            behindLayer = min(behindLayer + 1, Layer.character - 1)
-        }
 
         scene.layer = Layer.character
         if let outgoing = stage.outgoing, let pack = loaded[outgoing.pack.id] {
@@ -157,12 +153,9 @@ final class CharacterRenderer: CharacterLayerProvider {
         drawParticles(front: true, atlas: activeAtlas, uv: current.petals[stage.current.activePose], frame: frame,
                       g: g, into: &scene)
 
-        var frontLayer = Layer.inFront
-        for kind in order where body(kind, frame, g).inFront {
-            scene.layer = frontLayer
-            drawBody(kind, frame, character: character, g: g, into: &scene)
-            frontLayer = min(frontLayer + 1, Layer.peak - 1)
-        }
+        backing = scene.backingScale
+        scene.layer = Layer.inFront
+        drawCards(frame, character: character, into: &scene)
         scene.layer = Layer.peak
         drawPeak(frame, into: &scene)
         scene.layer = 0
@@ -193,7 +186,7 @@ final class CharacterRenderer: CharacterLayerProvider {
         if lightning.isActive { return true }
         guard let stage else { return loading }
         return loading || stage.outgoing != nil || stage.incoming != nil || stage.current.fadingPose != nil
-            || hud.peakAge != nil || particles.isLively
+            || hud.peakAge != nil || particles.isLively || wings.isFading
     }
 
     func pulse(at time: TimeInterval, strength: Double, heat: Double) {
@@ -319,42 +312,95 @@ final class CharacterRenderer: CharacterLayerProvider {
 
     // MARK: Readouts
 
-    private func body(_ kind: CharacterHud.BodyKind, _ frame: OrbFrame, _ g: Geometry) -> HudBody {
-        hud.bodies.indices.contains(kind.rawValue) ? hud.bodies[kind.rawValue] : HudBody(x: g.feet.x, y: g.feet.y, depth: 1,
-                                                                                          scale: 1, spin: 0, alpha: 0)
-    }
-
-    /// Reduce Motion and effects Off park the bodies around her (DESIGN 2a.6): the speed at her right shoulder, the
-    /// model above her head, the agents at her left knee.
-    static func park(_ bodies: inout [HudBody], _ g: Geometry) {
-        let x = g.feet.x, y = g.feet.y, h = g.height
-        bodies.removeAll(keepingCapacity: true)
-        bodies.append(HudBody(x: x + 0.36 * h, y: y - 0.72 * h, depth: 1, scale: 1, spin: 0, alpha: 1))
-        bodies.append(HudBody(x: x, y: y - 1.05 * h, depth: 1, scale: 1, spin: 0, alpha: 1))
-        bodies.append(HudBody(x: x - 0.34 * h, y: y - 0.25 * h, depth: 1, scale: 1, spin: 0, alpha: 1))
-    }
-
-    private func drawBody(_ kind: CharacterHud.BodyKind, _ frame: OrbFrame, character: OrbCharacterContent?, g: Geometry,
-                          into scene: inout OrbScene) {
-        let b = body(kind, frame, g)
-        let metrics = CharacterReadoutMetrics(disc: frame.s)
-        let contrast = frame.content.increaseContrast
-        let painter = CharacterBodyPainter(frame: frame, center: CGPoint(x: b.x, y: b.y), scale: CGFloat(b.scale),
-                                           spin: b.spin, alpha: b.alpha * frame.alpha, metrics: metrics, contrast: contrast)
-        let rim = frame.dark ? RGBColor(red: 1, green: 1, blue: 1).opacity(0.16) : RGBColor(red: 0, green: 0, blue: 0).opacity(0.1)
-        switch kind {
-        case .speed:
-            drawSpeed(painter, frame, into: &scene)
-        case .model:
-            let name = character?.modelName ?? lastModel
-                ?? character?.pack.map { OrbCharacterSection.name($0.manifest.name, frame.content.language) }
-            guard let name else { return }
-            let accent = character?.accent ?? RGBColor(red: 0.85, green: 0.47, blue: 0.34)
-            _ = painter.chip(name, size: metrics.model, at: 0, text: frame.tokens.valueText, rim: rim, dot: accent, into: &scene)
-        case .info:
-            guard !frame.isSmallCharacter, let line = character?.agentLine else { return }
-            _ = painter.chip(line, size: metrics.info, at: 0, text: frame.tokens.secondaryText, rim: rim, into: &scene)
+    /// Places the cards for this frame: her outline from the skinned mesh, each card's size and whether it shows
+    /// (switched on and loud; at small sizes the column keeps its first two), then the wings' layout.
+    private func layoutCards(_ dt: Double, _ frame: OrbFrame, character: OrbCharacterContent?,
+                             performer: CharacterPerformer, g: Geometry) {
+        let d = Double(frame.s)
+        let side = 2 * Double(frame.center.x)
+        let step = max(2, (d / 150).rounded())
+        if silhouette?.step != step || silhouette?.left.count != Int((side / step).rounded(.up)) {
+            silhouette = HudSilhouette(top: 0, bottom: side, step: step)
         }
+        let anchors = performer.trace(into: &silhouette!, feetOnScreen: (g.feet.x, g.feet.y),
+                                      pointsPerPixel: g.pointsPerPixel, scratch: &scratch)
+        let cards = CharacterCards(frame: frame, character: character, backing: backing)
+        let model = modelName(frame, character: character)
+        let readouts = character?.readouts ?? .default
+        let readings = character?.readings
+        let speed = speedBox(frame)
+        speedDrop = speed.drop
+        for card in HudCard.allCases {
+            cardSizes[card.rawValue] = card == .speed ? (speed.w, speed.h) : cards.size(card, model: model)
+        }
+        func has(_ card: HudCard) -> Bool { cardSizes[card.rawValue].w > 0 }
+        cardShown[HudCard.speed.rawValue] = true
+        cardShown[HudCard.model.rawValue] = readouts.model && has(.model)
+        cardShown[HudCard.performance.rawValue] = readings?.performanceLoud == true && has(.performance)
+        cardShown[HudCard.network.rawValue] = readouts.network && readings?.networkLoud == true && has(.network)
+        cardShown[HudCard.cost.rawValue] = readouts.cost && readings?.costLoud == true && has(.cost)
+        cardShown[HudCard.agents.rawValue] = readouts.agents && !frame.isSmallCharacter && has(.agents)
+        if frame.isSmallCharacter {
+            var room = 2
+            for card in HudCard.column where cardShown[card.rawValue] {
+                if room == 0 { cardShown[card.rawValue] = false } else { room -= 1 }
+            }
+        }
+        wings.still = frame.effects.reduceMotion || frame.effects.level == .off
+        wings.update(dt, time: hudTime, frame: HudFrame(bounds: (0, 0, side, side), silhouette: silhouette!, footprint: d,
+                                                         anchors: anchors),
+                     sizes: cardSizes, shown: cardShown)
+    }
+
+    /// The model chip's text: the fastest model, the last one shown, else her own name.
+    private func modelName(_ frame: OrbFrame, character: OrbCharacterContent?) -> String? {
+        character?.modelName ?? lastModel
+            ?? character?.pack.map { OrbCharacterSection.name($0.manifest.name, frame.content.language) }
+    }
+
+    /// The speed's card: the rolling digits (or the static value) over the unit and the title chip; `drop` is the
+    /// digits' center below the card's center.
+    private func speedBox(_ frame: OrbFrame) -> (w: Double, h: Double, drop: Double) {
+        let m = CharacterReadoutMetrics(disc: frame.s)
+        let ink = CharacterInk(frame, contrast: frame.content.increaseContrast)
+        let cache = OrbTextCache.shared
+        let pad = ink.width(m.value) + 1
+        let half = cache.capHeight(m.digitStyle) * 0.62 + pad
+        var width = CGFloat(hud.speedWidth) + 2 * pad
+        if let text = staticValue(frame) {
+            width = (cache.texture(text, style: m.digitStyle, language: frame.content.language, scale: backing)?.advance ?? 0)
+                + 2 * pad
+        }
+        if let unit = cache.texture(frame.content.unit, style: m.unitStyle, language: frame.content.language, scale: backing) {
+            width = max(width, unit.advance)
+        }
+        var bottom = 50 * m.q + cache.capHeight(m.unitStyle)
+        let title = frame.content.unavailableTitle ?? frame.content.titleLabel
+        if let chip = CharacterBodyPainter.chipHalfSize(title, size: m.title, language: frame.content.language, scale: backing) {
+            width = max(width, 2 * chip.width)
+            bottom = 86 * m.q + m.title + chip.height
+        }
+        return (Double(width), Double(bottom + half), Double((bottom - half) / 2))
+    }
+
+    private static let drawOrder = HudCard.column + [.model]
+
+    /// The column, the model chip, then the speed over everything.
+    private func drawCards(_ frame: OrbFrame, character: OrbCharacterContent?, into scene: inout OrbScene) {
+        let cards = CharacterCards(frame: frame, character: character, backing: scene.backingScale)
+        let model = modelName(frame, character: character)
+        for card in Self.drawOrder {
+            cards.draw(card, at: wings.places[card.rawValue], size: wings.sizes[card.rawValue], model: model,
+                       right: wings.isAtHerRight(card), into: &scene)
+        }
+        let place = wings.places[HudCard.speed.rawValue]
+        let spin = place.spin
+        let drop = speedDrop * place.scale
+        let center = CGPoint(x: place.x + drop * sin(spin), y: place.y - drop * cos(spin))
+        let painter = CharacterBodyPainter(frame: frame, center: center, scale: CGFloat(place.scale), spin: spin,
+                                           alpha: place.alpha * frame.alpha, metrics: CharacterReadoutMetrics(disc: frame.s),
+                                           contrast: frame.content.increaseContrast)
+        drawSpeed(painter, frame, into: &scene)
     }
 
     nonisolated static func lightningStrength(_ effects: OrbEffects, small: Bool) -> CharacterLightning.Strength {

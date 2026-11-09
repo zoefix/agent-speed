@@ -2431,10 +2431,10 @@
     "ja": "キャラクター"
   },
   "style.character.desc": {
-    "zh-Hant": "AI 娘站在桌面上隨速度舞動，速度、模型和 agent 圍著她緩緩繞行；角色跟著最快的模型更換。",
-    "zh-Hans": "AI 娘站在桌面上随速度舞动，速度、模型和 agent 围着她缓缓绕行；角色跟着最快的模型更换。",
-    "en": "An AI character stands on your desktop and dances to the speed, with the speed, the model and your agents slowly orbiting her. She changes with the fastest model.",
-    "ja": "AI キャラクターがデスクトップに立ち、速度に合わせて踊ります。速度・モデル・agent が彼女のまわりをゆっくり周回し、いちばん速いモデルに合わせて入れ替わります。"
+    "zh-Hant": "AI 娘站在桌面上隨速度舞動，速度、性能、網速和費用浮在她身旁；角色跟著最快的模型更換。",
+    "zh-Hans": "AI 娘站在桌面上随速度舞动，速度、性能、网速和费用浮在她身旁；角色跟着最快的模型更换。",
+    "en": "An AI character stands on your desktop and dances to the speed, with the speed, performance, network speed and cost floating beside her. She changes with the fastest model.",
+    "ja": "AI キャラクターがデスクトップに立ち、速度に合わせて踊ります。速度・性能・通信速度・費用が彼女のそばに浮かび、いちばん速いモデルに合わせて入れ替わります。"
   },
   "character.empty": {
     "zh-Hant": "下載角色",
@@ -2465,6 +2465,60 @@
     "zh-Hans": "自动（跟着最快的模型）",
     "en": "Automatic (fastest model)",
     "ja": "自動（いちばん速いモデル）"
+  },
+  "character.readouts": {
+    "zh-Hant": "顯示資訊",
+    "zh-Hans": "显示信息",
+    "en": "Readouts",
+    "ja": "表示する情報"
+  },
+  "character.readouts.intel": {
+    "zh-Hant": "性能",
+    "zh-Hans": "性能",
+    "en": "Performance",
+    "ja": "性能"
+  },
+  "character.readouts.thinking": {
+    "zh-Hant": "思考速度",
+    "zh-Hans": "思考速度",
+    "en": "Thinking Speed",
+    "ja": "思考速度"
+  },
+  "character.readouts.network": {
+    "zh-Hant": "網路速度",
+    "zh-Hans": "网络速度",
+    "en": "Network Speed",
+    "ja": "ネットワーク速度"
+  },
+  "character.readouts.cost": {
+    "zh-Hant": "費用",
+    "zh-Hans": "费用",
+    "en": "Cost",
+    "ja": "費用"
+  },
+  "character.readouts.agents": {
+    "zh-Hant": "今日用量與 agent",
+    "zh-Hans": "今日用量与 agent",
+    "en": "Today & Agents",
+    "ja": "今日の使用量と agent"
+  },
+  "character.readouts.model": {
+    "zh-Hant": "最快的模型",
+    "zh-Hans": "最快的模型",
+    "en": "Fastest Model",
+    "ja": "いちばん速いモデル"
+  },
+  "character.readouts.networkScope": {
+    "zh-Hant": "網路速度範圍",
+    "zh-Hans": "网络速度范围",
+    "en": "Network Speed Of",
+    "ja": "ネットワーク速度の対象"
+  },
+  "character.readouts.hint": {
+    "zh-Hant": "速度一直顯示；其他資訊有資料時才浮現在她身旁，安靜 10 秒後淡出。",
+    "zh-Hans": "速度一直显示；其他信息有数据时才浮现在她身旁，安静 10 秒后淡出。",
+    "en": "The speed always shows; the others float in beside her while they have something to show and fade out after 10 quiet seconds.",
+    "ja": "速度は常に表示されます。ほかの情報はデータがあるときだけ彼女のそばに現れ、10 秒間静かだとフェードアウトします。"
   },
   "characters.more": {
     "zh-Hant": "下載更多角色…",

@@ -62,8 +62,10 @@ struct OrbPane: View {
                 if orb.style == .character {
                     OrbCharacterSection(model: model, orb: orb)
                         .id(OrbCharacterSection.anchor)
+                    OrbCharacterReadoutsSection(model: model, orb: orb)
+                } else {
+                    OrbUnitSection(model: model, orb: orb)
                 }
-                OrbUnitSection(model: model, orb: orb)
                 OrbLookSection(model: model, orb: orb)
                 OrbSwitchesSection(model: model, orb: orb)
                 OrbAdvancedSection(model: model, orb: orb, expanded: $advancedExpanded)

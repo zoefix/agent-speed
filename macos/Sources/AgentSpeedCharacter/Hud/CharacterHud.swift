@@ -32,26 +32,18 @@ public enum HeatColor {
     }
 }
 
-/// Where a floating readout body sits this frame.
+/// Where the new-peak pill sits this frame.
 public struct HudBody: Sendable, Equatable {
     public var x, y: Double
-    /// -1 farthest behind the character, 1 nearest in front; draw behind her when negative.
-    public var depth: Double
     public var scale: Double
-    /// Tumble in radians, clockwise on screen.
-    public var spin: Double
     public var alpha: Double
 
-    public init(x: Double, y: Double, depth: Double, scale: Double, spin: Double, alpha: Double) {
+    public init(x: Double, y: Double, scale: Double, alpha: Double) {
         self.x = x
         self.y = y
-        self.depth = depth
         self.scale = scale
-        self.spin = spin
         self.alpha = alpha
     }
-
-    public var inFront: Bool { depth >= 0 }
 }
 
 /// The geometry the readout is laid around, in screen points (y down).
@@ -60,34 +52,26 @@ public struct HudLayout: Sendable {
     public var ground: (cx: Double, cy: Double, rx: Double, ry: Double)
     /// The agents' orbit around the waist.
     public var waist: (cx: Double, cy: Double, rx: Double, ry: Double)
-    /// The center the readout bodies orbit.
-    public var orbitCenter: (x: Double, y: Double)
-    /// The idle character's height, which sizes the orbits.
+    /// The idle character's height.
     public var characterHeight: Double
     /// Points per reference unit (the reference film is 1350 px tall: unit = height / 1350).
     public var unit: Double
 
-    public init(ground: (Double, Double, Double, Double), waist: (Double, Double, Double, Double),
-                orbitCenter: (Double, Double), characterHeight: Double, unit: Double) {
+    public init(ground: (Double, Double, Double, Double), waist: (Double, Double, Double, Double), characterHeight: Double,
+                unit: Double) {
         self.ground = ground
         self.waist = waist
-        self.orbitCenter = orbitCenter
         self.characterHeight = characterHeight
         self.unit = unit
     }
 }
 
 /// The floating readout's state and lights (hud.py): the gauge ring with its comet, response pulses, agent lights
-/// orbiting the waist, embers at redline, the three readout bodies on Kepler orbits, the rolling speed and the new
-/// peak burst. Text is the renderer's: it draws the speed digits of `odometer`, the unit, the title (crossfading over
-/// `titleProgress`), the model chip and the agent line at the `bodies`.
+/// orbiting the waist, embers at redline, the rolling speed and the new peak burst. The cards are placed by
+/// `HudWings`; text is the renderer's: it draws the speed digits of `odometer`, the unit, the title (crossfading over
+/// `titleProgress`) and the cards.
 public struct CharacterHud: Sendable {
-    public enum BodyKind: Int, Sendable, CaseIterable {
-        case speed, model, info
-    }
-
     public private(set) var odometer = Odometer()
-    public private(set) var bodies: [HudBody] = []
     /// The title shown and the one it replaces while they crossfade (0 → 1).
     public private(set) var title: String?
     public private(set) var previousTitle: String?
@@ -102,9 +86,7 @@ public struct CharacterHud: Sendable {
     public private(set) var speedWidth = 0.0
 
     var rng: Rng
-    var center = Follow(f: 1.1, z: 0.75, bob: (0.0, 1.0), phase: 0)
     var peakFollow: Follow
-    var orbits: [Orbit]?
     var width = SecondOrder(2.5, 0.8, 0)
     var comet = 0.0
     var orbitPhase = 0.0
@@ -115,8 +97,6 @@ public struct CharacterHud: Sendable {
     var intensity = 0.0
     /// Multiplies the ember rate (0 turns embers off: Soft and Off effects; 1.6 at Max).
     public var emberRate = 1.0
-    /// Fixed places of the bodies (speed, model, info) instead of their orbits (Reduce Motion), nil to orbit.
-    public var parked: [HudBody]?
     var time = 0.0
 
     public init(seed: UInt64 = 5, unit: Double = 1) {
@@ -124,7 +104,6 @@ public struct CharacterHud: Sendable {
         peakFollow = Follow(f: 2.0, z: 0.6, bob: (3.0 * unit, 2.9), phase: 0.7)
         back.reserveCapacity(512)
         front.reserveCapacity(512)
-        bodies.reserveCapacity(3)
         pulses.reserveCapacity(16)
         embers.reserveCapacity(256)
     }
@@ -164,35 +143,18 @@ public struct CharacterHud: Sendable {
         odometer.update(dt, speed)
     }
 
-    /// Places the bodies and rebuilds the lights for this frame. `digitAdvance` is the renderer's width of one digit
-    /// of the speed (points), for the width spring; `agents` are the agent colors (0…255 RGB).
-    public mutating func layout(_ dt: Double, _ l: HudLayout, agents: [(Double, Double, Double)], digitAdvance: Double) {
+    /// Rebuilds the lights for this frame and moves the new-peak pill toward `peakAt` (above the speed).
+    /// `digitAdvance` is the renderer's width of one digit of the speed (points), for the width spring; `agents` are
+    /// the agent colors (0…255 RGB).
+    public mutating func layout(_ dt: Double, _ l: HudLayout, agents: [(Double, Double, Double)], digitAdvance: Double,
+                                peakAt: (x: Double, y: Double)) {
         let u = l.unit
         speedWidth = width.update(dt, digitAdvance * Double(odometer.digits.count))
-        if orbits == nil {
-            let k = l.characterHeight
-            orbits = [Orbit(a: 0.4 * k, e: 0.2, period: 52.0, phase: 0.35, omega: 0.0, height: -0.06 * k, seed: 0.4),
-                      Orbit(a: 0.34 * k, e: 0.26, period: 38.0, phase: 2.4, omega: 0.9, height: -0.34 * k, seed: 1.9),
-                      Orbit(a: 0.38 * k, e: 0.22, period: 45.0, phase: 4.3, omega: -0.6, height: 0.22 * k, seed: 3.1)]
-        }
-        let (cx, cy) = center.update(dt, time, l.orbitCenter.x, l.orbitCenter.y)
-        bodies.removeAll(keepingCapacity: true)
-        if let parked, parked.count == BodyKind.allCases.count {
-            bodies.append(contentsOf: parked)
-        } else {
-            for orbit in orbits! {
-                let p = orbit.at(time, cx, cy)
-                bodies.append(HudBody(x: p.x, y: p.y, depth: p.depth, scale: 0.82 + 0.2 * (p.depth + 1) / 2,
-                                      spin: orbit.spin(time), alpha: 0.55 + 0.45 * (p.depth + 1) / 2))
-            }
-        }
         if let age = peakAge {
-            let s = bodies[BodyKind.speed.rawValue]
-            let (px, py) = peakFollow.update(dt, time, s.x, s.y - 0.13 * l.characterHeight)
+            let (px, py) = peakFollow.update(dt, time, peakAt.x, peakAt.y)
             let pop = age > 0 ? 1 + 0.25 * exp(-6 * age) * sin(14 * age) : 1
             let grow = min(1.0, 0.6 + age * 3)
-            peak = HudBody(x: px, y: py, depth: 1, scale: pop * grow, spin: 0,
-                           alpha: min(1.0, age / 0.15) * min(1.0, (2.4 - age) / 0.4))
+            peak = HudBody(x: px, y: py, scale: pop * grow, alpha: min(1.0, age / 0.15) * min(1.0, (2.4 - age) / 0.4))
         } else {
             peak = nil
         }

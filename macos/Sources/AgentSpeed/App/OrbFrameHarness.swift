@@ -141,6 +141,7 @@ enum OrbFrameHarness {
         let size: CGSize
         var cells: [Cell] = []
         var castAt: (Double) -> Void = { _ in }
+        var demoAt: () -> Void = {}
         func stage(_ style: OrbStyleKind, _ diameter: CGFloat) -> OrbPreviewStage {
             let stage = OrbPreviewStage(model: model, style: style, diameter: diameter, dark: clip.dark, level: clip.level,
                                         reduceMotion: clip.reduceMotion)
@@ -183,6 +184,12 @@ enum OrbFrameHarness {
                                                        fastestVendor: vendor)
             }
             castAt(0)
+            var readings = CharacterDemoReadings(environment: environment)
+            demoAt = {
+                if let next = readings.update(value: character.value, time: character.time, display: model.cost) {
+                    character.feed.characterReadings = next
+                }
+            }
             cells.append(Cell(stage: character, center: CGPoint(x: disc * 0.75, y: disc * 0.75), label: nil))
         case .hero(let style), .still(let style, _):
             let big: CGFloat = 240
@@ -202,6 +209,7 @@ enum OrbFrameHarness {
         func advance() {
             tourTime += dt
             castAt(tourTime)
+            demoAt()
             let reference = cells[0].stage
             var fire: (Double, Int)?
             if reference.gauge.tier != .idle, random.next() < (0.3 + 1.5 * reference.gauge.heat(at: reference.time)) * dt {

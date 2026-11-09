@@ -202,7 +202,7 @@ enum TinyPack {
         for n in 0..<240 {
             performer.step(1.0 / 60, level: 3)
             hud.update(1.0 / 60, time: Double(n) / 60, speed: 40, heat: 0.3, intensity: 0.2, title: "x")
-            hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20)
+            hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20, peakAt: (360, 300))
         }
         var quietWindows = 0
         for _ in 0..<40 {
@@ -211,7 +211,7 @@ enum TinyPack {
                 for n in 0..<20 {
                     performer.step(1.0 / 60, level: 3)
                     hud.update(1.0 / 60, time: 2 + Double(n) / 60, speed: 40, heat: 0.3, intensity: 0.2, title: "x")
-                    hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20)
+                    hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20, peakAt: (360, 300))
                 }
             }
             guard let count else { return }
@@ -239,7 +239,7 @@ enum TinyPack {
                 let layout = performer.hudLayout(feetOnScreen: (300, 600), pointsPerPixel: 0.4, unit: 0.5)
                 hud.update(1.0 / 60, time: Double(n) / 60, speed: Double(level * 30), heat: Double(level) / 13,
                            intensity: performer.intensity, title: "t")
-                hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20)
+                hud.layout(1.0 / 60, layout, agents: [(217, 119, 87)], digitAdvance: 20, peakAt: (360, 300))
             }
         }
         let perFrame = Double(elapsed.components.attoseconds) / 1e15 / Double(frames)
@@ -254,26 +254,23 @@ enum TinyPack {
 @Suite struct CharacterHudTests {
     @Test func ringLightsFillWithHeatAndSplitFrontAndBack() {
         var hud = CharacterHud()
-        let layout = HudLayout(ground: (300, 600, 200, 34), waist: (300, 400, 220, 36), orbitCenter: (300, 350),
-                               characterHeight: 700, unit: 1)
+        let layout = HudLayout(ground: (300, 600, 200, 34), waist: (300, 400, 220, 36), characterHeight: 700, unit: 1)
         hud.update(1.0 / 60, time: 1, speed: 120, heat: 0.5, intensity: 0.5, title: "x")
-        hud.layout(1.0 / 60, layout, agents: [], digitAdvance: 20)
+        hud.layout(1.0 / 60, layout, agents: [], digitAdvance: 20, peakAt: (360, 300))
         let ringFront = hud.front.filter { $0.y >= 600 }
         let ringBack = hud.back.filter { $0.y < 600 && $0.additive }
         #expect(!ringFront.isEmpty && !ringBack.isEmpty)
-        #expect(hud.bodies.count == 3)
         #expect(hud.odometer.digits.count >= 1)
     }
 
     @Test func peakPillPopsAndFades() {
         var hud = CharacterHud()
-        let layout = HudLayout(ground: (300, 600, 200, 34), waist: (300, 400, 220, 36), orbitCenter: (300, 350),
-                               characterHeight: 700, unit: 1)
+        let layout = HudLayout(ground: (300, 600, 200, 34), waist: (300, 400, 220, 36), characterHeight: 700, unit: 1)
         hud.celebratePeak()
         var seen = false
         for n in 0..<180 {
             hud.update(1.0 / 60, time: Double(n) / 60, speed: 300, heat: 0.8, intensity: 0.8, title: "x")
-            hud.layout(1.0 / 60, layout, agents: [], digitAdvance: 20)
+            hud.layout(1.0 / 60, layout, agents: [], digitAdvance: 20, peakAt: (360, 300))
             if hud.peak != nil { seen = true }
         }
         #expect(seen)

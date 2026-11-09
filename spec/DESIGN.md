@@ -553,8 +553,8 @@ Every floating orb has a **style**: `led` (the LED gauge of section 2, the defau
 `minimal` or `character`. The first five are one family: they share the disc and window, the body, the aura, the
 readout, the agent dots, the response wave, the new-peak pill, hover, the source bezel (2b), the effects levels,
 accessibility and the frame policy below; each one adds its own instrument between the body and the readout.
-`character` (2a.6) replaces the instrument and the body with an animated character and moves the readout onto orbits
-around her; it keeps the window rules, hover, the effects levels, accessibility and the frame policy. The dashboard
+`character` (2a.6) replaces the instrument and the body with an animated character and floats the readout beside her
+as cards; it keeps the window rules, hover, the effects levels, accessibility and the frame policy. The dashboard
 hero (section 4) always uses `led` with the hero vehicle.
 
 | Key | Name (`style.*`) | Personality | Primary encoding of `h` |
@@ -601,7 +601,7 @@ OKLab L, stepped to ≥ 4.5:1 against the body); *hot* is `mix(heat(h), #FFF7D6,
   - **Odometer**: on a value change only the characters that changed roll, each clipped to its own character cell,
     travel 0.92 × the value size, 0.24 s ease-out (up when rising). Different lengths crossfade in 0.12 s. No roll with
     Off, Reduce Motion, `minimal` and S < 80 (the text simply updates).
-  - Readout text is always drawn above every effect (`character`'s orbiting readouts pass behind her, 2a.6). Particles
+  - Readout text is always drawn above every effect (`character`'s cards included: they never pass behind her, 2a.6). Particles
     that pass behind it fade to 35 % inside the *readout
     zone* (an ellipse 0.30 S × 0.19 S around `c + (0, 0.07 S)`, Gaussian falloff) so it never competes with them.
 - **Readout** (optional, per orb): two small lines above the value (`needle`: inside the hub, below it) with the
@@ -891,8 +891,8 @@ color. At S < 80 the title uses 7 pt and the ring keeps `w ≥ 2.5 pt`.
 
 ### 2a.6 `character` — Character
 
-An anime character, one per model vendor, stands on the desktop and acts out the speed; the speed, the model and the
-agents orbit her like small moons. Packs, rig evaluation, motion, the pose swap, the choice of character and the
+An anime character, one per model vendor, stands on the desktop and acts out the speed; the speed and every live fact
+of the orb float beside her as cards. Packs, rig evaluation, motion, the pose swap, the choice of character and the
 floating readouts are specified in CHARACTERS (spec/CHARACTERS.md); this section covers what the orb adds.
 
 **Footprint.** The style occupies a disc `D = 2 S` (S = the orb's size, 64–240): the window is `1.5 D` square and
@@ -912,13 +912,11 @@ Layers, back to front (conventions of 2a with `S` replaced by `D`):
    lights it passes (period `6 − 5.3 h` s).
 3. **Agent lights, back half**: one light per generating agent in its source color on a tilted orbit around her waist
    (0.3 × 0.05 D), with a short tail; speed `0.25 + 0.9 h` rad/s.
-4. **Readouts behind her**: the orbiting bodies of CHARACTERS 8 whose depth is behind her, at 82–92 % size and
-   55–78 % opacity.
-5. **The character**: the skinned pose of the current band (CHARACTERS 3, 6), drawn as textured triangle meshes.
-6. **Ring and agent lights, front half**, response ripples (the ring growing to 1.42 × and fading over 0.9 s,
+4. **The character**: the skinned pose of the current band (CHARACTERS 3, 6), drawn as textured triangle meshes.
+5. **Ring and agent lights, front half**, response ripples (the ring growing to 1.42 × and fading over 0.9 s,
    strength from `log10(output)`), embers rising from the ring at redline.
-7. **Readouts in front of her**, then her particles (CHARACTERS 8, Particles; the rest of them draw behind her,
-   after layer 4) and the new-peak pill (gold, above the speed body, with 24 rays). Each character has her own kind:
+6. **Her particles in front** (CHARACTERS 8, Particles; the rest of them draw behind her, after layer 3).
+   Each character has her own kind:
    Claude's petals blown by the wind from boost up; bubbles rising and swaying (DeepSeek), twinkling four-point
    sparkles or stars, music notes floating up (Kimi), embers from her feet (Grok), blue foxfire wisps (GLM),
    tumbling confetti from above (MiniMax), `Z z` drifting from her head only while she rests (Llama), pages and
@@ -926,12 +924,56 @@ Layers, back to front (conventions of 2a with `S` replaced by `D`):
    kind's own colors; stars, wisps and embers add up on dark glass and are laid over on light; notes and `Z` are
    bold glyphs. Take-offs, wing flaps, pounces and pose swaps throw out a puff of 14. The slow drift rides the
    band's frame rate (15 fps at idle); puffs and wind-blown petals ask for 60.
+7. **The cards** (*Readouts* below), always over her, then the new-peak pill (gold, above the speed card, with 24
+   rays).
 
-The readouts are three bodies on Kepler orbits (CHARACTERS 8): **speed** (rolling digits sampled 5 times a second,
-size 0.068 D, the unit and the speed title chip below), **model** (a glass chip with the vendor's accent dot and the
-fastest model's name) and **agents** (a glass chip with today's tokens and the number of agents). Periods 38–52 s,
-eccentricity 0.2–0.26, heights at her chest, head and knees; each tumbles by ±5°. With no live model the model chip
-shows the last one.
+**Readouts.** Nothing ever goes behind her: the readout is a set of cards beside her, each with a fixed place, placed
+every frame against her outline as drawn (the skinned mesh of the current pose, in bands of `max(2, D / 150)` pt), so a
+raised arm, a held-out staff or open wings push a card away instead of covering it:
+
+- **Speed** (always shown): at her right at chest height (her chin + 45 % of the way to her waist), its left edge
+  `0.035 D` clear of her outline over the rows it spans; if it does not fit there, the nearest row (±0.04 … 0.3 D)
+  where it overflows least. Rolling digits sampled 5 times a second, size 0.068 D, the unit and the speed title chip
+  below; no plate.
+- **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
+  model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
+  of her that rises under it. With no live model it shows the last one.
+- **The column** at her left, top to bottom from her shoulders (chin + 25 % to the waist): **性能** (`性能 1,286` at
+  `p = 1.25 t` over `思考 412 tok/s` at `t`, the score's motion, pale resting form and provisional mark as in section 10;
+  the 思考 row fades after its hold at 0 and the card closes up, section 10 *Thinking hidden at zero*), **network**
+  (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
+  `–` when nothing is priced, and the money unit) and **today** (`boards.today` with today's tokens over
+  `agents.count`). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
+  every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
+  apart; a hidden card's room closes up as it fades.
+- **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
+  its last cards continue under the speed at her right, left edges on one line, in the same order. Only when no split
+  fits does the column move further (up to 0.3 D), and only then do its cards hug her outline one by one. Cards move
+  only after the column has overflowed for 0.6 s and come back once the larger column has fitted near her shoulders
+  with `0.04 D` to spare for 4 s (12 s within 30 s of the last change, so a dance that keeps reaching out does not send
+  them back and forth), and a passing gesture moves nothing; a card changing sides fades out where it was
+  (0.18 s) and back in at its new place (0.3 s) instead of crossing her. A card's accent edge is the one facing her.
+
+Each card is a frosted glass plate: corner `0.72 t` (the model chip a capsule), padding `0.8 t` × `0.55 t`, fill
+`#12141D` 64 % on dark / white 80 % on light (92 % with Increase Contrast, 97 % with Reduce Transparency), a hairline rim
+(white 15 % / black 8.5 %), a soft shadow (black 30 % / 11 %, Gaussian `0.9 t`, `0.2 t` down), a sheen along the top
+edge (white 10 % / 75 %) and a spine of her accent color along the edge facing her (`0.15 t` wide, 60 % of the height).
+Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and units the secondary token.
+
+**Which cards show.** A card shows while it is switched on (`characterReadouts`, 2b; the speed always) and has
+something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
+resting or an agent generates, 費用 while money flows (or a generating set has no price), each until 10 s after its
+last loud moment; today while there is a token today. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
+their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A
+`character` orb's network card follows `traffic` for its scope (`machine` = the whole computer, anything else = the
+orb's agents); its speed stays in tok/s (`unit` is not used: the cost has its own card, and clicking the orb does not
+switch units).
+
+**Floating.** Anchors follow her on springs (0.9 Hz, damping 0.78); a card she reaches into (closer than half the gap)
+gets out of her way at once (time constant 0.06 s) and drifts back on the slow spring. Every card floats on its own slow figure of eight
+(two sines per axis, periods 2.6–13 s, a phase of its own), the speed by `±0.008 × ±0.011 D`, the others by
+`±0.013 × ±0.017 D`, tilts by up to ±2.6° (the speed ±1.6°) with its glyphs, and breathes ±1.2 % in size, so the
+readout drifts gently beside her while each value stays where the eye left it.
 
 The speed has no plate; it stays legible over her dress and any wallpaper by its ink. Digits are the value color
 (white 96 % on dark, `#0B0D12` 92 % on light) with an outline 0.06 × the text size in the opposite tone (near-black
@@ -955,17 +997,17 @@ she acts out a gesture or move.
 
 | Effects | `character` |
 | --- | --- |
-| Off | the character at rest pose with breathing only, readouts parked (not orbiting), no particles |
+| Off | the character at rest pose with breathing only, cards still (no float or tilt), no particles |
 | Soft | grooves and actions at half amplitude, no embers or particles |
 | Standard | as described |
 | Max | Standard with 1.6 × particle rates |
 
-Reduce Motion: the readouts park at fixed places around her (speed at her right shoulder, model above her head, agents
-at her left knee), actions that leave the ground (hops, jumps, spins, steps) are skipped, and pose swaps become 0.3 s
-crossfades. Increase Contrast: the readout plates become opaque (90 %), unlit ring lights × 2. With no character
+Reduce Motion: the cards keep their places without floating, tilting or easing (fades stay, card size changes are
+instant), actions that leave the ground (hops, jumps, spins, steps) are skipped, and pose swaps become 0.3 s
+crossfades. Increase Contrast: the card plates become nearly opaque (92 %) with stronger rims and text, unlit ring lights × 2. With no character
 installed, the style draws the ring and the standard readout of the frame table (value 0.13 D) with `character.empty`
-above it; the context menu's `characters.more` leads to the downloads. LOD: below S = 96 the agent lights and the agents body are
-not drawn; thumbnails and style cards show the pack's `preview.png`.
+above it; the context menu's `characters.more` leads to the downloads. LOD: below S = 96 the agent lights and the today card are
+not drawn and the column keeps at most its first two shown cards; thumbnails and style cards show the pack's `preview.png`.
 
 ### Frame policy and performance budget (normative for every style, `led` included)
 
@@ -1033,10 +1075,10 @@ the scenario of the prototype (idle → climb → redline → overdrive → back
   glyph atlas (digits, `.kMB–`, the unit and the titles of the title themes in use — presets in the current language,
   custom titles as typed — built once per size and rebuilt when a theme or custom set changes).
 - Exception for `character` (2a.6): the character is a textured, skinned triangle mesh pass (bone matrices in a
-  per-frame buffer, the atlas sampled with mipmaps and premultiplied after sampling) between the SDF batches; its
-  readout text may draw behind her, so text and shape batches interleave in depth order. Only the current pose's atlas
+  per-frame buffer, the atlas sampled with mipmaps and premultiplied after sampling) between the SDF batches; her
+  particles and lights draw on both sides of her, so text and shape batches interleave in depth order. Only the current pose's atlas
   and, during a swap, the incoming one are resident; atlases are downscaled once to the on-screen size (at most 2 ×
-  the drawn height at the backing scale) when loaded. Glyphs of the orbiting readouts rotate with their body.
+  the drawn height at the backing scale) when loaded. Glyphs of the cards tilt with their card.
 - No per-frame allocation: instance buffers and particle pools are sized once from the style's maximum budget (ring
   buffers), paths and geometry are rebuilt only on a size or appearance change; WPF: frozen resources only.
 - CPU per frame ≤ 0.25 ms for state updates (springs, particles) at the maximum budget.
@@ -1099,6 +1141,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `style` | `led` · `needle` · `liquid` · `reactor` · `minimal` · `character`; unknown → `led`. |
 | `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size; `character` occupies a disc of 2 × the size (2a.6, Footprint), which placement, snapping and magnets use. |
 | `character` | `character` style only: a character pack id (CHARACTERS 1), or absent = Auto, following the fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto. |
+| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `network`, `cost`, `agents` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1329,7 +1372,12 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    all-sources orb makes the set that single source. It is followed by `orbs.unit` ▸ `orbs.unit.tokens` /
    `orbs.unit.cost` (section 9), `orbs.traffic` ▸ `orbs.traffic.sources` / `orbs.traffic.machine` /
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
-   plate shows (Name plate).
+   plate shows (Name plate). A `character` orb has `character.readouts` ▸ in place of the unit and traffic items: a
+   check per card (`character.readouts.intel`, `.thinking`, `.network`, `.cost`, `.agents`, `.model`; network disabled
+   while traffic is not measured), a separator, the section header `character.readouts.networkScope` and the radio
+   pair `orbs.traffic.sources` / `orbs.traffic.machine` (disabled while the network card is off). The quick menu
+   does the same. In Settings the orb editor shows the cards as checkboxes with the scope popup and
+   `character.readouts.hint` (section `character.readouts`) in place of the unit section.
 4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196, checked when the size is one of them), a
    separator, then a slider over the whole range (64–240 pt, 4 pt steps) with the value at its trailing edge
    (`%d pt`, tabular digits, secondary text). The orb resizes live while the thumb moves, every step is stored like a

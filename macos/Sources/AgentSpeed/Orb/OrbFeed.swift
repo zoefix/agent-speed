@@ -36,6 +36,8 @@ final class OrbFeed {
     var vendors = VendorReading()
     /// The character a `character` orb shows (CHARACTERS 7); nil when none is installed.
     var characterID: String?
+    /// The cards of a `character` orb besides the speed (DESIGN 2a.6, Readouts); nil for other styles.
+    var characterReadings: OrbCharacterReadings?
 
     @ObservationIgnored private var listeners: [UUID: @MainActor (OrbFeedEvent) -> Void] = [:]
 
