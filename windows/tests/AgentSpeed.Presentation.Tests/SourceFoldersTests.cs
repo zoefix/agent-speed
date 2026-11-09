@@ -49,7 +49,7 @@ public class SourceFoldersTests
     public void TheMonitorDefaultsStartWithTheCliStore()
     {
         var defaults = LiveMonitor.DefaultAntigravityStores;
-        Assert.Equal(["antigravity-cli", "antigravity", "antigravity-ide"], defaults.Select(Path.GetFileName));
+        Assert.Equal(["antigravity-cli", "antigravity", "antigravity-ide"], defaults.Take(3).Select(Path.GetFileName));
         Assert.Equal([defaults[0]], SourceFolders.Antigravity(null, defaults, _ => false));
     }
 

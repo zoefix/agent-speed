@@ -92,7 +92,7 @@ Agent Speed reads the transcripts your agents already write on your disk:
 | OpenCode (CLI and desktop) | `~/.local/share/opencode/opencode.db` (or `$XDG_DATA_HOME/opencode`) |
 | Gemini CLI | `~/.gemini/tmp` (or `$GEMINI_CLI_HOME/.gemini/tmp`) |
 | omp (oh-my-pi) | `~/.omp/agent/sessions` and every profile in `~/.omp/profiles` (or `$PI_CODING_AGENT_DIR/sessions`) |
-| Antigravity (`agy` CLI, desktop app, IDE and extensions) | `~/.gemini/antigravity-cli`, `~/.gemini/antigravity` and `~/.gemini/antigravity-ide` (their `conversations` folders) |
+| Antigravity (`agy` CLI, desktop app, IDE and extensions) | `~/.gemini/antigravity-cli`, `~/.gemini/antigravity` and `~/.gemini/antigravity-ide` (their `conversations` folders); Windows also discovers `~/.t3/userdata/providers/antigravity/*/antigravity-acp` stores |
 | WorkBuddy (Tencent, China edition) | `~/.workbuddy/projects` |
 | WorkBuddy AI (international edition) | `~/.workbuddy-ai/projects` |
 | ZCode | `~/.zcode/cli/db/db.sqlite` (or `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`) |

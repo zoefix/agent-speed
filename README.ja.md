@@ -87,7 +87,7 @@ Agent Speed は、agent がすでにローカルに書き出している記録�
 | OpenCode（CLI とデスクトップ） | `~/.local/share/opencode/opencode.db`（または `$XDG_DATA_HOME/opencode`） |
 | Gemini CLI | `~/.gemini/tmp`（または `$GEMINI_CLI_HOME/.gemini/tmp`） |
 | omp（oh-my-pi） | `~/.omp/agent/sessions` と `~/.omp/profiles` 内の各プロファイル（または `$PI_CODING_AGENT_DIR/sessions`） |
-| Antigravity（`agy` CLI・デスクトップアプリ・IDE・拡張機能） | `~/.gemini/antigravity-cli`、`~/.gemini/antigravity`、`~/.gemini/antigravity-ide`（それぞれの `conversations` フォルダ） |
+| Antigravity（`agy` CLI・デスクトップアプリ・IDE・拡張機能） | `~/.gemini/antigravity-cli`、`~/.gemini/antigravity`、`~/.gemini/antigravity-ide`（それぞれの `conversations` フォルダ）。Windows では `~/.t3/userdata/providers/antigravity/*/antigravity-acp` のストアも検出 |
 | WorkBuddy（Tencent、中国版） | `~/.workbuddy/projects` |
 | WorkBuddy AI（国際版） | `~/.workbuddy-ai/projects` |
 | ZCode | `~/.zcode/cli/db/db.sqlite`（または `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |

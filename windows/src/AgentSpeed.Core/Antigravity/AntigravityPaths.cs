@@ -15,9 +15,37 @@ internal static class AntigravityPaths
 
     private const string BackupSuffix = "-backup";
 
-    /// <summary>The three default stores below <paramref name="geminiFolder"/> (<c>~/.gemini</c>).</summary>
-    public static IReadOnlyList<string> DefaultStores(string geminiFolder) =>
-        [.. StoreNames.Select(name => Path.Combine(geminiFolder, name))];
+    /// <summary>Native stores below <c>~/.gemini</c>, then valid T3 Code ACP stores on Windows.</summary>
+    public static IReadOnlyList<string> DefaultStores(string geminiFolder)
+    {
+        var stores = StoreNames.Select(name => Path.Combine(geminiFolder, name)).ToList();
+        if (!OperatingSystem.IsWindows())
+        {
+            return stores;
+        }
+
+        var providers = Path.GetFullPath(Path.Combine(geminiFolder, "..", ".t3", "userdata", "providers", "antigravity"));
+        try
+        {
+            foreach (var instance in Directory.EnumerateDirectories(providers, "*", new EnumerationOptions
+            {
+                IgnoreInaccessible = true,
+                AttributesToSkip = FileAttributes.ReparsePoint,
+            }).Order(StringComparer.Ordinal))
+            {
+                var store = Path.Combine(instance, "antigravity-acp");
+                if (Directory.Exists(ConversationsOf(store)))
+                {
+                    stores.Add(store);
+                }
+            }
+        }
+        catch (Exception e) when (e is IOException or UnauthorizedAccessException)
+        {
+        }
+
+        return stores;
+    }
 
     /// <summary>
     /// The folders to read: the setting alone when given, else the default stores; a store named <c>*-backup</c> (or its

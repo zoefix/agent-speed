@@ -28,7 +28,7 @@ from cumulative session counters (4.16).
 | OpenCode (CLI and desktop app) | `$XDG_DATA_HOME/opencode/opencode.db`, else `~/.local/share/opencode/opencode.db` (same form on Windows under `%USERPROFILE%`) | the folder that contains `opencode.db`, or that file: one database |
 | Gemini CLI (interactive, `-p`, ACP/IDE sessions) | `<home>/.gemini/tmp`; on macOS also `<home>/.cache/.gemini/tmp` (seatbelt sandbox, v0.63+). `<home>` = `$GEMINI_CLI_HOME`, else `~` | one `tmp` folder (its `settings.json`: 2.1) |
 | omp (oh-my-pi: TUI, `-p`, RPC, ACP) | The default root plus one root per named profile (4.7). Default: `$PI_CODING_AGENT_DIR/sessions`, else on macOS `$XDG_DATA_HOME/omp/sessions` when `$XDG_DATA_HOME/omp` exists, else `~/<cfg>/agent/sessions`, where `<cfg>` = `$PI_CONFIG_DIR`, else `.omp`. Profiles: `~/<cfg>/profiles/<name>/agent/sessions` for every folder `<name>` | one `sessions` folder, without profiles |
-| Antigravity (CLI `agy`, desktop app, IDE, IDE extensions) | three store folders: `~/.gemini/antigravity-cli`, `~/.gemini/antigravity`, `~/.gemini/antigravity-ide` (each contains `conversations`) | one store folder, or its `conversations` folder |
+| Antigravity (CLI `agy`, desktop app, IDE, IDE extensions) | native stores: `~/.gemini/antigravity-cli`, `~/.gemini/antigravity`, `~/.gemini/antigravity-ide`; Windows also discovers `~/.t3/userdata/providers/antigravity/*/antigravity-acp` with an existing `conversations` folder | one store folder, or its `conversations` folder |
 | WorkBuddy (desktop app `WorkBuddy`, China edition) | `~/.workbuddy/projects` (4.9) | the data folder or its `projects` folder: that `projects` folder |
 | WorkBuddy AI (desktop app `WorkBuddy AI`, international edition) | `~/.workbuddy-ai/projects` (4.9) | the data folder or its `projects` folder: that `projects` folder |
 | ZCode | `~/.zcode/cli/db/db.sqlite`; `$ZCODE_DATA_BASE_DIR` replaces the home base, with `.zcode/cli/db` underneath | a data directory, database folder, or `db.sqlite`: one database |
@@ -71,7 +71,7 @@ one, every other source has its own. The seventeen lists are named `codex`, `cla
 - **Entries.** An entry is either `automatic` — every root of the table's *Root* column, derived from the environment
   whenever roots are resolved, exactly as before lists existed (Codex: the sessions root and the agent-scoped Codex home
   of every OpenClaw agent database; Gemini CLI: both `tmp` folders; omp: the default root and every profile;
-  Antigravity: the three stores; Pi: its sessions root and its custom session folder; OpenClaw: every state folder;
+  Antigravity: the native stores and, on Windows, valid T3 Code ACP stores; Pi: its sessions root and its custom session folder; OpenClaw: every state folder;
   Hermes Agent: the home; Devin: the CLI database) — or a *user location*: one absolute path, read as the table's
   last column says.
 - **Shape.** 1 to 8 entries, each at most once. A user location is absolute and normalized (no `.` or `..` segment, no
@@ -769,6 +769,13 @@ to 0.
   files.
 
 ### 4.8 Antigravity
+
+On Windows, the automatic location also enumerates each direct, non-symlink instance folder below
+`~/.t3/userdata/providers/antigravity` in ordinal order and adds its `antigravity-acp` store when `conversations` exists.
+Missing or inaccessible provider folders are ignored. Explicit user locations keep their existing meaning. Roots are
+resolved at monitor startup and on history analysis (including Refresh). A new instance needs a monitor restart for live
+tracking; new conversations inside an already resolved store use the existing watcher. No instance hash needs to be saved
+in settings when the automatic location is present.
 
 Google Antigravity (the `agy` CLI, which replaced Gemini CLI for personal accounts on 2026-06-18; the 2.x desktop app;
 the Antigravity IDE; IDE extensions) runs a local language server that keeps one SQLite database per conversation.
