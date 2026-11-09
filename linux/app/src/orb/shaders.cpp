@@ -147,6 +147,16 @@ void main() {
     float fill = vExtra2.x;
     float d;
 
+    if (shape > 10.5 && shape < 11.5) {
+        vec2 q = rotate2(p, -vA.z) / max(vB.xy, vec2(0.0001));
+        float r = length(q);
+        float soft = vExtra.z;
+        float cover = soft >= 0.99 ? pow(max(1.0 - r, 0.0), 2.0) : 1.0 - smoothstep(1.0 - soft, 1.0, r);
+        float alpha = color.a * cover * keep;
+        if (alpha <= 0.0005) discard;
+        fragColor = vec4(color.rgb * alpha, alpha);
+        return;
+    }
     if (shape < 0.5) {
         vec2 q = rotate2(p, -vA.z);
         float r = vB.z;
@@ -653,6 +663,8 @@ float liquidWaveY(float x, bool back) {
 const char* kTextVertex = R"(
 uniform vec4 uRect;    // x, y (top-left), width, height (points)
 uniform vec4 uParams;  // shear, shear pivot y, glow radius (points), clip mode
+uniform vec4 uXform;   // cos, sin of the rotation, scale, unused
+uniform vec2 uPivot;   // the rotation and scale pivot (points)
 out vec2 vUv;
 out vec2 vCanvas;
 const vec2 corners[6] = vec2[6](vec2(-1, -1), vec2(1, -1), vec2(-1, 1), vec2(1, -1), vec2(1, 1), vec2(-1, 1));
@@ -663,6 +675,8 @@ void main() {
     point.x += uParams.x * (uParams.y - point.y);
     vUv = uv;
     vCanvas = point;
+    vec2 d = (point - uPivot) * uXform.z;
+    point = uPivot + vec2(uXform.x * d.x - uXform.y * d.y, uXform.y * d.x + uXform.x * d.y);
     gl_Position = clipPosition(point);
 }
 )";
@@ -673,6 +687,8 @@ uniform vec4 uRect;
 uniform vec4 uParams;
 uniform vec4 uColor;   // straight alpha
 uniform vec4 uGlow;    // rgb, strength
+uniform vec4 uOutline; // rgb, alpha; its width is uOutlineWidth (points)
+uniform float uOutlineWidth;
 uniform vec4 uClipRect;  // min x, min y, max x, max y (points), clip mode 1
 in vec2 vUv;
 in vec2 vCanvas;
@@ -713,11 +729,52 @@ void main() {
     }
     vec3 rgb = uGlow.rgb * glowAlpha;
     float alpha = glowAlpha;
+    if (uOutlineWidth > 0.0 && uOutline.a > 0.0) {
+        vec2 stepUv = uOutlineWidth / uRect.zw;
+        float dilated = coverage;
+        for (int k = 0; k < 16; k++) {
+            float angle = float(k) * 0.39269908;
+            vec2 dir = vec2(cos(angle), sin(angle)) * stepUv;
+            dilated = max(dilated, texture(uGlyphs, vUv + dir).a);
+            dilated = max(dilated, texture(uGlyphs, vUv + dir * 0.5).a);
+        }
+        float outlineAlpha = dilated * uOutline.a;
+        rgb = uOutline.rgb * outlineAlpha + rgb * (1.0 - outlineAlpha);
+        alpha = outlineAlpha + alpha * (1.0 - outlineAlpha);
+    }
     rgb = uColor.rgb * textAlpha + rgb * (1.0 - textAlpha);
     alpha = textAlpha + alpha * (1.0 - textAlpha);
     alpha *= keep;
     if (alpha <= 0.0005) discard;
     fragColor = vec4(rgb * keep, alpha);
+}
+)";
+
+// The character's skinned mesh (DESIGN 2a.6 Techniques): positions in points, the atlas sampled with mipmaps and
+// premultiplied after sampling, times the part's opacity.
+const char* kMeshVertex = R"(
+layout(location = 0) in vec2 aPosition;
+layout(location = 1) in vec2 aUv;
+layout(location = 2) in float aAlpha;
+out vec2 vUv;
+out float vAlpha;
+void main() {
+    vUv = aUv;
+    vAlpha = aAlpha;
+    gl_Position = clipPosition(aPosition);
+}
+)";
+
+const char* kMeshFragment = R"(
+uniform sampler2D uAtlas;
+in vec2 vUv;
+in float vAlpha;
+out vec4 fragColor;
+void main() {
+    vec4 c = texture(uAtlas, vUv);
+    float a = c.a * vAlpha;
+    if (a <= 0.002) discard;
+    fragColor = vec4(c.rgb * a, a);
 }
 )";
 
@@ -897,6 +954,8 @@ QByteArray textFragment() { return join(kLiquidCommon, kTextFragment); }
 QByteArray liquidVertex() { return join(kLiquidCommon, kLiquidVertex); }
 QByteArray liquidFragment() { return join(kLiquidCommon, kLiquidFragment); }
 QByteArray imageVertex() { return join(kImageVertex, ""); }
+QByteArray meshVertex() { return join(kMeshVertex, ""); }
+QByteArray meshFragment() { return join(kMeshFragment, ""); }
 QByteArray imageFragment() { return join(kImageFragment, ""); }
 
 }  // namespace orb::shaders

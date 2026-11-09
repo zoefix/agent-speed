@@ -292,6 +292,7 @@ void OrbManager::sync() {
         } else {
             orb.window = std::make_unique<orb::OrbWindow>(strings_, c.id);
             orb.window->setTitles(titles_);
+            orb.window->setCharacters(characters_);
             orb.window->forceDark(forcedDark_);
             orb.window->setEffectsLevel(effectsLevel_);
             orb.plate = std::make_unique<NamePlate>();
@@ -507,6 +508,7 @@ void OrbManager::setCharacterReadout(const QString& id, const QString& key, bool
 
 void OrbManager::setCharacters(CharacterLibrary* characters) {
     characters_ = characters;
+    for (auto& [id, orb] : orbs_) orb.window->setCharacters(characters_);
     if (characters_) connect(characters_, &CharacterLibrary::installedChanged, this, [this] { sync(); });
 }
 
@@ -566,9 +568,9 @@ void OrbManager::add(const QString& from) {
         }
     }
     const QString origin = source->id;
-    const QPointF from_ = orbs_.count(origin) ? orbs_[origin].window->discCenter() : defaultCenter(c.size);
-    const double fromRadius = source->size / 2;
-    store_.setPosition(arrangement(), c.id, recordOf(freeSpot(from_, fromRadius, c.size / 2, QString()), c.size));
+    const QPointF from_ = orbs_.count(origin) ? orbs_[origin].window->discCenter() : defaultCenter(c.footprintDiameter());
+    const double fromRadius = source->footprintDiameter() / 2;
+    store_.setPosition(arrangement(), c.id, recordOf(freeSpot(from_, fromRadius, c.footprintDiameter() / 2, QString()), c.footprintDiameter()));
     if (store_.insert(c, origin)) {
         select(c.id);
         showChip(c.id, 2);
@@ -582,8 +584,8 @@ void OrbManager::duplicate(const QString& id) {
     c.id = OrbsStore::newId();
     c.extra = {};
     if (c.name) c.name = *c.name + QStringLiteral(" 2");
-    const QPointF from = orbs_.count(id) ? orbs_[id].window->discCenter() : defaultCenter(c.size);
-    store_.setPosition(arrangement(), c.id, recordOf(freeSpot(from, source->size / 2, c.size / 2, QString()), c.size));
+    const QPointF from = orbs_.count(id) ? orbs_[id].window->discCenter() : defaultCenter(c.footprintDiameter());
+    store_.setPosition(arrangement(), c.id, recordOf(freeSpot(from, source->footprintDiameter() / 2, c.footprintDiameter() / 2, QString()), c.footprintDiameter()));
     if (store_.insert(c, id)) select(c.id);
 }
 
@@ -603,11 +605,11 @@ std::vector<OrbConfig> OrbManager::splitInto(std::vector<OrbConfig>& all, int at
     first.sources = QStringList{keys[0]};
     first.name.reset();
     all[static_cast<std::size_t>(at)] = first;
-    const QPointF start = orbs_.count(original.id) ? orbs_[original.id].window->discCenter() : defaultCenter(original.size);
+    const QPointF start = orbs_.count(original.id) ? orbs_[original.id].window->discCenter() : defaultCenter(original.footprintDiameter());
     QScreen* screen = QGuiApplication::screenAt(start.toPoint());
     if (!screen) screen = QGuiApplication::primaryScreen();
     const QRectF avail = screen->availableGeometry();
-    const double r = original.size / 2;
+    const double r = original.footprintDiameter() / 2;
     const bool column = start.x() - r - avail.left() <= kSnapMargin + 2 || avail.right() + 1 - start.x() - r <= kSnapMargin + 2;
     const QPointF step = column ? QPointF(0, start.y() < avail.center().y() ? 1 : -1) * (2 * r + kGap)
                                 : QPointF(start.x() < avail.center().x() ? 1 : -1, 0) * (2 * r + kGap);
@@ -620,7 +622,7 @@ std::vector<OrbConfig> OrbManager::splitInto(std::vector<OrbConfig>& all, int at
         c.hosts = original.hosts;
         QPointF next = previous + step;
         if (!avail.adjusted(r, r, -r, -r).contains(next)) next = freeSpot(previous, r, r, original.id);
-        store_.setPosition(arrangement(), c.id, recordOf(next, c.size));
+        store_.setPosition(arrangement(), c.id, recordOf(next, c.footprintDiameter()));
         previous = next;
         children.push_back(c);
     }
@@ -764,7 +766,7 @@ void OrbManager::savePosition(const QString& id) {
     const auto it = orbs_.find(id);
     const auto* c = store_.find(id);
     if (it == orbs_.end() || !c) return;
-    store_.setPosition(arrangement(), id, recordOf(it->second.window->discCenter(), c->size));
+    store_.setPosition(arrangement(), id, recordOf(it->second.window->discCenter(), c->footprintDiameter()));
 }
 
 // An orb's place in this arrangement; else its record from the last arrangement when its display is still connected
@@ -775,16 +777,16 @@ void OrbManager::place(const QString& id) {
     if (!c || it == orbs_.end()) return;
     QPointF center;
     if (auto p = store_.position(arrangement(), id)) {
-        center = centerOf(*p, c->size);
+        center = centerOf(*p, c->footprintDiameter());
     } else if (auto last = store_.lastPosition(id, arrangement())) {
-        center = centerOf(*last, c->size);
+        center = centerOf(*last, c->footprintDiameter());
     } else if (store_.indexOf(id) == 0 && store_.legacyCenter() && QGuiApplication::screenAt(store_.legacyCenter()->toPoint())) {
         center = *store_.legacyCenter();
     } else {
-        center = store_.indexOf(id) == 0 ? defaultCenter(c->size) : freeSpot(defaultCenter(c->size), c->size / 2, c->size / 2, id);
+        center = store_.indexOf(id) == 0 ? defaultCenter(c->footprintDiameter()) : freeSpot(defaultCenter(c->footprintDiameter()), c->footprintDiameter() / 2, c->footprintDiameter() / 2, id);
     }
     it->second.window->placeAt(center);
-    store_.setPosition(arrangement(), id, recordOf(center, c->size));
+    store_.setPosition(arrangement(), id, recordOf(center, c->footprintDiameter()));
 }
 
 // Every orb from the layout of the current arrangement; overlaps are resolved in list order.
@@ -794,10 +796,10 @@ void OrbManager::placeAll() {
     for (const auto& c : store_.orbs()) {
         auto& window = orbs_[c.id].window;
         const QPointF center = window->discCenter();
-        if (!fits(center, c.size / 2, c.id)) {
-            const QPointF free = freeSpot(center, c.size / 2, c.size / 2, c.id);
+        if (!fits(center, c.footprintDiameter() / 2, c.id)) {
+            const QPointF free = freeSpot(center, c.footprintDiameter() / 2, c.footprintDiameter() / 2, c.id);
             window->placeAt(free);
-            store_.setPosition(arrangement(), c.id, recordOf(free, c.size));
+            store_.setPosition(arrangement(), c.id, recordOf(free, c.footprintDiameter()));
         }
         window->setShown(shown_ && c.visible);
     }
@@ -810,7 +812,7 @@ std::vector<orb::Disc> OrbManager::discs(const QString& except) const {
         if (c.id == except) continue;
         const auto it = orbs_.find(c.id);
         if (it == orbs_.end() || !it->second.window->isVisible()) continue;
-        out.push_back({it->second.window->discCenter(), c.size / 2});
+        out.push_back({it->second.window->discCenter(), c.footprintDiameter() / 2});
     }
     return out;
 }
@@ -857,8 +859,8 @@ void OrbManager::resetPosition(const QString& id) {
     const auto* c = store_.find(id);
     auto it = orbs_.find(id);
     if (!c || it == orbs_.end()) return;
-    QPointF center = defaultCenter(c->size);
-    if (!fits(center, c->size / 2, id)) center = freeSpot(center, c->size / 2, c->size / 2, id);
+    QPointF center = defaultCenter(c->footprintDiameter());
+    if (!fits(center, c->footprintDiameter() / 2, id)) center = freeSpot(center, c->footprintDiameter() / 2, c->footprintDiameter() / 2, id);
     it->second.window->placeAt(center);
     savePosition(id);
     layoutPlates();
@@ -872,7 +874,7 @@ void OrbManager::moveToNextCorner(const QString& id) {
     QScreen* screen = QGuiApplication::screenAt(center.toPoint());
     if (!screen) screen = QGuiApplication::primaryScreen();
     const QRectF avail = screen->availableGeometry();
-    const double r = c->size / 2, m = kSnapMargin + r;
+    const double r = c->footprintDiameter() / 2, m = kSnapMargin + r;
     const QPointF corners[] = {{avail.right() + 1 - m, avail.top() + m}, {avail.right() + 1 - m, avail.bottom() + 1 - m},
                                {avail.left() + m, avail.bottom() + 1 - m}, {avail.left() + m, avail.top() + m}};
     int nearest = 0;
@@ -915,7 +917,7 @@ void OrbManager::layoutPlates() {
         }
         NamePlate::Look look;
         look.dark = isDark;
-        look.diameter = c.size;
+        look.diameter = c.footprintDiameter();
         const QStringList keys = c.sources ? ordered(*c.sources) : QStringList();
         QStringList unavailable;
         for (const auto& item : orb.values.value(QStringLiteral("sourceStates")).toList()) {
@@ -956,17 +958,17 @@ void OrbManager::layoutPlates() {
         }
         // Width budget: 1.5 S; with another disc in the horizontal band, to the point dividing the centers by size, less 3 pt.
         const QPointF center = window->discCenter();
-        const double r = c.size / 2 * window->hoverScale();
-        double budget = 1.5 * c.size;
+        const double r = c.footprintDiameter() / 2 * window->hoverScale();
+        double budget = 1.5 * c.footprintDiameter();
         for (const auto& d : discs(c.id)) {
-            if (std::abs(d.center.y() - center.y()) >= (c.size / 2 + d.radius)) continue;
+            if (std::abs(d.center.y() - center.y()) >= (c.footprintDiameter() / 2 + d.radius)) continue;
             const double distance = std::abs(d.center.x() - center.x());
-            budget = std::min(budget, 2 * (distance * c.size / (c.size + 2 * d.radius) - 3));
+            budget = std::min(budget, 2 * (distance * c.footprintDiameter() / (c.footprintDiameter() + 2 * d.radius) - 3));
         }
         look.budget = std::max(budget, 40.0);
         orb.plate->setLook(look);
         const QSizeF size = orb.plate->capsule();
-        const double g = NamePlate::gap(c.size);
+        const double g = NamePlate::gap(c.footprintDiameter());
         QScreen* screen = QGuiApplication::screenAt(center.toPoint());
         if (!screen) screen = QGuiApplication::primaryScreen();
         const QRectF avail = screen->availableGeometry().adjusted(3, 3, -3, -3);
@@ -1099,11 +1101,11 @@ QMenu* OrbManager::buildMenu(const QString& id) {
     QList<QAction*> presets;
     for (int i = 0; i < 3; ++i) {
         const double d = kPresets[i];
-        presets.push_back(radio(size, strings_.t(QString::fromLatin1(sizeKeys[i])), std::abs(c.size - d) < 0.5,
+        presets.push_back(radio(size, strings_.t(QString::fromLatin1(sizeKeys[i])), std::abs(c.footprintDiameter() - d) < 0.5,
                                 [this, id, d] { set(id, QStringLiteral("size"), d); }));
     }
     size->addSeparator();
-    auto* slider = new SizeSliderAction(c.size, strings_.t(QStringLiteral("settings.orb.size")), size);
+    auto* slider = new SizeSliderAction(c.footprintDiameter(), strings_.t(QStringLiteral("settings.orb.size")), size);
     connect(slider, &SizeSliderAction::sizeChanged, this, [this, id, presets](double d) {
         set(id, QStringLiteral("size"), d);
         for (int i = 0; i < 3; ++i) presets[i]->setChecked(std::abs(d - kPresets[i]) < 0.5);

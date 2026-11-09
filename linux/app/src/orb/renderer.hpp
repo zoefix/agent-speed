@@ -20,6 +20,10 @@ struct TextMetrics {
     QSizeF size;         // whole texture
 };
 
+// The advance and cap height (points) of a text as the renderer draws it, without a GL context.
+double textAdvance(const TextDraw& text);
+double textCapHeight(const TextDraw& text);
+
 // Draws a Scene with OpenGL 3.3: the body image, the SDF instances, the led fields and the texts.
 class Renderer : protected QOpenGLExtraFunctions {
 public:
@@ -64,6 +68,15 @@ private:
     QOpenGLShaderProgram* text_ = nullptr;
     QOpenGLShaderProgram* image_ = nullptr;
     QOpenGLShaderProgram* liquid_ = nullptr;
+    QOpenGLShaderProgram* mesh_ = nullptr;
+    unsigned int meshVao_ = 0, meshBuffer_ = 0, meshIndexBuffer_ = 0;
+    struct Atlas {
+        unsigned int id = 0;
+        int lastUse = 0;
+    };
+    QHash<qint64, Atlas> atlases_;
+    unsigned int atlasTexture(const QImage& image);
+    void drawMeshes(const Scene& scene, int index, QSizeF viewport, double dpr, QPointF center, double scale);
     unsigned int instanceVao_ = 0, emptyVao_ = 0, instanceBuffer_ = 0, palette_ = 0, body_ = 0;
     unsigned int silkFbo_ = 0, silkTexture_ = 0;
     int silkSize_ = 0;

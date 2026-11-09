@@ -9,11 +9,12 @@
 namespace orb {
 
 // The instrument an orb draws (DESIGN 2a). Unknown keys read as `led`.
-enum class StyleKind { Led, Needle, Liquid, Reactor, Minimal };
+enum class StyleKind { Led, Needle, Liquid, Reactor, Minimal, Character };
 
 QString styleKey(StyleKind kind);
 StyleKind styleFromKey(const QString& key);
-inline constexpr StyleKind kStyles[] = {StyleKind::Led, StyleKind::Needle, StyleKind::Liquid, StyleKind::Reactor, StyleKind::Minimal};
+inline constexpr StyleKind kStyles[] = {StyleKind::Led, StyleKind::Needle, StyleKind::Liquid, StyleKind::Reactor, StyleKind::Minimal,
+                                        StyleKind::Character};
 
 // What each style contributes to an orb (the macOS OrbStyleRenderer). The window draws the shared aura, response wave
 // and new-peak rays around `build` for the styles that use them, and the readout after it.
