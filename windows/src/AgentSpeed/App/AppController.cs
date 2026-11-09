@@ -1571,6 +1571,24 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             return hostsMenu;
         }
 
+        if (kind is "menu-orb-characters" or "menu-orb-readouts")
+        {
+            var label = _loc[kind == "menu-orb-characters" ? "characters.title" : "character.readouts"];
+            var level = Settings.Orbs.Orbs.FirstOrDefault() is { } first
+                ? OrbMenuModel.Build(first.Id, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable,
+                    _remoteHosts?.MenuStates(_loc), InstalledCharacters)
+                : null;
+            if (level?.Rows.FirstOrDefault(r => r.Label == label)?.Submenu is not { } submenu)
+            {
+                return null;
+            }
+
+            var subMenu = MenuBuilder.Build(submenu, this, _loc);
+            var place = Monitors.Primary() is { } screen ? new POINT(screen.WorkArea.Left + 400, screen.WorkArea.Top + 200) : new POINT(400, 200);
+            _menu.Show(subMenu, place);
+            return subMenu;
+        }
+
         var menu = kind == "menu-orb" && Settings.Orbs.Orbs.FirstOrDefault() is { } orb
             ? OrbMenu.Build(this, orb.Id, Settings, SourceAvailability.From(_speed.Snapshot.Sources), _loc, SourceTrafficAvailable,
                 _remoteHosts?.MenuStates(_loc))
