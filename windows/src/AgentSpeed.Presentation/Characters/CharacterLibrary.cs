@@ -611,6 +611,8 @@ public sealed class CharacterLibrary : IDisposable
     private void FinishDownload(string id, Exception? error)
     {
         var key = error is null ? null : ErrorKey(error);
+        // The installed list is current before the download ends, so the pack is never in neither.
+        ReloadInstalled();
         lock (_gate)
         {
             if (_tasks.Remove(id, out var cancel))
@@ -625,7 +627,6 @@ public sealed class CharacterLibrary : IDisposable
             }
         }
 
-        ReloadInstalled();
         var next = false;
         lock (_gate)
         {

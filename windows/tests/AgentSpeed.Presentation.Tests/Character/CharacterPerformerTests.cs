@@ -181,7 +181,8 @@ public class CharacterPerformerTests
             hud.Layout(1.0 / 60, layout, agents, 20, (360, 300));
         }
 
-        var quietWindows = 0;
+        // A per-frame allocation shows up in every quiet window; a one-time runtime allocation (tiering) in one or two.
+        var quiet = new List<long>();
         for (var w = 0; w < 40; w++)
         {
             var starts = performer.Director.MotionStarts;
@@ -196,12 +197,13 @@ public class CharacterPerformerTests
             var allocated = GC.GetAllocatedBytesForCurrentThread() - before;
             if (performer.Director.MotionStarts == starts)
             {
-                quietWindows++;
-                Assert.True(allocated == 0, $"{allocated} bytes allocated in a window without new actions");
+                quiet.Add(allocated);
             }
         }
 
-        Assert.True(quietWindows > 0);
+        Assert.Contains(0L, quiet);
+        Assert.True(quiet.Count(bytes => bytes > 0) <= 2, $"allocations in quiet windows: {string.Join(", ", quiet)}");
+        Assert.All(quiet, bytes => Assert.True(bytes < 1024, $"{bytes} bytes allocated in a window without new actions"));
     }
 
     [Fact]

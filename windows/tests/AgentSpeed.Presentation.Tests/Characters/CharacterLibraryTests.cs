@@ -327,7 +327,7 @@ public class CharacterInstallerTests
 public class CharacterLibraryTests
 {
     private static (CharacterLibrary Library, MapFetcher Fetcher, CharacterPackFixture Fixture, List<IReadOnlyList<string>> Saved) Run(
-        Func<bool>? network = null)
+        Func<bool>? network = null, int fetchDelayMs = 20)
     {
         var fixture = new CharacterPackFixture();
         var vendors = new Dictionary<string, string[]> { ["claude"] = ["anthropic"], ["gpt"] = ["openai"], ["kimi"] = ["moonshot"] };
@@ -341,7 +341,7 @@ public class CharacterLibraryTests
         }
 
         var catalog = new CharacterCatalog(entries);
-        var fetcher = new MapFetcher(archives);
+        var fetcher = new MapFetcher(archives, fetchDelayMs);
         var saved = new List<IReadOnlyList<string>>();
         var library = new CharacterLibrary(new CharacterStore(Path.Combine(fixture.Root, "Characters")),
             new FixedTransport(new HttpFetchResponse(200, catalog.ToJson())), fetcher, "1.7.0", saveSetAside: s => saved.Add(s));
@@ -415,7 +415,8 @@ public class CharacterLibraryTests
     [Fact]
     public async Task StopSetsAsideWhatIsLeft()
     {
-        var (library, fetcher, fixture, _) = Run();
+        // The first download stays in flight until Stop cancels it, so the run is always stopped mid-download.
+        var (library, fetcher, fixture, _) = Run(fetchDelayMs: 30_000);
         using (fixture)
         {
             library.RefreshForList();
