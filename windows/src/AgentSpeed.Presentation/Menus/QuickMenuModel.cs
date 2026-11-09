@@ -1,3 +1,4 @@
+using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
@@ -19,8 +20,9 @@ public static class QuickMenuModel
     /// <param name="update">The available release; adds the "Update to …" row on top (UPDATES section 4).</param>
     /// <param name="sourceTraffic">Per-process traffic can be measured now (the per-orb traffic submenu says so otherwise).</param>
     /// <param name="report">Live reporting while it is on and registered: its item with a submenu (DESIGN 11, Menu).</param>
+    /// <param name="characters">The installed characters (id, localized name) for the <c>character</c> orbs' items.</param>
     public static MenuLevel Build(AppSettings settings, SourceAvailability sources, Localizer localizer, ReleaseInfo? update = null,
-        bool sourceTraffic = true, ReportMenuState? report = null)
+        bool sourceTraffic = true, ReportMenuState? report = null, IReadOnlyList<MenuCharacter>? characters = null)
     {
         ArgumentNullException.ThrowIfNull(settings);
         ArgumentNullException.ThrowIfNull(localizer);
@@ -54,7 +56,7 @@ public static class QuickMenuModel
         }
         else
         {
-            entries.Add(OrbsMenu(settings, orbs, sources, localizer, sourceTraffic));
+            entries.Add(OrbsMenu(settings, orbs, sources, localizer, sourceTraffic, characters ?? []));
             entries.Add(EffectsMenu(settings.Effects, localizer));
         }
 
@@ -128,7 +130,7 @@ public static class QuickMenuModel
     };
 
     private static MenuRow OrbsMenu(AppSettings settings, IEnumerable<OrbDefinition> orbs, SourceAvailability sources, Localizer localizer,
-        bool sourceTraffic) =>
+        bool sourceTraffic, IReadOnlyList<MenuCharacter> characters) =>
         Submenu(localizer["settings.orb"], orbs.Select(orb =>
         {
             var shown = settings.ShowOrbs && orb.Visible;
@@ -137,8 +139,9 @@ public static class QuickMenuModel
                 Toggle(localizer["orbs.visible"], shown, new MenuAction.SetOrbVisible(orb.Id, !shown)),
                 Toggle(localizer["menu.clickThrough"], orb.ClickThrough, new MenuAction.SetOrbClickThrough(orb.Id, !orb.ClickThrough)),
                 ShowNameToggle(orb, settings, localizer),
-                OrbMenuModel.UnitMenu(orb, settings, localizer),
-                OrbMenuModel.TrafficMenu(orb, settings, localizer, sourceTraffic),
+                .. orb.Style == OrbStyle.Character
+                    ? new MenuEntry[] { OrbMenuModel.CharacterMenu(orb, characters, localizer), OrbMenuModel.ReadoutsMenu(orb, settings, localizer) }
+                    : [OrbMenuModel.UnitMenu(orb, settings, localizer), OrbMenuModel.TrafficMenu(orb, settings, localizer, sourceTraffic)],
                 MenuSeparator.Instance,
                 Command(localizer["menu.orb.settings"], new MenuAction.OpenOrbSettings(orb.Id), MenuGlyph.Settings),
             ]) with

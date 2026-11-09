@@ -42,6 +42,12 @@ public abstract record MenuAction
     /// <summary>What one orb's traffic readout shows (DESIGN 10).</summary>
     public sealed record SetOrbTraffic(string OrbId, Settings.Orbs.OrbTraffic Traffic) : MenuAction;
 
+    /// <summary>A <c>character</c> orb's character: a pack id, or null for Auto (CHARACTERS 7).</summary>
+    public sealed record SetOrbCharacter(string OrbId, string? Character) : MenuAction;
+
+    /// <summary>One card of a <c>character</c> orb (DESIGN 2a.6, Readouts).</summary>
+    public sealed record SetOrbCharacterReadout(string OrbId, Settings.Orbs.CharacterReadout Readout, bool On) : MenuAction;
+
     public sealed record SetOrbAllSources(string OrbId) : MenuAction;
 
     public sealed record ToggleOrbSource(string OrbId, SourceKind Source) : MenuAction;

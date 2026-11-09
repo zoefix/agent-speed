@@ -16,7 +16,9 @@ internal static class OrbMenu
     /// <param name="hosts">Each host's dot and word for the Hosts submenu (DESIGN 13).</param>
     public static ContextMenu? Build(IAppCommands commands, string orbId, AppSettings settings, SourceAvailability sources, Localizer loc,
         bool sourceTraffic = true, IReadOnlyDictionary<string, MenuHostState>? hosts = null) =>
-        OrbMenuModel.Build(orbId, settings, sources, loc, sourceTraffic, hosts) is { } level ? MenuBuilder.Build(level, commands, loc) : null;
+        OrbMenuModel.Build(orbId, settings, sources, loc, sourceTraffic, hosts, commands.InstalledCharacters) is { } level
+            ? MenuBuilder.Build(level, commands, loc)
+            : null;
 
     /// <summary>The question the menu's Remove asks first (the menu has no undo banner); true to remove.</summary>
     public static bool ConfirmRemove(Window? owner, string orbName, Localizer loc)

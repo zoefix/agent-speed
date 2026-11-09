@@ -50,6 +50,13 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     private TitleThemesService _titles = null!;
     private CostService _cost = null!;
     private Characters.CharacterService? _characters;
+
+    /// <summary>The installed characters in catalog order for the menus (DESIGN 2b, Context menu item 2).</summary>
+    public IReadOnlyList<Presentation.Menus.MenuCharacter> InstalledCharacters =>
+        _characters is { } characters
+            ? characters.Library.Packs.Select(p => new Presentation.Menus.MenuCharacter(p.Id,
+                characters.Library.InstalledPack(p.Id)?.Manifest.Name.For(_loc.LanguageCode) ?? p.Id)).ToArray()
+            : [];
     private Traffic.TrafficService _traffic = null!;
     private TaskbarState? _lastTaskbarState;
     private readonly ThinkingZeroHold _barThinking = new();
