@@ -762,9 +762,29 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(tail.alpha[100, 125], 1.0)
         self.assertEqual(hair.alpha[100, 125], 1.0)
         self.assertLess(abs(hair.rgba[100, 125, 2] - 0.3), 0.06)
-        seal_tail(parts)
+        seal_tail(parts, np.full((200, 200, 3), 0.3, np.float32))
         self.assertEqual(tail.alpha[151, 125], 1.0)
         self.assertEqual(tail_from_back_hair(parts, None), 0)
+
+    def test_what_the_tail_uncovers_by_its_root_shows_the_coat_under_it(self):
+        from characters.rig.layers import back_tail_root
+        coat = self.layer("bottomwear", (0.1, 0.1, 0.1), (20, 190, 20, 90))
+        tail = self.layer("tail", (0.5, 0.5, 0.5), (60, 190, 80, 140))
+        self.assertGreater(back_tail_root([coat, tail], (85, 62), 60), 0)
+        self.assertEqual(coat.alpha[80, 100], 1.0)
+        self.assertAlmostEqual(float(coat.rgba[80, 100, 0]), 0.1, places=5)
+        self.assertEqual(coat.alpha[180, 130], 0.0)
+
+    def test_a_notch_between_the_pieces_of_a_tail_is_filled_from_the_art(self):
+        from characters.rig.layers import seal_tail
+        ref = np.full((200, 200, 3), 0.6, np.float32)
+        tail = self.layer("tail", (0.3, 0.3, 0.3), (40, 160, 60, 140))
+        tail.rgba[90:110, 120:140, 3] = 0.0
+        seal_tail([tail], ref)
+        self.assertEqual(tail.alpha[100, 135], 1.0)
+        self.assertAlmostEqual(float(tail.rgba[100, 135, 0]), 0.6, places=5)
+        self.assertAlmostEqual(float(tail.rgba[60, 100, 0]), 0.3, places=5)
+        self.assertEqual(tail.alpha[100, 150], 0.0)
 
     def test_a_copy_of_the_tail_in_the_back_hair_goes_and_a_tail_behind_the_skirt_stays(self):
         from characters.rig.layers import tail_alone

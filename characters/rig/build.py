@@ -176,7 +176,7 @@ def main(argv=None):
         moved = layers.tail_from_back_hair(parts, segment.tail_mask(reference, tail_layer.alpha, args.sam))
         if moved:
             print(f"tail drawn into the back hair given back to the tail: {moved} px")
-    layers.seal_tail(parts)
+    layers.seal_tail(parts, reference)
     parts, copies = layers.tail_alone(parts, reference)
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
@@ -219,6 +219,9 @@ def main(argv=None):
     for hand in lm["hands"].values():
         bones += hands.bones(hand, skeleton.Bone)
     tail_lm, wing_lm, ear_lm, spine = add_appendages(parts, lm, bones, hints)
+    if tail_lm is not None:
+        backed = layers.back_tail_root(parts, tail_lm["root"], 0.35 * tail_lm["length"])
+        print(f"behind the tail's root filled from the layers under it: {backed} px")
     held = sorted(((float(p.alpha.sum()), object_bone(p, lm)) for p in parts if p.tag == "objects"), reverse=True)
     object_side = next((bone.split(".", 1)[1] for _, bone in held if bone.split(".")[0] in ("hand", "forearm")), None)
     object_attach = {p.name: object_bone(p, lm) for p in parts if p.tag == "objects"}

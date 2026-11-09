@@ -172,8 +172,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   art is found too, prompted by five points at the tail layer's thickest (the largest mask scored at least 0.8 that
   holds 90 % of the tail layer and is at most 2.5 times its size); the back hair's pixels inside it, in pieces of at
   least 500 px that touch the tail layer, join the tail (the top of a tail behind long hair), and the back hair is
-  repainted there. The tail is then made opaque inside its outline (eroded by 2 px) where no layer drawn over it
-  hides it, and wherever a layer behind it
+  repainted there. Notches in the stitched tail's outline (closed by a disk of radius 15 px) are filled with the art
+  where no layer drawn over it hides them, so the rest pose is unchanged. The tail is then made opaque inside its
+  outline (eroded by 2 px) where no layer drawn over it hides it, and wherever a layer behind it
   was cleared, so its stitched pieces never show the backdrop through a hairline crack. A recovered `extra` blob no larger than the
   tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
   `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
@@ -185,6 +186,10 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   own outline (its pixels without the copy, closed by 15 px, holes filled) it takes a blur of the layer around it,
   from fine to coarse (Gaussian, sigma 2 to 64, normalized by the blurred coverage); outside it, it turns
   transparent, for a layer over the tail only where the tail is opaque (its soft rim keeps the clothes behind it).
+- **Behind the tail's root**: once the tail is rigged, its footprint within 0.35 of its length from the root that the
+  layers under it leave bare (coverage under 0.98) is filled by those layers, each taking the pixels nearest its own
+  (in the color of its nearest pixel): a tail swinging away from the body uncovers the coat or the hair it hung over
+  there, not the backdrop.
 - **Hidden legs**: every `legwear` pixel the layers above hide (opacity over 0.5) takes the color of the nearest leg
   pixel that shows (over 10 px below the layers above, 2 px inside the outline) and is opaque where See-Through's
   guess is over 0.3 (ramping to it below), within a 45-degree cone above or below that pixel (6 px wider); the rest of

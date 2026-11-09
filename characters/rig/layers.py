@@ -301,17 +301,27 @@ def tail_from_back_hair(layers, mask, reach=3, min_px=500):
     return int(piece.sum())
 
 
-def seal_tail(layers, core=2):
-    """Makes the tail opaque inside its outline (eroded by `core` px) where it shows: the pieces it was stitched from
-    (a recovered base, a piece from the hair) meet with soft edges, which would show the backdrop as a hairline crack.
+def seal_tail(layers, reference, core=2, notch=15):
+    """Makes the tail whole where it shows. The pieces it was stitched from (a recovered base, a piece from the hair)
+    meet with soft edges and leave notches between them, which show the backdrop as a crack once the tail swings over
+    it. Notches up to about 2 * `notch` px across (the tail's outline closed by a disk of radius `notch`) are filled
+    with the art as it shows there, so the rest pose is unchanged; then the tail is opaque inside its outline (eroded
+    by `core` px).
     What layers drawn over it hide stays as it is (See-Through's dark guess there would show as a slab once the tail
     swings out)."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
     if index is None:
         return
     tail = layers[index]
+    hidden = coverage(layers[index + 1:]) > 0.5 if index + 1 < len(layers) else np.zeros(tail.alpha.shape, bool)
+    solid = tail.alpha > 0.5
+    yy, xx = np.mgrid[-notch:notch + 1, -notch:notch + 1]
+    disk = xx * xx + yy * yy <= notch * notch
+    closed = ndimage.binary_fill_holes(ndimage.binary_closing(solid, structure=disk))
+    gap = closed & ~solid & ~hidden
+    tail.rgba[..., :3] = np.where(gap[..., None], reference, tail.rgba[..., :3])
+    tail.rgba[..., 3] = np.where(gap, 1.0, tail.alpha)
     inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
-    hidden = coverage(layers[index + 1:]) > 0.5 if index + 1 < len(layers) else np.zeros_like(inside)
     tail.rgba[..., 3] = np.where(inside & ~hidden, 1.0, tail.alpha)
 
 
@@ -510,6 +520,46 @@ def fill_hidden_legs(layers, solid=0.3, shade=10, edge=2, reach=6):
         leg.rgba[..., 3] = np.where(hidden, np.where(along, np.clip(leg.alpha / solid, 0, 1), 0.0), leg.alpha)
         repainted += int(hidden.sum())
     return repainted
+
+
+def back_tail_root(layers, root, reach, pad=4):
+    """Fills what lies behind the tail near its root (within `reach` px) with the layers drawn under it, each taking
+    the part nearest its own pixels, in the colors of its nearest pixel: the tail swings away from the body there, and
+    what it uncovers shows the coat or the hair it hung over, not the backdrop. Returns the pixels filled."""
+    index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
+    if index is None or index == 0:
+        return 0
+    tail, below = layers[index], layers[:index]
+    h, w = tail.alpha.shape
+    yy, xx = np.mgrid[0:h, 0:w]
+    zone = (tail.alpha > 0.05) & (np.hypot(xx - root[0], yy - root[1]) < reach) & (coverage(below) < 0.98)
+    if not zone.any():
+        return 0
+    ys, xs = np.nonzero(zone)
+    r = int(reach) + pad
+    box = (slice(max(ys.min() - r, 0), min(ys.max() + r, h)), slice(max(xs.min() - r, 0), min(xs.max() + r, w)))
+    best = np.full(zone[box].shape, np.inf)
+    owner = np.full(zone[box].shape, -1)
+    nearest = {}
+    for k, layer in enumerate(below):
+        solid = layer.alpha[box] > 0.5
+        if not solid.any():
+            continue
+        dist, idx = ndimage.distance_transform_edt(~solid, return_indices=True)
+        closer = dist < best
+        best = np.where(closer, dist, best)
+        owner = np.where(closer, k, owner)
+        nearest[k] = idx
+    filled = 0
+    for k, (iy, ix) in nearest.items():
+        pick = zone[box] & (owner == k) & (best < reach)
+        if not pick.any():
+            continue
+        view = below[k].rgba[box]
+        view[..., :3] = np.where(pick[..., None], view[iy, ix, :3], view[..., :3])
+        view[..., 3] = np.where(pick, 1.0, view[..., 3])
+        filled += int(pick.sum())
+    return filled
 
 
 def grow_underlays(layers, radius=10, seam=3):
