@@ -122,6 +122,17 @@ public static class OrbsJson
         writer.WriteString("unit", OrbUnits.Key(orb.Unit));
         writer.WriteString("traffic", OrbTraffics.Key(orb.Traffic));
         WriteHosts(writer, orb.Hosts);
+        if (orb.Character is { } character)
+        {
+            writer.WriteString("character", character);
+        }
+
+        if (!orb.CharacterReadouts.IsDefault)
+        {
+            writer.WritePropertyName("characterReadouts");
+            orb.CharacterReadouts.Write(writer);
+        }
+
         writer.WriteEndObject();
     }
 
@@ -187,6 +198,8 @@ public static class OrbsJson
             Unit = OrbUnits.Parse(ReadString(element, "unit", 32)),
             Traffic = OrbTraffics.Parse(ReadString(element, "traffic", 32)),
             Hosts = ReadHosts(element),
+            Character = ReadString(element, "character", 64),
+            CharacterReadouts = element.TryGetProperty("characterReadouts", out var readouts) ? CharacterReadouts.Read(readouts) : CharacterReadouts.Default,
         }.Validated();
     }
 

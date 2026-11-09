@@ -15,5 +15,6 @@ internal static class AppMenu
     /// <param name="report">Live reporting's item while it is on and registered (DESIGN 11, Menu).</param>
     public static ContextMenu Build(IAppCommands commands, AppSettings settings, Localizer loc, ReleaseInfo? update = null,
         SourceAvailability? sources = null, bool sourceTraffic = true, ReportMenuState? report = null) =>
-        MenuBuilder.Build(QuickMenuModel.Build(settings, sources ?? SourceAvailability.All, loc, update, sourceTraffic, report), commands, loc);
+        MenuBuilder.Build(QuickMenuModel.Build(settings, sources ?? SourceAvailability.All, loc, update, sourceTraffic, report, commands.InstalledCharacters),
+            commands, loc);
 }

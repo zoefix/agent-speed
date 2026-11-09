@@ -9,6 +9,7 @@ public static class OrbStyleDraws
     {
         OrbStyle.Needle => new NeedleDraw(seed),
         OrbStyle.Minimal => new MinimalDraw(),
+        OrbStyle.Character => new CharacterDraw(),
         OrbStyle.Liquid => new LiquidDraw(unchecked((int)seed)),
         OrbStyle.Reactor => new ReactorDraw(unchecked((int)seed)),
         _ => new LedDraw(scene, seed),

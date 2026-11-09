@@ -27,6 +27,15 @@ public enum OrbPass
 
     /// <summary>Text quads drawn in sequence with the shapes (under what follows), <see cref="OrbBatch.Start"/> into the texts.</summary>
     Text,
+
+    /// <summary>A skinned character pose (DESIGN 2a.6): <see cref="OrbBatch.Mode"/> indexes <see cref="OrbDrawList.CharacterMeshes"/>.</summary>
+    CharacterMesh,
+
+    /// <summary>The character style's soft lights, <see cref="OrbBatch.Start"/> into <see cref="OrbDrawList.CharacterDots"/>.</summary>
+    CharacterDots,
+
+    /// <summary>Atlas sprites (petals), <see cref="OrbBatch.Start"/> into the sprites; <see cref="OrbBatch.Mode"/> the mesh whose atlas they sample.</summary>
+    CharacterSprites,
 }
 
 /// <summary>A run of instances drawn with one pipeline state.</summary>
@@ -40,7 +49,7 @@ public readonly record struct OrbBatch(OrbPass Pass, OrbBlend Blend, float Clip,
 /// always drawn above every effect), then the batches added after <see cref="BeginOverlay"/> (the digit lightning, DESIGN
 /// 2.1). The storage is reused frame after frame, so a warm list never allocates.
 /// </summary>
-public sealed class OrbDrawList
+public sealed partial class OrbDrawList
 {
     private OrbGpuInstance[] _instances;
     private OrbBatch[] _batches = new OrbBatch[32];
@@ -115,6 +124,7 @@ public sealed class OrbDrawList
         OverlayBatchStart = -1;
         HasLiquid = false;
         HasLed = false;
+        ResetCharacter();
         AlphaScale = 1;
         ClipRadius = 0;
         ClipFeather = 0;
@@ -283,11 +293,12 @@ public sealed class OrbDrawList
             hash = Mix(hash, MemoryMarshal.AsBytes(new ReadOnlySpan<OrbLedUniforms>(in Led)));
         }
 
+        hash = MixCharacter(hash);
         Span<double> globals = [Canvas, Scale, CenterX, CenterY, ContentScale, Opacity, OverlayBatchStart];
         return Mix(hash, MemoryMarshal.AsBytes(globals));
     }
 
-    private static ulong Mix(ulong hash, ReadOnlySpan<byte> bytes)
+    internal static ulong Mix(ulong hash, ReadOnlySpan<byte> bytes)
     {
         var words = MemoryMarshal.Cast<byte, ulong>(bytes);
         foreach (var word in words)
@@ -304,7 +315,7 @@ public sealed class OrbDrawList
         return hash;
     }
 
-    private void AddBatch(in OrbBatch batch)
+    internal void AddBatch(in OrbBatch batch)
     {
         if (BatchCount == _batches.Length)
         {

@@ -43,6 +43,15 @@ internal interface IAppCommands
 
     void SetOrbTraffic(string orbId, OrbTraffic traffic) => UpdateOrbs(d => OrbEditing.SetTraffic(d, orbId, traffic));
 
+    /// <summary>A <c>character</c> orb's character: a pack id, or null for Auto (CHARACTERS 7).</summary>
+    void SetOrbCharacter(string orbId, string? character) => UpdateOrbs(d => OrbEditing.SetCharacter(d, orbId, character));
+
+    /// <summary>One card of a <c>character</c> orb (DESIGN 2a.6, Readouts).</summary>
+    void SetOrbCharacterReadout(string orbId, CharacterReadout readout, bool on) => UpdateOrbs(d => OrbEditing.SetCharacterReadout(d, orbId, readout, on));
+
+    /// <summary>The installed characters for the menus (id, localized name), in catalog order.</summary>
+    IReadOnlyList<Presentation.Menus.MenuCharacter> InstalledCharacters => [];
+
     /// <summary>The orb tracks every source again.</summary>
     void SetOrbAllSources(string orbId) => UpdateOrbs(d => OrbEditing.SetAllSources(d, orbId));
 

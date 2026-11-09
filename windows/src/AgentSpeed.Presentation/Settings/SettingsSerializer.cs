@@ -194,6 +194,11 @@ public static class SettingsSerializer
             w.WriteBoolean("enabled", s.NetworkEnabled);
             w.WriteEndObject();
 
+            if (!s.CharactersSetAside.IsEmpty)
+            {
+                s.CharactersSetAside.Write(w, "charactersSetAside");
+            }
+
             ReportSettingsJson.Write(w, s.Report);
 
             w.WriteStartObject("updates");
@@ -331,6 +336,7 @@ public static class SettingsSerializer
         {
             Orbs = orbs ?? OrbsMigration.FromLegacy(validated), Boards = boards, TitleThemes = titles ?? TitleThemesDocument.Default,
             RemoteHosts = remoteHosts, Lan = lan,
+            CharactersSetAside = root.TryGetProperty("charactersSetAside", out var aside) ? CharacterSetAside.Read(aside) : CharacterSetAside.Empty,
         };
     }
 

@@ -17,7 +17,14 @@ internal partial class OrbPage : UserControl
     public OrbPage()
     {
         InitializeComponent();
-        IsVisibleChanged += (_, _) => Highlight(IsVisible ? Model?.SelectedRow : null);
+        IsVisibleChanged += (_, _) =>
+        {
+            Highlight(IsVisible ? Model?.SelectedRow : null);
+            if (IsVisible)
+            {
+                Model?.CharacterSectionShown();
+            }
+        };
         OrbList.SelectionChanged += (_, _) => Highlight(Model?.SelectedRow);
         OrbList.GotKeyboardFocus += (_, _) => Highlight(Model?.SelectedRow);
         Loaded += (_, _) => AttachModel();
@@ -107,14 +114,14 @@ internal partial class OrbPage : UserControl
         UpdateCardColumns();
     }
 
-    /// <summary>Five cards in one row; 3 + 2 below 560 pt of width (DESIGN 5).</summary>
+    /// <summary>Six cards in one row; 3 + 3 below 560 pt of width (DESIGN 5).</summary>
     private void OnCardsSizeChanged(object sender, SizeChangedEventArgs e) => UpdateCardColumns();
 
     private void UpdateCardColumns()
     {
         if (_cardsPanel is { } panel)
         {
-            var columns = StyleCards.ActualWidth >= 560 ? 5 : 3;
+            var columns = StyleCards.ActualWidth >= 560 ? 6 : 3;
             if (panel.Columns != columns)
             {
                 panel.Columns = columns;

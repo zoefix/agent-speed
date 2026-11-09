@@ -11,6 +11,7 @@
              Focusable="False">
     <UserControl.Resources>
         <BooleanToVisibilityConverter x:Key="BoolToVisibility" />
+        <controls:InverseBoolToVisibilityConverter x:Key="InverseBoolToVisibility" />
 
         <!-- Card group: the Fluent card look shared by the list and the editor groups. -->
         <Style x:Key="GroupBorder" TargetType="Border">
@@ -134,7 +135,7 @@
                                     <ColumnDefinition Width="Auto" />
                                 </Grid.ColumnDefinitions>
                                 <Grid Width="38" Height="38" Margin="0,0,12,0" VerticalAlignment="Center">
-                                    <pane:OrbPreview Diameter="38" StyleKind="{Binding Definition.Style}"
+                                    <pane:OrbPreview Diameter="38" StyleKind="{Binding Definition.Style}" CharacterId="{Binding Definition.Character}"
                                                      Value="{Binding Live}" Tier="{Binding Tier}" Title="{Binding Title}"
                                                      Dark="{Binding DataContext.DarkTheme, RelativeSource={RelativeSource AncestorType=ListBox}}"
                                                      ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=ListBox}}" />
@@ -251,7 +252,7 @@
                                   SizeChanged="OnCardsSizeChanged">
                         <ItemsControl.ItemsPanel>
                             <ItemsPanelTemplate>
-                                <UniformGrid Columns="5" Loaded="OnCardsPanelLoaded" />
+                                <UniformGrid Columns="6" Loaded="OnCardsPanelLoaded" />
                             </ItemsPanelTemplate>
                         </ItemsControl.ItemsPanel>
                         <ItemsControl.ItemTemplate>
@@ -261,6 +262,7 @@
                                              CommandParameter="{Binding}" AutomationProperties.Name="{Binding AccessibleName}">
                                     <StackPanel>
                                         <pane:OrbPreview Diameter="64" Card="True" CardIndex="{Binding Index}" StyleKind="{Binding Style}"
+                                                         CharacterId="{Binding DataContext.CardCharacter, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                          HorizontalAlignment="Center" Margin="0,4,0,8"
                                                          Labels="{Binding DataContext.OrbTitleLabels, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
                                                          Dark="{Binding DataContext.DarkTheme, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
@@ -280,6 +282,139 @@
                 </StackPanel>
             </Border>
 
+            <!-- Character (DESIGN 5, characters.title; CHARACTERS 2, 7): only for a character orb, under the style cards -->
+            <StackPanel Visibility="{Binding IsCharacter, Converter={StaticResource BoolToVisibility}}">
+                <TextBlock Text="{loc:Loc characters.title}" Style="{StaticResource SectionHeaderText}" Margin="2,22,0,8"
+                           AutomationProperties.HeadingLevel="Level3" />
+                <Border Style="{StaticResource GroupBorder}" Padding="16,4,16,8">
+                    <StackPanel>
+                        <DockPanel MinHeight="56">
+                            <ComboBox DockPanel.Dock="Right" MinWidth="200" VerticalAlignment="Center" ItemsSource="{Binding CharacterChoices}"
+                                      DisplayMemberPath="Name" SelectedIndex="{Binding CharacterChoiceIndex, Mode=TwoWay}"
+                                      AutomationProperties.Name="{loc:Loc characters.choice}" AutomationProperties.HelpText="{loc:Loc characters.choice.hint}" />
+                            <StackPanel VerticalAlignment="Center" Margin="0,0,12,0">
+                                <TextBlock Text="{loc:Loc characters.choice}" FontSize="13" />
+                                <TextBlock Text="{loc:Loc characters.choice.hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
+                            </StackPanel>
+                        </DockPanel>
+                        <!-- The automatic download's progress with Stop (CHARACTERS 2, Automatic download) -->
+                        <DockPanel MinHeight="40" Visibility="{Binding AutoRunning, Converter={StaticResource BoolToVisibility}}"
+                                   AutomationProperties.Name="{Binding AutoStatus}">
+                            <Button DockPanel.Dock="Right" Content="{loc:Loc characters.auto.stop}" Command="{Binding CharacterStopCommand}"
+                                    VerticalAlignment="Center" MinWidth="72" />
+                            <ProgressBar Width="96" Height="4" Minimum="0" Maximum="1" Value="{Binding AutoProgress, Mode=OneWay}" VerticalAlignment="Center" />
+                            <TextBlock Text="{Binding AutoStatus}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" Margin="10,0,10,0"
+                                       Typography.NumeralAlignment="Tabular" />
+                        </DockPanel>
+                        <Rectangle Style="{StaticResource Hairline}" Margin="0,2,0,2" />
+                        <ItemsControl ItemsSource="{Binding CharacterRows}" Focusable="False">
+                            <ItemsControl.ItemTemplate>
+                                <DataTemplate DataType="{x:Type pane:CharacterRowViewModel}">
+                                    <Grid MinHeight="64" Margin="0,4,0,4" AutomationProperties.Name="{Binding AccessibleName}">
+                                        <Grid.ColumnDefinitions>
+                                            <ColumnDefinition Width="44" />
+                                            <ColumnDefinition Width="*" />
+                                            <ColumnDefinition Width="Auto" />
+                                        </Grid.ColumnDefinitions>
+                                        <Image Source="{Binding Portrait}" Height="56" Stretch="Uniform" RenderOptions.BitmapScalingMode="HighQuality"
+                                               Visibility="{Binding HasPortrait, Converter={StaticResource BoolToVisibility}}" />
+                                        <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xE77B;" FontSize="26" HorizontalAlignment="Center"
+                                                   VerticalAlignment="Center" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                                   Visibility="{Binding HasPortrait, Converter={StaticResource InverseBoolToVisibility}}" />
+                                        <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="10,0,10,0">
+                                            <StackPanel Orientation="Horizontal">
+                                                <Ellipse Width="7" Height="7" Fill="{Binding Accent}" VerticalAlignment="Center" Margin="0,1,6,0" />
+                                                <TextBlock Text="{Binding Name}" FontSize="13" FontWeight="Medium" />
+                                                <TextBlock Text="{loc:Loc characters.development}" Style="{StaticResource CaptionText}" FontSize="10" Margin="6,0,0,0"
+                                                           VerticalAlignment="Center" Visibility="{Binding Development, Converter={StaticResource BoolToVisibility}}" />
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Margin="0,2,0,0">
+                                                <Button Style="{StaticResource LinkButton}" Content="{Binding Artist}" Padding="0" FontSize="11" Margin="0,0,8,0"
+                                                        Command="{Binding DataContext.CharacterArtistCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}" ToolTip="{Binding ArtistLink}"
+                                                        Visibility="{Binding HasArtistLink, Converter={StaticResource BoolToVisibility}}" />
+                                                <TextBlock Text="{Binding Artist}" Style="{StaticResource CaptionText}" Margin="0,0,8,0"
+                                                           Visibility="{Binding HasArtistText, Converter={StaticResource BoolToVisibility}}" />
+                                                <TextBlock Text="{Binding Size}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <TextBlock Text="{Binding Error}" FontSize="11" Foreground="{DynamicResource SystemFillColorCriticalBrush}" TextWrapping="Wrap"
+                                                       Margin="0,2,0,0" Visibility="{Binding HasError, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
+                                        <StackPanel Grid.Column="2" Orientation="Horizontal" VerticalAlignment="Center">
+                                            <Button Content="{loc:Loc characters.download}" Style="{DynamicResource AccentButtonStyle}" MinWidth="80"
+                                                    IsEnabled="{Binding DownloadEnabled}"
+                                                    Command="{Binding DataContext.CharacterDownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" Visibility="{Binding CanDownload, Converter={StaticResource BoolToVisibility}}" />
+                                            <StackPanel Orientation="Horizontal" Visibility="{Binding Downloading, Converter={StaticResource BoolToVisibility}}">
+                                                <ProgressBar Width="72" Height="4" Minimum="0" Maximum="1" Value="{Binding Progress, Mode=OneWay}" VerticalAlignment="Center" />
+                                                <Button Style="{StaticResource SubtleButton}" Margin="6,0,0,0" ToolTip="{loc:Loc characters.cancel}"
+                                                        AutomationProperties.Name="{loc:Loc characters.cancel}"
+                                                        Command="{Binding DataContext.CharacterCancelCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                        CommandParameter="{Binding}">
+                                                    <TextBlock Style="{StaticResource SymbolIcon}" Text="&#xEB90;" FontSize="14" />
+                                                </Button>
+                                            </StackPanel>
+                                            <StackPanel Orientation="Horizontal" Visibility="{Binding Installing, Converter={StaticResource BoolToVisibility}}">
+                                                <ProgressBar Width="40" Height="4" IsIndeterminate="True" VerticalAlignment="Center" />
+                                                <TextBlock Text="{loc:Loc characters.installing}" Style="{StaticResource CaptionText}" Margin="8,0,0,0" VerticalAlignment="Center" />
+                                            </StackPanel>
+                                            <Button Content="{loc:Loc characters.update}" Margin="0,0,6,0" IsEnabled="{Binding DownloadEnabled}"
+                                                    Command="{Binding DataContext.CharacterDownloadCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" Visibility="{Binding CanUpdate, Converter={StaticResource BoolToVisibility}}" />
+                                            <Button Content="{loc:Loc characters.remove}" Style="{StaticResource LinkButton}"
+                                                    Foreground="{DynamicResource SystemFillColorCriticalBrush}"
+                                                    Command="{Binding DataContext.CharacterRemoveCommand, RelativeSource={RelativeSource AncestorType=ItemsControl}}"
+                                                    CommandParameter="{Binding}" Visibility="{Binding CanRemove, Converter={StaticResource BoolToVisibility}}" />
+                                        </StackPanel>
+                                    </Grid>
+                                </DataTemplate>
+                            </ItemsControl.ItemTemplate>
+                        </ItemsControl>
+                        <!-- No rows: loading, unavailable with Retry, or offline -->
+                        <DockPanel MinHeight="40" Visibility="{Binding CharacterListEmpty, Converter={StaticResource BoolToVisibility}}">
+                            <Button DockPanel.Dock="Right" Content="{loc:Loc characters.retry}" Command="{Binding CharacterRetryCommand}" VerticalAlignment="Center"
+                                    Visibility="{Binding CharacterRetryVisible, Converter={StaticResource BoolToVisibility}}" />
+                            <ProgressBar Width="24" Height="4" IsIndeterminate="True" VerticalAlignment="Center" Margin="0,0,8,0"
+                                         Visibility="{Binding CharacterLoading, Converter={StaticResource BoolToVisibility}}" />
+                            <TextBlock Text="{Binding CharacterEmptyText}" Style="{StaticResource CaptionText}" VerticalAlignment="Center" TextWrapping="Wrap" />
+                        </DockPanel>
+                    </StackPanel>
+                </Border>
+                <DockPanel Margin="4,6,4,0">
+                    <Button DockPanel.Dock="Right" Style="{StaticResource LinkButton}" Content="{loc:Loc characters.openFolder}" FontSize="11"
+                            Command="{Binding CharacterFolderCommand}" VerticalAlignment="Top" />
+                    <TextBlock Text="{loc:Loc characters.footer}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,0,12,0" />
+                </DockPanel>
+
+                <!-- The cards (DESIGN 2a.6, Readouts) in place of the unit and the two-line readout -->
+                <TextBlock Text="{loc:Loc character.readouts}" Style="{StaticResource SectionHeaderText}" Margin="2,22,0,8"
+                           AutomationProperties.HeadingLevel="Level3" />
+                <Border Style="{StaticResource GroupBorder}" Padding="16,10,16,10">
+                    <StackPanel>
+                        <UniformGrid Columns="2">
+                            <CheckBox Content="{loc:Loc character.readouts.intel}" IsChecked="{Binding ReadoutIntel, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.thinking}" IsChecked="{Binding ReadoutThinking, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.network}" IsChecked="{Binding ReadoutNetwork, Mode=TwoWay}" Margin="0,4,0,4"
+                                      IsEnabled="{Binding TrafficMeasured}" />
+                            <CheckBox Content="{loc:Loc character.readouts.cost}" IsChecked="{Binding ReadoutCost, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.agents}" IsChecked="{Binding ReadoutAgents, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.model}" IsChecked="{Binding ReadoutModel, Mode=TwoWay}" Margin="0,4,0,4" />
+                        </UniformGrid>
+                        <Rectangle Style="{StaticResource Hairline}" Margin="0,6,0,2" />
+                        <DockPanel MinHeight="44" IsEnabled="{Binding NetworkScopeEnabled}">
+                            <ComboBox DockPanel.Dock="Right" MinWidth="200" VerticalAlignment="Center" SelectedIndex="{Binding NetworkScopeIndex, Mode=TwoWay}"
+                                      AutomationProperties.Name="{loc:Loc character.readouts.networkScope}">
+                                <ComboBoxItem Content="{loc:Loc orbs.traffic.sources}" />
+                                <ComboBoxItem Content="{loc:Loc orbs.traffic.machine}" />
+                            </ComboBox>
+                            <TextBlock Text="{loc:Loc character.readouts.networkScope}" VerticalAlignment="Center" FontSize="13" />
+                        </DockPanel>
+                        <TextBlock Text="{loc:Loc character.readouts.hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" Margin="0,4,0,0" />
+                    </StackPanel>
+                </Border>
+            </StackPanel>
+
+            <StackPanel Visibility="{Binding IsNotCharacter, Converter={StaticResource BoolToVisibility}}">
             <!-- Unit (DESIGN 9 Orb, Switching 3): tok/s or the money unit, directly under the style cards -->
             <Border Style="{StaticResource GroupBorder}" Margin="0,16,0,0" Padding="16,4,16,4">
                 <DockPanel MinHeight="48">
@@ -313,6 +448,7 @@
                     <TextBlock Text="{Binding TrafficHint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" />
                 </StackPanel>
             </Border>
+            </StackPanel>
 
             <!-- Size and opacity -->
             <Border Style="{StaticResource GroupBorder}" Margin="0,16,0,0" Padding="16,4,16,4">

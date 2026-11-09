@@ -48,6 +48,12 @@ public sealed class OrbFeed
     /// <summary>The money readout while <see cref="Unit"/> is money and a <see cref="CostDisplay"/> is attached; else null.</summary>
     public LiveMoney? Money { get; private set; }
 
+    /// <summary>A <c>character</c> orb: its speed stays in tok/s and the cost rate goes to its card (<see cref="CardMoney"/>, DESIGN 2a.6).</summary>
+    public bool Character { get; set; }
+
+    /// <summary>The live cost rate of a <c>character</c> orb's cost card; else null.</summary>
+    public LiveMoney? CardMoney { get; private set; }
+
     /// <summary>Formats the money unit (the orb's sources without subscription sources unless included, METRICS 9.4).</summary>
     public CostDisplay? Cost { get; set; }
 
@@ -96,8 +102,11 @@ public sealed class OrbFeed
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         Reading = OrbSubset.Reading(snapshot, Sources, Hosts);
-        Money = Unit == OrbUnit.Cost && Cost is { } cost
+        Money = Unit == OrbUnit.Cost && !Character && Cost is { } cost
             ? cost.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, cost.Billable), Reading.Agents.Count)
+            : null;
+        CardMoney = Character && Cost is { } card
+            ? card.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, card.Billable), Reading.Agents.Count)
             : null;
         var value = Reading.Live.ValueFor(Metric);
         Value = double.IsFinite(value) && value > 0 ? value : 0;
