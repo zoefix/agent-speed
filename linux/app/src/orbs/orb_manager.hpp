@@ -150,6 +150,12 @@ private:
     std::vector<orb::Disc> discs(const QString& except) const;
     void showMenu(const QString& id, QPoint global);
     QMenu* buildMenu(const QString& id);
+public:
+    // DESIGN 2b Context menu items 2–3 for a `character` orb: `characters.title ▸` (Auto, the installed characters,
+    // `characters.more`) and `character.readouts ▸` (a check per card, the network scope); the tray's quick menu too.
+    void addCharacterMenu(QMenu* menu, const QString& id);
+    void addReadoutsMenu(QMenu* menu, const QString& id);
+private:
     void showBanner(const QString& text);
     QStringList detected() const;
     QString nameOf(const OrbConfig& config) const;

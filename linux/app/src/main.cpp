@@ -431,6 +431,11 @@ int main(int argc, char* argv[]) {
     QObject::connect(&orbs, &OrbManager::dashboardRequested, &flyout, &Flyout::toggle);
     QObject::connect(&orbs, &OrbManager::quitRequested, &app, quitApp);
     QObject::connect(&orbs, &OrbManager::settingsRequested, &app, [&] { openSettings(1); });
+    tray.orbExtras = [&orbs](QMenu* menu, const QString& id, const QVariantMap& orb) {
+        if (orb.value(QStringLiteral("style")).toString() != QLatin1String("character")) return;
+        orbs.addCharacterMenu(menu, id);
+        orbs.addReadoutsMenu(menu, id);
+    };
     const auto syncOrbMenu = [&] { tray.setOrbs(orbs.shown(), orbs.list()); };
     QObject::connect(&orbs, &OrbManager::listChanged, &tray, syncOrbMenu);
     QObject::connect(&orbs, &OrbManager::shownChanged, &tray, syncOrbMenu);

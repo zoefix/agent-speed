@@ -1021,6 +1021,14 @@ QList<std::pair<QString, QImage>> OrbManager::menuPictures(const QString& id) {
     out.push_back({QStringLiteral("menu"), menu->grab().toImage()});
     for (auto* sub : menu->findChildren<QMenu*>()) {
         if (sub->title() == strings_.t(QStringLiteral("remote.hosts"))) out.push_back({QStringLiteral("hosts"), sub->grab().toImage()});
+        if (sub->title() == strings_.t(QStringLiteral("characters.title"))) {
+            sub->adjustSize();
+            out.push_back({QStringLiteral("characters"), sub->grab().toImage()});
+        }
+        if (sub->title() == strings_.t(QStringLiteral("character.readouts"))) {
+            sub->adjustSize();
+            out.push_back({QStringLiteral("readouts"), sub->grab().toImage()});
+        }
         if (sub->title() == strings_.t(QStringLiteral("menu.size"))) {
             sub->adjustSize();
             out.push_back({QStringLiteral("size"), sub->grab().toImage()});
@@ -1050,6 +1058,8 @@ QMenu* OrbManager::buildMenu(const QString& id) {
         const QString key = QString::fromLatin1(style);
         radio(styles, strings_.t(QStringLiteral("style.") + key), c.style == key, [this, id, key] { set(id, QStringLiteral("style"), key); });
     }
+    const bool character = c.style == QLatin1String("character");
+    if (character) addCharacterMenu(menu, id);
     auto* sources = menu->addMenu(strings_.t(QStringLiteral("orbs.sources")));
     radio(sources, strings_.t(QStringLiteral("orbs.sources.all")), c.tracksAll(), [this, id] { set(id, QStringLiteral("allSources"), true); });
     sources->addSeparator();
@@ -1079,12 +1089,13 @@ QMenu* OrbManager::buildMenu(const QString& id) {
         connect(action, &QAction::triggered, this, [this, id, key](bool on) { setSource(id, key, on); });
     }
     addHostsMenu(menu, c);
-    auto* unit = menu->addMenu(strings_.t(QStringLiteral("orbs.unit")));
+    if (character) addReadoutsMenu(menu, id);
+    auto* unit = character ? new QMenu(menu) : menu->addMenu(strings_.t(QStringLiteral("orbs.unit")));
     radio(unit, strings_.t(QStringLiteral("orbs.unit.tokens")), c.unit != QLatin1String("cost"), [this, id] { set(id, QStringLiteral("unit"), QStringLiteral("tokens")); });
     const QString symbol = orbs_.count(id) ? orbs_[id].values.value(QStringLiteral("costSymbol")).toString() : QString();
     radio(unit, fill(strings_.t(QStringLiteral("orbs.unit.cost")), {symbol.isEmpty() ? QStringLiteral("US$") : symbol}), c.unit == QLatin1String("cost"),
           [this, id] { set(id, QStringLiteral("unit"), QStringLiteral("cost")); });
-    auto* traffic = menu->addMenu(strings_.t(QStringLiteral("orbs.traffic")));
+    auto* traffic = character ? new QMenu(menu) : menu->addMenu(strings_.t(QStringLiteral("orbs.traffic")));
     for (const char* mode : {"sources", "machine", "intelligence", "off"}) {
         const QString value = QString::fromLatin1(mode);
         radio(traffic, strings_.t(QStringLiteral("orbs.traffic.") + value), c.traffic == value, [this, id, value] { set(id, QStringLiteral("traffic"), value); });
@@ -1101,11 +1112,11 @@ QMenu* OrbManager::buildMenu(const QString& id) {
     QList<QAction*> presets;
     for (int i = 0; i < 3; ++i) {
         const double d = kPresets[i];
-        presets.push_back(radio(size, strings_.t(QString::fromLatin1(sizeKeys[i])), std::abs(c.footprintDiameter() - d) < 0.5,
+        presets.push_back(radio(size, strings_.t(QString::fromLatin1(sizeKeys[i])), std::abs(c.size - d) < 0.5,
                                 [this, id, d] { set(id, QStringLiteral("size"), d); }));
     }
     size->addSeparator();
-    auto* slider = new SizeSliderAction(c.footprintDiameter(), strings_.t(QStringLiteral("settings.orb.size")), size);
+    auto* slider = new SizeSliderAction(c.size, strings_.t(QStringLiteral("settings.orb.size")), size);
     connect(slider, &SizeSliderAction::sizeChanged, this, [this, id, presets](double d) {
         set(id, QStringLiteral("size"), d);
         for (int i = 0; i < 3; ++i) presets[i]->setChecked(std::abs(d - kPresets[i]) < 0.5);
@@ -1165,6 +1176,73 @@ QMenu* OrbManager::buildMenu(const QString& id) {
     menu->addAction(strings_.t(QStringLiteral("menu.dashboard")), this, &OrbManager::dashboardRequested);
     menu->addAction(strings_.t(QStringLiteral("menu.quit")), this, &OrbManager::quitRequested);
     return menu;
+}
+
+void OrbManager::addCharacterMenu(QMenu* menu, const QString& id) {
+    const auto* c = store_.find(id);
+    if (!c) return;
+    auto* sub = menu->addMenu(strings_.t(QStringLiteral("characters.title")));
+    auto* group = new QActionGroup(sub);
+    auto* automatic = sub->addAction(strings_.t(QStringLiteral("characters.auto")));
+    automatic->setCheckable(true);
+    automatic->setChecked(!c->character);
+    group->addAction(automatic);
+    connect(automatic, &QAction::triggered, this, [this, id] { setCharacter(id, QString()); });
+    if (characters_ && characters_->hasInstalled()) {
+        sub->addSeparator();
+        for (const auto& pack : characters_->packs()) {
+            const QString packID = QString::fromStdString(pack.id);
+            auto* action = sub->addAction(characters_->displayName(packID));
+            QPixmap dot(10, 10);
+            dot.fill(Qt::transparent);
+            {
+                QPainter p(&dot);
+                p.setRenderHint(QPainter::Antialiasing);
+                p.setPen(Qt::NoPen);
+                p.setBrush(QColor(characters_->accent(packID)));
+                p.drawEllipse(QRectF(1, 1, 8, 8));
+            }
+            action->setIcon(QIcon(dot));
+            action->setCheckable(true);
+            action->setChecked(c->character == packID);
+            group->addAction(action);
+            connect(action, &QAction::triggered, this, [this, id, packID] { setCharacter(id, packID); });
+        }
+    }
+    sub->addSeparator();
+    // Downloads live in the orb's Settings, under the style cards.
+    sub->addAction(strings_.t(QStringLiteral("characters.more")), this, [this, id] {
+        select(id);
+        emit settingsRequested();
+    });
+}
+
+void OrbManager::addReadoutsMenu(QMenu* menu, const QString& id) {
+    const auto* c = store_.find(id);
+    if (!c) return;
+    auto* sub = menu->addMenu(strings_.t(QStringLiteral("character.readouts")));
+    const bool measured = prefs_.trafficEnabled();
+    for (const auto readout : agentspeed::character::kCharacterReadouts) {
+        auto* action = sub->addAction(strings_.t(QLatin1String(agentspeed::character::titleKey(readout))));
+        action->setCheckable(true);
+        action->setChecked(c->characterReadouts.get(readout));
+        if (readout == agentspeed::character::CharacterReadout::Network && !measured) action->setEnabled(false);
+        const QString key = QLatin1String(agentspeed::character::key(readout));
+        connect(action, &QAction::triggered, this, [this, id, key](bool on) { setCharacterReadout(id, key, on); });
+    }
+    sub->addSeparator();
+    sub->addAction(strings_.t(QStringLiteral("character.readouts.networkScope")))->setEnabled(false);
+    auto* group = new QActionGroup(sub);
+    const bool scopeOn = measured && c->characterReadouts.network;
+    for (const char* mode : {"sources", "machine"}) {
+        const QString value = QString::fromLatin1(mode);
+        auto* action = sub->addAction(strings_.t(QStringLiteral("orbs.traffic.") + value));
+        action->setCheckable(true);
+        action->setChecked(value == QLatin1String("machine") ? c->traffic == value : c->traffic != QLatin1String("machine"));
+        action->setEnabled(scopeOn);
+        group->addAction(action);
+        connect(action, &QAction::triggered, this, [this, id, value] { set(id, QStringLiteral("traffic"), value); });
+    }
 }
 
 // DESIGN 13: the Hosts submenu, only while remote hosts exist: All Hosts, then every host with its status dot and a
