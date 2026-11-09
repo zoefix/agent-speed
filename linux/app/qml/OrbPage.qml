@@ -14,6 +14,7 @@ SettingsPage {
         return list.length > 0 ? list[0] : null
     }
     function set(key, value) { if (current) orbs.set(current.id, key, value) }
+    readonly property bool character: current !== null && current.style === "character"
 
     // 1. Master group.
     SettingsGroup {
@@ -376,10 +377,12 @@ SettingsPage {
                 y: 14
                 width: parent.width - 28
                 selected: page.current ? page.current.style : "led"
+                character: page.current ? page.current.character : ""
                 onPicked: (key) => page.set("style", key)
             }
         }
         SettingsRow {
+            visible: !page.character
             label: S.tr2(S.rev, "orbs.unit")
             divider: false
             Segmented {
@@ -391,6 +394,16 @@ SettingsPage {
                 onActivated: (v) => page.set("unit", v)
             }
         }
+    }
+
+    // A `character` orb: its character under the style cards, and its cards in place of the unit and readout.
+    CharacterSection {
+        visible: page.character
+        orb: page.current
+    }
+    CharacterReadoutsGroup {
+        visible: page.character
+        orb: page.current
     }
 
     // Size, opacity, name plate and window toggles.
@@ -467,6 +480,7 @@ SettingsPage {
             }
         }
         SettingsRow {
+            visible: !page.character
             label: S.tr2(S.rev, "orbs.traffic")
             caption: page.current && page.current.traffic === "intelligence" ? S.tr2(S.rev, "orbs.traffic.hint.intel") : S.tr2(S.rev, "orbs.traffic.hint")
             Dropdown {

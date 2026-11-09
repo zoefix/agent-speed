@@ -192,7 +192,7 @@ void Director::blendGrooves(double dt) {
     const auto& o = slots_.side(out_);
     const auto& k = slots_.side(book_);
     for (const auto& layer : grooves_) {
-        groove::emit(layer.band, beat_.phase, time_, slots_, o, k, restIdle(), grooveOut_);
+        groove::fill(layer.band, beat_.phase, time_, slots_, o, k, restIdle(), grooveOut_);
         for (const auto& [slot, raw] : grooveOut_) {
             const auto s = static_cast<std::size_t>(slot);
             const double v = raw * grooveScale_[s];

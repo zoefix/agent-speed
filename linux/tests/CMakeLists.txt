@@ -87,12 +87,15 @@ if(AGENTSPEED_BUILD_APP)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
+        app/character_library_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
         app/orb_size_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
+        ../app/src/characters/character_library.cpp
+        ../app/src/characters/character_transport.cpp
         ../app/src/lan/lan_connection.cpp
         ../app/src/lan/lan_http_post.cpp
         ../app/src/lan/lan_net.cpp
@@ -103,10 +106,11 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
         ../app/src/source_locations_view.cpp
+        ../app/src/strings.cpp
     )
     set_target_properties(agentspeed_app_tests PROPERTIES AUTOMOC ON)
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
-    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Network Qt6::Widgets GTest::gtest_main)
+    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
     target_compile_definitions(agentspeed_app_tests PRIVATE
         AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
         AGENTSPEED_APP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../app")

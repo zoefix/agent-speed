@@ -47,7 +47,7 @@ namespace groove {
 using Out = std::vector<std::pair<int, double>>;
 double up(double b);
 double hit(double b);
-void emit(Band band, double b, double t, const Slots& s, const Slots::SideSlots& o, const Slots::SideSlots& k,
+void fill(Band band, double b, double t, const Slots& s, const Slots::SideSlots& o, const Slots::SideSlots& k,
           bool rest, Out& out);
 }  // namespace groove
 

@@ -47,7 +47,7 @@ double up(double b) { return std::fabs(std::sin(math::kPi * b)); }
 
 double hit(double b) { return std::pow(1 - std::fabs(std::sin(math::kPi * b)), 4.0); }
 
-void emit(Band band, double b, double t, const Slots& s, const Slots::SideSlots& o, const Slots::SideSlots& k,
+void fill(Band band, double b, double t, const Slots& s, const Slots::SideSlots& o, const Slots::SideSlots& k,
           bool rest, Out& out) {
     using std::cos;
     using std::sin;

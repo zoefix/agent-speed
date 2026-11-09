@@ -1,5 +1,7 @@
 #include "orbs/orb_manager.hpp"
 
+#include "characters/character_library.hpp"
+
 #include <QActionGroup>
 #include <QDateTime>
 #include <QIcon>
@@ -250,6 +252,8 @@ QVariantList OrbManager::list() const {
         m.insert(QStringLiteral("showName"), c.showName ? QVariant(*c.showName) : QVariant());
         m.insert(QStringLiteral("plate"), platesShown(c.id));
         m.insert(QStringLiteral("titleTheme"), c.titleTheme.value_or(QString()));
+        m.insert(QStringLiteral("character"), c.character.value_or(QString()));
+        m.insert(QStringLiteral("characterReadouts"), OrbConfig::readoutsToJson(c.characterReadouts).toVariantMap());
         const bool total = prefs_.metric() == QLatin1String("total");
         const auto own = total ? c.redlineTotal : c.redlineOutput;
         m.insert(QStringLiteral("customRedline"), own.has_value());
@@ -434,6 +438,7 @@ void OrbManager::set(const QString& id, const QString& key, const QVariant& valu
     if (!found) return;
     OrbConfig c = *found;
     const bool sourcesBefore = c.tracksAll();
+    const QString styleBefore = c.style;
     if (key == QLatin1String("style")) {
         c.style = value.toString();
     } else if (key == QLatin1String("size")) {
@@ -473,6 +478,44 @@ void OrbManager::set(const QString& id, const QString& key, const QVariant& valu
     }
     store_.update(c);
     if (sourcesBefore != c.tracksAll()) showChip(id, 2);
+    // Switching to `character` downloads every character, this orb's live vendors first (CHARACTERS 2).
+    if (characters_ && key == QLatin1String("style") && c.style == QLatin1String("character") && styleBefore != c.style) {
+        const auto it = orbs_.find(id);
+        characters_->downloadAll(it == orbs_.end() ? QStringList() : it->second.values.value(QStringLiteral("vendorOrder")).toStringList());
+    }
+}
+
+void OrbManager::setCharacter(const QString& id, const QString& character) {
+    const auto* found = store_.find(id);
+    if (!found) return;
+    OrbConfig c = *found;
+    c.character = OrbConfig::cleanCharacter(character);
+    if (c.character == found->character) return;
+    store_.update(c);
+}
+
+void OrbManager::setCharacterReadout(const QString& id, const QString& key, bool on) {
+    const auto* found = store_.find(id);
+    if (!found) return;
+    OrbConfig c = *found;
+    for (const auto readout : agentspeed::character::kCharacterReadouts) {
+        if (key == QLatin1String(agentspeed::character::key(readout))) c.characterReadouts.set(readout, on);
+    }
+    if (c.characterReadouts == found->characterReadouts) return;
+    store_.update(c);
+}
+
+void OrbManager::setCharacters(CharacterLibrary* characters) {
+    characters_ = characters;
+    if (characters_) connect(characters_, &CharacterLibrary::installedChanged, this, [this] { sync(); });
+}
+
+bool OrbManager::anyCharacterOrb() const {
+    return std::any_of(store_.orbs().begin(), store_.orbs().end(), [](const OrbConfig& c) { return c.style == QLatin1String("character"); });
+}
+
+void OrbManager::resumeCharacterDownloads() {
+    if (characters_ && anyCharacterOrb()) characters_->downloadAll({});
 }
 
 // Checking a source on an all-sources orb makes the set that single source; the last one cannot be unchecked.

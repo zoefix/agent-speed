@@ -26,6 +26,7 @@
 #include "network_service.hpp"
 #include "orb/orb_accessible.hpp"
 #include "orb/orb_window.hpp"
+#include "characters/character_library.hpp"
 #include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
 #include "hero/hero_item.hpp"
@@ -234,6 +235,16 @@ int main(int argc, char* argv[]) {
     TrayIcon tray(strings, demo);
     QObject::connect(&strings, &Strings::changed, &tray, &TrayIcon::retranslate);
     OrbManager orbs(strings, prefs, orbStore);
+    // CHARACTERS 2: the installed character packs, the catalog and the downloads, under the master switch.
+    CharacterLibrary characters(CharacterLibrary::standardStore(QStringLiteral(AGENTSPEED_VERSION)),
+                                std::make_unique<NetworkCharacterTransport>(QByteArrayLiteral("AgentSpeed/" AGENTSPEED_VERSION " (Linux)")),
+                                &strings);
+    characters.networkEnabled = [&prefs] { return prefs.networkEnabled(); };
+    orbs.setCharacters(&characters);
+    QObject::connect(&prefs, &Preferences::networkEnabledChanged, &characters, [&] {
+        characters.networkChanged();
+        if (prefs.networkEnabled()) orbs.resumeCharacterDownloads();
+    });
     orb::PreviewItem::setUnit(strings.t(QStringLiteral("unit.tokS")));
     qmlRegisterType<orb::PreviewItem>("AgentSpeed.Orb", 1, 0, "OrbPreview");
     HeroItem::setContext(&themes, &strings);
@@ -255,6 +266,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("prefs"), &prefs);
     engine.rootContext()->setContextProperty(QStringLiteral("catalog"), &catalog);
     engine.rootContext()->setContextProperty(QStringLiteral("orbs"), &orbs);
+    engine.rootContext()->setContextProperty(QStringLiteral("characters"), &characters);
     engine.rootContext()->setContextProperty(QStringLiteral("themes"), &themes);
     engine.rootContext()->setContextProperty(QStringLiteral("boardStore"), &boardStore);
     orbs.setTitles(&themes);
@@ -431,6 +443,10 @@ int main(int argc, char* argv[]) {
     syncOrbMenu();
     const auto arguments = app.arguments();
     network.start();
+    if (orbs.anyCharacterOrb()) {
+        characters.refreshInBackground();
+        orbs.resumeCharacterDownloads();
+    }
     report.start();
     lan.start();
     // Development aid: --report-selftest=<http://127.0.0.1:port> reports to a local reference server.

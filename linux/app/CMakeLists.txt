@@ -26,6 +26,8 @@ qt_add_executable(agent-speed
     src/monitor_worker.cpp
     src/network_service.cpp
     src/catalog.cpp
+    src/characters/character_library.cpp
+    src/characters/character_transport.cpp
     src/preferences.cpp
     src/host_dot.cpp
     src/remote_hosts_view.cpp
@@ -156,6 +158,10 @@ set(agent_speed_qml
     qml/remote/RemoteHostSheet.qml
     qml/remote/RemotePage.qml
     qml/remote/RemoveHostDialog.qml
+    qml/characters/CharacterReadoutsGroup.qml
+    qml/characters/CharacterRow.qml
+    qml/characters/CharacterSection.qml
+    qml/characters/CharacterSilhouette.qml
     qml/sources/DefaultBadge.qml
     qml/sources/LocationActions.qml
     qml/sources/LocationIcon.qml

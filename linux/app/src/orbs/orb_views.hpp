@@ -4,11 +4,16 @@
 #include <QStringList>
 #include <QVariantMap>
 #include <map>
+#include <memory>
 #include <optional>
 #include <string>
 #include <vector>
 
 #include "agentspeed/snapshot.hpp"
+
+namespace agentspeed::pricing {
+class PriceTable;
+}
 
 // One floating orb as the worker sees it (DESIGN 2b): its id, sources (nullopt: every enabled source) and hosts
 // (DESIGN 13; nullopt: every host).
@@ -29,6 +34,8 @@ struct OrbContext {
     bool trafficBits = false;
     qint64 nowMs = 0;
     qint64 todayStartMs = 0;
+    // The price table the vendor of a model resolves through (CHARACTERS 7).
+    std::shared_ptr<const agentspeed::pricing::PriceTable> prices;
 };
 
 // METRICS 6.8 Orb subsets: per orb, on the engine tick, the live value of its sources, its agents, events, today's

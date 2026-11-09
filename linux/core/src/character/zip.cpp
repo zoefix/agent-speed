@@ -147,7 +147,7 @@ void ZipArchive::extractAll(const fs::path& folder, std::uint64_t maxTotal) cons
         std::uint64_t remaining = item.compressedSize;
         std::uint64_t written = 0;
         uLong crc = crc32(0, nullptr, 0);
-        auto emit = [&](const unsigned char* data, std::size_t size) {
+        auto sink = [&](const unsigned char* data, std::size_t size) {
             written += size;
             if (written > entry.uncompressedSize) throw PackFailure(PackError::TooLarge, entry.path);
             crc = crc32(crc, data, static_cast<uInt>(size));
@@ -159,7 +159,7 @@ void ZipArchive::extractAll(const fs::path& folder, std::uint64_t maxTotal) cons
                 const auto chunk = static_cast<std::size_t>(std::min<std::uint64_t>(remaining, input.size()));
                 in.read(reinterpret_cast<char*>(input.data()), static_cast<std::streamsize>(chunk));
                 if (static_cast<std::size_t>(in.gcount()) != chunk) malformed(entry.path);
-                emit(input.data(), chunk);
+                sink(input.data(), chunk);
                 remaining -= chunk;
             }
         } else {
@@ -181,7 +181,7 @@ void ZipArchive::extractAll(const fs::path& folder, std::uint64_t maxTotal) cons
                 z.avail_out = static_cast<uInt>(output.size());
                 status = inflate(&z, Z_NO_FLUSH);
                 if (status != Z_OK && status != Z_STREAM_END) malformed(entry.path);
-                emit(output.data(), output.size() - z.avail_out);
+                sink(output.data(), output.size() - z.avail_out);
             }
         }
         if (written != entry.uncompressedSize || crc != item.crc) malformed(entry.path);
