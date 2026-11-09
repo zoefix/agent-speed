@@ -1,0 +1,44 @@
+{
+ "id": "grok",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Grok 娘",
+  "zh-Hans": "Grok 娘",
+  "en": "Grok-chan",
+  "ja": "Grokちゃん"
+ },
+ "vendors": [
+  "xai"
+ ],
+ "accent": "#E8C25A",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/grok"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 1.1,
+  "energy": 1.2,
+  "sway": 0.9,
+  "bounce": 1.0,
+  "gap": 0.9,
+  "idle": "rest",
+  "particles": "embers",
+  "signature": [
+   "swagger",
+   "hop",
+   "shake",
+   "doubletake",
+   "spin"
+  ],
+  "hands": [
+   "fan",
+   "drum",
+   "flex"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "legsInSkirt": true
+ }
+}

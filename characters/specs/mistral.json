@@ -1,0 +1,44 @@
+{
+ "id": "mistral",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Mistral 娘",
+  "zh-Hans": "Mistral 娘",
+  "en": "Mistral-chan",
+  "ja": "Mistralちゃん"
+ },
+ "vendors": [
+  "mistral"
+ ],
+ "accent": "#FA520F",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/mistral"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 1.0,
+  "energy": 1.05,
+  "sway": 1.0,
+  "bounce": 0.9,
+  "gap": 1.0,
+  "idle": "rest",
+  "particles": "sparkles",
+  "signature": [
+   "spin",
+   "curtsy",
+   "hop",
+   "bow",
+   "tailswish"
+  ],
+  "hands": [
+   "flex",
+   "fan"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "tail": true,
+  "legsInSkirt": true
+ }
+}

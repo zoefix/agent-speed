@@ -37,10 +37,19 @@ struct OrbBody: View, Equatable {
     private var hasLens: Bool { style == .led || style == .needle || style == .reactor }
 
     var body: some View {
+        if style == .character {
+            // The character stands on the desktop without a glass body (DESIGN 2a.6).
+            Color.clear.frame(width: canvasSide, height: canvasSide)
+        } else {
+            disc
+        }
+    }
+
+    private var disc: some View {
         let s = diameter
         let (top, bottom) = gradient
         let bodyOpacity = solid ? 1 : tokens.bodyOpacity * opacity
-        ZStack {
+        return ZStack {
             shadow
             Circle()
                 .fill(LinearGradient(colors: [top.color, bottom.color], startPoint: .top, endPoint: .bottom))

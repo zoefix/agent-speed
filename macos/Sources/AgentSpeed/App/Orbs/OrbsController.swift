@@ -164,8 +164,10 @@ final class OrbsController {
         if next != availability { availability = next }
         let previewing = model.store.isPreviewing
         let now = Clock.now
+        let characters = document.orbs.contains { $0.style == .character } ? model.characterInputs : nil
         for orb in document.orbs {
-            runtimes[orb.id]?.ingest(snapshot, settings: model.settings, cost: model.cost, isPreviewing: previewing, now: now)
+            runtimes[orb.id]?.ingest(snapshot, settings: model.settings, cost: model.cost, isPreviewing: previewing, now: now,
+                                     characters: characters)
         }
     }
 
@@ -339,6 +341,11 @@ final class OrbsController {
         setDocument(OrbEditing.setStyle(style, of: id, in: document))
     }
 
+    /// A pack id, or nil to follow the fastest model vendor (CHARACTERS 7).
+    func setCharacter(_ character: String?, of id: String) {
+        setDocument(OrbEditing.setCharacter(character, of: id, in: document))
+    }
+
     /// tok/s or the money unit (DESIGN 9); persisted at once.
     func setUnit(_ unit: OrbUnit, of id: String) {
         setDocument(OrbEditing.setUnit(unit, of: id, in: document))
@@ -352,9 +359,14 @@ final class OrbsController {
         setDocument(OrbEditing.setShowName(showName, of: id, in: document))
     }
 
+    /// A `character` orb keeps tok/s: its cost has a card of its own (DESIGN 2a.6).
     func toggleUnit(of id: String) {
-        guard let orb = document.orb(id) else { return }
+        guard let orb = document.orb(id), orb.style != .character else { return }
         setUnit(orb.unit.toggled, of: id)
+    }
+
+    func setCharacterReadout(_ readout: CharacterReadout, _ on: Bool, of id: String) {
+        setDocument(OrbEditing.setCharacterReadout(readout, on, of: id, in: document))
     }
 
     func setSize(_ size: Double, of id: String) {
@@ -513,10 +525,12 @@ final class OrbsController {
         }
         if let model {
             let snapshot = model.store.snapshot
+            let characters = document.orbs.contains { $0.style == .character } ? model.characterInputs : nil
             for orb in document.orbs {
                 runtimes[orb.id]?.ingest(snapshot, settings: model.settings, cost: model.cost, isPreviewing: model.store.isPreviewing,
-                                         now: Clock.now)
+                                         now: Clock.now, characters: characters)
             }
+            if characters != nil { model.characters.refreshInBackground() }
         }
     }
 }

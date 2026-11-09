@@ -74,7 +74,7 @@ final class OrbWindowController {
         self.manager = manager
         id = runtime.id
         config = runtime.config
-        let diameter = CGFloat(runtime.config.size)
+        let diameter = CGFloat(runtime.config.footprintDiameter)
         let interaction = OrbInteraction()
         let panel = OrbPanel()
         self.interaction = interaction
@@ -205,12 +205,13 @@ final class OrbWindowController {
 
     private func applyConfiguration() {
         presenter.setStyle(config.style)
+        host.setHitShape(config.style.hitShape)
         panel.apply(alwaysOnTop: config.alwaysOnTop, allSpaces: config.allSpaces)
         chipPanel.panel.level = panel.level
         nameplate.setLevel(panel.level, behavior: panel.collectionBehavior)
         fader.followerFactor = CGFloat(config.opacity)
         fader.reorderIfShown()
-        resize(to: CGFloat(config.size))
+        resize(to: CGFloat(config.footprintDiameter))
         updateTracking()
         refreshBody()
         refreshNameplate()
@@ -236,7 +237,7 @@ final class OrbWindowController {
     private func refreshBody() {
         let hideBlur = model.accessibility.reduceTransparency
         let opacity = CGFloat(config.opacity)
-        if host.blurView.isHidden != hideBlur { host.blurView.isHidden = hideBlur }
+        if host.blurHidden != hideBlur { host.blurHidden = hideBlur }
         if host.blurView.alphaValue != opacity { host.blurView.alphaValue = opacity }
         let contrast = model.accessibility.increaseContrast
         let dark = presenter.dark
@@ -405,6 +406,12 @@ final class OrbWindowController {
         updatePointer(at: NSEvent.mouseLocation)
     }
 
+    /// Re-reads the pointer after a stretch in which no move reached the monitors: a menu or modal session of the
+    /// app took every mouse event, so the pointer may now rest on this orb (or have left it) unseen.
+    func pointerMayHaveMoved() {
+        refreshPointer()
+    }
+
     /// Lets the panel take the mouse only while the pointer is over the disc, and the plate only over its capsule;
     /// everything else clicks through.
     private func updatePointer(at location: NSPoint) {
@@ -416,6 +423,7 @@ final class OrbWindowController {
             && nameplate.contains(screenPoint: location, slack: nameplate.hoverSlack))
         if panel.ignoresMouseEvents == inside {
             panel.ignoresMouseEvents = !inside
+            OrbWindowLog.debug("\(id.prefix(8)) takes the mouse: \(inside) at \(OrbWindowLog.describe(location))")
         }
         nameplate.setAcceptsMouse(onPlate)
         setHovered(inside || nearPlate)

@@ -10,6 +10,7 @@ final class OrbEncoder {
     private var index = 0
     private let semaphore = DispatchSemaphore(value: ringSize)
     private lazy var heroEncoder: HeroLayerEncoder? = gpu.hero.map(HeroLayerEncoder.init)
+    private lazy var characterEncoder: CharacterLayerEncoder? = gpu.character.map(CharacterLayerEncoder.init)
     /// The `led` silk drawn at half the backing resolution before the frame's pass (one per encoder, reused).
     private var silkTexture: MTLTexture?
     private let silkPass: MTLRenderPassDescriptor = {
@@ -90,12 +91,15 @@ final class OrbEncoder {
         var total = 0
         var totalPoints = 0
         var hasVehicle = false
+        var characterBytes = 0
         for index in 0..<count {
             let item = scene(index).scene
             total += item.instanceCount
             totalPoints += item.points.count
             hasVehicle = hasVehicle || item.vehicle != nil
+            characterBytes += CharacterLayerEncoder.bytes(of: item)
         }
+        let characters = characterBytes > 0 && (characterEncoder?.beginFrame(total: characterBytes) ?? false)
         // Polyline points follow the instances in the same buffer.
         let pointsBase = (total * stride + 255) / 256 * 256
         var buffer: MTLBuffer?
@@ -143,8 +147,9 @@ final class OrbEncoder {
                     }
                     encoder.setScissorRect(MTLScissorRect(x: Int(rect.minX), y: Int(rect.minY), width: Int(rect.width), height: Int(rect.height)))
                 }
+                let offsets = characters ? characterEncoder?.upload(item.scene) : nil
                 encode(item.scene, size: item.frame.size, scale: scale, buffer: buffer, first: first,
-                       points: pointsBase + firstPoint * pointStride, into: encoder)
+                       points: pointsBase + firstPoint * pointStride, characterOffsets: offsets, into: encoder)
                 first += item.scene.instanceCount
                 firstPoint += item.scene.points.count
             }
@@ -156,7 +161,7 @@ final class OrbEncoder {
     /// Encodes one scene whose instances start at `first` in `buffer` and whose polyline points start at byte `points`.
     /// Overlay batches are drawn after the texts.
     private func encode(_ scene: OrbScene, size: CGSize, scale: CGFloat, buffer: MTLBuffer?, first: Int, points: Int,
-                        into encoder: MTLRenderCommandEncoder) {
+                        characterOffsets: CharacterLayerEncoder.Offsets?, into encoder: MTLRenderCommandEncoder) {
         let stride = MemoryLayout<OrbInstance>.stride
         if let vehicle = scene.vehicle {
             heroEncoder?.encode(vehicle.list, origin: vehicle.origin, unit: vehicle.unit, viewport: size, scale: scale,
@@ -216,17 +221,26 @@ final class OrbEncoder {
                     encoder.setFragmentBytes(base, length: bytes.count, index: 4)
                 }
                 encoder.drawPrimitives(type: .triangle, vertexStart: 0, vertexCount: OrbLedShaderSource.vertexCount(mode: mode))
+            case .characterMesh, .characterDots, .characterSprites:
+                guard let characterEncoder, let characterOffsets else { return }
+                uniforms.viewport.w = 0
+                uniforms.transform.w = 0
+                withUnsafeBytes(of: &uniforms) { bytes in
+                    characterEncoder.draw(batch.pass, batch: batch, scene: scene, offsets: characterOffsets, uniforms: bytes,
+                                          into: encoder)
+                }
+                encoder.setFragmentTexture(gpu.palette, index: 0)
             }
         }
-        for batch in scene.batches where !batch.overlay { draw(batch) }
-        if !scene.texts.isEmpty {
+        func drawTexts(layer: Int) {
+            guard scene.texts.contains(where: { $0.layer == layer }) else { return }
             uniforms.viewport.w = 0
             uniforms.transform.w = 0
             encoder.setRenderPipelineState(gpu.text)
             encoder.setVertexBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
             encoder.setFragmentBytes(&uniforms, length: MemoryLayout<Uniforms>.stride, index: 1)
             encoder.setFragmentBytes(&liquid, length: MemoryLayout<OrbLiquidUniforms>.stride, index: 2)
-            for draw in scene.texts {
+            for draw in scene.texts where draw.layer == layer {
                 var instance = draw.instance
                 encoder.setVertexBytes(&instance, length: MemoryLayout<OrbTextInstance>.stride, index: 0)
                 encoder.setFragmentBytes(&instance, length: MemoryLayout<OrbTextInstance>.stride, index: 0)
@@ -235,7 +249,12 @@ final class OrbEncoder {
             }
             encoder.setFragmentTexture(gpu.palette, index: 0)
         }
-        for batch in scene.batches where batch.overlay { draw(batch) }
+        // Layer by layer: shapes, texts, overlay shapes. Every style but `character` uses layer 0 only.
+        for layer in 0...scene.maxLayer {
+            for batch in scene.batches where !batch.overlay && batch.layer == layer { draw(batch) }
+            drawTexts(layer: layer)
+            for batch in scene.batches where batch.overlay && batch.layer == layer { draw(batch) }
+        }
     }
 
     /// Renders the scene's silk (DESIGN 2.1) at half the backing resolution into `silkTexture`, so its four height samples

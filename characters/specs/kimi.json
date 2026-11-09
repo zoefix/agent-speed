@@ -1,0 +1,52 @@
+{
+ "id": "kimi",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Kimi 娘",
+  "zh-Hans": "Kimi 娘",
+  "en": "Kimi-chan",
+  "ja": "Kimiちゃん"
+ },
+ "vendors": [
+  "moonshot"
+ ],
+ "accent": "#8E8CFF",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/kimi"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.8,
+  "energy": 0.8,
+  "sway": 1.2,
+  "bounce": 0.4,
+  "gap": 1.3,
+  "idle": "rest",
+  "particles": "notes",
+  "signature": [
+   "sway",
+   "hum",
+   "tiptoe",
+   "curtsy"
+  ],
+  "hands": [
+   "ripple",
+   "flex"
+  ],
+  "poseHands": {
+   "cruise": "flute",
+   "boost": "flute"
+  },
+  "exclude": [
+   "run",
+   "hops",
+   "jump",
+   "jumpjoy"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "legsInSkirt": true
+ }
+}

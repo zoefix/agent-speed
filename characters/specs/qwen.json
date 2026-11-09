@@ -1,0 +1,52 @@
+{
+ "id": "qwen",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "Qwen 娘",
+  "zh-Hans": "Qwen 娘",
+  "en": "Qwen-chan",
+  "ja": "Qwenちゃん"
+ },
+ "vendors": [
+  "alibaba"
+ ],
+ "accent": "#615CED",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/qwen"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.9,
+  "energy": 0.9,
+  "sway": 1.2,
+  "bounce": 0.5,
+  "gap": 1.1,
+  "idle": "rest",
+  "particles": "blossoms",
+  "signature": [
+   "curtsy",
+   "spin",
+   "sway",
+   "bow",
+   "tiptoe"
+  ],
+  "hands": [
+   "fan",
+   "flex"
+  ],
+  "poseHands": {
+   "cruise": "fanflutter",
+   "boost": "fanflutter",
+   "overdrive": "fanflutter",
+   "redline": "fanflutter"
+  },
+  "exclude": [
+   "run"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "legsInSkirt": true
+ }
+}

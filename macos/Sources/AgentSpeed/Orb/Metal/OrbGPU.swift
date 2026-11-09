@@ -20,6 +20,8 @@ final class OrbGPU: Sendable {
     nonisolated(unsafe) let palette: MTLTexture
     /// The dashboard hero's vehicle layer (DESIGN 4c); nil if its shaders failed, which only hides the vehicle.
     let hero: HeroLayerGPU?
+    /// The `character` style's mesh, lights and sprites (DESIGN 2a.6); nil if its shaders failed.
+    let character: CharacterLayerGPU?
     static let pixelFormat = MTLPixelFormat.bgra8Unorm
 
     private init?() {
@@ -55,6 +57,7 @@ final class OrbGPU: Sendable {
         self.queue = queue
         self.palette = palette
         hero = HeroLayerGPU(device: device)
+        character = CharacterLayerGPU(device: device, pixelFormat: Self.pixelFormat)
     }
 
     func pipeline(for blend: OrbBlend) -> MTLRenderPipelineState {

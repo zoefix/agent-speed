@@ -66,6 +66,8 @@ final class AppModel {
     let report: ReportController
     /// The local network feed (DESIGN 14): off until the user turns on the server or adds a target.
     let lan: LanController
+    /// Character packs for the `character` orb style (CHARACTERS 2): installed ones, the catalog and downloads.
+    let characters: CharacterLibrary
     /// The menu bar intelligence block's thinking line, hidden after its rate has read 0 for 3 s (DESIGN 10).
     let barThinking = StatusItemThinkingHold()
 
@@ -119,6 +121,8 @@ final class AppModel {
         report = ReportController(settings: settings, store: store, traffic: traffic, priceBook: priceBook,
                                   appData: Self.appDataDirectory)
         lan = LanController(settings: settings, store: store)
+        characters = CharacterLibrary.standard()
+        characters.networkEnabled = { [weak settings] in settings?.networkEnabled ?? false }
         gauge.redline = settings.redline
     }
 
@@ -264,7 +268,11 @@ final class AppModel {
         })
         prices.start()
         rates.start()
+        if orbs.orbs.contains(where: { $0.style == .character }) { characters.refreshInBackground() }
     }
+
+    /// What the orb runtimes need to choose a character (CHARACTERS 7).
+    var characterInputs: OrbCharacterInputs { characters.inputs(prices: priceBook.current) }
 
     /// Starts the daily history analysis if it is not running yet.
     func startHistory() {

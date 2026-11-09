@@ -1,0 +1,54 @@
+{
+ "id": "jev",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "JEV 娘",
+  "zh-Hans": "JEV 娘",
+  "en": "JEV-chan",
+  "ja": "JEVちゃん"
+ },
+ "vendors": [],
+ "accent": "#E0408A",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/jev"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.75,
+  "energy": 0.7,
+  "sway": 0.6,
+  "bounce": 0.2,
+  "gap": 1.6,
+  "idle": "rest",
+  "talk": false,
+  "particles": "feathers",
+  "signature": [
+   "nod",
+   "lookaround",
+   "bow",
+   "tilt"
+  ],
+  "hands": [
+   "ripple"
+  ],
+  "exclude": [
+   "giggle",
+   "hops",
+   "run",
+   "jump",
+   "jumpjoy",
+   "hop",
+   "tiptoe",
+   "peek",
+   "sway",
+   "doubletake",
+   "spin"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "rigidLower": true,
+  "bodyInArms": true
+ }
+}

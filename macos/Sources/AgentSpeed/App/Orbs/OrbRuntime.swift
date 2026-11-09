@@ -15,6 +15,12 @@ final class OrbRuntime {
     private var trackerArmed = false
     private var drawOnTimer: Timer?
     private var lineQuiet = OrbLineQuietRule()
+    private var characterSelection = CharacterSelection()
+    /// The `character` style's own readings, independent of the two-line readout (DESIGN 2a.6, Readouts).
+    private var characterNetwork = OrbLineQuietRule()
+    private var characterPerformance = OrbLineQuietRule()
+    private var characterCost = OrbCostQuietRule()
+    private var characterBits = false
 
     init(config: OrbConfig) {
         id = config.id
@@ -35,16 +41,28 @@ final class OrbRuntime {
     func update(config: OrbConfig) {
         let sourcesChanged = config.sources != self.config.sources || config.hosts != self.config.hosts
         let readoutChanged = config.traffic != self.config.traffic
+        let styleChanged = config.style != self.config.style
+        let previousReadouts = self.config.characterReadouts
         self.config = config
         if sourcesChanged { trackerArmed = false }
         if readoutChanged {
             lineQuiet = OrbLineQuietRule()
             publishLines(nil)
         }
+        if readoutChanged || sourcesChanged || styleChanged {
+            characterNetwork = OrbLineQuietRule()
+            characterPerformance = OrbLineQuietRule()
+            characterCost = OrbCostQuietRule()
+        }
+        if readoutChanged || sourcesChanged || styleChanged || config.characterReadouts != previousReadouts {
+            publishCharacterReadings(at: Clock.now)
+        }
     }
 
     /// Feeds one snapshot (every engine tick). While the effects preview runs, every orb shows the demo.
-    func ingest(_ snapshot: SpeedSnapshot, settings: AppSettings, cost: CostDisplay?, isPreviewing: Bool, now: TimeInterval) {
+    func ingest(_ snapshot: SpeedSnapshot, settings: AppSettings, cost: CostDisplay?, isPreviewing: Bool, now: TimeInterval,
+                characters: OrbCharacterInputs? = nil) {
+        defer { if let characters { updateCharacter(characters, now: now) } }
         let metric = settings.metric
         let set = isPreviewing ? nil : sourceSet
         let reading = OrbSubset.reading(snapshot, sources: set, hosts: isPreviewing ? nil : hostSet)
@@ -71,12 +89,21 @@ final class OrbRuntime {
                             thinking: reading.intelligence.thinking, generating: !reading.generatingSources.isEmpty, at: now)
             publishLines(.intelligence)
         }
+        if config.style == .character {
+            let generating = !reading.generatingSources.isEmpty
+            characterPerformance.apply(score: PerfSetReading(score: reading.intelligence.score, agents: reading.agents),
+                                       thinking: reading.intelligence.thinking, generating: generating, at: now)
+            characterCost.apply(cost.map { money($0, snapshot, reading: reading, isPreviewing: isPreviewing) },
+                                generating: generating, at: now)
+            publishCharacterReadings(at: now)
+        }
     }
 
     /// The network readout (DESIGN 10): its sources' rates with tools per the setting (`sources`), this computer
     /// (`machine`) or nothing; not drawn while measuring is off or, for sources, while per-process traffic is unavailable.
     /// Called once per traffic sample; the quiet rule keeps a quiet orb free of frames.
     func ingestTraffic(_ snapshot: TrafficSnapshot, settings: AppSettings, now: TimeInterval) {
+        if config.style == .character { ingestCharacterTraffic(snapshot, settings: settings, now: now) }
         let mode = config.traffic
         guard mode != .intelligence else { return }
         let enabled = settings.trafficEnabled && snapshot.enabled && mode.isNetwork
@@ -91,6 +118,51 @@ final class OrbRuntime {
         publishLines(enabled ? .traffic(bits: bits) : nil)
     }
 
+    /// The network card of a `character` orb: the whole computer when its readout is set to `machine`, else its
+    /// agents' traffic (DESIGN 2a.6, Readouts).
+    private func ingestCharacterTraffic(_ snapshot: TrafficSnapshot, settings: AppSettings, now: TimeInterval) {
+        let machine = config.traffic == .machine
+        let enabled = settings.trafficEnabled && snapshot.enabled
+            && (machine || snapshot.processState.unavailableReason == nil)
+        let rate: TrafficRate? = switch machine {
+        case _ where !enabled: nil
+        case true: snapshot.machineLive ?? .zero
+        case false: snapshot.live(of: sourceSet, includeTools: settings.trafficIncludeTools) ?? .zero
+        }
+        characterBits = settings.trafficUnit == .bits
+        characterNetwork.apply(rate, bits: characterBits, at: now)
+        publishCharacterReadings(at: now)
+    }
+
+    private func publishCharacterReadings(at now: TimeInterval) {
+        guard config.style == .character else {
+            if feed.characterReadings != nil { feed.characterReadings = nil }
+            return
+        }
+        let network = characterNetwork.reading
+        let performance = characterPerformance.reading
+        let next = OrbCharacterReadings(
+            readouts: config.characterReadouts, network: network, bits: characterBits, performance: performance, cost: characterCost.money,
+            networkLoud: network.map { now < $0.quietAt } ?? false,
+            performanceLoud: performance.map { now < $0.quietAt } ?? false,
+            costLoud: characterCost.isLoud(at: now)
+        )
+        if feed.characterReadings != next { feed.characterReadings = next }
+    }
+
+    /// The vendor reading and the character of a `character` orb (CHARACTERS 7); other styles keep neither.
+    private func updateCharacter(_ inputs: OrbCharacterInputs, now: TimeInterval) {
+        guard config.style == .character else {
+            if feed.vendors != VendorReading() { feed.vendors = VendorReading() }
+            if feed.characterID != nil { feed.characterID = nil }
+            return
+        }
+        let vendors = VendorReading(agents: reading.agents, prices: inputs.prices)
+        if feed.vendors != vendors { feed.vendors = vendors }
+        let id = characterSelection.update(locked: config.character, vendorRates: vendors.rates, installed: inputs.installed, at: now)
+        if feed.characterID != id { feed.characterID = id }
+    }
+
     /// The intelligence readout (DESIGN 10) follows every engine tick in `ingest`; it needs no traffic measuring.
     private func publishLines(_ format: OrbLineFormat?) {
         let lines = format.map { OrbLines(format: $0, reading: lineQuiet.reading) }
@@ -100,19 +172,25 @@ final class OrbRuntime {
     /// The money readout of a cost orb (METRICS 6.8 Cost, DESIGN 9 Orb): its billable sources' live cost rate.
     /// The effects preview has no prices, so it shows the demo's output at a nominal $15 per million tokens.
     private func updateMoney(_ snapshot: SpeedSnapshot, reading: SubsetReading, cost: CostDisplay?, isPreviewing: Bool) {
-        if feed.unit != config.unit { feed.unit = config.unit }
-        guard config.unit == .cost, let cost else {
+        let unit: OrbUnit = config.style == .character ? .tokens : config.unit
+        if feed.unit != unit { feed.unit = unit }
+        // The character style shows the cost on its own card, so its speed stays in tok/s (DESIGN 2a.6).
+        guard config.unit == .cost, config.style != .character, let cost else {
             if feed.money != nil { feed.money = nil }
             return
         }
+        let money = money(cost, snapshot, reading: reading, isPreviewing: isPreviewing)
+        if feed.money != money { feed.money = money }
+    }
+
+    private func money(_ cost: CostDisplay, _ snapshot: SpeedSnapshot, reading: SubsetReading, isPreviewing: Bool) -> LiveMoney {
         var costReading = OrbSubset.cost(snapshot, sources: isPreviewing ? nil : sourceSet,
                                          hosts: isPreviewing ? nil : hostSet, billable: cost.billable)
         if isPreviewing {
             costReading = CostReading(microUsdPerSecond: reading.live.output * Self.previewMicroUsdPerToken,
                                       liveOutput: reading.live.output)
         }
-        let money = cost.live(costReading, agentCount: reading.agents.count)
-        if feed.money != money { feed.money = money }
+        return cost.live(costReading, agentCount: reading.agents.count)
     }
 
     static let previewMicroUsdPerToken = 15.0

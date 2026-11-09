@@ -1,0 +1,44 @@
+{
+ "id": "rwkv",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "RWKV 娘",
+  "zh-Hans": "RWKV 娘",
+  "en": "RWKV-chan",
+  "ja": "RWKVちゃん"
+ },
+ "vendors": [
+  "rwkv"
+ ],
+ "accent": "#7B4DFF",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/rwkv"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.9,
+  "energy": 1.0,
+  "sway": 1.0,
+  "bounce": 0.5,
+  "gap": 1.1,
+  "idle": "rest",
+  "particles": "feathers",
+  "signature": [
+   "wingflap",
+   "hum",
+   "sway",
+   "spin",
+   "bow"
+  ],
+  "hands": [
+   "flex",
+   "fan"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "rigidLower": true,
+  "bodyInArms": true
+ }
+}

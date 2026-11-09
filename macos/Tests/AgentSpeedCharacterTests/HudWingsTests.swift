@@ -1,0 +1,238 @@
+import Foundation
+import Testing
+@testable import AgentSpeedCharacter
+
+/// A frame like a 148 pt orb's (D = 296, window 444): her outline a slim body from y 80 to 400 around x 222, with an
+/// optional arm held out to one side at chest height.
+private func frame(armOut: Double = 0, armSide: Double = 1) -> HudFrame {
+    var s = HudSilhouette(top: 0, bottom: 444, step: 4)
+    for y in stride(from: 80.0, through: 400, by: 2) {
+        s.add(190, y)
+        s.add(254, y)
+    }
+    if armOut > 0 {
+        for y in stride(from: 150.0, through: 190, by: 2) { s.add(222 + armSide * armOut, y) }
+    }
+    return HudFrame(bounds: (0, 0, 444, 444), silhouette: s, footprint: 296, centerX: 222, headTop: 80, chest: 170,
+                    shoulders: 140)
+}
+
+/// Her outline with wide hair at her left from her head to her knees: no room for the column there.
+private func wideHairFrame() -> HudFrame {
+    var f = frame()
+    for y in stride(from: 80.0, through: 300, by: 2) { f.silhouette.add(60, y) }
+    return f
+}
+
+private let sizes: [(w: Double, h: Double)] = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16)]
+
+private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: HudFrame) -> Bool {
+    guard let e = f.silhouette.extent(p.y - size.h / 2, p.y + size.h / 2) else { return false }
+    return p.x + size.w / 2 > e.left && p.x - size.w / 2 < e.right
+}
+
+@Suite struct HudWingsTests {
+    @Test func cardsSitBesideHerNeverOverHer() {
+        let f = frame()
+        var wings = HudWings()
+        wings.still = true
+        wings.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: 6))
+        for card in [HudCard.speed] + HudCard.column {
+            let p = wings.places[card.rawValue]
+            #expect(!overlaps(p, sizes[card.rawValue], f), "\(card)")
+            #expect(p.x - sizes[card.rawValue].w / 2 >= 0 && p.x + sizes[card.rawValue].w / 2 <= 444)
+        }
+        #expect(wings.places[HudCard.speed.rawValue].x > 254)
+        for card in HudCard.column { #expect(wings.places[card.rawValue].x < 190) }
+        let model = wings.places[HudCard.model.rawValue]
+        #expect(abs(model.x - 222) < 1e-9 && model.y + sizes[1].h / 2 < 80)
+        let ys = HudCard.column.map { wings.places[$0.rawValue].y }
+        #expect(ys == ys.sorted())
+    }
+
+    @Test func theSpeedMovesOffAnArmHeldOutToItsSide() {
+        let f = frame(armOut: 150)
+        var wings = HudWings()
+        wings.still = true
+        for n in 0..<240 { wings.update(1 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: 6)) }
+        let p = wings.places[HudCard.speed.rawValue]
+        #expect(!overlaps(p, sizes[0], f))
+    }
+
+    @Test func aHiddenCardFadesAndTheColumnClosesUp() {
+        let f = frame()
+        var wings = HudWings()
+        wings.still = true
+        var shown = [Bool](repeating: true, count: 6)
+        wings.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: shown)
+        let before = wings.places[HudCard.cost.rawValue].y
+        shown[HudCard.network.rawValue] = false
+        for n in 1...180 { wings.update(1 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: shown) }
+        #expect(wings.places[HudCard.network.rawValue].alpha == 0)
+        #expect(wings.places[HudCard.cost.rawValue].y < before - 25)
+    }
+
+    @Test func cardsFloatUnlessStill() {
+        let f = frame()
+        var moving = HudWings()
+        var still = HudWings()
+        still.still = true
+        var spread = 0.0, tilt = 0.0
+        var first: Double?
+        for n in 0..<600 {
+            let t = Double(n) / 60
+            moving.update(1 / 60, time: t, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: 6))
+            still.update(1 / 60, time: t, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: 6))
+            let p = moving.places[HudCard.network.rawValue]
+            if first == nil { first = p.y }
+            spread = max(spread, abs(p.y - first!))
+            tilt = max(tilt, abs(p.spin))
+            #expect(still.places[HudCard.network.rawValue].spin == 0)
+        }
+        #expect(spread > 4 && spread < 15)
+        #expect(tilt > 0.02 && tilt < 0.06)
+    }
+
+    @Test func theColumnContinuesAtHerRightWhenHerLeftIsFull() {
+        let f = wideHairFrame()
+        var wings = HudWings()
+        let shown = [Bool](repeating: true, count: 6)
+        for n in 0..<240 { wings.update(1 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: shown) }
+        #expect(wings.split < HudCard.column.count)
+        let speed = wings.places[HudCard.speed.rawValue]
+        for card in HudCard.column {
+            let p = wings.places[card.rawValue]
+            #expect(p.alpha > 0.9, "\(card)")
+            let w = sizes[card.rawValue].w, h = sizes[card.rawValue].h
+            guard let e = f.silhouette.extent(p.y - h / 2 + 3, p.y + h / 2 - 3) else { continue }
+            #expect(p.x + w / 2 < e.left + 6 || p.x - w / 2 > e.right - 6, "\(card) overlaps her")
+            #expect(p.x - w / 2 >= 0 && p.x + w / 2 <= 444)
+        }
+        let moved = HudCard.column.filter { wings.places[$0.rawValue].x > 222 }
+        #expect(!moved.isEmpty && moved.allSatisfy { wings.places[$0.rawValue].y > speed.y })
+    }
+
+    @Test func cardsComeBackOnlyAfterHerLeftStaysClear() {
+        var wings = HudWings()
+        wings.still = false
+        let shown = [Bool](repeating: true, count: 6)
+        var t = 0.0
+        for _ in 0..<120 {
+            wings.update(1 / 60, time: t, frame: wideHairFrame(), sizes: sizes, shown: shown)
+            t += 1 / 60
+        }
+        let spilled = wings.split
+        #expect(spilled < HudCard.column.count)
+        // A moment of room changes nothing; staying clear brings the cards back.
+        for _ in 0..<30 {
+            wings.update(1 / 60, time: t, frame: frame(), sizes: sizes, shown: shown)
+            t += 1 / 60
+        }
+        #expect(wings.split == spilled)
+        for _ in 0..<600 {
+            wings.update(1 / 60, time: t, frame: frame(), sizes: sizes, shown: shown)
+            t += 1 / 60
+        }
+        #expect(wings.split == HudCard.column.count)
+        for card in HudCard.column { #expect(wings.places[card.rawValue].x < 190) }
+    }
+
+    @Test func aPassingGestureMovesNoCard() {
+        var wings = HudWings()
+        let shown = [Bool](repeating: true, count: 6)
+        var t = 0.0
+        for n in 0..<300 {
+            // The wide hair for 0.2 s (12 frames) of every 2 s.
+            let f = n % 120 >= 60 && n % 120 < 72 ? wideHairFrame() : frame()
+            wings.update(1 / 60, time: t, frame: f, sizes: sizes, shown: shown)
+            t += 1 / 60
+            #expect(wings.split == HudCard.column.count)
+        }
+    }
+
+    @Test func floatsDifferPerCard() {
+        let a = HudWings.float(.performance, time: 3)
+        let b = HudWings.float(.network, time: 3)
+        #expect(a.dx != b.dx && a.dy != b.dy)
+    }
+}
+
+@Suite struct HudTraceTests {
+    @Test func traceMarksEveryBandOfHerDrawnParts() throws {
+        // The fixture rig: a 10 px square (y 20–30) over a 20 px face (y 40–60), feet at y 90, drawn at 2 pt per px.
+        let rig = try TinyPack.rigJSON()
+        var performer = CharacterPerformer(pack: try CharacterPack.load(from: TinyPack.make(bands: ["idle": rig])))
+        performer.step(1.0 / 60, level: 0)
+        var silhouette = HudSilhouette(top: 0, bottom: 800, step: 4)
+        var scratch: [Double] = []
+        let anchors = performer.trace(into: &silhouette, feetOnScreen: (300, 600), pointsPerPixel: 2, scratch: &scratch)
+        func marked(_ y0: Double, _ y1: Double) -> Bool {
+            stride(from: y0, to: y1, by: 4).allSatisfy { silhouette.extent($0, $0 + 1) != nil }
+        }
+        #expect(marked(464, 476) && marked(504, 536))
+        #expect(silhouette.extent(486, 494) == nil)
+        // Every vertex, skinned as the GPU skins it, lies inside its band.
+        let active = performer.activeRig
+        let k = 2 * performer.activePlacement.scale
+        var skinned: [Double] = []
+        for part in active.parts.indices {
+            active.skin(part: part, world: performer.world, into: &skinned)
+            for v in stride(from: 0, to: skinned.count, by: 2) {
+                let x = 300 + (skinned[v] - performer.activePlacement.feet.x) * k
+                let y = 600 + (skinned[v + 1] - performer.activePlacement.feet.y) * k
+                let e = try #require(silhouette.extent(y, y))
+                #expect(e.left <= x + 1e-9 && x <= e.right + 1e-9)
+            }
+        }
+        #expect(abs(anchors.headTop - 500) < 6)
+        #expect(anchors.shoulders < anchors.chest && anchors.chest < 600)
+        let warm = scratch.count
+        _ = performer.trace(into: &silhouette, feetOnScreen: (300, 600), pointsPerPixel: 2, scratch: &scratch)
+        #expect(scratch.count == warm)
+    }
+}
+
+/// `AGENT_SPEED_CHARACTER_PACKS` (a folder of unpacked packs): every pack dances through the bands for 60 s at a 148 pt
+/// orb while the cards follow her outline; prints how often cards changed sides and checks none ever covers her.
+@Suite struct HudWingsPackTests {
+    @Test(.enabled(if: ProcessInfo.processInfo.environment["AGENT_SPEED_CHARACTER_PACKS"] != nil))
+    func cardsStayBesideEveryCharacter() throws {
+        let root = URL(fileURLWithPath: ProcessInfo.processInfo.environment["AGENT_SPEED_CHARACTER_PACKS"]!)
+        let ids = try FileManager.default.contentsOfDirectory(atPath: root.path).filter {
+            FileManager.default.fileExists(atPath: root.appendingPathComponent("\($0)/manifest.json").path)
+        }.sorted().filter { id in
+            ProcessInfo.processInfo.environment["AGENT_SPEED_CHARACTER_IDS"].map { $0.split(separator: ",").contains(Substring(id)) } ?? true
+        }
+        let d = 296.0, side = 444.0
+        let sizes: [(w: Double, h: Double)] = [(84, 62), (90, 18), (80, 28), (64, 27), (96, 18), (62, 27)]
+        let levels = [2, 5, 8, 11, 13, 9, 4, 1]
+        for id in ids {
+            var performer = CharacterPerformer(pack: try CharacterPack.load(from: root.appendingPathComponent(id)), seed: 11)
+            var wings = HudWings()
+            var silhouette = HudSilhouette(top: 0, bottom: side, step: 2)
+            var scratch: [Double] = []
+            let ppp = 0.86 * d / performer.idleHeight
+            var changes = 0, last = -1, covered = 0
+            for n in 0..<3600 {
+                performer.step(1.0 / 60, level: levels[min(levels.count - 1, n / 450)])
+                let anchors = performer.trace(into: &silhouette, feetOnScreen: (222, 222 + 0.45 * d), pointsPerPixel: ppp,
+                                              scratch: &scratch)
+                let f = HudFrame(bounds: (0, 0, side, side), silhouette: silhouette, footprint: d, anchors: anchors)
+                wings.update(1.0 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: 6))
+                if wings.split != last {
+                    changes += last < 0 ? 0 : 1
+                    if last >= 0 { print("hud \(id): split \(last) → \(wings.split) at \(String(format: "%.1f", Double(n) / 60)) s") }
+                    last = wings.split
+                }
+                for card in HudCard.column + [.speed] {
+                    let p = wings.places[card.rawValue]
+                    let w = wings.sizes[card.rawValue].w, h = wings.sizes[card.rawValue].h
+                    guard p.alpha > 0.5, let e = silhouette.extent(p.y - h / 2 + 4, p.y + h / 2 - 4) else { continue }
+                    let enters = p.x < anchors.centerX ? p.x + w / 2 - e.left : e.right - (p.x - w / 2)
+                    if enters > 6 { covered += 1 }
+                }
+            }
+            print("hud \(id): \(changes) side changes in 60 s, \(covered) covered card-frames, split \(wings.split)")
+        }
+    }
+}

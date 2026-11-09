@@ -21,6 +21,7 @@ enum OrbMenus {
         menu.addItem(header)
         menu.addItem(.separator())
         menu.addItem(styleItem(model: model, orb: orb))
+        if orb.style == .character { menu.addItem(characterItem(model: model, orb: orb)) }
         menu.addItem(sourcesItem(model: model, orb: orb))
         let hosts = model.hostChoices
         if OrbHostChoice.pickerShown(hosts) {
@@ -28,8 +29,7 @@ enum OrbMenus {
                                         setAll: { [weak model] in model?.orbs.setHosts(.all, of: id) },
                                         toggle: { [weak model] host in model?.orbs.toggleHost(host, of: id) }))
         }
-        menu.addItem(unitItem(model: model, orb: orb))
-        menu.addItem(trafficItem(model: model, orb: orb))
+        addReadoutItems(to: menu, model: model, orb: orb)
         menu.addItem(showNameItem(model: model, orb: orb))
         menu.addItem(sizeItem(model: model, orb: orb))
         menu.addItem(MenuFactory.effectsItem(model: model))
@@ -95,6 +95,30 @@ enum OrbMenus {
         return item
     }
 
+    /// `characters.title` ▸ Auto, every installed character, then "Download more…" opening the orb's Settings
+    /// (DESIGN 2b, Context menu; CHARACTERS 7).
+    private static func characterItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
+        let l10n = model.l10n
+        let item = NSMenuItem(title: l10n("characters.title"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        submenu.addItem(ActionMenuItem(l10n("characters.auto"), state: orb.character == nil ? .on : .off) { [weak model] in
+            model?.orbs.setCharacter(nil, of: orb.id)
+        })
+        let installed = model.characters.installed
+        if !installed.isEmpty { submenu.addItem(.separator()) }
+        for pack in installed {
+            let name = OrbCharacterSection.name(pack.manifest.name, l10n.language)
+            submenu.addItem(ActionMenuItem(name, state: orb.character == pack.id ? .on : .off) { [weak model] in
+                model?.orbs.setCharacter(pack.id, of: orb.id)
+            })
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(ActionMenuItem(l10n("characters.more")) { [weak model] in model?.commands?.showOrbSettings(orb.id) })
+        item.submenu = submenu
+        return item
+    }
+
     /// `orbs.sources.all`, then every source with its colour dot and a check when tracked; unavailable sources show
     /// their status and stay selectable; the last tracked source cannot be unchecked (DESIGN 2b).
     private static func sourcesItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
@@ -120,6 +144,53 @@ enum OrbMenus {
             if tracked, orb.sources.toggling(source) == nil {
                 entry.isEnabled = false
                 entry.toolTip = l10n("orbs.sources.lastOne")
+            }
+            submenu.addItem(entry)
+        }
+        item.submenu = submenu
+        return item
+    }
+
+    /// The unit and the traffic readout; a `character` orb shows everything at once, so it has its cards instead.
+    private static func addReadoutItems(to menu: NSMenu, model: AppModel, orb: OrbConfig) {
+        if orb.style == .character {
+            menu.addItem(characterReadoutsItem(model: model, orb: orb))
+        } else {
+            menu.addItem(unitItem(model: model, orb: orb))
+            menu.addItem(trafficItem(model: model, orb: orb))
+        }
+    }
+
+    /// `character.readouts` ▸ a check per card, then the network card's scope: this orb's agents or the whole computer
+    /// (DESIGN 2a.6, Readouts). Each switch saves at once; the network items are disabled while traffic is not measured.
+    static func characterReadoutsItem(model: AppModel, orb: OrbConfig) -> NSMenuItem {
+        let l10n = model.l10n
+        let item = NSMenuItem(title: l10n("character.readouts"), action: nil, keyEquivalent: "")
+        let submenu = NSMenu()
+        submenu.autoenablesItems = false
+        let measured = model.settings.trafficEnabled
+        for readout in CharacterReadout.allCases {
+            let on = orb.characterReadouts[readout]
+            let entry = ActionMenuItem(l10n(readout.titleKey), state: on ? .on : .off) { [weak model] in
+                model?.orbs.setCharacterReadout(readout, !on, of: orb.id)
+            }
+            if readout == .network, !measured {
+                entry.isEnabled = false
+                entry.toolTip = l10n("settings.traffic.enabled")
+            }
+            submenu.addItem(entry)
+        }
+        submenu.addItem(.separator())
+        submenu.addItem(NSMenuItem.sectionHeader(title: l10n("character.readouts.networkScope")))
+        let machine = orb.traffic == .machine
+        let unavailable = processTrafficUnavailable(model) ? l10n("traffic.unavailable.short") : nil
+        for scope in [OrbTraffic.sources, .machine] {
+            let entry = ActionMenuItem(l10n(scope.titleKey), state: (scope == .machine) == machine ? .on : .off) { [weak model] in
+                model?.orbs.setTraffic(scope, of: orb.id)
+            }
+            entry.isEnabled = measured && orb.characterReadouts.network
+            if let unavailable, scope == .sources {
+                entry.attributedTitle = statusTitle(l10n(scope.titleKey), status: unavailable)
             }
             submenu.addItem(entry)
         }
@@ -248,8 +319,7 @@ enum OrbMenus {
         let orbs = model.orbs
         guard orbs.orbs.count > 1 else {
             guard let orb = orbs.orbs.first else { return }
-            menu.addItem(unitItem(model: model, orb: orb))
-            menu.addItem(trafficItem(model: model, orb: orb))
+            addReadoutItems(to: menu, model: model, orb: orb)
             menu.addItem(showNameItem(model: model, orb: orb))
             menu.addItem(sizeItem(model: model, orb: orb))
             menu.addItem(ActionMenuItem(l10n("menu.alwaysOnTop"), state: orb.alwaysOnTop ? .on : .off) { [weak orbs] in
@@ -276,8 +346,7 @@ enum OrbMenus {
             actions.addItem(ActionMenuItem(l10n("menu.clickThrough"), state: orb.clickThrough ? .on : .off) { [weak orbs] in
                 orbs?.setClickThrough(!orb.clickThrough, of: orb.id)
             })
-            actions.addItem(unitItem(model: model, orb: orb))
-            actions.addItem(trafficItem(model: model, orb: orb))
+            addReadoutItems(to: actions, model: model, orb: orb)
             actions.addItem(showNameItem(model: model, orb: orb))
             actions.addItem(.separator())
             actions.addItem(ActionMenuItem(l10n("menu.orb.settings")) { [weak model] in model?.commands?.showOrbSettings(orb.id) })

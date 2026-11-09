@@ -1,0 +1,49 @@
+{
+ "id": "gpt",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "GPT 娘",
+  "zh-Hans": "GPT 娘",
+  "en": "GPT-chan",
+  "ja": "GPTちゃん"
+ },
+ "vendors": [
+  "openai"
+ ],
+ "accent": "#10A37F",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/gpt"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.9,
+  "energy": 0.95,
+  "sway": 1.0,
+  "bounce": 0.5,
+  "gap": 1.1,
+  "idle": "rest",
+  "particles": "sparkles",
+  "signature": [
+   "curtsy",
+   "spin",
+   "wingflap",
+   "bow",
+   "tiptoe"
+  ],
+  "hands": [
+   "flex",
+   "fan"
+  ],
+  "exclude": [
+   "run",
+   "hops"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "tail": true,
+  "wings": true,
+  "legsInSkirt": true
+ }
+}

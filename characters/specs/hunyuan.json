@@ -1,0 +1,46 @@
+{
+ "id": "hunyuan",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "混元娘",
+  "zh-Hans": "混元娘",
+  "en": "Hunyuan-chan",
+  "ja": "混元ちゃん"
+ },
+ "vendors": [
+  "tencent"
+ ],
+ "accent": "#0052D9",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/hunyuan"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.95,
+  "energy": 0.95,
+  "sway": 0.9,
+  "bounce": 0.7,
+  "gap": 1.0,
+  "idle": "rest",
+  "particles": "snow",
+  "signature": [
+   "nod",
+   "tilt",
+   "foottap",
+   "curtsy"
+  ],
+  "hands": [
+   "count",
+   "flex"
+  ],
+  "poseHands": {
+   "cruise": "abacus",
+   "redline": "grip"
+  }
+ },
+ "rig": {
+  "recover": true,
+  "legsInSkirt": true
+ }
+}

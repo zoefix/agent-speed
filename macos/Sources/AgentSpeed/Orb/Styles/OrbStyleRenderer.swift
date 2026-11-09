@@ -30,6 +30,8 @@ struct OrbContent {
     var isThumbnail = false
     /// The two-line readout while it is on for this orb (DESIGN 10).
     var lines: OrbLines?
+    /// The `character` style's character and readouts (CHARACTERS 7, 8); nil for other styles.
+    var character: OrbCharacterContent?
 
     /// Below 64 pt only the value is drawn (DESIGN 2a, Shared foundation).
     var valueOnly: Bool { diameter < 64 }
@@ -98,6 +100,10 @@ struct OrbFrame {
     var readoutShift: CGFloat = 0
     /// The aura's flare after a response pulse (0...1), for styles that draw their own aura.
     var auraFlare: Double = 0
+    /// The speed title's step, 0 (idle) ... 13 (rocket): the `character` director's level (CHARACTERS 5).
+    var speedLevel = 0
+    /// The value the readout shows (tok/s), for styles that roll their own digits.
+    var readoutValue = 0.0
 
     var tokens: OrbTokens { content.tokens }
     var dark: Bool { content.tokens.isDark }
@@ -267,6 +273,7 @@ enum OrbStyles {
         case .liquid: LiquidStyle()
         case .reactor: ReactorStyle()
         case .minimal: MinimalStyle()
+        case .character: CharacterStyle()
         }
     }
 }

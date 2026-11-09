@@ -1,0 +1,46 @@
+{
+ "id": "wenxin",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "文心娘",
+  "zh-Hans": "文心娘",
+  "en": "Wenxin-chan",
+  "ja": "文心ちゃん"
+ },
+ "vendors": [
+  "baidu"
+ ],
+ "accent": "#2932E1",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/wenxin"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 0.8,
+  "energy": 0.75,
+  "sway": 0.6,
+  "bounce": 0.0,
+  "gap": 1.3,
+  "idle": "read",
+  "seated": true,
+  "particles": "pages",
+  "signature": [
+   "nod",
+   "tilt",
+   "lookaround",
+   "hum"
+  ],
+  "hands": [
+   "ripple",
+   "flex"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "staticObjects": true,
+  "props": {
+   "overdrive": {"points": [[0.418, 0.3672], [0.4258, 0.4492], [0.5391, 0.3555], [0.582, 0.4375]], "follow": "chest"}
+  }
+ }
+}

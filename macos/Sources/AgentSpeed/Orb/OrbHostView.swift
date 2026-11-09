@@ -1,3 +1,4 @@
+import AgentSpeedOrbModel
 import AppKit
 import SwiftUI
 
@@ -86,8 +87,13 @@ final class OrbHostView: NSView {
     private func updateHighlightPath() {
         let radius = discDiameter * hoverScale / 2 + 4 + 1
         highlightLayer.frame = bounds
-        highlightLayer.path = CGPath(ellipseIn: CGRect(x: bounds.midX - radius, y: bounds.midY - radius, width: 2 * radius, height: 2 * radius),
-                                     transform: nil)
+        if hitShape == .disc {
+            highlightLayer.path = CGPath(ellipseIn: CGRect(x: bounds.midX - radius, y: bounds.midY - radius, width: 2 * radius,
+                                                           height: 2 * radius), transform: nil)
+        } else {
+            let box = discRect(scale: hoverScale).insetBy(dx: -5, dy: -5)
+            highlightLayer.path = CGPath(roundedRect: box, cornerWidth: box.width / 2, cornerHeight: box.width / 2, transform: nil)
+        }
         if highlightLayer.superlayer != nil, layer?.sublayers?.last !== highlightLayer {
             highlightLayer.removeFromSuperlayer()
             layer?.addSublayer(highlightLayer)
@@ -214,14 +220,34 @@ final class OrbHostView: NSView {
 
     // MARK: Geometry
 
+    /// The clickable part of the disc: the whole disc, or the character's body (DESIGN 2a.6).
+    private(set) var hitShape = OrbHitShape.disc
+
+    /// The character style has no glass body or blur; the window is otherwise transparent.
+    func setHitShape(_ shape: OrbHitShape) {
+        guard shape != hitShape else { return }
+        hitShape = shape
+        blurView.isHidden = shape != .disc || blurHidden
+        bodyView.isHidden = shape != .disc
+        updateBlurFrame()
+        if isHighlighted { updateHighlightPath() }
+    }
+
+    /// Reduce Transparency hides the blur; the character style hides it regardless.
+    var blurHidden = false {
+        didSet { blurView.isHidden = hitShape != .disc || blurHidden }
+    }
+
     private func discRect(scale: CGFloat) -> NSRect {
         let side = discDiameter * scale
-        return NSRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        let disc = NSRect(x: bounds.midX - side / 2, y: bounds.midY - side / 2, width: side, height: side)
+        guard hitShape != .disc else { return disc }
+        return hitShape.bounds(diameter: side).offsetBy(dx: bounds.midX, dy: bounds.midY)
     }
 
     private func discContains(_ point: NSPoint) -> Bool {
-        let radius = discDiameter * hoverScale / 2 + Self.hitTolerance
-        return hypot(point.x - bounds.midX, point.y - bounds.midY) <= radius
+        hitShape.contains(dx: point.x - bounds.midX, dy: point.y - bounds.midY, diameter: discDiameter * hoverScale,
+                          tolerance: Self.hitTolerance)
     }
 
     private func updateBlurFrame() {

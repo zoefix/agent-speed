@@ -1,7 +1,8 @@
 import AppKit
 
 /// Event-driven pointer tracking for the orb: global monitors see the pointer while the panel ignores the mouse
-/// (events go to other apps), local monitors while it is over our own windows. No timers, no polling.
+/// (events go to other apps), local monitors while it is over our own windows. No timers, no polling. Presses count
+/// too: a press another app received on the disc means a move went unseen, and fixes the routing for the next one.
 @MainActor
 final class OrbWindowPointerTracker {
     /// Pointer location in screen coordinates, and whether the event was a plain move (no button held).
@@ -12,6 +13,7 @@ final class OrbWindowPointerTracker {
 
     private static let events: NSEvent.EventTypeMask = [
         .mouseMoved, .leftMouseDragged, .rightMouseDragged, .otherMouseDragged, .leftMouseUp, .rightMouseUp,
+        .leftMouseDown, .rightMouseDown, .otherMouseDown,
     ]
 
     nonisolated(unsafe) private var monitors: [Any] = []
@@ -46,8 +48,11 @@ final class OrbWindowPointerTracker {
     private func handle(_ event: NSEvent, foreign: Bool) {
         switch event.type {
         case .leftMouseDragged, .rightMouseDragged, .otherMouseDragged: isForeignDragActive = foreign
-        case .mouseMoved: isForeignDragActive = false
+        case .mouseMoved, .leftMouseDown, .rightMouseDown, .otherMouseDown: isForeignDragActive = false
         default: isForeignDragActive = foreign && NSEvent.pressedMouseButtons != 0
+        }
+        if foreign, event.type == .rightMouseDown || event.type == .leftMouseDown {
+            OrbWindowLog.debug("press in another app at \(OrbWindowLog.describe(NSEvent.mouseLocation))")
         }
         onMove?(NSEvent.mouseLocation, event.type == .mouseMoved)
     }

@@ -81,7 +81,7 @@ enum OrbSharedLayers {
     /// The colour rim of an orb tracking a subset: equal arcs clockwise from 12 o'clock with 4° gaps, dashed when the
     /// source is unavailable (DESIGN 2b, Identity at a glance).
     static func addBezel(_ scene: inout OrbScene, _ frame: OrbFrame) {
-        guard let bezel = frame.content.bezel, !bezel.arcs.isEmpty else { return }
+        guard let bezel = frame.content.bezel, !bezel.arcs.isEmpty, frame.content.style != .character else { return }
         let width = frame.content.isThumbnail ? 1 : max(1, 0.0105 * frame.s)
         let radius = frame.s / 2 - width / 2
         let count = bezel.arcs.count

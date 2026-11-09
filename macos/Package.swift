@@ -30,13 +30,17 @@ let package = Package(
             path: "Sources/AgentSpeedHero"
         ),
         .target(
+            name: "AgentSpeedCharacter",
+            path: "Sources/AgentSpeedCharacter"
+        ),
+        .target(
             name: "AgentSpeedOrbModel",
             dependencies: ["AgentSpeedCore"],
             path: "Sources/AgentSpeedOrbModel"
         ),
         .executableTarget(
             name: "AgentSpeed",
-            dependencies: ["AgentSpeedCore", "AgentSpeedHero", "AgentSpeedOrbModel"],
+            dependencies: ["AgentSpeedCore", "AgentSpeedHero", "AgentSpeedOrbModel", "AgentSpeedCharacter"],
             path: "Sources/AgentSpeed"
         ),
         .executableTarget(
@@ -55,13 +59,18 @@ let package = Package(
             path: "Tests/AgentSpeedHeroTests"
         ),
         .testTarget(
+            name: "AgentSpeedCharacterTests",
+            dependencies: ["AgentSpeedCharacter"],
+            path: "Tests/AgentSpeedCharacterTests"
+        ),
+        .testTarget(
             name: "AgentSpeedOrbModelTests",
             dependencies: ["AgentSpeedOrbModel", "AgentSpeedCore"],
             path: "Tests/AgentSpeedOrbModelTests"
         ),
         .testTarget(
             name: "AgentSpeedAppTests",
-            dependencies: ["AgentSpeed", "AgentSpeedCore"],
+            dependencies: ["AgentSpeed", "AgentSpeedCore", "AgentSpeedCharacter"],
             path: "Tests/AgentSpeedAppTests"
         ),
     ]

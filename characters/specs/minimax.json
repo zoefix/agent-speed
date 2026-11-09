@@ -1,0 +1,44 @@
+{
+ "id": "minimax",
+ "packVersion": 1,
+ "name": {
+  "zh-Hant": "MiniMax 娘",
+  "zh-Hans": "MiniMax 娘",
+  "en": "MiniMax-chan",
+  "ja": "MiniMaxちゃん"
+ },
+ "vendors": [
+  "minimax"
+ ],
+ "accent": "#FF5F7E",
+ "artist": {
+  "name": "ZipZipPipe",
+  "url": "https://genderswapai.com/zh-CN/ai-gijinka/minimax"
+ },
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "motion": {
+  "tempo": 1.1,
+  "energy": 1.15,
+  "sway": 0.9,
+  "bounce": 1.1,
+  "gap": 0.9,
+  "idle": "rest",
+  "particles": "confetti",
+  "signature": [
+   "peek",
+   "hop",
+   "step",
+   "lookaround",
+   "doubletake"
+  ],
+  "hands": [
+   "count",
+   "flex",
+   "drum"
+  ]
+ },
+ "rig": {
+  "recover": true,
+  "rigidLower": true
+ }
+}

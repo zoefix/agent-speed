@@ -348,8 +348,8 @@ after Antigravity, the China edition first.
 ## 2. The orb (floating window)
 
 A circular smoked-glass instrument. This section defines the shared frame and the default style, `led`; section 2a adds
-four more styles and section 2b lets the user float several orbs, each tracking its own sources. Diameter `S` (per orb,
-64–240 pt/DIP in every style, default 148). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
+five more styles and section 2b lets the user float several orbs, each tracking its own sources. Diameter `S` (per orb,
+64–240 pt/DIP in every style, default 148; `character` stands in a disc of 2 S, 2a.6). The window is `1.5 S` square so the aura and sparks can leave the disc; everything outside the disc is fully transparent and ignores clicks wherever
 the platform allows it. The orb follows the Appearance setting. The dark variant is described inline below; the
 light variant ("porcelain") changes only these tokens:
 
@@ -549,11 +549,13 @@ unchanged — the benchmark harness must show it.
 
 ## 2a. Orb styles
 
-Every floating orb has a **style**: `led` (the LED gauge of section 2, the default), `needle`, `liquid`, `reactor` or
-`minimal`. The styles are one family: they share the disc and window, the body, the aura, the readout, the agent dots,
-the response wave, the new-peak pill, hover, the source bezel (2b), the effects levels, accessibility and the frame
-policy below; each one adds its own instrument between the body and the readout. The dashboard hero (section 4) always
-uses `led` with the hero vehicle.
+Every floating orb has a **style**: `led` (the LED gauge of section 2, the default), `needle`, `liquid`, `reactor`,
+`minimal` or `character`. The first five are one family: they share the disc and window, the body, the aura, the
+readout, the agent dots, the response wave, the new-peak pill, hover, the source bezel (2b), the effects levels,
+accessibility and the frame policy below; each one adds its own instrument between the body and the readout.
+`character` (2a.6) replaces the instrument and the body with an animated character and floats the readout beside her
+as cards; it keeps the window rules, hover, the effects levels, accessibility and the frame policy. The dashboard
+hero (section 4) always uses `led` with the hero vehicle.
 
 | Key | Name (`style.*`) | Personality | Primary encoding of `h` |
 | --- | --- | --- | --- |
@@ -562,6 +564,7 @@ uses `led` with the hero vehicle.
 | `liquid` | 能量液球 | organic, luminous, alive | liquid level in a glass sphere |
 | `reactor` | 反應爐 | sci-fi, rotational energy | arc length and spin of counter-rotating rings |
 | `minimal` | 極簡圓環 | quiet, typographic | one thin progress ring |
+| `character` | 角色 | alive, playful, personal | the character's pose and motion, and a ring of lights at her feet |
 
 Conventions for this section: `c` = disc center, `S` = diameter, radii and lengths are fractions of `S`, angles are
 degrees clockwise from 3 o'clock in screen space (y down). A *dial position* `n` maps to the angle `135° + 270° n` (the
@@ -598,7 +601,8 @@ OKLab L, stepped to ≥ 4.5:1 against the body); *hot* is `mix(heat(h), #FFF7D6,
   - **Odometer**: on a value change only the characters that changed roll, each clipped to its own character cell,
     travel 0.92 × the value size, 0.24 s ease-out (up when rising). Different lengths crossfade in 0.12 s. No roll with
     Off, Reduce Motion, `minimal` and S < 80 (the text simply updates).
-  - Readout text is always drawn above every effect. Particles that pass behind it fade to 35 % inside the *readout
+  - Readout text is always drawn above every effect (`character`'s cards included: they never pass behind her, 2a.6). Particles
+    that pass behind it fade to 35 % inside the *readout
     zone* (an ellipse 0.30 S × 0.19 S around `c + (0, 0.07 S)`, Gaussian falloff) so it never competes with them.
 - **Readout** (optional, per orb): two small lines above the value (`needle`: inside the hub, below it) with the
   download and upload speed or 性能, the performance score (section 10; values in section 12).
@@ -885,6 +889,126 @@ Reduce Motion: steady glow (no breathing), the gold tint and blink become 0.2 s 
 × 2, ring width × 1.25, no glow. Windows high contrast: track in the theme's gray text color, ring in its highlight
 color. At S < 80 the title uses 7 pt and the ring keeps `w ≥ 2.5 pt`.
 
+### 2a.6 `character` — Character
+
+An anime character, one per model vendor, stands on the desktop and acts out the speed; the speed and every live fact
+of the orb float beside her as cards. Packs, rig evaluation, motion, the pose swap, the choice of character and the
+floating readouts are specified in CHARACTERS (spec/CHARACTERS.md); this section covers what the orb adds.
+
+**Footprint.** The style occupies a disc `D = 2 S` (S = the orb's size, 64–240): the window is `1.5 D` square and
+placement, snapping, magnets, the name plate and the source chip use this disc. Changing to or from `character`
+resizes the orb like a size change (the docked edge stays). The character stands centered with her feet at
+`c + 0.45 D` and her height ≈ 0.86 D. There is no body, blur, lens or bezel: outside her and the readouts the window is
+fully transparent. Clicks, hover, the cursor and click-through use an upright capsule around her body (0.42 D wide,
+0.9 D tall, centered 0.04 D below `c`) instead of the disc; the Settings highlight rings that capsule.
+
+Layers, back to front (conventions of 2a with `S` replaced by `D`):
+
+1. **Ground glow**: an ellipse 0.27 × 0.08 D at the feet in the label color, opacity `0.12 + 0.3 h` (additive in dark),
+   and a soft contact shadow 0.15 × 0.03 D, black 55 %.
+2. **Ring, back half**: 96 lights on an ellipse of radius 0.23 D squashed to 17 %, starting at the front and going
+   counter-clockwise; light `i` is lit when `i < 96 h` in the heat color of its own position, the leading light
+   white-hot; unlit lights in the unlit token. Depth scales size and opacity (55 % at the back). A comet brightens the
+   lights it passes (period `6 − 5.3 h` s).
+3. **Agent lights, back half**: one light per generating agent in its source color on a tilted orbit around her waist
+   (0.3 × 0.05 D), with a short tail; speed `0.25 + 0.9 h` rad/s.
+4. **The character**: the skinned pose of the current band (CHARACTERS 3, 6), drawn as textured triangle meshes.
+5. **Ring and agent lights, front half**, response ripples (the ring growing to 1.42 × and fading over 0.9 s,
+   strength from `log10(output)`), embers rising from the ring at redline.
+6. **Her particles in front** (CHARACTERS 8, Particles; the rest of them draw behind her, after layer 3).
+   Each character has her own kind:
+   Claude's petals blown by the wind from boost up; bubbles rising and swaying (DeepSeek), twinkling four-point
+   sparkles or stars, music notes floating up (Kimi), embers from her feet (Grok), blue foxfire wisps (GLM),
+   tumbling confetti from above (MiniMax), `Z z` drifting from her head only while she rests (Llama), pages and
+   blossoms blown sideways (文心, Qwen), feathers and snow falling. Dots are soft ellipses in her accent's tints or the
+   kind's own colors; stars, wisps and embers add up on dark glass and are laid over on light; notes and `Z` are
+   bold glyphs. Take-offs, wing flaps, pounces and pose swaps throw out a puff of 14. The slow drift rides the
+   band's frame rate (15 fps at idle); puffs and wind-blown petals ask for 60.
+7. **The cards** (*Readouts* below), always over her, then the new-peak pill (gold, above the speed card, with 24
+   rays).
+
+**Readouts.** Nothing ever goes behind her: the readout is a set of cards beside her, each with a fixed place, placed
+every frame against her outline as drawn (the skinned mesh of the current pose, in bands of `max(2, D / 150)` pt), so a
+raised arm, a held-out staff or open wings push a card away instead of covering it:
+
+- **Speed** (always shown): at her right at chest height (her chin + 45 % of the way to her waist), its left edge
+  `0.035 D` clear of her outline over the rows it spans; if it does not fit there, the nearest row (±0.04 … 0.3 D)
+  where it overflows least. Rolling digits sampled 5 times a second, size 0.068 D, the unit and the speed title chip
+  below; no plate.
+- **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
+  model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
+  of her that rises under it. With no live model it shows the last one.
+- **The column** at her left, top to bottom from her shoulders (chin + 25 % to the waist): **性能** (`性能 1,286` at
+  `p = 1.25 t` over `思考 412 tok/s` at `t`, the score's motion, pale resting form and provisional mark as in section 10;
+  the 思考 row fades after its hold at 0 and the card closes up, section 10 *Thinking hidden at zero*), **network**
+  (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
+  `–` when nothing is priced, and the money unit) and **today** (`boards.today` with today's tokens over
+  `agents.count`). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
+  every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
+  apart; a hidden card's room closes up as it fades.
+- **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
+  its last cards continue under the speed at her right, left edges on one line, in the same order. Only when no split
+  fits does the column move further (up to 0.3 D), and only then do its cards hug her outline one by one. Cards move
+  only after the column has overflowed for 0.6 s and come back once the larger column has fitted near her shoulders
+  with `0.04 D` to spare for 4 s (12 s within 30 s of the last change, so a dance that keeps reaching out does not send
+  them back and forth), and a passing gesture moves nothing; a card changing sides fades out where it was
+  (0.18 s) and back in at its new place (0.3 s) instead of crossing her. A card's accent edge is the one facing her.
+
+Each card is a frosted glass plate: corner `0.72 t` (the model chip a capsule), padding `0.8 t` × `0.55 t`, fill
+`#12141D` 64 % on dark / white 80 % on light (92 % with Increase Contrast, 97 % with Reduce Transparency), a hairline rim
+(white 15 % / black 8.5 %), a soft shadow (black 30 % / 11 %, Gaussian `0.9 t`, `0.2 t` down), a sheen along the top
+edge (white 10 % / 75 %) and a spine of her accent color along the edge facing her (`0.15 t` wide, 60 % of the height).
+Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and units the secondary token.
+
+**Which cards show.** A card shows while it is switched on (`characterReadouts`, 2b; the speed always) and has
+something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
+resting or an agent generates, 費用 while money flows (or a generating set has no price), each until 10 s after its
+last loud moment; today while there is a token today. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
+their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A
+`character` orb's network card follows `traffic` for its scope (`machine` = the whole computer, anything else = the
+orb's agents); its speed stays in tok/s (`unit` is not used: the cost has its own card, and clicking the orb does not
+switch units).
+
+**Floating.** Anchors follow her on springs (0.9 Hz, damping 0.78); a card she reaches into (closer than half the gap)
+gets out of her way at once (time constant 0.06 s) and drifts back on the slow spring. Every card floats on its own slow figure of eight
+(two sines per axis, periods 2.6–13 s, a phase of its own), the speed by `±0.008 × ±0.011 D`, the others by
+`±0.013 × ±0.017 D`, tilts by up to ±2.6° (the speed ±1.6°) with its glyphs, and breathes ±1.2 % in size, so the
+readout drifts gently beside her while each value stays where the eye left it.
+
+The speed has no plate; it stays legible over her dress and any wallpaper by its ink. Digits are the value color
+(white 96 % on dark, `#0B0D12` 92 % on light) with an outline 0.06 × the text size in the opposite tone (near-black
+90 % on dark, white 95 % on light; 0.085 × and opaque with Increase Contrast) and a soft halo of the same tone (radius
+0.1 ×, 45 %); the unit has the same outline. A changed digit rolls: the old one slides up out of a one-digit window as
+the new one slides in from below, a full window apart, so the two never overlap (0.12 s, ease-out). **Lightning**:
+when digits change, each changed digit crackles: an arc of 9 points around its ellipse (0.6 advance × 0.8 cap) with a
+jagged radius (±20 %), sweeping 1.2–2.2 rad, at most three digits; when more than the last digit changes, a 12-point
+arc also jumps over the changed digits. Bolts are three-stroke polylines (glow 0.22, mid 0.09, core 0.04 × the text
+size; electric `#8CD1FF` blended 20 % toward the heat color with a white-hot core on dark, `#4D8CFF` with a `#1F4DF2`
+core on light), redrawn in a new shape 30 times a second, flickering (55–100 %), fading over 0.2 s (units only) or
+0.3 s, strength `0.35 + 0.65 h`; the changed digits' halo flares electric (90 %, radius 0.18 ×) with them. Soft: one
+crackle per digit and no arc, 0.7 × the life (also below S = 96); Max: one more crackle from `h` 0.54 up; Off: none;
+Reduce Motion: the flare only, no bolts. While a bolt lives the orb draws at 60 fps.
+
+Motion: CHARACTERS 5 drives every parameter from the orb's level (the director, grooves per band, actions, hand
+acting, springs). Pulse accent: the ripple of layer 6. New peak: the pill and rays of layer 7. Title change: the
+title chip crossfades and slides 14 pt (0.35 s). Tier change: the pose swap of CHARACTERS 6 when the band's pose
+differs, else the ring flashes. Idle: her idle groove (breathing, glances, blinks, hand ripple) at 15 fps, 60 while
+she acts out a gesture or move.
+
+| Effects | `character` |
+| --- | --- |
+| Off | the character at rest pose with breathing only, cards still (no float or tilt), no particles |
+| Soft | grooves and actions at half amplitude, no embers or particles |
+| Standard | as described |
+| Max | Standard with 1.6 × particle rates |
+
+Reduce Motion: the cards keep their places without floating, tilting or easing (fades stay, card size changes are
+instant), actions that leave the ground (hops, jumps, spins, steps) are skipped, and pose swaps become 0.3 s
+crossfades. Increase Contrast: the card plates become nearly opaque (92 %) with stronger rims and text, unlit ring lights × 2. With no character
+installed, the style draws the ring and the standard readout of the frame table (value 0.13 D) with `character.empty`
+above it; the context menu's `characters.more` leads to the downloads. LOD: below S = 96 the agent lights and the today card are
+not drawn and the column keeps at most its first two shown cards; thumbnails and style cards show the pack's `preview.png`.
+
 ### Frame policy and performance budget (normative for every style, `led` included)
 
 The orb runs all day and there may be eight of them; a single Windows orb at the redline costs ≈ 38 % of one core today
@@ -896,13 +1020,13 @@ k-th tick. "60 fps" means the integer divisor of the refresh rate closest to 60 
 120 → 60, 60 → 60); "30 fps" likewise (144 → 28.8, 120 → 30); "15 fps" likewise. The display refresh rate itself is
 never used above 72.
 
-| State | `led` | `needle` | `liquid` | `reactor` | `minimal` |
-| --- | --- | --- | --- | --- | --- |
-| Idle, not hovered | static; 30 fps during the 0.9 s sweep every 6 s | static; 30 fps sweep | static; 30 fps for the 1.2 s bubble | static; 30 fps sweep | static, never animates |
-| Cruise, boost (`h < 0.45`) | 30 fps | 30 fps; 60 while the needle turns > 90°/s | 30 fps | 30 fps | 30 fps while a spring settles, else static |
-| Overdrive, redline | 60 fps | 60 fps | 60 fps (Soft: 30) | 60 fps | as above; 15 fps for the redline breathing |
-| Transitions (title, peak, pulse, hover, style change) | 60 fps for their duration | 60 | 60 | 60 | 30 |
-| Off or Reduce Motion | on change only: a value tick (≤ 2/s) renders the spring at 30 fps until it settles (change < 0.001), then stops | same | same | same | same |
+| State | `led` | `needle` | `liquid` | `reactor` | `minimal` | `character` |
+| --- | --- | --- | --- | --- | --- | --- |
+| Idle, not hovered | static; 30 fps during the 0.9 s sweep every 6 s | static; 30 fps sweep | static; 30 fps for the 1.2 s bubble | static; 30 fps sweep | static, never animates | 15 fps while she only breathes and glances; 60 while she acts (a gesture, a move, a pose swap) |
+| Cruise, boost (`h < 0.45`) | 30 fps | 30 fps; 60 while the needle turns > 90°/s | 30 fps | 30 fps | 30 fps while a spring settles, else static | cruise band 30 fps, boost band 60; 60 while she acts |
+| Overdrive, redline | 60 fps | 60 fps | 60 fps (Soft: 30) | 60 fps | as above; 15 fps for the redline breathing | 60 fps |
+| Transitions (title, peak, pulse, hover, style change) | 60 fps for their duration | 60 | 60 | 60 | 30 | 60 |
+| Off or Reduce Motion | on change only: a value tick (≤ 2/s) renders the spring at 30 fps until it settles (change < 0.001), then stops | same | same | same | same | 30 fps while a pose crossfades or a spring settles, else static |
 
 - "Static" means no frames: the last frame stays on screen; the next one is drawn on data change, hover or the next
   scheduled sign of life (a single timer, not polling).
@@ -930,6 +1054,14 @@ the orb's own ≈ 0.1–0.2 ms, so the budget is a frame-count budget: keep the 
 present a frame that would be identical to the previous one.
 | GPU time per orb frame (S = 240, 2× / 200 %) | ≤ 1.0 ms | ≤ 1.0 ms |
 | Memory per orb (surfaces, buffers, atlases) | ≤ 12 MB | ≤ 12 MB |
+| `character`: idle (15 fps between actions, 60 while she acts), one orb | ≤ 3 % | ≤ 4 % |
+| `character`: cruise to redline (60 fps while she acts, which is most of the time) | ≤ 6.5 % | ≤ 8 % |
+| `character`: GPU time per frame (S = 240, 2×) | ≤ 2.0 ms | ≤ 2.0 ms |
+| `character`: memory per orb | ≤ 48 MB | ≤ 48 MB |
+
+The character's own work is small (performer step and scene ≈ 0.1–0.2 ms of CPU, warm frames allocate nothing); its
+budget is higher only because she is drawn at 60 fps whenever she moves, and each presented frame costs the system
+≈ 0.5 ms of CPU (measured on an M5 Pro at 120 Hz: led at redline 3.8 %, `character` at redline 4.3 %, at cruise 5.9 %).
 
 Targets are part of the definition of done: each platform ships a benchmark harness that drives every style through
 the scenario of the prototype (idle → climb → redline → overdrive → back) and reports these numbers.
@@ -942,6 +1074,11 @@ the scenario of the prototype (idle → climb → redline → overdrive → back
   surface, body, currents and spherical shade are one fragment shader evaluating `y(x)` per pixel; text comes from a
   glyph atlas (digits, `.kMB–`, the unit and the titles of the title themes in use — presets in the current language,
   custom titles as typed — built once per size and rebuilt when a theme or custom set changes).
+- Exception for `character` (2a.6): the character is a textured, skinned triangle mesh pass (bone matrices in a
+  per-frame buffer, the atlas sampled with mipmaps and premultiplied after sampling) between the SDF batches; her
+  particles and lights draw on both sides of her, so text and shape batches interleave in depth order. Only the current pose's atlas
+  and, during a swap, the incoming one are resident; atlases are downscaled once to the on-screen size (at most 2 ×
+  the drawn height at the backing scale) when loaded. Glyphs of the cards tilt with their card.
 - No per-frame allocation: instance buffers and particle pools are sized once from the style's maximum budget (ring
   buffers), paths and geometry are rebuilt only on a size or appearance change; WPF: frozen resources only.
 - CPU per frame ≤ 0.25 ms for state updates (springs, particles) at the maximum budget.
@@ -1001,8 +1138,10 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `id` | UUID, never reused. |
 | `name` | Custom name, 1–32 characters, trimmed; `null` = automatic: `orbs.sources.all` for all sources, the source name for one, `orbs.name.pair` for two, `orbs.name.more` (first source + count) for three or more, in source order (METRICS 1). |
 | `sources` | `"all"` (every enabled source, including sources detected or added later) or a non-empty array of METRICS 1 keys, stored in source order without duplicates. Unknown keys from a newer version are kept and ignored. |
-| `style` | `led` · `needle` · `liquid` · `reactor` · `minimal`; unknown → `led`. |
-| `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size. |
+| `style` | `led` · `needle` · `liquid` · `reactor` · `minimal` · `character`; unknown → `led`. |
+| `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size; `character` occupies a disc of 2 × the size (2a.6, Footprint), which placement, snapping and magnets use. |
+| `character` | `character` style only: a character pack id (CHARACTERS 1), or absent = Auto, following the fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto. |
+| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `network`, `cost`, `agents` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1100,7 +1239,7 @@ wallpapers, in tight rows, columns and clusters, with Latin, CJK, long and multi
   and sits at the 7 pt floor at 112); print on the dial above the value (that space holds the traffic readout and the
   new-peak pill, and at 112 a name shrinks to `CL…`); a curved glass collar hugging the lower rim (charming alone, but
   curved text reads worse, a row of them makes a wavy line, and long or CJK names tilt at the ends); plain text with a
-  shadow and no plate (breaks up on light and patterned wallpapers). One plate for all five styles: a mixed-style row
+  shadow and no plate (breaks up on light and patterned wallpapers). One plate for all six styles: a mixed-style row
   shares one baseline, and the plate repeats the orb's own glass instead of competing with any instrument.
 - **When it shows**: the orb's `showName` (`true` / `false`), else the global `orbNames`:
 
@@ -1224,14 +1363,21 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    capsule or mode row (user's choice, 2026-10-28); agents' effort and speed stay on the dashboard's agent rows
    (section 4, Agents), boards and history. The orb's hover info line never mentions modes either, and a configured
    value (section 4, *Configured capsule*) is no exception: an orb looks the same whether or not one exists.
-2. `orbs.style` ▸ the five style names, check on the current one.
+2. `orbs.style` ▸ the six style names, check on the current one. A `character` orb follows it with
+   `characters.title` ▸ `characters.auto`, separator, every installed character (checked when locked to it), separator,
+   `characters.more` (opens the orb's Settings, where the character section sits under the style cards).
 3. `orbs.sources` ▸ `orbs.sources.all`, separator, every source in source order with its colour dot and a check when
    tracked; unavailable ones show their status in secondary text and stay selectable. Unchecking the last tracked source
    is disabled (`orbs.sources.lastOne`). Checking `orbs.sources.all` replaces the set; checking a source on an
    all-sources orb makes the set that single source. It is followed by `orbs.unit` ▸ `orbs.unit.tokens` /
    `orbs.unit.cost` (section 9), `orbs.traffic` ▸ `orbs.traffic.sources` / `orbs.traffic.machine` /
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
-   plate shows (Name plate).
+   plate shows (Name plate). A `character` orb has `character.readouts` ▸ in place of the unit and traffic items: a
+   check per card (`character.readouts.intel`, `.thinking`, `.network`, `.cost`, `.agents`, `.model`; network disabled
+   while traffic is not measured), a separator, the section header `character.readouts.networkScope` and the radio
+   pair `orbs.traffic.sources` / `orbs.traffic.machine` (disabled while the network card is off). The quick menu
+   does the same. In Settings the orb editor shows the cards as checkboxes with the scope popup and
+   `character.readouts.hint` (section `character.readouts`) in place of the unit section.
 4. `menu.size` ▸ `menu.size.small` / `.medium` / `.large` (112 / 148 / 196, checked when the size is one of them), a
    separator, then a slider over the whole range (64–240 pt, 4 pt steps) with the value at its trailing edge
    (`%d pt`, tabular digits, secondary text). The orb resizes live while the thumb moves, every step is stored like a
@@ -2683,12 +2829,25 @@ accent color for selection, no extra borders. The pane scrolls when taller than 
      source order: checkbox, colour dot, name, trailing status (`source.notFound` / `source.disabled`) in secondary.
      With all sources on, the rows show checked and disabled. The last checked source cannot be unchecked (help tag
      `orbs.sources.lastOne`).
-   - **`orbs.style`** — five cards in one row (≈ 120 × 112 pt; 3 + 2 rows below 560 pt of width): an animated preview
+   - **`orbs.style`** — six cards in one row (≈ 100 × 112 pt; 3 + 3 rows below 560 pt of width): an animated preview
      (the real renderer at 64 pt, effects Soft, looping cruise → redline → cruise every 8 s, each card 1.6 s later than
      the previous, ≤ 24 fps, only while visible; with Reduce Motion a still frame at the redline) above the style name
-     (`style.*`); the selected card has a 2 pt accent ring and a faint accent fill. Arrow keys move between cards; each
-     card's accessibility label is `orbs.preview.a11y`. Below the cards the selected style's name (semibold) and its
-     description (`style.*.desc`).
+     (`style.*`); the `character` card shows the locked (else the first installed) character's `preview.png`, or a
+     quiet silhouette when none is installed. The selected card has a 2 pt accent ring and a faint accent fill. Arrow
+     keys move between cards; each card's accessibility label is `orbs.preview.a11y`. Below the cards the selected
+     style's name (semibold) and its description (`style.*.desc`).
+   - **`characters.title`** (only for a `character` orb, under the style cards; CHARACTERS 2, 7) — `characters.choice`
+     with `characters.choice.hint`: a pop-up of `characters.auto` and the installed characters. Then one row per
+     character of the catalog, in catalog order, followed by installed ones the catalog does not list: the portrait
+     (the installed `preview.png`, else a silhouette — nothing is fetched for a character that is not downloaded), the
+     accent dot and localized name, `characters.artist` (a link when the pack gives an https URL) and the download size,
+     and on the right `characters.download` (prominent; disabled while network features are off), a progress bar with
+     `characters.cancel` while downloading and `characters.installing` while unpacking, or `characters.update` (when the
+     catalog has a newer `packVersion`) and `characters.remove`. A failed download shows its error under the row
+     (`characters.error.*`). Development packs (`AGENT_SPEED_CHARACTERS`) are marked `characters.development` and cannot
+     be removed. With no rows: `characters.loading`, or `characters.unavailable` with `characters.retry`, or
+     `characters.offline`. Footer: `characters.footer` and `characters.openFolder`. Showing the section refreshes the
+     catalog (at most every 10 minutes).
    - **Size** — `menu.size.small` / `.medium` / `.large` presets (112 / 148 / 196) as a compact segmented control left of
      a slider (64–240, step 4) with the value in pt. **Opacity** — slider 40–100 % with the value.
    - `orbs.showName` popup — `orbs.showName.auto` with the current automatic result, a separator, `orbs.showName.on`,

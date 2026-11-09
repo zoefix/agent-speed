@@ -32,6 +32,12 @@ final class OrbFeed {
     var money: LiveMoney?
     /// The two-line readout while it is on (DESIGN 10): network speed, or 性能 and 思考 of the orb's agents.
     var lines: OrbLines?
+    /// Live output per model vendor and the fastest model (CHARACTERS 7); filled for `character` orbs only.
+    var vendors = VendorReading()
+    /// The character a `character` orb shows (CHARACTERS 7); nil when none is installed.
+    var characterID: String?
+    /// The cards of a `character` orb besides the speed (DESIGN 2a.6, Readouts); nil for other styles.
+    var characterReadings: OrbCharacterReadings?
 
     @ObservationIgnored private var listeners: [UUID: @MainActor (OrbFeedEvent) -> Void] = [:]
 

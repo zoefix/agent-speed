@@ -65,7 +65,7 @@ enum OrbSceneBuilder {
         }
 
         func frame(alpha: Double) -> OrbFrame {
-            OrbFrame(
+            var frame = OrbFrame(
                 time: time,
                 dt: dt,
                 geometry: geometry,
@@ -90,6 +90,9 @@ enum OrbSceneBuilder {
                 alpha: alpha,
                 resumed: resumed
             )
+            frame.speedLevel = unavailable ? 0 : gauge.title.rawValue
+            frame.readoutValue = gauge.readoutValue
+            return frame
         }
 
         if let outgoing = animator.outgoing, mix < 1 {
