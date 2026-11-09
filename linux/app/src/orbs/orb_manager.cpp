@@ -1,6 +1,7 @@
 #include "orbs/orb_manager.hpp"
 
 #include "characters/character_library.hpp"
+#include "orbs/character_demo.hpp"
 
 #include <QActionGroup>
 #include <QDateTime>
@@ -383,6 +384,12 @@ void OrbManager::applySnapshot(const QVariantMap& snap) {
         if (it == orbs_.end()) continue;
         valuesChanged = valuesChanged || it->second.values.value(QStringLiteral("liveText")) != map.value(QStringLiteral("liveText"));
         it->second.values = map;
+        if (character_demo::enabled() && it->second.window->style() == QLatin1String("character")) {
+            auto demo = map;
+            character_demo::apply(demo, static_cast<double>(QDateTime::currentMSecsSinceEpoch()) / 1000, strings_.language());
+            it->second.window->applySnapshot(demo);
+            continue;
+        }
         it->second.window->applySnapshot(map);
     }
     if (valuesChanged) emit this->valuesChanged();

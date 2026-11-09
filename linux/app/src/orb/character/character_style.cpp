@@ -74,8 +74,9 @@ struct CardMetrics {
     static double rowHeight(double size) { return 0.92 * size; }
     static double baseline(double size) { return 0.82 * size; }
     double glyphGap() const { return 0.24 * t; }
-    double cellGap() const { return 0.3 * t; }
+    double cellGap() const { return 0.16 * t; }  // OrbLinePlacement.gap
 };
+
 
 TextDraw textOf(const QString& text, double size, int weight) {
     TextDraw d;
@@ -90,6 +91,18 @@ double advance(const QString& text, double size, int weight) {
 }
 
 double capHeight(double size, int weight) { return textCapHeight(textOf(QStringLiteral("0"), size, weight)); }
+
+// The network card's fixed cells (OrbLineMetrics.cells): the arrow, the number right-aligned in an `8.88` cell, the
+// unit in an `MB/s` (or `Mb/s`) cell, so the card keeps its width while the values change.
+struct NetCells {
+    double lead, number, unit;
+    NetCells(double t, bool bits)
+        : lead(0.5 * t), number(advance(QStringLiteral("8.88"), t, 600)),
+          unit(advance(bits ? QStringLiteral("Mb/s") : QStringLiteral("MB/s"), kUnitScale * t, 500)) {}
+    double lineWidth(double t) const { return lead + 2 * 0.16 * t + number + unit; }
+};
+
+bool bitsUnit(const QString& unit) { return unit.endsWith(QLatin1String("b/s")) && !unit.endsWith(QLatin1String("B/s")); }
 
 // The ink of the floating speed (CharacterInk).
 struct Ink {
@@ -348,11 +361,8 @@ std::array<double, 2> CharacterStyle::cardSize(HudCard card, const Frame& f) con
         case HudCard::Network: {
             const auto& n = content_.net;
             if (n.downNumber.isEmpty() && n.upNumber.isEmpty()) return {0, 0};
-            const double cell = advance(QStringLiteral("888.8"), m.t, 600);
-            const double unit = std::max(advance(n.downUnit, kUnitScale * m.t, 500), advance(n.upUnit, kUnitScale * m.t, 500));
-            const double w = advance(QStringLiteral("↓"), kUnitScale * m.t, 600) + m.glyphGap() + cell + m.cellGap() +
-                             std::max(unit, advance(QStringLiteral("MB/s"), kUnitScale * m.t, 500));
-            return plate(w, 2 * CardMetrics::rowHeight(m.t) + m.rowGap);
+            const NetCells cells(m.t, bitsUnit(n.downUnit));
+            return plate(cells.lineWidth(m.t), 2 * CardMetrics::rowHeight(m.t) + m.rowGap);
         }
         case HudCard::Cost: {
             if (content_.costNumber.isEmpty()) return {0, 0};
@@ -424,7 +434,11 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
         }
     }
     wings_.still = f.effects.level == 0;
+    const int splitBefore = wings_.split();
     wings_.update(dt, hudTime_, ac::HudFrame({0, 0, side, side}, *silhouette_, d, anchors), cardSizes_, cardShown_);
+    if (wings_.split() != splitBefore && Lap::on()) {
+        qInfo("character cards: %d of the column at her left (was %d)", wings_.split(), splitBefore);
+    }
 }
 
 // ---- drawing
@@ -694,18 +708,33 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
             case HudCard::Performance: {
                 plate(pen, size.w, size.h, std::nullopt, spine);
                 const auto& in = content_.intel;
+                const bool score = content_.readouts.intelligence && !in.number.isEmpty();
                 double y = top;
-                if (content_.readouts.intelligence && !in.number.isEmpty()) {
+                if (score) {
                     const double baseline = y + CardMetrics::baseline(m.p);
                     double x = left;
                     scene.add(pen.leading(in.glyph, kUnitScale * m.p, 600, x, baseline, secondary));
                     x += advance(in.glyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25;
-                    const Rgba ink = in.form == 2 ? number.mix(secondary, 0.6) : number;
+                    // The resting score and none read in the secondary ink (DESIGN 10, 12); a value fades in.
+                    const Rgba ink = in.form == 1 ? number : secondary;
                     scene.add(pen.leading(in.number, m.p, 600, x, baseline, ink.opacity(in.numberAlpha)));
+                    if (in.provisional) {
+                        // The provisional mark: a dotted underline under the digits, 0.22 p below the baseline.
+                        const double w = advance(in.number, m.p, 600);
+                        const double d = std::max(1.0, 0.1 * m.p);
+                        const int n = std::max(2, static_cast<int>(std::floor((w - d) / (2.4 * d))) + 1);
+                        const Rgba dot = ink.withAlpha(ink.a * 0.7 * alpha * in.numberAlpha);
+                        for (int k = 0; k < n; ++k) {
+                            const double dx = x + d / 2 + (n > 1 ? k * (w - d) / (n - 1) : 0);
+                            scene.add(Instance::circle(pen.point(dx, baseline + 0.22 * m.p), d / 2 * pen.scale, dot), Blend::Over);
+                        }
+                    }
                     y += CardMetrics::rowHeight(m.p) + m.rowGap;
                 }
                 if (content_.readouts.thinking && !in.thinking.isEmpty()) {
-                    const double share = content_.readouts.intelligence && !in.number.isEmpty() ? in.thinkingOpacity : 1;
+                    const double share = score ? in.thinkingOpacity : 1;
+                    // Hiding at zero fades the row and closes the card up under it.
+                    if (score) y -= (1 - share) * (CardMetrics::rowHeight(m.t) + m.rowGap);
                     if (share > 0.01) {
                         const double baseline = y + CardMetrics::baseline(m.t);
                         double x = left;
@@ -722,17 +751,17 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
             case HudCard::Network: {
                 plate(pen, size.w, size.h, std::nullopt, spine);
                 const auto& n = content_.net;
-                const double cell = advance(QStringLiteral("888.8"), m.t, 600);
-                const double arrow = advance(QStringLiteral("↓"), kUnitScale * m.t, 600);
+                const NetCells cells(m.t, bitsUnit(n.downUnit));
                 double y = top;
                 for (int row = 0; row < 2; ++row) {
                     const double baseline = y + CardMetrics::baseline(m.t);
                     const QString& value = row == 0 ? n.downNumber : n.upNumber;
                     const QString& unit = row == 0 ? n.downUnit : n.upUnit;
-                    scene.add(pen.leading(row == 0 ? QStringLiteral("↓") : QStringLiteral("↑"), kUnitScale * m.t, 600, left, baseline, secondary));
-                    const double numberRight = left + arrow + m.glyphGap() + cell;
-                    scene.add(pen.leading(value, m.t, 600, numberRight - advance(value, m.t, 600), baseline, number));
-                    scene.add(pen.leading(unit, kUnitScale * m.t, 500, numberRight + m.cellGap(), baseline, secondary));
+                    const QString arrow = row == 0 ? QStringLiteral("↓") : QStringLiteral("↑");
+                    scene.add(pen.text(arrow, m.t, 600, left + cells.lead / 2, baseline, secondary));
+                    const double numberLeft = left + cells.lead + m.cellGap();
+                    scene.add(pen.leading(value, m.t, 600, numberLeft + cells.number - advance(value, m.t, 600), baseline, number));
+                    scene.add(pen.leading(unit, kUnitScale * m.t, 500, numberLeft + cells.number + m.cellGap(), baseline, secondary));
                     y += CardMetrics::rowHeight(m.t) + m.rowGap;
                 }
                 break;
@@ -747,7 +776,7 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                     scene.add(pen.leading(QStringLiteral("≥"), kUnitScale * m.p, 500, x, baseline, secondary));
                     x += advance(QStringLiteral("≥"), kUnitScale * m.p, 500) + 0.08 * m.p;
                 }
-                scene.add(pen.leading(content_.costNumber, m.p, 600, x, baseline, number));
+                scene.add(pen.leading(content_.costNumber, m.p, 600, x, baseline, content_.costUnknown ? secondary : number));
                 x += advance(content_.costNumber, m.p, 600);
                 if (!content_.costUnknown) scene.add(pen.leading(content_.costUnit, kUnitScale * m.t, 500, x + m.cellGap(), baseline, secondary));
                 break;

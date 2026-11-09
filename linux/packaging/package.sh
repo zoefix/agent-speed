@@ -84,7 +84,7 @@ Section: utils
 Priority: optional
 Architecture: $debarch
 Installed-Size: $size
-Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3
+Depends: libc6 (>= $glibc), libstdc++6 (>= $cxx), libgl1, libegl1, libfontconfig1, libfreetype6, libx11-6, libx11-xcb1, libxcb1, libxkbcommon0, libxkbcommon-x11-0, libdbus-1-3, zlib1g
 Recommends: openssh-client
 Maintainer: zoefix <277453498+zoefix@users.noreply.github.com>
 Homepage: https://github.com/zoefix/agent-speed

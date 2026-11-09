@@ -865,7 +865,7 @@ void OrbWindow::renderFrame() {
         renderNs += profileTimer.nsecsElapsed() - built;
         if (t - since >= 5) {
             qInfo("orb %s: %.1f fps, build %.3f ms, submit %.3f ms per frame", qPrintable(styleKey(styleKind_)), frames / (t - since),
-                  buildNs / 1e6 / frames, renderNs / 1e6 / frames);
+                  static_cast<double>(buildNs) / 1e6 / frames, static_cast<double>(renderNs) / 1e6 / frames);
             frames = 0;
             buildNs = renderNs = 0;
             since = t;

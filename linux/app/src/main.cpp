@@ -27,6 +27,7 @@
 #include "orb/orb_accessible.hpp"
 #include "orb/orb_window.hpp"
 #include "characters/character_library.hpp"
+#include "orbs/character_demo.hpp"
 #include "orbs/orb_manager.hpp"
 #include "orb/preview.hpp"
 #include "hero/hero_item.hpp"
@@ -477,6 +478,17 @@ int main(int argc, char* argv[]) {
     // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal); --orb-size=<pt> its diameter.
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("traffic"), arg.mid(14));
+        // AGENT_SPEED_ORB_CHARACTER locks the first orb to a character (as the macOS frame harness).
+        if (arg.startsWith(QStringLiteral("--orb-style=")) && qEnvironmentVariableIsSet("AGENT_SPEED_ORB_CHARACTER")) {
+            orbs.setCharacter(orbStore.orbs().front().id, qEnvironmentVariable("AGENT_SPEED_ORB_CHARACTER"));
+        }
+        // AGENT_SPEED_ORB_READOUTS: demo readings for character orbs, and the cards it switches on the first orb.
+        if (arg.startsWith(QStringLiteral("--orb-style=")) && character_demo::enabled()) {
+            const auto switches = character_demo::switches();
+            for (auto it = switches.begin(); it != switches.end(); ++it) {
+                orbs.setCharacterReadout(orbStore.orbs().front().id, it.key(), it.value().toBool());
+            }
+        }
         // AGENT_SPEED_ORB_STYLE_DELAY (ms) switches the style later, once the orb shows live agents.
         if (arg.startsWith(QStringLiteral("--orb-style="))) {
             const QString key = arg.mid(12);
