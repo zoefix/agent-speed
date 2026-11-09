@@ -218,7 +218,18 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             Characters = _characters,
             Prices = () => _cost.Book.Current,
         };
-        _characters.Changed += (_, _) => _orbs?.RefreshCharacters();
+        _characters.Changed += (_, _) =>
+        {
+            _orbs?.RefreshCharacters();
+            AgentSpeed.Settings.OrbsPane.OrbPreview.NotifyCharacterPortraits();
+        };
+        AgentSpeed.Settings.OrbsPane.OrbPreview.CharacterPortrait = id =>
+        {
+            var library = _characters?.Library;
+            var pack = (id is null ? null : library?.InstalledPack(id))
+                ?? (library?.Packs.FirstOrDefault() is { } first ? library.InstalledPack(first.Id) : null);
+            return pack is null ? null : AgentSpeed.Settings.OrbsPane.OrbsPaneViewModel.Portrait(pack);
+        };
         _orbs.Apply();
         StartBoards();
         _titles.Changed += (_, _) => OnTitlesChanged();
@@ -443,6 +454,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             {
                 _settingsModel.Orbs = new Settings.OrbsPane.OrbsPaneViewModel(_settings, _orbs, _speed, _loc)
                 {
+                    Characters = _characters,
                     TitleService = _titles,
                     RemoteHosts = _remoteHosts,
                 };

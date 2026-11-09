@@ -107,7 +107,7 @@ internal sealed record OrbTitleThemeChoice(string? Id, string Text, bool IsSepar
 /// Settings → 懸浮窗 (DESIGN 5, Floating orb pane): master switch, the orb list with live thumbnails, add / remove /
 /// duplicate / split / merge with undo, and the editor of the selected orb. Every change applies live and persists.
 /// </summary>
-internal sealed class OrbsPaneViewModel : ObservableObject
+internal sealed partial class OrbsPaneViewModel : ObservableObject
 {
     private readonly SettingsService _settings;
     private readonly OrbManager _manager;
@@ -933,6 +933,7 @@ internal sealed class OrbsPaneViewModel : ObservableObject
         OnPropertyChanged(nameof(RedlineOutputValue));
         OnPropertyChanged(nameof(RedlineTotalLog));
         RefreshTitles();
+        RefreshCharacterEditor();
     }
 
     /// <summary>The theme popup, the preview cards' labels and the custom redline's title list for the selected orb.</summary>
