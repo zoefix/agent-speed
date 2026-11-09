@@ -6,6 +6,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     board_test.cpp
+    character_catalog_test.cpp
     character_fixture_test.cpp
     character_performer_test.cpp
     character_selection_test.cpp
@@ -60,7 +61,9 @@ add_executable(agentspeed_tests
     unpriced_test.cpp
     work_signals_test.cpp
 )
-target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(TEST_ZLIB REQUIRED IMPORTED_TARGET zlib)
+target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main PkgConfig::TEST_ZLIB)
 target_compile_definitions(agentspeed_tests PRIVATE
     AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
 

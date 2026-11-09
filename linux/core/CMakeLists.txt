@@ -132,8 +132,12 @@ add_library(agentspeed_character STATIC
     src/character/rig.cpp
     src/character/selection.cpp
     src/character/springs.cpp
+    src/character/catalog.cpp
+    src/character/store.cpp
+    src/character/zip.cpp
 )
-target_link_libraries(agentspeed_character PUBLIC agentspeed_base)
+pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
+target_link_libraries(agentspeed_character PUBLIC agentspeed_base PRIVATE PkgConfig::ZLIB)
 endif()
 
 # The desktop app's core: the base plus live reporting and the demo driver.
