@@ -201,16 +201,20 @@ void Scene::add(const TextDraw& text) {
 void Scene::addMesh(const QImage& atlas, const float* vertices, int vertexCount, const std::uint32_t* indices, int indexCount) {
     if (atlas.isNull() || vertexCount <= 0 || indexCount <= 0) return;
     const auto base = static_cast<std::uint32_t>(meshVertices_.size() / 5);
-    const float a = static_cast<float>(alphaScale);
-    for (int i = 0; i < vertexCount; ++i) {
-        const float* v = vertices + 5 * i;
-        meshVertices_.insert(meshVertices_.end(), {v[0], v[1], v[2], v[3], v[4] * a});
+    const std::size_t at = meshVertices_.size();
+    meshVertices_.resize(at + 5 * static_cast<std::size_t>(vertexCount));
+    std::copy(vertices, vertices + 5 * vertexCount, meshVertices_.begin() + static_cast<std::ptrdiff_t>(at));
+    if (alphaScale < 1) {
+        const float a = static_cast<float>(alphaScale);
+        for (std::size_t i = at + 4; i < meshVertices_.size(); i += 5) meshVertices_[i] *= a;
     }
     MeshDraw draw;
     draw.atlas = atlas;
     draw.firstIndex = static_cast<int>(meshIndices_.size());
     draw.indexCount = indexCount;
-    for (int i = 0; i < indexCount; ++i) meshIndices_.push_back(base + indices[i]);
+    const std::size_t from = meshIndices_.size();
+    meshIndices_.resize(from + static_cast<std::size_t>(indexCount));
+    for (int i = 0; i < indexCount; ++i) meshIndices_[from + static_cast<std::size_t>(i)] = base + indices[i];
     Batch batch;
     batch.kind = Batch::Kind::Mesh;
     batch.mode = static_cast<int>(meshes_.size());

@@ -282,4 +282,16 @@ TEST(CharacterPerformer, PlaysARealPackQuickly) {
     std::printf("character frame: %.3f ms over %d frames, %zu poses, %d bones\n", ms, frames, pack->poses.size(),
                 pack->poses[0].rig.boneCount());
     EXPECT_LT(ms, 2);
+    // Her outline and the skinned vertices of every part, as the renderer needs them each frame.
+    HudSilhouette silhouette(0, 444, 2);
+    std::vector<double> scratch, skinned;
+    const auto traceStart = std::chrono::steady_clock::now();
+    for (int n = 0; n < 600; ++n) (void)performer.trace(silhouette, 222, 355, 0.3, scratch);
+    const double traceMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - traceStart).count() / 600;
+    const auto skinStart = std::chrono::steady_clock::now();
+    for (int n = 0; n < 600; ++n) {
+        for (int part = 0; part < static_cast<int>(performer.activeRig().parts.size()); ++part) performer.activeRig().skin(part, performer.world(), skinned);
+    }
+    const double skinMs = std::chrono::duration<double, std::milli>(std::chrono::steady_clock::now() - skinStart).count() / 600;
+    std::printf("trace %.3f ms, skin %.3f ms per frame\n", traceMs, skinMs);
 }

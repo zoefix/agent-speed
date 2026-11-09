@@ -745,6 +745,11 @@ QImage OrbWindow::snapshot() {
 }
 
 void OrbWindow::renderFrame() {
+    // Development aid: AGENT_SPEED_ORB_PROFILE=1 prints, every 5 s, the frames drawn and the CPU time of building
+    // the scene (springs, the character, the cards) and of submitting it.
+    static const bool profile = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_PROFILE") > 0;
+    QElapsedTimer profileTimer;
+    if (profile) profileTimer.start();
     const double t = now();
     const bool resumed = resumePending_;
     resumePending_ = false;
@@ -849,7 +854,23 @@ void OrbWindow::renderFrame() {
     highlight_ = highlighted_ ? std::min(1.0, highlight_ + dt / 0.15) : std::max(0.0, highlight_ - dt / 0.15);
     addHighlight(scene_, f);
 
+    const qint64 built = profile ? profileTimer.nsecsElapsed() : 0;
     renderer_.render(scene_, QSizeF(side(), side()), dpr, center());
+    if (profile) {
+        static int frames = 0;
+        static qint64 buildNs = 0, renderNs = 0;
+        static double since = t;
+        ++frames;
+        buildNs += built;
+        renderNs += profileTimer.nsecsElapsed() - built;
+        if (t - since >= 5) {
+            qInfo("orb %s: %.1f fps, build %.3f ms, submit %.3f ms per frame", qPrintable(styleKey(styleKind_)), frames / (t - since),
+                  buildNs / 1e6 / frames, renderNs / 1e6 / frames);
+            frames = 0;
+            buildNs = renderNs = 0;
+            since = t;
+        }
+    }
     schedule();
 }
 

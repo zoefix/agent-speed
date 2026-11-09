@@ -1,5 +1,6 @@
 #include "orb/character/character_style.hpp"
 
+#include <QElapsedTimer>
 #include <QFontMetricsF>
 #include <algorithm>
 #include <cmath>
@@ -19,6 +20,37 @@ constexpr double kFeet = 0.45;    // her feet below the disc center × D
 constexpr double kRingRadius = 0.23, kRingSquash = 0.17;
 constexpr int kRingLights = 96;
 constexpr double kUnitScale = 0.82;
+
+// AGENT_SPEED_ORB_PROFILE=2: the time of each part of a character frame, every 300 frames.
+struct Lap {
+    static bool on() {
+        static const bool enabled = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_PROFILE") >= 2;
+        return enabled;
+    }
+    static std::array<double, 8>& sums() {
+        static std::array<double, 8> s{};
+        return s;
+    }
+    QElapsedTimer timer;
+    Lap() {
+        if (on()) timer.start();
+    }
+    void mark(int slot) {
+        if (!on()) return;
+        sums()[static_cast<std::size_t>(slot)] += static_cast<double>(timer.nsecsElapsed()) / 1e6;
+        timer.restart();
+    }
+    static void report() {
+        if (!on()) return;
+        static int frames = 0;
+        if (++frames < 300) return;
+        auto& s = sums();
+        qInfo("character ms/frame: perform %.3f particles %.3f hud %.3f cards %.3f layout %.3f | mesh %.3f dots %.3f cards %.3f",
+              s[0] / frames, s[1] / frames, s[2] / frames, s[3] / frames, s[4] / frames, s[5] / frames, s[6] / frames, s[7] / frames);
+        s.fill(0);
+        frames = 0;
+    }
+};
 
 std::uint64_t nextSeed() {
     static std::uint64_t seeds = 7;
@@ -198,6 +230,7 @@ void CharacterStyle::step(const Frame& f) {
         loaded_[pack->id()] = pack;
         stage_->switchTo(ac::Performer(pack, nextSeed(), 1));
     }
+    Lap lap;
     stage_->calm = false;
     stage_->amplitude = f.effects.level == 0 ? 0 : f.effects.level == 1 ? 0.5 : 1;
     stage_->step(dt, content_.level);
@@ -206,6 +239,7 @@ void CharacterStyle::step(const Frame& f) {
         loaded_ = {{performer.pack().id(), performer.packPointer()}};
     }
 
+    lap.mark(0);
     const auto g = geometry(f, performer);
     const bool particles = f.effects.level >= 2;
     const double rate = f.effects.level >= 3 ? 1.6 : 1.0;
@@ -222,6 +256,7 @@ void CharacterStyle::step(const Frame& f) {
                                                                    g.feetX + 0.625 * g.height, g.feetY - 0.042 * g.height};
     particles_.update(dt, particles ? performer.intensity() : 0, area, g.unit, particles ? rate : 0);
 
+    lap.mark(1);
     hudTime_ += dt;
     const double heat = content_.unavailable ? 0 : f.heat;
     hud_.emberRate = particles ? rate : 0;
@@ -234,10 +269,13 @@ void CharacterStyle::step(const Frame& f) {
         for (const auto& c : content_.agents) agents.push_back({c.redF() * 255, c.greenF() * 255, c.blueF() * 255});
     }
     if (!content_.modelName.isEmpty()) lastModel_ = content_.modelName;
+    lap.mark(2);
     layoutCards(dt, f, performer, g);
+    lap.mark(3);
     const auto& speed = wings_.places()[0];
     const double speedTop = speed.y - wings_.sizes()[0].h / 2;
     hud_.layout(dt, performer.hudLayout(g.feetX, g.feetY, g.ppp, g.unit), agents, digitAdvance, speed.x, speedTop - 1.1 * m.peak);
+    lap.mark(4);
 }
 
 CharacterLightning::Strength CharacterStyle::lightningStrength(const Frame& f) const {
@@ -408,30 +446,50 @@ void CharacterStyle::drawPose(Scene& scene, const Frame& f, const ac::Performer&
     const double k = g.ppp * placement.scale;
     const double ox = g.feetX - placement.feetX * k, oy = g.feetY - placement.feetY * k;
     const double aw = std::max(1, rig.atlasWidth), ah = std::max(1, rig.atlasHeight);
-    vertices_.clear();
-    indices_.clear();
+    // Sized once per frame and written in place: no per-vertex growth checks.
+    std::size_t vertexTotal = 0, indexTotal = 0;
+    for (std::size_t i = 0; i < rig.parts.size(); ++i) {
+        if ((i < opacities.size() ? opacities[i] : 1) < 0.002) continue;
+        vertexTotal += static_cast<std::size_t>(rig.parts[i].vertexCount());
+        indexTotal += rig.parts[i].triangles.size();
+    }
+    vertices_.resize(5 * vertexTotal);
+    indices_.resize(indexTotal);
+    float* out = vertices_.data();
+    std::uint32_t* index = indices_.data();
+    std::uint32_t base = 0;
+    const double iw = 1 / aw, ih = 1 / ah;
+    const float fade = static_cast<float>(alpha * f.alpha);
     for (std::size_t i = 0; i < rig.parts.size(); ++i) {
         const double opacity = i < opacities.size() ? opacities[i] : 1;
         if (opacity < 0.002) continue;
         const auto& part = rig.parts[i];
-        const auto base = static_cast<std::uint32_t>(vertices_.size() / 5);
         const auto n = static_cast<std::size_t>(part.vertexCount());
         const auto m = static_cast<std::size_t>(part.influences);
+        const double* pos = part.vertices.data();
+        const double* uv = part.uv.data();
+        const double* weights = part.weights.data();
+        const std::uint16_t* bones = part.bones.data();
+        const float a = static_cast<float>(opacity) * fade;
         for (std::size_t v = 0; v < n; ++v) {
-            const double x = part.vertices[2 * v], y = part.vertices[2 * v + 1];
+            const double x = pos[2 * v], y = pos[2 * v + 1];
             double sx = 0, sy = 0;
             for (std::size_t j = 0; j < m; ++j) {
-                const double w = part.weights[v * m + j];
+                const double w = weights[v * m + j];
                 if (w == 0) continue;
-                const auto& t = world[part.bones[v * m + j]];
+                const auto& t = world[bones[v * m + j]];
                 sx += w * (t.a * x + t.b * y + t.tx);
                 sy += w * (t.c * x + t.d * y + t.ty);
             }
-            vertices_.insert(vertices_.end(), {static_cast<float>(ox + sx * k), static_cast<float>(oy + sy * k),
-                                               static_cast<float>(part.uv[2 * v] / aw), static_cast<float>(part.uv[2 * v + 1] / ah),
-                                               static_cast<float>(opacity * alpha * f.alpha)});
+            out[0] = static_cast<float>(ox + sx * k);
+            out[1] = static_cast<float>(oy + sy * k);
+            out[2] = static_cast<float>(uv[2 * v] * iw);
+            out[3] = static_cast<float>(uv[2 * v + 1] * ih);
+            out[4] = a;
+            out += 5;
         }
-        for (auto t : part.triangles) indices_.push_back(base + t);
+        for (auto t : part.triangles) *index++ = base + t;
+        base += static_cast<std::uint32_t>(n);
     }
     scene.addMesh(image, vertices_.data(), static_cast<int>(vertices_.size() / 5), indices_.data(), static_cast<int>(indices_.size()));
 }
@@ -526,14 +584,19 @@ void CharacterStyle::build(Scene& scene, const Frame& f) {
         return;
     }
     const double now = f.time;
+    Lap lap;
     addDots(scene, f, hud_.back());
     drawParticles(scene, f, false, 0, now);
     if (const auto& outgoing = stage_->outgoing()) drawCharacter(scene, f, *outgoing, 1 - stage_->outgoingFade(), now);
     drawCharacter(scene, f, stage_->current(), stage_->outgoing() ? stage_->outgoingFade() : 1, now);
+    lap.mark(5);
     addDots(scene, f, hud_.front());
     drawParticles(scene, f, true, 0, now);
+    lap.mark(6);
     drawCards(scene, f);
     drawPeak(scene, f);
+    lap.mark(7);
+    Lap::report();
     CharacterAssets::shared().sweep(now);
     drew_ = true;
 }

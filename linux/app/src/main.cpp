@@ -497,7 +497,8 @@ int main(int argc, char* argv[]) {
             });
         }
     }
-    // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits.
+    // Development aid: --orb-snapshots=<prefix> saves the orb every 4 s, 16 times, then quits;
+    // AGENT_SPEED_ORB_SHOT_MS and AGENT_SPEED_ORB_SHOTS change the interval and the count (a frame sequence).
     QString orbShots;
     for (const auto& arg : app.arguments()) {
         if (arg.startsWith(QStringLiteral("--orb-snapshots="))) orbShots = arg.mid(16);
@@ -508,9 +509,11 @@ int main(int argc, char* argv[]) {
         orbs.forceDark(app.arguments().contains(QStringLiteral("--orb-dark")));
         QObject::connect(&orbShotTimer, &QTimer::timeout, &app, [&] {
             if (auto* first = orbs.first()) first->snapshot().save(orbShots + QStringLiteral("-%1.png").arg(orbShot, 2, 10, QLatin1Char('0')));
-            if (++orbShot >= 16) QApplication::quit();
+            const int count = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_SHOTS");
+            if (++orbShot >= (count > 0 ? count : 16)) QApplication::quit();
         });
-        orbShotTimer.start(4000);
+        const int interval = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_SHOT_MS");
+        orbShotTimer.start(interval > 0 ? interval : 4000);
     }
     // Development aid: --plate-snapshots=<prefix> widens the first orb's plate to its chip after 3 s and saves the plate
     // every 50 ms for 0.8 s, then quits.
