@@ -242,6 +242,14 @@ public static class OrbEditing
         Update(document, id, o => o with { Traffic = Enum.IsDefined(traffic) ? traffic : OrbTraffic.Sources });
 
     /// <summary>The orb's title theme: null follows the General theme, else a preset or custom set id.</summary>
+    /// <summary>The <c>character</c> style's character: a pack id, or null to follow the fastest model vendor (CHARACTERS 7).</summary>
+    public static OrbsDocument SetCharacter(OrbsDocument document, string id, string? character) =>
+        Update(document, id, o => o with { Character = OrbDefinition.CleanCharacter(character) });
+
+    /// <summary>One card of the <c>character</c> style (DESIGN 2a.6, Readouts).</summary>
+    public static OrbsDocument SetCharacterReadout(OrbsDocument document, string id, CharacterReadout readout, bool on) =>
+        Update(document, id, o => o with { CharacterReadouts = o.CharacterReadouts.With(readout, on) });
+
     public static OrbsDocument SetTitleTheme(OrbsDocument document, string id, string? themeId) =>
         Update(document, id, o => o with { TitleTheme = OrbDefinition.CleanId(themeId) });
 
@@ -330,6 +338,8 @@ public static class OrbEditing
         Unit = template.Unit,
         Traffic = template.Traffic,
         Hosts = template.Hosts,
+        Character = template.Character,
+        CharacterReadouts = template.CharacterReadouts,
         Visible = true,
     };
 
