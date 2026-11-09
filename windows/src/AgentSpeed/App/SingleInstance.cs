@@ -92,16 +92,23 @@ internal sealed class SingleInstance : IDisposable
         }
     }
 
+    /// <summary>
+    /// The user's instance; a test session with its own settings file (<c>AGENT_SPEED_SETTINGS_FILE</c>) is an instance of
+    /// its own, so it can run beside the installed app.
+    /// </summary>
     private static string UserSuffix()
     {
+        var session = Environment.GetEnvironmentVariable("AGENT_SPEED_SETTINGS_FILE") is { Length: > 0 } file
+            ? "." + Convert.ToHexString(System.Security.Cryptography.SHA256.HashData(System.Text.Encoding.UTF8.GetBytes(file.ToUpperInvariant())))[..12]
+            : string.Empty;
         try
         {
             using var identity = WindowsIdentity.GetCurrent();
-            return identity.User?.Value ?? Environment.UserName;
+            return (identity.User?.Value ?? Environment.UserName) + session;
         }
         catch (Exception ex) when (ex is System.Security.SecurityException or UnauthorizedAccessException)
         {
-            return Environment.UserName;
+            return Environment.UserName + session;
         }
     }
 }

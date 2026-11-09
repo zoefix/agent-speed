@@ -53,8 +53,8 @@ public class CharacterDrawTests(ITestOutputHelper output)
     {
         orb.SetData(time, value, HeatMath.RawTier(value, Redline), SpeedTitles.Raw(value, Redline), value > 0 ? [SourceKind.ClaudeCode] : [], "info", null);
         var rx = value * 52;
-        orb.SetCharacterReadings(time, OrbLinesText.Traffic(new TrafficRate(rx, rx / 4), false, En), null,
-            value > 0 ? new Cost.LiveMoney("0.0042", "US$/s", "$", false, false, 4200, "", "") : null, value > 0);
+        orb.SetCharacterNetwork(time, OrbLinesText.Traffic(new TrafficRate(rx, rx / 4), false, En));
+        orb.SetCharacterReadings(time, null, value > 0 ? new Cost.LiveMoney("0.0042", "US$/s", "$", false, false, 4200, "", "") : null, value > 0);
     }
 
     private static CharacterPack TinyPack() =>

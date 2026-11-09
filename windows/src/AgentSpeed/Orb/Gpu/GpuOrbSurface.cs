@@ -54,6 +54,22 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
         _automation = automation;
         _orb = new OrbGpuOrb(seed, device.Atlas.ForScale(1));
         device.Recovered += OnRecovered;
+        CharacterGpu.AssetReady += OnCharacterAsset;
+    }
+
+    /// <summary>A character atlas finished decoding: draw a frame so it shows (the frame's fingerprint may not change).</summary>
+    private void OnCharacterAsset(object? sender, EventArgs e)
+    {
+        if (InstrumentStyle != OrbStyle.Character)
+        {
+            return;
+        }
+
+        System.Windows.Application.Current?.Dispatcher.BeginInvoke(() =>
+        {
+            _forcePresent = true;
+            _clock.Kick(this);
+        });
     }
 
     private void OnRecovered(object? sender, EventArgs e)
@@ -251,6 +267,36 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
 
     public bool LinesVisible => _orb.LinesVisible(Now());
 
+    public void SetCharacter(Presentation.Orb.OrbCharacterContent? content)
+    {
+        if (_orb.SetCharacter(content))
+        {
+            _forcePresent = true;
+            _clock.Kick(this);
+        }
+    }
+
+    public void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating)
+    {
+        if (_orb.SetCharacterReadings(Now(), performance, money, generating))
+        {
+            _clock.Kick(this);
+        }
+    }
+
+    public void SetCharacterNetwork(Presentation.Orb.Lines.OrbLinesSample? network)
+    {
+        if (_orb.SetCharacterNetwork(Now(), network))
+        {
+            _clock.Kick(this);
+        }
+    }
+
+    public string? CharacterSentence(Presentation.Localization.Localizer localizer, string currencyName) =>
+        InstrumentStyle == OrbStyle.Character && _orb.Character is { } content
+            ? OrbCharacterSpeech.Sentence(_orb.CharacterReadings, content.Readouts, Now(), localizer, currencyName)
+            : null;
+
     public Presentation.Orb.Lines.OrbLinesReading? LinesReading => _orb.LinesReading;
 
     public void Pulse(double speed, long outputTokens)
@@ -370,6 +416,7 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
     public void Dispose()
     {
         _device.Recovered -= OnRecovered;
+        CharacterGpu.AssetReady -= OnCharacterAsset;
         _clock.Unregister(this);
         _surface?.Dispose();
         _surface = null;

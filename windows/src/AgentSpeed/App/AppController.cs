@@ -49,6 +49,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
     private SettingsService _settings = null!;
     private TitleThemesService _titles = null!;
     private CostService _cost = null!;
+    private Characters.CharacterService? _characters;
     private Traffic.TrafficService _traffic = null!;
     private TaskbarState? _lastTaskbarState;
     private readonly ThinkingZeroHold _barThinking = new();
@@ -202,7 +203,15 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                 Orb.Gpu.OrbGpuRenderer.Timer = new Orb.Gpu.GpuTimer();
             }
         }
-        _orbs = new OrbManager(_ui, _orbClock, _settings, _theme, _speed, _loc, this) { Titles = _titles, Cost = _cost.Display };
+        _characters = new Characters.CharacterService(_ui, _settings, AppPaths.Version);
+        _orbs = new OrbManager(_ui, _orbClock, _settings, _theme, _speed, _loc, this)
+        {
+            Titles = _titles,
+            Cost = _cost.Display,
+            Characters = _characters,
+            Prices = () => _cost.Book.Current,
+        };
+        _characters.Changed += (_, _) => _orbs?.RefreshCharacters();
         _orbs.Apply();
         StartBoards();
         _titles.Changed += (_, _) => OnTitlesChanged();
@@ -334,8 +343,29 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                             case "corner" when first is not null:
                                 _orbs?.MoveToNextCorner(first);
                                 break;
+                            case not null when first is not null && op.StartsWith("style-", StringComparison.Ordinal):
+                                var style = Presentation.Orb.OrbStyles.Parse(op[6..]);
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetStyle(s.Orbs, first, style) });
+                                break;
+                            case not null when first is not null && op.StartsWith("character-", StringComparison.Ordinal):
+                                var character = op[10..];
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetCharacter(s.Orbs, first, character == "auto" ? null : character) });
+                                break;
+                            case not null when first is not null && op.StartsWith("size-", StringComparison.Ordinal)
+                                && double.TryParse(op[5..], NumberStyles.Float, CultureInfo.InvariantCulture, out var size):
+                                _settings.Update(s => s with { Orbs = OrbEditing.SetSize(s.Orbs, first, size) });
+                                break;
+                            case not null when first is not null && op.StartsWith("readout-", StringComparison.Ordinal):
+                                var parts = op[8..].Split('-');
+                                if (parts.Length == 2 && CharacterReadouts.All.FirstOrDefault(r => CharacterReadouts.Key(r) == parts[0]) is var readout
+                                    && CharacterReadouts.Key(readout) == parts[0])
+                                {
+                                    _settings.Update(s => s with { Orbs = OrbEditing.SetCharacterReadout(s.Orbs, first, readout, parts[1] == "on") });
+                                }
+
+                                break;
                             default:
-                                RunTitleCaptureOperation(op);
+                                RunTitleCaptureOperation(op!);
                                 break;
                         }
                     },
@@ -499,6 +529,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         Try(() => _previewWindow?.Close());
         Try(() => _traffic?.Dispose());
         Try(() => _cost.Dispose());
+        Try(() => _characters?.Dispose());
         Try(() => _settings.Flush());
         Try(() => _preview.Stop());
         Try(() => _pinnedSpeeds?.Dispose());
@@ -1114,6 +1145,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         _updates.OnSettingsChanged(previous, current);
         _cost.OnSettingsChanged(previous, current);
+        _characters?.OnSettingsChanged(previous, current);
         _traffic.OnSettingsChanged(previous, current);
         if (previous.Traffic.IncludeTools != current.Traffic.IncludeTools || previous.EnabledSourceSet() != current.EnabledSourceSet())
         {

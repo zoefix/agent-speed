@@ -55,7 +55,7 @@ internal sealed record OrbUndo(OrbUndoKind Kind, OrbsDocument Before, string Anc
 /// editing operations (add, duplicate, split, merge, remove, undo). The dashboard and the taskbar keep showing all
 /// sources.
 /// </summary>
-internal sealed class OrbManager : IDisposable
+internal sealed partial class OrbManager : IDisposable
 {
     private static readonly TimeSpan UndoTime = TimeSpan.FromSeconds(8);
     private static readonly TimeSpan ChipTime = TimeSpan.FromSeconds(2);
@@ -300,6 +300,7 @@ internal sealed class OrbManager : IDisposable
         UpdateTraffic(_traffic);
         Update(_speed.Snapshot);
         ResolvePlates();
+        NoteCharacterStyles(previous, visible);
 
         // After the plates are laid out for the new sources: the chip (or the plate folding it) shows the new content.
         foreach (var id in resourced)
@@ -322,8 +323,9 @@ internal sealed class OrbManager : IDisposable
         {
             var feed = entry.Feed;
             feed.Previewing = _speed.IsPreviewing;
+            feed.Character = entry.Definition.Style == OrbStyle.Character;
             var fired = feed.Update(snapshot, now);
-            if (entry.Definition.Traffic == OrbTraffic.Intelligence)
+            if (entry.Definition.Traffic == OrbTraffic.Intelligence && !feed.Character)
             {
                 FeedLines(entry);
             }
@@ -351,7 +353,11 @@ internal sealed class OrbManager : IDisposable
         _traffic = traffic;
         foreach (var entry in _entries.Values)
         {
-            if (entry.Definition.Traffic != OrbTraffic.Intelligence)
+            if (entry.Definition.Style == OrbStyle.Character)
+            {
+                FeedCharacterNetwork(entry);
+            }
+            else if (entry.Definition.Traffic != OrbTraffic.Intelligence)
             {
                 FeedLines(entry);
             }
@@ -712,7 +718,7 @@ internal sealed class OrbManager : IDisposable
         var texts = Texts(ThemeOf(orb), orb.Unit == OrbUnit.Cost && Cost is { } cost ? cost.UnitPerSecond : null);
         var sources = orb.TrackedSources is { } set ? set.ToArray() : null;
         var unavailable = UnavailableOf(entry);
-        var config = new OrbSurfaceConfig(orb.Style, orb.Size, _theme.IsDark ? OrbAppearance.Dark : OrbAppearance.Light, effects,
+        var config = new OrbSurfaceConfig(orb.Style, orb.Footprint, _theme.IsDark ? OrbAppearance.Dark : OrbAppearance.Light, effects,
             _theme.HighContrast, !_theme.TransparencyEnabled, orb.Opacity, settings.ResponsePulses, settings.CelebratePeaks,
             orb.EffectiveRedline(settings.Metric, settings), texts, sources, unavailable);
         var options = new OrbWindowOptions(orb.AlwaysOnTop, orb.ClickThrough, orb.FadeWhenIdle, entry.Feed.IsUnavailable, _theme.ReduceMotion);
@@ -785,6 +791,7 @@ internal sealed class OrbManager : IDisposable
         }
 
         surface.Scene.SetMoney(money);
+        PushCharacter(entry);
         var info = money?.HoverLine ?? _loc.Format("today.summary", SpeedFormat.Tokens(reading.Today.Output), reading.Agents.Count);
         surface.SetData(feed.Value, feed.Tier, feed.Title, reading.GeneratingSources, info, unavailableTitle);
         surface.SetIdentity(orb.TrackedSources?.ToArray(), UnavailableOf(entry));
@@ -811,10 +818,15 @@ internal sealed class OrbManager : IDisposable
             accessible = _loc.Format("a11y.orb.named", name, SpeedFormat.Speed(feed.Value), ThemeOf(orb).Text(feed.Title, _loc));
         }
 
-        var lines = unavailableTitle is null && surface.LinesVisible ? surface.LinesReading : null;
+        var lines = unavailableTitle is null && surface.LinesVisible && orb.Style != OrbStyle.Character ? surface.LinesReading : null;
         if (lines is { } shown)
         {
             accessible += DisplayText.SpokenSeparator(_loc) + shown.Spoken(_clock.Now);
+        }
+        else if (unavailableTitle is null && orb.Style == OrbStyle.Character
+            && surface.CharacterSentence(_loc, Cost?.CurrencyName ?? "USD") is { } cards)
+        {
+            accessible += DisplayText.SpokenSeparator(_loc) + cards;
         }
 
         entry.Window.SetDiscHint(lines?.Content.Detail);
@@ -1176,7 +1188,7 @@ internal sealed class OrbManager : IDisposable
         var monitor = Monitors.FromPoint(new POINT((int)entry.Window.Center.X, (int)entry.Window.Center.Y));
         var scale = monitor?.Scale ?? 1;
         _chip.SetContent(dots, UnavailableOf(entry), text, null, _theme.IsDark, AppFonts.XmlLanguageFor(_loc.LanguageCode));
-        _chip.PlaceNear(entry.Window.Center, orb.Size / 2 * scale, monitor?.WorkRect ?? new RectD(0, 0, 1920, 1080), scale, OtherDiscs(id, scale));
+        _chip.PlaceNear(entry.Window.Center, orb.Footprint / 2 * scale, monitor?.WorkRect ?? new RectD(0, 0, 1920, 1080), scale, OtherDiscs(id, scale));
         _chip.Opacity = 1;
     }
 
@@ -1211,7 +1223,7 @@ internal sealed class OrbManager : IDisposable
 
     private IReadOnlyList<(PointD Center, double Radius)> OtherDiscs(string id, double scale) =>
         _entries.Where(e => e.Key != id && e.Value.Window.HasCenter)
-            .Select(e => (e.Value.Window.Center, e.Value.Definition.Size / 2 * scale))
+            .Select(e => (e.Value.Window.Center, e.Value.Definition.Footprint / 2 * scale))
             .ToArray();
 
     private void HideChip()
@@ -1263,7 +1275,7 @@ internal sealed class OrbManager : IDisposable
         var monitor = Monitors.FromPoint(new POINT((int)entry.Window.Center.X, (int)entry.Window.Center.Y));
         var scale = monitor?.Scale ?? 1;
         _undoChip.SetContent([], SourceSet.Empty, text, _loc["orbs.undo"], _theme.IsDark, AppFonts.XmlLanguageFor(_loc.LanguageCode));
-        _undoChip.PlaceNear(entry.Window.Center, entry.Definition.Size / 2 * scale, monitor?.WorkRect ?? new RectD(0, 0, 1920, 1080), scale,
+        _undoChip.PlaceNear(entry.Window.Center, entry.Definition.Footprint / 2 * scale, monitor?.WorkRect ?? new RectD(0, 0, 1920, 1080), scale,
             OtherDiscs(undo.AnchorId, scale), stackOffset: 30 * scale);
         _undoChip.FadeIn(_theme.ReduceMotion);
     }

@@ -196,10 +196,17 @@ public sealed class OrbGpuOrb
     public OrbCharacterContent? Character => _character;
 
     /// <summary>The <c>character</c> cards' live values (DESIGN 2a.6, Which cards show); true when anything shown changed.</summary>
-    public bool SetCharacterReadings(double now, OrbLinesSample? network, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating)
+    public bool SetCharacterReadings(double now, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating)
     {
         Scene.Update(Math.Max(Scene.Time, now));
-        return _characterReadings.Apply(network, performance, money, generating, Scene.Time);
+        return _characterReadings.Apply(performance, money, generating, Scene.Time);
+    }
+
+    /// <summary>The <c>character</c> network card's traffic sample; true when anything shown changed.</summary>
+    public bool SetCharacterNetwork(double now, OrbLinesSample? network)
+    {
+        Scene.Update(Math.Max(Scene.Time, now));
+        return _characterReadings.ApplyNetwork(network, Scene.Time);
     }
 
     public OrbCharacterReadings CharacterReadings => _characterReadings;

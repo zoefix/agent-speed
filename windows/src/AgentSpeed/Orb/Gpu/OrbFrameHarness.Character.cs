@@ -139,7 +139,8 @@ internal static partial class OrbFrameHarness
         var performance = HarnessIntelligence(loc, value, generating ? value * 0.3 : 0, generating ? 760 + 3.2 * value : 0);
         var money = generating ? new LiveMoney((value * 0.000004).ToString("0.0000", CultureInfo.InvariantCulture), "US$/s", "$", false, false, value * 4, "", "")
             : null;
-        orb.SetCharacterReadings(time, network, performance, money, generating);
+        orb.SetCharacterNetwork(time, network);
+        orb.SetCharacterReadings(time, performance, money, generating);
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,

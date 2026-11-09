@@ -1,6 +1,7 @@
 using AgentSpeed.Presentation.Character;
 using AgentSpeed.Presentation.Colors;
 using AgentSpeed.Presentation.Cost;
+using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Orb.Lines;
 using AgentSpeed.Presentation.Settings.Orbs;
 
@@ -98,20 +99,62 @@ public sealed class OrbCharacterReadings
 
     public bool PerformanceLoud(double time) => Performance.Reading is { } r && time < r.QuietAt;
 
-    /// <summary>Applies one engine tick; true when anything shown may have changed.</summary>
-    public bool Apply(OrbLinesSample? network, OrbLinesSample? performance, LiveMoney? money, bool generating, double time)
+    /// <summary>Applies one engine tick (性能 and 思考, the cost rate); true when anything shown may have changed.</summary>
+    public bool Apply(OrbLinesSample? performance, LiveMoney? money, bool generating, double time)
     {
-        var changed = Network.Apply(network, time);
-        changed |= Performance.Apply(performance, time);
+        var changed = Performance.Apply(performance, time);
         var before = Cost.Money;
         Cost.Apply(money, generating, time);
         return changed || !Equals(before, Cost.Money);
     }
+
+    /// <summary>Applies one traffic sample (null while network speed is not measured); true when it changed.</summary>
+    public bool ApplyNetwork(OrbLinesSample? network, double time) => Network.Apply(network, time);
 
     /// <summary>When a card next fades by its quiet rule, or null.</summary>
     public double? NextChange(double time)
     {
         static double? Min(double? a, double? b) => a is null ? b : b is null ? a : Math.Min(a.Value, b.Value);
         return Min(Min(Network.Reading?.NextChange(time), Performance.Reading?.NextChange(time)), Cost.QuietAt > time ? Cost.QuietAt : null);
+    }
+}
+
+/// <summary>The <c>character</c> orb's cards in its accessible text (DESIGN 2a.6, Accessibility).</summary>
+public static class OrbCharacterSpeech
+{
+    /// <summary>
+    /// The cards that show, in the column's order: 性能 and 思考, network speed, then the cost rate; null when none shows.
+    /// </summary>
+    public static string? Sentence(OrbCharacterReadings readings, CharacterReadouts on, double time, Localizer localizer, string currencyName)
+    {
+        ArgumentNullException.ThrowIfNull(readings);
+        ArgumentNullException.ThrowIfNull(on);
+        ArgumentNullException.ThrowIfNull(localizer);
+        var parts = new List<string>(3);
+        if (readings.PerformanceLoud(time) && (on.Intelligence || on.Thinking) && readings.Performance.Reading is { Content: { Kind: OrbLinesKind.Intelligence } } performance)
+        {
+            var hidden = !on.Thinking || (on.Intelligence && performance.Thinking.Hides(time));
+            parts.Add(hidden ? performance.Content.SpokenAlone ?? performance.Content.Spoken : performance.Content.Spoken);
+        }
+
+        if (readings.NetworkLoud(time) && on.Network && readings.Network.Reading is { Content: { Kind: OrbLinesKind.Traffic } network })
+        {
+            parts.Add(network.Spoken);
+        }
+
+        if (readings.Cost.IsLoud(time) && on.Cost && readings.Cost.Money is { } money)
+        {
+            parts.Add(money.Unknown
+                ? localizer["a11y.board.costUnknown"]
+                : localizer.Format("a11y.board.cost", money.AtLeast ? localizer.Format("a11y.orb.costAtLeast", money.Number) : money.Number, currencyName));
+        }
+
+        if (parts.Count == 0)
+        {
+            return null;
+        }
+
+        var separator = localizer.LanguageCode == LanguageCodes.Ja ? "、" : localizer.UsesLatinScript ? ", " : "，";
+        return string.Join(separator, parts);
     }
 }
