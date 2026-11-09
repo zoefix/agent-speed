@@ -33,7 +33,7 @@ never requested.
 
 | Feature | Hosts (in fallback order) | When | Cap |
 | --- | --- | --- | --- |
-| Update check (UPDATES) | `api.github.com`; downloads `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` | 30 s after launch, every 6 h, manual | 300 MiB (assets) |
+| Update check (UPDATES) | `api.github.com`; Windows public-release fallback `github.com`; asset headers and downloads `github.com`, `objects.githubusercontent.com`, `release-assets.githubusercontent.com` | 30 s after launch, every 6 h, manual | 2 MiB (feeds), 300 MiB (assets) |
 | Price table (3) | `raw.githubusercontent.com`, `cdn.jsdelivr.net` | 60 s after launch, then daily, manual | 1 MiB |
 | Exchange rates (4) | `open.er-api.com`, `cdn.jsdelivr.net`, `latest.currency-api.pages.dev`, `api.frankfurter.dev` | only while a non-USD currency is selected: 30 s after launch or on selection, then daily, manual | 256 KiB |
 | Live reporting (6) | the service URL and the API host the user confirmed | only while the user has it on: every 5 s while agents work, a heartbeat while idle, nothing when quiet | 64 KiB discovery, 16 KiB API |

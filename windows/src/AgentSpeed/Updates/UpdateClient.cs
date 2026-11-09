@@ -2,12 +2,13 @@ using System.Buffers;
 using System.Net;
 using System.Net.Http;
 using System.Net.Http.Headers;
+using System.Runtime.InteropServices;
 using AgentSpeed.Presentation.Updates;
 
 namespace AgentSpeed.Updates;
 
 /// <summary>
-/// The only network access in the app (UPDATES section 1): the release feed and the two release assets. Redirects
+/// Update network access (UPDATES section 1): the release feeds and the two release assets. Redirects
 /// are followed by hand so that every hop is checked against <see cref="UpdateSource"/>; requests carry only Accept,
 /// User-Agent (and X-GitHub-Api-Version for the feed), never cookies or credentials.
 /// </summary>
@@ -26,29 +27,49 @@ internal sealed class UpdateClient : IDisposable
     private readonly string _userAgent;
 
     public UpdateClient(UpdateSource source, string currentVersion)
+        : this(source, currentVersion, CreateHandler())
+    {
+    }
+
+    internal UpdateClient(UpdateSource source, string currentVersion, HttpMessageHandler handler)
     {
         Source = source;
         _userAgent = $"AgentSpeed/{currentVersion} (Windows)";
-        var handler = new SocketsHttpHandler
-        {
-            AllowAutoRedirect = false,
-            UseCookies = false,
-            AutomaticDecompression = DecompressionMethods.None,
-            Credentials = null,
-            PreAuthenticate = false,
-            ConnectTimeout = FeedTimeout,
-            PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
-            PooledConnectionLifetime = TimeSpan.FromMinutes(5),
-            MaxResponseHeadersLength = 64,
-        };
         _http = new HttpClient(handler, disposeHandler: true) { Timeout = Timeout.InfiniteTimeSpan };
     }
+
+    private static SocketsHttpHandler CreateHandler() => new()
+    {
+        AllowAutoRedirect = false,
+        UseCookies = false,
+        AutomaticDecompression = DecompressionMethods.None,
+        Credentials = null,
+        PreAuthenticate = false,
+        ConnectTimeout = FeedTimeout,
+        PooledConnectionIdleTimeout = TimeSpan.FromSeconds(30),
+        PooledConnectionLifetime = TimeSpan.FromMinutes(5),
+        MaxResponseHeadersLength = 64,
+    };
 
     public UpdateSource Source { get; }
 
     /// <summary>The latest offerable release, or null when the feed has none (including HTTP 404: no releases yet).</summary>
     /// <exception cref="UpdateException">Network, rate limit or invalid feed.</exception>
     public async Task<ReleaseInfo?> FetchLatestAsync(CancellationToken cancellationToken)
+    {
+        try
+        {
+            return await FetchFeedAsync(cancellationToken).ConfigureAwait(false);
+        }
+        catch (UpdateException ex) when (!Source.IsOverride
+            && ex.Failure is UpdateFailure.Network or UpdateFailure.RateLimited
+            && !cancellationToken.IsCancellationRequested)
+        {
+            return await FetchPublicLatestAsync(cancellationToken).ConfigureAwait(false);
+        }
+    }
+
+    private async Task<ReleaseInfo?> FetchFeedAsync(CancellationToken cancellationToken)
     {
         using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         timeout.CancelAfter(FeedTimeout);
@@ -77,6 +98,65 @@ internal sealed class UpdateClient : IDisposable
         {
             throw new UpdateException(UpdateFailure.Network, "The release feed could not be read.", ex);
         }
+    }
+
+    private async Task<ReleaseInfo?> FetchPublicLatestAsync(CancellationToken cancellationToken)
+    {
+        using var timeout = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeout.CancelAfter(FeedTimeout);
+        try
+        {
+            // GitHub's latest redirect excludes drafts and pre-releases; the Atom feed alone does not.
+            using var latest = await SendAsync(new Uri(UpdateSource.GitHubReleasesUrl + "/latest"), "text/html",
+                feed: false, timeout.Token).ConfigureAwait(false);
+            if (latest.StatusCode == HttpStatusCode.NotFound)
+            {
+                return null;
+            }
+
+            EnsureSuccess(latest);
+            var page = latest.RequestMessage?.RequestUri
+                ?? throw new UpdateException(UpdateFailure.Invalid, "The latest release has no page URL.");
+            using var atom = await SendAsync(new Uri(UpdateSource.GitHubReleasesUrl + ".atom"), "application/atom+xml",
+                feed: false, timeout.Token).ConfigureAwait(false);
+            EnsureSuccess(atom);
+            if (atom.Content.Headers.ContentLength > ReleaseFeed.MaxFeedBytes)
+            {
+                throw new UpdateException(UpdateFailure.Invalid, "The public release feed is too large.");
+            }
+
+            var bytes = await ReadLimitedAsync(atom.Content, ReleaseFeed.MaxFeedBytes, timeout.Token).ConfigureAwait(false);
+            var release = GitHubReleaseFallback.Parse(page, bytes);
+            var packageName = UpdatePackage.AssetNameFor(RuntimeInformation.ProcessArchitecture)
+                ?? throw new UpdateException(UpdateFailure.Invalid, "No package for this architecture.");
+            var root = UpdateSource.GitHubReleasesUrl + "/download/" + Uri.EscapeDataString(release.Tag) + "/";
+            var package = await FetchAssetMetadataAsync(root, packageName, UpdatePackage.MaxAssetBytes, timeout.Token).ConfigureAwait(false);
+            var checksums = await FetchAssetMetadataAsync(root, UpdatePackage.ChecksumsName, UpdatePackage.MaxChecksumsBytes, timeout.Token).ConfigureAwait(false);
+            return release with { Assets = [package, checksums] };
+        }
+        catch (OperationCanceledException ex) when (!cancellationToken.IsCancellationRequested)
+        {
+            throw new UpdateException(UpdateFailure.Network, "The public release check timed out.", ex);
+        }
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
+        {
+            throw new UpdateException(UpdateFailure.Network, "The public release could not be read.", ex);
+        }
+    }
+
+    private async Task<ReleaseAsset> FetchAssetMetadataAsync(string root, string name, long maxBytes, CancellationToken cancellationToken)
+    {
+        var url = new Uri(root + name);
+        using var response = await SendAsync(url, AssetAccept, feed: false, cancellationToken).ConfigureAwait(false);
+        EnsureSuccess(response);
+        // Read headers only, never download an installer during an update check. The existing install path still
+        // checks the exact size and SHA-256 of the package before extracting or replacing anything.
+        if (response.Content.Headers.ContentLength is not { } size || size <= 0 || size > maxBytes)
+        {
+            throw new UpdateException(UpdateFailure.Invalid, $"{name} has an invalid size.");
+        }
+
+        return new ReleaseAsset(name, url, size);
     }
 
     /// <summary>Streams an asset to a new file; the size must equal the size the feed declared.</summary>
@@ -150,7 +230,7 @@ internal sealed class UpdateClient : IDisposable
         var current = url;
         for (var hop = 0; ; hop++)
         {
-            var request = new HttpRequestMessage(HttpMethod.Get, current) { Version = HttpVersion.Version11 };
+            using var request = new HttpRequestMessage(HttpMethod.Get, current) { Version = HttpVersion.Version11 };
             request.Headers.Accept.Add(new MediaTypeWithQualityHeaderValue(accept));
             request.Headers.TryAddWithoutValidation("User-Agent", _userAgent);
             if (feed)
