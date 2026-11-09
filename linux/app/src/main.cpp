@@ -653,8 +653,8 @@ int main(int argc, char* argv[]) {
         });
     }
 
-    // Development aid: --orb-menu-snapshot=<prefix> saves the first orb's context menu and its Hosts and Size submenus
-    // (<prefix>-menu.png, -hosts.png, -size.png), then quits.
+    // Development aid: --orb-menu-snapshot=<prefix> saves the first orb's context menu and its Hosts, Size, Style and
+    // character submenus (<prefix>-menu.png, -hosts.png, -size.png, -style.png, …), then quits.
     for (const auto& arg : arguments) {
         if (!arg.startsWith(QStringLiteral("--orb-menu-snapshot="))) continue;
         QTimer::singleShot(2500, &app, [&, prefix = arg.mid(20)] {

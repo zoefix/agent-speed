@@ -22,6 +22,7 @@
 #include "appearance.hpp"
 #include "host_dot.hpp"
 #include "orb/orb_window.hpp"
+#include "orb/style.hpp"
 #include "orbs/name_plate.hpp"
 #include "orbs/size_slider_action.hpp"
 #include "preferences.hpp"
@@ -34,7 +35,6 @@ namespace {
 
 constexpr double kGap = 12, kSnapMargin = 12;
 constexpr double kPresets[] = {112, 148, 196};
-const char* const kStyles[] = {"led", "needle", "liquid", "reactor", "minimal"};
 
 QString fill(QString text, const QStringList& args) {
     for (const auto& arg : args) {
@@ -1040,6 +1040,10 @@ QList<std::pair<QString, QImage>> OrbManager::menuPictures(const QString& id) {
             sub->adjustSize();
             out.push_back({QStringLiteral("size"), sub->grab().toImage()});
         }
+        if (sub->title() == strings_.t(QStringLiteral("orbs.style"))) {
+            sub->adjustSize();
+            out.push_back({QStringLiteral("style"), sub->grab().toImage()});
+        }
     }
     menu->deleteLater();
     return out;
@@ -1061,8 +1065,8 @@ QMenu* OrbManager::buildMenu(const QString& id) {
         return action;
     };
     auto* styles = menu->addMenu(strings_.t(QStringLiteral("orbs.style")));
-    for (const char* style : kStyles) {
-        const QString key = QString::fromLatin1(style);
+    for (const auto kind : orb::kStyles) {
+        const QString key = orb::styleKey(kind);
         radio(styles, strings_.t(QStringLiteral("style.") + key), c.style == key, [this, id, key] { set(id, QStringLiteral("style"), key); });
     }
     const bool character = c.style == QLatin1String("character");
