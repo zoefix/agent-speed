@@ -472,7 +472,7 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
     if (!unavailable_.isEmpty()) {
         valueText_ = QStringLiteral("–");
         info_.clear();
-    } else if (unit_ == QLatin1String("cost")) {
+    } else if (unit_ == QLatin1String("cost") && !isCharacter()) {
         // DESIGN 9 Orb: the live cost rate of the orb's sources; – when nothing is priced, 0 for subscriptions only.
         const bool unknown = snap.value(QStringLiteral("costUnknown")).toBool();
         const bool subscriptions = snap.value(QStringLiteral("costSubscriptionOnly")).toBool();
@@ -1211,7 +1211,8 @@ void OrbWindow::updateLabel() {
     const auto language = strings_.language();
     const QString separator = language == QLatin1String("ja") ? QStringLiteral("、") : language == QLatin1String("en") ? QStringLiteral(", ") : QStringLiteral("，");
     // The money unit reads the number as shown with the currency's name; nothing priced reads as unknown (DESIGN 9).
-    const bool money = unit_ == QLatin1String("cost");
+    // A `character` orb keeps tok/s: its cost has a card of its own (DESIGN 2a.6).
+    const bool money = unit_ == QLatin1String("cost") && !isCharacter();
     const QString amount = atLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {valueText_}) : valueText_;
     const QString currency = strings_.t(QStringLiteral("currency.") + (currency_.isEmpty() ? QStringLiteral("USD") : currency_));
     if (unavailable_ == QLatin1String("hostsOffline")) {
@@ -1230,8 +1231,10 @@ void OrbWindow::updateLabel() {
         label = fill(strings_.t(QStringLiteral("a11y.orb.named")), {name_, valueText_, title});
     }
     // DESIGN 10 Accessibility: while the performance readout is visible, its words join the label.
-    if (unavailable_.isEmpty() && traffic_ == QLatin1String("intelligence") && intelOpacity_ > 0.5) {
-        const bool thinking = thinkingOpacity_ > 0.5;
+    if (unavailable_.isEmpty() && intelEnabled() && intelOpacity_ > 0.5) {
+        // A `character` orb reads its cards that show, in the column's order (DESIGN 2a.6 Readouts).
+        const bool thinking = isCharacter() ? characterReadouts_.thinking && (!characterReadouts_.intelligence || thinkingOpacity_ > 0.5)
+                                            : thinkingOpacity_ > 0.5;
         QString sentence;
         if (intelShown_ >= 0 && !intelWords_.isEmpty()) {
             sentence = thinking ? strings_.fmt(QStringLiteral("a11y.orb.intel"), {intelWords_, thinkingText_})
@@ -1252,6 +1255,14 @@ void OrbWindow::updateLabel() {
             return text.endsWith(QLatin1String("/s")) ? text.chopped(2) : text;
         };
         label += separator + fill(strings_.t(QStringLiteral("a11y.orb.traffic")), {spoken(netDown_), spoken(netUp_)});
+    }
+    if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.cost && costOpacity_ > 0.5 && !costCardNumber_.isEmpty()) {
+        if (costCardUnknown_) {
+            label += separator + strings_.t(QStringLiteral("a11y.board.costUnknown"));
+        } else {
+            const QString shown = costCardAtLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {costCardNumber_}) : costCardNumber_;
+            label += separator + fill(strings_.t(QStringLiteral("a11y.board.cost")), {shown, currency});
+        }
     }
     if (label == labelText_) return;
     labelText_ = label;
