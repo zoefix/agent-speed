@@ -2526,6 +2526,18 @@
     "en": "Download More Characters…",
     "ja": "ほかのキャラクターをダウンロード…"
   },
+  "characters.auto.status": {
+    "zh-Hant": "正在下載全部角色（%d / %d）",
+    "zh-Hans": "正在下载全部角色（%d / %d）",
+    "en": "Downloading all characters (%d of %d)",
+    "ja": "すべてのキャラクターをダウンロード中（%d / %d）"
+  },
+  "characters.auto.stop": {
+    "zh-Hant": "停止",
+    "zh-Hans": "停止",
+    "en": "Stop",
+    "ja": "停止"
+  },
   "characters.download": {
     "zh-Hant": "下載",
     "zh-Hans": "下载",
@@ -2593,10 +2605,10 @@
     "ja": "再試行"
   },
   "characters.footer": {
-    "zh-Hant": "角色要按「下載」才會從 GitHub 取得，下載後會驗證完整性。",
-    "zh-Hans": "角色要按“下载”才会从 GitHub 获取，下载后会验证完整性。",
-    "en": "Characters come from GitHub only when you press Download, and are verified before they're installed.",
-    "ja": "キャラクターは「ダウンロード」を押したときだけ GitHub から取得し、インストール前に検証します。"
+    "zh-Hant": "切換到角色樣式時，會自動從 GitHub 依序下載全部角色，並在安裝前驗證完整性；移除或取消的角色不會再自動下載。",
+    "zh-Hans": "切换到角色样式时，会自动从 GitHub 依次下载全部角色，并在安装前验证完整性；移除或取消的角色不会再自动下载。",
+    "en": "Switching to the character style downloads every character from GitHub, one at a time, verified before it's installed. Characters you remove or cancel aren't downloaded again on their own.",
+    "ja": "キャラクタースタイルに切り替えると、GitHub からすべてのキャラクターを順にダウンロードし、インストール前に検証します。削除やキャンセルしたキャラクターは自動ではダウンロードしません。"
   },
   "characters.openFolder": {
     "zh-Hant": "打開角色資料夾",

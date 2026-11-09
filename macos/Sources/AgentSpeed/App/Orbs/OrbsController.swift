@@ -337,8 +337,14 @@ final class OrbsController {
         setDocument(OrbEditing.removingHost(hostId, from: document))
     }
 
+    /// Switching to `character` starts the automatic download of every character, this orb's live vendors first
+    /// (CHARACTERS 2).
     func setStyle(_ style: OrbStyleKind, of id: String) {
+        let previous = document.orb(id)?.style
         setDocument(OrbEditing.setStyle(style, of: id, in: document))
+        guard style == .character, previous != .character, let model else { return }
+        let reading = VendorReading(agents: runtimes[id]?.reading.agents ?? [], prices: model.priceBook.current)
+        model.characters.downloadAll(preferring: CharacterAutoDownload.vendors(reading))
     }
 
     /// A pack id, or nil to follow the fastest model vendor (CHARACTERS 7).

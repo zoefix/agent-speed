@@ -121,7 +121,7 @@ final class AppModel {
         report = ReportController(settings: settings, store: store, traffic: traffic, priceBook: priceBook,
                                   appData: Self.appDataDirectory)
         lan = LanController(settings: settings, store: store)
-        characters = CharacterLibrary.standard()
+        characters = CharacterLibrary.standard(defaults: settings.storage)
         characters.networkEnabled = { [weak settings] in settings?.networkEnabled ?? false }
         gauge.redline = settings.redline
     }
@@ -259,16 +259,29 @@ final class AppModel {
     /// (NETWORK 1, 3, 4); a newly accepted table re-prices what no table could price (METRICS 9.7).
     private func activateNetwork() {
         prices.onTableAccepted = { [weak self] _ in self?.historyService?.refresh(showsProgress: false) }
+        var networkWas = settings.networkEnabled
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let network = self.settings.networkEnabled
             self.prices.update(networkEnabled: network, autoSync: self.settings.syncPrices)
             self.rates.update(networkEnabled: network, currency: self.settings.currency)
             self.updates.networkEnabled = network
+            // Network features back on: a character orb resumes the automatic download (CHARACTERS 2).
+            if network, !networkWas { self.resumeCharacterDownloads() }
+            networkWas = network
         })
         prices.start()
         rates.start()
-        if orbs.orbs.contains(where: { $0.style == .character }) { characters.refreshInBackground() }
+        if orbs.orbs.contains(where: { $0.style == .character }) {
+            characters.refreshInBackground()
+            resumeCharacterDownloads()
+        }
+    }
+
+    /// While an orb uses the `character` style, fetch every pack not set aside (CHARACTERS 2, *Automatic download*).
+    func resumeCharacterDownloads() {
+        guard orbs.orbs.contains(where: { $0.style == .character }) else { return }
+        characters.downloadAll(preferring: [])
     }
 
     /// What the orb runtimes need to choose a character (CHARACTERS 7).

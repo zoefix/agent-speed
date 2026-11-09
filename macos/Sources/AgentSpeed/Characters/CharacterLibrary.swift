@@ -10,9 +10,11 @@ struct OrbCharacterInputs {
     var installed: [CharacterSelection.Pack]
 }
 
-/// The character packs (CHARACTERS 2): what is installed, the catalog of the `characters` release, and downloads the
-/// user starts. The catalog is fetched when Settings shows the list (at most every 10 minutes) and at most once a day
-/// otherwise, only while network features are on, and its failures stay quiet; download failures are shown.
+/// The character packs (CHARACTERS 2): what is installed, the catalog of the `characters` release, downloads the user
+/// starts, and the automatic download of every pack the user has not set aside (run when an orb switches to the
+/// `character` style and at launch while one uses it, one pack at a time). The catalog is fetched when Settings shows
+/// the list (at most every 10 minutes), when a run needs it, and at most once a day otherwise, only while network
+/// features are on, and its failures stay quiet; download failures are shown.
 @MainActor
 @Observable
 final class CharacterLibrary {
@@ -34,6 +36,15 @@ final class CharacterLibrary {
     private(set) var downloads: [String: Download] = [:]
     /// Localization keys of the last failed download per character.
     private(set) var errors: [String: String] = [:]
+    /// The automatic run: packs still queued, the one downloading and how many the run began with.
+    private(set) var autoQueue: [String] = []
+    private(set) var autoCurrent: String?
+    private(set) var autoTotal = 0
+    /// Packs the user removed or cancelled: a run never downloads them (CHARACTERS 2, *Automatic download*).
+    private(set) var setAside: Set<String>
+
+    /// The run's position for its status line: the pack downloading now, counted from 1.
+    var autoPosition: Int { autoTotal - autoQueue.count }
 
     @ObservationIgnored let store: CharacterStore
     @ObservationIgnored private let transport: HTTPTransport
@@ -44,18 +55,26 @@ final class CharacterLibrary {
     @ObservationIgnored private var tasks: [String: Task<Void, Never>] = [:]
     @ObservationIgnored var networkEnabled: () -> Bool = { true }
     @ObservationIgnored var catalogURL = CharacterCatalog.url
+    @ObservationIgnored private let defaults: UserDefaults?
+    /// Packs that failed their checks in this run, and the vendors of a run waiting for the catalog.
+    @ObservationIgnored private var skipped: Set<String> = []
+    @ObservationIgnored private var pendingRun: [String]?
 
     init(store: CharacterStore, transport: HTTPTransport = URLSessionTransport(),
-         fetcher: CharacterPackFetching? = nil, appVersion: String = UpdateConfiguration.bundleVersion) {
+         fetcher: CharacterPackFetching? = nil, appVersion: String = UpdateConfiguration.bundleVersion,
+         defaults: UserDefaults? = nil) {
         self.store = store
         self.transport = transport
         self.fetcher = fetcher ?? UpdateHTTPPackFetcher(userAgentVersion: appVersion)
+        self.defaults = defaults
         userAgent = "AgentSpeed/\(appVersion) (macOS)"
+        setAside = Set(defaults?.stringArray(forKey: CharacterAutoDownload.setAsideKey) ?? [])
         reloadInstalled()
     }
 
-    static func standard() -> CharacterLibrary {
-        CharacterLibrary(store: .standard(appData: AppModel.appDataDirectory, appVersion: UpdateConfiguration.bundleVersion))
+    static func standard(defaults: UserDefaults) -> CharacterLibrary {
+        CharacterLibrary(store: .standard(appData: AppModel.appDataDirectory, appVersion: UpdateConfiguration.bundleVersion),
+                         defaults: defaults)
     }
 
     // MARK: Installed
@@ -135,11 +154,76 @@ final class CharacterLibrary {
             catalogState = catalog == nil ? .failed : .loaded
             Self.logger.notice("Character catalog unavailable")
         }
+        if let vendors = pendingRun {
+            pendingRun = nil
+            if catalog != nil { downloadAll(preferring: vendors) }
+        }
+    }
+
+    // MARK: Automatic download
+
+    /// Queues every pack that is neither installed, set aside, downloading nor queued — the packs of `vendors` first
+    /// (fastest first), then catalog order — and downloads them one at a time. Waits for the catalog when it is not
+    /// loaded yet; does nothing while network features are off.
+    func downloadAll(preferring vendors: [String]) {
+        guard networkEnabled() else { return }
+        guard let catalog else {
+            pendingRun = vendors
+            refreshCatalog(maxAge: Self.listRefresh)
+            return
+        }
+        let busy = Set(downloads.keys).union(autoQueue)
+        let fresh = CharacterAutoDownload.queue(catalog, installed: Set(installed.map(\.id)), setAside: setAside,
+                                                skipped: skipped.union(busy), vendors: vendors)
+        guard !fresh.isEmpty else { return }
+        if autoCurrent == nil, autoQueue.isEmpty {
+            autoTotal = 0
+            skipped = []
+        }
+        autoQueue += fresh
+        autoTotal += fresh.count
+        startNextAutomatic()
+    }
+
+    /// Stop: every pack still queued, and the one downloading, is set aside.
+    func stopAutomatic() {
+        let ids = autoQueue + (autoCurrent.map { [$0] } ?? [])
+        autoQueue = []
+        setAside(ids, true)
+        if let current = autoCurrent { tasks[current]?.cancel() } else { autoTotal = 0 }
+    }
+
+    private func startNextAutomatic() {
+        guard autoCurrent == nil else { return }
+        while networkEnabled(), !autoQueue.isEmpty {
+            let id = autoQueue.removeFirst()
+            guard installed(id) == nil, !setAside.contains(id), tasks[id] == nil,
+                  let entry = catalog?.characters.first(where: { $0.id == id }) else { continue }
+            autoCurrent = id
+            start(entry)
+            return
+        }
+        autoQueue = []
+        autoTotal = 0
+    }
+
+    private func setAside(_ ids: [String], _ aside: Bool) {
+        var next = setAside
+        for id in ids { if aside { next.insert(id) } else { next.remove(id) } }
+        guard next != setAside else { return }
+        setAside = next
+        defaults?.set(next.sorted(), forKey: CharacterAutoDownload.setAsideKey)
     }
 
     // MARK: Downloads
 
+    /// The user's Download or Update: also takes the pack back from the set-aside list.
     func download(_ entry: CharacterCatalog.Entry) {
+        setAside([entry.id], false)
+        start(entry)
+    }
+
+    private func start(_ entry: CharacterCatalog.Entry) {
         guard tasks[entry.id] == nil else { return }
         guard networkEnabled() else {
             errors[entry.id] = "characters.error.offline"
@@ -163,12 +247,16 @@ final class CharacterLibrary {
         }
     }
 
+    /// The user's cancel sets the pack aside, so a run does not fetch it again.
     func cancel(_ id: String) {
+        setAside([id], true)
         tasks[id]?.cancel()
     }
 
+    /// Removing sets the pack aside as well.
     func remove(_ id: String) {
         guard let pack = installed(id), !pack.isDevelopment else { return }
+        setAside([id], true)
         do {
             try store.remove(id)
             errors[id] = nil
@@ -188,8 +276,18 @@ final class CharacterLibrary {
     private func finishDownload(_ id: String, error: Error?) {
         tasks[id] = nil
         downloads[id] = nil
-        if let error { errors[id] = Self.errorKey(error) }
+        let key = error.flatMap(Self.errorKey)
+        if let key { errors[id] = key }
         reloadInstalled()
+        guard id == autoCurrent else { return }
+        autoCurrent = nil
+        if key == "characters.error.network" {
+            // The connection is down: end the run; the next launch or style switch starts it again.
+            autoQueue = []
+        } else if key != nil {
+            skipped.insert(id)
+        }
+        startNextAutomatic()
     }
 
     static func errorKey(_ error: Error) -> String? {

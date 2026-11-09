@@ -4,8 +4,8 @@ import AppKit
 import SwiftUI
 
 /// The selected `character` orb's character (DESIGN 5, Character; CHARACTERS 2, 7): Auto or one installed character,
-/// then every character of the catalog and every installed one with its portrait, name, artist and size, and
-/// Download / Update / Remove. Nothing downloads until the user presses Download.
+/// the automatic download's progress with Stop while it runs, then every character of the catalog and every installed
+/// one with its portrait, name, artist and size, and Download / Update / Remove.
 struct OrbCharacterSection: View {
     /// Scroll target of the context menu's "Download more…".
     static let anchor = "orbCharacters"
@@ -25,6 +25,7 @@ struct OrbCharacterSection: View {
                     Text(Self.name(pack.manifest.name, l10n.language)).tag(pack.id)
                 }
             }
+            if library.autoTotal > 0 { autoDownload }
             ForEach(rows) { row in
                 CharacterRow(model: model, row: row)
             }
@@ -46,6 +47,23 @@ struct OrbCharacterSection: View {
         let listed = Set(out.map(\.id))
         out += library.installed.filter { !listed.contains($0.id) }.map { CharacterRow.Model(id: $0.id, entry: nil, pack: $0) }
         return out
+    }
+
+    /// `characters.auto.status` with the run's progress, and Stop.
+    private var autoDownload: some View {
+        let l10n = model.l10n
+        let library = model.characters
+        return HStack(spacing: Spacing.s) {
+            ProgressView(value: Double(max(0, library.autoPosition - 1)), total: Double(max(1, library.autoTotal)))
+                .frame(width: 96)
+            Text(l10n("characters.auto.status", library.autoPosition, library.autoTotal))
+                .font(.system(size: 12))
+                .foregroundStyle(.secondary)
+                .monospacedDigit()
+            Spacer(minLength: Spacing.xs)
+            Button(l10n("characters.auto.stop")) { library.stopAutomatic() }
+        }
+        .accessibilityElement(children: .combine)
     }
 
     @ViewBuilder

@@ -59,8 +59,15 @@ https://github.com/zoefix/agent-speed/releases/download/characters/catalog.json
                  "preview": ".../claude-preview.png"}]}
 ```
 
-- The app never downloads a pack on its own: the user presses Download (Settings, or the orb's context menu). The
-  catalog itself is fetched when the character list is shown and at most once a day otherwise.
+- **Automatic download.** When an orb switches to the `character` style, and at launch while any orb uses it, the app
+  downloads every pack of the catalog that is neither installed nor set aside, one at a time: first the packs of the
+  vendors that orb shows live now (fastest first), then the rest in catalog order. A pack the user removes, or whose
+  download the user cancels, is **set aside** (stored per user, `charactersSetAside`) and never downloaded
+  automatically again; pressing its Download clears that. Stop (Settings) sets aside every pack still queued. A
+  network failure ends the run (the next launch or style switch starts it again); a pack that fails its checks is
+  skipped until the next run. Nothing downloads while network features are off. Settings shows the run as
+  `characters.auto.status` (done / total) with `characters.auto.stop`. The catalog itself is fetched when the
+  character list is shown or a run needs it, and at most once a day otherwise.
 - Only `https` URLs on `github.com` and `objects.githubusercontent.com` (where release downloads redirect) are
   followed. The download must match `size` and `sha256` before it is unpacked; otherwise it is deleted and the error
   shown. Packs are unpacked into a temporary folder, validated (section 1), then moved into place atomically.
