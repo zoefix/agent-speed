@@ -477,7 +477,12 @@ int main(int argc, char* argv[]) {
     // --orb-style=<key> its instrument (led, needle, liquid, reactor, minimal); --orb-size=<pt> its diameter.
     for (const auto& arg : arguments) {
         if (arg.startsWith(QStringLiteral("--orb-traffic="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("traffic"), arg.mid(14));
-        if (arg.startsWith(QStringLiteral("--orb-style="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), arg.mid(12));
+        // AGENT_SPEED_ORB_STYLE_DELAY (ms) switches the style later, once the orb shows live agents.
+        if (arg.startsWith(QStringLiteral("--orb-style="))) {
+            const QString key = arg.mid(12);
+            const int delay = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_STYLE_DELAY");
+            QTimer::singleShot(std::max(0, delay), &orbs, [&orbs, &orbStore, key] { orbs.set(orbStore.orbs().front().id, QStringLiteral("style"), key); });
+        }
         if (arg.startsWith(QStringLiteral("--orb-size="))) orbs.set(orbStore.orbs().front().id, QStringLiteral("size"), arg.mid(11).toInt());
         // --orb-hosts=<all|id[,id…]> sets the first orb's hosts (DESIGN 13).
         if (arg.startsWith(QStringLiteral("--orb-hosts="))) {

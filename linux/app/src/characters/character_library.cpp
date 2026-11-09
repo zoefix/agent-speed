@@ -220,6 +220,8 @@ void CharacterLibrary::downloadAll(const QStringList& vendors) {
     }
     for (const auto& id : fresh) autoQueue_.push_back(q(id));
     autoTotal_ += static_cast<int>(fresh.size());
+    qInfo("characters: automatic download of %d, live vendors first: %s", static_cast<int>(fresh.size()),
+          qPrintable(vendors.isEmpty() ? QStringLiteral("none") : vendors.join(QLatin1Char(','))));
     emit changed();
     startNextAutomatic();
 }

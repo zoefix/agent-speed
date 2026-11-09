@@ -13,15 +13,17 @@ Item {
     Accessible.role: Accessible.ListItem
     Accessible.name: [row.name, row.artist, row.size, row.error].filter((s) => s && s.length > 0).join(", ")
 
-    RowLayout {
+    Item {
         anchors.fill: parent
         anchors.leftMargin: 14
         anchors.rightMargin: 14
-        spacing: 12
 
         Item {
-            Layout.preferredWidth: 40
-            Layout.preferredHeight: 52
+            id: portraitBox
+            anchors.left: parent.left
+            anchors.verticalCenter: parent.verticalCenter
+            width: 40
+            height: 52
             Image {
                 id: portrait
                 anchors.fill: parent
@@ -42,7 +44,11 @@ Item {
 
         ColumnLayout {
             id: texts
-            Layout.fillWidth: true
+            anchors.left: portraitBox.right
+            anchors.leftMargin: 12
+            anchors.right: action.left
+            anchors.rightMargin: 12
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 3
             RowLayout {
                 spacing: 6
@@ -102,9 +108,10 @@ Item {
 
         // The action: progress with cancel while downloading, installing, update / remove, or download.
         RowLayout {
+            id: action
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
             spacing: 6
-            Layout.fillWidth: false
-            Layout.alignment: Qt.AlignRight | Qt.AlignVCenter
             RowLayout {
                 visible: item.row.downloading === true && item.row.installing !== true
                 Layout.fillWidth: false

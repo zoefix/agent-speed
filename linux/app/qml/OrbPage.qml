@@ -140,12 +140,38 @@ SettingsPage {
                             width: 44
                             height: 44
                             diameter: 38
-                            style: row.modelData.style
+                            visible: row.modelData.style !== "character"
+                            style: row.modelData.style === "character" ? "led" : row.modelData.style
                             dark: Theme.dark
                             fps: 15
                             liveValue: row.live.unavailable ? 0 : row.live.value
                             valueText: row.live.unavailable ? "–" : row.live.valueText
                             redline: row.modelData.redline
+                        }
+                        // DESIGN 2a.6 LOD: a `character` orb's thumbnail is her preview.png (a silhouette before one is installed).
+                        Item {
+                            visible: row.modelData.style === "character"
+                            x: 10
+                            anchors.verticalCenter: parent.verticalCenter
+                            width: 44
+                            height: 44
+                            readonly property string preview: { characters.rows; return characters.previewFor(row.modelData.character) }
+                            Image {
+                                id: thumbPortrait
+                                anchors.fill: parent
+                                visible: parent.preview.length > 0 && status === Image.Ready
+                                source: parent.preview
+                                sourceSize.height: 88
+                                fillMode: Image.PreserveAspectFit
+                                smooth: true
+                                mipmap: true
+                                asynchronous: true
+                            }
+                            CharacterSilhouette {
+                                anchors.fill: parent
+                                visible: !thumbPortrait.visible
+                                color: Theme.ink3
+                            }
                         }
                         ColumnLayout {
                             anchors.left: thumb.right
