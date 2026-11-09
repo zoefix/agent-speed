@@ -26,6 +26,8 @@ final class OrbWindowManager {
     private var loops: [ObservationLoop] = []
     private var arrangement: String
     nonisolated(unsafe) private var screenObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var menuObserver: NSObjectProtocol?
+    nonisolated(unsafe) private var closeObserver: NSObjectProtocol?
     /// Ids created by an operation, placed by `handle(_:)` rather than by `sync()`.
     private var pendingPlacement: Set<String> = []
     /// The shown leaderboard boards, which orbs keep clear of (DESIGN 2c).
@@ -47,10 +49,31 @@ final class OrbWindowManager {
         ) { [weak self] _ in
             MainActor.assumeIsolated { self?.screensChanged() }
         }
+        // While any menu of the app tracks (an orb's or a board's context menu, the menu bar menu) it takes every mouse
+        // event, so no orb sees the pointer move; the click that closes it is used up. Every orb re-reads the pointer
+        // when the menu ends, so the next right-click on an orb the pointer now rests on reaches it.
+        menuObserver = NotificationCenter.default.addObserver(
+            forName: NSMenu.didEndTrackingNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            MainActor.assumeIsolated { self?.pointerMayHaveMoved() }
+        }
+        // A closing window may end a modal session (the remove confirmation) that hid the moves the same way.
+        closeObserver = NotificationCenter.default.addObserver(
+            forName: NSWindow.willCloseNotification, object: nil, queue: .main
+        ) { [weak self] _ in
+            DispatchQueue.main.async { MainActor.assumeIsolated { self?.pointerMayHaveMoved() } }
+        }
     }
 
     deinit {
         if let screenObserver { NotificationCenter.default.removeObserver(screenObserver) }
+        if let menuObserver { NotificationCenter.default.removeObserver(menuObserver) }
+        if let closeObserver { NotificationCenter.default.removeObserver(closeObserver) }
+    }
+
+    /// Every orb re-reads the pointer (after a menu or modal session that hid its moves).
+    func pointerMayHaveMoved() {
+        windows.values.forEach { $0.pointerMayHaveMoved() }
     }
 
     func shutdown() {
