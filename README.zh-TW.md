@@ -47,7 +47,7 @@ curl -fsSL https://raw.githubusercontent.com/zoefix/agent-speed/main/install.sh 
 ## 功能
 
 - **懸浮窗**——煙燻玻璃質感的儀表，36 格 LED 錶盤。速度一路攀升時，稱號也跟著升級——從「步行」「自行車」到「高鐵」「戰鬥機」，衝到紅線就是「火箭」；錶盤沿著熱度光譜點亮、彗星繞圈疾馳、火花四濺、餘燼升騰，每完成一次回應就釋放一道衝擊波；打破今日紀錄還會慶祝。
-- **六種懸浮窗樣式，想開幾個就開幾個**——「LED 儀表」「指針轉速錶」「能量液球」「反應爐」「極簡圓環」，以及「角色」（macOS）：下載的 AI 娘會跟著最快模型的速度舞動。每個懸浮窗都能自由組合來源（全部、單一工具，或 Claude Code＋Codex），下方的玻璃名牌在任何桌布上都清楚好讀。
+- **六種懸浮窗樣式，想開幾個就開幾個**——「LED 儀表」「指針轉速錶」「能量液球」「反應爐」「極簡圓環」，以及「角色」：下載的 AI 娘會跟著最快模型的速度舞動。每個懸浮窗都能自由組合來源（全部、單一工具，或 Claude Code＋Codex），下方的玻璃名牌在任何桌布上都清楚好讀。
 - **選單列／工作列**——精簡的儀表與數字，寬度固定不跳動；可顯示 tok/s、金額，或 tok/s 加上即時花費與今日總額，也能加上網路速度。Windows 版直接嵌在工作列裡、時鐘旁邊。
 - **面板**——圓形儀表裡有一台跟著速度稱號變化的發光線條載具：從步行、蹬著自行車出發，一路換到紅線時的火箭；另有即時曲線、各來源速度、所有正在工作的 agent（含子 agent）與其狀態、今日統計。點一下來源就能打開它的用量歷史。
 - **性能分數**——為每個 agent 當下的組合跑分：1000 是參考水準，沒有上限，越高越快。綜合輸出吞吐、首段延遲、思考速度、工具節奏、工具耗時、工具成功率和快取命中，並和同一個模型在你電腦上前 14 天的表現相比，告訴你現在比平常快還是慢。懸浮窗、排行看板、選單列／工作列和面板都看得到（滑鼠移上去就有完整分析），用量歷史還有每個模型的每日趨勢。
@@ -150,7 +150,7 @@ dotnet test windows/tests/AgentSpeed.Presentation.Tests
 ```sh
 cmake -S linux -B build -G Ninja -DAGENTSPEED_BUILD_TESTS=ON -DAGENTSPEED_BUILD_APP=ON
 cmake --build build && ctest --test-dir build
-linux/packaging/package.sh build dist 1.6.3   # → AppImage 與 .deb
+linux/packaging/package.sh build dist 1.7.0   # → AppImage 與 .deb
 ```
 </details>
 
