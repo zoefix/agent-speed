@@ -112,6 +112,34 @@ else()
     target_link_libraries(agentspeed_base PUBLIC PkgConfig::ZSTD PkgConfig::BROTLI PkgConfig::SQLITE OpenSSL::Crypto)
 endif()
 
+# The character player (spec/CHARACTERS.md): rig, physics, motion, director, performer and readout layout. Plain C++.
+if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
+add_library(agentspeed_character STATIC
+    src/character/curve.cpp
+    src/character/director.cpp
+    src/character/hand_actor.cpp
+    src/character/hud.cpp
+    src/character/hud_wings.cpp
+    src/character/motion.cpp
+    src/character/motion_profile.cpp
+    src/character/moves.cpp
+    src/character/pack.cpp
+    src/character/param_space.cpp
+    src/character/performer.cpp
+    src/character/physics.cpp
+    src/character/pose_switch.cpp
+    src/character/rhythm.cpp
+    src/character/rig.cpp
+    src/character/selection.cpp
+    src/character/springs.cpp
+    src/character/catalog.cpp
+    src/character/store.cpp
+    src/character/zip.cpp
+)
+pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
+target_link_libraries(agentspeed_character PUBLIC agentspeed_base PRIVATE PkgConfig::ZLIB)
+endif()
+
 # The desktop app's core: the base plus live reporting and the demo driver.
 if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
     pkg_check_modules(ICU REQUIRED IMPORTED_TARGET icu-uc)
@@ -167,5 +195,5 @@ if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
         src/report/mode_rows.cpp
         src/report/usernames.cpp
     )
-    target_link_libraries(agentspeed_core PUBLIC agentspeed_base PkgConfig::ICU)
+    target_link_libraries(agentspeed_core PUBLIC agentspeed_base agentspeed_character PkgConfig::ICU)
 endif()

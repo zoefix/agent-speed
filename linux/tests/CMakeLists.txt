@@ -6,6 +6,11 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     board_test.cpp
+    character_catalog_test.cpp
+    character_fixture_test.cpp
+    character_performer_test.cpp
+    character_selection_test.cpp
+    character_wings_test.cpp
     current_values_test.cpp
     devin_fixture_test.cpp
     devin_source_test.cpp
@@ -56,7 +61,9 @@ add_executable(agentspeed_tests
     unpriced_test.cpp
     work_signals_test.cpp
 )
-target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main)
+find_package(PkgConfig REQUIRED)
+pkg_check_modules(TEST_ZLIB REQUIRED IMPORTED_TARGET zlib)
+target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main PkgConfig::TEST_ZLIB)
 target_compile_definitions(agentspeed_tests PRIVATE
     AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
 
@@ -69,16 +76,26 @@ endif()
 include(GoogleTest)
 gtest_discover_tests(agentspeed_tests)
 
+# Counts heap allocations through a replacement operator new, so it runs in a binary of its own.
+add_executable(agentspeed_character_alloc_tests character_alloc_test.cpp)
+target_link_libraries(agentspeed_character_alloc_tests PRIVATE agentspeed_character GTest::gtest_main)
+target_compile_definitions(agentspeed_character_alloc_tests PRIVATE AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
+gtest_discover_tests(agentspeed_character_alloc_tests)
+
 # The app's settings side (DESIGN 5 Storage, METRICS 2.1 Editing) needs Qt: built only with the app.
 if(AGENTSPEED_BUILD_APP)
     find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
+        app/character_library_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
+        app/orb_character_test.cpp
         app/orb_size_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
+        ../app/src/characters/character_library.cpp
+        ../app/src/characters/character_transport.cpp
         ../app/src/lan/lan_connection.cpp
         ../app/src/lan/lan_http_post.cpp
         ../app/src/lan/lan_net.cpp
@@ -89,10 +106,11 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
         ../app/src/source_locations_view.cpp
+        ../app/src/strings.cpp
     )
     set_target_properties(agentspeed_app_tests PROPERTIES AUTOMOC ON)
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
-    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Network Qt6::Widgets GTest::gtest_main)
+    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
     target_compile_definitions(agentspeed_app_tests PRIVATE
         AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
         AGENTSPEED_APP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../app")

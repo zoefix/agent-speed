@@ -1,5 +1,6 @@
 #include "orb/style.hpp"
 
+#include "orb/character/character_style.hpp"
 #include "orb/led_style.hpp"
 #include "orb/liquid_style.hpp"
 #include "orb/minimal_style.hpp"
@@ -15,6 +16,7 @@ QString styleKey(StyleKind kind) {
     case StyleKind::Liquid: return QStringLiteral("liquid");
     case StyleKind::Reactor: return QStringLiteral("reactor");
     case StyleKind::Minimal: return QStringLiteral("minimal");
+    case StyleKind::Character: return QStringLiteral("character");
     }
     return QStringLiteral("led");
 }
@@ -33,6 +35,7 @@ std::unique_ptr<Style> Style::make(StyleKind kind) {
     case StyleKind::Liquid: return std::make_unique<LiquidStyle>();
     case StyleKind::Reactor: return std::make_unique<ReactorStyle>();
     case StyleKind::Minimal: return std::make_unique<MinimalStyle>();
+    case StyleKind::Character: return std::make_unique<CharacterStyle>();
     }
     return std::make_unique<LedStyle>();
 }

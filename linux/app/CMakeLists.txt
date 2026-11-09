@@ -26,6 +26,8 @@ qt_add_executable(agent-speed
     src/monitor_worker.cpp
     src/network_service.cpp
     src/catalog.cpp
+    src/characters/character_library.cpp
+    src/characters/character_transport.cpp
     src/preferences.cpp
     src/host_dot.cpp
     src/remote_hosts_view.cpp
@@ -48,6 +50,10 @@ qt_add_executable(agent-speed
     src/hero/hero_painter.cpp
     src/hero/hero_stage.cpp
     src/orb/body.cpp
+    src/orb/character/character_assets.cpp
+    src/orb/character/character_lightning.cpp
+    src/orb/character/character_particles.cpp
+    src/orb/character/character_style.cpp
     src/orb/orb_accessible.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp
@@ -68,6 +74,7 @@ qt_add_executable(agent-speed
     src/orb/shared_layers.cpp
     src/orb/style.cpp
     src/orb/x11.cpp
+    src/orbs/character_demo.cpp
     src/orbs/name_plate.cpp
     src/orbs/orb_manager.cpp
     src/orbs/orb_views.cpp
@@ -156,6 +163,10 @@ set(agent_speed_qml
     qml/remote/RemoteHostSheet.qml
     qml/remote/RemotePage.qml
     qml/remote/RemoveHostDialog.qml
+    qml/characters/CharacterReadoutsGroup.qml
+    qml/characters/CharacterRow.qml
+    qml/characters/CharacterSection.qml
+    qml/characters/CharacterSilhouette.qml
     qml/sources/DefaultBadge.qml
     qml/sources/LocationActions.qml
     qml/sources/LocationIcon.qml

@@ -42,6 +42,20 @@ QFont textFont(const TextDraw& text) {
 
 }  // namespace
 
+double textAdvance(const TextDraw& text) {
+    static QHash<QString, double> cache;
+    const QString key = text.text + QLatin1Char('|') + QString::number(text.pixelSize, 'f', 2) + QLatin1Char('|') +
+                        QString::number(text.weight) + QLatin1Char('|') + QString::number(text.tracking, 'f', 2);
+    auto it = cache.find(key);
+    if (it != cache.end()) return *it;
+    if (cache.size() > 4096) cache.clear();
+    const double width = QFontMetricsF(textFont(text)).horizontalAdvance(text.text);
+    cache.insert(key, width);
+    return width;
+}
+
+double textCapHeight(const TextDraw& text) { return QFontMetricsF(textFont(text)).capHeight(); }
+
 Renderer::Renderer() = default;
 
 Renderer::~Renderer() = default;
@@ -57,7 +71,21 @@ bool Renderer::initialize() {
     text_ = build(shaders::textVertex(), shaders::textFragment(), "text");
     image_ = build(shaders::imageVertex(), shaders::imageFragment(), "image");
     liquid_ = build(shaders::liquidVertex(), shaders::liquidFragment(), "liquid");
-    if (!shapes_ || !led_ || !text_ || !image_ || !liquid_) return false;
+    mesh_ = build(shaders::meshVertex(), shaders::meshFragment(), "mesh");
+    if (!shapes_ || !led_ || !text_ || !image_ || !liquid_ || !mesh_) return false;
+    glGenVertexArrays(1, &meshVao_);
+    glGenBuffers(1, &meshBuffer_);
+    glGenBuffers(1, &meshIndexBuffer_);
+    glBindVertexArray(meshVao_);
+    glBindBuffer(GL_ARRAY_BUFFER, meshBuffer_);
+    glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshIndexBuffer_);
+    glEnableVertexAttribArray(0);
+    glEnableVertexAttribArray(1);
+    glEnableVertexAttribArray(2);
+    glVertexAttribPointer(0, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), nullptr);
+    glVertexAttribPointer(1, 2, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<const void*>(2 * sizeof(float)));
+    glVertexAttribPointer(2, 1, GL_FLOAT, GL_FALSE, 5 * sizeof(float), reinterpret_cast<const void*>(4 * sizeof(float)));
+    glBindVertexArray(0);
 
     glGenVertexArrays(1, &emptyVao_);
     glGenVertexArrays(1, &instanceVao_);
@@ -84,6 +112,14 @@ void Renderer::release() {
     if (!ready_) return;
     for (auto& t : texts_) glDeleteTextures(1, &t.id);
     texts_.clear();
+    for (auto& a : atlases_) glDeleteTextures(1, &a.id);
+    atlases_.clear();
+    if (meshBuffer_) glDeleteBuffers(1, &meshBuffer_);
+    if (meshIndexBuffer_) glDeleteBuffers(1, &meshIndexBuffer_);
+    if (meshVao_) glDeleteVertexArrays(1, &meshVao_);
+    meshBuffer_ = meshIndexBuffer_ = meshVao_ = 0;
+    delete mesh_;
+    mesh_ = nullptr;
     glDeleteTextures(1, &palette_);
     if (silkTexture_) glDeleteTextures(1, &silkTexture_);
     if (silkFbo_) glDeleteFramebuffers(1, &silkFbo_);
@@ -139,7 +175,7 @@ QString Renderer::textKey(const TextDraw& text, double dpr) const {
         .arg(text.weight)
         .arg(text.tracking, 0, 'f', 2)
         .arg(dpr, 0, 'f', 2)
-        .arg(text.glowRadius, 0, 'f', 1);
+        .arg(text.glowRadius, 0, 'f', 1) + QStringLiteral("|%1").arg(text.outlineWidth, 0, 'f', 1);
 }
 
 Renderer::TextTexture& Renderer::textTexture(const TextDraw& text, double dpr) {
@@ -161,7 +197,7 @@ Renderer::TextTexture& Renderer::textTexture(const TextDraw& text, double dpr) {
     const QFontMetricsF fm(font);
     TextTexture t;
     t.metrics.width = fm.horizontalAdvance(text.text);
-    t.metrics.padding = std::ceil(text.glowRadius + 2);
+    t.metrics.padding = std::ceil(std::max(text.glowRadius, text.outlineWidth) + 2);
     const double height = fm.ascent() + fm.descent();
     t.metrics.size = QSizeF(std::ceil(t.metrics.width + 2 * t.metrics.padding), std::ceil(height + 2 * t.metrics.padding));
     t.metrics.ascent = fm.ascent();
@@ -264,6 +300,11 @@ void Renderer::drawText(const TextDraw& text, double dpr) {
                            static_cast<float>(text.glowRadius), static_cast<float>(text.clip));
     text_->setUniformValue("uColor", text.color.r, text.color.g, text.color.b, text.color.a);
     text_->setUniformValue("uGlow", text.glowColor.r, text.glowColor.g, text.glowColor.b, static_cast<float>(text.glowStrength));
+    text_->setUniformValue("uOutline", text.outlineColor.r, text.outlineColor.g, text.outlineColor.b, text.outlineColor.a);
+    text_->setUniformValue("uOutlineWidth", static_cast<float>(text.outlineWidth));
+    text_->setUniformValue("uXform", static_cast<float>(std::cos(text.rotation)), static_cast<float>(std::sin(text.rotation)),
+                           static_cast<float>(text.scale), 0.0f);
+    text_->setUniformValue("uPivot", static_cast<float>(text.pivot.x()), static_cast<float>(text.pivot.y()));
     if (text.clip == 1) {
         text_->setUniformValue("uClipRect", static_cast<float>(text.clipRect.left()), static_cast<float>(text.clipRect.top()),
                                static_cast<float>(text.clipRect.right()), static_cast<float>(text.clipRect.bottom()));
@@ -294,6 +335,61 @@ void Renderer::setLiquidUniforms(QOpenGLShaderProgram* program, const Scene& sce
     set("uLMeniscusGeom", l.meniscusGeom);
     set("uLGold", l.gold);
     set("uLFlags", l.flags);
+}
+
+unsigned int Renderer::atlasTexture(const QImage& image) {
+    const qint64 key = image.cacheKey();
+    auto it = atlases_.find(key);
+    if (it != atlases_.end()) {
+        it->lastUse = frame_;
+        return it->id;
+    }
+    // Atlases not drawn for ~4 s (at 60 fps) leave the GPU; a swap keeps two resident.
+    for (auto a = atlases_.begin(); a != atlases_.end();) {
+        if (frame_ - a->lastUse > 240) {
+            glDeleteTextures(1, &a->id);
+            a = atlases_.erase(a);
+        } else {
+            ++a;
+        }
+    }
+    const QImage rgba = image.convertToFormat(QImage::Format_RGBA8888);
+    unsigned int id = 0;
+    glGenTextures(1, &id);
+    glBindTexture(GL_TEXTURE_2D, id);
+    glPixelStorei(GL_UNPACK_ALIGNMENT, 4);
+    glTexImage2D(GL_TEXTURE_2D, 0, GL_RGBA8, rgba.width(), rgba.height(), 0, GL_RGBA, GL_UNSIGNED_BYTE, rgba.constBits());
+    glGenerateMipmap(GL_TEXTURE_2D);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MIN_FILTER, GL_LINEAR_MIPMAP_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_MAG_FILTER, GL_LINEAR);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_S, GL_CLAMP_TO_EDGE);
+    glTexParameteri(GL_TEXTURE_2D, GL_TEXTURE_WRAP_T, GL_CLAMP_TO_EDGE);
+    atlases_.insert(key, Atlas{id, frame_});
+    return id;
+}
+
+void Renderer::drawMeshes(const Scene& scene, int index, QSizeF viewport, double dpr, QPointF center, double scale) {
+    if (index < 0 || index >= static_cast<int>(scene.meshes().size())) return;
+    const auto& draw = scene.meshes()[static_cast<std::size_t>(index)];
+    // The whole frame's vertices go up with its first mesh.
+    if (index == 0) {
+        glBindBuffer(GL_ARRAY_BUFFER, meshBuffer_);
+        glBufferData(GL_ARRAY_BUFFER, static_cast<GLsizeiptr>(scene.meshVertices().size() * sizeof(float)),
+                     scene.meshVertices().data(), GL_STREAM_DRAW);
+        glBindVertexArray(meshVao_);
+        glBindBuffer(GL_ELEMENT_ARRAY_BUFFER, meshIndexBuffer_);
+        glBufferData(GL_ELEMENT_ARRAY_BUFFER, static_cast<GLsizeiptr>(scene.meshIndices().size() * sizeof(std::uint32_t)),
+                     scene.meshIndices().data(), GL_STREAM_DRAW);
+    }
+    setBlend(Blend::Over);
+    mesh_->bind();
+    setCommon(mesh_, viewport, dpr, center, scale);
+    mesh_->setUniformValue("uAtlas", 0);
+    glActiveTexture(GL_TEXTURE0);
+    glBindTexture(GL_TEXTURE_2D, atlasTexture(draw.atlas));
+    glBindVertexArray(meshVao_);
+    glDrawElements(GL_TRIANGLES, draw.indexCount, GL_UNSIGNED_INT,
+                   reinterpret_cast<const void*>(static_cast<std::uintptr_t>(draw.firstIndex) * sizeof(std::uint32_t)));
 }
 
 void Renderer::setBlend(Blend blend) {
@@ -366,6 +462,9 @@ void Renderer::render(const Scene& scene, QSizeF viewport, double dpr, QPointF c
                                       reinterpret_cast<const void*>(offset));
             }
             glDrawArraysInstanced(GL_TRIANGLES, 0, 6, batch.count);
+        } else if (batch.kind == Scene::Batch::Kind::Mesh) {
+            drawMeshes(scene, batch.mode, viewport, dpr, center, scale);
+            glBindTexture(GL_TEXTURE_2D, palette_);
         } else if (batch.kind == Scene::Batch::Kind::Liquid) {
             liquid_->bind();
             setCommon(liquid_, viewport, dpr, center, scale);

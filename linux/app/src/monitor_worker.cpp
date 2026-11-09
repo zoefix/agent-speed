@@ -530,6 +530,7 @@ void MonitorWorker::publish(const agentspeed::Snapshot& snap, const std::vector<
         context.trafficBits = options_.trafficBits;
         context.nowMs = now;
         context.todayStartMs = todayStart;
+        context.prices = options_.config.prices ? options_.config.prices->current() : agentspeed::pricing::PriceBook::bundled();
         map.insert(QStringLiteral("orbs"), orbs_.compute(snap, options_.orbs, context, map, sets_.size() + options_.boards.size()));
     }
     emit snapshotReady(map);

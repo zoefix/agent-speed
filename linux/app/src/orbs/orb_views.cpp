@@ -3,6 +3,7 @@
 #include <QVariantList>
 #include <algorithm>
 
+#include "agentspeed/character/store.hpp"
 #include "agentspeed/host_subset.hpp"
 #include "agentspeed/money.hpp"
 #include "agentspeed/traffic.hpp"
@@ -17,6 +18,26 @@ using agentspeed::money::Form;
 bool contains(const std::vector<SourceKind>& set, SourceKind kind) { return std::find(set.begin(), set.end(), kind) != set.end(); }
 
 QString keyOf(SourceKind kind) { return QString::fromUtf8(agentspeed::sourceId(kind)); }
+
+// CHARACTERS 7: the live output per model vendor of the orb's generating agents and its fastest model.
+void addVendors(QVariantMap& map, const agentspeed::Snapshot& snap, const std::optional<std::vector<SourceKind>>& sources,
+                const std::optional<std::vector<std::string>>& hosts, const OrbContext& c) {
+    std::vector<agentspeed::AgentRow> agents;
+    for (const auto& a : snap.agents) {
+        if (sources && !contains(*sources, a.source)) continue;
+        if (hosts && std::find(hosts->begin(), hosts->end(), a.host) == hosts->end()) continue;
+        agents.push_back(a);
+    }
+    const auto reading = agentspeed::character::VendorReading::of(agents, c.prices.get());
+    QVariantMap rates;
+    for (const auto& [vendor, rate] : reading.rates) rates.insert(QString::fromStdString(vendor), rate);
+    QStringList order;
+    for (const auto& v : reading.vendorsByRate()) order.push_back(QString::fromStdString(v));
+    map.insert(QStringLiteral("vendorRates"), rates);
+    map.insert(QStringLiteral("vendorOrder"), order);
+    map.insert(QStringLiteral("fastestModel"), reading.fastestModel ? QString::fromStdString(*reading.fastestModel) : QString());
+    map.insert(QStringLiteral("fastestVendor"), reading.fastestVendor ? QString::fromStdString(*reading.fastestVendor) : QString());
+}
 
 }  // namespace
 
@@ -83,6 +104,7 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
             }
             map.insert(QStringLiteral("unavailable"), QString());
             addCost(map, snap, std::nullopt, c);
+            addVendors(map, snap, std::nullopt, std::nullopt, c);
             out.push_back(map);
             kept[orb.id] = state;
             continue;
@@ -185,6 +207,7 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
         traffic.insert(QStringLiteral("agentsTxText"), QString::fromStdString(agentspeed::traffic::formatRate(tx, c.trafficBits)));
         map.insert(QStringLiteral("traffic"), traffic);
         addCost(map, view, orb.sources, c);
+        addVendors(map, snap, orb.sources, orb.hosts, c);
         out.push_back(map);
         kept[orb.id] = state;
     }

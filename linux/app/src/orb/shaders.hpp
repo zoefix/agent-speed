@@ -15,5 +15,7 @@ QByteArray liquidVertex();
 QByteArray liquidFragment();
 QByteArray imageVertex();
 QByteArray imageFragment();
+QByteArray meshVertex();
+QByteArray meshFragment();
 
 }  // namespace orb::shaders
