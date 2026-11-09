@@ -421,7 +421,7 @@ public class CharacterLibraryTests
             library.RefreshForList();
             await LibraryWait.Until(() => library.Catalog is not null);
             library.DownloadAll([]);
-            await LibraryWait.Until(() => library.AutoCurrent is not null);
+            await LibraryWait.Until(() => library.AutoCurrent is not null && fetcher.Order.Count == 1);
             library.StopAutomatic();
             await LibraryWait.Settle(library);
             Assert.Equal(new[] { "claude", "gpt", "kimi" }.Where(id => library.InstalledPack(id) is null).ToHashSet(), library.SetAside);

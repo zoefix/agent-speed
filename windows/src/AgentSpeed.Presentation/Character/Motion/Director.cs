@@ -396,9 +396,16 @@ public sealed class CharacterDirector
         }
 
         var share = 1.0;
-        if (_gesture is { } g && g.Motion.Entries.Any(e => e.Slot == slot))
+        if (_gesture is { } g)
         {
-            share = 1 - g.W;
+            foreach (var entry in g.Motion.Entries)
+            {
+                if (entry.Slot == slot)
+                {
+                    share = 1 - g.W;
+                    break;
+                }
+            }
         }
 
         Write(slot, Math.Min(Math.Max(Values[slot] + share * v, p.Min), p.Max));

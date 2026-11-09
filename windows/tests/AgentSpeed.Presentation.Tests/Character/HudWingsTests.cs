@@ -138,7 +138,7 @@ public class HudWingsTests
             wings.Update(1 / 60.0, n / 60.0, f, Sizes, AllShown);
         }
 
-        Assert.True(wings.Split < HudCards.Column.Count);
+        Assert.True(wings.Split < HudCards.Column.Length);
         var speed = wings.Places[(int)HudCard.Speed];
         foreach (var card in HudCards.Column)
         {
@@ -169,7 +169,7 @@ public class HudWingsTests
         }
 
         var spilled = wings.Split;
-        Assert.True(spilled < HudCards.Column.Count);
+        Assert.True(spilled < HudCards.Column.Length);
         for (var i = 0; i < 30; i++)
         {
             wings.Update(1 / 60.0, t, Frame(), Sizes, AllShown);
@@ -183,7 +183,7 @@ public class HudWingsTests
             t += 1 / 60.0;
         }
 
-        Assert.Equal(HudCards.Column.Count, wings.Split);
+        Assert.Equal(HudCards.Column.Length, wings.Split);
         foreach (var card in HudCards.Column)
         {
             Assert.True(wings.Places[(int)card].X < 190);
@@ -200,7 +200,7 @@ public class HudWingsTests
             var f = n % 120 >= 60 && n % 120 < 72 ? WideHairFrame() : Frame();
             wings.Update(1 / 60.0, t, f, Sizes, AllShown);
             t += 1 / 60.0;
-            Assert.Equal(HudCards.Column.Count, wings.Split);
+            Assert.Equal(HudCards.Column.Length, wings.Split);
         }
     }
 

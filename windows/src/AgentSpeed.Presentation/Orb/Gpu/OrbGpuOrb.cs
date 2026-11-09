@@ -51,6 +51,8 @@ public sealed class OrbGpuOrb
     private readonly List<SourceKind> _lastAgents = new(8);
     private readonly OrbLinesQuietRule _lines = new();
     private bool _linesOn;
+    private readonly OrbCharacterReadings _characterReadings = new();
+    private OrbCharacterContent? _character;
 
     public OrbGpuOrb(uint seed, IOrbGlyphs glyphs)
     {
@@ -107,6 +109,11 @@ public sealed class OrbGpuOrb
         get
         {
             var scene = Scene.NextWake;
+            if (_style is CharacterDraw && _characterReadings.NextChange(Scene.Time) is { } cards && (scene is null || cards < scene))
+            {
+                scene = cards;
+            }
+
             if (_lines.Reading is not { } reading || _unavailable || reading.NextChange(Scene.Time) is not { } lines)
             {
                 return scene;
@@ -160,7 +167,42 @@ public sealed class OrbGpuOrb
         _style.Configure(context);
         _outgoing?.Configure(context);
         Readout.Configure(context, config.Strings);
+        if (_style is CharacterDraw character)
+        {
+            character.Attach(Scene);
+            character.Strings = config.Strings;
+            character.Content = _character;
+            character.Readings = _characterReadings;
+        }
     }
+
+    /// <summary>The <c>character</c> style's character and cards (DESIGN 2a.6); true when it changed.</summary>
+    public bool SetCharacter(OrbCharacterContent? content)
+    {
+        if (Equals(content, _character))
+        {
+            return false;
+        }
+
+        _character = content;
+        if (_style is CharacterDraw character)
+        {
+            character.Content = content;
+        }
+
+        return true;
+    }
+
+    public OrbCharacterContent? Character => _character;
+
+    /// <summary>The <c>character</c> cards' live values (DESIGN 2a.6, Which cards show); true when anything shown changed.</summary>
+    public bool SetCharacterReadings(double now, OrbLinesSample? network, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating)
+    {
+        Scene.Update(Math.Max(Scene.Time, now));
+        return _characterReadings.Apply(network, performance, money, generating, Scene.Time);
+    }
+
+    public OrbCharacterReadings CharacterReadings => _characterReadings;
 
     /// <summary>Updates the tracked sources' bezel; true when it changed.</summary>
     public bool SetIdentity(IReadOnlyList<SourceKind>? sources, SourceSet unavailable)
@@ -275,6 +317,10 @@ public sealed class OrbGpuOrb
         }
 
         Lines.Glyphs = Readout.Glyphs;
+        if (style is CharacterDraw characterStyle)
+        {
+            characterStyle.Glyphs = Readout.Glyphs;
+        }
         UpdateDialUnit(ctx, style, config);
         var frame = Frame(now, dt, config, StackShift(ctx, style) / ctx.Size);
         if (snap)
@@ -317,6 +363,11 @@ public sealed class OrbGpuOrb
         list.Opacity = Math.Clamp(opacity, 0, 1);
         var thumbnail = ctx.Size < 64;
         var crossfading = _outgoing is not null;
+        if (style is CharacterDraw character && !crossfading)
+        {
+            RenderCharacter(list, ctx, character, frame, now);
+            return;
+        }
 
         if (!thumbnail)
         {
@@ -372,6 +423,49 @@ public sealed class OrbGpuOrb
         if (Readout.IsMoving(Scene) || LinesMoving(now))
         {
             demand = FramePolicy.Max(demand, FrameClass.Fps30);
+        }
+
+        Demand = demand;
+    }
+
+    /// <summary>
+    /// The <c>character</c> style (DESIGN 2a.6): her scene, cards and speed when a character is on stage; else the ring, the
+    /// standard readout and <c>character.empty</c>. No body, bezel or aura: outside her the window is transparent.
+    /// </summary>
+    private void RenderCharacter(OrbDrawList list, OrbGpuContext ctx, CharacterDraw character, in OrbFrame frame, double now)
+    {
+        character.Glyphs = Readout.Glyphs;
+        if (character.CanDraw)
+        {
+            character.BuildScene(list, Scene, frame, _highlight.Value, Accent);
+        }
+        else
+        {
+            character.Build(list, Scene, frame);
+            Readout.Shift = 0;
+            Readout.UnitOnDial = false;
+            Readout.Add(list, Scene, character.Readout, OrbReadoutColors.Standard, OrbTextClip.None, pill: true);
+            if (_character is { NoneInstalled: true } content)
+            {
+                character.BuildEmptyLabel(list, ctx, content.EmptyLabel);
+            }
+
+            OrbSharedDraw.Highlight(list, ctx, Accent, _highlight.Value);
+        }
+
+        var demand = FramePolicy.Max(Scene.SharedFrameClass(minimal: false), character.Model.Demand);
+        if (character.CanDraw)
+        {
+            demand = character.Model.Demand;
+            if (Scene.PeakAge is { } age && age < 2.5)
+            {
+                demand = FramePolicy.Max(demand, FrameClass.Fps60);
+            }
+        }
+
+        if (!_highlight.IsSettled(Highlighted ? 1 : 0, 0.01))
+        {
+            demand = FramePolicy.Max(demand, FrameClass.Fps60);
         }
 
         Demand = demand;

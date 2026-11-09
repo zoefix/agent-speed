@@ -64,8 +64,13 @@ public sealed record OrbReadoutLayout(
     public static OrbReadoutLayout Minimal { get; } =
         new(0.30, 0.07, 0.66, null, 0, 0.098, null, 0.068, 0.62, 0.67, 0.92, null, -0.25, Rolls: false, TitleCrossfade: true, ValueGlow: false);
 
+    /// <summary>The <c>character</c> fallback without a character (DESIGN 2a.6), in units of D.</summary>
+    public static OrbReadoutLayout Character { get; } =
+        new(0.13, -0.02, 0.36, 0.036, 0.055, 0.048, null, 0.032, 0.34, 0.4, 0.92, null, -0.16);
+
     public static OrbReadoutLayout For(OrbStyle style) => style switch
     {
+        OrbStyle.Character => Character,
         OrbStyle.Needle => Needle,
         OrbStyle.Liquid => Liquid,
         OrbStyle.Reactor => Reactor,

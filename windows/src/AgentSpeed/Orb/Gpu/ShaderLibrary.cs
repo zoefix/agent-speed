@@ -8,7 +8,8 @@ namespace AgentSpeed.Orb.Gpu;
 
 /// <summary>Compiled bytecode of the orb shaders.</summary>
 internal sealed record OrbShaderCode(byte[] ShapeVertex, byte[] ShapePixel, byte[] TextVertex, byte[] TextPixel, byte[] LiquidVertex,
-    byte[] LiquidPixel, byte[] LedVertex, byte[] LedPixel, byte[] LayerVertex, byte[] LayerPixel);
+    byte[] LiquidPixel, byte[] LedVertex, byte[] LedPixel, byte[] LayerVertex, byte[] LayerPixel, byte[] MeshVertex, byte[] MeshPixel,
+    byte[] DotVertex, byte[] DotPixel, byte[] SpriteVertex, byte[] SpritePixel);
 
 /// <summary>
 /// Compiles the orb's HLSL (embedded resources) with the operating system's <c>d3dcompiler_47.dll</c> and keeps the bytecode
@@ -18,8 +19,8 @@ internal sealed record OrbShaderCode(byte[] ShapeVertex, byte[] ShapePixel, byte
 internal static class ShaderLibrary
 {
     private const string Profile = "4_0";
-    private static readonly string[] Parts = ["OrbCommon", "OrbLiquid", "OrbShapes", "OrbText", "OrbLed", "BoardLayer"];
-    private const int BlobCount = 10;
+    private static readonly string[] Parts = ["OrbCommon", "OrbLiquid", "OrbShapes", "OrbText", "OrbLed", "BoardLayer", "CharacterMesh"];
+    private const int BlobCount = 16;
 
     private static Task<OrbShaderCode>? s_preload;
 
@@ -78,7 +79,13 @@ internal static class ShaderLibrary
             Compile(source, "VsLed", "vs"),
             Compile(source, "PsLed", "ps"),
             Compile(source, "VsLayer", "vs"),
-            Compile(source, "PsLayer", "ps"));
+            Compile(source, "PsLayer", "ps"),
+            Compile(source, "VsCharacterMesh", "vs"),
+            Compile(source, "PsCharacterMesh", "ps"),
+            Compile(source, "VsCharacterDot", "vs"),
+            Compile(source, "PsCharacterDot", "ps"),
+            Compile(source, "VsCharacterSprite", "vs"),
+            Compile(source, "PsCharacterSprite", "ps"));
         AppLog.Info($"Orb shaders compiled in {watch.ElapsedMilliseconds} ms.");
         TryWrite(path, code);
         return code;
@@ -118,7 +125,7 @@ internal static class ShaderLibrary
         }
     }
 
-    // Cache file: "ORB3", then ten length-prefixed blobs, then the SHA-256 of everything before it.
+    // Cache file: "ORB4", then sixteen length-prefixed blobs, then the SHA-256 of everything before it.
     private static OrbShaderCode? TryRead(string path)
     {
         try
@@ -140,7 +147,7 @@ internal static class ShaderLibrary
                 return null;
             }
 
-            if (Encoding.ASCII.GetString(body[..4]) != "ORB3")
+            if (Encoding.ASCII.GetString(body[..4]) != "ORB4")
             {
                 return null;
             }
@@ -160,7 +167,8 @@ internal static class ShaderLibrary
                 offset += length;
             }
 
-            return new OrbShaderCode(blobs[0], blobs[1], blobs[2], blobs[3], blobs[4], blobs[5], blobs[6], blobs[7], blobs[8], blobs[9]);
+            return new OrbShaderCode(blobs[0], blobs[1], blobs[2], blobs[3], blobs[4], blobs[5], blobs[6], blobs[7], blobs[8], blobs[9], blobs[10],
+                blobs[11], blobs[12], blobs[13], blobs[14], blobs[15]);
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
@@ -179,11 +187,12 @@ internal static class ShaderLibrary
             }
 
             using var memory = new MemoryStream();
-            memory.Write("ORB3"u8);
+            memory.Write("ORB4"u8);
             foreach (var blob in new[]
                      {
                          code.ShapeVertex, code.ShapePixel, code.TextVertex, code.TextPixel, code.LiquidVertex, code.LiquidPixel, code.LedVertex,
-                         code.LedPixel, code.LayerVertex, code.LayerPixel,
+                         code.LedPixel, code.LayerVertex, code.LayerPixel, code.MeshVertex, code.MeshPixel, code.DotVertex, code.DotPixel,
+                         code.SpriteVertex, code.SpritePixel,
                      })
             {
                 memory.Write(BitConverter.GetBytes(blob.Length));

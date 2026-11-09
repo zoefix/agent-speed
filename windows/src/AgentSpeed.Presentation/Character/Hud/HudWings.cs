@@ -1,3 +1,5 @@
+using System.Collections.Immutable;
+
 namespace AgentSpeed.Presentation.Character;
 
 /// <summary>The cards of the character's floating readout (DESIGN 2a.6, <i>Readouts</i>): the speed on her right, the model above her head, and the column of facts on her left, top to bottom.</summary>
@@ -16,9 +18,9 @@ public static class HudCards
     public const int Count = 6;
 
     /// <summary>The left column, top to bottom.</summary>
-    public static IReadOnlyList<HudCard> Column { get; } = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents];
+    public static ImmutableArray<HudCard> Column { get; } = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents];
 
-    public static IReadOnlyList<HudCard> All { get; } = [HudCard.Speed, HudCard.Model, HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents];
+    public static ImmutableArray<HudCard> All { get; } = [HudCard.Speed, HudCard.Model, HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents];
 }
 
 /// <summary>
@@ -166,6 +168,8 @@ public sealed class HudWings
     public static readonly (double X, double Y) CardFloat = (0.013, 0.017);
 
     /// <summary>Vertical offsets tried, in shares of D, when a card or the column does not fit beside her at its row.</summary>
+    private static readonly double[] Reaches = [NearReach, Reach];
+
     private static readonly double[] Shifts = [0, -0.04, 0.04, -0.08, 0.08, -0.12, 0.12, 0.17, -0.17, 0.23, 0.3];
 
     private readonly Place[] _places;
@@ -217,10 +221,24 @@ public sealed class HudWings
     public bool Still { get; set; }
 
     /// <summary>A card is fading in or out or changing sides (frames are needed even when nothing else moves).</summary>
-    public bool IsFading => _presence.Any(p => p > 0 && p < 1) || _hop.Any(h => h < 1);
+    public bool IsFading
+    {
+        get
+        {
+            for (var i = 0; i < _presence.Length; i++)
+            {
+                if ((_presence[i] > 0 && _presence[i] < 1) || _hop[i] < 1)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
 
     /// <summary>How many cards of the column (in its order) stay at her left; the rest continue under the speed.</summary>
-    public int Split { get; private set; } = HudCards.Column.Count;
+    public int Split { get; private set; } = HudCards.Column.Length;
 
     /// <summary>The card is drawn at her right (the speed, and column cards that spilled over).</summary>
     public bool IsAtHerRight(HudCard card) => card == HudCard.Speed || _right[(int)card];
@@ -426,7 +444,7 @@ public sealed class HudWings
 
         var chosen = Fit(f, sizes, Split, 0, Reach, aligned: !_hugging);
         Layout(f, sizes, Split, chosen.Shift, aligned: !_hugging, room: 0, write: true);
-        for (var k = 0; k < HudCards.Column.Count; k++)
+        for (var k = 0; k < HudCards.Column.Length; k++)
         {
             var i = (int)HudCards.Column[k];
             var wanted = k >= Split;
@@ -462,12 +480,12 @@ public sealed class HudWings
     /// <summary>The most cards at her left, more than now, whose column fits near her shoulders with room to spare; null when none does.</summary>
     private int? Roomier(HudFrame f, (double W, double H)[] sizes)
     {
-        if (Split >= HudCards.Column.Count)
+        if (Split >= HudCards.Column.Length)
         {
             return null;
         }
 
-        for (var k = HudCards.Column.Count; k > Split; k--)
+        for (var k = HudCards.Column.Length; k > Split; k--)
         {
             if (Fit(f, sizes, k, 0.04 * f.Footprint, NearReach, aligned: true).Over == 0)
             {
@@ -484,8 +502,8 @@ public sealed class HudWings
     /// </summary>
     private (int Split, bool Hugging) Best(HudFrame f, (double W, double H)[] sizes)
     {
-        var count = HudCards.Column.Count;
-        foreach (var reach in new[] { NearReach, Reach })
+        var count = HudCards.Column.Length;
+        foreach (var reach in Reaches)
         {
             for (var split = count; split >= 0; split--)
             {
@@ -592,7 +610,7 @@ public sealed class HudWings
             }
         }
 
-        if (split >= cards.Count)
+        if (split >= cards.Length)
         {
             return over;
         }
@@ -600,7 +618,7 @@ public sealed class HudWings
         var speed = (int)HudCard.Speed;
         y = _targets[speed].Y + sizes[speed].H / 2 + gap;
         var left = double.NegativeInfinity;
-        for (var k = split; k < cards.Count; k++)
+        for (var k = split; k < cards.Length; k++)
         {
             var i = (int)cards[k];
             var h = sizes[i].H;
@@ -624,7 +642,7 @@ public sealed class HudWings
             left = f.CenterX + 0.04 * d;
         }
 
-        for (var k = split; k < cards.Count; k++)
+        for (var k = split; k < cards.Length; k++)
         {
             var i = (int)cards[k];
             var w = sizes[i].W + room;

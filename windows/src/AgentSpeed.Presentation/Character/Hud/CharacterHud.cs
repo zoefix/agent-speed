@@ -105,10 +105,10 @@ public sealed class CharacterHud
     public HudBody? Peak { get; private set; }
 
     /// <summary>Lights behind the character, rebuilt every frame (capacity reused).</summary>
-    public IReadOnlyList<HudDot> Back => _back;
+    public ReadOnlySpan<HudDot> Back => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_back);
 
     /// <summary>Lights in front of the character, rebuilt every frame.</summary>
-    public IReadOnlyList<HudDot> Front => _front;
+    public ReadOnlySpan<HudDot> Front => System.Runtime.InteropServices.CollectionsMarshal.AsSpan(_front);
 
     /// <summary>The speed's width spring (points), so the digits glide when their count changes.</summary>
     public double SpeedWidth { get; private set; }

@@ -119,7 +119,7 @@ public readonly record struct OrbTextClip(OrbTextClipMode Mode, float X0, float 
     };
 }
 
-/// <summary>One text quad of the atlas pipeline (128 bytes, the layout of <c>TextInstance</c> in the HLSL source).</summary>
+/// <summary>One text quad of the atlas pipeline (144 bytes, the layout of <c>TextInstance</c> in the HLSL source).</summary>
 [StructLayout(LayoutKind.Sequential, Pack = 4)]
 public struct OrbTextInstance
 {
@@ -147,5 +147,8 @@ public struct OrbTextInstance
     /// <summary>Gradient top y, bottom y, enabled, unused.</summary>
     public Vector4 Gradient;
 
-    public const int Stride = 128;
+    /// <summary>Rotation (radians, clockwise on screen) about the pivot x, y (canvas points), after the shear; 0: upright.</summary>
+    public Vector4 Rotate;
+
+    public const int Stride = 144;
 }

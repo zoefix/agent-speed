@@ -55,6 +55,12 @@ internal static class OrbGpuRenderer
             return false;
         }
 
+        if ((list.CharacterDotCount > 0 || list.CharacterSpriteCount > 0 || list.CharacterMeshCount > 0) && r.Character is { } character
+            && !character.Upload(context, list))
+        {
+            return false;
+        }
+
         var atlas = device.Atlas.Upload(r.Device, context);
         context.OMSetRenderTargets(target);
         context.RSSetViewport(0, 0, pixelWidth, pixelHeight);
@@ -113,6 +119,17 @@ internal static class OrbGpuRenderer
                 written = true;
             }
 
+            if (batch.Pass is OrbPass.CharacterMesh or OrbPass.CharacterDots or OrbPass.CharacterSprites)
+            {
+                if (r.Character is { } characters && !characters.Draw(context, r, list, batch))
+                {
+                    return false;
+                }
+
+                layout = 0;
+                continue;
+            }
+
             if (batch.Pass is OrbPass.Liquid or OrbPass.Led)
             {
                 Span<int> mode = [batch.Mode, 0, 0, 0];
@@ -166,6 +183,7 @@ internal static class OrbGpuRenderer
         }
 
         Timer?.End(r);
+        r.Character?.Sweep();
         return true;
     }
 

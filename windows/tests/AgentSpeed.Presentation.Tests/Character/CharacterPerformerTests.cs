@@ -241,8 +241,8 @@ public class CharacterHudTests
         var layout = new HudLayout((300, 600, 200, 34), (300, 400, 220, 36), 700, 1);
         hud.Update(1.0 / 60, 1, 120, 0.5, 0.5, "x");
         hud.Layout(1.0 / 60, layout, [], 20, (360, 300));
-        Assert.Contains(hud.Front, d => d.Y >= 600);
-        Assert.Contains(hud.Back, d => d.Y < 600 && d.Additive);
+        Assert.Contains(hud.Front.ToArray(), d => d.Y >= 600);
+        Assert.Contains(hud.Back.ToArray(), d => d.Y < 600 && d.Additive);
         Assert.True(hud.Odometer.Digits.Count >= 1);
     }
 
