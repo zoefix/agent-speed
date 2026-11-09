@@ -17,13 +17,15 @@ private struct LocalFetcher: CharacterPackFetching {
 /// Copies the archive of the pack each URL names, recording the order of the requests.
 private final class MapFetcher: CharacterPackFetching, @unchecked Sendable {
     let archives: [String: URL]
+    let delay: Duration
     private let lock = NSLock()
     private var log: [String] = []
     private var running = 0
     private(set) var mostAtOnce = 0
 
-    init(_ archives: [String: URL]) {
+    init(_ archives: [String: URL], delay: Duration = .milliseconds(20)) {
         self.archives = archives
+        self.delay = delay
     }
 
     var order: [String] { lock.withLock { log } }
@@ -36,7 +38,7 @@ private final class MapFetcher: CharacterPackFetching, @unchecked Sendable {
             mostAtOnce = max(mostAtOnce, running)
         }
         defer { lock.withLock { running -= 1 } }
-        try await Task.sleep(for: .milliseconds(20))
+        try await Task.sleep(for: delay)
         try FileManager.default.copyItem(at: archives[id]!, to: destination)
         progress(1)
     }
@@ -161,13 +163,14 @@ private struct ZippedPack {
     }
 
     /// Three packs, a library over a fresh defaults suite with their catalog loaded.
-    fileprivate static func run() async throws -> (library: CharacterLibrary, fetcher: MapFetcher, packs: [ZippedPack], defaults: UserDefaults) {
+    fileprivate static func run(fetchDelay: Duration = .milliseconds(20)) async throws
+        -> (library: CharacterLibrary, fetcher: MapFetcher, packs: [ZippedPack], defaults: UserDefaults) {
         let ids = ["claude", "gpt", "kimi"]
         let vendors = ["claude": ["anthropic"], "gpt": ["openai"], "kimi": ["moonshot"]]
         var packs: [ZippedPack] = []
         for id in ids { packs.append(try await ZippedPack(id: id)) }
         let catalog = CharacterCatalog(characters: zip(ids, packs).map { $1.entry(id: $0, vendors: vendors[$0]!) })
-        let fetcher = MapFetcher(Dictionary(uniqueKeysWithValues: zip(ids, packs.map(\.archive))))
+        let fetcher = MapFetcher(Dictionary(uniqueKeysWithValues: zip(ids, packs.map(\.archive))), delay: fetchDelay)
         let suite = "character-auto-" + UUID().uuidString
         let defaults = try #require(UserDefaults(suiteName: suite))
         let library = CharacterLibrary(store: CharacterStore(root: packs[0].root.appendingPathComponent("Characters"), appVersion: nil),
@@ -213,10 +216,11 @@ private struct ZippedPack {
     }
 
     @Test func stopSetsAsideWhatIsLeft() async throws {
-        let (library, fetcher, packs, _) = try await Self.run()
+        // The first download stays in flight until Stop cancels it, so the run is always stopped mid-download.
+        let (library, fetcher, packs, _) = try await Self.run(fetchDelay: .seconds(30))
         defer { packs.forEach { $0.remove() } }
         library.downloadAll(preferring: [])
-        for _ in 0..<500 where library.autoCurrent == nil { try await Task.sleep(for: .milliseconds(2)) }
+        for _ in 0..<500 where library.autoCurrent == nil || fetcher.order.isEmpty { try await Task.sleep(for: .milliseconds(2)) }
         library.stopAutomatic()
         try await Self.settle(library)
         #expect(library.setAside == ["claude", "gpt", "kimi"].filter { library.installed($0) == nil }.reduce(into: Set<String>()) { $0.insert($1) })

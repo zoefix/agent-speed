@@ -289,7 +289,7 @@ public sealed class CharacterLibrary : IDisposable
             response = null;
         }
 
-        IReadOnlyList<string>? run;
+        bool queued;
         lock (_gate)
         {
             if (response is { Status: 304 } && _catalog is not null)
@@ -316,18 +316,17 @@ public sealed class CharacterLibrary : IDisposable
                 _catalogState = _catalog is null ? CatalogState.Failed : CatalogState.Loaded;
             }
 
-            run = _pendingRun;
+            // The pending run is queued before the lock is released, so the library never looks idle in between.
+            var pending = _pendingRun;
             _pendingRun = null;
-            if (_catalog is null)
-            {
-                run = null;
-            }
+            queued = pending is not null && _catalog is not null && !_disposed && NetworkEnabled() && QueueLocked(pending);
         }
 
         Notify();
-        if (run is not null)
+        if (queued)
         {
-            DownloadAll(run);
+            StartNextAutomatic();
+            Notify();
         }
     }
 
@@ -352,24 +351,9 @@ public sealed class CharacterLibrary : IDisposable
             {
                 _pendingRun = vendors;
             }
-            else
+            else if (!QueueLocked(vendors))
             {
-                var busy = new HashSet<string>(_downloads.Keys.Concat(_autoQueue), StringComparer.Ordinal);
-                var skipped = new HashSet<string>(_skipped.Concat(busy), StringComparer.Ordinal);
-                var fresh = CharacterAutoDownload.Queue(_catalog!, _installed.Select(p => p.Id).ToHashSet(StringComparer.Ordinal), _setAside, skipped, vendors);
-                if (fresh.Count == 0)
-                {
-                    return;
-                }
-
-                if (_autoCurrent is null && _autoQueue.Count == 0)
-                {
-                    _autoTotal = 0;
-                    _skipped.Clear();
-                }
-
-                _autoQueue.AddRange(fresh);
-                _autoTotal += fresh.Count;
+                return;
             }
         }
 
@@ -381,6 +365,28 @@ public sealed class CharacterLibrary : IDisposable
 
         StartNextAutomatic();
         Notify();
+    }
+
+    /// <summary>Adds the packs a run would fetch to the queue; false when there are none.</summary>
+    private bool QueueLocked(IReadOnlyList<string> vendors)
+    {
+        var busy = new HashSet<string>(_downloads.Keys.Concat(_autoQueue), StringComparer.Ordinal);
+        var skipped = new HashSet<string>(_skipped.Concat(busy), StringComparer.Ordinal);
+        var fresh = CharacterAutoDownload.Queue(_catalog!, _installed.Select(p => p.Id).ToHashSet(StringComparer.Ordinal), _setAside, skipped, vendors);
+        if (fresh.Count == 0)
+        {
+            return false;
+        }
+
+        if (_autoCurrent is null && _autoQueue.Count == 0)
+        {
+            _autoTotal = 0;
+            _skipped.Clear();
+        }
+
+        _autoQueue.AddRange(fresh);
+        _autoTotal += fresh.Count;
+        return true;
     }
 
     /// <summary>Stop: every pack still queued, and the one downloading, is set aside.</summary>
