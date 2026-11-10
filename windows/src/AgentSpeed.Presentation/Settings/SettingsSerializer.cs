@@ -201,6 +201,14 @@ public static class SettingsSerializer
                 s.CharactersSetAside.Write(w, "charactersSetAside");
             }
 
+            w.WriteBoolean("quotaCodex", s.Quota.Codex);
+            w.WriteBoolean("quotaClaudeDesktop", s.Quota.ClaudeDesktop);
+            w.WriteBoolean("quotaClaudeCli", s.Quota.ClaudeCli);
+            if (s.Quota.CliInviteDismissed)
+            {
+                w.WriteString("quotaCliInvite", "dismissed");
+            }
+
             ReportSettingsJson.Write(w, s.Report);
 
             w.WriteStartObject("updates");
@@ -341,6 +349,13 @@ public static class SettingsSerializer
             Orbs = orbs ?? OrbsMigration.FromLegacy(validated), Boards = boards, TitleThemes = titles ?? TitleThemesDocument.Default,
             RemoteHosts = remoteHosts, Lan = lan,
             CharactersSetAside = root.TryGetProperty("charactersSetAside", out var aside) ? CharacterSetAside.Read(aside) : CharacterSetAside.Empty,
+            Quota = new QuotaSettings
+            {
+                Codex = ReadBool(root, "quotaCodex", QuotaSettings.Default.Codex),
+                ClaudeDesktop = ReadBool(root, "quotaClaudeDesktop", QuotaSettings.Default.ClaudeDesktop),
+                ClaudeCli = ReadBool(root, "quotaClaudeCli", QuotaSettings.Default.ClaudeCli),
+                CliInviteDismissed = ReadString(root, "quotaCliInvite") == "dismissed",
+            },
         };
     }
 

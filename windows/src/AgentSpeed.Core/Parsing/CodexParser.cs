@@ -37,6 +37,9 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
         SetSubagent(_pathIsSubagent);
     }
 
+    /// <summary>Receives the account's limits of this computer's rollouts (QUOTAS 3); null elsewhere (history, remote hosts).</summary>
+    public Quota.CodexQuotaCollector? Quota { get; init; }
+
     /// <summary>Time of the first <c>session_meta</c>, i.e. when the rollout was created.</summary>
     public long? CreatedMs => _fileCreatedMs;
 
@@ -179,6 +182,11 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
 
     private void ApplyEvent(in CodexLine line, long ts, IResponseSink sink)
     {
+        if (line.PayloadKind == CodexPayloadKind.TokenCount && line.RateLimits is { } limits)
+        {
+            Quota?.Observe(limits, ts);
+        }
+
         switch (line.PayloadKind)
         {
             case CodexPayloadKind.TaskStarted or CodexPayloadKind.UserMessage:

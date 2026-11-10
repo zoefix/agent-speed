@@ -49,7 +49,8 @@ public class CharacterMenuTests
         Assert.Equal(
             [
                 En["character.readouts.intel"], En["character.readouts.thinking"], En["character.readouts.latency"], En["character.readouts.network"],
-                En["character.readouts.cost"], En["character.readouts.agents"], En["character.readouts.models"], En["character.readouts.model"],
+                En["character.readouts.cost"], En["character.readouts.agents"], En["character.readouts.models"], En["character.readouts.quota"],
+                En["character.readouts.model"],
                 Separator, En["character.readouts.networkScope"],
                 En["orbs.traffic.sources"], En["orbs.traffic.machine"],
             ],

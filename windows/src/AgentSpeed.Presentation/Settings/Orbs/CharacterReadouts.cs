@@ -12,6 +12,7 @@ public enum CharacterReadout
     Cost,
     Agents,
     Models,
+    Quota,
     Model,
 }
 
@@ -22,14 +23,14 @@ public enum CharacterReadout
 /// Decoding is tolerant: a missing key, or a value that is not a boolean, takes its default.
 /// </summary>
 public sealed record CharacterReadouts(bool Model = false, bool Intelligence = true, bool Thinking = true, bool Network = true, bool Cost = true,
-    bool Agents = true, bool Latency = true, bool Models = true)
+    bool Agents = true, bool Latency = true, bool Models = true, bool Quota = true)
 {
     public static CharacterReadouts Default { get; } = new();
 
     public static IReadOnlyList<CharacterReadout> All { get; } =
     [
         CharacterReadout.Intelligence, CharacterReadout.Thinking, CharacterReadout.Latency, CharacterReadout.Network, CharacterReadout.Cost,
-        CharacterReadout.Agents, CharacterReadout.Models, CharacterReadout.Model,
+        CharacterReadout.Agents, CharacterReadout.Models, CharacterReadout.Quota, CharacterReadout.Model,
     ];
 
     public bool IsDefault => this == Default;
@@ -43,6 +44,7 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Network => Network,
         CharacterReadout.Cost => Cost,
         CharacterReadout.Models => Models,
+        CharacterReadout.Quota => Quota,
         _ => Agents,
     };
 
@@ -55,12 +57,13 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Network => this with { Network = on },
         CharacterReadout.Cost => this with { Cost = on },
         CharacterReadout.Models => this with { Models = on },
+        CharacterReadout.Quota => this with { Quota = on },
         _ => this with { Agents = on },
     };
 
     /// <summary>
     /// <c>character.readouts.intel</c>, <c>.thinking</c>, <c>.latency</c>, <c>.network</c>, <c>.cost</c>, <c>.agents</c>,
-    /// <c>.models</c>, <c>.model</c>.
+    /// <c>.models</c>, <c>.quota</c>, <c>.model</c>.
     /// </summary>
     public static string TitleKey(CharacterReadout readout) => readout switch
     {
@@ -71,6 +74,7 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Cost => "character.readouts.cost",
         CharacterReadout.Agents => "character.readouts.agents",
         CharacterReadout.Models => "character.readouts.models",
+        CharacterReadout.Quota => "character.readouts.quota",
         _ => "character.readouts.model",
     };
 
@@ -84,6 +88,7 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Cost => "cost",
         CharacterReadout.Agents => "agents",
         CharacterReadout.Models => "models",
+        CharacterReadout.Quota => "quota",
         _ => "model",
     };
 
@@ -118,6 +123,7 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         writer.WriteBoolean("agents", Agents);
         writer.WriteBoolean("latency", Latency);
         writer.WriteBoolean("models", Models);
+        writer.WriteBoolean("quota", Quota);
         writer.WriteEndObject();
     }
 }

@@ -8,6 +8,7 @@
         xmlns:modes="clr-namespace:AgentSpeed.Modes"
         xmlns:perf="clr-namespace:AgentSpeed.Perf"
         xmlns:history="clr-namespace:AgentSpeed.History"
+        xmlns:quota="clr-namespace:AgentSpeed.Dashboard.Quota"
         Title="{loc:Loc app.name}"
         Width="368"
         WindowStyle="SingleBorderWindow"
@@ -108,6 +109,10 @@
                             <Border x:Name="Focus" CornerRadius="5" BorderThickness="2" Visibility="Collapsed"
                                     BorderBrush="{DynamicResource KeyboardFocusBorderColorBrush}" />
                             <Grid Margin="{TemplateBinding Padding}">
+                                <Grid.RowDefinitions>
+                                    <RowDefinition Height="30" />
+                                    <RowDefinition Height="Auto" />
+                                </Grid.RowDefinitions>
                                 <Grid.ColumnDefinitions>
                                     <ColumnDefinition Width="*" />
                                     <ColumnDefinition Width="Auto" />
@@ -119,6 +124,7 @@
                                            HorizontalAlignment="Right" VerticalAlignment="Center" IsHitTestVisible="False"
                                            FontFamily="{DynamicResource AppSymbolFontFamily}"
                                            Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                <ContentPresenter Grid.Row="1" Grid.ColumnSpan="2" Content="{TemplateBinding Below}" RecognizesAccessKey="False" />
                             </Grid>
                         </Grid>
                         <ControlTemplate.Triggers>
@@ -132,6 +138,41 @@
                     </ControlTemplate>
                 </Setter.Value>
             </Setter>
+        </Style>
+
+        <!-- The Claude Code invitation's link (DESIGN 4): 11 pt in the accent color, its text on the quota labels' line. -->
+        <Style x:Key="QuotaInviteLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
+            <Setter Property="FontSize" Value="11" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Padding" Value="4,0" />
+            <Setter Property="Margin" Value="-4,0,0,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+        </Style>
+
+        <!-- Its trailing × (10 pt, tertiary, secondary on hover). -->
+        <Style x:Key="QuotaDismissButton" TargetType="Button" BasedOn="{StaticResource SubtleButton}">
+            <Setter Property="Foreground" Value="{DynamicResource TextFillColorTertiaryBrush}" />
+            <Setter Property="Width" Value="22" />
+            <Setter Property="MinWidth" Value="0" />
+            <Setter Property="Height" Value="22" />
+            <Setter Property="Padding" Value="0" />
+            <Setter Property="Margin" Value="0,0,-6,0" />
+            <Setter Property="VerticalAlignment" Value="Center" />
+            <Setter Property="ToolTipService.InitialShowDelay" Value="500" />
+            <Setter Property="Content">
+                <Setter.Value>
+                    <TextBlock Text="&#xE711;" FontSize="10" FontFamily="{DynamicResource AppSymbolFontFamily}" />
+                </Setter.Value>
+            </Setter>
+            <Style.Triggers>
+                <Trigger Property="IsMouseOver" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Trigger>
+                <Trigger Property="IsKeyboardFocused" Value="True">
+                    <Setter Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                </Trigger>
+            </Style.Triggers>
         </Style>
 
         <!-- Small secondary text button in a section header; its negative margins keep the header line's height. -->
@@ -253,9 +294,14 @@
                     <ItemsControl ItemsSource="{Binding Sources}" Focusable="False">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type dash:SourceRow}">
-                                <!-- Exactly 30 DIP in every state; the settings link is a sibling over the trailing edge, never
-                                     a button nested inside the row button. -->
-                                <Grid Height="30" Visibility="{Binding IsListed, Converter={StaticResource Visible}}">
+                                <!-- The row's line is exactly 30 DIP in every state; quota lines (DESIGN 4) grow the row under it,
+                                     inside its plate. The settings link and the Claude Code invitation are siblings over the row,
+                                     never buttons nested inside the row button. -->
+                                <Grid Visibility="{Binding IsListed, Converter={StaticResource Visible}}">
+                                    <Grid.RowDefinitions>
+                                        <RowDefinition Height="Auto" />
+                                        <RowDefinition Height="Auto" />
+                                    </Grid.RowDefinitions>
                                     <dash:SourceRowButton Style="{StaticResource SourceRowButton}" Click="OnSourceRow"
                                                           ShowChevron="{Binding ShowChevron}"
                                                           ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -286,10 +332,66 @@
                                                                 ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
                                             </Grid>
                                         </dash:SourceRowButton.Trailing>
+                                        <dash:SourceRowButton.Below>
+                                            <quota:EasedHeight ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <ItemsControl ItemsSource="{Binding QuotaLines}" Focusable="False" IsTabStop="False" Margin="18,0,0,6"
+                                                              Opacity="{Binding IsDimmed, Converter={StaticResource Dim}}"
+                                                              Visibility="{Binding HasQuota, Converter={StaticResource Visible}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type quota:QuotaLineRow}">
+                                                            <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent"
+                                                                                  Columns="{Binding DataContext.QuotaColumns, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                  ToolTip="{Binding Tooltip}" ToolTipService.InitialShowDelay="500">
+                                                                <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="Medium"
+                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                <quota:QuotaBar Value="{Binding Bar}" Pace="{Binding Pace}" Passed="{Binding Passed}" Fill="{Binding Fill}"
+                                                                                Track="{Binding DataContext.QuotaTrack, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                TrackOpacity="{Binding DataContext.QuotaTrackOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                Tick="{Binding DataContext.QuotaTick, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                TickOpacity="{Binding DataContext.QuotaTickOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                                                ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                                <Grid>
+                                                                    <TextBlock Text="100%" FontSize="11.5" FontWeight="SemiBold" Visibility="Hidden"
+                                                                               Typography.NumeralAlignment="Tabular" />
+                                                                    <quota:QuotaFadeText Text="{Binding PercentText}" HorizontalAlignment="Right"
+                                                                                         TextElement.FontSize="11.5" TextElement.FontWeight="SemiBold"
+                                                                                         Typography.NumeralAlignment="Tabular"
+                                                                                         ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                                        <quota:QuotaFadeText.Style>
+                                                                            <Style TargetType="quota:QuotaFadeText">
+                                                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                                                                <Style.Triggers>
+                                                                                    <DataTrigger Binding="{Binding Critical}" Value="True">
+                                                                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                                                                    </DataTrigger>
+                                                                                </Style.Triggers>
+                                                                            </Style>
+                                                                        </quota:QuotaFadeText.Style>
+                                                                    </quota:QuotaFadeText>
+                                                                </Grid>
+                                                                <quota:QuotaFadeText Text="{Binding ResetText}" Tail="{Binding AgeText}"
+                                                                                     TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                                                     TailBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                                                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                            </quota:QuotaLinePanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </quota:EasedHeight>
+                                        </dash:SourceRowButton.Below>
                                     </dash:SourceRowButton>
-                                    <Button Style="{StaticResource LinkButton}" HorizontalAlignment="Right" Margin="0,0,-4,0"
-                                            Content="{Binding Status}" FontSize="12" Click="OnOpenSources"
-                                            Visibility="{Binding ShowSettingsLink, Converter={StaticResource Visible}}" />
+                                    <Grid Height="30" VerticalAlignment="Top" HorizontalAlignment="Right"
+                                          Visibility="{Binding ShowSettingsLink, Converter={StaticResource Visible}}">
+                                        <Button Style="{StaticResource LinkButton}" Margin="0,0,-4,0" VerticalAlignment="Center"
+                                                Content="{Binding Status}" FontSize="12" Click="OnOpenSources" />
+                                    </Grid>
+                                    <!-- The Claude Code invitation (DESIGN 4): one line in place of quota lines while the bridge is off. -->
+                                    <Grid Grid.Row="1" Margin="18,-3,0,7" Visibility="{Binding ShowsCliInvitation, Converter={StaticResource Visible}}">
+                                        <Button Style="{StaticResource QuotaInviteLink}" HorizontalAlignment="Left" Content="{loc:Loc dashboard.quota.enableCli}"
+                                                Click="OnEnableCliQuota" AutomationProperties.Name="{loc:Loc dashboard.quota.enableCli}" />
+                                        <Button Style="{StaticResource QuotaDismissButton}" HorizontalAlignment="Right" Click="OnDismissCliInvitation"
+                                                ToolTip="{loc:Loc dashboard.quota.dismiss}" AutomationProperties.Name="{loc:Loc dashboard.quota.dismiss}" />
+                                    </Grid>
                                 </Grid>
                             </DataTemplate>
                         </ItemsControl.ItemTemplate>

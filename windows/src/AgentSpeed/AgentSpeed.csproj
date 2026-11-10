@@ -88,6 +88,21 @@
     <Message Importance="high" Text="Embedding traffic helper %(_TrafficHelperHashed.Rid): %(_TrafficHelperHashed.Sha256)" />
   </Target>
 
+  <!-- QUOTAS 5.1: the NativeAOT status line helper, published beforehand (windows/scripts/publish.ps1), is embedded and
+       copied to %LOCALAPPDATA%\AgentSpeed\bin when the Claude Code bridge is on: the app ships as one exe that updates
+       itself, so a file beside it would go stale. StatuslineHelperDir holds win-x64/ and/or
+       win-arm64/agent-speed-statusline.exe; a RID-specific build embeds only its own architecture. -->
+  <PropertyGroup Condition="'$(StatuslineHelperDir)' != ''">
+    <_StatuslineHelperRoot>$([MSBuild]::EnsureTrailingSlash('$(StatuslineHelperDir)'))</_StatuslineHelperRoot>
+  </PropertyGroup>
+
+  <ItemGroup Condition="'$(_StatuslineHelperRoot)' != ''">
+    <EmbeddedResource Include="$(_StatuslineHelperRoot)win-x64/agent-speed-statusline.exe" LogicalName="AgentSpeed.StatuslineHelper.win-x64.exe"
+        Condition="Exists('$(_StatuslineHelperRoot)win-x64/agent-speed-statusline.exe') and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == 'win-x64')" />
+    <EmbeddedResource Include="$(_StatuslineHelperRoot)win-arm64/agent-speed-statusline.exe" LogicalName="AgentSpeed.StatuslineHelper.win-arm64.exe"
+        Condition="Exists('$(_StatuslineHelperRoot)win-arm64/agent-speed-statusline.exe') and ('$(RuntimeIdentifier)' == '' or '$(RuntimeIdentifier)' == 'win-arm64')" />
+  </ItemGroup>
+
   <!-- REMOTE 3.1: both Linux relays are embedded with their SHA-256 (RemoteRelay.targets); publishing fails without them. -->
   <Import Project="RemoteRelay.targets" />
 

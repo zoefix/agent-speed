@@ -27,6 +27,16 @@ internal sealed partial class OrbManager
     /// <summary>The price table models resolve against (vendors and model names); null resolves by family and source only.</summary>
     public Func<PriceTable?>? Prices { get; init; }
 
+    /// <summary>The quotas the 額度 cards show (QUOTAS 6).</summary>
+    private Presentation.Quota.QuotaState _quota = Presentation.Quota.QuotaState.Empty;
+
+    /// <summary>The quotas changed: every character orb shows its 額度 card again.</summary>
+    public void UpdateQuota(Presentation.Quota.QuotaState state)
+    {
+        _quota = state;
+        RefreshCharacters();
+    }
+
     /// <summary>The vendors of an orb's live agents, fastest first (the automatic download's order).</summary>
     public IReadOnlyList<string> LiveVendors(string orbId) =>
         _entries.TryGetValue(orbId, out var entry)
@@ -102,6 +112,9 @@ internal sealed partial class OrbManager
             ThinkingGlyph = _loc["intel.thinking.glyph"],
             ModelsMore = _loc["character.models.more"],
             TokensUnit = _loc["unit.tokS"],
+            Quota = orb.CharacterReadouts.Quota
+                ? OrbQuotaCard.Of(_quota, s => orb.TrackedSources?.Contains(s) ?? true, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), _loc)
+                : OrbQuotaCard.Empty,
         });
         var generating = reading.GeneratingSources.Count > 0;
         surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating,

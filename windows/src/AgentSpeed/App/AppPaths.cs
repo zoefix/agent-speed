@@ -24,6 +24,15 @@ internal static class AppPaths
             && !custom.StartsWith(@"\\", StringComparison.Ordinal)
             ? custom : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductFolder, "logs");
 
+    /// <summary>
+    /// The app's data folder <c>%LOCALAPPDATA%\AgentSpeed</c> (QUOTAS 5.1: the status line helper's copy and the quota
+    /// files); <c>AGENT_SPEED_DATA_DIR</c> points a test session at its own folder.
+    /// </summary>
+    public static string DataDirectory =>
+        Environment.GetEnvironmentVariable("AGENT_SPEED_DATA_DIR") is { Length: > 0 } custom && Path.IsPathFullyQualified(custom)
+            && !custom.StartsWith(@"\\", StringComparison.Ordinal)
+            ? custom : Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), ProductFolder);
+
     public static string? ExecutablePath => Environment.ProcessPath;
 
     public static string Version
