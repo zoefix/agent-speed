@@ -24,9 +24,12 @@ public struct PerfEvaluation: Equatable, Sendable {
     public var components: [PerfComponent]
     /// The 14-day pooled score of the agent's source and model (METRICS 6.11 *Baseline*); nil without one.
     public var baseline: Double?
+    /// `firstMs − startMs` of every sample response that has both, newest first: the agent's share of its set's
+    /// first-content latency (6.9 *Readouts of a set*), whatever the sample's size.
+    public var latencies: [Int64]
 
     public init(score: Double?, n: Int, tools: Int, activeMs: Int64, spanStartMs: Int64?, model: String?,
-                components: [PerfComponent], baseline: Double? = nil) {
+                components: [PerfComponent], baseline: Double? = nil, latencies: [Int64] = []) {
         self.score = score
         self.n = n
         self.tools = tools
@@ -35,6 +38,7 @@ public struct PerfEvaluation: Equatable, Sendable {
         self.model = model
         self.components = components
         self.baseline = baseline
+        self.latencies = latencies
     }
 
     /// No sample: every component absent.
@@ -71,6 +75,7 @@ public struct PerfEvaluation: Equatable, Sendable {
     public static func evaluate(source: SourceKind, responses: some Sequence<ResponseRecord>, actions: [ToolAction],
                                 nowMs: Int64) -> PerfEvaluation {
         let sample = sampleOf(responses, nowMs: nowMs)
+        let latencies = sample.compactMap { PerfLatency.latency(startMs: $0.record.startMs, firstMs: $0.record.firstMs) }
         let n = sample.count
         let spanStart = sample.map(\.startMs).min()
         let calls = n >= PerfFormula.minimumSamples ? callsOf(actions, spanStart: spanStart ?? .max, nowMs: nowMs) : []
@@ -79,24 +84,25 @@ public struct PerfEvaluation: Equatable, Sendable {
         let active = unionLength(intervals)
         var measures: [PerfComponentId: (measure: Double?, samples: Int)] = [:]
         if n >= PerfFormula.minimumSamples {
-            measures = componentMeasures(source: source, sample: sample, calls: calls, activeMs: active)
+            measures = componentMeasures(source: source, sample: sample, latencies: latencies, calls: calls,
+                                         activeMs: active)
         } else {
             measures[.T] = (nil, n)
         }
         let (components, score) = PerfFormula.combine(source: source, measures: measures)
         return PerfEvaluation(score: score, n: n, tools: calls.count, activeMs: active, spanStartMs: spanStart,
-                              model: sample.first?.record.model, components: components)
+                              model: sample.first?.record.model, components: components, latencies: latencies)
     }
 
-    private static func componentMeasures(source: SourceKind, sample: [TimedResponse], calls: [ToolAction],
-                                          activeMs: Int64) -> [PerfComponentId: (measure: Double?, samples: Int)] {
+    private static func componentMeasures(source: SourceKind, sample: [TimedResponse], latencies: [Int64],
+                                          calls: [ToolAction], activeMs: Int64)
+        -> [PerfComponentId: (measure: Double?, samples: Int)] {
         let minimum = PerfFormula.minimumSamples
         var measures: [PerfComponentId: (measure: Double?, samples: Int)] = [:]
         let output = sample.reduce(0) { $0 + $1.record.usage.output }
         let duration = sample.reduce(Int64(0)) { $0 + $1.durationMs }
         measures[.T] = (Double(output) / (Double(duration) / 1000), sample.count)
 
-        let latencies = sample.compactMap { PerfLatency.latency(startMs: $0.record.startMs, firstMs: $0.record.firstMs) }
         measures[.L] = (latencies.count >= minimum ? median(latencies) : nil, latencies.count)
 
         if source.recordsReasoningApart {
@@ -172,7 +178,7 @@ public struct PerfEvaluation: Equatable, Sendable {
         return total
     }
 
-    private static func median(_ values: [Int64]) -> Double {
+    static func median(_ values: [Int64]) -> Double {
         let ordered = values.sorted()
         let mid = ordered.count / 2
         return ordered.count % 2 == 1 ? Double(ordered[mid]) : Double(ordered[mid - 1] + ordered[mid]) / 2

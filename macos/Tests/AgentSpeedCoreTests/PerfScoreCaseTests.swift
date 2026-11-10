@@ -3,7 +3,8 @@ import Testing
 @testable import AgentSpeedCore
 
 /// `spec/fixtures/perf-score-cases.json` (METRICS 6.9, 6.11) through the app's own evaluation, set values, recorder,
-/// pooled scores, baseline and History window rows. The `thinking` cases are `IntelligenceCaseTests`.
+/// pooled scores, baseline and History window rows. The `thinking` cases are `IntelligenceCaseTests`, the `readouts`
+/// cases `PerfReadoutCaseTests`.
 @Suite("Performance score fixture cases")
 struct PerfScoreCaseTests {
     @Test func everyGroupIsInTheFixture() {
@@ -14,6 +15,7 @@ struct PerfScoreCaseTests {
         #expect(PerfFixture.group("pooled").count == 4)
         #expect(PerfFixture.group("baseline").count == 3)
         #expect(PerfFixture.group("range").count == 2)
+        #expect(PerfFixture.group("readouts").count == 3)
     }
 
     @Test func theEdgesAreTheFixtures() {
