@@ -2,7 +2,8 @@ import Foundation
 
 /// Builds the published `TrafficSnapshot` from the engine (METRICS 10.7, 10.8).
 enum TrafficSnapshotBuilder {
-    static func snapshot(engine: TrafficEngine, wallMs: Int64, state: ProcessTrafficState) -> TrafficSnapshot {
+    static func snapshot(engine: TrafficEngine, wallMs: Int64, state: ProcessTrafficState, quotaApps: QuotaApps? = nil)
+        -> TrafficSnapshot {
         let today = engine.today()
         var sources: [SourceKind: SourceTraffic] = [:]
         var sourceHistory: [SourceKind: [TrafficPoint]] = [:]
@@ -39,7 +40,8 @@ enum TrafficSnapshotBuilder {
             agents: agents,
             dayStart: engine.ledger.dayStart(forMs: wallMs),
             reportTotals: engine.reportTotals,
-            machineAvailable: engine.machineInterfaceCount > 0
+            machineAvailable: engine.machineInterfaceCount > 0,
+            quotaApps: quotaApps
         )
     }
 }

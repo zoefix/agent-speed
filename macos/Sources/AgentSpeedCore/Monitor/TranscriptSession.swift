@@ -108,6 +108,8 @@ final class TranscriptSession {
     private var unreadablePaths: Set<String> = []
     private var removedMalformedLines = 0
     private(set) var partialHistory = false
+    /// The newest Codex account limits across every Codex location (QUOTAS 3); local files only.
+    private(set) var codexQuota: QuotaSnapshot?
     /// OpenCode's databases, when that source is enabled (METRICS 2.1, 4.5, 5.2).
     let opencode: OpencodeSourceSet?
     let zcode: ZcodeSourceSet?
@@ -757,6 +759,7 @@ final class TranscriptSession {
 
     private func finishRead(of file: TrackedFile, result: FileTailer.ReadResult) {
         file.wasRead = true
+        if let quota = file.parser.codexQuota, quota.observedMs > codexQuota?.observedMs ?? .min { codexQuota = quota }
         if result.oversized || file.parser.hasPartialHistory { partialHistory = true }
         if result.failed {
             unreadablePaths.insert(file.path)

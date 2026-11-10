@@ -357,6 +357,22 @@ struct JSONScanner {
         return JSONNumber(truncated: truncated, isFinite: value.isFinite, isPositive: value > 0, isNonNegative: value >= 0)
     }
 
+    /// Reads a number as the nearest finite `Double` (a usage percent, QUOTAS 3). Non-numbers are skipped and give nil.
+    mutating func readDouble() throws(JSONScanError) -> Double? {
+        skipWhitespace()
+        guard position < end else { throw JSONScanError() }
+        let first = base[position]
+        guard first == UInt8(ascii: "-") || Self.isDigit(first) else {
+            try skipValue()
+            return nil
+        }
+        let start = position
+        _ = try skipNumber()
+        let text = String(decoding: UnsafeBufferPointer(start: base + start, count: position - start), as: UTF8.self)
+        guard let value = Double(text), value.isFinite else { return nil }
+        return value
+    }
+
     /// Passes the current value as the document stores it to `body` and consumes it: a string's decoded UTF-8 text,
     /// any other value's raw JSON text. Nothing is kept beyond the call.
     mutating func withStoredText<Result>(_ body: (UnsafeRawBufferPointer) -> Result) throws(JSONScanError) -> Result {

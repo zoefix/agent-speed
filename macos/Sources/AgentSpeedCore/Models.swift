@@ -345,6 +345,8 @@ public struct SpeedSnapshot: Equatable, Sendable {
     /// The (host, source) cells with something to show, in `hosts` order and then source order; empty while no remote
     /// host is configured. Per source they add up to `sources`.
     public var hostSources: [HostSourceStatus] = []
+    /// The newest Codex account limits read from this computer's rollouts (QUOTAS 3); display only.
+    public var codexQuota: QuotaSnapshot?
 
     public init(
         timestamp: Date,
