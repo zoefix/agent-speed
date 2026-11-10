@@ -123,7 +123,8 @@ import Testing
     /// The 首字 row and the models card (user's choice, 2026-11-10): on by default, in the menus' order, tolerant and
     /// written only when they differ.
     @Test func latencyAndModelsAreOnByDefaultAndRoundTrip() throws {
-        #expect(CharacterReadout.allCases == [.intelligence, .thinking, .latency, .network, .cost, .agents, .models, .model])
+        #expect(CharacterReadout.allCases == [.intelligence, .thinking, .latency, .network, .cost, .agents, .models, .quota,
+                                              .model])
         #expect(CharacterReadout.latency.titleKey == "character.readouts.latency")
         #expect(CharacterReadout.models.titleKey == "character.readouts.models")
         #expect(CharacterReadouts.default.latency && CharacterReadouts.default.models)
@@ -146,6 +147,28 @@ import Testing
         doc = OrbEditing.setCharacterReadout(.latency, true, of: "a", in: doc)
         let encoded = String(decoding: try JSONEncoder().encode(doc.orb("a")), as: UTF8.self)
         #expect(!encoded.contains("characterReadouts"))
+    }
+
+    /// 額度 (user's choice, 2026-11-10): on by default, between the models card and the model chip, tolerant and written
+    /// only when it differs.
+    @Test func quotaIsOnByDefaultAndRoundTrips() throws {
+        #expect(CharacterReadouts.default.quota)
+        #expect(CharacterReadout.quota.titleKey == "character.readouts.quota")
+        let models = try #require(CharacterReadout.allCases.firstIndex(of: .models))
+        #expect(CharacterReadout.allCases[models + 1] == .quota && CharacterReadout.allCases.last == .model)
+        let older = try JSONDecoder().decode(CharacterReadouts.self, from: Data(#"{"models": false}"#.utf8))
+        #expect(older == CharacterReadouts(models: false) && older.quota)
+        let typed = try JSONDecoder().decode(CharacterReadouts.self, from: Data(#"{"quota": "off"}"#.utf8))
+        #expect(typed == .default)
+        let off = CharacterReadouts(quota: false)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(off)) as? [String: Bool]
+        #expect(json?["quota"] == false && json?["models"] == true)
+        var doc = OrbsDocument(orbs: [OrbConfig(id: "a", style: .character)])
+        doc = OrbEditing.setCharacterReadout(.quota, false, of: "a", in: doc)
+        #expect(doc.orb("a")?.characterReadouts == off)
+        #expect(String(decoding: try JSONEncoder().encode(doc.orb("a")), as: UTF8.self).contains("\"quota\":false"))
+        doc = OrbEditing.setCharacterReadout(.quota, true, of: "a", in: doc)
+        #expect(!String(decoding: try JSONEncoder().encode(doc.orb("a")), as: UTF8.self).contains("characterReadouts"))
     }
 
     @Test func editingSetsAndCopiesTheReadouts() throws {

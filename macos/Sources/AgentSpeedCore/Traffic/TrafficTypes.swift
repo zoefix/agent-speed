@@ -192,6 +192,8 @@ public struct TrafficSnapshot: Equatable, Sendable {
     public var reportTotals: TrafficReportTotals
     /// A counted interface was up at the latest sample (METRICS 10.2).
     public var machineAvailable: Bool
+    /// The quota sources' apps in the process table (QUOTAS 6); nil while no table is kept.
+    public var quotaApps: QuotaApps?
 
     public init(
         timestamp: Date,
@@ -207,7 +209,8 @@ public struct TrafficSnapshot: Equatable, Sendable {
         agents: [String: AgentTraffic] = [:],
         dayStart: Date = .distantPast,
         reportTotals: TrafficReportTotals = .zero,
-        machineAvailable: Bool = true
+        machineAvailable: Bool = true,
+        quotaApps: QuotaApps? = nil
     ) {
         self.timestamp = timestamp
         self.enabled = enabled
@@ -223,6 +226,7 @@ public struct TrafficSnapshot: Equatable, Sendable {
         self.dayStart = dayStart
         self.reportTotals = reportTotals
         self.machineAvailable = machineAvailable
+        self.quotaApps = quotaApps
     }
 
     public static let off = TrafficSnapshot(timestamp: .distantPast, enabled: false, processState: .off)

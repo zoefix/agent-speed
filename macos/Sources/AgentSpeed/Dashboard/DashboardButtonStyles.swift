@@ -72,9 +72,12 @@ struct DashboardSourceRowButtonStyle: ButtonStyle {
 
     /// Draws the hover state without a pointer (previews).
     var forcedHover = false
+    /// A row with lines under its first one (quota lines): the plate keeps its lift around them and the chevron stays
+    /// beside the first line.
+    var stacked = false
 
     func makeBody(configuration: Configuration) -> some View {
-        SourceRowPlate(isPressed: configuration.isPressed, forcedHover: forcedHover) {
+        SourceRowPlate(isPressed: configuration.isPressed, forcedHover: forcedHover, stacked: stacked) {
             configuration.label
         }
     }
@@ -82,6 +85,7 @@ struct DashboardSourceRowButtonStyle: ButtonStyle {
     private struct SourceRowPlate<Label: View>: View {
         let isPressed: Bool
         let forcedHover: Bool
+        let stacked: Bool
         @ViewBuilder var label: Label
 
         @State private var isHovered = false
@@ -97,12 +101,14 @@ struct DashboardSourceRowButtonStyle: ButtonStyle {
             label
                 .padding(.leading, DashboardSourceRowButtonStyle.leadingBleed)
                 .padding(.trailing, DashboardSourceRowButtonStyle.trailingBleed)
+                .padding(.vertical, stacked ? DashboardSourceRowButtonStyle.lift : 0)
                 .frame(maxWidth: .infinity, minHeight: DashboardLayout.rowHeight + DashboardSourceRowButtonStyle.lift * 2, alignment: .leading)
-                .overlay(alignment: .trailing) {
+                .overlay(alignment: stacked ? .topTrailing : .trailing) {
                     Image(systemName: "chevron.right")
                         .font(.system(size: 8.5, weight: .bold))
                         .foregroundStyle(.dashboardSecondary)
-                        .frame(width: DashboardSourceRowButtonStyle.trailingBleed)
+                        .frame(width: DashboardSourceRowButtonStyle.trailingBleed,
+                               height: stacked ? DashboardLayout.rowHeight + DashboardSourceRowButtonStyle.lift * 2 : nil)
                         .opacity(active ? 1 : 0)
                         .offset(x: active || reduceMotion ? 0 : -3)
                         .accessibilityHidden(true)

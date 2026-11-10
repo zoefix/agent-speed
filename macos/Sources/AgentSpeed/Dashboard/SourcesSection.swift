@@ -1,16 +1,21 @@
 import AgentSpeedCore
 import SwiftUI
 
-/// One row per source that produced tokens today, with its live speed and today's output (DESIGN section 4.3). Each
-/// row opens the Usage History window filtered to its source. The other sources are left to Settings → Data Sources.
+/// One row per source that produced tokens today, with its live speed and today's output (DESIGN section 4.3), and
+/// under it the source's quota lines (QUOTAS; a source with a recent quota is listed too). Each row opens the Usage
+/// History window filtered to its source. The other sources are left to Settings → Data Sources.
 struct SourcesSection: View {
     let model: AppModel
 
     var body: some View {
         let l10n = model.l10n
+        let quotaListed = model.quota.listedSources
         let sources = SourceKind.allCases.compactMap { kind in
-            model.snapshot.sources.first { $0.kind == kind && $0.producedToday }
+            model.snapshot.sources.first { $0.kind == kind && ($0.producedToday || quotaListed.contains(kind)) }
         }
+        let separator = " · "
+        let (quota, columns) = SourceQuotaColumns.fit(
+            Dictionary(uniqueKeysWithValues: sources.map { ($0.kind, model.quotaLines($0.kind)) }), separator: separator)
 
         VStack(alignment: .leading, spacing: DashboardLayout.rowSpacing) {
             HStack(spacing: Spacing.s) {
@@ -33,11 +38,15 @@ struct SourcesSection: View {
                     .transition(.opacity)
             }
             ForEach(sources) { source in
-                SourceRow(model: model, source: source)
+                SourceRow(model: model, source: source, quota: quota[source.kind] ?? [], columns: columns,
+                          separator: separator,
+                          invitesCli: source.kind == .claudeCode && source.producedToday && model.quota.invitesCli)
                     .transition(.opacity)
             }
         }
         .animation(model.dashboardMotion, value: sources.map(\.kind))
+        .animation(model.accessibility.reduceMotion ? nil : .easeInOut(duration: 0.25),
+                   value: quota.mapValues { $0.count })
     }
 }
 
@@ -89,21 +98,47 @@ private struct LiveCostValue: View {
 }
 
 private struct SourceRow: View {
+    /// The name's leading edge: the dot and the gap after it; quota lines start here.
+    static let nameInset = SourceQuotaColumns.nameInset
+
     let model: AppModel
     let source: SourceStatus
+    let quota: [SourceQuotaLine]
+    let columns: SourceQuotaColumns
+    let separator: String
+    let invitesCli: Bool
 
     @Environment(\.colorScheme) private var colorScheme
     @Environment(\.previewHoveredSource) private var previewHovered
 
     var body: some View {
+        VStack(alignment: .leading, spacing: 0) {
+            button
+            if invitesCli {
+                QuotaInvitationLine(model: model)
+                    .padding(.leading, Self.nameInset)
+                    .transition(.opacity)
+            }
+        }
+        .animation(model.accessibility.reduceMotion ? nil : .easeInOut(duration: 0.25), value: invitesCli)
+    }
+
+    /// The quota windows read after the cost, joined like a list.
+    private var spokenQuota: String {
+        quota.map(\.spoken).joined(separator: model.l10n("list.separator"))
+    }
+
+    private var button: some View {
         let l10n = model.l10n
         let live = source.enabled
         let speed = model.value(of: source.live)
         let name = l10n(source.kind.titleKey)
+        let spokenQuota = quota.isEmpty ? "" : ", " + self.spokenQuota
 
-        Button {
+        return Button {
             model.commands?.showHistory(source: source.kind)
         } label: {
+            VStack(alignment: .leading, spacing: 0) {
             HStack(spacing: Spacing.s) {
                 Circle()
                     .fill(source.kind.tint(dark: colorScheme == .dark))
@@ -124,7 +159,7 @@ private struct SourceRow: View {
                         .lineLimit(1)
                         .fixedSize()
                         .frame(minWidth: DashboardLayout.tokensColumn, alignment: .trailing)
-                        .accessibilityLabel("\(l10n("dashboard.today")) \(l10n("today.output")) \(SpeedFormat.tokens(source.today.output)), \(l10n("today.cost")) \(spokenCost)")
+                        .accessibilityLabel("\(l10n("dashboard.today")) \(l10n("today.output")) \(SpeedFormat.tokens(source.today.output)), \(l10n("today.cost")) \(spokenCost)\(spokenQuota)")
                     if model.settings.liveUnit == .cost {
                         LiveCostValue(model: model, source: source)
                     } else {
@@ -135,11 +170,21 @@ private struct SourceRow: View {
                         .font(DashboardFont.detail)
                         .foregroundStyle(.dashboardSecondary)
                         .lineLimit(1)
+                        .accessibilityLabel(l10n("source.disabled") + spokenQuota)
                 }
             }
             .frame(minHeight: DashboardLayout.rowHeight)
+            if !quota.isEmpty {
+                SourceQuotaLines(source: source.kind, lines: quota, columns: columns, separator: separator,
+                                 reduceMotion: model.accessibility.reduceMotion)
+                    .padding(.leading, Self.nameInset)
+                    .padding(.bottom, 4)
+                    .accessibilityHidden(true)
+                    .transition(.opacity)
+            }
+            }
         }
-        .buttonStyle(DashboardSourceRowButtonStyle(forcedHover: previewHovered == source.kind))
+        .buttonStyle(DashboardSourceRowButtonStyle(forcedHover: previewHovered == source.kind, stacked: !quota.isEmpty))
         .animation(Motion.fade, value: model.cost.currency.code)
         .focusEffectDisabled()
         .help(l10n("mac.dashboard.sourceHint"))

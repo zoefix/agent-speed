@@ -20,6 +20,8 @@ struct CodexParser: Sendable {
     private var provider: String?
     /// Lines of a paginated sub-agent below this ordinal copy its parent's records (METRICS 3.5).
     private var subagentStartOrdinal: Int64?
+    /// The account's limits from the newest token count of this file that had a window (QUOTAS 3).
+    private(set) var quota: QuotaSnapshot?
 
     init(agentId: String, fileID: FileID) {
         self.agentId = agentId
@@ -80,6 +82,7 @@ struct CodexParser: Sendable {
             return
         }
         state.noteLine(at: timestamp)
+        if let limits = line.rateLimits { noteQuota(limits, at: timestamp) }
         // After the line, with the model of the current turn (METRICS 6.10).
         defer { state.actions.record(tools, at: timestamp, model: state.model) }
         var requestModes = ExecutionModes.empty
@@ -154,6 +157,13 @@ struct CodexParser: Sendable {
         case .other:
             break
         }
+    }
+
+    /// Whatever the usage rules do with the line; a token count without a usable window replaces nothing.
+    private mutating func noteQuota(_ limits: CodexRateLimits, at timestamp: Int64) {
+        let windows = limits.windows(timestampMs: timestamp)
+        guard !windows.isEmpty, timestamp > quota?.observedMs ?? .min else { return }
+        quota = QuotaSnapshot(source: .codex, observedMs: timestamp, windows: windows)
     }
 
     private mutating func markInput(at timestamp: Int64) {

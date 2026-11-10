@@ -17,6 +17,8 @@ struct SnapshotContext: Sendable {
     var warnings: [MonitorWarning]
     var todayStartMs: Int64
     var remote = RemoteIngest()
+    /// Display only: never reported, sent to the local network or to remote hosts (QUOTAS 1).
+    var codexQuota: QuotaSnapshot?
 
     init(sources: [SourceKind: SourceInfo], warnings: [MonitorWarning] = [], todayStartMs: Int64) {
         self.sources = sources
@@ -58,6 +60,7 @@ struct SnapshotContext: Sendable {
         }
         localSources = sources
         remote = session.remote
+        codexQuota = session.codexQuota
         for host in remote.hosts where remote.isConnected(host.id) {
             for state in remote.reports[host.id]?.sources ?? [] where sources[state.source]?.enabled == true {
                 if state.available { sources[state.source]?.available = true }
@@ -153,6 +156,7 @@ enum SnapshotBuilder {
         if !context.remote.hosts.isEmpty {
             (snapshot.hosts, snapshot.hostSources) = hosts(output, context: context)
         }
+        snapshot.codexQuota = context.codexQuota
         return snapshot
     }
 
@@ -185,6 +189,7 @@ enum SnapshotBuilder {
         }
         snapshot.warnings = context.warnings
         snapshot.dayStart = date(context.todayStartMs)
+        snapshot.codexQuota = context.codexQuota
         return snapshot
     }
 

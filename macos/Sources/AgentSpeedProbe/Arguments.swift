@@ -14,6 +14,8 @@ struct ProbeArguments {
         case syncPrices(directory: String)
         /// One real exchange-rate round into a scratch folder (NETWORK 4).
         case syncRates(directory: String, currency: String)
+        /// The quotas this computer holds (QUOTAS 3–6), read-only.
+        case dumpQuota
     }
 
     var mode: Mode
@@ -60,7 +62,7 @@ struct ProbeArguments {
                                [--openclaw LOCATION]... [--hermes LOCATION]... [--droid LOCATION]...
                                [--devin LOCATION]... [--qoder LOCATION]... [--qoder-cli LOCATION]...
                LOCATION: a path, or @auto for the source's automatic roots; repeat a flag to read several
-               AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY
+               AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY | --dump-quota [--codex LOCATION]...
         """
 
     static func parse(_ arguments: [String]) -> ProbeArguments? {
@@ -84,6 +86,8 @@ struct ProbeArguments {
                 mode = .dumpToday
             case "--dump-history":
                 mode = .dumpHistory
+            case "--dump-quota":
+                mode = .dumpQuota
             case "--dump-unpriced":
                 dumpsUnpriced = true
             case "--now":

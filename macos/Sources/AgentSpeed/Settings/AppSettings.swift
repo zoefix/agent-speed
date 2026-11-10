@@ -100,6 +100,16 @@ final class AppSettings {
         didSet { if lan != oldValue { store(lan.data(), .lan) } }
     }
 
+    /// The subscription quotas (QUOTAS; DESIGN 5 *額度*): Codex and Claude Desktop on, the Claude CLI's status line
+    /// bridge off until the user confirms it.
+    var quotaCodex: Bool { didSet { store(quotaCodex, .quotaCodex) } }
+    var quotaClaudeDesktop: Bool { didSet { store(quotaClaudeDesktop, .quotaClaudeDesktop) } }
+    var quotaClaudeCli: Bool { didSet { store(quotaClaudeCli, .quotaClaudeCli) } }
+    /// The dashboard's Claude Code invitation was dismissed for good (`quotaCliInvite` = `"dismissed"`).
+    var quotaCliInviteDismissed: Bool {
+        didSet { store(quotaCliInviteDismissed ? Self.inviteDismissed : nil, .quotaCliInvite) }
+    }
+
     /// The vehicle of the last speed title other than idle (DESIGN 4c, Idle), parked in the dashboard hero while idle,
     /// also across relaunches. Nil before any title was reached.
     var heroLastTitle: String? {
@@ -170,6 +180,10 @@ final class AppSettings {
             .compactMap(SourceKind.init(rawValue:)))
         includeSubscriptions = defaults.object(forKey: Key.includeSubscriptions.rawValue) as? Bool ?? false
         heroLastTitle = defaults.string(forKey: Key.heroLastTitle.rawValue)
+        quotaCodex = defaults.object(forKey: Key.quotaCodex.rawValue) as? Bool ?? true
+        quotaClaudeDesktop = defaults.object(forKey: Key.quotaClaudeDesktop.rawValue) as? Bool ?? true
+        quotaClaudeCli = defaults.object(forKey: Key.quotaClaudeCli.rawValue) as? Bool ?? false
+        quotaCliInviteDismissed = defaults.string(forKey: Key.quotaCliInvite.rawValue) == Self.inviteDismissed
         remoteHosts = defaults.data(forKey: Key.remoteHosts.rawValue).flatMap(RemoteHostsDocument.init(data:)) ?? .empty
         lan = defaults.data(forKey: Key.lan.rawValue).map(LanDocument.init(data:)) ?? .empty
         if !redlinesMigrated {
@@ -239,6 +253,18 @@ final class AppSettings {
     /// `codexRoot`, `claudeRoot`, …: read to migrate, never written.
     static func legacyKey(_ folder: TranscriptFolder) -> String { folder.rawValue + "Root" }
 
+    static let inviteDismissed = "dismissed"
+
+    /// Whether a source's quota switch is on; only the quota sources have one (DESIGN 5 *額度*).
+    func showsQuota(_ source: SourceKind) -> Bool {
+        switch source {
+        case .codex: quotaCodex
+        case .claudeDesktop: quotaClaudeDesktop
+        case .claudeCode: quotaClaudeCli
+        default: false
+        }
+    }
+
     /// The stored `barTraffic` value of builds before 性能 had its own switch (DESIGN 10).
     static let retiredIntelligenceTraffic = "intelligence"
 
@@ -260,6 +286,7 @@ final class AppSettings {
         case heroLastTitle
         case remoteHosts
         case lan
+        case quotaCodex, quotaClaudeDesktop, quotaClaudeCli, quotaCliInvite
     }
 }
 

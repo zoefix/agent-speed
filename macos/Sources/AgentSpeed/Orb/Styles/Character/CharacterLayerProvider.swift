@@ -23,6 +23,8 @@ struct OrbCharacterContent: Equatable {
     var latency: CharacterReadoutText.Latency?
     /// The models card's rows, fastest first (every running model; the card shows the first four).
     var models: [CharacterModelLine] = []
+    /// The 額度 card's sources: the orb's running, signed-in agents with a quota, in source order.
+    var quota: [CharacterQuotaSource] = []
     /// Shown in place of the character while none is installed.
     var emptyLabel: String
 }

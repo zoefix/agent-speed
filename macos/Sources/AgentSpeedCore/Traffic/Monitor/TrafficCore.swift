@@ -36,6 +36,8 @@ final class TrafficCore: @unchecked Sendable {
     private var stream = 0
     private var streamStartUs: Int64 = 0
     private var lastTableRefreshMs: Int64?
+    /// The quota sources' apps at the last table refresh (QUOTAS 6).
+    private var quotaApps: QuotaApps?
     private var lastIntervalChangeMs: Int64?
     private var lastTickMs: Int64?
     private var lastActiveWallMs: Int64?
@@ -192,6 +194,7 @@ final class TrafficCore: @unchecked Sendable {
         if refreshTable {
             engine.table.refresh(processReader.list(nowMs: t), inspector: processReader, nowMs: t)
             lastTableRefreshMs = t
+            quotaApps = QuotaApps.of(engine.table)
         }
         applyCadence(t: t, wall: wall)
         sampler.poll()
@@ -217,7 +220,7 @@ final class TrafficCore: @unchecked Sendable {
                     inspector: processReader)
 
         persist(t: t)
-        mailbox.post(TrafficSnapshotBuilder.snapshot(engine: engine, wallMs: wall, state: processState))
+        mailbox.post(TrafficSnapshotBuilder.snapshot(engine: engine, wallMs: wall, state: processState, quotaApps: quotaApps))
         let spent = clock_gettime_nsec_np(CLOCK_THREAD_CPUTIME_ID) - started
         if ticks == 0 { firstTickNanos = spent } else { tickNanos += spent }
         ticks += 1

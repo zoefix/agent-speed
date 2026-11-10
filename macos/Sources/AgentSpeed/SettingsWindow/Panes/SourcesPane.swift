@@ -16,6 +16,7 @@ struct SourcesPane: View {
                     ForEach(folder.sources) { kind in
                         SourceToggleRow(kind: kind, model: model)
                     }
+                    QuotaSwitches(folder: folder, model: model)
                     SourceLocationList(folder: folder, model: model)
                 } header: {
                     if folder == TranscriptFolder.allCases.first {
@@ -86,7 +87,7 @@ enum SourceState: Equatable {
     }
 }
 
-private struct SourceToggleRow: View {
+struct SourceToggleRow: View {
     let kind: SourceKind
     let model: AppModel
     @Environment(\.colorScheme) private var colorScheme

@@ -20,6 +20,8 @@ public struct TodayScanReport: Sendable {
     public var perfAgents = 0
     /// The instant the performance scores were evaluated at.
     public var perfNowMs: Int64 = 0
+    /// The newest Codex account limits the seeded rollouts hold (QUOTAS 3).
+    public var codexQuota: QuotaSnapshot?
 }
 
 /// One-shot seeding without watching, used by diagnostics such as the probe.
@@ -63,7 +65,8 @@ public enum TranscriptScan {
             unreadableFiles: session.unreadableFileCount,
             perfRows: perfRows,
             perfAgents: max(0, perfRows.count - 1),
-            perfNowMs: evaluatedAt
+            perfNowMs: evaluatedAt,
+            codexQuota: session.codexQuota
         )
     }
 }

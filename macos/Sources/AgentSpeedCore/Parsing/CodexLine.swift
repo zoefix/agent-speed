@@ -85,6 +85,8 @@ struct CodexLine: Equatable, Sendable {
     var ordinal: Int64?
     var kind: CodexLineKind
     var modeUpdate: CodexModeUpdate = .none
+    /// `payload.rate_limits` of an `event_msg` / `token_count` line, when it is an object (QUOTAS 3).
+    var rateLimits: CodexRateLimits?
 }
 
 /// Decodes the fields of a Codex envelope line that METRICS 4.2 needs. Conversation text is never captured.
@@ -117,6 +119,7 @@ enum CodexLineExtractor {
         var usage: CodexRawUsage?
         var infoPresent = false
         var info: CodexLegacyInfo?
+        var rateLimits: CodexRateLimits?
     }
 
     /// Outer nil: the field is absent; `.some(nil)`: present without a usable string, which clears the setting.
@@ -150,6 +153,7 @@ enum CodexLineExtractor {
             try scanner.finish()
             var line = CodexLine(timestampMs: timestamp, ordinal: ordinal, kind: classify(envelope: envelope, payload: payload))
             line.modeUpdate = modeUpdate(envelope: envelope, payload: payload)
+            if envelope == 3, payload?.type == "token_count" { line.rateLimits = payload?.rateLimits }
             return .line(line)
         } catch {
             return .malformed
@@ -280,6 +284,8 @@ enum CodexLineExtractor {
                 payload.usage = try scanUsage(&scanner)
             } else if scanner.key(key, is: "info") {
                 payload.info = try scanInfo(&scanner)
+            } else if scanner.key(key, is: "rate_limits") {
+                payload.rateLimits = try CodexRateLimits.scan(&scanner)
             } else {
                 try scanner.skipValue()
             }

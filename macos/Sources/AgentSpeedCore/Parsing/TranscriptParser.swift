@@ -207,6 +207,9 @@ struct TranscriptParser: Sendable {
 
     var hasPartialHistory: Bool { grokBuild?.partialHistory ?? false }
 
+    /// A Codex file's newest account limits (QUOTAS 3).
+    var codexQuota: QuotaSnapshot? { codex?.quota }
+
     mutating func refreshMetadata(deduper: inout Deduper, emit: (ResponseUpsert) -> Void) -> Bool {
         grokBuild?.refreshMetadata(deduper: &deduper, emit: emit) ?? false
     }

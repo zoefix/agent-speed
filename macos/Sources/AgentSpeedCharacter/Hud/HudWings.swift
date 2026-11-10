@@ -1,12 +1,13 @@
 import Foundation
 
 /// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right with the running
-/// models under it, the model above her head, and the column of facts on her left, top to bottom.
+/// models under it, the model above her head, and the column of facts on her left, top to bottom, 額度 last. New cards
+/// go at the end, so the others keep their float phases.
 public enum HudCard: Int, Sendable, CaseIterable {
-    case speed, model, performance, network, cost, agents, models
+    case speed, model, performance, network, cost, agents, models, quota
 
     /// The left column, top to bottom.
-    public static let column: [HudCard] = [.performance, .network, .cost, .agents]
+    public static let column: [HudCard] = [.performance, .network, .cost, .agents, .quota]
 }
 
 /// Her outline this frame as horizontal bands of `step` points from `top`: each band's leftmost and rightmost x of her
@@ -179,6 +180,12 @@ public struct HudWings: Sendable {
     /// Seconds a hidden models card must fit with room to spare before it comes back (it moves back up from below
     /// after `returnAfter`).
     public static let modelsReturnAfter = 1.2
+    /// The 額度 card's narrowest form (no headers, short bars, no reset cells), set by the renderer each frame: the
+    /// column spills only when even this form does not fit. Zero: the card's own width.
+    public var quotaNarrowest = 0.0
+    /// The room the 額度 card has at its place: from the column's right edge to the orb's left edge, or from the
+    /// spill-over's left edge to the orb's right edge, which its form follows.
+    public private(set) var quotaRoom = Double.infinity
 
     /// The card is drawn at her right (the speed, the models card and column cards that spilled over).
     public func isAtHerRight(_ card: HudCard) -> Bool { card == .speed || card == .models || right[card.rawValue] }
@@ -604,12 +611,12 @@ public struct HudWings: Sendable {
 
         // Her left: one right edge for the whole column.
         var total = -gap
-        for k in 0..<split { total += presence[cards[k].rawValue] * (sizes[cards[k].rawValue].h + gap) }
+        for k in 0..<split { total += share(cards[k].rawValue, sizes, gap: gap) }
         var top = f.shoulders + shift * d
         top = min(max(top, f.bounds.minY + HudWings.margin * d), maxY - max(0, total))
         var line = Double.infinity
         var y = top
-        var edges = (0.0, 0.0, 0.0, 0.0)
+        var edges = (0.0, 0.0, 0.0, 0.0, 0.0)
         for k in 0..<split {
             let i = cards[k].rawValue
             let h = sizes[i].h
@@ -618,14 +625,19 @@ public struct HudWings: Sendable {
             HudWings.set(&edges, k, edge)
             if write { targets[i].y = y + h / 2 }
             if presence[i] > 0.01 { line = min(line, edge) }
-            y += presence[i] * (h + gap)
+            y += share(i, sizes, gap: gap)
         }
         for k in 0..<split {
             let i = cards[k].rawValue
             let w = sizes[i].w + room
-            let x = (aligned && line.isFinite ? line : HudWings.get(edges, k)) - w / 2
-            over += presence[i] * max(0, minX - (x - w / 2))
-            if write { targets[i].x = max(x, minX + w / 2) }
+            let right = aligned && line.isFinite ? line : HudWings.get(edges, k)
+            let x = right - w / 2
+            // 額度 narrows before it spills: its narrowest form decides the overflow.
+            over += presence[i] * max(0, minX - (right - fitting(i, sizes) - room))
+            if write {
+                targets[i].x = max(x, minX + w / 2)
+                if cards[k] == .quota { quotaRoom = right - minX }
+            }
         }
 
         // Her right, under the speed (and under the models card while it is there): one left edge.
@@ -642,34 +654,49 @@ public struct HudWings: Sendable {
             if presence[i] > 0.01 { left = max(left, max(side + HudWings.gap * d, f.centerX + 0.04 * d)) }
             if write { targets[i].y = y + h / 2 }
             over += presence[i] * max(0, y + h - maxY)
-            y += presence[i] * (h + gap)
+            y += share(i, sizes, gap: gap)
         }
         if write { rightEnd = y }
         if !left.isFinite { left = f.centerX + 0.04 * d }
         for k in split..<cards.count {
             let i = cards[k].rawValue
             let w = sizes[i].w + room
-            over += presence[i] * max(0, left + w - maxX)
-            if write { targets[i].x = min(left + w / 2, maxX - w / 2) }
+            over += presence[i] * max(0, left + fitting(i, sizes) + room - maxX)
+            if write {
+                targets[i].x = min(left + w / 2, maxX - w / 2)
+                if cards[k] == .quota { quotaRoom = maxX - left }
+            }
         }
         return over
     }
 
-    private static func set(_ t: inout (Double, Double, Double, Double), _ k: Int, _ v: Double) {
+    /// The room a column card takes: its shown share of its height and the gap; an empty card takes none.
+    private func share(_ i: Int, _ sizes: [(w: Double, h: Double)], gap: Double) -> Double {
+        sizes[i].h > 0 ? presence[i] * (sizes[i].h + gap) : 0
+    }
+
+    /// The width a card needs to fit: 額度's narrowest form, every other card's own width.
+    private func fitting(_ i: Int, _ sizes: [(w: Double, h: Double)]) -> Double {
+        i == HudCard.quota.rawValue && quotaNarrowest > 0 ? min(sizes[i].w, quotaNarrowest) : sizes[i].w
+    }
+
+    private static func set(_ t: inout (Double, Double, Double, Double, Double), _ k: Int, _ v: Double) {
         switch k {
         case 0: t.0 = v
         case 1: t.1 = v
         case 2: t.2 = v
-        default: t.3 = v
+        case 3: t.3 = v
+        default: t.4 = v
         }
     }
 
-    private static func get(_ t: (Double, Double, Double, Double), _ k: Int) -> Double {
+    private static func get(_ t: (Double, Double, Double, Double, Double), _ k: Int) -> Double {
         switch k {
         case 0: t.0
         case 1: t.1
         case 2: t.2
-        default: t.3
+        case 3: t.3
+        default: t.4
         }
     }
 }

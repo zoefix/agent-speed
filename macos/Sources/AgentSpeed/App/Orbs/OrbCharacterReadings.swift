@@ -21,6 +21,8 @@ struct OrbCharacterReadings: Equatable {
     var latencyMs: Double?
     /// The running models, fastest first; the last ones are kept while the card is quiet.
     var models: [OrbModelReading] = []
+    /// 額度: the quotas of the orb's sources whose app runs and is signed in, in source order (QUOTAS 6).
+    var quota: [QuotaSnapshot] = []
     /// Loud at the last tick.
     var networkLoud = false
     var performanceLoud = false

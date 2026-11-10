@@ -23,6 +23,7 @@ final class OrbRuntime {
     private var characterModels = OrbModelsQuietRule()
     private var characterLatency: Double?
     private var characterBits = false
+    private var characterQuota: [QuotaSnapshot] = []
 
     init(config: OrbConfig) {
         id = config.id
@@ -105,6 +106,16 @@ final class OrbRuntime {
         }
     }
 
+    /// The 額度 card (DESIGN 2a.6): the orb's sources whose app runs and is signed in, this computer's only (remote
+    /// hosts have no quotas). Follows the quota controller; a quota has no quiet rule.
+    func ingestQuota(_ quota: QuotaController) {
+        let local = hostSet.map { $0.contains(RemoteHost.localId) } ?? true
+        let next = config.style == .character && local ? quota.cardSnapshots(within: sourceSet) : []
+        guard next != characterQuota else { return }
+        characterQuota = next
+        publishCharacterReadings(at: Clock.now)
+    }
+
     /// The network readout (DESIGN 10): its sources' rates with tools per the setting (`sources`), this computer
     /// (`machine`) or nothing; not drawn while measuring is off or, for sources, while per-process traffic is unavailable.
     /// Called once per traffic sample; the quiet rule keeps a quiet orb free of frames.
@@ -149,7 +160,7 @@ final class OrbRuntime {
         let performance = characterPerformance.reading
         let next = OrbCharacterReadings(
             readouts: config.characterReadouts, network: network, bits: characterBits, performance: performance, cost: characterCost.money,
-            latencyMs: characterLatency, models: characterModels.rows,
+            latencyMs: characterLatency, models: characterModels.rows, quota: characterQuota,
             networkLoud: network.map { now < $0.quietAt } ?? false,
             performanceLoud: performance.map { now < $0.quietAt } ?? false,
             costLoud: characterCost.isLoud(at: now),

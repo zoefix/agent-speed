@@ -70,6 +70,8 @@ final class AppModel {
     let characters: CharacterLibrary
     /// The menu bar intelligence block's thinking line, hidden after its rate has read 0 for 3 s (DESIGN 10).
     let barThinking = StatusItemThinkingHold()
+    /// The subscription quotas (QUOTAS): display only.
+    let quota: QuotaController
 
     /// True while the 20 s effects preview (or the `--demo` loop) drives the store.
     private(set) var isPreviewing = false
@@ -121,6 +123,7 @@ final class AppModel {
         report = ReportController(settings: settings, store: store, traffic: traffic, priceBook: priceBook,
                                   appData: Self.appDataDirectory)
         lan = LanController(settings: settings, store: store)
+        quota = QuotaController(settings: settings, store: store, traffic: traffic, data: Self.appDataDirectory)
         characters = CharacterLibrary.standard(defaults: settings.storage)
         characters.networkEnabled = { [weak settings] in settings?.networkEnabled ?? false }
         gauge.redline = settings.redline
@@ -223,6 +226,7 @@ final class AppModel {
         })
         remoteHosts.start(settings: settings, prices: prices)
         monitor.start()
+        quota.activate()
         report.perfWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
         report.activate()
         lan.activate()
@@ -330,6 +334,7 @@ final class AppModel {
     }
 
     func shutdown() {
+        quota.shutdown()
         report.shutdown()
         lan.shutdown()
         trafficController?.stop()
