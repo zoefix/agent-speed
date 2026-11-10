@@ -55,6 +55,9 @@ struct RelayLineDecoder: Sendable {
         case "historyDone": return .historyDone(days: try f.count("days"), analyzed: try f.count("analyzed"))
         case "historyProgress": return .historyProgress(try f.fraction("value"))
         case "error": return .error(try error(f))
+        case "quota": return try quota(f)
+        case "quotaRemoved": return try quotaRemoved(f)
+        case "quotaBridge": return try quotaBridge(f)
         default: return nil
         }
     }

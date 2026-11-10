@@ -16,6 +16,8 @@ public struct RemoteHost: Equatable, Sendable, Identifiable {
     public var enabled: Bool
     /// nil = `~/.cache/agent-speed`.
     public var relayFolder: String?
+    /// The host's Claude Code status line bridge (REMOTE 11.3); absent = false.
+    public var quotaClaudeCli: Bool
     var extra: [String: PreservedJSON] = [:]
 
     public init(
@@ -23,13 +25,15 @@ public struct RemoteHost: Equatable, Sendable, Identifiable {
         destination: String,
         name: String? = nil,
         enabled: Bool = true,
-        relayFolder: String? = nil
+        relayFolder: String? = nil,
+        quotaClaudeCli: Bool = false
     ) {
         self.id = id
         self.destination = destination
         self.name = RemoteHostValidation.cleanName(name)
         self.enabled = enabled
         self.relayFolder = relayFolder.flatMap { $0.isEmpty ? nil : $0 }
+        self.quotaClaudeCli = quotaClaudeCli
     }
 
     /// The folder on the host, as inserted (unquoted) into the remote commands.
@@ -56,7 +60,7 @@ public struct RemoteHost: Equatable, Sendable, Identifiable {
 
 extension RemoteHost: Codable {
     enum CodingKeys: String, CodingKey, CaseIterable {
-        case id, destination, name, enabled, relayFolder
+        case id, destination, name, enabled, relayFolder, quotaClaudeCli
     }
 
     public init(from decoder: Decoder) throws {
@@ -73,7 +77,8 @@ extension RemoteHost: Codable {
             destination: value(String.self, .destination) ?? "",
             name: value(String.self, .name),
             enabled: value(Bool.self, .enabled) ?? true,
-            relayFolder: value(String.self, .relayFolder)
+            relayFolder: value(String.self, .relayFolder),
+            quotaClaudeCli: value(Bool.self, .quotaClaudeCli) ?? false
         )
         extra = try PreservedJSON.unknownMembers(in: decoder, known: Set(CodingKeys.allCases.map(\.stringValue)))
     }
@@ -86,5 +91,6 @@ extension RemoteHost: Codable {
         try container.encode(name, forKey: .name)
         try container.encode(enabled, forKey: .enabled)
         try container.encode(relayFolder, forKey: .relayFolder)
+        if quotaClaudeCli { try container.encode(true, forKey: .quotaClaudeCli) }
     }
 }

@@ -30,7 +30,8 @@ extension RemoteConnection {
         session.lastLineAt = now
         scheduleSilenceCheck()
         send(RelayLineEncoder.start(todayStartMs: environment.todayStartMs(at: now), sources: settings.sources,
-                                    zone: RemoteZone.current(environment.timeZone()), prices: settings.prices))
+                                    zone: RemoteZone.current(environment.timeZone()), prices: settings.prices,
+                                    quota: settings.quota))
         if settings.watch { send(RelayLineEncoder.watch(true)) }
     }
 
@@ -95,8 +96,11 @@ extension RemoteConnection {
         case .agentRemoved(let id):
             session.agentIds.remove(id)
             emit(.message(message, seeded: !session.ready))
-        case .response, .tool:
+        case .response, .tool, .quota:
             _ = emitConverted(message)
+        case .quotaBridge(let bridge):
+            emit(.message(message, seeded: !session.ready))
+            if retiring, bridge.state == .off { stopNow() }
         case .historyDone:
             emit(.message(message, seeded: !session.ready))
             historyRunEnded()

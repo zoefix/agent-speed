@@ -25,11 +25,14 @@ public struct RemoteSessionSettings: Equatable, Sendable {
     public var prices: RemotePriceTableJSON
     /// Live reporting's watch (METRICS 11.10).
     public var watch: Bool
+    /// What the relay reads for quotas (REMOTE 11.1); sent with `start` and whenever it changes.
+    public var quota: RemoteQuotaConfig?
 
-    public init(sources: Set<SourceKind>, prices: RemotePriceTableJSON, watch: Bool = false) {
+    public init(sources: Set<SourceKind>, prices: RemotePriceTableJSON, watch: Bool = false, quota: RemoteQuotaConfig? = nil) {
         self.sources = sources
         self.prices = prices
         self.watch = watch
+        self.quota = quota
     }
 }
 
