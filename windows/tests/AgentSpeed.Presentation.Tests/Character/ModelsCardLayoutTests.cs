@@ -30,7 +30,7 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
     private static readonly Localizer En = new(Localizer.LoadEmbeddedTable(), LanguageCodes.En);
 
     /// <summary>A slim body from y 80 to 400 around x 222 (as HudWingsTests), optionally with a staff at x over y0…y1 or wide hair at her left.</summary>
-    private static HudFrame Frame((double Y0, double Y1)? staff = null, bool wideHair = false, double staffX = 360)
+    private static HudFrame Frame((double Y0, double Y1)? staff = null, bool wideHair = false, double staffX = 390)
     {
         var s = new HudSilhouette(0, 444, 4);
         for (var y = 80.0; y <= 400; y += 2)
@@ -58,9 +58,12 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
         return new HudFrame((0, 0, 444, 444), s, D, 222, 80, 170, 140);
     }
 
+    /// <summary>The card's narrowest form in these frames: its dots and speeds (the given size is its widest).</summary>
+    private const double Narrowest = 60;
+
     private static HudWings Settled(HudFrame f, bool still = true, double seconds = 1)
     {
-        var wings = new HudWings { Still = still };
+        var wings = new HudWings { Still = still, ModelsNarrowest = Narrowest };
         for (var n = 0; n < seconds * 60; n++)
         {
             wings.Update(1 / 60.0, n / 60.0, f, Sizes, Shown);
@@ -125,7 +128,76 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
         var models = Box(wings, HudCard.Models);
         Assert.Equal(HudWings.ModelsPlace.UnderSpeed, wings.ModelsAt);
         Assert.Equal(300 + HudWings.Gap * D, models.Left, 6);
-        Assert.Equal(444 - HudWings.Margin * D - (254 + 0.5 * HudWings.Gap * D), wings.ModelsWidth, 6);
+        Assert.Equal(444 - HudWings.Margin * D - (300 + HudWings.Gap * D), wings.ModelsWidth, 6);
+    }
+
+    [Fact]
+    public void ANarrowRoomKeepsTheCardUnderTheSpeedAsLongAsItsNarrowestFormFits()
+    {
+        var f = Frame(staff: (195, 260), staffX: 360);
+        var room = 444 - HudWings.Margin * D - (360 + HudWings.Gap * D);
+        var narrow = new HudWings { Still = true, ModelsNarrowest = room - 1 };
+        narrow.Update(1 / 60.0, 0, f, Sizes, Shown);
+        Assert.Equal(HudWings.ModelsPlace.UnderSpeed, narrow.ModelsAt);
+        Assert.Equal(room, narrow.ModelsWidth, 6);
+        var wide = new HudWings { Still = true, ModelsNarrowest = room + 1 };
+        wide.Update(1 / 60.0, 0, f, Sizes, Shown);
+        Assert.Equal(HudWings.ModelsPlace.BelowSpill, wide.ModelsAt);
+    }
+
+    [Fact]
+    public void AHiddenCardComesBackAfterItFitsWithRoomToSpareFor1point2Seconds()
+    {
+        var wings = new HudWings { ModelsNarrowest = Narrowest };
+        var t = 0.0;
+        void Run(HudFrame f, double seconds)
+        {
+            for (var n = 0; n < seconds * 60; n++, t += 1 / 60.0)
+            {
+                wings.Update(1 / 60.0, t, f, Sizes, Shown);
+            }
+        }
+
+        Run(Frame(staff: (195, 400)), 2);
+        Assert.Equal(HudWings.ModelsPlace.Hidden, wings.ModelsAt);
+
+        // Room for the narrowest form but not 0.04 D more: it stays hidden.
+        var x = 444 - HudWings.Margin * D - Narrowest - 0.02 * D - HudWings.Gap * D;
+        Run(Frame(staff: (195, 400), staffX: x), 3);
+        Assert.Equal(HudWings.ModelsPlace.Hidden, wings.ModelsAt);
+
+        Run(Frame(), 1.0);
+        Assert.Equal(HudWings.ModelsPlace.Hidden, wings.ModelsAt);
+        Run(Frame(), 0.3);
+        Assert.Equal(HudWings.ModelsPlace.UnderSpeed, wings.ModelsAt);
+    }
+
+    [Fact]
+    public void TheLoweredCardMovesBackUpAfterFourSeconds()
+    {
+        var wings = new HudWings { ModelsNarrowest = Narrowest };
+        var t = 0.0;
+        void Run(HudFrame f, double seconds)
+        {
+            for (var n = 0; n < seconds * 60; n++, t += 1 / 60.0)
+            {
+                wings.Update(1 / 60.0, t, f, Sizes, Shown);
+            }
+        }
+
+        Run(Frame(staff: (195, 260)), 2);
+        Assert.Equal(HudWings.ModelsPlace.BelowSpill, wings.ModelsAt);
+        Run(Frame(), 3.9);
+        Assert.Equal(HudWings.ModelsPlace.BelowSpill, wings.ModelsAt);
+        Assert.Equal(1, wings.Places[(int)HudCard.Models].Alpha, 6);
+        Run(Frame(), 0.2);
+        Assert.Equal(HudWings.ModelsPlace.BelowSpill, wings.ModelsAt);
+        Assert.True(wings.Places[(int)HudCard.Models].Alpha < 1, "it fades out where it was");
+        Run(Frame(), 0.2);
+        Assert.Equal(HudWings.ModelsPlace.UnderSpeed, wings.ModelsAt);
+        Assert.True(wings.Places[(int)HudCard.Models].Alpha < 1, "and in at its new place");
+        Run(Frame(), 0.5);
+        Assert.Equal(1, wings.Places[(int)HudCard.Models].Alpha, 6);
     }
 
     [Fact]
@@ -133,7 +205,7 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
     {
         var wings = Settled(Frame(), still: false, seconds: 2);
         var t = 2.0;
-        for (var n = 0; n < 18; n++, t += 1 / 60.0)
+        for (var n = 0; n < 30; n++, t += 1 / 60.0)
         {
             wings.Update(1 / 60.0, t, Frame(staff: (195, 260)), Sizes, Shown);
         }
@@ -205,12 +277,33 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
     }
 
     [Fact]
-    public void ALongIdIsCutToNineT()
+    public void ALongNameLosesItsDateAndIsCutAtItsEndToNineT()
     {
-        var (_, glyphs) = Run(148, [new OrbModelRow("gemini-4-argon-preview-2026-11-10", 50, null)], null);
-        var cut = Assert.Single(glyphs.Texts, t => t.StartsWith("gemini", StringComparison.Ordinal) && t.Contains('…', StringComparison.Ordinal));
+        var (orb, glyphs) = Run(148, [new OrbModelRow("gemini-4-argon-preview-2026-11-10", 50, null), new OrbModelRow("claude-sonnet-4-5-20250929", 40, null)],
+            null);
+        Assert.Equal(9, Assert.IsType<CharacterDraw>(orb.Style).ModelNameRoom);
+        Assert.Contains("claude-sonnet-4-5", glyphs.Texts);
+        var cut = Assert.Single(glyphs.Texts, t => t.StartsWith("gemini-4-argon", StringComparison.Ordinal) && t.EndsWith('…'));
         Assert.True(cut.Length * 8 * 0.56 <= 9 * 8, cut);
-        Assert.EndsWith("-10", cut, StringComparison.Ordinal);
+        Assert.DoesNotContain(glyphs.Texts, t => t.Contains("2026", StringComparison.Ordinal) || t.Contains("20250929", StringComparison.Ordinal));
+    }
+
+    [Fact]
+    public void SmallerOrbsNarrowTheNamesThenKeepOnlyTheDotsAndSpeeds()
+    {
+        var (mid, midGlyphs) = Run(92, Five[..3], null);
+        var narrowed = Assert.IsType<CharacterDraw>(mid.Style);
+        Assert.InRange(narrowed.ModelNameRoom, OrbModelsNames.Narrowest, OrbModelsNames.Widest - OrbModelsNames.Step);
+        Assert.Contains(midGlyphs.Texts, t => t.StartsWith("claude", StringComparison.Ordinal) && t.EndsWith('…'));
+        Assert.True(narrowed.Wings.Places[(int)HudCard.Models].Alpha > 0.9);
+
+        var (small, _) = Run(72, Five[..3], null);
+        var dots = Assert.IsType<CharacterDraw>(small.Style);
+        Assert.Equal(0, dots.ModelNameRoom);
+        Assert.Equal(HudWings.ModelsPlace.UnderSpeed, dots.Wings.ModelsAt);
+        Assert.True(dots.Wings.Places[(int)HudCard.Models].Alpha > 0.9);
+        Assert.Equal(dots.Wings.ModelsNarrowest, dots.Wings.Sizes[(int)HudCard.Models].W, 3);
+        Assert.True(dots.Wings.ModelsNarrowest <= dots.Wings.ModelsWidth);
     }
 
     [Fact]
@@ -240,8 +333,9 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
     }
 
     /// <summary>
-    /// <c>AGENT_SPEED_CHARACTER_PACKS</c> (a folder of unpacked packs): at a 148 pt orb every character dances through three
-    /// bands for 30 s with three running models; the card finds room beside her most of the time and rarely moves.
+    /// <c>AGENT_SPEED_CHARACTER_PACKS</c> (a folder of unpacked packs): at 148, 112, 92 and 72 pt every character dances
+    /// through three bands for 30 s with three running models. At 148 pt the card finds room beside her nearly all the time
+    /// and rarely moves; the smaller sizes are reported with how often the names are whole, shortened or dropped.
     /// </summary>
     [Fact]
     public void TheCardFindsRoomBesideEveryCharacter()
@@ -251,37 +345,58 @@ public class ModelsCardLayoutTests(ITestOutputHelper output)
             return;
         }
 
-        OrbModelRow[] rows = [Five[0], Five[1], new("gemini-4-argon-preview-2026-11", null, null)];
+        OrbModelRow[] rows = [Five[0], Five[1], new("gemini-4-argon-preview-20261101", null, null)];
         var sums = new IntelligenceSums(Output: 1200, Thinking: 528, ThinkingBasis: 1200) { Score = TestSums.Live(1286.25) };
         var performance = OrbLinesText.Intelligence(PerfSetReading.Of(sums, []), sums, generating: true, En);
-        foreach (var dir in Directory.GetDirectories(root).Where(p => File.Exists(Path.Combine(p, "manifest.json"))).Order(StringComparer.Ordinal))
+        foreach (var size in new double[] { 148, 112, 92, 72 })
         {
-            var (orb, _) = CharacterDrawTests.Create(CharacterPack.Load(dir), 148);
-            orb.SetCharacter(orb.Character! with { ModelsMore = En["character.models.more"] });
-            var time = 10.0;
-            int shown = 0, frames = 0, moves = 0;
-            var last = HudWings.ModelsPlace.UnderSpeed;
-            foreach (var value in new double[] { 100, 600, 1500 })
+            double shownAll = 0, framesAll = 0;
+            foreach (var dir in Directory.GetDirectories(root).Where(p => File.Exists(Path.Combine(p, "manifest.json"))).Order(StringComparer.Ordinal))
             {
-                for (var n = 0; n < 600; n++, time += 1 / 60.0)
+                var (orb, _) = CharacterDrawTests.Create(CharacterPack.Load(dir), size);
+                orb.SetCharacter(orb.Character! with { ModelsMore = En["character.models.more"] });
+                var time = 10.0;
+                int shown = 0, frames = 0, moves = 0, whole = 0, dots = 0, widths = 0;
+                var room = OrbModelsNames.Widest;
+                var last = HudWings.ModelsPlace.UnderSpeed;
+                foreach (var value in new double[] { 100, 600, 1500 })
                 {
-                    if (n % 30 == 0)
+                    for (var n = 0; n < 600; n++, time += 1 / 60.0)
                     {
-                        orb.SetData(time, value, HeatMath.RawTier(value, 2000), SpeedTitles.Raw(value, 2000), [SourceKind.ClaudeCode], "info", null);
-                        orb.SetCharacterReadings(time, performance, null, true, OrbLatency.Of(1200, En), rows);
-                    }
+                        if (n % 30 == 0)
+                        {
+                            orb.SetData(time, value, HeatMath.RawTier(value, 2000), SpeedTitles.Raw(value, 2000), [SourceKind.ClaudeCode], "info", null);
+                            orb.SetCharacterReadings(time, performance, null, true, OrbLatency.Of(1200, En), rows);
+                        }
 
-                    orb.Render(time);
-                    var wings = ((CharacterDraw)orb.Style!).Wings;
-                    frames++;
-                    shown += wings.Places[(int)HudCard.Models].Alpha > 0.5 ? 1 : 0;
-                    moves += wings.ModelsAt != last ? 1 : 0;
-                    last = wings.ModelsAt;
+                        orb.Render(time);
+                        var draw = (CharacterDraw)orb.Style!;
+                        var wings = draw.Wings;
+                        frames++;
+                        if (wings.Places[(int)HudCard.Models].Alpha > 0.5)
+                        {
+                            shown++;
+                            whole += draw.ModelNameRoom == OrbModelsNames.Widest ? 1 : 0;
+                            dots += draw.ModelNameRoom == 0 ? 1 : 0;
+                        }
+
+                        moves += wings.ModelsAt != last ? 1 : 0;
+                        last = wings.ModelsAt;
+                        widths += draw.ModelNameRoom != room ? 1 : 0;
+                        room = draw.ModelNameRoom;
+                    }
+                }
+
+                shownAll += shown;
+                framesAll += frames;
+                output.WriteLine($"S{size} {Path.GetFileName(dir)}: shown {100.0 * shown / frames:0}% (whole {whole}, shortened {shown - whole - dots}, dots {dots}), {moves} moves, {widths} width changes");
+                if (size >= 148)
+                {
+                    Assert.True(shown > 0.9 * frames && moves <= 8, $"{Path.GetFileName(dir)}: shown {shown}/{frames}, {moves} moves");
                 }
             }
 
-            output.WriteLine($"{Path.GetFileName(dir)}: shown {shown}/{frames}, {moves} moves");
-            Assert.True(shown > 0.6 * frames && moves <= 8, $"{Path.GetFileName(dir)}: shown {shown}/{frames}, {moves} moves");
+            output.WriteLine($"S{size}: shown {100 * shownAll / framesAll:0.0}% of all frames");
         }
     }
 }

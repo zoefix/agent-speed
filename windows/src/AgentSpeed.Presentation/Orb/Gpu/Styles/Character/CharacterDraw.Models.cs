@@ -7,23 +7,16 @@ namespace AgentSpeed.Presentation.Orb.Gpu.Styles;
 
 public sealed partial class CharacterDraw
 {
-    /// <summary>A model id is cut in the middle beyond this many <c>t</c> (DESIGN 2a.6, Models).</summary>
-    private const double NameRoom = 9;
-
-    /// <summary>Where her right side leaves less room, ids are cut shorter, down to this many <c>t</c>, before the card moves or hides.</summary>
-    private const double NameRoomMin = 5;
-
-    private const double NameShrinkAfter = 0.3;
-    private const double NameGrowAfter = 4;
-
     private readonly OrbModelsMotion _models = new();
     private readonly Dictionary<(string Model, double Room), string> _shortNames = [];
+    private readonly Dictionary<string, string> _displayNames = new(StringComparer.Ordinal);
     private readonly Dictionary<int, string> _moreTexts = [];
+    private readonly OrbModelsNames _names = new();
     private double _shortNamesSize = double.NaN;
     private string? _moreTemplate;
-    private double _nameRoom = NameRoom;
-    private double _nameShrink;
-    private double _nameGrow;
+
+    /// <summary>The name width in <c>t</c> this frame; 0 when the rows show only the dot and the speed.</summary>
+    public double ModelNameRoom => _names.Room;
 
     /// <summary>The models card's lines this frame: the held rows, at most four (two below S = 96).</summary>
     public OrbModelsMotion ModelLines => _models;
@@ -49,70 +42,10 @@ public sealed partial class CharacterDraw
 
     private string SpeedUnit => Content?.TokensUnit ?? "tok/s";
 
-    /// <summary>The columns of the card: the widest speed, the unit, and the content's width.</summary>
-    private readonly record struct ModelColumns(double Number, double Unit, double Width);
-
-    /// <summary>
-    /// How many <c>t</c> the ids may take: 9, or less (down to 5, in half steps) while her right side leaves the card less room
-    /// than it needs; shorter after 0.3 s without room, longer again after 4 s with room (at once while still or hidden).
-    /// </summary>
-    private void FitNames(in CardMetrics m, double dt, double time, bool atOnce)
+    private OrbModelsColumns ModelsColumns(in CardMetrics m, double time)
     {
-        double longest = 0, more = 0;
-        foreach (var line in _models)
-        {
-            if (line.Row is { } row)
-            {
-                longest = Math.Max(longest, Advance(row.Model, OrbFont.Info, m.T));
-            }
-            else
-            {
-                more = Advance(MoreText(line.Hidden), OrbFont.Info, m.T);
-            }
-        }
-
-        var columns = ModelsColumns(m, time);
-        var rest = columns.Width - Math.Min(longest, _nameRoom * m.T) + 2 * m.PadX;
-        var floor = 2 * m.PadX + NameIndent(m) + more;
-        var t = m.T;
-        double Width(double room) => Math.Max(rest + Math.Min(longest, room * t), floor);
-        var limit = _wings.ModelsWidth + 0.5;
-        var best = NameRoom;
-        while (best > NameRoomMin && Width(best) > limit)
-        {
-            best -= 0.5;
-        }
-
-        if (Width(_nameRoom) > limit && best < _nameRoom)
-        {
-            _nameGrow = 0;
-            _nameShrink += dt;
-            if (atOnce || _nameShrink >= NameShrinkAfter)
-            {
-                _nameRoom = best;
-                _nameShrink = 0;
-            }
-        }
-        else if (best > _nameRoom)
-        {
-            _nameShrink = 0;
-            _nameGrow += dt;
-            if (atOnce || _nameGrow >= NameGrowAfter)
-            {
-                _nameRoom = best;
-                _nameGrow = 0;
-            }
-        }
-        else
-        {
-            _nameShrink = 0;
-            _nameGrow = 0;
-        }
-    }
-
-    private ModelColumns ModelsColumns(in CardMetrics m, double time)
-    {
-        double name = 0, number = 0, more = 0;
+        double longest = 0, number = 0, more = 0;
+        var unit = false;
         foreach (var line in _models)
         {
             if (line.Leaving && line.Alpha(time) <= 0.01)
@@ -122,8 +55,9 @@ public sealed partial class CharacterDraw
 
             if (line.Row is { } row)
             {
-                name = Math.Max(name, Advance(ShortName(row.Model, m.T, _nameRoom), OrbFont.Info, m.T));
+                longest = Math.Max(longest, Advance(DisplayName(row.Model), OrbFont.Info, m.T));
                 number = Math.Max(number, DigitsWidth(row.Number, OrbFont.TrafficNumber, m.T));
+                unit |= !line.Leaving && line.To == 0 && row.Speed is not null;
             }
             else
             {
@@ -131,9 +65,16 @@ public sealed partial class CharacterDraw
             }
         }
 
-        var unit = Advance(SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T));
-        var width = Math.Max(NameIndent(m) + name + NameGap(m) + number + m.CellGap + unit, NameIndent(m) + more);
-        return new ModelColumns(number, unit, width);
+        return new OrbModelsColumns(longest, number, unit ? Advance(SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T)) : 0, more, NameIndent(m), NameGap(m),
+            m.CellGap, 2 * m.PadX);
+    }
+
+    /// <summary>The name width follows the room at the card's place; the layout learns the narrowest form (dots and speeds).</summary>
+    private void FitNames(in CardMetrics m, double dt, double time, bool atOnce)
+    {
+        var columns = ModelsColumns(m, time);
+        _wings.ModelsNarrowest = columns.Width(0);
+        _names.Update(columns, m.T, _wings.ModelsWidth, HudWings.ModelsSpare * (_ctx?.Size ?? 0), dt, atOnce);
     }
 
     private (double W, double H) ModelsSize(in CardMetrics m, double time)
@@ -145,10 +86,27 @@ public sealed partial class CharacterDraw
         }
 
         var columns = ModelsColumns(m, time);
-        return Plate(columns.Width, count * CardMetrics.RowHeight(m.T) + (count - 1) * 0.3 * m.T, m);
+        return (columns.Width(_names.Room * m.T), count * CardMetrics.RowHeight(m.T) + (count - 1) * 0.3 * m.T + 2 * m.PadY);
     }
 
-    /// <summary>The id as the card shows it: whole up to <paramref name="rooms"/> <c>t</c>, else cut in the middle (cached).</summary>
+    /// <summary>The id without a trailing date (cached).</summary>
+    private string DisplayName(string model)
+    {
+        if (!_displayNames.TryGetValue(model, out var name))
+        {
+            if (_displayNames.Count > 64)
+            {
+                _displayNames.Clear();
+            }
+
+            name = OrbModelName.Display(model);
+            _displayNames[model] = name;
+        }
+
+        return name;
+    }
+
+    /// <summary>The display name cut at its end to <paramref name="rooms"/> <c>t</c> (cached per name, size and width).</summary>
     private string ShortName(string model, double t, double rooms)
     {
         if (_shortNamesSize != t || _shortNames.Count > 64)
@@ -162,8 +120,9 @@ public sealed partial class CharacterDraw
             return cached;
         }
 
+        var name = DisplayName(model);
         var room = rooms * t;
-        var text = Advance(model, OrbFont.Info, t) <= room ? model : OrbMiddleTruncation.Fit(model, room, e => Advance(e, OrbFont.Info, t));
+        var text = Advance(name, OrbFont.Info, t) <= room ? name : OrbModelName.Truncate(name, room, e => Advance(e, OrbFont.Info, t));
         _shortNames[(model, rooms)] = text;
         return text;
     }
@@ -188,10 +147,10 @@ public sealed partial class CharacterDraw
     }
 
     /// <summary>
-    /// The models card: per line the vendor's dot, the id in the value token and the speed right-aligned in tabular digits
-    /// (<c>–</c> in the secondary token without one), <c>tok/s</c> once after the first line's number; the more line in the
-    /// secondary token. Lines glide and fade by <see cref="OrbModelsMotion"/>. With a high-contrast theme every dot takes the
-    /// theme's highlight, like the model chip's.
+    /// The models card: per line the vendor's dot, the display name in the value token (none in the narrowest form) and the
+    /// speed right-aligned in tabular digits (<c>–</c> in the secondary token without one), <c>tok/s</c> once after the first
+    /// row's number when it has one; the more line in the secondary token. Lines glide and fade by
+    /// <see cref="OrbModelsMotion"/>. With a high-contrast theme every dot takes the theme's highlight, like the model chip's.
     /// </summary>
     private void DrawModels(OrbDrawList list, in Pen pen, (double W, double H) box, in CardMetrics m, in CardInk ink, bool right, double time,
         bool highContrast)
@@ -200,7 +159,7 @@ public sealed partial class CharacterDraw
         var columns = ModelsColumns(m, time);
         var left = -box.W / 2 + m.PadX;
         var top = -box.H / 2 + m.PadY;
-        var numberRight = box.W / 2 - m.PadX - columns.Unit - m.CellGap;
+        var numberRight = box.W / 2 - m.PadX - (columns.Unit > 0 ? columns.Unit + m.CellGap : 0);
         var pitch = LinePitch(m);
         var dot = Dot(m);
         var nameLeft = left + NameIndent(m);
@@ -222,12 +181,19 @@ public sealed partial class CharacterDraw
             var (dx, dy) = pen.Point(left + dot / 2, baseline - 0.36 * m.T);
             var color = highContrast ? ink.Accent : row.Accent ?? ink.Secondary;
             list.Add(OrbGpuInstance.Circle(dx, dy, dot / 2 * pen.Scale, color.MultiplyAlpha(a * pen.Alpha)));
-            Put(list, ShortName(row.Model, m.T, _nameRoom), OrbFont.Info, m.T, pen, nameLeft, baseline, ink.Number.MultiplyAlpha(a));
+            if (_names.Room > 0)
+            {
+                Put(list, ShortName(row.Model, m.T, _names.Room), OrbFont.Info, m.T, pen, nameLeft, baseline, ink.Number.MultiplyAlpha(a));
+            }
+
             var width = DigitsWidth(row.Number, OrbFont.TrafficNumber, m.T);
             PutDigits(list, row.Number, OrbFont.TrafficNumber, m.T, pen, numberRight - width, baseline,
                 (row.Speed is null ? ink.Secondary : ink.Number).MultiplyAlpha(a));
         }
 
-        Put(list, SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T), pen, numberRight + m.CellGap, top + CardMetrics.Baseline(m.T), ink.Secondary);
+        if (columns.Unit > 0)
+        {
+            Put(list, SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T), pen, numberRight + m.CellGap, top + CardMetrics.Baseline(m.T), ink.Secondary);
+        }
     }
 }

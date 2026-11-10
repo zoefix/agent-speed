@@ -146,8 +146,8 @@ public sealed record HudFrame((double MinX, double MinY, double MaxX, double Max
 /// figure of eight, bobs, tilts and breathes. A card that shows or hides fades and rises or sinks; the column closes up
 /// around it. When her left side has no room for the whole column, its last cards continue under the speed on her right
 /// (under the models card while it shows); a card changing sides fades out and back in at its new place instead of
-/// crossing her. When her right side is crowded under the speed, the models card moves down past the spilled cards (up to
-/// 0.3 D) before it hides.
+/// crossing her. Where her right side is crowded under the speed, the models card steps right of her outline and narrows,
+/// then moves down past the spilled cards (up to 0.3 D below them) before it hides.
 /// </summary>
 public sealed class HudWings
 {
@@ -167,8 +167,11 @@ public sealed class HudWings
     public const double SettleWindow = 30.0;
     public const double SettledReturn = 12.0;
 
-    /// <summary>A hidden models card comes back once it has fitted for this long (moving between its places waits <see cref="ReturnAfter"/>).</summary>
+    /// <summary>A hidden models card comes back once it has fit with <see cref="ModelsSpare"/> to spare for this long.</summary>
     public const double ModelsReturnAfter = 1.2;
+
+    /// <summary>The room (× D) a hidden or lowered models card needs to spare before it comes back.</summary>
+    public const double ModelsSpare = 0.04;
 
     private const double Dodge = 0.06;
     private const double NearReach = 0.12;
@@ -199,6 +202,7 @@ public sealed class HudWings
     private ModelsPlace _modelsPlace = ModelsPlace.UnderSpeed;
     private ModelsPlace? _modelsHop;
     private double _modelsStrain;
+    private double _modelsEase;
     private double _modelsTop;
     private bool _snapModels;
     private double _sinceChange = double.PositiveInfinity;
@@ -217,10 +221,13 @@ public sealed class HudWings
     public ModelsPlace ModelsAt => _modelsPlace;
 
     /// <summary>
-    /// The widest the models card can be this frame and still fit beside her, under the speed or lower (points): the card
-    /// cuts its ids shorter to fit it.
+    /// The room from the models card's left edge to the orb's edge at its place this frame (points): the card narrows its
+    /// names, then drops them, to fit it.
     /// </summary>
     public double ModelsWidth { get; private set; } = double.PositiveInfinity;
+
+    /// <summary>The models card's width in its narrowest form, dots and speeds only (points); the renderer sets it each frame.</summary>
+    public double ModelsNarrowest { get; set; }
 
     public HudWings()
     {
@@ -708,49 +715,37 @@ public sealed class HudWings
     }
 
     /// <summary>
-    /// The models card's left edge with its top at <paramref name="top"/>: on the speed's line, or as far right as keeps it
-    /// <see cref="Gap"/> clear of her outline over its rows when she reaches past that line; moved in from the window's edge
-    /// when it is too wide for the rest. Null when that brings it closer to her than half the gap, or past the bottom.
+    /// The models card's left edge with its top at <paramref name="top"/>: on the speed's line, or further right where her
+    /// outline under the speed is wider, <see cref="Gap"/> clear of it over the rows the card spans.
     /// </summary>
-    private double? ModelsLeft(HudFrame f, double top)
+    private double ModelsLeft(HudFrame f, double top)
     {
-        var d = f.Footprint;
         var speed = (int)HudCard.Speed;
-        var (w, h) = _sizes[(int)HudCard.Models];
-        if (top + h > f.Bounds.MaxY - Margin * d + 0.5)
-        {
-            return null;
-        }
-
         var line = _targets[speed].X - _sizes[speed].W / 2;
-        var side = f.Silhouette.Extent(top, top + h)?.Right;
-        var left = Math.Min(side is { } r ? Math.Max(line, r + Gap * d) : line, f.Bounds.MaxX - Margin * d - w);
-        return side is { } right && right + 0.5 * Gap * d > left + 0.5 ? null : left;
+        return f.Silhouette.Extent(top, top + _sizes[(int)HudCard.Models].H) is { } e ? Math.Max(line, e.Right + Gap * f.Footprint) : line;
     }
 
-    private bool ModelsFit(HudFrame f, double top) => ModelsLeft(f, top) is not null;
-
-    /// <summary>The widest models card of the current height that fits with its top at <paramref name="top"/>; 0 below the bottom.</summary>
+    /// <summary>The room from the card's left edge to the orb's edge with its top at <paramref name="top"/>; 0 past the bottom.</summary>
     private double ModelsRoomAt(HudFrame f, double top)
     {
         var d = f.Footprint;
-        if (top + _sizes[(int)HudCard.Models].H > f.Bounds.MaxY - Margin * d + 0.5)
-        {
-            return 0;
-        }
-
-        var limit = f.Silhouette.Extent(top, top + _sizes[(int)HudCard.Models].H) is { } e ? e.Right + 0.5 * Gap * d : f.CenterX + 0.04 * d;
-        return Math.Max(0, f.Bounds.MaxX - Margin * d - limit);
+        return top + _sizes[(int)HudCard.Models].H > f.Bounds.MaxY - Margin * d + 0.5
+            ? 0
+            : Math.Max(0, f.Bounds.MaxX - Margin * d - ModelsLeft(f, top));
     }
 
-    /// <summary>The widest models card that fits now, under the speed or in the best of its lower rows (points).</summary>
-    private double ModelsRoom(HudFrame f)
+    /// <summary>The card in its narrowest form (dots and speeds) fits with its top at <paramref name="top"/>, with <paramref name="spare"/> to spare.</summary>
+    private bool ModelsFit(HudFrame f, double top, double spare) => ModelsRoomAt(f, top) + 0.5 >= ModelsNarrowest + spare;
+
+    /// <summary>The top right under the speed title chip.</summary>
+    private double ModelsUnder(HudFrame f) => SpeedBottom(_sizes) + ColumnGap * f.Footprint;
+
+    /// <summary>The first top from the spilled cards' bottom down to 0.3 D below them where the card fits; null for none.</summary>
+    private double? ModelsBelowSpill(HudFrame f, double spare)
     {
         var d = f.Footprint;
         var gap = ColumnGap * d;
-        var start = SpeedBottom(_sizes) + gap;
-        var room = ModelsRoomAt(f, start);
-        var y = start;
+        var y = ModelsUnder(f);
         var cards = HudCards.Column;
         for (var k = Split; k < cards.Length; k++)
         {
@@ -759,32 +754,9 @@ public sealed class HudWings
         }
 
         var step = Math.Max(1, f.Silhouette.Step);
-        for (var top = y; top <= start + Reach * d + 1e-9; top += step)
+        for (var top = y; top <= y + Reach * d + 1e-9; top += step)
         {
-            room = Math.Max(room, ModelsRoomAt(f, top));
-        }
-
-        return room;
-    }
-
-    /// <summary>The first top from the spilled cards' bottom down to 0.3 D under the speed where the models card fits; null for none.</summary>
-    private double? ModelsBelowSpill(HudFrame f)
-    {
-        var d = f.Footprint;
-        var gap = ColumnGap * d;
-        var start = SpeedBottom(_sizes) + gap;
-        var y = start;
-        var cards = HudCards.Column;
-        for (var k = Split; k < cards.Length; k++)
-        {
-            var i = (int)cards[k];
-            y += _presence[i] * (_sizes[i].H + gap);
-        }
-
-        var step = Math.Max(1, f.Silhouette.Step);
-        for (var top = y; top <= start + Reach * d + 1e-9; top += step)
-        {
-            if (ModelsFit(f, top))
+            if (ModelsFit(f, top, spare))
             {
                 return top;
             }
@@ -793,33 +765,29 @@ public sealed class HudWings
         return null;
     }
 
+    /// <summary>The best place the card fits now, with <paramref name="spare"/> to spare: under the speed, below the spilled cards, or hidden.</summary>
+    private (ModelsPlace Place, double Top) ModelsWanted(HudFrame f, double spare)
+    {
+        var under = ModelsUnder(f);
+        if (ModelsFit(f, under, spare))
+        {
+            return (ModelsPlace.UnderSpeed, under);
+        }
+
+        return ModelsBelowSpill(f, spare) is { } top ? (ModelsPlace.BelowSpill, top) : (ModelsPlace.Hidden, under);
+    }
+
     /// <summary>
-    /// Picks the models card's place with the column's patience: a worse place once the better one has failed for
-    /// <see cref="SpillAfter"/>, back under the speed once that has fitted for <see cref="ReturnAfter"/>, back from hidden
-    /// after <see cref="ModelsReturnAfter"/>; at once when still, before the first frame or while the card is switched off
-    /// or quiet. Moving between its two places it fades out where it was and back in at the new one, like a card changing
-    /// sides.
+    /// Picks the models card's place (DESIGN 2a.6, Models: place and width): where it stands, as long as it fits there; once
+    /// it has not fit for <see cref="SpillAfter"/>, the best place that fits (lower, or hidden); from hidden back once it has
+    /// fit with 0.04 D to spare for <see cref="ModelsReturnAfter"/>, from the lower place back up after
+    /// <see cref="ReturnAfter"/>. At once while still, before the first frame or while the card is switched off or quiet.
+    /// Moving between its two places it fades out where it was and back in at the new one, like a card changing sides.
     /// </summary>
     private void ChooseModelsPlace(double dt, HudFrame f, bool shown)
     {
         var i = (int)HudCard.Models;
-        var under = SpeedBottom(_sizes) + ColumnGap * f.Footprint;
-        ModelsWidth = ModelsRoom(f);
-        ModelsPlace wanted;
-        if (ModelsFit(f, under))
-        {
-            wanted = ModelsPlace.UnderSpeed;
-        }
-        else if (ModelsBelowSpill(f) is { } top)
-        {
-            wanted = ModelsPlace.BelowSpill;
-            _modelsTop = top;
-        }
-        else
-        {
-            wanted = ModelsPlace.Hidden;
-        }
-
+        var fits = ModelsWanted(f, 0);
         if (_modelsHop is { } next)
         {
             _hop[i] = Math.Max(0, _hop[i] - dt / HopOut);
@@ -830,49 +798,84 @@ public sealed class HudWings
                 _snapModels = true;
             }
 
+            ModelsWidth = ModelsRoomAt(f, ModelsTopOf(f, _modelsPlace));
             return;
         }
 
         _hop[i] = Math.Min(1, _hop[i] + dt / HopIn);
-        if (wanted == _modelsPlace || !_placed || Still || !shown)
+        if (!_placed || Still || !shown)
         {
-            _snapModels |= wanted != _modelsPlace && _presence[i] == 0;
-            _modelsPlace = wanted;
+            _snapModels |= fits.Place != _modelsPlace && _presence[i] == 0;
+            _modelsPlace = fits.Place;
+            _modelsTop = fits.Top;
             _modelsStrain = 0;
-            return;
+            _modelsEase = 0;
         }
-
-        _modelsStrain += dt;
-        var patience = wanted > _modelsPlace ? SpillAfter : _modelsPlace == ModelsPlace.Hidden ? ModelsReturnAfter : ReturnAfter;
-        if (_modelsStrain < patience)
+        else if (_modelsPlace != ModelsPlace.Hidden && !ModelsFit(f, ModelsTopOf(f, _modelsPlace), 0))
         {
-            return;
+            _modelsEase = 0;
+            _modelsStrain += dt;
+            if (_modelsStrain >= SpillAfter)
+            {
+                Move(fits.Place);
+            }
         }
-
-        _modelsStrain = 0;
-        if (wanted != ModelsPlace.Hidden && _modelsPlace != ModelsPlace.Hidden && _presence[i] > 0)
+        else if (ModelsWanted(f, ModelsSpare * f.Footprint) is var roomy && roomy.Place < _modelsPlace)
         {
-            _modelsHop = wanted;
-            return;
+            _modelsStrain = 0;
+            _modelsEase += dt;
+            if (_modelsEase >= (_modelsPlace == ModelsPlace.Hidden ? ModelsReturnAfter : ReturnAfter))
+            {
+                Move(roomy.Place);
+            }
+        }
+        else
+        {
+            _modelsStrain = 0;
+            _modelsEase = 0;
         }
 
-        _snapModels |= _presence[i] == 0;
-        _modelsPlace = wanted;
+        ModelsWidth = ModelsRoomAt(f, ModelsTopOf(f, _modelsPlace));
+
+        void Move(ModelsPlace place)
+        {
+            _modelsStrain = 0;
+            _modelsEase = 0;
+            if (place != ModelsPlace.Hidden && _modelsPlace != ModelsPlace.Hidden && _presence[i] > 0)
+            {
+                _modelsHop = place;
+                return;
+            }
+
+            _snapModels |= _presence[i] == 0;
+            _modelsPlace = place;
+        }
     }
 
-    /// <summary>The models card's target: its left edge on the speed's line, right under the speed or below the spilled cards.</summary>
+    /// <summary>The card's top in a place: under the speed, or the first fitting row below the spilled cards (the last one found when none fits now).</summary>
+    private double ModelsTopOf(HudFrame f, ModelsPlace place)
+    {
+        if (place != ModelsPlace.BelowSpill)
+        {
+            return ModelsUnder(f);
+        }
+
+        if (ModelsBelowSpill(f, 0) is { } top)
+        {
+            _modelsTop = top;
+        }
+
+        return _modelsTop;
+    }
+
+    /// <summary>The models card's target: its left edge on the speed's line or right of her, right under the speed or below the spilled cards.</summary>
     private void ModelsAnchor(HudFrame f)
     {
         var d = f.Footprint;
         var i = (int)HudCard.Models;
         var (w, h) = _sizes[i];
-        var top = _modelsPlace == ModelsPlace.BelowSpill ? ModelsBelowSpill(f) ?? _modelsTop : SpeedBottom(_sizes) + ColumnGap * d;
-        if (_modelsPlace == ModelsPlace.Hidden && _presence[i] > 0)
-        {
-            top = _targets[i].Y - h / 2;
-        }
-
-        var left = ModelsLeft(f, top) ?? _targets[i].X - w / 2;
+        var top = _modelsPlace == ModelsPlace.Hidden && _presence[i] > 0 ? _targets[i].Y - h / 2 : ModelsTopOf(f, _modelsPlace);
+        var left = Math.Min(ModelsLeft(f, top), f.Bounds.MaxX - Margin * d - w);
         _targets[i] = (left + w / 2, top + h / 2);
         if (_snapModels)
         {

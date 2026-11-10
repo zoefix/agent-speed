@@ -244,14 +244,84 @@ public class CharacterReadoutRowsTests
         Assert.Equal(1, still.Lines.Single(l => l.Row?.Model == "a").Position(20));
     }
 
+    [Theory]
+    [InlineData("claude-sonnet-4-5-20250929", "claude-sonnet-4-5")]
+    [InlineData("gpt-4o-2024-08-06", "gpt-4o")]
+    [InlineData("claude-opus-5-5", "claude-opus-5-5")]
+    [InlineData("gemini-4-argon-preview", "gemini-4-argon-preview")]
+    [InlineData("glm-5-0929", "glm-5-0929")]
+    [InlineData("model-2025-9-29", "model-2025-9-29")]
+    [InlineData("x-20250929-20251001", "x-20250929")]
+    [InlineData("20250929", "20250929")]
+    [InlineData("2025-09-29", "2025-09-29")]
+    [InlineData("-20250929", "-20250929")]
+    public void DisplayNamesDropATrailingDate(string id, string shown) => Assert.Equal(shown, OrbModelName.Display(id));
+
     [Fact]
-    public void IdsAreCutInTheMiddle()
+    public void NamesAreCutAtTheirEnd()
     {
         static double Measure(string s) => s.Length;
-        Assert.Equal("claude-opus-5-5", OrbMiddleTruncation.Fit("claude-opus-5-5", 15, Measure));
-        Assert.Equal("clau…-5-5", OrbMiddleTruncation.Fit("claude-opus-5-5", 9, Measure));
-        Assert.Equal("claud…-5-5", OrbMiddleTruncation.Fit("claude-opus-5-5", 10, Measure));
-        Assert.Equal("gemin…26-11", OrbMiddleTruncation.Fit("gemini-4-argon-preview-2026-11", 11, Measure));
+        Assert.Equal("claude-opus-5-5", OrbModelName.Truncate("claude-opus-5-5", 15, Measure));
+        Assert.Equal("claude-o…", OrbModelName.Truncate("claude-opus-5-5", 9, Measure));
+        Assert.Equal("c…", OrbModelName.Truncate("claude-opus-5-5", 2, Measure));
+        Assert.Equal("…", OrbModelName.Truncate("claude", 0.5, Measure));
+    }
+
+    /// <summary>Columns of 8 pt text: a 72 pt name, 15 pt of digits, a 16 pt unit; the narrowest form is 55 pt wide.</summary>
+    private static OrbModelsColumns Columns(double longest = 72) => new(longest, 15, 16, 0, 8.32, 6.4, 3, 12.8);
+
+    [Fact]
+    public void NamesNarrowFromNineTToFourTThenTheRowsKeepTheDotAndTheSpeed()
+    {
+        const double t = 8;
+        var columns = Columns();
+        Assert.Equal(12.8 + 8.32 + 15 + 3 + 16, columns.Width(0), 9);
+        Assert.Equal(columns.Width(0) + 6.4 + 72, columns.Width(9 * t), 9);
+        Assert.Equal(9, OrbModelsNames.Fitting(columns, t, 200));
+        Assert.Equal(6.5, OrbModelsNames.Fitting(columns, t, columns.Width(6.5 * t) + 2));
+        Assert.Equal(4, OrbModelsNames.Fitting(columns, t, columns.Width(4 * t)));
+        Assert.Equal(0, OrbModelsNames.Fitting(columns, t, columns.Width(4 * t) - 1));
+        Assert.Equal(9, OrbModelsNames.Fitting(Columns(longest: 20), t, Columns(longest: 20).Width(0) + 30));
+    }
+
+    [Fact]
+    public void NamesNarrowAtOnceAndWidenOnlyAfterTheyFitWithRoomToSpareFor1point2Seconds()
+    {
+        const double t = 8;
+        const double spare = 0.04 * 296;
+        var columns = Columns();
+        var names = new OrbModelsNames();
+        names.Update(columns, t, 500, spare, 1 / 60.0, atOnce: false);
+        Assert.Equal(9, names.Room);
+        var tight = columns.Width(5 * t) + 1;
+        names.Update(columns, t, tight, spare, 1 / 60.0, atOnce: false);
+        Assert.Equal(5, names.Room);
+        names.Update(columns, t, columns.Width(4 * t) - 1, spare, 1 / 60.0, atOnce: false);
+        Assert.Equal(0, names.Room);
+
+        var roomy = columns.Width(7 * t) + spare;
+        for (var n = 0; n < 66; n++)
+        {
+            names.Update(columns, t, roomy, spare, 1 / 60.0, atOnce: false);
+        }
+
+        Assert.Equal(0, names.Room);
+        for (var n = 0; n < 10; n++)
+        {
+            names.Update(columns, t, roomy, spare, 1 / 60.0, atOnce: false);
+        }
+
+        Assert.Equal(7, names.Room);
+
+        var close = columns.Width(9 * t) + spare - 1;
+        for (var n = 0; n < 120; n++)
+        {
+            names.Update(columns, t, close, spare, 1 / 60.0, atOnce: false);
+        }
+
+        Assert.Equal(8.5, names.Room);
+        names.Update(columns, t, 500, spare, 1 / 60.0, atOnce: true);
+        Assert.Equal(9, names.Room);
     }
 
     // MARK: Accessibility
@@ -276,6 +346,11 @@ public class CharacterReadoutRowsTests
 
         var off = OrbCharacterSpeech.Sentence(readings, CharacterReadouts.Default with { Latency = false, Models = false, Cost = false }, 10.5, En, "US dollars");
         Assert.Equal("performance 1,286, thinking 176 tokens per second", off);
+
+        var dated = new OrbCharacterReadings();
+        dated.Apply(null, null, true, 10, null, [Row("claude-sonnet-4-5-20250929", 80)]);
+        Assert.Equal("running models: claude-sonnet-4-5-20250929 at 80 tokens per second",
+            OrbCharacterSpeech.Sentence(dated, CharacterReadouts.Default, 10, En, "US dollars"));
 
         var zh = new OrbCharacterReadings();
         zh.Apply(null, null, true, 10, null, [Row("glm-5", 42), Row("kimi-k3", 30)]);
