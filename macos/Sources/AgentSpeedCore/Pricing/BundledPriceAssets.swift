@@ -7,7 +7,7 @@ enum BundledPriceAssets {
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 7,
+  "version": 8,
   "updated": "2026-11-10",
   "currency": "USD",
   "unit": "perMillionTokens",
@@ -1755,6 +1755,36 @@ enum BundledPriceAssets {
       "checked": "2026-10-22"
     },
     {
+      "id": "gemini-4-carbon",
+      "provider": "google",
+      "name": "Gemini 4 Carbon",
+      "status": "current",
+      "prices": {
+        "input": 2,
+        "cachedInput": 0.1,
+        "output": 10
+      },
+      "periods": [
+        {
+          "from": "2026-12-01",
+          "prices": {
+            "input": 4,
+            "cachedInput": 0.2,
+            "output": 20
+          }
+        }
+      ],
+      "aliases": [
+        "gemini 4 carbon (low)",
+        "gemini 4 carbon (medium)",
+        "gemini 4 carbon (high)",
+        "gemini 4 carbon"
+      ],
+      "source": "https://aistudio.google.com/docs/pricing",
+      "checked": "2026-11-10",
+      "note": "Announced price change on 2026-12-01. Implicit caching only."
+    },
+    {
       "id": "gemini-4-argon",
       "provider": "google",
       "name": "Gemini 4 Argon",
@@ -1780,8 +1810,8 @@ enum BundledPriceAssets {
         "gemini 4 argon (high)",
         "gemini 4 argon"
       ],
-      "source": "https://ai.google.dev/gemini-api/docs/pricing",
-      "checked": "2026-10-24",
+      "source": "https://aistudio.google.com/docs/pricing",
+      "checked": "2026-11-10",
       "note": "Announced price change on 2026-12-01."
     },
     {
@@ -4942,6 +4972,18 @@ enum BundledPriceAssets {
     {
       "model": "gemini 4 argon",
       "expect": "gemini-4-argon"
+    },
+    {
+      "model": "gemini-4-carbon",
+      "expect": "gemini-4-carbon"
+    },
+    {
+      "model": "models/gemini-4-carbon",
+      "expect": "gemini-4-carbon"
+    },
+    {
+      "model": "Gemini 4 Carbon (High)",
+      "expect": "gemini-4-carbon"
     },
     {
       "model": "mimo-v2.6-pro",
