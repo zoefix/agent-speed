@@ -7,6 +7,7 @@ using AgentSpeed.App;
 using AgentSpeed.Controls;
 using AgentSpeed.Core.Locations;
 using AgentSpeed.Presentation.Localization;
+using AgentSpeed.Presentation.Quota;
 using AgentSpeed.Presentation.Settings.Locations;
 using AgentSpeed.Services;
 
@@ -33,8 +34,54 @@ internal sealed class SourcesPaneViewModel : ObservableObject
         _pickFolder = pickFolder;
         var rows = toggles.ToList();
         Groups = [.. LocationFolders.All.Select(folder =>
-            new SourceGroupViewModel(folder, [.. folder.Sources().Select(kind => rows.First(row => row.Kind == kind))], this, loc))];
+            new SourceGroupViewModel(folder, [.. folder.Sources().Select(kind => rows.First(row => row.Kind == kind))], this, loc, QuotaFor(folder, loc)))];
         Sync();
+    }
+
+    /// <summary>What the quota switches do; set by the app.</summary>
+    public IQuotaSettingsActions? QuotaActions { get; set; }
+
+    /// <summary>Claude Code's settings file, abbreviated with <c>~</c>, for the bridge's messages.</summary>
+    public string CliSettingsPath { get; set; } = "~\\.claude\\settings.json";
+
+    private string? _cliFailure;
+    private QuotaState _quotaState = QuotaState.Empty;
+    private Presentation.Settings.QuotaSettings _quotaSettings = Presentation.Settings.QuotaSettings.Default;
+
+    private IReadOnlyList<QuotaToggleViewModel> QuotaFor(LocationFolder folder, Localizer loc)
+    {
+        var sources = folder.Sources().ToList();
+        var switches = new List<QuotaToggleViewModel>();
+        if (sources.Contains(Core.SourceKind.Codex))
+        {
+            switches.Add(new QuotaToggleViewModel(QuotaSwitch.Codex, loc, () => QuotaActions));
+        }
+
+        if (sources.Contains(Core.SourceKind.ClaudeDesktop) || sources.Contains(Core.SourceKind.ClaudeCode))
+        {
+            switches.Add(new QuotaToggleViewModel(QuotaSwitch.ClaudeDesktop, loc, () => QuotaActions));
+            switches.Add(new QuotaToggleViewModel(QuotaSwitch.ClaudeCli, loc, () => QuotaActions));
+        }
+
+        return switches;
+    }
+
+    /// <summary>The quota switches and the bridge's status follow the settings and the readers.</summary>
+    public void UpdateQuota(QuotaState state, Presentation.Settings.QuotaSettings settings)
+    {
+        _quotaState = state;
+        _quotaSettings = settings;
+        foreach (var toggle in Groups.SelectMany(g => g.QuotaToggles))
+        {
+            toggle.Update(settings, state, _cliFailure, CliSettingsPath);
+        }
+    }
+
+    /// <summary>Why the bridge could not be turned on (warning style under its switch); null clears it.</summary>
+    public void ShowCliFailure(string? failure)
+    {
+        _cliFailure = failure;
+        UpdateQuota(_quotaState, _quotaSettings);
     }
 
     public IReadOnlyList<SourceGroupViewModel> Groups { get; }

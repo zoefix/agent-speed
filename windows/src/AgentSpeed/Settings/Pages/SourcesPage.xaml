@@ -55,6 +55,49 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
+        <!-- A quota switch of the group (DESIGN 5, 額度): a gauge in the dot column, the title, its hint as the caption and, for
+             the Claude CLI bridge, a status line (warning style with Reconnect when the status line was replaced). -->
+        <DataTemplate x:Key="QuotaRow" DataType="{x:Type sources:QuotaToggleViewModel}">
+            <Grid>
+                <Rectangle Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+                <Grid Margin="16,11,16,12" MinHeight="40">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <controls:SymbolGlyph Style="{StaticResource SymbolIcon}" Text="&#xEC4A;" FontSize="12" HorizontalAlignment="Left" VerticalAlignment="Top"
+                                          Margin="-1,3,0,0" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,24,0">
+                        <TextBlock Text="{Binding Title}" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock Text="{Binding Hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17" Margin="0,3,0,0" />
+                        <StackPanel x:Name="StatusLine" Orientation="Horizontal" Margin="0,7,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Visible}}">
+                            <controls:SymbolGlyph x:Name="StatusGlyph" Style="{StaticResource SymbolIcon}" Text="&#xE73E;" FontSize="12" Margin="0,1,6,0"
+                                                  VerticalAlignment="Center" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Visibility="Collapsed" />
+                            <TextBlock x:Name="StatusText" Text="{Binding Status}" Style="{StaticResource CaptionText}" VerticalAlignment="Center"
+                                       TextWrapping="Wrap" MaxWidth="420" AutomationProperties.LiveSetting="Polite" />
+                            <Button Style="{StaticResource LinkButton}" Content="{Binding ReconnectText}" Command="{Binding ReconnectCommand}" FontSize="12"
+                                    Height="22" Margin="8,-2,0,-2" VerticalAlignment="Center"
+                                    Visibility="{Binding ShowsReconnect, Converter={StaticResource Visible}}" />
+                        </StackPanel>
+                    </StackPanel>
+                    <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsOn, Mode=TwoWay}" VerticalAlignment="Center"
+                              AutomationProperties.Name="{Binding Title}" AutomationProperties.HelpText="{Binding Hint}" />
+                </Grid>
+            </Grid>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                    <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                    <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="StatusGlyph" Property="Text" Value="&#xE7BA;" />
+                    <Setter TargetName="StatusGlyph" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
+                    <Setter TargetName="StatusText" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
         <!-- One folder line: the path cut in the middle when it does not fit, then the 預設 badge on the automatic entry's first line. -->
         <DataTemplate x:Key="PathLine" DataType="{x:Type sources:LocationLineViewModel}">
             <controls:ShrinkFirstPanel Background="Transparent" ToolTip="{Binding FullPath}" ToolTipService.InitialShowDelay="600">
@@ -190,6 +233,8 @@
                         <Border Style="{StaticResource GroupBorder}" AutomationProperties.Name="{Binding GroupName}">
                             <StackPanel>
                                 <ItemsControl ItemsSource="{Binding Toggles}" ItemTemplate="{StaticResource ToggleRow}" Focusable="False" IsTabStop="False" />
+                                <ItemsControl ItemsSource="{Binding QuotaToggles}" ItemTemplate="{StaticResource QuotaRow}" Focusable="False" IsTabStop="False"
+                                              Visibility="{Binding HasQuota, Converter={StaticResource Visible}}" />
                                 <Rectangle Style="{StaticResource Hairline}" />
                                 <ItemsControl ItemsSource="{Binding Entries}" ItemTemplate="{StaticResource LocationRow}" Focusable="False" IsTabStop="False"
                                               Tag="{Binding}" />

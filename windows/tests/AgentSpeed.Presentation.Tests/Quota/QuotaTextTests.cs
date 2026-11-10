@@ -107,3 +107,49 @@ public sealed class QuotaTextTests
         Assert.Contains("/", earlier, StringComparison.Ordinal);
     }
 }
+
+/// <summary>The dashboard's quota lines (DESIGN 4, Quota lines).</summary>
+public sealed class QuotaLinesTests
+{
+    private const long Now = 1794338773000;
+    private static readonly Localizer En = new(Localizer.LoadEmbeddedTable(), LanguageCodes.En);
+
+    [Fact]
+    public void LinesCarryTonePaceResetAndAge()
+    {
+        var snapshot = new QuotaSnapshot(SourceKind.ClaudeCode, Now - 2 * 3_600_000L,
+        [
+            QuotaWindow.Of(QuotaWindowKind.SevenDay, 96, Now + 3 * 86_400_000L),
+            QuotaWindow.Of(QuotaWindowKind.FiveHour, 80, Now + 2 * 3_600_000L),
+            QuotaWindow.Of(QuotaWindowKind.ModelWeek, 10, null, "Fable"),
+        ]);
+        var lines = QuotaLines.Of(snapshot, Now, En, TimeZoneInfo.Utc);
+        Assert.Equal(["5h", "7d", "Fable 7d"], lines.Select(l => l.Label));
+        Assert.Equal([QuotaTone.Warning, QuotaTone.Critical, QuotaTone.Normal], lines.Select(l => l.Tone));
+        Assert.Equal(0.6, lines[0].Pace!.Value, 9);
+        Assert.Null(lines[2].Pace);
+        Assert.Equal("resets in 2 h", lines[0].ResetLong);
+        Assert.Equal(string.Empty, lines[2].ResetLong);
+        Assert.Equal(" · updated 2 h ago", lines[0].Age);
+        Assert.Contains("60% of the window has passed", lines[0].Tooltip, StringComparison.Ordinal);
+        Assert.Equal("80%", lines[0].PercentText);
+        Assert.Equal("Fable 7d 10% used", lines[2].Spoken);
+    }
+
+    [Fact]
+    public void ARecentQuotaListsItsSourceAndAnOldOneDoesNot()
+    {
+        var recent = new QuotaSnapshot(SourceKind.Codex, Now - 3_600_000L, [QuotaWindow.Of(QuotaWindowKind.SevenDay, 1, null)]);
+        var old = new QuotaSnapshot(SourceKind.ClaudeDesktop, Now - 25 * 3_600_000L, [QuotaWindow.Of(QuotaWindowKind.SevenDay, 1, null)]);
+        var empty = new QuotaSnapshot(SourceKind.ClaudeCode, Now, []);
+        var state = new QuotaState
+        {
+            Snapshots = System.Collections.Immutable.ImmutableDictionary<SourceKind, QuotaSnapshot>.Empty
+                .Add(SourceKind.Codex, recent).Add(SourceKind.ClaudeDesktop, old).Add(SourceKind.ClaudeCode, empty),
+        };
+        Assert.True(state.ListsSource(SourceKind.Codex, Now));
+        Assert.False(state.ListsSource(SourceKind.ClaudeDesktop, Now));
+        Assert.False(state.ListsSource(SourceKind.ClaudeCode, Now));
+        Assert.Equal(state, state with { });
+    }
+}
