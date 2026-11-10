@@ -164,6 +164,17 @@ public final class RemoteConnection: @unchecked Sendable {
         }
     }
 
+    /// The bridge once off and on again, for *Reconnect*.
+    public func reapplyQuota() {
+        queue.async { [self] in
+            guard stage == .run, var config = settings.quota, config.claudeBridge else { return }
+            config.claudeBridge = false
+            config.sources.remove(.claudeCode)
+            send(RelayLineEncoder.quota(config))
+            if let current = settings.quota { send(RelayLineEncoder.quota(current)) }
+        }
+    }
+
     public static let retireLimit: TimeInterval = 10
 
     func stopNow() {

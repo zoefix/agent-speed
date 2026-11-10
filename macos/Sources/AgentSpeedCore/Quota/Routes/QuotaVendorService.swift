@@ -139,13 +139,38 @@ public actor QuotaVendorService {
 
     // MARK: Results
 
+    /// A browser route's session as found: none, the refused one again, or a session (another sign-in drops the old
+    /// account's numbers).
+    private func applyBrowser(_ result: FetchResult, _ round: QuotaVendorRound, _ state: inout RouteState) {
+        switch result.skipped {
+        case .noSession:
+            state.reading.status = .noBrowser
+            state.reading.signedIn = false
+            state.cadence.record(.failure, nowMs: round.nowMs, credential: state.cadence.credential ?? result.credential)
+        case .refused:
+            state.reading.status = .denied(host: result.route.host(region: round.zaiRegion, site: result.site))
+            state.reading.signedIn = false
+        case nil:
+            if let account = state.account, account != result.credential { state.reading.snapshot = nil }
+            state.account = result.credential
+            state.reading.host = result.route.host(region: round.zaiRegion, site: result.site)
+            state.reading.signedIn = result.outcome != .denied
+        }
+    }
+
     private func apply(_ result: FetchResult, _ round: QuotaVendorRound) {
         var state = states[result.route] ?? RouteState()
-        guard state.account == result.credential || state.account == nil else { return }
+        if result.route.readsBrowser {
+            applyBrowser(result, round, &state)
+            states[result.route] = state
+            if result.skipped != nil { return }
+        } else {
+            guard state.account == result.credential || state.account == nil else { return }
+        }
         state.cadence.record(result.outcome, nowMs: round.nowMs, credential: result.credential)
         if let project = result.geminiProject { state.geminiProject = (result.credential, project) }
         forgottenTokens.formUnion(result.forgetTokens)
-        let host = state.reading.host ?? result.route.host(region: round.zaiRegion, site: nil)
+        let host = state.reading.host ?? result.route.host(region: round.zaiRegion, site: result.site)
         switch result.outcome {
         case .success:
             let observed = result.observedMs ?? round.nowMs

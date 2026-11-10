@@ -145,6 +145,9 @@ public final class RemoteCoordinator {
     /// *Retry now*.
     public func retryNow(hostId: String) { hub.retryNow(hostId: hostId) }
 
+    /// The host's relay installs its Claude Code bridge again (a status line the user replaced, REMOTE 11.3).
+    public func reapplyQuota(hostId: String) { hub.reapplyQuota(hostId: hostId) }
+
     public func requestHistory(hostId: String, digests: [String: String]) {
         hub.requestHistory(hostId: hostId, digests: digests)
     }

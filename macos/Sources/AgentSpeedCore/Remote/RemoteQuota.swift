@@ -53,6 +53,14 @@ public struct RemoteQuotaReport: Equatable, Sendable {
     public var signedIn: Bool
     public var status: QuotaRouteStatus
 
+    public init(hostId: String, snapshot: QuotaSnapshot, running: Bool, signedIn: Bool, status: QuotaRouteStatus) {
+        self.hostId = hostId
+        self.snapshot = snapshot
+        self.running = running
+        self.signedIn = signedIn
+        self.status = status
+    }
+
     public var source: SourceKind { snapshot.source }
 }
 
@@ -66,4 +74,10 @@ public struct RemoteQuotaBridge: Equatable, Sendable {
     public var state: State
     /// Abbreviated with `~`; displayed only.
     public var settingsPath: String
+
+    public init(hostId: String, state: State, settingsPath: String) {
+        self.hostId = hostId
+        self.state = state
+        self.settingsPath = settingsPath
+    }
 }

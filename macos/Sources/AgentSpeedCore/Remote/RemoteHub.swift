@@ -102,6 +102,12 @@ public final class RemoteHub: @unchecked Sendable {
         }
     }
 
+    /// Sends the host's quota config off and on again: its relay turns the bridge off (leaving a replaced status line
+    /// alone) and installs it again (QUOTAS 5.2, 5.3).
+    public func reapplyQuota(hostId: String) {
+        queue.sync { connections[hostId]?.reapplyQuota() }
+    }
+
     /// *Retry now* (or a fresh look after the user fixed something on the host).
     public func retryNow(hostId: String) {
         queue.sync { connections[hostId]?.retryNow() }

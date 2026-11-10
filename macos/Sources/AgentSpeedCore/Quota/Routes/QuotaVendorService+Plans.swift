@@ -9,6 +9,9 @@ struct FetchPlan: Sendable {
         case gemini(token: String, project: String??, userAgent: String)
         /// The servers' addresses in order, until one answers.
         case antigravity([AntigravityServer], userAgent: String)
+        /// The browser's session, read off the actor (macOS may ask for a keychain item meanwhile), then one request
+        /// unless that very session was refused before.
+        case browser(reader: any BrowserSessionReading, sites: [String], refused: QuotaFingerprint?, userAgent: String)
     }
 
     var route: QuotaRoute
@@ -17,9 +20,18 @@ struct FetchPlan: Sendable {
 }
 
 struct FetchResult: Sendable {
+    /// A browser route found no session, or only the one refused before; nothing was asked.
+    enum Skipped: Sendable {
+        case noSession
+        case refused
+    }
+
     var route: QuotaRoute
     var credential: QuotaFingerprint
     var outcome: QuotaCadence.Outcome
+    var skipped: Skipped?
+    /// The site a browser session came from.
+    var site: String?
     var windows: [QuotaWindow] = []
     var observedMs: Int64?
     var statusCode: Int?
@@ -146,26 +158,10 @@ extension QuotaVendorService {
         let wait = state.cadence.lastOutcome == .success ? QuotaCadence.intervalMs : QuotaCadence.failureWaitMs
         if let checked = state.checkedMs, round.nowMs - checked < wait { return nil }
         state.checkedMs = round.nowMs
-        guard let session = environment.browser.session(sites: route.cookieSites, nowMs: round.nowMs),
-              Self.isHeaderSafe(session.cookie), Self.isHeaderSafe(session.userAgent) else {
-            state.reading.status = .noBrowser
-            state.reading.signedIn = false
-            return nil
-        }
-        state.reading.signedIn = true
-        let fingerprint = session.fingerprint
-        guard gate(route, round, credential: fingerprint, state: &state, site: session.site) else { return nil }
-        let request: QuotaHTTPRequest?
-        let parse: @Sendable (JSONValue, Int64) -> [QuotaWindow]?
-        if route == .qoder {
-            request = QuotaRequests.qoderCredits(cookie: session.cookie, site: session.site, userAgent: environment.userAgent)
-            parse = { body, _ in body.object == nil ? nil : BrowserSessionCredits.qoderWindows(body) }
-        } else {
-            request = QuotaRequests.workBuddySummary(cookie: session.cookie, browserUserAgent: session.userAgent)
-            parse = { body, _ in BrowserSessionCredits.workBuddyWindows(body) }
-        }
-        guard let request else { return nil }
-        return FetchPlan(route: route, credential: fingerprint, kind: .single(request, parse: parse))
+        let refused = state.cadence.lastOutcome == .denied ? state.cadence.credential : nil
+        return FetchPlan(route: route, credential: state.account ?? QuotaFingerprint(""),
+                         kind: .browser(reader: environment.browser, sites: route.cookieSites, refused: refused,
+                                        userAgent: environment.userAgent))
     }
 }
 
@@ -209,7 +205,43 @@ extension FetchPlan {
             return result
         case .antigravity(let servers, let userAgent):
             return await antigravity(servers, userAgent: userAgent, transport, now: now)
+        case .browser(let reader, let sites, let refused, let userAgent):
+            return await browser(reader, sites: sites, refused: refused, userAgent: userAgent, transport, now: now)
         }
+    }
+
+    private func browser(_ reader: any BrowserSessionReading, sites: [String], refused: QuotaFingerprint?, userAgent: String,
+                         _ transport: any QuotaHTTPTransport, now: @Sendable () -> Int64) async -> FetchResult {
+        let nowMs = now()
+        let session = await withCheckedContinuation { continuation in
+            DispatchQueue.global(qos: .utility).async {
+                continuation.resume(returning: reader.session(sites: sites, nowMs: nowMs))
+            }
+        }
+        guard let session, QuotaVendorService.isHeaderSafe(session.cookie), QuotaVendorService.isHeaderSafe(session.userAgent)
+        else {
+            return FetchResult(route: route, credential: credential, outcome: .failure, skipped: .noSession)
+        }
+        let fingerprint = session.fingerprint
+        if fingerprint == refused {
+            return FetchResult(route: route, credential: fingerprint, outcome: .denied, skipped: .refused, site: session.site)
+        }
+        let request: QuotaHTTPRequest?
+        let parse: @Sendable (JSONValue, Int64) -> [QuotaWindow]?
+        if route == .qoder {
+            request = QuotaRequests.qoderCredits(cookie: session.cookie, site: session.site, userAgent: userAgent)
+            parse = { body, _ in body.object == nil ? nil : BrowserSessionCredits.qoderWindows(body) }
+        } else {
+            request = QuotaRequests.workBuddySummary(cookie: session.cookie, browserUserAgent: session.userAgent)
+            parse = { body, _ in BrowserSessionCredits.workBuddyWindows(body) }
+        }
+        guard let request else {
+            return FetchResult(route: route, credential: fingerprint, outcome: .failure, skipped: .noSession)
+        }
+        let plan = FetchPlan(route: route, credential: fingerprint, kind: .single(request, parse: parse))
+        var result = await plan.execute(transport, now: now)
+        result.site = session.site
+        return result
     }
 
     private func antigravity(_ servers: [AntigravityServer], userAgent: String, _ transport: any QuotaHTTPTransport,
