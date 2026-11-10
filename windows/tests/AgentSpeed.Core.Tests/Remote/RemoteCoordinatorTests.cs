@@ -35,12 +35,13 @@ public sealed class RemoteCoordinatorTests
             var snapshot = Volatile.Read(ref latest);
             return snapshot.State.Kind == MonitorStateKind.Running && snapshot.Today.Output == 340
                 && snapshot.Hosts.Select(h => h.Id).SequenceEqual([RemoteHost.LocalId, HostId]) && snapshot.Hosts[^1].IsConnected
-                && snapshot.Agents.Any(a => a.Id == agentId && a.Host == HostId);
+                && snapshot.Agents.Any(a => a.Id == agentId && a.Host == HostId)
+                // The host's source detection reaches the snapshot on its own turn, after its first agents.
+                && snapshot.Sources.Single(s => s.Kind == SourceKind.Codex).Available;
         }
 
         Assert.True(await WaitUntil(ShowsTheHost), Describe(Volatile.Read(ref latest)));
         Assert.Equal("devbox", latest.Hosts[^1].Name);
-        Assert.True(latest.Sources.Single(s => s.Kind == SourceKind.Codex).Available, "detected on the host");
         Assert.Equal([["codex", "claudeCode"]], relay.Starts);
         var run = relay.Transport.Runs[0];
         var arguments = run.Request.Arguments.ToList();
