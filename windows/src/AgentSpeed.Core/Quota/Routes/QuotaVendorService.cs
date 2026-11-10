@@ -374,7 +374,7 @@ public sealed partial class QuotaVendorService
         state.Settled = state.Status;
         if (result.Outcome != QuotaCadence.Outcome.Success)
         {
-            Log?.Invoke($"Quota request failed: {host} {(result.StatusCode is { } code ? code.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")}");
+            Log?.Invoke($"request failed: {host} {(result.StatusCode is { } code ? code.ToString(System.Globalization.CultureInfo.InvariantCulture) : "-")}");
         }
     }
 }
