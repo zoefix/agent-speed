@@ -20,10 +20,13 @@ public struct RemoteQuotaConfig: Equatable, Sendable {
 
     public static let off = RemoteQuotaConfig(sources: [], network: false, grokLive: false, claudeBridge: false)
 
-    /// The app-wide switches for one host: Claude Code is that host's own bridge switch.
-    public static func forHost(_ host: RemoteHost, switches: RemoteQuotaSwitches, networkEnabled: Bool) -> RemoteQuotaConfig {
+    /// The app-wide switches for one host: Claude Code is that host's own bridge switch. A source the app does not
+    /// read (`enabled`) reads no quota on the host either (QUOTAS 9.1); the bridge itself stays as the host's switch.
+    public static func forHost(_ host: RemoteHost, switches: RemoteQuotaSwitches, networkEnabled: Bool,
+                               enabled: Set<SourceKind>? = nil) -> RemoteQuotaConfig {
         var sources = switches.sources.subtracting([.claudeCode])
-        if host.quotaClaudeCli { sources.insert(.claudeCode) }
+        if host.quotaClaudeCli, switches.claudeCode { sources.insert(.claudeCode) }
+        if let enabled { sources.formIntersection(enabled) }
         return RemoteQuotaConfig(sources: sources, network: networkEnabled, grokLive: switches.grokLive && sources.contains(.grokBuild),
                                  claudeBridge: host.quotaClaudeCli)
     }
@@ -33,10 +36,13 @@ public struct RemoteQuotaConfig: Equatable, Sendable {
 public struct RemoteQuotaSwitches: Equatable, Sendable {
     public var sources: Set<SourceKind>
     public var grokLive: Bool
+    /// Claude Code is enabled: the hosts' bridges may report its quota.
+    public var claudeCode: Bool
 
-    public init(sources: Set<SourceKind> = [], grokLive: Bool = false) {
+    public init(sources: Set<SourceKind> = [], grokLive: Bool = false, claudeCode: Bool = true) {
         self.sources = sources
         self.grokLive = grokLive
+        self.claudeCode = claudeCode
     }
 }
 

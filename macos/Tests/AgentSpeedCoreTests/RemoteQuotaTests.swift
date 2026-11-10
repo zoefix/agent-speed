@@ -126,6 +126,23 @@ struct RemoteQuotaTests {
         #expect(on.claudeBridge && !on.network)
         let noGrok = RemoteQuotaConfig.forHost(plain, switches: RemoteQuotaSwitches(sources: [.codex], grokLive: true), networkEnabled: true)
         #expect(!noGrok.grokLive)
+        // A disabled source reads nothing on the host; the bridge stays the host's switch (QUOTAS 9.1).
+        let disabled = RemoteQuotaConfig.forHost(bridged, switches: switches, networkEnabled: true, enabled: [.codex, .claudeCode])
+        #expect(disabled.sources == [.codex, .claudeCode])
+        var noClaude = switches
+        noClaude.claudeCode = false
+        let claudeOff = RemoteQuotaConfig.forHost(bridged, switches: noClaude, networkEnabled: true)
+        #expect(!claudeOff.sources.contains(.claudeCode) && claudeOff.claudeBridge)
+    }
+
+    @Test func theHubSendsOnlyEnabledSources() throws {
+        let harness = try RemoteHubTests.Harness()
+        let host = RemoteHost(id: RemoteHubTests.a, destination: "alpha")
+        harness.hub.update(hosts: [host], networkEnabled: true, enabledSources: [.codex], priceTable: RemoteHubTests.prices,
+                           quota: RemoteQuotaSwitches(sources: [.codex, .kimi, .gemini]))
+        harness.settle()
+        let run = try #require(harness.runs("alpha").first)
+        #expect(run.writtenLines.first?["quota"]?["sources"]?.array?.compactMap(\.string) == ["codex"])
     }
 
     @Test func theHostFieldRoundTripsAndIsLeftOutWhileOff() throws {
@@ -216,20 +233,21 @@ struct RemoteQuotaTests {
         var host = RemoteHost(id: RemoteHubTests.a, destination: "alpha")
         host.quotaClaudeCli = true
         let switches = RemoteQuotaSwitches(sources: [.codex, .kimi], grokLive: false)
-        harness.hub.update(hosts: [host], networkEnabled: true, enabledSources: [.codex], priceTable: RemoteHubTests.prices,
-                           quota: switches)
+        harness.hub.update(hosts: [host], networkEnabled: true, enabledSources: [.codex, .claudeCode, .kimi],
+                           priceTable: RemoteHubTests.prices, quota: switches)
         harness.settle()
         let run = try #require(harness.runs("alpha").first)
         #expect(run.writtenLines.first?["quota"]?["sources"]?.array?.compactMap(\.string) == ["codex", "claudeCode", "kimi"])
         run.send(RelayLines.hello())
         run.send(RelayLines.ready)
         harness.settle()
-        harness.hub.update(hosts: [host], networkEnabled: true, enabledSources: [.codex], priceTable: RemoteHubTests.prices,
-                           quota: RemoteQuotaSwitches(sources: [.codex], grokLive: false))
+        harness.hub.update(hosts: [host], networkEnabled: true, enabledSources: [.codex, .claudeCode, .kimi],
+                           priceTable: RemoteHubTests.prices, quota: RemoteQuotaSwitches(sources: [.codex], grokLive: false))
         harness.settle()
         #expect(harness.runs("alpha").count == 1)
         #expect(run.writtenLines.last?["config"]?["sources"]?.array?.compactMap(\.string) == ["codex", "claudeCode"])
-        harness.hub.update(hosts: [], networkEnabled: true, enabledSources: [.codex], priceTable: RemoteHubTests.prices)
+        harness.hub.update(hosts: [], networkEnabled: true, enabledSources: [.codex, .claudeCode, .kimi],
+                           priceTable: RemoteHubTests.prices)
         #expect(harness.hub.retiringHostIds == [RemoteHubTests.a])
         #expect(harness.hub.connectedHostIds.isEmpty)
         harness.hub.retiringConnection(RemoteHubTests.a)?.sync {}

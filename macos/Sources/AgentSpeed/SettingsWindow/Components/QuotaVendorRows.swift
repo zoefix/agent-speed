@@ -5,13 +5,27 @@ import SwiftUI
 /// The phase 2 quota switches of Settings → Data Sources (DESIGN 5, *額度, phase 2*), after each group's source
 /// toggles: the hint, `settings.quota.unverified`, and while on the source's status line. Grok Build adds its live
 /// request indented under its log; ZCode its key field and region; Qoder and WorkBuddy ask before reading the
-/// browser's session.
+/// browser's session. While the source itself is off its quota rows are dimmed: nothing is read for it (QUOTAS 9.1).
 struct QuotaVendorSwitches: View {
     let folder: TranscriptFolder
     let model: AppModel
 
     var body: some View {
         let settings = model.settings
+        Group {
+            rows(settings)
+        }
+        .disabled(!sourceIsOn(settings))
+    }
+
+    /// Qoder's shared account counts while either Qoder source is on.
+    private func sourceIsOn(_ settings: AppSettings) -> Bool {
+        folder == .qoder ? settings.isEnabled(.qoder) || settings.isEnabled(.qoderCli)
+            : folder.sources.contains(where: settings.isEnabled)
+    }
+
+    @ViewBuilder
+    private func rows(_ settings: AppSettings) -> some View {
         switch folder {
         case .grokBuild:
             QuotaRouteRow(route: .grokBuild, model: model, title: "settings.quota.grokBuild", hint: "settings.quota.grokBuild.hint",

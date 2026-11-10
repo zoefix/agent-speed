@@ -73,8 +73,9 @@ extension QuotaController {
         if next != hostQuotas { hostQuotas = next }
     }
 
+    /// A disabled source shows no quota from any host either (QUOTAS 9.1).
     static func hostShows(_ source: SourceKind, host: RemoteHost, switches: RemoteQuotaSwitches) -> Bool {
-        source == .claudeCode ? host.quotaClaudeCli : switches.sources.contains(source)
+        source == .claudeCode ? host.quotaClaudeCli && switches.claudeCode : switches.sources.contains(source)
     }
 
     /// A host's quota lines in Dashboard → Hosts (DESIGN 13 *Host quotas*): every source with windows observed within

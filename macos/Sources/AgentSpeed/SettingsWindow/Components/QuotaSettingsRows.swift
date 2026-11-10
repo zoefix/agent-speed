@@ -15,9 +15,12 @@ struct QuotaSwitches: View {
         case .codex:
             QuotaToggleRow(title: l10n("settings.quota.codex"), hint: l10n("settings.quota.codex.hint"),
                            isOn: Binding(get: { settings.quotaCodex }, set: { settings.quotaCodex = $0 }))
+                .disabled(!settings.isEnabled(.codex))
         case .claude:
             QuotaToggleRow(title: l10n("settings.quota.claudeDesktop"), hint: l10n("settings.quota.claudeDesktop.hint"),
                            isOn: Binding(get: { settings.quotaClaudeDesktop }, set: { settings.quotaClaudeDesktop = $0 }))
+                .disabled(!settings.isEnabled(.claudeDesktop))
+            // The bridge stays switchable while Claude Code is off, so it can always be restored.
             ClaudeCliQuotaRow(model: model)
         default:
             QuotaVendorSwitches(folder: folder, model: model)

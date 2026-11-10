@@ -62,6 +62,11 @@ enum QuotaVendorPreviews {
         settings.networkEnabled = false
         write(settingsGroups(model), dark: false, to: directory, "quota2-settings-networkoff-light")
         settings.networkEnabled = true
+        // A source that is off reads and shows no quota: its quota rows dim (QUOTAS 9.1).
+        for source in [SourceKind.kimi, .workbuddy] { settings.setEnabled(source, false) }
+        write(browserGroups(model), dark: false, to: directory, "quota2-settings-source-off-light")
+        write(settingsGroups(model), dark: true, to: directory, "quota2-settings-source-off-dark")
+        for source in [SourceKind.kimi, .workbuddy] { settings.setEnabled(source, true) }
         for dark in [false, true] {
             write(statusGallery(model, now: now), dark: dark, to: directory, "quota2-status-lines-\(dark ? "dark" : "light")")
         }

@@ -9,6 +9,13 @@ public struct BrowserSession: Sendable {
     public var userAgent: String
     public var browser: BrowserKind
 
+    public init(site: String, cookie: String, userAgent: String, browser: BrowserKind) {
+        self.site = site
+        self.cookie = cookie
+        self.userAgent = userAgent
+        self.browser = browser
+    }
+
     /// The first 8 bytes of the SHA-256 of the header (QUOTAS 9.1): a new sign-in is a new account.
     public var fingerprint: QuotaFingerprint { QuotaFingerprint(cookie) }
 }

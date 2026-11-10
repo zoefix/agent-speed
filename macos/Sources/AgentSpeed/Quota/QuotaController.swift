@@ -89,12 +89,14 @@ final class QuotaController {
          desktopFolder: URL = DesktopQuotaReader.defaultFolder,
          userAgent: String = "AgentSpeed/\(UpdateConfiguration.bundleVersion) (macOS)",
          zcodeKeys: any ZcodeKeyStoring = KeychainZcodeKeyStore(),
-         vendorEnvironment: QuotaVendorEnvironment? = nil) {
+         vendorEnvironment: QuotaVendorEnvironment? = nil,
+         signInFiles: (codex: URL, claude: URL) = (QuotaSignIn.codexFile, QuotaSignIn.claudeFile)) {
         self.settings = settings
         self.store = store
         self.traffic = traffic
         self.zcodeKeys = zcodeKeys
-        worker = QuotaWorker(bridge: ClaudeStatusLineBridge(settings: claudeSettings, data: data), desktopFolder: desktopFolder)
+        worker = QuotaWorker(bridge: ClaudeStatusLineBridge(settings: claudeSettings, data: data), desktopFolder: desktopFolder,
+                             signInFiles: signInFiles)
         vendorService = QuotaVendorService(environment: vendorEnvironment
             ?? QuotaVendorEnvironment(userAgent: userAgent, zcodeKey: { zcodeKeys.read() }))
         minuteMs = Self.minute(Self.nowMs())
@@ -175,6 +177,7 @@ final class QuotaController {
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
             _ = (self.settings.quotaClaudeDesktop, self.settings.quotaClaudeCli, self.settings.quotaCodex)
+            _ = self.settings.enabledSources
             _ = (self.settings.quotaRoutes, self.settings.quotaZcodeRegion, self.settings.networkEnabled)
             DispatchQueue.main.async { [weak self] in
                 self?.readsLocalNext = true
@@ -227,12 +230,13 @@ final class QuotaController {
         let appsKnown = appsSeenMs.map { now - $0 < 60_000 } ?? false
         let request = QuotaWorker.Request(
             nowMs: now,
-            desktop: settings.quotaClaudeDesktop,
+            desktop: settings.showsQuota(.claudeDesktop),
             desktopRunning: apps.claudeDesktop || !appsKnown,
             desktopStarted: desktopStartedSinceLastRound(),
-            cli: settings.quotaClaudeCli,
+            cli: settings.showsQuota(.claudeCode),
             bridgeStatus: settings.quotaClaudeCli && everyMinute,
-            signIn: every15s && (settings.quotaCodex || settings.quotaClaudeCli),
+            codexSignIn: every15s && settings.showsQuota(.codex),
+            claudeSignIn: every15s && settings.showsQuota(.claudeCode),
             scanProcesses: every15s && tableApps == nil && (wantsCard || !settings.quotaRoutes.isEmpty)
         )
         roundInFlight = true
@@ -246,17 +250,23 @@ final class QuotaController {
 
     private func apply(_ result: QuotaWorker.Result) {
         roundInFlight = false
-        if let desktop = result.desktop, settings.quotaClaudeDesktop, self.desktop != desktop { self.desktop = desktop }
-        if !settings.quotaClaudeDesktop, desktop != nil { desktop = nil }
-        if let cli = result.cli, settings.quotaClaudeCli, self.cli != cli { self.cli = cli }
-        if let received = result.cliReceivedMs, settings.quotaClaudeCli, cliReceivedMs != received { cliReceivedMs = received }
-        if !settings.quotaClaudeCli {
+        let readsDesktop = settings.showsQuota(.claudeDesktop), readsCli = settings.showsQuota(.claudeCode)
+        if let desktop = result.desktop, readsDesktop, self.desktop != desktop { self.desktop = desktop }
+        if !readsDesktop, desktop != nil { desktop = nil }
+        if let cli = result.cli, readsCli, self.cli != cli { self.cli = cli }
+        if let received = result.cliReceivedMs, readsCli, cliReceivedMs != received { cliReceivedMs = received }
+        if !readsCli {
             if cli != nil { cli = nil }
             if cliReceivedMs != nil { cliReceivedMs = nil }
-            if bridgeStatus != nil { bridgeStatus = nil }
+        }
+        if !settings.quotaClaudeCli, bridgeStatus != nil { bridgeStatus = nil }
+        if let signedIn = result.signedIn {
+            var kept = signedIn
+            if !settings.showsQuota(.codex) { kept.remove(.codex) }
+            if !readsCli { kept.remove(.claudeCode) }
+            if self.signedIn != kept { self.signedIn = kept }
         }
         if let status = result.bridgeStatus { apply(status: status) }
-        if let signedIn = result.signedIn, self.signedIn != signedIn { self.signedIn = signedIn }
         if let apps = result.apps {
             applyApps(apps)
             appsSeenMs = Self.nowMs()

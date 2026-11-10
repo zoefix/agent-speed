@@ -282,9 +282,14 @@ final class AppSettings {
 
     static let inviteDismissed = "dismissed"
 
-    /// Whether a source's quota switch is on; only the quota sources have one (DESIGN 5 *額度*). Qoder's one switch
-    /// covers both Qoder sources.
+    /// Whether a source's quota is read and shown (QUOTAS 9.1): the source is enabled and its quota switch is on; only
+    /// the quota sources have one (DESIGN 5 *額度*). Qoder's one switch covers both Qoder sources, each row its own.
     func showsQuota(_ source: SourceKind) -> Bool {
+        isEnabled(source) && quotaSwitch(source)
+    }
+
+    /// The quota switch alone, whatever the source's toggle.
+    func quotaSwitch(_ source: SourceKind) -> Bool {
         switch source {
         case .codex: quotaCodex
         case .claudeDesktop: quotaClaudeDesktop
@@ -302,26 +307,26 @@ final class AppSettings {
         }
     }
 
-    /// The phase 2 readers whose switch is on (QUOTAS 9.1); Grok's live request only with its log's switch.
+    /// The phase 2 readers that may run (QUOTAS 9.1): the source enabled and its switch on; Grok's live request only
+    /// with its log's switch; Qoder's shared account while either Qoder source is enabled.
     var quotaRoutes: Set<QuotaRoute> {
-        var routes: Set<QuotaRoute> = []
-        if quotaGrokBuild { routes.insert(.grokBuild) }
-        if quotaGrokBuild && quotaGrokBuildLive { routes.insert(.grokBuildLive) }
-        if quotaDevin { routes.insert(.devin) }
-        if quotaAntigravity { routes.insert(.antigravity) }
-        if quotaKimi { routes.insert(.kimi) }
-        if quotaGemini { routes.insert(.gemini) }
-        if quotaDroid { routes.insert(.droid) }
-        if quotaZcode { routes.insert(.zcode) }
-        if quotaQoder { routes.insert(.qoder) }
-        if quotaWorkBuddy { routes.insert(.workbuddy) }
-        return routes
+        Set(QuotaRoute.allCases.filter(routeIsOn))
     }
 
-    /// The switches every remote host reads with (REMOTE 11.1); Claude Code is each host's own switch.
+    func routeIsOn(_ route: QuotaRoute) -> Bool {
+        switch route {
+        case .grokBuildLive: showsQuota(.grokBuild) && quotaGrokBuildLive
+        case .qoder: quotaQoder && (isEnabled(.qoder) || isEnabled(.qoderCli))
+        default: showsQuota(route.source)
+        }
+    }
+
+    /// The switches every remote host reads with (REMOTE 11.1): enabled sources only; Claude Code is each host's own
+    /// switch, and only while Claude Code is enabled.
     var remoteQuotaSwitches: RemoteQuotaSwitches {
         let sources = RemoteQuotaConfig.hostSources.filter { $0 != .claudeCode && showsQuota($0) }
-        return RemoteQuotaSwitches(sources: Set(sources), grokLive: quotaGrokBuild && quotaGrokBuildLive)
+        return RemoteQuotaSwitches(sources: Set(sources), grokLive: routeIsOn(.grokBuildLive),
+                                   claudeCode: isEnabled(.claudeCode))
     }
 
     /// The stored `barTraffic` value of builds before 性能 had its own switch (DESIGN 10).

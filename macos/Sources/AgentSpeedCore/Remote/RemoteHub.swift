@@ -81,7 +81,8 @@ public final class RemoteHub: @unchecked Sendable {
                 }
                 idleStatuses[host.id] = nil
                 var next = shared
-                next.quota = RemoteQuotaConfig.forHost(host, switches: quota, networkEnabled: networkEnabled)
+                next.quota = RemoteQuotaConfig.forHost(host, switches: quota, networkEnabled: networkEnabled,
+                                                       enabled: enabledSources)
                 if let existing = connections[host.id] {
                     let edited = connectedHosts[host.id]?.connectionIdentity != host.connectionIdentity
                     if edited || sourcesChanged {

@@ -55,6 +55,59 @@ struct QuotaPhaseTwoTests {
         #expect(defaults.dictionaryRepresentation().keys.allSatisfy { !$0.lowercased().contains("zcodekey") })
     }
 
+    /// QUOTAS 9.1: only an enabled source's quota is read or shown; Qoder's while either Qoder source is on.
+    @Test func aDisabledSourceHasNoRouteAndNoQuota() {
+        let suite = "QuotaPhaseTwoTests.disabled.\(UUID().uuidString)"
+        let defaults = UserDefaults(suiteName: suite)!
+        defaults.removePersistentDomain(forName: suite)
+        let settings = AppSettings(defaults: defaults)
+        settings.quotaQoder = true
+        settings.quotaGrokBuildLive = true
+        settings.setEnabled(.kimi, false)
+        settings.setEnabled(.grokBuild, false)
+        settings.setEnabled(.qoder, false)
+        #expect(!settings.quotaRoutes.contains(.kimi))
+        #expect(!settings.quotaRoutes.contains(.grokBuild) && !settings.quotaRoutes.contains(.grokBuildLive))
+        #expect(settings.quotaRoutes.contains(.qoder))
+        #expect(!settings.showsQuota(.kimi) && settings.quotaSwitch(.kimi))
+        #expect(!settings.showsQuota(.qoder) && settings.showsQuota(.qoderCli))
+        settings.setEnabled(.qoderCli, false)
+        #expect(!settings.quotaRoutes.contains(.qoder))
+        settings.setEnabled(.codex, false)
+        settings.setEnabled(.claudeCode, false)
+        #expect(!settings.showsQuota(.codex))
+        #expect(!settings.remoteQuotaSwitches.sources.contains(.codex))
+        #expect(!settings.remoteQuotaSwitches.sources.contains(.kimi))
+        #expect(!settings.remoteQuotaSwitches.claudeCode)
+    }
+
+    @Test func aDisabledSourceShowsNoQuotaFromAnyReader() {
+        let model = Self.model()
+        let readings = QuotaVendorReadings(routes: [
+            .kimi: QuotaRouteReading(snapshot: Self.kimi(), status: .ok(Self.now), signedIn: true),
+        ])
+        model.quota.preview(desktop: QuotaSnapshot(source: .claudeDesktop, observedMs: Self.now, windows: [
+            QuotaWindow(kind: .sevenDay, usedPercent: 10, resetsAtMs: nil),
+        ]), cli: nil, apps: QuotaApps(claudeDesktop: true, agents: [.kimi]), vendor: readings, nowMs: Self.now)
+        #expect(model.quota.lines(.kimi) != nil && model.quota.lines(.claudeDesktop) != nil)
+        model.settings.setEnabled(.kimi, false)
+        model.settings.setEnabled(.claudeDesktop, false)
+        #expect(model.quota.lines(.kimi) == nil && model.quota.lines(.claudeDesktop) == nil)
+        #expect(model.quota.listedSources.isEmpty)
+        #expect(model.quota.cardSnapshots(within: nil).isEmpty)
+        #expect(model.quota.status(.kimi) == nil)
+
+        var host = RemoteHost(id: Self.hostId, destination: "devbox")
+        host.quotaClaudeCli = true
+        model.settings.remoteHosts = RemoteHostsDocument(hosts: [host])
+        model.settings.setEnabled(.claudeCode, false)
+        model.quota.applyRemote(Self.report(QuotaSnapshot(source: .claudeCode, observedMs: Self.now, windows: [
+            QuotaWindow(kind: .fiveHour, usedPercent: 6, resetsAtMs: nil),
+        ])), hostId: Self.hostId)
+        model.quota.applyRemote(Self.report(Self.kimi()), hostId: Self.hostId)
+        #expect(model.quota.hostSnapshots(Self.hostId).isEmpty)
+    }
+
     @Test func vendorSnapshotsFollowTheirSwitchAndQoderServesBothRows() {
         let model = Self.model()
         model.settings.quotaQoder = true
