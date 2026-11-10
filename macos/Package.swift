@@ -85,7 +85,7 @@ let package = Package(
         ),
         .testTarget(
             name: "AgentSpeedAppTests",
-            dependencies: ["AgentSpeed", "AgentSpeedCore", "AgentSpeedCharacter"],
+            dependencies: ["AgentSpeed", "AgentSpeedCore", "AgentSpeedCharacter", "AgentSpeedStatusLineKit"],
             path: "Tests/AgentSpeedAppTests"
         ),
     ]
