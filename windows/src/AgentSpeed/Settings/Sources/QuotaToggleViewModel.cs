@@ -113,7 +113,23 @@ internal sealed class QuotaToggleViewModel : ObservableObject
     /// <summary>The status reads in the warning style (replaced, unreadable, failed).</summary>
     public bool IsWarning { get => _warning; private set => Set(ref _warning, value); }
 
-    public bool ShowsReconnect { get => _reconnect; private set => Set(ref _reconnect, value); }
+    public bool ShowsReconnect
+    {
+        get => _reconnect;
+        private set
+        {
+            if (Set(ref _reconnect, value))
+            {
+                OnPropertyChanged(nameof(ReconnectLink));
+                OnPropertyChanged(nameof(ReconnectGap));
+            }
+        }
+    }
+
+    /// <summary>The Reconnect link's text inside the status line, empty while it is not offered.</summary>
+    public string ReconnectLink => _reconnect ? ReconnectText : string.Empty;
+
+    public string ReconnectGap => _reconnect ? "   " : string.Empty;
 
     /// <summary>Connected with a quota file: the status line leads with a check.</summary>
     public bool IsConnected { get => _ok; private set => Set(ref _ok, value); }

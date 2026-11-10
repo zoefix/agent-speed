@@ -48,6 +48,15 @@ public sealed class StatuslineRunTests : IDisposable
     }
 
     [Fact]
+    public void InputWithAByteOrderMarkStillMerges()
+    {
+        using var stdin = new MemoryStream([0xEF, 0xBB, 0xBF, .. Encoding.UTF8.GetBytes(WithLimits)]);
+        using var stdout = new MemoryStream();
+        Assert.Equal(0, new StatuslineRun(_data, () => Now).Run(stdin, stdout));
+        Assert.Equal("5h 6% · 7d 86%\n", Encoding.UTF8.GetString(stdout.ToArray()));
+    }
+
+    [Fact]
     public void InputWithoutLimitsKeepsTheStoredLine()
     {
         Run(WithLimits);

@@ -207,6 +207,11 @@ internal sealed class QuotaService : IDisposable
                 _cliStatus = Bridge.Status();
                 Interlocked.Exchange(ref _bridgeCheckedMs, now);
             }
+            else if (_cliStatus is ClaudeCliBridgeStatus.Waiting or ClaudeCliBridgeStatus.Ok)
+            {
+                // Between the settings checks, the quota file (checked every 5 s) tells waiting from connected.
+                _cliStatus = _cli.FileTime is null ? ClaudeCliBridgeStatus.Waiting : ClaudeCliBridgeStatus.Ok;
+            }
         }
         else
         {
@@ -271,9 +276,18 @@ internal sealed class QuotaService : IDisposable
         }, DispatcherPriority.Background);
     }
 
-    /// <summary>QUOTAS 4.1 on Windows: <c>%APPDATA%\Claude</c>, and the Microsoft Store build's packaged copy (unverified).</summary>
+    /// <summary>
+    /// QUOTAS 4.1 on Windows: <c>%APPDATA%\Claude</c>, and the Microsoft Store build's packaged copy (unverified). The
+    /// developer variable <c>AGENT_SPEED_CLAUDE_CACHE_DIR</c> (a fully qualified local folder) replaces them for a test session.
+    /// </summary>
     private static IReadOnlyList<string> DesktopCacheFolders()
     {
+        if (Environment.GetEnvironmentVariable("AGENT_SPEED_CLAUDE_CACHE_DIR") is { Length: > 0 } test && Path.IsPathFullyQualified(test)
+            && !test.StartsWith(@"\\", StringComparison.Ordinal))
+        {
+            return [test];
+        }
+
         var folders = new List<string>
         {
             Path.Combine(Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData), "Claude", "Cache", "Cache_Data"),
@@ -312,7 +326,11 @@ internal sealed class QuotaService : IDisposable
     {
         _disposed = true;
         _timer.Dispose();
-        _presence?.Dispose();
+        lock (_gate)
+        {
+            // A poll still running finishes before the process listing goes away.
+            _presence?.Dispose();
+        }
     }
 }
 

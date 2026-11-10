@@ -36,12 +36,15 @@ internal static class ClaudeCliQuota
 
     private static readonly JsonDocumentOptions Tolerant = new() { MaxDepth = 64 };
 
+    /// <summary>Some shells pipe text with a UTF-8 byte order mark (Windows PowerShell); JSON is parsed without it.</summary>
+    public static ReadOnlySpan<byte> WithoutBom(ReadOnlySpan<byte> json) => json.StartsWith((ReadOnlySpan<byte>)[0xEF, 0xBB, 0xBF]) ? json[3..] : json;
+
     /// <summary>Reads a quota file; anything unreadable is an empty state.</summary>
     public static CliQuotaState Read(ReadOnlySpan<byte> json)
     {
         try
         {
-            using var document = JsonDocument.Parse(json.ToArray(), Tolerant);
+            using var document = JsonDocument.Parse(WithoutBom(json).ToArray(), Tolerant);
             var root = document.RootElement;
             if (root.ValueKind != JsonValueKind.Object || !root.TryGetProperty("version", out var version)
                 || version.ValueKind != JsonValueKind.Number || version.GetDouble() != 1)
@@ -112,7 +115,7 @@ internal static class ClaudeCliQuota
         changed = false;
         try
         {
-            using var document = JsonDocument.Parse(input.ToArray(), Tolerant);
+            using var document = JsonDocument.Parse(WithoutBom(input).ToArray(), Tolerant);
             return Merge(stored, document.RootElement, nowMs, out changed);
         }
         catch (JsonException)
@@ -211,7 +214,7 @@ internal static class ClaudeCliQuota
     {
         try
         {
-            using var document = JsonDocument.Parse(sidecar.ToArray(), Tolerant);
+            using var document = JsonDocument.Parse(WithoutBom(sidecar).ToArray(), Tolerant);
             var root = document.RootElement;
             return root.ValueKind == JsonValueKind.Object && root.TryGetProperty("statusLine", out var line) && line.ValueKind == JsonValueKind.Object
                 && line.TryGetProperty("type", out var type) && type.ValueKind == JsonValueKind.String && type.ValueEquals("command")

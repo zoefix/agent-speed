@@ -143,6 +143,10 @@ internal sealed partial class AppController
 
     internal void DismissCliInvitation() => _settings.Update(s => s with { Quota = s.Quota with { CliInviteDismissed = true } });
 
+    /// <summary>The bridge's open confirmation, for the developer capture's <c>dialog</c> request.</summary>
+    private static System.Windows.FrameworkElement? QuotaCaptureTarget() =>
+        System.Windows.Application.Current.Windows.OfType<ConfirmDialog>().FirstOrDefault()?.Content as System.Windows.FrameworkElement;
+
     /// <summary>A path under the home folder with <c>~</c> in its place.</summary>
     private static string AbbreviatedHome(string path)
     {
@@ -156,7 +160,8 @@ internal sealed partial class AppController
     /// Developer capture operations (only with <c>--capture-dir</c>): <c>quota-demo</c> (Claude Desktop 7d + Fable 7d, Claude
     /// Code 5h + 7d, Codex 7d, all running), <c>quota-demo-two</c> (Claude Desktop and Codex), <c>quota-demo-off</c>,
     /// <c>quota-cli-&lt;waiting|ok|replaced|unreadable|failed&gt;</c> (Settings' status line), <c>quota-cli-off</c>,
-    /// <c>quota-invite</c> (the dashboard's Claude Code invitation) and <c>quota-confirm</c> (the bridge's dialog, cancelled).
+    /// <c>quota-invite</c> (the dashboard's Claude Code invitation), <c>quota-confirm</c> (the bridge's dialog) and
+    /// <c>quota-cli-install</c> / <c>quota-cli-uninstall</c> (the bridge itself, without the dialog).
     /// </summary>
     private bool RunQuotaCaptureOperation(string op)
     {
@@ -184,12 +189,27 @@ internal sealed partial class AppController
                     CliStatus = ClaudeCliBridgeStatus.Off,
                 });
                 break;
+            case "quota-cli-install":
+                // The bridge as the Settings switch installs it, without the dialog (end-to-end checks on a test machine).
+                AppLog.Info($"Quota capture: install -> {quota.TurnOnBridge()}");
+                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = true } });
+                break;
+            case "quota-cli-uninstall":
+                DisableClaudeCliQuota();
+                break;
             case "quota-cli-off":
                 _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = false } });
                 _settingsModel?.SourcesPane.ShowCliFailure(null);
                 break;
             case "quota-confirm":
                 _ui.BeginInvoke(() => EnableClaudeCliQuota());
+                break;
+            case "quota-confirm-cancel":
+                foreach (var dialog in System.Windows.Application.Current.Windows.OfType<ConfirmDialog>().ToList())
+                {
+                    dialog.Close();
+                }
+
                 break;
             case "quota-cli-unreadable" or "quota-cli-failed":
                 _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = false } });

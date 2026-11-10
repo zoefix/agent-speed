@@ -181,6 +181,33 @@ public sealed class QuotaCardTests
     }
 
     [Fact]
+    public void AWarmFrameWithTheCardAllocatesNoMoreThanWithout()
+    {
+        static long Allocated(OrbQuotaCard card)
+        {
+            var (orb, _) = Run(148, card);
+            var time = 20.0;
+            for (var n = 0; n < 60; n++, time += 1 / 60.0)
+            {
+                orb.Render(time);
+            }
+
+            var before = GC.GetAllocatedBytesForCurrentThread();
+            for (var n = 0; n < 240; n++, time += 1 / 60.0)
+            {
+                orb.Render(time);
+            }
+
+            return GC.GetAllocatedBytesForCurrentThread() - before;
+        }
+
+        var without = Allocated(OrbQuotaCard.Empty);
+        var with = Allocated(OrbQuotaCard.Of(State(), _ => true, Now, En, TimeZoneInfo.Utc));
+        // Its texts are shared strings: a warm frame adds at most a few bytes for the card.
+        Assert.True(with - without <= 240 * 64, $"{with} B with the card, {without} B without over 240 frames");
+    }
+
+    [Fact]
     public void TheOrbSpeaksTheQuotaLast()
     {
         var card = OrbQuotaCard.Of(State(), _ => true, Now, En);

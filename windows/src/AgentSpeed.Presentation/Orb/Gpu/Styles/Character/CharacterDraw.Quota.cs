@@ -27,6 +27,9 @@ public sealed partial class CharacterDraw
 
     private readonly OrbQuotaMotion _quota = new();
     private QuotaForm _quotaForm = QuotaForm.Full;
+    private IReadOnlyList<OrbQuotaSource>? _quotaSynced;
+    private IReadOnlyList<OrbQuotaSource> _quotaFirst = [];
+    private bool _quotaSmall;
 
     /// <summary>The 額度 card's lines this frame (tests).</summary>
     public OrbQuotaMotion QuotaLines => _quota;
@@ -40,10 +43,24 @@ public sealed partial class CharacterDraw
     /// <summary>Below S = 96 the card lists its first source without reset cells (DESIGN 2a.6, LOD).</summary>
     private void SyncQuota(OrbGpuContext ctx, in OrbFrame frame)
     {
-        var sources = QuotaLive ? Content?.Quota.Sources ?? [] : [];
-        if (IsSmall(ctx) && sources.Count > 1)
+        // The content keeps its list while it does not change, so a warm frame syncs (and allocates) nothing.
+        IReadOnlyList<OrbQuotaSource> sources = QuotaLive ? Content?.Quota.Sources ?? [] : [];
+        var small = IsSmall(ctx);
+        if (ReferenceEquals(sources, _quotaSynced) && small == _quotaSmall && !_quota.HasLeaving)
         {
-            sources = [sources[0]];
+            return;
+        }
+
+        _quotaSynced = sources;
+        _quotaSmall = small;
+        if (small && sources.Count > 1)
+        {
+            if (_quotaFirst.Count != 1 || !ReferenceEquals(_quotaFirst[0], sources[0]))
+            {
+                _quotaFirst = [sources[0]];
+            }
+
+            sources = _quotaFirst;
         }
 
         _quota.Sync(sources, frame.Time, frame.Effects.ReduceMotion, atOnce: _wings.Presence[(int)HudCard.Quota] == 0);
@@ -57,8 +74,10 @@ public sealed partial class CharacterDraw
     {
         double label = 0, reset = 0, header = 0;
         var small = QuotaSmall(m);
-        foreach (var source in _quota.Sources)
+        var all = _quota.Sources;
+        for (var i = 0; i < all.Count; i++)
         {
+            var source = all[i];
             if (source.Alpha(time) <= 0.01 && source.Leaving)
             {
                 continue;
@@ -143,8 +162,10 @@ public sealed partial class CharacterDraw
 
         var height = 0.0;
         var any = false;
-        foreach (var source in _quota.Sources)
+        var all = _quota.Sources;
+        for (var i = 0; i < all.Count; i++)
         {
+            var source = all[i];
             var share = Easing.SmoothStep(0, 1, source.Alpha(time));
             if (share <= 0)
             {
@@ -197,8 +218,10 @@ public sealed partial class CharacterDraw
         var resetLeft = percentRight + 0.4 * m.T;
         var thickness = 0.26 * m.T;
         var any = false;
-        foreach (var source in _quota.Sources)
+        var all = _quota.Sources;
+        for (var i = 0; i < all.Count; i++)
         {
+            var source = all[i];
             var alpha = source.Alpha(time);
             var share = Easing.SmoothStep(0, 1, alpha);
             if (share <= 0 || source.Windows.Count == 0)

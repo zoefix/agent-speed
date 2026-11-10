@@ -73,6 +73,9 @@ internal sealed class QuotaLinePanel : Panel
             }
         }));
 
+    /// <summary>The children's natural widths (label, percent cell, reset) from the last measure.</summary>
+    private (double Label, double Percent, double Reset) _natural;
+
     public QuotaLinePanel()
     {
         Unloaded += (_, _) => Columns?.Forget(this);
@@ -87,9 +90,9 @@ internal sealed class QuotaLinePanel : Panel
     private (double Label, double Bar, double Percent, double Reset) Widths(double available)
     {
         var columns = Columns;
-        var label = Math.Max(columns?.Label ?? 0, Desired(0));
-        var percent = Math.Max(columns?.Percent ?? 0, Desired(2));
-        var reset = Math.Max(columns?.Reset ?? 0, Desired(3));
+        var label = Math.Max(columns?.Label ?? 0, _natural.Label);
+        var percent = Math.Max(columns?.Percent ?? 0, _natural.Percent);
+        var reset = Math.Max(columns?.Reset ?? 0, _natural.Reset);
         var fixedPart = label + percent + 3 * Gap;
         var bar = Math.Max(MinBar, available - fixedPart - reset);
         var resetRoom = Math.Max(0, available - fixedPart - bar);
@@ -108,11 +111,8 @@ internal sealed class QuotaLinePanel : Panel
             height = Math.Max(height, InternalChildren[i].DesiredSize.Height);
         }
 
-        if (IsLoaded || IsVisible)
-        {
-            Columns?.Report(this, Desired(0), Desired(2), Desired(3));
-        }
-
+        _natural = (Desired(0), Desired(2), Desired(3));
+        Columns?.Report(this, _natural.Label, _natural.Percent, _natural.Reset);
         var available = double.IsFinite(availableSize.Width) ? availableSize.Width : MinBar * 3;
         var widths = Widths(available);
         if (InternalChildren.Count > 3)

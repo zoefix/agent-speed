@@ -105,8 +105,10 @@ public static class QuotaText
             : loc.Format("a11y.quota.windowNoReset", window.Label, window.Percent);
     }
 
-    /// <summary>The percent text: <c>23%</c> in every language.</summary>
-    public static string Percent(int percent) => Whole(percent) + "%";
+    private static readonly string[] Percents = [.. Enumerable.Range(0, 101).Select(i => Whole(i) + "%")];
+
+    /// <summary>The percent text: <c>23%</c> in every language (shared strings: the orb draws them every frame).</summary>
+    public static string Percent(int percent) => percent is >= 0 and <= 100 ? Percents[percent] : Whole(percent) + "%";
 
     private static string Duration(long ms, Localizer loc)
     {

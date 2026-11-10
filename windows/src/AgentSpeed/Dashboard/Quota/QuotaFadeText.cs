@@ -47,6 +47,18 @@ internal sealed class QuotaFadeText : Grid
 
     public bool ReduceMotion { get => (bool)GetValue(ReduceMotionProperty); set => SetValue(ReduceMotionProperty, value); }
 
+    /// <summary>A right-aligned text (the percent) crossfades on its right edge.</summary>
+    protected override void OnPropertyChanged(DependencyPropertyChangedEventArgs e)
+    {
+        base.OnPropertyChanged(e);
+        if (e.Property == HorizontalAlignmentProperty)
+        {
+            var right = HorizontalAlignment == HorizontalAlignment.Right ? HorizontalAlignment.Right : HorizontalAlignment.Left;
+            _shown.HorizontalAlignment = right;
+            _leaving.HorizontalAlignment = right;
+        }
+    }
+
     private static TextBlock NewText() => new()
     {
         TextTrimming = TextTrimming.CharacterEllipsis,

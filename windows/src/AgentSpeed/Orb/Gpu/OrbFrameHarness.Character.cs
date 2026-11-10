@@ -138,7 +138,8 @@ internal static partial class OrbFrameHarness
 
     /// <summary>
     /// The 額度 card (DESIGN 2a.6) at 148 and 92 pt with two sources (Claude Desktop 7d + Fable 7d, Codex 7d) and three
-    /// (Claude Code 5h + 7d too), at a calm speed so the column is short: <c>character-quota-ID-dark|light.png</c>.
+    /// (Claude Code 5h + 7d too), at rest so the live cards are quiet (below S = 96 the column keeps two cards):
+    /// <c>character-quota-ID-dark|light.png</c>.
     /// </summary>
     private static void CharacterQuotaSheets(GpuDevice device, OffscreenTarget target, CharacterPack pack, double scale, OrbReadoutStrings strings,
         string info, Localizer loc, string directory)
@@ -154,7 +155,7 @@ internal static partial class OrbFrameHarness
                 var row = new List<BitmapSource>();
                 foreach (var card in new[] { two, three })
                 {
-                    var (bitmap, _) = CharacterStill(device, target, pack, size, scale, dark, Redline * 0.05, strings, info, loc, 4.0,
+                    var (bitmap, _) = CharacterStill(device, target, pack, size, scale, dark, 0, strings, info, loc, 4.0,
                         EffectsIntensity.Standard, quota: card);
                     if (bitmap is not null)
                     {

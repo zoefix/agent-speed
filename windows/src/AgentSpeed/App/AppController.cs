@@ -320,7 +320,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
                     if (target == "dialog")
                     {
-                        return LanCaptureTarget() ?? RemoteCaptureTarget(target);
+                        return LanCaptureTarget() ?? QuotaCaptureTarget() ?? RemoteCaptureTarget(target);
                     }
 
                     if (target == "history")

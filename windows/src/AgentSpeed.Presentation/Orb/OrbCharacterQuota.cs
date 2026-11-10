@@ -251,9 +251,45 @@ public sealed class OrbQuotaMotion
         }
     }
 
-    public bool IsMoving(double time) =>
-        _sources.Any(s => (time >= s.AppearAt && time < s.AppearAt + SourceFade) || (s.LeaveAt is { } l && time < l + SourceFade)
-            || s.Windows.Any(w => w.IsMoving(time)));
+    /// <summary>A source is still fading out (it leaves the list at the next sync after its fade).</summary>
+    public bool HasLeaving
+    {
+        get
+        {
+            for (var i = 0; i < _sources.Count; i++)
+            {
+                if (_sources[i].Leaving)
+                {
+                    return true;
+                }
+            }
+
+            return false;
+        }
+    }
+
+    /// <summary>Something fades, glides or eases at <paramref name="time"/> (no allocation: checked every frame).</summary>
+    public bool IsMoving(double time)
+    {
+        for (var i = 0; i < _sources.Count; i++)
+        {
+            var s = _sources[i];
+            if ((time >= s.AppearAt && time < s.AppearAt + SourceFade) || (s.LeaveAt is { } l && time < l + SourceFade))
+            {
+                return true;
+            }
+
+            for (var k = 0; k < s.Windows.Count; k++)
+            {
+                if (s.Windows[k].IsMoving(time))
+                {
+                    return true;
+                }
+            }
+        }
+
+        return false;
+    }
 
     private static double Ramp(double time, double start, double duration) => Math.Clamp((time - start) / duration, 0, 1);
 }
