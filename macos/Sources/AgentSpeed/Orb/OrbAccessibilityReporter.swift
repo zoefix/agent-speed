@@ -172,14 +172,13 @@ final class OrbAccessibilityReporter {
     /// network speed, the cost rate, then the running models.
     private func characterSentence(_ l10n: Localizer) -> String? {
         guard let readings = runtime.feed.characterReadings, !runtime.isUnavailable else { return nil }
-        // Below S = 96 the models card keeps two rows (DESIGN 2a.6, LOD); accessibility reads what it shows.
-        let parts = Self.characterParts(readings, small: runtime.config.size < 96, currency: model.cost.currencyName, l10n)
+        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n)
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，")
     }
 
     /// The sentences of `characterSentence`, one per card that shows.
-    static func characterParts(_ readings: OrbCharacterReadings, small: Bool, currency: String, _ l10n: Localizer,
+    static func characterParts(_ readings: OrbCharacterReadings, currency: String, _ l10n: Localizer,
                                now: TimeInterval = Clock.now) -> [String] {
         let on = readings.readouts
         var parts: [String] = []
@@ -199,9 +198,7 @@ final class OrbAccessibilityReporter {
                 : l10n("a11y.board.cost", money.atLeast ? l10n("a11y.orb.costAtLeast", money.number) : money.number,
                        currency))
         }
-        if readings.modelsLoud, on.models,
-           let models = CharacterReadoutText.modelsSentence(readings.models,
-                                                            limit: CharacterReadoutText.rowLimit(small: small), l10n) {
+        if readings.modelsLoud, on.models, let models = CharacterReadoutText.modelsSentence(readings.models, l10n) {
             parts.append(models)
         }
         return parts

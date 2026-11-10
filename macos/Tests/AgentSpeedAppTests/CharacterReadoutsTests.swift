@@ -115,10 +115,15 @@ struct CharacterReadoutsTests {
         #expect(dynamics.latencyPresence == 0)
     }
 
+    /// The cards with room for the names in full.
     static func cards(_ content: OrbCharacterContent, small: Bool = false) -> CharacterCards {
         var dynamics = CharacterCardDynamics()
         dynamics.update(1 / 60, character: content, small: small, instant: true)
         let frame = CharacterCardsTests.frame(CharacterCardsTests.readings(), readouts: content.readouts)
+        let probe = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
+        if let measure = probe.modelsMeasure() {
+            dynamics.fitNames(1 / 60, room: 1000, measure: measure, t: probe.m.t, spare: 0, snap: true)
+        }
         return CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
     }
 
@@ -143,14 +148,103 @@ struct CharacterReadoutsTests {
         #expect(Self.cards(Self.content([])).size(.models, model: nil).w == 0)
     }
 
+    @Test func displayNamesDropATrailingDate() {
+        #expect(CharacterReadoutText.displayName("claude-sonnet-4-5-20250929") == "claude-sonnet-4-5")
+        #expect(CharacterReadoutText.displayName("gpt-4o-2024-08-06") == "gpt-4o")
+        #expect(CharacterReadoutText.displayName("o3-20250416") == "o3")
+        #expect(CharacterReadoutText.displayName("gpt-6.1-sol") == "gpt-6.1-sol")
+        #expect(CharacterReadoutText.displayName("claude-opus-4-5") == "claude-opus-4-5")
+        #expect(CharacterReadoutText.displayName("qwen3-coder-480b-a35b") == "qwen3-coder-480b-a35b")
+        #expect(CharacterReadoutText.displayName("model-202509") == "model-202509", "not a date")
+        #expect(CharacterReadoutText.displayName("model-2025-0929") == "model-2025-0929")
+        #expect(CharacterReadoutText.displayName("model_20250929") == "model_20250929")
+        #expect(CharacterReadoutText.displayName("-20250929") == "-20250929", "nothing left without the date")
+        #expect(CharacterReadoutText.displayName("20250929") == "20250929")
+    }
+
     @Test(.enabled(if: OrbGPU.shared != nil))
-    func longModelIdsAreCutInTheMiddle() {
-        let id = "accounts/fireworks/models/qwen3-coder-480b-a35b-instruct"
+    func longNamesAreCutAtTheirEnd() {
+        let id = "accounts/fireworks/models/qwen3-coder-480b-a35b-instruct-20250731"
         let cards = Self.cards(Self.content([CharacterModelLine(id: id, speed: "88", hasSpeed: true, accent: nil)]))
-        let shown = cards.modelsName(id)
-        #expect(shown.contains("…") && shown.hasPrefix("acc") && shown.hasSuffix("uct"))
-        #expect(CharacterTextFit.measure(shown, style: cards.m.label(cards.m.t), language: .zhHant) <= 9 * cards.m.t)
-        #expect(cards.modelsName("gpt-6.1-sol") == "gpt-6.1-sol")
+        let width = 9 * cards.m.t
+        let shown = cards.modelsName(id, width: width)
+        #expect(shown.hasSuffix("…") && shown.hasPrefix("accounts/fire") && !shown.contains("2025"))
+        #expect(CharacterTextFit.measure(shown, style: cards.m.label(cards.m.t), language: .zhHant) <= width)
+        #expect(cards.modelsName("claude-sonnet-4-5-20250929", width: 20 * cards.m.t) == "claude-sonnet-4-5")
+        #expect(cards.modelsName("gpt-6.1-sol", width: width) == "gpt-6.1-sol")
+        #expect(cards.modelsName("claude-sonnet-4-5-20250929", width: 4 * cards.m.t).hasPrefix("cla"))
+    }
+
+    /// The models card fitted to `room` (points from its left edge to the orb's edge).
+    static func fitted(_ lines: [CharacterModelLine], room: Double, small: Bool = false) -> CharacterCards {
+        let content = Self.content(lines)
+        var dynamics = CharacterCardDynamics()
+        dynamics.update(1 / 60, character: content, small: small, instant: true)
+        let frame = CharacterCardsTests.frame(CharacterCardsTests.readings(), readouts: content.readouts)
+        let probe = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
+        if let measure = probe.modelsMeasure() {
+            dynamics.fitNames(1 / 60, room: room, measure: measure, t: probe.m.t, spare: 11.84, snap: true)
+        }
+        return CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
+    }
+
+    @Test(.enabled(if: OrbGPU.shared != nil))
+    func theNamesNarrowFromNineToFourTThenTheRowsKeepTheDotsAndSpeeds() throws {
+        let lines = [CharacterModelLine(id: "claude-sonnet-4-5-20250929", speed: "142", hasSpeed: true, accent: nil),
+                     CharacterModelLine(id: "deepseek-v4-pro-max-preview", speed: "74", hasSpeed: true, accent: nil)]
+        let wide = Self.fitted(lines, room: 400)
+        let t = wide.m.t
+        let measure = try #require(wide.modelsMeasure())
+        #expect(wide.dynamics.nameWidth == min(9 * t, measure.natural))
+        let full = wide.size(.models, model: nil).w
+        #expect(abs(full - (Double(measure.rest) + Double(wide.dynamics.nameWidth ?? 0))) < 0.01)
+        // Room for names of 5 t: they narrow in half-t steps.
+        let narrow = Self.fitted(lines, room: Double(measure.rest + 5.2 * t))
+        #expect(narrow.dynamics.nameWidth == 5 * t)
+        #expect(narrow.size(.models, model: nil).w < full - 20)
+        // Less than 4 t: no names, the dots and the speeds.
+        let dots = Self.fitted(lines, room: Double(measure.rest + 3.9 * t))
+        #expect(dots.dynamics.nameWidth == nil)
+        let size = dots.size(.models, model: nil)
+        #expect(abs(size.w - Double(measure.narrowest)) < 0.01)
+        var scene = OrbScene(capacity: 64)
+        dots.draw(.models, at: HudWings.Place(x: 200, y: 200, scale: 1, spin: 0, alpha: 1), size: size, model: nil,
+                  right: true, into: &scene)
+        #expect(scene.texts.count == 3 + 2 + 1, "the digits of 142 and 74 and the unit once; no names")
+        for text in scene.texts where text.texture.size.height >= 5 {
+            let left = CGFloat(text.instance.rect.x) + text.texture.padding
+            #expect(left >= 200 - size.w / 2 + 1 && left + text.texture.advance <= 200 + size.w / 2 - 1)
+        }
+    }
+
+    @Test(.enabled(if: OrbGPU.shared != nil))
+    func increaseContrastMarksEveryModelInTheHighlightColor() {
+        func dots(contrast: Bool) -> (colors: [SIMD4<Float>], dark: Bool) {
+            let content = Self.content(Self.lines(2))
+            var dynamics = CharacterCardDynamics()
+            dynamics.update(1 / 60, character: content, small: false, instant: true)
+            let frame = CharacterCardsTests.frame(CharacterCardsTests.readings(), contrast: contrast)
+            let probe = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
+            if let measure = probe.modelsMeasure() {
+                dynamics.fitNames(1 / 60, room: 1000, measure: measure, t: probe.m.t, spare: 0, snap: true)
+            }
+            let cards = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
+            var scene = OrbScene(capacity: 64)
+            let size = cards.size(.models, model: nil)
+            cards.draw(.models, at: HudWings.Place(x: 200, y: 200, scale: 1, spin: 0, alpha: 1), size: size, model: nil,
+                       right: true, into: &scene)
+            let circles = scene.instances.filter { $0.a.w == OrbInstance.Shape.circle.rawValue }.map(\.color)
+            return (circles, frame.dark)
+        }
+        func same(_ a: SIMD4<Float>, _ b: SIMD4<Float>) -> Bool {
+            abs(a.x - b.x) < 0.01 && abs(a.y - b.y) < 0.01 && abs(a.z - b.z) < 0.01
+        }
+        let plain = dots(contrast: false)
+        #expect(plain.colors.count == 2)
+        #expect(same(plain.colors[0], RGBColor(hex: 0xD97757).simd), "the vendor's theme color")
+        let high = dots(contrast: true)
+        let highlight = CharacterHighlight.color(dark: high.dark).simd
+        #expect(high.colors.count == 2 && high.colors.allSatisfy { same($0, highlight) })
     }
 
     @Test(.enabled(if: OrbGPU.shared != nil))
@@ -205,7 +299,7 @@ struct CharacterReadoutsTests {
         let l10n = Localizer(preference: .en)
         let models = [OrbModelReading(model: "gpt-6.1-sol", speed: 106, vendor: nil),
                       OrbModelReading(model: "gemini-4-argon", speed: nil, vendor: nil)]
-        let parts = OrbAccessibilityReporter.characterParts(Self.readings(models: models, latency: 1050), small: false,
+        let parts = OrbAccessibilityReporter.characterParts(Self.readings(models: models, latency: 1050),
                                                             currency: "US dollars", l10n, now: 100)
         #expect(parts.count == 5)
         #expect(parts[0].hasPrefix("performance"))
@@ -213,18 +307,19 @@ struct CharacterReadoutsTests {
         #expect(parts[4] == "running models: gpt-6.1-sol at 106 tokens per second, gemini-4-argon")
         var off = Self.readings(models: models, latency: 1050)
         off.readouts = CharacterReadouts(latency: false, models: false)
-        let quiet = OrbAccessibilityReporter.characterParts(off, small: false, currency: "US dollars", l10n, now: 100)
+        let quiet = OrbAccessibilityReporter.characterParts(off, currency: "US dollars", l10n, now: 100)
         #expect(quiet.count == 3 && !quiet.contains { $0.contains("latency") || $0.contains("running") })
     }
 
-    @Test func accessibilityReadsTheRowsTheCardShows() {
+    @Test func accessibilityReadsEveryRunningModelByItsFullId() {
         let l10n = Localizer(preference: .zhHant)
-        let models = (0..<5).map { OrbModelReading(model: "m\($0)", speed: 100 - $0, vendor: nil) }
-        #expect(CharacterReadoutText.modelsSentence(models, limit: 4, l10n)
-            == "執行中的模型：m0 每秒 100 個 token、m1 每秒 99 個 token、m2 每秒 98 個 token、m3 每秒 97 個 token、+1 個模型")
-        #expect(CharacterReadoutText.modelsSentence(Array(models.prefix(3)), limit: 2, l10n)
-            == "執行中的模型：m0 每秒 100 個 token、m1 每秒 99 個 token、+1 個模型")
-        #expect(CharacterReadoutText.modelsSentence([], limit: 4, l10n) == nil)
+        var models = (0..<5).map { OrbModelReading(model: "m\($0)", speed: 100 - $0, vendor: nil) }
+        models[0].model = "claude-sonnet-4-5-20250929"
+        models[4].speed = nil
+        #expect(CharacterReadoutText.modelsSentence(models, l10n)
+            == "執行中的模型：claude-sonnet-4-5-20250929 每秒 100 個 token、m1 每秒 99 個 token、m2 每秒 98 個 token、"
+            + "m3 每秒 97 個 token、m4")
+        #expect(CharacterReadoutText.modelsSentence([], l10n) == nil)
     }
 
     // MARK: Menus

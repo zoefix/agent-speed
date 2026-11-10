@@ -37,15 +37,28 @@ enum CharacterReadoutText {
     /// How many model rows the card shows: 4, or 2 below S = 96 (DESIGN 2a.6, LOD).
     nonisolated static func rowLimit(small: Bool) -> Int { small ? 2 : 4 }
 
-    /// `a11y.orb.models`: one `a11y.orb.modelSpeed` per row the card shows (the model alone while it has no speed),
-    /// joined by `list.separator`, then the card's `+N` line when it has one.
-    @MainActor
-    static func modelsSentence(_ rows: [OrbModelReading], limit: Int, _ l10n: Localizer) -> String? {
-        guard !rows.isEmpty else { return nil }
-        var parts = rows.prefix(limit).map { row in
-            row.speed.map { l10n("a11y.orb.modelSpeed", row.model, String($0)) } ?? row.model
+    /// A model's display name: its id without a trailing date, `-YYYYMMDD` or `-YYYY-MM-DD`
+    /// (`claude-sonnet-4-5-20250929` → `claude-sonnet-4-5`); an id that is only a date stays as it is.
+    nonisolated static func displayName(_ id: String) -> String {
+        let bytes = Array(id.utf8)
+        let n = bytes.count
+        func digits(_ range: Range<Int>) -> Bool { range.allSatisfy { bytes[$0] >= 0x30 && bytes[$0] <= 0x39 } }
+        func dash(_ k: Int) -> Bool { bytes[k] == 0x2D }
+        if n > 9, dash(n - 9), digits(n - 8..<n) {
+            return String(decoding: bytes[..<(n - 9)], as: UTF8.self)
         }
-        if rows.count > limit { parts.append(more(rows.count - limit, language: l10n.language)) }
+        if n > 11, dash(n - 11), digits(n - 10..<n - 6), dash(n - 6), digits(n - 5..<n - 3), dash(n - 3), digits(n - 2..<n) {
+            return String(decoding: bytes[..<(n - 11)], as: UTF8.self)
+        }
+        return id
+    }
+
+    /// `a11y.orb.models`: one `a11y.orb.modelSpeed` per running model, drawn or not, by its full id (the model alone
+    /// while it has no speed), joined by `list.separator`.
+    @MainActor
+    static func modelsSentence(_ rows: [OrbModelReading], _ l10n: Localizer) -> String? {
+        guard !rows.isEmpty else { return nil }
+        let parts = rows.map { row in row.speed.map { l10n("a11y.orb.modelSpeed", row.model, String($0)) } ?? row.model }
         return l10n("a11y.orb.models", parts.joined(separator: l10n("list.separator")))
     }
 }

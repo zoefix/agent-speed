@@ -3,51 +3,76 @@ import AppKit
 import CoreText
 
 /// The models card (DESIGN 2a.6, *Models*): one row per running model, fastest first — the vendor's accent dot, the
-/// model id at `t` in the value token (truncated in the middle beyond `9 t`) and its whole tok/s at the trailing edge
-/// in tabular digits, the unit once after the first row's number; at most four rows (two below S = 96) and a secondary
-/// `+N` line. Rows glide and fade as `CharacterCardDynamics` moves them.
+/// model's display name at `t` in the value token (cut at its end to the name width) and its whole tok/s at the
+/// trailing edge in tabular digits, the unit once after the first row's number; at most four rows (two below S = 96)
+/// and a secondary `+N` line. The name width follows the room (`HudNameWidth`, kept in `CharacterCardDynamics`);
+/// without names the rows keep the dot and the speed. Rows glide and fade as the dynamics move them.
 extension CharacterCards {
+    /// The card's columns: names (zero without them), numbers, the unit's cell, the `+N` line, and its height in rows.
     struct ModelsLayout {
         var names: CGFloat
         var numbers: CGFloat
-        /// The unit's cell (gap included); zero when the first row has no speed.
         var unit: CGFloat
+        var more: CGFloat
         var rows: Double
+    }
+
+    /// What the name width is fitted from: the widest name in full, the card's width without its names, and its
+    /// narrowest width (no names).
+    struct ModelsMeasure {
+        var natural: CGFloat
+        var rest: CGFloat
+        var narrowest: CGFloat
     }
 
     var modelsDot: CGFloat { 0.62 * m.t }
     var modelsDotGap: CGFloat { 0.42 * m.t }
-    var modelsNumberGap: CGFloat { 0.9 * m.t }
+    var modelsNameGap: CGFloat { 0.9 * m.t }
     var modelsRowGap: CGFloat { 0.3 * m.t }
-    var modelsNameWidth: CGFloat { 9 * m.t }
+    var moreText: String { CharacterReadoutText.more(dynamics.moreCount, language: language) }
 
-    /// The model id as drawn: whole up to `9 t`, else cut in the middle.
-    func modelsName(_ id: String) -> String {
-        CharacterTextFit.middle(id, style: m.label(m.t), language: language, width: modelsNameWidth)
+    /// A model's display name as drawn in `width`.
+    func modelsName(_ id: String, width: CGFloat) -> String {
+        CharacterTextFit.tail(CharacterReadoutText.displayName(id), style: m.label(m.t), language: language, width: width)
     }
 
-    func modelsLayout() -> ModelsLayout? {
+    private func columns() -> (natural: CGFloat, numbers: CGFloat, unit: CGFloat, more: CGFloat)? {
         let rows = dynamics.modelRows.rows
         guard !rows.isEmpty else { return nil }
-        var names: CGFloat = 0, numbers: CGFloat = 0
+        var natural: CGFloat = 0, numbers: CGFloat = 0, more: CGFloat = 0
         for row in rows where row.presence > 0 {
             if row.id == CharacterCardDynamics.moreId {
-                names = max(names, advance(moreText, m.unit(m.t)))
+                more = advance(moreText, m.unit(m.t))
             } else if let line = dynamics.modelLines[row.id] {
-                names = max(names, advance(modelsName(line.id), m.label(m.t)))
+                natural = max(natural, CharacterTextFit.width(CharacterReadoutText.displayName(line.id), style: m.label(m.t),
+                                                              language: language))
                 numbers = max(numbers, digits(line.speed, m.number(m.t)))
             }
         }
-        let first = dynamics.modelRows.rows.first { $0.wanted }.flatMap { dynamics.modelLines[$0.id] }
+        let first = rows.first { $0.wanted }.flatMap { dynamics.modelLines[$0.id] }
         let unit = first?.hasSpeed == true ? m.cellGap + advance(OrbLineMetrics.thinkingUnit, m.unit(m.t)) : 0
-        return ModelsLayout(names: names, numbers: numbers, unit: unit, rows: dynamics.modelRows.extent)
+        return (natural, numbers, unit, more)
     }
 
-    var moreText: String { CharacterReadoutText.more(dynamics.moreCount, language: language) }
+    func modelsMeasure() -> ModelsMeasure? {
+        guard let c = columns() else { return nil }
+        let lead = 2 * m.padX + modelsDot + modelsDotGap
+        let numbers = c.numbers + c.unit
+        return ModelsMeasure(natural: c.natural, rest: lead + modelsNameGap + numbers,
+                             narrowest: lead + max(numbers, c.more))
+    }
+
+    func modelsLayout() -> ModelsLayout? {
+        guard let c = columns() else { return nil }
+        let names = dynamics.nameWidth.map { min($0, c.natural) } ?? 0
+        return ModelsLayout(names: names, numbers: c.numbers, unit: c.unit, more: c.more, rows: dynamics.modelRows.extent)
+    }
 
     func modelsSize() -> CGSize {
         guard let layout = modelsLayout(), layout.rows > 0 else { return .zero }
-        let width = modelsDot + modelsDotGap + layout.names + modelsNumberGap + layout.numbers + layout.unit
+        let rows = layout.names > 0 ? layout.names + modelsNameGap + layout.numbers + layout.unit
+            : layout.numbers + layout.unit
+        let width = modelsDot + modelsDotGap + max(rows, layout.more)
         let height = CGFloat(layout.rows) * (m.rowHeight(m.t) + modelsRowGap) - modelsRowGap
         return plate(CGSize(width: width, height: max(0, height)))
     }
@@ -59,6 +84,8 @@ extension CharacterCards {
         let bottom = box.height / 2 - m.padY
         let numberRight = box.width / 2 - m.padX - layout.unit
         let nameLeft = origin.x + modelsDot + modelsDotGap
+        // Increase Contrast marks every model in the system's highlight color.
+        let highlight = frame.content.increaseContrast ? CharacterHighlight.color(dark: frame.dark) : nil
         var unitDrawn = false
         for row in dynamics.modelRows.rows {
             let top = origin.y + CGFloat(row.slot) * pitch
@@ -73,11 +100,13 @@ extension CharacterCards {
                 continue
             }
             guard let line = dynamics.modelLines[row.id] else { continue }
-            let accent = line.accent ?? ink.secondary
+            let accent = highlight ?? line.accent ?? ink.secondary
             scene.add(.circle(center: pen.point(origin.x + modelsDot / 2, baseline - 0.36 * m.t), radius: modelsDot / 2 * pen.scale,
                               color: accent.opacity(alpha * pen.alpha)), blend: .over)
-            put(modelsName(line.id), m.label(m.t), pen, x: nameLeft, baseline: baseline, color: ink.number.opacity(alpha),
-                into: &scene)
+            if layout.names > 0 {
+                put(modelsName(line.id, width: layout.names), m.label(m.t), pen, x: nameLeft, baseline: baseline,
+                    color: ink.number.opacity(alpha), into: &scene)
+            }
             let style = m.number(m.t)
             putDigits(line.speed, style, pen, x: numberRight - digits(line.speed, style), baseline: baseline,
                       color: (line.hasSpeed ? ink.number : ink.secondary).opacity(alpha), into: &scene)
@@ -90,8 +119,33 @@ extension CharacterCards {
     }
 }
 
-/// Fits text into a width by cutting it in the middle (`claude-op…5-20251101`), measured with Core Text as the glyph
-/// atlas lays it out; results are kept, since the same ids are fitted every frame.
+/// The system highlight (accent) color as it resolves on a dark or light card, kept until the system colors change.
+@MainActor
+enum CharacterHighlight {
+    private static var resolved: [Bool: RGBColor] = [:]
+    private static var observer: NSObjectProtocol?
+
+    static func color(dark: Bool) -> RGBColor {
+        if observer == nil {
+            observer = NotificationCenter.default.addObserver(forName: NSColor.systemColorsDidChangeNotification,
+                                                              object: nil, queue: .main) { _ in
+                MainActor.assumeIsolated { resolved = [:] }
+            }
+        }
+        if let color = resolved[dark] { return color }
+        var color = RGBColor(hex: dark ? 0x4D9CFF : 0x0A64D6)
+        NSAppearance(named: dark ? .darkAqua : .aqua)?.performAsCurrentDrawingAppearance {
+            if let accent = NSColor.controlAccentColor.usingColorSpace(.sRGB) {
+                color = RGBColor(red: accent.redComponent, green: accent.greenComponent, blue: accent.blueComponent)
+            }
+        }
+        resolved[dark] = color
+        return color
+    }
+}
+
+/// Fits text into a width by cutting its end (`claude-sonnet-4…`), measured with Core Text as the glyph atlas lays it
+/// out; results are kept, since the same names are fitted every frame.
 @MainActor
 enum CharacterTextFit {
     private struct Key: Hashable {
@@ -102,8 +156,19 @@ enum CharacterTextFit {
     }
 
     private static var fitted: [Key: String] = [:]
+    private static var widths: [Key: CGFloat] = [:]
 
-    static func middle(_ text: String, style: OrbTextStyle, language: AppLanguage, width: CGFloat) -> String {
+    /// The text's width in full, kept.
+    static func width(_ text: String, style: OrbTextStyle, language: AppLanguage) -> CGFloat {
+        let key = Key(text: text, style: style, language: language, width: 0)
+        if let cached = widths[key] { return cached }
+        let width = measure(text, style: style, language: language)
+        if widths.count >= 256 { widths.removeAll(keepingCapacity: true) }
+        widths[key] = width
+        return width
+    }
+
+    static func tail(_ text: String, style: OrbTextStyle, language: AppLanguage, width: CGFloat) -> String {
         let key = Key(text: text, style: style, language: language, width: width)
         if let cached = fitted[key] { return cached }
         let result = fit(text, style: style, language: language, width: width)
@@ -123,12 +188,9 @@ enum CharacterTextFit {
     }
 
     private static func fit(_ text: String, style: OrbTextStyle, language: AppLanguage, width: CGFloat) -> String {
-        guard measure(text, style: style, language: language) > width else { return text }
+        guard measure(text, style: style, language: language) > width + 0.25 else { return text }
         let characters = Array(text)
-        func cut(_ kept: Int) -> String {
-            let head = (kept + 1) / 2
-            return String(characters.prefix(head)) + "…" + String(characters.suffix(kept - head))
-        }
+        func cut(_ kept: Int) -> String { String(characters.prefix(kept)) + "…" }
         var low = 0, high = characters.count - 1
         while low < high {
             let mid = (low + high + 1) / 2

@@ -329,6 +329,14 @@ final class CharacterRenderer: CharacterLayerProvider {
         if !cardShown[models], wings.presence[models] == 0 { cardDynamics.resetModels() }
         cardDynamics.update(dt, character: character, small: frame.isSmallCharacter,
                             instant: frame.effects.reduceMotion || frame.effects.level == .off)
+        // The names narrow to the room the wings found last frame; the wings fit the card's narrowest form.
+        let measure = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
+            .modelsMeasure()
+        if let measure {
+            cardDynamics.fitNames(dt, room: wings.modelsRoom, measure: measure, t: CharacterCardMetrics(disc: frame.s).t,
+                                  spare: 0.04 * d, snap: !cardShown[models] || wings.presence[models] == 0)
+        }
+        wings.modelsNarrowest = measure.map { Double($0.narrowest) } ?? 0
         let cards = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
         let model = modelName(frame, character: character)
         let readouts = character?.readouts ?? .default

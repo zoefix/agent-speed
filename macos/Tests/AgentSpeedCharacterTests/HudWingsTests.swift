@@ -209,11 +209,78 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
         run(rightReach(from: 150, to: 444), 3)
         #expect(wings.modelsPlace == .hidden && wings.places[HudCard.models.rawValue].alpha == 0)
         #expect(wings.places[HudCard.speed.rawValue].alpha > 0.9, "the speed always shows")
-        // Clear again: back under the speed only once it has fitted for a while.
+        // Clear again: back under the speed once it has fitted with room to spare for 1.2 s.
         run(frame(), 1)
         #expect(wings.modelsPlace == .hidden)
-        run(frame(), 4)
-        #expect(wings.modelsPlace == .under && wings.places[HudCard.models.rawValue].alpha > 0.9)
+        run(frame(), 0.4)
+        #expect(wings.modelsPlace == .under)
+        run(frame(), 1)
+        #expect(wings.places[HudCard.models.rawValue].alpha > 0.9)
+    }
+
+    @Test func theModelsCardMovesBackUpFromBelowAfterFourSeconds() {
+        let shown = [Bool](repeating: true, count: HudCard.allCases.count)
+        var wings = HudWings()
+        var t = 0.0
+        func run(_ f: HudFrame, _ seconds: Double) {
+            for _ in 0..<Int(seconds * 60) {
+                wings.update(1 / 60, time: t, frame: f, sizes: sizes, shown: shown)
+                t += 1 / 60
+            }
+        }
+        run(frame(), 1)
+        run(rightReach(from: 196, to: 222), 1)
+        #expect(wings.modelsPlace == .below)
+        run(frame(), 3.5)
+        #expect(wings.modelsPlace == .below, "a moment of room changes nothing")
+        run(frame(), 1)
+        #expect(wings.modelsPlace == .under)
+    }
+
+    @Test func itsNarrowestFormDecidesWhetherItFits() {
+        // A staff held out under the speed leaves 60 pt to the orb's edge: the 96 pt card does not fit, a 60 pt form
+        // of it (no names) does, so it stays under the speed and reports the room its names narrow to.
+        let f = rightReach(from: 196, to: 222, reach: 444 - 0.025 * 296 - 60 - 0.035 * 296 - 222)
+        var wings = HudWings()
+        wings.still = true
+        wings.modelsNarrowest = 60
+        wings.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: HudCard.allCases.count))
+        #expect(wings.modelsPlace == .under)
+        #expect(wings.modelsRoom < 61 && wings.modelsRoom > 59)
+        var wide = HudWings()
+        wide.still = true
+        wide.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: HudCard.allCases.count))
+        #expect(wide.modelsPlace != .under, "its own 96 pt do not fit")
+    }
+
+    @Test func namesNarrowToTheRoomThenDrop() {
+        let t = 8.0
+        // Rest 60 pt: names in full (50 pt) while they fit, else half-t steps down to 4 t, else none.
+        #expect(HudNameWidth.best(room: 200, rest: 60, natural: 50, t: t) == 50)
+        #expect(HudNameWidth.best(room: 200, rest: 60, natural: 120, t: t) == 72, "at most 9 t")
+        #expect(HudNameWidth.best(room: 105, rest: 60, natural: 120, t: t) == 44)
+        #expect(HudNameWidth.best(room: 92, rest: 60, natural: 120, t: t) == 32, "4 t")
+        #expect(HudNameWidth.best(room: 91, rest: 60, natural: 120, t: t) == nil, "below 4 t the names go")
+        #expect(HudNameWidth.best(room: 85, rest: 60, natural: 22, t: t) == 22, "short names in full")
+        #expect(HudNameWidth.best(room: 80, rest: 60, natural: 22, t: t) == nil)
+    }
+
+    @Test func namesNarrowAtOnceAndWidenAfterTheyHaveFitted() {
+        let t = 8.0, spare = 11.84
+        var names = HudNameWidth()
+        names.update(1 / 60, room: 200, rest: 60, natural: 72, t: t, spare: spare, snap: true)
+        #expect(names.width == 72)
+        names.update(1 / 60, room: 110, rest: 60, natural: 72, t: t, spare: spare, snap: false)
+        #expect(names.width == 48, "narrows at once")
+        names.update(1 / 60, room: 80, rest: 60, natural: 72, t: t, spare: spare, snap: false)
+        #expect(names.width == nil, "dots and speeds only")
+        for _ in 0..<60 { names.update(1 / 60, room: 200, rest: 60, natural: 72, t: t, spare: spare, snap: false) }
+        #expect(names.width == nil, "a second of room is not enough")
+        for _ in 0..<15 { names.update(1 / 60, room: 200, rest: 60, natural: 72, t: t, spare: spare, snap: false) }
+        #expect(names.width == 72)
+        // The long name's model stops: the names take their new width at once.
+        names.update(1 / 60, room: 200, rest: 60, natural: 40, t: t, spare: spare, snap: false)
+        #expect(names.width == 40)
     }
 
     @Test func theModelsCardStepsRightOfHerOutlineUnderTheSpeed() {

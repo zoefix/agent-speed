@@ -11,6 +11,8 @@ struct CharacterCardDynamics {
     private(set) var latency: CharacterReadoutText.Latency?
     private(set) var latencyPresence = 0.0
     private(set) var modelRows = HudRows()
+    /// The names' width on the models card; nil keeps only the dots and the speeds.
+    private(set) var names = HudNameWidth()
     private(set) var modelLines: [String: CharacterModelLine] = [:]
     /// The models the card had no room for at the last change (its `+N`).
     private(set) var moreCount = 0
@@ -20,6 +22,16 @@ struct CharacterCardDynamics {
     private var primed = false
 
     var isMoving: Bool { (latencyPresence > 0 && latencyPresence < 1) || modelRows.isMoving }
+
+    var nameWidth: CGFloat? { names.width.map { CGFloat($0) } }
+
+    /// Fits the names to `room` (the wings' room to the orb's edge at the card's place) from the card's measures.
+    /// `snap` while the card is off screen.
+    mutating func fitNames(_ dt: Double, room: Double, measure: CharacterCards.ModelsMeasure, t: CGFloat, spare: Double,
+                           snap: Bool) {
+        names.update(dt, room: room, rest: Double(measure.rest), natural: Double(measure.natural), t: Double(t),
+                     spare: spare, snap: snap)
+    }
 
     /// Advances one frame. `small`: below S = 96 the card keeps its first two rows. `instant` reorders at once (Reduce
     /// Motion).
