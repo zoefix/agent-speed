@@ -294,7 +294,8 @@ internal sealed class OrbSurface : FrameworkElement, IOrbFrameClient, IOrbSurfac
     {
     }
 
-    public void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating)
+    public void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating,
+        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models)
     {
     }
 

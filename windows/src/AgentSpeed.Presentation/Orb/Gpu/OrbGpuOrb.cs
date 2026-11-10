@@ -195,11 +195,15 @@ public sealed class OrbGpuOrb
 
     public OrbCharacterContent? Character => _character;
 
-    /// <summary>The <c>character</c> cards' live values (DESIGN 2a.6, Which cards show); true when anything shown changed.</summary>
-    public bool SetCharacterReadings(double now, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating)
+    /// <summary>
+    /// The <c>character</c> cards' live values (DESIGN 2a.6, Which cards show): 性能 and 思考, the cost rate, the 首字 latency
+    /// and the running models; true when anything shown changed.
+    /// </summary>
+    public bool SetCharacterReadings(double now, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating, OrbLatency? latency = null,
+        IReadOnlyList<OrbModelRow>? models = null)
     {
         Scene.Update(Math.Max(Scene.Time, now));
-        return _characterReadings.Apply(performance, money, generating, Scene.Time);
+        return _characterReadings.Apply(performance, money, generating, Scene.Time, latency, models);
     }
 
     /// <summary>The <c>character</c> network card's traffic sample; true when anything shown changed.</summary>

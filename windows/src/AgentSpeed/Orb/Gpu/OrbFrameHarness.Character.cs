@@ -129,7 +129,19 @@ internal static partial class OrbFrameHarness
         AgentsLine = loc.Format("agents.count", 3),
         IntelligenceGlyph = loc["intel.glyph"],
         ThinkingGlyph = loc["intel.thinking.glyph"],
+        ModelsMore = loc["character.models.more"],
+        TokensUnit = loc["unit.tokS"],
     };
+
+    /// <summary>The demo's running models: two timed, one without a timed response yet, a long id cut in the middle.</summary>
+    private static IReadOnlyList<OrbModelRow> HarnessModels(double value) => value > 1
+        ?
+        [
+            new OrbModelRow("claude-opus-5-5", (int)Math.Round(value * 0.62), Rgba.FromHex("#D97757")),
+            new OrbModelRow("gpt-6.1-sol", (int)Math.Round(value * 0.41), Rgba.FromHex("#10A37F")),
+            new OrbModelRow("gemini-4-argon-preview-2026-11", null, Rgba.FromHex("#4C8DF6")),
+        ]
+        : [];
 
     private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value)
     {
@@ -140,7 +152,8 @@ internal static partial class OrbFrameHarness
         var money = generating ? new LiveMoney((value * 0.000004).ToString("0.0000", CultureInfo.InvariantCulture), "US$/s", "$", false, false, value * 4, "", "")
             : null;
         orb.SetCharacterNetwork(time, network);
-        orb.SetCharacterReadings(time, performance, money, generating);
+        orb.SetCharacterReadings(time, performance, money, generating, generating ? OrbLatency.Of(1180 + 40 * Math.Sin(time), loc) : null,
+            HarnessModels(value));
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,

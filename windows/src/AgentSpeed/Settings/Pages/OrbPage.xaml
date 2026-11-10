@@ -394,10 +394,12 @@
                         <UniformGrid Columns="2">
                             <CheckBox Content="{loc:Loc character.readouts.intel}" IsChecked="{Binding ReadoutIntel, Mode=TwoWay}" Margin="0,4,0,4" />
                             <CheckBox Content="{loc:Loc character.readouts.thinking}" IsChecked="{Binding ReadoutThinking, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.latency}" IsChecked="{Binding ReadoutLatency, Mode=TwoWay}" Margin="0,4,0,4" />
                             <CheckBox Content="{loc:Loc character.readouts.network}" IsChecked="{Binding ReadoutNetwork, Mode=TwoWay}" Margin="0,4,0,4"
                                       IsEnabled="{Binding TrafficMeasured}" />
                             <CheckBox Content="{loc:Loc character.readouts.cost}" IsChecked="{Binding ReadoutCost, Mode=TwoWay}" Margin="0,4,0,4" />
                             <CheckBox Content="{loc:Loc character.readouts.agents}" IsChecked="{Binding ReadoutAgents, Mode=TwoWay}" Margin="0,4,0,4" />
+                            <CheckBox Content="{loc:Loc character.readouts.models}" IsChecked="{Binding ReadoutModels, Mode=TwoWay}" Margin="0,4,0,4" />
                             <CheckBox Content="{loc:Loc character.readouts.model}" IsChecked="{Binding ReadoutModel, Mode=TwoWay}" Margin="0,4,0,4" />
                         </UniformGrid>
                         <Rectangle Style="{StaticResource Hairline}" Margin="0,6,0,2" />

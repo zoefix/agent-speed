@@ -89,7 +89,7 @@ public sealed partial class CharacterDraw
         }
     }
 
-    private static readonly HudCard[] DrawOrder = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Model];
+    private static readonly HudCard[] DrawOrder = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Models, HudCard.Model];
 
     private OrbLinesContent? PerformanceContent => Readings?.Performance.Reading?.Content;
 
@@ -114,6 +114,8 @@ public sealed partial class CharacterDraw
         var readouts = Content?.Readouts ?? Settings.Orbs.CharacterReadouts.Default;
         var (sw, sh, drop) = SpeedBox(ctx, frame);
         _speedDrop = drop;
+        SyncModels(ctx, frame);
+        FitNames(new CardMetrics(d), dt, time, _wings.Still || _wings.Presence[(int)HudCard.Models] == 0);
         foreach (var card in HudCards.All)
         {
             _cardSizes[(int)card] = card == HudCard.Speed ? (sw, sh) : CardSize(ctx, card, frame);
@@ -127,6 +129,7 @@ public sealed partial class CharacterDraw
         _cardShown[(int)HudCard.Network] = readouts.Network && readings?.NetworkLoud(time) == true && Has(HudCard.Network);
         _cardShown[(int)HudCard.Cost] = readouts.Cost && readings?.Cost.IsLoud(time) == true && Has(HudCard.Cost);
         _cardShown[(int)HudCard.Agents] = readouts.Agents && !IsSmall(ctx) && Has(HudCard.Agents);
+        _cardShown[(int)HudCard.Models] = readouts.Models && readings?.Models.IsLoud(time) == true && Has(HudCard.Models);
         if (IsSmall(ctx))
         {
             var room = 2;
@@ -225,7 +228,11 @@ public sealed partial class CharacterDraw
 
                 return (Advance(name, OrbFont.Title, m.T) + 0.62 * m.T + 0.42 * m.T + 2 * 0.85 * m.T, CardMetrics.RowHeight(m.T) + 2 * 0.5 * m.T);
             case HudCard.Performance:
-                return PerformanceRows(frame, m) is { } rows ? Plate(Math.Max(rows.ScoreWidth, rows.ThinkingShare * rows.ThinkingWidth), rows.Height, m) : (0, 0);
+                return PerformanceRows(frame, m) is { } rows
+                    ? Plate(Math.Max(rows.ScoreWidth, Math.Max(rows.ThinkingShare * rows.ThinkingWidth, rows.LatencyShare * rows.LatencyWidth)), rows.Height, m)
+                    : (0, 0);
+            case HudCard.Models:
+                return ModelsSize(m, frame.Time);
             case HudCard.Network:
                 if (Readings?.Network.Reading is not { Content: { Kind: OrbLinesKind.Traffic } traffic })
                 {
@@ -283,7 +290,17 @@ public sealed partial class CharacterDraw
     }
 
     private sealed record PerformanceLayout(OrbScoreFrame? Score, string ScoreText, string? Outgoing, double ScoreWidth, OrbLine? Thinking,
-        double ThinkingWidth, double ThinkingAlpha, double ThinkingShare, double Height);
+        double ThinkingWidth, double ThinkingAlpha, double ThinkingShare, double Height)
+    {
+        /// <summary>The 首字 row (DESIGN 2a.6): its line, width, opacity and share of its room as it fades in or out.</summary>
+        public OrbLine? Latency { get; init; }
+
+        public double LatencyWidth { get; init; }
+
+        public double LatencyAlpha { get; init; }
+
+        public double LatencyShare { get; init; }
+    }
 
     private PerformanceLayout? PerformanceRows(in OrbFrame frame, in CardMetrics m)
     {
@@ -322,7 +339,19 @@ public sealed partial class CharacterDraw
             }
         }
 
-        if (score is null && thinking is null)
+        OrbLine? latency = null;
+        double latencyWidth = 0, latencyAlpha = 0, latencyShare = 0;
+        var fade = Readings?.Latency ?? OrbLatencyFade.None;
+        if (readouts.Latency && fade.Latency is { } shown && !fade.IsGone(frame.Time))
+        {
+            latency = shown.Line;
+            latencyWidth = Advance(shown.Line.Glyph, OrbFont.Title, CardMetrics.Small(m.T)) + m.GlyphGap
+                + DigitsWidth(shown.Line.Number, OrbFont.TrafficNumber, m.T) + m.CellGap + Advance(shown.Line.Unit, OrbFont.Unit, CardMetrics.Small(m.T));
+            latencyAlpha = fade.Alpha(frame.Time);
+            latencyShare = fade.Share(frame.Time, reduce);
+        }
+
+        if (score is null && thinking is null && latency is null)
         {
             return null;
         }
@@ -338,7 +367,18 @@ public sealed partial class CharacterDraw
             height += thinkingShare * ((score is not null ? m.RowGap : 0) + CardMetrics.RowHeight(m.T));
         }
 
-        return new PerformanceLayout(score, scoreText, outgoing, scoreWidth, thinking, thinkingWidth, thinkingAlpha, thinkingShare, height);
+        if (latency is not null)
+        {
+            height += latencyShare * ((score is not null || thinking is not null ? m.RowGap : 0) + CardMetrics.RowHeight(m.T));
+        }
+
+        return new PerformanceLayout(score, scoreText, outgoing, scoreWidth, thinking, thinkingWidth, thinkingAlpha, thinkingShare, height)
+        {
+            Latency = latency,
+            LatencyWidth = latencyWidth,
+            LatencyAlpha = latencyAlpha,
+            LatencyShare = latencyShare,
+        };
     }
 
     // MARK: Drawing
@@ -405,18 +445,20 @@ public sealed partial class CharacterDraw
                     y += CardMetrics.RowHeight(m.P) + m.RowGap;
                 }
 
-                if (rows.Thinking is { } thinking && rows.ThinkingAlpha > 0.01)
+                if (rows.Thinking is { } thinking)
                 {
-                    if (rows.Score is not null)
+                    var share = rows.Score is not null ? rows.ThinkingShare : 1;
+                    if (rows.ThinkingAlpha > 0.01)
                     {
-                        y -= (1 - rows.ThinkingShare) * (CardMetrics.RowHeight(m.T) + m.RowGap);
+                        DrawRow(list, thinking, pen, left, y - (1 - share) * (CardMetrics.RowHeight(m.T) + m.RowGap), rows.ThinkingAlpha, m, ink);
                     }
 
-                    var baseline = y + CardMetrics.Baseline(m.T);
-                    var a = rows.ThinkingAlpha;
-                    var x = left + Put(list, thinking.Glyph, OrbFont.Title, CardMetrics.Small(m.T), pen, left, baseline, ink.Secondary.MultiplyAlpha(a)) + m.GlyphGap;
-                    x += PutDigits(list, thinking.Number, OrbFont.TrafficNumber, m.T, pen, x, baseline, ink.Number.MultiplyAlpha(a)) + m.CellGap;
-                    Put(list, thinking.Unit, OrbFont.Unit, CardMetrics.Small(m.T), pen, x, baseline, ink.Secondary.MultiplyAlpha(a));
+                    y += share * (CardMetrics.RowHeight(m.T) + m.RowGap);
+                }
+
+                if (rows.Latency is { } latency && rows.LatencyAlpha > 0.01)
+                {
+                    DrawRow(list, latency, pen, left, y, rows.LatencyAlpha, m, ink);
                 }
 
                 break;
@@ -451,6 +493,10 @@ public sealed partial class CharacterDraw
                 break;
             }
 
+            case HudCard.Models:
+                DrawModels(list, pen, box, m, ink, right, frame.Time, ctx.HighContrast);
+                break;
+
             case HudCard.Agents:
             {
                 DrawPlate(list, pen, box, ink, m, null, right ? -1 : 1);
@@ -469,6 +515,15 @@ public sealed partial class CharacterDraw
                 break;
             }
         }
+    }
+
+    /// <summary>A row at <c>t</c> of the 性能 card (思考, 首字): the label and unit in the secondary token, the number in the value token.</summary>
+    private void DrawRow(OrbDrawList list, in OrbLine line, in Pen pen, double left, double top, double alpha, in CardMetrics m, in CardInk ink)
+    {
+        var baseline = top + CardMetrics.Baseline(m.T);
+        var x = left + Put(list, line.Glyph, OrbFont.Title, CardMetrics.Small(m.T), pen, left, baseline, ink.Secondary.MultiplyAlpha(alpha)) + m.GlyphGap;
+        x += PutDigits(list, line.Number, OrbFont.TrafficNumber, m.T, pen, x, baseline, ink.Number.MultiplyAlpha(alpha)) + m.CellGap;
+        Put(list, line.Unit, OrbFont.Unit, CardMetrics.Small(m.T), pen, x, baseline, ink.Secondary.MultiplyAlpha(alpha));
     }
 
     /// <summary>One traffic row: the arrow, the number right-aligned in the 8.88 cell, the unit left-aligned in its cell.</summary>

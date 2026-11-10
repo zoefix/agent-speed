@@ -53,8 +53,12 @@ internal interface IOrbSurface
     /// <summary>The <c>character</c> style's character and cards (DESIGN 2a.6); other styles ignore it.</summary>
     void SetCharacter(Presentation.Orb.OrbCharacterContent? content);
 
-    /// <summary>One engine tick of the <c>character</c> cards' values (network, 性能 and 思考, the cost rate).</summary>
-    void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating);
+    /// <summary>
+    /// One engine tick of the <c>character</c> cards' values (性能 and 思考, the cost rate, the 首字 latency, the running
+    /// models).
+    /// </summary>
+    void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating,
+        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models);
 
     /// <summary>One traffic sample of the <c>character</c> network card (null while not measured).</summary>
     void SetCharacterNetwork(Presentation.Orb.Lines.OrbLinesSample? network);

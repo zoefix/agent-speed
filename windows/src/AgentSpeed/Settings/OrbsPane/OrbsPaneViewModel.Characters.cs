@@ -273,11 +273,15 @@ internal sealed partial class OrbsPaneViewModel
 
     public bool ReadoutThinking { get => Readout(CharacterReadout.Thinking); set => SetReadout(CharacterReadout.Thinking, value); }
 
+    public bool ReadoutLatency { get => Readout(CharacterReadout.Latency); set => SetReadout(CharacterReadout.Latency, value); }
+
     public bool ReadoutNetwork { get => Readout(CharacterReadout.Network); set => SetReadout(CharacterReadout.Network, value); }
 
     public bool ReadoutCost { get => Readout(CharacterReadout.Cost); set => SetReadout(CharacterReadout.Cost, value); }
 
     public bool ReadoutAgents { get => Readout(CharacterReadout.Agents); set => SetReadout(CharacterReadout.Agents, value); }
+
+    public bool ReadoutModels { get => Readout(CharacterReadout.Models); set => SetReadout(CharacterReadout.Models, value); }
 
     public bool ReadoutModel { get => Readout(CharacterReadout.Model); set => SetReadout(CharacterReadout.Model, value); }
 
@@ -424,9 +428,11 @@ internal sealed partial class OrbsPaneViewModel
         OnPropertyChanged(nameof(CardCharacter));
         OnPropertyChanged(nameof(ReadoutIntel));
         OnPropertyChanged(nameof(ReadoutThinking));
+        OnPropertyChanged(nameof(ReadoutLatency));
         OnPropertyChanged(nameof(ReadoutNetwork));
         OnPropertyChanged(nameof(ReadoutCost));
         OnPropertyChanged(nameof(ReadoutAgents));
+        OnPropertyChanged(nameof(ReadoutModels));
         OnPropertyChanged(nameof(ReadoutModel));
         OnPropertyChanged(nameof(TrafficMeasured));
         OnPropertyChanged(nameof(NetworkScopeEnabled));
