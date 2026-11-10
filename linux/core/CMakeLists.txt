@@ -157,6 +157,31 @@ add_library(agentspeed_quota STATIC
     src/quota/format.cpp
     src/quota/ordered_json.cpp
     src/quota/presence.cpp
+    # Phase 2 (QUOTAS 9)
+    src/quota/cookies/browsers.cpp
+    src/quota/cookies/crypto.cpp
+    src/quota/cookies/header.cpp
+    src/quota/cookies/reader.cpp
+    src/quota/cookies/stores.cpp
+    src/quota/routes/antigravity.cpp
+    src/quota/routes/cadence.cpp
+    src/quota/routes/credentials.cpp
+    src/quota/routes/files.cpp
+    src/quota/routes/fingerprint.cpp
+    src/quota/routes/local.cpp
+    src/quota/routes/requests.cpp
+    src/quota/vendor_fetch.cpp
+    src/quota/vendor_service.cpp
+    src/quota/vendor_service_plans.cpp
+    src/quota/vendors/antigravity.cpp
+    src/quota/vendors/browser_credits.cpp
+    src/quota/vendors/devin.cpp
+    src/quota/vendors/droid.cpp
+    src/quota/vendors/gemini.cpp
+    src/quota/vendors/grok.cpp
+    src/quota/vendors/kimi.cpp
+    src/quota/vendors/values.cpp
+    src/quota/vendors/zai.cpp
 )
 target_link_libraries(agentspeed_quota PUBLIC agentspeed_base agentspeed_statusline_kit)
 if(AGENTSPEED_STATIC)

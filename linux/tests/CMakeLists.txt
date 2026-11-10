@@ -43,6 +43,12 @@ add_executable(agentspeed_tests
     quota_format_test.cpp
     quota_helper_test.cpp
     quota_presence_test.cpp
+    # Quota phase 2
+    quota_antigravity_test.cpp
+    quota_cookies_test.cpp
+    quota_local_routes_test.cpp
+    quota_vendor_fixture_test.cpp
+    quota_vendor_service_test.cpp
     qoder_fixture_test.cpp
     qoder_source_test.cpp
     report_body_test.cpp
