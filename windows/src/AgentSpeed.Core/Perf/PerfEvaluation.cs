@@ -55,6 +55,12 @@ public sealed record PerfEvaluation(
     /// <summary><c>100 × vsUsual</c> rounded half away from zero (shown as <c>+8%</c>, <c>−12%</c>, <c>±0%</c>).</summary>
     public int? VsUsualPercent => VsUsual is { } vs ? PerfFormula.Round(100 * vs) : null;
 
+    /// <summary>
+    /// The sample's first-content latencies <c>firstMs − startMs</c> (ms, newest first) of the responses that have both with
+    /// <c>firstMs ≥ startMs</c>, whatever <c>n</c>: a set's 首字 pools them (METRICS 6.9 <i>Readouts of a set</i>).
+    /// </summary>
+    public IReadOnlyList<long> Latencies { get; init; } = [];
+
     public PerfComponent Component(PerfComponentId id) => Components[(int)id];
 
     /// <summary>Equal by value, components included, so an unchanged evaluation is an unchanged frame.</summary>
@@ -62,7 +68,7 @@ public sealed record PerfEvaluation(
         other is not null && Source == other.Source && Form == other.Form && Nullable.Equals(Score, other.Score) && N == other.N
         && Tools == other.Tools && ActiveMs == other.ActiveMs && SpanStartMs == other.SpanStartMs
         && string.Equals(Model, other.Model, StringComparison.Ordinal) && Nullable.Equals(Baseline, other.Baseline)
-        && Components.SequenceEqual(other.Components);
+        && Components.SequenceEqual(other.Components) && Latencies.SequenceEqual(other.Latencies);
 
     public override int GetHashCode() => HashCode.Combine(Source, Form, Score, N, Tools, ActiveMs, Model);
 }
