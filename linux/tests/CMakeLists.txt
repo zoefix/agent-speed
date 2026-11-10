@@ -58,6 +58,7 @@ add_executable(agentspeed_tests
     remote_scripts_test.cpp
     remote_ssh_test.cpp
     rfc3339_test.cpp
+    set_readouts_test.cpp
     source_locations_test.cpp
     traffic_test.cpp
     unpriced_test.cpp

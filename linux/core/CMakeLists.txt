@@ -96,6 +96,7 @@ add_library(agentspeed_base STATIC
     src/remote/messages.cpp
     src/remote/status.cpp
     src/rfc3339.cpp
+    src/set_readouts.cpp
     src/tailer.cpp
     src/traffic.cpp
     src/traffic_linux.cpp

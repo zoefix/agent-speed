@@ -117,3 +117,32 @@ TEST(Monitor, ScoresTheListedAgentsWithThePerformanceScore) {
     EXPECT_TRUE(snap.scoreSets[0].provisional);
     EXPECT_FALSE(snap.scoreGroups.empty());
 }
+
+// METRICS 6.9 Readouts of a set on the engine tick: the set's 首字 pools its listed agents' sample latencies, and its
+// running models are its non-idle agents with a model, each model once.
+TEST(Monitor, AnOrbsSetReadsItsFirstTokenLatencyAndRunningModels) {
+    Monitor monitor(fixtureConfig({SourceKind::Codex}));
+    monitor.setScoreSets({std::nullopt, std::vector<SourceKind>{SourceKind::Codex}, std::vector<SourceKind>{SourceKind::Gemini}});
+    constexpr std::int64_t kNow = 1792490897100 + 60'000;
+    monitor.start(kNow, kDayStart);
+    const auto snap = monitor.snapshot(kNow, kDayStart);
+    ASSERT_EQ(snap.scoreSets.size(), 3u);
+    std::vector<perf::ReadoutAgent> pooled;
+    std::map<std::string, std::int64_t> running;
+    for (const auto& a : snap.agents) {
+        ASSERT_TRUE(a.perf);
+        pooled.push_back({a.perf->score.latencies, std::nullopt, Phase::Idle, std::nullopt, a.source});
+        const auto& info = monitor.agents().at(a.id);
+        if (perf::effectivePhase(info.phase, info.lastLineMs, kNow) != Phase::Idle && a.model && !a.model->empty()) ++running[*a.model];
+    }
+    const auto& codex = snap.scoreSets[1];
+    EXPECT_EQ(codex.firstLatency, perf::setFirstLatency(pooled));
+    EXPECT_GE(codex.firstLatency.n, 3);
+    ASSERT_TRUE(codex.firstLatency.ms.has_value());
+    EXPECT_EQ(snap.scoreSets[0].firstLatency, codex.firstLatency);
+    ASSERT_EQ(codex.models.size(), running.size());
+    for (const auto& m : codex.models) EXPECT_EQ(m.agents, running[m.model]) << m.model;
+    // A set of sources the orb's monitor does not read has neither.
+    EXPECT_EQ(snap.scoreSets[2].firstLatency, (perf::SetLatency{std::nullopt, 0}));
+    EXPECT_TRUE(snap.scoreSets[2].models.empty());
+}

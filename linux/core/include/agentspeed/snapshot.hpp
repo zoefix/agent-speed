@@ -10,6 +10,7 @@
 #include "agentspeed/remote_status.hpp"
 #include "agentspeed/report_values.hpp"
 #include "agentspeed/perf.hpp"
+#include "agentspeed/set_readouts.hpp"
 #include "agentspeed/traffic_service.hpp"
 #include "agentspeed/unpriced.hpp"
 #include "agentspeed/work_signals.hpp"
@@ -58,6 +59,9 @@ struct ScoreSet {
     double liveThinking = 0;
     double thinkingShare = 0;
     bool generating = false;                // an agent of the set is generating
+    // METRICS 6.9 Readouts of a set: 首字 over the agents' samples and the running models, fastest first.
+    perf::SetLatency firstLatency;
+    std::vector<perf::RunningModel> models;
 };
 
 // A board group's value (METRICS 6.9 Sets and groups): a root and its descendants in the agents list.

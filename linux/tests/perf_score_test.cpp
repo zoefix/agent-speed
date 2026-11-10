@@ -7,6 +7,7 @@
 #include "agentspeed/perf.hpp"
 #include "agentspeed/perf_history.hpp"
 #include "agentspeed/pricing.hpp"
+#include "agentspeed/set_readouts.hpp"
 #include "fixture_support.hpp"
 
 using namespace agentspeed;
@@ -421,4 +422,41 @@ TEST_F(PerfScore, LiveThinking) {
         }
     }
     EXPECT_GT(queries, 20);
+}
+
+// METRICS 6.9 Readouts of a set, through the engine's own steps: each agent's evaluation (its sample's latencies), its
+// recentSpeed and its phase after the staleness rule, then the set's 首字 and its running models.
+TEST_F(PerfScore, Readouts) {
+    const auto cases = section("readouts").elements();
+    EXPECT_EQ(cases.size(), 3u);
+    for (const auto& c : cases) {
+        SCOPED_TRACE(*c["name"].string());
+        const auto now = *c["nowMs"].truncated();
+        std::vector<engine::Response> responses;
+        for (const auto& r : c["responses"].elements()) responses.push_back(responseOf(r));
+        std::vector<perf::ReadoutAgent> agents;
+        for (const auto& a : c["agents"].elements()) {
+            const auto agent = agentOf(a);
+            std::vector<const engine::Response*> own;
+            for (const auto& r : responses) {
+                if (r.agentId == agent.id) own.push_back(&r);
+            }
+            const auto evaluation = perf::evaluate(agent.source, agent.phase, agent.lastLineMs, own, std::deque<work::Action>{}, now);
+            agents.push_back({evaluation.latencies, agent.model, perf::effectivePhase(agent.phase, agent.lastLineMs, now),
+                              perf::recentSpeed(own, now), agent.source});
+        }
+        const auto got = perf::readoutsOf(agents);
+        const auto want = c["expect"];
+        expectNumber(got.firstLatency.ms, want["firstLatency"]["ms"], "firstLatency.ms");
+        EXPECT_EQ(got.firstLatency.n, *want["firstLatency"]["n"].truncated());
+        const auto models = want["models"].elements();
+        ASSERT_EQ(got.models.size(), models.size());
+        for (std::size_t i = 0; i < models.size(); ++i) {
+            SCOPED_TRACE(got.models[i].model);
+            EXPECT_EQ(got.models[i].model, *models[i]["model"].string());
+            expectNumber(got.models[i].speed, models[i]["speed"], "speed");
+            EXPECT_EQ(got.models[i].agents, *models[i]["agents"].truncated());
+            EXPECT_EQ(got.models[i].shown(), fixtures::optInt(models[i]["shown"]));
+        }
+    }
 }
