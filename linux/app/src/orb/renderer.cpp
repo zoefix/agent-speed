@@ -16,8 +16,8 @@ namespace orb {
 namespace {
 
 constexpr int kInstanceFloats = 24;
-// The character orb's cards alone draw about fifty texts a frame.
-constexpr int kMaxTextTextures = 96;
+// The character orb's cards alone draw about fifty texts a frame, and a 額度 card of many sources as many again.
+constexpr int kMaxTextTextures = 160;
 
 QOpenGLShaderProgram* build(const QByteArray& vertex, const QByteArray& fragment, const char* name) {
     auto* program = new QOpenGLShaderProgram();

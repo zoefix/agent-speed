@@ -316,7 +316,7 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
     top = std::min(std::max(top, f.bounds.minY + kMargin * d), maxY - std::max(0.0, total));
     double line = kInf;
     double y = top;
-    std::array<double, 4> edges{};
+    std::array<double, kHudColumn.size()> edges{};
     for (std::size_t k = 0; k < split; ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
         const double h = sizes_[i].h;
@@ -331,9 +331,11 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
     for (std::size_t k = 0; k < split; ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
         const double w = sizes_[i].w + room;
-        const double x = (aligned && std::isfinite(line) ? line : edges[k]) - w / 2;
-        over += presence_[i] * std::max(0.0, minX - (x - w / 2));
-        if (write) targets_[i].first = std::max(x, minX + w / 2);
+        const double right = aligned && std::isfinite(line) ? line : edges[k];
+        over += presence_[i] * std::max(0.0, minX - (right - fitting(i) - room));
+        if (!write) continue;
+        targets_[i].first = std::max(right - w / 2, minX + w / 2);
+        if (kHudColumn[k] == HudCard::Quota) quotaRoom_ = right - minX;
     }
 
     if (split >= kHudColumn.size()) return over;
@@ -358,10 +360,18 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
     for (std::size_t k = split; k < kHudColumn.size(); ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
         const double w = sizes_[i].w + room;
-        over += presence_[i] * std::max(0.0, left + w - maxX);
-        if (write) targets_[i].first = std::min(left + w / 2, maxX - w / 2);
+        over += presence_[i] * std::max(0.0, left + fitting(i) + room - maxX);
+        if (!write) continue;
+        targets_[i].first = std::min(left + w / 2, maxX - w / 2);
+        if (kHudColumn[k] == HudCard::Quota) quotaRoom_ = maxX - left;
     }
     return over;
+}
+
+// The width a card needs to fit: the 額度 card narrows itself to its room, so only its narrowest form counts.
+double HudWings::fitting(std::size_t card) const {
+    const double w = sizes_[card].w;
+    return card == static_cast<std::size_t>(HudCard::Quota) && quotaNarrowest > 0 ? std::min(w, quotaNarrowest) : w;
 }
 
 double HudWings::speedBottom() const { return targets_[0].second + sizes_[0].h / 2; }

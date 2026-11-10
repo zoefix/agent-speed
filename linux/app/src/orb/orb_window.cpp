@@ -238,6 +238,15 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
     if (changed || readoutsChanged) requestFrame();
 }
 
+void OrbWindow::setQuota(const QVariantList& items) {
+    auto next = CharacterQuota::of(items, strings_);
+    if (*next.sources == *characterQuota_.sources && next.spoken == characterQuota_.spoken) return;
+    characterQuota_ = std::move(next);
+    if (!isCharacter()) return;
+    updateLabel();
+    requestFrame();
+}
+
 // DESIGN 9 Accessibility: a unit change is announced once (`a11y.unitChanged`).
 void OrbWindow::announceUnit() {
 #if QT_VERSION >= QT_VERSION_CHECK(6, 8, 0)
@@ -924,6 +933,7 @@ void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, 
         c.modelsOpacity = characterReadouts_.models ? characterReadings_.modelsOpacity() : 0;
         c.modelsMore = strings_.t(QStringLiteral("character.models.more"));
         c.speedUnit = strings_.t(QStringLiteral("unit.tokS"));
+        c.quota = characterQuota_.sources;
         character->setContent(c);
         character->setBackingScale(devicePixelRatio());
     }
@@ -1316,6 +1326,10 @@ void OrbWindow::updateLabel() {
     // The models card after the cost: every running model, drawn or not.
     if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.models && characterReadings_.modelsOpacity() > 0.5) {
         if (const QString spoken = characterReadings_.spokenModels(strings_); !spoken.isEmpty()) label += separator + spoken;
+    }
+    // 額度 last, every source of the card whenever it applies (it has no quiet rule).
+    if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.quota && !characterQuota_.spoken.isEmpty()) {
+        label += separator + characterQuota_.spoken;
     }
     if (label == labelText_) return;
     labelText_ = label;

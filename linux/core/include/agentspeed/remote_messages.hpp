@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <map>
 #include <optional>
+#include <set>
 #include <string>
 #include <string_view>
 #include <variant>
@@ -13,6 +14,7 @@
 #include "agentspeed/model.hpp"
 #include "agentspeed/modes.hpp"
 #include "agentspeed/perf_history.hpp"
+#include "agentspeed/quota/window.hpp"
 #include "agentspeed/remote_status.hpp"
 
 // The relay's lines as the app reads them (REMOTE 5.2, 5.4), already validated (5.6). Agent ids are prefixed with
@@ -176,8 +178,71 @@ struct RelayError {
     bool operator==(const RelayError&) const = default;
 };
 
+// REMOTE 11: what a host reads of the quotas. A host has command-line agents only: no Claude Desktop, Devin Desktop,
+// browser sessions or the ZCode key the user pasted into the app.
+namespace quotas {
+inline constexpr std::size_t kWindows = 16;
+inline constexpr std::size_t kNameCharacters = 64;
+inline constexpr std::int64_t kMaxMinutes = 527'040;
+inline constexpr double kMaxUsedPercent = 1000;
+// codex, claudeCode, gemini, antigravity, kimi, grokBuild, droid (source order).
+const std::vector<SourceKind>& hostSources();
+bool hostReads(SourceKind source);
+}  // namespace quotas
+
+// The app's quota switches as they apply to every host (REMOTE 11.1): the sources whose quota switch is on and that
+// are enabled, the master switch, Grok's live request, and whether Claude Code is enabled.
+struct QuotaSwitches {
+    std::set<SourceKind> sources;
+    bool network = false;
+    bool grokLive = false;
+    bool claudeCode = false;
+    bool operator==(const QuotaSwitches&) const = default;
+};
+
+// `start.quota` and the `quota` line's `config` for one host.
+struct HostQuotaConfig {
+    std::set<SourceKind> sources;
+    bool network = false;
+    bool grokLive = false;
+    bool claudeBridge = false;
+    bool operator==(const HostQuotaConfig&) const = default;
+    // Claude Code counts only through the host's own bridge (`quotaClaudeCli`) and while Claude Code is enabled; the
+    // bridge itself follows the host's switch alone, so it can always be restored.
+    static HostQuotaConfig forHost(bool hostBridge, const QuotaSwitches& switches);
+};
+
+// A `quota` line: one source's snapshot on a host and whether its agent runs and is signed in there.
+struct HostQuota {
+    enum class Status : std::uint8_t { Ok, NoCredential, Expired, Denied, Failed, NetworkOff, NoCertificates, NotRunning };
+    std::string hostId;
+    quota::Snapshot snapshot;
+    bool running = false;
+    bool signedIn = false;
+    Status status = Status::Ok;
+    bool operator==(const HostQuota&) const = default;
+};
+std::string_view hostQuotaStatusId(HostQuota::Status status);
+
+struct HostQuotaRemoved {
+    std::string hostId;
+    SourceKind source = SourceKind::Codex;
+    bool operator==(const HostQuotaRemoved&) const = default;
+};
+
+// A `quotaBridge` line: the host's Claude Code status line bridge (QUOTAS 5.4 on the host).
+struct HostQuotaBridge {
+    enum class State : std::uint8_t { Off, Waiting, Ok, Replaced, Unreadable, Failed };
+    std::string hostId;
+    State state = State::Off;
+    std::string settingsPath;  // abbreviated with `~`; displayed only
+    bool operator==(const HostQuotaBridge&) const = default;
+};
+std::string_view hostBridgeStateId(HostQuotaBridge::State state);
+
 using RelayMessage = std::variant<Hello, Progress, RemoteAgent, AgentRemoved, Parents, RemoteResponse, RemoteTool, Ready,
-                                  SourceReport, ClockReply, HistoryDay, HistoryPerf, HistoryDone, HistoryProgress, RelayError>;
+                                  SourceReport, ClockReply, HistoryDay, HistoryPerf, HistoryDone, HistoryProgress, RelayError,
+                                  HostQuota, HostQuotaRemoved, HostQuotaBridge>;
 
 // What a host's connection reports, in order.
 struct HostEvent {

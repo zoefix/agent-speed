@@ -10,6 +10,7 @@ add_executable(agentspeed_tests
     character_fixture_test.cpp
     character_models_test.cpp
     character_performer_test.cpp
+    character_quota_test.cpp
     character_selection_test.cpp
     character_wings_test.cpp
     current_values_test.cpp
@@ -35,6 +36,20 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     perf_score_test.cpp
     pricing_test.cpp
+    quota_http_test.cpp
+    # Quota phase 1
+    quota_bridge_test.cpp
+    quota_codex_test.cpp
+    quota_desktop_test.cpp
+    quota_format_test.cpp
+    quota_helper_test.cpp
+    quota_presence_test.cpp
+    # Quota phase 2
+    quota_antigravity_test.cpp
+    quota_cookies_test.cpp
+    quota_local_routes_test.cpp
+    quota_vendor_fixture_test.cpp
+    quota_vendor_service_test.cpp
     qoder_fixture_test.cpp
     qoder_source_test.cpp
     report_body_test.cpp
@@ -56,6 +71,7 @@ add_executable(agentspeed_tests
     remote_ingest_test.cpp
     remote_presentation_test.cpp
     remote_process_test.cpp
+    remote_quota_test.cpp
     remote_scripts_test.cpp
     remote_ssh_test.cpp
     rfc3339_test.cpp
@@ -70,6 +86,12 @@ pkg_check_modules(TEST_ZLIB REQUIRED IMPORTED_TARGET zlib)
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main PkgConfig::TEST_ZLIB)
 target_compile_definitions(agentspeed_tests PRIVATE
     AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
+
+# QUOTAS 5.5: the status line helper's own tests run the built executable.
+if(TARGET agent-speed-statusline)
+    target_compile_definitions(agentspeed_tests PRIVATE AGENTSPEED_STATUSLINE_BINARY="$<TARGET_FILE:agent-speed-statusline>")
+    add_dependencies(agentspeed_tests agent-speed-statusline)
+endif()
 
 # REMOTE 10: the app's connection runs the real relay through a stand-in for ssh.
 if(TARGET agent-speed-relay)
@@ -88,16 +110,21 @@ gtest_discover_tests(agentspeed_character_alloc_tests)
 
 # The app's settings side (DESIGN 5 Storage, METRICS 2.1 Editing) needs Qt: built only with the app.
 if(AGENTSPEED_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core DBus Network Widgets)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/character_library_test.cpp
+        app/character_quota_test.cpp
         app/character_readings_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
         app/orb_size_test.cpp
         app/qoder_settings_test.cpp
+        app/quota_transport_test.cpp
+        app/quota_view_test.cpp
+        app/quota_worker_test.cpp
+        app/secret_service_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
         ../app/src/characters/character_library.cpp
@@ -108,11 +135,17 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/lan/lan_server.cpp
         ../app/src/lan/lan_targets.cpp
         ../app/src/format.cpp
+        ../app/src/orb/character/character_quota.cpp
         ../app/src/orb/character/character_readings.cpp
         ../app/src/orb/idle_fade.cpp
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
+        ../app/src/quota/quota_text.cpp
+        ../app/src/quota/quota_transport.cpp
+        ../app/src/quota/quota_view.cpp
+        ../app/src/quota/quota_worker.cpp
+        ../app/src/quota/secret_service.cpp
         ../app/src/source_locations_view.cpp
         ../app/src/strings.cpp
     )
@@ -127,8 +160,9 @@ if(AGENTSPEED_BUILD_APP)
         BASE "${CMAKE_CURRENT_SOURCE_DIR}/../app"
         FILES "${CMAKE_CURRENT_SOURCE_DIR}/../app/strings.linux.json")
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
-    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
+    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::DBus Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
     target_compile_definitions(agentspeed_app_tests PRIVATE
+        AGENTSPEED_VERSION="${AGENTSPEED_VERSION}"
         AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
         AGENTSPEED_APP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../app")
     gtest_discover_tests(agentspeed_app_tests)

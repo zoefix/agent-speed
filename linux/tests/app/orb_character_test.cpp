@@ -79,6 +79,23 @@ TEST(OrbCharacter, LatencyAndModelsDefaultOnAndRoundTrip) {
     EXPECT_TRUE(odd.characterReadouts.isDefault());
 }
 
+// DESIGN 2b `characterReadouts`: `quota` defaults true, also for settings written before it existed; written only when
+// it differs from the default, and a value that is not a boolean takes the default.
+TEST(OrbCharacter, QuotaDefaultsOnAndRoundTrips) {
+    const auto older = decode(R"({"id": "a", "style": "character", "characterReadouts": {"models": false}})");
+    EXPECT_TRUE(older.characterReadouts.quota);
+    auto off = older;
+    off.characterReadouts.quota = false;
+    const auto json = off.toJson().value(QStringLiteral("characterReadouts")).toObject();
+    EXPECT_EQ(json.value(QStringLiteral("quota")), QJsonValue(false));
+    EXPECT_EQ(OrbConfig::fromJson(off.toJson()).characterReadouts, off.characterReadouts);
+    EXPECT_TRUE(decode(R"({"id": "a", "characterReadouts": {"quota": "off"}})").characterReadouts.quota);
+    auto plain = decode(R"({"id": "a", "style": "character"})");
+    EXPECT_FALSE(plain.toJson().contains(QStringLiteral("characterReadouts")));
+    plain.characterReadouts.quota = false;
+    EXPECT_TRUE(plain.toJson().contains(QStringLiteral("characterReadouts")));
+}
+
 // The Settings orb editor lists the checks in the menus' order (the context menu and the tray build theirs from the
 // same list).
 TEST(OrbCharacter, TheEditorListsTheReadoutChecksInTheMenusOrder) {
@@ -87,10 +104,10 @@ TEST(OrbCharacter, TheEditorListsTheReadoutChecksInTheMenusOrder) {
         keys << item.toMap().value(QStringLiteral("key")).toString();
         titles << item.toMap().value(QStringLiteral("title")).toString();
     }
-    EXPECT_EQ(keys, (QStringList{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "model"}));
+    EXPECT_EQ(keys, (QStringList{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "quota", "model"}));
     EXPECT_EQ(titles, (QStringList{"character.readouts.intel", "character.readouts.thinking", "character.readouts.latency",
                                    "character.readouts.network", "character.readouts.cost", "character.readouts.agents",
-                                   "character.readouts.models", "character.readouts.model"}));
+                                   "character.readouts.models", "character.readouts.quota", "character.readouts.model"}));
     QFile qml(QStringLiteral(AGENTSPEED_APP_DIR "/qml/characters/CharacterReadoutsGroup.qml"));
     ASSERT_TRUE(qml.open(QIODevice::ReadOnly));
     EXPECT_TRUE(QString::fromUtf8(qml.readAll()).contains(QStringLiteral("model: orbs.characterReadoutItems()")));

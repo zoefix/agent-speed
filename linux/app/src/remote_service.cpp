@@ -12,6 +12,7 @@
 #include "history_service.hpp"
 #include "orbs/orbs_store.hpp"
 #include "preferences.hpp"
+#include "agentspeed/quota/sources.hpp"
 
 namespace {
 
@@ -61,6 +62,23 @@ RemoteService::RemoteService(Preferences& prefs, std::shared_ptr<agentspeed::pri
     });
     connect(&prefs_, &Preferences::networkEnabledChanged, this, &RemoteService::apply);
     connect(&prefs_, &Preferences::sourcesChanged, this, &RemoteService::apply);
+    connect(&prefs_, &Preferences::quotaChanged, this, &RemoteService::apply);
+    coordinator_->setQuotaSink([this](const remote::HostEvent& event) {
+        const auto* message = std::get_if<remote::HostEvent::Message>(&event.kind);
+        if (!message) return;
+        if (const auto* bridge = std::get_if<remote::HostQuotaBridge>(&message->message);
+            bridge && bridge->state == remote::HostQuotaBridge::State::Off) {
+            QMetaObject::invokeMethod(this, [this, id = qt(bridge->hostId)] {
+                if (pendingRemovals_.contains(id)) finishRemoval(id);
+            }, Qt::QueuedConnection);
+        }
+        std::function<void(const remote::RelayMessage&)> sink;
+        {
+            std::lock_guard lock(sinkMutex_);
+            sink = quotaSink_;
+        }
+        if (sink) sink(message->message);
+    });
     watchSystem();
     apply();
 }
@@ -113,9 +131,29 @@ void RemoteService::save() {
     apply();
 }
 
+void RemoteService::setQuotaSink(std::function<void(const remote::RelayMessage&)> sink) {
+    std::lock_guard lock(sinkMutex_);
+    quotaSink_ = std::move(sink);
+}
+
+// REMOTE 11.1: the sources whose quota switch is on and that are enabled (QUOTAS 9.1); each host adds its bridge.
+remote::QuotaSwitches RemoteService::quotaSwitches() const {
+    remote::QuotaSwitches out;
+    const auto enabled = prefs_.monitorConfig().enabled;
+    for (const auto& route : agentspeed::quota::sourceRoutes()) {
+        if (!enabled.contains(route.source) || !remote::quotas::hostReads(route.source)) continue;
+        if (route.source == agentspeed::SourceKind::ClaudeCode || prefs_.quotaSwitch(QString::fromUtf8(route.switchKey))) out.sources.insert(route.source);
+    }
+    out.network = prefs_.networkEnabled();
+    out.grokLive = prefs_.quotaSwitch(QStringLiteral("quotaGrokBuildLive"));
+    out.claudeCode = enabled.contains(agentspeed::SourceKind::ClaudeCode);
+    return out;
+}
+
 void RemoteService::apply() {
     const auto table = prices_ ? prices_->current() : agentspeed::pricing::PriceBook::bundled();
-    coordinator_->update(document_, prefs_.networkEnabled(), prefs_.monitorConfig().enabled, table ? table->data() : std::string());
+    coordinator_->update(document_, prefs_.networkEnabled(), prefs_.monitorConfig().enabled, table ? table->data() : std::string(),
+                         quotaSwitches());
     if (history_) history_->setRemoteHosts(document_.displayNames());
 }
 
@@ -199,7 +237,63 @@ void RemoteService::setHostEnabled(const QString& id, bool enabled) {
     save();
 }
 
+void RemoteService::setHostQuotaBridge(const QString& id, bool on) {
+    const auto* found = document_.find(utf8(id));
+    if (!found || found->quotaClaudeCli == on) return;
+    auto host = *found;
+    host.quotaClaudeCli = on;
+    document_.update(std::move(host));
+    save();
+}
+
+std::map<QString, QString> RemoteService::hostNames() const {
+    std::map<QString, QString> out;
+    for (const auto& [id, name] : document_.displayNames()) out[qt(id)] = qt(name);
+    return out;
+}
+
+QSet<QString> RemoteService::connectedHosts() const {
+    QSet<QString> out;
+    for (const auto& id : coordinator_->connectedHostIds()) out.insert(qt(id));
+    return out;
+}
+
+std::map<QString, QSet<QString>> RemoteService::hostQuotaSources() const {
+    std::map<QString, QSet<QString>> out;
+    const auto switches = quotaSwitches();
+    for (const auto& host : document_.hosts()) {
+        auto& set = out[qt(host.id)];
+        for (const auto source : remote::HostQuotaConfig::forHost(host.quotaClaudeCli, switches).sources) {
+            set.insert(QString::fromUtf8(agentspeed::sourceId(source)));
+        }
+    }
+    return out;
+}
+
+bool RemoteService::hostQuotaBridge(const QString& id) const {
+    const auto* host = document_.find(utf8(id));
+    return host && host->quotaClaudeCli;
+}
+
 void RemoteService::removeHost(const QString& id, bool deleteHistory) {
+    const auto* host = document_.find(utf8(id));
+    if (!host) return;
+    // REMOTE 2.4: a host whose bridge is on restores its status line first, when it can be reached.
+    if (host->quotaClaudeCli && coordinator_->connectedHostIds().contains(utf8(id))) {
+        pendingRemovals_[id] = deleteHistory;
+        setHostQuotaBridge(id, false);
+        QTimer::singleShot(10'000, this, [this, id] {
+            if (pendingRemovals_.contains(id)) finishRemoval(id);
+        });
+        return;
+    }
+    pendingRemovals_[id] = deleteHistory;
+    finishRemoval(id);
+}
+
+void RemoteService::finishRemoval(const QString& id) {
+    const bool deleteHistory = pendingRemovals_[id];
+    pendingRemovals_.erase(id);
     if (!document_.find(utf8(id))) return;
     document_.remove(utf8(id));
     save();

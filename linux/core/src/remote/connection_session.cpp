@@ -9,7 +9,7 @@ void Connection::beginSession() {
     session_.lastLineMs = now();
     scheduleSilenceCheck();
     const auto zone = environment_.zone ? environment_.zone() : Zone{"UTC", utcTzif()};
-    send(encode::start(environment_.todayStartMs(now()), settings_.sources, zone, settings_.prices));
+    send(encode::start(environment_.todayStartMs(now()), settings_.sources, zone, settings_.prices, quotaConfig()));
     if (settings_.watch) send(encode::watch(true));
 }
 

@@ -61,13 +61,14 @@ void Coordinator::stop() {
     if (thread_.joinable()) thread_.join();
 }
 
-void Coordinator::update(const HostsDocument& document, bool networkEnabled, std::set<SourceKind> sources, std::string priceTable) {
+void Coordinator::update(const HostsDocument& document, bool networkEnabled, std::set<SourceKind> sources, std::string priceTable,
+                         QuotaSwitches quota) {
     {
         std::lock_guard lock(mutex_);
         if (stopped_) return;
         document_ = document;
     }
-    Applied next{document.hosts(), networkEnabled, std::move(sources), std::move(priceTable)};
+    Applied next{document.hosts(), networkEnabled, std::move(sources), std::move(priceTable), std::move(quota)};
     const auto names = document.displayNames();
     loop_.post([this, next = std::move(next), names] {
         if (applied_ && *applied_ == next) return;
@@ -75,7 +76,7 @@ void Coordinator::update(const HostsDocument& document, bool networkEnabled, std
         std::vector<HostInfo> hosts;
         for (const auto& h : next.hosts) hosts.push_back({h.id, names.contains(h.id) ? names.at(h.id) : h.automaticName()});
         if (options_.feed) options_.feed->setHosts(std::move(hosts));
-        hub_->update(next.hosts, next.networkEnabled, next.sources, next.priceTable);
+        hub_->update(next.hosts, next.networkEnabled, next.sources, next.priceTable, next.quota);
         hub_->setWatch(watch_);
     });
 }
@@ -106,6 +107,11 @@ void Coordinator::noteTimeZoneChange() {
 void Coordinator::setHistorySink(HistorySink sink) {
     std::lock_guard lock(mutex_);
     historySink_ = std::move(sink);
+}
+
+void Coordinator::setQuotaSink(HistorySink sink) {
+    std::lock_guard lock(mutex_);
+    quotaSink_ = std::move(sink);
 }
 
 std::uint64_t Coordinator::testConnection(Host host, std::function<void(TestOutcome)> done) {
@@ -163,6 +169,10 @@ Coordinator::Route Coordinator::route(const HostEvent& event) {
         return Route::History;
     }
     if (const auto* error = std::get_if<RelayError>(&message); error && error->code == RelayError::Code::HistoryFailed) return Route::History;
+    if (std::holds_alternative<HostQuota>(message) || std::holds_alternative<HostQuotaRemoved>(message) ||
+        std::holds_alternative<HostQuotaBridge>(message)) {
+        return Route::Quota;
+    }
     return Route::Live;
 }
 
@@ -202,12 +212,15 @@ void Coordinator::receive(const HostEvent& event) {
 }
 
 void Coordinator::deliver(const HostEvent& event) {
-    HistorySink sink;
+    HistorySink sink, quotaSink;
     {
         std::lock_guard lock(mutex_);
         sink = historySink_;
+        quotaSink = quotaSink_;
     }
     const auto where = route(event);
+    if ((where == Route::Quota || where == Route::Both) && quotaSink) quotaSink(event);
+    if (where == Route::Quota) return;
     if (where != Route::History && options_.feed) {
         const auto now = loop_.nowMs();
         options_.feed->receive(event, now, todayStartMs(now));

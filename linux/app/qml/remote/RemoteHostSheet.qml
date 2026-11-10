@@ -22,6 +22,8 @@ Popup {
     property string name: ""
     property string folder: ""
     property bool advanced: false
+    // REMOTE 11.3: the host's Claude Code status line bridge, saved with the host.
+    property bool quotaBridge: false
     property bool destinationEdited: false
     // idle | running | done
     property string testState: "idle"
@@ -51,6 +53,7 @@ Popup {
         editingId = ""
         originalName = ""
         load("", "", "")
+        quotaBridge = false
         destinationEdited = false
         open()
         destinationField.focusField()
@@ -59,6 +62,7 @@ Popup {
         editingId = host.hostId
         originalName = host.name
         load(host.destination, host.customName || "", host.relayFolder || "")
+        quotaBridge = remote.hostQuotaBridge(host.hostId)
         destinationEdited = true
         open()
     }
@@ -73,6 +77,8 @@ Popup {
             pair[0].restore()
         }
     }
+    // Development aid: the bridge's confirmation as the switch asks it.
+    function askBridge() { bridgeDialog.ask() }
     // Development aid: the destination as if typed.
     function typeDestination(text) { destinationField.type(text) }
     function typeName(text) { nameField.type(text) }
@@ -94,8 +100,11 @@ Popup {
         if (!valid) return
         if (editing) {
             if (!remote.updateHost(editingId, cleanDestination, name, folder.trim())) return
-        } else if (!remote.canAdd || remote.addHost(cleanDestination, name, folder.trim()).length === 0) {
-            return
+            remote.setHostQuotaBridge(editingId, quotaBridge)
+        } else {
+            const id = remote.canAdd ? remote.addHost(cleanDestination, name, folder.trim()) : ""
+            if (id.length === 0) return
+            remote.setHostQuotaBridge(id, quotaBridge)
         }
         close()
     }
@@ -283,6 +292,80 @@ Popup {
                                 Layout.fillWidth: true
                                 text: sheet.nameError
                             }
+                        }
+                    }
+                }
+
+                // DESIGN 13 Host quotas: the host's Claude Code status line bridge, and its state under the switch.
+                Rectangle {
+                    id: quotaCard
+                    readonly property var line: quotas.revision >= 0 && sheet.editing ? quotas.hostBridgeLine(sheet.editingId) : ({})
+                    Layout.fillWidth: true
+                    Layout.leftMargin: 24
+                    Layout.rightMargin: 24
+                    Layout.topMargin: 12
+                    implicitHeight: quotaRow.implicitHeight + 24
+                    radius: 10
+                    color: Theme.card
+                    border.width: 1
+                    border.color: Theme.border
+                    RowLayout {
+                        id: quotaRow
+                        anchors.left: parent.left
+                        anchors.leftMargin: 14
+                        anchors.right: parent.right
+                        anchors.rightMargin: 14
+                        anchors.verticalCenter: parent.verticalCenter
+                        spacing: 12
+                        ColumnLayout {
+                            Layout.fillWidth: true
+                            spacing: 3
+                            Text {
+                                Layout.fillWidth: true
+                                text: S.tr2(S.rev, "remote.quota.claudeCli")
+                                color: Theme.ink
+                                font.pixelSize: 13
+                                wrapMode: Text.Wrap
+                            }
+                            Text {
+                                Layout.fillWidth: true
+                                text: S.tr2(S.rev, "remote.quota.claudeCli.hint")
+                                color: Theme.ink3
+                                font.pixelSize: 11
+                                lineHeight: 1.25
+                                wrapMode: Text.Wrap
+                            }
+                            RowLayout {
+                                visible: sheet.quotaBridge && (quotaCard.line.text || "").length > 0
+                                Layout.topMargin: 2
+                                Layout.fillWidth: true
+                                spacing: 5
+                                Glyph {
+                                    Layout.preferredWidth: 11
+                                    Layout.preferredHeight: 11
+                                    Layout.alignment: Qt.AlignTop
+                                    Layout.topMargin: 1
+                                    name: quotaCard.line.warning ? "warning" : quotaCard.line.ok ? "checkCircle" : "dotRing"
+                                    color: quotaCard.line.warning ? (Theme.dark ? "#FB923C" : "#E86A0C") : quotaCard.line.ok ? Theme.good : Theme.ink3
+                                    Accessible.ignored: true
+                                }
+                                Text {
+                                    Layout.fillWidth: true
+                                    // The host reports the settings path: plain text only (REMOTE 5.6).
+                                    textFormat: Text.PlainText
+                                    text: quotaCard.line.text || ""
+                                    color: quotaCard.line.warning ? (Theme.dark ? "#FDBA74" : "#C2410C") : Theme.ink2
+                                    font.pixelSize: 11
+                                    font.features: Theme.tabular
+                                    wrapMode: Text.Wrap
+                                }
+                            }
+                        }
+                        ToggleSwitch {
+                            Layout.alignment: Qt.AlignTop
+                            label: S.tr2(S.rev, "remote.quota.claudeCli")
+                            checked: sheet.quotaBridge
+                            onToggled: (on) => on ? bridgeDialog.ask() : (sheet.quotaBridge = false)
                         }
                     }
                 }
@@ -505,5 +588,16 @@ Popup {
                 onClicked: sheet.save()
             }
         }
+    }
+
+    QuotaConfirmDialog {
+        id: bridgeDialog
+        glyph: "gauge"
+        question: Format.fill(S.tr2(S.rev, "remote.quota.claudeCli.confirm.title"),
+                              [sheet.editing ? sheet.originalName : (sheet.name.trim().length > 0 ? sheet.name.trim() : sheet.automaticName)])
+        detail: Format.fill(S.tr2(S.rev, "remote.quota.claudeCli.confirm.message"),
+                            [sheet.editing ? quotas.hostBridgePath(sheet.editingId) : "~/.claude/settings.json"])
+        action: S.tr2(S.rev, "settings.quota.claudeCli.confirm.ok")
+        onConfirmed: sheet.quotaBridge = true
     }
 }

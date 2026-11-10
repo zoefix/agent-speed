@@ -1,4 +1,5 @@
 #include <QAccessible>
+#include <QDateTime>
 #include <QApplication>
 #include <QQmlApplicationEngine>
 #include <QQmlEngine>
@@ -32,6 +33,9 @@
 #include "orb/preview.hpp"
 #include "hero/hero_item.hpp"
 #include "preferences.hpp"
+#include "agentspeed/quota/codex.hpp"
+#include "quota/quota_service.hpp"
+#include "quota/quota_view.hpp"
 #include "remote_hosts_view.hpp"
 #include "remote_service.hpp"
 #include "remote_trace.hpp"
@@ -78,6 +82,7 @@ std::vector<BoardSpec> boardSpecs(const BoardStore* store) {
 const BoardStore* gBoards = nullptr;
 const OrbsStore* gOrbs = nullptr;
 std::shared_ptr<agentspeed::remote::Feed> gRemoteFeed;
+std::shared_ptr<agentspeed::quota::CodexCollector> gCodexQuota;
 
 WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, const Strings& strings,
                           const std::shared_ptr<agentspeed::pricing::PriceBook>& prices) {
@@ -97,6 +102,7 @@ WorkerOptions optionsFrom(const Preferences& prefs, const Catalog& catalog, cons
     options.boards = boardSpecs(gBoards);
     if (gOrbs) options.orbs = orbSpecs(*gOrbs);
     options.remoteFeed = gRemoteFeed;
+    options.codexQuota = gCodexQuota;
     return options;
 }
 
@@ -150,6 +156,7 @@ int main(int argc, char* argv[]) {
     RemoteService remote(prefs, prices);
     remote.setSelectionStores(&orbStore, &boardStore);
     gRemoteFeed = remote.feed();
+    gCodexQuota = std::make_shared<agentspeed::quota::CodexCollector>();
 
     QThread thread;
     thread.setObjectName(QStringLiteral("monitor"));
@@ -251,6 +258,12 @@ int main(int argc, char* argv[]) {
     HeroItem::setContext(&themes, &strings);
     qmlRegisterType<HeroItem>("AgentSpeed.Orb", 1, 0, "HeroOrb");
 
+    // QUOTAS: the quotas as the dashboard, Settings and the orbs show them (outlives the engine). AGENT_SPEED_QUOTA_DEMO
+    // shows fixed quotas of every route in demo mode (screenshots).
+    QuotaView quotas(strings);
+    if (demo && qEnvironmentVariableIsSet("AGENT_SPEED_QUOTA_DEMO")) quotas.loadDemo(QDateTime::currentMSecsSinceEpoch());
+    orbs.setQuotas(&quotas);
+    QuotaService quotaService(prefs, quotas, remote, gCodexQuota);
     // DESIGN 13: the hosts as the settings, pickers, dashboard and history show them (outlives the engine).
     RemoteHostsView hostsView(remote, prefs, state, historyModel, strings);
     // DESIGN 5 資料來源: every source's location list.
@@ -275,6 +288,7 @@ int main(int argc, char* argv[]) {
     engine.rootContext()->setContextProperty(QStringLiteral("remote"), &remote);
     engine.rootContext()->setContextProperty(QStringLiteral("hostsView"), &hostsView);
     engine.rootContext()->setContextProperty(QStringLiteral("locations"), &locations);
+    engine.rootContext()->setContextProperty(QStringLiteral("quotas"), &quotas);
     orbs.setHostsView(&hostsView);
     installRemoteTrace(state, historyModel);
     // NETWORK 1–4 and UPDATES: price sync, exchange rates and the update check, under the master switch.
@@ -394,6 +408,10 @@ int main(int argc, char* argv[]) {
         tray.notify(strings.fmt(QStringLiteral("update.available.title"), {version}), strings.t(QStringLiteral("update.notification.body")));
     });
     Flyout flyout(window, popup);
+    // QUOTAS 9.1: while the dashboard is open, the vendors may be asked for agents that are not running.
+    QObject::connect(window, &QWindow::visibleChanged, &quotaService, [&](bool visible) { quotaService.setDashboardOpen(visible); });
+    // DESIGN 4: the invitation's link opens 資料來源, where the confirmation asks.
+    QObject::connect(&quotas, &QuotaView::cliSettingsRequested, &app, [&] { openSettings(kSourcesPage); });
     QObject::connect(&state, &AppState::snapshotChanged, &tray, [&] {
         const auto snap = state.snapshot();
         const auto live = snap.value(QStringLiteral("liveText")).toString();
@@ -500,6 +518,10 @@ int main(int argc, char* argv[]) {
         if (arg.startsWith(QStringLiteral("--orb-hosts="))) {
             const auto value = arg.mid(12);
             orbs.setHosts(orbStore.orbs().front().id, value == QLatin1String("all") ? QVariant(value) : QVariant(value.split(QLatin1Char(','))));
+        }
+        // --orb-sources=<key[,key…]> sets the first orb's sources (METRICS 1 keys).
+        if (arg.startsWith(QStringLiteral("--orb-sources="))) {
+            for (const auto& key : arg.mid(14).split(QLatin1Char(','), Qt::SkipEmptyParts)) orbs.setSource(orbStore.orbs().front().id, key, true);
         }
         // --orb-do=<add|duplicate|split|merge|undo> runs that action on the first orb after 3 s.
         if (arg.startsWith(QStringLiteral("--orb-do="))) {
@@ -680,7 +702,9 @@ int main(int argc, char* argv[]) {
 
     thread.start();
     historyThread.start();
+    quotaService.start();
     const int code = app.exec();
+    quotaService.stop();
     // Quitting closes every relay's stdin and ends every ssh (REMOTE 4.4).
     remote.stop();
     // Today's traffic is saved at quit (METRICS 10.9), before both threads stop.

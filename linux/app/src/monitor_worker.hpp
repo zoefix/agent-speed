@@ -17,6 +17,9 @@
 #include "orbs/orb_views.hpp"
 
 class QTimer;
+namespace agentspeed::quota {
+class CodexCollector;
+}
 class Strings;
 
 // What the worker needs from the settings; set from the UI thread, applied on the next tick.
@@ -36,6 +39,8 @@ struct WorkerOptions {
     std::vector<OrbSpec> orbs;      // DESIGN 2b: every floating orb's sources
     // REMOTE 7: the remote hosts' live side; every tick applies its changes, a new monitor its replay.
     std::shared_ptr<agentspeed::remote::Feed> remoteFeed;
+    // QUOTAS 3: every Codex parser hands its `rate_limits` to this collector.
+    std::shared_ptr<agentspeed::quota::CodexCollector> codexQuota;
 };
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;

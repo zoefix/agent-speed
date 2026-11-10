@@ -102,7 +102,8 @@ std::optional<Host> decodeHost(const json::Value& value) {
     const auto enabled = value["enabled"];
     auto host = Host::make(*id, value["destination"].string().value_or(""), value["name"].string(), !enabled.isBool() || enabled.isTrue(),
                            value["relayFolder"].string());
-    host.extra = unknownMembers(value, {"id", "destination", "name", "enabled", "relayFolder"});
+    host.quotaClaudeCli = value["quotaClaudeCli"].isTrue();
+    host.extra = unknownMembers(value, {"id", "destination", "name", "enabled", "relayFolder", "quotaClaudeCli"});
     return host;
 }
 
@@ -280,6 +281,7 @@ std::string HostsDocument::json() const {
         members.emplace_back("name", optionalText(h.name));
         members.emplace_back("enabled", h.enabled ? "true" : "false");
         members.emplace_back("relayFolder", optionalText(h.relayFolder));
+        if (h.quotaClaudeCli) members.emplace_back("quotaClaudeCli", "true");
         if (i) hosts += ',';
         hosts += object(std::move(members));
     }

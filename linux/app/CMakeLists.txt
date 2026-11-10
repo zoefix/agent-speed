@@ -29,6 +29,12 @@ qt_add_executable(agent-speed
     src/characters/character_library.cpp
     src/characters/character_transport.cpp
     src/preferences.cpp
+    src/quota/quota_text.cpp
+    src/quota/quota_service.cpp
+    src/quota/quota_transport.cpp
+    src/quota/quota_view.cpp
+    src/quota/quota_worker.cpp
+    src/quota/secret_service.cpp
     src/host_dot.cpp
     src/remote_hosts_view.cpp
     src/remote_service.cpp
@@ -54,6 +60,8 @@ qt_add_executable(agent-speed
     src/orb/character/character_lightning.cpp
     src/orb/character/character_models.cpp
     src/orb/character/character_particles.cpp
+    src/orb/character/character_quota.cpp
+    src/orb/character/character_quota_card.cpp
     src/orb/character/character_readings.cpp
     src/orb/character/character_style.cpp
     src/orb/orb_accessible.cpp
@@ -176,6 +184,15 @@ set(agent_speed_qml
     qml/sources/LocationRow.qml
     qml/sources/SourceGroup.qml
     qml/sources/SourceToggleRow.qml
+    qml/quota/QuotaBar.qml
+    qml/quota/QuotaConfirmDialog.qml
+    qml/quota/QuotaFadeText.qml
+    qml/quota/QuotaGroupRows.qml
+    qml/quota/QuotaInvite.qml
+    qml/quota/QuotaKeyField.qml
+    qml/quota/QuotaLine.qml
+    qml/quota/QuotaLines.qml
+    qml/quota/QuotaToggle.qml
 )
 # Serve every file from the module root, so the implicit directory import sees the qmldir (and the Theme singleton).
 foreach(file IN LISTS agent_speed_qml)

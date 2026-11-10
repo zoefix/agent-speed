@@ -252,6 +252,13 @@ std::string Env::name(const std::string& exe) const {
     return base;
 }
 
+bool isClaudeDesktopProcess(const Env& env, const Process& process) { return isClaudeDesktopApp(env, process); }
+
+bool isCodexAppProcess(const Env& env, const Process& process) {
+    if (env.platform == Platform::MacOS) return under(env, process.exe, {"/Applications/Codex.app/Contents/MacOS/Codex"});
+    return env.platform == Platform::Windows && env.name(process.exe) == "codex" && packageApp(env, process.exe) == "openai.codex_";
+}
+
 std::optional<SourceKind> matchSource(const Env& env, const Process& p, const std::vector<const Process*>& ancestors) {
     if (isDesktopApp(env, p)) return std::nullopt;
     const auto name = env.name(p.exe);

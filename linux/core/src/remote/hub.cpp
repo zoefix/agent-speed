@@ -17,10 +17,11 @@ Hub::Hub(ConnectionEnvironment environment, Sink sink) : environment_(std::move(
 
 Hub::~Hub() { stopAll(); }
 
-void Hub::update(const std::vector<Host>& hosts, bool networkEnabled, const std::set<SourceKind>& sources, std::string_view priceTable) {
+void Hub::update(const std::vector<Host>& hosts, bool networkEnabled, const std::set<SourceKind>& sources, std::string_view priceTable,
+                 const QuotaSwitches& quota) {
     auto prices = compactPriceTable(priceTable);
     if (!prices) prices = settings_ ? settings_->prices : bundledPrices();
-    SessionSettings next{sources, *prices, settings_ ? settings_->watch : false};
+    SessionSettings next{sources, *prices, settings_ ? settings_->watch : false, quota};
     const bool sourcesChanged = settings_ && settings_->sources != sources;
     settings_ = next;
 
@@ -61,6 +62,7 @@ void Hub::update(const std::vector<Host>& hosts, bool networkEnabled, const std:
             } else {
                 connectedHosts_[host.id] = host;
                 it->second->updatePrices(next.prices);
+                it->second->setQuota(quota, host.quotaClaudeCli);
                 continue;
             }
         }

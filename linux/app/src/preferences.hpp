@@ -29,6 +29,11 @@ class Preferences : public QObject {
     Q_PROPERTY(bool trafficEnabled READ trafficEnabled WRITE setTrafficEnabled NOTIFY trafficChanged)
     Q_PROPERTY(bool trafficIncludeTools READ trafficIncludeTools WRITE setTrafficIncludeTools NOTIFY trafficChanged)
     Q_PROPERTY(QString trafficUnit READ trafficUnit WRITE setTrafficUnit NOTIFY trafficChanged)
+    // DESIGN 5 額度 Storage: `quotaCliInvite` ("dismissed" or absent) and `quotaZcodeRegion`.
+    Q_PROPERTY(bool quotaCliInviteDismissed READ quotaCliInviteDismissed WRITE setQuotaCliInviteDismissed NOTIFY quotaChanged)
+    Q_PROPERTY(QString quotaZcodeRegion READ quotaZcodeRegion WRITE setQuotaZcodeRegion NOTIFY quotaChanged)
+    // Bumped by every quota setting change, so QML bindings to quotaSwitch() re-evaluate.
+    Q_PROPERTY(int quotaRevision READ quotaRevision NOTIFY quotaChanged)
 
 public:
     explicit Preferences(QObject* parent = nullptr);
@@ -82,6 +87,15 @@ public:
     QString lan() const;
     void setLan(const QString& json);
 
+    // DESIGN 5 額度: the switches `quotaCodex` … `quotaWorkBuddy` and `quotaGrokBuildLive` (QUOTAS 9.1 defaults).
+    Q_INVOKABLE bool quotaSwitch(const QString& key) const;
+    Q_INVOKABLE void setQuotaSwitch(const QString& key, bool on);
+    bool quotaCliInviteDismissed() const;
+    void setQuotaCliInviteDismissed(bool value);
+    QString quotaZcodeRegion() const;
+    void setQuotaZcodeRegion(const QString& value);
+    int quotaRevision() const { return quotaRevision_; }
+
     Q_INVOKABLE bool sourceEnabled(const QString& source) const;
     Q_INVOKABLE void setSourceEnabled(const QString& source, bool enabled);
     Q_INVOKABLE bool subscribed(const QString& source) const;
@@ -110,10 +124,12 @@ signals:
     void autoCheckUpdatesChanged();
     void remoteHostsChanged();
     void lanChanged();
+    void quotaChanged();
 
 private:
     template <typename T>
     void store(const char* key, const T& value, void (Preferences::*signal)());
 
     mutable QSettings settings_;
+    int quotaRevision_ = 0;
 };

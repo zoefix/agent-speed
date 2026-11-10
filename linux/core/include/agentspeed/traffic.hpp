@@ -43,6 +43,10 @@ struct Process {
 using Key = std::pair<std::int64_t, std::int64_t>;  // (pid, start)
 
 std::optional<SourceKind> matchSource(const Env& env, const Process& process, const std::vector<const Process*>& ancestors);
+// QUOTAS 6 Runs: the desktop apps' own executables, never agent processes. Claude Desktop (macOS, Windows; no Linux path
+// is known, so never on Linux) and the Codex app (macOS `/Applications/Codex.app/...`, Windows `WindowsApps\OpenAI.Codex_*`).
+bool isClaudeDesktopProcess(const Env& env, const Process& process);
+bool isCodexAppProcess(const Env& env, const Process& process);
 
 struct Classification {
     enum class Role { None, Agent, Self, Tool } role = Role::None;

@@ -1,5 +1,7 @@
 #include "monitor_worker.hpp"
 
+#include "agentspeed/quota/codex.hpp"
+
 #include <QDate>
 #include <QDateTime>
 #include <QTimer>
@@ -79,6 +81,7 @@ void MonitorWorker::startMonitor(qint64 now) {
     // A restart (new folders, sources) keeps today's traffic measured so far.
     const TrafficRows carried = monitor_ ? monitor_->trafficToday(now) : TrafficRows{};
     monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
+    if (options_.codexQuota) monitor_->setRateLimitObserver(options_.codexQuota->observer());
     monitor_->restoreTraffic(carried);
     monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setPerfBaselines(baselines_);

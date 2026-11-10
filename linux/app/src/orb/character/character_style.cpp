@@ -263,7 +263,7 @@ bool CharacterStyle::isBusy(const Frame&) const {
     if (lightning_.isActive()) return true;
     if (!stage_) return content_.pack != nullptr || CharacterAssets::shared().loading();
     return CharacterAssets::shared().loading() || stage_->outgoing() || stage_->incoming() || stage_->current().fadingPose() ||
-           hud_.peakAge() || particles_.isLively() || wings_.isFading() || modelsCard_.moving(hudTime_);
+           hud_.peakAge() || particles_.isLively() || wings_.isFading() || modelsCard_.moving(hudTime_) || quotaCard_.moving(hudTime_);
 }
 
 int CharacterStyle::ambientFps(const Frame& f) const {
@@ -337,6 +337,10 @@ std::array<double, 2> CharacterStyle::cardSize(HudCard card, const Frame& f) con
             const auto shape = modelsCard_.shape(m, {content_.modelsMore, content_.speedUnit});
             return {shape.dots, shape.h};
         }
+        case HudCard::Quota: {
+            const auto size = quotaCard_.size(m, hudTime_);
+            return {size.w, size.h};
+        }
         case HudCard::Network: {
             const auto& n = content_.net;
             if (n.downNumber.isEmpty() && n.upNumber.isEmpty()) return {0, 0};
@@ -397,6 +401,17 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
     const bool modelsLive = (content_.readouts.models && content_.modelsOpacity > 0) || wings_.presence()[models] > 0;
     modelsCard_.sync(modelsLive ? content_.models : kNoRows, d < 192 ? ac::kSmallModelRows : ac::kModelRows, hudTime_,
                      f.effects.level == 0);
+    // 額度 takes the widest form the room it had last frame allows; the wings spill it only when its narrowest does not
+    // fit. Below S = 96 it lists its first source without reset cells.
+    static const std::vector<ac::QuotaSource> kNoSources;
+    const auto quota = static_cast<std::size_t>(ac::index(HudCard::Quota));
+    const auto& sources = content_.quota ? *content_.quota : kNoSources;
+    const bool quotaLive = content_.readouts.quota && !sources.empty();
+    const bool quotaGone = wings_.presence()[quota] == 0;
+    quotaCard_.sync(sources, quotaLive, quotaGone, d < 192, hudTime_, f.effects.level == 0);
+    const auto quotaWidths = quotaCard_.widths(CardMetrics(d), hudTime_);
+    quotaCard_.fit(dt, quotaWidths, wings_.quotaRoom(), ac::HudWings::kModelsSpare * d, !cardShown_[quota] || quotaGone, f.effects.level == 0);
+    wings_.quotaNarrowest = *std::min_element(quotaWidths.begin(), quotaWidths.end());
     for (HudCard card : ac::kHudCards) {
         const auto size = card == HudCard::Speed ? std::array<double, 2>{speed.first, speed.second} : cardSize(card, f);
         cardSizes_[static_cast<std::size_t>(ac::index(card))] = {size[0], size[1]};
@@ -410,9 +425,14 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
     cardShown_[4] = r.cost && content_.costOpacity > 0.5 && has(HudCard::Cost);
     cardShown_[5] = r.agents && d >= 192 && has(HudCard::Agents);
     cardShown_[models] = r.models && content_.modelsOpacity > 0.5 && has(HudCard::Models);
+    // No quiet rule: a quota does not change by the second, it shows whenever it applies; once the wings have measured its
+    // room (from her second frame), so it never shows in a form too wide for it.
+    cardShown_[quota] = quotaLive && has(HudCard::Quota) && std::isfinite(wings_.quotaRoom());
     if (d < 192) {
-        int room = 2;
+        // The column keeps two cards; 額度 is one of them when it shows.
+        int room = cardShown_[quota] ? 1 : 2;
         for (HudCard card : ac::kHudColumn) {
+            if (card == HudCard::Quota) continue;
             auto& shown = cardShown_[static_cast<std::size_t>(ac::index(card))];
             if (!shown) continue;
             if (room == 0) shown = false;
@@ -671,7 +691,8 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                   Blend::Over);
     };
 
-    for (HudCard card : {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Models, HudCard::Model}) {
+    for (HudCard card :
+         {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Quota, HudCard::Models, HudCard::Model}) {
         const auto i = static_cast<std::size_t>(ac::index(card));
         const auto& place = wings_.places()[i];
         const auto size = wings_.sizes()[i];
@@ -735,6 +756,12 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                     row(rows.latencyShare, score || rows.thinking ? m.rowGap : 0, rows.latencyColumn, content_.latencyGlyph, content_.latencyNumber,
                         content_.latencyUnit);
                 }
+                break;
+            }
+            case HudCard::Quota: {
+                if (quotaCard_.empty()) break;
+                plate(pen, size.w, size.h, std::nullopt, spine);
+                quotaCard_.draw(scene, pen, size, m, {number, secondary, dark}, hudTime_);
                 break;
             }
             case HudCard::Models: {

@@ -1,5 +1,7 @@
 #include "preferences.hpp"
 
+#include "agentspeed/quota/sources.hpp"
+
 #include <QDir>
 #include <QFile>
 #include <QStandardPaths>
@@ -15,7 +17,9 @@ const QStringList kLanguages = {QStringLiteral("system"), QStringLiteral("zh-Han
 
 }  // namespace
 
-Preferences::Preferences(QObject* parent) : QObject(parent) {}
+Preferences::Preferences(QObject* parent) : QObject(parent) {
+    connect(this, &Preferences::quotaChanged, this, [this] { ++quotaRevision_; });
+}
 
 template <typename T>
 void Preferences::store(const char* key, const T& value, void (Preferences::*signal)()) {
@@ -134,6 +138,54 @@ void Preferences::setTrafficUnit(const QString& value) { store("traffic/unit", v
 
 bool Preferences::autoCheckUpdates() const { return settings_.value(QStringLiteral("network/autoCheckUpdates"), true).toBool(); }
 void Preferences::setAutoCheckUpdates(bool value) { store("network/autoCheckUpdates", value, &Preferences::autoCheckUpdatesChanged); }
+
+namespace {
+
+std::optional<bool> quotaDefault(const QString& key) {
+    if (key == QLatin1String("quotaGrokBuildLive")) return false;
+    for (const auto& route : agentspeed::quota::sourceRoutes()) {
+        if (key.toStdString() == route.switchKey) return route.defaultOn;
+    }
+    return std::nullopt;
+}
+
+}  // namespace
+
+bool Preferences::quotaSwitch(const QString& key) const {
+    const auto fallback = quotaDefault(key);
+    if (!fallback) return false;
+    return settings_.value(QStringLiteral("quota/") + key, *fallback).toBool();
+}
+
+void Preferences::setQuotaSwitch(const QString& key, bool on) {
+    if (!quotaDefault(key) || quotaSwitch(key) == on) return;
+    settings_.setValue(QStringLiteral("quota/") + key, on);
+    emit quotaChanged();
+}
+
+bool Preferences::quotaCliInviteDismissed() const {
+    return settings_.value(QStringLiteral("quota/quotaCliInvite")).toString() == QLatin1String("dismissed");
+}
+
+void Preferences::setQuotaCliInviteDismissed(bool value) {
+    if (value == quotaCliInviteDismissed()) return;
+    if (value) {
+        settings_.setValue(QStringLiteral("quota/quotaCliInvite"), QStringLiteral("dismissed"));
+    } else {
+        settings_.remove(QStringLiteral("quota/quotaCliInvite"));
+    }
+    emit quotaChanged();
+}
+
+QString Preferences::quotaZcodeRegion() const {
+    return settings_.value(QStringLiteral("quota/quotaZcodeRegion")).toString() == QLatin1String("bigmodel-cn") ? QStringLiteral("bigmodel-cn")
+                                                                                                            : QStringLiteral("global");
+}
+
+void Preferences::setQuotaZcodeRegion(const QString& value) {
+    if (value != QLatin1String("global") && value != QLatin1String("bigmodel-cn")) return;
+    store("quota/quotaZcodeRegion", value, &Preferences::quotaChanged);
+}
 
 bool Preferences::sourceEnabled(const QString& source) const { return !disabledSources().contains(source); }
 

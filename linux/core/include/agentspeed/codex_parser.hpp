@@ -1,5 +1,7 @@
 #pragma once
 
+#include <functional>
+
 #include "agentspeed/transcript_parser.hpp"
 
 namespace agentspeed {
@@ -24,6 +26,11 @@ public:
 
     CopyFacts copyFacts() const override { return {fileCreatedMs_, subagentStartOrdinal_, false}; }
 
+    // QUOTAS 3: every `event_msg` `token_count` line whose `payload.rate_limits` is an object, after the copied-history
+    // checks (METRICS 3.5), with the line's timestamp. The value lives only during the call.
+    using RateLimitObserver = std::function<void(const json::Value& rateLimits, std::int64_t timestampMs)>;
+    void setRateLimitObserver(RateLimitObserver observer) { rateLimitObserver_ = std::move(observer); }
+
 private:
     void handle(const json::Value& root, std::string_view text, ResponseSink& sink);
     void onInput(std::int64_t ts);
@@ -47,6 +54,7 @@ private:
     std::optional<Usage> previousLegacyTotals_;
     // Facts that apply from their time on (EXECUTION-MODES, Codex); also the agent's current facts.
     ExecutionModes context_;
+    RateLimitObserver rateLimitObserver_;
 };
 
 }  // namespace agentspeed

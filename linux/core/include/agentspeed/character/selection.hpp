@@ -17,15 +17,16 @@ bool isValidCharacterID(std::string_view id);
 std::optional<std::string> cleanCharacterID(std::string_view id);
 
 // One switch of `CharacterReadouts`, in the menu's and editor's order.
-enum class CharacterReadout { Intelligence, Thinking, Latency, Network, Cost, Agents, Models, Model };
+enum class CharacterReadout { Intelligence, Thinking, Latency, Network, Cost, Agents, Models, Quota, Model };
 
-constexpr std::array<CharacterReadout, 8> kCharacterReadouts = {
-    CharacterReadout::Intelligence, CharacterReadout::Thinking, CharacterReadout::Latency, CharacterReadout::Network,
-    CharacterReadout::Cost,         CharacterReadout::Agents,   CharacterReadout::Models,  CharacterReadout::Model};
+constexpr std::array<CharacterReadout, 9> kCharacterReadouts = {
+    CharacterReadout::Intelligence, CharacterReadout::Thinking, CharacterReadout::Latency,
+    CharacterReadout::Network,      CharacterReadout::Cost,     CharacterReadout::Agents,
+    CharacterReadout::Models,       CharacterReadout::Quota,    CharacterReadout::Model};
 
-// The JSON key (`intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `model`).
+// The JSON key (`intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `quota`, `model`).
 const char* key(CharacterReadout r);
-// `character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`, `.model`.
+// `character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`, `.quota`, `.model`.
 const char* titleKey(CharacterReadout r);
 
 // The cards a `character` orb floats beside her: the speed always shows; each card (and the 性能 card's 首字 row) has
@@ -39,6 +40,7 @@ struct CharacterReadouts {
     bool cost = true;
     bool agents = true;
     bool models = true;
+    bool quota = true;
 
     bool operator==(const CharacterReadouts&) const = default;
     bool isDefault() const { return *this == CharacterReadouts{}; }

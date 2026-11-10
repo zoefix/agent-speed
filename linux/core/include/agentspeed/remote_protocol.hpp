@@ -85,8 +85,11 @@ std::optional<std::string> compactPriceTable(std::string_view json);
 
 // The app → relay lines of REMOTE 5.3, each a compact JSON object ending in a newline (nullopt beyond 4 MiB).
 namespace encode {
+// `quota` (REMOTE 11.1) is left out when nullopt.
 std::optional<std::string> start(std::int64_t todayStartMs, const std::set<SourceKind>& sources, const Zone& zone,
-                                 std::string_view compactPrices);
+                                 std::string_view compactPrices, const std::optional<HostQuotaConfig>& quota = std::nullopt);
+// `{"t":"quota","config":{...}}`: the host's quota config changed (REMOTE 11.1).
+std::optional<std::string> quota(const HostQuotaConfig& config);
 std::optional<std::string> ping(std::int64_t id);
 std::optional<std::string> today(std::int64_t todayStartMs);
 std::optional<std::string> prices(std::string_view compactPrices);

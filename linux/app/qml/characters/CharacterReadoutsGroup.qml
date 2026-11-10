@@ -14,7 +14,7 @@ SettingsGroup {
     footnote: S.tr2(S.rev, "character.readouts.hint")
 
     Repeater {
-        // The menus' order, from the orb model: intel, thinking, latency, network, cost, agents, models, model.
+        // The menus' order, from the orb model: intel, thinking, latency, network, cost, agents, models, quota, model.
         model: orbs.characterReadoutItems()
         delegate: SettingsRow {
             id: readoutRow

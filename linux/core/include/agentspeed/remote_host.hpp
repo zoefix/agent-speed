@@ -45,6 +45,8 @@ struct Host {
     std::optional<std::string> name;  // nullopt: automatic
     bool enabled = true;
     std::optional<std::string> relayFolder;  // nullopt: ~/.cache/agent-speed
+    // The host's Claude Code status line bridge (REMOTE 11.3); absent = false, written only while on.
+    bool quotaClaudeCli = false;
     // Members of a newer version: name → exact JSON text.
     std::vector<std::pair<std::string, std::string>> extra;
 
@@ -57,7 +59,7 @@ struct Host {
     // Both `destination` and `relayFolder` pass REMOTE 2.1; otherwise the host shows `invalidDestination`.
     bool connectable() const;
     std::string automaticName() const { return validation::automaticName(destination); }
-    // What reconnects a running connection when it changes: everything but the name and the switch.
+    // What reconnects a running connection when it changes: everything but the name and the switches.
     std::pair<std::string, std::string> connectionIdentity() const { return {destination, effectiveRelayFolder()}; }
     bool operator==(const Host&) const = default;
 };

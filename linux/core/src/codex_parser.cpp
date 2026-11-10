@@ -188,6 +188,9 @@ void CodexParser::handle(const json::Value& root, std::string_view text, Respons
         if (kind == "task_started" || kind == "user_message") {
             onInput(ts);
         } else if (kind == "token_count") {
+            if (rateLimitObserver_) {
+                if (const auto limits = payload["rate_limits"]; limits.isObject()) rateLimitObserver_(limits, ts);
+            }
             if (sawModernUsage_ && streaming_) {
                 afterUsage(ts);
                 return;

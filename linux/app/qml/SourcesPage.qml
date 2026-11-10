@@ -35,7 +35,11 @@ SettingsPage {
         target: appState
         function onSnapshotChanged() { if (page.visible) page.refresh() }
     }
-    onVisibleChanged: if (visible) refresh()
+    onVisibleChanged: if (visible) {
+        refresh()
+        // QUOTAS 5.4: the bridge's status is checked when Settings opens.
+        quotas.settingsShown()
+    }
     Component.onCompleted: refresh()
 
     Text {

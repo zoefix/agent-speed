@@ -37,9 +37,11 @@ HudFrame wideHairFrame() {
     return HudFrame({0, 0, 444, 444}, s, 296, 222, 80, 170, 140);
 }
 
-// The models card's size comes from its shape; these tests leave it off unless they are about it.
-const std::array<CardSize, kHudCardCount> kSizes = {{{80, 40}, {90, 18}, {78, 34}, {70, 30}, {74, 16}, {86, 16}, {0, 0}}};
-const std::array<bool, kHudCardCount> kAll = {true, true, true, true, true, true, false};
+// The models card's size comes from its shape; these tests leave it and the 額度 card off unless they are about them.
+const std::array<CardSize, kHudCardCount> kSizes = {{{80, 40}, {90, 18}, {78, 34}, {70, 30}, {74, 16}, {86, 16}, {0, 0}, {0, 0}}};
+const std::array<bool, kHudCardCount> kAll = {true, true, true, true, true, true, false, false};
+// The whole column at her left.
+constexpr int kWhole = static_cast<int>(kHudColumn.size());
 
 bool overlaps(const HudWings::Place& p, CardSize size, const HudFrame& f) {
     const auto e = f.silhouette.extent(p.y - size.h / 2, p.y + size.h / 2);
@@ -122,6 +124,7 @@ TEST(HudWings, TheColumnContinuesAtHerRightWhenHerLeftIsFull) {
     const auto& speed = wings.places()[0];
     int moved = 0;
     for (HudCard card : kHudColumn) {
+        if (!kAll[at(card)]) continue;
         const auto& p = wings.places()[at(card)];
         EXPECT_GT(p.alpha, 0.9) << index(card);
         const double w = kSizes[at(card)].w, h = kSizes[at(card)].h;
@@ -146,7 +149,7 @@ TEST(HudWings, CardsComeBackOnlyAfterHerLeftStaysClear) {
     for (int n = 0; n < 30; ++n, t += 1.0 / 60) wings.update(1.0 / 60, t, frame(), kSizes, kAll);
     EXPECT_EQ(wings.split(), spilled);
     for (int n = 0; n < 600; ++n, t += 1.0 / 60) wings.update(1.0 / 60, t, frame(), kSizes, kAll);
-    EXPECT_EQ(wings.split(), 4);
+    EXPECT_EQ(wings.split(), kWhole);
     for (HudCard card : kHudColumn) EXPECT_LT(wings.places()[at(card)].x, 190);
 }
 
@@ -156,7 +159,7 @@ TEST(HudWings, APassingGestureMovesNoCard) {
     for (int n = 0; n < 300; ++n, t += 1.0 / 60) {
         const bool hair = n % 120 >= 60 && n % 120 < 72;
         wings.update(1.0 / 60, t, hair ? wideHairFrame() : frame(), kSizes, kAll);
-        EXPECT_EQ(wings.split(), 4);
+        EXPECT_EQ(wings.split(), kWhole);
     }
 }
 
@@ -382,6 +385,82 @@ TEST(HudWingsModels, ACardThatShowsAgainStartsAtItsBestPlace) {
     EXPECT_GE(topOf(wings, HudCard::Models), 260 - 0.02 * 296);
 }
 
+namespace {
+
+std::array<CardSize, kHudCardCount> withQuota(CardSize quota) {
+    auto sizes = kSizes;
+    sizes[at(HudCard::Quota)] = quota;
+    return sizes;
+}
+
+std::array<bool, kHudCardCount> allShown() {
+    std::array<bool, kHudCardCount> shown{};
+    shown.fill(true);
+    shown[at(HudCard::Models)] = false;
+    return shown;
+}
+
+}  // namespace
+
+// DESIGN 2a.6 額度: the column's last card, its right edge on the column's line, its room from there to the orb's edge.
+TEST(HudWingsQuota, ItIsTheColumnsLastCard) {
+    EXPECT_EQ(kHudColumn.back(), HudCard::Quota);
+    EXPECT_EQ(kHudCards.back(), HudCard::Quota) << "new cards go last, so the others keep their float phases";
+    const auto f = frame();
+    HudWings wings;
+    wings.still = true;
+    const auto sizes = withQuota({120, 60});
+    wings.update(1.0 / 60, 0, f, sizes, allShown());
+    const auto& quota = wings.places()[at(HudCard::Quota)];
+    const auto& agents = wings.places()[at(HudCard::Agents)];
+    EXPECT_GT(quota.y, agents.y);
+    EXPECT_FALSE(wings.isAtHerRight(HudCard::Quota));
+    const double right = quota.x + 60;
+    EXPECT_NEAR(right, agents.x + sizes[at(HudCard::Agents)].w / 2, 1e-6);
+    EXPECT_NEAR(wings.quotaRoom(), right - 0.025 * 296, 1e-6);
+    EXPECT_FALSE(overlaps(quota, sizes[at(HudCard::Quota)], f));
+}
+
+TEST(HudWingsQuota, AnEmptyCardTakesNoRoom) {
+    const auto f = frame();
+    HudWings with, without;
+    with.still = without.still = true;
+    with.update(1.0 / 60, 0, f, kSizes, allShown());
+    without.update(1.0 / 60, 0, f, kSizes, kAll);
+    for (std::size_t k = 0; k + 1 < kHudColumn.size(); ++k) {
+        EXPECT_EQ(with.places()[at(kHudColumn[k])].y, without.places()[at(kHudColumn[k])].y) << k;
+    }
+}
+
+// 額度 Room: it narrows before it spills, so only its narrowest form decides whether the column spills.
+TEST(HudWingsQuota, ItsNarrowestFormDecidesWhetherTheColumnSpills) {
+    // Her left has room for 147 pt; the card's full form is 170 pt, its narrowest 120.
+    auto f = frame();
+    for (double y = 80; y <= 400; y += 2) f.silhouette.add(165, y);
+    const auto sizes = withQuota({170, 40});
+    HudWings wide;
+    wide.still = true;
+    wide.update(1.0 / 60, 0, f, sizes, allShown());
+    EXPECT_LT(wide.split(), kWhole) << "without a narrower form it spills";
+    HudWings narrow;
+    narrow.still = true;
+    narrow.quotaNarrowest = 120;
+    narrow.update(1.0 / 60, 0, f, sizes, allShown());
+    EXPECT_EQ(narrow.split(), kWhole);
+    EXPECT_LT(narrow.quotaRoom(), 170);
+    EXPECT_GE(narrow.quotaRoom(), 120);
+}
+
+TEST(HudWingsQuota, ASpilledCardMeasuresItsRoomToTheRightEdge) {
+    const auto f = wideHairFrame();
+    HudWings wings;
+    wings.still = true;
+    wings.update(1.0 / 60, 0, f, withQuota({110, 44}), allShown());
+    EXPECT_TRUE(wings.isAtHerRight(HudCard::Quota));
+    const double left = wings.places()[at(HudCard::Quota)].x - 55;
+    EXPECT_NEAR(wings.quotaRoom(), 444 - 0.025 * 296 - left, 1e-6);
+}
+
 // AGENT_SPEED_CHARACTER_PACKS (a folder of unpacked packs): every pack dances through the bands for 60 s at a 148 pt
 // orb while the cards follow her outline; prints how often cards changed sides and how many card-frames cover her.
 TEST(HudWingsPack, CardsStayBesideEveryCharacter) {
@@ -394,7 +473,7 @@ TEST(HudWingsPack, CardsStayBesideEveryCharacter) {
     }
     std::sort(ids.begin(), ids.end());
     const double d = 296, side = 444;
-    const std::array<CardSize, kHudCardCount> sizes = {{{84, 62}, {90, 18}, {80, 28}, {64, 27}, {96, 18}, {62, 27}, {0, 0}}};
+    const std::array<CardSize, kHudCardCount> sizes = {{{84, 62}, {90, 18}, {80, 28}, {64, 27}, {96, 18}, {62, 27}, {0, 0}, {0, 0}}};
     // Three running models at t = 8: names of 9 t, a 26 pt speed column and 18 pt of unit.
     const ModelsShape models{8, 2 * 6.4 + 8.32 + 6.4 + 26 + 18, 96, 0, 2 * 6.4 + 8.32 + 26 + 18, 2 * 4.4 + 3 * 7.36 + 2 * 2.4};
     auto shown = kAll;

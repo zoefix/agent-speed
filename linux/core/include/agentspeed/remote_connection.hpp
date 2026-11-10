@@ -31,6 +31,8 @@ struct SessionSettings {
     std::string prices;
     // Live reporting's watch (METRICS 11.10).
     bool watch = false;
+    // The app's quota switches (REMOTE 11.1); each host adds its own Claude Code bridge.
+    QuotaSwitches quota;
     bool operator==(const SessionSettings&) const = default;
 };
 
@@ -92,6 +94,9 @@ public:
     void noteWake();
     void updatePrices(const std::string& compactPrices);
     void setWatch(bool on);
+    // The quota switches or the host's bridge switch changed: a running relay gets the new `quota` config.
+    void setQuota(const QuotaSwitches& switches, bool hostBridge);
+    HostQuotaConfig quotaConfig() const { return HostQuotaConfig::forHost(host_.quotaClaudeCli, settings_.quota); }
     // Sends `history` with the digests the app holds; ignored before `ready`.
     void requestHistory(const std::map<std::string, std::string>& digests);
     // The zone changed: the relay gets it and the new local midnight.

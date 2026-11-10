@@ -5,6 +5,7 @@
 #include <utility>
 
 #include "agentspeed/antigravity.hpp"
+#include "agentspeed/codex_parser.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/gemini_parser.hpp"
@@ -147,6 +148,9 @@ Monitor::Tracked& Monitor::track(std::size_t root, const std::string& path) {
     file->root = root;
     file->tailer = makeTailer(roots_[root].family, path);
     file->parser = makeParser(roots_[root].family, path, roots_[root].path, deduper_);
+    if (auto* codex = dynamic_cast<CodexParser*>(file->parser.get()); codex && rateLimitObserver_) {
+        codex->setRateLimitObserver(rateLimitObserver_);
+    }
     if (work::hasActions(file->parser->source())) {
         file->actions = makeActions(path, file->parser->source());
         file->parser->setLineObserver(file->actions.get());
@@ -154,6 +158,13 @@ Monitor::Tracked& Monitor::track(std::size_t root, const std::string& path) {
     auto& ref = *file;
     files_[path] = std::move(file);
     return ref;
+}
+
+void Monitor::setRateLimitObserver(std::function<void(const json::Value&, std::int64_t)> observer) {
+    rateLimitObserver_ = std::move(observer);
+    for (auto& [path, file] : files_) {
+        if (auto* codex = dynamic_cast<CodexParser*>(file->parser.get())) codex->setRateLimitObserver(rateLimitObserver_);
+    }
 }
 
 std::optional<Monitor::Plan> Monitor::planInitialRead(Tracked& file, const discovery::DiscoveredFile& found,

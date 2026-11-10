@@ -26,6 +26,7 @@
 #include "orbs/name_plate.hpp"
 #include "orbs/size_slider_action.hpp"
 #include "preferences.hpp"
+#include "quota/quota_view.hpp"
 #include "remote_hosts_view.hpp"
 #include "source_colors.hpp"
 #include "strings.hpp"
@@ -105,6 +106,28 @@ void OrbManager::setTitles(const TitleThemes* titles) {
 void OrbManager::setHostsView(const RemoteHostsView* hosts) {
     hosts_ = hosts;
     if (hosts_) connect(hosts_, &RemoteHostsView::namesChanged, this, &OrbManager::sync);
+}
+
+void OrbManager::setQuotas(const QuotaView* quotas) {
+    quotas_ = quotas;
+    if (quotas_) connect(quotas_, &QuotaView::changed, this, &OrbManager::pushQuotas);
+    pushQuotas();
+}
+
+// Every `character` orb's 額度 items, made again once the quotas or the orb's sources or hosts changed.
+void OrbManager::pushQuotas() {
+    if (!quotas_) return;
+    for (const auto& c : store_.orbs()) {
+        const auto it = orbs_.find(c.id);
+        if (it == orbs_.end() || c.style != QLatin1String("character")) continue;
+        const QStringList sources = c.sources.value_or(QStringList());
+        const QStringList hosts = c.hosts.value_or(QStringList());
+        const QString key = QString::number(quotas_->revision()) + QLatin1Char('|') + sources.join(QLatin1Char(',')) + QLatin1Char('|') +
+                            (c.tracksAllHosts() ? QStringLiteral("*") : hosts.join(QLatin1Char(',')));
+        if (key == it->second.quotaKey) continue;
+        it->second.quotaKey = key;
+        it->second.window->setQuota(quotas_->cardItems(sources, hosts, c.tracksAllHosts()));
+    }
 }
 
 void OrbManager::start() {
@@ -358,6 +381,7 @@ void OrbManager::sync() {
         emit specsChanged();
     }
     layoutPlates();
+    pushQuotas();
     emit listChanged();
 }
 
@@ -392,6 +416,7 @@ void OrbManager::applySnapshot(const QVariantMap& snap) {
         }
         it->second.window->applySnapshot(map);
     }
+    pushQuotas();
     if (valuesChanged) emit this->valuesChanged();
 }
 
