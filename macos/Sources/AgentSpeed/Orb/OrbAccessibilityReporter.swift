@@ -168,16 +168,27 @@ final class OrbAccessibilityReporter {
         }
     }
 
-    /// The `character` orb's cards that show (DESIGN 2a.6, Readouts), in the column's order: 性能 and 思考, network
-    /// speed, then the cost rate.
+    /// The `character` orb's cards that show (DESIGN 2a.6, Readouts), in the column's order: 性能 and 思考, 首字,
+    /// network speed, the cost rate, then the running models.
     private func characterSentence(_ l10n: Localizer) -> String? {
         guard let readings = runtime.feed.characterReadings, !runtime.isUnavailable else { return nil }
+        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n)
+        guard !parts.isEmpty else { return nil }
+        return parts.joined(separator: l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，")
+    }
+
+    /// The sentences of `characterSentence`, one per card that shows.
+    static func characterParts(_ readings: OrbCharacterReadings, currency: String, _ l10n: Localizer,
+                               now: TimeInterval = Clock.now) -> [String] {
         let on = readings.readouts
         var parts: [String] = []
         if readings.performanceLoud, on.intelligence || on.thinking, let reading = readings.performance,
            case .intelligence(let score, let thinking) = reading.content {
-            let hidden = !on.thinking || (on.intelligence && reading.thinking.isHidden(at: Clock.now))
+            let hidden = !on.thinking || (on.intelligence && reading.thinking.isHidden(at: now))
             parts.append(Self.intelligenceSentence(score, thinking: hidden ? nil : thinking, l10n))
+        }
+        if readings.performanceLoud, on.latency, readings.performance != nil, let ms = readings.latencyMs {
+            parts.append(l10n("a11y.orb.latency", CharacterReadoutText.latency(ms: ms, language: l10n.language).spoken))
         }
         if readings.networkLoud, on.network, case .traffic(let rx, let tx) = readings.network?.content {
             parts.append(l10n("a11y.orb.traffic", TrafficText.spoken(rx), TrafficText.spoken(tx)))
@@ -185,10 +196,12 @@ final class OrbAccessibilityReporter {
         if readings.costLoud, on.cost, let money = readings.cost {
             parts.append(money.unknown ? l10n("a11y.board.costUnknown")
                 : l10n("a11y.board.cost", money.atLeast ? l10n("a11y.orb.costAtLeast", money.number) : money.number,
-                       model.cost.currencyName))
+                       currency))
         }
-        guard !parts.isEmpty else { return nil }
-        return parts.joined(separator: l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，")
+        if readings.modelsLoud, on.models, let models = CharacterReadoutText.modelsSentence(readings.models, l10n) {
+            parts.append(models)
+        }
+        return parts
     }
 
     /// The performance readout's words (DESIGN 12, *Accessibility*): the score words in `a11y.orb.intel` with the

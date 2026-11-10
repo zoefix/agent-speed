@@ -1,9 +1,9 @@
 import Foundation
 
-/// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right, the model above
-/// her head, and the column of facts on her left, top to bottom.
+/// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right with the running
+/// models under it, the model above her head, and the column of facts on her left, top to bottom.
 public enum HudCard: Int, Sendable, CaseIterable {
-    case speed, model, performance, network, cost, agents
+    case speed, model, performance, network, cost, agents, models
 
     /// The left column, top to bottom.
     public static let column: [HudCard] = [.performance, .network, .cost, .agents]
@@ -101,8 +101,16 @@ public struct HudFrame: Sendable {
 /// eight, bobs, tilts and breathes, so the readout drifts like moons beside her while each value stays where the
 /// eye left it. A card that shows or hides fades and rises or sinks; the column closes up around it. When her left
 /// side has no room for the whole column (wide hair, a step to the left), its last cards continue under the speed on
-/// her right; a card changing sides fades out and back in at its new place instead of crossing her.
+/// her right; a card changing sides fades out and back in at its new place instead of crossing her. The models card
+/// sits directly under the speed on its left edge (further right only where her outline under the speed needs it),
+/// the spill-over under it; its names narrow to the room (`HudNameWidth`), and only when even its narrowest form does
+/// not fit there does it move below the spill-over (up to 0.3 D down), then hide.
 public struct HudWings: Sendable {
+    /// Where the models card sits: directly under the speed, further down below the spill-over, or nowhere.
+    public enum ModelsPlace: Int, Sendable {
+        case under, below, hidden
+    }
+
     /// Where a card is drawn this frame: its center, scale, tilt (radians, clockwise on screen) and opacity.
     public struct Place: Sendable, Equatable {
         public var x, y, scale, spin, alpha: Double
@@ -161,9 +169,19 @@ public struct HudWings: Sendable {
 
     /// How many cards of the column (in its order) stay at her left; the rest continue under the speed.
     public private(set) var split = HudCard.column.count
+    public private(set) var modelsPlace = ModelsPlace.under
+    /// The models card's narrowest width (its rows without names), set by the renderer each frame; a place fits when
+    /// this form fits there. Zero: the card's own width.
+    public var modelsNarrowest = 0.0
+    /// The room from the models card's left edge to the orb's edge at its place (under the speed while hidden),
+    /// which its names narrow to.
+    public private(set) var modelsRoom = Double.infinity
+    /// Seconds a hidden models card must fit with room to spare before it comes back (it moves back up from below
+    /// after `returnAfter`).
+    public static let modelsReturnAfter = 1.2
 
-    /// The card is drawn at her right (the speed, and column cards that spilled over).
-    public func isAtHerRight(_ card: HudCard) -> Bool { card == .speed || right[card.rawValue] }
+    /// The card is drawn at her right (the speed, the models card and column cards that spilled over).
+    public func isAtHerRight(_ card: HudCard) -> Bool { card == .speed || card == .models || right[card.rawValue] }
 
     var anchors: [(x: SecondOrder, y: SecondOrder)]
     var growth: [(w: SecondOrder, h: SecondOrder)]
@@ -177,6 +195,15 @@ public struct HudWings: Sendable {
     /// No split fits with one edge: each card hugs her outline.
     var hugging = false
     var placed = false
+    /// Seconds the models card's place has not fitted, or a better place has; its top below the spill-over; and
+    /// where the right side's cards end (the bottom of the last one plus the gap), from the last layout.
+    var modelsStrain = 0.0
+    var modelsEase = 0.0
+    var modelsBelow: Double?
+    var rightEnd = 0.0
+    /// Cards fading out to reappear at a new place on the same side (the models card and the spill-over when the
+    /// models card comes or goes under the speed), so they never slide through each other.
+    var jumping: [Bool]
 
     public init() {
         let count = HudCard.allCases.count
@@ -188,6 +215,7 @@ public struct HudWings: Sendable {
         targets = [(x: Double, y: Double)](repeating: (0, 0), count: count)
         right = [Bool](repeating: false, count: count)
         hop = [Double](repeating: 1, count: count)
+        jumping = [Bool](repeating: false, count: count)
     }
 
     /// Advances the layout one frame. `sizes` are the cards' current sizes in points (width, height) and `shown` which
@@ -195,7 +223,8 @@ public struct HudWings: Sendable {
     public mutating func update(_ dt: Double, time: Double, frame f: HudFrame, sizes given: [(w: Double, h: Double)],
                                 shown: [Bool]) {
         for i in presence.indices {
-            let target = shown[i] ? 1.0 : 0.0
+            let hidden = i == HudCard.models.rawValue && modelsPlace == .hidden
+            let target = shown[i] && !hidden ? 1.0 : 0.0
             let rate = dt / (target > presence[i] ? HudWings.fadeIn : HudWings.fadeOut)
             presence[i] = target > presence[i] ? min(target, presence[i] + rate) : max(target, presence[i] - rate)
             if !placed { presence[i] = target }
@@ -209,11 +238,12 @@ public struct HudWings: Sendable {
         targets[HudCard.speed.rawValue] = speedAnchor(f, sizes[HudCard.speed.rawValue])
         targets[HudCard.model.rawValue] = modelAnchor(f, sizes[HudCard.model.rawValue])
         columnAnchors(dt, f, sizes)
+        modelsAnchor(dt, f, sizes, shown: shown[HudCard.models.rawValue])
 
         let d = f.footprint
         for card in HudCard.allCases {
             let i = card.rawValue
-            if !placed || presence[i] == 0 && !shown[i] {
+            if !placed || presence[i] == 0 && (!shown[i] || card == .models && modelsPlace == .hidden) {
                 anchors[i].x.snap(targets[i].x)
                 anchors[i].y.snap(targets[i].y)
             }
@@ -314,6 +344,142 @@ public struct HudWings: Sendable {
         return (x, y)
     }
 
+    /// The models card's top directly under the speed (its title chip), and its left edge: the speed's.
+    func modelsSlot(_ f: HudFrame, _ sizes: [(w: Double, h: Double)]) -> (top: Double, left: Double) {
+        let speed = targets[HudCard.speed.rawValue], size = sizes[HudCard.speed.rawValue]
+        return (speed.y + size.h / 2 + HudWings.columnGap * f.footprint, speed.x - size.w / 2)
+    }
+
+    /// Where the models card's left edge wants to be with its top at `top`: on the speed's line, or further right where
+    /// her outline over its rows is wider, the gap clear of it as every card.
+    func modelsEdge(_ f: HudFrame, height: Double, top: Double, line: Double) -> Double {
+        guard let e = f.silhouette.extent(top, top + height) else { return line }
+        return max(line, e.right + HudWings.gap * f.footprint)
+    }
+
+    /// The models card's left edge with its top at `top`, nil where it does not fit: inside the bounds and at least
+    /// half the gap clear of her. `spare` widens the card for the check, as the column's room to spare.
+    func modelsLeft(_ f: HudFrame, _ size: (w: Double, h: Double), top: Double, line: Double, spare: Double = 0) -> Double? {
+        let d = f.footprint
+        let maxX = f.bounds.maxX - HudWings.margin * d, maxY = f.bounds.maxY - HudWings.margin * d
+        guard top + size.h <= maxY + 0.5 else { return nil }
+        let wanted = modelsEdge(f, height: size.h, top: top, line: line)
+        guard let e = f.silhouette.extent(top, top + size.h) else { return min(wanted, maxX - size.w) }
+        guard min(wanted, maxX - size.w - spare) >= e.right + 0.5 * HudWings.gap * d - 0.5 else { return nil }
+        return min(wanted, maxX - size.w)
+    }
+
+    /// Whether the models card fits there in its narrowest form.
+    func modelsFit(_ f: HudFrame, _ size: (w: Double, h: Double), top: Double, left: Double, spare: Double = 0) -> Bool {
+        let narrow = modelsNarrowest > 0 ? (min(size.w, modelsNarrowest), size.h) : size
+        return modelsLeft(f, narrow, top: top, line: left, spare: spare) != nil
+    }
+
+    /// The nearest top below the spill-over (from `start`, within 0.3 D of the card's own place) where the models card
+    /// fits; the current one while it still fits there.
+    func modelsBelowTop(_ f: HudFrame, _ size: (w: Double, h: Double), slot: (top: Double, left: Double), start: Double,
+                        spare: Double) -> Double? {
+        let d = f.footprint
+        let limit = start + HudWings.reach * d + 1e-9
+        if spare == 0, let current = modelsBelow, current >= start - 0.5, current <= limit,
+           modelsFit(f, size, top: current, left: slot.left) {
+            return current
+        }
+        var top = start
+        while top <= limit {
+            if modelsFit(f, size, top: top, left: slot.left, spare: spare) { return top }
+            top += 0.02 * d
+        }
+        return nil
+    }
+
+    /// The models card's place (DESIGN 2a.6, *Models*): directly under the speed while its narrowest form fits there,
+    /// else below the spill-over cards' room, as near as fits within 0.3 D, else hidden. A worse place is taken once the
+    /// current one has not fitted for `spillAfter`; a hidden card comes back once it has fitted with 0.04 D to spare
+    /// for `modelsReturnAfter`, and moves back up from below after `returnAfter`, so a passing gesture moves nothing. A
+    /// change of place fades the card (and the spill-over, when it comes or goes under the speed) out and back in at the
+    /// new places. Writes its target and the room its names narrow to.
+    mutating func modelsAnchor(_ dt: Double, _ f: HudFrame, _ sizes: [(w: Double, h: Double)], shown: Bool) {
+        let i = HudCard.models.rawValue
+        let size = sizes[i]
+        let d = f.footprint
+        let slot = modelsSlot(f, sizes)
+        guard size.w > 0, size.h > 0 else {
+            modelsPlace = .under
+            modelsStrain = 0
+            modelsEase = 0
+            modelsRoom = f.bounds.maxX - HudWings.margin * d - slot.left
+            targets[i] = (slot.left, slot.top)
+            return
+        }
+        let gap = HudWings.columnGap * d
+        let spare = 0.04 * d
+        // Where the spill-over ends without the models card over it.
+        let spillEnd = rightEnd - (modelsPlace == .under ? presence[i] * (size.h + gap) : 0)
+        let start = max(slot.top, spillEnd)
+        let fitsUnder = modelsFit(f, size, top: slot.top, left: slot.left)
+        modelsBelow = modelsBelowTop(f, size, slot: slot, start: start, spare: 0)
+        let now: ModelsPlace = fitsUnder ? .under : modelsBelow != nil ? .below : .hidden
+        let previous = modelsPlace
+        if !placed || still || !shown {
+            modelsPlace = now
+            modelsStrain = 0
+            modelsEase = 0
+        } else if now.rawValue > modelsPlace.rawValue {
+            modelsEase = 0
+            modelsStrain += dt
+            if modelsStrain >= HudWings.spillAfter {
+                modelsPlace = now
+                modelsStrain = 0
+            }
+        } else if modelsPlace != .under {
+            // Back only to a better place that fits with room to spare, after a while.
+            let roomy: ModelsPlace? = modelsFit(f, size, top: slot.top, left: slot.left, spare: spare) ? .under
+                : modelsPlace == .hidden && modelsBelowTop(f, size, slot: slot, start: start, spare: spare) != nil ? .below
+                : nil
+            modelsStrain = 0
+            if let roomy {
+                modelsEase += dt
+                if modelsEase >= (modelsPlace == .hidden ? HudWings.modelsReturnAfter : HudWings.returnAfter) {
+                    modelsPlace = roomy
+                    modelsEase = 0
+                }
+            } else {
+                modelsEase = 0
+            }
+        } else {
+            modelsStrain = 0
+            modelsEase = 0
+        }
+        if modelsPlace != previous, placed, !still, shown {
+            if previous != .hidden, modelsPlace != .hidden { jumping[i] = true }
+            if previous == .under || modelsPlace == .under {
+                for card in HudCard.column[split...] where presence[card.rawValue] > 0 { jumping[card.rawValue] = true }
+            }
+        }
+        if jumping[i] {
+            hop[i] = max(0, hop[i] - dt / HudWings.hopOut)
+        } else {
+            hop[i] = still ? 1 : min(1, hop[i] + dt / HudWings.hopIn)
+        }
+        let maxX = f.bounds.maxX - HudWings.margin * d
+        func x(_ top: Double) -> Double {
+            min(modelsEdge(f, height: size.h, top: top, line: slot.left), maxX - size.w) + size.w / 2
+        }
+        let top = modelsPlace == .below ? modelsBelow ?? start : slot.top
+        modelsRoom = maxX - modelsEdge(f, height: size.h, top: top, line: slot.left)
+        switch modelsPlace {
+        case .under: targets[i] = (x(slot.top), slot.top + size.h / 2)
+        case .below: targets[i] = (x(top), top + size.h / 2)
+        case .hidden: break
+        }
+        if jumping[i], hop[i] == 0 {
+            jumping[i] = false
+            anchors[i].x.snap(targets[i].x)
+            anchors[i].y.snap(targets[i].y)
+        }
+    }
+
     /// The column: cards stacked from her shoulders down at her left (the shown share of each card taking its room),
     /// their right edges on one line clear of her outline at every row the column spans; the column moves up or down
     /// to the offset where it fits best. Cards from `split` on stack under the speed at her right, their left edges on
@@ -353,10 +519,19 @@ public struct HudWings: Sendable {
         for (k, card) in HudCard.column.enumerated() {
             let i = card.rawValue
             let wanted = k >= split
-            if wanted == right[i] {
+            if jumping[i], wanted == right[i], !still {
+                hop[i] = max(0, hop[i] - dt / HudWings.hopOut)
+                if hop[i] == 0 {
+                    jumping[i] = false
+                    anchors[i].x.snap(targets[i].x)
+                    anchors[i].y.snap(targets[i].y)
+                }
+            } else if wanted == right[i] {
+                jumping[i] = false
                 hop[i] = still ? 1 : min(1, hop[i] + dt / HudWings.hopIn)
             } else if presence[i] == 0 || still || !placed {
                 right[i] = wanted
+                jumping[i] = false
                 hop[i] = 1
                 anchors[i].x.snap(targets[i].x)
                 anchors[i].y.snap(targets[i].y)
@@ -364,6 +539,7 @@ public struct HudWings: Sendable {
                 hop[i] = max(0, hop[i] - dt / HudWings.hopOut)
                 if hop[i] == 0 {
                     right[i] = wanted
+                    jumping[i] = false
                     anchors[i].x.snap(targets[i].x)
                     anchors[i].y.snap(targets[i].y)
                 }
@@ -452,10 +628,12 @@ public struct HudWings: Sendable {
             if write { targets[i].x = max(x, minX + w / 2) }
         }
 
-        // Her right, under the speed: one left edge.
-        guard split < cards.count else { return over }
-        let speed = HudCard.speed.rawValue
+        // Her right, under the speed (and under the models card while it is there): one left edge.
+        let speed = HudCard.speed.rawValue, models = HudCard.models.rawValue
         y = targets[speed].y + sizes[speed].h / 2 + gap
+        if modelsPlace == .under, sizes[models].h > 0 { y += presence[models] * (sizes[models].h + gap) }
+        if write { rightEnd = y }
+        guard split < cards.count else { return over }
         var left = -Double.infinity
         for k in split..<cards.count {
             let i = cards[k].rawValue
@@ -466,6 +644,7 @@ public struct HudWings: Sendable {
             over += presence[i] * max(0, y + h - maxY)
             y += presence[i] * (h + gap)
         }
+        if write { rightEnd = y }
         if !left.isFinite { left = f.centerX + 0.04 * d }
         for k in split..<cards.count {
             let i = cards[k].rawValue

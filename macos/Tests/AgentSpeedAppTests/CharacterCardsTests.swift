@@ -31,10 +31,11 @@ struct CharacterCardsTests {
         #expect(rule.money == nil && !rule.isLoud(at: 41))
     }
 
-    static func frame(_ readings: OrbCharacterReadings?, readouts: CharacterReadouts = .default, time: TimeInterval = 100)
-        -> OrbFrame {
+    static func frame(_ readings: OrbCharacterReadings?, readouts: CharacterReadouts = .default, time: TimeInterval = 100,
+                      contrast: Bool = false) -> OrbFrame {
         var c = OrbContent.placeholder(diameter: 296)
         c.style = .character
+        c.increaseContrast = contrast
         c.language = .zhHant
         c.character = OrbCharacterContent(pack: nil, modelName: "claude-opus", vendorName: nil, accent: nil,
                                           readouts: readouts, readings: readings, todayLine: "今日 1.24M",

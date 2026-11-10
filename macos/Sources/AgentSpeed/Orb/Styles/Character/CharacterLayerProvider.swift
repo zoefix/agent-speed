@@ -19,8 +19,20 @@ struct OrbCharacterContent: Equatable {
     var agentsLine: String?
     /// `費用`, the cost card's glyph.
     var costGlyph: String = ""
+    /// The 首字 row's value, nil while the orb has none.
+    var latency: CharacterReadoutText.Latency?
+    /// The models card's rows, fastest first (every running model; the card shows the first four).
+    var models: [CharacterModelLine] = []
     /// Shown in place of the character while none is installed.
     var emptyLabel: String
+}
+
+/// One row of the models card: the model id, its speed as shown (`–` before a timed response) and its vendor's accent.
+struct CharacterModelLine: Equatable {
+    var id: String
+    var speed: String
+    var hasSpeed: Bool
+    var accent: RGBColor?
 }
 
 /// The skinned character and the readout cards beside her (CHARACTERS 3–8, DESIGN 2a.6). `CharacterStyle` owns one per orb

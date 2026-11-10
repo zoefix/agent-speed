@@ -20,6 +20,8 @@ final class OrbRuntime {
     private var characterNetwork = OrbLineQuietRule()
     private var characterPerformance = OrbLineQuietRule()
     private var characterCost = OrbCostQuietRule()
+    private var characterModels = OrbModelsQuietRule()
+    private var characterLatency: Double?
     private var characterBits = false
 
     init(config: OrbConfig) {
@@ -53,6 +55,8 @@ final class OrbRuntime {
             characterNetwork = OrbLineQuietRule()
             characterPerformance = OrbLineQuietRule()
             characterCost = OrbCostQuietRule()
+            characterModels = OrbModelsQuietRule()
+            characterLatency = nil
         }
         if readoutChanged || sourcesChanged || styleChanged || config.characterReadouts != previousReadouts {
             publishCharacterReadings(at: Clock.now)
@@ -95,6 +99,8 @@ final class OrbRuntime {
                                        thinking: reading.intelligence.thinking, generating: generating, at: now)
             characterCost.apply(cost.map { money($0, snapshot, reading: reading, isPreviewing: isPreviewing) },
                                 generating: generating, at: now)
+            characterLatency = PerfSetReadouts.firstLatency(of: reading.agents).ms
+            characterModels.apply(Self.models(of: reading.agents, prices: characters?.prices), at: now)
             publishCharacterReadings(at: now)
         }
     }
@@ -143,11 +149,22 @@ final class OrbRuntime {
         let performance = characterPerformance.reading
         let next = OrbCharacterReadings(
             readouts: config.characterReadouts, network: network, bits: characterBits, performance: performance, cost: characterCost.money,
+            latencyMs: characterLatency, models: characterModels.rows,
             networkLoud: network.map { now < $0.quietAt } ?? false,
             performanceLoud: performance.map { now < $0.quietAt } ?? false,
-            costLoud: characterCost.isLoud(at: now)
+            costLoud: characterCost.isLoud(at: now),
+            modelsLoud: characterModels.isLoud(at: now)
         )
         if feed.characterReadings != next { feed.characterReadings = next }
+    }
+
+    /// The models card's rows (METRICS 6.9 *Readouts of a set*): each running model once with its fastest agent's
+    /// speed and the vendor its dot takes the accent of.
+    static func models(of agents: [AgentStatus], prices: PriceTable?) -> [OrbModelReading] {
+        PerfSetReadouts.runningModels(of: agents).map { row in
+            OrbModelReading(model: row.model, speed: row.shown,
+                            vendor: CharacterVendors.resolve(model: row.model, source: row.source, prices: prices).vendor)
+        }
     }
 
     /// The vendor reading and the character of a `character` orb (CHARACTERS 7); other styles keep neither.

@@ -36,6 +36,7 @@ final class CharacterRenderer: CharacterLayerProvider {
     private var scratch: [Double] = []
     private var cardSizes = [(w: Double, h: Double)](repeating: (0, 0), count: HudCard.allCases.count)
     private var cardShown = [Bool](repeating: false, count: HudCard.allCases.count)
+    private var cardDynamics = CharacterCardDynamics()
     /// The speed's digits center below its card's center (the card spans the digits down to the title chip).
     private var speedDrop = 0.0
     /// The last backing scale drawn at, for measuring text in `step`.
@@ -186,7 +187,7 @@ final class CharacterRenderer: CharacterLayerProvider {
         if lightning.isActive { return true }
         guard let stage else { return loading }
         return loading || stage.outgoing != nil || stage.incoming != nil || stage.current.fadingPose != nil
-            || hud.peakAge != nil || particles.isLively || wings.isFading
+            || hud.peakAge != nil || particles.isLively || wings.isFading || cardDynamics.isMoving
     }
 
     func pulse(at time: TimeInterval, strength: Double, heat: Double) {
@@ -324,7 +325,19 @@ final class CharacterRenderer: CharacterLayerProvider {
         }
         let anchors = performer.trace(into: &silhouette!, feetOnScreen: (g.feet.x, g.feet.y),
                                       pointsPerPixel: g.pointsPerPixel, scratch: &scratch)
-        let cards = CharacterCards(frame: frame, character: character, backing: backing)
+        let models = HudCard.models.rawValue
+        if !cardShown[models], wings.presence[models] == 0 { cardDynamics.resetModels() }
+        cardDynamics.update(dt, character: character, small: frame.isSmallCharacter,
+                            instant: frame.effects.reduceMotion || frame.effects.level == .off)
+        // The names narrow to the room the wings found last frame; the wings fit the card's narrowest form.
+        let measure = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
+            .modelsMeasure()
+        if let measure {
+            cardDynamics.fitNames(dt, room: wings.modelsRoom, measure: measure, t: CharacterCardMetrics(disc: frame.s).t,
+                                  spare: 0.04 * d, snap: !cardShown[models] || wings.presence[models] == 0)
+        }
+        wings.modelsNarrowest = measure.map { Double($0.narrowest) } ?? 0
+        let cards = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
         let model = modelName(frame, character: character)
         let readouts = character?.readouts ?? .default
         let readings = character?.readings
@@ -340,6 +353,7 @@ final class CharacterRenderer: CharacterLayerProvider {
         cardShown[HudCard.network.rawValue] = readouts.network && readings?.networkLoud == true && has(.network)
         cardShown[HudCard.cost.rawValue] = readouts.cost && readings?.costLoud == true && has(.cost)
         cardShown[HudCard.agents.rawValue] = readouts.agents && !frame.isSmallCharacter && has(.agents)
+        cardShown[models] = readouts.models && readings?.modelsLoud == true && has(.models)
         if frame.isSmallCharacter {
             var room = 2
             for card in HudCard.column where cardShown[card.rawValue] {
@@ -383,11 +397,11 @@ final class CharacterRenderer: CharacterLayerProvider {
         return (Double(width), Double(bottom + half), Double((bottom - half) / 2))
     }
 
-    private static let drawOrder = HudCard.column + [.model]
+    private static let drawOrder = HudCard.column + [.models, .model]
 
     /// The column, the model chip, then the speed over everything.
     private func drawCards(_ frame: OrbFrame, character: OrbCharacterContent?, into scene: inout OrbScene) {
-        let cards = CharacterCards(frame: frame, character: character, backing: scene.backingScale)
+        let cards = CharacterCards(frame: frame, character: character, backing: scene.backingScale, dynamics: cardDynamics)
         let model = modelName(frame, character: character)
         for card in Self.drawOrder {
             cards.draw(card, at: wings.places[card.rawValue], size: wings.sizes[card.rawValue], model: model,
