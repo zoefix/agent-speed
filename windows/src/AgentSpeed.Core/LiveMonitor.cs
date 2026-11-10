@@ -183,6 +183,21 @@ public sealed class LiveMonitor : IDisposable
     /// <summary>The folder the automatic Devin entry names in Settings: the CLI folder that holds the database (DESIGN 5).</summary>
     public static string DefaultDevinRoot => Devin.DevinRoot.Database(DefaultDevinDatabase).DisplayFolder;
 
+    /// <summary>
+    /// Qoder IDE's chat databases, one per edition: <c>%APPDATA%\Qoder\SharedClientCache\cache\db\local.db</c> and the same below
+    /// <c>%APPDATA%\QoderCN</c> (macOS <c>~/Library/Application Support</c>, Linux the XDG config folder), METRICS 2, 4.18.
+    /// </summary>
+    public static IReadOnlyList<string> DefaultQoderDatabases => Qoder.QoderPaths.AutomaticDatabases();
+
+    /// <summary>The IDE data folders the automatic Qoder IDE entry names in Settings, international edition first (DESIGN 5).</summary>
+    public static IReadOnlyList<string> DefaultQoderRoots => Qoder.QoderPaths.AutomaticDataFolders();
+
+    /// <summary>
+    /// Qoder CLI's roots: <c>%QODER_CONFIG_DIR%\projects</c>, else <c>~\.qoder\projects</c>, then <c>%QODERCN_CONFIG_DIR%\projects</c>,
+    /// else <c>~\.qoder-cn\projects</c> (METRICS 2, 4.19).
+    /// </summary>
+    public static IReadOnlyList<string> DefaultQoderCliRoots => Qoder.QoderCliPaths.AutomaticRoots();
+
     /// <summary>Every automatic OpenClaw state folder: the override alone, else <c>.openclaw</c> and its profiles.</summary>
     public static IReadOnlyList<string> DefaultOpenClawRoots => OpenClaw.OpenClawPaths.AutomaticStateFolders();
 

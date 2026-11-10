@@ -133,7 +133,9 @@ public sealed class HistoryServiceTests : IDisposable
         _temp.Combine("gemini", "tmp"),
         AntigravityRoot: _temp.Combine("antigravity"),
         HermesRoot: _temp.Combine("hermes"),
-        DroidRoot: _temp.Combine(".factory"));
+        DroidRoot: _temp.Combine(".factory"),
+        QoderRoot: _temp.Combine("Qoder"),
+        QoderCliRoot: _temp.Combine(".qoder"));
 
     private string WriteClaude(string relative, long ms, string id, long output) =>
         _temp.WriteFile("claude/projects/" + relative,

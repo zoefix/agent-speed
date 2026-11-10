@@ -163,6 +163,7 @@ public sealed class ParserFixtureTests
         SourceKind.Pi => "pi",
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Droid => "droid",
+        SourceKind.QoderCli => "qoderCli",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
@@ -243,6 +244,12 @@ public sealed class ParserFixtureTests
         if (relative.StartsWith("claude/", StringComparison.Ordinal))
         {
             return FeedLines(new ClaudeParser(path, deduper), content, sink, maxLines);
+        }
+
+        // Qoder CLI writes Claude's transcript format to its own folder (METRICS 4.19).
+        if (relative.StartsWith("qoder-cli/", StringComparison.Ordinal))
+        {
+            return FeedLines(ClaudeParser.ForQoderCli(path, deduper), content, sink, maxLines);
         }
 
         // OpenClaw's agent-scoped Codex home is a Codex root (METRICS 2, 4.14).

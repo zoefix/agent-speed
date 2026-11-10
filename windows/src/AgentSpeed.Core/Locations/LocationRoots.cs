@@ -13,7 +13,8 @@ internal static class LocationRoots
 {
     /// <summary>
     /// The automatic roots of a folder as read: Antigravity's store folders, WorkBuddy's <c>projects</c> folders, OpenCode's and
-    /// ZCode's data folders, OpenClaw's state folders, Hermes Agent's home, Devin's CLI database. Codex's agent-scoped OpenClaw
+    /// ZCode's data folders, OpenClaw's state folders, Hermes Agent's home, Devin's CLI database, Qoder IDE's database of each
+    /// edition, Qoder CLI's <c>projects</c> folder of each edition. Codex's agent-scoped OpenClaw
     /// homes are not included.
     /// </summary>
     public static IReadOnlyList<string> Automatic(LocationFolder folder) => folder switch
@@ -35,19 +36,22 @@ internal static class LocationRoots
         LocationFolder.Hermes => [LiveMonitor.DefaultHermesRoot],
         LocationFolder.Droid => [LiveMonitor.DefaultDroidRoot],
         LocationFolder.Devin => [Devin.DevinPaths.AutomaticDatabase()],
+        LocationFolder.Qoder => Qoder.QoderPaths.AutomaticDatabases(),
+        LocationFolder.QoderCli => Qoder.QoderCliPaths.AutomaticRoots(),
         _ => [],
     };
 
     /// <summary>
     /// The root a user location names: an Antigravity store as given (its <c>conversations</c> folder is read), a WorkBuddy data
     /// folder's <c>projects</c>, a Kimi Code CLI or Grok Build data directory's <c>sessions</c>, a <c>.factory</c> folder's
-    /// <c>sessions</c>; any other location is the root itself.
+    /// <c>sessions</c>, a Qoder CLI config folder's <c>projects</c>; any other location is the root itself.
     /// </summary>
     public static string User(LocationFolder folder, string path) => folder switch
     {
         LocationFolder.WorkBuddy or LocationFolder.WorkBuddyAi => Monitoring.SourceLocations.WorkBuddyRootOf(path),
         LocationFolder.Kimi or LocationFolder.GrokBuild => HarnessPaths.SessionsOf(path),
         LocationFolder.Droid => Droid.DroidPaths.RootOf(path),
+        LocationFolder.QoderCli => Qoder.QoderCliPaths.RootOf(path),
         _ => path,
     };
 

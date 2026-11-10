@@ -61,6 +61,8 @@ public static class HistoryCsv
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
         SourceKind.Devin => "devin",
+        SourceKind.Qoder => "qoder",
+        SourceKind.QoderCli => "qoder-cli",
         _ => "unknown",
     };
 

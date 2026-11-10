@@ -38,9 +38,9 @@ public sealed class LocationListTests : IDisposable
         Assert.True(lists.IsAutomaticOnly);
         Assert.Equal([SourceKind.ClaudeCode, SourceKind.ClaudeDesktop], LocationFolder.Claude.Sources());
         Assert.All(Enum.GetValues<SourceKind>(), kind => Assert.Contains(kind, LocationFolders.Of(kind).Sources()));
-        Assert.Equal(17, LocationFolders.All.Count);
+        Assert.Equal(19, LocationFolders.All.Count);
         Assert.Equal(["codex", "claude", "dsh", "opencode", "gemini", "omp", "antigravity", "workbuddy", "workbuddyAi", "zcode", "kimi",
-            "grokBuild", "pi", "openclaw", "hermes", "droid", "devin"], LocationFolders.All.Select(f => f.Key()));
+            "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli"], LocationFolders.All.Select(f => f.Key()));
     }
 
     [Fact]

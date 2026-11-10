@@ -64,6 +64,8 @@ public static class LocationEntries
         LocationFolder.Hermes => "settings.sources.hermesHint",
         LocationFolder.Droid => "settings.sources.droidHint",
         LocationFolder.Devin => "settings.sources.devinHint",
+        LocationFolder.Qoder => "settings.sources.qoderHint",
+        LocationFolder.QoderCli => "settings.sources.qoderCliHint",
         _ => null,
     };
 

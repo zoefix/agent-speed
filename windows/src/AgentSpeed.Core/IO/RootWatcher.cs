@@ -19,7 +19,7 @@ internal sealed class RootWatcher : IDisposable
         try
         {
             var database = naming is TranscriptNaming.OpenCodeDatabase or TranscriptNaming.AntigravityDatabase or TranscriptNaming.ZCodeDatabase
-                or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase;
+                or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase or TranscriptNaming.QoderDatabase;
             watcher = new FileSystemWatcher(root)
             {
                 IncludeSubdirectories = !database,
@@ -64,6 +64,7 @@ internal sealed class RootWatcher : IDisposable
         TranscriptNaming.HermesLog => [Hermes.HermesPaths.LiveLogName + "*"],
         TranscriptNaming.DroidSession => ["*" + Droid.DroidPaths.TranscriptExtension, "*" + Droid.DroidPaths.SidecarSuffix],
         TranscriptNaming.DevinDatabase => [Devin.DevinPaths.DatabaseName, Devin.DevinPaths.DatabaseName + Devin.DevinPaths.WalSuffix],
+        TranscriptNaming.QoderDatabase => [Qoder.QoderPaths.DatabaseName, Qoder.QoderPaths.DatabaseName + Qoder.QoderPaths.WalSuffix],
 
         // Never *-shm: readers touch it, so watching it would make every read trigger the next one.
         TranscriptNaming.AntigravityDatabase => ["*.db", "*.db-wal"],

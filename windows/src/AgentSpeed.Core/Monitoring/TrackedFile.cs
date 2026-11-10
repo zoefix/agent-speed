@@ -44,6 +44,12 @@ internal enum RootFamily
 
     /// <summary>The folder of a Devin CLI database read by <see cref="Devin.DevinSource"/>; watched only (METRICS 4.17).</summary>
     Devin,
+
+    /// <summary>The folder of a Qoder IDE chat database read by <see cref="Qoder.QoderSource"/>; watched only (METRICS 4.18).</summary>
+    Qoder,
+
+    /// <summary>A Qoder CLI <c>projects</c> folder: Claude's transcript format, read by the Claude parser's Qoder CLI rules (METRICS 4.19).</summary>
+    QoderCli,
 }
 
 /// <summary>Per-family file rules: names, parser and the sources it can produce (METRICS 2 and 4).</summary>
@@ -54,6 +60,7 @@ internal static class Families
         [
             RootFamily.Codex, RootFamily.Claude, RootFamily.DeepSeek, RootFamily.Gemini, RootFamily.Omp, RootFamily.Antigravity,
             RootFamily.WorkBuddy, RootFamily.WorkBuddyAi, RootFamily.Kimi, RootFamily.GrokBuild, RootFamily.Pi, RootFamily.Droid,
+            RootFamily.QoderCli,
         ];
 
     public static TranscriptNaming Naming(RootFamily family) => family switch
@@ -73,6 +80,7 @@ internal static class Families
         RootFamily.Hermes => TranscriptNaming.HermesLog,
         RootFamily.Droid => TranscriptNaming.DroidSession,
         RootFamily.Devin => TranscriptNaming.DevinDatabase,
+        RootFamily.Qoder => TranscriptNaming.QoderDatabase,
         _ => TranscriptNaming.Jsonl,
     };
 
@@ -91,6 +99,7 @@ internal static class Families
         RootFamily.GrokBuild => new GrokBuild.GrokParser(path, deduper),
         RootFamily.Pi => Pi.PiParser.ForPath(path, deduper),
         RootFamily.Droid => new Droid.DroidParser(path, deduper),
+        RootFamily.QoderCli => ClaudeParser.ForQoderCli(path, deduper),
         _ => throw new ArgumentOutOfRangeException(nameof(family)),
     };
 
@@ -120,6 +129,8 @@ internal static class Families
         RootFamily.Hermes => enabled.Contains(SourceKind.Hermes),
         RootFamily.Droid => enabled.Contains(SourceKind.Droid),
         RootFamily.Devin => enabled.Contains(SourceKind.Devin),
+        RootFamily.Qoder => enabled.Contains(SourceKind.Qoder),
+        RootFamily.QoderCli => enabled.Contains(SourceKind.QoderCli),
         _ => false,
     };
 
@@ -141,6 +152,8 @@ internal static class Families
         SourceKind.Hermes => RootFamily.Hermes,
         SourceKind.Droid => RootFamily.Droid,
         SourceKind.Devin => RootFamily.Devin,
+        SourceKind.Qoder => RootFamily.Qoder,
+        SourceKind.QoderCli => RootFamily.QoderCli,
         _ => RootFamily.Claude,
     };
 }

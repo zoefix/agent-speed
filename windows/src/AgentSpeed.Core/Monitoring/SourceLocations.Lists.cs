@@ -42,6 +42,12 @@ internal sealed partial record SourceLocations
     /// <summary>Devin's roots in list order (METRICS 4.17): the automatic CLI database and the user locations, each once.</summary>
     public IReadOnlyList<Devin.DevinRoot> DevinRoots { get; init; } = [];
 
+    /// <summary>Qoder IDE's roots in list order (METRICS 4.18): each edition's automatic database and the user locations, each once.</summary>
+    public IReadOnlyList<Qoder.QoderRoot> QoderRoots { get; init; } = [];
+
+    /// <summary>Qoder CLI's <c>projects</c> folders in list order (METRICS 4.19): both editions' automatic roots, then the user locations.</summary>
+    public IReadOnlyList<string> QoderCliRoots { get; init; } = [];
+
     /// <summary>Gemini CLI's <c>settings.json</c> for each of its roots (EXECUTION-MODES); a root missing here takes the default rule.</summary>
     public IReadOnlyDictionary<string, string> GeminiSettings { get; init; } = NoSettings;
 
@@ -78,6 +84,7 @@ internal sealed partial record SourceLocations
         Add("hermes", HermesRoots.Select(root => (root.Chosen ? "+" : "-") + LocationPaths.Normalized(root.Path)));
         Add("gemini", GeminiRoots.Select(root => GeminiSettingsOf(root)));
         Add("devin", DevinRoots.Select(root => (root.IsDatabase ? "=" : "+") + root.Path));
+        Add("qoder", QoderRoots.Select(root => (root.IsDatabase ? "=" : "+") + root.Path));
         text.Append(OmpAutomatic).Append(PiAutomatic).Append(OpenClawAutomatic).Append(CodexAutomatic);
         return text.ToString();
     }
@@ -112,6 +119,31 @@ internal sealed partial record SourceLocations
             if (root.Path.Length > 0 && !roots.Exists(known => known.IsDatabase == root.IsDatabase && LocationPaths.Comparer.Equals(known.Path, root.Path)))
             {
                 roots.Add(root);
+            }
+        }
+
+        return roots;
+    }
+
+    /// <summary>
+    /// Qoder IDE's roots (METRICS 2, 4.18): each edition's automatic database and every user location (a folder whose database is
+    /// looked up at every rediscovery), each once.
+    /// </summary>
+    private static List<Qoder.QoderRoot> QoderRootsOf(MonitorConfiguration configuration)
+    {
+        var roots = new List<Qoder.QoderRoot>();
+        foreach (var entry in configuration.ListOf(LocationFolder.Qoder))
+        {
+            IEnumerable<Qoder.QoderRoot> named = entry.Path is { } user
+                ? [Qoder.QoderRoot.Location(LocationPaths.Normalized(user))]
+                : LocationRoots.Automatic(LocationFolder.Qoder).Select(database => Qoder.QoderRoot.Database(LocationPaths.Normalized(database)));
+            foreach (var root in named)
+            {
+                if (root.Path.Length > 0
+                    && !roots.Exists(known => known.IsDatabase == root.IsDatabase && LocationPaths.Comparer.Equals(known.Path, root.Path)))
+                {
+                    roots.Add(root);
+                }
             }
         }
 

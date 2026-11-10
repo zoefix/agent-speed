@@ -29,7 +29,7 @@ public sealed class DevinSettingsTests
         Assert.Equal(LocationLists.AutomaticOnly, settings.Locations[LocationFolder.Devin]);
         Assert.Contains(SourceKind.Devin, settings.ToMonitorConfiguration().EnabledSources);
         Assert.Equal(LocationFolder.Devin, LocationFolders.Of(SourceKind.Devin));
-        Assert.Equal(LocationFolder.Devin, LocationFolders.All[^1]);
+        Assert.Equal([LocationFolder.Devin, LocationFolder.Qoder, LocationFolder.QoderCli], LocationFolders.All.TakeLast(3));
 
         var off = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.WithSourceEnabled(SourceKind.Devin, false)));
         Assert.False(off.IsSourceEnabled(SourceKind.Devin));

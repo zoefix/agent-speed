@@ -728,6 +728,8 @@ internal static class SourceNames
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
         SourceKind.Devin => "devin",
+        SourceKind.Qoder => "qoder",
+        SourceKind.QoderCli => "qoderCli",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
@@ -751,6 +753,8 @@ internal static class SourceNames
         "hermes" => SourceKind.Hermes,
         "droid" => SourceKind.Droid,
         "devin" => SourceKind.Devin,
+        "qoder" => SourceKind.Qoder,
+        "qoderCli" => SourceKind.QoderCli,
         _ => null,
     };
 }

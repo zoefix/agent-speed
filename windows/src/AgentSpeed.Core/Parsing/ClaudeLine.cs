@@ -63,6 +63,9 @@ internal struct ClaudeLine
     public string? Model;
     public TokenCounts Usage;
 
+    /// <summary><c>message.usage.input_tokens</c> alone, which Qoder CLI's own models count with the cache read (METRICS 4.19).</summary>
+    public long UsageInputTokens;
+
     /// <summary><c>message.usage.speed == "fast"</c> (METRICS 3.2).</summary>
     public bool Fast;
     public string? Speed;
@@ -274,7 +277,7 @@ internal static class ClaudeLineReader
                 reader.Read();
                 if (reader.TokenType == JsonTokenType.StartObject)
                 {
-                    (result.Usage, result.Fast, result.Speed) = ReadUsage(ref reader);
+                    (result.Usage, result.UsageInputTokens, result.Fast, result.Speed) = ReadUsage(ref reader);
                 }
                 else
                 {
@@ -294,7 +297,7 @@ internal static class ClaudeLineReader
         }
     }
 
-    private static (TokenCounts Usage, bool Fast, string? Speed) ReadUsage(ref Utf8JsonReader reader)
+    private static (TokenCounts Usage, long Input, bool Fast, string? Speed) ReadUsage(ref Utf8JsonReader reader)
     {
         long input = 0, cacheCreation = 0, cacheCreation1h = 0, cacheRead = 0, output = 0, thinking = 0;
         var fast = false;
@@ -345,7 +348,7 @@ internal static class ClaudeLineReader
         }
 
         var totalInput = JsonScan.SaturatingAdd(JsonScan.SaturatingAdd(input, cacheCreation), cacheRead);
-        return (new TokenCounts(totalInput, cacheRead, cacheCreation, output, thinking, Math.Min(cacheCreation1h, cacheCreation)), fast, speed);
+        return (new TokenCounts(totalInput, cacheRead, cacheCreation, output, thinking, Math.Min(cacheCreation1h, cacheCreation)), input, fast, speed);
     }
 
     /// <summary>

@@ -19,6 +19,9 @@ internal sealed class AgentProcessRules
     /// </summary>
     private static readonly Regex DesktopPackageApp = new("/windowsapps/(claude_|openai\\.codex_|openai\\.chatgpt)[^/]*/app/[^/]+$",
         RegexOptions.CultureInvariant);
+    /// <summary>Qoder IDE's agent core: <c>resources/bin/&lt;platform&gt;/Qoder</c> inside the IDE; the IDE's own executable is not (METRICS 10.5).</summary>
+    private static readonly Regex QoderCore = new("/resources/bin/[^/]+/[^/]+$", RegexOptions.CultureInvariant | RegexOptions.IgnoreCase);
+
     private static readonly string[] CodexTargets = ["x86_64", "aarch64", "apple-darwin", "linux", "windows"];
     private static readonly string[] OpenCodeTargets = ["darwin", "linux", "windows"];
 
@@ -52,7 +55,8 @@ internal sealed class AgentProcessRules
         _claudeDesktopApp = platform.IsWindows
             ? platform.Prefixes("%LOCALAPPDATA%/AnthropicClaude/")
             : platform.Prefixes("/Applications/Claude.app/Contents/MacOS/Claude");
-        // Devin Desktop's own executable is an app process (Windows: an assumed path); its `devin acp` agent follows the row.
+        // Devin Desktop's own executable is an app process (Windows: an assumed path); its `devin acp` agent follows the row. Qoder
+        // IDE's own executable is one too; its agent core follows the row.
         _desktopApps = platform.IsWindows
             ? platform.Prefixes("%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe")
             : platform.Prefixes(
@@ -61,7 +65,8 @@ internal sealed class AgentProcessRules
                 "/Applications/Codex.app/Contents/MacOS/Codex",
                 "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
                 "/Applications/Antigravity.app/Contents/MacOS/Antigravity",
-                "/Applications/Devin.app/Contents/MacOS/Devin");
+                "/Applications/Devin.app/Contents/MacOS/Devin",
+                "/Applications/Qoder IDE.app/Contents/MacOS/Qoder");
         _deepseekApp = platform.IsWindows ? [] : platform.Prefixes("/Applications/DeepSeek Harness.app/Contents/MacOS/DeepSeek Harness");
         _claudeVersions = platform.Prefixes("~/.local/share/claude/versions");
     }
@@ -275,6 +280,19 @@ internal sealed class AgentProcessRules
         if (name == "devin")
         {
             return SourceKind.Devin;
+        }
+
+        // Qoder IDE's agent core, which makes the model calls; the IDE and its Electron helpers are app processes.
+        if (name == (_platform.IsWindows ? "qoder" : "Qoder") && QoderCore.IsMatch(_platform.Normalize(executable)))
+        {
+            return SourceKind.Qoder;
+        }
+
+        // Qoder CLI's native installers (both editions), or its npm bundle on a script host.
+        if (name is "qodercli" or "qoderclicn" || script.Contains("/@qoder-ai/qodercli/", StringComparison.Ordinal)
+            || script.Contains("/@qodercn-ai/qoderclicn/", StringComparison.Ordinal))
+        {
+            return SourceKind.QoderCli;
         }
 
         // WorkBuddy's embedded CLI, never its app, helper or daemon processes (the same executable without the CLI entry).

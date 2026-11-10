@@ -13,6 +13,7 @@ public static class AutomaticLocations
         LocationFolder.WorkBuddy => [LiveMonitor.DefaultWorkBuddyFolder],
         LocationFolder.WorkBuddyAi => [LiveMonitor.DefaultWorkBuddyAiFolder],
         LocationFolder.Devin => [LiveMonitor.DefaultDevinRoot],
+        LocationFolder.Qoder => LiveMonitor.DefaultQoderRoots,
         _ => LocationRoots.Automatic(folder),
     };
 
@@ -49,7 +50,8 @@ public static class AutomaticLocations
 
     /// <summary>
     /// A location of the folder exists and is read: a folder (OpenCode, ZCode and OpenClaw also a database file); an Antigravity
-    /// <c>*-backup</c> store never is (METRICS 4.8); a Devin folder only while it holds the CLI's database (METRICS 4.17).
+    /// <c>*-backup</c> store never is (METRICS 4.8); a Devin folder only while it holds the CLI's database (METRICS 4.17), a Qoder
+    /// IDE folder only while it holds the chat database (METRICS 4.18).
     /// </summary>
     public static bool IsReadable(LocationFolder folder, string path)
     {
@@ -66,6 +68,11 @@ public static class AutomaticLocations
                 || (string.Equals(path, automatic.DisplayFolder, StringComparison.OrdinalIgnoreCase) && automatic.DatabaseNow is not null);
         }
 
+        if (folder == LocationFolder.Qoder)
+        {
+            return Qoder.QoderPaths.DatabaseOf(path) is not null;
+        }
+
         try
         {
             return Directory.Exists(path) || (AcceptsFile(folder) && File.Exists(path));
@@ -76,10 +83,10 @@ public static class AutomaticLocations
         }
     }
 
-    /// <summary>The folder or file exists at all (Show in File Explorer works for it); a Devin folder holds the database.</summary>
+    /// <summary>The folder or file exists at all (Show in File Explorer works for it); a Devin or Qoder IDE folder holds the database.</summary>
     public static bool Exists(LocationFolder folder, string path)
     {
-        if (folder == LocationFolder.Devin)
+        if (folder is LocationFolder.Devin or LocationFolder.Qoder)
         {
             return IsReadable(folder, path);
         }

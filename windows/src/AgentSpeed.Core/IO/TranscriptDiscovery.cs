@@ -48,6 +48,9 @@ internal enum TranscriptNaming
 
     /// <summary><c>sessions.db</c> and its WAL in one folder (Devin CLI, METRICS 4.17); not enumerated.</summary>
     DevinDatabase,
+
+    /// <summary><c>local.db</c> and its WAL in one folder (Qoder IDE, METRICS 4.18); not enumerated.</summary>
+    QoderDatabase,
 }
 
 /// <summary>Recursive transcript enumeration that never follows reparse points or symlinks (METRICS 2).</summary>
@@ -68,7 +71,7 @@ internal static class TranscriptDiscovery
                 || fileName.EndsWith(".jsonl.zst", StringComparison.OrdinalIgnoreCase),
             TranscriptNaming.GeminiSession => Gemini.GeminiDiscovery.IsSessionFileName(fileName),
             TranscriptNaming.OpenCodeDatabase or TranscriptNaming.ZCodeDatabase or TranscriptNaming.OpenClawDatabase
-                or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase => false,
+                or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase or TranscriptNaming.QoderDatabase => false,
             TranscriptNaming.KimiSession => fileName.SequenceEqual("wire.jsonl"),
             TranscriptNaming.GrokBuildSession => fileName.SequenceEqual("updates.jsonl"),
             TranscriptNaming.OmpSession or TranscriptNaming.PiSession => Omp.OmpDiscovery.IsSessionFileName(fileName),
@@ -112,7 +115,7 @@ internal static class TranscriptDiscovery
         }
 
         if (naming is TranscriptNaming.OpenCodeDatabase or TranscriptNaming.ZCodeDatabase or TranscriptNaming.OpenClawDatabase
-            or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase)
+            or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase or TranscriptNaming.QoderDatabase)
         {
             return [];
         }

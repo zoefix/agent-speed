@@ -37,7 +37,10 @@ public sealed class HistoryTests : IDisposable
             PiRoots: PiFixture.RootsIn(copy),
             OpenClawRoots: OpenClawFixture.StateFoldersIn(copy),
             HermesRoot: HermesFixture.HomeIn(copy),
-            DroidRoot: DroidFixture.RootIn(copy));
+            DroidRoot: DroidFixture.RootIn(copy))
+        {
+            QoderCliRoots = [QoderCliFixture.RootIn(copy)],
+        };
         var document = JsonNode.Parse(File.ReadAllText(Path.Combine(FixtureLocator.FixturesDirectory, "history-expected.json")))!;
         var pricing = document["prices"]!;
         var tables = pricing["tables"]!.AsArray()

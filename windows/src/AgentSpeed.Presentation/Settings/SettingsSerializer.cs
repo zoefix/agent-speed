@@ -116,6 +116,8 @@ public static class SettingsSerializer
             w.WriteBoolean("hermes", s.HermesEnabled);
             w.WriteBoolean("droid", s.DroidEnabled);
             w.WriteBoolean("devin", s.DevinEnabled);
+            w.WriteBoolean("qoder", s.QoderEnabled);
+            w.WriteBoolean("qoderCli", s.QoderCliEnabled);
             // The single folders of an earlier version go back exactly as loaded, so a downgrade still finds them (METRICS 2.1).
             foreach (var (folder, path) in s.LegacyRoots)
             {
@@ -293,6 +295,8 @@ public static class SettingsSerializer
             HermesEnabled = ReadBool(sources, "hermes", d.HermesEnabled),
             DroidEnabled = ReadBool(sources, "droid", d.DroidEnabled),
             DevinEnabled = ReadBool(sources, "devin", d.DevinEnabled),
+            QoderEnabled = ReadBool(sources, "qoder", d.QoderEnabled),
+            QoderCliEnabled = ReadBool(sources, "qoderCli", d.QoderCliEnabled),
             LegacyRoots = ReadLegacyRoots(sources),
             StoredLocations = root.TryGetProperty("sourceLocations", out var locations) ? LocationLists.Read(locations) : null,
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),

@@ -47,6 +47,9 @@ internal enum LinkKind : byte
 
     /// <summary>Factory Droid: a Task worker names <c>&lt;folder&gt;/&lt;callingSessionId&gt;.jsonl</c> in its own folder (METRICS 4.16).</summary>
     DroidPath,
+
+    /// <summary>Qoder IDE: a sub-agent session names <c>&lt;database&gt;#&lt;parent_session_id&gt;</c>, a session of its own database (METRICS 4.18).</summary>
+    QoderSession,
 }
 
 /// <summary>What one transcript says about its parent (METRICS 6.7).</summary>
