@@ -12,6 +12,10 @@ internal sealed partial class RemoteConnection
     public static readonly TimeSpan PingInterval = TimeSpan.FromSeconds(30);
     public static readonly TimeSpan HistoryInterval = TimeSpan.FromMinutes(10);
     public static readonly TimeSpan KillDelay = TimeSpan.FromSeconds(2);
+
+    /// <summary>How long a removed host's relay may take to restore its status line (REMOTE 2.4, 11.3).</summary>
+    public static readonly TimeSpan RetireLimit = TimeSpan.FromSeconds(10);
+
     public const int UploadChunkBytes = 256 * 1024;
     public const int PendingPingLimit = 8;
 
@@ -26,6 +30,9 @@ internal sealed partial class RemoteConnection
     private RemoteSessionSettings _settings;
     private Stage _stage = Stage.Idle;
     private bool _stopped;
+
+    /// <summary>Waiting for the relay to restore the host's status line before stopping; nothing is reported any more.</summary>
+    private bool _retiring;
     private int _attempt;
 
     /// <summary>Counts launched processes, so callbacks of an old process are ignored.</summary>
@@ -72,6 +79,7 @@ internal sealed partial class RemoteConnection
         Ping,
         History,
         Midnight,
+        Retire,
     }
 
     public RemoteHost Host { get; }
@@ -97,22 +105,7 @@ internal sealed partial class RemoteConnection
     /// Closes the relay's stdin, ends <c>ssh</c> (killed after 2 s) and reports <paramref name="finalStatus"/>, if any, as the
     /// last event. Synchronous; the connection cannot be started again.
     /// </summary>
-    public void Stop(RemoteStatus? finalStatus = null) => Queue.Sync(() =>
-    {
-        if (_stopped)
-        {
-            return;
-        }
-
-        _stopped = true;
-        CancelTimers();
-        CloseUpload();
-        EndProcess();
-        if (finalStatus is { } status)
-        {
-            Report(status);
-        }
-    });
+    public void Stop(RemoteStatus? finalStatus = null) => Queue.Sync(() => Halt(finalStatus));
 
     /// <summary><i>Retry now</i>: an attempt at once unless one is under way; the back-off starts over.</summary>
     public void RetryNow() => Queue.Post(() =>
@@ -161,6 +154,58 @@ internal sealed partial class RemoteConnection
         {
             Send(RelayLineEncoder.Prices(prices));
         }
+    });
+
+    /// <summary>The quota config changed (a switch, the host's bridge): a running relay gets a <c>quota</c> line, no reconnect.</summary>
+    public void UpdateQuota(RemoteQuotaConfig config) => Queue.Post(() =>
+    {
+        if (_retiring || _settings.Quota == config)
+        {
+            return;
+        }
+
+        _settings = _settings with { Quota = config };
+        if (_stage == Stage.Run)
+        {
+            Send(RelayLineEncoder.Quota(config));
+        }
+    });
+
+    /// <summary>
+    /// The host left the settings with its bridge on (REMOTE 2.4, 11.3): the relay is asked to restore the status line
+    /// first, and the connection stops once it reports the bridge <c>off</c>, after <paramref name="timeout"/> (10 s) or when
+    /// the relay ends. A relay that is not running stops at once. A retiring connection reports nothing.
+    /// </summary>
+    public void Retire(TimeSpan? timeout = null) => Queue.Post(() =>
+    {
+        if (_stopped || _retiring)
+        {
+            return;
+        }
+
+        if (_stage != Stage.Run || !_session.HelloReceived || _endReason is not null || _process is null)
+        {
+            Halt();
+            return;
+        }
+
+        _retiring = true;
+        var config = (_settings.Quota ?? RemoteQuotaConfig.Off).WithoutBridge();
+        _settings = _settings with { Quota = config };
+        Send(RelayLineEncoder.Quota(config));
+        Schedule(TimerSlot.Retire, timeout ?? RetireLimit, () => Halt());
+    });
+
+    /// <summary><i>Reconnect</i> of the bridge: the config once without it and again with it, so the relay installs it anew.</summary>
+    public void ReapplyQuota() => Queue.Post(() =>
+    {
+        if (_stopped || _retiring || _stage != Stage.Run || _settings.Quota is not { ClaudeBridge: true } config)
+        {
+            return;
+        }
+
+        Send(RelayLineEncoder.Quota(config.WithoutBridge()));
+        Send(RelayLineEncoder.Quota(config));
     });
 
     public void SetWatch(bool on) => Queue.Post(() =>
@@ -300,6 +345,12 @@ internal sealed partial class RemoteConnection
         CloseUpload();
         if (_stopped)
         {
+            return;
+        }
+
+        if (_retiring)
+        {
+            Halt();
             return;
         }
 
@@ -506,6 +557,24 @@ internal sealed partial class RemoteConnection
 
     // Ending
 
+    /// <summary>Stops for good: timers cancelled, the process ended, <paramref name="finalStatus"/> (if any) reported last.</summary>
+    private void Halt(RemoteStatus? finalStatus = null)
+    {
+        if (_stopped)
+        {
+            return;
+        }
+
+        _stopped = true;
+        CancelTimers();
+        CloseUpload();
+        EndProcess();
+        if (finalStatus is { } status)
+        {
+            Report(status);
+        }
+    }
+
     /// <summary>Ends the running process: stdin closed, then killed after 2 s. Its exit then reports <paramref name="reason"/>.</summary>
     private void EndProcess(RemoteStatus? reason = null)
     {
@@ -570,6 +639,11 @@ internal sealed partial class RemoteConnection
 
     private void Emit(RemoteHostEventKind kind)
     {
+        if (_retiring)
+        {
+            return;
+        }
+
         var hostEvent = new RemoteHostEvent(Host.Id, _attempt, kind);
         var onEvent = _onEvent;
         _eventQueue.Post(() => onEvent(hostEvent));

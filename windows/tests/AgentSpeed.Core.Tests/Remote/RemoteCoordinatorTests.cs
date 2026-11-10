@@ -1,11 +1,13 @@
 using System.Diagnostics;
 using System.Text;
 using System.Text.Json;
+using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Network;
 using AgentSpeed.Core.Remote;
 
 namespace AgentSpeed.Core.Tests.Remote;
 
-/// <summary>REMOTE 2, 4.4, 7, 8.2: the coordinator connects a host to the running live monitor and routes history events.</summary>
+/// <summary>REMOTE 2, 4.4, 7, 8.2, 11.1: the coordinator connects a host to the running live monitor and routes history and quota events.</summary>
 public sealed class RemoteCoordinatorTests
 {
     private const string HostId = "8C0D6B0A-1111-4222-8333-0000000000C1";
@@ -98,6 +100,87 @@ public sealed class RemoteCoordinatorTests
         Assert.Equal(RemoteStatus.NetworkOff, coordinator.Statuses[HostId].Status);
         Assert.Empty(relay.Transport.Launched);
         Assert.Empty(coordinator.ConnectedHostIds);
+    }
+
+    [Fact]
+    public void QuotaLinesRouteOnlyToTheQuotaEvent()
+    {
+        static RemoteHostEvent Event(RelayMessage message) => new(HostId, 1, new RemoteHostEventKind.Message(message, Seeded: false));
+        var report = new RemoteQuotaReport(HostId, new QuotaSnapshot(SourceKind.Kimi, 1, []), true, true, QuotaRouteStatus.Ok(1));
+        Assert.Equal((false, false, true), RemoteCoordinator.RouteOf(Event(new RelayMessage.Quota(report))));
+        Assert.Equal((false, false, true), RemoteCoordinator.RouteOf(Event(new RelayMessage.QuotaRemoved(HostId, SourceKind.Kimi))));
+        Assert.Equal((false, false, true),
+            RemoteCoordinator.RouteOf(Event(new RelayMessage.QuotaBridge(new RemoteQuotaBridge(HostId, ClaudeCliBridgeStatus.Ok, "~")))));
+        Assert.Equal((true, false, false), RemoteCoordinator.RouteOf(Event(new RelayMessage.Ready())));
+        Assert.Equal((false, true, false), RemoteCoordinator.RouteOf(Event(new RelayMessage.HistoryDone(0, 0))));
+        Assert.Equal((true, true, false), RemoteCoordinator.RouteOf(new RemoteHostEvent(HostId, 1, new RemoteHostEventKind.Status(new RemoteHostStatus(RemoteStatus.Connected)))));
+    }
+
+    [Fact]
+    public async Task AHostsQuotaLinesReachTheQuotaEvent()
+    {
+        using var relay = new Relay();
+        var hub = new SpeedHub();
+        using var monitor = new LiveMonitor(hub, new MonitorConfiguration(new HashSet<SourceKind> { SourceKind.Codex, SourceKind.ClaudeCode }));
+        var environment = new RemoteEnvironment(relay.Transport, relay.Relays.Bundle, SystemRemoteScheduling.Instance, static () => TimeZoneInfo.Utc,
+            new Dictionary<string, string>());
+        using var coordinator = new RemoteCoordinator(monitor, environment);
+        var received = new List<RemoteQuotaEventArgs>();
+        coordinator.QuotaReceived += (_, e) =>
+        {
+            lock (received)
+            {
+                received.Add(e);
+            }
+        };
+        int Received()
+        {
+            lock (received)
+            {
+                return received.Count;
+            }
+        }
+
+        var document = new RemoteHostsDocument([new RemoteHost("devbox", HostId) { QuotaClaudeCli = true }]);
+        coordinator.Update(document, networkEnabled: true, new RemoteQuotaSwitches([SourceKind.Codex, SourceKind.Kimi]));
+        Assert.True(await WaitUntil(() => coordinator.Statuses.TryGetValue(HostId, out var status) && status.Status == RemoteStatus.Connected));
+        var run = relay.Transport.Runs[0];
+        var start = run.WrittenLines[0].GetProperty("quota");
+        Assert.Equal(["codex", "claudeCode"], QuotaLines.Sources(start));
+        Assert.True(start.GetProperty("claudeBridge").GetBoolean());
+
+        var observed = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        run.Send(QuotaLines.Quota(source: "codex", observed: observed, windows: []));
+        run.Send(QuotaLines.Removed("kimi"));
+        run.Send(QuotaLines.Bridge("ok"));
+        Assert.True(await WaitUntil(() => Received() == 3));
+        List<RemoteQuotaEventArgs> events;
+        lock (received)
+        {
+            events = [.. received];
+        }
+
+        Assert.All(events, e => Assert.Equal(HostId, e.HostId));
+        Assert.Equal(SourceKind.Codex, events[0].Report?.Source);
+        Assert.Null(events[0].RemovedSource);
+        Assert.InRange(events[0].Report!.Snapshot.ObservedMs, observed - 5_000, observed + 5_000);
+        Assert.Equal(SourceKind.Kimi, events[1].RemovedSource);
+        Assert.Equal(ClaudeCliBridgeStatus.Ok, events[2].Bridge?.State);
+
+        // New switches go to the relay without a reconnect; an update without switches keeps them.
+        coordinator.Update(document, networkEnabled: true, new RemoteQuotaSwitches([SourceKind.Codex], ClaudeCode: false));
+        coordinator.Hub.Connection(HostId)!.Queue.Sync(() => { });
+        Assert.Equal(["quota"], run.WrittenTypes.Where(t => t == "quota"));
+        Assert.Equal(["codex"], QuotaLines.Sources(run.WrittenLines[^1].GetProperty("config")));
+        coordinator.Update(document, networkEnabled: true);
+        coordinator.Hub.Connection(HostId)!.Queue.Sync(() => { });
+        Assert.Single(run.WrittenTypes, t => t == "quota");
+        Assert.Single(relay.Transport.Runs);
+
+        // Lines of a host that is not configured are dropped.
+        coordinator.Route(new RemoteHostEvent("8C0D6B0A-1111-4222-8333-0000000000FF", 1,
+            new RemoteHostEventKind.Message(new RelayMessage.QuotaRemoved("8C0D6B0A-1111-4222-8333-0000000000FF", SourceKind.Kimi), Seeded: false)));
+        Assert.Equal(3, Received());
     }
 
     private static async Task<bool> WaitUntil(Func<bool> condition)

@@ -1,3 +1,6 @@
+using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Network;
+
 namespace AgentSpeed.Core.Remote;
 
 /// <summary>
@@ -64,7 +67,7 @@ public sealed class RemoteClockEstimator
 internal static class RelayMessageTimes
 {
     /// <summary>
-    /// The message with every time of an <c>agent</c>, <c>response</c> or <c>tool</c> line converted to local time
+    /// The message with every time of an <c>agent</c>, <c>response</c>, <c>tool</c> or <c>quota</c> line converted to local time
     /// (<c>t − δ</c>); null when a converted time leaves the years 2000–2100 (the line is then invalid). Durations are unchanged.
     /// </summary>
     public static RelayMessage? Converted(this RelayMessage message, long delta)
@@ -105,9 +108,45 @@ internal static class RelayMessageTimes
                 }
 
                 return new RelayMessage.Tool(tool with { Call = tool.Call with { AtMs = atMs, ResultMs = resultLocal } });
+            case RelayMessage.Quota { Value: var report }:
+                return Converted(report, delta) is { } local ? new RelayMessage.Quota(local) : null;
             default:
                 return message;
         }
+    }
+
+    /// <summary>The snapshot's time, every reset and the time of an <c>ok</c> status.</summary>
+    private static RemoteQuotaReport? Converted(RemoteQuotaReport report, long delta)
+    {
+        var snapshot = report.Snapshot;
+        if (Shift(snapshot.ObservedMs, delta) is not { } observed)
+        {
+            return null;
+        }
+
+        var windows = new List<QuotaWindow>(snapshot.Windows.Count);
+        foreach (var window in snapshot.Windows)
+        {
+            if (!ShiftOptional(window.ResetsAtMs, delta, out var resets))
+            {
+                return null;
+            }
+
+            windows.Add(window with { ResetsAtMs = resets });
+        }
+
+        var status = report.Status;
+        if (status.Kind == QuotaStatusKind.Ok)
+        {
+            if (Shift(status.AtMs, delta) is not { } at)
+            {
+                return null;
+            }
+
+            status = status with { AtMs = at };
+        }
+
+        return report with { Snapshot = snapshot with { ObservedMs = observed, Windows = windows }, Status = status };
     }
 
     private static long? Shift(long ms, long delta)

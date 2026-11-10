@@ -24,7 +24,8 @@ internal sealed record RemoteHostEvent(string HostId, int Connection, RemoteHost
 /// <summary>What a connection sends with <c>start</c> and keeps in step afterwards.</summary>
 /// <param name="Sources">The app's enabled sources (REMOTE 3.3); a change means a new connection.</param>
 /// <param name="Watch">Live reporting's watch (METRICS 11.10).</param>
-internal sealed record RemoteSessionSettings(SourceSet Sources, RemotePriceTableJson Prices, bool Watch = false);
+/// <param name="Quota">What the relay reads for quotas (REMOTE 11.1); sent with <c>start</c> and whenever it changes.</param>
+internal sealed record RemoteSessionSettings(SourceSet Sources, RemotePriceTableJson Prices, bool Watch = false, RemoteQuotaConfig? Quota = null);
 
 /// <summary>Everything a connection uses from the outside world, replaceable in tests.</summary>
 internal sealed record RemoteEnvironment(

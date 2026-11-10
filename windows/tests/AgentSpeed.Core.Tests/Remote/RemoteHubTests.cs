@@ -5,9 +5,9 @@ namespace AgentSpeed.Core.Tests.Remote;
 /// <summary>REMOTE 2.3, 4.4, 7 <i>Sources</i>: the hub keeps one connection per enabled host in step with the settings.</summary>
 public sealed class RemoteHubTests
 {
-    private const string A = "8C0D6B0A-1111-4222-8333-00000000000A";
-    private const string B = "8C0D6B0A-1111-4222-8333-00000000000B";
-    private static readonly byte[] Prices = """{"schema":3}"""u8.ToArray();
+    internal const string A = "8C0D6B0A-1111-4222-8333-00000000000A";
+    internal const string B = "8C0D6B0A-1111-4222-8333-00000000000B";
+    internal static readonly byte[] Prices = """{"schema":3}"""u8.ToArray();
 
     [Fact]
     public void StartsEnabledHostsAndKeepsThemOnAnIdenticalUpdate()
@@ -140,7 +140,7 @@ public sealed class RemoteHubTests
         Assert.Empty(harness.Hub.ConnectedHostIds);
     }
 
-    private sealed class Harness : IDisposable
+    internal sealed class Harness : IDisposable
     {
         public Harness()
         {
@@ -179,9 +179,10 @@ public sealed class RemoteHubTests
 
         public RemoteHub Hub { get; }
 
-        public void Update(IReadOnlyList<RemoteHost> hosts, bool network = true, SourceSet? sources = null, byte[]? prices = null)
+        public void Update(
+            IReadOnlyList<RemoteHost> hosts, bool network = true, SourceSet? sources = null, byte[]? prices = null, RemoteQuotaSwitches? quota = null)
         {
-            Hub.Update(hosts, network, sources ?? SourceSet.Of(SourceKind.Codex), prices ?? Prices);
+            Hub.Update(hosts, network, sources ?? SourceSet.Of(SourceKind.Codex), prices ?? Prices, quota);
             Settle();
         }
 
@@ -192,6 +193,11 @@ public sealed class RemoteHubTests
                 foreach (var id in Hub.ConnectedHostIds)
                 {
                     Hub.Connection(id)?.Queue.Sync(() => { });
+                }
+
+                foreach (var id in Hub.RetiringHostIds)
+                {
+                    Hub.RetiringConnection(id)?.Queue.Sync(() => { });
                 }
 
                 Events.Queue.Sync(() => { });

@@ -11,7 +11,7 @@ namespace AgentSpeed.Core.Remote;
 public static class RemoteHostsJson
 {
     private static readonly string[] DocumentMembers = ["version", "hosts"];
-    private static readonly string[] HostMembers = ["id", "destination", "name", "enabled", "relayFolder"];
+    private static readonly string[] HostMembers = ["id", "destination", "name", "enabled", "relayFolder", "quotaClaudeCli"];
 
     public static void Write(Utf8JsonWriter writer, RemoteHostsDocument document)
     {
@@ -30,6 +30,11 @@ public static class RemoteHostsJson
             WriteNullable(writer, "name", host.Name);
             writer.WriteBoolean("enabled", host.Enabled);
             WriteNullable(writer, "relayFolder", host.RelayFolder);
+            if (host.QuotaClaudeCli)
+            {
+                writer.WriteBoolean("quotaClaudeCli", true);
+            }
+
             writer.WriteEndObject();
         }
 
@@ -97,6 +102,7 @@ public static class RemoteHostsJson
             Name = String(item, "name"),
             Enabled = !item.TryGetProperty("enabled", out var enabled) || enabled.ValueKind != JsonValueKind.False,
             RelayFolder = String(item, "relayFolder"),
+            QuotaClaudeCli = item.TryGetProperty("quotaClaudeCli", out var bridge) && bridge.ValueKind == JsonValueKind.True,
             ExtraJson = Extra(item, HostMembers),
         };
     }

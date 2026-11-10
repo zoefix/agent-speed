@@ -365,7 +365,8 @@ internal sealed class ConnectionHarness : IDisposable
         SourceSet? sources = null,
         Action<FakeProcess, FakeRelayBundle>? probe = null,
         Action<FakeProcess, FakeRelayBundle>? upload = null,
-        RemoteRelayBundle? bundle = null)
+        RemoteRelayBundle? bundle = null,
+        RemoteQuotaConfig? quota = null)
     {
         Scheduling = new ManualScheduling(start ?? DateTimeOffset.FromUnixTimeSeconds(1_780_000_000));
         Relays = new FakeRelayBundle();
@@ -373,8 +374,8 @@ internal sealed class ConnectionHarness : IDisposable
             new Dictionary<string, string> { ["SystemRoot"] = @"C:\Windows", ["HOME"] = "/Users/me" });
         var prices = RemotePriceTableJson.From("""{"schema":3}"""u8)!;
         Connection = new RemoteConnection(new RemoteHost(destination, HostId),
-            new RemoteSessionSettings(sources ?? SourceSet.Of(SourceKind.Codex).With(SourceKind.ClaudeCode), prices), Environment, Events.Queue,
-            Events.Handler);
+            new RemoteSessionSettings(sources ?? SourceSet.Of(SourceKind.Codex).With(SourceKind.ClaudeCode), prices, Quota: quota), Environment,
+            Events.Queue, Events.Handler);
         var relays = Relays;
         Transport.Script = process =>
         {
