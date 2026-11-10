@@ -313,6 +313,9 @@ Every later line first passes both copied-history rules of 3.5 (timestamp, then 
 | `event_msg` + `payload.type == "token_count"` | if `sawModernUsage` and `streaming`: the response ended without a usage record — `streaming = false`, `pendingStartMs = ts`, phase `tools`. Otherwise legacy usage (below). |
 | `event_msg` + `payload.type` in `task_complete`, `turn_aborted` | phase `idle`, `pendingStartMs = null`, `streaming = false` |
 
+A `token_count` line whose `payload.rate_limits` is an object also goes to the quota reader (QUOTAS 3), whatever
+the usage rules below do with it; copied history does not.
+
 Input lines:
 - `event_msg` with `payload.type` in `task_started`, `user_message`
 - `response_item` with `payload.type` ending in `_output`

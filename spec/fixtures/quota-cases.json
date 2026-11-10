@@ -1,0 +1,1398 @@
+{
+ "version": 1,
+ "now": 1794338773000,
+ "timeZone": "Asia/Taipei",
+ "codex": [
+  {
+   "name": "weekOnly",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:11:22.318Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794337882318,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 23.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "bothWindows",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:11:22.318Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 6.0,
+         "window_minutes": 300,
+         "resets_at": 1794354000
+        },
+        "secondary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        }
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794337882318,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 6.0,
+      "resetsAtMs": 1794354000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 23.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "zeroWindowSkipped",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-03T11:32:36.462Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 0.0,
+         "window_minutes": 0,
+         "resets_at": 1
+        },
+        "secondary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        }
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1793705556462,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 23.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "premiumIgnored",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:12:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "premium",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": null
+  },
+  {
+   "name": "nullWindowsReplaceNothing",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:00:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    },
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:30:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": null,
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794337200000,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 23.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "legacyResetsIn",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2025-09-01T10:00:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 2.0,
+         "window_minutes": 299,
+         "resets_in_seconds": 15212
+        },
+        "secondary": {
+         "used_percent": 30.5,
+         "window_minutes": 10079,
+         "resets_in_seconds": 400000
+        }
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1756720800000,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 2.0,
+      "resetsAtMs": 1756736012000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 30.5,
+      "resetsAtMs": 1757120800000
+     }
+    ]
+   }
+  },
+  {
+   "name": "newestWins",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:30:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 25.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    },
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:00:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 24.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794339000000,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 25.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "copiedIgnored",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:00:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 23.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    },
+    {
+     "copied": true,
+     "line": {
+      "timestamp": "2026-11-10T19:40:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 99.0,
+         "window_minutes": 10080,
+         "resets_at": 1794897479
+        },
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794337200000,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 23.0,
+      "resetsAtMs": 1794897479000
+     }
+    ]
+   }
+  },
+  {
+   "name": "otherLength",
+   "lines": [
+    {
+     "line": {
+      "timestamp": "2026-11-10T19:00:00Z",
+      "type": "event_msg",
+      "payload": {
+       "type": "token_count",
+       "info": {},
+       "rate_limits": {
+        "limit_id": "codex",
+        "limit_name": null,
+        "credits": {
+         "has_credits": false
+        },
+        "plan_type": "promax",
+        "primary": {
+         "used_percent": 50.0,
+         "window_minutes": 1440,
+         "resets_at": 1794400000
+        },
+        "secondary": null
+       }
+      }
+     }
+    }
+   ],
+   "expected": {
+    "source": "codex",
+    "observedMs": 1794337200000,
+    "windows": [
+     {
+      "kind": "other",
+      "name": null,
+      "minutes": 1440,
+      "usedPercent": 50.0,
+      "resetsAtMs": 1794400000000
+     }
+    ]
+   }
+  }
+ ],
+ "entries": [
+  {
+   "file": "zstd-ultra.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage",
+    "observedMs": 1794338773000,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 94.0,
+      "resetsAtMs": 1794380399589
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Fable",
+      "minutes": 10080,
+      "usedPercent": 27.0,
+      "resetsAtMs": 1794380399589
+     }
+    ]
+   }
+  },
+  {
+   "file": "identity-max.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage?skip_spend=1",
+    "observedMs": 1794338773000,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 23.5,
+      "resetsAtMs": 1794348000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 41.2,
+      "resetsAtMs": 1794618000000
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Opus",
+      "minutes": 10080,
+      "usedPercent": 12.0,
+      "resetsAtMs": 1794618000000
+     }
+    ]
+   }
+  },
+  {
+   "file": "gzip-max.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage?at_wall=1&skip_spend=1",
+    "observedMs": 1794339805000,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 23.5,
+      "resetsAtMs": 1794348000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 41.2,
+      "resetsAtMs": 1794618000000
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Opus",
+      "minutes": 10080,
+      "usedPercent": 12.0,
+      "resetsAtMs": 1794618000000
+     }
+    ]
+   }
+  },
+  {
+   "file": "br-ultra.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage?cedar_ember=1&skip_spend=1",
+    "observedMs": 1794337800000,
+    "windows": [
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 94.0,
+      "resetsAtMs": 1794380399589
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Fable",
+      "minutes": 10080,
+      "usedPercent": 27.0,
+      "resetsAtMs": 1794380399589
+     }
+    ]
+   }
+  },
+  {
+   "file": "partitioned.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage",
+    "observedMs": 1794338773000,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 23.5,
+      "resetsAtMs": 1794348000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 41.2,
+      "resetsAtMs": 1794618000000
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Opus",
+      "minutes": 10080,
+      "usedPercent": 12.0,
+      "resetsAtMs": 1794618000000
+     }
+    ]
+   }
+  },
+  {
+   "file": "status-304.bin",
+   "expected": null
+  },
+  {
+   "file": "other-url.bin",
+   "expected": null
+  },
+  {
+   "file": "no-key-sha.bin",
+   "expected": {
+    "url": "https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage?y=1",
+    "observedMs": 1794338773000,
+    "windows": [
+     {
+      "kind": "fiveHour",
+      "name": null,
+      "minutes": 300,
+      "usedPercent": 23.5,
+      "resetsAtMs": 1794348000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080,
+      "usedPercent": 41.2,
+      "resetsAtMs": 1794618000000
+     },
+     {
+      "kind": "modelWeek",
+      "name": "Opus",
+      "minutes": 10080,
+      "usedPercent": 12.0,
+      "resetsAtMs": 1794618000000
+     }
+    ]
+   }
+  },
+  {
+   "file": "version-4.bin",
+   "expected": null
+  },
+  {
+   "file": "unknown-encoding.bin",
+   "expected": null
+  },
+  {
+   "file": "truncated.bin",
+   "expected": null
+  },
+  {
+   "file": "bad-magic.bin",
+   "expected": null
+  }
+ ],
+ "fileName": {
+  "key": "1/0/https://claude.ai/api/organizations/0fba5d0f-43ab-4376-8ca3-f41e01ec4623/usage",
+  "expected": "383706cf5aea4bcc_0"
+ },
+ "desktopNewest": {
+  "files": [
+   "zstd-ultra.bin",
+   "identity-max.bin",
+   "gzip-max.bin",
+   "br-ultra.bin"
+  ],
+  "mtimeMs": 1794338773000,
+  "expected": {
+   "source": "claudeDesktop",
+   "observedMs": 1794339805000,
+   "file": "gzip-max.bin",
+   "windows": [
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 23.5,
+     "resetsAtMs": 1794348000000
+    },
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 41.2,
+     "resetsAtMs": 1794618000000
+    },
+    {
+     "kind": "modelWeek",
+     "name": "Opus",
+     "minutes": 10080,
+     "usedPercent": 12.0,
+     "resetsAtMs": 1794618000000
+    }
+   ]
+  }
+ },
+ "helper": [
+  {
+   "input": {
+    "rate_limits": {
+     "five_hour": {
+      "used_percentage": 6,
+      "resets_at": 1794354000
+     },
+     "seven_day": {
+      "used_percentage": 86,
+      "resets_at": 1794448800
+     }
+    }
+   },
+   "nowMs": 1794338773000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794338773000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 6,
+      "resets_at": 1794354000
+     },
+     "seven_day": {
+      "used_percentage": 86,
+      "resets_at": 1794448800
+     }
+    }
+   },
+   "line": "5h 6% · 7d 86%"
+  },
+  {
+   "input": {
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 83,
+      "resets_at": 1794448800
+     }
+    }
+   },
+   "nowMs": 1794338833000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794338773000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 6,
+      "resets_at": 1794354000
+     },
+     "seven_day": {
+      "used_percentage": 86,
+      "resets_at": 1794448800
+     }
+    }
+   },
+   "line": "5h 6% · 7d 86%"
+  },
+  {
+   "input": {
+    "rate_limits": {
+     "seven_day": {
+      "used_percentage": 88,
+      "resets_at": 1794448830
+     }
+    }
+   },
+   "nowMs": 1794338893000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794338893000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 6,
+      "resets_at": 1794354000
+     },
+     "seven_day": {
+      "used_percentage": 88,
+      "resets_at": 1794448830
+     }
+    }
+   },
+   "line": "5h 6% · 7d 88%"
+  },
+  {
+   "input": {
+    "model": {
+     "id": "claude-opus-5-5"
+    }
+   },
+   "nowMs": 1794338953000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794338893000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 6,
+      "resets_at": 1794354000
+     },
+     "seven_day": {
+      "used_percentage": 88,
+      "resets_at": 1794448830
+     }
+    }
+   },
+   "line": "5h 6% · 7d 88%"
+  },
+  {
+   "input": {
+    "rate_limits": {
+     "five_hour": {
+      "used_percentage": 2,
+      "resets_at": 1794372000
+     }
+    }
+   },
+   "nowMs": 1794339013000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794339013000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 2,
+      "resets_at": 1794372000
+     },
+     "seven_day": {
+      "used_percentage": 88,
+      "resets_at": 1794448830
+     }
+    }
+   },
+   "line": "5h 2% · 7d 88%"
+  },
+  {
+   "input": {
+    "rate_limits": {
+     "five_hour": {
+      "used_percentage": 40,
+      "resets_at": 1794336000
+     }
+    }
+   },
+   "nowMs": 1794339073000,
+   "expected": {
+    "version": 1,
+    "receivedMs": 1794339013000,
+    "windows": {
+     "five_hour": {
+      "used_percentage": 2,
+      "resets_at": 1794372000
+     },
+     "seven_day": {
+      "used_percentage": 88,
+      "resets_at": 1794448830
+     }
+    }
+   },
+   "line": "5h 2% · 7d 88%"
+  }
+ ],
+ "helperExpired": {
+  "stored": {
+   "version": 1,
+   "receivedMs": 1794339013000,
+   "windows": {
+    "five_hour": {
+     "used_percentage": 2,
+     "resets_at": 1794372000
+    },
+    "seven_day": {
+     "used_percentage": 88,
+     "resets_at": 1794448830
+    }
+   }
+  },
+  "nowMs": 1794372000000,
+  "line": "7d 88%"
+ },
+ "commands": {
+  "posix": [
+   [
+    "/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline",
+    "'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'"
+   ],
+   [
+    "/Users/o'neil/Library/Application Support/AgentSpeed/bin/agent-speed-statusline",
+    "'/Users/o'\\''neil/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'"
+   ]
+  ],
+  "windows": [
+   [
+    "C:\\Users\\me\\AppData\\Local\\AgentSpeed\\bin\\agent-speed-statusline.exe",
+    "\"C:/Users/me/AppData/Local/AgentSpeed/bin/agent-speed-statusline.exe\""
+   ]
+  ]
+ },
+ "bridge": [
+  {
+   "name": "noFile",
+   "settings": null,
+   "sidecar": null,
+   "on": {
+    "status": "on",
+    "settings": "{\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\"\n  }\n}\n",
+    "previous": {
+     "version": 1
+    }
+   },
+   "off": {
+    "status": "off",
+    "settings": "{}\n"
+   }
+  },
+  {
+   "name": "noStatusLine",
+   "settings": "{\n  \"env\": {},\n  \"permissions\": {\n    \"allow\": [\n      \"Bash\"\n    ]\n  },\n  \"model\": \"opus\"\n}\n",
+   "sidecar": null,
+   "on": {
+    "status": "on",
+    "settings": "{\n  \"env\": {},\n  \"permissions\": {\n    \"allow\": [\n      \"Bash\"\n    ]\n  },\n  \"model\": \"opus\",\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\"\n  }\n}\n",
+    "previous": {
+     "version": 1
+    }
+   },
+   "off": {
+    "status": "off",
+    "settings": "{\n  \"env\": {},\n  \"permissions\": {\n    \"allow\": [\n      \"Bash\"\n    ]\n  },\n  \"model\": \"opus\"\n}\n"
+   }
+  },
+  {
+   "name": "withPadding",
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"~/bin/line.sh\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+   "sidecar": null,
+   "on": {
+    "status": "on",
+    "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+    "previous": {
+     "version": 1,
+     "statusLine": {
+      "type": "command",
+      "command": "~/bin/line.sh",
+      "padding": 0
+     }
+    }
+   },
+   "off": {
+    "status": "off",
+    "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"~/bin/line.sh\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n"
+   }
+  },
+  {
+   "name": "alreadyOurs",
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+   "sidecar": {
+    "version": 1,
+    "statusLine": {
+     "type": "command",
+     "command": "~/bin/line.sh",
+     "padding": 0
+    }
+   },
+   "on": {
+    "status": "on",
+    "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+    "previous": {
+     "version": 1,
+     "statusLine": {
+      "type": "command",
+      "command": "~/bin/line.sh",
+      "padding": 0
+     }
+    }
+   },
+   "off": {
+    "status": "off",
+    "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"~/bin/line.sh\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n"
+   }
+  },
+  {
+   "name": "notAnObject",
+   "settings": "[1, 2]\n",
+   "sidecar": null,
+   "on": {
+    "status": "unreadable",
+    "settings": null,
+    "previous": null
+   },
+   "off": null
+  },
+  {
+   "name": "brokenJson",
+   "settings": "{\"env\": \n",
+   "sidecar": null,
+   "on": {
+    "status": "unreadable",
+    "settings": null,
+    "previous": null
+   },
+   "off": null
+  },
+  {
+   "name": "replacedByUser",
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"npx ccstatusline\"\n  }\n}\n",
+   "sidecar": {
+    "version": 1
+   },
+   "on": null,
+   "off": {
+    "status": "off",
+    "settings": null
+   }
+  }
+ ],
+ "bridgeStatus": [
+  {
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+   "quotaFile": false,
+   "expected": "waiting"
+  },
+  {
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"'/Users/me/Library/Application Support/AgentSpeed/bin/agent-speed-statusline'\",\n    \"padding\": 0\n  },\n  \"model\": \"opus\"\n}\n",
+   "quotaFile": true,
+   "expected": "ok"
+  },
+  {
+   "settings": "{\n  \"env\": {},\n  \"statusLine\": {\n    \"type\": \"command\",\n    \"command\": \"npx ccstatusline\"\n  }\n}\n",
+   "quotaFile": true,
+   "expected": "replaced"
+  },
+  {
+   "settings": "nope",
+   "quotaFile": false,
+   "expected": "unreadable"
+  }
+ ],
+ "shown": {
+  "snapshot": {
+   "source": "x",
+   "observedMs": 1794338773000,
+   "windows": [
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 94.0,
+     "resetsAtMs": 1794380399589
+    },
+    {
+     "kind": "modelWeek",
+     "name": "Fable",
+     "minutes": 10080,
+     "usedPercent": 27.0,
+     "resetsAtMs": 1794380399589
+    },
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 103.4,
+     "resetsAtMs": 1794338772000
+    },
+    {
+     "kind": "other",
+     "name": null,
+     "minutes": 1440,
+     "usedPercent": 49.5,
+     "resetsAtMs": null
+    },
+    {
+     "kind": "modelWeek",
+     "name": "Opus",
+     "minutes": 10080,
+     "usedPercent": 12.0,
+     "resetsAtMs": null
+    }
+   ]
+  },
+  "expected": [
+   {
+    "label": "5h",
+    "percent": 0,
+    "bar": 0.0,
+    "resetsAtMs": null,
+    "passed": true
+   },
+   {
+    "label": "7d",
+    "percent": 94,
+    "bar": 94.0,
+    "resetsAtMs": 1794380399589,
+    "passed": false
+   },
+   {
+    "label": "Fable 7d",
+    "percent": 27,
+    "bar": 27.0,
+    "resetsAtMs": 1794380399589,
+    "passed": false
+   },
+   {
+    "label": "Opus 7d",
+    "percent": 12,
+    "bar": 12.0,
+    "resetsAtMs": null,
+    "passed": false
+   },
+   {
+    "label": "1d",
+    "percent": 50,
+    "bar": 49.5,
+    "resetsAtMs": null,
+    "passed": false
+   }
+  ]
+ },
+ "resetTexts": [
+  {
+   "resetsAtMs": 1794339073000,
+   "long": {
+    "zh-Hant": "5 分後重置",
+    "zh-Hans": "5 分钟后重置",
+    "en": "resets in 5 min",
+    "ja": "5分後にリセット"
+   },
+   "short": {
+    "zh-Hant": "5m",
+    "zh-Hans": "5m",
+    "en": "5m",
+    "ja": "5m"
+   }
+  },
+  {
+   "resetsAtMs": 1794341352000,
+   "long": {
+    "zh-Hant": "42 分後重置",
+    "zh-Hans": "42 分钟后重置",
+    "en": "resets in 42 min",
+    "ja": "42分後にリセット"
+   },
+   "short": {
+    "zh-Hant": "42m",
+    "zh-Hans": "42m",
+    "en": "42m",
+    "ja": "42m"
+   }
+  },
+  {
+   "resetsAtMs": 1794349573000,
+   "long": {
+    "zh-Hant": "3 小時後重置",
+    "zh-Hans": "3 小时后重置",
+    "en": "resets in 3 h",
+    "ja": "3時間後にリセット"
+   },
+   "short": {
+    "zh-Hant": "3h",
+    "zh-Hans": "3h",
+    "en": "3h",
+    "ja": "3h"
+   }
+  },
+  {
+   "resetsAtMs": 1794350323000,
+   "long": {
+    "zh-Hant": "3 小時 12 分後重置",
+    "zh-Hans": "3 小时 12 分后重置",
+    "en": "resets in 3 h 12 min",
+    "ja": "3時間12分後にリセット"
+   },
+   "short": {
+    "zh-Hant": "3h",
+    "zh-Hans": "3h",
+    "en": "3h",
+    "ja": "3h"
+   }
+  },
+  {
+   "resetsAtMs": 1794425113000,
+   "long": {
+    "zh-Hant": "23 小時 59 分後重置",
+    "zh-Hans": "23 小时 59 分后重置",
+    "en": "resets in 23 h 59 min",
+    "ja": "23時間59分後にリセット"
+   },
+   "short": {
+    "zh-Hant": "23h",
+    "zh-Hans": "23h",
+    "en": "23h",
+    "ja": "23h"
+   }
+  },
+  {
+   "resetsAtMs": 1794529573000,
+   "long": {
+    "zh-Hant": "週五 08:26 重置",
+    "zh-Hans": "周五 08:26 重置",
+    "en": "resets Fri 08:26",
+    "ja": "金 08:26にリセット"
+   },
+   "short": {
+    "zh-Hant": "週五",
+    "zh-Hans": "周五",
+    "en": "Fri",
+    "ja": "金"
+   }
+  },
+  {
+   "resetsAtMs": 1794939973000,
+   "long": {
+    "zh-Hant": "11/18 02:26 重置",
+    "zh-Hans": "11/18 02:26 重置",
+    "en": "resets 11/18 02:26",
+    "ja": "11/18 02:26にリセット"
+   },
+   "short": {
+    "zh-Hant": "11/18",
+    "zh-Hans": "11/18",
+    "en": "11/18",
+    "ja": "11/18"
+   }
+  }
+ ],
+ "ageTexts": [
+  {
+   "observedMs": 1794336973000,
+   "expected": {
+    "zh-Hant": null,
+    "zh-Hans": null,
+    "en": null,
+    "ja": null
+   }
+  },
+  {
+   "observedMs": 1794335173000,
+   "expected": {
+    "zh-Hant": "1 小時前更新",
+    "zh-Hans": "1 小时前更新",
+    "en": "updated 1 h ago",
+    "ja": "1時間前に更新"
+   }
+  },
+  {
+   "observedMs": 1794317233000,
+   "expected": {
+    "zh-Hant": "5 小時前更新",
+    "zh-Hans": "5 小时前更新",
+    "en": "updated 5 h ago",
+    "ja": "5時間前に更新"
+   }
+  },
+  {
+   "observedMs": 1794075973000,
+   "expected": {
+    "zh-Hant": "3 天前更新",
+    "zh-Hans": "3 天前更新",
+    "en": "updated 3 d ago",
+    "ja": "3日前に更新"
+   }
+  }
+ ],
+ "pace": [
+  {
+   "window": {
+    "kind": "fiveHour",
+    "name": null,
+    "minutes": 300,
+    "usedPercent": 10.0,
+    "resetsAtMs": 1794345973000
+   },
+   "expected": 0.6
+  },
+  {
+   "window": {
+    "kind": "sevenDay",
+    "name": null,
+    "minutes": 10080,
+    "usedPercent": 10.0,
+    "resetsAtMs": 1794943574000
+   },
+   "expected": 0.0
+  },
+  {
+   "window": {
+    "kind": "sevenDay",
+    "name": null,
+    "minutes": 10080,
+    "usedPercent": 10.0,
+    "resetsAtMs": null
+   },
+   "expected": null
+  },
+  {
+   "window": {
+    "kind": "fiveHour",
+    "name": null,
+    "minutes": 300,
+    "usedPercent": 10.0,
+    "resetsAtMs": 1794338772999
+   },
+   "expected": null
+  }
+ ],
+ "labels": [
+  [
+   {
+    "kind": "fiveHour",
+    "name": null,
+    "minutes": 300,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "5h"
+  ],
+  [
+   {
+    "kind": "sevenDay",
+    "name": null,
+    "minutes": 10080,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "7d"
+  ],
+  [
+   {
+    "kind": "modelWeek",
+    "name": "Fable",
+    "minutes": 10080,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "Fable 7d"
+  ],
+  [
+   {
+    "kind": "other",
+    "name": null,
+    "minutes": 1440,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "1d"
+  ],
+  [
+   {
+    "kind": "other",
+    "name": null,
+    "minutes": 120,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "2h"
+  ],
+  [
+   {
+    "kind": "other",
+    "name": null,
+    "minutes": 45,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   "45m"
+  ]
+ ],
+ "percents": [
+  [
+   0,
+   0
+  ],
+  [
+   0.49,
+   0
+  ],
+  [
+   0.5,
+   1
+  ],
+  [
+   22.5,
+   23
+  ],
+  [
+   99.6,
+   100
+  ],
+  [
+   100,
+   100
+  ],
+  [
+   103.4,
+   100
+  ],
+  [
+   -2,
+   0
+  ]
+ ]
+}

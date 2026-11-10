@@ -974,10 +974,34 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   value exists, fading in and out (0.25 s) as the card eases to its height, so an orb of sources without first-content
   times never shows the row), **network**
   (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
-  `–` when nothing is priced, and the money unit) and **today** (`boards.today` with today's tokens over
-  `agents.count`). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
+  `–` when nothing is priced, and the money unit), **today** (`boards.today` with today's tokens over
+  `agents.count`) and last **額度** (below). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
   every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
   apart; a hidden card's room closes up as it fades.
+- **額度** (`character.readouts.quota`, on by default; user's choice 2026-11-10: the left column, only agents whose app
+  runs and is signed in): the column's last card. It lists every source of the orb whose app runs, is signed in and has
+  a quota with at least one window (QUOTAS 6), in source order, each with only the windows its account has (QUOTAS 2):
+  an account with a weekly window alone shows one line, never a placeholder for a missing 5-hour window.
+  - Per source: a header line with the source's color dot (`0.55 t`) and its name (`source.*`) at `0.9 t` in the
+    secondary token, then one line per window in QUOTAS 2 order.
+  - A window line: the label (`5h`, `7d`, `Fable 7d`) at `0.9 t` in the secondary token, in a column as wide as the
+    card's widest label; `0.5 t`; the bar, `5 t` long and `0.26 t` tall, fully rounded; `0.5 t`; the percent at `t` in
+    the value token, tabular, right-aligned in a cell as wide as `100%`; `0.4 t`; the short reset (QUOTAS 7: `42m`,
+    `3h`, `週五`) at `0.9 t` in the secondary token, in a cell as wide as the card's widest, nothing while unknown or
+    passed.
+  - Bar: track label 12 % (dark 16 %); fill the source color, amber `#F5A524` (light `#B86E00`) from 80 %, the system
+    red from 95 %, when the percent takes the same red. Increase Contrast: the fill in the text color, the track in the
+    disabled-text color.
+  - Spacing: sources `0.45 t` apart, a source's lines `0.25 t` apart.
+  - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s while its reset cell fades
+    out; a changed percent crossfades (0.2 s); a source joining or leaving fades its lines (0.25 s) as the card eases to
+    its height. Reduce Motion: lengths change at once, fades stay.
+  - Room: the card is as wide as its content and keeps the column's right edge. When it does not fit the room to the
+    orb's edge, the reset cells go first, then the bars shorten to `3 t`, then the header lines go (the dot moves before
+    the source's first label, `0.35 t` before it). Only then does the card spill over like the column's other cards.
+  - Accessibility: after the today reading, `a11y.orb.quota` with each source's name followed by one
+    `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), sources joined
+    by `list.separator`.
 - **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
   its last cards continue under the speed at her right (under the models card while it shows), left edges on one
   line, in the same order. Only when no split
@@ -997,7 +1021,8 @@ Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and un
 something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
 resting or an agent generates, 費用 while money flows (or a generating set has no price), models while a model runs
 (an agent of the orb is not idle), each until 10 s after its last loud moment (the models card keeps its last rows
-for those 10 s); today while there is a token today. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
+for those 10 s); today while there is a token today; 額度 while it has a source (QUOTAS 6), with no quiet rule: a
+quota does not change by the second, it is shown whenever it applies. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
 their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A
 `character` orb's network card follows `traffic` for its scope (`machine` = the whole computer, anything else = the
 orb's agents); its speed stays in tok/s (`unit` is not used: the cost has its own card, and clicking the orb does not
@@ -1041,7 +1066,8 @@ instant), actions that leave the ground (hops, jumps, spins, steps) are skipped,
 crossfades. Increase Contrast: the card plates become nearly opaque (92 %) with stronger rims and text, unlit ring lights × 2. With no character
 installed, the style draws the ring and the standard readout of the frame table (value 0.13 D) with `character.empty`
 above it; the context menu's `characters.more` leads to the downloads. LOD: below S = 96 the agent lights and the today card are
-not drawn and the column keeps at most its first two shown cards, and the models card keeps at most its first two
+not drawn and the column keeps at most its first two shown cards (the 額度 card counts as one of them when shown,
+listing its first source without reset cells), and the models card keeps at most its first two
 rows; thumbnails and style cards show the pack's `preview.png`.
 
 ### Frame policy and performance budget (normative for every style, `led` included)
@@ -1176,7 +1202,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `style` | `led` · `needle` · `liquid` · `reactor` · `minimal` · `character`; unknown → `led`. |
 | `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size; `character` occupies a disc of 2 × the size (2a.6, Footprint), which placement, snapping and magnets use. |
 | `character` | `character` style only: a character pack id (CHARACTERS 1), or absent = Auto, following the fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto. |
-| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
+| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `quota` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1413,7 +1439,7 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
    plate shows (Name plate). A `character` orb has `character.readouts` ▸ in place of the unit and traffic items: a
    check per card (`character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`,
-   `.model`; network disabled
+   `.quota`, `.model`; network disabled
    while traffic is not measured), a separator, the section header `character.readouts.networkScope` and the radio
    pair `orbs.traffic.sources` / `orbs.traffic.machine` (disabled while the network card is off). The quick menu
    does the same. In Settings the orb editor shows the cards as checkboxes with the scope popup and
@@ -2063,6 +2089,32 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    with its status. A listed source that is disabled is dimmed. Rows fade in and out as sources join and leave (at
    midnight every row leaves until its source produces again). With no row the section shows
    `dashboard.sources.empty` in secondary text under its header.
+   A source with a quota observed within the last 24 hours (QUOTAS 2) is listed too, its today values at 0.
+   **Quota lines** (QUOTAS; user's choice 2026-11-10: two bars per row, percent and reset time): a row whose source
+   has a quota with windows, and whose quota switch is on (section 5), adds one line per window under its secondary
+   line, in QUOTAS 2 order. Only the windows the account has appear: a weekly-only account shows one line, with no
+   placeholder for a 5-hour window.
+   - Columns, from the name's leading edge: the label (`5h`, `7d`, `Fable 7d`), 11 pt medium, secondary, in a column
+     as wide as the section's widest label; 8 pt; the bar, flexible, at least 88 pt; 8 pt; the percent, 11.5 pt
+     semibold tabular in the value color, right-aligned in a cell as wide as `100%`; 8 pt; the long reset (QUOTAS 7:
+     `3 小時 12 分後重置`, `週五 09:00 重置`), 11 pt secondary, in the rest of the row, its tail truncated. While the
+     snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+   - Bar: 4 pt tall, fully rounded; track label 8 % (dark 12 %); fill the source color, amber `#F5A524` (light
+     `#B86E00`) from 80 %, the system red from 95 %, when the percent takes the same red. The pace mark, while
+     QUOTAS 7 gives one, is a 1 × 8 pt tick at the pace fraction, label 35 %, centered on the bar's height.
+   - Spacing: the first line 6 pt below the secondary line, lines 4 pt apart; the row eases to its new height (0.25 s).
+   - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s; texts crossfade in 0.2 s.
+     Reduce Motion: lengths change at once.
+   - Tooltip of a line: `quota.updated` with the snapshot's time (time only today, else date and time) and, while
+     known, `quota.pace`.
+   - Accessibility: the row's label adds, after the cost, one `a11y.quota.window` per window
+     (`a11y.quota.windowNoReset` without a reset time), joined by `list.separator`.
+   - Increase Contrast / Windows high contrast: fill and pace mark in the text color, track in the disabled-text color.
+   - **Claude Code invitation**: while `quotaClaudeCli` is off and the invitation was not dismissed, the listed Claude
+     Code row shows one line in place of quota lines: the link button `dashboard.quota.enableCli` (11 pt, accent color)
+     and, at the trailing edge, a × (10 pt, tertiary, secondary on hover; tooltip and accessibility label
+     `dashboard.quota.dismiss`). The link asks as section 5 does (*額度*) and turns the bridge on; × hides the
+     invitation for good (`quotaCliInvite`).
 4. **Agents** — up to 6 rows sorted by section 6.7 of METRICS: project (semibold), source + model (secondary,
    truncated), phase badge (generating: animated three-dot shimmer in the source color; tools: wrench glyph;
    idle: grey dot), effort capsule, 性能 (the performance score, section 12) and live tok/s right-aligned. Sub-agents are indented 12 pt with a
@@ -2780,11 +2832,28 @@ with Mica). Sections:
     `claudeRoot`, … `droidRoot` on macOS) are read only while `sourceLocations` is absent, to migrate (METRICS 2.1), and
     are never written again.
   - `settings.sources.change` (*Change…*) is retired by the list and removed from `strings.json`.
+  - **額度** (`quota.title`; QUOTAS; user's choice 2026-11-10). Switches after the source toggles of their group, each
+    with its hint as caption:
+    - Codex: `settings.quota.codex` (`quotaCodex`, on).
+    - Claude: `settings.quota.claudeDesktop` (`quotaClaudeDesktop`, on) and `settings.quota.claudeCli`
+      (`quotaClaudeCli`, off).
+    Turning `quotaClaudeCli` on asks first. The sheet (macOS) or dialog has the title
+    `settings.quota.claudeCli.confirm.title` and the message `settings.quota.claudeCli.confirm.message` with the
+    settings file's path abbreviated with `~`, and offers `settings.quota.claudeCli.confirm.ok` (default) and Cancel.
+    - Confirming runs QUOTAS 5.2. Cancel, or a failed install, leaves the switch off and shows the failure under it
+      (`settings.quota.cli.unreadable`, `settings.quota.cli.failed`) in the warning style.
+    - While the bridge is on, a status line under the switch reads QUOTAS 5.4:
+      - `settings.quota.cli.waiting`;
+      - `settings.quota.cli.ok` with the quota file's time (short time; date and time when not today);
+      - `settings.quota.cli.replaced` in the warning style, with the button `settings.quota.cli.reconnect`.
+    - Turning it off runs QUOTAS 5.3 at once, without a dialog.
+    Storage: `quotaCodex`, `quotaClaudeDesktop`, `quotaClaudeCli` (booleans) and `quotaCliInvite` (`"dismissed"` or
+    absent). Remote hosts (section 13) have no quota switches.
 - **關於 About** — version, GitHub link, license, privacy statement: read-only, local-only, no network, no telemetry,
   conversation content is never stored or displayed. With the cost feature: `privacy.statement` and the Network group
   with the master switch (section 9, `spec/NETWORK.md`). With traffic measuring: `privacy.traffic` follows
   (section 10). `privacy.perfScore` follows, always (section 12: what the performance score reads, what it keeps and
-  what live reporting may send). While remote hosts exist, `privacy.remote` follows it (section 13: the user's own SSH,
+  what live reporting may send), then `privacy.quota`, always (QUOTAS 8). While remote hosts exist, `privacy.remote` follows it (section 13: the user's own SSH,
   a read-only helper in `~/.cache/agent-speed` on the host, only numbers come back, nothing about hosts is reported).
   While the local network server is on or any target exists, `privacy.lan` follows (section 14).
   With live reporting: `privacy.report` follows, and the texts switch while reporting is

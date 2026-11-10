@@ -7433,5 +7433,197 @@
     "zh-Hans": "速度一有变化，应用就会把数据发送到这个地址；只能填写局域网内的地址。",
     "en": "The app sends the speed to this address as it changes. It must be on your local network.",
     "ja": "速度が変わるたびに、アプリがこのアドレスへ送信します。ローカルネットワーク内のアドレスに限ります。"
+  },
+  "quota.title": {
+    "zh-Hant": "額度",
+    "zh-Hans": "额度",
+    "en": "Quota",
+    "ja": "利用枠"
+  },
+  "quota.reset.in": {
+    "zh-Hant": "%@後重置",
+    "zh-Hans": "%@后重置",
+    "en": "resets in %@",
+    "ja": "%@後にリセット"
+  },
+  "quota.reset.at": {
+    "zh-Hant": "%@ 重置",
+    "zh-Hans": "%@ 重置",
+    "en": "resets %@",
+    "ja": "%@にリセット"
+  },
+  "quota.duration.m": {
+    "zh-Hant": "%d 分",
+    "zh-Hans": "%d 分钟",
+    "en": "%d min",
+    "ja": "%d分"
+  },
+  "quota.duration.h": {
+    "zh-Hant": "%d 小時",
+    "zh-Hans": "%d 小时",
+    "en": "%d h",
+    "ja": "%d時間"
+  },
+  "quota.duration.hm": {
+    "zh-Hant": "%d 小時 %d 分",
+    "zh-Hans": "%d 小时 %d 分",
+    "en": "%d h %d min",
+    "ja": "%d時間%d分"
+  },
+  "quota.duration.d": {
+    "zh-Hant": "%d 天",
+    "zh-Hans": "%d 天",
+    "en": "%d d",
+    "ja": "%d日"
+  },
+  "quota.age": {
+    "zh-Hant": "%@前更新",
+    "zh-Hans": "%@前更新",
+    "en": "updated %@ ago",
+    "ja": "%@前に更新"
+  },
+  "quota.updated": {
+    "zh-Hant": "更新於 %@",
+    "zh-Hans": "更新于 %@",
+    "en": "Updated %@",
+    "ja": "%@ に更新"
+  },
+  "quota.pace": {
+    "zh-Hant": "時間進度 %d%%",
+    "zh-Hans": "时间进度 %d%%",
+    "en": "%d%% of the window has passed",
+    "ja": "期間の %d%% が経過"
+  },
+  "a11y.quota.window": {
+    "zh-Hant": "%@ 已用 %d%%，%@",
+    "zh-Hans": "%@ 已用 %d%%，%@",
+    "en": "%@ %d%% used, %@",
+    "ja": "%@ %d%% 使用、%@"
+  },
+  "a11y.quota.windowNoReset": {
+    "zh-Hant": "%@ 已用 %d%%",
+    "zh-Hans": "%@ 已用 %d%%",
+    "en": "%@ %d%% used",
+    "ja": "%@ %d%% 使用"
+  },
+  "a11y.orb.quota": {
+    "zh-Hant": "額度：%@",
+    "zh-Hans": "额度：%@",
+    "en": "Quota: %@",
+    "ja": "利用枠：%@"
+  },
+  "character.readouts.quota": {
+    "zh-Hant": "額度",
+    "zh-Hans": "额度",
+    "en": "Quota",
+    "ja": "利用枠"
+  },
+  "dashboard.quota.enableCli": {
+    "zh-Hant": "顯示 Claude Code 額度…",
+    "zh-Hans": "显示 Claude Code 额度…",
+    "en": "Show Claude Code quota…",
+    "ja": "Claude Code の利用枠を表示…"
+  },
+  "dashboard.quota.dismiss": {
+    "zh-Hant": "不再顯示",
+    "zh-Hans": "不再显示",
+    "en": "Don't show again",
+    "ja": "今後表示しない"
+  },
+  "settings.quota.codex": {
+    "zh-Hant": "顯示 Codex 額度",
+    "zh-Hans": "显示 Codex 额度",
+    "en": "Show Codex quota",
+    "ja": "Codex の利用枠を表示"
+  },
+  "settings.quota.codex.hint": {
+    "zh-Hant": "來自 Codex 的對話紀錄，每次回應都會更新。",
+    "zh-Hans": "来自 Codex 的对话记录，每次回复都会更新。",
+    "en": "Read from Codex's session logs and updated with every response.",
+    "ja": "Codex のセッション記録から読み取り、応答のたびに更新されます。"
+  },
+  "settings.quota.claudeDesktop": {
+    "zh-Hant": "顯示 Claude Desktop 額度",
+    "zh-Hans": "显示 Claude Desktop 额度",
+    "en": "Show Claude Desktop quota",
+    "ja": "Claude Desktop の利用枠を表示"
+  },
+  "settings.quota.claudeDesktop.hint": {
+    "zh-Hant": "讀取 Claude Desktop 自己留在本機的用量快取：只讀、不連網、不碰登入資料。Desktop 開著時約每 15 分鐘更新；這不是公開的介面，Desktop 改版後可能讀不到。",
+    "zh-Hans": "读取 Claude Desktop 自己留在本机的用量缓存：只读、不联网、不碰登录数据。Desktop 开着时约每 15 分钟更新；这不是公开的接口，Desktop 更新后可能读不到。",
+    "en": "Reads the usage response Claude Desktop keeps in its own cache on this computer: read-only, no network, no sign-in data. It updates about every 15 minutes while Desktop runs. This is not a public interface, so a Desktop update may stop it.",
+    "ja": "Claude Desktop がこのコンピュータに残す使用量のキャッシュを読み取ります。読み取り専用で、通信もサインイン情報の読み取りもしません。Desktop の起動中は約 15 分ごとに更新されます。公開された仕組みではないため、Desktop の更新で読めなくなることがあります。"
+  },
+  "settings.quota.claudeCli": {
+    "zh-Hant": "透過狀態列顯示 Claude Code 額度",
+    "zh-Hans": "通过状态栏显示 Claude Code 额度",
+    "en": "Show Claude Code quota through its status line",
+    "ja": "ステータスラインで Claude Code の利用枠を表示"
+  },
+  "settings.quota.claudeCli.hint": {
+    "zh-Hant": "Claude Code 只把額度交給狀態列指令。開啟後，Agent Speed 會把 Claude Code 的狀態列換成一個小工具：它把額度存在本機，並照常顯示你原本的狀態列；關閉時還原。只有終端機裡的 Claude Code 會執行狀態列，Desktop 的 Code 分頁不會。",
+    "zh-Hans": "Claude Code 只把额度交给状态栏命令。开启后，Agent Speed 会把 Claude Code 的状态栏换成一个小工具：它把额度存在本机，并照常显示你原来的状态栏；关闭时还原。只有终端里的 Claude Code 会运行状态栏，Desktop 的 Code 标签页不会。",
+    "en": "Claude Code hands its quota only to a status line command. When this is on, Agent Speed points Claude Code's status line at a small helper that saves the quota on this computer and still shows your own status line; turning it off restores it. Only Claude Code in a terminal runs a status line, not Desktop's Code tab.",
+    "ja": "Claude Code は利用枠をステータスラインのコマンドにだけ渡します。オンにすると、Agent Speed は Claude Code のステータスラインを小さな補助ツールに切り替えます。補助ツールは利用枠をこのコンピュータに保存し、元のステータスラインもそのまま表示します。オフにすると元に戻ります。ステータスラインを実行するのはターミナルの Claude Code だけで、Desktop の Code タブは実行しません。"
+  },
+  "settings.quota.claudeCli.confirm.title": {
+    "zh-Hant": "接上 Claude Code 狀態列？",
+    "zh-Hans": "接入 Claude Code 状态栏？",
+    "en": "Connect to Claude Code's status line?",
+    "ja": "Claude Code のステータスラインに接続しますか？"
+  },
+  "settings.quota.claudeCli.confirm.message": {
+    "zh-Hant": "Agent Speed 會把 %@ 裡的 statusLine 改成執行 Agent Speed 的小工具。小工具只把 5h／7d 額度存到本機，再照常執行你原本的狀態列；沒有的話就顯示「5h 6% · 7d 86%」這樣的一行。原檔會先備份，關閉這個功能時還原。",
+    "zh-Hans": "Agent Speed 会把 %@ 里的 statusLine 改成运行 Agent Speed 的小工具。小工具只把 5h／7d 额度存到本机，再照常运行你原来的状态栏；没有的话就显示「5h 6% · 7d 86%」这样的一行。原文件会先备份，关闭这个功能时还原。",
+    "en": "Agent Speed will set statusLine in %@ to run Agent Speed's helper. The helper only saves the 5h / 7d quota on this computer, then runs your own status line as before; without one it shows a line like “5h 6% · 7d 86%”. The file is backed up first and restored when you turn this off.",
+    "ja": "Agent Speed は %@ の statusLine を Agent Speed の補助ツールを実行するように変更します。補助ツールは 5h／7d の利用枠をこのコンピュータに保存してから、元のステータスラインをそのまま実行します。元のものがなければ「5h 6% · 7d 86%」のような 1 行を表示します。ファイルは先にバックアップされ、この機能をオフにすると元に戻ります。"
+  },
+  "settings.quota.claudeCli.confirm.ok": {
+    "zh-Hant": "接上",
+    "zh-Hans": "接入",
+    "en": "Connect",
+    "ja": "接続"
+  },
+  "settings.quota.cli.waiting": {
+    "zh-Hant": "已接上，等待 Claude Code 下一次回應",
+    "zh-Hans": "已接入，等待 Claude Code 下一次回复",
+    "en": "Connected. Waiting for Claude Code's next response",
+    "ja": "接続済み。Claude Code の次の応答を待っています"
+  },
+  "settings.quota.cli.ok": {
+    "zh-Hant": "已接上，額度更新於 %@",
+    "zh-Hans": "已接入，额度更新于 %@",
+    "en": "Connected. Quota updated %@",
+    "ja": "接続済み。利用枠の更新：%@"
+  },
+  "settings.quota.cli.replaced": {
+    "zh-Hant": "狀態列已被其他設定取代",
+    "zh-Hans": "状态栏已被其他设置取代",
+    "en": "The status line was replaced by another setting",
+    "ja": "ステータスラインが別の設定に置き換えられました"
+  },
+  "settings.quota.cli.reconnect": {
+    "zh-Hant": "重新接上",
+    "zh-Hans": "重新接入",
+    "en": "Reconnect",
+    "ja": "再接続"
+  },
+  "settings.quota.cli.unreadable": {
+    "zh-Hant": "無法讀取 %@（不是有效的 JSON），沒有做任何變更",
+    "zh-Hans": "无法读取 %@（不是有效的 JSON），没有做任何更改",
+    "en": "Couldn't read %@ (not valid JSON). Nothing was changed",
+    "ja": "%@ を読み取れません（有効な JSON ではありません）。何も変更していません"
+  },
+  "settings.quota.cli.failed": {
+    "zh-Hant": "無法寫入 %@，沒有做任何變更",
+    "zh-Hans": "无法写入 %@，没有做任何更改",
+    "en": "Couldn't write %@. Nothing was changed",
+    "ja": "%@ に書き込めません。何も変更していません"
+  },
+  "privacy.quota": {
+    "zh-Hant": "額度：Codex 的額度來自它的對話紀錄；Claude Desktop 的額度來自 Desktop 自己留在本機的用量快取；Claude Code 的額度只在你開啟後，透過它的狀態列取得。Agent Speed 不讀取任何 Claude 登入憑證或權杖，不向 Claude 傳送任何請求；額度不會上報，也不會傳到其他裝置。",
+    "zh-Hans": "额度：Codex 的额度来自它的对话记录；Claude Desktop 的额度来自 Desktop 自己留在本机的用量缓存；Claude Code 的额度只在你开启后，通过它的状态栏获取。Agent Speed 不读取任何 Claude 登录凭据或令牌，不向 Claude 发送任何请求；额度不会上报，也不会传到其他设备。",
+    "en": "Quotas: Codex's come from its session logs, Claude Desktop's from the usage response Desktop keeps in its own cache on this computer, and Claude Code's, only once you turn it on, from its status line. Agent Speed never reads Claude credentials or tokens and never sends a request to Claude. Quotas are not reported or sent to other devices.",
+    "ja": "利用枠：Codex の利用枠はセッション記録から、Claude Desktop の利用枠は Desktop がこのコンピュータに残す使用量のキャッシュから、Claude Code の利用枠はオンにした場合だけステータスラインから取得します。Agent Speed は Claude のサインイン情報やトークンを読み取らず、Claude にリクエストを送ることもありません。利用枠は送信されず、ほかのデバイスにも渡りません。"
   }
 }
