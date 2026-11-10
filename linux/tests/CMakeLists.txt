@@ -35,6 +35,13 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     perf_score_test.cpp
     pricing_test.cpp
+    quota_http_test.cpp
+    # Quota phase 1
+    quota_bridge_test.cpp
+    quota_codex_test.cpp
+    quota_desktop_test.cpp
+    quota_format_test.cpp
+    quota_presence_test.cpp
     qoder_fixture_test.cpp
     qoder_source_test.cpp
     report_body_test.cpp

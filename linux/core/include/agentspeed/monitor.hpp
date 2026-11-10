@@ -147,6 +147,9 @@ public:
         toolObserver_ = std::move(observer);
     }
     void setSeedProgress(std::function<void(std::size_t done, std::size_t total)> progress) { seedProgress_ = std::move(progress); }
+    // QUOTAS 3: installed on every Codex parser, those tracked already and later ones, so seeding feeds it too. Called
+    // on the monitor's thread; copied history never reaches it.
+    void setRateLimitObserver(std::function<void(const json::Value& rateLimits, std::int64_t timestampMs)> observer);
     // An agent's actions (METRICS 6.10 Storage) and working directory (10.6), when it has them.
     const work::ActionReader* actionsFor(const std::string& id) const { return actionsOf(id); }
     std::optional<std::string> cwdOf(const std::string& id) const;
@@ -301,6 +304,7 @@ private:
     engine::Thinking lastThinking_;
     std::function<void(const std::string&, SourceKind, const work::Action&)> toolObserver_;
     std::function<void(std::size_t, std::size_t)> seedProgress_;
+    std::function<void(const json::Value&, std::int64_t)> rateLimitObserver_;
 };
 
 }  // namespace agentspeed

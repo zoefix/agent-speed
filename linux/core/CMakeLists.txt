@@ -6,6 +6,18 @@ if(AGENTSPEED_STATIC)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
+# zlib: the character packs and the quota readers (gzip bodies). The relay's static build (REMOTE 3.1) needs neither yet.
+pkg_check_modules(ZLIB IMPORTED_TARGET zlib)
+if((AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP) AND NOT ZLIB_FOUND)
+    message(FATAL_ERROR "zlib (pkg-config zlib) is required for the app and the tests")
+endif()
+
+# JSON and file-system helpers with no library dependency: the base and the status line helper share them.
+add_library(agentspeed_json STATIC
+    src/fs_util.cpp
+    src/json.cpp
+)
+target_include_directories(agentspeed_json PUBLIC include)
 
 set(AGENTSPEED_PRICES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/assets/prices.json")
 set(AGENTSPEED_PRICES_CPP "${CMAKE_CURRENT_BINARY_DIR}/bundled_prices.cpp")
@@ -46,7 +58,6 @@ add_library(agentspeed_base STATIC
     src/dsh_parser.cpp
     src/engine.cpp
     src/file_reader.cpp
-    src/fs_util.cpp
     src/gemini_parser.cpp
     src/grok_parser.cpp
     src/harness.cpp
@@ -55,7 +66,6 @@ add_library(agentspeed_base STATIC
     src/history_analyzer.cpp
     src/history_remote_store.cpp
     src/history_store.cpp
-    src/json.cpp
     src/kimi_parser.cpp
     src/line_splitter.cpp
     src/location_editing.cpp
@@ -113,10 +123,46 @@ add_library(agentspeed_base STATIC
     src/zstd_frames.cpp
 )
 target_include_directories(agentspeed_base PUBLIC include)
+target_link_libraries(agentspeed_base PUBLIC agentspeed_json)
 if(AGENTSPEED_STATIC)
     target_link_libraries(agentspeed_base PUBLIC ${ZSTD_STATIC_LDFLAGS} ${BROTLI_STATIC_LDFLAGS} ${SQLITE_STATIC_LDFLAGS} OpenSSL::Crypto)
 else()
     target_link_libraries(agentspeed_base PUBLIC PkgConfig::ZSTD PkgConfig::BROTLI PkgConfig::SQLITE OpenSSL::Crypto)
+endif()
+
+# Quotas (spec/QUOTAS.md). The status line kit is what the helper executable needs (QUOTAS 5.5): JSON and files only,
+# so the helper starts fast and loads no library.
+add_library(agentspeed_statusline_kit STATIC
+    src/quota/cli_quota.cpp
+    src/quota/files.cpp
+    src/quota/paths.cpp
+    src/quota/sources.cpp
+    src/quota/window.cpp
+)
+target_link_libraries(agentspeed_statusline_kit PUBLIC agentspeed_json)
+
+# Every quota reader, parser and route, in plain C++ (no Qt): the app links it, and so can the relay (REMOTE 11).
+if(ZLIB_FOUND)
+add_library(agentspeed_quota STATIC
+    src/quota/http.cpp
+    # Phase 1 (QUOTAS 2–8)
+    src/quota/bridge.cpp
+    src/quota/bridge_settings.cpp
+    src/quota/codex.cpp
+    src/quota/content_decoding.cpp
+    src/quota/desktop_entry.cpp
+    src/quota/desktop_reader.cpp
+    src/quota/desktop_usage.cpp
+    src/quota/format.cpp
+    src/quota/ordered_json.cpp
+    src/quota/presence.cpp
+)
+target_link_libraries(agentspeed_quota PUBLIC agentspeed_base agentspeed_statusline_kit)
+if(AGENTSPEED_STATIC)
+    target_link_libraries(agentspeed_quota PUBLIC ${ZLIB_STATIC_LDFLAGS})
+else()
+    target_link_libraries(agentspeed_quota PUBLIC PkgConfig::ZLIB)
+endif()
 endif()
 
 # The character player (spec/CHARACTERS.md): rig, physics, motion, director, performer and readout layout. Plain C++.
@@ -144,7 +190,6 @@ add_library(agentspeed_character STATIC
     src/character/store.cpp
     src/character/zip.cpp
 )
-pkg_check_modules(ZLIB REQUIRED IMPORTED_TARGET zlib)
 target_link_libraries(agentspeed_character PUBLIC agentspeed_base PRIVATE PkgConfig::ZLIB)
 endif()
 
@@ -203,5 +248,5 @@ if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
         src/report/mode_rows.cpp
         src/report/usernames.cpp
     )
-    target_link_libraries(agentspeed_core PUBLIC agentspeed_base agentspeed_character PkgConfig::ICU)
+    target_link_libraries(agentspeed_core PUBLIC agentspeed_base agentspeed_quota agentspeed_character PkgConfig::ICU)
 endif()
