@@ -386,7 +386,8 @@ Sources with no quota to show:
 | Vendor website with the browser's session | Qoder IDE and Qoder CLI, WorkBuddy and WorkBuddy AI | off; turning it on asks first (9.10) |
 
 **Network rules.** These are the new feature *Quotas* of NETWORK 9.
-- Requests are only made while `networkEnabled` is on and the source's switch is on.
+- Requests are only made while `networkEnabled` is on, the source itself is enabled (DESIGN 5, Data sources) and its
+  quota switch is on. A disabled source reads no quota on any route, phase 1 included, and shows none.
 - HTTPS only, except the loopback route. A redirect is never followed and counts as a failure. The system proxy
   applies, except for loopback.
 - Timeout 10 s (loopback 2 s). Body cap 256 KiB. JSON only.
