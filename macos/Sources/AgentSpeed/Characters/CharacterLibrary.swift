@@ -97,6 +97,14 @@ final class CharacterLibrary {
             .map { CharacterSelection.Pack(id: $0.id, vendors: $0.manifest.vendors) }
     }
 
+    /// The accent of the character a model vendor stands for (the models card's dots, DESIGN 2a.6): an installed
+    /// pack's, else the catalog's; nil when no character stands for it.
+    func accent(vendor: String) -> RGBColor? {
+        let hex = installed.first { $0.manifest.vendors.contains(vendor) }?.manifest.accent
+            ?? catalog?.characters.first { $0.vendors.contains(vendor) }?.accent
+        return hex.flatMap(CharacterManifest.rgb).map { RGBColor(red: $0.r, green: $0.g, blue: $0.b) }
+    }
+
     func inputs(prices: PriceTable?) -> OrbCharacterInputs {
         OrbCharacterInputs(prices: prices, installed: packs)
     }

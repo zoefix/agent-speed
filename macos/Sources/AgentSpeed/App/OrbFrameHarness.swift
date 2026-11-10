@@ -15,8 +15,11 @@ import AppKit
 /// - `strip-<seconds>[-light][-s<size>]`: a single PNG of the five styles side by side at a moment of the tour, at
 ///   148 pt or the given size (the smallest orbs of DESIGN 2a);
 /// - `fx-<tok/s>[-light][-<level>][-rm][-peak][-zap][-s<size>]`: a single PNG of `led` at R = 2000 tok/s after 6 s at
-///   that speed, for side-by-side review with the v1.4 prototype's still frames (`OrbFrameHarness+Led`).
-/// `AGENT_SPEED_ORB_FPS` (30) and `AGENT_SPEED_ORB_SECONDS` limit the clips.
+///   that speed, for side-by-side review with the v1.4 prototype's still frames (`OrbFrameHarness+Led`);
+/// - `character[-light][-t<seconds>][-s<size>][-still]`: the `character` style over the tour (`-still`: one PNG at
+///   `-t`), with the cards of `CharacterDemoReadings`.
+/// `AGENT_SPEED_ORB_FPS` (30) and `AGENT_SPEED_ORB_SECONDS` limit the clips; `AGENT_SPEED_ORB_LANGUAGE` (`zh-Hant`)
+/// sets the language.
 @MainActor
 enum OrbFrameHarness {
     struct Clip {
@@ -80,7 +83,7 @@ enum OrbFrameHarness {
             case "character":
                 kind = .character
                 start = parts.dropFirst().compactMap { $0.hasPrefix("t") ? Double($0.dropFirst()) : nil }.first ?? 0
-                duration = OrbTour.length - start
+                duration = parts.contains("still") ? 0 : OrbTour.length - start
             default:
                 return nil
             }
@@ -101,8 +104,9 @@ enum OrbFrameHarness {
             settings: AppSettings(defaults: defaults),
             updates: UpdateController(configuration: .current(environment: [:]), store: UpdateStore(defaults: defaults))
         )
-        model.settings.language = .zhHant
-        model.l10n.apply(.zhHant)
+        let language = environment["AGENT_SPEED_ORB_LANGUAGE"].flatMap(LanguagePreference.init(rawValue:)) ?? .zhHant
+        model.settings.language = language
+        model.l10n.apply(language)
         // The designer's scenarios are written for R = 400 tok/s.
         model.settings.redlineOutput = 400
         var report = ""
@@ -184,7 +188,7 @@ enum OrbFrameHarness {
                                                        fastestVendor: vendor)
             }
             castAt(0)
-            var readings = CharacterDemoReadings(environment: environment)
+            var readings = CharacterDemoReadings(environment: environment, prices: model.priceBook.current)
             demoAt = {
                 if let next = readings.update(value: character.value, time: character.time, display: model.cost) {
                     character.feed.characterReadings = next

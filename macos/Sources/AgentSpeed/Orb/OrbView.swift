@@ -200,7 +200,12 @@ enum OrbContentBuilder {
         let l10n = model.l10n
         let pack = feed.characterID.flatMap(model.characters.installed)
         let vendor = feed.vendors.fastestVendor
-        let readouts = feed.characterReadings?.readouts ?? .default
+        let readings = feed.characterReadings
+        let readouts = readings?.readouts ?? .default
+        let models = (readings?.models ?? []).map { row in
+            CharacterModelLine(id: row.model, speed: row.speed.map(String.init) ?? CharacterReadoutText.noSpeed,
+                               hasSpeed: row.speed != nil, accent: row.vendor.flatMap(model.characters.accent))
+        }
         return OrbCharacterContent(
             pack: pack,
             modelName: feed.vendors.fastestModel,
@@ -211,6 +216,8 @@ enum OrbContentBuilder {
             todayLine: feed.todayTokens > 0 ? l10n("boards.today", SpeedFormat.tokens(feed.todayTokens)) : nil,
             agentsLine: feed.agentCount > 0 ? l10n("agents.count", feed.agentCount) : nil,
             costGlyph: l10n("cost.glyph"),
+            latency: readings?.latencyMs.map { CharacterReadoutText.latency(ms: $0, language: l10n.language) },
+            models: models,
             emptyLabel: l10n("character.empty")
         )
     }

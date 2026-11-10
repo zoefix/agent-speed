@@ -82,13 +82,17 @@ struct CharacterCards {
     let character: OrbCharacterContent?
     let m: CharacterCardMetrics
     let backing: CGFloat
+    /// The 首字 row's fade and the models card's rows, carried from frame to frame by the renderer.
+    let dynamics: CharacterCardDynamics
     let cache = OrbTextCache.shared
 
-    init(frame: OrbFrame, character: OrbCharacterContent?, backing: CGFloat) {
+    init(frame: OrbFrame, character: OrbCharacterContent?, backing: CGFloat,
+         dynamics: CharacterCardDynamics = CharacterCardDynamics()) {
         self.frame = frame
         self.character = character
         m = CharacterCardMetrics(disc: frame.s)
         self.backing = backing
+        self.dynamics = dynamics
     }
 
     var language: AppLanguage { frame.content.language }
@@ -107,11 +111,12 @@ struct CharacterCards {
         case .network: networkSize()
         case .cost: costSize()
         case .agents: agentsSize()
+        case .models: modelsSize()
         }
         return (Double(size.width), Double(size.height))
     }
 
-    private func plate(_ content: CGSize) -> CGSize {
+    func plate(_ content: CGSize) -> CGSize {
         CGSize(width: content.width + 2 * m.padX, height: content.height + 2 * m.padY)
     }
 
@@ -125,12 +130,22 @@ struct CharacterCards {
         /// The thinking row's opacity and its share of its room (it fades, then the card closes up).
         var thinkingAlpha = 1.0
         var thinkingShare: CGFloat = 1
+        /// 首字: the value it shows (or showed, while it fades out), its eased presence as opacity and share of its room.
+        var latency: CharacterReadoutText.Latency?
+        var latencyWidth: CGFloat = 0
+        var latencyShare: CGFloat = 0
     }
 
     private func performanceRows() -> PerformanceRows? {
         guard let reading = readings?.performance, case .intelligence(_, let thinking) = reading.content else { return nil }
         var rows = PerformanceRows()
         let glyphs = OrbLineGlyphs(language)
+        if let latency = dynamics.latency, dynamics.latencyPresence > 0 {
+            rows.latency = latency
+            rows.latencyShare = CGFloat(Easing.smoothstep(0, 1, dynamics.latencyPresence))
+            rows.latencyWidth = advance(Localizer.string("character.latency.glyph", language: language), m.glyph(m.t))
+                + m.glyphGap + digits(latency.number, m.number(m.t)) + m.cellGap + advance(latency.unit, m.unit(m.t))
+        }
         if readouts.intelligence {
             let score = reading.scoreMotion.frame(at: frame.time, reduceMotion: reduceMotion)
             rows.score = score
@@ -148,7 +163,7 @@ struct CharacterCards {
                 rows.thinkingShare = 1 - CGFloat(Easing.smoothstep(0, 1, single))
             }
         }
-        return rows.score == nil && rows.thinking == nil ? nil : rows
+        return rows.score == nil && rows.thinking == nil && rows.latency == nil ? nil : rows
     }
 
     private func performanceSize() -> CGSize {
@@ -158,7 +173,10 @@ struct CharacterCards {
         if rows.thinking != nil {
             height += rows.thinkingShare * ((rows.score != nil ? m.rowGap : 0) + m.rowHeight(m.t))
         }
-        let width = max(rows.scoreWidth, rows.thinkingShare * rows.thinkingWidth)
+        if rows.latency != nil {
+            height += rows.latencyShare * ((rows.score != nil || rows.thinking != nil ? m.rowGap : 0) + m.rowHeight(m.t))
+        }
+        let width = max(rows.scoreWidth, rows.thinkingShare * rows.thinkingWidth, rows.latencyShare * rows.latencyWidth)
         return plate(CGSize(width: width, height: height))
     }
 
@@ -241,6 +259,10 @@ struct CharacterCards {
             guard let money = readings?.cost else { return }
             drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
             drawCost(money, pen, origin: origin, ink: ink, into: &scene)
+        case .models:
+            guard modelsLayout() != nil else { return }
+            drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
+            drawModels(pen, origin: origin, box: box, ink: ink, into: &scene)
         case .agents:
             drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
             var top = origin.y
@@ -256,8 +278,8 @@ struct CharacterCards {
 
     /// The plate: a soft shadow, the hairline rim, the frosted fill, a sheen along the top, and her accent on the edge
     /// facing her (`spine` 1 the right edge, -1 the left one, nil none).
-    private func drawPlate(_ pen: CharacterBodyPainter, box: CGSize, ink: CharacterCardInk, corner: CGFloat? = nil,
-                           spine: CGFloat?, into scene: inout OrbScene) {
+    func drawPlate(_ pen: CharacterBodyPainter, box: CGSize, ink: CharacterCardInk, corner: CGFloat? = nil,
+                   spine: CGFloat?, into scene: inout OrbScene) {
         let s = pen.scale
         let a = pen.alpha
         let half = CGSize(width: box.width / 2 * s, height: box.height / 2 * s)
@@ -300,17 +322,30 @@ struct CharacterCards {
             drawProvisionalMark(score, pen, x: x, width: width, baseline: baseline, color: color, into: &scene)
             top += m.rowHeight(m.p) + m.rowGap
         }
-        guard let thinking = rows.thinking, rows.thinkingAlpha > 0.01 else { return }
-        if rows.score != nil { top -= (1 - rows.thinkingShare) * (m.rowHeight(m.t) + m.rowGap) }
-        let baseline = top + m.baseline(m.t)
-        let a = rows.thinkingAlpha
-        var x = origin.x
-        x += put(glyphs.thinking, m.glyph(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a), into: &scene)
+        if let thinking = rows.thinking {
+            var rowTop = top
+            if rows.score != nil { rowTop -= (1 - rows.thinkingShare) * (m.rowHeight(m.t) + m.rowGap) }
+            if rows.thinkingAlpha > 0.01 {
+                drawRow(glyphs.thinking, number: thinking, unit: OrbLineMetrics.thinkingUnit, pen, x: origin.x,
+                        baseline: rowTop + m.baseline(m.t), alpha: rows.thinkingAlpha, ink: ink, into: &scene)
+            }
+            top += rows.thinkingShare * (m.rowHeight(m.t) + m.rowGap)
+        }
+        // 首字 fades where it stands as the card eases to its height.
+        guard let latency = rows.latency, rows.latencyShare > 0.01 else { return }
+        drawRow(Localizer.string("character.latency.glyph", language: language), number: latency.number, unit: latency.unit,
+                pen, x: origin.x, baseline: top + m.baseline(m.t), alpha: Double(rows.latencyShare), ink: ink, into: &scene)
+    }
+
+    /// A row at `t`: its glyph, the number in the value token and the unit in the secondary one.
+    private func drawRow(_ glyph: String, number: String, unit: String, _ pen: CharacterBodyPainter, x left: CGFloat,
+                         baseline: CGFloat, alpha a: Double, ink: CharacterCardInk, into scene: inout OrbScene) {
+        var x = left
+        x += put(glyph, m.glyph(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a), into: &scene)
         x += m.glyphGap
-        x += putDigits(thinking, m.number(m.t), pen, x: x, baseline: baseline, color: ink.number.opacity(a), into: &scene)
+        x += putDigits(number, m.number(m.t), pen, x: x, baseline: baseline, color: ink.number.opacity(a), into: &scene)
         x += m.cellGap
-        _ = put(OrbLineMetrics.thinkingUnit, m.unit(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a),
-                into: &scene)
+        put(unit, m.unit(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a), into: &scene)
     }
 
     /// The dotted mark under a provisional score (DESIGN 12, *Provisional mark*); it takes no width.
@@ -369,12 +404,12 @@ struct CharacterCards {
 
     // MARK: Text
 
-    private func scale(_ pen: CharacterBodyPainter) -> CGFloat { backing * max(1, pen.scale) }
+    func scale(_ pen: CharacterBodyPainter) -> CGFloat { backing * max(1, pen.scale) }
 
     /// A whole string from `x` (local); returns its advance.
     @discardableResult
-    private func put(_ text: String, _ style: OrbTextStyle, _ pen: CharacterBodyPainter, x: CGFloat, baseline: CGFloat,
-                     color: RGBColor, into scene: inout OrbScene) -> CGFloat {
+    func put(_ text: String, _ style: OrbTextStyle, _ pen: CharacterBodyPainter, x: CGFloat, baseline: CGFloat,
+             color: RGBColor, into scene: inout OrbScene) -> CGFloat {
         guard !text.isEmpty, let texture = cache.texture(text, style: style, language: language, scale: scale(pen)) else { return 0 }
         scene.add(pen.text(texture, centerX: x + texture.advance / 2, baseline: baseline, color: color.opacity(pen.alpha)))
         return texture.advance
@@ -382,8 +417,8 @@ struct CharacterCards {
 
     /// Digits character by character from `x` (local); returns their advance.
     @discardableResult
-    private func putDigits(_ text: String, _ style: OrbTextStyle, _ pen: CharacterBodyPainter, x: CGFloat, baseline: CGFloat,
-                           color: RGBColor, into scene: inout OrbScene) -> CGFloat {
+    func putDigits(_ text: String, _ style: OrbTextStyle, _ pen: CharacterBodyPainter, x: CGFloat, baseline: CGFloat,
+                   color: RGBColor, into scene: inout OrbScene) -> CGFloat {
         var dx: CGFloat = 0
         for character in text {
             guard let texture = cache.texture(character, style: style, language: .en, scale: scale(pen)) else { continue }
@@ -396,12 +431,12 @@ struct CharacterCards {
         return dx
     }
 
-    private func advance(_ text: String, _ style: OrbTextStyle) -> CGFloat {
+    func advance(_ text: String, _ style: OrbTextStyle) -> CGFloat {
         guard !text.isEmpty else { return 0 }
         return cache.texture(text, style: style, language: language, scale: backing)?.advance ?? 0
     }
 
-    private func digits(_ text: String, _ style: OrbTextStyle) -> CGFloat {
+    func digits(_ text: String, _ style: OrbTextStyle) -> CGFloat {
         var width: CGFloat = 0
         for character in text { width += cache.texture(character, style: style, language: .en, scale: backing)?.advance ?? 0 }
         return width
