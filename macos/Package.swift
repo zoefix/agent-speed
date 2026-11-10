@@ -7,6 +7,7 @@ let package = Package(
     platforms: [.macOS(.v14)],
     products: [
         .executable(name: "AgentSpeed", targets: ["AgentSpeed"]),
+        .executable(name: "agent-speed-statusline", targets: ["AgentSpeedStatusLine"]),
     ],
     targets: [
         .target(
@@ -21,8 +22,17 @@ let package = Package(
             ]
         ),
         .target(
+            name: "AgentSpeedStatusLineKit",
+            path: "Sources/AgentSpeedStatusLineKit"
+        ),
+        .executableTarget(
+            name: "AgentSpeedStatusLine",
+            dependencies: ["AgentSpeedStatusLineKit"],
+            path: "Sources/AgentSpeedStatusLine"
+        ),
+        .target(
             name: "AgentSpeedCore",
-            dependencies: ["CZstd"],
+            dependencies: ["CZstd", "AgentSpeedStatusLineKit"],
             path: "Sources/AgentSpeedCore"
         ),
         .target(
@@ -52,6 +62,11 @@ let package = Package(
             name: "AgentSpeedCoreTests",
             dependencies: ["AgentSpeedCore"],
             path: "Tests/AgentSpeedCoreTests"
+        ),
+        .testTarget(
+            name: "AgentSpeedStatusLineTests",
+            dependencies: ["AgentSpeedStatusLineKit"],
+            path: "Tests/AgentSpeedStatusLineTests"
         ),
         .testTarget(
             name: "AgentSpeedHeroTests",
