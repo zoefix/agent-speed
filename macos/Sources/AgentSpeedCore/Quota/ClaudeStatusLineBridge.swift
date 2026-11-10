@@ -168,7 +168,8 @@ public struct ClaudeStatusLineBridge: Sendable {
     static func replace(_ url: URL, with data: Data, mode: mode_t) -> Bool {
         let temporary = url.deletingLastPathComponent()
             .appendingPathComponent(".\(url.lastPathComponent).agent-speed-\(getpid()).tmp")
-        let descriptor = open(temporary.path, O_WRONLY | O_CREAT | O_TRUNC | O_CLOEXEC | O_NOFOLLOW, mode)
+        unlink(temporary.path)
+        let descriptor = open(temporary.path, O_WRONLY | O_CREAT | O_EXCL | O_CLOEXEC | O_NOFOLLOW, mode)
         guard descriptor >= 0 else { return false }
         let written = data.withUnsafeBytes { buffer -> Bool in
             var offset = 0
