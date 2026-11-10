@@ -34,6 +34,8 @@ QString hintOf(RootFamily list) {
         case RootFamily::Hermes: return QStringLiteral("settings.sources.hermesHint");
         case RootFamily::Droid: return QStringLiteral("settings.sources.droidHint");
         case RootFamily::Devin: return QStringLiteral("settings.sources.devinHint");
+        case RootFamily::Qoder: return QStringLiteral("settings.sources.qoderHint");
+        case RootFamily::QoderCli: return QStringLiteral("settings.sources.qoderCliHint");
         default: return {};
     }
 }
@@ -65,7 +67,7 @@ QVariantList SourceLocationsView::groups() const {
     QVariantList out;
     for (const auto family : agentspeed::locationListOrder()) {
         QStringList sources;
-        for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Devin); ++k) {
+        for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::QoderCli); ++k) {
             const auto kind = static_cast<agentspeed::SourceKind>(k);
             // Claude Code and Claude Desktop share one switch on Linux.
             if (kind == agentspeed::SourceKind::ClaudeDesktop) continue;

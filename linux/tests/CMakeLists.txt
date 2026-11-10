@@ -94,6 +94,7 @@ if(AGENTSPEED_BUILD_APP)
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
         app/orb_size_test.cpp
+        app/qoder_settings_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
         ../app/src/characters/character_library.cpp

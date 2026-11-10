@@ -52,7 +52,7 @@ QtObject {
         opencode: "#F4B13E", gemini: "#34B8F0", omp: "#84CC16", antigravity: "#EC4899",
         workbuddy: "#11A68B", workbuddyAi: "#007AB4", zcode: "#466BFF", kimi: "#E16F8A",
         grokBuild: "#8290A6", pi: "#A855F7", openclaw: "#DE2E1F", hermes: "#B8860B", droid: "#9E5F46",
-        devin: "#557F14"
+        devin: "#557F14", qoder: "#B3329D", qoderCli: "#7E61B6"
     })
 
     function sourceColor(id) { return sourceColors[id] || "#7C8798" }

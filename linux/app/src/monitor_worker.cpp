@@ -128,7 +128,7 @@ QVariantMap MonitorWorker::trafficVariant(const agentspeed::Snapshot& snap) cons
     std::vector<Row> rows;
     double agentsRx = 0, agentsTx = 0;
     bool agentsKnown = false;
-    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Devin); ++k) {
+    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::QoderCli); ++k) {
         const auto kind = static_cast<agentspeed::SourceKind>(k);
         if (!options_.config.enabled.contains(kind)) continue;
         Row row{QString::fromUtf8(agentspeed::sourceId(kind)), 0, 0, 0, 0};

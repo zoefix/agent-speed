@@ -8,7 +8,7 @@
 class Preferences;
 
 // DESIGN 5 資料來源: the location lists as Settings shows and edits them (METRICS 2.1). Lists are named as stored
-// (`codex`, `claude`, … `devin`).
+// (`codex`, `claude`, … `qoderCli`).
 class SourceLocationsView : public QObject {
     Q_OBJECT
     Q_PROPERTY(int revision READ revision NOTIFY changed)
