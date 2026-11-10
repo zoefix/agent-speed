@@ -120,6 +120,34 @@ import Testing
         #expect(broken.characterReadouts == .default)
     }
 
+    /// The 首字 row and the models card (user's choice, 2026-11-10): on by default, in the menus' order, tolerant and
+    /// written only when they differ.
+    @Test func latencyAndModelsAreOnByDefaultAndRoundTrip() throws {
+        #expect(CharacterReadout.allCases == [.intelligence, .thinking, .latency, .network, .cost, .agents, .models, .model])
+        #expect(CharacterReadout.latency.titleKey == "character.readouts.latency")
+        #expect(CharacterReadout.models.titleKey == "character.readouts.models")
+        #expect(CharacterReadouts.default.latency && CharacterReadouts.default.models)
+        let older = try JSONDecoder().decode(CharacterReadouts.self, from: Data(#"{"model": true, "cost": false}"#.utf8))
+        #expect(older == CharacterReadouts(model: true, cost: false))
+        let typed = try JSONDecoder().decode(CharacterReadouts.self,
+                                             from: Data(#"{"latency": "no", "models": 0, "thinking": false}"#.utf8))
+        #expect(typed == CharacterReadouts(thinking: false))
+        let off = CharacterReadouts(latency: false, models: false)
+        let json = try JSONSerialization.jsonObject(with: JSONEncoder().encode(off)) as? [String: Bool]
+        #expect(json?["latency"] == false && json?["models"] == false && json?["network"] == true)
+        #expect(try JSONDecoder().decode(CharacterReadouts.self, from: JSONEncoder().encode(off)) == off)
+        var orb = OrbConfig(id: "a", style: .character)
+        orb.characterReadouts.models = false
+        let again = try JSONDecoder().decode(OrbConfig.self, from: JSONEncoder().encode(orb))
+        #expect(again.characterReadouts == CharacterReadouts(models: false))
+        var doc = OrbsDocument(orbs: [OrbConfig(id: "a", style: .character)])
+        doc = OrbEditing.setCharacterReadout(.latency, false, of: "a", in: doc)
+        #expect(doc.orb("a")?.characterReadouts == CharacterReadouts(latency: false))
+        doc = OrbEditing.setCharacterReadout(.latency, true, of: "a", in: doc)
+        let encoded = String(decoding: try JSONEncoder().encode(doc.orb("a")), as: UTF8.self)
+        #expect(!encoded.contains("characterReadouts"))
+    }
+
     @Test func editingSetsAndCopiesTheReadouts() throws {
         var doc = OrbsDocument(orbs: [OrbConfig(id: "a", style: .character)])
         doc = OrbEditing.setCharacterReadout(.model, true, of: "a", in: doc)
