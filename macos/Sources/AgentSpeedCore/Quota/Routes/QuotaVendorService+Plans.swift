@@ -122,7 +122,22 @@ extension QuotaVendorService {
 
     // MARK: Antigravity (QUOTAS 9.4)
 
+    /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open), the
+    /// network is on and the last request is old enough.
     private func antigravityPlan(_ round: QuotaVendorRound, _ state: inout RouteState) -> FetchPlan? {
+        guard round.networkEnabled else {
+            state.reading.status = .networkOff
+            return nil
+        }
+        guard round.dashboardOpen || round.running.contains(.antigravity) else {
+            antigravityRuns = false
+            state.reading.status = .notRunning
+            return nil
+        }
+        if let last = state.cadence.lastRequestMs {
+            let wait = state.cadence.lastOutcome == .success ? QuotaCadence.intervalMs : QuotaCadence.failureWaitMs
+            if round.nowMs - last < wait { return nil }
+        }
         var servers = environment.antigravity.servers()
         antigravityRuns = !servers.isEmpty
         forgottenTokens.formIntersection(servers.map(\.pid))
