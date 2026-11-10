@@ -36,6 +36,7 @@ internal sealed class SourcesPaneViewModel : ObservableObject
         Groups = [.. LocationFolders.All.Select(folder =>
             new SourceGroupViewModel(folder, [.. folder.Sources().Select(kind => rows.First(row => row.Kind == kind))], this, loc, QuotaFor(folder, loc)))];
         Sync();
+        UpdateQuota(QuotaState.Empty, settings.Current);
     }
 
     /// <summary>What the quota switches do; set by the app.</summary>
@@ -46,12 +47,13 @@ internal sealed class SourcesPaneViewModel : ObservableObject
 
     private string? _cliFailure;
     private QuotaState _quotaState = QuotaState.Empty;
-    private Presentation.Settings.QuotaSettings _quotaSettings = Presentation.Settings.QuotaSettings.Default;
+    private Presentation.Settings.AppSettings? _quotaSettings;
 
-    private IReadOnlyList<QuotaToggleViewModel> QuotaFor(LocationFolder folder, Localizer loc)
+    /// <summary>The group's quota switches (DESIGN 5): Codex, Claude Desktop and the bridge, then the phase 2 routes.</summary>
+    private List<QuotaRowViewModel> QuotaFor(LocationFolder folder, Localizer loc)
     {
-        var sources = folder.Sources().ToList();
-        var switches = new List<QuotaToggleViewModel>();
+        var sources = folder.Sources();
+        var switches = new List<QuotaRowViewModel>();
         if (sources.Contains(Core.SourceKind.Codex))
         {
             switches.Add(new QuotaToggleViewModel(QuotaSwitch.Codex, loc, () => QuotaActions));
@@ -63,17 +65,19 @@ internal sealed class SourcesPaneViewModel : ObservableObject
             switches.Add(new QuotaToggleViewModel(QuotaSwitch.ClaudeCli, loc, () => QuotaActions));
         }
 
+        switches.AddRange(QuotaSwitchRows.Of(folder).Select(route => new QuotaRouteToggleViewModel(route, loc, () => QuotaActions)));
         return switches;
     }
 
-    /// <summary>The quota switches and the bridge's status follow the settings and the readers.</summary>
-    public void UpdateQuota(QuotaState state, Presentation.Settings.QuotaSettings settings)
+    /// <summary>The quota switches, their status lines and the rows a disabled source dims follow the settings and the readers.</summary>
+    public void UpdateQuota(QuotaState state, Presentation.Settings.AppSettings settings)
     {
         _quotaState = state;
         _quotaSettings = settings;
+        var context = new QuotaRowContext(settings, state, _cliFailure, CliSettingsPath, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
         foreach (var toggle in Groups.SelectMany(g => g.QuotaToggles))
         {
-            toggle.Update(settings, state, _cliFailure, CliSettingsPath);
+            toggle.Update(context);
         }
     }
 
@@ -81,7 +85,7 @@ internal sealed class SourcesPaneViewModel : ObservableObject
     public void ShowCliFailure(string? failure)
     {
         _cliFailure = failure;
-        UpdateQuota(_quotaState, _quotaSettings);
+        UpdateQuota(_quotaState, _quotaSettings ?? _settings.Current);
     }
 
     public IReadOnlyList<SourceGroupViewModel> Groups { get; }
@@ -125,6 +129,8 @@ internal sealed class SourcesPaneViewModel : ObservableObject
             group.Relocalize(loc);
         }
 
+        // The status lines are sentences of the language: they are written again.
+        UpdateQuota(_quotaState, _quotaSettings ?? _settings.Current);
         OnPropertyChanged(string.Empty);
     }
 

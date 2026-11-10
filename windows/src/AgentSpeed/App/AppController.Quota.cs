@@ -2,6 +2,8 @@ using System.Collections.Immutable;
 using AgentSpeed.Controls;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Network;
+using AgentSpeed.Core.Quota.Routes;
 using AgentSpeed.Presentation.Orb;
 using AgentSpeed.Presentation.Quota;
 using AgentSpeed.Presentation.Settings;
@@ -12,7 +14,8 @@ namespace AgentSpeed.App;
 
 /// <summary>
 /// Quotas (QUOTAS; DESIGN 4, 2a.6, 5): the service started with the monitor, its state on the dashboard, the orbs and
-/// Settings, the Claude Code bridge with its confirmation, and the developer capture's quota operations.
+/// Settings, the Claude Code bridge and the browser sessions with their confirmations, ZCode's key and region, and the
+/// developer capture's quota operations.
 /// </summary>
 internal sealed partial class AppController
 {
@@ -43,7 +46,7 @@ internal sealed partial class AppController
         _dashboardModel.Quota = state;
         _dashboardModel.QuotaSettings = Settings.Quota;
         _orbs?.UpdateQuota(state);
-        _settingsModel?.SourcesPane.UpdateQuota(state, Settings.Quota);
+        _settingsModel?.SourcesPane.UpdateQuota(state, Settings);
         _dashboardDirty = true;
         FlushDashboard();
     }
@@ -54,7 +57,13 @@ internal sealed partial class AppController
         if (previous.Quota != current.Quota)
         {
             _dashboardModel.QuotaSettings = current.Quota;
-            _settingsModel?.SourcesPane.UpdateQuota(Quota, current.Quota);
+        }
+
+        // A disabled source dims its quota rows and the network switch speaks in their status lines (QUOTAS 9.1).
+        if (previous.Quota != current.Quota || previous.NetworkEnabled != current.NetworkEnabled
+            || previous.EnabledSourceSet() != current.EnabledSourceSet())
+        {
+            _settingsModel?.SourcesPane.UpdateQuota(Quota, current);
         }
 
         if (previous.RemoteHosts != current.RemoteHosts || previous.RemoteQuotaSwitches != current.RemoteQuotaSwitches)
@@ -143,7 +152,30 @@ internal sealed partial class AppController
             quota.RefreshBridgeStatus();
         }
 
-        pane.UpdateQuota(Quota, Settings.Quota);
+        pane.UpdateQuota(Quota, Settings);
+    }
+
+    /// <summary>
+    /// Turning <c>quotaQoder</c> or <c>quotaWorkBuddy</c> on (DESIGN 5, QUOTAS 9.10): asks first, naming the site and its
+    /// host and what Chrome and Edge allow on Windows; Cancel leaves the switch off. Returns whether it is on now.
+    /// </summary>
+    internal bool EnableBrowserQuota(QuotaRoute route)
+    {
+        if (QuotaSwitchRows.Site(route) is not { } site)
+        {
+            return false;
+        }
+
+        if (!ConfirmDialog.ShowAccent(_settingsWindow is { IsVisible: true } ? _settingsWindow : null, _loc["app.name"],
+                _loc.Format("settings.quota.cookies.confirm.title", site.Name),
+                _loc.Format("win.settings.quota.cookies.confirm.message", site.Name, site.Host),
+                _loc["settings.quota.cookies.confirm.ok"], _loc["history.cancel"]))
+        {
+            return false;
+        }
+
+        _settings.Update(s => s with { Quota = s.Quota.With(route, true) });
+        return true;
     }
 
     private sealed class QuotaActions(AppController app) : IQuotaSettingsActions
@@ -158,6 +190,16 @@ internal sealed partial class AppController
         public void DisableClaudeCli() => app.DisableClaudeCliQuota();
 
         public void ReconnectClaudeCli() => app.ReconnectClaudeCliQuota();
+
+        public void SetRoute(QuotaRoute route, bool on) => app._settings.Update(s => s with { Quota = s.Quota.With(route, on) });
+
+        public bool EnableBrowser(QuotaRoute route) => app.EnableBrowserQuota(route);
+
+        public bool SaveZcodeKey(string text) => app._quota?.SaveZcodeKey(text) ?? false;
+
+        public void RemoveZcodeKey() => app._quota?.RemoveZcodeKey();
+
+        public void SetZcodeRegion(ZaiRegion region) => app._settings.Update(s => s with { Quota = s.Quota with { ZcodeRegion = region } });
     }
 
     internal void DismissCliInvitation() => _settings.Update(s => s with { Quota = s.Quota with { CliInviteDismissed = true } });

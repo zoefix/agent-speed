@@ -1,166 +1,105 @@
 using System.Windows.Threading;
 using AgentSpeed.Controls;
+using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Quota;
-using AgentSpeed.Presentation.Settings;
 
 namespace AgentSpeed.Settings.Sources;
 
-/// <summary>The quota switches of Settings → Data Sources (DESIGN 5).</summary>
-internal enum QuotaSwitch
-{
-    Codex,
-    ClaudeDesktop,
-    ClaudeCli,
-}
-
-/// <summary>What the quota switches do; the app implements it (the bridge asks first and may fail).</summary>
-internal interface IQuotaSettingsActions
-{
-    void Set(QuotaSwitch quota, bool on);
-
-    /// <summary>Asks, then turns the Claude CLI bridge on; true when it is on.</summary>
-    bool EnableClaudeCli();
-
-    void DisableClaudeCli();
-
-    void ReconnectClaudeCli();
-}
-
 /// <summary>
-/// One quota switch with its hint as the caption and, for the Claude CLI bridge, its status line: waiting, connected
-/// with the quota file's time, replaced (warning, with Reconnect), or why it could not be turned on (warning).
+/// A phase 1 quota switch with its hint as the caption and, for the Claude CLI bridge, its status line: waiting, connected
+/// with the quota file's time, replaced (warning, with Reconnect), or why it could not be turned on (warning). Codex and
+/// Claude Desktop dim while their source is disabled; the bridge stays switchable so it can always be restored.
 /// </summary>
-internal sealed class QuotaToggleViewModel : ObservableObject
+internal sealed class QuotaToggleViewModel : QuotaRowViewModel
 {
-    private readonly Func<IQuotaSettingsActions?> _actions;
-    private Localizer _loc;
-    private bool _isOn;
-    private string _status = string.Empty;
-    private bool _warning;
     private bool _reconnect;
-    private bool _ok;
 
     public QuotaToggleViewModel(QuotaSwitch quota, Localizer loc, Func<IQuotaSettingsActions?> actions)
+        : base(loc, actions)
     {
         Switch = quota;
-        _loc = loc;
-        _actions = actions;
-        ReconnectCommand = new RelayCommand(() => _actions()?.ReconnectClaudeCli());
+        ReconnectCommand = new RelayCommand(() => Actions()?.ReconnectClaudeCli());
     }
 
     public QuotaSwitch Switch { get; }
 
-    public string Title => _loc[Switch switch
+    public override string Title => Loc[Switch switch
     {
         QuotaSwitch.Codex => "settings.quota.codex",
         QuotaSwitch.ClaudeDesktop => "settings.quota.claudeDesktop",
         _ => "settings.quota.claudeCli",
     }];
 
-    public string Hint => _loc[Switch switch
+    public override string Hint => Loc[Switch switch
     {
         QuotaSwitch.Codex => "settings.quota.codex.hint",
         QuotaSwitch.ClaudeDesktop => "settings.quota.claudeDesktop.hint",
         _ => "settings.quota.claudeCli.hint",
     }];
 
-    public string ReconnectText => _loc["settings.quota.cli.reconnect"];
+    public override string ReconnectText => Loc["settings.quota.cli.reconnect"];
 
-    public RelayCommand ReconnectCommand { get; }
+    public override RelayCommand ReconnectCommand { get; }
 
-    public bool IsOn
+    public override bool ShowsReconnect => _reconnect;
+
+    protected override void Toggle(bool on)
     {
-        get => _isOn;
-        set
+        if (Switch != QuotaSwitch.ClaudeCli)
         {
-            if (value == _isOn)
-            {
-                return;
-            }
-
-            if (Switch != QuotaSwitch.ClaudeCli)
-            {
-                _isOn = value;
-                OnPropertyChanged();
-                _actions()?.Set(Switch, value);
-                return;
-            }
-
-            if (!value)
-            {
-                _isOn = false;
-                OnPropertyChanged();
-                _actions()?.DisableClaudeCli();
-                return;
-            }
-
-            // Turning the bridge on asks first: the switch stays off until the dialog confirms and the install succeeds.
-            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Input, () =>
-            {
-                var on = _actions()?.EnableClaudeCli() ?? false;
-                _isOn = on;
-                OnPropertyChanged(nameof(IsOn));
-            });
+            ShowOn(on);
+            Actions()?.Set(Switch, on);
+            return;
         }
+
+        if (!on)
+        {
+            ShowOn(false);
+            Actions()?.DisableClaudeCli();
+            return;
+        }
+
+        // Turning the bridge on asks first: the switch stays off until the dialog confirms and the install succeeds.
+        Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+        {
+            ShowOn(Actions()?.EnableClaudeCli() ?? false);
+            RefreshOn();
+        });
     }
 
-    public string Status { get => _status; private set => Set(ref _status, value); }
-
-    public bool HasStatus => _status.Length > 0;
-
-    /// <summary>The status reads in the warning style (replaced, unreadable, failed).</summary>
-    public bool IsWarning { get => _warning; private set => Set(ref _warning, value); }
-
-    public bool ShowsReconnect
+    /// <summary>Takes the switch's stored value and, for the bridge, its status; the bridge's failure wins while set.</summary>
+    public override void Update(QuotaRowContext context)
     {
-        get => _reconnect;
-        private set
-        {
-            if (Set(ref _reconnect, value))
-            {
-                OnPropertyChanged(nameof(ReconnectLink));
-                OnPropertyChanged(nameof(ReconnectGap));
-            }
-        }
-    }
-
-    /// <summary>The Reconnect link's text inside the status line, empty while it is not offered.</summary>
-    public string ReconnectLink => _reconnect ? ReconnectText : string.Empty;
-
-    public string ReconnectGap => _reconnect ? "   " : string.Empty;
-
-    /// <summary>Connected with a quota file: the status line leads with a check.</summary>
-    public bool IsConnected { get => _ok; private set => Set(ref _ok, value); }
-
-    /// <summary>Takes the switch's stored value and, for the bridge, its status; <paramref name="failure"/> wins while set.</summary>
-    public void Update(QuotaSettings settings, QuotaState state, string? failure, string settingsPath)
-    {
+        var settings = context.Settings;
         var on = Switch switch
         {
-            QuotaSwitch.Codex => settings.Codex,
-            QuotaSwitch.ClaudeDesktop => settings.ClaudeDesktop,
-            _ => settings.ClaudeCli,
+            QuotaSwitch.Codex => settings.Quota.Codex,
+            QuotaSwitch.ClaudeDesktop => settings.Quota.ClaudeDesktop,
+            _ => settings.Quota.ClaudeCli,
         };
-        if (on != _isOn)
+        ShowOn(on);
+        CanSwitch = Switch switch
         {
-            _isOn = on;
-            OnPropertyChanged(nameof(IsOn));
-        }
+            QuotaSwitch.Codex => settings.IsSourceEnabled(SourceKind.Codex),
+            QuotaSwitch.ClaudeDesktop => settings.IsSourceEnabled(SourceKind.ClaudeDesktop),
+            _ => true,
+        };
 
         if (Switch != QuotaSwitch.ClaudeCli)
         {
             return;
         }
 
+        var state = context.State;
         string status;
-        var warning = false;
+        var mark = QuotaStatusMark.None;
         var reconnect = false;
-        if (failure is { Length: > 0 })
+        if (context.CliFailure is { Length: > 0 } failure)
         {
             status = failure;
-            warning = true;
+            mark = QuotaStatusMark.Warning;
         }
         else if (!on)
         {
@@ -171,34 +110,32 @@ internal sealed class QuotaToggleViewModel : ObservableObject
             switch (state.CliStatus)
             {
                 case ClaudeCliBridgeStatus.Ok when state.CliFileTime is { } time:
-                    status = _loc.Format("settings.quota.cli.ok",
-                        QuotaText.When(time.ToUnixTimeMilliseconds(), DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), _loc));
+                    status = Loc.Format("settings.quota.cli.ok", QuotaText.When(time.ToUnixTimeMilliseconds(), context.NowMs, Loc));
+                    mark = QuotaStatusMark.Ok;
                     break;
                 case ClaudeCliBridgeStatus.Replaced:
-                    status = _loc["settings.quota.cli.replaced"];
-                    warning = true;
+                    status = Loc["settings.quota.cli.replaced"];
+                    mark = QuotaStatusMark.Warning;
                     reconnect = true;
                     break;
                 case ClaudeCliBridgeStatus.Unreadable:
-                    status = _loc.Format("settings.quota.cli.unreadable", settingsPath);
-                    warning = true;
+                    status = Loc.Format("settings.quota.cli.unreadable", context.CliSettingsPath);
+                    mark = QuotaStatusMark.Warning;
                     break;
                 default:
-                    status = _loc["settings.quota.cli.waiting"];
+                    status = Loc["settings.quota.cli.waiting"];
                     break;
             }
         }
 
         Status = status;
-        IsWarning = warning;
-        IsConnected = !warning && on && state.CliStatus == ClaudeCliBridgeStatus.Ok && state.CliFileTime is not null && failure is not { Length: > 0 };
-        ShowsReconnect = reconnect;
-        OnPropertyChanged(nameof(HasStatus));
-    }
-
-    public void Relocalize(Localizer loc)
-    {
-        _loc = loc;
-        OnPropertyChanged(string.Empty);
+        StatusMark = mark;
+        if (reconnect != _reconnect)
+        {
+            _reconnect = reconnect;
+            OnPropertyChanged(nameof(ShowsReconnect));
+            OnPropertyChanged(nameof(ReconnectLink));
+            OnPropertyChanged(nameof(ReconnectGap));
+        }
     }
 }
