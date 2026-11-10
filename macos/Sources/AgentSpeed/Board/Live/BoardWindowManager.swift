@@ -118,7 +118,8 @@ final class BoardWindowManager {
     private func showMenu(_ id: String, event: NSEvent) {
         guard let window = presenters[id]?.window else { return }
         let menu = BoardMenus.contextMenu(model: model, boardId: id)
-        NSMenu.popUpContextMenu(menu, with: event, for: window.host)
+        let point = event.window?.convertPoint(toScreen: event.locationInWindow) ?? NSEvent.mouseLocation
+        menu.popUpDetached(at: point, appearance: window.host.effectiveAppearance)
     }
 
     // MARK: Placement

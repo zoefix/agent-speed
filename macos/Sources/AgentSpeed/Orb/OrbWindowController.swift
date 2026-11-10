@@ -797,15 +797,10 @@ extension OrbWindowController: OrbHostViewDelegate {
         finishPendingDrag()
         manager?.orbInteracted(id)
         let menu = MenuFactory.orbContextMenu(model: model, orbId: id)
-        if let event, event.window === panel {
-            NSMenu.popUpContextMenu(menu, with: event, for: host)
-        } else if let event, let window = event.window {
-            // A right-click on the name plate: open at the pointer, over the orb.
-            let point = panel.convertPoint(fromScreen: window.convertPoint(toScreen: event.locationInWindow))
-            menu.popUp(positioning: nil, at: host.convert(point, from: nil), in: host)
-        } else {
-            menu.popUp(positioning: nil, at: NSPoint(x: host.bounds.midX, y: host.bounds.midY), in: host)
-        }
+        // At the pointer for a right-click on the disc or the name plate; at the disc's centre from accessibility.
+        let point = event.map { $0.window?.convertPoint(toScreen: $0.locationInWindow) ?? NSEvent.mouseLocation }
+            ?? NSPoint(x: panel.frame.midX, y: panel.frame.midY)
+        menu.popUpDetached(at: point, appearance: host.effectiveAppearance)
         refreshPointer()
     }
 

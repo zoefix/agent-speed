@@ -1359,7 +1359,11 @@ An orb never deletes or rewrites its sources because of that.
 ### Context menu (right-click on an orb)
 
 Native menu (macOS `NSMenu` with leading check marks; Windows Fluent context menu), submenus open away from the screen
-edge. Windows (this menu and the tray quick menu): every label starts in one text column whether or not the item has an
+edge. It opens with its top-left corner at the pointer (at the disc's centre from accessibility), moved left and up as
+needed to stay whole on that screen's visible area, never scrolled. On macOS the menu has no parent window (boards'
+menus too): a menu opened for a floating panel joins the panel's window group, and macOS 27 can leave that group on no
+Space after the panel is dragged to another display, so the menu is never drawn and the orb can leave the screen with
+it. Windows (this menu and the tray quick menu): every label starts in one text column whether or not the item has an
 icon (icons sit in a fixed leading column), and toggle items show their check mark trailing, right-aligned in the same
 column as submenu chevrons, so checked and unchecked items never shift the text:
 
