@@ -322,7 +322,10 @@ QVariantMap RemoteHostsView::testResult(const QVariantMap& result, const QString
 QString RemoteHostsView::removeFiles(const QString& id) const {
     const auto* host = remote_.document().find(id.toStdString());
     const auto folder = host ? qt(host->effectiveRelayFolder()) : QStringLiteral("~/.cache/agent-speed");
-    return strings_.fmt(QStringLiteral("remote.remove.files"), {folder});
+    auto text = strings_.fmt(QStringLiteral("remote.remove.files"), {folder});
+    // REMOTE 2.4, 11.3: a host whose bridge is on restores its status line first when it can be reached.
+    if (host && host->quotaClaudeCli) text += QStringLiteral("\n\n") + strings_.fmt(QStringLiteral("remote.quota.removeNote"), {folder});
+    return text;
 }
 
 void RemoteHostsView::copySshCommand(const QString& id) const {

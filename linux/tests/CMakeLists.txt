@@ -109,7 +109,7 @@ gtest_discover_tests(agentspeed_character_alloc_tests)
 
 # The app's settings side (DESIGN 5 Storage, METRICS 2.1 Editing) needs Qt: built only with the app.
 if(AGENTSPEED_BUILD_APP)
-    find_package(Qt6 6.5 REQUIRED COMPONENTS Core Network Widgets)
+    find_package(Qt6 6.5 REQUIRED COMPONENTS Core DBus Network Widgets)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/character_library_test.cpp
@@ -119,6 +119,10 @@ if(AGENTSPEED_BUILD_APP)
         app/orb_character_test.cpp
         app/orb_size_test.cpp
         app/qoder_settings_test.cpp
+        app/quota_transport_test.cpp
+        app/quota_view_test.cpp
+        app/quota_worker_test.cpp
+        app/secret_service_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
         ../app/src/characters/character_library.cpp
@@ -134,6 +138,11 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
+        ../app/src/quota/quota_text.cpp
+        ../app/src/quota/quota_transport.cpp
+        ../app/src/quota/quota_view.cpp
+        ../app/src/quota/quota_worker.cpp
+        ../app/src/quota/secret_service.cpp
         ../app/src/source_locations_view.cpp
         ../app/src/strings.cpp
     )
@@ -148,8 +157,9 @@ if(AGENTSPEED_BUILD_APP)
         BASE "${CMAKE_CURRENT_SOURCE_DIR}/../app"
         FILES "${CMAKE_CURRENT_SOURCE_DIR}/../app/strings.linux.json")
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
-    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
+    target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::DBus Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
     target_compile_definitions(agentspeed_app_tests PRIVATE
+        AGENTSPEED_VERSION="${AGENTSPEED_VERSION}"
         AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
         AGENTSPEED_APP_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../app")
     gtest_discover_tests(agentspeed_app_tests)

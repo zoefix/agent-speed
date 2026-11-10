@@ -17,5 +17,11 @@
     "zh-Hans": "在文件管理器中显示",
     "en": "Show in File Manager",
     "ja": "ファイルマネージャで表示"
+  },
+  "linux.settings.quota.cookies.confirm.message": {
+    "zh-Hant": "Agent Speed 會從這台電腦的瀏覽器讀取 %@ 的 Cookie，只用來向 %@ 查詢你的額度，只放在記憶體裡，用完即丟，不會存檔或傳到其他地方。Chrome 系列瀏覽器的 Cookie 由系統的鑰匙圈保護，鑰匙圈上鎖時會請你解鎖一次，拒絕就略過那個瀏覽器。",
+    "zh-Hans": "Agent Speed 会从这台电脑的浏览器读取 %@ 的 Cookie，只用来向 %@ 查询你的额度，只放在内存里，用完即丢，不会存盘或传到其他地方。Chrome 系列浏览器的 Cookie 由系统的钥匙串保护，钥匙串上锁时会请你解锁一次，拒绝就跳过那个浏览器。",
+    "en": "Agent Speed will read the %@ cookies from the browsers on this computer, only to ask %@ for your quota. They stay in memory, are dropped after use, and are never saved or sent anywhere else. Chrome-family browsers protect their cookies with the system keyring; if it is locked, you are asked once to unlock it, and refusing skips that browser.",
+    "ja": "Agent Speed はこのコンピュータのブラウザから %@ の Cookie を読み取り、%@ に利用枠を問い合わせるためだけに使います。Cookie はメモリ上にだけ置き、使い終わったら破棄し、保存したりほかへ送ったりしません。Chrome 系のブラウザは Cookie をシステムのキーリングで保護しています。キーリングがロックされている場合は一度だけロック解除を求められ、拒否したブラウザは使いません。"
   }
 }

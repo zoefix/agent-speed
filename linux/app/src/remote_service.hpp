@@ -1,6 +1,11 @@
 #pragma once
 
+#include <functional>
+#include <map>
+#include <mutex>
+
 #include <QObject>
+#include <QSet>
 #include <QString>
 #include <QTimer>
 #include <QVariantList>
@@ -66,6 +71,15 @@ public:
     Q_INVOKABLE QString addHost(const QString& destination, const QString& name = {}, const QString& relayFolder = {});
     Q_INVOKABLE bool updateHost(const QString& id, const QString& destination, const QString& name, const QString& relayFolder);
     Q_INVOKABLE void setHostEnabled(const QString& id, bool enabled);
+    // REMOTE 11.3: the host's Claude Code status line bridge (`quotaClaudeCli`).
+    Q_INVOKABLE void setHostQuotaBridge(const QString& id, bool on);
+    Q_INVOKABLE bool hostQuotaBridge(const QString& id) const;
+    // REMOTE 11.1: the hosts' quota lines (`quota`, `quotaRemoved`, `quotaBridge`), on the coordinator's thread.
+    void setQuotaSink(std::function<void(const agentspeed::remote::RelayMessage&)> sink);
+    // For the quota views: every host's name, the connected ones, and the sources each host's quota may show.
+    std::map<QString, QString> hostNames() const;
+    QSet<QString> connectedHosts() const;
+    std::map<QString, QSet<QString>> hostQuotaSources() const;
     // Removes the host from the settings and every selection; with `deleteHistory`, its daily history too.
     Q_INVOKABLE void removeHost(const QString& id, bool deleteHistory);
     Q_INVOKABLE void retryNow(const QString& id);
@@ -84,6 +98,12 @@ private:
     void save();
     void apply();
     void watchSystem();
+    void finishRemoval(const QString& id);
+    agentspeed::remote::QuotaSwitches quotaSwitches() const;
+    // Hosts removed while their bridge was on: removed once the host reports it off, or after a timeout (REMOTE 2.4).
+    std::map<QString, bool> pendingRemovals_;
+    std::function<void(const agentspeed::remote::RelayMessage&)> quotaSink_;
+    mutable std::mutex sinkMutex_;
 
     Preferences& prefs_;
     std::shared_ptr<agentspeed::pricing::PriceBook> prices_;

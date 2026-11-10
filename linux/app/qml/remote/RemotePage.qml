@@ -128,7 +128,7 @@ SettingsPage {
 
     // Development aid: --remote-ui=<step>[,<step>…] drives this pane as a user would, for snapshots and the end-to-end
     // check: add[:<destination>], name:<text>, folder:<path>, advanced, test, save, edit:<n>, off:<n>, remove:<n>,
-    // menu:<n>. Each step waits for the last one (a test for its result).
+    // menu:<n>, bridge, askBridge. Each step waits for the last one (a test for its result).
     QtObject {
         id: devAid
         property var steps: []
@@ -159,6 +159,10 @@ SettingsPage {
                 sheet.typeFolder(arg)
             } else if (verb === "advanced") {
                 sheet.advanced = true
+            } else if (verb === "bridge") {
+                sheet.quotaBridge = true
+            } else if (verb === "askBridge") {
+                sheet.askBridge()
             } else if (verb === "edit" && +arg < hostModel.count) {
                 sheet.openEdit(hostModel.get(+arg))
             } else if (verb === "off" && +arg < hostModel.count) {

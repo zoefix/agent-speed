@@ -65,6 +65,9 @@ SettingsGroup {
             info: group.states[modelData] || null
         }
     }
+    QuotaGroupRows {
+        sources: group.sources
+    }
     Repeater {
         id: entryRows
         model: group.entryModel
