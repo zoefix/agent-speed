@@ -137,6 +137,7 @@ add_library(agentspeed_statusline_kit STATIC
     src/quota/files.cpp
     src/quota/paths.cpp
     src/quota/sources.cpp
+    src/quota/statusline_helper.cpp
     src/quota/window.cpp
 )
 target_link_libraries(agentspeed_statusline_kit PUBLIC agentspeed_json)

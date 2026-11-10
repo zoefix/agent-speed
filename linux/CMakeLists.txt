@@ -17,6 +17,11 @@ endif()
 
 add_subdirectory(core)
 
+# QUOTAS 5.5: the status line helper, installed beside the app's executable.
+if(AGENTSPEED_BUILD_APP OR AGENTSPEED_BUILD_TESTS)
+    add_subdirectory(statusline)
+endif()
+
 if(AGENTSPEED_BUILD_APP)
     add_subdirectory(app)
 endif()

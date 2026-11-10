@@ -41,6 +41,7 @@ add_executable(agentspeed_tests
     quota_codex_test.cpp
     quota_desktop_test.cpp
     quota_format_test.cpp
+    quota_helper_test.cpp
     quota_presence_test.cpp
     qoder_fixture_test.cpp
     qoder_source_test.cpp
@@ -77,6 +78,12 @@ pkg_check_modules(TEST_ZLIB REQUIRED IMPORTED_TARGET zlib)
 target_link_libraries(agentspeed_tests PRIVATE agentspeed_core GTest::gtest_main PkgConfig::TEST_ZLIB)
 target_compile_definitions(agentspeed_tests PRIVATE
     AGENTSPEED_SPEC_DIR="${CMAKE_CURRENT_SOURCE_DIR}/../../spec")
+
+# QUOTAS 5.5: the status line helper's own tests run the built executable.
+if(TARGET agent-speed-statusline)
+    target_compile_definitions(agentspeed_tests PRIVATE AGENTSPEED_STATUSLINE_BINARY="$<TARGET_FILE:agent-speed-statusline>")
+    add_dependencies(agentspeed_tests agent-speed-statusline)
+endif()
 
 # REMOTE 10: the app's connection runs the real relay through a stand-in for ssh.
 if(TARGET agent-speed-relay)
