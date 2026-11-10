@@ -115,6 +115,9 @@ internal struct CodexLine
     public CodexUsage Total;
     public CodexUsage Last;
 
+    /// <summary>A <c>token_count</c>'s <c>payload.rate_limits</c> object (QUOTAS 3); null without one.</summary>
+    public Quota.CodexRateLimits? RateLimits;
+
     /// <summary>A <c>response_item</c>'s tool call or its output (METRICS 6.10).</summary>
     public LineTools Tools;
 }
@@ -334,6 +337,11 @@ internal static class CodexLineReader
             {
                 reader.Read();
                 ReadInfo(ref reader, ref result);
+            }
+            else if (hints.TokenCount && reader.ValueTextEquals("rate_limits"u8))
+            {
+                reader.Read();
+                result.RateLimits = Quota.CodexRateLimits.Read(ref reader);
             }
             else if (!(hints.Tools && tools.TryRead(ref reader, line)))
             {

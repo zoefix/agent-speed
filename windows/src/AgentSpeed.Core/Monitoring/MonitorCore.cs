@@ -121,6 +121,9 @@ internal sealed partial class MonitorCore : IDisposable
         RefreshAvailability();
     }
 
+    /// <summary>Receives the Codex rollouts' limits (QUOTAS 3); set before seeding.</summary>
+    internal Quota.CodexQuotaCollector? CodexQuota { get; init; }
+
     /// <summary>Live reporting's statistics watch (METRICS 11.10), as last published; the monitor thread sets it before reading.</summary>
     internal Reporting.ReportPerfWatch PerfWatch { get; set; } = Reporting.ReportPerfWatch.Off;
 
@@ -1432,7 +1435,7 @@ internal sealed partial class MonitorCore : IDisposable
 
     private TrackedFile NewTrackedFile(SourceRoot root, string path)
     {
-        return new TrackedFile(root, path, _deduper);
+        return new TrackedFile(root, path, _deduper, CodexQuota);
     }
 
     /// <summary>Re-resolves parent links over the engine's agents after any of them changed (METRICS 6.7).</summary>

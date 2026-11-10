@@ -85,9 +85,11 @@ internal static class Families
     };
 
     /// <param name="root">The root the file was found in (omp and WorkBuddy decide sub-agents by the path below it).</param>
-    public static TranscriptParser CreateParser(RootFamily family, string path, IDeduper deduper, string root = "") => family switch
+    /// <param name="quota">Receives Codex's limits (QUOTAS 3); only this computer's live files pass one.</param>
+    public static TranscriptParser CreateParser(RootFamily family, string path, IDeduper deduper, string root = "",
+        Quota.CodexQuotaCollector? quota = null) => family switch
     {
-        RootFamily.Codex => new CodexParser(path, deduper),
+        RootFamily.Codex => new CodexParser(path, deduper) { Quota = quota },
         RootFamily.DeepSeek => new DshParser(path, deduper),
         RootFamily.Gemini => new GeminiParser(path, deduper),
         RootFamily.Claude => new ClaudeParser(path, deduper),
@@ -184,11 +186,11 @@ internal sealed class SourceRoot(RootFamily family, string path, bool enabled)
 /// <summary>A discovered transcript: its tailer, its parser and what was last observed on disk.</summary>
 internal sealed class TrackedFile
 {
-    public TrackedFile(SourceRoot root, string path, IDeduper deduper)
+    public TrackedFile(SourceRoot root, string path, IDeduper deduper, Quota.CodexQuotaCollector? quota = null)
     {
         Root = root;
         Tailer = Families.CreateTailer(root.Family, path);
-        Parser = Families.CreateParser(root.Family, path, deduper, root.Path);
+        Parser = Families.CreateParser(root.Family, path, deduper, root.Path, quota);
     }
 
     public SourceRoot Root { get; }
