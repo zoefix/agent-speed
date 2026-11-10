@@ -91,16 +91,29 @@ TEST(CharacterReadouts, TheMenusListLatencyAndModelsInTheirPlaces) {
         keys.emplace_back(key(readout));
         titles.emplace_back(titleKey(readout));
     }
-    EXPECT_EQ(keys, (std::vector<std::string>{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "model"}));
+    EXPECT_EQ(keys, (std::vector<std::string>{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "quota", "model"}));
     EXPECT_EQ(titles, (std::vector<std::string>{"character.readouts.intel", "character.readouts.thinking", "character.readouts.latency",
                                                 "character.readouts.network", "character.readouts.cost", "character.readouts.agents",
-                                                "character.readouts.models", "character.readouts.model"}));
+                                                "character.readouts.models", "character.readouts.quota", "character.readouts.model"}));
     CharacterReadouts r;
     EXPECT_TRUE(r.latency && r.models);
     r.set(CharacterReadout::Latency, false);
     r.set(CharacterReadout::Models, false);
     EXPECT_FALSE(r.get(CharacterReadout::Latency) || r.get(CharacterReadout::Models));
     EXPECT_TRUE(r.intelligence && r.thinking && r.agents && !r.isDefault());
+}
+
+// DESIGN 2b `characterReadouts`: 額度 has a switch of its own after the running models, on by default.
+TEST(CharacterReadouts, QuotaIsASwitchOfItsOwnOnByDefault) {
+    CharacterReadouts r;
+    EXPECT_TRUE(r.quota);
+    EXPECT_TRUE(r.get(CharacterReadout::Quota));
+    EXPECT_STREQ(key(CharacterReadout::Quota), "quota");
+    EXPECT_STREQ(titleKey(CharacterReadout::Quota), "character.readouts.quota");
+    r.set(CharacterReadout::Quota, false);
+    EXPECT_FALSE(r.quota);
+    EXPECT_FALSE(r.isDefault());
+    EXPECT_TRUE(r.models && r.intelligence && !r.model);
 }
 
 TEST(CharacterReadouts, CharacterIDsAreCleaned) {

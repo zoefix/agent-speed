@@ -12,6 +12,7 @@
 
 #include "agentspeed/character/pack.hpp"
 #include "agentspeed/character/selection.hpp"
+#include "orb/character/character_quota.hpp"
 #include "orb/character/character_readings.hpp"
 #include "orb/gauge.hpp"
 #include "orb/idle_fade.hpp"
@@ -54,6 +55,8 @@ public:
     QString id() const { return id_; }
     // This orb's settings with what the manager resolves for it: its name and the redline of the current metric.
     void apply(const OrbConfig& config, const QString& name, int redline);
+    // The 額度 card's items of a `character` orb (QuotaView::cardItems for its sources and hosts, DESIGN 2a.6).
+    void setQuota(const QVariantList& items);
     void setEffectsLevel(int level);
     // The master switch and the orb's own visibility together.
     void setShown(bool shown);
@@ -177,6 +180,8 @@ private:
     double costLastActive_ = -1e9, costOpacity_ = 0;
     // The 首字 row and the models card (DESIGN 2a.6) with their quiet rules.
     CharacterReadings characterReadings_;
+    // The 額度 card's sources and what accessibility reads of it.
+    CharacterQuota characterQuota_;
     std::function<std::vector<Disc>()> neighbors_;
     void stepIntel(double time, double dt);
     IntelReadout intelContent(double time) const;

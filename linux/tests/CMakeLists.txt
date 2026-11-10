@@ -10,6 +10,7 @@ add_executable(agentspeed_tests
     character_fixture_test.cpp
     character_models_test.cpp
     character_performer_test.cpp
+    character_quota_test.cpp
     character_selection_test.cpp
     character_wings_test.cpp
     current_values_test.cpp
@@ -113,6 +114,7 @@ if(AGENTSPEED_BUILD_APP)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/character_library_test.cpp
+        app/character_quota_test.cpp
         app/character_readings_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
@@ -133,6 +135,7 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/lan/lan_server.cpp
         ../app/src/lan/lan_targets.cpp
         ../app/src/format.cpp
+        ../app/src/orb/character/character_quota.cpp
         ../app/src/orb/character/character_readings.cpp
         ../app/src/orb/idle_fade.cpp
         ../app/src/orbs/orbs_store.cpp

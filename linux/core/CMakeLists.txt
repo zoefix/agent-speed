@@ -199,6 +199,7 @@ add_library(agentspeed_character STATIC
     src/character/hand_actor.cpp
     src/character/hud.cpp
     src/character/hud_models.cpp
+    src/character/hud_quota.cpp
     src/character/hud_wings.cpp
     src/character/motion.cpp
     src/character/motion_profile.cpp

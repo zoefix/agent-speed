@@ -16,6 +16,7 @@
 
 class CharacterLibrary;
 class Preferences;
+class QuotaView;
 class RemoteHostsView;
 class Strings;
 class TitleThemes;
@@ -55,6 +56,8 @@ public:
     void setHostsView(const RemoteHostsView* hosts);
     // CHARACTERS 2, 7: the installed packs the `character` orbs show and download.
     void setCharacters(CharacterLibrary* characters);
+    // QUOTAS 6, DESIGN 2a.6: the quotas a `character` orb's 額度 card lists, for its sources and hosts.
+    void setQuotas(const QuotaView* quotas);
     // Shows the orbs where they were (call once the windows may appear).
     void start();
     // While an orb uses the `character` style, download every pack not set aside (CHARACTERS 2, Automatic download).
@@ -92,7 +95,7 @@ public:
     // DESIGN 2b `character` (empty: Auto) and one switch of `characterReadouts` (`intelligence`, ... `model`).
     Q_INVOKABLE void setCharacter(const QString& id, const QString& character);
     Q_INVOKABLE void setCharacterReadout(const QString& id, const QString& key, bool on);
-    // The readout checks in the menus' order (intel, thinking, latency, network, cost, agents, models, model).
+    // The readout checks in the menus' order (intel, thinking, latency, network, cost, agents, models, quota, model).
     Q_INVOKABLE QVariantList characterReadoutItems() const;
     // DESIGN 13: "all" or the host ids the orb tracks.
     Q_INVOKABLE void setHosts(const QString& id, const QVariant& hosts);
@@ -135,9 +138,11 @@ private:
         std::unique_ptr<NamePlate> plate;
         QVariantMap values;  // its OrbViews map of the last tick
         double chipUntil = 0;
+        QString quotaKey;  // the quotas' revision and the sources and hosts its 額度 items were made for
     };
 
     void sync();
+    void pushQuotas();
     void syncWindow(const OrbConfig& config, Orb& orb);
     void placeAll();
     void place(const QString& id);
@@ -174,6 +179,7 @@ private:
     const TitleThemes* titles_ = nullptr;
     const RemoteHostsView* hosts_ = nullptr;
     CharacterLibrary* characters_ = nullptr;
+    const QuotaView* quotas_ = nullptr;
     std::map<QString, Orb> orbs_;
     QVariantList sourceRows_;
     bool shown_ = true;

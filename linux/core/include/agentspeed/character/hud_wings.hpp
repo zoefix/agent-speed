@@ -12,14 +12,15 @@
 namespace agentspeed::character {
 
 // The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right with the running
-// models under it, the model above her head, and the column of facts on her left, top to bottom.
-enum class HudCard { Speed = 0, Model = 1, Performance = 2, Network = 3, Cost = 4, Agents = 5, Models = 6 };
+// models under it, the model above her head, and the column of facts on her left, top to bottom, 額度 last. New cards go
+// last, so the others keep their float phases.
+enum class HudCard { Speed = 0, Model = 1, Performance = 2, Network = 3, Cost = 4, Agents = 5, Models = 6, Quota = 7 };
 
-constexpr int kHudCardCount = 7;
-constexpr std::array<HudCard, kHudCardCount> kHudCards = {HudCard::Speed, HudCard::Model, HudCard::Performance, HudCard::Network,
-                                                          HudCard::Cost,  HudCard::Agents, HudCard::Models};
+constexpr int kHudCardCount = 8;
+constexpr std::array<HudCard, kHudCardCount> kHudCards = {HudCard::Speed, HudCard::Model,  HudCard::Performance, HudCard::Network,
+                                                          HudCard::Cost,  HudCard::Agents, HudCard::Models,      HudCard::Quota};
 // The left column, top to bottom.
-constexpr std::array<HudCard, 4> kHudColumn = {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents};
+constexpr std::array<HudCard, 5> kHudColumn = {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Quota};
 
 inline int index(HudCard c) { return static_cast<int>(c); }
 
@@ -105,7 +106,8 @@ enum class ModelsPlace { UnderSpeed, Lower, Hidden };
 // her; anchors trail her on soft springs and every card floats on its own slow figure of eight. When her left side
 // has no room for the whole column, its last cards continue under the speed on her right (under the models card while
 // it shows); a card changing sides fades out and back in at its new place instead of crossing her. The models card
-// narrows its names, then drops them, then moves down past the spilled cards, and only then hides.
+// narrows its names, then drops them, then moves down past the spilled cards, and only then hides. The 額度 card takes
+// the widest of its forms that fits its room, so only its narrowest form decides whether the column spills.
 class HudWings {
 public:
     // Where a card is drawn this frame: its center, scale, tilt (radians, clockwise on screen) and opacity.
@@ -158,11 +160,17 @@ public:
     bool isFading() const;
     ModelsPlace modelsPlace() const { return modelsPlace_; }
     const ModelsForm& modelsForm() const { return form_; }
+    // The room from the 額度 card's column edge to the orb's edge at its place this frame (points): its right edge on
+    // the column's line at her left, its left edge when it spilled to her right.
+    double quotaRoom() const { return quotaRoom_; }
 
     // No float, tilt or breathing (Reduce Motion, effects Off): the cards still keep clear of her.
     bool still = false;
     // The models card's widths and height this frame.
     ModelsShape models;
+    // The 額度 card's narrowest form (no resets, short bars, no headers; points), 0 for none: the renderer sets it every
+    // frame, and only when even that does not fit does the card spill over.
+    double quotaNarrowest = 0;
 
 private:
     struct Fit {
@@ -193,6 +201,7 @@ private:
     std::optional<double> lowerTop(const HudFrame& f, bool spare) const;
     void chooseModels(double dt, const HudFrame& f, bool shown);
     void modelsAnchor(const HudFrame& f);
+    double fitting(std::size_t card) const;
 
     std::array<Place, kHudCardCount> places_{};
     std::array<double, kHudCardCount> presence_{};
@@ -210,7 +219,8 @@ private:
     double lowerTop_ = 0;
     bool snapModels_ = false;
     bool modelsFresh_ = true;  // it shows after it was gone: its best place at once
-    int split_ = 4;
+    int split_ = static_cast<int>(kHudColumn.size());
+    double quotaRoom_ = std::numeric_limits<double>::infinity();
     double strain_ = 0;
     double ease_ = 0;
     double sinceChange_ = std::numeric_limits<double>::infinity();

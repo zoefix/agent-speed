@@ -262,6 +262,7 @@ int main(int argc, char* argv[]) {
     // shows fixed quotas of every route in demo mode (screenshots).
     QuotaView quotas(strings);
     if (demo && qEnvironmentVariableIsSet("AGENT_SPEED_QUOTA_DEMO")) quotas.loadDemo(QDateTime::currentMSecsSinceEpoch());
+    orbs.setQuotas(&quotas);
     QuotaService quotaService(prefs, quotas, remote, gCodexQuota);
     // DESIGN 13: the hosts as the settings, pickers, dashboard and history show them (outlives the engine).
     RemoteHostsView hostsView(remote, prefs, state, historyModel, strings);
@@ -517,6 +518,10 @@ int main(int argc, char* argv[]) {
         if (arg.startsWith(QStringLiteral("--orb-hosts="))) {
             const auto value = arg.mid(12);
             orbs.setHosts(orbStore.orbs().front().id, value == QLatin1String("all") ? QVariant(value) : QVariant(value.split(QLatin1Char(','))));
+        }
+        // --orb-sources=<key[,key…]> sets the first orb's sources (METRICS 1 keys).
+        if (arg.startsWith(QStringLiteral("--orb-sources="))) {
+            for (const auto& key : arg.mid(14).split(QLatin1Char(','), Qt::SkipEmptyParts)) orbs.setSource(orbStore.orbs().front().id, key, true);
         }
         // --orb-do=<add|duplicate|split|merge|undo> runs that action on the first orb after 3 s.
         if (arg.startsWith(QStringLiteral("--orb-do="))) {

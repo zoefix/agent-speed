@@ -18,6 +18,7 @@
 #include "orb/character/character_lightning.hpp"
 #include "orb/character/character_models.hpp"
 #include "orb/character/character_particles.hpp"
+#include "orb/character/character_quota_card.hpp"
 #include "orb/style.hpp"
 
 namespace orb {
@@ -48,12 +49,15 @@ struct CharacterContent {
     std::vector<agentspeed::character::ModelRow> models;
     double modelsOpacity = 0;
     QString modelsMore, speedUnit;
+    // The 額度 card's sources (null or empty: none), in source order; they go along while it is switched off, so it
+    // fades out with them.
+    std::shared_ptr<const std::vector<agentspeed::character::QuotaSource>> quota;
 };
 
 // `character` (DESIGN 2a.6): the skinned character of the chosen pack with its pose and character swaps, the ring of
 // lights at her feet, agent lights, her particles, and the readout cards beside her — the speed at her right with the
-// running models under it, the facts in a column at her left, the model above her head. Frame `s` is the footprint D = 2 S. Without a pack the
-// style draws the ring and the standard readout with `character.empty`.
+// running models under it, the facts in a column at her left with 額度 last, the model above her head. Frame `s` is the
+// footprint D = 2 S. Without a pack the style draws the ring and the standard readout with `character.empty`.
 class CharacterStyle : public Style {
 public:
     CharacterStyle();
@@ -124,6 +128,7 @@ private:
     std::array<agentspeed::character::CardSize, agentspeed::character::kHudCardCount> cardSizes_{};
     std::array<bool, agentspeed::character::kHudCardCount> cardShown_{};
     ModelsCard modelsCard_;
+    QuotaCard quotaCard_;
     std::vector<float> vertices_;
     std::vector<std::uint32_t> indices_;
     double hudTime_ = 0;
