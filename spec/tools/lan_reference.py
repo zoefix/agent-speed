@@ -42,7 +42,8 @@ MAX_TARGETS = 8
 KEY_ALPHABET = "0123456789ABCDEFGHJKMNPQRSTVWXYZ"
 KEY_LENGTH = 12
 SOURCE_ORDER = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
-                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin")
+                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin",
+                "qoder", "qoderCli")
 MAX_TOKS = 1e9
 MAX_COUNT = 100_000
 NAME_LIMIT = 64

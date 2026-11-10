@@ -27,7 +27,8 @@ engine = thinking.engine
 FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures", "perf-score-cases.json")
 
 SOURCE_ORDER = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
-                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin")
+                "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin",
+                "qoder", "qoderCli")
 LATENCY_SOURCES = ("codex", "claudeCode", "claudeDesktop", "devin")  # 4.1, 4.2, 4.17: firstMs
 ACTION_SOURCES = ("codex", "claudeCode", "claudeDesktop", "omp", "pi", "openclaw", "droid")  # 6.10
 NO_REASONING = thinking.NO_SEPARATE_REASONING                         # 4.3: output does not split out reasoning

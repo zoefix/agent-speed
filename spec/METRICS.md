@@ -8,8 +8,8 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition). This is the append-only *source order*. |
-| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17.) |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition), `qoder` (Qoder IDE, Alibaba), `qoderCli` (Qoder CLI). This is the append-only *source order*. |
+| Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17; Qoder IDE: one per chat session of a database, 4.18.) |
 | Response | One model API call that produced a usage record. |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
 
@@ -39,6 +39,8 @@ from cumulative session counters (4.16).
 | Hermes Agent (CLI, TUI, desktop app, messaging gateway, cron, ACP) | the log folders of the Hermes home: `<home>/logs` and `<home>/profiles/<name>/logs`, with `<home>` from `$HERMES_HOME` (4.15), else macOS `~/.hermes`, Windows `%LOCALAPPDATA%\hermes` | a Hermes home or one `logs` folder (4.15) |
 | Factory Droid (CLI `droid`, interactive and `droid exec`; Factory Desktop) | `~/.factory/sessions`; no environment variable (4.16) | the `.factory` folder or its `sessions` folder (4.16) |
 | Devin CLI (`devin`: interactive, `-p`, `devin acp`) | the CLI database (4.17): `$CHISEL_SESSION_DB`, else `$XDG_DATA_HOME/devin/cli/sessions.db`, else `~/.local/share/devin/cli/sessions.db` (Windows `%APPDATA%\devin\cli\sessions.db`) | a folder: the CLI folder that holds `sessions.db`, or its `devin` data folder: one database (4.17) |
+| Qoder IDE (the agent chat of the editor; international and China editions) | `<data>/Qoder/SharedClientCache/cache/db/local.db` and `<data>/QoderCN/SharedClientCache/cache/db/local.db`, with `<data>` = macOS `~/Library/Application Support`, Windows `%APPDATA%`, Linux `$XDG_CONFIG_HOME`, else `~/.config` (4.18) | the IDE's data folder, its `SharedClientCache` folder, or the folder that holds `local.db`: one database (4.18) |
+| Qoder CLI (`qodercli`, `qoderclicn`: interactive, `-p`) | `$QODER_CONFIG_DIR/projects`, else `~/.qoder/projects`; `$QODERCN_CONFIG_DIR/projects`, else `~/.qoder-cn/projects` (4.19) | a config folder or its `projects` folder: that `projects` folder |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
@@ -48,7 +50,7 @@ Discovery: recursive enumeration of `*.jsonl` (Codex also `*.jsonl.zst`, 5.3; De
 fixed depths, see 4.6; omp and Pi: see 4.7 and 4.13; Antigravity: conversation databases, see 4.8; WorkBuddy: fixed
 depths, see 4.9; OpenClaw: agent databases, see 4.14; Hermes Agent: `agent.log` and its rotated files, see
 4.15; Factory Droid: one or two levels below the root, each transcript with its settings file, see 4.16; Devin: one
-SQLite database, see 4.17),
+SQLite database, see 4.17; Qoder IDE: one SQLite database per edition, see 4.18),
 maximum depth 6, never follow symlinks, at most 20 000 files per root.
 A source is *detected* when any of its roots (Antigravity: any store; WorkBuddy: the data folder) exists or it has data
 today; what an undetected source shows is DESIGN 2b (unavailable sources), 4 and 5.
@@ -59,20 +61,21 @@ WorkBuddy.
 For OpenClaw, a source is detected when a state folder (or a user location) exists; its session count is the
 number of transcript windows that are not sub-agents (4.14).
 For Devin, a source is detected when a CLI database exists; its session count is the number of sessions with a row
-today (4.17).
+today (4.17). Qoder IDE likewise counts the chat sessions with a row today (4.18).
 
 ### 2.1 Location lists
 
 Every source group of the settings (DESIGN 5) has a *location list* (issue #45): Claude Code and Claude Desktop share
-one, every other source has its own. The seventeen lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
+one, every other source has its own. The nineteen lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
 `omp`, `antigravity`, `workbuddy`, `workbuddyAi`, `zcode`, `kimi`, `grokBuild`, `pi`, `openclaw`, `hermes`, `droid`,
-`devin`.
+`devin`, `qoder`, `qoderCli`.
 
 - **Entries.** An entry is either `automatic` — every root of the table's *Root* column, derived from the environment
   whenever roots are resolved, exactly as before lists existed (Codex: the sessions root and the agent-scoped Codex home
   of every OpenClaw agent database; Gemini CLI: both `tmp` folders; omp: the default root and every profile;
   Antigravity: the native stores and, on Windows, valid T3 Code ACP stores; Pi: its sessions root and its custom session folder; OpenClaw: every state folder;
-  Hermes Agent: the home; Devin: the CLI database) — or a *user location*: one absolute path, read as the table's
+  Hermes Agent: the home; Devin: the CLI database; Qoder IDE: the database of each edition; Qoder CLI: both config
+  folders) — or a *user location*: one absolute path, read as the table's
   last column says.
 - **Shape.** 1 to 8 entries, each at most once. A user location is absolute and normalized (no `.` or `..` segment, no
   trailing separator). `automatic` appears at most once and, when present, first; user locations keep the order in which
@@ -93,7 +96,8 @@ one, every other source has its own. The seventeen lists are named `codex`, `cla
   so the earliest database that has the session keeps it, and a database found later never takes a session from
   another. A copied or backed-up database therefore adds no agents, sessions or tokens. OpenClaw reads the agent
   databases of every root, each database once (4.14); Hermes Agent the log folders of every root, each folder once
-  (4.15). Devin reads one CLI database per root, like OpenCode and ZCode (4.17).
+  (4.15). Devin reads one CLI database per root, like OpenCode and ZCode (4.17), and Qoder IDE one `local.db` per root
+  (4.18).
 - **Detected, counted, named.** A source is detected when any of its roots exists (OpenCode, ZCode: any database file;
   WorkBuddy: any data folder). Its session count covers every root, each file, database session and log session once.
   The path a source reports (DESIGN 4, the dashboard's source rows) is its first detected root in list order, else its
@@ -114,7 +118,9 @@ one, every other source has its own. The seventeen lists are named `codex`, `cla
      folder, a `.factory` folder and its `sessions` folder, a Kimi Code CLI or Grok Build data directory and its
      `sessions` folder, an Antigravity store and its `conversations` folder, an OpenCode folder and its `opencode.db`,
      a ZCode data directory, its `.zcode/cli/db` folder and its `db.sqlite`, an OpenClaw agent folder and its
-     `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder (both name one `sessions.db`). A Hermes home and
+     `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder (both name one `sessions.db`), a Qoder IDE data
+     folder, its `SharedClientCache` folder and its `cache/db` folder (all name one `local.db`), a Qoder CLI config
+     folder and its `projects` folder. A Hermes home and
      its `logs` folder differ (the home has profiles);
   3. refused (*already in the default location*) when `automatic` is in the list and the location is the same as one of
      the roots the automatic entry reads now (Codex's OpenClaw Codex homes included);
@@ -2097,6 +2103,164 @@ Adding the source needs no analysis version (section 8).
   databases (`spec/research/devin.md`); not verified against a running Devin. Verification target (by hand): for one
   session, the sums of its responses equal the request-deduplicated sums of its rows' `metrics`.
 
+### 4.18 Qoder IDE
+
+Qoder IDE is Alibaba's agentic editor (a VS Code fork, closed source). Its agent runs in a bundled core executable that
+keeps every chat in one SQLite database; the assistant row of each model call holds the usage Qoder's server
+reported. The source `qoder` reads that database. Only usage metadata is read, never message content (Qoder stores it
+encrypted), titles, credentials or logs. Evidence: `spec/research/qoder.md` (static analysis of Qoder IDE 1.39.2 and a
+signed-in run); fixtures: `spec/tools/qoder_fixtures.py` (`spec/fixtures/qoder`, `spec/fixtures/qoder-expected.json`,
+checked by `spec/tools/qoder_reference.py`). Not read: `state.vscdb`, the hook transcripts, the core's log, the
+per-turn records' content, credits (Qoder's server keeps them).
+
+#### Roots and discovery
+
+- **Automatic entry** (section 2): one database per edition folder that exists, in this order: `<data>/Qoder` (the
+  international edition, `nameShort` `Qoder`), then `<data>/QoderCN` (the China edition `Qoder CN IDE`, `nameShort`
+  `QoderCN`), each
+  `<folder>/SharedClientCache/cache/db/local.db`, with `<data>` = macOS `~/Library/Application Support`, Windows
+  `%APPDATA%`, Linux `$XDG_CONFIG_HOME` when not empty, else `~/.config`. The IDE's own `VSCODE_PORTABLE` and
+  `VSCODE_APPDATA` overrides are not seen by Agent Speed; such a folder is added as a user location.
+- **User location**: a folder. Its database is the first that exists of `<folder>/local.db`,
+  `<folder>/cache/db/local.db` (the `SharedClientCache` folder), `<folder>/SharedClientCache/cache/db/local.db` (the
+  IDE's data folder), looked up again at every rediscovery.
+- **Database**: a regular file, never a symbolic link. Two roots naming the same file (resolved) are one database; a
+  session id that an earlier database of the list has is skipped in a later one (2.1 *Databases*).
+- **Detected**: a database exists.
+
+#### Opening and rows
+
+- **Opening**: read-only with the WAL and immutable safeguards of 4.5 (the core keeps the database in WAL mode), every
+  read one short transaction; it never creates `-wal` or `-shm` and never writes. Required:
+  `chat_message(rowid, id, session_id, role, token_info, model_info, gmt_create)` and `chat_session(session_id,
+  project_uri)`; `chat_message.request_id`, `chat_session.parent_session_id` and `chat_record(request_id, extra)` are
+  read when present (older databases lack some of them). A database without the required columns is unsupported (warning `unsupportedFormat`) and
+  contributes nothing.
+- **Rows** of `chat_message`, in `rowid` order; rows of a session `chat_session` does not list are not read. A row's
+  time is `gmt_create` (Unix milliseconds; an integer or a finite real, truncated, 3.6). `token_info`, `model_info`
+  and `chat_record.extra` are text of at most 1 MiB that is a JSON object (3.6); a value that is not is treated as
+  absent. A row without a time, or whose `role` is not a string, is malformed (it still counts toward `lastLineMs`
+  when it has a time). Of the row nothing else is read.
+
+#### Calls
+
+An assistant row (`role == "assistant"`) whose `token_info` is a JSON object is one model call; one whose
+`token_info` is absent or not such an object is no call (and not malformed). Key:
+`"qoder:" + chat_message.id` (a UUID; trimmed, not blank, else `"qoder:" + session id + ":row:" + rowid`). The same key
+again in the same database updates the response (4.4) and counts no request; a key another database owns is ignored
+(3.4).
+
+- Tokens (token values of 3.2): `input = prompt_tokens` (it already includes the cache read, OpenAI's way),
+  `cachedInput = min(cached_tokens, input)`, `cacheWriteInput = 0`, `cacheWrite1hInput = 0`,
+  `output = completion_tokens`, `reasoning = 0` (Qoder does not store it). A call whose `input` and `output` are both 0
+  emits nothing.
+- `endMs` = the row's time (written when the call's stream ended). `startMs` = the time of the session's previous row
+  in `rowid` order (the prompt, a tool result or the previous call; it ended before this request was sent), read even
+  when it lies before the startup window; null for a session's first row and when that previous row has no time. The interval therefore includes the time to
+  first token and Qoder's own queueing and prompt building (3.3; Known approximations). `firstMs` null.
+- `model` = `model_info.model_key` when it is a string that is not blank (trimmed): the model tier the user selected
+  (`auto`, `lite`, `efficient`, `performance`, `ultimate`, …) or the key of a custom model. Tiers name no model; they
+  are `unknown` entries of the price table (9.2), so their cost is unknown. `provider` null, `fast` false, `final`
+  true, one request.
+
+#### Agents and phase
+
+- One agent per session with a row read; agent id `<database path>#<session id>`. `project` = the last path component
+  of `chat_session.project_uri` (a path as it is, or a `file://` URI's path, percent-decoded, without the `/` before a
+  drive letter: `file:///c%3A/work/app` → `c:/work/app`; split on `/` and `\`), else the session id; `cwdPath` = that
+  path; `model` = the model of the latest call that has one; `lastLineMs` = the latest row time. A session whose
+  `parent_session_id` is not blank is a sub-agent; its parent is `<database path>#<parent_session_id>` when that
+  session is tracked.
+- **Phase**, from the row's time: a `user` or `tool` row (the next request follows) → `generating`
+  (`inFlightStartMs` = its time); an assistant row → `tools`, or `idle` when the row's request has finished: the
+  `chat_record` row with the same `request_id` has `extra["ai-coding/turn-info"].finishedAt` (Unix ms, finite) not
+  earlier than the row's time (the latest `finishedAt` when several records share the id). That record is read with the rows and again when it changes (5); its finish moves an
+  agent whose latest row is that assistant row to `idle` at `finishedAt`. A row whose time is earlier than the time of
+  the row that last set the phase changes nothing; other roles only `lastLineMs`.
+- Settings (DESIGN 5) count today's sessions: sessions with a row today, sub-agent sessions included as children.
+
+#### Reading
+
+Startup reads, per database, the rows of the startup window (5): from the highest `rowid` down while the rows' times
+are not earlier than `todayStartMs − 15 min` (a row without a time neither ends the read nor is left out: it is read
+and counts as malformed, as for Devin; rows are written in time order), plus, for each session read, the time of its
+row just below the window, the start of its first call there (that row is not processed otherwise), then processes
+them in `rowid` order. While running, a change of
+the database or its `-wal` (watcher, the 1-second fallback, rediscovery) reads the rows above the highest `rowid`
+seen, the `chat_session` rows of sessions not yet known and the `chat_record` rows of the requests whose agents are
+not `idle`. A database that is replaced (another identity) or shrinks is read again like at startup; its keys update
+their responses. A row changed in place is not noticed until then: Qoder overwrites the latest call's `token_info`
+with an estimate after a context compaction and in Quest mode, so the first value read is the one kept.
+
+#### History
+
+The analysis (8) reads every row of every database with the same rules, databases in list order. Each database owns
+its calls' keys. Contributions are kept per session (key `<database path>#<session id>`; identity: its row count and
+its highest `rowid`); a session whose identity changed is read again, an unchanged one is not read. A call whose
+`token_info` Qoder later replaced with an estimate is counted with the estimate. Adding the source needs no analysis
+version (section 8).
+
+#### Effort, actions, traffic
+
+- Effort and speed: none (EXECUTION-MODES). Rows name a model tier, no reasoning effort.
+- Actions (6.10): none (the content that names tools is encrypted).
+- Traffic (10.5): the IDE's agent core, the executable `Qoder` in the IDE's `resources/bin/<platform>` folder.
+
+#### Known approximations
+
+- A call's interval starts when the previous row was written, so it includes the time to first token, Qoder's
+  queueing and prompt building; speeds read lower than the model's generation speed. The first call of a turn starts
+  at the user's message, written before Qoder builds the prompt.
+- Reasoning tokens are not stored. `completion_tokens` very likely includes them (481 for a 200-word answer in the
+  research run), which this source cannot tell.
+- Tiers name no model, so no cost; a custom model's key prices only when it is a model id the price table knows.
+- A call Qoder later replaced with an estimate (compaction, Quest mode) keeps its first value while running and the
+  estimate in the history.
+- Verified with a signed-in run of Qoder IDE 1.39.2 on macOS (`spec/research/qoder.md`); the Windows and Linux paths
+  follow VS Code's convention and were not run. Verification target (by hand): the completion tokens of a session's
+  calls against Qoder's own usage display.
+
+### 4.19 Qoder CLI
+
+Qoder CLI (`qodercli`; the China edition's `qoderclicn`) writes Claude Code's transcript format (4.1) to its own
+folder. Before it writes an assistant line, it removes the line's usage when the model is Qoder's own (billed in
+credits): only calls of a custom model (bring-your-own-key) and calls made with `QODER_EXPOSE_TOKEN_USAGE=1` keep
+their usage. Without usage a call adds activity and phase, but no tokens. Evidence: `spec/research/qoder.md` (static
+analysis of Qoder CLI 1.1.86 and two signed-in runs); fixtures: `spec/tools/qoder_fixtures.py`
+(`spec/fixtures/qoder-cli`). Every rule of 4.1 applies, with these differences:
+
+- **Roots** (section 2): `<config>/projects` of each edition's config folder: `$QODER_CONFIG_DIR` when not empty, else
+  `~/.qoder` (international); `$QODERCN_CONFIG_DIR` when not empty, else `~/.qoder-cn` (the China edition, whose
+  variables have the prefix `QODERCN_`). A user location is a config folder or its `projects` folder, read as that
+  `projects` folder. Discovery as Claude's (`*.jsonl`, depth 6). Sub-agents write
+  `<project folder>/<session id>/subagents/agent-<id>.jsonl`, as Claude Code does. The Qoder desktop app (`com.qoder.app`,
+  `com.qodercn.app`) runs the same engine and writes its conversations here too, with the same usage rule.
+- **Source**: every file is `qoderCli`; `entrypoint` (`cli`, …) is not used.
+- **Sub-agents**: as 4.1 (`subagents` path component, or `"isSidechain": true`).
+- **Lines**: Qoder writes no `api-request` lines; one would be *anything else*, like Qoder's own lines
+  (`runtime-config`, `active-leaf`, `workspace-directories`, `last-prompt`), whose numeric `timestamp` is not a
+  timestamp (3.1).
+- **Assistant line**: `key = message.id`, else `uuid`, prefixed `"qodercli:"`. An assistant line without usage —
+  no `message.usage` object, or one whose `input` and `output` (below) are both 0 (Qoder writes zeros when the usage
+  carries billing fields) — creates no response, but claims its key for the file (3.4), so a copy in another file is
+  ignored; it applies steps 5 and 6 (final, phase), sets the agent's `model` to `message.model`, and consumes the
+  pending start (`pendingStartMs = null`, `preciseStart = false`), so the next call starts at its own prompt or tool
+  result. With usage, tokens are Claude's (3.2) except `input`: Qoder's `input_tokens` already includes the cache read
+  for its own models (research run: 20 341 input with 20 096 cached), so `input = input_tokens` when
+  `input_tokens ≥ cache_read_input_tokens + cache_creation_input_tokens`, else Claude's sum (a custom Anthropic
+  provider's own accounting). `firstMs` null (each call is one line, written when it ends); `fast` false.
+- **Model**: `message.model`: the tier (`auto`, …; price table `unknown`, 9.2) or the custom model id.
+- **Effort**: none (EXECUTION-MODES); `runtime-config.reasoningEffort` was null in every run and is not read.
+- **Actions** (6.10): none. The lines carry `tool_use` and `tool_result` blocks, but Qoder's tool names were not
+  observed beyond `Read` and `Bash`.
+- **Traffic** (10.5): `name` in `qodercli`, `qoderclicn` (the native installers), or a script host whose arguments
+  contain `/@qoder-ai/qodercli/` or `/@qodercn-ai/qoderclicn/` (npm).
+- **Known approximations**: with Qoder's own models (the default) the source shows sessions, agents and phases but no
+  tokens or speed unless the user runs the CLI with `QODER_EXPOSE_TOKEN_USAGE=1` (China edition:
+  `QODERCN_EXPOSE_TOKEN_USAGE=1`); Settings says so (`settings.sources.qoderCliHint`). Reasoning tokens are not stored
+  separately. Verified with the international CLI on macOS; the China edition's folder and variables are read from its
+  bundle, whose usage rule is the same code.
+
 ## 5. Reading files
 
 - Startup reading order (it decides which file owns a duplicated key): files sorted by modification time ascending,
@@ -2268,6 +2432,9 @@ Parent links (`parentId`, an agent id or null):
   `<folder>/<callingSessionId>.jsonl` (its own folder) when that file is a tracked agent. `parent` (forks and
   successors) is not a parent link.
 - Devin: none. The CLI database names no parent (4.17).
+- Qoder IDE: a session whose `chat_session.parent_session_id` is not blank has the parent
+  `<database path>#<parent_session_id>` when that session is a tracked agent (4.18).
+- Qoder CLI: as Claude (`<project folder>/<session id>/subagents/…` under `<project folder>/<session id>.jsonl`).
 - Self references and cycles resolve to null.
 
 List:
@@ -2651,7 +2818,7 @@ performance records of 6.11 — are stored, never requests, keys in plain text, 
 Scope: every discovered file of every enabled source with no date filter and no file-count limit (Codex `.jsonl.zst`,
 all Gemini roots with legacy `.json`, every omp root including profiles, every Antigravity conversation database
 of every store, both WorkBuddy roots, the rotated logs of every Hermes Agent profile, every Factory Droid session
-with its sidecar, and every row of Devin's databases included), plus Codex `archived_sessions` (the sibling of the sessions root) and the whole OpenCode
+with its sidecar, and every row of Devin's and Qoder IDE's databases included), plus Codex `archived_sessions` (the sibling of the sessions root) and the whole OpenCode
 database. Parsing uses exactly the rules of section 4 (same state machines, dedupe, copied-history rules) over whole
 files and complete database reads, in startup order (5; an Antigravity database's time is the newer of its `.db` and
 `-wal`, 5.4).
@@ -2692,6 +2859,9 @@ practice only Droid's ids reach).
 
 Devin (4.17): contributions are kept per CLI session, with the identity of 4.17 *History*. Adding the source needs no new
 analysis version either; nor does its `firstMs`, which only the performance records (6.11) use.
+
+Qoder IDE (4.18): contributions are kept per chat session, with the identity of 4.18 *History*; Qoder CLI (4.19) per file,
+like Claude. Adding the two sources needs no new analysis version.
 
 Cost (9.7): every row also has `costMicroUsd` and `unpricedRequests`, every model `costMicroUsd` and
 `unpricedRequests`, and every date a `priceVersion`. The cost feature bumps the store version; days kept from an
@@ -3259,9 +3429,11 @@ desktop app that runs its agent on its own executable, so its row needs the argu
 | `hermes` | A Python host whose arguments after the first contain `hermes_bootstrap`, `hermes_cli` or `acp_adapter` (Hermes's launchers run `python -I -c "…import hermes_bootstrap…"`; the desktop app, the TUI's local gateway and the gateway services run `-m hermes_cli.main` or the same bootstrap; source checkouts `hermes_cli/main.py`), or one with an argument whose file name without `.exe` is `hermes`, `hermes-agent` or `hermes-acp` (pip and uv console scripts `bin/hermes`, `Scripts\hermes.exe`, and Hermes's Windows launcher `.hermes\bin\hermes.exe`, which runs Python on its own path). The Python process sends Hermes's model requests; a launcher process sends nothing and is not a row, since `hermes` is also the name of the Hermes JavaScript engine's command-line tool. Not verified with a running Hermes. |
 | `droid` | `name == droid`: droid is one native executable (built with Bun), installed as `~/.local/bin/droid` (the install script), `%USERPROFILE%\bin\droid.exe` (the PowerShell installer), by the Homebrew cask `droid`, or as the npm package `droid`'s platform binary (`@factory/cli-<os>-<arch>[-baseline]/bin/droid`; on Windows a Node shim, which is not a row and sends nothing, starts `droid.exe`). The interactive CLI starts a second `droid` (`droid exec --input-format stream-jsonrpc …`), which counts as part of it; Factory Desktop runs `droid daemon` and `droid exec` children from its bundle (Windows `…\resources\bin\droid.exe`), and the app's own processes are app processes like the other desktop apps'. From the installers, the Homebrew cask, the npm package and Factory's issue reports; not verified with a running droid. |
 | `devin` | `name == devin`: the CLI, one native executable (Devin's install script, the Homebrew cask, the Windows installers), interactive, `devin -p` or `devin acp` — also when Devin Desktop or another client starts `devin acp` as its local agent, whose sessions are in the database (4.17). Devin Desktop's own executables (macOS `Devin.app/Contents/MacOS/Devin` and its helpers; Windows `%LOCALAPPDATA%\Programs\Devin\Devin.exe`, an assumed path, since Windows compares names case-insensitively) are app processes, never Devin agents. From Devin's documentation and a third-party reader; not verified with a running Devin. |
+| `qoder` | `name == Qoder` and the executable lies in a `resources/bin/<platform>/` folder of a Qoder IDE install (macOS `…/Qoder IDE.app/Contents/Resources/app/resources/bin/aarch64_darwin/Qoder`; observed 2026-11-10): the IDE's agent core, which makes the model calls. The IDE's own processes (its `Contents/MacOS/Qoder`, Electron helpers) are app processes, below. |
+| `qoderCli` | `name` in `qodercli`, `qoderclicn` (native installers), or a script host whose arguments contain `/@qoder-ai/qodercli/` (npm `bundle/qodercli.js`). |
 
 The desktop apps' own processes are **not** agent processes, nor are their Electron or Tauri helpers: macOS
-`/Applications/{Claude,ChatGPT,Codex,OpenCode,Antigravity,Devin}.app/Contents/MacOS/<name>`; Windows executables directly in
+`/Applications/{Claude,ChatGPT,Codex,OpenCode,Antigravity,Devin,Qoder IDE}.app/Contents/MacOS/<name>`; Windows executables directly in
 the `app` folder of the `WindowsApps\Claude_*`, `WindowsApps\OpenAI.Codex_*` and `WindowsApps\OpenAI.ChatGPT*`
 packages (`app\claude.exe`, `app\Codex.exe`; the tools a package bundles deeper follow the rows, so
 `app\resources\codex.exe` is a Codex agent), everything under `%LOCALAPPDATA%\AnthropicClaude\` and
@@ -3320,7 +3492,8 @@ parent's process). Each tick, for every root agent process `P` of source `s` wit
 `cwdPath` is new parser metadata (section 4): the full working directory the transcript names — Claude: the latest
 `cwd`; Codex: `session_meta`/`turn_context` `cwd`; dsh: header `cwd`; OpenCode: `session_v2.directory`; Gemini CLI: the
 `.project_root` content; omp: header `cwd`; Antigravity: the decoded path of the first workspace URI; WorkBuddy: the
-latest `cwd`; Pi and OpenClaw: header `cwd`; Factory Droid: `session_start.cwd`; Devin: `sessions.working_directory`.
+latest `cwd`; Pi and OpenClaw: header `cwd`; Factory Droid: `session_start.cwd`; Devin: `sessions.working_directory`;
+Qoder IDE: the path of `chat_session.project_uri`; Qoder CLI: the latest `cwd`.
 Null when absent.
 It is metadata only (no effect on tokens or history).
 

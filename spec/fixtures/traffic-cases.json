@@ -988,6 +988,75 @@
        "args": [
         "devinfo"
        ]
+      },
+      {
+       "pid": 1600,
+       "ppid": 1,
+       "start": 9800,
+       "exe": "/Applications/Qoder IDE.app/Contents/MacOS/Qoder"
+      },
+      {
+       "pid": 1601,
+       "ppid": 1600,
+       "start": 9810,
+       "exe": "/Applications/Qoder IDE.app/Contents/Frameworks/Qoder Helper.app/Contents/MacOS/Qoder Helper"
+      },
+      {
+       "pid": 1602,
+       "ppid": 1600,
+       "start": 9820,
+       "exe": "/Applications/Qoder IDE.app/Contents/Resources/app/resources/bin/aarch64_darwin/Qoder"
+      },
+      {
+       "pid": 1603,
+       "ppid": 1602,
+       "start": 9830,
+       "exe": "/bin/zsh",
+       "args": [
+        "/bin/zsh",
+        "-c",
+        "npm test"
+       ]
+      },
+      {
+       "pid": 1604,
+       "ppid": 100,
+       "start": 9840,
+       "exe": "/opt/homebrew/bin/node",
+       "args": [
+        "node",
+        "/opt/homebrew/lib/node_modules/@qoder-ai/qodercli/bundle/qodercli.js",
+        "-p",
+        "hi"
+       ]
+      },
+      {
+       "pid": 1605,
+       "ppid": 1604,
+       "start": 9850,
+       "exe": "/usr/bin/git",
+       "args": [
+        "git",
+        "status"
+       ]
+      },
+      {
+       "pid": 1606,
+       "ppid": 100,
+       "start": 9860,
+       "exe": "/Users/dev/.local/bin/qoderclicn",
+       "args": [
+        "qoderclicn"
+       ]
+      },
+      {
+       "pid": 1607,
+       "ppid": 100,
+       "start": 9870,
+       "exe": "/usr/local/bin/qoder",
+       "args": [
+        "qoder"
+       ]
       }
      ]
     }
@@ -1086,7 +1155,15 @@
      "1523": null,
      "1524": "devin/agent",
      "1525": "devin/tool",
-     "1526": null
+     "1526": null,
+     "1600": null,
+     "1601": null,
+     "1602": "qoder/agent",
+     "1603": "qoder/tool",
+     "1604": "qoderCli/agent",
+     "1605": "qoderCli/tool",
+     "1606": "qoderCli/agent",
+     "1607": null
     }
    }
   },
@@ -1510,6 +1587,39 @@
        "args": [
         "powershell.exe"
        ]
+      },
+      {
+       "pid": 1600,
+       "ppid": 4,
+       "start": 9800,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\Qoder\\Qoder.exe"
+      },
+      {
+       "pid": 1601,
+       "ppid": 1600,
+       "start": 9810,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\Qoder\\resources\\app\\resources\\bin\\x86_64_windows\\Qoder.exe"
+      },
+      {
+       "pid": 1602,
+       "ppid": 1601,
+       "start": 9820,
+       "exe": "C:\\Windows\\System32\\cmd.exe",
+       "args": [
+        "cmd.exe",
+        "/c",
+        "dir"
+       ]
+      },
+      {
+       "pid": 1603,
+       "ppid": 4,
+       "start": 9830,
+       "exe": "C:\\Program Files\\nodejs\\node.exe",
+       "args": [
+        "node.exe",
+        "C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@qodercn-ai\\qoderclicn\\bundle\\qodercli.js"
+       ]
       }
      ]
     }
@@ -1560,7 +1670,11 @@
      "970": "devin/agent",
      "971": null,
      "972": "devin/agent",
-     "973": "devin/tool"
+     "973": "devin/tool",
+     "1600": null,
+     "1601": "qoder/agent",
+     "1602": "qoder/tool",
+     "1603": "qoderCli/agent"
     }
    }
   },

@@ -120,7 +120,7 @@ So the same values give the same bytes on every platform.
 
 ### 3.2 Sources
 
-`sources` lists, in the source order of REPORTING 6.4 (the order of each app's source list, `devin` last), every
+`sources` lists, in the source order of REPORTING 6.4 (the order of each app's source list, `qoderCli` last), every
 enabled source whose `sessions.active` is above 0 or whose rounded `outputTokS` is above 0. Each entry has, in this
 order: `source` (the REPORTING 6.4 id), `phase`, `outputTokS`, `estimatedShare`, `sessions`, computed as in 3.1
 restricted to that source. With no such source the array is empty. A device must accept and may ignore a source id it
