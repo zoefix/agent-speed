@@ -105,16 +105,17 @@ TEST(QuotaViewTest, ListsSourcesObservedWithinADayAndOnlyThoseWithWindows) {
     QuotaView view(strings);
     int changed = 0;
     QObject::connect(&view, &QuotaView::changed, [&] { ++changed; });
+    // Windows without a reset time: their texts and pace do not move with the clock between the two calls.
     const auto now = nowMs();
-    view.setLocal({state(SourceKind::Codex, {quota::makeWindow(quota::Kind::SevenDay, 23, now + kHour)}, now - 2 * kHour),
-                   state(SourceKind::ClaudeDesktop, {quota::makeWindow(quota::Kind::SevenDay, 90, now + kHour)}, now - 25 * kHour),
+    view.setLocal({state(SourceKind::Codex, {quota::makeWindow(quota::Kind::SevenDay, 23, std::nullopt)}, now - 2 * kHour),
+                   state(SourceKind::ClaudeDesktop, {quota::makeWindow(quota::Kind::SevenDay, 90, std::nullopt)}, now - 25 * kHour),
                    state(SourceKind::Kimi, {}, now)});
     EXPECT_EQ(view.listed(), QStringList{QStringLiteral("codex")});
     EXPECT_TRUE(view.lines().contains(QStringLiteral("claudeDesktop")));
     EXPECT_FALSE(view.lines().contains(QStringLiteral("kimi")));
     EXPECT_EQ(changed, 1);
-    view.setLocal({state(SourceKind::Codex, {quota::makeWindow(quota::Kind::SevenDay, 23, now + kHour)}, now - 2 * kHour),
-                   state(SourceKind::ClaudeDesktop, {quota::makeWindow(quota::Kind::SevenDay, 90, now + kHour)}, now - 25 * kHour),
+    view.setLocal({state(SourceKind::Codex, {quota::makeWindow(quota::Kind::SevenDay, 23, std::nullopt)}, now - 2 * kHour),
+                   state(SourceKind::ClaudeDesktop, {quota::makeWindow(quota::Kind::SevenDay, 90, std::nullopt)}, now - 25 * kHour),
                    state(SourceKind::Kimi, {}, now)});
     EXPECT_EQ(changed, 1) << "nothing visible changed";
     view.setInvite(true);
