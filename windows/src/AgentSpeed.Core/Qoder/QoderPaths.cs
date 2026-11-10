@@ -117,16 +117,20 @@ internal static class QoderPaths
         return Named(db, DbFolder) && Named(cache, CacheFolder) && Named(shared, SharedCacheFolder) && data.Length > 0 ? data : db;
     }
 
-    /// <summary>The databases the roots name now, in list order, each once (resolved).</summary>
+    /// <summary>
+    /// The databases the roots name now, in list order, each once (resolved) and normalized, so a database keeps one path
+    /// (its agent ids and history keys) however a root spelled its separators.
+    /// </summary>
     public static List<string> Databases(IEnumerable<QoderRoot> roots)
     {
         var seen = new HashSet<string>(LocationPaths.Comparer);
         var databases = new List<string>();
         foreach (var root in roots)
         {
-            if (root.DatabaseNow is { } database && seen.Add(LocationPaths.Resolved(database)))
+            if (root.DatabaseNow is { } database && LocationPaths.Normalized(database) is { Length: > 0 } normalized
+                && seen.Add(LocationPaths.Resolved(normalized)))
             {
-                databases.Add(database);
+                databases.Add(normalized);
             }
         }
 
