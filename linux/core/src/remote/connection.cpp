@@ -115,6 +115,14 @@ void Connection::setWatch(bool on) {
     if (stage_ == Stage::Run) send(encode::watch(on));
 }
 
+void Connection::setQuota(const QuotaSwitches& switches, bool hostBridge) {
+    const auto before = quotaConfig();
+    settings_.quota = switches;
+    host_.quotaClaudeCli = hostBridge;
+    const auto after = quotaConfig();
+    if (stage_ == Stage::Run && session_.decoder && after != before) send(encode::quota(after));
+}
+
 void Connection::begin() {
     cancelTimers();
     attempt_ = nextAttempt();

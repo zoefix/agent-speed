@@ -32,7 +32,7 @@ protected:
         environment.scheduler = &scheduler_;
         environment.relays = bundle_.get();
         environment.zone = [] { return Zone{"UTC", utcTzif()}; };
-        connection_ = Connection::make(std::move(host), SessionSettings{{SourceKind::Codex}, "{}", false}, environment,
+        connection_ = Connection::make(std::move(host), SessionSettings{{SourceKind::Codex}, "{}", false, {}}, environment,
                                        [this](const HostEvent& e) { events_.push_back(e); });
         connection_->start();
         return connection_;

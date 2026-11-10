@@ -70,6 +70,7 @@ add_executable(agentspeed_tests
     remote_ingest_test.cpp
     remote_presentation_test.cpp
     remote_process_test.cpp
+    remote_quota_test.cpp
     remote_scripts_test.cpp
     remote_ssh_test.cpp
     rfc3339_test.cpp

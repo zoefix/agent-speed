@@ -246,6 +246,7 @@ if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
         src/remote/decoder.cpp
         src/remote/decoder_agent.cpp
         src/remote/decoder_history.cpp
+        src/remote/decoder_quota.cpp
         src/remote/encoder.cpp
         src/remote/event_loop.cpp
         src/remote/feed.cpp

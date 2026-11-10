@@ -27,7 +27,9 @@ public:
     // the master switch is off). A host whose destination or folder changed reconnects, and every host does when the
     // enabled sources change. A new price table goes to the running relays without a reconnect; an invalid one keeps
     // the previous (else the bundled) table.
-    void update(const std::vector<Host>& hosts, bool networkEnabled, const std::set<SourceKind>& sources, std::string_view priceTable);
+    // The quota switches go to every running relay without a reconnect, with each host's bridge (REMOTE 11.1).
+    void update(const std::vector<Host>& hosts, bool networkEnabled, const std::set<SourceKind>& sources, std::string_view priceTable,
+                const QuotaSwitches& quota = {});
     void retryNow(const std::string& hostId);
     void requestHistory(const std::string& hostId, const std::map<std::string, std::string>& digests);
     void setWatch(bool on);

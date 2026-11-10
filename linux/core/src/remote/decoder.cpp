@@ -238,6 +238,9 @@ SourceReport status(const Fields& f);
 HistoryDay historyDay(const Fields& f);
 HistoryPerf historyPerf(const Fields& f);
 std::string relayAgentId(const Fields& f, std::string_view key);
+std::optional<RelayMessage> quotaLine(const Fields& f, const std::string& hostId);
+std::optional<RelayMessage> quotaRemovedLine(const Fields& f, const std::string& hostId);
+RelayMessage quotaBridgeLine(const Fields& f, const std::string& hostId);
 }  // namespace detail
 
 namespace {
@@ -305,6 +308,9 @@ std::optional<RelayMessage> message(std::string_view type, const Fields& f, cons
     }
     if (type == "historyProgress") return HistoryProgress{f.fraction("value")};
     if (type == "error") return error(f);
+    if (type == "quota") return detail::quotaLine(f, hostId);
+    if (type == "quotaRemoved") return detail::quotaRemovedLine(f, hostId);
+    if (type == "quotaBridge") return detail::quotaBridgeLine(f, hostId);
     return std::nullopt;
 }
 

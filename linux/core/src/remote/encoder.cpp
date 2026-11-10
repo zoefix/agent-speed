@@ -21,6 +21,17 @@ std::optional<std::string> line(std::string text) {
 
 std::string zoneMembers(const Zone& zone) { return "\"id\":" + quoted(zone.id) + ",\"tzif\":" + quoted(encode::base64(zone.tzif)); }
 
+std::string quotaConfig(const HostQuotaConfig& config) {
+    std::string keys;
+    for (const auto source : config.sources) {
+        if (!keys.empty()) keys += ',';
+        keys += quoted(sourceId(source));
+    }
+    const auto flag = [](bool on) { return on ? "true" : "false"; };
+    return std::string("{\"sources\":[") + keys + "],\"network\":" + flag(config.network) + ",\"grokLive\":" + flag(config.grokLive) +
+           ",\"claudeBridge\":" + flag(config.claudeBridge) + "}";
+}
+
 bool byBytes(const std::string& a, const std::string& b) {
     return std::lexicographical_compare(a.begin(), a.end(), b.begin(), b.end(),
                                         [](char x, char y) { return static_cast<unsigned char>(x) < static_cast<unsigned char>(y); });
@@ -58,15 +69,18 @@ std::optional<std::string> compactPriceTable(std::string_view json) {
 namespace encode {
 
 std::optional<std::string> start(std::int64_t todayStartMs, const std::set<SourceKind>& sources, const Zone& zone,
-                                 std::string_view compactPrices) {
+                                 std::string_view compactPrices, const std::optional<HostQuotaConfig>& quota) {
     std::string keys;
     for (const auto source : sources) {
         if (!keys.empty()) keys += ',';
         keys += quoted(sourceId(source));
     }
     return line("{\"t\":\"start\",\"protocol\":" + std::to_string(kProtocol) + ",\"todayStartMs\":" + std::to_string(todayStartMs) +
-                ",\"sources\":[" + keys + "],\"zone\":{" + zoneMembers(zone) + "},\"prices\":" + std::string(compactPrices) + "}");
+                ",\"sources\":[" + keys + "],\"zone\":{" + zoneMembers(zone) + "},\"prices\":" + std::string(compactPrices) +
+                (quota ? ",\"quota\":" + quotaConfig(*quota) : std::string()) + "}");
 }
+
+std::optional<std::string> quota(const HostQuotaConfig& config) { return line("{\"t\":\"quota\",\"config\":" + quotaConfig(config) + "}"); }
 
 std::optional<std::string> ping(std::int64_t id) { return line("{\"t\":\"ping\",\"id\":" + std::to_string(id) + "}"); }
 
