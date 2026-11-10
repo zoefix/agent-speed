@@ -39,7 +39,7 @@ values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, 
 | `fiveHour` | the rolling 5-hour window | `5h` |
 | `sevenDay` | the weekly window over every model | `7d` |
 | `modelWeek` | a weekly window of one model or model family, `name` = the vendor's display name (`Fable`, `Opus`) | `<name> 7d` (`Fable 7d`) |
-| `other` | any other length, `minutes` known | `<n>h` for whole hours below a day, else `<n>d` for whole days, else `<n>m` |
+| `other` | any other length, `minutes` known | `<n>d` for whole days, else `<n>h` for whole hours (`25h`), else `<n>m` |
 
 - `usedPercent` is a number; the bar draws `clamp(usedPercent, 0, 100)` and the text shows it rounded half up to an
   integer, clamped to 0…100 (`100%` once a window is exhausted, even when the vendor says 103).
