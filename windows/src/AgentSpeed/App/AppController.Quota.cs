@@ -25,9 +25,9 @@ internal sealed partial class AppController
     {
         try
         {
-            _quota = new QuotaService(_ui, () => _monitor?.CodexQuota.Snapshot);
+            _quota = new QuotaService(_ui, () => _monitor?.CodexQuota.Snapshot, sandboxed: _launch.CaptureDir is not null);
             _quota.Changed += OnQuotaChanged;
-            _quota.Apply(Settings.Quota);
+            _quota.Apply(Settings);
             UpdateQuotaDemand();
             _quota.Start();
         }
@@ -50,15 +50,34 @@ internal sealed partial class AppController
 
     private void OnQuotaSettingsChanged(AppSettings previous, AppSettings current)
     {
+        _quota?.Apply(current);
         if (previous.Quota != current.Quota)
         {
-            _quota?.Apply(current.Quota);
             _dashboardModel.QuotaSettings = current.Quota;
             _settingsModel?.SourcesPane.UpdateQuota(Quota, current.Quota);
         }
 
+        if (previous.RemoteHosts != current.RemoteHosts || previous.RemoteQuotaSwitches != current.RemoteQuotaSwitches)
+        {
+            var switches = current.RemoteQuotaSwitches;
+            _quota?.PruneHosts(current.RemoteHosts, (source, host) => HostShows(source, host, switches));
+        }
+
         UpdateQuotaDemand();
     }
+
+    /// <summary>A host's line from the remote event thread (REMOTE 11.1): kept while its source shows on that host.</summary>
+    private void OnRemoteQuota(object? sender, Core.Remote.RemoteQuotaEventArgs e)
+    {
+        var settings = Settings;
+        var shows = e.Report is not { } report
+            || (settings.RemoteHosts.Hosts.FirstOrDefault(h => h.Id == e.HostId) is { } host && HostShows(report.Source, host, settings.RemoteQuotaSwitches));
+        _quota?.ApplyRemote(e, shows);
+    }
+
+    /// <summary>A disabled source shows no quota from any host either (QUOTAS 9.1); Claude Code is the host's own bridge.</summary>
+    private static bool HostShows(SourceKind source, Core.Remote.RemoteHost host, Core.Remote.RemoteQuotaSwitches switches) =>
+        source == SourceKind.ClaudeCode ? host.QuotaClaudeCli && switches.ClaudeCode : switches.Sources.Contains(source);
 
     /// <summary>Some character orb has the 額度 card on: the running apps are listed every 15 s (QUOTAS 6).</summary>
     private void UpdateQuotaDemand() =>
@@ -154,119 +173,5 @@ internal sealed partial class AppController
         return home.Length > 0 && path.StartsWith(home + Path.DirectorySeparatorChar, StringComparison.OrdinalIgnoreCase)
             ? "~" + path[home.Length..]
             : path;
-    }
-
-    /// <summary>
-    /// Developer capture operations (only with <c>--capture-dir</c>): <c>quota-demo</c> (Claude Desktop 7d + Fable 7d, Claude
-    /// Code 5h + 7d, Codex 7d, all running), <c>quota-demo-two</c> (Claude Desktop and Codex), <c>quota-demo-off</c>,
-    /// <c>quota-cli-&lt;waiting|ok|replaced|unreadable|failed&gt;</c> (Settings' status line), <c>quota-cli-off</c>,
-    /// <c>quota-invite</c> (the dashboard's Claude Code invitation), <c>quota-confirm</c> (the bridge's dialog) and
-    /// <c>quota-cli-install</c> / <c>quota-cli-uninstall</c> (the bridge itself, without the dialog).
-    /// </summary>
-    private bool RunQuotaCaptureOperation(string op)
-    {
-        if (_quota is not { } quota || !op.StartsWith("quota-", StringComparison.Ordinal))
-        {
-            return false;
-        }
-
-        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        switch (op)
-        {
-            case "quota-demo" or "quota-demo-two":
-                var demo = QuotaDemo.State(now, two: op == "quota-demo-two");
-                _settings.Update(s => s with { Quota = s.Quota with { Codex = true, ClaudeDesktop = true, ClaudeCli = op == "quota-demo" } });
-                quota.SetDemo(demo);
-                break;
-            case "quota-demo-off":
-                quota.SetDemo(null);
-                break;
-            case "quota-invite":
-                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = false, CliInviteDismissed = false } });
-                quota.SetDemo(QuotaDemo.State(now, two: false) with
-                {
-                    Snapshots = QuotaDemo.State(now, two: false).Snapshots.Remove(SourceKind.ClaudeCode),
-                    CliStatus = ClaudeCliBridgeStatus.Off,
-                });
-                break;
-            case "quota-cli-install":
-                // The bridge as the Settings switch installs it, without the dialog (end-to-end checks on a test machine).
-                AppLog.Info($"Quota capture: install -> {quota.TurnOnBridge()}");
-                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = true } });
-                break;
-            case "quota-cli-uninstall":
-                DisableClaudeCliQuota();
-                break;
-            case "quota-cli-off":
-                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = false } });
-                _settingsModel?.SourcesPane.ShowCliFailure(null);
-                break;
-            case "quota-confirm":
-                _ui.BeginInvoke(() => EnableClaudeCliQuota());
-                break;
-            case "quota-confirm-cancel":
-                foreach (var dialog in System.Windows.Application.Current.Windows.OfType<ConfirmDialog>().ToList())
-                {
-                    dialog.Close();
-                }
-
-                break;
-            case "quota-cli-unreadable" or "quota-cli-failed":
-                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = false } });
-                _settingsModel?.SourcesPane.ShowCliFailure(_loc.Format(op == "quota-cli-unreadable" ? "settings.quota.cli.unreadable" : "settings.quota.cli.failed",
-                    AbbreviatedHome(quota.Bridge.Paths.SettingsFile)));
-                break;
-            case "quota-cli-waiting" or "quota-cli-ok" or "quota-cli-replaced":
-                _settingsModel?.SourcesPane.ShowCliFailure(null);
-                _settings.Update(s => s with { Quota = s.Quota with { ClaudeCli = true } });
-                quota.SetDemo(QuotaDemo.State(now, two: false) with
-                {
-                    CliStatus = op switch
-                    {
-                        "quota-cli-waiting" => ClaudeCliBridgeStatus.Waiting,
-                        "quota-cli-ok" => ClaudeCliBridgeStatus.Ok,
-                        _ => ClaudeCliBridgeStatus.Replaced,
-                    },
-                    CliFileTime = op == "quota-cli-ok" ? DateTimeOffset.FromUnixTimeMilliseconds(now - 4 * 60_000) : null,
-                });
-                break;
-            default:
-                return false;
-        }
-
-        return true;
-    }
-}
-
-/// <summary>The developer capture's fixed quotas, around <c>now</c>.</summary>
-internal static class QuotaDemo
-{
-    public static QuotaState State(long now, bool two)
-    {
-        const long Hour = 3_600_000;
-        var snapshots = ImmutableDictionary.CreateBuilder<SourceKind, QuotaSnapshot>();
-        snapshots[SourceKind.ClaudeDesktop] = new QuotaSnapshot(SourceKind.ClaudeDesktop, now - 6 * 60_000,
-        [
-            QuotaWindow.Of(QuotaWindowKind.SevenDay, 86, now + 2 * 24 * Hour + 5 * Hour),
-            QuotaWindow.Of(QuotaWindowKind.ModelWeek, 27, now + 2 * 24 * Hour + 5 * Hour, "Fable"),
-        ]);
-        snapshots[SourceKind.Codex] = new QuotaSnapshot(SourceKind.Codex, now - 2 * 60_000,
-            [QuotaWindow.Of(QuotaWindowKind.SevenDay, 23, now + 5 * 24 * Hour + 9 * Hour)]);
-        if (!two)
-        {
-            snapshots[SourceKind.ClaudeCode] = new QuotaSnapshot(SourceKind.ClaudeCode, now - 60_000,
-            [
-                QuotaWindow.Of(QuotaWindowKind.FiveHour, 41, now + 3 * Hour + 12 * 60_000),
-                QuotaWindow.Of(QuotaWindowKind.SevenDay, 96, now + 19 * Hour + 40 * 60_000),
-            ]);
-        }
-
-        return new QuotaState
-        {
-            Snapshots = snapshots.ToImmutable(),
-            Active = [.. snapshots.Keys],
-            CliStatus = two ? ClaudeCliBridgeStatus.Off : ClaudeCliBridgeStatus.Ok,
-            CliFileTime = two ? null : DateTimeOffset.FromUnixTimeMilliseconds(now - 60_000),
-        };
     }
 }

@@ -1,3 +1,4 @@
+using AgentSpeed.Core.Quota.Network;
 using System.Collections.Immutable;
 using System.Globalization;
 using System.Text;
@@ -209,6 +210,18 @@ public static class SettingsSerializer
                 w.WriteString("quotaCliInvite", "dismissed");
             }
 
+            w.WriteBoolean("quotaGrokBuild", s.Quota.GrokBuild);
+            w.WriteBoolean("quotaGrokBuildLive", s.Quota.GrokBuildLive);
+            w.WriteBoolean("quotaDevin", s.Quota.Devin);
+            w.WriteBoolean("quotaAntigravity", s.Quota.Antigravity);
+            w.WriteBoolean("quotaKimi", s.Quota.Kimi);
+            w.WriteBoolean("quotaGemini", s.Quota.Gemini);
+            w.WriteBoolean("quotaDroid", s.Quota.Droid);
+            w.WriteBoolean("quotaZcode", s.Quota.Zcode);
+            w.WriteString("quotaZcodeRegion", s.Quota.ZcodeRegion.Key());
+            w.WriteBoolean("quotaQoder", s.Quota.Qoder);
+            w.WriteBoolean("quotaWorkBuddy", s.Quota.WorkBuddy);
+
             ReportSettingsJson.Write(w, s.Report);
 
             w.WriteStartObject("updates");
@@ -355,6 +368,17 @@ public static class SettingsSerializer
                 ClaudeDesktop = ReadBool(root, "quotaClaudeDesktop", QuotaSettings.Default.ClaudeDesktop),
                 ClaudeCli = ReadBool(root, "quotaClaudeCli", QuotaSettings.Default.ClaudeCli),
                 CliInviteDismissed = ReadString(root, "quotaCliInvite") == "dismissed",
+                GrokBuild = ReadBool(root, "quotaGrokBuild", QuotaSettings.Default.GrokBuild),
+                GrokBuildLive = ReadBool(root, "quotaGrokBuildLive", QuotaSettings.Default.GrokBuildLive),
+                Devin = ReadBool(root, "quotaDevin", QuotaSettings.Default.Devin),
+                Antigravity = ReadBool(root, "quotaAntigravity", QuotaSettings.Default.Antigravity),
+                Kimi = ReadBool(root, "quotaKimi", QuotaSettings.Default.Kimi),
+                Gemini = ReadBool(root, "quotaGemini", QuotaSettings.Default.Gemini),
+                Droid = ReadBool(root, "quotaDroid", QuotaSettings.Default.Droid),
+                Zcode = ReadBool(root, "quotaZcode", QuotaSettings.Default.Zcode),
+                ZcodeRegion = QuotaRequests.RegionOf(ReadString(root, "quotaZcodeRegion")),
+                Qoder = ReadBool(root, "quotaQoder", QuotaSettings.Default.Qoder),
+                WorkBuddy = ReadBool(root, "quotaWorkBuddy", QuotaSettings.Default.WorkBuddy),
             },
         };
     }

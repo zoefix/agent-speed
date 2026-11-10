@@ -43,7 +43,7 @@ internal sealed class RemoteHostsService : IDisposable
 
         var names = settings.RemoteHosts.DisplayNames();
         History.SetHosts([.. settings.RemoteHosts.Hosts.Select(h => (h.Id, names[h.Id]))]);
-        _coordinator.Update(settings.RemoteHosts, settings.NetworkEnabled);
+        _coordinator.Update(settings.RemoteHosts, settings.NetworkEnabled, settings.RemoteQuotaSwitches);
     }
 
     /// <summary>

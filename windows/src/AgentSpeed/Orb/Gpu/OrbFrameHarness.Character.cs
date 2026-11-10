@@ -145,8 +145,8 @@ internal static partial class OrbFrameHarness
         string info, Localizer loc, string directory)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var two = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: true), _ => true, now, loc);
-        var three = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: false), _ => true, now, loc);
+        var two = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: true), _ => true, now, loc);
+        var three = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: false), _ => true, now, loc);
         foreach (var dark in new[] { true, false })
         {
             var rows = new List<List<BitmapSource>>();
