@@ -1272,7 +1272,10 @@ For each model bucket:
   `reasoningTokens > outputTokens`: then the provider counted reasoning apart (xAI Chat Completions, the default API of
   a custom model) and `output = outputTokens + reasoningTokens`; `reasoning = min(reasoningTokens, output)` (issue
   #51). A batch with reasoning counted apart but no larger than its output cannot be told apart and reads as included.
-  Provider remains null because the native record does not name one.
+  Provider remains null because the native record does not name one. The model is the name Grok Build's backend
+  served, often the API id with `-build` (`grok-4.7-build`, issue #60); `-build` is a `modifierSuffixes` entry of
+  `grok-` in the price table, so it prices as the API model (`grok-4.7`). Grok Build bills its users in credits;
+  the cost stays API-equivalent (9).
 - `endMs` is the completion event time. A positive `apiDurationMs` within the existing 15-minute interval limit gives
   `startMs = endMs - apiDurationMs`; otherwise `startMs = null`, as for any other response without a valid interval.
 - `requestCount` is native `modelCalls`, clamped to 1–100000. Other sources default to 1. Totals, model breakdowns,

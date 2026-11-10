@@ -7,8 +7,8 @@ enum BundledPriceAssets {
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 5,
-  "updated": "2026-11-09",
+  "version": 6,
+  "updated": "2026-11-10",
   "currency": "USD",
   "unit": "perMillionTokens",
   "providers": {
@@ -167,6 +167,12 @@ enum BundledPriceAssets {
           "-volc",
           "-lkeap",
           "-taiji"
+        ]
+      },
+      {
+        "prefix": "grok-",
+        "suffixes": [
+          "-build"
         ]
       }
     ],
@@ -2076,7 +2082,7 @@ enum BundledPriceAssets {
         }
       ],
       "source": "https://docs.x.ai/developers/models/grok-4.7",
-      "checked": "2026-10-22"
+      "checked": "2026-11-10"
     },
     {
       "id": "grok-4.6",
@@ -2097,7 +2103,7 @@ enum BundledPriceAssets {
         }
       ],
       "source": "https://docs.x.ai/developers/models/grok-4.6",
-      "checked": "2026-10-22"
+      "checked": "2026-11-10"
     },
     {
       "id": "grok-4.5",
@@ -4772,6 +4778,22 @@ enum BundledPriceAssets {
     {
       "model": "grok-code-fast-1",
       "expect": "grok-code-fast-1"
+    },
+    {
+      "model": "grok-4.7-build",
+      "expect": "grok-4.7"
+    },
+    {
+      "model": "grok-4.6-build",
+      "expect": "grok-4.6"
+    },
+    {
+      "model": "xai/grok-4.7-build",
+      "expect": "grok-4.7"
+    },
+    {
+      "model": "grok-build-0.1",
+      "expect": "grok-build-0.1"
     },
     {
       "model": "grok-4",
