@@ -89,7 +89,8 @@ public sealed partial class CharacterDraw
         }
     }
 
-    private static readonly HudCard[] DrawOrder = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Models, HudCard.Model];
+    private static readonly HudCard[] DrawOrder =
+        [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Quota, HudCard.Models, HudCard.Model];
 
     private OrbLinesContent? PerformanceContent => Readings?.Performance.Reading?.Content;
 
@@ -116,6 +117,8 @@ public sealed partial class CharacterDraw
         _speedDrop = drop;
         SyncModels(ctx, frame);
         FitNames(new CardMetrics(d), dt, time, _wings.Still || _wings.Presence[(int)HudCard.Models] == 0);
+        SyncQuota(ctx, frame);
+        FitQuota(new CardMetrics(d), time, IsSmall(ctx));
         foreach (var card in HudCards.All)
         {
             _cardSizes[(int)card] = card == HudCard.Speed ? (sw, sh) : CardSize(ctx, card, frame);
@@ -130,6 +133,7 @@ public sealed partial class CharacterDraw
         _cardShown[(int)HudCard.Cost] = readouts.Cost && readings?.Cost.IsLoud(time) == true && Has(HudCard.Cost);
         _cardShown[(int)HudCard.Agents] = readouts.Agents && !IsSmall(ctx) && Has(HudCard.Agents);
         _cardShown[(int)HudCard.Models] = readouts.Models && readings?.Models.IsLoud(time) == true && Has(HudCard.Models);
+        _cardShown[(int)HudCard.Quota] = readouts.Quota && Content?.Quota.IsEmpty == false && Has(HudCard.Quota);
         if (IsSmall(ctx))
         {
             var room = 2;
@@ -233,6 +237,8 @@ public sealed partial class CharacterDraw
                     : (0, 0);
             case HudCard.Models:
                 return ModelsSize(m, frame.Time);
+            case HudCard.Quota:
+                return QuotaSize(m, frame.Time);
             case HudCard.Network:
                 if (Readings?.Network.Reading is not { Content: { Kind: OrbLinesKind.Traffic } traffic })
                 {
@@ -495,6 +501,10 @@ public sealed partial class CharacterDraw
 
             case HudCard.Models:
                 DrawModels(list, pen, box, m, ink, right, frame.Time, ctx.HighContrast);
+                break;
+
+            case HudCard.Quota:
+                DrawQuota(list, ctx, pen, box, m, ink, right, frame.Time);
                 break;
 
             case HudCard.Agents:

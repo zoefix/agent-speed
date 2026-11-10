@@ -4,11 +4,11 @@ namespace AgentSpeed.Presentation.Tests.Character;
 
 public class HudWingsTests
 {
-    private static readonly (double W, double H)[] Sizes = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 36)];
+    private static readonly (double W, double H)[] Sizes = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 36), (88, 40)];
 
-    private static readonly bool[] AllShown = [true, true, true, true, true, true, false];
+    private static readonly bool[] AllShown = [true, true, true, true, true, true, false, true];
 
-    private static readonly bool[] WithModels = [true, true, true, true, true, true, true];
+    private static readonly bool[] WithModels = [true, true, true, true, true, true, true, true];
 
     /// <summary>
     /// A frame like a 148 pt orb's (D = 296, window 444): her outline a slim body from y 80 to 400 around x 222, with an

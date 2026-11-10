@@ -54,6 +54,9 @@ public sealed record OrbCharacterContent
 
     /// <summary><c>unit.tokS</c>: the models card's unit, whatever the orb's own unit setting.</summary>
     public string TokensUnit { get; init; } = "tok/s";
+
+    /// <summary>The 額度 card: the orb's sources whose app runs and is signed in, with their windows (QUOTAS 6).</summary>
+    public OrbQuotaCard Quota { get; init; } = OrbQuotaCard.Empty;
 }
 
 /// <summary>
@@ -143,10 +146,11 @@ public sealed class OrbCharacterReadings
 public static class OrbCharacterSpeech
 {
     /// <summary>
-    /// The cards that show, in the column's order: 性能 and 思考 with the 首字 row, network speed, the cost rate, then the
-    /// running models; null when none shows.
+    /// The cards that show, in the column's order: 性能 and 思考 with the 首字 row, network speed, the cost rate, the
+    /// running models, then the 額度 card; null when none shows.
     /// </summary>
-    public static string? Sentence(OrbCharacterReadings readings, CharacterReadouts on, double time, Localizer localizer, string currencyName)
+    public static string? Sentence(OrbCharacterReadings readings, CharacterReadouts on, double time, Localizer localizer, string currencyName,
+        OrbQuotaCard? quota = null)
     {
         ArgumentNullException.ThrowIfNull(readings);
         ArgumentNullException.ThrowIfNull(on);
@@ -178,6 +182,11 @@ public static class OrbCharacterSpeech
         if (readings.Models.IsLoud(time) && on.Models && OrbModelsText.Spoken(readings.Models.Rows, localizer) is { } models)
         {
             parts.Add(models);
+        }
+
+        if (on.Quota && quota?.Spoken is { Length: > 0 } spoken)
+        {
+            parts.Add(spoken);
         }
 
         if (parts.Count == 0)

@@ -283,6 +283,8 @@ internal sealed partial class OrbsPaneViewModel
 
     public bool ReadoutModels { get => Readout(CharacterReadout.Models); set => SetReadout(CharacterReadout.Models, value); }
 
+    public bool ReadoutQuota { get => Readout(CharacterReadout.Quota); set => SetReadout(CharacterReadout.Quota, value); }
+
     public bool ReadoutModel { get => Readout(CharacterReadout.Model); set => SetReadout(CharacterReadout.Model, value); }
 
     /// <summary>The network card needs traffic measured (Settings → 網路流量).</summary>
@@ -433,6 +435,7 @@ internal sealed partial class OrbsPaneViewModel
         OnPropertyChanged(nameof(ReadoutCost));
         OnPropertyChanged(nameof(ReadoutAgents));
         OnPropertyChanged(nameof(ReadoutModels));
+        OnPropertyChanged(nameof(ReadoutQuota));
         OnPropertyChanged(nameof(ReadoutModel));
         OnPropertyChanged(nameof(TrafficMeasured));
         OnPropertyChanged(nameof(NetworkScopeEnabled));

@@ -85,6 +85,11 @@ internal static partial class OrbFrameHarness
             }
         }
 
+        foreach (var pack in packs.Take(QuotaSheetPacks()))
+        {
+            CharacterQuotaSheets(device, target, pack, scale, strings, info, loc, directory);
+        }
+
         var empty = new List<List<BitmapSource>>();
         foreach (var dark in new[] { true, false })
         {
@@ -125,9 +130,49 @@ internal static partial class OrbFrameHarness
         return sizes.Length > 0 ? sizes : [148, 72];
     }
 
-    /// <summary>The demo content of a harness character orb: every card on, the model chip, today's line.</summary>
-    private static OrbCharacterContent CharacterContent(CharacterPack? pack, Localizer loc) => new()
+    /// <summary><c>AGENT_SPEED_ORB_FRAMES_QUOTA</c>: how many packs get 額度 sheets (default 1).</summary>
+    private static int QuotaSheetPacks() =>
+        int.TryParse(Environment.GetEnvironmentVariable("AGENT_SPEED_ORB_FRAMES_QUOTA"), NumberStyles.Integer, CultureInfo.InvariantCulture, out var n)
+            ? Math.Max(0, n)
+            : 1;
+
+    /// <summary>
+    /// The 額度 card (DESIGN 2a.6) at 148 and 92 pt with two sources (Claude Desktop 7d + Fable 7d, Codex 7d) and three
+    /// (Claude Code 5h + 7d too), at a calm speed so the column is short: <c>character-quota-ID-dark|light.png</c>.
+    /// </summary>
+    private static void CharacterQuotaSheets(GpuDevice device, OffscreenTarget target, CharacterPack pack, double scale, OrbReadoutStrings strings,
+        string info, Localizer loc, string directory)
     {
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        var two = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: true), _ => true, now, loc);
+        var three = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: false), _ => true, now, loc);
+        foreach (var dark in new[] { true, false })
+        {
+            var rows = new List<List<BitmapSource>>();
+            foreach (var size in new[] { 148.0, 92.0 })
+            {
+                var row = new List<BitmapSource>();
+                foreach (var card in new[] { two, three })
+                {
+                    var (bitmap, _) = CharacterStill(device, target, pack, size, scale, dark, Redline * 0.05, strings, info, loc, 4.0,
+                        EffectsIntensity.Standard, quota: card);
+                    if (bitmap is not null)
+                    {
+                        row.Add(bitmap);
+                    }
+                }
+
+                rows.Add(row);
+            }
+
+            WriteSheet(rows, dark, scale, Path.Combine(directory, $"character-quota-{pack.Id}-{(dark ? "dark" : "light")}.png"));
+        }
+    }
+
+    /// <summary>The demo content of a harness character orb: every card on, the model chip, today's line.</summary>
+    private static OrbCharacterContent CharacterContent(CharacterPack? pack, Localizer loc, OrbQuotaCard? quota = null) => new()
+    {
+        Quota = quota ?? OrbQuotaCard.Empty,
         Pack = pack,
         NoneInstalled = pack is null,
         EmptyLabel = loc["character.empty"],
@@ -169,13 +214,13 @@ internal static partial class OrbFrameHarness
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,
         double scale, bool dark, double value, OrbReadoutStrings strings, string info, Localizer loc, double seconds, EffectsIntensity level,
-        int warmFrames = 0)
+        int warmFrames = 0, OrbQuotaCard? quota = null)
     {
         var effects = new EffectsPolicy(level);
         var d = OrbStyles.FootprintDiameter(OrbStyle.Character, size);
         var orb = new OrbGpuOrb(0x9E3779B9u, device.Atlas.ForScale(scale));
         var context = new OrbGpuContext(d, scale, OrbTokens.For(dark ? OrbAppearance.Dark : OrbAppearance.Light), effects);
-        orb.SetCharacter(CharacterContent(pack, loc));
+        orb.SetCharacter(CharacterContent(pack, loc, quota));
         orb.Configure(new OrbGpuConfig(OrbStyle.Character, d, effects, true, true, Redline, strings, null, SourceSet.Empty), context);
         var tier = HeatMath.RawTier(value, Redline);
         var title = SpeedTitles.Raw(value, Redline);
