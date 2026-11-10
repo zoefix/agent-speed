@@ -1,5 +1,5 @@
 {
- "_comment": "METRICS 6.9 and 6.11, checked by spec/tools/perf_score.py and generated from spec/tools/perf_score_cases.py (--write), whose expectations are written by hand. Times are Unix ms; days are UTC dates here (the apps use local dates). `edges`: the integer latency edges E_0 … E_64 = ⌈100 · 2^(j/4)⌉. `latencyBins`: a latency in ms -> its bucket. `agents`: each agent's responses (engine form, 3.3) and stored actions (6.10, file order) -> at `nowMs` the 6.9 evaluation (form, unrounded score, shown, provisional, n, tools = |C|, activeMs, spanStartMs, model of the newest sample response, the seven components with presence, reason, samples, measure, ratio and sub-score; with `history` and `today` also the baseline, vsUsual and vsUsualPercent). `sets`: agents' values -> the value of the whole set and of every board group, with the supplying agent. `days`: each agent's completions in the order they complete -> the history records per (day, source, model). `pooled`: records of one source -> the pooled evaluation. `baseline`: records -> the 14-day baseline of (source, model) before `today`. `range`: records -> the History window's rows over [first, last] (one source when `source` is given) with the daily trend. `thinking`: the live thinking line (6.9 Live thinking). Numbers compare within 1e-9 (relative above 1).",
+ "_comment": "METRICS 6.9 and 6.11, checked by spec/tools/perf_score.py and generated from spec/tools/perf_score_cases.py (--write), whose expectations are written by hand. Times are Unix ms; days are UTC dates here (the apps use local dates). `edges`: the integer latency edges E_0 … E_64 = ⌈100 · 2^(j/4)⌉. `latencyBins`: a latency in ms -> its bucket. `agents`: each agent's responses (engine form, 3.3) and stored actions (6.10, file order) -> at `nowMs` the 6.9 evaluation (form, unrounded score, shown, provisional, n, tools = |C|, activeMs, spanStartMs, model of the newest sample response, the seven components with presence, reason, samples, measure, ratio and sub-score; with `history` and `today` also the baseline, vsUsual and vsUsualPercent). `sets`: agents' values -> the value of the whole set and of every board group, with the supplying agent. `days`: each agent's completions in the order they complete -> the history records per (day, source, model). `pooled`: records of one source -> the pooled evaluation. `baseline`: records -> the 14-day baseline of (source, model) before `today`. `range`: records -> the History window's rows over [first, last] (one source when `source` is given) with the daily trend. `thinking`: the live thinking line (6.9 Live thinking). `readouts`: a set's first-content latency and running models (6.9 Readouts of a set). Numbers compare within 1e-9 (relative above 1).",
  "edges": [
   100,
   119,
@@ -8899,5 +8899,437 @@
     ]
    }
   ]
- }
+ },
+ "readouts": [
+  {
+   "name": "latency pooled over the agents' samples (an even count: the mean of the middle two); one model row per running agent, fastest first",
+   "nowMs": 1800000100000,
+   "agents": [
+    {
+     "id": "a1",
+     "source": "claudeCode",
+     "phase": "tools",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "claude-opus-5-5"
+    },
+    {
+     "id": "a2",
+     "source": "codex",
+     "phase": "generating",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "gpt-6.1-sol"
+    }
+   ],
+   "responses": [
+    {
+     "key": "r1",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000000000,
+     "endMs": 1800000004000,
+     "firstMs": 1800000000800,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 100,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "r2",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000010000,
+     "endMs": 1800000014000,
+     "firstMs": 1800000011200,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 200,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "r3",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000020000,
+     "endMs": 1800000024000,
+     "firstMs": 1800000021500,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 300,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "r4",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000030000,
+     "endMs": 1800000034000,
+     "firstMs": 1800000033000,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 400,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "r5",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000040000,
+     "endMs": 1800000044000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 500,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "r6",
+     "agentId": "a1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000045000,
+     "endMs": 1800000048000,
+     "firstMs": 1800000045100,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 900,
+     "reasoning": 0,
+     "final": false
+    },
+    {
+     "key": "c0",
+     "agentId": "a2",
+     "source": "codex",
+     "model": "gpt-6.1-sol",
+     "startMs": 1799998080000,
+     "endMs": 1799998140000,
+     "firstMs": 1799998080100,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 50,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "c1",
+     "agentId": "a2",
+     "source": "codex",
+     "model": "gpt-6.1-sol",
+     "startMs": 1800000050000,
+     "endMs": 1800000052000,
+     "firstMs": 1800000050600,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 200,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "c2",
+     "agentId": "a2",
+     "source": "codex",
+     "model": "gpt-6.1-sol",
+     "startMs": 1800000060000,
+     "endMs": 1800000063000,
+     "firstMs": 1800000060900,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 330,
+     "reasoning": 0,
+     "final": true
+    }
+   ],
+   "expect": {
+    "firstLatency": {
+     "ms": 1050.0,
+     "n": 6
+    },
+    "models": [
+     {
+      "model": "gpt-6.1-sol",
+      "speed": 106.0,
+      "agents": 1,
+      "shown": 106
+     },
+     {
+      "model": "claude-opus-5-5",
+      "speed": 100.0,
+      "agents": 1,
+      "shown": 100
+     }
+    ]
+   }
+  },
+  {
+   "name": "fewer than three latencies: none; a model's row takes its fastest agent, idle, stale and model-less agents are left out, a tie goes to the smaller model id, a model without a timed response is last",
+   "nowMs": 1800000100000,
+   "agents": [
+    {
+     "id": "b1",
+     "source": "claudeCode",
+     "phase": "generating",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "claude-opus-5-5"
+    },
+    {
+     "id": "b2",
+     "source": "claudeCode",
+     "phase": "tools",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "claude-opus-5-5"
+    },
+    {
+     "id": "b3",
+     "source": "gemini",
+     "phase": "tools",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "gemini-4-argon"
+    },
+    {
+     "id": "b4",
+     "source": "codex",
+     "phase": "generating",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "gpt-6.1-sol"
+    },
+    {
+     "id": "b5",
+     "source": "claudeCode",
+     "phase": "idle",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": "claude-sonnet-5-5"
+    },
+    {
+     "id": "b6",
+     "source": "claudeCode",
+     "phase": "generating",
+     "lastLineMs": 1799999799000,
+     "parentId": null,
+     "model": "claude-haiku-4-5"
+    },
+    {
+     "id": "b7",
+     "source": "codex",
+     "phase": "tools",
+     "lastLineMs": 1800000100000,
+     "parentId": null,
+     "model": null
+    }
+   ],
+   "responses": [
+    {
+     "key": "x1",
+     "agentId": "b1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000000000,
+     "endMs": 1800000002000,
+     "firstMs": 1800000000500,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 240,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "x2",
+     "agentId": "b2",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000010000,
+     "endMs": 1800000015000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 400,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "x3",
+     "agentId": "b3",
+     "source": "gemini",
+     "model": "gemini-4-argon",
+     "startMs": 1800000020000,
+     "endMs": 1800000022000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 240,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "x5",
+     "agentId": "b5",
+     "source": "claudeCode",
+     "model": "claude-sonnet-5-5",
+     "startMs": 1800000030000,
+     "endMs": 1800000031000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 500,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "x6",
+     "agentId": "b6",
+     "source": "claudeCode",
+     "model": "claude-haiku-4-5",
+     "startMs": 1799999750000,
+     "endMs": 1799999752000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 900,
+     "reasoning": 0,
+     "final": true
+    }
+   ],
+   "expect": {
+    "firstLatency": {
+     "ms": null,
+     "n": 1
+    },
+    "models": [
+     {
+      "model": "claude-opus-5-5",
+      "speed": 120.0,
+      "agents": 2,
+      "shown": 120
+     },
+     {
+      "model": "gemini-4-argon",
+      "speed": 120.0,
+      "agents": 1,
+      "shown": 120
+     },
+     {
+      "model": "gpt-6.1-sol",
+      "speed": null,
+      "agents": 1,
+      "shown": null
+     }
+    ]
+   }
+  },
+  {
+   "name": "recentSpeed reads the newest three measured responses that end in the last ten minutes",
+   "nowMs": 1800001200000,
+   "agents": [
+    {
+     "id": "d1",
+     "source": "claudeCode",
+     "phase": "generating",
+     "lastLineMs": 1800001200000,
+     "parentId": null,
+     "model": "claude-opus-5-5"
+    }
+   ],
+   "responses": [
+    {
+     "key": "y1",
+     "agentId": "d1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000480000,
+     "endMs": 1800000482000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 5000,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "y2",
+     "agentId": "d1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000660000,
+     "endMs": 1800000661000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 1000,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "y3",
+     "agentId": "d1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000720000,
+     "endMs": 1800000722000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 100,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "y4",
+     "agentId": "d1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000780000,
+     "endMs": 1800000782000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 100,
+     "reasoning": 0,
+     "final": true
+    },
+    {
+     "key": "y5",
+     "agentId": "d1",
+     "source": "claudeCode",
+     "model": "claude-opus-5-5",
+     "startMs": 1800000840000,
+     "endMs": 1800000844000,
+     "firstMs": null,
+     "input": 1000,
+     "cachedInput": 900,
+     "output": 200,
+     "reasoning": 0,
+     "final": true
+    }
+   ],
+   "expect": {
+    "firstLatency": {
+     "ms": null,
+     "n": 0
+    },
+    "models": [
+     {
+      "model": "claude-opus-5-5",
+      "speed": 50.0,
+      "agents": 1,
+      "shown": 50
+     }
+    ]
+   }
+  }
+ ]
 }

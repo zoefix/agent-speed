@@ -939,19 +939,39 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   `0.035 D` clear of her outline over the rows it spans; if it does not fit there, the nearest row (±0.04 … 0.3 D)
   where it overflows least. Rolling digits sampled 5 times a second, size 0.068 D, the unit and the speed title chip
   below; no plate.
+- **Models** (`character.readouts.models`, on by default; user's choice, 2026-11-10): a card directly under the speed
+  title chip, `0.022 D` below it, left edge on the speed's line, listing the orb's running models (METRICS 6.9
+  *Readouts of a set*): one row per model, fastest first — the vendor's accent dot (the model chip's), the model id
+  at `t` in the value token (truncated in the middle beyond `9 t`; the full id in the accessibility label) and its
+  speed at the trailing edge, a whole number of tok/s in tabular digits with the unit `tok/s` once, after the first
+  row's number, in the secondary token (`–` while the model has no timed response yet). At most 4 rows; more
+  models add a fifth, secondary line `character.models.more` (`+3 個模型`). Rows are `0.3 t` apart and reorder with
+  a 0.3 s glide (Reduce Motion: at once); a model that stops running fades out of its row (0.25 s) and the card
+  eases to its new height. The speed always outranks it: when the card does not fit under the speed (her right side
+  crowded), it moves down past the spill-over cards' room (up to 0.3 D) before it hides.
+  Accessibility reads `a11y.orb.models` with one `a11y.orb.modelSpeed` per row (the model alone while it has no
+  speed), joined by `list.separator`, after the cost; the 首字 row adds `a11y.orb.latency` (the shown value with its
+  unit) after the 性能 reading.
 - **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
   model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
   of her that rises under it. With no live model it shows the last one.
 - **The column** at her left, top to bottom from her shoulders (chin + 25 % to the waist): **性能** (`性能 1,286` at
   `p = 1.25 t` over `思考 412 tok/s` at `t`, the score's motion, pale resting form and provisional mark as in section 10;
-  the 思考 row fades after its hold at 0 and the card closes up, section 10 *Thinking hidden at zero*), **network**
+  the 思考 row fades after its hold at 0 and the card closes up, section 10 *Thinking hidden at zero*; a third row
+  `首字 1.2 s` at `t`, `character.readouts.latency`, on by default, user's choice 2026-11-10: the orb's first-content
+  latency of METRICS 6.9 *Readouts of a set*, its label `character.latency.glyph`, the value in the value token and
+  the unit in the secondary one — below 1 s whole milliseconds rounded to the nearest 10 with `perf.unit.ms`
+  (`850 ms`), from 1 s one decimal with `perf.unit.s` (`1.2 s`), from 10 s whole seconds (`14 s`); shown while the
+  value exists, fading in and out (0.25 s) as the card eases to its height, so an orb of sources without first-content
+  times never shows the row), **network**
   (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
   `–` when nothing is priced, and the money unit) and **today** (`boards.today` with today's tokens over
   `agents.count`). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
   every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
   apart; a hidden card's room closes up as it fades.
 - **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
-  its last cards continue under the speed at her right, left edges on one line, in the same order. Only when no split
+  its last cards continue under the speed at her right (under the models card while it shows), left edges on one
+  line, in the same order. Only when no split
   fits does the column move further (up to 0.3 D), and only then do its cards hug her outline one by one. Cards move
   only after the column has overflowed for 0.6 s and come back once the larger column has fitted near her shoulders
   with `0.04 D` to spare for 4 s (12 s within 30 s of the last change, so a dance that keeps reaching out does not send
@@ -966,8 +986,9 @@ Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and un
 
 **Which cards show.** A card shows while it is switched on (`characterReadouts`, 2b; the speed always) and has
 something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
-resting or an agent generates, 費用 while money flows (or a generating set has no price), each until 10 s after its
-last loud moment; today while there is a token today. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
+resting or an agent generates, 費用 while money flows (or a generating set has no price), models while a model runs
+(an agent of the orb is not idle), each until 10 s after its last loud moment (the models card keeps its last rows
+for those 10 s); today while there is a token today. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
 their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A
 `character` orb's network card follows `traffic` for its scope (`machine` = the whole computer, anything else = the
 orb's agents); its speed stays in tok/s (`unit` is not used: the cost has its own card, and clicking the orb does not
@@ -1011,7 +1032,8 @@ instant), actions that leave the ground (hops, jumps, spins, steps) are skipped,
 crossfades. Increase Contrast: the card plates become nearly opaque (92 %) with stronger rims and text, unlit ring lights × 2. With no character
 installed, the style draws the ring and the standard readout of the frame table (value 0.13 D) with `character.empty`
 above it; the context menu's `characters.more` leads to the downloads. LOD: below S = 96 the agent lights and the today card are
-not drawn and the column keeps at most its first two shown cards; thumbnails and style cards show the pack's `preview.png`.
+not drawn and the column keeps at most its first two shown cards, and the models card keeps at most its first two
+rows; thumbnails and style cards show the pack's `preview.png`.
 
 ### Frame policy and performance budget (normative for every style, `led` included)
 
@@ -1145,7 +1167,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `style` | `led` · `needle` · `liquid` · `reactor` · `minimal` · `character`; unknown → `led`. |
 | `size` | 64–240 pt/DIP, one range for every style; values outside it are clamped when read. Changing the style never changes the size; `character` occupies a disc of 2 × the size (2a.6, Footprint), which placement, snapping and magnets use. |
 | `character` | `character` style only: a character pack id (CHARACTERS 1), or absent = Auto, following the fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto. |
-| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `network`, `cost`, `agents` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
+| `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
 | `visible` | Hides one orb without removing it. |
@@ -1381,7 +1403,8 @@ column as submenu chevrons, so checked and unchecked items never shift the text:
    `orbs.unit.cost` (section 9), `orbs.traffic` ▸ `orbs.traffic.sources` / `orbs.traffic.machine` /
    `orbs.traffic.intelligence` / `orbs.traffic.off` (section 10) and `orbs.showName`, checked when the orb's name
    plate shows (Name plate). A `character` orb has `character.readouts` ▸ in place of the unit and traffic items: a
-   check per card (`character.readouts.intel`, `.thinking`, `.network`, `.cost`, `.agents`, `.model`; network disabled
+   check per card (`character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`,
+   `.model`; network disabled
    while traffic is not measured), a separator, the section header `character.readouts.networkScope` and the radio
    pair `orbs.traffic.sources` / `orbs.traffic.machine` (disabled while the network card is off). The quick menu
    does the same. In Settings the orb editor shows the cards as checkboxes with the scope popup and

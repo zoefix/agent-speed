@@ -2573,6 +2573,22 @@ unrounded score in that form, the one with the latest `lastLineMs`, then the sma
 its sub-agent's own value. Values never drive heat, tiers, titles, peaks or celebrations; live reporting sends them
 only through its `perfScore` extension (11.10). Cases: `sets`.
 
+**Readouts of a set** (a `character` orb's 性能 card and models card, DESIGN 2a.6; user's choice, 2026-11-10). For an
+orb's set `A` (6.8) at `nowMs`, on every engine tick:
+
+- **First-content latency** (首字): the median of `firstMs − startMs` over the union of the samples (above, per agent)
+  of `A`'s agents, the responses that have both with `firstMs ≥ startMs` (an even count: the mean of the two middle
+  values), in ms; **none** with fewer than 3 such values. Only Claude (both), Codex and Devin record `firstMs` (3.3), so
+  a set of other sources has none.
+- **Running models**: the agents of `A` whose phase after the staleness rule (6.7 step 1) is not `idle` and whose
+  `model` is a string that is not empty, grouped by that exact string. A group's speed is the highest `recentSpeed`
+  (6.2, the agent's own responses; no fallback) of its agents, none when none of them has one; its `agents` is the
+  number of agents in it. The rows are ordered by speed, fastest first, groups without a speed last, ties by model
+  (ordinal, UTF-16 code units); the shown speed is rounded half away from zero. Each model appears once, however
+  many tasks run it.
+
+They never drive heat, titles, peaks or the character choice. Cases: `readouts` (`spec/tools/perf_score.py`).
+
 #### Facts for the card
 
 From the same evaluation, for the score card (DESIGN 12): `n`, `tools` (`|C|`, 工具調用次數), `activeMs`,

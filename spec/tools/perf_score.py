@@ -251,6 +251,53 @@ def highest(agents, values):
     return {"form": "none", "score": None, "shown": None, "agent": None}
 
 
+# ----------------------------------------------------------------------------- readouts of a set (6.9)
+
+RECENT_MS = 10 * 60_000
+RECENT_RESPONSES = 3
+
+
+def set_first_latency(responses, now):
+    """6.9 *Readouts of a set*: the median first-content latency over the samples of the set's agents."""
+    by_agent = {}
+    for r in responses:
+        by_agent.setdefault(r["agentId"], []).append(r)
+    values = [r["firstMs"] - r["startMs"] for own in by_agent.values() for r in sample_of(own, now)
+              if r.get("firstMs") is not None and r.get("startMs") is not None and r["firstMs"] >= r["startMs"]]
+    return {"ms": median(values) if len(values) >= MIN_SAMPLES else None, "n": len(values)}
+
+
+def recent_speed(responses, now):
+    """6.2 recentSpeed: Σ output / Σ duration over the up to 3 newest measured responses of the last 10 minutes."""
+    chosen = [r for r in responses if measured(r) and now - RECENT_MS <= r["endMs"] <= now]
+    chosen.sort(key=lambda r: _ordinal(r["key"]))
+    chosen.sort(key=lambda r: r["endMs"], reverse=True)
+    chosen = chosen[:RECENT_RESPONSES]
+    if not chosen:
+        return None
+    return seq_sum((r["output"] for r in chosen), 0) / (seq_sum((duration_ms(r) for r in chosen), 0) / 1000)
+
+
+def running_models(agents, responses, now):
+    """6.9 *Readouts of a set*: one row per model of the set's running agents, its fastest agent's recentSpeed,
+    fastest first (no speed last), ties by model (ordinal)."""
+    rows = {}
+    for a in agents:
+        model = a.get("model")
+        if effective_phase(a, now) == "idle" or not isinstance(model, str) or not model:
+            continue
+        speed = recent_speed([r for r in responses if r["agentId"] == a["id"]], now)
+        row = rows.setdefault(model, {"model": model, "speed": None, "agents": 0})
+        row["agents"] += 1
+        if speed is not None and (row["speed"] is None or speed > row["speed"]):
+            row["speed"] = speed
+    ordered = sorted(rows.values(), key=lambda row: _ordinal(row["model"]))
+    ordered.sort(key=lambda row: (row["speed"] is None, -(row["speed"] or 0)))
+    for row in ordered:
+        row["shown"] = None if row["speed"] is None else round_half_away(row["speed"])
+    return ordered
+
+
 # ----------------------------------------------------------------------------- history (6.11)
 
 FIELDS = ("n", "outputSum", "durationMsSum", "latencyBins", "reasonN", "reasonOutput", "reasonDurationMsSum",
@@ -451,6 +498,9 @@ def compute(cases):
     out["range"] = [dict(c, expect=range_values(c["records"], c["first"], c["last"], c.get("source")))
                     for c in cases["range"]]
     out["thinking"] = compute_thinking(cases["thinking"])
+    out["readouts"] = [dict(c, expect={"firstLatency": set_first_latency(c["responses"], c["nowMs"]),
+                                       "models": running_models(c["agents"], c["responses"], c["nowMs"])})
+                       for c in cases.get("readouts", [])]
     return out
 
 
@@ -536,7 +586,7 @@ def counts(data):
     queries = sum(len(c["queries"]) for c in data["agents"])
     return {"latencyBins": len(data["latencyBins"]), "agentQueries": queries, "sets": len(data["sets"]),
             "days": len(data["days"]), "pooled": len(data["pooled"]), "baseline": len(data["baseline"]),
-            "range": len(data["range"]),
+            "range": len(data["range"]), "readouts": len(data.get("readouts", [])),
             "thinkingQueries": sum(len(c["queries"]) for k in ("windows", "agentWindows", "groupWindows",
                                                                 "modelWindows") for c in data["thinking"][k])}
 

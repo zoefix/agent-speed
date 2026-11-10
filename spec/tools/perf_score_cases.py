@@ -37,7 +37,8 @@ COMMENT = (
     "complete -> the history records per (day, source, model). `pooled`: records of one source -> the pooled "
     "evaluation. `baseline`: records -> the 14-day baseline of (source, model) before `today`. `range`: records -> "
     "the History window's rows over [first, last] (one source when `source` is given) with the daily trend. "
-    "`thinking`: the live thinking line (6.9 Live thinking). Numbers compare within 1e-9 (relative above 1).")
+    "`thinking`: the live thinking line (6.9 Live thinking). `readouts`: a set's first-content latency and running "
+    "models (6.9 Readouts of a set). Numbers compare within 1e-9 (relative above 1).")
 
 
 def gm(pairs):
@@ -457,9 +458,70 @@ def range_cases():
     ]
 
 
+def readouts_cases():
+    """6.9 *Readouts of a set*: the set's first-content latency and its running models."""
+    def running(aid, source, phase, last, model):
+        return dict(agent(aid, source, phase, last), model=model)
+    now = T0 + 100 * S
+    pooled_case = {
+        "name": "latency pooled over the agents' samples (an even count: the mean of the middle two); one model row "
+                "per running agent, fastest first",
+        "nowMs": now,
+        "agents": [running("a1", "claudeCode", "tools", 100 * S, OPUS), running("a2", "codex", "generating", 100 * S, GPT)],
+        # a1 latencies 800, 1200, 1500, 3000 and one response without firstMs; a2 600 and 900. Left out: c0 ends
+        # 31 minutes before now, r6 is not final. Pooled: 600 800 900 1200 1500 3000 → (900 + 1200) / 2 = 1050.
+        # recentSpeed: a1's newest three (r5, r4, r3) 1200 tokens over 12 s = 100; a2 530 over 5 s = 106.
+        "responses": [resp("r1", "a1", 0, 4 * S, 100, first=800), resp("r2", "a1", 10 * S, 14 * S, 200, first=11200),
+                      resp("r3", "a1", 20 * S, 24 * S, 300, first=21500), resp("r4", "a1", 30 * S, 34 * S, 400, first=33000),
+                      resp("r5", "a1", 40 * S, 44 * S, 500),
+                      resp("r6", "a1", 45 * S, 48 * S, 900, first=45100, final=False),
+                      resp("c0", "a2", -32 * MIN, -31 * MIN, 50, source="codex", model=GPT, first=-32 * MIN + 100),
+                      resp("c1", "a2", 50 * S, 52 * S, 200, source="codex", model=GPT, first=50600),
+                      resp("c2", "a2", 60 * S, 63 * S, 330, source="codex", model=GPT, first=60900)],
+        "want": {"firstLatency": {"ms": 1050, "n": 6},
+                 "models": [{"model": GPT, "speed": 106, "agents": 1, "shown": 106},
+                            {"model": OPUS, "speed": 100, "agents": 1, "shown": 100}]},
+    }
+    argon = "gemini-4-argon"
+    dedupe_case = {
+        "name": "fewer than three latencies: none; a model's row takes its fastest agent, idle, stale and model-less "
+                "agents are left out, a tie goes to the smaller model id, a model without a timed response is last",
+        "nowMs": now,
+        "agents": [running("b1", "claudeCode", "generating", 100 * S, OPUS), running("b2", "claudeCode", "tools", 100 * S, OPUS),
+                   running("b3", "gemini", "tools", 100 * S, argon), running("b4", "codex", "generating", 100 * S, GPT),
+                   running("b5", "claudeCode", "idle", 100 * S, SONNET),
+                   running("b6", "claudeCode", "generating", -201 * S, "claude-haiku-4-5"),
+                   running("b7", "codex", "tools", 100 * S, None)],
+        # b1 240 / 2 s = 120 and b2 400 / 5 s = 80: OPUS 120 over two agents; argon 240 / 2 s = 120, after OPUS by id;
+        # GPT has no response. b5 is idle, b6 stale (301 s since its last line), b7 has no model. One latency (x1).
+        "responses": [resp("x1", "b1", 0, 2 * S, 240, first=500), resp("x2", "b2", 10 * S, 15 * S, 400),
+                      resp("x3", "b3", 20 * S, 22 * S, 240, source="gemini", model=argon),
+                      resp("x5", "b5", 30 * S, 31 * S, 500, model=SONNET),
+                      resp("x6", "b6", -250 * S, -248 * S, 900, model="claude-haiku-4-5")],
+        "want": {"firstLatency": {"ms": None, "n": 1},
+                 "models": [{"model": OPUS, "speed": 120, "agents": 2, "shown": 120},
+                            {"model": argon, "speed": 120, "agents": 1, "shown": 120},
+                            {"model": GPT, "speed": None, "agents": 1, "shown": None}]},
+    }
+    later = T0 + 20 * MIN
+    window_case = {
+        "name": "recentSpeed reads the newest three measured responses that end in the last ten minutes",
+        "nowMs": later,
+        "agents": [running("d1", "claudeCode", "generating", 20 * MIN, OPUS)],
+        # y1 ends 11 min 58 s before now (out); y2 is the fourth newest (out); y3 + y4 + y5: 400 tokens over 8 s = 50.
+        "responses": [resp("y1", "d1", 8 * MIN, 8 * MIN + 2 * S, 5000), resp("y2", "d1", 11 * MIN, 11 * MIN + S, 1000),
+                      resp("y3", "d1", 12 * MIN, 12 * MIN + 2 * S, 100), resp("y4", "d1", 13 * MIN, 13 * MIN + 2 * S, 100),
+                      resp("y5", "d1", 14 * MIN, 14 * MIN + 4 * S, 200)],
+        "want": {"firstLatency": {"ms": None, "n": 0},
+                 "models": [{"model": OPUS, "speed": 50, "agents": 1, "shown": 50}]},
+    }
+    return [pooled_case, dedupe_case, window_case]
+
+
 def cases():
     return {"latencyBins": latency_bins(), "agents": agents_cases(), "sets": sets_cases(), "days": days_cases(),
-            "pooled": pooled_cases(), "baseline": baseline_cases(), "range": range_cases(), "thinking": THINKING}
+            "pooled": pooled_cases(), "baseline": baseline_cases(), "range": range_cases(), "thinking": THINKING,
+            "readouts": readouts_cases()}
 
 
 # ----------------------------------------------------------------------------- checking and writing

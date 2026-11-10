@@ -2484,6 +2484,12 @@
     "en": "Thinking Speed",
     "ja": "思考速度"
   },
+  "character.readouts.latency": {
+    "zh-Hant": "首字延遲",
+    "zh-Hans": "首字延迟",
+    "en": "First-Token Latency",
+    "ja": "初回出力までの時間"
+  },
   "character.readouts.network": {
     "zh-Hant": "網路速度",
     "zh-Hans": "网络速度",
@@ -2502,11 +2508,29 @@
     "en": "Today & Agents",
     "ja": "今日の使用量と agent"
   },
+  "character.readouts.models": {
+    "zh-Hant": "執行中的模型",
+    "zh-Hans": "运行中的模型",
+    "en": "Running Models",
+    "ja": "実行中のモデル"
+  },
   "character.readouts.model": {
     "zh-Hant": "最快的模型",
     "zh-Hans": "最快的模型",
     "en": "Fastest Model",
     "ja": "いちばん速いモデル"
+  },
+  "character.latency.glyph": {
+    "zh-Hant": "首字",
+    "zh-Hans": "首字",
+    "en": "TTFT",
+    "ja": "初回"
+  },
+  "character.models.more": {
+    "zh-Hant": "+%@ 個模型",
+    "zh-Hans": "+%@ 个模型",
+    "en": "+%@ more",
+    "ja": "ほか %@ 件"
   },
   "character.readouts.networkScope": {
     "zh-Hant": "網路速度範圍",
@@ -4115,6 +4139,24 @@
     "zh-Hans": "性能 %@，思考每秒 %@ 个 token",
     "en": "performance %@, thinking %@ tokens per second",
     "ja": "性能 %@、思考 毎秒 %@ トークン"
+  },
+  "a11y.orb.latency": {
+    "zh-Hant": "首字延遲 %@",
+    "zh-Hans": "首字延迟 %@",
+    "en": "first-token latency %@",
+    "ja": "初回出力まで %@"
+  },
+  "a11y.orb.models": {
+    "zh-Hant": "執行中的模型：%@",
+    "zh-Hans": "运行中的模型：%@",
+    "en": "running models: %@",
+    "ja": "実行中のモデル：%@"
+  },
+  "a11y.orb.modelSpeed": {
+    "zh-Hant": "%@ 每秒 %@ 個 token",
+    "zh-Hans": "%@ 每秒 %@ 个 token",
+    "en": "%@ at %@ tokens per second",
+    "ja": "%@ 毎秒 %@ トークン"
   },
   "intel.none": {
     "zh-Hant": "性能：尚無分數",
