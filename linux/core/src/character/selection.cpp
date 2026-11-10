@@ -23,9 +23,11 @@ const char* key(CharacterReadout r) {
     switch (r) {
         case CharacterReadout::Intelligence: return "intelligence";
         case CharacterReadout::Thinking: return "thinking";
+        case CharacterReadout::Latency: return "latency";
         case CharacterReadout::Network: return "network";
         case CharacterReadout::Cost: return "cost";
         case CharacterReadout::Agents: return "agents";
+        case CharacterReadout::Models: return "models";
         case CharacterReadout::Model: return "model";
     }
     return "model";
@@ -35,9 +37,11 @@ const char* titleKey(CharacterReadout r) {
     switch (r) {
         case CharacterReadout::Intelligence: return "character.readouts.intel";
         case CharacterReadout::Thinking: return "character.readouts.thinking";
+        case CharacterReadout::Latency: return "character.readouts.latency";
         case CharacterReadout::Network: return "character.readouts.network";
         case CharacterReadout::Cost: return "character.readouts.cost";
         case CharacterReadout::Agents: return "character.readouts.agents";
+        case CharacterReadout::Models: return "character.readouts.models";
         case CharacterReadout::Model: return "character.readouts.model";
     }
     return "character.readouts.model";
@@ -47,9 +51,11 @@ bool CharacterReadouts::get(CharacterReadout r) const {
     switch (r) {
         case CharacterReadout::Intelligence: return intelligence;
         case CharacterReadout::Thinking: return thinking;
+        case CharacterReadout::Latency: return latency;
         case CharacterReadout::Network: return network;
         case CharacterReadout::Cost: return cost;
         case CharacterReadout::Agents: return agents;
+        case CharacterReadout::Models: return models;
         case CharacterReadout::Model: return model;
     }
     return false;
@@ -59,9 +65,11 @@ void CharacterReadouts::set(CharacterReadout r, bool on) {
     switch (r) {
         case CharacterReadout::Intelligence: intelligence = on; break;
         case CharacterReadout::Thinking: thinking = on; break;
+        case CharacterReadout::Latency: latency = on; break;
         case CharacterReadout::Network: network = on; break;
         case CharacterReadout::Cost: cost = on; break;
         case CharacterReadout::Agents: agents = on; break;
+        case CharacterReadout::Models: models = on; break;
         case CharacterReadout::Model: model = on; break;
     }
 }

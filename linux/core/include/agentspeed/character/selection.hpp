@@ -17,26 +17,28 @@ bool isValidCharacterID(std::string_view id);
 std::optional<std::string> cleanCharacterID(std::string_view id);
 
 // One switch of `CharacterReadouts`, in the menu's and editor's order.
-enum class CharacterReadout { Intelligence, Thinking, Network, Cost, Agents, Model };
+enum class CharacterReadout { Intelligence, Thinking, Latency, Network, Cost, Agents, Models, Model };
 
-constexpr std::array<CharacterReadout, 6> kCharacterReadouts = {
-    CharacterReadout::Intelligence, CharacterReadout::Thinking, CharacterReadout::Network,
-    CharacterReadout::Cost,         CharacterReadout::Agents,   CharacterReadout::Model};
+constexpr std::array<CharacterReadout, 8> kCharacterReadouts = {
+    CharacterReadout::Intelligence, CharacterReadout::Thinking, CharacterReadout::Latency, CharacterReadout::Network,
+    CharacterReadout::Cost,         CharacterReadout::Agents,   CharacterReadout::Models,  CharacterReadout::Model};
 
-// The JSON key (`intelligence`, `thinking`, `network`, `cost`, `agents`, `model`).
+// The JSON key (`intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `model`).
 const char* key(CharacterReadout r);
-// `character.readouts.intel`, `.thinking`, `.network`, `.cost`, `.agents`, `.model`.
+// `character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`, `.model`.
 const char* titleKey(CharacterReadout r);
 
-// The cards a `character` orb floats beside her: the speed always shows; each card has its own switch. Every card is
-// on for a new orb except the fastest model's name.
+// The cards a `character` orb floats beside her: the speed always shows; each card (and the 性能 card's 首字 row) has
+// its own switch. Every one is on for a new orb, and for one saved before it existed, except the fastest model's name.
 struct CharacterReadouts {
     bool model = false;
     bool intelligence = true;
     bool thinking = true;
+    bool latency = true;
     bool network = true;
     bool cost = true;
     bool agents = true;
+    bool models = true;
 
     bool operator==(const CharacterReadouts&) const = default;
     bool isDefault() const { return *this == CharacterReadouts{}; }

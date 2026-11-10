@@ -513,6 +513,8 @@ void OrbManager::setCharacterReadout(const QString& id, const QString& key, bool
     store_.update(c);
 }
 
+QVariantList OrbManager::characterReadoutItems() const { return OrbConfig::readoutItems(); }
+
 void OrbManager::setCharacters(CharacterLibrary* characters) {
     characters_ = characters;
     for (auto& [id, orb] : orbs_) orb.window->setCharacters(characters_);

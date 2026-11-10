@@ -2,9 +2,10 @@ import QtQuick
 import QtQuick.Controls
 import QtQuick.Layouts
 
-// The `character` orb's cards (DESIGN 2a.6, Readouts): a checkbox per card in the menu's order, the network card's
-// scope under them, and `character.readouts.hint`. It takes the place of the unit and the two-line readout: the
-// character shows the speed in tok/s and everything else on its own cards. Each change applies and saves at once.
+// The `character` orb's cards (DESIGN 2a.6, Readouts): a checkbox per card and the 首字 row, in the menus' order, the
+// network card's scope under them, and `character.readouts.hint`. It takes the place of the unit and the two-line
+// readout: the character shows the speed in tok/s and everything else on its own cards. Each change applies and saves
+// at once.
 SettingsGroup {
     id: group
     property var orb: null
@@ -13,14 +14,8 @@ SettingsGroup {
     footnote: S.tr2(S.rev, "character.readouts.hint")
 
     Repeater {
-        model: [
-            { key: "intelligence", title: "character.readouts.intel" },
-            { key: "thinking", title: "character.readouts.thinking" },
-            { key: "network", title: "character.readouts.network" },
-            { key: "cost", title: "character.readouts.cost" },
-            { key: "agents", title: "character.readouts.agents" },
-            { key: "model", title: "character.readouts.model" }
-        ]
+        // The menus' order, from the orb model: intel, thinking, latency, network, cost, agents, models, model.
+        model: orbs.characterReadoutItems()
         delegate: SettingsRow {
             id: readoutRow
             required property var modelData

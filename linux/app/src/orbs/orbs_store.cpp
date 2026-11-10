@@ -4,6 +4,7 @@
 #include <QJsonDocument>
 #include <QSettings>
 #include <QUuid>
+#include <QVariantMap>
 #include <algorithm>
 #include <cmath>
 
@@ -92,6 +93,15 @@ QJsonObject OrbConfig::readoutsToJson(const agentspeed::character::CharacterRead
         o.insert(QLatin1String(agentspeed::character::key(readout)), r.get(readout));
     }
     return o;
+}
+
+QVariantList OrbConfig::readoutItems() {
+    QVariantList out;
+    for (const auto readout : agentspeed::character::kCharacterReadouts) {
+        out.push_back(QVariantMap{{QStringLiteral("key"), QLatin1String(agentspeed::character::key(readout))},
+                                  {QStringLiteral("title"), QLatin1String(agentspeed::character::titleKey(readout))}});
+    }
+    return out;
 }
 
 OrbConfig OrbConfig::childOf(const OrbConfig& from, const QString& id) {
