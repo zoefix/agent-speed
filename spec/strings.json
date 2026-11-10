@@ -7621,9 +7621,243 @@
     "ja": "%@ に書き込めません。何も変更していません"
   },
   "privacy.quota": {
-    "zh-Hant": "額度：Codex 的額度來自它的對話紀錄；Claude Desktop 的額度來自 Desktop 自己留在本機的用量快取；Claude Code 的額度只在你開啟後，透過它的狀態列取得。Agent Speed 不讀取任何 Claude 登入憑證或權杖，不向 Claude 傳送任何請求；額度不會上報，也不會傳到其他裝置。",
-    "zh-Hans": "额度：Codex 的额度来自它的对话记录；Claude Desktop 的额度来自 Desktop 自己留在本机的用量缓存；Claude Code 的额度只在你开启后，通过它的状态栏获取。Agent Speed 不读取任何 Claude 登录凭据或令牌，不向 Claude 发送任何请求；额度不会上报，也不会传到其他设备。",
-    "en": "Quotas: Codex's come from its session logs, Claude Desktop's from the usage response Desktop keeps in its own cache on this computer, and Claude Code's, only once you turn it on, from its status line. Agent Speed never reads Claude credentials or tokens and never sends a request to Claude. Quotas are not reported or sent to other devices.",
-    "ja": "利用枠：Codex の利用枠はセッション記録から、Claude Desktop の利用枠は Desktop がこのコンピュータに残す使用量のキャッシュから、Claude Code の利用枠はオンにした場合だけステータスラインから取得します。Agent Speed は Claude のサインイン情報やトークンを読み取らず、Claude にリクエストを送ることもありません。利用枠は送信されず、ほかのデバイスにも渡りません。"
+    "zh-Hant": "額度：Codex 的額度來自它的對話紀錄；Claude Desktop 的額度來自 Desktop 自己留在本機的用量快取；Claude Code 的額度只在你開啟後，透過它的狀態列取得。Agent Speed 不讀取任何 Claude 登入憑證或權杖，也不向 Claude 傳送任何請求。其他 agent 的額度依各自的開關，讀取本機資料，或用該 agent 自己的登入、你貼上的 API Key，或你同意後讀取的瀏覽器登入，只向該 agent 的廠商查詢；這些登入資料只放在記憶體裡、用完即丟。額度不會上報，也不會傳到其他裝置。",
+    "zh-Hans": "额度：Codex 的额度来自它的对话记录；Claude Desktop 的额度来自 Desktop 自己留在本机的用量缓存；Claude Code 的额度只在你开启后，通过它的状态栏获取。Agent Speed 不读取任何 Claude 登录凭据或令牌，也不向 Claude 发送任何请求。其他 agent 的额度按各自的开关，读取本机数据，或用该 agent 自己的登录、你粘贴的 API Key，或你同意后读取的浏览器登录，只向该 agent 的厂商查询；这些登录数据只放在内存里、用完即丢。额度不会上报，也不会传到其他设备。",
+    "en": "Quotas: Codex's come from its session logs, Claude Desktop's from the usage response Desktop keeps in its own cache on this computer, and Claude Code's, only once you turn it on, from its status line. Agent Speed never reads Claude credentials or tokens and never sends a request to Claude. Other agents' quotas follow their own switches: local data, or a request to that agent's own vendor with the agent's sign-in, an API key you pasted, or, once you allow it, your browser sign-in. Those credentials stay in memory and are dropped after use. Quotas are not reported or sent to other devices.",
+    "ja": "利用枠：Codex の利用枠はセッション記録から、Claude Desktop の利用枠は Desktop がこのコンピュータに残す使用量のキャッシュから、Claude Code の利用枠はオンにした場合だけステータスラインから取得します。Agent Speed は Claude のサインイン情報やトークンを読み取らず、Claude にリクエストを送ることもありません。ほかの agent の利用枠はそれぞれのスイッチに従い、ローカルのデータを読むか、その agent 自身のサインイン、貼り付けた API キー、または許可したブラウザのサインインで、その agent のベンダーにだけ問い合わせます。これらの資格情報はメモリ上にだけ置き、使い終わったら破棄します。利用枠は送信されず、ほかのデバイスにも渡りません。"
+  },
+  "quota.window.month": {
+    "zh-Hant": "月",
+    "zh-Hans": "月",
+    "en": "mo",
+    "ja": "月"
+  },
+  "quota.window.credits": {
+    "zh-Hant": "點數",
+    "zh-Hans": "积分",
+    "en": "credits",
+    "ja": "クレジット"
+  },
+  "settings.quota.unverified": {
+    "zh-Hant": "依開源工具 Tokei、CodexBar 的做法實作，尚未以真實帳號驗證；數字有誤請回報。",
+    "zh-Hans": "依开源工具 Tokei、CodexBar 的做法实现，尚未用真实账号验证；数字有误请反馈。",
+    "en": "Built the way the open-source tools Tokei and CodexBar do it and not yet checked with a real account; please report wrong numbers.",
+    "ja": "オープンソースの Tokei と CodexBar の方法で実装しており、実際のアカウントではまだ確認していません。数値がおかしい場合はお知らせください。"
+  },
+  "settings.quota.grokBuild": {
+    "zh-Hant": "顯示 Grok Build 額度",
+    "zh-Hans": "显示 Grok Build 额度",
+    "en": "Show Grok Build quota",
+    "ja": "Grok Build の利用枠を表示"
+  },
+  "settings.quota.grokBuild.hint": {
+    "zh-Hant": "讀取 Grok Build 寫在本機日誌裡的帳單資訊，不連網。",
+    "zh-Hans": "读取 Grok Build 写在本机日志里的账单信息，不联网。",
+    "en": "Reads the billing details Grok Build writes to its local log, with no network.",
+    "ja": "Grok Build がローカルのログに書く請求情報を読み取ります。通信はしません。"
+  },
+  "settings.quota.grokBuildLive": {
+    "zh-Hant": "用 Grok Build 的登入向 xAI 即時查詢",
+    "zh-Hans": "用 Grok Build 的登录向 xAI 实时查询",
+    "en": "Ask xAI live with Grok Build's sign-in",
+    "ja": "Grok Build のサインインで xAI にリアルタイムで問い合わせ"
+  },
+  "settings.quota.devin": {
+    "zh-Hant": "顯示 Devin 額度",
+    "zh-Hans": "显示 Devin 额度",
+    "en": "Show Devin quota",
+    "ja": "Devin の利用枠を表示"
+  },
+  "settings.quota.devin.hint": {
+    "zh-Hant": "讀取 Devin 桌面版啟動時存在本機的方案快取，不連網；只用 CLI 時沒有資料。",
+    "zh-Hans": "读取 Devin 桌面版启动时存在本机的方案缓存，不联网；只用 CLI 时没有数据。",
+    "en": "Reads the plan Devin Desktop caches on this computer when it starts, with no network; CLI-only users have none.",
+    "ja": "Devin デスクトップ版が起動時にこのコンピュータに保存するプラン情報を読み取ります。通信はしません。CLI だけを使っている場合はデータがありません。"
+  },
+  "settings.quota.antigravity": {
+    "zh-Hant": "顯示 Antigravity 額度",
+    "zh-Hans": "显示 Antigravity 额度",
+    "en": "Show Antigravity quota",
+    "ja": "Antigravity の利用枠を表示"
+  },
+  "settings.quota.antigravity.hint": {
+    "zh-Hant": "只詢問本機正在執行的 Antigravity 語言伺服器，不會啟動 Antigravity。",
+    "zh-Hans": "只询问本机正在运行的 Antigravity 语言服务器，不会启动 Antigravity。",
+    "en": "Asks only the Antigravity language server already running on this computer; never starts Antigravity.",
+    "ja": "このコンピュータで動作中の Antigravity 言語サーバーにだけ問い合わせます。Antigravity を起動することはありません。"
+  },
+  "settings.quota.kimi": {
+    "zh-Hant": "顯示 Kimi Code 額度",
+    "zh-Hans": "显示 Kimi Code 额度",
+    "en": "Show Kimi Code quota",
+    "ja": "Kimi Code の利用枠を表示"
+  },
+  "settings.quota.kimi.hint": {
+    "zh-Hant": "用 Kimi Code CLI 自己的登入向 api.kimi.com 查詢；只讀取登入，不會更新它。",
+    "zh-Hans": "用 Kimi Code CLI 自己的登录向 api.kimi.com 查询；只读取登录，不会刷新它。",
+    "en": "Asks api.kimi.com with the Kimi Code CLI's own sign-in, which is only read, never refreshed.",
+    "ja": "Kimi Code CLI 自身のサインインで api.kimi.com に問い合わせます。サインイン情報は読み取るだけで更新しません。"
+  },
+  "settings.quota.gemini": {
+    "zh-Hant": "顯示 Gemini CLI 額度",
+    "zh-Hans": "显示 Gemini CLI 额度",
+    "en": "Show Gemini CLI quota",
+    "ja": "Gemini CLI の利用枠を表示"
+  },
+  "settings.quota.gemini.hint": {
+    "zh-Hant": "用 Gemini CLI 自己的 Google 登入向 Google 查詢；個人帳號自 2026 年 6 月起已無法使用 Gemini CLI 登入。",
+    "zh-Hans": "用 Gemini CLI 自己的 Google 登录向 Google 查询；个人账号自 2026 年 6 月起已无法使用 Gemini CLI 登录。",
+    "en": "Asks Google with the Gemini CLI's own Google sign-in. Individual accounts can no longer sign in to Gemini CLI since June 2026.",
+    "ja": "Gemini CLI 自身の Google サインインで Google に問い合わせます。個人アカウントは 2026 年 6 月から Gemini CLI にサインインできなくなっています。"
+  },
+  "settings.quota.droid": {
+    "zh-Hant": "顯示 Factory Droid 額度",
+    "zh-Hans": "显示 Factory Droid 额度",
+    "en": "Show Factory Droid quota",
+    "ja": "Factory Droid の利用枠を表示"
+  },
+  "settings.quota.droid.hint": {
+    "zh-Hant": "用 FACTORY_API_KEY（環境變數或 ~/.factory/.env）向 api.factory.ai 查詢。",
+    "zh-Hans": "用 FACTORY_API_KEY（环境变量或 ~/.factory/.env）向 api.factory.ai 查询。",
+    "en": "Asks api.factory.ai with FACTORY_API_KEY (from the environment or ~/.factory/.env).",
+    "ja": "FACTORY_API_KEY（環境変数または ~/.factory/.env）で api.factory.ai に問い合わせます。"
+  },
+  "settings.quota.zcode": {
+    "zh-Hant": "顯示 ZCode 額度",
+    "zh-Hans": "显示 ZCode 额度",
+    "en": "Show ZCode quota",
+    "ja": "ZCode の利用枠を表示"
+  },
+  "settings.quota.zcode.hint": {
+    "zh-Hant": "貼上 GLM Coding Plan 的 API Key，它會存在系統的鑰匙圈，只用來向智譜查詢額度。",
+    "zh-Hans": "粘贴 GLM Coding Plan 的 API Key，它会存在系统的钥匙串，只用来向智谱查询额度。",
+    "en": "Paste your GLM Coding Plan API key. It is kept in the system keychain and only used to ask Zhipu for your quota.",
+    "ja": "GLM Coding Plan の API キーを貼り付けてください。システムのキーチェーンに保存し、Zhipu への利用枠の問い合わせにだけ使います。"
+  },
+  "settings.quota.zcode.key": {
+    "zh-Hant": "API Key",
+    "zh-Hans": "API Key",
+    "en": "API key",
+    "ja": "API キー"
+  },
+  "settings.quota.zcode.keyPlaceholder": {
+    "zh-Hant": "貼上 API Key",
+    "zh-Hans": "粘贴 API Key",
+    "en": "Paste the API key",
+    "ja": "API キーを貼り付け"
+  },
+  "settings.quota.zcode.saved": {
+    "zh-Hant": "已存在鑰匙圈",
+    "zh-Hans": "已存入钥匙串",
+    "en": "Saved in the keychain",
+    "ja": "キーチェーンに保存済み"
+  },
+  "settings.quota.zcode.remove": {
+    "zh-Hant": "移除",
+    "zh-Hans": "移除",
+    "en": "Remove",
+    "ja": "削除"
+  },
+  "settings.quota.zcode.region": {
+    "zh-Hant": "區域",
+    "zh-Hans": "区域",
+    "en": "Region",
+    "ja": "地域"
+  },
+  "settings.quota.zcode.regionGlobal": {
+    "zh-Hant": "國際版（z.ai）",
+    "zh-Hans": "国际版（z.ai）",
+    "en": "International (z.ai)",
+    "ja": "国際版（z.ai）"
+  },
+  "settings.quota.zcode.regionCn": {
+    "zh-Hant": "中國版（bigmodel.cn）",
+    "zh-Hans": "中国版（bigmodel.cn）",
+    "en": "China (bigmodel.cn)",
+    "ja": "中国版（bigmodel.cn）"
+  },
+  "settings.quota.qoder": {
+    "zh-Hant": "顯示 Qoder 額度（讀取瀏覽器登入）",
+    "zh-Hans": "显示 Qoder 额度（读取浏览器登录）",
+    "en": "Show Qoder quota (reads the browser sign-in)",
+    "ja": "Qoder の利用枠を表示（ブラウザのサインインを読み取り）"
+  },
+  "settings.quota.workbuddy": {
+    "zh-Hant": "顯示 WorkBuddy 額度（讀取瀏覽器登入）",
+    "zh-Hans": "显示 WorkBuddy 额度（读取浏览器登录）",
+    "en": "Show WorkBuddy quota (reads the browser sign-in)",
+    "ja": "WorkBuddy の利用枠を表示（ブラウザのサインインを読み取り）"
+  },
+  "settings.quota.cookies.hint": {
+    "zh-Hant": "從這台電腦的瀏覽器讀取 %@ 的登入，向 %@ 查詢額度；只放在記憶體裡，用完即丟。",
+    "zh-Hans": "从这台电脑的浏览器读取 %@ 的登录，向 %@ 查询额度；只放在内存里，用完即丢。",
+    "en": "Reads your %@ sign-in from the browsers on this computer to ask %@ for your quota; kept in memory and dropped after use.",
+    "ja": "このコンピュータのブラウザから %@ のサインインを読み取り、%@ に利用枠を問い合わせます。メモリ上にだけ置き、使い終わったら破棄します。"
+  },
+  "settings.quota.cookies.confirm.title": {
+    "zh-Hant": "讀取 %@ 的瀏覽器登入？",
+    "zh-Hans": "读取 %@ 的浏览器登录？",
+    "en": "Read your %@ sign-in from the browser?",
+    "ja": "ブラウザから %@ のサインインを読み取りますか？"
+  },
+  "settings.quota.cookies.confirm.message": {
+    "zh-Hant": "Agent Speed 會從這台電腦的瀏覽器讀取 %@ 的 Cookie，只用來向 %@ 查詢你的額度，只放在記憶體裡，用完即丟，不會存檔或傳到其他地方。macOS 會為每個瀏覽器詢問一次是否允許使用它的「Safe Storage」鑰匙圈項目，拒絕就略過那個瀏覽器。",
+    "zh-Hans": "Agent Speed 会从这台电脑的浏览器读取 %@ 的 Cookie，只用来向 %@ 查询你的额度，只放在内存里，用完即丢，不会存盘或传到其他地方。macOS 会为每个浏览器询问一次是否允许使用它的「Safe Storage」钥匙串项目，拒绝就跳过那个浏览器。",
+    "en": "Agent Speed will read the %@ cookies from the browsers on this computer, only to ask %@ for your quota. They stay in memory, are dropped after use, and are never saved or sent anywhere else. macOS asks once per browser whether to allow its “Safe Storage” keychain item; refusing skips that browser.",
+    "ja": "Agent Speed はこのコンピュータのブラウザから %@ の Cookie を読み取り、%@ に利用枠を問い合わせるためだけに使います。Cookie はメモリ上にだけ置き、使い終わったら破棄し、保存したりほかへ送ったりしません。macOS はブラウザごとに「Safe Storage」キーチェーン項目の使用を許可するか一度だけ確認します。拒否したブラウザは使いません。"
+  },
+  "settings.quota.cookies.confirm.ok": {
+    "zh-Hant": "允許讀取",
+    "zh-Hans": "允许读取",
+    "en": "Allow",
+    "ja": "許可"
+  },
+  "settings.quota.status.ok": {
+    "zh-Hant": "已更新 %@",
+    "zh-Hans": "已更新 %@",
+    "en": "Updated %@",
+    "ja": "%@ に更新"
+  },
+  "settings.quota.status.noCredential": {
+    "zh-Hant": "找不到登入資料",
+    "zh-Hans": "找不到登录数据",
+    "en": "No sign-in found",
+    "ja": "サインイン情報が見つかりません"
+  },
+  "settings.quota.status.expired": {
+    "zh-Hant": "登入已過期，等 %@ 重新整理後再查詢",
+    "zh-Hans": "登录已过期，等 %@ 刷新后再查询",
+    "en": "The sign-in has expired; waiting for %@ to renew it",
+    "ja": "サインインの期限が切れています。%@ が更新するのを待っています"
+  },
+  "settings.quota.status.denied": {
+    "zh-Hant": "%@ 拒絕了請求，登入變更後再試",
+    "zh-Hans": "%@ 拒绝了请求，登录变更后再试",
+    "en": "%@ refused the request; trying again once the sign-in changes",
+    "ja": "%@ がリクエストを拒否しました。サインインが変わったら再試行します"
+  },
+  "settings.quota.status.failed": {
+    "zh-Hant": "上次查詢失敗，稍後重試",
+    "zh-Hans": "上次查询失败，稍后重试",
+    "en": "The last request failed; trying again later",
+    "ja": "前回の問い合わせに失敗しました。あとで再試行します"
+  },
+  "settings.quota.status.noBrowser": {
+    "zh-Hant": "在瀏覽器裡找不到 %@ 的登入",
+    "zh-Hans": "在浏览器里找不到 %@ 的登录",
+    "en": "No %@ sign-in found in your browsers",
+    "ja": "ブラウザに %@ のサインインが見つかりません"
+  },
+  "settings.quota.status.networkOff": {
+    "zh-Hant": "網路已關閉（關於 → 網路）",
+    "zh-Hans": "网络已关闭（关于 → 网络）",
+    "en": "Network is off (About → Network)",
+    "ja": "ネットワークがオフです（情報 → ネットワーク）"
+  },
+  "settings.quota.status.notRunning": {
+    "zh-Hant": "%@ 沒有在執行",
+    "zh-Hans": "%@ 没有在运行",
+    "en": "%@ is not running",
+    "ja": "%@ は実行されていません"
   }
 }

@@ -1083,6 +1083,13 @@
     "passed": true
    },
    {
+    "label": "1d",
+    "percent": 50,
+    "bar": 49.5,
+    "resetsAtMs": null,
+    "passed": false
+   },
+   {
     "label": "7d",
     "percent": 94,
     "bar": 94.0,
@@ -1100,13 +1107,6 @@
     "label": "Opus 7d",
     "percent": 12,
     "bar": 12.0,
-    "resetsAtMs": null,
-    "passed": false
-   },
-   {
-    "label": "1d",
-    "percent": 50,
-    "bar": 49.5,
     "resetsAtMs": null,
     "passed": false
    }
@@ -1308,7 +1308,12 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "5h"
+   {
+    "zh-Hant": "5h",
+    "zh-Hans": "5h",
+    "en": "5h",
+    "ja": "5h"
+   }
   ],
   [
    {
@@ -1318,7 +1323,12 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "7d"
+   {
+    "zh-Hant": "7d",
+    "zh-Hans": "7d",
+    "en": "7d",
+    "ja": "7d"
+   }
   ],
   [
    {
@@ -1328,7 +1338,12 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "Fable 7d"
+   {
+    "zh-Hant": "Fable 7d",
+    "zh-Hans": "Fable 7d",
+    "en": "Fable 7d",
+    "ja": "Fable 7d"
+   }
   ],
   [
    {
@@ -1338,7 +1353,12 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "1d"
+   {
+    "zh-Hant": "1d",
+    "zh-Hans": "1d",
+    "en": "1d",
+    "ja": "1d"
+   }
   ],
   [
    {
@@ -1348,7 +1368,12 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "2h"
+   {
+    "zh-Hant": "2h",
+    "zh-Hans": "2h",
+    "en": "2h",
+    "ja": "2h"
+   }
   ],
   [
    {
@@ -1358,9 +1383,806 @@
     "usedPercent": 1,
     "resetsAtMs": null
    },
-   "45m"
+   {
+    "zh-Hant": "45m",
+    "zh-Hans": "45m",
+    "en": "45m",
+    "ja": "45m"
+   }
+  ],
+  [
+   {
+    "kind": "month",
+    "name": null,
+    "minutes": 43200,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   {
+    "zh-Hant": "月",
+    "zh-Hans": "月",
+    "en": "mo",
+    "ja": "月"
+   }
+  ],
+  [
+   {
+    "kind": "credits",
+    "name": null,
+    "minutes": null,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   {
+    "zh-Hant": "點數",
+    "zh-Hans": "积分",
+    "en": "credits",
+    "ja": "クレジット"
+   }
+  ],
+  [
+   {
+    "kind": "fiveHour",
+    "name": "Gemini",
+    "minutes": 300,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   {
+    "zh-Hant": "Gemini 5h",
+    "zh-Hans": "Gemini 5h",
+    "en": "Gemini 5h",
+    "ja": "Gemini 5h"
+   }
+  ],
+  [
+   {
+    "kind": "month",
+    "name": "MCP",
+    "minutes": 43200,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   {
+    "zh-Hant": "MCP 月",
+    "zh-Hans": "MCP 月",
+    "en": "MCP mo",
+    "ja": "MCP 月"
+   }
   ]
  ],
+ "order": {
+  "windows": [
+   {
+    "kind": "month",
+    "name": null,
+    "minutes": 43200,
+    "usedPercent": 5,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "sevenDay",
+    "name": "Claude/GPT",
+    "minutes": 10080,
+    "usedPercent": 4,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "credits",
+    "name": null,
+    "minutes": null,
+    "usedPercent": 3,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "fiveHour",
+    "name": "Gemini",
+    "minutes": 300,
+    "usedPercent": 2,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "sevenDay",
+    "name": null,
+    "minutes": 10080,
+    "usedPercent": 1,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "fiveHour",
+    "name": "Claude/GPT",
+    "minutes": 300,
+    "usedPercent": 6,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "other",
+    "name": null,
+    "minutes": 1440,
+    "usedPercent": 7,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "sevenDay",
+    "name": "Gemini",
+    "minutes": 10080,
+    "usedPercent": 8,
+    "resetsAtMs": null
+   },
+   {
+    "kind": "fiveHour",
+    "name": null,
+    "minutes": 300,
+    "usedPercent": 9,
+    "resetsAtMs": null
+   }
+  ],
+  "expected": [
+   "5h",
+   "1d",
+   "7d",
+   "mo",
+   "credits",
+   "Claude/GPT 5h",
+   "Claude/GPT 7d",
+   "Gemini 5h",
+   "Gemini 7d"
+  ]
+ },
+ "vendors": {
+  "grokLog": {
+   "lines": [
+    "partial line",
+    "{\"ts\": \"2026-11-10T10:00:00Z\", \"msg\": \"billing: fetched credits config\", \"ctx\": {\"config\": {\"creditUsagePercent\": 12.5, \"currentPeriod\": {\"type\": \"PERIOD_TYPE_WEEKLY\", \"start\": \"2026-11-08T00:00:00Z\", \"end\": \"2026-11-15T00:00:00Z\"}}}}",
+    "{\"ts\": \"2026-11-10T12:00:00Z\", \"msg\": \"billing: fetched credits config\", \"ctx\": {\"config\": {\"isUnifiedBillingUser\": true, \"currentPeriod\": {\"type\": \"PERIOD_TYPE_MONTHLY\", \"start\": \"2026-11-01T00:00:00Z\", \"end\": \"2026-12-01T00:00:00Z\"}}}}",
+    "{\"ts\": \"2026-11-10T11:00:00Z\", \"msg\": \"other\"}"
+   ],
+   "expected": {
+    "observedMs": 1794312000000,
+    "windows": [
+     {
+      "kind": "month",
+      "name": null,
+      "minutes": 43200,
+      "usedPercent": 0.0,
+      "resetsAtMs": 1796083200000
+     }
+    ]
+   }
+  },
+  "grokApi": {
+   "body": {
+    "config": {
+     "creditUsagePercent": 64,
+     "billingPeriodEnd": "2026-11-12T00:00:00Z"
+    }
+   },
+   "expected": [
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 64.0,
+     "resetsAtMs": 1794441600000
+    }
+   ]
+  },
+  "grokUnknown": {
+   "config": {
+    "currentPeriod": {
+     "type": "WEEKLY"
+    }
+   },
+   "expected": []
+  },
+  "devin": {
+   "rows": [
+    [
+     "windsurf.reactSettings.cachedPlanInfoData:user-a",
+     "{\"endTimestamp\": 1790000000, \"dailyRemainingPercent\": 90, \"dailyResetAtUnix\": 1794400000, \"weeklyRemainingPercent\": 10, \"weeklyResetAtUnix\": 1794800000000}"
+    ],
+    [
+     "windsurf.reactSettings.cachedPlanInfoData:user-b",
+     "{\"endTimestamp\": 1800000000, \"dailyRemainingPercent\": 75, \"dailyResetAtUnix\": 1794400000, \"hideDailyQuota\": false, \"weeklyRemainingPercent\": 40, \"weeklyResetAtUnix\": 1794800000, \"hideWeeklyQuota\": true, \"accountIdentityText\": \"x\"}"
+    ],
+    [
+     "other",
+     "not json"
+    ]
+   ],
+   "expected": [
+    {
+     "kind": "other",
+     "name": null,
+     "minutes": 1440,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794400000000
+    }
+   ]
+  },
+  "antigravity": {
+   "body": {
+    "response": {
+     "groups": [
+      {
+       "displayName": "Gemini models",
+       "buckets": [
+        {
+         "bucketId": "gemini_5h",
+         "remainingFraction": 0.75,
+         "resetTime": "2026-11-10T22:00:00Z"
+        },
+        {
+         "window": "WEEKLY",
+         "remainingFraction": {
+          "case": "remainingFraction",
+          "value": 0.4
+         },
+         "resetTime": "2026-11-12T00:00:00Z"
+        }
+       ]
+      },
+      {
+       "displayName": "Claude and GPT (third party)",
+       "buckets": [
+        {
+         "displayName": "Five hour",
+         "remaining": {
+          "remainingFraction": 1.0
+         }
+        },
+        {
+         "bucketId": "weekly",
+         "remainingFraction": 0.1,
+         "disabled": true
+        }
+       ]
+      },
+      {
+       "displayName": "Gemini 4 Argon",
+       "buckets": [
+        {
+         "window": "7d",
+         "remainingFraction": 0.95,
+         "resetTime": 1794800000
+        }
+       ]
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": "Gemini",
+     "minutes": 300,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794348000000
+    },
+    {
+     "kind": "sevenDay",
+     "name": "Gemini",
+     "minutes": 10080,
+     "usedPercent": 60.0,
+     "resetsAtMs": 1794441600000
+    },
+    {
+     "kind": "fiveHour",
+     "name": "Claude/GPT",
+     "minutes": 300,
+     "usedPercent": 0.0,
+     "resetsAtMs": null
+    },
+    {
+     "kind": "sevenDay",
+     "name": "Gemini Argon",
+     "minutes": 10080,
+     "usedPercent": 5.0,
+     "resetsAtMs": 1794800000000
+    }
+   ]
+  },
+  "antigravityStatus": {
+   "body": {
+    "userStatus": {
+     "cascadeModelConfigData": {
+      "clientModelConfigs": [
+       {
+        "label": "Gemini 3 Pro",
+        "quotaInfo": {
+         "remainingFraction": 0.6,
+         "resetTime": "2026-11-10T22:00:00Z"
+        }
+       },
+       {
+        "label": "x",
+        "quotaInfo": {}
+       }
+      ]
+     }
+    }
+   },
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": "Gemini 3 Pro",
+     "minutes": 300,
+     "usedPercent": 40.0,
+     "resetsAtMs": 1794348000000
+    }
+   ]
+  },
+  "kimiCurrent": {
+   "body": {
+    "usages": {
+     "limit_5h": {
+      "used_ratio": 0.25,
+      "reset_time": "2026-11-10T22:00:00Z"
+     },
+     "limit_7d": {
+      "used_ratio": 0.5,
+      "reset_time": "2026-11-12T00:00:00Z"
+     },
+     "limit_month_total": {
+      "used_ratio": 0.125,
+      "reset_time": "2026-12-01T00:00:00Z"
+     },
+     "limit_month": {
+      "used_ratio": 0.9
+     }
+    }
+   },
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794348000000
+    },
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 50.0,
+     "resetsAtMs": 1794441600000
+    },
+    {
+     "kind": "month",
+     "name": null,
+     "minutes": 43200,
+     "usedPercent": 12.5,
+     "resetsAtMs": 1796083200000
+    }
+   ]
+  },
+  "kimiLegacy": {
+   "body": {
+    "limits": [
+     {
+      "window": {
+       "duration": "300",
+       "timeUnit": "TIME_UNIT_MINUTE"
+      },
+      "detail": {
+       "limit": "200",
+       "remaining": "150",
+       "resetTime": "2026-11-10T22:00:00Z"
+      }
+     },
+     {
+      "window": {
+       "duration": 1,
+       "timeUnit": "TIME_UNIT_DAY"
+      },
+      "detail": {
+       "limit": 100,
+       "used": 10
+      }
+     }
+    ],
+    "usage": {
+     "limit": "2048",
+     "used": "512",
+     "reset_at": "2026-11-12T00:00:00Z"
+    }
+   },
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794348000000
+    },
+    {
+     "kind": "other",
+     "name": null,
+     "minutes": 1440,
+     "usedPercent": 10.0,
+     "resetsAtMs": null
+    },
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794441600000
+    }
+   ]
+  },
+  "geminiProject": {
+   "body": {
+    "cloudaicompanionProject": {
+     "id": "proj-123"
+    }
+   },
+   "expected": "proj-123"
+  },
+  "gemini": {
+   "body": {
+    "buckets": [
+     {
+      "modelId": "gemini-3-pro",
+      "remainingFraction": 0.8,
+      "resetTime": "2026-11-12T00:00:00Z"
+     },
+     {
+      "modelId": "gemini-3-pro-preview",
+      "remainingFraction": 0.6,
+      "resetTime": "2026-11-12T00:00:00Z"
+     },
+     {
+      "modelId": "gemini-3-flash",
+      "remainingFraction": 1.0,
+      "resetTime": "2026-11-12T00:00:00Z"
+     },
+     {
+      "modelId": "gemini-3-flash-lite",
+      "remainingFraction": 0.95
+     },
+     {
+      "modelId": "imagen-4",
+      "remainingFraction": 0.5
+     }
+    ]
+   },
+   "expected": [
+    {
+     "kind": "other",
+     "name": "Pro",
+     "minutes": 1440,
+     "usedPercent": 40.0,
+     "resetsAtMs": 1794441600000
+    },
+    {
+     "kind": "other",
+     "name": "Flash",
+     "minutes": 1440,
+     "usedPercent": 0.0,
+     "resetsAtMs": 1794441600000
+    },
+    {
+     "kind": "other",
+     "name": "Flash Lite",
+     "minutes": 1440,
+     "usedPercent": 5.0,
+     "resetsAtMs": null
+    },
+    {
+     "kind": "other",
+     "name": "imagen-4",
+     "minutes": 1440,
+     "usedPercent": 50.0,
+     "resetsAtMs": null
+    }
+   ]
+  },
+  "droidEnv": [
+   [
+    "# comment\nOTHER=1\nexport FACTORY_API_KEY=\"fk-abc\"\n",
+    "fk-abc"
+   ],
+   [
+    "FACTORY_API_KEY=fk-plain",
+    "fk-plain"
+   ],
+   [
+    "NOPE=1",
+    null
+   ]
+  ],
+  "droid": {
+   "body": {
+    "limits": {
+     "standard": {
+      "fiveHour": {
+       "usedPercent": 20,
+       "secondsRemaining": 3600
+      },
+      "weekly": {
+       "usedPercent": 55,
+       "windowEnd": 1794800000
+      },
+      "monthly": {
+       "usedPercent": 70,
+       "windowEnd": "2026-11-01T00:00:00Z"
+      }
+     },
+     "core": {
+      "weekly": {
+       "usedPercent": 5,
+       "windowEnd": 1794800000000
+      }
+     }
+    }
+   },
+   "nowMs": 1794338773000,
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 20.0,
+     "resetsAtMs": 1794342373000
+    },
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 55.0,
+     "resetsAtMs": 1794800000000
+    },
+    {
+     "kind": "month",
+     "name": null,
+     "minutes": 43200,
+     "usedPercent": 0.0,
+     "resetsAtMs": null
+    },
+    {
+     "kind": "sevenDay",
+     "name": "Core",
+     "minutes": 10080,
+     "usedPercent": 5.0,
+     "resetsAtMs": 1794800000000
+    }
+   ]
+  },
+  "zcode": {
+   "body": {
+    "success": true,
+    "code": 200,
+    "data": {
+     "limits": [
+      {
+       "type": "TOKENS_LIMIT",
+       "unit": 3,
+       "number": 5,
+       "percentage": 30,
+       "nextResetTime": 1794345973000
+      },
+      {
+       "type": "TOKENS_LIMIT",
+       "unit": 6,
+       "number": 1,
+       "usage": 1000,
+       "currentValue": 250,
+       "percentage": 99,
+       "nextResetTime": 1794770773000
+      },
+      {
+       "type": "TIME_LIMIT",
+       "unit": 5,
+       "number": 1,
+       "percentage": 40,
+       "nextResetTime": 1796066773000
+      },
+      {
+       "type": "TOKENS_LIMIT",
+       "unit": 3,
+       "number": 5,
+       "percentage": 1,
+       "nextResetTime": 1794362773000
+      }
+     ]
+    }
+   },
+   "nowMs": 1794338773000,
+   "expected": [
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 30.0,
+     "resetsAtMs": 1794345973000
+    },
+    {
+     "kind": "sevenDay",
+     "name": null,
+     "minutes": 10080,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1794770773000
+    },
+    {
+     "kind": "month",
+     "name": "MCP",
+     "minutes": 43200,
+     "usedPercent": 40.0,
+     "resetsAtMs": 1796066773000
+    },
+    {
+     "kind": "fiveHour",
+     "name": null,
+     "minutes": 300,
+     "usedPercent": 1.0,
+     "resetsAtMs": null
+    }
+   ]
+  },
+  "zcodeFailure": {
+   "body": {
+    "success": false,
+    "code": 401
+   },
+   "expected": null
+  },
+  "qoder": {
+   "body": {
+    "totalQuota": {
+     "quotaSummary": {
+      "usedValue": 30,
+      "limitValue": 100
+     }
+    },
+    "sharedQuota": {
+     "quotaSummary": {
+      "used_value": "20",
+      "limit_value": "100"
+     }
+    },
+    "next_reset_at": "2026-12-01T00:00:00+08:00"
+   },
+   "expected": [
+    {
+     "kind": "credits",
+     "name": null,
+     "minutes": null,
+     "usedPercent": 25.0,
+     "resetsAtMs": 1796054400000
+    }
+   ]
+  },
+  "qoderPercent": {
+   "body": {
+    "totalQuota": {
+     "quotaSummary": {
+      "usagePercentage": 42
+     }
+    },
+    "nextResetAt": 1796000000
+   },
+   "expected": [
+    {
+     "kind": "credits",
+     "name": null,
+     "minutes": null,
+     "usedPercent": 42.0,
+     "resetsAtMs": 1796000000000
+    }
+   ]
+  },
+  "workbuddy": {
+   "body": {
+    "code": 0,
+    "data": {
+     "Packages": [
+      {
+       "CycleTotalCapacity": "1000.00",
+       "CycleRemainCapacity": "250.5",
+       "CapacityUnit": "credits"
+      },
+      {
+       "CycleTotalCapacity": "500",
+       "CycleRemainCapacity": "500",
+       "CapacityUnit": "credits"
+      },
+      {
+       "CycleTotalCapacity": "9",
+       "CycleRemainCapacity": "1",
+       "CapacityUnit": "minutes"
+      }
+     ]
+    }
+   },
+   "expected": [
+    {
+     "kind": "month",
+     "name": null,
+     "minutes": 43200,
+     "usedPercent": 49.966667,
+     "resetsAtMs": null
+    }
+   ]
+  },
+  "userAgent": "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/142.0.0.0 Safari/537.36",
+  "cookies": {
+   "macV10": {
+    "password": "mac-safe-storage-password",
+    "iterations": 1003,
+    "metaVersion": 23,
+    "blob": "7631305e0374686d6a83eecf38c2ce7dd7552a",
+    "expected": "qoder-session-1"
+   },
+   "macV10HostHash": {
+    "password": "mac-safe-storage-password",
+    "iterations": 1003,
+    "metaVersion": 24,
+    "host": ".qoder.com",
+    "blob": "76313029a6c029cb944196fb8cf0ff5ec8692452640c38e1e0db949b7cae93a3bfa93e2d032448f507cf88b39c7a4b7802b5ef",
+    "expected": "qoder-session-2"
+   },
+   "linuxV10": {
+    "password": "peanuts",
+    "iterations": 1,
+    "metaVersion": 23,
+    "blob": "763130cf541b5310c45dabb5989e33f6b59c2c",
+    "expected": "wb-session"
+   },
+   "linuxV11HostHash": {
+    "password": "libsecret-password",
+    "iterations": 1,
+    "metaVersion": 24,
+    "host": "www.workbuddy.cn",
+    "blob": "7631317389450f149c624492228dedc8fbb25ccb42232a4db7ab5abd22aee3c97a750d8f62109315a6f55ab3b6180181c3ab08",
+    "expected": "wb-session-11"
+   },
+   "windowsGcm": {
+    "key": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+    "nonce": "a0a1a2a3a4a5a6a7a8a9aaab",
+    "ciphertextAndTag": "957d0f5e2ca46c820506eafe6415afb519c97466f3db370979330478b4637df5c1fcbcfa51a6ed7b",
+    "plaintext": "session=gcm-cookie-value",
+    "blob": "v10a0a1a2a3a4a5a6a7a8a9aaab"
+   }
+  },
+  "cookieHeader": {
+   "rows": [
+    [
+     ".qoder.com",
+     "sid",
+     "a1",
+     0
+    ],
+    [
+     "qoder.com",
+     "csrf",
+     "b2",
+     1794338833
+    ],
+    [
+     "old.qoder.com",
+     "gone",
+     "x",
+     1794338713
+    ],
+    [
+     "notqoder.com",
+     "evil",
+     "y",
+     0
+    ],
+    [
+     "api.qoder.com",
+     "region",
+     "sg",
+     0
+    ]
+   ],
+   "site": "qoder.com",
+   "nowS": 1794338773,
+   "expected": "sid=a1; csrf=b2; region=sg"
+  }
+ },
  "percents": [
   [
    0,

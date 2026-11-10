@@ -5,7 +5,8 @@ has (a 5-hour window, a weekly window, a weekly limit of one model), the used pe
 dashboard's Sources rows show every source that has a quota; the `character` orb's 額度 card shows the sources whose
 app runs and is signed in. The UI is DESIGN 4 (Sources), 2a.6 (*Readouts*, 額度) and 5 (Data sources); the fixtures are
 checked by `spec/tools/quota_reference.py --check-fixtures`. Status: specified 2026-11-10 (user's request); phase 1
-covers Codex, Claude Desktop and Claude Code. Other sources follow in section 9.
+covers Codex, Claude Desktop and Claude Code; phase 2 (section 9) adds Grok Build, Devin, Antigravity, Kimi Code,
+Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy.
 
 ## 1. Principles
 
@@ -25,7 +26,8 @@ covers Codex, Claude Desktop and Claude Code. Other sources follow in section 9.
 - **Each account on its own.** Claude Desktop and the Claude CLI may be signed in to different accounts (the user's
   case), so `claudeDesktop` and `claudeCode` each carry their own snapshot and are never merged.
 - **Phase 1 needs no network.** The Codex and Claude Desktop readers only read local files. The Claude CLI bridge
-  writes one value into Claude Code's settings, and only after the user turns it on (section 5).
+  writes one value into Claude Code's settings, and only after the user turns it on (section 5). Phase 2's vendor
+  requests follow section 9.1 and NETWORK 9.
 
 ## 2. Model
 
@@ -43,8 +45,9 @@ values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, 
   integer, clamped to 0…100 (`100%` once a window is exhausted, even when the vendor says 103).
 - `resetsAtMs` may be null (unknown).
 - `minutes` is 300 for `fiveHour`, 10080 for `sevenDay` and `modelWeek`, the vendor's value for `other`.
-- **Order**: `fiveHour`, `sevenDay`, then `modelWeek` by `name` (ordinal, case-insensitive), then `other` by
-  `minutes`.
+- **Order**: windows without a name first, by `minutes` (shortest first; equal lengths in kind order `fiveHour`,
+  `other`, `sevenDay`, `modelWeek`, `month`, `credits`; `credits` and any window with null minutes last). Then the
+  named windows, grouped by name in the order the vendor lists the names, each group by `minutes` the same way.
 
 **Reset passed.** When `now ≥ resetsAtMs`, the window has started over. It shows `0%` and no reset time until a newer
 snapshot arrives, and its pace mark (DESIGN 4) is hidden. Claude Code itself drops a window from the status line once
@@ -90,8 +93,8 @@ records (2026-11-10).
 
 ## 4. Claude Desktop
 
-Claude Desktop asks claude.ai for the signed-in account's usage while it runs, about every 15 minutes (observed
-11:26:13 → 11:43:25 on 2026-11-10), and its Chromium network stack caches each response on disk. Agent Speed reads that
+Claude Desktop asks claude.ai for the signed-in account's usage while it runs, every 5 to 17 minutes (observed
+2026-11-10: 11:26:13, 11:43:25, 11:54:39, 11:59:47, 12:04:59), and its Chromium network stack caches each response on disk. Agent Speed reads that
 cached response, read-only. It never reads cookies, `Local Storage`, `IndexedDB` or credentials, and never sends the
 request itself.
 
@@ -341,11 +344,317 @@ at least one window.
   turning the bridge off, the status line keeps running the copy in `<data>/bin`, which still prints their previous
   status line or the quota line.
 
-## 9. Further sources
+## 9. Further sources (phase 2)
 
-Sources other than these three follow the same model and UI once their readers are specified here. The research
-started 2026-11-10 (Tokei's readers and each agent's local data). For vendors other than Anthropic, the user allows
-an agent's own vendor API with that agent's local sign-in (2026-11-10).
+The user chose on 2026-11-10 to add every source that has a quota: "全都做，包含讀瀏覽器 Cookie". For vendors other
+than Anthropic, they allow the vendor's API with the agent's own sign-in, a key the user enters, and the user's
+browser session ("就算是讀取API也無所謂，我們只在乎Claude的用戶協議").
+
+The readers follow the open-source apps Tokei (cclank/tokei, `usage.30s.py`, 2026-11-09) and CodexBar
+(steipete/CodexBar, 2026-11-10). They are **unverified**: none of these agents is installed on the development
+machine, and the endpoints are undocumented. They ship with the caption `settings.quota.unverified` and are fixed from
+user reports ("如果到時候有用戶反饋有問題，我們在修復即可").
+
+Sources with no quota to show:
+- DeepSeek Harness: a wallet balance, no windows.
+- Pi, oh-my-pi, OpenCode: no subscription quota of their own.
+- OpenClaw and Hermes: they ask other vendors live, including Anthropic, which section 1 excludes.
+
+### 9.1 Common rules
+
+**More window kinds.**
+- `month`: a monthly or billing-cycle window. `minutes` is the cycle length when start and end are known, else
+  43200. Label `quota.window.month`.
+- `credits`: a credit pool with no stated length. `minutes` is null and there is no pace. Label
+  `quota.window.credits`.
+- `other` with 1440 minutes is the daily window (`1d`).
+- **Names.** Any kind may carry a `name`, a model group such as `Gemini` or `Claude/GPT`. Its label is
+  `<name> <base label>`; `modelWeek` is the same as `sevenDay` with a name.
+- **Order** is section 2's: unnamed by length, then named groups in vendor order.
+
+**Routes and switches.** One switch per source, `quota<Source>` (DESIGN 5).
+
+| Route | Sources | Default |
+| --- | --- | --- |
+| Local file | Grok Build (log), Devin | on |
+| Loopback server | Antigravity | on |
+| Vendor API with the agent's own sign-in | Kimi Code, Gemini CLI, Factory Droid (its API key), Grok Build (live) | on; Grok Build live off |
+| Vendor API with a key the user enters | ZCode | off until a key is saved |
+| Vendor website with the browser's session | Qoder IDE and Qoder CLI, WorkBuddy and WorkBuddy AI | off; turning it on asks first (9.10) |
+
+**Network rules.** These are the new feature *Quotas* of NETWORK 9.
+- Requests are only made while `networkEnabled` is on and the source's switch is on.
+- HTTPS only, except the loopback route. A redirect is never followed and counts as a failure. The system proxy
+  applies, except for loopback.
+- Timeout 10 s (loopback 2 s). Body cap 256 KiB. JSON only.
+- Headers are only the ones each section lists, plus `User-Agent: AgentSpeed/<version> (<macOS|Windows|Linux>)`.
+  WorkBuddy is the one exception: it sends the browser's user agent (9.9).
+
+**Credentials.**
+- A credential is read from its file, the keychain or the browser right before the request.
+- It stays in memory for that request only. It is never written, logged, shown or sent to any host but the one its
+  section names.
+- A token is only ever read, never refreshed: refreshing would race the agent and could sign it out (Kimi rotates its
+  refresh tokens).
+- When a token's own expiry has passed, no request is made, and the last snapshot stays with its age (section 2).
+- The snapshot is keyed by the first 8 bytes of the SHA-256 of the credential, so signing in to another account drops
+  the old account's numbers.
+
+**Cadence.**
+- A vendor request runs at most every 5 minutes per source, and only while the source runs (section 6, rows below) or
+  the dashboard is open.
+- A failure waits 15 minutes.
+- `401` and `403` stop the source's requests until its credential changes (new file modification time, a new cookie,
+  a new key).
+- `observedMs` is the response's `Date` header, else the time it arrived.
+- A local route is read when its file changes, checked every 60 s.
+
+**Signed in.** A source with a vendor route counts as signed in (section 6) while its credential exists and has not
+expired. A local route is signed in while its snapshot is at most 24 hours old, and Devin's while its launch time
+(9.3) is.
+
+### 9.2 Grok Build
+
+The Grok Build CLI logs its billing config: Tokei reads it, with no network.
+- **Log** (`quotaGrokBuild`, on): `$GROK_HOME/logs/unified.jsonl`, else `~/.grok/logs/unified.jsonl`.
+  - Read the last 2 MiB of the file and skip its first, partial line.
+  - Keep JSON lines with `msg == "billing: fetched credits config"`. The one with the greatest `ts` (ISO 8601)
+    wins: `config` = `ctx.config`, `observedMs` = `ts`.
+- **Live** (`quotaGrokBuildLive`, off):
+  - `GET https://cli-chat-proxy.grok.com/v1/billing?format=credits` with `Accept: application/json`,
+    `Authorization: Bearer <token>` and `x-xai-token-auth: xai-grok-cli`.
+  - The token is the first entry of `$GROK_HOME/auth.json`, an object whose keys are scope URLs. The entry's `key`,
+    else `access_token`, with `expires_at` (ISO 8601). Within 60 s of that expiry, no request.
+  - The response's `config` has the same shape as the log's.
+- **Config → one window.**
+  - Kind: `currentPeriod.type` containing `MONTH` → `month`, else `sevenDay`.
+  - `usedPercent = creditUsagePercent` (0–100).
+  - When it is absent, `0` only if `isUnifiedBillingUser == true` and `currentPeriod.start` and `currentPeriod.end`
+    exist (protobuf JSON drops zero values). Otherwise the snapshot has no window.
+  - The reset is `currentPeriod.end`, else `billingPeriodEnd` (ISO 8601). A `month` with both period ends known has
+    `minutes` = their difference.
+  - `productUsage[]` (`{product | name, usagePercent}`) is not shown.
+- **Runs**: a `grokBuild` agent process (METRICS 10.5).
+
+### 9.3 Devin
+
+Devin Desktop caches the account's plan when it starts; Tokei reads it. The quota is the account's, shared by the
+Devin CLI. Users of the CLI alone have no local quota.
+- **Folder**: the newest of these that contains `User/globalStorage/state.vscdb`:
+  - macOS `~/Library/Application Support/Devin`, `…/Windsurf`;
+  - Windows `%APPDATA%\Devin`, `%APPDATA%\Windsurf`;
+  - Linux `~/.config/Devin`, `~/.config/Windsurf`.
+- **Query** (SQLite, read-only, immutable): `SELECT key, value FROM ItemTable WHERE key LIKE
+  'windsurf.reactSettings.cachedPlanInfoData%'`, else `LIKE 'windsurf.settings.cachedPlanInfo%'`.
+  - The value is JSON (bytes as UTF-8).
+  - Several rows are several accounts. The greatest `endTimestamp` wins.
+- **Fields**:
+  - `dailyRemainingPercent` with `dailyResetAtUnix` → `other` 1440 minutes, unless `hideDailyQuota == true`.
+  - `weeklyRemainingPercent` with `weeklyResetAtUnix` → `sevenDay`, unless `hideWeeklyQuota == true`.
+  - `usedPercent = 100 − remaining`. Resets are epoch seconds; values above 1e11 are milliseconds.
+  - Message pools, overage and the plan name are not shown. `accountIdentityText` holds an e-mail address and is never
+    read into the snapshot.
+- **Time**: `observedMs` is the newest launch folder `<folder>/logs/<YYYYMMDDTHHMMSS>`, read as local time. Without
+  one, there is no snapshot. The row is written at launch, not while Desktop runs.
+- **Runs**: a `devin` agent process, or Devin Desktop's main process (METRICS 10.5 names it).
+
+### 9.4 Antigravity
+
+The running language server answers a quota request on loopback. Antigravity is never started for it.
+- **Servers**, from the process table (METRICS 10.5):
+  - An executable named `language_server_*` whose arguments contain `--app_data_dir` and `antigravity`, or whose path
+    is inside `Antigravity.app`, `Antigravity IDE.app` or `Gemini.app`. It takes `--csrf_token`,
+    `--extension_server_port` and `--extension_server_csrf_token`.
+  - Or an `agy` process. Its token comes from its own environment, `ANTIGRAVITY_CSRF_TOKEN`, with the address from
+    `ANTIGRAVITY_LS_ADDRESS` (`host:port`). On macOS this is `KERN_PROCARGS2`, on Linux `/proc/<pid>/environ`; there
+    is none on Windows.
+  - Only that one process is read: never the environment of every process, as Tokei does.
+  - Daemon files `~/.gemini/antigravity/daemon/ls_*.json`, `~/.gemini/antigravity-ide/daemon/ls_*.json`
+    (`pid`, `csrfToken`, `httpsPort`, `httpPort`), used while that pid runs.
+- **Ports**:
+  - `--extension_server_port` first, with `--extension_server_csrf_token`, then `--csrf_token`.
+  - Then the process's listening TCP ports on 127.0.0.1, over `http` and then `https`. Self-signed certificates are
+    accepted on loopback only.
+  - Ports come from macOS `proc_pidfdinfo` sockets, Windows `GetExtendedTcpTable`, Linux `/proc/net/tcp` with the
+    process's socket inodes.
+- **Request**:
+  - `POST <scheme>://127.0.0.1:<port>/exa.language_server_pb.LanguageServerService/RetrieveUserQuotaSummary` with
+    `Connect-Protocol-Version: 1`, `Content-Type: application/json`, `X-Codeium-Csrf-Token: <token>` (left out
+    without a token), and body `{"forceRefresh": true}`.
+  - `401` or `403` forgets that process's token.
+  - A `404` (the IDE's server) falls back to `.../GetUserStatus` with body
+    `{"metadata":{"ideName":"antigravity","extensionName":"antigravity","ideVersion":"unknown","locale":"en"}}`.
+- **Summary → windows**:
+  - The root is `response` when present, else the body.
+  - Each `groups[]` entry has a `displayName`, which gives its name:
+    - containing `gemini` and `argon` → `Gemini Argon`;
+    - `gemini` → `Gemini`;
+    - `claude`, `gpt` or `third` → `Claude/GPT`;
+    - otherwise the display name.
+  - Each `buckets[]` entry is skipped when `disabled == true`. Its kind comes from `window`, `bucketId` and
+    `displayName`, lowercased with `_` as `-`:
+    - containing `weekly`, `week` or `7d` → `sevenDay`;
+    - `5h`, `5-hour`, `five-hour`, `five hour` or `session` → `fiveHour`;
+    - else skipped.
+  - Remaining fraction: the bucket's `remainingFraction`, else `{"case": "remainingFraction", "value": x}`, else
+    `remaining.remainingFraction`. `usedPercent = (1 − x) × 100`.
+  - Reset: `resetTime` (ISO 8601 or epoch).
+- **GetUserStatus → windows**: `userStatus.cascadeModelConfigData.clientModelConfigs[].quotaInfo`
+  (`remainingFraction`, `resetTime`) → `fiveHour` named by the config's `label`.
+- **Runs**: one of the servers above runs. **Signed in**: the last request succeeded.
+
+### 9.5 Kimi Code
+
+- **Credential**: `$KIMI_CODE_HOME/credentials/kimi-code.json`, else `~/.kimi-code/credentials/kimi-code.json`, else
+  the legacy `~/.kimi/credentials/kimi-code.json`. It holds `access_token` and `expires_at` (seconds; above 1e11,
+  milliseconds). `refresh_token` is never read.
+- **Request**: `GET https://api.kimi.com/coding/v1/usages` with `Accept: application/json` and
+  `Authorization: Bearer <access_token>`. A `KIMI_CODE_BASE_URL` override is never used with this token.
+- **Response, current shape**: `usages.limit_5h` → `fiveHour`, `usages.limit_7d` → `sevenDay`, and the first of
+  `usages.limit_month_total`, `usages.limit_month` → `month`. Each is `{used_ratio (0–1), reset_time (ISO 8601)}`,
+  with `usedPercent = used_ratio × 100`.
+- **Legacy shape**:
+  - `limits[]` of `{window: {duration, timeUnit}, detail: {limit, used, remaining, resetTime}}`, numbers possibly as
+    strings. `timeUnit` is `TIME_UNIT_MINUTE`, `_HOUR`, `_DAY` or `_WEEK`.
+  - 300 minutes → `fiveHour`, a week → `sevenDay`, others → `other`.
+  - The top-level `usage {limit, used, remaining, resetTime}` → `sevenDay` when no limit gave one.
+  - `usedPercent = used / limit × 100`, with `used = limit − remaining` when `used` is missing.
+  - Reset keys: `resetTime`, `reset_time`, `resetAt`, `reset_at`.
+- **Runs**: a `kimi` agent process.
+
+### 9.6 Gemini CLI
+
+- **Credential**: `<home>/.gemini/oauth_creds.json` (`<home>` as METRICS 2: `$GEMINI_CLI_HOME`, else `~`):
+  `access_token` with `expiry_date` (milliseconds). Only the CLI's Google sign-in has one; API-key and Vertex users
+  have no quota here.
+- **Requests**, `Authorization: Bearer <access_token>`, `Content-Type: application/json`:
+  1. `POST https://cloudcode-pa.googleapis.com/v1internal:loadCodeAssist` with body
+     `{"metadata":{"ideType":"GEMINI_CLI","pluginType":"GEMINI"}}`. It gives `cloudaicompanionProject` (a string, or
+     an object's `id`). The result is kept for the access token's life.
+  2. `POST https://cloudcode-pa.googleapis.com/v1internal:retrieveUserQuota` with body `{"project": "<id>"}`, or `{}`
+     without one.
+- **Buckets**: `buckets[]` of `{modelId, remainingFraction (0–1), resetTime (ISO 8601)}`.
+  - Group by family:
+    - `modelId` containing `flash-lite` → `Flash Lite`;
+    - `flash` → `Flash`;
+    - `pro` → `Pro`;
+    - otherwise the id.
+  - Each family keeps the lowest remaining fraction, with its reset. It becomes `other` 1440 minutes named by the
+    family (Gemini's quotas are daily per model).
+  - Family order: Pro, Flash, Flash Lite, then others by id.
+- Google ended Gemini CLI sign-in for individual, AI Pro and Ultra accounts on 2026-06-18
+  (developers.google.com/gemini-code-assist/docs/deprecations/code-assist-individuals). Such accounts answer `403`,
+  so the source has no snapshot.
+- **Runs**: a `gemini` agent process.
+
+### 9.7 Factory Droid
+
+- **Credential**: `FACTORY_API_KEY` from the app's environment, else the `FACTORY_API_KEY=` line of `~/.factory/.env`
+  (that one line only; quotes trimmed). `~/.factory/settings.json` holds the user's own provider keys and is never
+  read. Where droid keeps its own sign-in is unverified, so a Droid user with no API key has no quota.
+- **Request**: `GET https://api.factory.ai/api/billing/limits` with `Accept: application/json` and
+  `Authorization: Bearer <key>`.
+- **Response**:
+  - `limits.standard` and the optional `limits.core`, each with `fiveHour`, `weekly` and `monthly` objects of
+    `{usedPercent (0–100), windowEnd (epoch s, ms or ISO 8601), secondsRemaining}`.
+  - Standard gives `fiveHour`, `sevenDay` and `month` (43200 minutes); `core` gives the same kinds named `Core`.
+  - The reset is `now + secondsRemaining` when present, else `windowEnd`. A `windowEnd` already past without
+    `secondsRemaining` means 0 %.
+- **Runs**: a `droid` agent process.
+
+### 9.8 ZCode
+
+ZCode uses Zhipu's GLM Coding Plan. Its quota endpoint takes the plan's API key, which the user pastes in Settings
+(Tokei's z.ai card). Whether ZCode's own sign-in works there is unverified.
+- **Key**: `quotaZcodeKey` in the platform's secret store: the macOS Keychain (service `AgentSpeed`, account
+  `zcode-api-key`), Windows Credential Manager (`AgentSpeed:zcode-api-key`), Linux libsecret (`service AgentSpeed`,
+  `account zcode-api-key`). It is never in the settings file.
+- **Region** `quotaZcodeRegion`: `global` (`https://api.z.ai`, default) or `bigmodel-cn` (`https://open.bigmodel.cn`).
+- **Request**: `GET <base>/api/monitor/usage/quota/limit` with `Authorization: Bearer <key>`.
+- **Response**:
+  - It must have `success == true` and `code == 200`.
+  - `data.limits[]` of `{type, unit, number, percentage (0–100), usage, currentValue, remaining, nextResetTime
+    (epoch ms)}`.
+  - `TOKENS_LIMIT` and `CREDIT_LIMIT`: minutes = `number ×` the unit's minutes (`{1: 1440, 3: 60, 5: 1, 6: 10080}`).
+    300 → `fiveHour`, 10080 → `sevenDay`, others → `other`.
+  - `TIME_LIMIT` (MCP calls) → `month` named `MCP`.
+  - `usedPercent` = `currentValue / usage × 100` when both are numbers and `usage > 0`, else `percentage`.
+  - A `fiveHour` reset more than 301 minutes ahead is dropped.
+- **Runs**: a `zcode` agent process.
+
+### 9.9 Qoder and WorkBuddy (browser session)
+
+**Qoder** (`quotaQoder`, for `qoder` and `qoderCli`, one account; off):
+- Request: `GET https://qoder.com/api/v2/me/usages/big_model_credits`, or `https://qoder.com.cn/...` for the China
+  edition. Headers: `Cookie` (9.10, cookies of `qoder.com` or `qoder.com.cn`), `Origin` and `Referer` set to the same
+  site, and `Accept: application/json`.
+- Response: `totalQuota.quotaSummary` and the optional `sharedQuota.quotaSummary`. Each has `usedValue` / `used_value`
+  and `limitValue` / `limit_value`, or `usagePercentage` / `usage_percentage`.
+  - Totals are summed. `usedPercent = used / limit × 100`, else the percentage.
+  - The reset is `nextResetAt` / `next_reset_at` (epoch s, ms or ISO 8601).
+  - One `credits` window.
+- Both sources share the snapshot; each shows it on its own row.
+
+**WorkBuddy** (`quotaWorkBuddy`, China edition `workbuddy` only; off; the international edition's endpoint is
+unknown):
+- Request: `POST https://www.workbuddy.cn/billing/meter/get-user-resource-summary` with body `{}`,
+  `Content-Type: application/json`, `Cookie` (9.10, cookies of `workbuddy.cn`) and `User-Agent` set to the user agent
+  of the browser the cookies came from. The server ties the session to it.
+  - Chrome family: `Mozilla/5.0 (<platform token>) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/<major>.0.0.0 Safari/537.36`,
+    with `<major>` from the profile's `Last Version` file.
+  - Firefox: `Mozilla/5.0 (<platform token>; rv:<v>) Gecko/20100101 Firefox/<v>`.
+  - Safari: `Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/<v> Safari/605.1.15`.
+- Response: `code == 0`. `data.Packages[]` with `CycleTotalCapacity`, `CycleRemainCapacity` (decimal strings) and
+  `CapacityUnit == "credits"`.
+  - Totals are summed, and `usedPercent = (total − remain) / total × 100`.
+  - One `month` window with no reset time: the reset needs client-version package codes, left out.
+- **Runs** (both): the source's agent process (METRICS 10.5).
+
+### 9.10 Browser cookies
+
+Turning `quotaQoder` or `quotaWorkBuddy` on asks first (DESIGN 5). The dialog names:
+- the site;
+- that only that site's cookies are read, from the browsers on this computer, and kept in memory for one request;
+- that macOS asks once per browser for its "Safe Storage" keychain item.
+
+A refusal leaves the browser out.
+
+- **Browsers**, tried in this order, one profile after another (`Default`, then `Profile *`):
+  - Chrome;
+  - Edge;
+  - Brave;
+  - Arc (macOS);
+  - Vivaldi;
+  - Chromium;
+  - Firefox (every profile in `profiles.ini`);
+  - Safari (macOS; needs Full Disk Access, else skipped).
+
+  The first profile with an unexpired cookie for the site wins; with several, the one with the newest
+  `last_access_utc`.
+- **Chrome family**: the `Cookies` SQLite database of the profile (also `Network/Cookies`), copied with its `-wal`
+  to a temporary file first and read there. Columns `host_key`, `name`, `value`, `encrypted_value`, `expires_utc`,
+  `last_access_utc`. A plain `value` is used as is. Otherwise `encrypted_value` decrypts:
+  - **macOS, `v10`**:
+    - key = PBKDF2-HMAC-SHA1(password, `saltysalt`, 1003 iterations, 16 bytes);
+    - the password is the keychain item `<Browser> Safe Storage` (`Chrome Safe Storage`, `Microsoft Edge Safe
+      Storage`, `Brave Safe Storage`, `Arc Safe Storage`, `Vivaldi Safe Storage`, `Chromium Safe Storage`);
+    - AES-128-CBC, IV of 16 spaces (`0x20`), PKCS#7.
+  - **Linux**: `v10` with the password `peanuts`, or `v11` with the libsecret item of `application` `chrome` (or the
+    browser's), PBKDF2 with 1 iteration, otherwise as on macOS.
+  - **Windows, `v10`/`v11`**:
+    - key = DPAPI `CryptUnprotectData` of `Local State` `os_crypt.encrypted_key` (base64, `DPAPI` prefix dropped);
+    - AES-256-GCM with a 12-byte nonce after the prefix and a 16-byte tag at the end.
+    - `v20` (app-bound encryption, Chrome 127+) cannot be decrypted by a user program and is skipped.
+    - A database the running browser holds locked is skipped too. Windows users of Chrome and Edge may therefore have
+      no session; Firefox works.
+  - Since Chrome 130 (the database's `meta` `version` ≥ 24), the decrypted value starts with the SHA-256 of
+    `host_key`; those 32 bytes are dropped.
+- **Firefox**: `cookies.sqlite` of each profile (copied with its `-wal`), table `moz_cookies` (`host`, `name`,
+  `value`, `expiry`, `lastAccessed`). Values are plain.
+- **Safari**: `~/Library/Containers/com.apple.Safari/Data/Library/Cookies/Cookies.binarycookies`, the binary cookies
+  format (big-endian page table, little-endian records).
+- **Hosts**: `host_key` equal to the site or ending in `.<site>`. The `Cookie` header joins every such `name=value`
+  that has not expired, in database order.
 
 ## 10. Fixtures
 
@@ -370,3 +679,7 @@ an agent's own vendor API with that agent's local sign-in (2026-11-10).
   the user, not an object.
 - Reset passed, labels and order, and the long and short reset texts in the four languages for fixed `now` values in
   `Asia/Taipei`.
+- Phase 2: every response shape of section 9 (Grok config from a log and from the API, Devin rows, Antigravity
+  summaries and `GetUserStatus`, Kimi current and legacy, Gemini buckets, Factory limits, z.ai limits, Qoder and
+  WorkBuddy summaries), named-window labels and order, and Chrome cookie decryption vectors for macOS `v10`, Linux
+  `v10`/`v11` (with and without the host hash) and Windows `v10` (AES-GCM, given key).

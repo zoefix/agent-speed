@@ -5,7 +5,9 @@ optional, all HTTPS `GET`, none of them carrying anything about the user: the up
 daily price-table sync (section 3) and the daily exchange rates (section 4). A fourth kind exists only when the user
 turns it on: live reporting (section 6, `spec/REPORTING.md`), the one feature that sends data about the user's
 activity, to a service the user chose. Two more work only on the user's own machines and network, also only when
-turned on: remote hosts over SSH (section 7) and the local network feed (section 8, `spec/LAN.md`). Both platforms implement exactly this behaviour; anything not listed here is
+turned on: remote hosts over SSH (section 7) and the local network feed (section 8, `spec/LAN.md`). Quotas (section 9,
+`spec/QUOTAS.md` 9) ask some agents' vendors for the user's own usage limits with that agent's own sign-in, a key the
+user entered, or, only when the user turns it on, the user's browser session; they never contact Anthropic. Both platforms implement exactly this behaviour; anything not listed here is
 never requested.
 
 ## 1. Common rules
@@ -259,3 +261,29 @@ switch `networkEnabled` is off (LAN 2.2).
 - **Plain text**: anyone who can watch the local network traffic can read frames and the access key; a broadcast
   target reaches every device on the network. The UI says so (`lan.footnote`).
 - **Live reporting and remote hosts** are unaffected: the feed sends nothing to a service and nothing about hosts.
+
+## 9. Quotas
+
+The quota readers of QUOTAS 9 send the user's own credential for one agent to that agent's vendor and receive the
+account's usage limits. This is the one feature besides live reporting whose requests carry anything about the user:
+the credential itself.
+
+- **Scope**: only while `networkEnabled` and the source's quota switch are on (QUOTAS 9.1), only to the hosts below,
+  never to Anthropic, never with anything but the headers QUOTAS 9 lists. The section 1 rule against credentials and
+  identifiers applies to every other feature unchanged.
+- **Transport**: HTTPS, redirects never followed, the system proxy, timeout 10 s, cap 256 KiB. The Antigravity reader
+  talks to `127.0.0.1` only (2 s, no proxy, a self-signed certificate accepted there alone).
+- **When**: at most every 5 minutes per source while the source runs or the dashboard is open; 15 minutes after a
+  failure; stopped after `401`/`403` until the credential changes.
+- **Failures** are silent like every other request, logged with host and status only.
+
+| Source | Hosts |
+| --- | --- |
+| Grok Build (live, off by default) | `cli-chat-proxy.grok.com` |
+| Kimi Code | `api.kimi.com` |
+| Gemini CLI | `cloudcode-pa.googleapis.com` |
+| Factory Droid | `api.factory.ai` |
+| ZCode | `api.z.ai` or `open.bigmodel.cn` (the user's region) |
+| Qoder (browser session, off by default) | `qoder.com`, `qoder.com.cn` |
+| WorkBuddy (browser session, off by default) | `www.workbuddy.cn` |
+| Antigravity | `127.0.0.1` |

@@ -28,6 +28,9 @@ from email.utils import parsedate_to_datetime
 from pathlib import Path
 from zoneinfo import ZoneInfo
 
+sys.path.insert(0, str(Path(__file__).resolve().parent))
+import quota_vendors as vendors  # noqa: E402
+
 ROOT = Path(__file__).resolve().parents[2]
 CASES = ROOT / "spec" / "fixtures" / "quota-cases.json"
 ENTRIES = ROOT / "spec" / "fixtures" / "quota"
@@ -46,7 +49,7 @@ USAGE_URL = re.compile(r"^https://claude\.ai/api/organizations/"
 KEY_PREFIX = re.compile(r"^\d+/\d+/")
 HELPER_NAME = "agent-speed-statusline"
 SAME_WINDOW_MS = 60_000
-KIND_ORDER = {"fiveHour": 0, "sevenDay": 1, "modelWeek": 2, "other": 3}
+KIND_ORDER = {"fiveHour": 0, "other": 1, "sevenDay": 2, "modelWeek": 3, "month": 4, "credits": 5}
 LANGS = ("zh-Hant", "zh-Hans", "en", "ja")
 WEEKDAYS = {
     "zh-Hant": ("週一", "週二", "週三", "週四", "週五", "週六", "週日"),
@@ -65,14 +68,16 @@ def window(kind, used, resets_ms, name=None, minutes=None):
     return {"kind": kind, "name": name, "minutes": minutes, "usedPercent": used, "resetsAtMs": resets_ms}
 
 
-def label(w):
+def base_label(w, lang):
     kind = w["kind"]
     if kind == "fiveHour":
         return "5h"
-    if kind == "sevenDay":
+    if kind in ("sevenDay", "modelWeek"):
         return "7d"
-    if kind == "modelWeek":
-        return f"{w['name']} 7d"
+    if kind == "month":
+        return string("quota.window.month", lang)
+    if kind == "credits":
+        return string("quota.window.credits", lang)
     minutes = w["minutes"]
     if minutes % 1440 == 0:
         return f"{minutes // 1440}d"
@@ -81,15 +86,21 @@ def label(w):
     return f"{minutes}m"
 
 
+def label(w, lang="en"):
+    base = base_label(w, lang)
+    return f"{w['name']} {base}" if w.get("name") else base
+
+
 def ordered(windows):
-    def key(w):
-        rank = KIND_ORDER[w["kind"]]
-        if w["kind"] == "modelWeek":
-            return (rank, (w["name"] or "").casefold(), 0)
-        if w["kind"] == "other":
-            return (rank, "", w["minutes"])
-        return (rank, "", 0)
-    return sorted(windows, key=key)
+    def length(w):
+        return (math.inf if w["minutes"] is None or w["kind"] == "credits" else w["minutes"], KIND_ORDER[w["kind"]])
+    unnamed = sorted((w for w in windows if not w.get("name")), key=length)
+    names = []
+    for w in windows:
+        if w.get("name") and w["name"] not in names:
+            names.append(w["name"])
+    named = [w for n in names for w in sorted((x for x in windows if x.get("name") == n), key=length)]
+    return unnamed + named
 
 
 def percent(used):
@@ -718,13 +729,137 @@ def build_cases(now_ms):
     cases["pace"] = [{"window": w, "expected": pace(w, now_ms)} for w in (
         window("fiveHour", 10.0, now_ms + 2 * HOUR_MS), window("sevenDay", 10.0, now_ms + 7 * DAY_MS + 1000),
         window("sevenDay", 10.0, None), window("fiveHour", 10.0, now_ms - 1))]
-    cases["labels"] = [[w, label(w)] for w in (window("fiveHour", 1, None), window("sevenDay", 1, None),
-                                               window("modelWeek", 1, None, name="Fable"),
-                                               window("other", 1, None, minutes=1440),
-                                               window("other", 1, None, minutes=120),
-                                               window("other", 1, None, minutes=45))]
+    label_windows = (window("fiveHour", 1, None), window("sevenDay", 1, None),
+                     window("modelWeek", 1, None, name="Fable"), window("other", 1, None, minutes=1440),
+                     window("other", 1, None, minutes=120), window("other", 1, None, minutes=45),
+                     window("month", 1, None, minutes=43200), window("credits", 1, None),
+                     window("fiveHour", 1, None, name="Gemini"), window("month", 1, None, name="MCP", minutes=43200))
+    cases["labels"] = [[w, {lang: label(w, lang) for lang in LANGS}] for w in label_windows]
+    mixed = [window("month", 5, None, minutes=43200), window("sevenDay", 4, None, name="Claude/GPT"),
+             window("credits", 3, None), window("fiveHour", 2, None, name="Gemini"), window("sevenDay", 1, None),
+             window("fiveHour", 6, None, name="Claude/GPT"), window("other", 7, None, minutes=1440),
+             window("sevenDay", 8, None, name="Gemini"), window("fiveHour", 9, None)]
+    cases["order"] = {"windows": mixed, "expected": [label(w) for w in ordered(mixed)]}
+    cases["vendors"] = vendor_cases(now_ms)
     cases["percents"] = [[v, percent(v)] for v in (0, 0.49, 0.5, 22.5, 99.6, 100, 103.4, -2)]
     return cases
+
+
+def vendor_cases(now_ms):
+    v = vendors
+    iso = "2026-11-12T00:00:00Z"
+    grok_log = [
+        "partial line",
+        json.dumps({"ts": "2026-11-10T10:00:00Z", "msg": "billing: fetched credits config",
+                    "ctx": {"config": {"creditUsagePercent": 12.5, "currentPeriod": {"type": "PERIOD_TYPE_WEEKLY",
+                                                                                      "start": "2026-11-08T00:00:00Z",
+                                                                                      "end": "2026-11-15T00:00:00Z"}}}}),
+        json.dumps({"ts": "2026-11-10T12:00:00Z", "msg": "billing: fetched credits config",
+                    "ctx": {"config": {"isUnifiedBillingUser": True,
+                                       "currentPeriod": {"type": "PERIOD_TYPE_MONTHLY", "start": "2026-11-01T00:00:00Z",
+                                                         "end": "2026-12-01T00:00:00Z"}}}}),
+        json.dumps({"ts": "2026-11-10T11:00:00Z", "msg": "other"}),
+    ]
+    grok_api = {"config": {"creditUsagePercent": 64, "billingPeriodEnd": iso}}
+    devin_rows = [("windsurf.reactSettings.cachedPlanInfoData:user-a", json.dumps({
+        "endTimestamp": 1790000000, "dailyRemainingPercent": 90, "dailyResetAtUnix": 1794400000,
+        "weeklyRemainingPercent": 10, "weeklyResetAtUnix": 1794800000000})),
+        ("windsurf.reactSettings.cachedPlanInfoData:user-b", json.dumps({
+            "endTimestamp": 1800000000, "dailyRemainingPercent": 75, "dailyResetAtUnix": 1794400000,
+            "hideDailyQuota": False, "weeklyRemainingPercent": 40, "weeklyResetAtUnix": 1794800000,
+            "hideWeeklyQuota": True, "accountIdentityText": "x"})), ("other", "not json")]
+    antigravity = {"response": {"groups": [
+        {"displayName": "Gemini models", "buckets": [
+            {"bucketId": "gemini_5h", "remainingFraction": 0.75, "resetTime": "2026-11-10T22:00:00Z"},
+            {"window": "WEEKLY", "remainingFraction": {"case": "remainingFraction", "value": 0.4},
+             "resetTime": iso}]},
+        {"displayName": "Claude and GPT (third party)", "buckets": [
+            {"displayName": "Five hour", "remaining": {"remainingFraction": 1.0}},
+            {"bucketId": "weekly", "remainingFraction": 0.1, "disabled": True}]},
+        {"displayName": "Gemini 4 Argon", "buckets": [{"window": "7d", "remainingFraction": 0.95,
+                                                         "resetTime": 1794800000}]}]}}
+    antigravity_status = {"userStatus": {"cascadeModelConfigData": {"clientModelConfigs": [
+        {"label": "Gemini 3 Pro", "quotaInfo": {"remainingFraction": 0.6, "resetTime": "2026-11-10T22:00:00Z"}},
+        {"label": "x", "quotaInfo": {}}]}}}
+    kimi_new = {"usages": {"limit_5h": {"used_ratio": 0.25, "reset_time": "2026-11-10T22:00:00Z"},
+                           "limit_7d": {"used_ratio": 0.5, "reset_time": iso},
+                           "limit_month_total": {"used_ratio": 0.125, "reset_time": "2026-12-01T00:00:00Z"},
+                           "limit_month": {"used_ratio": 0.9}}}
+    kimi_old = {"limits": [{"window": {"duration": "300", "timeUnit": "TIME_UNIT_MINUTE"},
+                            "detail": {"limit": "200", "remaining": "150", "resetTime": "2026-11-10T22:00:00Z"}},
+                           {"window": {"duration": 1, "timeUnit": "TIME_UNIT_DAY"},
+                            "detail": {"limit": 100, "used": 10}}],
+                "usage": {"limit": "2048", "used": "512", "reset_at": iso}}
+    gemini_load = {"cloudaicompanionProject": {"id": "proj-123"}}
+    gemini = {"buckets": [{"modelId": "gemini-3-pro", "remainingFraction": 0.8, "resetTime": iso},
+                          {"modelId": "gemini-3-pro-preview", "remainingFraction": 0.6, "resetTime": iso},
+                          {"modelId": "gemini-3-flash", "remainingFraction": 1.0, "resetTime": iso},
+                          {"modelId": "gemini-3-flash-lite", "remainingFraction": 0.95},
+                          {"modelId": "imagen-4", "remainingFraction": 0.5}]}
+    droid = {"limits": {"standard": {"fiveHour": {"usedPercent": 20, "secondsRemaining": 3600},
+                                     "weekly": {"usedPercent": 55, "windowEnd": 1794800000},
+                                     "monthly": {"usedPercent": 70, "windowEnd": "2026-11-01T00:00:00Z"}},
+                        "core": {"weekly": {"usedPercent": 5, "windowEnd": 1794800000000}}}}
+    zcode = {"success": True, "code": 200, "data": {"limits": [
+        {"type": "TOKENS_LIMIT", "unit": 3, "number": 5, "percentage": 30, "nextResetTime": now_ms + 2 * 3600000},
+        {"type": "TOKENS_LIMIT", "unit": 6, "number": 1, "usage": 1000, "currentValue": 250, "percentage": 99,
+         "nextResetTime": now_ms + 5 * 86400000},
+        {"type": "TIME_LIMIT", "unit": 5, "number": 1, "percentage": 40, "nextResetTime": now_ms + 20 * 86400000},
+        {"type": "TOKENS_LIMIT", "unit": 3, "number": 5, "percentage": 1, "nextResetTime": now_ms + 400 * 60000}]}}
+    qoder = {"totalQuota": {"quotaSummary": {"usedValue": 30, "limitValue": 100}},
+             "sharedQuota": {"quotaSummary": {"used_value": "20", "limit_value": "100"}},
+             "next_reset_at": "2026-12-01T00:00:00+08:00"}
+    qoder_pct = {"totalQuota": {"quotaSummary": {"usagePercentage": 42}}, "nextResetAt": 1796000000}
+    workbuddy = {"code": 0, "data": {"Packages": [
+        {"CycleTotalCapacity": "1000.00", "CycleRemainCapacity": "250.5", "CapacityUnit": "credits"},
+        {"CycleTotalCapacity": "500", "CycleRemainCapacity": "500", "CapacityUnit": "credits"},
+        {"CycleTotalCapacity": "9", "CycleRemainCapacity": "1", "CapacityUnit": "minutes"}]}}
+    mac_blob = v.chrome_cbc_encrypt(b"qoder-session-1", "mac-safe-storage-password", 1003)
+    mac_blob24 = v.chrome_cbc_encrypt(b"qoder-session-2", "mac-safe-storage-password", 1003, host=".qoder.com")
+    linux10 = v.chrome_cbc_encrypt(b"wb-session", "peanuts", 1)
+    linux11 = v.chrome_cbc_encrypt(b"wb-session-11", "libsecret-password", 1, prefix=b"v11", host="www.workbuddy.cn")
+    cookie_rows = [(".qoder.com", "sid", "a1", 0), ("qoder.com", "csrf", "b2", now_ms // 1000 + 60),
+                   ("old.qoder.com", "gone", "x", now_ms // 1000 - 60), ("notqoder.com", "evil", "y", 0),
+                   ("api.qoder.com", "region", "sg", 0)]
+    return {
+        "grokLog": {"lines": grok_log, "expected": v.grok_from_log(grok_log)},
+        "grokApi": {"body": grok_api, "expected": v.grok_windows(grok_api["config"])},
+        "grokUnknown": {"config": {"currentPeriod": {"type": "WEEKLY"}}, "expected": v.grok_windows(
+            {"currentPeriod": {"type": "WEEKLY"}})},
+        "devin": {"rows": devin_rows, "expected": v.devin_windows(devin_rows)},
+        "antigravity": {"body": antigravity, "expected": v.antigravity_windows(antigravity)},
+        "antigravityStatus": {"body": antigravity_status, "expected": v.antigravity_status_windows(antigravity_status)},
+        "kimiCurrent": {"body": kimi_new, "expected": v.kimi_windows(kimi_new)},
+        "kimiLegacy": {"body": kimi_old, "expected": v.kimi_windows(kimi_old)},
+        "geminiProject": {"body": gemini_load, "expected": v.gemini_project(gemini_load)},
+        "gemini": {"body": gemini, "expected": v.gemini_windows(gemini)},
+        "droidEnv": [[text, v.droid_key_from_env_file(text)] for text in (
+            "# comment\nOTHER=1\nexport FACTORY_API_KEY=\"fk-abc\"\n", "FACTORY_API_KEY=fk-plain", "NOPE=1")],
+        "droid": {"body": droid, "nowMs": now_ms, "expected": v.droid_windows(droid, now_ms)},
+        "zcode": {"body": zcode, "nowMs": now_ms, "expected": v.zcode_windows(zcode, now_ms)},
+        "zcodeFailure": {"body": {"success": False, "code": 401}, "expected": v.zcode_windows(
+            {"success": False, "code": 401}, now_ms)},
+        "qoder": {"body": qoder, "expected": v.qoder_windows(qoder)},
+        "qoderPercent": {"body": qoder_pct, "expected": v.qoder_windows(qoder_pct)},
+        "workbuddy": {"body": workbuddy, "expected": v.workbuddy_windows(workbuddy)},
+        "userAgent": v.chrome_user_agent("Macintosh; Intel Mac OS X 10_15_7", 142),
+        "cookies": {
+            "macV10": {"password": "mac-safe-storage-password", "iterations": 1003, "metaVersion": 23,
+                       "blob": mac_blob.hex(), "expected": v.chrome_cbc_decrypt(mac_blob, "mac-safe-storage-password",
+                                                                                 1003, 23)},
+            "macV10HostHash": {"password": "mac-safe-storage-password", "iterations": 1003, "metaVersion": 24,
+                               "host": ".qoder.com", "blob": mac_blob24.hex(),
+                               "expected": v.chrome_cbc_decrypt(mac_blob24, "mac-safe-storage-password", 1003, 24)},
+            "linuxV10": {"password": "peanuts", "iterations": 1, "metaVersion": 23, "blob": linux10.hex(),
+                         "expected": v.chrome_cbc_decrypt(linux10, "peanuts", 1, 23)},
+            "linuxV11HostHash": {"password": "libsecret-password", "iterations": 1, "metaVersion": 24,
+                                 "host": "www.workbuddy.cn", "blob": linux11.hex(),
+                                 "expected": v.chrome_cbc_decrypt(linux11, "libsecret-password", 1, 24)},
+            "windowsGcm": v.GCM_VECTOR,
+        },
+        "cookieHeader": {"rows": cookie_rows, "site": "qoder.com", "nowS": now_ms // 1000,
+                         "expected": v.cookie_header(cookie_rows, "qoder.com", now_ms // 1000)},
+    }
 
 
 NOW_MS = 1794338773000  # 2026-11-10 19:26:13 UTC = 2026-11-11 03:26:13 Asia/Taipei
@@ -732,7 +867,7 @@ NOW_MS = 1794338773000  # 2026-11-10 19:26:13 UTC = 2026-11-11 03:26:13 Asia/Tai
 
 def check():
     stored = json.loads(CASES.read_text(encoding="utf-8"))
-    fresh = build_cases(stored["now"])
+    fresh = json.loads(json.dumps(build_cases(stored["now"]), ensure_ascii=False))
     problems = [k for k in fresh if fresh[k] != stored.get(k)]
     for k in stored:
         if k not in fresh:
@@ -749,7 +884,7 @@ def main():
     parser.add_argument("--check-fixtures", action="store_true")
     parser.add_argument("--write", action="store_true")
     args = parser.parse_args()
-    for tool in ("zstd", "brotli"):
+    for tool in ("zstd", "brotli", "openssl"):
         if shutil.which(tool) is None:
             print(f"{tool} is required", file=sys.stderr)
             return 2

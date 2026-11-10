@@ -2849,6 +2849,34 @@ with Mica). Sections:
     - Turning it off runs QUOTAS 5.3 at once, without a dialog.
     Storage: `quotaCodex`, `quotaClaudeDesktop`, `quotaClaudeCli` (booleans) and `quotaCliInvite` (`"dismissed"` or
     absent). Remote hosts (section 13) have no quota switches.
+  - **額度, phase 2** (QUOTAS 9; user's choice 2026-11-10). Each source's group gets its switch after the source
+    toggles, with its hint and `settings.quota.unverified` below as the caption (secondary, then tertiary):
+    - Grok Build: `settings.quota.grokBuild` (`quotaGrokBuild`, on), and indented under it
+      `settings.quota.grokBuildLive` (`quotaGrokBuildLive`, off; disabled while the first is off).
+    - Devin `settings.quota.devin`, Antigravity `settings.quota.antigravity`, Kimi Code `settings.quota.kimi`, Gemini
+      CLI `settings.quota.gemini`, Factory Droid `settings.quota.droid`: on.
+    - ZCode: `settings.quota.zcode` (`quotaZcode`, off) with, while on:
+      - a secure text field `settings.quota.zcode.key` (placeholder `settings.quota.zcode.keyPlaceholder`). A pasted
+        key is saved to the secret store (QUOTAS 9.8) when the field loses focus or Return is pressed, and the field
+        then shows `settings.quota.zcode.saved` with a `settings.quota.zcode.remove` button. The key is never shown
+        again.
+      - a region picker `settings.quota.zcode.region` (`settings.quota.zcode.regionGlobal`,
+        `settings.quota.zcode.regionCn`).
+    - Qoder (one switch in the Qoder IDE group, for both Qoder sources) `settings.quota.qoder` and WorkBuddy (the
+      WorkBuddy group) `settings.quota.workbuddy`: off, with `settings.quota.cookies.hint` as the caption. Turning one
+      on asks first: `settings.quota.cookies.confirm.title` with `.message` (the site's name and host), buttons
+      `settings.quota.cookies.confirm.ok` (default) and Cancel.
+    - While a switch is on, a status line under it reads the source's state:
+      - `settings.quota.status.ok` with the time;
+      - `settings.quota.status.noCredential` or `.noBrowser`;
+      - `settings.quota.status.expired` (with the agent's name) or `.denied` (with the host);
+      - `settings.quota.status.failed`;
+      - `settings.quota.status.networkOff` when `networkEnabled` is off;
+      - `settings.quota.status.notRunning` while nothing asks yet because the agent is not running.
+      Problems show in the warning style, the rest in secondary.
+    Storage: `quotaGrokBuild`, `quotaGrokBuildLive`, `quotaDevin`, `quotaAntigravity`, `quotaKimi`, `quotaGemini`,
+    `quotaDroid`, `quotaZcode`, `quotaZcodeRegion` (`global` / `bigmodel-cn`), `quotaQoder`, `quotaWorkBuddy`; the
+    ZCode key only in the secret store.
 - **關於 About** — version, GitHub link, license, privacy statement: read-only, local-only, no network, no telemetry,
   conversation content is never stored or displayed. With the cost feature: `privacy.statement` and the Network group
   with the master switch (section 9, `spec/NETWORK.md`). With traffic measuring: `privacy.traffic` follows
