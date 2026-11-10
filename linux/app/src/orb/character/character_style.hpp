@@ -9,11 +9,14 @@
 #include <vector>
 
 #include "agentspeed/character/hud.hpp"
+#include "agentspeed/character/hud_models.hpp"
 #include "agentspeed/character/hud_wings.hpp"
 #include "agentspeed/character/pack.hpp"
 #include "agentspeed/character/performer.hpp"
 #include "agentspeed/character/selection.hpp"
+#include "orb/character/character_cards.hpp"
 #include "orb/character/character_lightning.hpp"
+#include "orb/character/character_models.hpp"
 #include "orb/character/character_particles.hpp"
 #include "orb/style.hpp"
 
@@ -38,11 +41,18 @@ struct CharacterContent {
     bool costAtLeast = false, costUnknown = false;
     double costOpacity = 0;  // the cost card's quiet rule
     QString todayLine, agentsLine;
+    // The 性能 card's 首字 row: its label, value and unit, and its fade (empty while switched off or without a value).
+    QString latencyGlyph, latencyNumber, latencyUnit;
+    double latencyOpacity = 0;
+    // The models card's rows, fastest first, its quiet rule's fade (0 while switched off) and its texts.
+    std::vector<agentspeed::character::ModelRow> models;
+    double modelsOpacity = 0;
+    QString modelsMore, speedUnit;
 };
 
 // `character` (DESIGN 2a.6): the skinned character of the chosen pack with its pose and character swaps, the ring of
-// lights at her feet, agent lights, her particles, and the readout cards beside her — the speed at her right, the
-// facts in a column at her left, the model above her head. Frame `s` is the footprint D = 2 S. Without a pack the
+// lights at her feet, agent lights, her particles, and the readout cards beside her — the speed at her right with the
+// running models under it, the facts in a column at her left, the model above her head. Frame `s` is the footprint D = 2 S. Without a pack the
 // style draws the ring and the standard readout with `character.empty`.
 class CharacterStyle : public Style {
 public:
@@ -87,6 +97,14 @@ private:
     void drawCards(Scene& scene, const Frame& f);
     void drawSpeed(Scene& scene, const Frame& f, QPointF center, double scale, double spin, double alpha);
     void drawPeak(Scene& scene, const Frame& f);
+    // The 性能 card's rows: 性能 at p, 思考 and 首字 at t with their shares while they fade, where their values start.
+    struct PerfRows {
+        bool score = false, thinking = false, latency = false;
+        double thinkingShare = 0, latencyShare = 0;
+        double thinkingColumn = 0, latencyColumn = 0;
+        double w = 0, h = 0;
+    };
+    PerfRows perfRows(const cards::CardMetrics& m) const;
     std::array<double, 2> cardSize(agentspeed::character::HudCard card, const Frame& f) const;
     QString modelText() const;
     CharacterLightning::Strength lightningStrength(const Frame& f) const;
@@ -103,8 +121,9 @@ private:
     agentspeed::character::HudWings wings_;
     std::optional<agentspeed::character::HudSilhouette> silhouette_;
     std::vector<double> scratch_;
-    std::array<agentspeed::character::CardSize, 6> cardSizes_{};
-    std::array<bool, 6> cardShown_{};
+    std::array<agentspeed::character::CardSize, agentspeed::character::kHudCardCount> cardSizes_{};
+    std::array<bool, agentspeed::character::kHudCardCount> cardShown_{};
+    ModelsCard modelsCard_;
     std::vector<float> vertices_;
     std::vector<std::uint32_t> indices_;
     double hudTime_ = 0;

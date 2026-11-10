@@ -133,7 +133,7 @@ void OrbWindow::setCharacters(CharacterLibrary* characters) {
 }
 
 bool OrbWindow::intelEnabled() const {
-    if (isCharacter()) return characterReadouts_.intelligence || characterReadouts_.thinking;
+    if (isCharacter()) return characterReadouts_.intelligence || characterReadouts_.thinking || characterReadouts_.latency;
     return traffic_ == QLatin1String("intelligence");
 }
 
@@ -369,6 +369,7 @@ void OrbWindow::stepIntel(double time, double dt) {
     netOpacity_ = ramp(netOpacity_, netTarget, dt, netTarget > netOpacity_ ? 0.25 : 0.6);
     const double costTarget = isCharacter() && !costCardNumber_.isEmpty() && time - costLastActive_ < 10 ? 1 : 0;
     costOpacity_ = ramp(costOpacity_, costTarget, dt, costTarget > costOpacity_ ? 0.25 : 0.6);
+    characterReadings_.step(time, dt);
     unitHoverAmount_ = ramp(unitHoverAmount_, unitHover_ ? 1 : 0, dt, 0.15);
 }
 
@@ -413,7 +414,8 @@ bool OrbWindow::intelBusy(double time) const {
     return std::abs(netOpacity_ - netTarget) > 0.001 || std::abs(costOpacity_ - costTarget) > 0.001 || std::abs(unitHoverAmount_ - (unitHover_ ? 1 : 0)) > 0.001 ||
            std::abs(intelOpacity_ - target) > 0.001 || std::abs(thinkingOpacity_ - shown) > 0.001 ||
            std::abs(glide_ - (1 - shown)) > 0.001 ||
-           (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.15);
+           (time - countStart_ >= 0 && time - countStart_ < countDuration_) || (time - numberFadeStart_ >= 0 && time - numberFadeStart_ < 0.15) ||
+           (isCharacter() && characterReadings_.busy(time));
 }
 
 double OrbWindow::nextIntelWake(double time) const {
@@ -423,6 +425,7 @@ double OrbWindow::nextIntelWake(double time) const {
     };
     if (netOpacity_ > 0) consider(netLastActive_ + 10);
     if (costOpacity_ > 0) consider(costLastActive_ + 10);
+    if (isCharacter()) consider(characterReadings_.nextWake(time));
     if (!intelEnabled()) return wake;
     if (intelOpacity_ > 0) consider(intelLastActive_ + 10);
     if (thinkingZeroSince_ >= 0 && thinkingOpacity_ > 0) consider(thinkingZeroSince_ + 3);
@@ -571,8 +574,9 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
     }
     if (isCharacter()) {
         updateCharacter(snap, t);
+        characterReadings_.apply(set, t, strings_);
         key += characterPack_ ? QString::fromStdString(characterPack_->id()) : QString();
-        key += costCardNumber_ + characterModel_ + todayText_;
+        key += costCardNumber_ + characterModel_ + todayText_ + characterReadings_.key();
     }
     const bool changed = key != contentKey_ || static_cast<int>(gauge_.tier()) != tierBefore ||
                          gauge_.title() != titleBefore || !gauge_.isSettled();
@@ -901,6 +905,25 @@ void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, 
         c.costOpacity = costOpacity_;
         c.todayLine = todayText_.isEmpty() ? QString() : fill(strings_.t(QStringLiteral("boards.today")), {todayText_});
         c.agentsLine = agentCount_ > 0 ? fill(strings_.t(QStringLiteral("agents.count")), {QString::number(agentCount_)}) : QString();
+        if (const auto& latency = characterReadings_.latency(); latency && characterReadouts_.latency) {
+            c.latencyGlyph = latency->glyph;
+            c.latencyNumber = latency->number;
+            c.latencyUnit = latency->unit;
+            c.latencyOpacity = characterReadings_.latencyOpacity();
+        }
+        // The rows go along even while the card is switched off, so it fades out with them.
+        for (const auto& m : characterReadings_.models()) {
+            agentspeed::character::ModelRow row;
+            row.model = m.model.toStdString();
+            if (m.speed >= 0) row.speed = m.speed;
+            if (const QColor accent(characters_ ? characters_->vendorAccent(m.vendor) : QString()); accent.isValid()) {
+                row.accent = static_cast<std::uint32_t>(accent.rgb() & 0xFFFFFFu);
+            }
+            c.models.push_back(std::move(row));
+        }
+        c.modelsOpacity = characterReadouts_.models ? characterReadings_.modelsOpacity() : 0;
+        c.modelsMore = strings_.t(QStringLiteral("character.models.more"));
+        c.speedUnit = strings_.t(QStringLiteral("unit.tokS"));
         character->setContent(c);
         character->setBackingScale(devicePixelRatio());
     }
@@ -1267,7 +1290,12 @@ void OrbWindow::updateLabel() {
         } else {
             sentence = strings_.t(QStringLiteral("intel.none"));
         }
-        label += separator + sentence;
+        if (!isCharacter() || characterReadouts_.intelligence || characterReadouts_.thinking) label += separator + sentence;
+        // The 首字 row after the 性能 reading, while it shows.
+        if (const auto& latency = characterReadings_.latency();
+            isCharacter() && characterReadouts_.latency && latency && characterReadings_.latencyOpacity() > 0.5) {
+            label += separator + latency->spoken;
+        }
     }
     // DESIGN 10 Accessibility: the network rates read as words while the readout shows.
     if (unavailable_.isEmpty() && netAvailable_ && netOpacity_ > 0.5) {
@@ -1284,6 +1312,10 @@ void OrbWindow::updateLabel() {
             const QString shown = costCardAtLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {costCardNumber_}) : costCardNumber_;
             label += separator + fill(strings_.t(QStringLiteral("a11y.board.cost")), {shown, currency});
         }
+    }
+    // The models card after the cost: every running model, drawn or not.
+    if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.models && characterReadings_.modelsOpacity() > 0.5) {
+        if (const QString spoken = characterReadings_.spokenModels(strings_); !spoken.isEmpty()) label += separator + spoken;
     }
     if (label == labelText_) return;
     labelText_ = label;

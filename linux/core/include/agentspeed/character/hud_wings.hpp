@@ -1,5 +1,6 @@
 #pragma once
 
+#include <algorithm>
 #include <array>
 #include <cmath>
 #include <limits>
@@ -10,13 +11,13 @@
 
 namespace agentspeed::character {
 
-// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right, the model above
-// her head, and the column of facts on her left, top to bottom.
-enum class HudCard { Speed = 0, Model = 1, Performance = 2, Network = 3, Cost = 4, Agents = 5 };
+// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right with the running
+// models under it, the model above her head, and the column of facts on her left, top to bottom.
+enum class HudCard { Speed = 0, Model = 1, Performance = 2, Network = 3, Cost = 4, Agents = 5, Models = 6 };
 
-constexpr int kHudCardCount = 6;
-constexpr std::array<HudCard, 6> kHudCards = {HudCard::Speed, HudCard::Model, HudCard::Performance,
-                                              HudCard::Network, HudCard::Cost, HudCard::Agents};
+constexpr int kHudCardCount = 7;
+constexpr std::array<HudCard, kHudCardCount> kHudCards = {HudCard::Speed, HudCard::Model, HudCard::Performance, HudCard::Network,
+                                                          HudCard::Cost,  HudCard::Agents, HudCard::Models};
 // The left column, top to bottom.
 constexpr std::array<HudCard, 4> kHudColumn = {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents};
 
@@ -79,10 +80,32 @@ struct CardSize {
     double w = 0, h = 0;
 };
 
+// The models card's widths (DESIGN 2a.6, Models, *Place and width*), in points: `fixed` plus its name column, the
+// widest name cut to the name width (9 t, narrowed as far as 4 t), and never narrower than `floor` (the "+N" line);
+// `dots` wide with the dots and speeds only.
+struct ModelsShape {
+    double t = 8;
+    double fixed = 0, names = 0, floor = 0, dots = 0;
+    double h = 0;
+    bool operator==(const ModelsShape&) const = default;
+};
+
+// How the models card is drawn: its names cut to `nameWidth` points, or no names (the dots and speeds only).
+struct ModelsForm {
+    bool names = true;
+    double nameWidth = 0;
+    bool operator==(const ModelsForm&) const = default;
+    double width(const ModelsShape& s) const { return names ? std::max(s.fixed + std::min(s.names, nameWidth), s.floor) : s.dots; }
+};
+
+// Where the models card is: under the speed, lower down past the spill-over cards' room, or hidden for want of room.
+enum class ModelsPlace { UnderSpeed, Lower, Hidden };
+
 // Places the readout cards beside her (DESIGN 2a.6): each has its own anchor, kept clear of her outline, never behind
 // her; anchors trail her on soft springs and every card floats on its own slow figure of eight. When her left side
-// has no room for the whole column, its last cards continue under the speed on her right; a card changing sides fades
-// out and back in at its new place instead of crossing her.
+// has no room for the whole column, its last cards continue under the speed on her right (under the models card while
+// it shows); a card changing sides fades out and back in at its new place instead of crossing her. The models card
+// narrows its names, then drops them, then moves down past the spilled cards, and only then hides.
 class HudWings {
 public:
     // Where a card is drawn this frame: its center, scale, tilt (radians, clockwise on screen) and opacity.
@@ -106,27 +129,40 @@ public:
     static constexpr double kReturnAfter = 4.0;
     static constexpr double kSettleWindow = 30.0;
     static constexpr double kSettledReturn = 12.0;
+    // The models card: names 9 t wide, narrowed as far as 4 t; back from hidden, or its names wider again, after it has
+    // fit with 0.04 D to spare for 1.2 s; below the spilled cards at most 0.3 D.
+    static constexpr double kModelsNames = 9;
+    static constexpr double kModelsNamesMin = 4;
+    static constexpr double kModelsBack = 1.2;
+    static constexpr double kModelsSpare = 0.04;
+    static constexpr double kModelsReach = 0.3;
 
     HudWings();
 
     // Advances the layout one frame. `sizes` are the cards' current sizes in points and `shown` which cards should
-    // show (switched on and not quiet), both indexed by `HudCard`.
-    void update(double dt, double time, const HudFrame& f, const std::array<CardSize, 6>& sizes,
-                const std::array<bool, 6>& shown);
+    // show (switched on and not quiet), both indexed by `HudCard`; the models card's size comes from `models`.
+    void update(double dt, double time, const HudFrame& f, const std::array<CardSize, kHudCardCount>& sizes,
+                const std::array<bool, kHudCardCount>& shown);
 
     // A card's float at time `t`: offset in shares of `D`, tilt in radians and breathing scale.
     static Float floatOf(HudCard card, double t);
 
-    const std::array<Place, 6>& places() const { return places_; }
-    const std::array<double, 6>& presence() const { return presence_; }
-    const std::array<CardSize, 6>& sizes() const { return sizes_; }
+    const std::array<Place, kHudCardCount>& places() const { return places_; }
+    const std::array<double, kHudCardCount>& presence() const { return presence_; }
+    const std::array<CardSize, kHudCardCount>& sizes() const { return sizes_; }
     int split() const { return split_; }
-    bool isAtHerRight(HudCard card) const { return card == HudCard::Speed || right_[static_cast<std::size_t>(index(card))]; }
+    bool isAtHerRight(HudCard card) const {
+        return card == HudCard::Speed || card == HudCard::Models || right_[static_cast<std::size_t>(index(card))];
+    }
     // A card is fading in or out or changing sides (frames are needed even when nothing else moves).
     bool isFading() const;
+    ModelsPlace modelsPlace() const { return modelsPlace_; }
+    const ModelsForm& modelsForm() const { return form_; }
 
     // No float, tilt or breathing (Reduce Motion, effects Off): the cards still keep clear of her.
     bool still = false;
+    // The models card's widths and height this frame.
+    ModelsShape models;
 
 private:
     struct Fit {
@@ -135,6 +171,11 @@ private:
     struct Best {
         int split;
         bool hugging;
+    };
+    // The models card at a top: its left edge and the form that fits the room to the orb's edge (nullopt: none).
+    struct ModelsFit {
+        double left;
+        std::optional<ModelsForm> form, spare;
     };
 
     bool intrudes(HudCard card, double x, double y, const HudFrame& f) const;
@@ -145,15 +186,30 @@ private:
     Best best(const HudFrame& f);
     Fit fit(const HudFrame& f, int split, double room, double reach, bool aligned);
     double layout(const HudFrame& f, int split, double shift, bool aligned, double room, bool write);
+    std::optional<ModelsForm> formFor(double room) const;
+    double speedBottom() const;
+    double spillBottom(const HudFrame& f) const;
+    ModelsFit modelsFit(const HudFrame& f, double top) const;
+    std::optional<double> lowerTop(const HudFrame& f, bool spare) const;
+    void chooseModels(double dt, const HudFrame& f, bool shown);
+    void modelsAnchor(const HudFrame& f);
 
-    std::array<Place, 6> places_{};
-    std::array<double, 6> presence_{};
-    std::array<CardSize, 6> sizes_{};
-    std::array<std::pair<SecondOrder, SecondOrder>, 6> anchors_;
-    std::array<std::pair<SecondOrder, SecondOrder>, 6> growth_;
-    std::array<std::pair<double, double>, 6> targets_{};
-    std::array<bool, 6> right_{};
-    std::array<double, 6> hop_{};
+    std::array<Place, kHudCardCount> places_{};
+    std::array<double, kHudCardCount> presence_{};
+    std::array<CardSize, kHudCardCount> sizes_{};
+    std::array<std::pair<SecondOrder, SecondOrder>, kHudCardCount> anchors_;
+    std::array<std::pair<SecondOrder, SecondOrder>, kHudCardCount> growth_;
+    std::array<std::pair<double, double>, kHudCardCount> targets_{};
+    std::array<bool, kHudCardCount> right_{};
+    std::array<double, kHudCardCount> hop_{};
+    ModelsPlace modelsPlace_ = ModelsPlace::UnderSpeed;
+    ModelsPlace modelsWas_ = ModelsPlace::UnderSpeed;  // its last place before it hid
+    std::optional<ModelsPlace> modelsHop_;
+    ModelsForm form_;
+    double modelsStrain_ = 0, modelsEase_ = 0, modelsWiden_ = 0;
+    double lowerTop_ = 0;
+    bool snapModels_ = false;
+    bool modelsFresh_ = true;  // it shows after it was gone: its best place at once
     int split_ = 4;
     double strain_ = 0;
     double ease_ = 0;

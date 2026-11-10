@@ -60,6 +60,9 @@ public:
     std::shared_ptr<const agentspeed::character::Pack> load(const QString& id);
     QString displayName(const QString& id) const;
     QString accent(const QString& id) const;
+    // A model vendor's accent (the models card's dot): an installed character's for the vendor, else the catalog's;
+    // empty when no character stands for it.
+    QString vendorAccent(const QString& vendor) const;
     bool hasUpdate(const QString& id) const;
 
     // Catalog.

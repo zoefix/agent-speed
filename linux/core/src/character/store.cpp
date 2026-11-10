@@ -348,5 +348,23 @@ Resolved resolve(const std::optional<std::string>& model, SourceKind source, con
     return {vendor, raw && !raw->empty() ? raw : std::nullopt};
 }
 
+std::optional<std::string> accent(const std::optional<std::string>& vendor, const std::vector<InstalledCharacter>& installed,
+                                  const CharacterCatalog* catalog) {
+    if (!vendor || vendor->empty()) return std::nullopt;
+    const auto valid = [](const std::string& hex) { return CharacterManifest::rgb(hex).has_value(); };
+    const auto standsFor = [&](const std::vector<std::string>& vendors) {
+        return std::find(vendors.begin(), vendors.end(), *vendor) != vendors.end();
+    };
+    for (const auto& pack : installed) {
+        if (standsFor(pack.manifest.vendors) && valid(pack.manifest.accent)) return pack.manifest.accent;
+    }
+    if (catalog) {
+        for (const auto& entry : catalog->characters) {
+            if (standsFor(entry.vendors) && valid(entry.accent)) return entry.accent;
+        }
+    }
+    return std::nullopt;
+}
+
 }  // namespace vendors
 }  // namespace agentspeed::character

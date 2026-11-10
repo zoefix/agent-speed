@@ -27,5 +27,8 @@ double perfScale(double value);
 std::pair<QString, QString> perfDuration(double ms);
 QString oneDecimalBelowTen(double value);
 QString cappedPercent(double share);
+// The character orb's 首字 row (DESIGN 2a.6) as {number, unit key}: below 1 s whole milliseconds to the nearest 10, from
+// 1 s one decimal, from 10 s whole seconds; each rounding half away from zero, the unit following the rounded value.
+std::pair<QString, QString> firstTokenLatency(double ms);
 
 }  // namespace format

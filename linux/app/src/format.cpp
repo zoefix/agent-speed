@@ -83,6 +83,17 @@ QString oneDecimalBelowTen(double value) {
     return QString::number(static_cast<std::int64_t>(std::floor(value + 0.5)));
 }
 
+std::pair<QString, QString> firstTokenLatency(double ms) {
+    const double v = std::max(0.0, ms);
+    if (const auto tens = static_cast<std::int64_t>(std::floor(v / 10 + 0.5)) * 10; tens < 1000) {
+        return {QString::number(tens), QStringLiteral("perf.unit.ms")};
+    }
+    if (const auto tenths = static_cast<std::int64_t>(std::floor(v / 100 + 0.5)); tenths < 100) {
+        return {QString::number(static_cast<double>(tenths) / 10, 'f', 1), QStringLiteral("perf.unit.s")};
+    }
+    return {QString::number(static_cast<std::int64_t>(std::floor(v / 1000 + 0.5))), QStringLiteral("perf.unit.s")};
+}
+
 QString cappedPercent(double share) {
     auto whole = static_cast<std::int64_t>(std::floor(share * 100 + 0.5));
     if (share < 1 && whole >= 100) whole = 99;

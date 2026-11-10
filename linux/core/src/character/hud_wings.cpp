@@ -68,28 +68,43 @@ HudWings::HudWings() {
 }
 
 bool HudWings::isFading() const {
-    for (std::size_t i = 0; i < 6; ++i) {
+    for (std::size_t i = 0; i < static_cast<std::size_t>(kHudCardCount); ++i) {
         if ((presence_[i] > 0 && presence_[i] < 1) || hop_[i] < 1) return true;
     }
     return false;
 }
 
-void HudWings::update(double dt, double time, const HudFrame& f, const std::array<CardSize, 6>& given,
-                      const std::array<bool, 6>& shown) {
-    for (std::size_t i = 0; i < 6; ++i) {
-        const double target = shown[i] ? 1.0 : 0.0;
+void HudWings::update(double dt, double time, const HudFrame& f, const std::array<CardSize, kHudCardCount>& given,
+                      const std::array<bool, kHudCardCount>& shownIn) {
+    constexpr auto kModels = static_cast<std::size_t>(HudCard::Models);
+    auto shown = shownIn;
+    shown[kModels] = shown[kModels] && models.h > 0;
+    auto wanted = given;
+    if (!placed_) form_ = ModelsForm{true, kModelsNames * models.t};
+    wanted[kModels] = {form_.width(models), models.h};
+    for (std::size_t i = 0; i < static_cast<std::size_t>(kHudCardCount); ++i) {
+        const bool on = shown[i] && (i != kModels || modelsPlace_ != ModelsPlace::Hidden);
+        const double target = on ? 1.0 : 0.0;
         const double rate = dt / (target > presence_[i] ? kFadeIn : kFadeOut);
         presence_[i] = target > presence_[i] ? std::min(target, presence_[i] + rate) : std::max(target, presence_[i] - rate);
         if (!placed_) presence_[i] = target;
         if (!placed_ || presence_[i] == 0 || still) {
-            growth_[i].first.snap(given[i].w);
-            growth_[i].second.snap(given[i].h);
+            growth_[i].first.snap(wanted[i].w);
+            growth_[i].second.snap(wanted[i].h);
         }
-        sizes_[i] = {growth_[i].first.update(dt, given[i].w), growth_[i].second.update(dt, given[i].h)};
+        sizes_[i] = {growth_[i].first.update(dt, wanted[i].w), growth_[i].second.update(dt, wanted[i].h)};
     }
     targets_[0] = speedAnchor(f, sizes_[0]);
     targets_[1] = modelAnchor(f, sizes_[1]);
+    const ModelsForm before = form_;
+    chooseModels(dt, f, shown[kModels]);
+    if (!placed_ && modelsPlace_ == ModelsPlace::Hidden) presence_[kModels] = 0;
+    if (form_ != before && (!placed_ || presence_[kModels] == 0 || still)) {
+        growth_[kModels].first.snap(form_.width(models));
+        sizes_[kModels].w = form_.width(models);
+    }
     columnAnchors(dt, f);
+    modelsAnchor(f);
 
     const double d = f.footprint;
     for (HudCard card : kHudCards) {
@@ -322,7 +337,12 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
     }
 
     if (split >= kHudColumn.size()) return over;
-    y = targets_[0].second + sizes_[0].h / 2 + gap;
+    y = speedBottom() + gap;
+    // Under the models card while it shows there, and while it fades out from there.
+    if ((modelsPlace_ == ModelsPlace::Hidden ? modelsWas_ : modelsPlace_) == ModelsPlace::UnderSpeed) {
+        constexpr auto m = static_cast<std::size_t>(HudCard::Models);
+        y += presence_[m] * (sizes_[m].h + gap);
+    }
     double left = -kInf;
     for (std::size_t k = split; k < kHudColumn.size(); ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
@@ -342,6 +362,174 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
         if (write) targets_[i].first = std::min(left + w / 2, maxX - w / 2);
     }
     return over;
+}
+
+double HudWings::speedBottom() const { return targets_[0].second + sizes_[0].h / 2; }
+
+double HudWings::spillBottom(const HudFrame& f) const {
+    const double gap = kColumnGap * f.footprint;
+    double y = speedBottom() + gap;
+    for (std::size_t k = static_cast<std::size_t>(std::max(0, split_)); k < kHudColumn.size(); ++k) {
+        const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
+        y += presence_[i] * (sizes_[i].h + gap);
+    }
+    return y;
+}
+
+// The widest form that fits `room`: the names 9 t wide, else as wide as fits down to 4 t, else the dots and speeds.
+std::optional<ModelsForm> HudWings::formFor(double room) const {
+    const auto& s = models;
+    constexpr double kSlack = 1e-9;
+    if (std::max(s.fixed + std::min(s.names, kModelsNames * s.t), s.floor) <= room + kSlack) return ModelsForm{true, kModelsNames * s.t};
+    if (std::max(s.fixed + std::min(s.names, kModelsNamesMin * s.t), s.floor) <= room + kSlack) {
+        return ModelsForm{true, std::clamp(room - s.fixed, kModelsNamesMin * s.t, kModelsNames * s.t)};
+    }
+    if (s.dots <= room + kSlack) return ModelsForm{false, 0};
+    return std::nullopt;
+}
+
+// Its left edge on the speed's line, or further right where her outline is wider under the speed, `kGap` clear of it.
+HudWings::ModelsFit HudWings::modelsFit(const HudFrame& f, double top) const {
+    const double d = f.footprint;
+    const double h = models.h;
+    const double line = targets_[0].first - sizes_[0].w / 2;
+    const auto e = f.silhouette.extent(top, top + h);
+    ModelsFit out{e ? std::max(line, e->right + kGap * d) : line, std::nullopt, std::nullopt};
+    if (top + h > f.bounds.maxY - kMargin * d + 0.5) return out;
+    const double room = f.bounds.maxX - kMargin * d - out.left;
+    out.form = formFor(room);
+    out.spare = formFor(room - kModelsSpare * d);
+    return out;
+}
+
+// The first top from the spill-over cards' room down to 0.3 D below it where the card fits (with room to spare).
+std::optional<double> HudWings::lowerTop(const HudFrame& f, bool spare) const {
+    const double start = spillBottom(f);
+    const double step = std::max(1.0, f.silhouette.step());
+    for (double top = start; top <= start + kModelsReach * f.footprint + 1e-9; top += step) {
+        const auto fit = modelsFit(f, top);
+        if (spare ? fit.spare.has_value() : fit.form.has_value()) return top;
+    }
+    return std::nullopt;
+}
+
+// The models card's place, with the column's patience (DESIGN 2a.6, *Place and width*): it moves down or hides once
+// its place has not fit for 0.6 s, comes back after it has fit with 0.04 D to spare for 1.2 s and moves back up after
+// 4 s; between its two places it fades out and back in. Its names narrow at once to fit and widen again after 1.2 s
+// with room to spare.
+void HudWings::chooseModels(double dt, const HudFrame& f, bool shown) {
+    constexpr auto i = static_cast<std::size_t>(HudCard::Models);
+    // Switched off or quiet and gone: nothing to place until it shows again, and then its best place at once.
+    if (!shown && presence_[i] == 0) {
+        modelsFresh_ = true;
+        modelsHop_.reset();
+        hop_[i] = 1;
+        modelsStrain_ = 0;
+        modelsEase_ = 0;
+        return;
+    }
+    const double under = speedBottom() + kColumnGap * f.footprint;
+    const auto atUnder = modelsFit(f, under);
+    // The lower place keeps its top while the card fits there, below the spilled cards.
+    const bool keepsLower = lowerTop_ >= spillBottom(f) - 0.5 && modelsFit(f, lowerTop_).form.has_value();
+    const auto lower = keepsLower ? std::optional<double>(lowerTop_) : lowerTop(f, false);
+    const auto go = [&](ModelsPlace place) {
+        modelsStrain_ = 0;
+        modelsEase_ = 0;
+        if (place == ModelsPlace::Lower && lower) lowerTop_ = *lower;
+        if (place != ModelsPlace::Hidden && modelsPlace_ != ModelsPlace::Hidden && presence_[i] > 0) {
+            modelsHop_ = place;
+            return;
+        }
+        snapModels_ = snapModels_ || presence_[i] == 0;
+        modelsPlace_ = place;
+    };
+    const bool atOnce = !placed_ || still || modelsFresh_;
+    modelsFresh_ = false;
+    if (modelsHop_) {
+        hop_[i] = std::max(0.0, hop_[i] - dt / kHopOut);
+        if (hop_[i] == 0 || atOnce) {
+            modelsPlace_ = *modelsHop_;
+            modelsHop_.reset();
+            snapModels_ = true;
+        }
+    } else {
+        hop_[i] = std::min(1.0, hop_[i] + dt / kHopIn);
+    }
+    if (atOnce) {
+        hop_[i] = 1;
+        modelsHop_.reset();
+        const ModelsPlace best = atUnder.form ? ModelsPlace::UnderSpeed : lower ? ModelsPlace::Lower : ModelsPlace::Hidden;
+        snapModels_ = snapModels_ || best != modelsPlace_ || presence_[i] == 0;
+        modelsPlace_ = best;
+        if (best == ModelsPlace::Lower) lowerTop_ = *lower;
+        modelsStrain_ = 0;
+        modelsEase_ = 0;
+    } else if (!shown || modelsHop_) {
+        modelsStrain_ = 0;
+        modelsEase_ = 0;
+    } else if (modelsPlace_ == ModelsPlace::UnderSpeed) {
+        modelsEase_ = 0;
+        modelsStrain_ = atUnder.form ? 0 : modelsStrain_ + dt;
+        if (modelsStrain_ >= kSpillAfter) go(lower ? ModelsPlace::Lower : ModelsPlace::Hidden);
+    } else if (modelsPlace_ == ModelsPlace::Lower) {
+        modelsEase_ = atUnder.spare ? modelsEase_ + dt : 0;
+        modelsStrain_ = lower ? 0 : modelsStrain_ + dt;
+        if (modelsEase_ >= kReturnAfter) go(ModelsPlace::UnderSpeed);
+        else if (modelsStrain_ >= kSpillAfter) go(atUnder.form ? ModelsPlace::UnderSpeed : ModelsPlace::Hidden);
+    } else {
+        modelsStrain_ = 0;
+        const bool lowerSpare = !atUnder.spare && lowerTop(f, true).has_value();
+        modelsEase_ = atUnder.spare || lowerSpare ? modelsEase_ + dt : 0;
+        if (modelsEase_ >= kModelsBack) go(atUnder.spare ? ModelsPlace::UnderSpeed : ModelsPlace::Lower);
+    }
+
+    // The form at its place: narrower at once, wider again once the wider one has had room to spare for 1.2 s.
+    if (modelsPlace_ == ModelsPlace::Hidden) return;
+    modelsWas_ = modelsPlace_;
+    if (modelsPlace_ == ModelsPlace::Lower && lower) lowerTop_ = *lower;
+    const auto at = modelsPlace_ == ModelsPlace::UnderSpeed ? atUnder : modelsFit(f, lowerTop_);
+    const ModelsForm target = at.form.value_or(ModelsForm{false, 0});
+    const auto rank = [](const ModelsForm& form) { return form.names ? form.nameWidth : -1.0; };
+    if (atOnce || presence_[i] == 0 || snapModels_) {
+        form_ = target;
+        modelsWiden_ = 0;
+    } else if (rank(target) < rank(form_) - 1e-9) {
+        form_ = target;
+        modelsWiden_ = 0;
+    } else if (at.spare && rank(*at.spare) > rank(form_) + 1e-9) {
+        modelsWiden_ += dt;
+        if (modelsWiden_ >= kModelsBack) {
+            form_ = *at.spare;
+            modelsWiden_ = 0;
+        }
+    } else {
+        modelsWiden_ = 0;
+    }
+}
+
+// The models card's target: under the speed or at its lower place; where it was while it hides.
+void HudWings::modelsAnchor(const HudFrame& f) {
+    constexpr auto i = static_cast<std::size_t>(HudCard::Models);
+    const double d = f.footprint;
+    const double w = sizes_[i].w, h = sizes_[i].h;
+    if (modelsPlace_ != ModelsPlace::Hidden) {
+        double top = speedBottom() + kColumnGap * d;
+        if (modelsPlace_ == ModelsPlace::Lower) {
+            if (lowerTop_ < spillBottom(f) - 0.5 || !modelsFit(f, lowerTop_).form) {
+                if (const auto lower = lowerTop(f, false)) lowerTop_ = *lower;
+            }
+            top = lowerTop_;
+        }
+        const double left = modelsFit(f, top).left;
+        targets_[i] = {std::max(std::min(left + w / 2, f.bounds.maxX - kMargin * d - w / 2), f.bounds.minX + kMargin * d + w / 2),
+                       top + h / 2};
+    }
+    if (snapModels_) {
+        anchors_[i].first.snap(targets_[i].first);
+        anchors_[i].second.snap(targets_[i].second);
+        snapModels_ = false;
+    }
 }
 
 }  // namespace agentspeed::character
