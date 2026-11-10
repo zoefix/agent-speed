@@ -54,6 +54,7 @@ final class QuotaController {
     @ObservationIgnored private var ticks = 0
     @ObservationIgnored private var roundInFlight = false
     @ObservationIgnored private var desktopWasRunning: Bool?
+    @ObservationIgnored private var appsSeenMs: Int64?
     @ObservationIgnored private var loops: [ObservationLoop] = []
     @ObservationIgnored private(set) var isLive = false
 
@@ -170,11 +171,16 @@ final class QuotaController {
         let every15s = force || ticks % 3 == 0
         let everyMinute = force || ticks % 12 == 0
         let tableApps = traffic.snapshot.enabled ? traffic.snapshot.quotaApps : nil
-        if let tableApps { applyApps(tableApps) }
+        if let tableApps {
+            applyApps(tableApps)
+            appsSeenMs = now
+        }
+        // Without any process listing lately, Desktop may be running: its cache is searched as if it were.
+        let appsKnown = appsSeenMs.map { now - $0 < 60_000 } ?? false
         let request = QuotaWorker.Request(
             nowMs: now,
             desktop: settings.quotaClaudeDesktop,
-            desktopRunning: apps.claudeDesktop,
+            desktopRunning: apps.claudeDesktop || !appsKnown,
             desktopStarted: desktopStartedSinceLastRound(),
             cli: settings.quotaClaudeCli,
             bridgeStatus: settings.quotaClaudeCli && everyMinute,
@@ -202,7 +208,10 @@ final class QuotaController {
         }
         if let status = result.bridgeStatus { apply(status: status) }
         if let signedIn = result.signedIn, self.signedIn != signedIn { self.signedIn = signedIn }
-        if let apps = result.apps { applyApps(apps) }
+        if let apps = result.apps {
+            applyApps(apps)
+            appsSeenMs = Self.nowMs()
+        }
     }
 
     private func apply(status: StatusLineSettings.Status) {
