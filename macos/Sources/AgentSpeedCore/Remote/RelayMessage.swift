@@ -45,6 +45,10 @@ public enum RelayMessage: Equatable, Sendable {
     /// History analysis progress, 0–1.
     case historyProgress(Double)
     case error(RelayError)
+    /// A source's quota on the host (REMOTE 11.1); times are the host's until converted.
+    case quota(RemoteQuotaReport)
+    case quotaRemoved(hostId: String, source: SourceKind)
+    case quotaBridge(RemoteQuotaBridge)
 }
 
 public struct RelayHello: Equatable, Sendable {

@@ -9,6 +9,12 @@ public protocol RemoteHistorySink: AnyObject, Sendable {
     func remoteHistory(_ event: RemoteHostEvent, requests: RemoteHistoryRequests)
 }
 
+/// Receives every host's `quota`, `quotaRemoved` and `quotaBridge` lines (REMOTE 11.1), times already local, in order
+/// on the coordinator's event queue. Quotas are display only: they never reach the monitor.
+public protocol RemoteQuotaSink: AnyObject, Sendable {
+    func remoteQuota(_ message: RelayMessage, hostId: String)
+}
+
 /// Sends `history` requests to the hosts' relays; usable from any thread.
 public struct RemoteHistoryRequests: Sendable {
     let hub: RemoteHub
@@ -29,6 +35,23 @@ public final class RemoteCoordinator {
         var networkEnabled: Bool
         var sources: Set<SourceKind>
         var priceTable: Data
+        var quota: RemoteQuotaSwitches
+    }
+
+    private final class QuotaRouter: Sendable {
+        private struct Target {
+            weak var sink: (any RemoteQuotaSink)?
+        }
+
+        private let target = OSAllocatedUnfairLock(initialState: Target())
+
+        func set(_ sink: (any RemoteQuotaSink)?) { target.withLock { $0.sink = sink } }
+        var sink: (any RemoteQuotaSink)? { target.withLock { $0.sink } }
+
+        func deliver(_ event: RemoteHostEvent) {
+            guard case .message(let message, _) = event.kind else { return }
+            target.withLock { $0.sink }?.remoteQuota(message, hostId: event.hostId)
+        }
     }
 
     /// Hands history events to the sink from the event queue.
@@ -55,17 +78,21 @@ public final class RemoteCoordinator {
     private let feed: RemoteFeed
     private weak var monitor: LiveMonitor?
     private let router: HistoryRouter
+    private let quotaRouter: QuotaRouter
     /// The hosts last applied, with their display names.
     public private(set) var document = RemoteHostsDocument.empty
     private var networkEnabled = true
     private var priceTable = Data()
+    private var quotaSwitches = RemoteQuotaSwitches()
     private var configured = false
     private var applied: Applied?
 
     public init(monitor: LiveMonitor, environment: RemoteEnvironment = RemoteEnvironment()) {
         let feed = monitor.remoteFeed
         let router = HistoryRouter()
+        let quotaRouter = QuotaRouter()
         self.router = router
+        self.quotaRouter = quotaRouter
         self.feed = feed
         self.monitor = monitor
         let queue = DispatchQueue(label: "app.agentspeed.remote.events", qos: .utility)
@@ -73,6 +100,7 @@ public final class RemoteCoordinator {
             switch Self.route(event) {
             case .live: feed.receive(event)
             case .history: router.deliver(event)
+            case .quota: quotaRouter.deliver(event)
             case .both:
                 feed.receive(event)
                 router.deliver(event)
@@ -88,15 +116,23 @@ public final class RemoteCoordinator {
         set { router.set(sink: newValue) }
     }
 
+    /// Receives the hosts' quota lines; held weakly.
+    public var quotaSink: (any RemoteQuotaSink)? {
+        get { quotaRouter.sink }
+        set { quotaRouter.set(newValue) }
+    }
+
     /// The `history` requests, for a sink that answers outside `remoteHistory`.
     public var historyRequests: RemoteHistoryRequests { RemoteHistoryRequests(hub: hub) }
 
     /// The settings: hosts, the network master switch (REMOTE 2.3) and the current price table's JSON (METRICS 9.1).
     /// Applied only when something changed; a change of hosts or enabled sources may reconnect (`RemoteHub.update`).
-    public func update(hosts: RemoteHostsDocument, networkEnabled: Bool, priceTable: Data) {
+    public func update(hosts: RemoteHostsDocument, networkEnabled: Bool, priceTable: Data,
+                       quota: RemoteQuotaSwitches = RemoteQuotaSwitches()) {
         document = hosts
         self.networkEnabled = networkEnabled
         self.priceTable = priceTable
+        quotaSwitches = quota
         configured = true
         apply()
     }
@@ -108,6 +144,9 @@ public final class RemoteCoordinator {
 
     /// *Retry now*.
     public func retryNow(hostId: String) { hub.retryNow(hostId: hostId) }
+
+    /// The host's relay installs its Claude Code bridge again (a status line the user replaced, REMOTE 11.3).
+    public func reapplyQuota(hostId: String) { hub.reapplyQuota(hostId: hostId) }
 
     public func requestHistory(hostId: String, digests: [String: String]) {
         hub.requestHistory(hostId: hostId, digests: digests)
@@ -134,19 +173,19 @@ public final class RemoteCoordinator {
     private func apply() {
         guard configured, let monitor else { return }
         let next = Applied(hosts: document.hosts, networkEnabled: networkEnabled,
-                           sources: monitor.configuration.enabledSources, priceTable: priceTable)
+                           sources: monitor.configuration.enabledSources, priceTable: priceTable, quota: quotaSwitches)
         if next != applied {
             applied = next
             let names = document.displayNames()
             feed.setHosts(document.hosts.map { RemoteHostInfo(id: $0.id, name: names[$0.id] ?? $0.automaticName) })
             hub.update(hosts: document.hosts, networkEnabled: networkEnabled, enabledSources: next.sources,
-                       priceTable: priceTable)
+                       priceTable: priceTable, quota: quotaSwitches)
         }
         hub.setWatch(monitor.reportWatch != nil)
     }
 
     private enum Route {
-        case live, history, both
+        case live, history, both, quota
     }
 
     private nonisolated static func route(_ event: RemoteHostEvent) -> Route {
@@ -159,6 +198,8 @@ public final class RemoteCoordinator {
             switch message {
             case .historyDay, .historyPerf, .historyDone, .historyProgress:
                 return .history
+            case .quota, .quotaRemoved, .quotaBridge:
+                return .quota
             case .error(let error) where error.code == .historyFailed:
                 return .history
             default:

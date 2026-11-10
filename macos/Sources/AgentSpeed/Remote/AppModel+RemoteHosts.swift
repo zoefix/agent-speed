@@ -86,6 +86,11 @@ extension AppModel {
         settings.remoteHosts = document
     }
 
+    /// *Reconnect* under a host's replaced status line: its relay runs QUOTAS 5.2 again (REMOTE 11.3).
+    func reconnectHostBridge(_ id: String) {
+        remoteHosts?.coordinator.reapplyQuota(hostId: id)
+    }
+
     /// *Retry now*.
     func retryRemoteHost(_ id: String) {
         remoteHosts?.coordinator.retryNow(hostId: id)

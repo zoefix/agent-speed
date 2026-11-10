@@ -117,7 +117,8 @@ final class OrbsController {
         loops.append(ObservationLoop { [weak self] in
             guard let self, let model = self.model else { return }
             let orbs = self.document.orbs
-            for runtime in self.runtimes.values { runtime.ingestQuota(model.quota) }
+            let connected = Set(model.snapshot.hosts.filter { $0.isConnected && !$0.isLocal }.map(\.id))
+            for runtime in self.runtimes.values { runtime.ingestQuota(model.quota, connected: connected) }
             // The light process listing runs only while a character orb could show the card (QUOTAS 6).
             let visible = model.settings.orbsVisible
             model.quota.wantsCard = visible && orbs.contains { orb in

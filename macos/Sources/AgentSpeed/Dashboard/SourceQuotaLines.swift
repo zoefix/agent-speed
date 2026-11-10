@@ -9,6 +9,7 @@ struct SourceQuotaLines: View {
     let columns: SourceQuotaColumns
     let separator: String
     let reduceMotion: Bool
+    var topPadding: CGFloat = 6
 
     var body: some View {
         VStack(alignment: .leading, spacing: 4) {
@@ -18,7 +19,7 @@ struct SourceQuotaLines: View {
                     .transition(.opacity)
             }
         }
-        .padding(.top, 6)
+        .padding(.top, topPadding)
         .animation(reduceMotion ? nil : .easeInOut(duration: 0.25), value: lines.map(\.id))
     }
 }
@@ -46,7 +47,7 @@ private struct SourceQuotaLineView: View {
                      track: strong ? Color(nsColor: .disabledControlTextColor) : Color.primary.opacity(dark ? 0.12 : 0.08),
                      tick: strong ? Color.primary : Color.primary.opacity(0.35),
                      animation: barAnimation)
-                .frame(minWidth: SourceQuotaColumns.minimumBar, maxWidth: .infinity)
+                .frame(minWidth: SourceQuotaColumns.compactBar, maxWidth: .infinity)
             Text(verbatim: line.percentText)
                 .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
                 .foregroundStyle(line.level == .critical ? Color(nsColor: .systemRed) : Color.primary)

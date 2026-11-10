@@ -12,7 +12,9 @@ final class QuotaWorker: @unchecked Sendable {
         var desktopStarted: Bool
         var cli: Bool
         var bridgeStatus: Bool
-        var signIn: Bool
+        /// Each marker only for an enabled source with its quota on (QUOTAS 9.1).
+        var codexSignIn: Bool
+        var claudeSignIn: Bool
         var scanProcesses: Bool
     }
 
@@ -30,12 +32,15 @@ final class QuotaWorker: @unchecked Sendable {
     let bridge: ClaudeStatusLineBridge
     private let desktopReader: DesktopQuotaReader
     private var cliReader: ClaudeCliQuotaReader
-    private var codexSignIn = QuotaSignIn(.codex, file: QuotaSignIn.codexFile)
-    private var claudeSignIn = QuotaSignIn(.claudeCode, file: QuotaSignIn.claudeFile)
+    private var codexSignIn: QuotaSignIn
+    private var claudeSignIn: QuotaSignIn
     private lazy var processes = QuotaProcessScan()
 
-    init(bridge: ClaudeStatusLineBridge, desktopFolder: URL = DesktopQuotaReader.defaultFolder) {
+    init(bridge: ClaudeStatusLineBridge, desktopFolder: URL = DesktopQuotaReader.defaultFolder,
+         signInFiles: (codex: URL, claude: URL) = (QuotaSignIn.codexFile, QuotaSignIn.claudeFile)) {
         self.bridge = bridge
+        codexSignIn = QuotaSignIn(.codex, file: signInFiles.codex)
+        claudeSignIn = QuotaSignIn(.claudeCode, file: signInFiles.claude)
         desktopReader = DesktopQuotaReader(folder: desktopFolder)
         cliReader = ClaudeCliQuotaReader(file: bridge.quotaFile)
     }
@@ -66,10 +71,10 @@ final class QuotaWorker: @unchecked Sendable {
             result.cliReceivedMs = .some(cliReader.receivedMs)
         }
         if request.bridgeStatus { result.bridgeStatus = bridge.status() }
-        if request.signIn {
+        if request.codexSignIn || request.claudeSignIn {
             var signedIn: Set<SourceKind> = []
-            if codexSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.codex) }
-            if claudeSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.claudeCode) }
+            if request.codexSignIn, codexSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.codex) }
+            if request.claudeSignIn, claudeSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.claudeCode) }
             result.signedIn = signedIn
         }
         if request.scanProcesses { result.apps = processes.scan(nowMs: request.nowMs) }

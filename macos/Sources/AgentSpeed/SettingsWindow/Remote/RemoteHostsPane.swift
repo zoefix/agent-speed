@@ -73,6 +73,7 @@ struct RemoteHostsPane: View {
         alert.alertStyle = .warning
         alert.messageText = l10n("remote.remove.confirm", name)
         alert.informativeText = l10n("remote.remove.files", remote.effectiveRelayFolder)
+            + (remote.quotaClaudeCli ? "\n\n" + l10n("remote.quota.removeNote", remote.effectiveRelayFolder) : "")
         let remove = alert.addButton(withTitle: l10n("remote.remove.button"))
         remove.hasDestructiveAction = true
         alert.addButton(withTitle: l10n("history.cancel"))

@@ -110,6 +110,21 @@ final class AppSettings {
         didSet { store(quotaCliInviteDismissed ? Self.inviteDismissed : nil, .quotaCliInvite) }
     }
 
+    /// Phase 2 (QUOTAS 9; DESIGN 5 *額度, phase 2*): local routes and the agents' own sign-ins on, Grok's live request
+    /// off, ZCode off until a key is saved, the browser sessions off until the user agrees. The ZCode key itself is
+    /// only in the keychain.
+    var quotaGrokBuild: Bool { didSet { store(quotaGrokBuild, .quotaGrokBuild) } }
+    var quotaGrokBuildLive: Bool { didSet { store(quotaGrokBuildLive, .quotaGrokBuildLive) } }
+    var quotaDevin: Bool { didSet { store(quotaDevin, .quotaDevin) } }
+    var quotaAntigravity: Bool { didSet { store(quotaAntigravity, .quotaAntigravity) } }
+    var quotaKimi: Bool { didSet { store(quotaKimi, .quotaKimi) } }
+    var quotaGemini: Bool { didSet { store(quotaGemini, .quotaGemini) } }
+    var quotaDroid: Bool { didSet { store(quotaDroid, .quotaDroid) } }
+    var quotaZcode: Bool { didSet { store(quotaZcode, .quotaZcode) } }
+    var quotaZcodeRegion: QuotaRequests.ZaiRegion { didSet { store(quotaZcodeRegion.rawValue, .quotaZcodeRegion) } }
+    var quotaQoder: Bool { didSet { store(quotaQoder, .quotaQoder) } }
+    var quotaWorkBuddy: Bool { didSet { store(quotaWorkBuddy, .quotaWorkBuddy) } }
+
     /// The vehicle of the last speed title other than idle (DESIGN 4c, Idle), parked in the dashboard hero while idle,
     /// also across relaunches. Nil before any title was reached.
     var heroLastTitle: String? {
@@ -184,6 +199,18 @@ final class AppSettings {
         quotaClaudeDesktop = defaults.object(forKey: Key.quotaClaudeDesktop.rawValue) as? Bool ?? true
         quotaClaudeCli = defaults.object(forKey: Key.quotaClaudeCli.rawValue) as? Bool ?? false
         quotaCliInviteDismissed = defaults.string(forKey: Key.quotaCliInvite.rawValue) == Self.inviteDismissed
+        func flag(_ key: Key, _ fallback: Bool) -> Bool { defaults.object(forKey: key.rawValue) as? Bool ?? fallback }
+        quotaGrokBuild = flag(.quotaGrokBuild, true)
+        quotaGrokBuildLive = flag(.quotaGrokBuildLive, false)
+        quotaDevin = flag(.quotaDevin, true)
+        quotaAntigravity = flag(.quotaAntigravity, true)
+        quotaKimi = flag(.quotaKimi, true)
+        quotaGemini = flag(.quotaGemini, true)
+        quotaDroid = flag(.quotaDroid, true)
+        quotaZcode = flag(.quotaZcode, false)
+        quotaZcodeRegion = QuotaRequests.ZaiRegion(rawValue: defaults.string(forKey: Key.quotaZcodeRegion.rawValue) ?? "") ?? .global
+        quotaQoder = flag(.quotaQoder, false)
+        quotaWorkBuddy = flag(.quotaWorkBuddy, false)
         remoteHosts = defaults.data(forKey: Key.remoteHosts.rawValue).flatMap(RemoteHostsDocument.init(data:)) ?? .empty
         lan = defaults.data(forKey: Key.lan.rawValue).map(LanDocument.init(data:)) ?? .empty
         if !redlinesMigrated {
@@ -255,14 +282,51 @@ final class AppSettings {
 
     static let inviteDismissed = "dismissed"
 
-    /// Whether a source's quota switch is on; only the quota sources have one (DESIGN 5 *額度*).
+    /// Whether a source's quota is read and shown (QUOTAS 9.1): the source is enabled and its quota switch is on; only
+    /// the quota sources have one (DESIGN 5 *額度*). Qoder's one switch covers both Qoder sources, each row its own.
     func showsQuota(_ source: SourceKind) -> Bool {
+        isEnabled(source) && quotaSwitch(source)
+    }
+
+    /// The quota switch alone, whatever the source's toggle.
+    func quotaSwitch(_ source: SourceKind) -> Bool {
         switch source {
         case .codex: quotaCodex
         case .claudeDesktop: quotaClaudeDesktop
         case .claudeCode: quotaClaudeCli
+        case .grokBuild: quotaGrokBuild
+        case .devin: quotaDevin
+        case .antigravity: quotaAntigravity
+        case .kimi: quotaKimi
+        case .gemini: quotaGemini
+        case .droid: quotaDroid
+        case .zcode: quotaZcode
+        case .qoder, .qoderCli: quotaQoder
+        case .workbuddy: quotaWorkBuddy
         default: false
         }
+    }
+
+    /// The phase 2 readers that may run (QUOTAS 9.1): the source enabled and its switch on; Grok's live request only
+    /// with its log's switch; Qoder's shared account while either Qoder source is enabled.
+    var quotaRoutes: Set<QuotaRoute> {
+        Set(QuotaRoute.allCases.filter(routeIsOn))
+    }
+
+    func routeIsOn(_ route: QuotaRoute) -> Bool {
+        switch route {
+        case .grokBuildLive: showsQuota(.grokBuild) && quotaGrokBuildLive
+        case .qoder: quotaQoder && (isEnabled(.qoder) || isEnabled(.qoderCli))
+        default: showsQuota(route.source)
+        }
+    }
+
+    /// The switches every remote host reads with (REMOTE 11.1): enabled sources only; Claude Code is each host's own
+    /// switch, and only while Claude Code is enabled.
+    var remoteQuotaSwitches: RemoteQuotaSwitches {
+        let sources = RemoteQuotaConfig.hostSources.filter { $0 != .claudeCode && showsQuota($0) }
+        return RemoteQuotaSwitches(sources: Set(sources), grokLive: routeIsOn(.grokBuildLive),
+                                   claudeCode: isEnabled(.claudeCode))
     }
 
     /// The stored `barTraffic` value of builds before 性能 had its own switch (DESIGN 10).
@@ -287,6 +351,8 @@ final class AppSettings {
         case remoteHosts
         case lan
         case quotaCodex, quotaClaudeDesktop, quotaClaudeCli, quotaCliInvite
+        case quotaGrokBuild, quotaGrokBuildLive, quotaDevin, quotaAntigravity, quotaKimi, quotaGemini, quotaDroid
+        case quotaZcode, quotaZcodeRegion, quotaQoder, quotaWorkBuddy
     }
 }
 

@@ -41,10 +41,22 @@ public enum RelayLineEncoder {
     public static let maxLineBytes = 4 << 20
 
     public static func start(todayStartMs: Int64, sources: Set<SourceKind>, zone: RemoteZone,
-                             prices: RemotePriceTableJSON) -> Data? {
+                             prices: RemotePriceTableJSON, quota: RemoteQuotaConfig? = nil) -> Data? {
         let keys = SourceKind.allCases.filter(sources.contains).map { quoted($0.rawValue) }.joined(separator: ",")
+        let quotaMember = quota.map { ",\"quota\":\(quotaObject($0))" } ?? ""
         return line("{\"t\":\"start\",\"protocol\":\(RemoteProtocol.version),\"todayStartMs\":\(todayStartMs),"
-            + "\"sources\":[\(keys)],\"zone\":\(zoneObject(zone)),\"prices\":\(prices.text)}")
+            + "\"sources\":[\(keys)],\"zone\":\(zoneObject(zone)),\"prices\":\(prices.text)\(quotaMember)}")
+    }
+
+    /// REMOTE 11.1: sent whenever the quota config changes.
+    public static func quota(_ config: RemoteQuotaConfig) -> Data? {
+        line("{\"t\":\"quota\",\"config\":\(quotaObject(config))}")
+    }
+
+    static func quotaObject(_ config: RemoteQuotaConfig) -> String {
+        let keys = SourceKind.allCases.filter(config.sources.contains).map { quoted($0.rawValue) }.joined(separator: ",")
+        return "{\"sources\":[\(keys)],\"network\":\(config.network),\"grokLive\":\(config.grokLive),"
+            + "\"claudeBridge\":\(config.claudeBridge)}"
     }
 
     public static func ping(id: Int64) -> Data? {

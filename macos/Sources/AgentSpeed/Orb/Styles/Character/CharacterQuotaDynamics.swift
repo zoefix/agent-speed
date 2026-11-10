@@ -40,7 +40,9 @@ struct CharacterQuotaDynamics {
 
     struct Source {
         var source: SourceKind
+        var key: String
         var name: String
+        var host: String?
         var tint: RGBColor
         var presence: Double
         var wanted: Bool
@@ -77,19 +79,21 @@ struct CharacterQuotaDynamics {
     }
 
     private mutating func merge(_ target: [CharacterQuotaSource], appearing: Bool, instant: Bool) {
-        let wanted = Set(target.map(\.source))
+        let wanted = Set(target.map(\.key))
         var merged: [Source] = target.map { next in
-            guard var source = sources.first(where: { $0.source == next.source }) else {
-                return Source(source: next.source, name: next.name, tint: next.tint, presence: appearing ? 1 : 0,
+            guard var source = sources.first(where: { $0.key == next.key }) else {
+                return Source(source: next.source, key: next.key, name: next.name, host: next.host, tint: next.tint,
+                              presence: appearing ? 1 : 0,
                               wanted: true, lines: Self.merged([], next.lines, appearing: true, instant: instant))
             }
             source.name = next.name
+            source.host = next.host
             source.tint = next.tint
             source.wanted = true
             source.lines = Self.merged(source.lines, next.lines, appearing: false, instant: instant)
             return source
         }
-        for (index, source) in sources.enumerated() where !wanted.contains(source.source) {
+        for (index, source) in sources.enumerated() where !wanted.contains(source.key) {
             var leaving = source
             leaving.wanted = false
             merged.insert(leaving, at: min(index, merged.count))

@@ -1,16 +1,22 @@
 import Foundation
 
-/// Which apps of the quota sources run (QUOTAS 6): a `codex` agent process or the Codex app's main process, a
-/// `claudeCode` agent process, Claude Desktop's main process.
+/// Which apps of the quota sources run (QUOTAS 6, 9): a `codex` agent process or the Codex app's main process, a
+/// `claudeCode` agent process, Claude Desktop's main process, Devin Desktop's, and every other source's agent processes.
 public struct QuotaApps: Equatable, Hashable, Sendable {
     public var codex: Bool
     public var claudeCode: Bool
     public var claudeDesktop: Bool
+    public var devinDesktop: Bool
+    /// The sources with a live agent process (METRICS 10.5).
+    public var agents: Set<SourceKind>
 
-    public init(codex: Bool = false, claudeCode: Bool = false, claudeDesktop: Bool = false) {
+    public init(codex: Bool = false, claudeCode: Bool = false, claudeDesktop: Bool = false, devinDesktop: Bool = false,
+                agents: Set<SourceKind> = []) {
         self.codex = codex
         self.claudeCode = claudeCode
         self.claudeDesktop = claudeDesktop
+        self.devinDesktop = devinDesktop
+        self.agents = agents
     }
 
     public static let none = QuotaApps()
@@ -20,12 +26,24 @@ public struct QuotaApps: Equatable, Hashable, Sendable {
         case .codex: codex
         case .claudeCode: claudeCode
         case .claudeDesktop: claudeDesktop
-        default: false
+        case .devin: devinDesktop || agents.contains(.devin)
+        default: agents.contains(source)
         }
+    }
+
+    /// Every source that runs, for the vendor readers' cadence (QUOTAS 9.1).
+    public var running: Set<SourceKind> {
+        var all = agents
+        if codex { all.insert(.codex) }
+        if claudeCode { all.insert(.claudeCode) }
+        if claudeDesktop { all.insert(.claudeDesktop) }
+        if devinDesktop { all.insert(.devin) }
+        return all
     }
 
     /// The Codex app's own executable, never an agent process (METRICS 10.5).
     static let codexApp = ["/Applications/Codex.app/Contents/MacOS/Codex"]
+    static let devinApp = ["/Applications/Devin.app/Contents/MacOS/Devin"]
 
     /// From the traffic process table (METRICS 10.5): its live roots and the apps' main processes.
     static func of(_ table: ProcessTable) -> QuotaApps {
@@ -35,9 +53,11 @@ public struct QuotaApps: Equatable, Hashable, Sendable {
             if let processClass = record.processClass, processClass.role == .agent {
                 if processClass.source == .codex { apps.codex = true }
                 if processClass.source == .claudeCode { apps.claudeCode = true }
+                apps.agents.insert(processClass.source)
             } else if record.processClass == nil, !record.executable.isEmpty {
                 if table.rules.isClaudeDesktopApp(record.executable) { apps.claudeDesktop = true }
                 if platform.isUnder(record.executable, codexApp) { apps.codex = true }
+                if platform.isUnder(record.executable, devinApp) { apps.devinDesktop = true }
             }
         }
         return apps

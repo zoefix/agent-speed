@@ -75,8 +75,11 @@ final class AppModel {
 
     /// True while the 20 s effects preview (or the `--demo` loop) drives the store.
     private(set) var isPreviewing = false
-    /// The dashboard popover is open (traffic samples every second while it shows per-source traffic).
-    var isDashboardShown = false
+    /// The dashboard popover is open (traffic samples every second while it shows per-source traffic; quota vendors
+    /// may be asked while it shows, QUOTAS 9.1).
+    var isDashboardShown = false {
+        didSet { if quota.dashboardOpen != isDashboardShown { quota.dashboardOpen = isDashboardShown } }
+    }
 
     @ObservationIgnored weak var commands: AppCommands?
     @ObservationIgnored private(set) var monitor: LiveMonitor?
@@ -218,6 +221,7 @@ final class AppModel {
         let remoteHosts = RemoteHostsController(monitor: monitor)
         self.remoteHosts = remoteHosts
         remoteHosts.coordinator.historySink = remoteHistory
+        remoteHosts.coordinator.quotaSink = quota.remoteSink
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
             let document = self.settings.remoteHosts

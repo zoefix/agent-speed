@@ -22,6 +22,7 @@ final class RemoteConnectionHarness: @unchecked Sendable {
 
     init(destination: String = "devbox", installed: Bool = true, answersPings: Bool = false,
          start: Date = Date(timeIntervalSince1970: 1_780_000_000), sources: Set<SourceKind> = [.codex, .claudeCode],
+         quota: RemoteQuotaConfig? = nil,
          probe: (@Sendable (FakeProcess, FakeRelayBundle) -> Void)? = nil,
          upload: (@Sendable (FakeProcess, FakeRelayBundle) -> Void)? = nil) throws {
         scheduling = ManualScheduling(start: start)
@@ -30,7 +31,7 @@ final class RemoteConnectionHarness: @unchecked Sendable {
                                             timeZone: { TimeZone(identifier: "UTC")! }, processEnvironment: ["HOME": "/Users/me"])
         let prices = RemotePriceTableJSON(Data(#"{"schema":3}"#.utf8))!
         connection = RemoteConnection(host: RemoteHost(id: Self.hostId, destination: destination),
-                                      settings: RemoteSessionSettings(sources: sources, prices: prices),
+                                      settings: RemoteSessionSettings(sources: sources, prices: prices, quota: quota),
                                       environment: environment, eventQueue: events.queue, onEvent: events.handler)
         let relays = relays
         let scheduling = scheduling

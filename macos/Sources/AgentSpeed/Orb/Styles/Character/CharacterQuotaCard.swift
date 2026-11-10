@@ -6,6 +6,9 @@ import AppKit
 /// window — the label in a column as wide as the card's widest, the bar, the percent right-aligned in a `100%` cell
 /// and the short reset in a cell as wide as the widest. When the room to the orb's edge is short the reset cells go
 /// first, then the bars shorten from 5 t to 3 t, then the headers go and the dot moves before each source's first label.
+/// A remote host's source reads `<source> · <host>` (DESIGN 13): the host follows the name while the card's width
+/// holds it, else it takes its own line under the name (in the compact form, above the source's lines), shortened
+/// with an ellipsis when even that line is too short; the host never widens the card.
 extension CharacterCards {
     /// The card's forms, widest first.
     enum QuotaForm: Int, CaseIterable {
@@ -74,10 +77,34 @@ extension CharacterCards {
         return frame.isSmallCharacter && form == .full ? .noReset : form
     }
 
-    private func quotaHeight(_ source: CharacterQuotaDynamics.Source, _ form: QuotaForm) -> CGFloat {
+    private func quotaHeight(_ source: CharacterQuotaDynamics.Source, _ form: QuotaForm, _ c: QuotaColumns) -> CGFloat {
         let lines = source.lines.reduce(CGFloat(0)) { $0 + CGFloat($1.presence) * (m.rowHeight(m.t) + quotaLineGap) }
-        let header = form.hasHeader ? m.rowHeight(quotaHeaderSize) + quotaLineGap : 0
+        let rows = (form.hasHeader ? 1 : 0) + (quotaHostOwnLine(source, form, c) ? 1 : 0)
+        let header = CGFloat(rows) * (m.rowHeight(quotaHeaderSize) + quotaLineGap)
         return max(0, header + lines - quotaLineGap)
+    }
+
+    /// `·` and the host after the name, in the label style.
+    private func quotaHostTail(_ host: String) -> String { " · " + host }
+
+    /// The host does not fit after the name: it takes a line of its own.
+    private func quotaHostOwnLine(_ source: CharacterQuotaDynamics.Source, _ form: QuotaForm, _ c: QuotaColumns) -> Bool {
+        guard let host = source.host else { return false }
+        guard form.hasHeader else { return true }
+        let header = quotaDot + quotaDotGap + advance(source.name, quotaNameStyle) + advance(quotaHostTail(host), quotaLabelStyle)
+        return header > quotaWidth(form, c) + 0.5
+    }
+
+    /// `text` shortened with a trailing ellipsis to `room`.
+    private func quotaFitted(_ text: String, _ style: OrbTextStyle, room: CGFloat) -> String {
+        guard advance(text, style) > room else { return text }
+        let characters = Array(text)
+        var low = 0, high = characters.count
+        while low < high {
+            let mid = (low + high + 1) / 2
+            if advance(String(characters[..<mid]) + "…", style) <= room { low = mid } else { high = mid - 1 }
+        }
+        return low == 0 ? "…" : String(characters[..<low]) + "…"
     }
 
     func quotaSize() -> CGSize {
@@ -85,7 +112,7 @@ extension CharacterCards {
         let form = quotaForm
         var height: CGFloat = 0
         for source in dynamics.quota.sources {
-            height += CGFloat(source.presence) * (quotaHeight(source, form) + quotaSourceGap)
+            height += CGFloat(source.presence) * (quotaHeight(source, form, c) + quotaSourceGap)
         }
         height -= quotaSourceGap
         guard height > 0.5 else { return .zero }
@@ -118,6 +145,8 @@ extension CharacterCards {
                 let overflow = Double((rowTop + height - bottom) / (0.5 * height))
                 return sourceAlpha * (1 - overflow).clamped(to: 0...1)
             }
+            let ownLine = quotaHostOwnLine(source, form, c)
+            let nameX = origin.x + quotaDot + quotaDotGap
             if form.hasHeader {
                 let h = m.rowHeight(quotaHeaderSize)
                 let a = alpha(top, h)
@@ -126,8 +155,23 @@ extension CharacterCards {
                     let middle = quotaMiddle(source.name, quotaNameStyle, pen, baseline: baseline)
                     scene.add(.circle(center: pen.point(origin.x + quotaDot / 2, middle),
                                       radius: quotaDot / 2 * pen.scale, color: tint.opacity(a * pen.alpha)), blend: .over)
-                    put(source.name, quotaNameStyle, pen, x: origin.x + quotaDot + quotaDotGap, baseline: baseline,
-                        color: ink.secondary.opacity(a), into: &scene)
+                    let name = put(source.name, quotaNameStyle, pen, x: nameX, baseline: baseline,
+                                   color: ink.secondary.opacity(a), into: &scene)
+                    if let host = source.host, !ownLine {
+                        put(quotaHostTail(host), quotaLabelStyle, pen, x: nameX + name, baseline: baseline,
+                            color: ink.secondary.opacity(a * 0.72), into: &scene)
+                    }
+                }
+                top += h + quotaLineGap
+            }
+            if ownLine, let host = source.host {
+                let h = m.rowHeight(quotaHeaderSize)
+                let a = alpha(top, h)
+                let x = form.hasHeader ? nameX : origin.x
+                let room = quotaWidth(form, c) - (x - origin.x)
+                if a > 0.01 {
+                    put(quotaFitted(host, quotaLabelStyle, room: room), quotaLabelStyle, pen, x: x,
+                        baseline: top + m.baseline(quotaHeaderSize), color: ink.secondary.opacity(a * 0.72), into: &scene)
                 }
                 top += h + quotaLineGap
             }
@@ -165,7 +209,7 @@ extension CharacterCards {
                         color: ink.secondary.opacity(a * line.resetPresence * (1 - line.resetMix)), into: &scene)
                 }
             }
-            top = sourceTop + CGFloat(source.presence) * (quotaHeight(source, form) + quotaSourceGap)
+            top = sourceTop + CGFloat(source.presence) * (quotaHeight(source, form, c) + quotaSourceGap)
         }
     }
 

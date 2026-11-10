@@ -15,34 +15,47 @@ struct QuotaSwitches: View {
         case .codex:
             QuotaToggleRow(title: l10n("settings.quota.codex"), hint: l10n("settings.quota.codex.hint"),
                            isOn: Binding(get: { settings.quotaCodex }, set: { settings.quotaCodex = $0 }))
+                .disabled(!settings.isEnabled(.codex))
         case .claude:
             QuotaToggleRow(title: l10n("settings.quota.claudeDesktop"), hint: l10n("settings.quota.claudeDesktop.hint"),
                            isOn: Binding(get: { settings.quotaClaudeDesktop }, set: { settings.quotaClaudeDesktop = $0 }))
+                .disabled(!settings.isEnabled(.claudeDesktop))
+            // The bridge stays switchable while Claude Code is off, so it can always be restored.
             ClaudeCliQuotaRow(model: model)
         default:
-            EmptyView()
+            QuotaVendorSwitches(folder: folder, model: model)
         }
     }
 }
 
-/// A quota switch: its title and hint aligned with the source names above it, and an optional status line.
+/// A quota switch: its title and hint aligned with the source names above it, an optional second caption in tertiary
+/// (`settings.quota.unverified`), and an optional status line. A dependent switch is indented under the one before.
 struct QuotaToggleRow<Status: View>: View {
     let title: String
-    let hint: String
+    let hint: String?
+    var note: String?
+    var indented = false
     @Binding var isOn: Bool
     @ViewBuilder var status: Status
+
+    init(title: String, hint: String?, note: String? = nil, indented: Bool = false, isOn: Binding<Bool>,
+         @ViewBuilder status: () -> Status) {
+        self.title = title
+        self.hint = hint
+        self.note = note
+        self.indented = indented
+        _isOn = isOn
+        self.status = status()
+    }
 
     var body: some View {
         Toggle(isOn: $isOn) {
             HStack(alignment: .firstTextBaseline, spacing: Spacing.xs) {
-                // The source dot's room, so the switch reads as part of its source.
-                Image(systemName: "circle.fill")
-                    .font(.system(size: 8))
-                    .hidden()
-                    .accessibilityHidden(true)
+                QuotaIndent(indented: indented)
                 VStack(alignment: .leading, spacing: 3) {
                     RowTitle(title)
-                    Footnote(hint)
+                    if let hint { Footnote(hint) }
+                    if let note { QuotaNote(text: note) }
                     status
                 }
             }
@@ -51,8 +64,34 @@ struct QuotaToggleRow<Status: View>: View {
 }
 
 extension QuotaToggleRow where Status == EmptyView {
-    init(title: String, hint: String, isOn: Binding<Bool>) {
-        self.init(title: title, hint: hint, isOn: isOn) { EmptyView() }
+    init(title: String, hint: String?, note: String? = nil, indented: Bool = false, isOn: Binding<Bool>) {
+        self.init(title: title, hint: hint, note: note, indented: indented, isOn: isOn) { EmptyView() }
+    }
+}
+
+/// The source dot's room (and one more step for a dependent row), so a quota row reads as part of its source.
+struct QuotaIndent: View {
+    var indented = false
+
+    var body: some View {
+        Image(systemName: "circle.fill")
+            .font(.system(size: 8))
+            .hidden()
+            .padding(.trailing, indented ? Spacing.m : 0)
+            .accessibilityHidden(true)
+    }
+}
+
+/// The second caption of a quota switch, a step quieter than its hint.
+struct QuotaNote: View {
+    let text: String
+    @Environment(\.isEnabled) private var isEnabled
+
+    var body: some View {
+        Text(text)
+            .font(.subheadline)
+            .foregroundStyle(isEnabled ? AnyShapeStyle(.tertiary) : AnyShapeStyle(.quaternary))
+            .fixedSize(horizontal: false, vertical: true)
     }
 }
 

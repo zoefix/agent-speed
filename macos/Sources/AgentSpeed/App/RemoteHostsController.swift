@@ -21,7 +21,7 @@ final class RemoteHostsController {
             // Reading the table status re-runs this when a newer table becomes current.
             _ = prices.table
             coordinator.update(hosts: settings.remoteHosts, networkEnabled: settings.networkEnabled,
-                               priceTable: prices.book.current.data)
+                               priceTable: prices.book.current.data, quota: settings.remoteQuotaSwitches)
         }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append((workspace, workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,

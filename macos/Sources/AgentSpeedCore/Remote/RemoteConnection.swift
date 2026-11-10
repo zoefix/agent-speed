@@ -50,6 +50,8 @@ public final class RemoteConnection: @unchecked Sendable {
     var backoff = RemoteBackoff()
     var lastStatus: RemoteHostStatus?
     var lastErrorAt: Date?
+    /// Waiting for the relay to restore the host's status line before stopping.
+    var retiring = false
 
     var stdoutBuffer = Data()
     var stderrBuffer = Data()
@@ -62,7 +64,7 @@ public final class RemoteConnection: @unchecked Sendable {
     var timers: [TimerSlot: any RemoteScheduledWork] = [:]
 
     enum TimerSlot: Hashable {
-        case retry, stageLimit, silence, ping, history, midnight
+        case retry, stageLimit, silence, ping, history, midnight, retire
     }
 
     public init(
@@ -131,6 +133,56 @@ public final class RemoteConnection: @unchecked Sendable {
             settings.prices = prices
             if stage == .run { send(RelayLineEncoder.prices(prices)) }
         }
+    }
+
+    /// The quota config changed (a switch, the host's bridge): the running relay gets a `quota` line, no reconnect.
+    public func updateQuota(_ config: RemoteQuotaConfig) {
+        queue.async { [self] in
+            guard settings.quota != config else { return }
+            settings.quota = config
+            if stage == .run { send(RelayLineEncoder.quota(config)) }
+        }
+    }
+
+    /// The host left the settings with its bridge on (REMOTE 2.4, 11.3): the relay is asked to restore the status line
+    /// first, and the connection stops once it reports the bridge off, or after `timeout`. A relay that is not running
+    /// stops at once.
+    public func retire(timeout: TimeInterval = RemoteConnection.retireLimit) {
+        queue.async { [self] in
+            guard !stopped else { return }
+            guard stage == .run, session.helloReceived else {
+                stopNow()
+                return
+            }
+            retiring = true
+            var config = settings.quota ?? .off
+            config.claudeBridge = false
+            config.sources.remove(.claudeCode)
+            settings.quota = config
+            send(RelayLineEncoder.quota(config))
+            schedule(.retire, after: timeout) { $0.stopNow() }
+        }
+    }
+
+    /// The bridge once off and on again, for *Reconnect*.
+    public func reapplyQuota() {
+        queue.async { [self] in
+            guard stage == .run, var config = settings.quota, config.claudeBridge else { return }
+            config.claudeBridge = false
+            config.sources.remove(.claudeCode)
+            send(RelayLineEncoder.quota(config))
+            if let current = settings.quota { send(RelayLineEncoder.quota(current)) }
+        }
+    }
+
+    public static let retireLimit: TimeInterval = 10
+
+    func stopNow() {
+        guard !stopped else { return }
+        stopped = true
+        cancelTimers()
+        closeUpload()
+        endProcess()
     }
 
     public func setWatch(_ on: Bool) {

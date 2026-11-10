@@ -18,6 +18,8 @@ public final class RemoteHub: @unchecked Sendable {
     private var idleStatuses: [String: RemoteStatus] = [:]
     private var settings: RemoteSessionSettings?
     private var networkWatcher: RemoteNetworkWatcher?
+    /// Removed hosts whose relay restores their Claude Code status line before it stops (REMOTE 2.4).
+    private var retiring: [String: RemoteConnection] = [:]
 
     public init(
         environment: RemoteEnvironment = RemoteEnvironment(),
@@ -32,6 +34,7 @@ public final class RemoteHub: @unchecked Sendable {
     deinit {
         networkWatcher?.stop()
         for connection in connections.values { connection.stop() }
+        for connection in retiring.values { connection.stop() }
     }
 
     /// Applies the settings: starts the connections of enabled, valid hosts and stops the others (removed or disabled
@@ -39,17 +42,27 @@ public final class RemoteHub: @unchecked Sendable {
     /// destination or folder changed reconnects, and every host does when the enabled sources change. A new price
     /// table goes to the running relays without a reconnect. `priceTable` is the current table's JSON; an invalid one
     /// keeps the previous (else the bundled) table.
-    public func update(hosts: [RemoteHost], networkEnabled: Bool, enabledSources: Set<SourceKind>, priceTable: Data) {
+    /// `quota`: the app's quota switches; each host's config adds its own Claude Code bridge (REMOTE 11.1) and goes
+    /// to its relay without a reconnect. A removed host whose bridge is on restores its status line first.
+    public func update(hosts: [RemoteHost], networkEnabled: Bool, enabledSources: Set<SourceKind>, priceTable: Data,
+                       quota: RemoteQuotaSwitches = RemoteQuotaSwitches()) {
         queue.sync {
             let prices = RemotePriceTableJSON(priceTable) ?? settings?.prices ?? Self.bundledPrices
             let watch = settings?.watch ?? false
-            let next = RemoteSessionSettings(sources: enabledSources, prices: prices, watch: watch)
+            let shared = RemoteSessionSettings(sources: enabledSources, prices: prices, watch: watch)
             let sourcesChanged = settings.map { $0.sources != enabledSources } ?? false
-            settings = next
+            settings = shared
 
             let valid = RemoteHostsDocument.normalized(hosts)
             let ids = Set(valid.map(\.id))
-            for id in connections.keys where !ids.contains(id) { removeConnection(id, finalStatus: nil) }
+            for id in connections.keys where !ids.contains(id) {
+                if connectedHosts[id]?.quotaClaudeCli == true, let connection = connections.removeValue(forKey: id) {
+                    connectedHosts[id] = nil
+                    retire(id, connection)
+                } else {
+                    removeConnection(id, finalStatus: nil)
+                }
+            }
             for id in idleStatuses.keys where !ids.contains(id) { idleStatuses[id] = nil }
 
             for host in valid {
@@ -67,6 +80,9 @@ public final class RemoteHub: @unchecked Sendable {
                     continue
                 }
                 idleStatuses[host.id] = nil
+                var next = shared
+                next.quota = RemoteQuotaConfig.forHost(host, switches: quota, networkEnabled: networkEnabled,
+                                                       enabled: enabledSources)
                 if let existing = connections[host.id] {
                     let edited = connectedHosts[host.id]?.connectionIdentity != host.connectionIdentity
                     if edited || sourcesChanged {
@@ -74,6 +90,7 @@ public final class RemoteHub: @unchecked Sendable {
                     } else {
                         connectedHosts[host.id] = host
                         existing.updatePrices(prices)
+                        if let config = next.quota { existing.updateQuota(config) }
                         continue
                     }
                 }
@@ -84,6 +101,12 @@ public final class RemoteHub: @unchecked Sendable {
                 connection.start()
             }
         }
+    }
+
+    /// Sends the host's quota config off and on again: its relay turns the bridge off (leaving a replaced status line
+    /// alone) and installs it again (QUOTAS 5.2, 5.3).
+    public func reapplyQuota(hostId: String) {
+        queue.sync { connections[hostId]?.reapplyQuota() }
     }
 
     /// *Retry now* (or a fresh look after the user fixed something on the host).
@@ -122,7 +145,18 @@ public final class RemoteHub: @unchecked Sendable {
     public func stopAll() {
         queue.sync {
             for id in Array(connections.keys) { removeConnection(id, finalStatus: nil) }
+            for connection in retiring.values { connection.stop() }
+            retiring.removeAll()
         }
+    }
+
+    /// Hosts that are restoring their status line before they stop (tests).
+    var retiringHostIds: Set<String> {
+        queue.sync { Set(retiring.keys) }
+    }
+
+    func retiringConnection(_ hostId: String) -> RemoteConnection? {
+        queue.sync { retiring[hostId] }
     }
 
     /// Watches the network path (NWPathMonitor) and calls `noteNetworkAvailable()` when it becomes usable again.
@@ -152,6 +186,17 @@ public final class RemoteHub: @unchecked Sendable {
     }
 
     // MARK: - Private
+
+    private func retire(_ id: String, _ connection: RemoteConnection) {
+        retiring[id]?.stop()
+        retiring[id] = connection
+        connection.retire()
+        queue.asyncAfter(deadline: .now() + RemoteConnection.retireLimit + 5) { [weak self] in
+            guard let self, self.retiring[id] === connection else { return }
+            connection.stop()
+            self.retiring[id] = nil
+        }
+    }
 
     private func removeConnection(_ id: String, finalStatus: RemoteStatus?) {
         connections.removeValue(forKey: id)?.stop(finalStatus: finalStatus)

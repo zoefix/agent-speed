@@ -46,7 +46,7 @@ public struct RemoteClockEstimator: Equatable, Sendable {
 }
 
 extension RelayMessage {
-    /// The message with every time of an `agent`, `response` or `tool` line converted to local time (`t − δ`);
+    /// The message with every time of an `agent`, `response`, `tool` or `quota` line converted to local time (`t − δ`);
     /// nil when a converted time leaves the years 2000–2100 (the line is then invalid). Durations are unchanged.
     public func converted(offsetMs delta: Int64) -> RelayMessage? {
         func shift(_ ms: Int64) -> Int64? {
@@ -83,6 +83,19 @@ extension RelayMessage {
             tool.completion.callMs = call
             tool.completion.resultMs = result
             return .tool(tool)
+        case .quota(var report):
+            guard let observed = shift(report.snapshot.observedMs) else { return nil }
+            var windows = report.snapshot.windows
+            for index in windows.indices {
+                guard let resets = shiftOptional(windows[index].resetsAtMs) else { return nil }
+                windows[index].resetsAtMs = resets
+            }
+            if case .ok(let at) = report.status {
+                guard let local = shift(at) else { return nil }
+                report.status = .ok(local)
+            }
+            report.snapshot = QuotaSnapshot(source: report.snapshot.source, observedMs: observed, windows: windows)
+            return .quota(report)
         default:
             return self
         }
