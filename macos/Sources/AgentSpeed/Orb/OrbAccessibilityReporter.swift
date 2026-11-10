@@ -42,6 +42,8 @@ final class OrbAccessibilityReporter {
         let gauge = runtime.feed.gauge
         _ = (gauge.readoutValue, gauge.title, runtime.feed.unavailableTitleKey, model.l10n.language)
         _ = (runtime.feed.money, runtime.feed.unit, runtime.feed.lines, runtime.feed.characterReadings)
+        // 額度's reset times move on each minute.
+        _ = model.quota.minuteMs
         _ = model.orbs.document
         _ = model.titles.document
         let elapsed = Clock.now - publishedAt
@@ -169,17 +171,17 @@ final class OrbAccessibilityReporter {
     }
 
     /// The `character` orb's cards that show (DESIGN 2a.6, Readouts), in the column's order: 性能 and 思考, 首字,
-    /// network speed, the cost rate, then the running models.
+    /// network speed, the cost rate, the running models, then 額度.
     private func characterSentence(_ l10n: Localizer) -> String? {
         guard let readings = runtime.feed.characterReadings, !runtime.isUnavailable else { return nil }
-        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n)
+        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n, quotaNowMs: model.quota.clockMs)
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，")
     }
 
     /// The sentences of `characterSentence`, one per card that shows.
     static func characterParts(_ readings: OrbCharacterReadings, currency: String, _ l10n: Localizer,
-                               now: TimeInterval = Clock.now) -> [String] {
+                               now: TimeInterval = Clock.now, quotaNowMs: Int64 = QuotaController.nowMs()) -> [String] {
         let on = readings.readouts
         var parts: [String] = []
         if readings.performanceLoud, on.intelligence || on.thinking, let reading = readings.performance,
@@ -200,6 +202,9 @@ final class OrbAccessibilityReporter {
         }
         if readings.modelsLoud, on.models, let models = CharacterReadoutText.modelsSentence(readings.models, l10n) {
             parts.append(models)
+        }
+        if on.quota, let quota = CharacterQuotaText.sentence(readings.quota, nowMs: quotaNowMs, l10n: l10n) {
+            parts.append(quota)
         }
         return parts
     }

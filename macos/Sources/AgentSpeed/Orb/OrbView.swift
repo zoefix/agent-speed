@@ -218,6 +218,10 @@ enum OrbContentBuilder {
             costGlyph: l10n("cost.glyph"),
             latency: readings?.latencyMs.map { CharacterReadoutText.latency(ms: $0, language: l10n.language) },
             models: models,
+            quota: readings.map { readings in
+                readings.quota.isEmpty ? []
+                    : CharacterQuotaText.sources(readings.quota, nowMs: model.quota.clockMs, l10n: l10n)
+            } ?? [],
             emptyLabel: l10n("character.empty")
         )
     }

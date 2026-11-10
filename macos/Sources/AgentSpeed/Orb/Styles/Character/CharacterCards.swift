@@ -112,6 +112,7 @@ struct CharacterCards {
         case .cost: costSize()
         case .agents: agentsSize()
         case .models: modelsSize()
+        case .quota: quotaSize()
         }
         return (Double(size.width), Double(size.height))
     }
@@ -263,6 +264,9 @@ struct CharacterCards {
             guard modelsLayout() != nil else { return }
             drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
             drawModels(pen, origin: origin, box: box, ink: ink, into: &scene)
+        case .quota:
+            drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
+            drawQuota(pen, origin: origin, box: box, ink: ink, into: &scene)
         case .agents:
             drawPlate(pen, box: box, ink: ink, spine: right ? -1 : 1, into: &scene)
             var top = origin.y

@@ -344,11 +344,11 @@ struct CharacterReadoutsTests {
         model.orbs.setStyle(.character, of: id)
         let orb = try #require(model.orbs.orb(id))
         let menu = try #require(OrbMenus.characterReadoutsItem(model: model, orb: orb).submenu)
-        let titles = menu.items.prefix(8).map(\.title)
+        let titles = menu.items.prefix(9).map(\.title)
         #expect(titles == CharacterReadout.allCases.map { model.l10n($0.titleKey) })
-        #expect(titles[2] == "首字延遲" && titles[6] == "執行中的模型")
-        #expect(menu.items.prefix(8).map(\.state) == [.on, .on, .on, .on, .on, .on, .on, .off])
-        #expect(menu.items[8].isSeparatorItem)
+        #expect(titles[2] == "首字延遲" && titles[6] == "執行中的模型" && titles[7] == "額度")
+        #expect(menu.items.prefix(9).map(\.state) == [.on, .on, .on, .on, .on, .on, .on, .on, .off])
+        #expect(menu.items[9].isSeparatorItem)
         // Unchecking 首字 and the models card saves at once.
         let latency = menu.items[2], models = menu.items[6]
         _ = latency.target?.perform(latency.action, with: latency)

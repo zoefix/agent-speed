@@ -114,6 +114,17 @@ final class OrbsController {
             let now = Clock.now
             for runtime in self.runtimes.values { runtime.ingestTraffic(snapshot, settings: settings, now: now) }
         })
+        loops.append(ObservationLoop { [weak self] in
+            guard let self, let model = self.model else { return }
+            let orbs = self.document.orbs
+            for runtime in self.runtimes.values { runtime.ingestQuota(model.quota) }
+            // The light process listing runs only while a character orb could show the card (QUOTAS 6).
+            let visible = model.settings.orbsVisible
+            model.quota.wantsCard = visible && orbs.contains { orb in
+                orb.visible && orb.style == .character && orb.characterReadouts.quota
+                    && QuotaController.sources.contains { orb.sources.sourceSet?.contains($0) ?? true }
+            }
+        })
         listener = model.store.addEventListener { [weak self] event in
             guard let self, let model = self.model else { return }
             for runtime in self.runtimes.values { runtime.handle(event, isPreviewing: model.store.isPreviewing) }

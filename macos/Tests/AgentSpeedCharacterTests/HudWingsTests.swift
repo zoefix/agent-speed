@@ -24,7 +24,8 @@ private func wideHairFrame() -> HudFrame {
     return f
 }
 
-private let sizes: [(w: Double, h: Double)] = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 30)]
+/// Every card's size; 額度 (last) is empty unless a test gives it one.
+private let sizes: [(w: Double, h: Double)] = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 30), (0, 0)]
 
 private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: HudFrame) -> Bool {
     guard let e = f.silhouette.extent(p.y - size.h / 2, p.y + size.h / 2) else { return false }
@@ -437,5 +438,98 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
             }
             print("hud \(id): \(changes) side changes in 60 s, \(covered) covered card-frames, split \(wings.split)")
         }
+    }
+}
+
+/// 額度 (DESIGN 2a.6): the column's last card, its room to the orb's edge, its narrowest form deciding a spill, and
+/// its forms' fit with the names' hysteresis.
+@Suite struct HudQuotaCardTests {
+    private func sized(quota: (w: Double, h: Double)) -> [(w: Double, h: Double)] {
+        var all = sizes
+        all[HudCard.quota.rawValue] = quota
+        return all
+    }
+
+    @Test func quotaIsTheColumnsLastCard() {
+        #expect(HudCard.column.last == .quota)
+        #expect(HudCard.allCases.last == .quota, "new cards go last, so the others keep their float phases")
+        let f = frame()
+        var wings = HudWings()
+        wings.still = true
+        let all = sized(quota: (120, 60))
+        wings.update(1 / 60, time: 0, frame: f, sizes: all, shown: [Bool](repeating: true, count: HudCard.allCases.count))
+        let quota = wings.places[HudCard.quota.rawValue], agents = wings.places[HudCard.agents.rawValue]
+        #expect(quota.y > agents.y)
+        #expect(!wings.isAtHerRight(.quota))
+        // Its right edge on the column's line, the room from there to the orb's edge.
+        let right = quota.x + 60
+        #expect(abs(right - (agents.x + all[HudCard.agents.rawValue].w / 2)) < 1e-6)
+        #expect(abs(wings.quotaRoom - (right - 0.025 * 296)) < 1e-6)
+        #expect(!overlaps(quota, all[HudCard.quota.rawValue], f))
+    }
+
+    @Test func anEmptyQuotaCardTakesNoRoom() {
+        let f = frame()
+        var with = HudWings(), without = HudWings()
+        with.still = true
+        without.still = true
+        let shown = [Bool](repeating: true, count: HudCard.allCases.count)
+        with.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: shown)
+        var hidden = shown
+        hidden[HudCard.quota.rawValue] = false
+        without.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: hidden)
+        for card in HudCard.column.dropLast() { #expect(with.places[card.rawValue].y == without.places[card.rawValue].y) }
+    }
+
+    @Test func itsNarrowestFormDecidesWhetherTheColumnSpills() {
+        // Her left has room for 150 pt; the card's full form is 170 pt, its narrowest 120.
+        var f = frame()
+        for y in stride(from: 80.0, through: 400, by: 2) { f.silhouette.add(165, y) }
+        let all = sized(quota: (170, 40))
+        let shown = [Bool](repeating: true, count: HudCard.allCases.count)
+        var wide = HudWings()
+        wide.still = true
+        wide.update(1 / 60, time: 0, frame: f, sizes: all, shown: shown)
+        #expect(wide.split < HudCard.column.count, "without a narrower form it spills")
+        var narrow = HudWings()
+        narrow.still = true
+        narrow.quotaNarrowest = 120
+        narrow.update(1 / 60, time: 0, frame: f, sizes: all, shown: shown)
+        #expect(narrow.split == HudCard.column.count)
+        #expect(narrow.quotaRoom < 170 && narrow.quotaRoom >= 120)
+    }
+
+    @Test func aSpilledQuotaCardMeasuresItsRoomToTheRightEdge() {
+        let f = wideHairFrame()
+        var wings = HudWings()
+        wings.still = true
+        let all = sized(quota: (110, 44))
+        wings.update(1 / 60, time: 0, frame: f, sizes: all, shown: [Bool](repeating: true, count: HudCard.allCases.count))
+        #expect(wings.isAtHerRight(.quota))
+        let left = wings.places[HudCard.quota.rawValue].x - 55
+        #expect(abs(wings.quotaRoom - (444 - 0.025 * 296 - left)) < 1e-6)
+    }
+
+    @Test func formsNarrowAtOnceAndWidenAfterFittingWithRoomToSpare() {
+        let widths = [140.0, 120, 100, 104]
+        var fit = HudFormFit()
+        fit.update(1 / 60, widths: widths, room: 200, spare: 12, snap: false)
+        #expect(fit.form == 0)
+        fit.update(1 / 60, widths: widths, room: 125, spare: 12, snap: false)
+        #expect(fit.form == 1, "narrows at once")
+        // Room for the full form without the spare changes nothing; with it, after 1.2 s.
+        for _ in 0..<120 { fit.update(1 / 60, widths: widths, room: 145, spare: 12, snap: false) }
+        #expect(fit.form == 1)
+        for _ in 0..<60 { fit.update(1 / 60, widths: widths, room: 160, spare: 12, snap: false) }
+        #expect(fit.form == 1)
+        for _ in 0..<20 { fit.update(1 / 60, widths: widths, room: 160, spare: 12, snap: false) }
+        #expect(fit.form == 0)
+        // Nothing fits: the narrowest, not the last.
+        fit.update(1 / 60, widths: widths, room: 50, spare: 12, snap: false)
+        #expect(fit.form == 2)
+        #expect(HudFormFit.best(widths: [.infinity, 120, 100, 100], room: 110) == 2)
+        #expect(HudFormFit.narrowest([.infinity, 120, 100, 100]) == 3)
+        fit.update(1 / 60, widths: widths, room: 300, spare: 12, snap: true)
+        #expect(fit.form == 0, "a card off screen takes its best form at once")
     }
 }

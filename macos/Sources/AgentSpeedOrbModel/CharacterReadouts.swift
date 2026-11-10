@@ -19,9 +19,11 @@ public struct CharacterReadouts: Equatable, Hashable, Sendable {
     public var agents: Bool
     /// The running models under the speed, each with its fastest agent's speed.
     public var models: Bool
+    /// 額度: the subscription quotas of the orb's running, signed-in agents, the column's last card.
+    public var quota: Bool
 
     public init(model: Bool = false, intelligence: Bool = true, thinking: Bool = true, latency: Bool = true,
-                network: Bool = true, cost: Bool = true, agents: Bool = true, models: Bool = true) {
+                network: Bool = true, cost: Bool = true, agents: Bool = true, models: Bool = true, quota: Bool = true) {
         self.model = model
         self.intelligence = intelligence
         self.thinking = thinking
@@ -30,6 +32,7 @@ public struct CharacterReadouts: Equatable, Hashable, Sendable {
         self.cost = cost
         self.agents = agents
         self.models = models
+        self.quota = quota
     }
 
     public static let `default` = CharacterReadouts()
@@ -45,6 +48,7 @@ public struct CharacterReadouts: Equatable, Hashable, Sendable {
             case .cost: cost
             case .agents: agents
             case .models: models
+            case .quota: quota
             }
         }
         set {
@@ -57,6 +61,7 @@ public struct CharacterReadouts: Equatable, Hashable, Sendable {
             case .cost: cost = newValue
             case .agents: agents = newValue
             case .models: models = newValue
+            case .quota: quota = newValue
             }
         }
     }
@@ -64,11 +69,11 @@ public struct CharacterReadouts: Equatable, Hashable, Sendable {
 
 /// One switch of `CharacterReadouts`, in the menu's and editor's order.
 public enum CharacterReadout: String, CaseIterable, Sendable, Identifiable {
-    case intelligence, thinking, latency, network, cost, agents, models, model
+    case intelligence, thinking, latency, network, cost, agents, models, quota, model
 
     public var id: String { rawValue }
 
-    /// `character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`, `.model`.
+    /// `character.readouts.intel`, `.thinking`, `.latency`, `.network`, `.cost`, `.agents`, `.models`, `.quota`, `.model`.
     public var titleKey: String {
         switch self {
         case .intelligence: "character.readouts.intel"
@@ -78,6 +83,7 @@ public enum CharacterReadout: String, CaseIterable, Sendable, Identifiable {
         case .cost: "character.readouts.cost"
         case .agents: "character.readouts.agents"
         case .models: "character.readouts.models"
+        case .quota: "character.readouts.quota"
         case .model: "character.readouts.model"
         }
     }
@@ -85,7 +91,7 @@ public enum CharacterReadout: String, CaseIterable, Sendable, Identifiable {
 
 extension CharacterReadouts: Codable {
     enum CodingKeys: String, CodingKey {
-        case model, intelligence, thinking, latency, network, cost, agents, models
+        case model, intelligence, thinking, latency, network, cost, agents, models, quota
     }
 
     public init(from decoder: Decoder) throws {
@@ -96,7 +102,8 @@ extension CharacterReadouts: Codable {
         let d = CharacterReadouts.default
         self.init(model: flag(.model, d.model), intelligence: flag(.intelligence, d.intelligence),
                   thinking: flag(.thinking, d.thinking), latency: flag(.latency, d.latency), network: flag(.network, d.network),
-                  cost: flag(.cost, d.cost), agents: flag(.agents, d.agents), models: flag(.models, d.models))
+                  cost: flag(.cost, d.cost), agents: flag(.agents, d.agents), models: flag(.models, d.models),
+                  quota: flag(.quota, d.quota))
     }
 
     public func encode(to encoder: Encoder) throws {
@@ -109,5 +116,6 @@ extension CharacterReadouts: Codable {
         try container.encode(cost, forKey: .cost)
         try container.encode(agents, forKey: .agents)
         try container.encode(models, forKey: .models)
+        try container.encode(quota, forKey: .quota)
     }
 }

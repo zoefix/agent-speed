@@ -325,8 +325,9 @@ final class CharacterRenderer: CharacterLayerProvider {
         }
         let anchors = performer.trace(into: &silhouette!, feetOnScreen: (g.feet.x, g.feet.y),
                                       pointsPerPixel: g.pointsPerPixel, scratch: &scratch)
-        let models = HudCard.models.rawValue
+        let models = HudCard.models.rawValue, quota = HudCard.quota.rawValue
         if !cardShown[models], wings.presence[models] == 0 { cardDynamics.resetModels() }
+        if !cardShown[quota], wings.presence[quota] == 0 { cardDynamics.resetQuota() }
         cardDynamics.update(dt, character: character, small: frame.isSmallCharacter,
                             instant: frame.effects.reduceMotion || frame.effects.level == .off)
         // The names narrow to the room the wings found last frame; the wings fit the card's narrowest form.
@@ -337,6 +338,12 @@ final class CharacterRenderer: CharacterLayerProvider {
                                   spare: 0.04 * d, snap: !cardShown[models] || wings.presence[models] == 0)
         }
         wings.modelsNarrowest = measure.map { Double($0.narrowest) } ?? 0
+        // 額度 takes the widest form its room allows; the wings spill it only when its narrowest does not fit.
+        let quotaWidths = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
+            .quotaWidths()
+        cardDynamics.fitQuota(dt, widths: quotaWidths, room: wings.quotaRoom, spare: 0.04 * d,
+                              snap: !cardShown[quota] || wings.presence[quota] == 0)
+        wings.quotaNarrowest = quotaWidths.min() ?? 0
         let cards = CharacterCards(frame: frame, character: character, backing: backing, dynamics: cardDynamics)
         let model = modelName(frame, character: character)
         let readouts = character?.readouts ?? .default
@@ -354,9 +361,12 @@ final class CharacterRenderer: CharacterLayerProvider {
         cardShown[HudCard.cost.rawValue] = readouts.cost && readings?.costLoud == true && has(.cost)
         cardShown[HudCard.agents.rawValue] = readouts.agents && !frame.isSmallCharacter && has(.agents)
         cardShown[models] = readouts.models && readings?.modelsLoud == true && has(.models)
+        // No quiet rule: a quota does not change by the second, it shows whenever it applies.
+        cardShown[quota] = readouts.quota && !(character?.quota.isEmpty ?? true) && has(.quota)
         if frame.isSmallCharacter {
-            var room = 2
-            for card in HudCard.column where cardShown[card.rawValue] {
+            // The column keeps two cards; 額度 is one of them when it shows.
+            var room = cardShown[quota] ? 1 : 2
+            for card in HudCard.column where card != .quota && cardShown[card.rawValue] {
                 if room == 0 { cardShown[card.rawValue] = false } else { room -= 1 }
             }
         }
