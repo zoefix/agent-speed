@@ -63,6 +63,9 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
 
     /// Room the toolbar needs beyond its items: the gaps between them and the trailing margin.
     private static let gaps: CGFloat = 32
+    /// A toolbar `.space`, which keeps the host picker and the subscriptions toggle off the item before them (adjacent
+    /// items would share one glass capsule).
+    private static let spaceWidth: CGFloat = 8
     /// Where the first item starts when it has not been laid out yet (after the window buttons).
     private static let defaultLeading: CGFloat = 96
     private static let iconExportWidth: CGFloat = 40
@@ -148,7 +151,8 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
     // MARK: NSToolbarDelegate
 
     func toolbarDefaultItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
-        [Self.sourceID, .flexibleSpace, Self.rangeID, .flexibleSpace, Self.exportID]
+        // The `.space` keeps the leading pickers off the centered range control when the window is narrow.
+        [Self.sourceID, .space, .flexibleSpace, Self.rangeID, .flexibleSpace, Self.exportID]
     }
 
     func toolbarAllowedItemIdentifiers(_ toolbar: NSToolbar) -> [NSToolbarItem.Identifier] {
@@ -309,13 +313,25 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         guard let source = toolbar.items.firstIndex(where: { $0.itemIdentifier == Self.sourceID }) else { return }
         let host = toolbar.items.firstIndex { $0.itemIdentifier == Self.hostID }
         if offered, index == nil {
-            toolbar.insertItem(withItemIdentifier: Self.subscriptionsID, at: (host ?? source) + 1)
+            insertSpaced(Self.subscriptionsID, after: host ?? source)
             refit()
         } else if !offered, let index {
-            toolbar.removeItem(at: index)
+            removeSpaced(at: index)
             subscriptionsItem = nil
             refit()
         }
+    }
+
+    /// Inserts an item after `index` with a `.space` before it.
+    private func insertSpaced(_ identifier: NSToolbarItem.Identifier, after index: Int) {
+        toolbar.insertItem(withItemIdentifier: .space, at: index + 1)
+        toolbar.insertItem(withItemIdentifier: identifier, at: index + 2)
+    }
+
+    /// Removes the item at `index` and the `.space` before it.
+    private func removeSpaced(at index: Int) {
+        toolbar.removeItem(at: index)
+        if index > 0, toolbar.items[index - 1].itemIdentifier == .space { toolbar.removeItem(at: index - 1) }
     }
 
     /// Range labels and segment widths of `fit`; a shortened label keeps the full one as the segment's tooltip.
@@ -402,10 +418,11 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         let sourceFull = hosts ? sourceWidth(icon: false) : sourcePopup.frame.width
         let sourceIcon = hosts ? sourceWidth(icon: true) : sourceFull
         return zip(Fit.ladder, ranges).map { candidate, range in
-            let subscriptions: CGFloat = offered ? (candidate.iconSubscriptions ? Self.iconExportWidth : checkbox) + 8 : 0
-            let host = hosts ? hostWidths.first { $0.0 == candidate.host }?.1 ?? 0 : 0
+            let subscriptions: CGFloat = offered
+                ? (candidate.iconSubscriptions ? Self.iconExportWidth : checkbox) + 8 + Self.spaceWidth : 0
+            let host = hosts ? (hostWidths.first { $0.0 == candidate.host }?.1 ?? 0) + Self.spaceWidth : 0
             let source = candidate.iconSource ? sourceIcon : sourceFull
-            return leading + source + host + subscriptions + range
+            return leading + source + Self.spaceWidth + host + subscriptions + range
                 + (candidate.iconExport ? Self.iconExportWidth : textExport) + Self.gaps
         }
     }
@@ -482,9 +499,9 @@ final class HistoryToolbar: NSObject, NSToolbarDelegate {
         let index = toolbar.items.firstIndex { $0.itemIdentifier == Self.hostID }
         guard let source = toolbar.items.firstIndex(where: { $0.itemIdentifier == Self.sourceID }) else { return }
         if offered, index == nil {
-            toolbar.insertItem(withItemIdentifier: Self.hostID, at: source + 1)
+            insertSpaced(Self.hostID, after: source)
         } else if !offered, let index {
-            toolbar.removeItem(at: index)
+            removeSpaced(at: index)
             hostItem = nil
         } else {
             return
