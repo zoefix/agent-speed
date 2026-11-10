@@ -263,6 +263,9 @@ public sealed record AppSettings
     /// <summary>NETWORK 1 master switch: off, nothing is ever requested (updates, prices, rates) and no <c>ssh</c> runs (REMOTE 2.3).</summary>
     public bool NetworkEnabled { get; init; } = true;
 
+    /// <summary>The quota switches and the Claude Code invitation (QUOTAS, DESIGN 5).</summary>
+    public QuotaSettings Quota { get; init; } = QuotaSettings.Default;
+
     /// <summary>Character packs the automatic download skips (settings value <c>charactersSetAside</c>, CHARACTERS 2).</summary>
     public CharacterSetAside CharactersSetAside { get; init; } = CharacterSetAside.Empty;
 

@@ -21,6 +21,10 @@ internal sealed class SourceRowButton : Button
     public static readonly DependencyProperty TrailingProperty = DependencyProperty.Register(
         nameof(Trailing), typeof(object), typeof(SourceRowButton), new PropertyMetadata(null));
 
+    /// <summary>Content under the row's line (the quota lines, DESIGN 4), inside the row's plate.</summary>
+    public static readonly DependencyProperty BelowProperty = DependencyProperty.Register(
+        nameof(Below), typeof(object), typeof(SourceRowButton), new PropertyMetadata(null));
+
     public static readonly DependencyProperty ShowChevronProperty = DependencyProperty.Register(
         nameof(ShowChevron), typeof(bool), typeof(SourceRowButton),
         new PropertyMetadata(true, (d, _) => ((SourceRowButton)d).Update(animate: true)));
@@ -56,6 +60,12 @@ internal sealed class SourceRowButton : Button
     {
         get => GetValue(TrailingProperty);
         set => SetValue(TrailingProperty, value);
+    }
+
+    public object? Below
+    {
+        get => GetValue(BelowProperty);
+        set => SetValue(BelowProperty, value);
     }
 
     /// <summary>False when something else (a settings link) occupies the trailing edge.</summary>

@@ -19,10 +19,12 @@ internal sealed class SourceGroupViewModel : ObservableObject
     private bool _canReset;
     private bool _shown;
 
-    public SourceGroupViewModel(LocationFolder folder, IReadOnlyList<SourceSettingsRow> toggles, SourcesPaneViewModel pane, Localizer loc)
+    public SourceGroupViewModel(LocationFolder folder, IReadOnlyList<SourceSettingsRow> toggles, SourcesPaneViewModel pane, Localizer loc,
+        IReadOnlyList<QuotaToggleViewModel>? quota = null)
     {
         Folder = folder;
         Toggles = toggles;
+        QuotaToggles = quota ?? [];
         _pane = pane;
         _loc = loc;
         AddCommand = new RelayCommand(() => _pane.Add(this), () => CanAdd);
@@ -32,6 +34,11 @@ internal sealed class SourceGroupViewModel : ObservableObject
     public LocationFolder Folder { get; }
 
     public IReadOnlyList<SourceSettingsRow> Toggles { get; }
+
+    /// <summary>The group's quota switches after its source toggles (DESIGN 5, 額度).</summary>
+    public IReadOnlyList<QuotaToggleViewModel> QuotaToggles { get; }
+
+    public bool HasQuota => QuotaToggles.Count > 0;
 
     public ObservableCollection<LocationRowViewModel> Entries { get; } = [];
 
@@ -115,6 +122,11 @@ internal sealed class SourceGroupViewModel : ObservableObject
         foreach (var row in Entries)
         {
             row.Relocalize(loc);
+        }
+
+        foreach (var toggle in QuotaToggles)
+        {
+            toggle.Relocalize(loc);
         }
 
         OnPropertyChanged(string.Empty);

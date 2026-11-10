@@ -23,6 +23,8 @@
                 <TextBlock Text="{Binding PrivacyTraffic}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <!-- What the performance score reads and keeps (DESIGN 12, Privacy and wording), unchanged while live reporting is on. -->
                 <TextBlock Text="{loc:Loc privacy.perfScore}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
+                <!-- QUOTAS 8: where each quota comes from, always. -->
+                <TextBlock Text="{loc:Loc privacy.quota}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <TextBlock Text="{Binding PrivacyReport}" Style="{StaticResource BodyText}" Margin="0,8,0,0" />
                 <!-- Remote hosts (DESIGN 13): only once a host is added. -->
                 <TextBlock Text="{loc:Loc privacy.remote}" Style="{StaticResource BodyText}" Margin="0,8,0,0"

@@ -58,8 +58,8 @@ public class CharacterReadoutRowsTests
     [Fact]
     public void TheReadoutsAreListedInTheMenusOrder()
     {
-        Assert.Equal(["intelligence", "thinking", "latency", "network", "cost", "agents", "models", "model"], CharacterReadouts.All.Select(CharacterReadouts.Key));
-        Assert.Equal(["Performance", "Thinking Speed", "First-Token Latency", "Network Speed", "Cost", "Today & Agents", "Running Models", "Fastest Model"],
+        Assert.Equal(["intelligence", "thinking", "latency", "network", "cost", "agents", "models", "quota", "model"], CharacterReadouts.All.Select(CharacterReadouts.Key));
+        Assert.Equal(["Performance", "Thinking Speed", "First-Token Latency", "Network Speed", "Cost", "Today & Agents", "Running Models", "Quota", "Fastest Model"],
             CharacterReadouts.All.Select(r => En[CharacterReadouts.TitleKey(r)]));
         Assert.Equal("首字延遲", ZhHant["character.readouts.latency"]);
         Assert.Equal("執行中的模型", ZhHant["character.readouts.models"]);

@@ -5,8 +5,9 @@
   Output: dist\AgentSpeed-Windows-x64.zip and dist\AgentSpeed-Windows-arm64.zip, each containing AgentSpeed.exe, which
   embeds both remote relays agent-speed-relay-linux-x86_64 and -aarch64 (spec/REMOTE.md 3.1).
   The traffic helper (spec/WINDOWS-SERVICE.md) is published first with NativeAOT for each architecture and embedded in
-  AgentSpeed.exe; this needs the Visual Studio C++ build tools including the ARM64 tools. AGENT_SPEED_NO_HELPER=1
-  builds without it (per-process traffic is then unavailable in that build).
+  AgentSpeed.exe; so is the Claude Code status line helper agent-speed-statusline.exe (spec/QUOTAS.md 5). This needs the
+  Visual Studio C++ build tools including the ARM64 tools. AGENT_SPEED_NO_HELPER=1 builds without both (per-process
+  traffic and the Claude Code quota bridge are then unavailable in that build).
 .PARAMETER Version
   Version to stamp (defaults to the repository VERSION file, then 1.0.0).
 .PARAMETER RelayDir
@@ -25,6 +26,7 @@ Set-StrictMode -Version Latest
 $root = (Resolve-Path (Join-Path $PSScriptRoot '..\..')).Path
 $project = Join-Path $root 'windows\src\AgentSpeed\AgentSpeed.csproj'
 $helperProject = Join-Path $root 'windows\src\AgentSpeed.TrafficHelper\AgentSpeed.TrafficHelper.csproj'
+$statuslineProject = Join-Path $root 'windows\src\AgentSpeed.StatuslineHelper\AgentSpeed.StatuslineHelper.csproj'
 $dist = Join-Path $root 'dist'
 
 if (-not $Version) { $Version = $env:AGENT_SPEED_VERSION }
@@ -73,7 +75,7 @@ New-Item -ItemType Directory -Path $dist -Force | Out-Null
 try {
     $helperArgs = @()
     if ($env:AGENT_SPEED_NO_HELPER -eq '1') {
-        Write-Warning 'AGENT_SPEED_NO_HELPER=1: building without the traffic helper (no per-process traffic on Windows).'
+        Write-Warning 'AGENT_SPEED_NO_HELPER=1: building without the traffic and status line helpers (no per-process traffic, no Claude Code quota bridge).'
     }
     else {
         # WINDOWS-SERVICE 2: the helper keeps its own version (HelperProtocol.BundledVersion), so no app version is stamped.
@@ -98,7 +100,28 @@ try {
             $helperHash = (Get-FileHash -Path $helperExe -Algorithm SHA256).Hash.ToLowerInvariant()
             Write-Host ("    AgentSpeedTrafficHelper.exe: {0:N0} KiB, SHA-256 {1}" -f ((Get-Item $helperExe).Length / 1KB), $helperHash)
         }
-        $helperArgs = @("-p:TrafficHelperDir=$helperRoot")
+        # QUOTAS 5.1: the status line helper, NativeAOT as well, embedded the same way.
+        $statuslineRoot = Join-Path $work 'statusline'
+        foreach ($arch in @('x64', 'arm64')) {
+            $rid = "win-$arch"
+            $statuslineOut = Join-Path $statuslineRoot $rid
+            Write-Host "==> Publishing the status line helper (NativeAOT) for $rid"
+            & dotnet publish $statuslineProject `
+                -c Release `
+                -r $rid `
+                --artifacts-path (Join-Path $work 'statusline-artifacts') `
+                -o $statuslineOut `
+                -p:DebugType=none `
+                -p:DebugSymbols=false `
+                -p:ContinuousIntegrationBuild=true `
+                -nologo
+            if ($LASTEXITCODE -ne 0) { throw "dotnet publish of the status line helper failed for $rid" }
+
+            $statuslineExe = Join-Path $statuslineOut 'agent-speed-statusline.exe'
+            if (-not (Test-Path $statuslineExe)) { throw "$statuslineExe was not produced" }
+            Write-Host ("    agent-speed-statusline.exe: {0:N0} KiB" -f ((Get-Item $statuslineExe).Length / 1KB))
+        }
+        $helperArgs = @("-p:TrafficHelperDir=$helperRoot", "-p:StatuslineHelperDir=$statuslineRoot")
     }
 
     foreach ($arch in @('x64', 'arm64')) {

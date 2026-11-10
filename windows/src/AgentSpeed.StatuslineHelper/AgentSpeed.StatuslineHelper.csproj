@@ -1,0 +1,53 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <!-- QUOTAS 5.5: the Claude Code status line helper. One NativeAOT file with no runtime, so it starts in a few
+       milliseconds; publish with `dotnet publish -c Release -r win-x64` (or win-arm64). The app embeds it and copies it to
+       %LOCALAPPDATA%\AgentSpeed\bin when the bridge is turned on. -->
+  <PropertyGroup>
+    <OutputType>Exe</OutputType>
+    <TargetFramework>net10.0</TargetFramework>
+    <AssemblyName>agent-speed-statusline</AssemblyName>
+    <RootNamespace>AgentSpeed.StatuslineHelper</RootNamespace>
+    <TreatWarningsAsErrors>true</TreatWarningsAsErrors>
+    <ApplicationManifest>app.manifest</ApplicationManifest>
+    <Description>Agent Speed status line helper</Description>
+    <InvariantGlobalization>true</InvariantGlobalization>
+    <SatelliteResourceLanguages>en</SatelliteResourceLanguages>
+    <IsAotCompatible>true</IsAotCompatible>
+    <GenerateDocumentationFile>false</GenerateDocumentationFile>
+  </PropertyGroup>
+
+  <!-- NativeAOT only when publishing for a Windows RID; a plain build (macOS, tests) stays an ordinary JIT assembly. -->
+  <PropertyGroup Condition="$(RuntimeIdentifier.StartsWith('win-'))">
+    <PublishAot>true</PublishAot>
+    <OptimizationPreference>Speed</OptimizationPreference>
+    <IlcGenerateStackTraceData>false</IlcGenerateStackTraceData>
+    <StackTraceSupport>false</StackTraceSupport>
+    <UseSystemResourceKeys>true</UseSystemResourceKeys>
+    <EventSourceSupport>false</EventSourceSupport>
+    <DebuggerSupport>false</DebuggerSupport>
+    <MetadataUpdaterSupport>false</MetadataUpdaterSupport>
+    <HttpActivityPropagationSupport>false</HttpActivityPropagationSupport>
+    <NullabilityInfoContextSupport>false</NullabilityInfoContextSupport>
+    <EnableUnsafeBinaryFormatterSerialization>false</EnableUnsafeBinaryFormatterSerialization>
+    <EnableUnsafeUTF7Encoding>false</EnableUnsafeUTF7Encoding>
+    <BuiltInComInteropSupport>false</BuiltInComInteropSupport>
+    <ConcurrentGarbageCollection>false</ConcurrentGarbageCollection>
+    <ServerGarbageCollection>false</ServerGarbageCollection>
+    <TieredPGO>false</TieredPGO>
+    <DebugType>none</DebugType>
+    <DebugSymbols>false</DebugSymbols>
+  </PropertyGroup>
+
+  <ItemGroup Condition="$(RuntimeIdentifier.StartsWith('win-'))">
+    <!-- Reproducible link (no time stamp), so the app's copy is replaced only when the code changed. -->
+    <LinkerArg Include="/Brepro" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <Compile Include="..\AgentSpeed.Core\Quota\ClaudeCliQuota.cs" Link="Quota\ClaudeCliQuota.cs" />
+  </ItemGroup>
+
+  <ItemGroup>
+    <InternalsVisibleTo Include="AgentSpeed.StatuslineHelper.Tests" />
+  </ItemGroup>
+</Project>

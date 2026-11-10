@@ -295,7 +295,7 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
 
     public string? CharacterSentence(Presentation.Localization.Localizer localizer, string currencyName) =>
         InstrumentStyle == OrbStyle.Character && _orb.Character is { } content
-            ? OrbCharacterSpeech.Sentence(_orb.CharacterReadings, content.Readouts, Now(), localizer, currencyName)
+            ? OrbCharacterSpeech.Sentence(_orb.CharacterReadings, content.Readouts, Now(), localizer, currencyName, content.Quota)
             : null;
 
     public Presentation.Orb.Lines.OrbLinesReading? LinesReading => _orb.LinesReading;

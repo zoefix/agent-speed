@@ -68,6 +68,9 @@ public sealed class LiveMonitor : IDisposable
 
     public PriceBook? Pricing { get; }
 
+    /// <summary>The newest Codex limits seen in this computer's rollouts (QUOTAS 3), kept across monitor restarts.</summary>
+    public Quota.CodexQuotaCollector CodexQuota { get; } = new();
+
     /// <summary>Runs on the pool thread before each background whole-file read (tests make reads slow with it).</summary>
     internal Action<string>? BeforeBackgroundRead { get; set; }
 
@@ -452,7 +455,10 @@ public sealed class LiveMonitor : IDisposable
     {
         var zone = TimeZoneInfo.Local;
         using var core = new MonitorCore(
-            configuration, SourceLocations.Resolve(configuration), LocalDay.StartMs(NowMs(), zone), pricing: Pricing, zone: zone);
+            configuration, SourceLocations.Resolve(configuration), LocalDay.StartMs(NowMs(), zone), pricing: Pricing, zone: zone)
+        {
+            CodexQuota = CodexQuota,
+        };
         core.ReadWholeFilesInBackground = true;
         core.BackgroundReadCompleted = SignalWake;
         core.BeforeBackgroundRead = BeforeBackgroundRead;

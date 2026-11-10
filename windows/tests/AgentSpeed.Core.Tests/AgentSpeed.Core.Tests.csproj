@@ -34,5 +34,6 @@
 
   <ItemGroup>
     <None Include="../../../spec/fixtures/**/*" LinkBase="spec/fixtures" CopyToOutputDirectory="Always" Visible="false" />
+    <None Include="../../../spec/strings.json" Link="spec/strings.json" CopyToOutputDirectory="Always" Visible="false" />
   </ItemGroup>
 </Project>

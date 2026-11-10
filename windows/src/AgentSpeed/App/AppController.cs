@@ -236,6 +236,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         phases.Mark("orb");
         UpdateTaskbar();
         StartMonitor();
+        StartQuota();
         phases.Mark("monitor");
         _instance.Listen(() => _ui.BeginInvoke(() => ShowDashboard(CursorAnchor())));
         _started = true;
@@ -319,7 +320,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
                     if (target == "dialog")
                     {
-                        return LanCaptureTarget() ?? RemoteCaptureTarget(target);
+                        return LanCaptureTarget() ?? QuotaCaptureTarget() ?? RemoteCaptureTarget(target);
                     }
 
                     if (target == "history")
@@ -466,6 +467,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
                 RemoteHosts = _remoteHosts,
             };
 
+            AttachQuotaPane(_settingsModel.SourcesPane);
             _settingsModel.ReduceMotion = _theme.ReduceMotion;
             _settingsModel.DarkTheme = _theme.IsDark;
             _settingsModel.UpdateLive(_speed.Snapshot, _taskbar?.Presence ?? TaskbarPresence.Hidden);
@@ -554,6 +556,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         Try(() => _pinnedSpeeds?.Dispose());
         Try(() => _heroTour?.Dispose());
         Try(() => _remote?.Dispose());
+        Try(() => _quota?.Dispose());
         Try(() => _monitor?.Dispose());
         Try(() => _taskbar?.Dispose());
         Try(() => _tray?.Dispose());
@@ -735,6 +738,9 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         _dashboardTitle = _speed.Title;
         var snapshot = _speed.Snapshot;
         _dashboardModel.ReduceMotion = _theme.ReduceMotion;
+        _dashboardModel.HighContrast = _theme.HighContrast;
+        _dashboardModel.Quota = Quota;
+        _dashboardModel.QuotaSettings = Settings.Quota;
         _dashboardModel.AgentsExpanded = Settings.AgentsExpanded;
         _dashboardModel.TitleTheme = _titles.General;
         _dashboardModel.TitleSlides = !_theme.ReduceMotion && Settings.Effects != EffectsIntensity.Off;
@@ -1003,6 +1009,8 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _dashboard = new DashboardWindow(_dashboardModel, () => _speed.Now) { Language = AppFonts.XmlLanguageFor(_loc.LanguageCode) };
             _dashboard.SettingsRequested += (_, _) => OpenSettings();
             _dashboard.SourcesRequested += (_, _) => OpenSettings("sources");
+            _dashboard.CliQuotaRequested += (_, _) => _ui.BeginInvoke(() => EnableClaudeCliQuota());
+            _dashboard.CliInvitationDismissed += (_, _) => DismissCliInvitation();
             _dashboard.HistoryRequested += (_, source) => OpenHistory(source);
             _dashboard.HostHistoryRequested += (_, host) => ShowHostHistory(host);
             _dashboard.QuitRequested += (_, _) => Quit();
@@ -1166,6 +1174,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         _cost.OnSettingsChanged(previous, current);
         _characters?.OnSettingsChanged(previous, current);
         _traffic.OnSettingsChanged(previous, current);
+        OnQuotaSettingsChanged(previous, current);
         if (previous.Traffic.IncludeTools != current.Traffic.IncludeTools || previous.EnabledSourceSet() != current.EnabledSourceSet())
         {
             _history?.OnTrafficSettingsChanged();
@@ -1263,6 +1272,11 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         }
 
         if (RunLanCaptureOperation(op))
+        {
+            return;
+        }
+
+        if (RunQuotaCaptureOperation(op))
         {
             return;
         }

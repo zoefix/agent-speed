@@ -98,6 +98,12 @@ internal sealed partial class DashboardWindow : Window
 
     public event EventHandler? SourcesRequested;
 
+    /// <summary>The Claude Code invitation's link was chosen (DESIGN 4).</summary>
+    public event EventHandler? CliQuotaRequested;
+
+    /// <summary>The Claude Code invitation's × was chosen.</summary>
+    public event EventHandler? CliInvitationDismissed;
+
     /// <summary>A source row (that source) or the Today header's history button (null, all sources) was clicked.</summary>
     public event EventHandler<SourceKind?>? HistoryRequested;
 
@@ -678,6 +684,16 @@ internal sealed partial class DashboardWindow : Window
         Dismiss();
         SourcesRequested?.Invoke(this, EventArgs.Empty);
     }
+
+    /// <summary>The Claude Code invitation's link: asks as Settings does, then turns the bridge on (DESIGN 4).</summary>
+    private void OnEnableCliQuota(object sender, RoutedEventArgs e)
+    {
+        Dismiss();
+        CliQuotaRequested?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>The invitation's ×: it never shows again.</summary>
+    private void OnDismissCliInvitation(object sender, RoutedEventArgs e) => CliInvitationDismissed?.Invoke(this, EventArgs.Empty);
 
     private void OnSourceRow(object sender, RoutedEventArgs e)
     {

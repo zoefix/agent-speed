@@ -15,17 +15,20 @@ public enum HudCard
     Cost,
     Agents,
     Models,
+
+    /// <summary>額度: the column's last card (QUOTAS 6).</summary>
+    Quota,
 }
 
 public static class HudCards
 {
-    public const int Count = 7;
+    public const int Count = 8;
 
     /// <summary>The left column, top to bottom.</summary>
-    public static ImmutableArray<HudCard> Column { get; } = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents];
+    public static ImmutableArray<HudCard> Column { get; } = [HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Quota];
 
     public static ImmutableArray<HudCard> All { get; } =
-        [HudCard.Speed, HudCard.Model, HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Models];
+        [HudCard.Speed, HudCard.Model, HudCard.Performance, HudCard.Network, HudCard.Cost, HudCard.Agents, HudCard.Models, HudCard.Quota];
 }
 
 /// <summary>
@@ -196,7 +199,7 @@ public sealed class HudWings
     private readonly (double X, double Y)[] _targets;
     private readonly bool[] _right;
     private readonly double[] _hop;
-    private readonly double[] _edges = new double[4];
+    private readonly double[] _edges = new double[HudCards.Column.Length];
     private double _strain;
     private double _ease;
     private ModelsPlace _modelsPlace = ModelsPlace.UnderSpeed;
@@ -228,6 +231,15 @@ public sealed class HudWings
 
     /// <summary>The models card's width in its narrowest form, dots and speeds only (points); the renderer sets it each frame.</summary>
     public double ModelsNarrowest { get; set; }
+
+    /// <summary>
+    /// The 額度 card's narrowest form (no resets, short bars, no headers; points); the renderer sets it each frame. Only
+    /// when even that does not fit does the card spill over like the column's other cards.
+    /// </summary>
+    public double QuotaNarrowest { get; set; }
+
+    /// <summary>The room from the 額度 card's column edge to the orb's edge at its place this frame (points).</summary>
+    public double QuotaRoom { get; private set; } = double.PositiveInfinity;
 
     public HudWings()
     {
@@ -290,6 +302,15 @@ public sealed class HudWings
     public void Update(double dt, double time, HudFrame f, IReadOnlyList<(double W, double H)> given, IReadOnlyList<bool> shown)
     {
         ArgumentNullException.ThrowIfNull(f);
+        ArgumentNullException.ThrowIfNull(given);
+        ArgumentNullException.ThrowIfNull(shown);
+        if (given.Count < HudCards.Count || shown.Count < HudCards.Count)
+        {
+            // Cards past the lists' ends are hidden with no size.
+            given = [.. Enumerable.Range(0, HudCards.Count).Select(i => i < given.Count ? given[i] : (0.0, 0.0))];
+            shown = [.. Enumerable.Range(0, HudCards.Count).Select(i => i < shown.Count && shown[i])];
+        }
+
         for (var i = 0; i < _presence.Length; i++)
         {
             var target = shown[i] && (i != (int)HudCard.Models || _modelsPlace != ModelsPlace.Hidden) ? 1.0 : 0.0;
@@ -649,11 +670,17 @@ public sealed class HudWings
         {
             var i = (int)cards[k];
             var w = sizes[i].W + room;
-            var x = (aligned && double.IsFinite(line) ? line : _edges[k]) - w / 2;
-            over += _presence[i] * Math.Max(0, minX - (x - w / 2));
+            var edge = aligned && double.IsFinite(line) ? line : _edges[k];
+            var x = edge - w / 2;
+            var fit = OverflowWidth(i, sizes[i].W) + room;
+            over += _presence[i] * Math.Max(0, minX - (edge - fit));
             if (write)
             {
                 _targets[i].X = Math.Max(x, minX + w / 2);
+                if (i == (int)HudCard.Quota)
+                {
+                    QuotaRoom = Math.Max(0, edge - minX);
+                }
             }
         }
 
@@ -698,15 +725,23 @@ public sealed class HudWings
         {
             var i = (int)cards[k];
             var w = sizes[i].W + room;
-            over += _presence[i] * Math.Max(0, left + w - maxX);
+            over += _presence[i] * Math.Max(0, left + OverflowWidth(i, sizes[i].W) + room - maxX);
             if (write)
             {
                 _targets[i].X = Math.Min(left + w / 2, maxX - w / 2);
+                if (i == (int)HudCard.Quota)
+                {
+                    QuotaRoom = Math.Max(0, maxX - left);
+                }
             }
         }
 
         return over;
     }
+
+    /// <summary>The width a card needs to fit: the 額度 card narrows itself to the room, so only its narrowest form counts.</summary>
+    private double OverflowWidth(int card, double width) =>
+        card == (int)HudCard.Quota && QuotaNarrowest > 0 ? Math.Min(width, QuotaNarrowest) : width;
 
     private double SpeedBottom((double W, double H)[] sizes)
     {
