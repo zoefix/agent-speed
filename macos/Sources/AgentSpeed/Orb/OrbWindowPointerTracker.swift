@@ -54,6 +54,12 @@ final class OrbWindowPointerTracker {
         if foreign, event.type == .rightMouseDown || event.type == .leftMouseDown {
             OrbWindowLog.debug("press in another app at \(OrbWindowLog.describe(NSEvent.mouseLocation))")
         }
-        onMove?(NSEvent.mouseLocation, event.type == .mouseMoved)
+        onMove?(NSEvent.mouseLocation, Self.isPlainMove(event.type, pressedButtons: NSEvent.pressedMouseButtons))
+    }
+
+    /// A move with no button held now. A move the window server sent before a press can reach a monitor just after
+    /// it; with the button still down it is no sign of a lost mouse-up, so it must not end the drag that press began.
+    nonisolated static func isPlainMove(_ type: NSEvent.EventType, pressedButtons: Int) -> Bool {
+        type == .mouseMoved && pressedButtons == 0
     }
 }
