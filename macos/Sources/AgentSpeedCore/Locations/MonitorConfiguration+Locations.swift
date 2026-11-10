@@ -16,6 +16,7 @@ extension TranscriptFamily {
         case .grokBuild: .grokBuild
         case .pi: .pi
         case .droid: .droid
+        case .qoderCli: .qoderCli
         }
     }
 }
@@ -44,6 +45,7 @@ extension MonitorConfiguration {
         case .workbuddy, .workbuddyAi: return TranscriptLocations.workbuddyProjects(url)
         case .kimi, .grokBuild: return TranscriptLocations.sessionsFolder(url)
         case .droid: return DroidPaths.sessionsFolder(url)
+        case .qoderCli: return QoderPaths.cliProjectsFolder(url)
         case .codex, .claude, .dsh, .gemini, .omp, .pi: return url
         }
     }
@@ -56,6 +58,7 @@ extension MonitorConfiguration {
             case .antigravity: urls.map(TranscriptLocations.antigravityConversations)
             case .workbuddy, .workbuddyAi: urls.map(TranscriptLocations.workbuddyProjects)
             case .kimi, .grokBuild: urls.map(TranscriptLocations.sessionsFolder)
+            case .qoderCli: urls.map(QoderPaths.cliProjectsFolder)
             default: urls
             }
         }
@@ -194,6 +197,17 @@ extension MonitorConfiguration {
         }.filter { seen.insert($0).inserted }
     }
 
+    /// Qoder IDE's roots (METRICS 2, 4.18): the automatic database of each edition and every user location, each once.
+    var resolvedQoderRoots: [QoderRoot] {
+        var seen: Set<QoderRoot> = []
+        return locations[.qoder].flatMap { location -> [QoderRoot] in
+            switch location {
+            case .automatic: qoderAutomaticRoots ?? TranscriptLocations.defaultQoderRoots
+            case .path(let path): [.location(TranscriptDiscovery.normalizedRoot(path))]
+            }
+        }.filter { seen.insert($0).inserted }
+    }
+
     /// The zone Hermes's wall-clock times are read in: this computer's, unless a test sets one.
     var resolvedHermesTimeZone: TimeZone { hermesTimeZone ?? .autoupdatingCurrent }
 
@@ -204,6 +218,7 @@ extension MonitorConfiguration {
     var readsOpencode: Bool { enabledSources.contains(.opencode) }
     var readsZcode: Bool { enabledSources.contains(.zcode) }
     var readsDevin: Bool { enabledSources.contains(.devin) }
+    var readsQoder: Bool { enabledSources.contains(.qoder) }
 
     func reads(_ family: TranscriptFamily) -> Bool {
         family.sources.contains { enabledSources.contains($0) }
@@ -220,6 +235,7 @@ extension MonitorConfiguration {
             || resolvedOpenclawRoots != other.resolvedOpenclawRoots
             || resolvedHermesRoots != other.resolvedHermesRoots
             || resolvedDevinRoots != other.resolvedDevinRoots
+            || resolvedQoderRoots != other.resolvedQoderRoots
     }
 }
 

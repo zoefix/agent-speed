@@ -45,6 +45,9 @@ struct SnapshotContext: Sendable {
             } else if kind == .devin {
                 let location = session.devinLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
+            } else if kind == .qoder {
+                let location = session.qoderLocation
+                sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)
             } else if kind == .hermes {
                 let location = session.hermesLocation
                 sources[kind] = SourceInfo(enabled: enabled, rootPath: location.path, available: location.available, sessionCount: counts[kind] ?? 0)

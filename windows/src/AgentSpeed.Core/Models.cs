@@ -41,6 +41,12 @@ public enum SourceKind
 
     /// <summary>Devin CLI (Cognition): its SQLite session database, one agent per session, METRICS 4.17.</summary>
     Devin,
+
+    /// <summary>Qoder IDE (Alibaba): the agent core's SQLite chat database per edition, one agent per chat session, METRICS 4.18.</summary>
+    Qoder,
+
+    /// <summary>Qoder CLI: Claude Code's transcript format in its own folders, METRICS 4.19.</summary>
+    QoderCli,
 }
 
 public enum AgentPhase
@@ -323,6 +329,8 @@ public abstract record SpeedEvent
 /// <param name="HermesRoot">A Hermes home or one <c>logs</c> folder in place of its list.</param>
 /// <param name="DroidRoot">The Factory Droid <c>.factory</c> folder or its <c>sessions</c> folder in place of its list.</param>
 /// <param name="DevinRoot">A Devin CLI folder that holds <c>sessions.db</c>, or its <c>devin</c> data folder, in place of its list.</param>
+/// <param name="QoderRoot">A Qoder IDE data folder, its <c>SharedClientCache</c> folder or the folder that holds <c>local.db</c>, in place of its list.</param>
+/// <param name="QoderCliRoot">A Qoder CLI config folder or its <c>projects</c> folder in place of its list.</param>
 public sealed record MonitorConfiguration(
     IReadOnlySet<SourceKind> EnabledSources,
     string? CodexRoot = null,
@@ -341,7 +349,9 @@ public sealed record MonitorConfiguration(
     string? OpenClawRoot = null,
     string? HermesRoot = null,
     string? DroidRoot = null,
-    string? DevinRoot = null)
+    string? DevinRoot = null,
+    string? QoderRoot = null,
+    string? QoderCliRoot = null)
 {
     public static MonitorConfiguration Default { get; } =
         new(new HashSet<SourceKind>(Enum.GetValues<SourceKind>()));
@@ -372,6 +382,8 @@ public sealed record MonitorConfiguration(
         LocationFolder.Hermes => HermesRoot,
         LocationFolder.Droid => DroidRoot,
         LocationFolder.Devin => DevinRoot,
+        LocationFolder.Qoder => QoderRoot,
+        LocationFolder.QoderCli => QoderCliRoot,
         _ => null,
     };
 

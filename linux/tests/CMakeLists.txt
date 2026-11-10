@@ -34,6 +34,8 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     perf_score_test.cpp
     pricing_test.cpp
+    qoder_fixture_test.cpp
+    qoder_source_test.cpp
     report_body_test.cpp
     report_perf_test.cpp
     report_profile_test.cpp
@@ -92,6 +94,7 @@ if(AGENTSPEED_BUILD_APP)
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
         app/orb_size_test.cpp
+        app/qoder_settings_test.cpp
         app/source_location_settings_test.cpp
         ../app/src/board/board_store.cpp
         ../app/src/characters/character_library.cpp

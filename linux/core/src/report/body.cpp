@@ -62,7 +62,7 @@ Json trafficJson(const TrafficSample& traffic, const std::optional<traffic::Rate
 
 std::vector<SourceKind> sourceOrder() {
     std::vector<SourceKind> out;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) out.push_back(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) out.push_back(static_cast<SourceKind>(k));
     return out;
 }
 

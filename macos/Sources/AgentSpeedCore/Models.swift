@@ -28,6 +28,10 @@ public enum SourceKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case droid
     /// Devin CLI (`devin`, Cognition): its session database.
     case devin
+    /// Qoder IDE (Alibaba): the chat database of the editor's agent core.
+    case qoder
+    /// Qoder CLI (`qodercli`): Claude Code's transcript format in its own folder.
+    case qoderCli
 
     public var id: String { rawValue }
 }
@@ -433,6 +437,8 @@ public struct MonitorConfiguration: Equatable, Sendable {
     var hermesTimeZone: TimeZone?
     /// Tests: Devin's automatic root (its CLI database), instead of the process's own.
     var devinAutomaticRoots: [DevinRoot]?
+    /// Tests: Qoder IDE's automatic roots (one database per edition), instead of the process's own.
+    var qoderAutomaticRoots: [QoderRoot]?
 
     /// `locations`, with each named URL as that source's only user location (`[path]`, no automatic entry): the
     /// one-folder form tests and the probe use.
@@ -455,7 +461,9 @@ public struct MonitorConfiguration: Equatable, Sendable {
         openclawRoot: URL? = nil,
         hermesRoot: URL? = nil,
         droidRoot: URL? = nil,
-        devinRoot: URL? = nil
+        devinRoot: URL? = nil,
+        qoderRoot: URL? = nil,
+        qoderCliRoot: URL? = nil
     ) {
         self.enabledSources = enabledSources
         self.locations = locations
@@ -463,7 +471,7 @@ public struct MonitorConfiguration: Equatable, Sendable {
             (.codex, codexRoot), (.claude, claudeRoot), (.dsh, dshRoot), (.opencode, opencodeRoot), (.gemini, geminiRoot),
             (.omp, ompRoot), (.antigravity, antigravityRoot), (.workbuddy, workbuddyRoot), (.workbuddyAi, workbuddyAiRoot),
             (.zcode, zcodeRoot), (.kimi, kimiRoot), (.grokBuild, grokBuildRoot), (.pi, piRoot), (.openclaw, openclawRoot),
-            (.hermes, hermesRoot), (.droid, droidRoot), (.devin, devinRoot),
+            (.hermes, hermesRoot), (.droid, droidRoot), (.devin, devinRoot), (.qoder, qoderRoot), (.qoderCli, qoderCliRoot),
         ]
         for case let (folder, url?) in single { self.locations[folder] = [.path(url.path)] }
     }

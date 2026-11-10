@@ -5628,6 +5628,18 @@
     "en": "Devin",
     "ja": "Devin"
   },
+  "source.qoder": {
+    "zh-Hant": "Qoder IDE",
+    "zh-Hans": "Qoder IDE",
+    "en": "Qoder IDE",
+    "ja": "Qoder IDE"
+  },
+  "source.qoderCli": {
+    "zh-Hant": "Qoder CLI",
+    "zh-Hans": "Qoder CLI",
+    "en": "Qoder CLI",
+    "ja": "Qoder CLI"
+  },
   "settings.sources.zcodeHint": {
     "zh-Hant": "讀取 ZCode 的本機工作階段資料庫；可選擇資料目錄或包含 db.sqlite 的資料夾。",
     "zh-Hans": "读取 ZCode 的本地会话数据库；可选择数据目录或包含 db.sqlite 的文件夹。",
@@ -5675,6 +5687,18 @@
     "zh-Hans": "Devin CLI 的会话数据库，通常位于 ~/.local/share/devin/cli（Windows 为 %APPDATA%\\devin\\cli），也可以选择上一层的 devin 文件夹。数据库只会以只读方式读取。",
     "en": "Devin CLI's session database, usually in ~/.local/share/devin/cli (Windows: %APPDATA%\\devin\\cli). You can also choose the devin folder above it. The database is only read, never written.",
     "ja": "Devin CLI のセッションデータベースです。通常は ~/.local/share/devin/cli（Windows では %APPDATA%\\devin\\cli）にあり、その上の devin フォルダも選べます。データベースは読み取り専用で読み込みます。"
+  },
+  "settings.sources.qoderHint": {
+    "zh-Hant": "Qoder IDE 的對話資料庫 local.db，位於 IDE 資料夾內的 SharedClientCache/cache/db（IDE 資料夾在 macOS 為 ~/Library/Application Support/Qoder，Windows 為 %APPDATA%\\Qoder，Linux 為 ~/.config/Qoder；國內版為 QoderCN），也可以選擇 IDE 資料夾或 SharedClientCache 資料夾。資料庫只會以唯讀方式讀取。Qoder 只記錄所選的模型檔位（例如 Auto），沒有實際模型，所以不顯示費用。",
+    "zh-Hans": "Qoder IDE 的对话数据库 local.db，位于 IDE 文件夹内的 SharedClientCache/cache/db（IDE 文件夹在 macOS 为 ~/Library/Application Support/Qoder，Windows 为 %APPDATA%\\Qoder，Linux 为 ~/.config/Qoder；国内版为 QoderCN），也可以选择 IDE 文件夹或 SharedClientCache 文件夹。数据库只会以只读方式读取。Qoder 只记录所选的模型档位（例如 Auto），没有实际模型，所以不显示费用。",
+    "en": "Qoder IDE's chat database local.db, in SharedClientCache/cache/db inside the IDE's folder (macOS ~/Library/Application Support/Qoder, Windows %APPDATA%\\Qoder, Linux ~/.config/Qoder; the China edition: QoderCN). You can also choose the IDE's folder or its SharedClientCache folder. The database is only read, never written. Qoder records only the model tier you chose (such as Auto), not the model, so no cost is shown.",
+    "ja": "Qoder IDE のチャットデータベース local.db です。IDE フォルダ内の SharedClientCache/cache/db にあります（IDE フォルダは macOS では ~/Library/Application Support/Qoder、Windows では %APPDATA%\\Qoder、Linux では ~/.config/Qoder。中国版は QoderCN）。IDE フォルダや SharedClientCache フォルダも選べます。データベースは読み取り専用で読み込みます。Qoder は選んだモデルの段階（Auto など）だけを記録し、モデル名は記録しないため、費用は表示されません。"
+  },
+  "settings.sources.qoderCliHint": {
+    "zh-Hant": "Qoder CLI 的工作階段資料夾，通常是 ~/.qoder/projects（國內版為 ~/.qoder-cn/projects），也可以選擇 .qoder 資料夾。使用 Qoder 自家的模型時，Qoder CLI 不會把 token 用量存到本機，這裡只看得到工作階段和狀態；以 QODER_EXPOSE_TOKEN_USAGE=1（國內版為 QODERCN_EXPOSE_TOKEN_USAGE=1）啟動 qodercli，或使用自訂模型，才會有 token 和速度。",
+    "zh-Hans": "Qoder CLI 的会话文件夹，通常是 ~/.qoder/projects（国内版为 ~/.qoder-cn/projects），也可以选择 .qoder 文件夹。使用 Qoder 自家的模型时，Qoder CLI 不会把 token 用量存到本机，这里只能看到会话和状态；以 QODER_EXPOSE_TOKEN_USAGE=1（国内版为 QODERCN_EXPOSE_TOKEN_USAGE=1）启动 qodercli，或使用自定义模型，才会有 token 和速度。",
+    "en": "Qoder CLI's session folder, usually ~/.qoder/projects (the China edition: ~/.qoder-cn/projects). You can also choose the .qoder folder. With Qoder's own models, Qoder CLI keeps no token usage on disk, so only sessions and status show here; start qodercli with QODER_EXPOSE_TOKEN_USAGE=1 (China edition: QODERCN_EXPOSE_TOKEN_USAGE=1), or use a custom model, to get tokens and speed.",
+    "ja": "Qoder CLI のセッションフォルダです。通常は ~/.qoder/projects（中国版は ~/.qoder-cn/projects）にあり、.qoder フォルダも選べます。Qoder 独自のモデルでは Qoder CLI がトークン使用量をローカルに保存しないため、ここではセッションと状態だけが表示されます。トークンと速度を表示するには QODER_EXPOSE_TOKEN_USAGE=1（中国版は QODERCN_EXPOSE_TOKEN_USAGE=1）を付けて qodercli を起動するか、カスタムモデルを使ってください。"
   },
   "mode.label": {
     "zh-Hant": "執行模式",

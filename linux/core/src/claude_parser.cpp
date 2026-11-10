@@ -30,6 +30,9 @@ struct Line {
     std::optional<std::string> key;
     std::optional<std::string> model;
     TokenCounts usage;
+    // Qoder CLI (METRICS 4.19): whether `message.usage` is an object, and its `input_tokens` alone.
+    bool hasUsage = false;
+    std::int64_t inputTokens = 0;
     bool fast = false;
     std::optional<std::string> speed;
     std::optional<std::string> effort;
@@ -78,7 +81,8 @@ struct Hints {
                 raw.find("\"workflow_keyword_request\"") != std::string_view::npos) {}
 };
 
-Line read(const json::Value& root, std::string_view raw) {
+// `qoder`: Qoder CLI keys an assistant line by `message.id`, else `uuid` (METRICS 4.19).
+Line read(const json::Value& root, std::string_view raw, bool qoder = false) {
     Line line;
     const Hints hints(raw);
     const auto type = root["type"];
@@ -121,7 +125,11 @@ Line read(const json::Value& root, std::string_view raw) {
                                   : stop.equals("pause_turn") ? StopReason::PauseTurn
                                                               : StopReason::Other;
             }
-            if (const auto usage = message["usage"]; usage.isObject()) line.usage = readUsage(usage, line.fast, line.speed);
+            if (const auto usage = message["usage"]; usage.isObject()) {
+                line.usage = readUsage(usage, line.fast, line.speed);
+                line.hasUsage = true;
+                line.inputTokens = usage["input_tokens"].count();
+            }
         }
         const auto content = message["content"];
         if (hints.interrupt || hints.toolUse || hints.user) {
@@ -141,7 +149,7 @@ Line read(const json::Value& root, std::string_view raw) {
         }
     }
     if (hints.assistant && !line.key) {
-        line.key = root["requestId"].nonEmptyString();
+        if (!qoder) line.key = root["requestId"].nonEmptyString();
         if (!line.key) line.key = root["uuid"].nonEmptyString();
     }
     return line;
@@ -154,8 +162,9 @@ const ModeFact& ultracodeFact() {
 
 }  // namespace
 
-ClaudeParser::ClaudeParser(std::string agentId, Deduper& deduper)
-    : TranscriptParser(std::move(agentId), deduper, SourceKind::ClaudeCode),
+ClaudeParser::ClaudeParser(std::string agentId, Deduper& deduper, Variant variant)
+    : TranscriptParser(std::move(agentId), deduper, variant == Variant::QoderCli ? SourceKind::QoderCli : SourceKind::ClaudeCode),
+      variant_(variant),
       pathIsSubagent_(path_text::hasDirectoryComponent(this->agentId(), "subagents")) {
     setSubagent(pathIsSubagent_);
 }
@@ -163,6 +172,7 @@ ClaudeParser::ClaudeParser(std::string agentId, Deduper& deduper)
 void ClaudeParser::reset() {
     TranscriptParser::reset();
     recent_.clear();
+    silent_.clear();
     recentOrder_.clear();
     pendingStartMs_.reset();
     preciseStart_ = false;
@@ -178,15 +188,27 @@ void ClaudeParser::refreshModes() {
                  .with(ultracode() ? std::optional<ModeFact>(ultracodeFact()) : lineEffort_));
 }
 
+void ClaudeParser::makeRoom() {
+    if (recentOrder_.size() < kMergeCacheCapacity) return;
+    recent_.erase(recentOrder_.front());
+    silent_.erase(recentOrder_.front());
+    recentOrder_.pop_front();
+}
+
 void ClaudeParser::remember(const ParsedResponse& response) {
-    if (!recent_.contains(response.key)) {
-        if (recentOrder_.size() >= kMergeCacheCapacity) {
-            recent_.erase(recentOrder_.front());
-            recentOrder_.pop_front();
-        }
+    // A silent key is already in the order.
+    if (!recent_.contains(response.key) && silent_.erase(response.key) == 0) {
+        makeRoom();
         recentOrder_.push_back(response.key);
     }
     recent_[response.key] = response;
+}
+
+void ClaudeParser::rememberSilent(const std::string& key) {
+    if (recent_.contains(key) || silent_.contains(key)) return;
+    makeRoom();
+    recentOrder_.push_back(key);
+    silent_.insert(key);
 }
 
 void ClaudeParser::feed(std::string_view text, ResponseSink& sink) {
@@ -196,7 +218,11 @@ void ClaudeParser::feed(std::string_view text, ResponseSink& sink) {
         countMalformed();
         return;
     }
-    handle(doc.root(), text, sink);
+    if (variant_ == Variant::QoderCli) {
+        handleQoder(doc.root(), text, sink);
+    } else {
+        handle(doc.root(), text, sink);
+    }
     observe(doc.root(), text);
 }
 
@@ -306,6 +332,108 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
             break;
         case StopReason::PauseTurn:
             setPhase(Phase::Generating, ts, response.startMs ? response.startMs : std::optional<std::int64_t>(ts));
+            break;
+        case StopReason::Other:
+            setPhase(Phase::Idle, ts, std::nullopt);
+            break;
+    }
+}
+
+// METRICS 4.19: 4.1's line table without `api-request` (any other line only updates `lastLineMs`), without execution
+// modes; every file is `qoderCli`, whatever its `entrypoint`.
+void ClaudeParser::handleQoder(const json::Value& root, std::string_view text, ResponseSink& sink) {
+    const Line line = read(root, text, true);
+    if (!line.timestampMs) return;
+    const std::int64_t ts = *line.timestampMs;
+    touch(ts);
+    setProjectFromCwd(line.cwd);
+    if (line.sidechain) setSubagent(true);
+    switch (line.kind) {
+        case Kind::User:
+            if (line.interrupt || line.toolEndsTurn) {
+                pendingStartMs_.reset();
+                preciseStart_ = false;
+                setPhase(Phase::Idle, ts, std::nullopt);
+            } else {
+                if (!preciseStart_) pendingStartMs_ = ts;
+                setPhase(Phase::Generating, ts, pendingStartMs_);
+            }
+            return;
+        case Kind::Assistant: break;
+        case Kind::ApiRequest:
+        case Kind::Attachment:
+        case Kind::Other: return;
+    }
+
+    if (line.model == "<synthetic>" || !line.key) return;
+    const std::string key = "qodercli:" + *line.key;
+    std::string owner;
+    const bool claimed = deduper().tryClaim(key, agentId(), &owner);
+    // Another file's message is copied history (METRICS 3.4).
+    if (!claimed && owner != agentId()) return;
+    const bool stopped = line.stopReason != StopReason::Missing;
+    const auto start = pendingStartMs_;
+    std::optional<ParsedResponse> record;
+    if (!claimed) {
+        if (const auto it = recent_.find(key); it != recent_.end()) record = it->second;
+    }
+    // Claude's tokens except `input`: Qoder's `input_tokens` already includes the cache when it covers it.
+    auto usage = line.usage;
+    if (line.inputTokens >= usage.cachedInput + usage.cacheWriteInput) usage.input = line.inputTokens;
+    if (line.hasUsage && (usage.input != 0 || usage.output != 0)) {
+        ParsedResponse next;
+        bool completion = false;
+        if (record) {
+            next = *record;
+            next.endMs = std::max(next.endMs, ts);
+            next.tokens = TokenCounts::max(next.tokens, usage);
+            if (line.model) next.model = line.model;
+            next.final = next.final || stopped;
+        } else {
+            next.key = key;
+            next.source = SourceKind::QoderCli;
+            next.agentId = agentId();
+            next.model = line.model;
+            next.startMs = pendingStartMs_;
+            next.endMs = ts;
+            next.tokens = usage;
+            next.final = stopped;
+            // The first response of a key a line without usage claimed is its completion.
+            completion = claimed || silent_.contains(key);
+            pendingStartMs_.reset();
+            preciseStart_ = false;
+        }
+        remember(next);
+        setModel(next.model);
+        sink.onResponse(next, completion);
+        record = std::move(next);
+    } else {
+        // Without usage the call adds activity and phase, but no tokens; its key stays this file's.
+        if (record && stopped && !record->final) {
+            record->final = true;
+            remember(*record);
+            sink.onResponse(*record, false);
+        }
+        pendingStartMs_.reset();
+        preciseStart_ = false;
+        setModel(line.model);
+        if (claimed) rememberSilent(key);
+    }
+
+    const auto begin = record ? record->startMs : start;
+    switch (line.stopReason) {
+        case StopReason::ToolUse:
+            setPhase(Phase::Tools, ts, std::nullopt);
+            break;
+        case StopReason::Missing:
+            if (line.hasToolUse) {
+                setPhase(Phase::Tools, ts, std::nullopt);
+            } else {
+                setPhase(Phase::Generating, ts, begin ? begin : std::optional<std::int64_t>(ts));
+            }
+            break;
+        case StopReason::PauseTurn:
+            setPhase(Phase::Generating, ts, begin ? begin : std::optional<std::int64_t>(ts));
             break;
         case StopReason::Other:
             setPhase(Phase::Idle, ts, std::nullopt);

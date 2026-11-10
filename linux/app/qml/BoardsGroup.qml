@@ -16,7 +16,7 @@ ColumnLayout {
     }
     readonly property var sourceIds: ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
                                       "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid",
-                                      "devin"]
+                                      "devin", "qoder", "qoderCli"]
 
     SettingsGroup {
         title: S.tr2(S.rev, "boards.title")

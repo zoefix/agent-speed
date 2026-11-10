@@ -26,7 +26,10 @@ public:
         scratch_ = std::make_unique<QTemporaryDir>();
         qputenv("HOME", scratch_->filePath(QStringLiteral("home")).toUtf8());
         qputenv("OPENCLAW_STATE_DIR", "/nonexistent/claw");
-        for (const char* variable : {"CODEX_HOME", "CLAUDE_CONFIG_DIR", "XDG_DATA_HOME", "HERMES_HOME", "CHISEL_SESSION_DB"}) qunsetenv(variable);
+        for (const char* variable : {"CODEX_HOME", "CLAUDE_CONFIG_DIR", "XDG_DATA_HOME", "HERMES_HOME", "CHISEL_SESSION_DB", "XDG_CONFIG_HOME",
+                                     "QODER_CONFIG_DIR", "QODERCN_CONFIG_DIR"}) {
+            qunsetenv(variable);
+        }
         QDir().mkpath(scratch_->filePath(QStringLiteral("home/.codex/sessions")));
         app_ = std::make_unique<QCoreApplication>(argc, argv);
         QCoreApplication::setOrganizationName(QStringLiteral("zoefix"));
@@ -146,7 +149,7 @@ TEST_F(SourceLocationSettings, EntriesAsSettingsShowsThem) {
     EXPECT_FALSE(missing.value(QStringLiteral("canReveal")).toBool());
     EXPECT_EQ(missing.value(QStringLiteral("key")).toString(), QStringLiteral("path:/nonexistent/sessions"));
     const auto groups = view.groups();
-    ASSERT_EQ(groups.size(), 17);
+    ASSERT_EQ(groups.size(), 19);
     EXPECT_EQ(groups[0].toMap().value(QStringLiteral("list")).toString(), QStringLiteral("codex"));
     EXPECT_EQ(groups[1].toMap().value(QStringLiteral("sources")).toStringList(), QStringList{QStringLiteral("claudeCode")});
     EXPECT_EQ(groups[13].toMap().value(QStringLiteral("list")).toString(), QStringLiteral("openclaw"));

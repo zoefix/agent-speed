@@ -101,6 +101,8 @@ internal sealed partial record SourceLocations(
             OpenClawUserRoots = openClawUser,
             GeminiSettings = GeminiSettingsOf(configuration),
             DevinRoots = DevinRootsOf(configuration),
+            QoderRoots = QoderRootsOf(configuration),
+            QoderCliRoots = Roots(LocationFolder.QoderCli),
         };
     }
 
@@ -143,7 +145,7 @@ internal sealed partial record SourceLocations(
 
     /// <summary>
     /// Transcript roots in family order, each family's in list order (METRICS 2.1): Codex (with OpenClaw's agent-scoped Codex
-    /// homes after the automatic root), Gemini, omp and Pi may have several, Antigravity one <c>conversations</c> folder per
+    /// homes after the automatic root), Gemini, omp, Pi and Qoder CLI may have several, Antigravity one <c>conversations</c> folder per
     /// store, WorkBuddy its <c>projects</c> folders. A root named twice, or resolving to the folder of an earlier root of its
     /// family, is returned once; an omp root that is a Pi root or lies inside one is Pi's only (METRICS 4.7).
     /// </summary>
@@ -164,6 +166,7 @@ internal sealed partial record SourceLocations(
             (RootFamily.GrokBuild, [GrokBuildRoot, .. MoreGrokBuildRoots]),
             (RootFamily.Pi, piRoots),
             (RootFamily.Droid, [DroidRoot, .. MoreDroidRoots]),
+            (RootFamily.QoderCli, QoderCliRoots),
         ];
         foreach (var (family, roots) in families)
         {

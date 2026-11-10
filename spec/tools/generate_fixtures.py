@@ -20,6 +20,7 @@ import hermes_fixtures  # noqa: E402
 import omp_fixtures  # noqa: E402
 import openclaw_fixtures  # noqa: E402
 import pi_fixtures  # noqa: E402
+import qoder_fixtures  # noqa: E402
 import workbuddy_fixtures  # noqa: E402
 
 ROOT = os.path.normpath(os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtures"))
@@ -856,6 +857,13 @@ files.update(droid["files"])
 mtimes.update(droid["mtimes"])
 traces_droid = droid["traces"]
 
+# --- Qoder CLI: Claude Code's transcript format in its own folder (the IDE's databases: qoder_fixtures.py) ----------
+qoder_cli = qoder_fixtures.write_cli_fixtures(ROOT)
+assert min(qoder_cli["mtimes"].values()) > max(mtimes.values())
+order += qoder_cli["order"]
+files.update(qoder_cli["files"])
+mtimes.update(qoder_cli["mtimes"])
+
 with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as f:
     json.dump({"_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the "
                            "Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this "
@@ -883,7 +891,11 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                            "any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one "
                            "parser state per log folder) but their modification times are in `mtimes`. Factory "
                            "Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, "
-                           "whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Every "
+                           "whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Qoder "
+                           "CLI: the folder `qoder-cli` plays a config folder (~/.qoder), so its root is "
+                           "qoder-cli/projects; `qoderCli.discover` lists what discovery finds there and its `traces` "
+                           "work like the omp ones (spec/tools/qoder_fixtures.py; its day totals are in "
+                           "qoder-expected.json `cli.history`). Every "
                            "agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the "
                            "files the fixture folders play: codex/config.toml, gemini/settings.json, "
                            "antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and "
@@ -900,7 +912,8 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                             "codexDiscover": openclaw["codexDiscover"], "databases": openclaw["databases"],
                             "traceSeqs": openclaw["traceSeqs"], "traces": openclaw["traces"]},
                "hermes": hermes,
-               "droid": dict(droid["droid"], traces=traces_droid)},
+               "droid": dict(droid["droid"], traces=traces_droid),
+               "qoderCli": {"discover": qoder_cli["discover"], "traces": qoder_cli["traces"]}},
               f, indent=2, ensure_ascii=False)
     f.write("\n")
 

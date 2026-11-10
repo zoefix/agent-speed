@@ -26,6 +26,7 @@ final class HistoryAnalyzer {
     static let zcodeMetaPrefix = "zcode:"
     static let hermesFamily = "hermes"
     static let devinFamily = "devin"
+    static let qoderFamily = "qoder"
     static let maxWorkers = 4
 
     struct Options: Sendable {
@@ -82,6 +83,8 @@ final class HistoryAnalyzer {
     private var droidUnreadableParents: [String: DroidPaths.Signature] = [:]
     /// Devin's databases as last read by this analyser (METRICS 4.17 *History*).
     private let devinPlanner = DevinHistoryPlanner()
+    /// Qoder IDE's databases as last read by this analyser (METRICS 4.18 *History*).
+    private let qoderPlanner = QoderHistoryPlanner()
     /// Bumped whenever performance records are written.
     private(set) var perfVersion = 0
 
@@ -195,6 +198,7 @@ final class HistoryAnalyzer {
         var openclaw: [PlannedOpenClawDatabase] = []
         var hermes: [PlannedHermesFile] = []
         var devin: [(entry: DevinHistoryEntry, previous: HistoryDatabase.Entry?)] = []
+        var qoder: [(entry: DevinHistoryEntry, previous: HistoryDatabase.Entry?)] = []
 
         var openclawWindows: Int { openclaw.reduce(0) { $0 + $1.windows.count } }
 
@@ -253,6 +257,17 @@ final class HistoryAnalyzer {
             }
             plan.discovered += devinPlanner.discovered
             plan.devin = planned.map { ($0, entries[$0.key]) }
+        }
+        if configuration.readsQoder {
+            let version = options.analysisVersion
+            let reprices = repricing && entries.values.contains { $0.family == Self.qoderFamily && $0.hasUnpriced }
+            let planned = qoderPlanner.plan(roots: configuration.resolvedQoderRoots) { key, size, modified in
+                guard let previous = entries[key], !zoneChanged, !reprices else { return false }
+                return previous.family == Self.qoderFamily && previous.version == version && previous.size == size
+                    && previous.modified == modified
+            }
+            plan.discovered += qoderPlanner.discovered
+            plan.qoder = planned.map { ($0, entries[$0.key]) }
         }
         return plan
     }
@@ -486,12 +501,12 @@ final class HistoryAnalyzer {
         report.filesDiscovered = plan.discovered
         let sessions = plan.opencode.flatMap(\.sessions)
         var state = Progress(filesTotal: plan.files.count + sessions.count + plan.zcode.count + plan.openclawWindows
-                                + plan.hermes.count + plan.devin.count, bytesTotal: plan.bytes)
+                                + plan.hermes.count + plan.devin.count + plan.qoder.count, bytesTotal: plan.bytes)
         progress(state)
         func elapsedMs() -> Double { Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000 }
 
         if plan.files.isEmpty && sessions.isEmpty && plan.zcode.isEmpty && plan.openclaw.isEmpty && plan.hermes.isEmpty
-            && plan.devin.isEmpty {
+            && plan.devin.isEmpty && plan.qoder.isEmpty {
             try finish(plan: plan, zone: zone, priceVersion: priceVersion)
             report.durationMs = elapsedMs()
             return report
@@ -500,7 +515,7 @@ final class HistoryAnalyzer {
         var deduper = Deduper.hashed()
         let replaced = Set(plan.files.compactMap(\.previous?.id) + sessions.compactMap(\.previous?.id) + plan.zcode.compactMap(\.previous?.id)
             + plan.openclaw.flatMap { $0.windows.compactMap(\.previous?.id) } + plan.hermes.compactMap(\.previous?.id)
-            + plan.devin.compactMap(\.previous?.id))
+            + plan.devin.compactMap(\.previous?.id) + plan.qoder.compactMap(\.previous?.id))
         try database.loadKeys(excluding: replaced, into: &deduper)
         var labeler = DayLabeler(timeZone: options.timeZone)
         var pending: [(path: String, entry: HistoryDatabase.Entry, keys: [UInt64])] = []
@@ -728,16 +743,17 @@ final class HistoryAnalyzer {
             }
         }
 
-        if !report.cancelled {
-            // Devin: one entry per CLI session (METRICS 4.17).
-            for (planned, previous) in plan.devin {
+        // Devin and Qoder IDE: one entry per session of a database (METRICS 4.17, 4.18).
+        for (source, family, sessions) in [(SourceKind.devin, Self.devinFamily, plan.devin), (.qoder, Self.qoderFamily, plan.qoder)]
+        where !report.cancelled {
+            for (planned, previous) in sessions {
                 if isCancelled() { report.cancelled = true; break }
                 let records = planned.records.filter { deduper.claim($0.key, for: planned.fileID) != .otherFile }
                 let keys = deduper.finishFile()
-                pendingPerf[planned.key] = Self.perfRecords(responses: records, source: .devin, timeZone: options.timeZone)
-                let entry = HistoryDatabase.Entry(id: previous?.id, family: Self.devinFamily, size: planned.size,
+                pendingPerf[planned.key] = Self.perfRecords(responses: records, source: source, timeZone: options.timeZone)
+                let entry = HistoryDatabase.Entry(id: previous?.id, family: family, size: planned.size,
                                                   modified: planned.modified, version: options.analysisVersion,
-                                                  days: DayAggregate.contributions(of: records, source: .devin,
+                                                  days: DayAggregate.contributions(of: records, source: source,
                                                                                    labeler: &labeler, pricing: pricing))
                 entries[planned.key] = entry
                 pending.append((planned.key, entry, keys))

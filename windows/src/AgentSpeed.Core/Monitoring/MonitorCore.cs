@@ -113,6 +113,7 @@ internal sealed partial class MonitorCore : IDisposable
 
         InitializeZCode(locations);
         InitializeDevin(locations);
+        InitializeQoder(locations);
         InitializeOpenClaw(locations);
         InitializeHermes(locations, zone);
         _ompAutomatic = locations.OmpAutomatic;
@@ -171,10 +172,12 @@ internal sealed partial class MonitorCore : IDisposable
         .Concat(_openCodeWatchRoots)
         .Concat(_openClawWatchRoots)
         .Concat(_hermesWatchRoots)
-        .Concat(_devinWatchRoots);
+        .Concat(_devinWatchRoots)
+        .Concat(_qoderWatchRoots);
 
     public bool AnyEnabledRootAvailable => _roots.Any(r => r.Enabled && r.Available) || _openCodeWatchRoots.Any(r => r.Available)
-        || _zcode?.Available == true || _openClaw?.Available == true || _hermes?.Available == true || _devin?.Available == true;
+        || _zcode?.Available == true || _openClaw?.Available == true || _hermes?.Available == true || _devin?.Available == true
+        || _qoder?.Available == true;
 
     public int TrackedFileCount => _files.Count;
 
@@ -190,6 +193,7 @@ internal sealed partial class MonitorCore : IDisposable
         RefreshOpenClawWatchRoots();
         RefreshHermesWatchRoots();
         RefreshDevinWatchRoots();
+        RefreshQoderWatchRoots();
         foreach (var root in _roots)
         {
             root.Available = SafeDirectoryExists(root.DetectionPath);
@@ -370,6 +374,7 @@ internal sealed partial class MonitorCore : IDisposable
         SeedOpenClaw(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         SeedHermes(todayStartMs, cancellationToken, ref discovered, ref filesRead, ref bytesRead);
         SeedDevin(todayStartMs, ref discovered, ref filesRead, ref bytesRead);
+        SeedQoder(todayStartMs, ref discovered, ref filesRead, ref bytesRead);
         RefreshAgentContext();
         return new SeedReport(stopwatch.ElapsedMilliseconds, discovered, filesRead, bytesRead, _responsesSeen);
     }
@@ -390,6 +395,7 @@ internal sealed partial class MonitorCore : IDisposable
         var openClawNew = false;
         var hermesChanged = false;
         var devinChanged = false;
+        var qoderChanged = false;
         foreach (var incoming in paths)
         {
             var path = incoming;
@@ -430,6 +436,12 @@ internal sealed partial class MonitorCore : IDisposable
             if (_devin?.IsWatchedPath(path) == true)
             {
                 devinChanged = true;
+                continue;
+            }
+
+            if (_qoder?.IsWatchedPath(path) == true)
+            {
+                qoderChanged = true;
                 continue;
             }
 
@@ -487,6 +499,11 @@ internal sealed partial class MonitorCore : IDisposable
             changed |= RefreshDevin();
         }
 
+        if (qoderChanged)
+        {
+            changed |= RefreshQoder();
+        }
+
         return changed;
     }
 
@@ -513,6 +530,7 @@ internal sealed partial class MonitorCore : IDisposable
         changed |= RefreshOpenClaw(discover: false);
         changed |= RefreshHermes(discover: false);
         changed |= RefreshDevin();
+        changed |= RefreshQoder();
         _connections.CloseIdle();
         List<TrackedFile>? due = null;
         foreach (var tracked in _files.Values)
@@ -578,6 +596,17 @@ internal sealed partial class MonitorCore : IDisposable
         else
         {
             changed |= RediscoverDevin(todayStartMs);
+        }
+
+        if (_qoder is not null && !_qoderSeeded)
+        {
+            var (discovered, filesRead, bytesRead) = (0, 0, 0L);
+            SeedQoder(todayStartMs, ref discovered, ref filesRead, ref bytesRead);
+            changed = true;
+        }
+        else
+        {
+            changed |= RediscoverQoder(todayStartMs);
         }
 
         AddNewPiRoots();
@@ -685,7 +714,13 @@ internal sealed partial class MonitorCore : IDisposable
             return _devin?.ActiveSessionCount(todayStartMs) ?? 0;
         }
 
-        var mainOnly = WorkBuddyPaths.IsWorkBuddy(kind) || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid;
+        if (kind == SourceKind.Qoder)
+        {
+            return _qoder?.ActiveSessionCount(todayStartMs) ?? 0;
+        }
+
+        var mainOnly = WorkBuddyPaths.IsWorkBuddy(kind)
+            || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid or SourceKind.QoderCli;
         var count = 0;
         foreach (var tracked in _files.Values)
         {
@@ -749,18 +784,24 @@ internal sealed partial class MonitorCore : IDisposable
             warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.Devin));
         }
 
+        if (_qoder?.Unsupported == true)
+        {
+            warnings.Add(new MonitorWarning.UnsupportedFormat(SourceKind.Qoder));
+        }
+
         return warnings;
     }
 
     public long MalformedLineCount =>
         _removedMalformedLines + _files.Values.Sum(f => f.Parser.MalformedLines) + (_openCode?.MalformedRows ?? 0)
-        + (_openClaw?.MalformedLines ?? 0) + (_hermes?.MalformedLines ?? 0) + (_devin?.MalformedRows ?? 0);
+        + (_openClaw?.MalformedLines ?? 0) + (_hermes?.MalformedLines ?? 0) + (_devin?.MalformedRows ?? 0) + (_qoder?.MalformedRows ?? 0);
 
     public long OversizedLineCount => _removedOversizedLines + _files.Values.Sum(f => f.Tailer.OversizedLines) + (_hermes?.OversizedLines ?? 0);
 
     public int UnreadableFileCount =>
         _files.Values.Count(f => f.Unreadable) + (_openCode?.UnreadableCount ?? 0) + (_zcode?.UnreadableCount ?? 0)
-        + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0) + (_devin?.UnreadableCount ?? 0);
+        + (_openClaw?.UnreadableCount ?? 0) + (_hermes?.UnreadableCount ?? 0) + (_devin?.UnreadableCount ?? 0)
+        + (_qoder?.UnreadableCount ?? 0);
 
     public bool PartialHistory => _partialHistory;
 
@@ -909,6 +950,11 @@ internal sealed partial class MonitorCore : IDisposable
         {
             (path, available) = DevinLocation();
             rootEnabled = _devin is not null;
+        }
+        else if (kind == SourceKind.Qoder)
+        {
+            (path, available) = QoderLocation();
+            rootEnabled = _qoder is not null;
         }
         else if (kind == SourceKind.OpenCode)
         {

@@ -192,6 +192,10 @@ public sealed record AppSettings
 
     public bool DevinEnabled { get; init; } = true;
 
+    public bool QoderEnabled { get; init; } = true;
+
+    public bool QoderCliEnabled { get; init; } = true;
+
     /// <summary>
     /// The stored <c>sourceLocations</c> value (DESIGN 5, METRICS 2.1); null while it is absent, and then the lists come from
     /// <see cref="LegacyRoots"/>.
@@ -297,6 +301,8 @@ public sealed record AppSettings
         SourceKind.Hermes => HermesEnabled,
         SourceKind.Droid => DroidEnabled,
         SourceKind.Devin => DevinEnabled,
+        SourceKind.Qoder => QoderEnabled,
+        SourceKind.QoderCli => QoderCliEnabled,
         _ => false,
     };
 
@@ -335,6 +341,8 @@ public sealed record AppSettings
         SourceKind.Hermes => this with { HermesEnabled = enabled },
         SourceKind.Droid => this with { DroidEnabled = enabled },
         SourceKind.Devin => this with { DevinEnabled = enabled },
+        SourceKind.Qoder => this with { QoderEnabled = enabled },
+        SourceKind.QoderCli => this with { QoderCliEnabled = enabled },
         _ => this,
     };
 

@@ -102,6 +102,8 @@ std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const s
         return std::make_unique<CodexParser>(agentId, deduper);
     }
     if (relative.rfind("claude/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper);
+    // The folder `qoder-cli` plays a Qoder CLI config folder (`~/.qoder`): Claude's parser with METRICS 4.19.
+    if (relative.rfind("qoder-cli/", 0) == 0) return std::make_unique<ClaudeParser>(agentId, deduper, ClaudeParser::Variant::QoderCli);
     if (relative.rfind("dsh/", 0) == 0) return std::make_unique<DshParser>(agentId, deduper);
     if (relative.rfind("gemini/", 0) == 0) return std::make_unique<GeminiParser>(agentId, deduper);
     if (relative.rfind("workbuddy/", 0) == 0) {
@@ -219,7 +221,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 58);
+    EXPECT_EQ(checked, 63);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);

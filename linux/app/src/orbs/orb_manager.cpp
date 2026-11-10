@@ -48,7 +48,7 @@ QString fill(QString text, const QStringList& args) {
 // METRICS 1 source order.
 QStringList sourceOrder() {
     QStringList keys;
-    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::Devin); ++k) {
+    for (int k = 0; k <= static_cast<int>(agentspeed::SourceKind::QoderCli); ++k) {
         keys.push_back(QString::fromUtf8(agentspeed::sourceId(static_cast<agentspeed::SourceKind>(k))));
     }
     return keys;

@@ -363,6 +363,11 @@ Warnings Monitor::warnings() const {
         unreadable += devin_->unreadableCount();
         if (devin_->unsupported()) w.unsupported.push_back(SourceKind::Devin);
     }
+    if (qoder_) {
+        malformed += qoder_->malformedRows();
+        unreadable += qoder_->unreadableCount();
+        if (qoder_->unsupported()) w.unsupported.push_back(SourceKind::Qoder);
+    }
     w.malformedLines = malformed;
     w.unreadableFiles = unreadable;
     return w;

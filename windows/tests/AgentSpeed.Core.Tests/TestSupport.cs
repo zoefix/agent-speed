@@ -209,6 +209,16 @@ internal static class DroidFixture
     public static System.Text.Json.JsonElement Expected => ParserFixtureTests.Expected.GetProperty("droid");
 }
 
+/// <summary>The fixture folder <c>qoder-cli</c> plays a Qoder CLI config folder (<c>~/.qoder</c>): its root is <c>qoder-cli/projects</c> (METRICS 4.19).</summary>
+internal static class QoderCliFixture
+{
+    public static string Root => RootIn(FixtureLocator.FixturesDirectory);
+
+    public static string RootIn(string fixtures) => Qoder.QoderCliPaths.RootOf(Path.Combine(fixtures, "qoder-cli"));
+
+    public static System.Text.Json.JsonElement Expected => ParserFixtureTests.Expected.GetProperty("qoderCli");
+}
+
 /// <summary>The fixture folder <c>omp</c> plays <c>~/.omp</c>: its automatic roots are the default root and every profile.</summary>
 internal static class OmpFixture
 {

@@ -26,7 +26,8 @@ struct AgentProcessRules: Sendable {
             ? ["%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe"]
             : ["/Applications/Claude.app/Contents/MacOS/Claude", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT",
                "/Applications/Codex.app/Contents/MacOS/Codex", "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
-               "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin"]
+               "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin",
+               "/Applications/Qoder IDE.app/Contents/MacOS/Qoder"]
     }
 
     private static let desktopPackages = ["claude_", "openai.codex_", "openai.chatgpt"]
@@ -158,12 +159,27 @@ struct AgentProcessRules: Sendable {
         if name == "droid" { return .droid }
         // Devin CLI, interactive or `devin acp` (which Devin Desktop starts for its local agent).
         if name == "devin" { return .devin }
+        // Qoder IDE's agent core, `resources/bin/<platform>/Qoder` inside the IDE; the IDE's own executable is not.
+        if name == (platform.isWindows ? "qoder" : "Qoder"), Self.isQoderCore(platform.normalize(executable)) { return .qoder }
+        if name == "qodercli" || name == "qoderclicn" || script.contains("/@qoder-ai/qodercli/")
+            || script.contains("/@qodercn-ai/qoderclicn/") {
+            return .qoderCli
+        }
         // Only the embedded CodeBuddy Code CLI is the agent; the app, its helpers and its daemon are not.
         if let edition = workbuddyEdition(executable: executable, bundleIdentifier: bundleIdentifier),
            (arguments() ?? []).dropFirst().contains(where: { platform.normalize($0).contains(Self.workbuddyCLI) }) {
             return edition
         }
         return nil
+    }
+
+    /// A normalized path that ends in `/resources/bin/<folder>/<name>`, compared case-insensitively.
+    static func isQoderCore(_ normalized: String) -> Bool {
+        let parts = normalized.lowercased().split(separator: "/", omittingEmptySubsequences: false)
+        guard parts.count >= 5 else { return false }
+        let count = parts.count
+        return parts[count - 4] == "resources" && parts[count - 3] == "bin" && !parts[count - 2].isEmpty
+            && !parts[count - 1].isEmpty
     }
 
     private static func containsAny(_ text: String, _ needles: [String]) -> Bool {

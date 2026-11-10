@@ -208,21 +208,22 @@ internal sealed partial class HistoryAnalyzer
         var plan = BuildPlan(locations, enabled, zoneChanged, repricing, zoneId, cancellationToken);
         PlanHermes(plan, locations, enabled, zoneChanged, repricing, zone);
         var state = new HistoryProgress(0, plan.Files.Count + plan.SessionCount + plan.ZCodeSessions.Count + plan.OpenClawDatabases.Count
-            + plan.HermesLogs.Count + plan.DevinSessions.Count, 0, plan.Files.Sum(f => f.Size) + plan.HermesLogs.Sum(l => l.Size));
+            + plan.HermesLogs.Count + plan.DevinSessions.Count + plan.QoderSessions.Count, 0, plan.Files.Sum(f => f.Size) + plan.HermesLogs.Sum(l => l.Size));
         progress?.Invoke(state);
-        int analyzed = 0, sessions = 0, unreadable = plan.OpenCodeFailures + plan.ZCodeFailures + plan.DevinFailures;
+        int analyzed = 0, sessions = 0, unreadable = plan.OpenCodeFailures + plan.ZCodeFailures + plan.DevinFailures + plan.QoderFailures;
         long bytes = 0;
         var cancelled = false;
         try
         {
             if (plan.Files.Count > 0 || plan.SessionCount > 0 || plan.ZCodeSessions.Count > 0 || plan.OpenClawDatabases.Count > 0
-                || plan.HermesLogs.Count > 0 || plan.DevinSessions.Count > 0)
+                || plan.HermesLogs.Count > 0 || plan.DevinSessions.Count > 0 || plan.QoderSessions.Count > 0)
             {
                 var ledger = new KeyLedger();
                 var replaced = plan.Files.Select(f => f.Previous?.Id ?? 0).Concat(plan.OpenCode.SelectMany(d => d.Sessions).Select(s => s.Previous?.Id ?? 0)).Concat(plan.ZCodeSessions.Select(s => s.Previous?.Id ?? 0))
                     .Concat(OpenClawReplacedIds(plan))
                     .Concat(HermesReplacedIds(plan))
                     .Concat(plan.DevinSessions.Select(s => s.Previous?.Id ?? 0))
+                    .Concat(plan.QoderSessions.Select(s => s.Previous?.Id ?? 0))
                     .Where(id => id != 0).ToHashSet();
                 _store.LoadKeys(ledger, replaced);
                 var labeler = new DayLabeler(zone);
@@ -264,6 +265,12 @@ internal sealed partial class HistoryAnalyzer
                     if (!cancelled)
                     {
                         cancelled = !AnalyzeDevinSessions(plan.DevinSessions, ledger, labeler, pending, Flush, ref state, ref sessions,
+                            progress, cancellationToken);
+                    }
+
+                    if (!cancelled)
+                    {
+                        cancelled = !AnalyzeQoderSessions(plan.QoderSessions, ledger, labeler, pending, Flush, ref state, ref sessions,
                             progress, cancellationToken);
                     }
 
@@ -310,7 +317,7 @@ internal sealed partial class HistoryAnalyzer
 
         return new HistoryReport(plan.Discovered,
             plan.Files.Count + plan.SessionCount + plan.ZCodeSessions.Count + plan.OpenClawDatabases.Count + plan.HermesLogs.Count
-            + plan.DevinSessions.Count,
+            + plan.DevinSessions.Count + plan.QoderSessions.Count,
             analyzed, bytes, sessions, unreadable,
             stopwatch.ElapsedMilliseconds, cancelled);
     }
@@ -387,6 +394,7 @@ internal sealed partial class HistoryAnalyzer
         PlanZCode(plan, locations, enabled, zoneChanged, repricing, cancellationToken);
         PlanOpenClaw(plan, locations, enabled, zoneChanged, repricing);
         PlanDevin(plan, locations, enabled, zoneChanged, repricing);
+        PlanQoder(plan, locations, enabled, zoneChanged, repricing);
         return plan;
     }
 
@@ -622,12 +630,17 @@ internal sealed partial class HistoryAnalyzer
         /// <summary>Devin's changed CLI sessions, the databases in list order (METRICS 4.17).</summary>
         public List<PlannedDevinSession> DevinSessions { get; } = [];
 
+        /// <summary>Qoder IDE's changed chat sessions, the databases in list order (METRICS 4.18).</summary>
+        public List<PlannedQoderSession> QoderSessions { get; } = [];
+
         /// <summary>The zone Hermes's wall times were read in; null when Hermes is not read.</summary>
         public TimeZoneInfo? HermesZone { get; set; }
 
         public int ZCodeFailures { get; set; }
 
         public int DevinFailures { get; set; }
+
+        public int QoderFailures { get; set; }
 
         public int Discovered { get; set; }
 

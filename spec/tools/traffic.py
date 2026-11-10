@@ -27,8 +27,10 @@ SCRIPT_HOSTS = {"node", "nodejs", "bun", "deno"}
 PYTHON_HOST = re.compile(r"python(?:w|[0-9][0-9.]*)?")
 HERMES_MARKERS = ("hermes_bootstrap", "hermes_cli", "acp_adapter")
 HERMES_SCRIPTS = {"hermes", "hermes-agent", "hermes-acp"}
+# Qoder IDE's agent core: `resources/bin/<platform>/Qoder` inside the IDE (METRICS 10.5); the IDE's own executable is not.
+QODER_CORE = re.compile(r"/resources/bin/[^/]+/[^/]+$", re.IGNORECASE)
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin")
+           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli")
 
 
 # ---------------------------------------------------------------------------------------------------- formatting
@@ -106,7 +108,8 @@ CLAUDE_DESKTOP_APP = {
 DESKTOP_APPS = {
     "macos": ["/Applications/Claude.app/Contents/MacOS/Claude", "/Applications/ChatGPT.app/Contents/MacOS/ChatGPT",
               "/Applications/Codex.app/Contents/MacOS/Codex", "/Applications/OpenCode.app/Contents/MacOS/OpenCode",
-              "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin"],
+              "/Applications/Antigravity.app/Contents/MacOS/Antigravity", "/Applications/Devin.app/Contents/MacOS/Devin",
+              "/Applications/Qoder IDE.app/Contents/MacOS/Qoder"],
     "windows": ["%LOCALAPPDATA%/AnthropicClaude/", "%LOCALAPPDATA%/Programs/Devin/Devin.exe"],
 }
 # Windows desktop apps by location: an executable directly in the `app` folder of their packages. The CLIs a package
@@ -215,6 +218,10 @@ def match_source(env: Env, proc: dict, ancestors: list[dict]) -> str | None:
         return "droid"
     if name == "devin":
         return "devin"
+    if name == ("qoder" if env.platform == "windows" else "Qoder") and QODER_CORE.search(env.norm(exe)):
+        return "qoder"
+    if name in ("qodercli", "qoderclicn") or "/@qoder-ai/qodercli/" in script or "/@qodercn-ai/qoderclicn/" in script:
+        return "qoderCli"
     edition = WORKBUDDY_APPS[env.platform].get(proc.get("bundle") if env.platform == "macos" else name)
     if edition and any(WORKBUDDY_CLI in env.norm(a) for a in args[1:]):
         return edition

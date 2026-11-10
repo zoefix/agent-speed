@@ -171,6 +171,15 @@ enum TranscriptLocations {
         DevinPaths.automaticRoots(environment: ProcessInfo.processInfo.environment, home: home.path)
     }
 
+    /// Qoder IDE's automatic roots (METRICS 2, 4.18): the database of each edition.
+    static var defaultQoderRoots: [QoderRoot] { QoderPaths.automaticRoots(home: home.path) }
+
+    /// Qoder CLI's automatic roots (METRICS 2, 4.19): the `projects` folder of each edition's config folder.
+    static var defaultQoderCliRoots: [URL] {
+        QoderPaths.cliRoots(environment: ProcessInfo.processInfo.environment, home: home.path)
+            .map { URL(fileURLWithPath: $0, isDirectory: true) }
+    }
+
     static func sessionsFolder(_ folder: URL) -> URL {
         folder.lastPathComponent == "sessions" ? folder : folder.appendingPathComponent("sessions", isDirectory: true)
     }
@@ -190,6 +199,7 @@ enum TranscriptLocations {
         case .grokBuild: [defaultGrokBuildRoot]
         case .pi: defaultPiRoots
         case .droid: [defaultDroidRoot]
+        case .qoderCli: defaultQoderCliRoots
         }
     }
 

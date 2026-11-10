@@ -31,6 +31,7 @@ constexpr const char* kOpenClawDatabaseFamily = "openclawDatabase";
 constexpr const char* kHermesFamily = "hermes";
 constexpr const char* kHermesLogFamily = "hermesLog";
 constexpr const char* kDevinFamily = "devin";
+constexpr const char* kQoderFamily = "qoder";
 
 const char* familyName(RootFamily family) {
     switch (family) {
@@ -51,6 +52,8 @@ const char* familyName(RootFamily family) {
         case RootFamily::Hermes: return "Hermes";
         case RootFamily::Droid: return "Droid";
         case RootFamily::Devin: return "Devin";
+        case RootFamily::Qoder: return "Qoder";
+        case RootFamily::QoderCli: return "QoderCli";
     }
     return "?";
 }
@@ -195,6 +198,7 @@ struct Analyzer::Work {
     };
     std::vector<HermesWork> hermes;
     std::vector<DevinSession> devin;
+    std::vector<QoderSession> qoder;
     std::set<std::int64_t> replaced;
 };
 
@@ -293,8 +297,9 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
     planZCode(locations, enabled, zoneChanged, zoneId, work, report);
     planOpenCode(locations, enabled, zoneChanged, zoneId, work, report);
     planDevin(locations, enabled, zoneChanged, work, report);
+    planQoder(locations, enabled, zoneChanged, work, report);
     report.filesPlanned = static_cast<int>(work.files.size() + work.openClaw.size() + work.hermes.size() + work.zcode.size() +
-                                           work.openCode.size() + work.devin.size());
+                                           work.openCode.size() + work.devin.size() + work.qoder.size());
     progress_ = progress;
     struct Reset {
         std::function<void(int, int)>& progress;
@@ -312,6 +317,7 @@ Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind
         if (!report.cancelled) analyzeZCode(work, ledger, labeler, report);
         if (!report.cancelled) analyzeOpenCode(work, ledger, labeler, report);
         if (!report.cancelled) analyzeDevin(work, ledger, labeler, report);
+        if (!report.cancelled) analyzeQoder(work, ledger, labeler, report);
     } catch (...) {
         flush(pending_);
         throw;
@@ -368,7 +374,8 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         }
         auto parser = makeParser(file.family, file.path, file.root, ledger);
         auto tailer = makeTailer(file.family, file.path);
-        Latest sink(file.family == RootFamily::Claude);
+        // The Claude parser's updates merge into the first emission (Qoder CLI is read by it too).
+        Latest sink(file.family == RootFamily::Claude || file.family == RootFamily::QoderCli);
         // Every action of the whole file, without the cap (METRICS 6.10 Storage).
         work::ActionReader actions(file.path, 0);
         actions.setResultHandler([&](const work::Action& action) { sink.action(action); });
@@ -618,7 +625,29 @@ void Analyzer::planDevin(const SourceLocations& locations, const std::set<Source
 
 // METRICS 4.17 History: one entry per CLI session; each database owns its calls' keys.
 void Analyzer::analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
-    for (auto& session : work.devin) {
+    analyzeSessions(work.devin, kDevinFamily, SourceKind::Devin, ledger, labeler, report);
+}
+
+void Analyzer::planQoder(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
+    if (!enabled.contains(SourceKind::Qoder)) return;
+    work.qoder = qoderPlanner_.plan(locations.qoderRoots, [&](const std::string& key, std::int64_t size, std::int64_t modified) {
+        return unchanged(previousOf(key), kQoderFamily, size, modified, force);
+    });
+    report.filesDiscovered += qoderPlanner_.discovered();
+    report.filesUnreadable += qoderPlanner_.unreadable();
+    for (const auto& session : work.qoder) {
+        if (const auto* previous = previousOf(session.key)) work.replaced.insert(previous->id);
+    }
+}
+
+// METRICS 4.18 History: one entry per chat session; each database owns its calls' keys.
+void Analyzer::analyzeQoder(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report) {
+    analyzeSessions(work.qoder, kQoderFamily, SourceKind::Qoder, ledger, labeler, report);
+}
+
+void Analyzer::analyzeSessions(std::vector<DevinSession>& sessions, const char* family, SourceKind source, KeyLedger& ledger,
+                               const DayLabeler& labeler, Report& report) {
+    for (auto& session : sessions) {
         std::vector<ParsedResponse> responses;
         for (auto& response : session.responses) {
             std::string owner;
@@ -626,12 +655,12 @@ void Analyzer::analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& lab
         }
         StoredFile entry;
         entry.path = session.key;
-        entry.family = kDevinFamily;
+        entry.family = family;
         entry.size = session.size;
         entry.modified = session.modified;
         entry.version = kVersion;
-        entry.days = contributionsOf(responses, SourceKind::Devin, labeler, *prices_);
-        entry.perf = emittedRecords(responses, SourceKind::Devin, labeler);
+        entry.days = contributionsOf(responses, source, labeler, *prices_);
+        entry.perf = emittedRecords(responses, source, labeler);
         keep(std::move(entry), ledger.finish(session.database));
         ++report.sessionsAnalyzed;
         advance(report);

@@ -60,6 +60,7 @@ SourceLocations locationsIn(const std::string& copy) {
     l.openClawRoots = paths::openClawStateFolders([](const std::string&) { return std::nullopt; }, copy + "/openclaw");
     l.hermesRoots = {{copy + "/hermes/home", false}};
     l.droidRoots = {droid::defaultRoot(copy + "/droid")};
+    l.qoderCliRoots = {qoder::cliProjectsOf(copy + "/qoder-cli")};
     return l;
 }
 
@@ -130,7 +131,7 @@ TEST(History, OverAllFixturesMatchesTheExpectation) {
     auto store = Store::open((temp / "store" / "history.sqlite").string());
     Analyzer analyzer(*store, std::make_shared<pricing::PriceBook>(tables, bindings), hermesZone);
     auto enabled = std::set<SourceKind>{};
-    for (int k = 0; k <= static_cast<int>(SourceKind::Droid); ++k) enabled.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) enabled.insert(static_cast<SourceKind>(k));
     const auto report = analyzer.run(locationsIn(copy), enabled, TimeZone::utc(), "UTC");
     EXPECT_FALSE(report.cancelled);
     EXPECT_EQ(report.filesUnreadable, 0);

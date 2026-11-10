@@ -1,5 +1,5 @@
 {
-  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Every agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the files the fixture folders play: codex/config.toml, gemini/settings.json, antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
+  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Qoder CLI: the folder `qoder-cli` plays a config folder (~/.qoder), so its root is qoder-cli/projects; `qoderCli.discover` lists what discovery finds there and its `traces` work like the omp ones (spec/tools/qoder_fixtures.py; its day totals are in qoder-expected.json `cli.history`). Every agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the files the fixture folders play: codex/config.toml, gemini/settings.json, antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
   "order": [
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl",
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-20-subagent.jsonl",
@@ -58,7 +58,12 @@
     "droid/.factory/sessions/-Users-dev-projects-forge/a1f0c3d2-0b6e-4c1a-9d7e-2f3a4b5c6d70.jsonl",
     "droid/.factory/sessions/-Users-dev-projects-forge/a7b6c9d8-6bc4-4a70-9d34-8f9a0b1c2d36.jsonl",
     "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl",
-    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl"
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl",
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl",
+    "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+    "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl",
+    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl"
   ],
   "files": {
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl": {
@@ -4065,6 +4070,212 @@
           }
         }
       }
+    },
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl": {
+      "source": "qoderCli",
+      "project": "atlas",
+      "model": "auto",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792674201662,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "qodercli:6f1d2c3b-0001-4001-8001-00009e3779b9",
+          "startMs": 1792674194903,
+          "endMs": 1792674198025,
+          "firstMs": null,
+          "input": 20341,
+          "cachedInput": 20096,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 92,
+          "reasoning": 0,
+          "model": "auto",
+          "provider": null,
+          "final": true,
+          "fast": false
+        },
+        {
+          "key": "qodercli:6f1d2c3b-0002-4001-8002-00013c6ef372",
+          "startMs": 1792674198131,
+          "endMs": 1792674201662,
+          "firstMs": null,
+          "input": 20478,
+          "cachedInput": 20096,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 107,
+          "reasoning": 0,
+          "model": "auto",
+          "provider": null,
+          "final": true,
+          "fast": false
+        }
+      ],
+      "actions": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "qodercli:6f1d2c3b-0001-4001-8001-00009e3779b9": {
+          "effort": null,
+          "speed": null
+        },
+        "qodercli:6f1d2c3b-0002-4001-8002-00013c6ef372": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl": {
+      "source": "qoderCli",
+      "project": "atlas",
+      "model": "claude-sonnet-4-5",
+      "isSubagent": true,
+      "parentFile": "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792674201300,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "qodercli:6f1d2c3b-0003-4001-8003-0001daa66d2b",
+          "startMs": 1792674198200,
+          "endMs": 1792674199950,
+          "firstMs": null,
+          "input": 5812,
+          "cachedInput": 4000,
+          "cacheWriteInput": 1800,
+          "cacheWrite1hInput": 600,
+          "output": 64,
+          "reasoning": 0,
+          "model": "claude-sonnet-4-5",
+          "provider": null,
+          "final": true,
+          "fast": false
+        },
+        {
+          "key": "qodercli:6f1d2c3d-000e-4003-800e-0008a708a81e",
+          "startMs": 1792674200010,
+          "endMs": 1792674201300,
+          "firstMs": null,
+          "input": 3000,
+          "cachedInput": 2500,
+          "cacheWriteInput": 500,
+          "cacheWrite1hInput": 0,
+          "output": 41,
+          "reasoning": 0,
+          "model": "claude-sonnet-4-5",
+          "provider": null,
+          "final": true,
+          "fast": false
+        }
+      ],
+      "actions": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "qodercli:6f1d2c3b-0003-4001-8003-0001daa66d2b": {
+          "effort": null,
+          "speed": null
+        },
+        "qodercli:6f1d2c3d-000e-4003-800e-0008a708a81e": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl": {
+      "source": "qoderCli",
+      "project": "borealis",
+      "model": "auto",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792675502000,
+      "malformedLines": 0,
+      "responses": [],
+      "actions": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
+    },
+    "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl": {
+      "source": "qoderCli",
+      "project": "atlas",
+      "model": "auto",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792676407200,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "qodercli:6f1d2c3b-0007-4001-8007-00045384540f",
+          "startMs": 1792676400000,
+          "endMs": 1792676405500,
+          "firstMs": null,
+          "input": 20900,
+          "cachedInput": 20480,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 310,
+          "reasoning": 0,
+          "model": "auto",
+          "provider": null,
+          "final": true,
+          "fast": false
+        },
+        {
+          "key": "qodercli:6f1d2c3b-0008-4001-8008-0004f1bbcdc8",
+          "startMs": 1792676405700,
+          "endMs": 1792676407200,
+          "firstMs": null,
+          "input": 21250,
+          "cachedInput": 20736,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 58,
+          "reasoning": 0,
+          "model": "auto",
+          "provider": null,
+          "final": true,
+          "fast": false
+        }
+      ],
+      "actions": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {
+        "qodercli:6f1d2c3b-0007-4001-8007-00045384540f": {
+          "effort": null,
+          "speed": null
+        },
+        "qodercli:6f1d2c3b-0008-4001-8008-0004f1bbcdc8": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl": {
+      "source": "qoderCli",
+      "project": "borealis",
+      "model": "auto",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "tools",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792677004000,
+      "malformedLines": 0,
+      "responses": [],
+      "actions": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
     }
   },
   "mtimes": {
@@ -4154,7 +4365,12 @@
     "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.settings.json": 1792584128500,
     "droid/.factory/sessions/-Users-dev-projects-quasar/c9d8ebfa-8de6-4c92-9f56-0b1c2d3e4f58.jsonl": 1792584129000,
     "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.settings.json": 1792584129000,
-    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl": 1792584129500
+    "droid/.factory/sessions/-Users-dev-projects-forge/ebfa0d1c-a0f8-4eb4-9b78-2d3e4f5a6b70.jsonl": 1792584129500,
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl": 1792674203000,
+    "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl": 1792674204000,
+    "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl": 1792675504000,
+    "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl": 1792676409000,
+    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl": 1792677006000
   },
   "opencode": {
     "database": "opencode/opencode.db",
@@ -11357,6 +11573,89 @@
         "afterLine": 4,
         "phase": "generating",
         "inFlightStartMs": 1792577100000
+      }
+    ]
+  },
+  "qoderCli": {
+    "discover": [
+      "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+      "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl",
+      "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl",
+      "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+      "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl"
+    ],
+    "traces": [
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+        "afterLine": 4,
+        "phase": "generating",
+        "inFlightStartMs": 1792674194903
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+        "afterLine": 5,
+        "phase": "tools",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b.jsonl",
+        "afterLine": 6,
+        "phase": "generating",
+        "inFlightStartMs": 1792674198131
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+        "afterLine": 3,
+        "phase": "tools",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+        "afterLine": 4,
+        "phase": "generating",
+        "inFlightStartMs": 1792675203300
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+        "afterLine": 5,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
+        "afterLine": 6,
+        "phase": "generating",
+        "inFlightStartMs": 1792675500000
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl",
+        "afterLine": 3,
+        "phase": "generating",
+        "inFlightStartMs": 1792674194903
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl",
+        "afterLine": 5,
+        "phase": "generating",
+        "inFlightStartMs": 1792674198131
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl",
+        "afterLine": 2,
+        "phase": "generating",
+        "inFlightStartMs": 1792675200000
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl",
+        "afterLine": 4,
+        "phase": "generating",
+        "inFlightStartMs": 1792675203300
+      },
+      {
+        "file": "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl",
+        "afterLine": 5,
+        "phase": "generating",
+        "inFlightStartMs": 1792677000000
       }
     ]
   }

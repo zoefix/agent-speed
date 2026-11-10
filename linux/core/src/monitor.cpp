@@ -48,7 +48,7 @@ std::int64_t nextEpoch() {
 
 std::set<SourceKind> MonitorConfig::allSources() {
     std::set<SourceKind> all;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) all.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) all.insert(static_cast<SourceKind>(k));
     return all;
 }
 
@@ -99,6 +99,8 @@ bool Monitor::familyEnabled(RootFamily family) const {
         case RootFamily::Hermes: return e.contains(SourceKind::Hermes);
         case RootFamily::Droid: return e.contains(SourceKind::Droid);
         case RootFamily::Devin: return e.contains(SourceKind::Devin);
+        case RootFamily::Qoder: return e.contains(SourceKind::Qoder);
+        case RootFamily::QoderCli: return e.contains(SourceKind::QoderCli);
     }
     return false;
 }
@@ -368,6 +370,9 @@ std::optional<std::string> Monitor::cwdOf(const std::string& id) const {
     if (devin_) {
         if (auto cwd = devin_->cwdOf(id)) return cwd;
     }
+    if (qoder_) {
+        if (auto cwd = qoder_->cwdOf(id)) return cwd;
+    }
     const auto remote = remote_->cwds.find(id);
     return remote == remote_->cwds.end() ? std::nullopt : remote->second;
 }
@@ -433,6 +438,8 @@ std::vector<traffic::AgentFacts> Monitor::trafficAgents(std::int64_t nowMs) {
             f.cwdPath = file->second->parser->cwdPath();
         } else if (info.source == SourceKind::Devin && devin_) {
             f.cwdPath = devin_->cwdOf(id);
+        } else if (info.source == SourceKind::Qoder && qoder_) {
+            f.cwdPath = qoder_->cwdOf(id);
         }
         const bool stale = info.lastLineMs && nowMs - *info.lastLineMs > 300'000;
         if (info.phase != Phase::Idle && !stale) f.active.emplace_back(nowMs, nowMs);
@@ -572,6 +579,8 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
     }
     // Devin: the sessions with a row today (METRICS 2, 4.17).
     if (kind == SourceKind::Devin) return devin_ ? devin_->activeSessionCount(todayStartMs) : 0;
+    // Qoder IDE: the chat sessions with a row today, sub-agent sessions included (METRICS 2, 4.18).
+    if (kind == SourceKind::Qoder) return qoder_ ? qoder_->activeSessionCount(todayStartMs) : 0;
     if (kind == SourceKind::OpenCode || kind == SourceKind::ZCode || kind == SourceKind::OpenClaw) {
         int count = 0;
         for (const auto& [id, agent] : agents_) {
@@ -582,7 +591,8 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
         return count;
     }
     const bool mainOnly = kind == SourceKind::WorkBuddy || kind == SourceKind::WorkBuddyAi || kind == SourceKind::Kimi ||
-                          kind == SourceKind::GrokBuild || kind == SourceKind::Pi || kind == SourceKind::Droid;
+                          kind == SourceKind::GrokBuild || kind == SourceKind::Pi || kind == SourceKind::Droid ||
+                          kind == SourceKind::QoderCli;
     int count = 0;
     for (const auto& [path, file] : files_) {
         const auto& p = *file->parser;

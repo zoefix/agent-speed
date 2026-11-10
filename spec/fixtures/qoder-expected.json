@@ -1,0 +1,1025 @@
+{
+ "_comment": "Qoder IDE (METRICS 4.18) and Qoder CLI (4.19), checked by spec/tools/qoder_reference.py; the Qoder CLI files themselves are in parser-expected.json (`qoderCli`). Paths are relative to the fixtures folder. `automatic`: the automatic entry's databases per platform. Each scenario reads its `locations` (list order) completely, as history does, unless it has `todayStartMs`: then it is the startup read of that day (window from todayStartMs - 15 min). `@auto` is the automatic entry with `home` as the macOS home folder (on Windows and Linux: APPDATA or XDG_CONFIG_HOME = <home>/Library/Application Support). `agents` lists every agent (a session with a row read); `sessions` the history identity of each (METRICS 4.18 History); `history` the UTC day totals of the listed responses. `cli.history` is the UTC day totals of the Qoder CLI responses of parser-expected.json (history-expected.json, source qoderCli).",
+ "version": 1,
+ "automatic": [
+  {
+   "platform": "macos",
+   "env": {},
+   "home": "/Users/dev",
+   "databases": [
+    "/Users/dev/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+    "/Users/dev/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db"
+   ]
+  },
+  {
+   "platform": "macos",
+   "env": {
+    "XDG_CONFIG_HOME": "/Users/dev/.cfg"
+   },
+   "home": "/Users/dev",
+   "databases": [
+    "/Users/dev/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+    "/Users/dev/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db"
+   ]
+  },
+  {
+   "platform": "windows",
+   "env": {
+    "APPDATA": "C:\\Users\\dev\\AppData\\Roaming"
+   },
+   "home": "C:\\Users\\dev",
+   "databases": [
+    "C:\\Users\\dev\\AppData\\Roaming\\Qoder\\SharedClientCache\\cache\\db\\local.db",
+    "C:\\Users\\dev\\AppData\\Roaming\\QoderCN\\SharedClientCache\\cache\\db\\local.db"
+   ]
+  },
+  {
+   "platform": "linux",
+   "env": {
+    "XDG_CONFIG_HOME": "/home/dev/.cfg"
+   },
+   "home": "/home/dev",
+   "databases": [
+    "/home/dev/.cfg/Qoder/SharedClientCache/cache/db/local.db",
+    "/home/dev/.cfg/QoderCN/SharedClientCache/cache/db/local.db"
+   ]
+  },
+  {
+   "platform": "linux",
+   "env": {
+    "XDG_CONFIG_HOME": ""
+   },
+   "home": "/home/dev",
+   "databases": [
+    "/home/dev/.config/Qoder/SharedClientCache/cache/db/local.db",
+    "/home/dev/.config/QoderCN/SharedClientCache/cache/db/local.db"
+   ]
+  }
+ ],
+ "resolve": {
+  "qoder/home/Library/Application Support/Qoder": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+  "qoder/home/Library/Application Support/Qoder/SharedClientCache": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+  "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+  "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache": null,
+  "qoder/home/Library/Application Support/QoderCN/SharedClientCache": "qoder/home/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db",
+  "qoder/portable/user-data": "qoder/portable/user-data/SharedClientCache/cache/db/local.db",
+  "qoder/legacy": "qoder/legacy/SharedClientCache/cache/db/local.db",
+  "qoder/home/Library/Application Support/Qoder/User/globalStorage": null,
+  "qoder/missing": null
+ },
+ "scenarios": {
+  "one": {
+   "locations": [
+    "qoder/home/Library/Application Support/Qoder"
+   ],
+   "databases": [
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db"
+   ],
+   "agents": {
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora": {
+     "project": "aurora",
+     "cwdPath": "/Users/dev/projects/aurora",
+     "model": "auto",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490464900,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0002-4001-8002-00013c6ef372",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490400000,
+       "endMs": 1792490405820,
+       "firstMs": null,
+       "input": 16846,
+       "cachedInput": 2048,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 481,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0004-4001-8004-000278dde6e4",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490460000,
+       "endMs": 1792490462260,
+       "firstMs": null,
+       "input": 17407,
+       "cachedInput": 17152,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 99,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-000a-4001-800a-00062e2ac13a",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490462265,
+       "endMs": 1792490464900,
+       "firstMs": null,
+       "input": 17631,
+       "cachedInput": 17408,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 244,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout": {
+     "project": "aurora labs",
+     "cwdPath": "/Users/dev/projects/aurora labs",
+     "model": "lite",
+     "isSubagent": true,
+     "parentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490463400,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0007-4001-8007-00045384540f",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout",
+       "startMs": 1792490462300,
+       "endMs": 1792490463100,
+       "firstMs": null,
+       "input": 5000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 120,
+       "reasoning": 0,
+       "model": "lite",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0009-4001-8009-00058ff34781",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout",
+       "startMs": 1792490463150,
+       "endMs": 1792490463400,
+       "firstMs": null,
+       "input": 5300,
+       "cachedInput": 5000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 60,
+       "reasoning": 0,
+       "model": "lite",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper": {
+     "project": "ledger",
+     "cwdPath": "C:\\Users\\dev\\work\\ledger",
+     "model": "efficient",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792492020000,
+     "malformedLines": 2,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-000b-4001-800b-0006cc623af3",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": null,
+       "endMs": 1792490700000,
+       "firstMs": null,
+       "input": 1200,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 300,
+       "reasoning": 0,
+       "model": "performance",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0010-4001-8010-0009e3779b90",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": null,
+       "endMs": 1792490760000,
+       "firstMs": null,
+       "input": 12,
+       "cachedInput": 12,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 7,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:copper:row:20",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": 1792490790750,
+       "endMs": 1792492020000,
+       "firstMs": null,
+       "input": 800,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 50,
+       "reasoning": 0,
+       "model": "efficient",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta": {
+     "project": "delta",
+     "cwdPath": "/Users/dev/projects/delta",
+     "model": "auto",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "generating",
+     "inFlightStartMs": 1792492204100,
+     "lastLineMs": 1792492204100,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0016-4001-8016-000d98c475e6",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta",
+       "startMs": 1792492200000,
+       "endMs": 1792492204000,
+       "firstMs": null,
+       "input": 3000,
+       "cachedInput": 1000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 200,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0018-4001-8018-000ed5336958",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta",
+       "startMs": 1792492204100,
+       "endMs": 1792492203000,
+       "firstMs": null,
+       "input": 3100,
+       "cachedInput": 3000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 50,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl": {
+     "project": "night-owl",
+     "cwdPath": null,
+     "model": "claude-sonnet-4-5",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493110000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001b-4001-801b-0010afd9d683",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl",
+       "startMs": 1792493040000,
+       "endMs": 1792493110000,
+       "firstMs": null,
+       "input": 2400,
+       "cachedInput": 1024,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 180,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan": {
+     "project": "orphan",
+     "cwdPath": "/Users/dev/projects/orphan",
+     "model": null,
+     "isSubagent": true,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493112000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001c-4001-801c-00114e11503c",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan",
+       "startMs": 1792493070000,
+       "endMs": 1792493112000,
+       "firstMs": null,
+       "input": 2000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 30,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    }
+   },
+   "sessions": {
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora": {
+     "rows": 6,
+     "highestRowid": 10
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout": {
+     "rows": 4,
+     "highestRowid": 9
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper": {
+     "rows": 9,
+     "highestRowid": 20
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta": {
+     "rows": 4,
+     "highestRowid": 24
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl": {
+     "rows": 2,
+     "highestRowid": 27
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan": {
+     "rows": 2,
+     "highestRowid": 28
+    }
+   },
+   "history": {
+    "2026-10-20": {
+     "requests": 12,
+     "input": 74696,
+     "cachedInput": 46644,
+     "cacheWriteInput": 0,
+     "output": 1821,
+     "reasoning": 0,
+     "measuredOutput": 1414,
+     "measuredMs": 128015,
+     "agents": 6,
+     "models": {
+      "auto": {
+       "requests": 5,
+       "output": 1074
+      },
+      "lite": {
+       "requests": 2,
+       "output": 180
+      },
+      "performance": {
+       "requests": 1,
+       "output": 300
+      },
+      "": {
+       "requests": 2,
+       "output": 37
+      },
+      "efficient": {
+       "requests": 1,
+       "output": 50
+      },
+      "claude-sonnet-4-5": {
+       "requests": 1,
+       "output": 180
+      }
+     }
+    }
+   }
+  },
+  "two": {
+   "locations": [
+    "@auto",
+    "qoder/portable/user-data/SharedClientCache/cache/db",
+    "qoder/legacy"
+   ],
+   "home": "qoder/home",
+   "databases": [
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db",
+    "qoder/home/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db",
+    "qoder/portable/user-data/SharedClientCache/cache/db/local.db",
+    "qoder/legacy/SharedClientCache/cache/db/local.db"
+   ],
+   "unsupported": [
+    "qoder/legacy/SharedClientCache/cache/db/local.db"
+   ],
+   "agents": {
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora": {
+     "project": "aurora",
+     "cwdPath": "/Users/dev/projects/aurora",
+     "model": "auto",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490464900,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0002-4001-8002-00013c6ef372",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490400000,
+       "endMs": 1792490405820,
+       "firstMs": null,
+       "input": 16846,
+       "cachedInput": 2048,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 481,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0004-4001-8004-000278dde6e4",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490460000,
+       "endMs": 1792490462260,
+       "firstMs": null,
+       "input": 17407,
+       "cachedInput": 17152,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 99,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-000a-4001-800a-00062e2ac13a",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+       "startMs": 1792490462265,
+       "endMs": 1792490464900,
+       "firstMs": null,
+       "input": 17631,
+       "cachedInput": 17408,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 244,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout": {
+     "project": "aurora labs",
+     "cwdPath": "/Users/dev/projects/aurora labs",
+     "model": "lite",
+     "isSubagent": true,
+     "parentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora",
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792490463400,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0007-4001-8007-00045384540f",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout",
+       "startMs": 1792490462300,
+       "endMs": 1792490463100,
+       "firstMs": null,
+       "input": 5000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 120,
+       "reasoning": 0,
+       "model": "lite",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0009-4001-8009-00058ff34781",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout",
+       "startMs": 1792490463150,
+       "endMs": 1792490463400,
+       "firstMs": null,
+       "input": 5300,
+       "cachedInput": 5000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 60,
+       "reasoning": 0,
+       "model": "lite",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper": {
+     "project": "ledger",
+     "cwdPath": "C:\\Users\\dev\\work\\ledger",
+     "model": "efficient",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792492020000,
+     "malformedLines": 2,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-000b-4001-800b-0006cc623af3",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": null,
+       "endMs": 1792490700000,
+       "firstMs": null,
+       "input": 1200,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 300,
+       "reasoning": 0,
+       "model": "performance",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0010-4001-8010-0009e3779b90",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": null,
+       "endMs": 1792490760000,
+       "firstMs": null,
+       "input": 12,
+       "cachedInput": 12,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 7,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:copper:row:20",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper",
+       "startMs": 1792490790750,
+       "endMs": 1792492020000,
+       "firstMs": null,
+       "input": 800,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 50,
+       "reasoning": 0,
+       "model": "efficient",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta": {
+     "project": "delta",
+     "cwdPath": "/Users/dev/projects/delta",
+     "model": "auto",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "generating",
+     "inFlightStartMs": 1792492204100,
+     "lastLineMs": 1792492204100,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0016-4001-8016-000d98c475e6",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta",
+       "startMs": 1792492200000,
+       "endMs": 1792492204000,
+       "firstMs": null,
+       "input": 3000,
+       "cachedInput": 1000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 200,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      },
+      {
+       "key": "qoder:6f1d2c3b-0018-4001-8018-000ed5336958",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta",
+       "startMs": 1792492204100,
+       "endMs": 1792492203000,
+       "firstMs": null,
+       "input": 3100,
+       "cachedInput": 3000,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 50,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl": {
+     "project": "night-owl",
+     "cwdPath": null,
+     "model": "claude-sonnet-4-5",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493110000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001b-4001-801b-0010afd9d683",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl",
+       "startMs": 1792493040000,
+       "endMs": 1792493110000,
+       "firstMs": null,
+       "input": 2400,
+       "cachedInput": 1024,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 180,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan": {
+     "project": "orphan",
+     "cwdPath": "/Users/dev/projects/orphan",
+     "model": null,
+     "isSubagent": true,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493112000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001c-4001-801c-00114e11503c",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan",
+       "startMs": 1792493070000,
+       "endMs": 1792493112000,
+       "firstMs": null,
+       "input": 2000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 30,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db#lumen": {
+     "project": "lumen",
+     "cwdPath": "/Users/dev/projects/lumen",
+     "model": "ultimate",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792494003500,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-0066-4001-8066-003f0a1a7fb6",
+       "agentId": "qoder/home/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db#lumen",
+       "startMs": 1792494000000,
+       "endMs": 1792494003500,
+       "firstMs": null,
+       "input": 9000,
+       "cachedInput": 8192,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 150,
+       "reasoning": 0,
+       "model": "ultimate",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/portable/user-data/SharedClientCache/cache/db/local.db#harbor": {
+     "project": "harbor",
+     "cwdPath": "/Users/dev/projects/harbor",
+     "model": "auto",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792495864000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-00cc-4001-80cc-007e1434ff6c",
+       "agentId": "qoder/portable/user-data/SharedClientCache/cache/db/local.db#harbor",
+       "startMs": 1792495860000,
+       "endMs": 1792495864000,
+       "firstMs": null,
+       "input": 4000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 90,
+       "reasoning": 0,
+       "model": "auto",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    }
+   },
+   "sessions": {
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora": {
+     "rows": 6,
+     "highestRowid": 10
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#aurora-scout": {
+     "rows": 4,
+     "highestRowid": 9
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#copper": {
+     "rows": 9,
+     "highestRowid": 20
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#delta": {
+     "rows": 4,
+     "highestRowid": 24
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl": {
+     "rows": 2,
+     "highestRowid": 27
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan": {
+     "rows": 2,
+     "highestRowid": 28
+    },
+    "qoder/home/Library/Application Support/QoderCN/SharedClientCache/cache/db/local.db#lumen": {
+     "rows": 2,
+     "highestRowid": 2
+    },
+    "qoder/portable/user-data/SharedClientCache/cache/db/local.db#harbor": {
+     "rows": 4,
+     "highestRowid": 5
+    }
+   },
+   "history": {
+    "2026-10-20": {
+     "requests": 14,
+     "input": 87696,
+     "cachedInput": 54836,
+     "cacheWriteInput": 0,
+     "output": 2061,
+     "reasoning": 0,
+     "measuredOutput": 1654,
+     "measuredMs": 135515,
+     "agents": 8,
+     "models": {
+      "auto": {
+       "requests": 6,
+       "output": 1164
+      },
+      "lite": {
+       "requests": 2,
+       "output": 180
+      },
+      "performance": {
+       "requests": 1,
+       "output": 300
+      },
+      "": {
+       "requests": 2,
+       "output": 37
+      },
+      "efficient": {
+       "requests": 1,
+       "output": 50
+      },
+      "claude-sonnet-4-5": {
+       "requests": 1,
+       "output": 180
+      },
+      "ultimate": {
+       "requests": 1,
+       "output": 150
+      }
+     }
+    }
+   }
+  },
+  "startup": {
+   "locations": [
+    "qoder/home/Library/Application Support/Qoder"
+   ],
+   "todayStartMs": 1792494000000,
+   "databases": [
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db"
+   ],
+   "agents": {
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl": {
+     "project": "night-owl",
+     "cwdPath": null,
+     "model": "claude-sonnet-4-5",
+     "isSubagent": false,
+     "parentId": null,
+     "phase": "idle",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493110000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001b-4001-801b-0010afd9d683",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#night-owl",
+       "startMs": 1792493040000,
+       "endMs": 1792493110000,
+       "firstMs": null,
+       "input": 2400,
+       "cachedInput": 1024,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 180,
+       "reasoning": 0,
+       "model": "claude-sonnet-4-5",
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    },
+    "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan": {
+     "project": "orphan",
+     "cwdPath": "/Users/dev/projects/orphan",
+     "model": null,
+     "isSubagent": true,
+     "parentId": null,
+     "phase": "tools",
+     "inFlightStartMs": null,
+     "lastLineMs": 1792493112000,
+     "malformedLines": 0,
+     "responses": [
+      {
+       "key": "qoder:6f1d2c3b-001c-4001-801c-00114e11503c",
+       "agentId": "qoder/home/Library/Application Support/Qoder/SharedClientCache/cache/db/local.db#orphan",
+       "startMs": 1792493070000,
+       "endMs": 1792493112000,
+       "firstMs": null,
+       "input": 2000,
+       "cachedInput": 0,
+       "cacheWriteInput": 0,
+       "cacheWrite1hInput": 0,
+       "output": 30,
+       "reasoning": 0,
+       "model": null,
+       "provider": null,
+       "final": true,
+       "fast": false
+      }
+     ]
+    }
+   }
+  }
+ },
+ "cli": {
+  "automatic": [
+   {
+    "platform": "macos",
+    "env": {},
+    "home": "/Users/dev",
+    "roots": [
+     "/Users/dev/.qoder/projects",
+     "/Users/dev/.qoder-cn/projects"
+    ]
+   },
+   {
+    "platform": "linux",
+    "env": {
+     "QODER_CONFIG_DIR": ""
+    },
+    "home": "/home/dev",
+    "roots": [
+     "/home/dev/.qoder/projects",
+     "/home/dev/.qoder-cn/projects"
+    ]
+   },
+   {
+    "platform": "linux",
+    "env": {
+     "QODER_CONFIG_DIR": "/srv/qoder"
+    },
+    "home": "/home/dev",
+    "roots": [
+     "/srv/qoder/projects",
+     "/home/dev/.qoder-cn/projects"
+    ]
+   },
+   {
+    "platform": "linux",
+    "env": {
+     "QODERCN_CONFIG_DIR": "/srv/qoder-cn"
+    },
+    "home": "/home/dev",
+    "roots": [
+     "/home/dev/.qoder/projects",
+     "/srv/qoder-cn/projects"
+    ]
+   },
+   {
+    "platform": "windows",
+    "env": {},
+    "home": "C:\\Users\\dev",
+    "roots": [
+     "C:\\Users\\dev\\.qoder\\projects",
+     "C:\\Users\\dev\\.qoder-cn\\projects"
+    ]
+   }
+  ],
+  "locations": {
+   "/Users/dev/.qoder": "/Users/dev/.qoder/projects",
+   "/Users/dev/.qoder/projects": "/Users/dev/.qoder/projects",
+   "/data/qoder-cn": "/data/qoder-cn/projects"
+  },
+  "history": {
+   "2026-10-22": {
+    "requests": 6,
+    "input": 91781,
+    "cachedInput": 87908,
+    "cacheWriteInput": 2300,
+    "output": 672,
+    "reasoning": 0,
+    "measuredOutput": 672,
+    "measuredMs": 16693,
+    "agents": 3,
+    "models": {
+     "auto": {
+      "requests": 4,
+      "output": 567,
+      "measuredOutput": 567,
+      "measuredMs": 13653
+     },
+     "claude-sonnet-4-5": {
+      "requests": 2,
+      "output": 105,
+      "measuredOutput": 105,
+      "measuredMs": 3040
+     }
+    }
+   }
+  }
+ }
+}

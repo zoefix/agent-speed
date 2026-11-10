@@ -23,6 +23,8 @@ public enum LocationFolder
     Hermes,
     Droid,
     Devin,
+    Qoder,
+    QoderCli,
 }
 
 public static class LocationFolders
@@ -51,6 +53,8 @@ public static class LocationFolders
         LocationFolder.Hermes => "hermes",
         LocationFolder.Droid => "droid",
         LocationFolder.Devin => "devin",
+        LocationFolder.Qoder => "qoder",
+        LocationFolder.QoderCli => "qoderCli",
         _ => throw new ArgumentOutOfRangeException(nameof(folder)),
     };
 
@@ -92,6 +96,8 @@ public static class LocationFolders
         SourceKind.Hermes => LocationFolder.Hermes,
         SourceKind.Droid => LocationFolder.Droid,
         SourceKind.Devin => LocationFolder.Devin,
+        SourceKind.Qoder => LocationFolder.Qoder,
+        SourceKind.QoderCli => LocationFolder.QoderCli,
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 

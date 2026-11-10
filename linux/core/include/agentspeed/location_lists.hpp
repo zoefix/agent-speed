@@ -25,7 +25,7 @@ struct DataLocation {
 
 using LocationList = std::vector<DataLocation>;
 
-// The seventeen lists in settings order, and their stored names (`codex`, `claude`, … `devin`).
+// The nineteen lists in settings order, and their stored names (`codex`, `claude`, … `qoderCli`).
 const std::vector<RootFamily>& locationListOrder();
 std::string_view listName(RootFamily list);
 std::optional<RootFamily> listNamed(std::string_view name);
@@ -33,7 +33,7 @@ std::optional<RootFamily> listNamed(std::string_view name);
 // One folder per source, the single setting of earlier versions; nullopt reads the automatic roots.
 struct RootSettings {
     std::optional<std::string> codex, claude, dsh, openCode, gemini, omp, antigravity, workBuddy, workBuddyAi, zcode, kimi,
-        grokBuild, pi, openClaw, hermes, droid, devin;
+        grokBuild, pi, openClaw, hermes, droid, devin, qoder, qoderCli;
 };
 
 enum class AddOutcome { Added, RestoredAutomatic, AlreadyListed, AlreadyAutomatic, Full, Invalid };

@@ -163,7 +163,9 @@ public sealed class LiveMonitorTests : IDisposable
         _temp.Combine("home", ".workbuddy"),
         _temp.Combine("home", ".workbuddy-ai"),
         HermesRoot: _temp.Combine("home", ".hermes"),
-        DroidRoot: _temp.Combine("home", ".factory"));
+        DroidRoot: _temp.Combine("home", ".factory"),
+        QoderRoot: _temp.Combine("home", "Qoder"),
+        QoderCliRoot: _temp.Combine("home", ".qoder"));
 
     private sealed class HubProbe
     {

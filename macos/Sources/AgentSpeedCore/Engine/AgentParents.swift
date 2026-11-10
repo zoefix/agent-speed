@@ -57,7 +57,7 @@ enum AgentParents {
             switch member.family {
             case .codex, .dsh:
                 parent = member.thread?.parentId.flatMap { threads[member.family]?[$0]?.id }
-            case .claude:
+            case .claude, .qoderCli:
                 parent = claudeParentPath(of: member.id).flatMap { ids.contains($0) ? $0 : nil }
             case .gemini:
                 parent = geminiSessionKey(ofSubagent: member).flatMap { geminiMains[$0] }

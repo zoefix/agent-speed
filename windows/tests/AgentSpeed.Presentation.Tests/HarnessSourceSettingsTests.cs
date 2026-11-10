@@ -43,6 +43,8 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Hermes, "hermes-home")]
     [InlineData(SourceKind.Droid, ".factory")]
     [InlineData(SourceKind.Devin, "devin/cli")]
+    [InlineData(SourceKind.Qoder, "Qoder/SharedClientCache")]
+    [InlineData(SourceKind.QoderCli, ".qoder")]
     public void ALocationAndToggleRoundTripAndReachTheMonitor(SourceKind kind, string relative)
     {
         var folder = LocationFolders.Of(kind);
@@ -65,6 +67,8 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Hermes, """{ "version": 1, "sources": { "codex": true, "openclaw": false, "openclawRoot": null } }""")]
     [InlineData(SourceKind.Droid, """{ "version": 1, "sources": { "codex": true, "hermes": false, "hermesRoot": null } }""")]
     [InlineData(SourceKind.Devin, """{ "version": 1, "sources": { "codex": true, "droid": false, "droidRoot": null } }""")]
+    [InlineData(SourceKind.Qoder, """{ "version": 1, "sources": { "codex": true, "devin": false, "devinRoot": null } }""")]
+    [InlineData(SourceKind.QoderCli, """{ "version": 1, "sources": { "codex": true, "devin": true, "qoder": false } }""")]
     public void OlderSettingsFilesKeepANewSourceOnWithItsAutomaticRoots(SourceKind kind, string json)
     {
         var s = SettingsSerializer.Deserialize(json);
@@ -102,6 +106,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Hermes, "hermes")]
     [InlineData(SourceKind.Droid, "droid")]
     [InlineData(SourceKind.Devin, "devin")]
+    [InlineData(SourceKind.Qoder, "qoder")]
     public void EverySurfaceUsesTheSameStableSourceIdentifier(SourceKind kind, string id)
     {
         Assert.Equal(id, ReportBody.SourceId(kind));

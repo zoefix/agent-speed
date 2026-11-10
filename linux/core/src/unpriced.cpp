@@ -163,7 +163,7 @@ std::vector<Part> mergeParts(const std::vector<Part>& parts) {
 
 std::vector<Part> liveParts(const std::vector<LiveResponse>& responses, const std::string& today) {
     std::vector<Part> out;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) {
+    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) {
         const auto source = static_cast<SourceKind>(k);
         Part part;
         part.day = today;
@@ -292,7 +292,7 @@ std::string render(const std::vector<Group>& groups, const App& app, const prici
     out += "app version=" + app.version + " platform=" + app.platform + " os=" + app.os + "\n";
     out += "prices version=" + std::to_string(table.version()) + " updated=" + table.updated() + "\n";
     std::string excludedText;
-    for (int k = 0; k <= static_cast<int>(SourceKind::Devin); ++k) {
+    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) {
         const auto kind = static_cast<SourceKind>(k);
         if (!excluded.contains(kind)) continue;
         if (!excludedText.empty()) excludedText += ",";

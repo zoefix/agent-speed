@@ -24,6 +24,8 @@ enum class LinkKind {
     PiPath,
     OpenClawWindow,
     DroidPath,
+    // Qoder IDE: the thread is the agent id, the parent `<database path>#<parent_session_id>` (METRICS 6.7).
+    QoderSession,
 };
 
 // What METRICS 6.7 needs from a tracked agent to find its parent.

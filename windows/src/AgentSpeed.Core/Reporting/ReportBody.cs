@@ -265,6 +265,8 @@ public static class ReportBody
         SourceKind.Hermes => "hermes",
         SourceKind.Droid => "droid",
         SourceKind.Devin => "devin",
+        SourceKind.Qoder => "qoder",
+        SourceKind.QoderCli => "qoderCli",
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

@@ -72,9 +72,11 @@ extension SourceLocations {
     /// WorkBuddy data folder and its `projects`, a `.factory` folder and its `sessions`, a Kimi Code CLI or Grok Build
     /// data directory and its `sessions`, an Antigravity store and its `conversations`, an OpenCode folder and its
     /// `opencode.db`, a ZCode data directory, its database folder and `db.sqlite`, an OpenClaw agent folder and its
-    /// `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder.
+    /// `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder, a Qoder IDE data folder, its
+    /// `SharedClientCache` folder and its `cache/db` folder, a Qoder CLI config folder and its `projects` folder.
     public static func locationKey(_ path: String, folder: TranscriptFolder) -> String {
         if folder == .devin { return DevinRoot.location(path).locationKey }
+        if folder == .qoder { return QoderRoot.location(path).locationKey }
         return LocationPaths.resolved(namedRoot(path, folder: folder))
     }
 
@@ -103,6 +105,7 @@ extension SourceLocations {
             case .openclaw: roots = (configuration.openclawHome ?? .current).stateFolders.map { namedRoot($0.path, folder: .openclaw) }
             case .hermes: roots = [(configuration.hermesHome ?? .current).folder]
             case .devin: roots = (configuration.devinAutomaticRoots ?? TranscriptLocations.defaultDevinRoots).map(\.locationKey)
+            case .qoder: roots = (configuration.qoderAutomaticRoots ?? TranscriptLocations.defaultQoderRoots).map(\.locationKey)
             default: roots = []
             }
         }

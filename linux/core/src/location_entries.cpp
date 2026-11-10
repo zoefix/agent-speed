@@ -16,6 +16,8 @@ bool isDatabaseList(RootFamily list) {
 bool locationExists(RootFamily list, const std::string& path) {
     // A Devin folder counts when it holds the CLI database (a Devin Desktop folder never does).
     if (list == RootFamily::Devin) return devin::databaseOf(path).has_value();
+    // A Qoder IDE folder counts when it holds `local.db` in one of the IDE's layouts.
+    if (list == RootFamily::Qoder) return qoder::databaseOf(path).has_value();
     return fsx::isDirectory(path) || (isDatabaseList(list) && fsx::isRegularFile(path));
 }
 
@@ -34,6 +36,8 @@ std::string defaultOf(RootFamily list, const Environment& environment, const std
         case RootFamily::Hermes: return SourceLocations::defaultRoot(SourceKind::Hermes, environment, home);
         case RootFamily::Droid: return SourceLocations::defaultRoot(SourceKind::Droid, environment, home);
         case RootFamily::Devin: return SourceLocations::defaultRoot(SourceKind::Devin, environment, home);
+        case RootFamily::Qoder: return SourceLocations::defaultRoot(SourceKind::Qoder, environment, home);
+        case RootFamily::QoderCli: return SourceLocations::defaultRoot(SourceKind::QoderCli, environment, home);
         default: return {};
     }
 }
@@ -46,6 +50,13 @@ std::vector<std::string> defaultLocations(RootFamily list, const Environment& en
         case RootFamily::Pi: return paths::piRoots(environment, home);
         case RootFamily::Antigravity: return paths::antigravityStores(home + "/.gemini", std::nullopt);
         case RootFamily::OpenClaw: return paths::openClawStateFolders(environment, home);
+        // Each edition's database folder, the international edition first.
+        case RootFamily::Qoder: {
+            std::vector<std::string> folders;
+            for (const auto& database : qoder::automaticDatabases(environment, home)) folders.push_back(qoder::Root::database(database).displayFolder());
+            return folders;
+        }
+        case RootFamily::QoderCli: return qoder::cliRoots(environment, home);
         default: {
             const auto root = defaultOf(list, environment, home);
             return root.empty() ? std::vector<std::string>{} : std::vector<std::string>{root};
@@ -82,8 +93,11 @@ LocationEntry locationEntry(RootFamily list, const DataLocation& location, const
     const auto shown = location.automatic ? automaticShown(list, environment, home) : reads;
     // Devin's automatic entry reads one database, which `$CHISEL_SESSION_DB` may give another name.
     const bool automaticDevin = location.automatic && list == RootFamily::Devin;
+    // Qoder IDE's automatic entry names each edition's database folder; each is there when it holds `local.db`.
+    const bool automaticQoder = location.automatic && list == RootFamily::Qoder;
     const auto isReadable = [&](const std::string& path) {
         if (automaticDevin) return devin::Root::database(devin::automaticDatabase(environment, home)).databaseNow().has_value();
+        if (automaticQoder) return qoder::isDatabaseFile(fsx::join(path, qoder::kDatabaseName));
         return isReadableLocation(list, path);
     };
     for (const auto& path : shown) entry.shown.emplace_back(path, isReadable(path));

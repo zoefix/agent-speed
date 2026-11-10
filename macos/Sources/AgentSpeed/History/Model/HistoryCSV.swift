@@ -44,6 +44,8 @@ enum HistoryCSV {
         case .hermes: "hermes"
         case .droid: "droid"
         case .devin: "devin"
+        case .qoder: "qoder"
+        case .qoderCli: "qoder-cli"
         }
     }
 

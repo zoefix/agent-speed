@@ -282,6 +282,7 @@ std::unique_ptr<TranscriptParser> makeParser(RootFamily family, const std::strin
         case RootFamily::GrokBuild: return std::make_unique<GrokParser>(path, deduper);
         case RootFamily::Pi: return PiParser::forPath(path, deduper);
         case RootFamily::Droid: return std::make_unique<droid::Parser>(path, deduper);
+        case RootFamily::QoderCli: return std::make_unique<ClaudeParser>(path, deduper, ClaudeParser::Variant::QoderCli);
         default: return std::make_unique<ClaudeParser>(path, deduper);
     }
 }

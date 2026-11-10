@@ -570,6 +570,18 @@
     "en": "Choose Devin CLI's cli folder (with sessions.db) or the devin folder above it",
     "ja": "Devin CLI の cli フォルダ（sessions.db を含む）またはその上の devin フォルダを選択"
   },
+  "mac.settings.sources.chooseQoder": {
+    "zh-Hant": "選擇 Qoder IDE 的 db 資料夾（含 local.db）、SharedClientCache 資料夾或 IDE 資料夾",
+    "zh-Hans": "选择 Qoder IDE 的 db 文件夹（含 local.db）、SharedClientCache 文件夹或 IDE 文件夹",
+    "en": "Choose Qoder IDE's db folder (with local.db), its SharedClientCache folder or the IDE's folder",
+    "ja": "Qoder IDE の db フォルダ（local.db を含む）、SharedClientCache フォルダ、または IDE フォルダを選択"
+  },
+  "mac.settings.sources.chooseQoderCli": {
+    "zh-Hant": "選擇 Qoder CLI 的 .qoder 資料夾或 projects 資料夾",
+    "zh-Hans": "选择 Qoder CLI 的 .qoder 文件夹或 projects 文件夹",
+    "en": "Choose Qoder CLI's .qoder folder or its projects folder",
+    "ja": "Qoder CLI の .qoder フォルダまたは projects フォルダを選択"
+  },
   "mac.update.relaunching": {
     "zh-Hant": "正在重新啟動…",
     "zh-Hans": "正在重新启动…",

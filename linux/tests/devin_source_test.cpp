@@ -353,7 +353,8 @@ TEST(Devin, SameLocationsAndTheAutomaticEntry) {
     EXPECT_FALSE(automaticIsWiderThanDefault(RootFamily::Devin));
     EXPECT_FALSE(acceptsDatabaseFile(RootFamily::Devin));
     EXPECT_EQ(listName(RootFamily::Devin), "devin");
-    EXPECT_EQ(locationListOrder().back(), RootFamily::Devin);
+    const auto& order = locationListOrder();
+    EXPECT_EQ(std::find(order.begin(), order.end(), RootFamily::Devin) - order.begin(), 16) << "after Factory Droid";
     EXPECT_EQ(familyOf(SourceKind::Devin), RootFamily::Devin);
 
     EXPECT_EQ(devin::databases({devin::Root::database(database), devin::Root::location(temp.file("share/devin"))}),

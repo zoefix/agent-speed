@@ -41,6 +41,8 @@ extension TranscriptFolder {
         case .hermes: [LiveMonitor.defaultHermesHome]
         case .droid: [LiveMonitor.defaultDroidRoot]
         case .devin: [LiveMonitor.defaultDevinRoot]
+        case .qoder: LiveMonitor.defaultQoderRoots
+        case .qoderCli: LiveMonitor.defaultQoderCliRoots
         }
     }
 
@@ -65,6 +67,8 @@ extension TranscriptFolder {
         case .hermes: "mac.settings.sources.chooseHermes"
         case .droid: "mac.settings.sources.chooseDroid"
         case .devin: "mac.settings.sources.chooseDevin"
+        case .qoder: "mac.settings.sources.chooseQoder"
+        case .qoderCli: "mac.settings.sources.chooseQoderCli"
         }
     }
 
@@ -88,6 +92,8 @@ extension TranscriptFolder {
         case .hermes: "settings.sources.hermesHint"
         case .droid: "settings.sources.droidHint"
         case .devin: "settings.sources.devinHint"
+        case .qoder: "settings.sources.qoderHint"
+        case .qoderCli: "settings.sources.qoderCliHint"
         }
     }
 
@@ -134,7 +140,7 @@ extension TranscriptFolder {
             let found = defaultURLs.filter(isReadable)
             return found.isEmpty ? [defaultURL] : found
         case .codex, .claude, .dsh, .opencode, .gemini, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .hermes, .droid,
-             .devin:
+             .devin, .qoder, .qoderCli:
             return defaultURLs
         }
     }
@@ -144,10 +150,11 @@ extension TranscriptFolder {
         locationExists(url) && (self != .antigravity || LiveMonitor.isReadableAntigravityStore(url))
     }
 
-    /// The folder exists; for OpenClaw an agent database file counts too; for Devin the folder must hold the CLI's
-    /// database (METRICS 4.17).
+    /// The folder exists; for OpenClaw an agent database file counts too; for Devin and Qoder IDE the folder must name
+    /// the database (METRICS 4.17, 4.18).
     func locationExists(_ url: URL) -> Bool {
         if self == .devin { return LiveMonitor.devinLocationExists(url) }
+        if self == .qoder { return LiveMonitor.qoderLocationExists(url) }
         return Self.exists(url) || (acceptsDatabaseFile && FolderChooser.isOpenClawDatabase(url))
     }
 

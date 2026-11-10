@@ -19,6 +19,7 @@ struct ParserFixtureTests {
         if relative.hasPrefix("workbuddy/.workbuddy-ai/") { return .workbuddyAi }
         if relative.hasPrefix("workbuddy/.workbuddy/") { return .workbuddy }
         if relative.hasPrefix("droid/") { return .droid }
+        if relative.hasPrefix("qoder-cli/") { return .qoderCli }
         return relative.hasPrefix("dsh/") ? .dsh : .claude
     }
 

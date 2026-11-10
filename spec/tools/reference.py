@@ -5,7 +5,7 @@
   python3 spec/tools/reference.py --dump-today [--codex PATH] [--claude PATH] [--dsh PATH] [--gemini PATH]
                                               [--omp PATH] [--pi PATH] [--antigravity PATH] [--workbuddy PATH]
                                               [--workbuddy-ai PATH] [--openclaw PATH] [--hermes PATH]
-                                              [--droid PATH]
+                                              [--droid PATH] [--devin PATH] [--qoder PATH] [--qoder-cli PATH]
   python3 spec/tools/reference.py --dump-history [--utc] [--prices PATH] [...]
   python3 spec/tools/reference.py --write-history-fixture
   python3 spec/tools/reference.py --dump-unpriced [--days N | --first YYYY-MM-DD --last YYYY-MM-DD | --live]
@@ -44,6 +44,7 @@ sys.path.insert(0, os.path.dirname(os.path.abspath(__file__)))
 import prices as pricing  # noqa: E402
 import harness_reference as harnesses  # noqa: E402
 import devin_reference as devin  # noqa: E402
+import qoder_reference as qoder  # noqa: E402
 import unpriced as diagnostics  # noqa: E402
 import execution_modes_reference as modes  # noqa: E402
 import tool_actions  # noqa: E402
@@ -190,7 +191,8 @@ class FileState:
         self.source_decided = False
         self.project = None
         self.model = None
-        self.is_subagent = source == "claudeCode" and "subagents" in [p for p in re.split(r"[\\/]", path) if p]
+        self.is_subagent = source in ("claudeCode", "qoderCli") and "subagents" in [
+            p for p in re.split(r"[\\/]", path) if p]
         self.phase = "idle"
         self.in_flight = None
         self.last_line = None
@@ -216,8 +218,10 @@ class FileState:
         self.streaming = False
         self.saw_modern = False
         self.prev_legacy = None
-        # claude
+        # claude, qoder cli (METRICS 4.19: its source never changes)
         self.precise = False
+        if source == "qoderCli":
+            self.source_decided = True
         # deepseek, gemini
         self.parent_session = None
         # gemini
@@ -511,7 +515,8 @@ def claude_line(state, obj, dedupe):
     if obj.get("isSidechain") is True:
         state.is_subagent = True
     kind = obj.get("type")
-    if kind == "attachment" and isinstance(obj.get("attachment"), dict):
+    qoder_cli = state.source == "qoderCli"
+    if kind == "attachment" and isinstance(obj.get("attachment"), dict) and not qoder_cli:
         marker = obj["attachment"].get("type")
         if marker in ("ultra_effort_enter", "ultra_effort_exit"):
             state.ultra_session = marker == "ultra_effort_enter"
@@ -519,7 +524,7 @@ def claude_line(state, obj, dedupe):
             state.ultra_turn = True
     if kind == "user" and is_prompt(obj):
         state.ultra_turn = False
-    if kind == "api-request":
+    if kind == "api-request" and not qoder_cli:
         state.pending, state.precise, state.phase, state.in_flight = ts, True, "generating", ts
     elif kind == "user":
         if is_interrupt(obj.get("message")) or obj.get("toolEndsTurn") is True:
@@ -528,6 +533,8 @@ def claude_line(state, obj, dedupe):
             if not state.precise:
                 state.pending = ts
             state.phase, state.in_flight = "generating", state.pending
+    elif kind == "assistant" and qoder_cli:
+        qoder_cli_assistant(state, obj, dedupe, ts)
     elif kind == "assistant":
         message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
         if message.get("model") == "<synthetic>":
@@ -575,6 +582,68 @@ def claude_line(state, obj, dedupe):
             state.phase, state.in_flight = "generating", resp["startMs"] if resp["startMs"] is not None else ts
         else:
             state.phase, state.in_flight = "idle", None
+
+
+def qoder_cli_tokens(usage):
+    """Claude's tokens (3.2) except `input`: Qoder's `input_tokens` already includes the cache when it covers it."""
+    tokens = claude_tokens(usage)
+    inp = num(usage.get("input_tokens"))
+    if inp >= num(usage.get("cache_read_input_tokens")) + num(usage.get("cache_creation_input_tokens")):
+        tokens["input"] = inp
+    return tokens
+
+
+def qoder_cli_assistant(state, obj, dedupe, ts):
+    """A Qoder CLI assistant line (METRICS 4.19): 4.1 with its own key, no response without usage, `fast` false, no
+    effort or speed facts, `firstMs` null (one line per call, written when the call ends)."""
+    message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
+    if message.get("model") == "<synthetic>":
+        return
+    raw = message.get("id") or obj.get("uuid")
+    if not isinstance(raw, str) or not raw:
+        return
+    key = "qodercli:" + raw
+    owner = dedupe.owner(key)
+    if owner is not None and owner != state.path:
+        return
+    if owner is None:
+        dedupe.claim(key, state.path)
+    usage = message.get("usage")
+    stop = message.get("stop_reason")
+    start = state.pending
+    resp = state.responses.get(key)
+    tokens = qoder_cli_tokens(usage) if isinstance(usage, dict) else None
+    if tokens is not None and tokens["input"] == 0 and tokens["output"] == 0:
+        tokens = None
+    if tokens is not None:
+        if resp is None:
+            emit(state, key, state.pending, ts, tokens, message.get("model"), stop is not None)
+            state.pending, state.precise = None, False
+            resp = state.responses[key]
+        else:
+            resp["endMs"] = max(resp["endMs"], ts)
+            for f in TOKEN_FIELDS:
+                resp[f] = max(resp[f], tokens[f])
+            resp["model"] = message.get("model") or resp["model"]
+            resp["final"] = resp["final"] or stop is not None
+            note_completed(state, resp)
+        state.model = resp["model"] or state.model
+    else:
+        if resp is not None:
+            resp["final"] = resp["final"] or stop is not None
+            note_completed(state, resp)
+        state.pending, state.precise = None, False
+        if isinstance(message.get("model"), str) and message["model"]:
+            state.model = message["model"]
+    content = message.get("content") if isinstance(message.get("content"), list) else []
+    has_tool_use = any(isinstance(b, dict) and b.get("type") == "tool_use" for b in content)
+    if stop == "tool_use" or (stop is None and has_tool_use):
+        state.phase, state.in_flight = "tools", None
+    elif stop is None or stop == "pause_turn":
+        begin = resp["startMs"] if resp is not None else start
+        state.phase, state.in_flight = "generating", begin if begin is not None else ts
+    else:
+        state.phase, state.in_flight = "idle", None
 
 
 ZSTD_MAGIC = 0xFD2FB528
@@ -3553,13 +3622,17 @@ def thinking_groups(agents):
 
 
 def perf_parents(states):
-    """6.7 parent links (OpenClaw windows link inside their database, 4.14; Hermes Agent has none, 4.15)."""
-    parents = resolve_parents([s for s in states if s.source not in ("openclaw", "hermes", "antigravity", "devin")])
+    """6.7 parent links (OpenClaw windows link inside their database, 4.14; Hermes Agent has none, 4.15; Qoder IDE
+    sessions name their parent, 4.18)."""
+    parents = resolve_parents([s for s in states if s.source not in ("openclaw", "hermes", "antigravity", "devin",
+                                                                      "qoder")])
     for s in states:
         if s.source == "openclaw":
             parents[s.path] = s.parent_session
         elif s.source in ("hermes", "devin"):
             parents[s.path] = None
+        elif s.source == "qoder":
+            parents[s.path] = s.parent_id
     ag = [s for s in states if s.source == "antigravity"]
     if ag:
         parents.update(antigravity_parents(ag))
@@ -3671,6 +3744,12 @@ def check_fixtures():
     if dr:
         failures += check_droid(root, dr)
         failures += check_traces(root, expected, dr["traces"])
+    qc = expected.get("qoderCli")
+    if qc:
+        found = sorted(os.path.relpath(p, root).replace(os.sep, "/") for p in discover(fixture_qoder_cli_root(root)))
+        if found != qc["discover"]:
+            failures.append("qoderCli discover: expected %r got %r" % (qc["discover"], found))
+        failures += check_traces(root, expected, qc["traces"])
     hist_path = os.path.join(root, "history-expected.json")
     if os.path.exists(hist_path):
         hist = json.load(open(hist_path, encoding="utf-8"))
@@ -3678,6 +3757,7 @@ def check_fixtures():
         want = hist["days"]
         if json.loads(json.dumps(got)) != want:
             failures.append("history: expected %s got %s" % (json.dumps(want)[:300], json.dumps(got)[:300]))
+        failures += qoder.check_cli_history(root, json.loads(json.dumps(got)))
         import perf_score
         if not perf_score.close(json.loads(json.dumps(perf)), hist["perf"]):
             failures.append("history perf: expected %s got %s" % (json.dumps(hist["perf"])[:300],
@@ -3734,6 +3814,7 @@ def check_fixtures():
     failures += ["unpriced: " + e for e in diagnostics.check_cases()]
     failures += ["harnesses: " + e for e in harnesses.check_fixtures(root)]
     failures += devin.check_fixtures(root)
+    failures += qoder.check_fixtures(root)
     attribution = json.load(open(os.path.join(root, "model-attribution-cases.json"), encoding="utf-8"))
     failures += ["model attribution: " + e for e in check_model_attribution(attribution)]
     created = sorted(set(tree()) - set(files_before))
@@ -4342,11 +4423,18 @@ def fixture_droid_root(root):
     return droid_root(os.path.join(root, "droid"))
 
 
+def fixture_qoder_cli_root(root):
+    """The fixture folder `qoder-cli` plays a Qoder CLI config folder (`~/.qoder`): its root is qoder-cli/projects."""
+    return qoder.cli_location(os.path.join(root, "qoder-cli"))
+
+
 def fixture_source(rel):
     if rel.startswith("openclaw/") and "/codex-home/sessions/" in rel:
         return "codex"
     if rel.startswith("droid/"):
         return "droid"
+    if rel.startswith("qoder-cli/"):
+        return "qoderCli"
     for prefix, source in (("codex/", "codex"), ("dsh/", "deepseek"), ("gemini/", "gemini"), ("omp/", "omp"), ("pi/", "pi"),
                            ("workbuddy/.workbuddy/", "workbuddy"), ("workbuddy/.workbuddy-ai/", "workbuddyAi")):
         if rel.startswith(prefix):
@@ -4418,7 +4506,8 @@ def fixture_history(root, expected, config=HISTORY_PRICES):
                                          openclaw_dbs=[db for r in fixture_openclaw_dirs(copy) for db in
                                                        discover_openclaw(r)],
                                          hermes_dirs=fixture_hermes_dirs(copy), hermes_tz=hermes_zone(expected),
-                                         droid_roots=[fixture_droid_root(copy)], perf_out=agents),
+                                         droid_roots=[fixture_droid_root(copy)], perf_out=agents,
+                                         qoder_cli_roots=[fixture_qoder_cli_root(copy)]),
                              tz=timezone.utc, day_pricing=fixture_pricing(root, config))
         return days, perf_history(agents, timezone.utc)
 
@@ -4472,7 +4561,8 @@ def discover(root, limit=20_000, deepseek=False, codex=False):
 
 
 def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
-                  limit=20_000, include_archived=False, pi_dirs=(), openclaw_dbs=(), codex_roots=None, droid_roots=()):
+                  limit=20_000, include_archived=False, pi_dirs=(), openclaw_dbs=(), codex_roots=None, droid_roots=(),
+                  qoder_cli_roots=()):
     """(time, path, source, root) of every discovered file and Antigravity or OpenClaw database, in startup order (5);
     the root (omp root or WorkBuddy `projects`) decides sub-agents by folder structure. `codex_roots` replaces the
     automatic Codex roots (the Codex setting); by default they are `codex_root` and the Codex homes OpenClaw keeps next
@@ -4495,6 +4585,7 @@ def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=()
     files += [(p, s, r) for s, r in wb_roots for p in discover_workbuddy(r, limit=limit)]
     files += [(p, "openclaw", None) for p in OrderedDict.fromkeys(openclaw_dbs)]
     files += [(p, "droid", None) for r in OrderedDict.fromkeys(droid_roots) for p in discover_droid(r, limit=limit)]
+    files += [(p, "qoderCli", None) for r in OrderedDict.fromkeys(qoder_cli_roots) for p in discover(r, limit=limit)]
     timed = {(ag_mtime(p) if s in ("antigravity", "openclaw") else droid_mtime(p) if s == "droid"
               else os.path.getmtime(p), p, s, r) for p, s, r in files}
     return sorted(timed, key=lambda t: (t[0], t[1]))
@@ -4502,14 +4593,16 @@ def startup_files(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=()
 
 def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None, devin_locations=()):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), agents_out=None, devin_locations=(),
+               qoder_locations=(), qoder_cli_roots=()):
     """Today's responses as the engine seeds them (the `--dump-today` rows), with files and bytes read; `agents_out`
     receives the parser state of every seeded agent (METRICS 6.9)."""
     index = pricing.Index(pricing.load(table))
     now = datetime.now().astimezone()
     today_start = int(now.replace(hour=0, minute=0, second=0, microsecond=0).timestamp() * 1000)
     files = startup_files(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, pi_dirs=pi_dirs,
-                          openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, droid_roots=droid_roots)
+                          openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, droid_roots=droid_roots,
+                          qoder_cli_roots=qoder_cli_roots)
     dedupe = Deduper()
     rows, read_files, read_bytes = [], 0, 0
     for mtime, path, source, root in files:
@@ -4575,28 +4668,31 @@ def today_rows(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
             rows.append(dict(record, source=source, agentId=agent,
                              costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
                              **harness_modes[record["key"]]))
-    devin_agents = devin.collect(devin_locations, since_ms=today_start - 15 * 60_000)
-    if agents_out is not None:
-        agents_out += devin_agents.values()
-    for agent in devin_agents.values():
-        for record in agent.responses.values():
-            if record["endMs"] >= today_start:
-                rows.append(dict(record, source="devin", agentId=agent.id, requestCount=1,
-                                 costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
-                                 effort=None, speed=None))
+    for module, locations in ((devin, devin_locations), (qoder, qoder_locations)):
+        db_agents = module.collect(locations, since_ms=today_start - 15 * 60_000)
+        if agents_out is not None:
+            agents_out += db_agents.values()
+        for agent in db_agents.values():
+            for record in agent.responses.values():
+                if record["endMs"] >= today_start:
+                    rows.append(dict(record, source=agent.source, agentId=agent.id, requestCount=1,
+                                     costMicroUsd=index.price(record) if has_day(record["endMs"]) else None,
+                                     effort=None, speed=None))
     rows.sort(key=lambda r: (r["endMs"], r["key"]))
     return rows, read_files, read_bytes
 
 
 def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), ag_stores=(), wb_roots=(),
                table=pricing.TABLE, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(), openclaw_dbs=(),
-               codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None, devin_locations=()):
+               codex_roots=None, hermes_dirs=(), droid_roots=(), now_ms=None, devin_locations=(), qoder_locations=(),
+               qoder_cli_roots=()):
     started = time.time()
     seeded = []
     rows, read_files, read_bytes = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores,
                                               wb_roots, table, zcode_root, kimi_root, grok_root, pi_dirs, openclaw_dbs,
                                               codex_roots, hermes_dirs, droid_roots, agents_out=seeded,
-                                              devin_locations=devin_locations)
+                                              devin_locations=devin_locations, qoder_locations=qoder_locations,
+                                              qoder_cli_roots=qoder_cli_roots)
     for r in rows:
         print(json.dumps(r, ensure_ascii=False, separators=(",", ":")))
     now = now_ms if now_ms is not None else int(time.time() * 1000)
@@ -4618,14 +4714,14 @@ def dump_today(codex_root, claude_root, dsh_root, gemini_dirs=(), omp_dirs=(), a
 def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), omp_dirs=(), ag_stores=(),
                 wb_roots=(), include_archived=True, zcode_root=None, kimi_root=None, grok_root=None, pi_dirs=(),
                 openclaw_dbs=(), codex_roots=None, hermes_dirs=(), hermes_tz=None, droid_roots=(), droid_memory=None,
-                droid_skipped=None, perf_out=None, devin_locations=()):
+                droid_skipped=None, perf_out=None, devin_locations=(), qoder_locations=(), qoder_cli_roots=()):
     """Parses every log completely (METRICS 8) and returns all responses with their source and agent. A Droid session
     whose parent counters are unknown is skipped (listed in `droid_skipped`); `droid_memory` keeps the signatures of
     unreadable parent sidecars from one analysis to the next (METRICS 4.16 Own counters). `perf_out` receives every
     agent's completions for the performance history (METRICS 6.11)."""
     files = startup_files(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                           limit=10 ** 9, include_archived=include_archived, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
-                          codex_roots=codex_roots, droid_roots=droid_roots)
+                          codex_roots=codex_roots, droid_roots=droid_roots, qoder_cli_roots=qoder_cli_roots)
     dedupe = Deduper(limit=10 ** 9)
     out = []
     for _, path, source, root in files:
@@ -4666,6 +4762,7 @@ def collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs=(), 
             perf_out += perf_agents(hs.agents.values())
     collected = harnesses.collect(zcode_root, kimi_root, grok_root)
     collected += devin.records(devin_locations)
+    collected += qoder.records(qoder_locations)
     out += collected
     if perf_out is not None:
         by_agent = OrderedDict()
@@ -4778,6 +4875,13 @@ def main():
     parser.add_argument("--devin", action="append", default=None,
                         help="Devin CLI location: the cli folder that holds sessions.db or its devin data folder, or @auto "
                              "for the automatic database (repeatable; replaces the automatic entry unless @auto is given)")
+    parser.add_argument("--qoder", action="append", default=None,
+                        help="Qoder IDE location: its data folder, SharedClientCache folder or the folder that holds "
+                             "local.db, or @auto for both editions' databases (repeatable; replaces the automatic entry "
+                             "unless @auto is given)")
+    parser.add_argument("--qoder-cli", action="append", default=None,
+                        help="Qoder CLI location: a config folder (~/.qoder) or its projects folder, or @auto for the "
+                             "automatic roots (repeatable; replaces the automatic entry unless @auto is given)")
     parser.add_argument("--write-history-fixture", action="store_true")
     parser.add_argument("--prices", default=pricing.TABLE, help="price table for --dump-history (METRICS 9)")
     parser.add_argument("--dump-unpriced", action="store_true", help="unpriced diagnostics text (METRICS 9.10)")
@@ -4814,6 +4918,9 @@ def main():
     codex_roots = [args.codex] if args.codex else None
     droid_roots = [droid_root(setting=args.droid)] if args.droid else [droid_root(home)]
     devin_locations = args.devin or ["@auto"]
+    qoder_locations = args.qoder or ["@auto"]
+    qoder_cli_roots = list(OrderedDict.fromkeys(root for location in args.qoder_cli or ["@auto"] for root in (
+        qoder.cli_roots() if location == "@auto" else [qoder.cli_location(location)])))
     if args.write_history_fixture:
         write_history_fixture()
         return
@@ -4833,14 +4940,16 @@ def main():
             rows, _, _ = today_rows(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                                     args.prices, zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs,
                                     openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                                    droid_roots=droid_roots, devin_locations=devin_locations)
+                                    droid_roots=droid_roots, devin_locations=devin_locations,
+                                    qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots)
             parts = diagnostics.live_parts([(r["source"], r) for r in rows], first)
         else:
             parts = diagnostics.history_parts(daily_history(
                 collect_all(codex_root, claude_root, dsh_root, opencode_db, gemini_dirs, omp_dirs, ag_stores, wb_roots,
                             zcode_root=zcode_root, kimi_root=kimi_root, grok_root=grok_root, pi_dirs=pi_dirs,
                             openclaw_dbs=openclaw_dbs, codex_roots=codex_roots, hermes_dirs=hermes_dirs,
-                            droid_roots=droid_roots, devin_locations=devin_locations),
+                            droid_roots=droid_roots, devin_locations=devin_locations,
+                            qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots),
                 day_pricing=pricing.DayPricing([pricing.load(args.prices)])))
         dump_unpriced(parts, args.prices, view, first, last, args.source)
         return
@@ -4850,7 +4959,8 @@ def main():
                                          ag_stores, wb_roots, zcode_root=zcode_root, kimi_root=kimi_root,
                                          grok_root=grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs,
                                          codex_roots=codex_roots, hermes_dirs=hermes_dirs, droid_roots=droid_roots,
-                                         perf_out=agents, devin_locations=devin_locations),
+                                         perf_out=agents, devin_locations=devin_locations,
+                                         qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots),
                              tz=timezone.utc if args.utc else None,
                              day_pricing=pricing.DayPricing([pricing.load(args.prices)]))
         for row in rows:
@@ -4863,7 +4973,8 @@ def main():
     elif args.dump_today:
         dump_today(codex_root, claude_root, dsh_root, gemini_dirs, omp_dirs, ag_stores, wb_roots, args.prices,
                    zcode_root, kimi_root, grok_root, pi_dirs=pi_dirs, openclaw_dbs=openclaw_dbs, codex_roots=codex_roots,
-                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now, devin_locations=devin_locations)
+                   hermes_dirs=hermes_dirs, droid_roots=droid_roots, now_ms=args.now, devin_locations=devin_locations,
+                   qoder_locations=qoder_locations, qoder_cli_roots=qoder_cli_roots)
     else:
         parser.print_help()
 

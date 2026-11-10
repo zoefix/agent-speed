@@ -9,6 +9,7 @@
 #include "agentspeed/location_lists.hpp"
 #include "agentspeed/locations.hpp"
 #include "agentspeed/opencode.hpp"
+#include "agentspeed/qoder.hpp"
 
 // METRICS 2.1 Editing: adding (in the rule order of the spec), removing and the same-location keys.
 namespace agentspeed {
@@ -29,6 +30,8 @@ std::string namedRoot(const std::string& path, RootFamily list) {
         case RootFamily::Hermes: return path;
         // A Devin data folder and its `cli` folder name one `sessions.db`.
         case RootFamily::Devin: return devin::Root::location(path).databaseNow().value_or(fsx::join(path, devin::kDatabaseName));
+        // A Qoder IDE data folder, its `SharedClientCache` folder and its `cache/db` folder name one `local.db`.
+        case RootFamily::Qoder: return qoder::databaseOf(path).value_or(qoder::expectedDatabaseOf(path));
         default: return userRoot(path, list);
     }
 }

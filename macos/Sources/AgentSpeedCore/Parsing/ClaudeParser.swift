@@ -1,13 +1,23 @@
 import Foundation
 
-/// Per-file Claude Code / Claude Desktop state machine (METRICS 4.1).
+/// Per-file Claude Code / Claude Desktop state machine (METRICS 4.1), which also reads Qoder CLI's transcripts with
+/// the differences of METRICS 4.19.
 struct ClaudeParser: Sendable {
+    enum Variant: Sendable {
+        case claude
+        /// Qoder CLI: source `qoderCli`, its own keys, no response without usage, no `api-request`, execution modes or
+        /// actions.
+        case qoderCli
+    }
+
     static let syntheticModel = "<synthetic>"
+    static let qoderKeyPrefix = "qodercli:"
     /// Repeated lines of one message are adjacent, so a short memory of recent keys is enough to merge them.
     static let mergeMemory = 1024
 
     let agentId: String
     let fileID: FileID
+    let variant: Variant
     private(set) var state: AgentState
 
     private var sourceDecided = false
@@ -15,6 +25,8 @@ struct ClaudeParser: Sendable {
     private var preciseStart = false
     private var responses: [String: ResponseRecord] = [:]
     private var responseOrder: [String] = []
+    /// Qoder CLI keys this file claimed with a line that had no usage (no response yet).
+    private var silentKeys: Set<String> = []
     /// Ultracode (EXECUTION-MODES, Claude Code): on for the session between enter and exit markers, and for one turn
     /// after a workflow keyword until the next prompt.
     private var ultraSession = false
@@ -23,11 +35,15 @@ struct ClaudeParser: Sendable {
     private var latestModes: ExecutionModes = .empty
     private var lineEffort: ExecutionModeFact?
 
-    init(agentId: String, fileID: FileID) {
+    init(agentId: String, fileID: FileID, variant: Variant = .claude) {
         self.agentId = agentId
         self.fileID = fileID
+        self.variant = variant
         let components = agentId.split(separator: "/", omittingEmptySubsequences: true)
-        state = AgentState(source: .claudeCode, isSubagent: components.dropLast().contains("subagents"))
+        state = AgentState(source: variant == .qoderCli ? .qoderCli : .claudeCode,
+                           isSubagent: components.dropLast().contains("subagents"))
+        // Every Qoder CLI file is `qoderCli`; `entrypoint` is not used (METRICS 4.19).
+        sourceDecided = variant == .qoderCli
     }
 
     mutating func noteMalformedLine() {
@@ -72,6 +88,10 @@ struct ClaudeParser: Sendable {
         }
         if let cwd = line.cwd { state.setProject(fromWorkingDirectory: cwd) }
         if line.isSidechain { state.isSubagent = true }
+        if variant == .qoderCli {
+            consumeQoder(line, at: timestamp, deduper: &deduper, emit: emit)
+            return
+        }
         let ultracode = ultraSession || ultraTurn
         switch line.attachment {
         case .ultraEffortEnter?: ultraSession = true
@@ -188,7 +208,102 @@ struct ClaudeParser: Sendable {
         responseOrder.append(key)
         guard responseOrder.count > Self.mergeMemory * 2 else { return }
         let evicted = responseOrder.prefix(responseOrder.count - Self.mergeMemory)
-        for old in evicted { responses[old] = nil }
+        for old in evicted {
+            responses[old] = nil
+            silentKeys.remove(old)
+        }
         responseOrder.removeFirst(evicted.count)
+    }
+
+    // MARK: - Qoder CLI (METRICS 4.19)
+
+    /// 4.1's line table without `api-request` (any other line only updates `lastLineMs`), and without actions.
+    private mutating func consumeQoder(_ line: ClaudeLine, at timestamp: Int64, deduper: inout Deduper,
+                                       emit: (ResponseUpsert) -> Void) {
+        switch line.type {
+        case .user:
+            if line.isInterrupt || line.toolEndsTurn {
+                state.setPhase(.idle, at: timestamp)
+                pendingStartMs = nil
+                preciseStart = false
+            } else {
+                if !preciseStart { pendingStartMs = timestamp }
+                state.setPhase(.generating, at: timestamp, inFlightStartMs: pendingStartMs)
+            }
+        case .assistant:
+            consumeQoderAssistant(line, at: timestamp, deduper: &deduper, emit: emit)
+        case .apiRequest, .attachment, .other:
+            break
+        }
+    }
+
+    /// Claude's tokens except `input`: Qoder's `input_tokens` already includes the cache when it covers it. Nil when
+    /// the line has no usage, or its input and output are both 0.
+    static func qoderUsage(_ line: ClaudeLine) -> TokenUsage? {
+        var usage = line.usage
+        if line.inputTokens >= usage.cachedInput + usage.cacheWriteInput { usage.input = line.inputTokens }
+        return usage.input == 0 && usage.output == 0 ? nil : usage
+    }
+
+    /// An assistant line: keyed `qodercli:` + `message.id`, else `uuid`. Without usage it creates no response but claims
+    /// its key, sets the model and consumes the pending start; `firstMs` null, `fast` false, no execution modes.
+    private mutating func consumeQoderAssistant(_ line: ClaudeLine, at timestamp: Int64, deduper: inout Deduper,
+                                                emit: (ResponseUpsert) -> Void) {
+        guard line.model != Self.syntheticModel, let raw = line.messageId ?? line.uuid else { return }
+        let key = Self.qoderKeyPrefix + raw
+        let claim = deduper.claim(key, for: fileID)
+        // Another file's message is copied history (METRICS 3.5).
+        guard claim != .otherFile else { return }
+        let hasStopReason = line.stopReason != .none
+        let start = pendingStartMs
+        var record = claim == .sameFile ? responses[key] : nil
+        if let usage = Self.qoderUsage(line) {
+            let next: ResponseRecord
+            let isCompletion: Bool
+            if var existing = record {
+                existing.endMs = max(existing.endMs, timestamp)
+                existing.usage = existing.usage.merged(with: usage)
+                if let model = line.model { existing.model = model }
+                existing.isFinal = existing.isFinal || hasStopReason
+                next = existing
+                isCompletion = false
+            } else {
+                next = ResponseRecord(key: key, source: .qoderCli, agentId: agentId, model: line.model,
+                                      startMs: pendingStartMs, endMs: timestamp, usage: usage, isFinal: hasStopReason)
+                let wasSilent = silentKeys.remove(key) != nil
+                isCompletion = claim == .new || wasSilent
+                pendingStartMs = nil
+                preciseStart = false
+                if !wasSilent { remember(key) }
+            }
+            responses[key] = next
+            record = next
+            if let model = next.model { state.model = model }
+            emit(ResponseUpsert(record: next, isCompletion: isCompletion))
+        } else {
+            if var existing = record, hasStopReason, !existing.isFinal {
+                existing.isFinal = true
+                responses[key] = existing
+                emit(ResponseUpsert(record: existing, isCompletion: false))
+            }
+            pendingStartMs = nil
+            preciseStart = false
+            if let model = line.model { state.model = model }
+            if claim == .new {
+                silentKeys.insert(key)
+                remember(key)
+            }
+        }
+        switch line.stopReason {
+        case .toolUse:
+            state.setPhase(.tools, at: timestamp)
+        case .none where line.hasToolUse:
+            state.setPhase(.tools, at: timestamp)
+        case .none, .pauseTurn:
+            let begin = record.map(\.startMs) ?? start
+            state.setPhase(.generating, at: timestamp, inFlightStartMs: begin ?? timestamp)
+        case .other:
+            state.setPhase(.idle, at: timestamp)
+        }
     }
 }

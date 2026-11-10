@@ -77,6 +77,9 @@ Mode changes affect their native scope and time, not earlier responses. Upserts 
 - Devin: no effort and no speed are recorded (METRICS 4.17). The CLI's thinking level (cycled with Alt+T) is not known
   to be stored with a call; `agent.model` of `~/.config/devin/config.json` is a model selection; `swe-1-6-fast`, `…-max` and
   `adaptive` are model names or routing, not tiers; `agent_mode` is a permission mode.
+- Qoder IDE and Qoder CLI: no effort and no speed are recorded (METRICS 4.18, 4.19). The IDE's rows and the CLI's
+  assistant lines name the selected model tier (`auto`, `lite`, `efficient`, `performance`, `ultimate`), which is a
+  routing choice, not a reasoning effort; the CLI's `runtime-config.reasoningEffort` was null in every observed run.
 
 ## Reasoning effort and speed
 
@@ -230,6 +233,8 @@ facts, and one that names no effort has no effort facts.
   tier fact. Current: the context, so a call shows its effort and tier as soon as its line is read.
 - **Devin** (METRICS 4.17): no facts and no current or configured values. The CLI's rows name no effort or tier, and
   model ids are kept as models.
+- **Qoder IDE, Qoder CLI** (METRICS 4.18, 4.19): no facts and no current or configured values. Tiers are kept as
+  models.
 - **Gemini CLI** (METRICS 4.6): no facts. The session file has token counts for thoughts but no level, `logs.json`
   has no settings, and OpenTelemetry leaves `thinkingConfig` out; `tokens.thoughts` says that a response thought, not
   how hard. It has no tier either: nothing in its code selects one. Only a configured effort exists.
@@ -377,6 +382,7 @@ and the mode CSV keep it unknown. `configured` stays forbidden in reports.
 | Hermes Agent | session-current; configured `agent.reasoning_effort` | configured `agent.service_tier` only | yes |
 | Gemini CLI | configured only | no local data | yes |
 | Devin | no local data | no local data | yes |
+| Qoder IDE, Qoder CLI | no local data | no local data | yes |
 
 What would settle the rules checked only against shipped code:
 

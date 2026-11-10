@@ -404,8 +404,8 @@ TEST(RelayEndToEnd, ServesTheFixturesAsTheDesktopReadsThem) {
     EXPECT_EQ(sources.size(), MonitorConfig::allSources().size());
     for (const auto& s : sources) {
         const auto id = *s["source"].string();
-        // The harness and Devin fixtures are not laid out in the fake home.
-        const bool fixtureSource = id != "zcode" && id != "kimi" && id != "grokBuild" && id != "devin";
+        // The harness, Devin and Qoder IDE fixtures are not laid out in the fake home.
+        const bool fixtureSource = id != "zcode" && id != "kimi" && id != "grokBuild" && id != "devin" && id != "qoder";
         EXPECT_EQ(s["available"].isTrue(), fixtureSource) << id;
         if (id == "antigravity") {
             EXPECT_TRUE(s["unsupported"].isTrue());

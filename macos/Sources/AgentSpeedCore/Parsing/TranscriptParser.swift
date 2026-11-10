@@ -21,10 +21,12 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     case pi
     /// Factory Droid: a session transcript read with its settings file (METRICS 4.16).
     case droid
+    /// Qoder CLI: Claude Code's transcript format, read by the Claude parser with its own rules (METRICS 4.19).
+    case qoderCli
 
     /// Nil for sources that are not read from transcript files: OpenCode, ZCode and OpenClaw keep databases
     /// (`OpencodeSource`, `ZcodeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
-    /// (`HermesSource`); Devin reads a database and event files together (`DevinSource`).
+    /// (`HermesSource`); Devin and Qoder IDE read databases (`DevinSource`, `QoderSource`).
     init?(_ source: SourceKind) {
         switch source {
         case .codex: self = .codex
@@ -39,7 +41,8 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: self = .grokBuild
         case .pi: self = .pi
         case .droid: self = .droid
-        case .opencode, .zcode, .openclaw, .hermes, .devin: return nil
+        case .qoderCli: self = .qoderCli
+        case .opencode, .zcode, .openclaw, .hermes, .devin, .qoder: return nil
         }
     }
 
@@ -58,6 +61,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: [.grokBuild]
         case .pi: [.pi]
         case .droid: [.droid]
+        case .qoderCli: [.qoderCli]
         }
     }
 
@@ -66,7 +70,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     var names: TranscriptNames {
         switch self {
         case .codex: .codexSession
-        case .claude: .jsonl
+        case .claude, .qoderCli: .jsonl
         case .dsh: .dshSession
         case .gemini: .geminiSession
         case .omp: .ompSession
@@ -160,6 +164,7 @@ struct TranscriptParser: Sendable {
         switch family {
         case .codex: codex = CodexParser(agentId: agentId, fileID: fileID)
         case .claude: claude = ClaudeParser(agentId: agentId, fileID: fileID)
+        case .qoderCli: claude = ClaudeParser(agentId: agentId, fileID: fileID, variant: .qoderCli)
         case .dsh: dsh = DshParser(agentId: agentId, fileID: fileID)
         case .gemini: gemini = GeminiParser(agentId: agentId, fileID: fileID)
         case .omp: omp = OmpParser(agentId: agentId, fileID: fileID, root: root)
@@ -186,7 +191,7 @@ struct TranscriptParser: Sendable {
     func decode(_ bytes: UnsafeRawBufferPointer, offset: Int64 = 0) -> DecodedLine? {
         switch family {
         case .codex: .codex(CodexLineExtractor.extract(bytes))
-        case .claude: .claude(ClaudeLineExtractor.extract(bytes))
+        case .claude, .qoderCli: .claude(ClaudeLineExtractor.extract(bytes))
         case .dsh: .dsh(DshLineExtractor.extract(bytes))
         case .gemini:
             .gemini(gemini?.isDocument == true ? GeminiLineExtractor.extractDocument(bytes) : GeminiLineExtractor.extract(bytes))
@@ -389,7 +394,7 @@ enum TranscriptDecoder {
         switch family {
         case .codex:
             return extract(CodexLineExtractor.extract, reader: &reader, family: family, tools: readsTools, wrap: DecodedLines.codex)
-        case .claude:
+        case .claude, .qoderCli:
             return extract(ClaudeLineExtractor.extract, reader: &reader, family: family, tools: readsTools, wrap: DecodedLines.claude)
         case .dsh:
             return extract(DshLineExtractor.extract, reader: &reader, family: family, tools: false, wrap: DecodedLines.dsh)

@@ -93,6 +93,8 @@ public static class HeatPalette
         SourceKind.Hermes => Rgba.FromHex("#B8860B"),
         SourceKind.Droid => Rgba.FromHex("#9E5F46"),
         SourceKind.Devin => Rgba.FromHex("#557F14"),
+        SourceKind.Qoder => Rgba.FromHex("#B3329D"),
+        SourceKind.QoderCli => Rgba.FromHex("#7E61B6"),
         _ => Neutral,
     };
 

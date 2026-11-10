@@ -1,7 +1,7 @@
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 6,
+  "version": 7,
   "updated": "2026-11-10",
   "currency": "USD",
   "unit": "perMillionTokens",
@@ -4530,6 +4530,26 @@
       "match": "exact",
       "value": "default-1.2",
       "reason": "WorkBuddy legacy slot labelled Claude-4.0-Sonnet; the served model is chosen by Tencent's gateway and not recorded."
+    },
+    {
+      "match": "exact",
+      "value": "lite",
+      "reason": "Qoder model tier; Qoder's service picks the model and its records do not name it."
+    },
+    {
+      "match": "exact",
+      "value": "efficient",
+      "reason": "Qoder model tier; Qoder's service picks the model and its records do not name it."
+    },
+    {
+      "match": "exact",
+      "value": "performance",
+      "reason": "Qoder model tier; Qoder's service picks the model and its records do not name it."
+    },
+    {
+      "match": "exact",
+      "value": "ultimate",
+      "reason": "Qoder model tier; Qoder's service picks the model and its records do not name it."
     }
   ],
   "tests": [
