@@ -939,19 +939,28 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   `0.035 D` clear of her outline over the rows it spans; if it does not fit there, the nearest row (±0.04 … 0.3 D)
   where it overflows least. Rolling digits sampled 5 times a second, size 0.068 D, the unit and the speed title chip
   below; no plate.
-- **Models** (`character.readouts.models`, on by default; user's choice, 2026-11-10): a card directly under the speed
-  title chip, `0.022 D` below it, left edge on the speed's line, listing the orb's running models (METRICS 6.9
-  *Readouts of a set*): one row per model, fastest first — the vendor's accent dot (the model chip's), the model id
-  at `t` in the value token (truncated in the middle beyond `9 t`; the full id in the accessibility label) and its
-  speed at the trailing edge, a whole number of tok/s in tabular digits with the unit `tok/s` once, after the first
-  row's number, in the secondary token (`–` while the model has no timed response yet). At most 4 rows; more
-  models add a fifth, secondary line `character.models.more` (`+3 個模型`). Rows are `0.3 t` apart and reorder with
-  a 0.3 s glide (Reduce Motion: at once); a model that stops running fades out of its row (0.25 s) and the card
-  eases to its new height. The speed always outranks it: when the card does not fit under the speed (her right side
-  crowded), it moves down past the spill-over cards' room (up to 0.3 D) before it hides.
-  Accessibility reads `a11y.orb.models` with one `a11y.orb.modelSpeed` per row (the model alone while it has no
-  speed), joined by `list.separator`, after the cost; the 首字 row adds `a11y.orb.latency` (the shown value with its
-  unit) after the 性能 reading.
+- **Models** (`character.readouts.models`, on by default; user's choice, 2026-11-10): a card under the speed title
+  chip, `0.022 D` below it, listing the orb's running models (METRICS 6.9 *Readouts of a set*): one row per model,
+  fastest first — the vendor's accent dot (the theme color of an installed character of the model's vendor, CHARACTERS
+  7, else of the catalog's, else the secondary token; Increase Contrast: the system highlight color; a model run by
+  several agents takes the vendor of its fastest agent), the model's **display name** at `t` in the value token, and
+  its speed at the trailing edge, a whole number of tok/s in tabular digits with the unit `tok/s` once, after the
+  first row's number when it has one, in the secondary token (`–` while the model has no timed response yet). The
+  display name is the id without a trailing date (`-YYYYMMDD` or `-YYYY-MM-DD`: `claude-sonnet-4-5-20250929` →
+  `claude-sonnet-4-5`; user's choice, 2026-11-10), truncated at its end with `…` beyond the name width. At most 4
+  rows; more models add a fifth, secondary line `character.models.more` (`+3 個模型`), counting every running model
+  not drawn. Rows are `0.3 t` apart and reorder with a 0.3 s glide (Reduce Motion: at once); a model that stops
+  running fades out of its row (0.25 s) and the card eases to its new height.
+  - **Place and width** (user's choice, 2026-11-10: shorten before hiding). Its left edge is on the speed's line, or
+    further right where her outline under the speed is wider (skirt, hair), `0.035 D` clear of it as the spill-over
+    cards keep. The name width is `9 t`, narrowed as far as `4 t` to fit the room to the orb's edge; below that the
+    rows drop the names and keep the dot and the speed. Only when even that does not fit does the card move down
+    past the spill-over cards' room (up to 0.3 D below them), and then hide. It moves or hides after it has not fit
+    for 0.6 s, comes back after it has fit with `0.04 D` to spare for 1.2 s, and moves back up from the lower place
+    after 4 s; a change of place fades out and in (0.18 s / 0.3 s) instead of crossing her or another card.
+  - Accessibility reads `a11y.orb.models` with one `a11y.orb.modelSpeed` per running model (the full id; the model
+    alone while it has no speed), every running model, drawn or not, joined by `list.separator`, after the cost; the
+    首字 row adds `a11y.orb.latency` (the shown value with its unit) after the 性能 reading.
 - **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
   model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
   of her that rises under it. With no live model it shows the last one.
