@@ -34,6 +34,8 @@ add_executable(agentspeed_tests
     parser_fixture_test.cpp
     perf_score_test.cpp
     pricing_test.cpp
+    qoder_fixture_test.cpp
+    qoder_source_test.cpp
     report_body_test.cpp
     report_perf_test.cpp
     report_profile_test.cpp

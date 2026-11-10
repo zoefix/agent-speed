@@ -24,6 +24,8 @@ enum class RootFamily {
     Hermes,
     Droid,
     Devin,
+    Qoder,
+    QoderCli,
 };
 
 RootFamily familyOf(SourceKind source);

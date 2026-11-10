@@ -10,7 +10,7 @@
 #include "agentspeed/tz.hpp"
 #include "agentspeed/zcode_set.hpp"
 
-// The database and log sources (METRICS 4.5, 4.10, 4.14, 4.15, 4.17): each keeps its own state and hands the monitor
+// The database and log sources (METRICS 4.5, 4.10, 4.14, 4.15, 4.17, 4.18): each keeps its own state and hands the monitor
 // updates.
 namespace agentspeed {
 
@@ -45,6 +45,7 @@ void Monitor::initSources() {
         hermes_ = std::make_unique<hermes::Source>(l.hermesRoots, deduper_, zone_);
     }
     initDevin();
+    initQoder();
 }
 
 void Monitor::seedSources(std::int64_t todayStartMs) {
@@ -67,6 +68,7 @@ void Monitor::seedSources(std::int64_t todayStartMs) {
         hermesSeeded_ = true;
     }
     seedDevin(todayStartMs);
+    seedQoder(todayStartMs);
 }
 
 bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t todayStartMs) {
@@ -84,6 +86,7 @@ bool Monitor::refreshSources(bool discover, std::int64_t nowMs, std::int64_t tod
     if (openClaw_ && openClawSeeded_) changed |= applyOpenClaw(openClaw_->refresh(discover), false);
     if (hermes_ && hermesSeeded_) changed |= applyHermes(hermes_->refresh(discover), false);
     changed |= refreshDevin(discover, todayStartMs);
+    changed |= refreshQoder(discover, todayStartMs);
     return changed;
 }
 
@@ -208,6 +211,7 @@ std::pair<std::string, bool> Monitor::sourceStatus(SourceKind kind) const {
             return firstOf(l.openCodeRoots, [](const std::string& r) { return fsx::isRegularFile(opencode::Database::databasePath(r)); });
         case SourceKind::OpenClaw: return firstOf(l.openClawRootsNow(environment_, home_), paths::openClawExists);
         case SourceKind::Devin: return devinStatus();
+        case SourceKind::Qoder: return qoderStatus();
         case SourceKind::Hermes: {
             std::vector<std::string> homes;
             for (const auto& root : l.hermesRoots) homes.push_back(root.path);

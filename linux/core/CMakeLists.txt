@@ -68,6 +68,7 @@ add_library(agentspeed_base STATIC
     src/mode_context.cpp
     src/monitor.cpp
     src/monitor_devin.cpp
+    src/monitor_qoder.cpp
     src/monitor_hosts.cpp
     src/monitor_remote.cpp
     src/monitor_snapshot.cpp
@@ -84,6 +85,11 @@ add_library(agentspeed_base STATIC
     src/price_book.cpp
     src/price_validator.cpp
     src/pricing.cpp
+    src/qoder_calls.cpp
+    src/qoder_database.cpp
+    src/qoder_history.cpp
+    src/qoder_paths.cpp
+    src/qoder_source.cpp
     src/report/perf.cpp
     src/report/values.cpp
     src/report/json_writer.cpp

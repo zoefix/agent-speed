@@ -17,6 +17,7 @@
 #include "agentspeed/locations.hpp"
 #include "agentspeed/actions.hpp"
 #include "agentspeed/mode_context.hpp"
+#include "agentspeed/qoder_source.hpp"
 #include "agentspeed/remote_feed.hpp"
 #include "agentspeed/snapshot.hpp"
 #include "agentspeed/tailer.hpp"
@@ -225,6 +226,12 @@ private:
     bool refreshDevin(bool discover, std::int64_t todayStartMs);
     bool applyDevin(const devin::Update& update, bool seeded);
     std::pair<std::string, bool> devinStatus() const;
+    // Qoder IDE (monitor_qoder.cpp).
+    void initQoder();
+    void seedQoder(std::int64_t todayStartMs);
+    bool refreshQoder(bool discover, std::int64_t todayStartMs);
+    bool applyQoder(const qoder::Update& update, bool seeded);
+    std::pair<std::string, bool> qoderStatus() const;
     void upsert(const ParsedResponse& response, bool completion, bool seeded);
     std::pair<std::string, bool> sourceStatus(SourceKind kind) const;
 
@@ -254,6 +261,8 @@ private:
     std::unique_ptr<hermes::Source> hermes_;
     std::unique_ptr<devin::Source> devin_;
     std::map<std::string, devin::Agent> devinPushed_;
+    std::unique_ptr<qoder::Source> qoder_;
+    std::map<std::string, qoder::Agent> qoderPushed_;
     std::shared_ptr<const TimeZone> zone_;
     std::map<std::string, std::uint64_t> openClawPushed_, hermesPushed_;
     std::map<std::string, std::unique_ptr<work::ActionReader>> windowActions_;
@@ -279,7 +288,8 @@ private:
     std::unique_ptr<work::ActionReader> makeActions(const std::string& id, SourceKind source);
     void scoreAgents(Snapshot& snap, const std::vector<engine::Response>& recent, const std::vector<engine::Agent>& agents,
                      std::int64_t nowMs);
-    bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false, devinSeeded_ = false;
+    bool openCodeSeeded_ = false, zcodeSeeded_ = false, openClawSeeded_ = false, hermesSeeded_ = false, devinSeeded_ = false,
+         qoderSeeded_ = false;
     const std::int64_t epoch_;
     std::shared_ptr<const report::Counters> reportCounters_ = std::make_shared<report::Counters>();
     std::uint64_t reportCountersVersion_ = 0;

@@ -33,6 +33,8 @@ SourceKind sourceOf(RootFamily family) {
         case RootFamily::Hermes: return SourceKind::Hermes;
         case RootFamily::Droid: return SourceKind::Droid;
         case RootFamily::Devin: return SourceKind::Devin;
+        case RootFamily::Qoder: return SourceKind::Qoder;
+        case RootFamily::QoderCli: return SourceKind::QoderCli;
     }
     return SourceKind::Codex;
 }
@@ -104,6 +106,7 @@ std::string userRoot(const std::string& path, RootFamily family) {
         case RootFamily::Kimi:
         case RootFamily::GrokBuild: return harness::sessionsOf(path);
         case RootFamily::Droid: return droid::rootOf(path);
+        case RootFamily::QoderCli: return qoder::cliProjectsOf(path);
         default: return path;
     }
 }
@@ -132,6 +135,12 @@ std::vector<std::string> automaticRoots(RootFamily list, const LocationLists& li
         case RootFamily::WorkBuddy:
         case RootFamily::WorkBuddyAi: return {paths::workBuddyProjectsOf(main)};
         case RootFamily::Devin: return {paths::normalizeRoot(devin::automaticDatabase(environment, home))};
+        case RootFamily::Qoder: {
+            std::vector<std::string> roots;
+            for (const auto& database : qoder::automaticDatabases(environment, home)) roots.push_back(paths::normalizeRoot(database));
+            return roots;
+        }
+        case RootFamily::QoderCli: return qoder::cliRoots(environment, home);
         default: return {main};
     }
 }
@@ -144,7 +153,9 @@ AutomaticKeys automaticKeys(RootFamily list, const LocationLists& lists, const E
         if (list == RootFamily::OpenCode) named = opencode::Database::databasePath(root);
         if (list == RootFamily::ZCode) named = harness::zcodeDatabase(root);
         if (list == RootFamily::OpenClaw) named = locationKey(root, list);
-        auto key = list == RootFamily::Devin ? devin::Root::database(root).locationKey() : resolvedPath(named);
+        auto key = list == RootFamily::Devin   ? devin::Root::database(root).locationKey()
+                   : list == RootFamily::Qoder ? qoder::Root::database(root).locationKey()
+                                               : resolvedPath(named);
         if (seen.insert(key).second) out.keys.push_back(std::move(key));
     }
     return out;
@@ -171,6 +182,7 @@ SourceLocations SourceLocations::resolve(const LocationLists& lists, const Envir
     l.grokBuildRoots = rootsOf(RootFamily::GrokBuild, harness::sessionsOf);
     l.piRoots = rootsOf(RootFamily::Pi, itself);
     l.droidRoots = rootsOf(RootFamily::Droid, droid::rootOf);
+    l.qoderCliRoots = rootsOf(RootFamily::QoderCli, qoder::cliProjectsOf);
 
     std::vector<std::string> stores;
     for (const auto& entry : lists[RootFamily::Antigravity]) {
@@ -211,6 +223,19 @@ SourceLocations SourceLocations::resolve(const LocationLists& lists, const Envir
         }
     }
 
+    const auto addQoder = [&](qoder::Root root) {
+        if (!root.path.empty() && std::find(l.qoderRoots.begin(), l.qoderRoots.end(), root) == l.qoderRoots.end()) {
+            l.qoderRoots.push_back(std::move(root));
+        }
+    };
+    for (const auto& entry : lists[RootFamily::Qoder]) {
+        if (!entry.automatic) {
+            addQoder(qoder::Root::location(paths::normalizeRoot(entry.path)));
+            continue;
+        }
+        for (const auto& database : qoder::automaticDatabases(environment, home)) addQoder(qoder::Root::database(paths::normalizeRoot(database)));
+    }
+
     for (const auto& entry : lists[RootFamily::Gemini]) {
         const auto roots = entry.automatic ? automaticRoots(RootFamily::Gemini, lists, environment, home) : std::vector<std::string>{entry.path};
         const auto file = entry.automatic ? paths::geminiSettingsOf(roots, environment, home) : geminiSettingsBeside(entry.path);
@@ -249,6 +274,7 @@ std::vector<std::pair<RootFamily, std::string>> SourceLocations::fileRoots() con
     add(RootFamily::GrokBuild, grokBuildRoots);
     add(RootFamily::Pi, pis);
     add(RootFamily::Droid, droidRoots);
+    add(RootFamily::QoderCli, qoderCliRoots);
     return roots;
 }
 
@@ -273,7 +299,8 @@ std::vector<std::string> SourceLocations::hermesFolders() const {
 bool SourceLocations::readsSame(const SourceLocations& other) const {
     return fileRoots() == other.fileRoots() && geminiSettings == other.geminiSettings && openCodeRoots == other.openCodeRoots &&
            zcodeRoots == other.zcodeRoots && openClawRoots == other.openClawRoots && openClawUserRoots == other.openClawUserRoots &&
-           hermesRoots == other.hermesRoots && devinRoots == other.devinRoots && codexAutomatic == other.codexAutomatic && ompAutomatic == other.ompAutomatic &&
+           hermesRoots == other.hermesRoots && devinRoots == other.devinRoots && qoderRoots == other.qoderRoots &&
+           codexAutomatic == other.codexAutomatic && ompAutomatic == other.ompAutomatic &&
            piAutomatic == other.piAutomatic && openClawAutomatic == other.openClawAutomatic;
 }
 

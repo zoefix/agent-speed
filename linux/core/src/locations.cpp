@@ -110,6 +110,8 @@ RootFamily familyOf(SourceKind source) {
         case SourceKind::Hermes: return RootFamily::Hermes;
         case SourceKind::Droid: return RootFamily::Droid;
         case SourceKind::Devin: return RootFamily::Devin;
+        case SourceKind::Qoder: return RootFamily::Qoder;
+        case SourceKind::QoderCli: return RootFamily::QoderCli;
         default: return RootFamily::Claude;
     }
 }
@@ -341,6 +343,8 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         case RootFamily::Hermes: return hermes::home(environment, false, home);
         case RootFamily::Droid: return droid::defaultRoot(home);
         case RootFamily::Devin: return devin::Root::database(devin::automaticDatabase(environment, home)).displayFolder();
+        case RootFamily::Qoder: return qoder::Root::database(qoder::automaticDatabases(environment, home).front()).displayFolder();
+        case RootFamily::QoderCli: return qoder::cliRoots(environment, home).front();
     }
     return {};
 }

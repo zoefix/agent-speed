@@ -8,6 +8,7 @@
 #include <vector>
 
 #include "agentspeed/devin_history.hpp"
+#include "agentspeed/qoder_history.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/history.hpp"
 #include "agentspeed/history_store.hpp"
@@ -76,18 +77,24 @@ private:
     void planOpenClaw(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void planHermes(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void planDevin(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
+    void planQoder(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report);
     void analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report, const std::function<bool()>& cancelled);
     void analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeHermes(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
     void analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
+    void analyzeQoder(Work& work, KeyLedger& ledger, const DayLabeler& labeler, Report& report);
+    // One entry per database session (Devin, Qoder IDE); each database owns its calls' keys.
+    void analyzeSessions(std::vector<DevinSession>& sessions, const char* family, SourceKind source, KeyLedger& ledger,
+                         const DayLabeler& labeler, Report& report);
     void advance(Report& report);
     bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const;
     const StoredFile* previousOf(const std::string& path) const;
     StoredFile& keep(StoredFile file, std::vector<std::uint64_t> owned);
     std::map<std::string, droid::SidecarSignature> droidUnreadableParents_;
     DevinPlanner devinPlanner_;
+    QoderPlanner qoderPlanner_;
 
     Store& store_;
     std::shared_ptr<pricing::PriceBook> prices_;

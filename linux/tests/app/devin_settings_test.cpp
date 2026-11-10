@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
@@ -53,7 +55,13 @@ TEST_F(DevinSettings, SettingsSavedBeforeDevinTurnItOnWithItsAutomaticEntry) {
     EXPECT_FALSE(Preferences().monitorConfig().enabled.contains(SourceKind::Devin)) << "persisted";
 
     SourceLocationsView view(prefs);
-    const auto group = view.groups().back().toMap();
+    const auto groups = view.groups();
+    const auto found = std::find_if(groups.begin(), groups.end(), [](const QVariant& g) {
+        return g.toMap().value(QStringLiteral("list")).toString() == QStringLiteral("devin");
+    });
+    ASSERT_NE(found, groups.end());
+    EXPECT_EQ(found - groups.begin(), 16) << "after Factory Droid";
+    const auto group = found->toMap();
     EXPECT_EQ(group.value(QStringLiteral("list")).toString(), QStringLiteral("devin"));
     EXPECT_EQ(group.value(QStringLiteral("sources")).toStringList(), QStringList{QStringLiteral("devin")});
     EXPECT_EQ(group.value(QStringLiteral("hint")).toString(), QStringLiteral("settings.sources.devinHint"));

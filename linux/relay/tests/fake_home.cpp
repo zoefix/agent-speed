@@ -32,6 +32,7 @@ const std::vector<std::pair<std::string, std::string>> kFolders = {
     {"openclaw", ""},
     {"hermes/home", ".hermes"},
     {"droid", ""},
+    {"qoder-cli", ".qoder"},
 };
 
 bool under(const std::string& path, const std::string& prefix) {
