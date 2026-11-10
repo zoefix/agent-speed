@@ -355,6 +355,9 @@ The readers follow the open-source apps Tokei (cclank/tokei, `usage.30s.py`, 202
 machine, and the endpoints are undocumented. They ship with the caption `settings.quota.unverified` and are fixed from
 user reports ("如果到時候有用戶反饋有問題，我們在修復即可").
 
+Remote hosts read the CLI routes on the host itself (REMOTE 11). That includes the Claude Code bridge, turned on per
+host.
+
 Sources with no quota to show:
 - DeepSeek Harness: a wallet balance, no windows.
 - Pi, oh-my-pi, OpenCode: no subscription quota of their own.

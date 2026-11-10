@@ -21,8 +21,11 @@ DESIGN 13. Status: implemented by the macOS, Windows and Linux desktop apps; pla
 - **The user's SSH.** The system OpenSSH client with the user's configuration, keys, agent and jump hosts. Agent Speed
   stores no password, key or passphrase and never answers a prompt; a host that needs a password or an unknown host
   key fails with a clear status (4.5).
-- **Read-only, no network.** The relay opens files read-only (databases as METRICS 5 says), writes only inside its own
-  folder on the host (4.2), opens no socket and never runs another program.
+- **Read-only, no network** — with the quota exceptions of section 11 (user's choice 2026-11-10). The relay opens files
+  read-only (databases as METRICS 5 says) and writes only inside its own folder on the host (4.2), except the Claude
+  Code status line of a host where the user turned the bridge on (11.3). It opens network connections only for the
+  quota requests of 11.4, which the app's switches allow. It runs another program only as that status line helper,
+  passing the user's previous status line through.
 - **Supported hosts**: Linux on `x86_64` and `aarch64`, any distribution (the relay is a static executable). Other
   systems report `unsupportedSystem` (4.5).
 
@@ -50,6 +53,8 @@ JSON text as a string in the `[General]` group of the app's QSettings file):
 | `enabled` | Off: no connection; the host's history stays visible. |
 | `relayFolder` | Folder on the host for the relay and its cache; `null` = `~/.cache/agent-speed`. Must be `~/…` or absolute, 1–200 bytes of `[A-Za-z0-9._/~-]`, contain no `..` component and no `//`. Anything else is refused like `destination`. |
 
+| `quotaClaudeCli` | The host's Claude Code status line bridge (11.3); absent = false. |
+
 At most **8** hosts. Unknown fields from a newer version are kept. Duplicated destinations are allowed (two users on
 one machine) but get distinct automatic names (`name (2)`).
 
@@ -74,7 +79,9 @@ The network master switch (`spec/NETWORK.md`) also governs SSH: while it is off 
 Removing a host stops its connection immediately and removes it from every orb and board selection (DESIGN 2b, 2c; a
 selection left with no host becomes `all`). Its daily history is kept unless the user ticks *Also delete its usage
 history* in the confirmation (DESIGN 13), which deletes the host's rows (8.3). The relay files on the host are left in
-place (the app may not be able to reach the host); the confirmation says where they are.
+place (the app may not be able to reach the host); the confirmation says where they are. A host whose quota bridge is
+on is first asked to restore its status line (11.3); `remote.quota.removeNote` in the confirmation says what stays
+if it cannot be reached.
 
 ## 3. The relay program
 
@@ -98,6 +105,7 @@ which must equal the build-time digest, and the upload hashes the bytes it sends
 | --- | --- |
 | `agent-speed-relay --version` | Prints one line `agent-speed-relay <app version> protocol <n>` and exits 0. |
 | `agent-speed-relay serve --folder <path>` | Runs the protocol of section 5 on stdin/stdout until stdin closes, then exits 0. `<path>` is its folder (2.1, already expanded by the remote shell); the history cache lives there. |
+| `agent-speed-statusline --folder <path>` | The same executable run under that name (11.3): the status line helper of QUOTAS 5.5, with its files in `<path>/quota/`. Claude Code runs it; it never speaks the protocol. |
 
 Anything else prints a usage line to stderr and exits 2. The relay never reads a terminal, ignores `SIGPIPE` (a write
 error ends it) and exits when stdin reaches end of file, so a dropped connection never leaves it running.
@@ -414,16 +422,101 @@ deduplicate, 7).
   strings with validated, unquoted-safe parts (4.1).
 - The relay executable is the one bundled in the signed app, verified by SHA-256 on the host before it runs (4.2);
   the folder is created with mode 700 and the relay with mode 700.
-- The relay is read-only (1), opens no network connection, executes nothing and writes only `<folder>/history.sqlite`
-  (+ its journal) and `<folder>/zone.tzif`.
+- The relay is read-only (1) and writes only `<folder>/history.sqlite` (+ its journal), `<folder>/zone.tzif`,
+  `<folder>/agent-speed-statusline` and `<folder>/quota/`. Its only exceptions are the quota bridge (11.3), which
+  changes one value of the host's Claude Code settings and restores it, and the quota requests (11.4).
+- A host agent's credential is read on the host, used there for one request to that agent's own vendor, and never
+  sent to the app, logged or written.
 - The app validates every relay line (5.6) and bounds memory per host; a hostile host can show wrong numbers for
   itself but cannot reach files, commands or other hosts' data on the Mac.
 - Nothing about hosts goes to any other service: live reporting sends the same aggregate fields as for local agents
   (METRICS 11), never a host name, destination or path.
 
+## 11. Quotas
+
+Hosts show quotas like this computer (QUOTAS; user's choice 2026-11-10: "遠端主機的小程式也要安排上"). A host is a Linux
+server with command-line agents, so the relay reads the CLI routes only: no Claude Desktop, Devin Desktop or
+browsers, and no key the user pasted into the app.
+
+| Source on a host | Route (QUOTAS) |
+| --- | --- |
+| `codex` | rollout `rate_limits` (3) |
+| `claudeCode` | the status line bridge of the host (11.3), per host, off by default |
+| `grokBuild` | the log (9.2); live when the app's `quotaGrokBuildLive` is on |
+| `kimi`, `gemini`, `droid` | the vendor API with the host's own sign-in (9.5, 9.6, 9.7; Droid's key from the host's `~/.factory/.env` or the SSH command's environment) |
+| `antigravity` | the `agy` language server on the host's loopback (9.4) |
+
+Not on hosts:
+- `claudeDesktop`, `devin`: desktop apps.
+- `zcode`: its key lives in the app's secret store and never leaves this computer.
+- `qoder`, `qoderCli`, `workbuddy`: browser sessions.
+
+### 11.1 Protocol
+
+- `start` gains an optional `quota` object, and the app sends a line `{"t": "quota", "config": {...}}` whenever it
+  changes. The config is `{"sources": [<keys whose quota switch is on>], "network": <networkEnabled>, "grokLive":
+  bool, "claudeBridge": bool}`.
+- The relay answers with one line per source:
+  - `{"t": "quota", "q": {source, observedMs, windows, running, signedIn, status}}` whenever it changes, at most once
+    a second;
+  - `{"t": "quotaRemoved", "source"}` when a source's snapshot goes.
+- `windows` is an array of at most 16 `{kind, name, minutes, usedPercent, resetsAtMs}` (QUOTAS 2, 9.1).
+  - `name` ≤ 64 characters or null.
+  - `kind` one of the QUOTAS kinds.
+  - `minutes` 1–527 040 or null.
+  - `usedPercent` finite, 0–1000.
+  - `resetsAtMs` a time or null.
+- `status` is one of `ok`, `noCredential`, `expired`, `denied`, `failed`, `networkOff`, `noCertificates`,
+  `notRunning`.
+- The bridge reports `{"t": "quotaBridge", "state", "settingsPath"}`, with `state` from QUOTAS 5.4 (`off`,
+  `waiting`, `ok`, `replaced`, `unreadable`, `failed`) and the path abbreviated with `~`.
+- The app validates them by 5.6. An invalid quota line is dropped like any invalid line.
+- An older relay ignores the new types (5.1), and an older app ignores the replies.
+
+### 11.2 Running and signed in
+
+The relay lists `/proc` every 15 s while `sources` is not empty: each process's `exe`, and for script hosts its
+`cmdline`. Its agent processes match METRICS 10.5's rows. Signed in follows QUOTAS 6 and 9.1 with the host's files
+(`$CODEX_HOME/auth.json`, `~/.claude.json` `oauthAccount`, and so on).
+
+### 11.3 Claude Code bridge on a host
+
+- `claudeBridge` comes from the host's `quotaClaudeCli` (2.1, a new boolean field, default false).
+- **Helper.** At start, while it is true, the relay copies itself to `<folder>/agent-speed-statusline`: a temporary
+  file, then rename, only when the bytes differ, mode 700. The upload step's clean-up (4.2) removes only
+  `agent-speed-relay-*` and `.upload-*`, so the helper survives upgrades. Its name selects the helper mode (3.2).
+- **Command**: `'<folder>/agent-speed-statusline' --folder '<folder>'`, with the folder absolute and quoted as
+  QUOTAS 5.2.
+- **Settings file**: `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json`, edited exactly as QUOTAS
+  5.2–5.4. The sidecar and backup are `<folder>/quota/claude-statusline-previous.json` and
+  `claude-settings.backup.json`; the quota file is `<folder>/quota/claude-cli.json`.
+- **Turning off**: `claudeBridge` false, or the host removed from the app, restores as QUOTAS 5.3.
+- **Removing a host** whose bridge is on first connects and turns it off (2.4). If the host cannot be reached, the
+  confirmation says that its status line keeps running the helper in `<folder>` until the bridge is turned off from a
+  new connection, or the user restores `claude-settings.backup.json`.
+
+### 11.4 Requests from the host
+
+- The routes of QUOTAS 9.1 apply on the host: only while `network` is true and the source is in `sources`; only the
+  hosts of NETWORK 9; HTTPS with redirects refused, 10 s, 256 KiB; the same cadence. The relay only asks while the
+  agent runs on the host (11.2).
+- **TLS**: mbedTLS 3, statically linked. The CA certificates are the first that exists of:
+  - `/etc/ssl/certs/ca-certificates.crt`;
+  - `/etc/pki/tls/certs/ca-bundle.crt`;
+  - `/etc/ssl/ca-bundle.pem`;
+  - `/etc/ssl/cert.pem`;
+  - `/etc/pki/ca-trust/extracted/pem/tls-ca-bundle.pem`.
+
+  With none, the status is `noCertificates`.
+- **Proxy**: `https_proxy`, else `HTTPS_PROXY`, from the SSH command's environment (an `http://host:port` proxy, used
+  with `CONNECT`), unless `no_proxy` / `NO_PROXY` lists the host. The Antigravity loopback never uses a proxy.
+- **Budget**: the relay stays below 3.4's 1 % of one core. A request is a few kilobytes every 5 minutes per running
+  agent.
+
 ## 10. Tests
 
-- **Relay**: protocol encoding unit tests; an end-to-end test that runs `agent-speed-relay serve` over the spec
+- **Relay**: protocol encoding unit tests; the quota fixtures of QUOTAS 10 through the relay's readers, its helper
+  mode and its bridge against a temporary home; an end-to-end test that runs `agent-speed-relay serve` over the spec
   fixtures (`spec/fixtures`) as a fake home and checks that its responses and agent states equal
   `parser-expected.json` and its history equals `history-expected.json`.
 - **App**: decoder validation (every rule of 5.6), clock estimation (6), ingestion (prefixing, cross-host

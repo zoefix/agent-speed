@@ -2848,7 +2848,8 @@ with Mica). Sections:
       - `settings.quota.cli.replaced` in the warning style, with the button `settings.quota.cli.reconnect`.
     - Turning it off runs QUOTAS 5.3 at once, without a dialog.
     Storage: `quotaCodex`, `quotaClaudeDesktop`, `quotaClaudeCli` (booleans) and `quotaCliInvite` (`"dismissed"` or
-    absent). Remote hosts (section 13) have no quota switches.
+    absent). Remote hosts use the same source switches for their agents (REMOTE 11); the Claude Code bridge is a
+    switch of each host (section 13).
   - **額度, phase 2** (QUOTAS 9; user's choice 2026-11-10). Each source's group gets its switch after the source
     toggles, with its hint and `settings.quota.unverified` below as the caption (secondary, then tertiary):
     - Grok Build: `settings.quota.grokBuild` (`quotaGrokBuild`, on), and indented under it
@@ -4530,6 +4531,15 @@ disabled while a field is invalid. Saving an enabled host connects it at once.
   tokens (secondary; with today's cost, section 9). A row is a button that opens the Usage History window filtered to
   that host; hover and focus as Sources rows. A disconnected host's row shows its status word instead of the live
   value.
+- **Host quotas** (REMOTE 11; user's choice 2026-11-10). A host row in Dashboard → Hosts adds, for each source on
+  that host with a quota, a sub-line with the source's dot and name (11 pt, secondary), then that source's quota lines
+  as in section 4 *Quota lines*, indented under the name.
+  - The host editor (*Edit…*) has the switch `remote.quota.claudeCli` (the host's `quotaClaudeCli`, off) with the
+    caption `remote.quota.claudeCli.hint`. Turning it on asks first, with `remote.quota.claudeCli.confirm.title` and
+    `.message` (the host's name and the settings path on the host).
+  - The bridge's state shows under the switch with the `settings.quota.cli.*` lines.
+  - The 額度 card of a `character` orb that includes hosts lists host sources too, the header reading
+    `<source> · <host>`.
 - **Agents** — a remote agent's secondary line becomes `model · source · host`; local agents are unchanged. The
   accessibility label adds `remote.a11y.onHost` (host). The score card's facts add the host.
 

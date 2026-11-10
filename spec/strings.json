@@ -7859,5 +7859,41 @@
     "zh-Hans": "%@ 没有在运行",
     "en": "%@ is not running",
     "ja": "%@ は実行されていません"
+  },
+  "remote.quota.claudeCli": {
+    "zh-Hant": "在這台主機接上 Claude Code 狀態列以顯示額度",
+    "zh-Hans": "在这台主机接入 Claude Code 状态栏以显示额度",
+    "en": "Show Claude Code quota through its status line on this host",
+    "ja": "このホストで Claude Code のステータスラインに接続して利用枠を表示"
+  },
+  "remote.quota.claudeCli.hint": {
+    "zh-Hant": "Agent Speed 的小程式會把這台主機上 Claude Code 的狀態列換成自己，把額度存在主機上的小程式資料夾，並照常顯示你原本的狀態列；關閉或移除主機時還原。",
+    "zh-Hans": "Agent Speed 的小程序会把这台主机上 Claude Code 的状态栏换成自己，把额度存在主机上的小程序文件夹，并照常显示你原来的状态栏；关闭或移除主机时还原。",
+    "en": "Agent Speed's helper on this host becomes Claude Code's status line there, saves the quota in its folder on the host and still shows your own status line; turning this off or removing the host restores it.",
+    "ja": "このホストの Agent Speed の補助プログラムが、ホスト上の Claude Code のステータスラインになります。利用枠はホスト上の補助プログラムのフォルダに保存し、元のステータスラインもそのまま表示します。オフにするかホストを削除すると元に戻ります。"
+  },
+  "remote.quota.claudeCli.confirm.title": {
+    "zh-Hant": "在 %@ 接上 Claude Code 狀態列？",
+    "zh-Hans": "在 %@ 接入 Claude Code 状态栏？",
+    "en": "Connect to Claude Code's status line on %@?",
+    "ja": "%@ で Claude Code のステータスラインに接続しますか？"
+  },
+  "remote.quota.claudeCli.confirm.message": {
+    "zh-Hant": "小程式會把主機上 %@ 的 statusLine 改成執行它自己。它只把 5h／7d 額度存在主機上，再照常執行你原本的狀態列。原檔會先備份在主機上，關閉這個功能時還原。",
+    "zh-Hans": "小程序会把主机上 %@ 的 statusLine 改成运行它自己。它只把 5h／7d 额度存在主机上，再照常运行你原来的状态栏。原文件会先备份在主机上，关闭这个功能时还原。",
+    "en": "The helper will set statusLine in %@ on the host to run itself. It only saves the 5h / 7d quota on the host, then runs your own status line as before. The file is backed up on the host first and restored when you turn this off.",
+    "ja": "補助プログラムはホスト上の %@ の statusLine を自分自身を実行するように変更します。5h／7d の利用枠をホストに保存してから、元のステータスラインをそのまま実行します。ファイルは先にホスト上でバックアップされ、この機能をオフにすると元に戻ります。"
+  },
+  "remote.quota.removeNote": {
+    "zh-Hant": "這台主機接上了 Claude Code 狀態列。連得上時會先還原；連不上的話，主機上的狀態列會繼續執行 %@ 裡的小程式，直到你重新連上後關閉，或自行還原備份 claude-settings.backup.json。",
+    "zh-Hans": "这台主机接入了 Claude Code 状态栏。连得上时会先还原；连不上的话，主机上的状态栏会继续运行 %@ 里的小程序，直到你重新连上后关闭，或自行还原备份 claude-settings.backup.json。",
+    "en": "This host's Claude Code status line runs Agent Speed's helper. It is restored first if the host can be reached; otherwise the status line keeps running the helper in %@ until you reconnect and turn it off, or restore claude-settings.backup.json yourself.",
+    "ja": "このホストの Claude Code のステータスラインは Agent Speed の補助プログラムを実行しています。接続できればまず元に戻します。接続できない場合は、再接続してオフにするか claude-settings.backup.json を自分で戻すまで、%@ の補助プログラムが実行され続けます。"
+  },
+  "settings.quota.status.noCertificates": {
+    "zh-Hant": "主機上找不到 HTTPS 憑證，無法查詢",
+    "zh-Hans": "主机上找不到 HTTPS 证书，无法查询",
+    "en": "No HTTPS certificates on the host, so it cannot ask",
+    "ja": "ホストに HTTPS 証明書がないため問い合わせできません"
   }
 }
