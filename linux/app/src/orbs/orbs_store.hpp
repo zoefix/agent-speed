@@ -4,6 +4,7 @@
 #include <QObject>
 #include <QPointF>
 #include <QStringList>
+#include <QVariantList>
 #include <optional>
 #include <vector>
 
@@ -48,6 +49,8 @@ struct OrbConfig {
     // A missing key or a value that is not a boolean takes its default.
     static agentspeed::character::CharacterReadouts readoutsFromJson(const QJsonValue& value);
     static QJsonObject readoutsToJson(const agentspeed::character::CharacterReadouts& readouts);
+    // The readout checks of the Settings orb editor, in the menus' order: {key, title} per switch.
+    static QVariantList readoutItems();
     // The disc the orb occupies: its size × the style's footprint (DESIGN 2a.6).
     double footprintDiameter() const { return size * agentspeed::character::footprint::scale(style.toStdString()); }
     // Add and Split (DESIGN 2b): a new orb with `from`'s look and toggles, its character and cards included.

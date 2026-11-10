@@ -7,6 +7,7 @@
 #include <algorithm>
 #include <set>
 
+#include "agentspeed/character/store.hpp"
 #include "agentspeed/demo.hpp"
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
@@ -274,6 +275,7 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
 
     // 性能 and 思考 of every requested source set (DESIGN 10, 12); the first is every enabled source.
     QVariantList sets;
+    const auto setPrices = options_.config.prices ? options_.config.prices->current() : agentspeed::pricing::PriceBook::bundled();
     for (const auto& set : snap.scoreSets) {
         QVariantMap value;
         value.insert(QStringLiteral("form"), QString::fromUtf8(agentspeed::perf::formId(set.value.form)));
@@ -289,6 +291,18 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         value.insert(QStringLiteral("liveThinking"), set.liveThinking);
         value.insert(QStringLiteral("thinkingText"), format::speed(set.liveThinking));
         value.insert(QStringLiteral("generating"), set.generating);
+        // A `character` orb's 首字 row and models card (METRICS 6.9 Readouts of a set), each model with its vendor.
+        if (set.firstLatency.ms) value.insert(QStringLiteral("firstLatencyMs"), *set.firstLatency.ms);
+        QVariantList models;
+        for (const auto& m : set.models) {
+            QVariantMap row;
+            row.insert(QStringLiteral("model"), QString::fromStdString(m.model));
+            row.insert(QStringLiteral("speed"), m.shown() ? static_cast<qlonglong>(*m.shown()) : -1);
+            const auto vendor = agentspeed::character::vendors::resolve(m.model, m.source, setPrices.get()).vendor;
+            row.insert(QStringLiteral("vendor"), vendor ? QString::fromStdString(*vendor) : QString());
+            models.push_back(row);
+        }
+        value.insert(QStringLiteral("models"), models);
         QString project;
         for (const auto& a : snap.agents) {
             if (set.value.agent && a.id == *set.value.agent) project = a.project ? QString::fromStdString(*a.project) : QString();

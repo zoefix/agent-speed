@@ -144,6 +144,12 @@ QString CharacterLibrary::accent(const QString& id) const {
     return {};
 }
 
+QString CharacterLibrary::vendorAccent(const QString& vendor) const {
+    if (vendor.isEmpty()) return {};
+    const auto hex = agentspeed::character::vendors::accent(vendor.toStdString(), installed_, catalog_ ? &*catalog_ : nullptr);
+    return hex ? q(*hex) : QString();
+}
+
 bool CharacterLibrary::hasUpdate(const QString& id) const {
     const auto* pack = installed(id);
     if (!pack || pack->isDevelopment || !catalog_) return false;

@@ -48,6 +48,7 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
     for (const auto& r : recent) byAgent[r.agentId].push_back(&r);
     static const std::deque<work::Action> kNoActions;
     std::map<std::string, perf::Valued> values;
+    std::map<std::string, perf::ReadoutAgent> readers;
     for (auto& row : snap.agents) {
         if (const auto it = thinking.perAgent.find(row.id); it != thinking.perAgent.end()) {
             row.liveThinking = it->second.liveThinking();
@@ -65,6 +66,8 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
         }
         value.workSignals = work::signalsOf(actions, nowMs);
         values[row.id] = {row.id, info.lastLineMs, value.score.form, value.score.score};
+        readers[row.id] = {value.score.latencies, info.model, perf::effectivePhase(info.phase, info.lastLineMs, nowMs),
+                           perf::recentSpeed(byAgent[row.id], nowMs), info.source};
         row.perf = std::move(value);
     }
 
@@ -73,12 +76,17 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
         set.sources = subset.sources;
         set.hosts = subset.hosts;
         std::vector<perf::Valued> members;
+        std::vector<perf::ReadoutAgent> readouts;
         for (const auto& a : snap.agents) {
             if (!subset.contains(a.source, a.host)) continue;
             members.push_back(values[a.id]);
+            readouts.push_back(readers[a.id]);
             if (a.phase == Phase::Generating) set.generating = true;
         }
         set.value = perf::highest(members);
+        auto [latency, models] = perf::readoutsOf(readouts);
+        set.firstLatency = latency;
+        set.models = std::move(models);
         for (const auto& a : snap.agents) {
             if (!subset.contains(a.source, a.host) || !a.perf) continue;
             if (set.value.form != perf::Form::None && a.perf->score.form == set.value.form) ++set.scored;

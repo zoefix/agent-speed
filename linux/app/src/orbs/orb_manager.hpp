@@ -89,9 +89,11 @@ public:
 
     Q_INVOKABLE void set(const QString& id, const QString& key, const QVariant& value);
     Q_INVOKABLE void setSource(const QString& id, const QString& source, bool on);
-    // DESIGN 2b `character` (empty: Auto) and one card of `characterReadouts` (`intelligence`, ... `model`).
+    // DESIGN 2b `character` (empty: Auto) and one switch of `characterReadouts` (`intelligence`, ... `model`).
     Q_INVOKABLE void setCharacter(const QString& id, const QString& character);
     Q_INVOKABLE void setCharacterReadout(const QString& id, const QString& key, bool on);
+    // The readout checks in the menus' order (intel, thinking, latency, network, cost, agents, models, model).
+    Q_INVOKABLE QVariantList characterReadoutItems() const;
     // DESIGN 13: "all" or the host ids the orb tracks.
     Q_INVOKABLE void setHosts(const QString& id, const QVariant& hosts);
     Q_INVOKABLE void add(const QString& from);

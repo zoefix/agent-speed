@@ -1,8 +1,10 @@
 #include <gtest/gtest.h>
 
+#include <QFile>
 #include <QJsonDocument>
 #include <QJsonObject>
 #include <QSettings>
+#include <QVariantMap>
 
 #include "orbs/orbs_store.hpp"
 
@@ -56,6 +58,42 @@ TEST(OrbCharacter, ReadoutsDecodeTolerantlyAndRoundTrip) {
     EXPECT_EQ(orb.characterReadouts, expected);
     EXPECT_EQ(OrbConfig::fromJson(orb.toJson()).characterReadouts, orb.characterReadouts);
     EXPECT_TRUE(decode(R"({"id": "a", "characterReadouts": 3})").characterReadouts.isDefault());
+}
+
+// DESIGN 2b `characterReadouts`: `latency` and `models` default true, also for settings written before they existed;
+// written only when they differ from the defaults.
+TEST(OrbCharacter, LatencyAndModelsDefaultOnAndRoundTrip) {
+    const auto older = decode(R"({"id": "a", "style": "character", "characterReadouts": {"model": true, "network": false}})");
+    EXPECT_TRUE(older.characterReadouts.latency);
+    EXPECT_TRUE(older.characterReadouts.models);
+    EXPECT_FALSE(older.characterReadouts.network);
+    auto off = older;
+    off.characterReadouts.latency = false;
+    off.characterReadouts.models = false;
+    const auto json = off.toJson().value(QStringLiteral("characterReadouts")).toObject();
+    EXPECT_EQ(json.value(QStringLiteral("latency")), QJsonValue(false));
+    EXPECT_EQ(json.value(QStringLiteral("models")), QJsonValue(false));
+    EXPECT_EQ(OrbConfig::fromJson(off.toJson()).characterReadouts, off.characterReadouts);
+    const auto odd = decode(R"({"id": "a", "characterReadouts": {"latency": 0, "models": "no"}})");
+    EXPECT_TRUE(odd.characterReadouts.latency && odd.characterReadouts.models);
+    EXPECT_TRUE(odd.characterReadouts.isDefault());
+}
+
+// The Settings orb editor lists the checks in the menus' order (the context menu and the tray build theirs from the
+// same list).
+TEST(OrbCharacter, TheEditorListsTheReadoutChecksInTheMenusOrder) {
+    QStringList keys, titles;
+    for (const auto& item : OrbConfig::readoutItems()) {
+        keys << item.toMap().value(QStringLiteral("key")).toString();
+        titles << item.toMap().value(QStringLiteral("title")).toString();
+    }
+    EXPECT_EQ(keys, (QStringList{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "model"}));
+    EXPECT_EQ(titles, (QStringList{"character.readouts.intel", "character.readouts.thinking", "character.readouts.latency",
+                                   "character.readouts.network", "character.readouts.cost", "character.readouts.agents",
+                                   "character.readouts.models", "character.readouts.model"}));
+    QFile qml(QStringLiteral(AGENTSPEED_APP_DIR "/qml/characters/CharacterReadoutsGroup.qml"));
+    ASSERT_TRUE(qml.open(QIODevice::ReadOnly));
+    EXPECT_TRUE(QString::fromUtf8(qml.readAll()).contains(QStringLiteral("model: orbs.characterReadoutItems()")));
 }
 
 TEST(OrbCharacter, AddDuplicateAndSplitCopyTheCharacterAndReadouts) {

@@ -73,6 +73,9 @@ struct Evaluation {
     std::optional<std::int64_t> spanStartMs;
     std::optional<std::string> model;  // of the newest sample response, as logged
     Components components;
+    // The sample's first-content latencies firstMs − startMs (ms, sample order) of the responses with both and
+    // firstMs ≥ startMs, whatever n: a set's 首字 pools them (6.9 Readouts of a set).
+    std::vector<std::int64_t> latencies;
     std::optional<double> baseline, vsUsual;
     std::optional<std::int64_t> vsUsualPercent;
 };

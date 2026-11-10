@@ -6,12 +6,19 @@
 #include <cmath>
 
 #include "orb/character/character_assets.hpp"
+#include "orb/character/character_cards.hpp"
 #include "orb/renderer.hpp"
 
 namespace orb {
 
 namespace ac = agentspeed::character;
 using ac::HudCard;
+using cards::advance;
+using cards::capHeight;
+using cards::CardMetrics;
+using cards::kUnitScale;
+using cards::Pen;
+using cards::textOf;
 
 namespace {
 
@@ -19,7 +26,6 @@ constexpr double kHeight = 0.86;  // her height × D
 constexpr double kFeet = 0.45;    // her feet below the disc center × D
 constexpr double kRingRadius = 0.23, kRingSquash = 0.17;
 constexpr int kRingLights = 96;
-constexpr double kUnitScale = 0.82;
 
 // AGENT_SPEED_ORB_PROFILE=2: the time of each part of a character frame, every 300 frames.
 struct Lap {
@@ -67,31 +73,6 @@ struct SpeedMetrics {
     double q() const { return value / 92; }
 };
 
-// Sizes of the cards (CharacterCardMetrics).
-struct CardMetrics {
-    double t, p, padX, padY, rowGap;
-    explicit CardMetrics(double d) : t(std::max(8.0, 0.027 * d)), p(1.25 * t), padX(0.8 * t), padY(0.55 * t), rowGap(0.36 * t) {}
-    static double rowHeight(double size) { return 0.92 * size; }
-    static double baseline(double size) { return 0.82 * size; }
-    double glyphGap() const { return 0.24 * t; }
-    double cellGap() const { return 0.16 * t; }  // OrbLinePlacement.gap
-};
-
-
-TextDraw textOf(const QString& text, double size, int weight) {
-    TextDraw d;
-    d.text = text;
-    d.pixelSize = size;
-    d.weight = weight;
-    return d;
-}
-
-double advance(const QString& text, double size, int weight) {
-    return text.isEmpty() ? 0 : textAdvance(textOf(text, size, weight));
-}
-
-double capHeight(double size, int weight) { return textCapHeight(textOf(QStringLiteral("0"), size, weight)); }
-
 // The network card's fixed cells (OrbLineMetrics.cells): the arrow, the number right-aligned in an `8.88` cell, the
 // unit in an `MB/s` (or `Mb/s`) cell, so the card keeps its width while the values change.
 struct NetCells {
@@ -112,30 +93,6 @@ struct Ink {
     double shadowAlpha() const { return 0.45; }
     static double width(double size) { return size * 0.06; }
     Rgba electric() const { return dark ? Rgba{0.55f, 0.82f, 1, 1} : Rgba{0.25f, 0.5f, 1, 1}; }
-};
-
-// A body of the readout laid out around `center`, scaled by `scale` and turned by `spin` (CharacterBodyPainter).
-struct Pen {
-    QPointF center;
-    double scale, spin, alpha;
-    QPointF point(double ox, double oy) const {
-        const double c = std::cos(spin), s = std::sin(spin), x = ox * scale, y = oy * scale;
-        return {center.x() + x * c - y * s, center.y() + x * s + y * c};
-    }
-    // A text centered at `ox` with its baseline at `oy` (offsets before the scale and spin).
-    TextDraw text(const QString& string, double size, int weight, double ox, double oy, Rgba color) const {
-        TextDraw d = textOf(string, size, weight);
-        d.baselineCenter = QPointF(center.x() + ox, center.y() + oy);
-        d.color = color.opacity(alpha);
-        d.pivot = center;
-        d.scale = scale;
-        d.rotation = spin;
-        return d;
-    }
-    // A text starting at `ox` (its left edge).
-    TextDraw leading(const QString& string, double size, int weight, double ox, double oy, Rgba color) const {
-        return text(string, size, weight, ox + advance(string, size, weight) / 2, oy, color);
-    }
 };
 
 std::pair<double, double> chipHalf(const QString& string, double size) {
@@ -306,7 +263,7 @@ bool CharacterStyle::isBusy(const Frame&) const {
     if (lightning_.isActive()) return true;
     if (!stage_) return content_.pack != nullptr || CharacterAssets::shared().loading();
     return CharacterAssets::shared().loading() || stage_->outgoing() || stage_->incoming() || stage_->current().fadingPose() ||
-           hud_.peakAge() || particles_.isLively() || wings_.isFading();
+           hud_.peakAge() || particles_.isLively() || wings_.isFading() || modelsCard_.moving(hudTime_);
 }
 
 int CharacterStyle::ambientFps(const Frame& f) const {
@@ -329,6 +286,38 @@ QString CharacterStyle::modelText() const {
     return {};
 }
 
+CharacterStyle::PerfRows CharacterStyle::perfRows(const CardMetrics& m) const {
+    const auto& in = content_.intel;
+    PerfRows r;
+    r.score = content_.readouts.intelligence && !in.number.isEmpty();
+    r.thinking = content_.readouts.thinking && !in.thinking.isEmpty();
+    r.latency = !content_.latencyNumber.isEmpty() && content_.latencyOpacity > 0;
+    r.thinkingShare = r.thinking ? (r.score ? in.thinkingOpacity : 1) : 0;
+    const double fade = std::clamp(content_.latencyOpacity, 0.0, 1.0);
+    r.latencyShare = r.latency ? fade * fade * (3 - 2 * fade) : 0;
+    // 思考 and 首字 share their value column while both show; it glides as one of them fades.
+    const double thinkingGlyph = r.thinking ? advance(in.thinkingGlyph, kUnitScale * m.t, 600) : 0;
+    const double latencyGlyph = r.latency ? advance(content_.latencyGlyph, kUnitScale * m.t, 600) : 0;
+    r.thinkingColumn = thinkingGlyph + r.latencyShare * std::max(0.0, latencyGlyph - thinkingGlyph) + m.glyphGap();
+    r.latencyColumn = latencyGlyph + r.thinkingShare * std::max(0.0, thinkingGlyph - latencyGlyph) + m.glyphGap();
+    if (r.score) {
+        r.w = advance(in.glyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25 + advance(in.number, m.p, 600);
+        r.h += CardMetrics::rowHeight(m.p);
+    }
+    if (r.thinking) {
+        const double w = r.thinkingColumn + advance(in.thinking, m.t, 600) + m.cellGap() + advance(in.unit, kUnitScale * m.t, 500);
+        r.w = std::max(r.w, r.thinkingShare * w);
+        r.h += r.thinkingShare * ((r.score ? m.rowGap : 0) + CardMetrics::rowHeight(m.t));
+    }
+    if (r.latency) {
+        const double w = r.latencyColumn + advance(content_.latencyNumber, m.t, 600) + m.cellGap() +
+                         advance(content_.latencyUnit, kUnitScale * m.t, 500);
+        r.w = std::max(r.w, r.latencyShare * w);
+        r.h += r.latencyShare * ((r.score || r.thinking ? m.rowGap : 0) + CardMetrics::rowHeight(m.t));
+    }
+    return r;
+}
+
 std::array<double, 2> CharacterStyle::cardSize(HudCard card, const Frame& f) const {
     const CardMetrics m(f.s);
     auto plate = [&](double w, double h) { return std::array<double, 2>{w + 2 * m.padX, h + 2 * m.padY}; };
@@ -340,23 +329,13 @@ std::array<double, 2> CharacterStyle::cardSize(HudCard card, const Frame& f) con
             return {advance(name, m.t, 600) + 0.62 * m.t + 0.42 * m.t + 2 * 0.85 * m.t, CardMetrics::rowHeight(m.t) + m.t};
         }
         case HudCard::Performance: {
-            const auto& in = content_.intel;
-            const bool score = content_.readouts.intelligence && !in.number.isEmpty();
-            const bool thinking = content_.readouts.thinking && !in.thinking.isEmpty();
-            if (!score && !thinking) return {0, 0};
-            double w = 0, h = 0;
-            if (score) {
-                w = advance(in.glyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25 + advance(in.number, m.p, 600);
-                h += CardMetrics::rowHeight(m.p);
-            }
-            if (thinking) {
-                const double share = score ? in.thinkingOpacity : 1;
-                const double tw = advance(in.thinkingGlyph, kUnitScale * m.t, 600) + m.glyphGap() + advance(in.thinking, m.t, 600) +
-                                  m.cellGap() + advance(in.unit, kUnitScale * m.t, 500);
-                w = std::max(w, share * tw);
-                h += share * ((score ? m.rowGap : 0) + CardMetrics::rowHeight(m.t));
-            }
-            return plate(w, h);
+            const auto rows = perfRows(m);
+            if (!rows.score && !rows.thinking && !rows.latency) return {0, 0};
+            return plate(rows.w, rows.h);
+        }
+        case HudCard::Models: {
+            const auto shape = modelsCard_.shape(m, {content_.modelsMore, content_.speedUnit});
+            return {shape.dots, shape.h};
         }
         case HudCard::Network: {
             const auto& n = content_.net;
@@ -412,6 +391,12 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
     }
     const auto anchors = performer.trace(*silhouette_, g.feetX, g.feetY, g.ppp, scratch_);
     const auto speed = speedBox(f);
+    // The models card follows its rows while it is switched on or still fading out; below S = 96 it keeps two.
+    static const std::vector<ac::ModelRow> kNoRows;
+    const auto models = static_cast<std::size_t>(ac::index(HudCard::Models));
+    const bool modelsLive = (content_.readouts.models && content_.modelsOpacity > 0) || wings_.presence()[models] > 0;
+    modelsCard_.sync(modelsLive ? content_.models : kNoRows, d < 192 ? ac::kSmallModelRows : ac::kModelRows, hudTime_,
+                     f.effects.level == 0);
     for (HudCard card : ac::kHudCards) {
         const auto size = card == HudCard::Speed ? std::array<double, 2>{speed.first, speed.second} : cardSize(card, f);
         cardSizes_[static_cast<std::size_t>(ac::index(card))] = {size[0], size[1]};
@@ -424,6 +409,7 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
     cardShown_[3] = r.network && content_.net.opacity > 0.5 && has(HudCard::Network);
     cardShown_[4] = r.cost && content_.costOpacity > 0.5 && has(HudCard::Cost);
     cardShown_[5] = r.agents && d >= 192 && has(HudCard::Agents);
+    cardShown_[models] = r.models && content_.modelsOpacity > 0.5 && has(HudCard::Models);
     if (d < 192) {
         int room = 2;
         for (HudCard card : ac::kHudColumn) {
@@ -434,6 +420,7 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
         }
     }
     wings_.still = f.effects.level == 0;
+    wings_.models = modelsCard_.shape(CardMetrics(d), {content_.modelsMore, content_.speedUnit});
     const int splitBefore = wings_.split();
     wings_.update(dt, hudTime_, ac::HudFrame({0, 0, side, side}, *silhouette_, d, anchors), cardSizes_, cardShown_);
     if (wings_.split() != splitBefore && Lap::on()) {
@@ -684,7 +671,7 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                   Blend::Over);
     };
 
-    for (HudCard card : {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Model}) {
+    for (HudCard card : {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Models, HudCard::Model}) {
         const auto i = static_cast<std::size_t>(ac::index(card));
         const auto& place = wings_.places()[i];
         const auto size = wings_.sizes()[i];
@@ -708,7 +695,8 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
             case HudCard::Performance: {
                 plate(pen, size.w, size.h, std::nullopt, spine);
                 const auto& in = content_.intel;
-                const bool score = content_.readouts.intelligence && !in.number.isEmpty();
+                const auto rows = perfRows(m);
+                const bool score = rows.score;
                 double y = top;
                 if (score) {
                     const double baseline = y + CardMetrics::baseline(m.p);
@@ -729,23 +717,30 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                             scene.add(Instance::circle(pen.point(dx, baseline + 0.22 * m.p), d / 2 * pen.scale, dot), Blend::Over);
                         }
                     }
-                    y += CardMetrics::rowHeight(m.p) + m.rowGap;
+                    y += CardMetrics::rowHeight(m.p);
                 }
-                if (content_.readouts.thinking && !in.thinking.isEmpty()) {
-                    const double share = score ? in.thinkingOpacity : 1;
-                    // Hiding at zero fades the row and closes the card up under it.
-                    if (score) y -= (1 - share) * (CardMetrics::rowHeight(m.t) + m.rowGap);
-                    if (share > 0.01) {
-                        const double baseline = y + CardMetrics::baseline(m.t);
-                        double x = left;
-                        const Pen faded{pen.center, pen.scale, pen.spin, pen.alpha * share};
-                        scene.add(faded.leading(in.thinkingGlyph, kUnitScale * m.t, 600, x, baseline, secondary));
-                        x += advance(in.thinkingGlyph, kUnitScale * m.t, 600) + m.glyphGap();
-                        scene.add(faded.leading(in.thinking, m.t, 600, x, baseline, number));
-                        x += advance(in.thinking, m.t, 600) + m.cellGap();
-                        scene.add(faded.leading(in.unit, kUnitScale * m.t, 500, x, baseline, secondary));
-                    }
+                // A row that hides fades and the card closes up under it (思考 at zero, 首字 without a value).
+                const auto row = [&](double share, double gap, double column, const QString& glyph, const QString& value, const QString& unit) {
+                    const double rowTop = y + gap - (1 - share) * (CardMetrics::rowHeight(m.t) + gap);
+                    y += share * (gap + CardMetrics::rowHeight(m.t));
+                    if (share <= 0.01) return;
+                    const double baseline = rowTop + CardMetrics::baseline(m.t);
+                    const Pen faded = pen.faded(share);
+                    scene.add(faded.leading(glyph, kUnitScale * m.t, 600, left, baseline, secondary));
+                    scene.add(faded.leading(value, m.t, 600, left + column, baseline, number));
+                    scene.add(faded.leading(unit, kUnitScale * m.t, 500, left + column + advance(value, m.t, 600) + m.cellGap(), baseline, secondary));
+                };
+                if (rows.thinking) row(rows.thinkingShare, score ? m.rowGap : 0, rows.thinkingColumn, in.thinkingGlyph, in.thinking, in.unit);
+                if (rows.latency) {
+                    row(rows.latencyShare, score || rows.thinking ? m.rowGap : 0, rows.latencyColumn, content_.latencyGlyph, content_.latencyNumber,
+                        content_.latencyUnit);
                 }
+                break;
+            }
+            case HudCard::Models: {
+                if (modelsCard_.empty()) break;
+                plate(pen, size.w, size.h, std::nullopt, spine);
+                modelsCard_.draw(scene, pen, size, wings_.modelsForm(), m, {content_.modelsMore, content_.speedUnit}, {number, secondary}, hudTime_);
                 break;
             }
             case HudCard::Network: {

@@ -83,6 +83,26 @@ TEST(CharacterReadouts, DefaultOnExceptTheModel) {
     EXPECT_TRUE(changed.model && !changed.cost && !changed.isDefault());
 }
 
+// DESIGN 2b `characterReadouts` and 2b menus: 首字 and the running models are switches of their own, on by default,
+// listed in the order intel, thinking, latency, network, cost, agents, models, model.
+TEST(CharacterReadouts, TheMenusListLatencyAndModelsInTheirPlaces) {
+    std::vector<std::string> keys, titles;
+    for (auto readout : kCharacterReadouts) {
+        keys.emplace_back(key(readout));
+        titles.emplace_back(titleKey(readout));
+    }
+    EXPECT_EQ(keys, (std::vector<std::string>{"intelligence", "thinking", "latency", "network", "cost", "agents", "models", "model"}));
+    EXPECT_EQ(titles, (std::vector<std::string>{"character.readouts.intel", "character.readouts.thinking", "character.readouts.latency",
+                                                "character.readouts.network", "character.readouts.cost", "character.readouts.agents",
+                                                "character.readouts.models", "character.readouts.model"}));
+    CharacterReadouts r;
+    EXPECT_TRUE(r.latency && r.models);
+    r.set(CharacterReadout::Latency, false);
+    r.set(CharacterReadout::Models, false);
+    EXPECT_FALSE(r.get(CharacterReadout::Latency) || r.get(CharacterReadout::Models));
+    EXPECT_TRUE(r.intelligence && r.thinking && r.agents && !r.isDefault());
+}
+
 TEST(CharacterReadouts, CharacterIDsAreCleaned) {
     EXPECT_EQ(cleanCharacterID(" claude "), "claude");
     EXPECT_EQ(cleanCharacterID("../x"), std::nullopt);

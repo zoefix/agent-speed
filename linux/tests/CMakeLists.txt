@@ -8,6 +8,7 @@ add_executable(agentspeed_tests
     board_test.cpp
     character_catalog_test.cpp
     character_fixture_test.cpp
+    character_models_test.cpp
     character_performer_test.cpp
     character_selection_test.cpp
     character_wings_test.cpp
@@ -58,6 +59,7 @@ add_executable(agentspeed_tests
     remote_scripts_test.cpp
     remote_ssh_test.cpp
     rfc3339_test.cpp
+    set_readouts_test.cpp
     source_locations_test.cpp
     traffic_test.cpp
     unpriced_test.cpp
@@ -90,6 +92,7 @@ if(AGENTSPEED_BUILD_APP)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/character_library_test.cpp
+        app/character_readings_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
@@ -104,6 +107,8 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/lan/lan_net.cpp
         ../app/src/lan/lan_server.cpp
         ../app/src/lan/lan_targets.cpp
+        ../app/src/format.cpp
+        ../app/src/orb/character/character_readings.cpp
         ../app/src/orb/idle_fade.cpp
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
@@ -112,6 +117,15 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/strings.cpp
     )
     set_target_properties(agentspeed_app_tests PROPERTIES AUTOMOC ON)
+    # The app's string tables, as the app embeds them, for the texts in every language.
+    qt_add_resources(agentspeed_app_tests "test_strings"
+        PREFIX "/"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/../../spec"
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/../../spec/strings.json")
+    qt_add_resources(agentspeed_app_tests "test_strings_linux"
+        PREFIX "/"
+        BASE "${CMAKE_CURRENT_SOURCE_DIR}/../app"
+        FILES "${CMAKE_CURRENT_SOURCE_DIR}/../app/strings.linux.json")
     target_include_directories(agentspeed_app_tests PRIVATE ../app/src)
     target_link_libraries(agentspeed_app_tests PRIVATE agentspeed_core Qt6::Core Qt6::Gui Qt6::Network Qt6::Widgets GTest::gtest_main PkgConfig::TEST_ZLIB)
     target_compile_definitions(agentspeed_app_tests PRIVATE

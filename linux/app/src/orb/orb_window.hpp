@@ -12,6 +12,7 @@
 
 #include "agentspeed/character/pack.hpp"
 #include "agentspeed/character/selection.hpp"
+#include "orb/character/character_readings.hpp"
 #include "orb/gauge.hpp"
 #include "orb/idle_fade.hpp"
 #include "orb/readout.hpp"
@@ -174,6 +175,8 @@ private:
     QString costCardNumber_, costCardUnit_;
     bool costCardAtLeast_ = false, costCardUnknown_ = false;
     double costLastActive_ = -1e9, costOpacity_ = 0;
+    // The 首字 row and the models card (DESIGN 2a.6) with their quiet rules.
+    CharacterReadings characterReadings_;
     std::function<std::vector<Disc>()> neighbors_;
     void stepIntel(double time, double dt);
     IntelReadout intelContent(double time) const;

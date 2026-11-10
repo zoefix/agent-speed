@@ -2,7 +2,9 @@
 
 #include <QStringList>
 #include <QVariantList>
+#include <algorithm>
 #include <cmath>
+#include <vector>
 
 #include "agentspeed/money.hpp"
 #include "agentspeed/traffic.hpp"
@@ -57,6 +59,43 @@ void apply(QVariantMap& orb, double time, const QString& language) {
     const double thinking = generating ? value * (0.28 + 0.2 * std::sin(time / 3)) : 0;
     set.insert(QStringLiteral("generating"), generating);
     set.insert(QStringLiteral("thinkingText"), format::speed(thinking));
+    // 首字 and the running models (METRICS 6.9 Readouts of a set): AGENT_SPEED_ORB_LATENCY fixes the latency (ms),
+    // AGENT_SPEED_ORB_MODELS how many models run (3 by default; 0 to 8).
+    const double fixedLatency = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_LATENCY");
+    set.insert(QStringLiteral("firstLatencyMs"), fixedLatency > 0 ? fixedLatency : 1200 + 380 * std::sin(time / 4));
+    struct Demo {
+        const char* model;
+        const char* vendor;
+        double share;
+    };
+    static constexpr Demo kModels[] = {
+        {"claude-opus-5-5", "anthropic", 0.62},          {"gpt-6.1-sol", "openai", 0.41},
+        {"claude-sonnet-4-5-20250929", "anthropic", 0.33}, {"gemini-4-argon", "google", 0.24},
+        {"deepseek-v4-reasoner", "deepseek", 0},          {"kimi-k3", "moonshot", 0.18},
+        {"glm-5.1", "zhipu", 0.12},                       {"grok-5-fast-reasoning-2026-09-01", "xai", 0.09},
+    };
+    const bool countSet = qEnvironmentVariableIsSet("AGENT_SPEED_ORB_MODELS");
+    const int count = std::clamp(countSet ? qEnvironmentVariableIntValue("AGENT_SPEED_ORB_MODELS") : 3, 0, 8);
+    struct Row {
+        QString model, vendor;
+        qint64 speed;
+    };
+    std::vector<Row> rows;
+    for (int i = 0; i < count; ++i) {
+        const auto& m = kModels[i];
+        const double wave = 1 + 0.2 * std::sin(time * (0.7 + 0.3 * i) + i);
+        rows.push_back({QString::fromLatin1(m.model), QString::fromLatin1(m.vendor),
+                        m.share > 0 ? static_cast<qint64>(std::lround(std::max(value, 40.0) * m.share * wave)) : -1});
+    }
+    std::stable_sort(rows.begin(), rows.end(), [](const Row& a, const Row& b) {
+        if ((a.speed < 0) != (b.speed < 0)) return a.speed >= 0;
+        return a.speed > b.speed;
+    });
+    QVariantList models;
+    for (const auto& r : rows) {
+        models.push_back(QVariantMap{{QStringLiteral("model"), r.model}, {QStringLiteral("speed"), r.speed}, {QStringLiteral("vendor"), r.vendor}});
+    }
+    set.insert(QStringLiteral("models"), models);
     orb.insert(QStringLiteral("scoreSets"), QVariantList{set});
 
     namespace money = agentspeed::money;

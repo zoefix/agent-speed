@@ -4,9 +4,9 @@
 #include <QVariantMap>
 
 // Development aid (macOS CharacterDemoReadings): `AGENT_SPEED_ORB_READOUTS` gives `character` orbs demo network, 性能 /
-// 思考 and cost readings that follow the orb's speed, so every card of the column shows in shots. Its value switches
-// cards: a comma list of readout keys (`intelligence`, `thinking`, `network`, `cost`, `agents`, `model`), each
-// optionally prefixed with `-` to switch it off; empty keeps the orb's own switches.
+// 思考 / 首字, cost and running-model readings that follow the orb's speed, so every card shows in shots. Its value
+// switches cards: a comma list of readout keys (`intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`,
+// `models`, `model`), each optionally prefixed with `-` to switch it off; empty keeps the orb's own switches.
 namespace character_demo {
 
 bool enabled();

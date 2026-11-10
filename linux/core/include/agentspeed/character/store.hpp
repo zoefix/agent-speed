@@ -109,6 +109,10 @@ Resolved resolve(const std::optional<std::string>& model, SourceKind source, con
 // `meta-llama/Llama-3.3-70B` → `meta`, `doubao-seed-1.6` → `bytedance`; nullopt for any other id.
 std::optional<std::string> family(const std::optional<std::string>& model);
 std::optional<std::string> fallback(SourceKind source);
+// The vendor's accent (the models card's dot, DESIGN 2a.6): the theme color of an installed character that stands for
+// the vendor, else of the catalog's, as `#RRGGBB`; nullopt when no character stands for it.
+std::optional<std::string> accent(const std::optional<std::string>& vendor, const std::vector<InstalledCharacter>& installed,
+                                  const CharacterCatalog* catalog);
 }  // namespace vendors
 
 }  // namespace agentspeed::character

@@ -90,6 +90,7 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory,
          {130, 1200, 3.8, 0, 0.94, 280, 0.95}, 11},
     };
     double codex = 0, claude = 0;
+    std::vector<perf::ReadoutAgent> readers;
     for (const auto& s : specs) {
         AgentRow row;
         row.id = s.id;
@@ -110,17 +111,31 @@ Snapshot demoAt(std::int64_t nowMs, std::int64_t todayStartMs, bool withHistory,
         row.perf = demoPerf(s.source, row.phase, t, s.phase, s.measures, s.samples);
         row.perf->score.model = s.model;
         row.liveThinking = row.liveOutput * 0.35;
+        // METRICS 6.9 Readouts of a set: three first-content latencies around the agent's L, its T as recentSpeed.
+        perf::ReadoutAgent reader{{}, row.model, row.phase, std::nullopt, s.source};
+        if (const auto& speed = row.perf->score.components[0].measure; s.phaseKind != Phase::Idle && speed) reader.recentSpeed = *speed;
+        if (const auto& latency = row.perf->score.components[1].measure; perf::recordsLatency(s.source) && latency) {
+            for (const double k : {0.8, 1.0, 1.3}) reader.latencies.push_back(static_cast<std::int64_t>(*latency * k));
+        }
+        readers.push_back(std::move(reader));
         snap.agents.push_back(row);
     }
     for (const auto& sources : sets) {
         const auto inSet = [&](SourceKind kind) { return !sources || std::find(sources->begin(), sources->end(), kind) != sources->end(); };
         std::vector<perf::Valued> valued;
-        for (const auto& a : snap.agents) {
-            if (inSet(a.source)) valued.push_back({a.id, nowMs, a.perf->score.form, a.perf->score.score});
+        std::vector<perf::ReadoutAgent> members;
+        for (std::size_t i = 0; i < snap.agents.size(); ++i) {
+            const auto& a = snap.agents[i];
+            if (!inSet(a.source)) continue;
+            valued.push_back({a.id, nowMs, a.perf->score.form, a.perf->score.score});
+            members.push_back(readers[i]);
         }
         ScoreSet set;
         set.sources = sources;
         set.value = perf::highest(valued);
+        auto [latency, models] = perf::readoutsOf(members);
+        set.firstLatency = latency;
+        set.models = std::move(models);
         for (const auto& a : snap.agents) {
             if (!inSet(a.source)) continue;
             if (set.value.agent && a.id == *set.value.agent) set.provisional = a.perf->score.provisional;

@@ -52,7 +52,9 @@ qt_add_executable(agent-speed
     src/orb/body.cpp
     src/orb/character/character_assets.cpp
     src/orb/character/character_lightning.cpp
+    src/orb/character/character_models.cpp
     src/orb/character/character_particles.cpp
+    src/orb/character/character_readings.cpp
     src/orb/character/character_style.cpp
     src/orb/orb_accessible.cpp
     src/orb/color.cpp
