@@ -13,7 +13,7 @@ struct QuotaControllerLiveTests {
         let root: URL
         init() throws {
             root = FileManager.default.temporaryDirectory.appendingPathComponent("quota-live-\(UUID().uuidString)")
-            for folder in ["cache", "claude", "data", "app"] {
+            for folder in ["cache", "claude", "data", "app", "home"] {
                 try FileManager.default.createDirectory(at: root.appendingPathComponent(folder), withIntermediateDirectories: true)
             }
         }
@@ -33,10 +33,42 @@ struct QuotaControllerLiveTests {
         while !condition(), Date() < deadline { try? await Task.sleep(for: .milliseconds(50)) }
     }
 
-    static func controller(_ folders: Folders, settings: AppSettings) -> QuotaController {
+    /// Answers every vendor request from a script; nothing reaches the network.
+    final class Vendors: QuotaHTTPTransport, @unchecked Sendable {
+        private let lock = NSLock()
+        private var answers: [String: (Int, String)] = [:]
+        private(set) var asked: [QuotaHTTPRequest] = []
+
+        func reply(_ url: String, _ status: Int, _ body: String) { lock.withLock { answers[url] = (status, body) } }
+        var requests: [QuotaHTTPRequest] { lock.withLock { asked } }
+
+        func send(_ request: QuotaHTTPRequest) async throws(QuotaHTTPError) -> QuotaHTTPResponse {
+            let answer = lock.withLock { () -> (Int, String)? in
+                asked.append(request)
+                return answers[request.url.absoluteString]
+            }
+            guard let answer else { throw .transport("offline") }
+            return QuotaHTTPResponse(status: answer.0, body: Data(answer.1.utf8))
+        }
+    }
+
+    struct NoBrowser: BrowserSessionReading {
+        func session(sites: [String], nowMs: Int64) -> BrowserSession? { nil }
+        func resetRefusals() {}
+    }
+
+    struct NoServers: AntigravityLocating {
+        func servers() -> [AntigravityServer] { [] }
+    }
+
+    /// A temporary home, no keychain, no browser, no process listing and a scripted transport.
+    static func controller(_ folders: Folders, settings: AppSettings, vendors: Vendors = Vendors()) -> QuotaController {
+        let environment = QuotaVendorEnvironment(home: folders.url("home"), variables: [:], transport: vendors, userAgent: "AgentSpeed/test",
+                                                 zcodeKey: { nil }, browser: NoBrowser(), antigravity: NoServers())
         let controller = QuotaController(settings: settings, store: SpeedStore(), traffic: TrafficStore(),
                                          data: folders.url("data"), claudeSettings: folders.url("claude/settings.json"),
-                                         desktopFolder: folders.url("cache"))
+                                         desktopFolder: folders.url("cache"), zcodeKeys: MemoryZcodeKeyStore(),
+                                         vendorEnvironment: environment)
         controller.helperSource = folders.url("app/agent-speed-statusline")
         return controller
     }
@@ -101,5 +133,26 @@ struct QuotaControllerLiveTests {
         #expect(!settings.quotaClaudeCli)
         #expect(quota.bridgeFailure == .unreadable)
         #expect(try String(contentsOf: folders.url("claude/settings.json"), encoding: .utf8) == "[1, 2]\n")
+    }
+
+    @Test func asksAVendorWhileTheDashboardIsOpen() async throws {
+        let folders = try Folders()
+        let credentials = folders.url("home/.kimi-code/credentials")
+        try FileManager.default.createDirectory(at: credentials, withIntermediateDirectories: true)
+        try Data(#"{"access_token":"t-1","expires_at":1900000000}"#.utf8).write(to: credentials.appendingPathComponent("kimi-code.json"))
+        let vendors = Vendors()
+        vendors.reply("https://api.kimi.com/coding/v1/usages", 200, #"{"usages":{"limit_7d":{"used_ratio":0.5}}}"#)
+        let settings = Self.settings()
+        let quota = Self.controller(folders, settings: settings, vendors: vendors)
+        quota.activate()
+        defer { quota.shutdown() }
+        await Self.waitUntil { quota.vendor.routes[.kimi]?.status == .notRunning }
+        #expect(vendors.requests.isEmpty)
+        quota.dashboardOpen = true
+        await Self.waitUntil { quota.lines(.kimi) != nil }
+        #expect(quota.lines(.kimi)?.windows.map { $0.label() } == ["7d"])
+        #expect(vendors.requests.count == 1)
+        #expect(vendors.requests.first?.header("Authorization") == "Bearer t-1")
+        #expect(quota.zcodeKeySaved == false)
     }
 }

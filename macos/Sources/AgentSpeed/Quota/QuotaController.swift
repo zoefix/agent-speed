@@ -3,12 +3,18 @@ import AppKit
 import Observation
 
 /// The subscription quotas the UI shows (QUOTAS; DESIGN 4 *Quota lines*, 2a.6 *額度*, 5 *額度*): Codex from the
-/// engine's snapshot, Claude Desktop from its cache, the Claude CLI through the status line bridge, and which of their
-/// apps run and are signed in. Display only: nothing here is reported or sent anywhere (QUOTAS 1).
+/// engine's snapshot, Claude Desktop from its cache, the Claude CLI through the status line bridge, the phase 2 readers
+/// (QUOTAS 9) through the vendor service, every remote host's sources (REMOTE 11), and which of their apps run and are
+/// signed in. Display only: nothing here is reported or sent anywhere (QUOTAS 1).
 @MainActor
 @Observable
 final class QuotaController {
-    static let sources: [SourceKind] = [.codex, .claudeCode, .claudeDesktop]
+    /// Every source with a quota, in source order.
+    static let sources: [SourceKind] = SourceKind.allCases.filter {
+        [.codex, .claudeCode, .claudeDesktop, .grokBuild, .devin, .antigravity, .kimi, .gemini, .droid, .zcode, .qoder,
+         .qoderCli, .workbuddy].contains($0)
+    }
+    static let phaseOneSources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop]
     static let tickInterval: TimeInterval = 5
     /// Desktop only refreshes its cached response while signed in (QUOTAS 6).
     static let desktopSignedInMs: Int64 = 45 * 60_000
@@ -30,6 +36,12 @@ final class QuotaController {
     private(set) var bridgeFailure: BridgeFailure?
     private(set) var apps = QuotaApps.none
     private(set) var signedIn: Set<SourceKind> = []
+    /// The phase 2 readers' snapshots and status lines (QUOTAS 9).
+    var vendor = QuotaVendorReadings()
+    /// A ZCode key is in the keychain (never the key itself); nil until checked.
+    var zcodeKeySaved: Bool?
+    /// Every remote host's quota lines and bridge state (REMOTE 11.1), by host id.
+    var hostQuotas: [String: HostQuotaState] = [:]
     /// The clock the texts follow, in whole minutes (resets and ages move on each minute).
     private(set) var minuteMs: Int64
     /// Previews fix the clock.
@@ -46,7 +58,18 @@ final class QuotaController {
 
     /// An orb shows (or could show) the 額度 card: the light process listing runs while traffic keeps no table.
     @ObservationIgnored var wantsCard = false
-    @ObservationIgnored private let settings: AppSettings
+    /// The dashboard is open: vendor requests may run while no agent does (QUOTAS 9.1).
+    @ObservationIgnored var dashboardOpen = false {
+        didSet { if dashboardOpen, !oldValue, isLive { tick(force: true) } }
+    }
+    @ObservationIgnored let vendorService: QuotaVendorService
+    @ObservationIgnored let zcodeKeys: any ZcodeKeyStoring
+    @ObservationIgnored var vendorInFlight = false
+    /// Something asked for a round while one ran: another follows it.
+    @ObservationIgnored var vendorRerun = false
+    @ObservationIgnored var readsLocalNext = true
+    @ObservationIgnored private(set) lazy var remoteSink = HostQuotaRelay(controller: self)
+    @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let store: SpeedStore
     @ObservationIgnored private let traffic: TrafficStore
     @ObservationIgnored private let worker: QuotaWorker
@@ -63,11 +86,17 @@ final class QuotaController {
 
     init(settings: AppSettings, store: SpeedStore, traffic: TrafficStore, data: URL,
          claudeSettings: URL = ClaudeStatusLineBridge.defaultSettings,
-         desktopFolder: URL = DesktopQuotaReader.defaultFolder) {
+         desktopFolder: URL = DesktopQuotaReader.defaultFolder,
+         userAgent: String = "AgentSpeed/\(UpdateConfiguration.bundleVersion) (macOS)",
+         zcodeKeys: any ZcodeKeyStoring = KeychainZcodeKeyStore(),
+         vendorEnvironment: QuotaVendorEnvironment? = nil) {
         self.settings = settings
         self.store = store
         self.traffic = traffic
+        self.zcodeKeys = zcodeKeys
         worker = QuotaWorker(bridge: ClaudeStatusLineBridge(settings: claudeSettings, data: data), desktopFolder: desktopFolder)
+        vendorService = QuotaVendorService(environment: vendorEnvironment
+            ?? QuotaVendorEnvironment(userAgent: userAgent, zcodeKey: { zcodeKeys.read() }))
         minuteMs = Self.minute(Self.nowMs())
     }
 
@@ -82,7 +111,7 @@ final class QuotaController {
         case .codex: return store.snapshot.codexQuota
         case .claudeDesktop: return desktop
         case .claudeCode: return cli
-        default: return nil
+        default: return vendor.snapshot(source)
         }
     }
 
@@ -99,22 +128,29 @@ final class QuotaController {
         })
     }
 
-    /// Whether the source's app runs and is signed in (QUOTAS 6).
+    /// Whether the source's app runs and is signed in (QUOTAS 6, 9.1).
     func isActive(_ source: SourceKind) -> Bool {
+        if source == .antigravity {
+            return (apps.runs(.antigravity) || vendor.antigravityRuns) && vendor.signedIn(.antigravity)
+        }
         guard apps.runs(source) else { return false }
         if source == .claudeDesktop {
             return desktop.map { clockMs - $0.observedMs <= Self.desktopSignedInMs } ?? false
         }
+        if !Self.phaseOneSources.contains(source) { return vendor.signedIn(source) }
         return signedIn.contains(source)
     }
 
-    /// The 額度 card's sources for an orb tracking `sources` (nil: all): running, signed in and with a window, in
-    /// source order (DESIGN 2a.6).
+    /// The 額度 card's sources of this Mac for an orb tracking `sources` (nil: all): running, signed in and with a
+    /// window, in source order (DESIGN 2a.6). Qoder's one account shows once, under the first Qoder source that runs.
     func cardSnapshots(within sources: SourceSet?) -> [QuotaSnapshot] {
-        Self.sources.compactMap { source in
-            guard sources?.contains(source) ?? true, isActive(source) else { return nil }
-            return lines(source)
+        var shown: [QuotaSnapshot] = []
+        for source in Self.sources {
+            guard sources?.contains(source) ?? true, isActive(source), let snapshot = lines(source) else { continue }
+            if source == .qoderCli, shown.contains(where: { $0.source == .qoder }) { continue }
+            shown.append(snapshot)
         }
+        return shown
     }
 
     /// The invitation under the Claude Code row (DESIGN 4): the bridge is off and the invitation was not dismissed.
@@ -139,8 +175,17 @@ final class QuotaController {
         loops.append(ObservationLoop { [weak self] in
             guard let self else { return }
             _ = (self.settings.quotaClaudeDesktop, self.settings.quotaClaudeCli, self.settings.quotaCodex)
-            DispatchQueue.main.async { [weak self] in self?.tick(force: true) }
+            _ = (self.settings.quotaRoutes, self.settings.quotaZcodeRegion, self.settings.networkEnabled)
+            DispatchQueue.main.async { [weak self] in
+                self?.readsLocalNext = true
+                self?.tick(force: true)
+            }
         })
+        loops.append(ObservationLoop { [weak self] in
+            guard let self else { return }
+            self.pruneHostQuotas(self.settings.remoteHosts, switches: self.settings.remoteQuotaSwitches)
+        })
+        zcodeKeySaved = zcodeKeys.hasKey()
         tick(force: true)
     }
 
@@ -152,8 +197,9 @@ final class QuotaController {
         isLive = false
     }
 
-    /// Settings opened: the bridge's status is checked at once (QUOTAS 5.4).
+    /// Settings opened: the bridge's status is checked at once (QUOTAS 5.4), and the local files are read again.
     func refreshBridgeStatus() {
+        readsLocalNext = true
         guard isLive, settings.quotaClaudeCli else { return }
         worker.perform({ $0.status() }) { status in
             DispatchQueue.main.async { [weak self] in
@@ -162,10 +208,12 @@ final class QuotaController {
         }
     }
 
-    private func tick(force: Bool = false) {
+    func tick(force: Bool = false) {
         let now = Self.nowMs()
         let minute = Self.minute(now)
         if minute != minuteMs { minuteMs = minute }
+        // The vendor service keeps its own cadence and runs beside the file round.
+        if force { runVendorRound(nowMs: now) }
         guard !roundInFlight else { return }
         if !force { ticks += 1 }
         let every15s = force || ticks % 3 == 0
@@ -185,7 +233,7 @@ final class QuotaController {
             cli: settings.quotaClaudeCli,
             bridgeStatus: settings.quotaClaudeCli && everyMinute,
             signIn: every15s && (settings.quotaCodex || settings.quotaClaudeCli),
-            scanProcesses: every15s && tableApps == nil && wantsCard
+            scanProcesses: every15s && tableApps == nil && (wantsCard || !settings.quotaRoutes.isEmpty)
         )
         roundInFlight = true
         worker.run(request) { result in
@@ -193,6 +241,7 @@ final class QuotaController {
                 MainActor.assumeIsolated { self?.apply(result) }
             }
         }
+        if every15s, !force { runVendorRound(nowMs: now) }
     }
 
     private func apply(_ result: QuotaWorker.Result) {
@@ -297,8 +346,12 @@ final class QuotaController {
     /// Sample state for previews and screenshots; never used by live runs.
     func preview(desktop: QuotaSnapshot?, cli: QuotaSnapshot?, cliReceivedMs: Int64? = nil,
                  status: StatusLineSettings.Status? = nil, failure: BridgeFailure? = nil, apps: QuotaApps = .none,
-                 signedIn: Set<SourceKind> = [], nowMs: Int64 = QuotaController.nowMs()) {
+                 signedIn: Set<SourceKind> = [], vendor: QuotaVendorReadings = QuotaVendorReadings(),
+                 hosts: [String: HostQuotaState] = [:], zcodeKeySaved: Bool = false, nowMs: Int64 = QuotaController.nowMs()) {
         guard !isLive else { return }
+        self.vendor = vendor
+        hostQuotas = hosts
+        self.zcodeKeySaved = zcodeKeySaved
         self.desktop = desktop
         self.cli = cli
         self.cliReceivedMs = cliReceivedMs

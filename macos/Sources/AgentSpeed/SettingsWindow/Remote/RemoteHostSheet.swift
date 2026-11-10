@@ -14,6 +14,7 @@ struct RemoteHostSheet: View {
     @State private var advancedExpanded: Bool
     @State private var destinationEdited: Bool
     @State private var tester: RemoteTestRunner
+    @State private var hostWindow = HostWindow()
     @FocusState private var destinationFocused: Bool
 
     init(model: AppModel, draft: RemoteHostDraft, advancedExpanded: Bool? = nil,
@@ -103,9 +104,13 @@ struct RemoteHostSheet: View {
                 }
             }
             Section {
+                RemoteHostQuotaRow(model: model, draft: $draft, host: hostWindow)
+            }
+            Section {
                 testRow(l10n)
             }
         }
+        .background(WindowReader(host: hostWindow))
         .formStyle(.grouped)
         .scrollContentBackground(.hidden)
         .scrollDisabled(true)

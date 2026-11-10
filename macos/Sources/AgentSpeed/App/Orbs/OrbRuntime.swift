@@ -23,7 +23,7 @@ final class OrbRuntime {
     private var characterModels = OrbModelsQuietRule()
     private var characterLatency: Double?
     private var characterBits = false
-    private var characterQuota: [QuotaSnapshot] = []
+    private var characterQuota: [QuotaCardItem] = []
 
     init(config: OrbConfig) {
         id = config.id
@@ -106,11 +106,11 @@ final class OrbRuntime {
         }
     }
 
-    /// The 額度 card (DESIGN 2a.6): the orb's sources whose app runs and is signed in, this computer's only (remote
-    /// hosts have no quotas). Follows the quota controller; a quota has no quiet rule.
-    func ingestQuota(_ quota: QuotaController) {
-        let local = hostSet.map { $0.contains(RemoteHost.localId) } ?? true
-        let next = config.style == .character && local ? quota.cardSnapshots(within: sourceSet) : []
+    /// The 額度 card (DESIGN 2a.6, 13 *Host quotas*): the orb's sources whose app runs and is signed in, on this Mac
+    /// and on its connected hosts. Follows the quota controller; a quota has no quiet rule.
+    func ingestQuota(_ quota: QuotaController, connected: Set<String>) {
+        let next = config.style == .character
+            ? quota.cardItems(within: sourceSet, hosts: hostSet, connected: connected) : []
         guard next != characterQuota else { return }
         characterQuota = next
         publishCharacterReadings(at: Clock.now)

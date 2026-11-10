@@ -6,6 +6,8 @@ struct RemoteHostDraft: Equatable {
     var destination: String
     var name: String
     var relayFolder: String
+    /// The host's Claude Code status line bridge (REMOTE 11.3).
+    var quotaClaudeCli: Bool
     /// The host being edited; nil while adding.
     let original: RemoteHost?
 
@@ -14,6 +16,7 @@ struct RemoteHostDraft: Equatable {
         destination = host?.destination ?? ""
         name = host?.name ?? ""
         relayFolder = host?.relayFolder ?? ""
+        quotaClaudeCli = host?.quotaClaudeCli ?? false
     }
 
     var isEditing: Bool { original != nil }
@@ -39,7 +42,8 @@ struct RemoteHostDraft: Equatable {
     /// The host the fields describe: a new id (enabled) while adding, else the edited host's id and switch.
     func host(newId: String = UUID().uuidString) -> RemoteHost {
         RemoteHost(id: original?.id ?? newId, destination: cleanDestination, name: name,
-                   enabled: original?.enabled ?? true, relayFolder: cleanFolder.isEmpty ? nil : cleanFolder)
+                   enabled: original?.enabled ?? true, relayFolder: cleanFolder.isEmpty ? nil : cleanFolder,
+                   quotaClaudeCli: quotaClaudeCli)
     }
 
     /// The name the host would get without a custom one, made distinct from the other hosts (the name's placeholder).

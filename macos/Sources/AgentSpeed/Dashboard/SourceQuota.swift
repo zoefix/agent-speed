@@ -34,7 +34,10 @@ struct SourceQuotaColumns: Equatable {
     var reset: CGFloat = 0
 
     static let gap: CGFloat = 8
+    /// The bar's comfortable length: an age is only added after the reset while the bar keeps it.
     static let minimumBar: CGFloat = 88
+    /// The shortest bar, for sections with long group labels (`Claude/GPT 7d`): the reset text keeps its room first.
+    static let compactBar: CGFloat = 52
 
     static var labelFont: NSFont { NSFont.systemFont(ofSize: 11, weight: .medium) }
     static var percentFont: NSFont { NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold) }
@@ -42,17 +45,24 @@ struct SourceQuotaColumns: Equatable {
 
     /// The lines' room in a Sources row: the dashboard's column less the dot and the gap before the name.
     static let nameInset: CGFloat = 8 + Spacing.s
-    @MainActor static var lineWidth: CGFloat { DashboardController.width - 2 * DashboardLayout.padding - nameInset }
+    /// A host's source sub-line (DESIGN 13 *Host quotas*): its 6 pt dot and the gap before the source's name.
+    static let hostSourceInset: CGFloat = nameInset + 6 + 6
+    @MainActor static var lineWidth: CGFloat { width(inset: nameInset) }
+
+    @MainActor static func width(inset: CGFloat) -> CGFloat {
+        DashboardController.width - 2 * DashboardLayout.padding - inset
+    }
 
     /// The section's columns, and its lines with an age only where the age still fits after the reset: a line that
     /// cannot hold both keeps its reset, and its tooltip keeps the time (DESIGN 4, *Quota lines*).
-    @MainActor static func fit(_ quota: [SourceKind: [SourceQuotaLine]], separator: String)
-        -> (lines: [SourceKind: [SourceQuotaLine]], columns: SourceQuotaColumns) {
+    @MainActor static func fit<Key: Hashable>(_ quota: [Key: [SourceQuotaLine]], separator: String,
+                                              inset: CGFloat = nameInset)
+        -> (lines: [Key: [SourceQuotaLine]], columns: SourceQuotaColumns) {
         var columns = SourceQuotaColumns()
         let all = quota.values.flatMap { $0 }
         columns.label = all.map { width($0.label, labelFont) }.max() ?? 0
         columns.percent = width("100%", percentFont)
-        let room = lineWidth - columns.label - columns.percent - minimumBar - 3 * gap
+        let room = width(inset: inset) - columns.label - columns.percent - minimumBar - 3 * gap
         var fitted = quota
         for (source, lines) in quota {
             fitted[source] = lines.map { line in
@@ -83,7 +93,15 @@ struct SourceQuotaColumns: Equatable {
 extension AppModel {
     /// The quota lines of a listed source (DESIGN 4): its windows in QUOTAS 2 order while its switch is on.
     func quotaLines(_ source: SourceKind) -> [SourceQuotaLine] {
-        guard let snapshot = quota.lines(source) else { return [] }
+        quota.lines(source).map(quotaLines) ?? []
+    }
+
+    /// A remote host's sources with a quota and their lines (DESIGN 13 *Host quotas*), in source order.
+    func hostQuotaLines(_ hostId: String) -> [(source: SourceKind, lines: [SourceQuotaLine])] {
+        quota.hostSnapshots(hostId).map { ($0.source, quotaLines($0)) }
+    }
+
+    func quotaLines(_ snapshot: QuotaSnapshot) -> [SourceQuotaLine] {
         let now = quota.clockMs
         let format = l10n.quotaFormat
         let age = format.age(observedMs: snapshot.observedMs, nowMs: now)

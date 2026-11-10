@@ -9,7 +9,8 @@ import Foundation
 /// `AGENT_SPEED_ORB_MODELS` the models card its rows: a comma list of `id=tok/s` (`id=-` before a timed response), the
 /// vendor resolved from the price table. `AGENT_SPEED_ORB_QUOTA` gives the 額度 card its sources: `;`-separated
 /// `source=label:percent:reset,…` with the reset as `+42m`, `+3h`, `+5d` from now, `-` unknown or `passed`, e.g.
-/// `claudeDesktop=7d:94:+10h,Fable 7d:27:+10h;codex=7d:25:+5d`.
+/// `claudeDesktop=7d:94:+10h,Fable 7d:27:+10h;codex=7d:25:+5d`; `source@host=…` is that source on a remote host, and
+/// a label may name a group (`Gemini 5h`), a month (`mo`) or credits.
 @MainActor
 struct CharacterDemoReadings {
     private var network = OrbLineQuietRule()
@@ -19,7 +20,7 @@ struct CharacterDemoReadings {
     let readouts: CharacterReadouts
     let latencyMs: Double?
     let models: [OrbModelReading]
-    let quota: [QuotaSnapshot]
+    let quota: [QuotaCardItem]
 
     init(environment: [String: String], prices: PriceTable? = nil) {
         latencyMs = environment["AGENT_SPEED_ORB_LATENCY"].flatMap(Double.init)
@@ -67,37 +68,44 @@ struct CharacterDemoReadings {
     }
 
     /// The sources of `AGENT_SPEED_ORB_QUOTA`.
-    static func quota(_ text: String, nowMs: Int64) -> [QuotaSnapshot] {
+    static func quota(_ text: String, nowMs: Int64) -> [QuotaCardItem] {
         let order = SourceKind.allCases
-        return text.split(separator: ";").compactMap { item -> QuotaSnapshot? in
+        let items = text.split(separator: ";").compactMap { item -> QuotaCardItem? in
             let parts = item.split(separator: "=", maxSplits: 1).map(String.init)
-            guard parts.count == 2, let source = SourceKind(rawValue: parts[0]) else { return nil }
-            let windows = parts[1].split(separator: ",").compactMap { window -> QuotaWindow? in
-                let fields = window.split(separator: ":").map(String.init)
+            guard parts.count == 2 else { return nil }
+            let key = parts[0].split(separator: "@", maxSplits: 1).map(String.init)
+            guard let source = SourceKind(rawValue: key[0]) else { return nil }
+            let windows = parts[1].split(separator: ",").compactMap { entry -> QuotaWindow? in
+                let fields = entry.split(separator: ":").map(String.init)
                 guard fields.count == 3, let used = Double(fields[1]) else { return nil }
-                return QuotaWindow(kind: kind(fields[0]), name: name(fields[0]), minutes: minutes(fields[0]),
-                                   usedPercent: used, resetsAtMs: reset(fields[2], nowMs: nowMs))
+                let (kind, name, minutes) = parseWindow(fields[0])
+                return QuotaWindow(kind: kind, name: name, minutes: minutes, usedPercent: used,
+                                   resetsAtMs: reset(fields[2], nowMs: nowMs))
             }
-            return QuotaSnapshot(source: source, observedMs: nowMs - 60_000, windows: windows)
-        }.sorted { order.firstIndex(of: $0.source)! < order.firstIndex(of: $1.source)! }
-    }
-
-    private static func kind(_ label: String) -> QuotaWindowKind {
-        switch label {
-        case "5h": .fiveHour
-        case "7d": .sevenDay
-        case _ where label.hasSuffix(" 7d"): .modelWeek
-        default: .other
+            let snapshot = QuotaSnapshot(source: source, observedMs: nowMs - 60_000, windows: windows)
+            return QuotaCardItem(snapshot: snapshot, hostId: key.count > 1 ? key[1] : nil, hostName: key.count > 1 ? key[1] : nil)
+        }
+        // This Mac's sources first, then each host's, each in source order.
+        return items.sorted { lhs, rhs in
+            let (a, b) = (lhs.hostName ?? "", rhs.hostName ?? "")
+            return a != b ? a < b : order.firstIndex(of: lhs.source)! < order.firstIndex(of: rhs.source)!
         }
     }
 
-    private static func name(_ label: String) -> String? {
-        label.hasSuffix(" 7d") ? String(label.dropLast(3)) : nil
-    }
-
-    private static func minutes(_ label: String) -> Int? {
-        guard kind(label) == .other, let unit = label.last, let n = Int(label.dropLast()) else { return nil }
-        return unit == "d" ? n * 1440 : unit == "h" ? n * 60 : n
+    /// `5h`, `7d`, `mo`, `credits` or a length (`1d`, `2h`, `45m`), after an optional group name.
+    private static func parseWindow(_ label: String) -> (QuotaWindowKind, String?, Int?) {
+        let words = label.split(separator: " ").map(String.init)
+        let base = words.last ?? label
+        let name = words.count > 1 ? words.dropLast().joined(separator: " ") : nil
+        switch base {
+        case "5h": return (.fiveHour, name, nil)
+        case "7d": return (.sevenDay, name, nil)
+        case "mo", "月": return (.month, name, nil)
+        case "credits", "點數": return (.credits, name, nil)
+        default:
+            guard let unit = base.last, let n = Int(base.dropLast()) else { return (.other, name, 60) }
+            return (.other, name, unit == "d" ? n * 1440 : unit == "h" ? n * 60 : n)
+        }
     }
 
     private static func reset(_ text: String, nowMs: Int64) -> Int64? {

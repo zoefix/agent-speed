@@ -43,7 +43,7 @@ struct QuotaDashboardTests {
         #expect(defaults.string(forKey: "quotaCliInvite") == "dismissed")
         let reloaded = AppSettings(defaults: defaults)
         #expect(reloaded.quotaCliInviteDismissed && !reloaded.quotaClaudeDesktop)
-        #expect(!reloaded.showsQuota(.gemini))
+        #expect(!reloaded.showsQuota(.opencode))
     }
 
     @Test func theCardTakesRunningSignedInSourcesInSourceOrder() {
@@ -98,7 +98,7 @@ struct QuotaDashboardTests {
         var lines = model.quotaLines(.claudeDesktop)
         #expect(lines.first?.age == "5 小時前更新")
         lines[0].reset = String(repeating: "很長的重置時間", count: 4)
-        let (fitted, columns) = SourceQuotaColumns.fit([.claudeDesktop: lines], separator: " · ")
+        let (fitted, columns) = SourceQuotaColumns.fit([SourceKind.claudeDesktop: lines], separator: " · ")
         #expect(fitted[.claudeDesktop]?.first?.age == nil)
         #expect(fitted[.claudeDesktop]?.first?.tooltip.contains("5 小時前更新") == true)
         #expect(columns.label > 0 && columns.percent > 0)

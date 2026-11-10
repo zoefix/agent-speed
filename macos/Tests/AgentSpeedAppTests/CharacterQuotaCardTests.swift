@@ -32,7 +32,7 @@ struct CharacterQuotaCardTests {
 
     static func sources(_ snapshots: [QuotaSnapshot] = snapshots(), _ language: LanguagePreference = .zhHant)
         -> [CharacterQuotaSource] {
-        CharacterQuotaText.sources(snapshots, nowMs: now, l10n: Localizer(preference: language))
+        CharacterQuotaText.sources(snapshots.map { QuotaCardItem(snapshot: $0) }, nowMs: now, l10n: Localizer(preference: language))
     }
 
     @Test func linesFollowTheWindowsOfEachAccount() {
@@ -55,12 +55,13 @@ struct CharacterQuotaCardTests {
 
     @Test func accessibilityReadsEverySourceAfterTheOtherCards() {
         let l10n = Localizer(preference: .en)
-        let sentence = CharacterQuotaText.sentence(Array(Self.snapshots().prefix(2)), nowMs: Self.now, l10n: l10n)
+        let sentence = CharacterQuotaText.sentence(Self.snapshots().prefix(2).map { QuotaCardItem(snapshot: $0) }, nowMs: Self.now,
+                                                   l10n: l10n)
         let reset = l10n.quotaFormat.resetLong(Self.now + 5 * 24 * Self.hour, nowMs: Self.now)
         #expect(sentence == "Quota: Codex 7d 25% used, \(reset), Claude Code 5h 0% used, 7d 86% used")
         #expect(CharacterQuotaText.sentence([], nowMs: Self.now, l10n: l10n) == nil)
         var readings = CharacterReadoutsTests.readings(models: [], latency: nil)
-        readings.quota = Self.snapshots()
+        readings.quota = Self.snapshots().map { QuotaCardItem(snapshot: $0) }
         let parts = OrbAccessibilityReporter.characterParts(readings, currency: "US dollars", l10n, now: 100,
                                                             quotaNowMs: Self.now)
         #expect(parts.last?.hasPrefix("Quota: Codex 7d 25% used") == true)
@@ -218,17 +219,17 @@ struct CharacterQuotaCardTests {
                             signedIn: [.claudeCode], nowMs: Self.now)
         var config = OrbConfig(id: "a", style: .character)
         let runtime = OrbRuntime(config: config)
-        runtime.ingestQuota(model.quota)
+        runtime.ingestQuota(model.quota, connected: [])
         // Codex has no snapshot in the engine's; Claude Code and Desktop run and are signed in.
         #expect(runtime.feed.characterReadings?.quota.map(\.source) == [.claudeCode, .claudeDesktop])
         config.sources = .explicit([.claudeDesktop])
         runtime.update(config: config)
-        runtime.ingestQuota(model.quota)
+        runtime.ingestQuota(model.quota, connected: [])
         #expect(runtime.feed.characterReadings?.quota.map(\.source) == [.claudeDesktop])
-        // An orb of remote hosts alone has no quotas: they belong to this computer.
+        // An orb of remote hosts alone shows only their sources, and only while connected.
         config.hosts = .explicit([UUID().uuidString])
         runtime.update(config: config)
-        runtime.ingestQuota(model.quota)
+        runtime.ingestQuota(model.quota, connected: [])
         #expect(runtime.feed.characterReadings?.quota.isEmpty == true)
     }
 }
