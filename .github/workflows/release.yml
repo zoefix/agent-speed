@@ -97,6 +97,8 @@ jobs:
         run: dotnet test windows/tests/AgentSpeed.Presentation.Tests -c Release
       - name: Test traffic helper
         run: dotnet test windows/tests/AgentSpeed.TrafficHelper.Tests -c Release
+      - name: Test status line helper
+        run: dotnet test windows/tests/AgentSpeed.StatuslineHelper.Tests -c Release
       - name: Publish
         shell: pwsh
         run: ./windows/scripts/publish.ps1 -Version $env:GITHUB_REF_NAME.TrimStart('v')
