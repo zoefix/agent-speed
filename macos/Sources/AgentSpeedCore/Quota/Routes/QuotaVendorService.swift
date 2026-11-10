@@ -66,6 +66,11 @@ public actor QuotaVendorService {
         return readings
     }
 
+    /// Forgets a route's state: its credential changed in the app (a new ZCode key or region).
+    public func forget(_ route: QuotaRoute) {
+        states[route] = nil
+    }
+
     public var readings: QuotaVendorReadings {
         QuotaVendorReadings(routes: states.mapValues(\.reading), antigravityRuns: antigravityRuns)
     }

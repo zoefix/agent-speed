@@ -51,14 +51,24 @@ extension QuotaController {
         guard let key = ZcodeKey.cleaned(text) else { return false }
         guard isLive ? zcodeKeys.save(key) : true else { return false }
         zcodeKeySaved = true
-        tick(force: true)
+        forgetZcode()
         return true
     }
 
     func removeZcodeKey() {
         if isLive { zcodeKeys.remove() }
         zcodeKeySaved = false
-        tick(force: true)
+        forgetZcode()
+    }
+
+    /// A new key (or region) asks at once and never shows the previous key's numbers.
+    func forgetZcode() {
+        guard isLive else { return }
+        let service = vendorService
+        Task { [weak self] in
+            await service.forget(.zcode)
+            await MainActor.run { self?.tick(force: true) }
+        }
     }
 }
 

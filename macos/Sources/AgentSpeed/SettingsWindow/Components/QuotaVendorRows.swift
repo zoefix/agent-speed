@@ -97,7 +97,11 @@ private struct ZcodeQuotaRows: View {
                 }
             }
             .transition(.opacity)
-            Picker(selection: Binding(get: { settings.quotaZcodeRegion }, set: { settings.quotaZcodeRegion = $0 })) {
+            Picker(selection: Binding(get: { settings.quotaZcodeRegion }, set: { region in
+                guard region != settings.quotaZcodeRegion else { return }
+                settings.quotaZcodeRegion = region
+                model.quota.forgetZcode()
+            })) {
                 Text(l10n("settings.quota.zcode.regionGlobal")).tag(QuotaRequests.ZaiRegion.global)
                 Text(l10n("settings.quota.zcode.regionCn")).tag(QuotaRequests.ZaiRegion.bigmodelCn)
             } label: {

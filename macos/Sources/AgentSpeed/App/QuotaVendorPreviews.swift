@@ -71,6 +71,19 @@ enum QuotaVendorPreviews {
                            to: directory.appendingPathComponent("quota2-consent-\(route.rawValue)-\(dark ? "dark" : "light").png"))
             }
         }
+        // English: the longest labels (`credits`, `mo`) and sentences.
+        let language = settings.language
+        settings.language = .en
+        model.l10n.apply(.en)
+        settings.quotaQoder = true
+        publish(model, now: now)
+        model.quota.preview(desktop: nil, cli: nil, apps: QuotaApps(agents: [.antigravity, .kimi, .qoderCli]),
+                            vendor: readings(now), zcodeKeySaved: true, nowMs: now)
+        write(sources(model), dark: false, to: directory, "quota2-dashboard-sources-en-light")
+        write(statusGallery(model, now: now), dark: false, to: directory, "quota2-status-lines-en-light")
+        write(browserGroups(model), dark: false, to: directory, "quota2-settings-browser-en-light")
+        settings.language = language
+        model.l10n.apply(language)
         settings.quotaZcode = false
         settings.quotaGrokBuildLive = false
     }

@@ -75,6 +75,15 @@ extension QuotaVendorService {
             return FetchPlan(route: route, credential: token.fingerprint, kind: .single(
                 QuotaRequests.droidLimits(key: token.value, userAgent: ua), parse: { body, now in DroidLimits.windows(body, nowMs: now) }))
         case .zcode:
+            // The keychain is read only when a request could go out; a new key forgets the route first.
+            guard round.networkEnabled, asks(route, round) else {
+                _ = gate(route, round, credential: state.account ?? QuotaFingerprint(""), state: &state)
+                return nil
+            }
+            if let last = state.cadence.lastRequestMs {
+                let wait = state.cadence.lastOutcome == .success ? QuotaCadence.intervalMs : QuotaCadence.failureWaitMs
+                if round.nowMs - last < wait || state.cadence.lastOutcome == .denied { return nil }
+            }
             guard let key = env.zcodeKey(), Self.isHeaderSafe(key) else {
                 // No key saved: the key field itself says what to do.
                 state.reading.status = nil
@@ -82,7 +91,7 @@ extension QuotaVendorService {
                 return nil
             }
             state.reading.signedIn = true
-            let fingerprint = QuotaFingerprint(key)
+            let fingerprint = QuotaFingerprint(key + "|" + round.zaiRegion.rawValue)
             guard gate(route, round, credential: fingerprint, state: &state) else { return nil }
             let region = round.zaiRegion
             return FetchPlan(route: route, credential: fingerprint, kind: .single(
