@@ -14,11 +14,12 @@ internal static class QoderCliPaths
 
     /// <summary>Pure string rules of the given platform.</summary>
     /// <param name="environment">Reads one environment variable; null means unset.</param>
-    public static IReadOnlyList<string> AutomaticRoots(Func<string, string?> environment, bool windows, string home) =>
-    [
-        Join(windows, environment("QODER_CONFIG_DIR") is { Length: > 0 } international ? international : Join(windows, home, ".qoder"), ProjectsFolder),
-        Join(windows, environment("QODERCN_CONFIG_DIR") is { Length: > 0 } china ? china : Join(windows, home, ".qoder-cn"), ProjectsFolder),
-    ];
+    public static IReadOnlyList<string> AutomaticRoots(Func<string, string?> environment, bool windows, string home)
+    {
+        string Root(string variable, string folder) =>
+            QoderPaths.Join(windows, environment(variable) is { Length: > 0 } config ? config : QoderPaths.Join(windows, home, folder), ProjectsFolder);
+        return [Root("QODER_CONFIG_DIR", ".qoder"), Root("QODERCN_CONFIG_DIR", ".qoder-cn")];
+    }
 
     /// <summary>A user location, a config folder or its <c>projects</c> folder, read as that <c>projects</c> folder.</summary>
     public static string RootOf(string location) => RootOf(location, OperatingSystem.IsWindows());
@@ -30,17 +31,6 @@ internal static class QoderCliPaths
         var folder = trimmed.Length > 0 ? trimmed : location;
         var name = folder[(folder.LastIndexOfAny(['/', '\\']) + 1)..];
         var comparison = windows ? StringComparison.OrdinalIgnoreCase : StringComparison.Ordinal;
-        return string.Equals(name, ProjectsFolder, comparison) ? folder : Join(windows, folder, ProjectsFolder);
-    }
-
-    private static string Join(bool windows, string parent, string child)
-    {
-        if (parent.Length == 0)
-        {
-            return child;
-        }
-
-        var separator = windows ? '\\' : '/';
-        return parent[^1] is '/' or '\\' ? parent + child : parent + separator + child;
+        return string.Equals(name, ProjectsFolder, comparison) ? folder : QoderPaths.Join(windows, folder, ProjectsFolder);
     }
 }

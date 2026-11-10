@@ -99,18 +99,7 @@ internal static class DevinPaths
     }
 
     /// <summary>A regular file, never a symbolic link or junction (the folders above it may be links).</summary>
-    public static bool IsRegularFile(string path)
-    {
-        try
-        {
-            var info = new FileInfo(path);
-            return info.Exists && (info.Attributes & (FileAttributes.ReparsePoint | FileAttributes.Directory | FileAttributes.Device)) == 0;
-        }
-        catch (Exception e) when (e is IOException or UnauthorizedAccessException or ArgumentException or NotSupportedException)
-        {
-            return false;
-        }
-    }
+    public static bool IsRegularFile(string path) => LocationPaths.IsRegularFile(path);
 
     private static string Join(bool windows, string parent, string child)
     {

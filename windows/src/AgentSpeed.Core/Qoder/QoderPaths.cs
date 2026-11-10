@@ -95,7 +95,10 @@ internal static class QoderPaths
         return candidates.FirstOrDefault(IsRegularFile);
     }
 
-    /// <summary>Where a folder without a database would keep it, judged by its name: a <c>db</c> folder, a <c>SharedClientCache</c> folder or a data folder.</summary>
+    /// <summary>
+    /// Where a folder without a database would keep it, judged by its name: a <c>db</c> folder, a <c>SharedClientCache</c> folder or
+    /// an IDE data folder.
+    /// </summary>
     public static string ExpectedDatabase(string folder)
     {
         var name = System.IO.Path.GetFileName(System.IO.Path.TrimEndingDirectorySeparator(folder));
@@ -131,7 +134,7 @@ internal static class QoderPaths
     }
 
     /// <summary>A regular file, never a symbolic link or junction (METRICS 4.18 <i>Database</i>).</summary>
-    public static bool IsRegularFile(string path) => Devin.DevinPaths.IsRegularFile(path);
+    public static bool IsRegularFile(string path) => LocationPaths.IsRegularFile(path);
 
     private static string UserHome => Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
 
@@ -143,7 +146,8 @@ internal static class QoderPaths
     private static bool Named(string path, string name) =>
         path.Length > 0 && string.Equals(System.IO.Path.GetFileName(path), name, LocationPaths.Comparison);
 
-    private static string Join(bool windows, string parent, string child)
+    /// <summary>Joins with the given platform's separator, whatever this process runs on.</summary>
+    internal static string Join(bool windows, string parent, string child)
     {
         if (parent.Length == 0)
         {
