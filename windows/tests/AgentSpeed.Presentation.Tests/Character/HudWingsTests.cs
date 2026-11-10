@@ -4,9 +4,11 @@ namespace AgentSpeed.Presentation.Tests.Character;
 
 public class HudWingsTests
 {
-    private static readonly (double W, double H)[] Sizes = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16)];
+    private static readonly (double W, double H)[] Sizes = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 36)];
 
-    private static readonly bool[] AllShown = [true, true, true, true, true, true];
+    private static readonly bool[] AllShown = [true, true, true, true, true, true, false];
+
+    private static readonly bool[] WithModels = [true, true, true, true, true, true, true];
 
     /// <summary>
     /// A frame like a 148 pt orb's (D = 296, window 444): her outline a slim body from y 80 to 400 around x 222, with an
@@ -226,7 +228,7 @@ public class HudWingsTests
 
         const double d = 296.0;
         const double side = 444.0;
-        (double W, double H)[] sizes = [(84, 62), (90, 18), (80, 28), (64, 27), (96, 18), (62, 27)];
+        (double W, double H)[] sizes = [(84, 62), (90, 18), (80, 28), (64, 27), (96, 18), (62, 27), (100, 40)];
         int[] levels = [2, 5, 8, 11, 13, 9, 4, 1];
         foreach (var dir in Directory.GetDirectories(root).Where(p => File.Exists(Path.Combine(p, "manifest.json"))).Order(StringComparer.Ordinal))
         {
@@ -241,8 +243,8 @@ public class HudWingsTests
                 performer.Step(1.0 / 60, levels[Math.Min(levels.Length - 1, n / 450)]);
                 var anchors = performer.Trace(silhouette, (222, 222 + 0.45 * d), ppp, ref scratch);
                 var f = new HudFrame((0, 0, side, side), silhouette, d, anchors);
-                wings.Update(1.0 / 60, n / 60.0, f, sizes, AllShown);
-                foreach (var card in HudCards.Column.Append(HudCard.Speed))
+                wings.Update(1.0 / 60, n / 60.0, f, sizes, WithModels);
+                foreach (var card in HudCards.Column.Append(HudCard.Speed).Append(HudCard.Models))
                 {
                     var p = wings.Places[(int)card];
                     var (w, h) = wings.Sizes[(int)card];

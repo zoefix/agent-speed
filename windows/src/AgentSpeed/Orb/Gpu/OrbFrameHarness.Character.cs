@@ -25,7 +25,7 @@ namespace AgentSpeed.Orb.Gpu;
 /// The <c>character</c> sheets of the frame harness (DESIGN 2a.6): with <c>character</c> among
 /// <c>AGENT_SPEED_ORB_FRAMES_STYLES</c>, every pack of the <c>AGENT_SPEED_CHARACTERS</c> folder (or
 /// <c>AGENT_SPEED_ORB_FRAMES_CHARACTERS</c>, a comma list of ids) at idle, cruise, boost, overdrive and redline, at 148 pt
-/// and 72 pt, dark and light (<c>character-ID-dark|light.png</c>); a 6 s tour of the first one at 148 pt dark as numbered
+/// and 72 pt (or the sizes of <c>AGENT_SPEED_ORB_FRAMES_SIZES</c>, a comma list), dark and light (<c>character-ID-dark|light.png</c>); a 6 s tour of the first one at 148 pt dark as numbered
 /// frames every 0.25 s with a pose swap and the cards floating (<c>character-tour/</c>); the empty state; and the build and
 /// GPU cost of a frame. The cards follow a demo reading through the app's own quiet rules.
 /// </summary>
@@ -65,7 +65,7 @@ internal static partial class OrbFrameHarness
             foreach (var dark in new[] { true, false })
             {
                 var rows = new List<List<BitmapSource>>();
-                foreach (var size in new double[] { 148, 72 })
+                foreach (var size in CharacterSizes())
                 {
                     var row = new List<BitmapSource>();
                     foreach (var fraction in CharacterLevels)
@@ -114,6 +114,17 @@ internal static partial class OrbFrameHarness
         }
     }
 
+    /// <summary><c>AGENT_SPEED_ORB_FRAMES_SIZES</c> (sizes in pt, 64–240), else 148 and 72.</summary>
+    private static double[] CharacterSizes()
+    {
+        var sizes = (Environment.GetEnvironmentVariable("AGENT_SPEED_ORB_FRAMES_SIZES") ?? string.Empty)
+            .Split(',', StringSplitOptions.RemoveEmptyEntries | StringSplitOptions.TrimEntries)
+            .Select(t => double.TryParse(t, NumberStyles.Float, CultureInfo.InvariantCulture, out var v) ? v : double.NaN)
+            .Where(v => v is >= 64 and <= 240)
+            .ToArray();
+        return sizes.Length > 0 ? sizes : [148, 72];
+    }
+
     /// <summary>The demo content of a harness character orb: every card on, the model chip, today's line.</summary>
     private static OrbCharacterContent CharacterContent(CharacterPack? pack, Localizer loc) => new()
     {
@@ -129,7 +140,19 @@ internal static partial class OrbFrameHarness
         AgentsLine = loc.Format("agents.count", 3),
         IntelligenceGlyph = loc["intel.glyph"],
         ThinkingGlyph = loc["intel.thinking.glyph"],
+        ModelsMore = loc["character.models.more"],
+        TokensUnit = loc["unit.tokS"],
     };
+
+    /// <summary>The demo's running models: two timed, one without a timed response yet, a long dated id.</summary>
+    private static IReadOnlyList<OrbModelRow> HarnessModels(double value) => value > 1
+        ?
+        [
+            new OrbModelRow("claude-opus-5-5", (int)Math.Round(value * 0.62), Rgba.FromHex("#D97757")),
+            new OrbModelRow("gpt-6.1-sol", (int)Math.Round(value * 0.41), Rgba.FromHex("#10A37F")),
+            new OrbModelRow("gemini-4-argon-preview-2026-11-01", null, Rgba.FromHex("#4C8DF6")),
+        ]
+        : [];
 
     private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value)
     {
@@ -140,7 +163,8 @@ internal static partial class OrbFrameHarness
         var money = generating ? new LiveMoney((value * 0.000004).ToString("0.0000", CultureInfo.InvariantCulture), "US$/s", "$", false, false, value * 4, "", "")
             : null;
         orb.SetCharacterNetwork(time, network);
-        orb.SetCharacterReadings(time, performance, money, generating);
+        orb.SetCharacterReadings(time, performance, money, generating, generating ? OrbLatency.Of(1180 + 40 * Math.Sin(time), loc) : null,
+            HarnessModels(value));
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,

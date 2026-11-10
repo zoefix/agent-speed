@@ -73,10 +73,26 @@ internal static class PerfEvaluator
         var (components, score) = PerfFormula.Combine(source, measures);
         var form = score is null ? PerfForm.None : idle ? PerfForm.Resting : PerfForm.Live;
         var model = n > 0 ? sample[0].Model : null;
-        var evaluation = new PerfEvaluation(source, form, score, n, calls.Count, active, spanStart, model, components);
+        var evaluation = new PerfEvaluation(source, form, score, n, calls.Count, active, spanStart, model, components) { Latencies = Latencies(sample) };
         return score is not null && baselines?.Baseline(source, model ?? string.Empty) is { } baseline
             ? evaluation with { Baseline = baseline }
             : evaluation;
+    }
+
+    /// <summary>The sample's first-content latencies (ms, in sample order): responses with both times and <c>firstMs ≥ startMs</c>.</summary>
+    public static IReadOnlyList<long> Latencies(IReadOnlyList<ParsedResponse> sample)
+    {
+        ArgumentNullException.ThrowIfNull(sample);
+        List<long>? latencies = null;
+        foreach (var response in sample)
+        {
+            if (response.FirstMs is { } first && response.StartMs is { } start && first >= start)
+            {
+                (latencies ??= new List<long>(sample.Count)).Add(first - start);
+            }
+        }
+
+        return latencies is null ? [] : latencies;
     }
 
     /// <summary>

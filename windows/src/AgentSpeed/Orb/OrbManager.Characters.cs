@@ -1,5 +1,6 @@
 using AgentSpeed.Characters;
 using AgentSpeed.Core;
+using AgentSpeed.Core.Perf;
 using AgentSpeed.Core.Pricing;
 using AgentSpeed.Core.Traffic;
 using AgentSpeed.Presentation.Characters;
@@ -13,8 +14,8 @@ namespace AgentSpeed.Orb;
 /// <summary>
 /// The <c>character</c> orbs (DESIGN 2a.6, CHARACTERS 7–8): which character each shows (Auto follows its fastest live
 /// vendor with a 3 s hold, or the locked pack), her content and the cards' live values (network speed by the orb's scope,
-/// 性能 and 思考, the cost rate), the automatic download when an orb switches to the style, and her cards in the orb's
-/// accessible text.
+/// 性能 and 思考 with the 首字 latency, the cost rate, the running models), the automatic download when an orb switches to
+/// the style, and her cards in the orb's accessible text.
 /// </summary>
 internal sealed partial class OrbManager
 {
@@ -99,9 +100,30 @@ internal sealed partial class OrbManager
             Bits = Settings.Traffic.Bits,
             IntelligenceGlyph = _loc["intel.glyph"],
             ThinkingGlyph = _loc["intel.thinking.glyph"],
+            ModelsMore = _loc["character.models.more"],
+            TokensUnit = _loc["unit.tokS"],
         });
         var generating = reading.GeneratingSources.Count > 0;
-        surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating);
+        surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating,
+            OrbLatency.Of(PerfSetReadouts.FirstLatency(reading.Agents).Ms, _loc), ModelRows(reading.Agents));
+    }
+
+    /// <summary>
+    /// The models card's rows (METRICS 6.9 <i>Readouts of a set</i>): the orb's running models, fastest first, each with the
+    /// accent of the character that stands for its vendor.
+    /// </summary>
+    private IReadOnlyList<OrbModelRow> ModelRows(IReadOnlyList<AgentStatus> agents)
+    {
+        var running = PerfSetReadouts.RunningModels(agents);
+        if (running.Count == 0)
+        {
+            return [];
+        }
+
+        var prices = Prices?.Invoke();
+        var installed = Characters?.Library.Installed ?? [];
+        var catalog = Characters?.Library.Catalog;
+        return OrbModelsText.Rows(running, m => VendorAccents.Of(CharacterVendors.Resolve(m.Model, m.Source, prices).Vendor, installed, catalog));
     }
 
     /// <summary>

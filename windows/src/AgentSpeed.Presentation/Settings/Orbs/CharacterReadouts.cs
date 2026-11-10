@@ -7,24 +7,30 @@ public enum CharacterReadout
 {
     Intelligence,
     Thinking,
+    Latency,
     Network,
     Cost,
     Agents,
+    Models,
     Model,
 }
 
 /// <summary>
 /// The cards a <c>character</c> orb floats beside her (DESIGN 2a.6 <i>Readouts</i>, 2b <c>characterReadouts</c>): the
-/// speed always shows; each card has its own switch. Every card is on for a new orb except the fastest model's name.
+/// speed always shows; each card (and the 性能 card's 首字 row) has its own switch. Every card is on for a new orb except the
+/// fastest model's name.
 /// Decoding is tolerant: a missing key, or a value that is not a boolean, takes its default.
 /// </summary>
 public sealed record CharacterReadouts(bool Model = false, bool Intelligence = true, bool Thinking = true, bool Network = true, bool Cost = true,
-    bool Agents = true)
+    bool Agents = true, bool Latency = true, bool Models = true)
 {
     public static CharacterReadouts Default { get; } = new();
 
     public static IReadOnlyList<CharacterReadout> All { get; } =
-        [CharacterReadout.Intelligence, CharacterReadout.Thinking, CharacterReadout.Network, CharacterReadout.Cost, CharacterReadout.Agents, CharacterReadout.Model];
+    [
+        CharacterReadout.Intelligence, CharacterReadout.Thinking, CharacterReadout.Latency, CharacterReadout.Network, CharacterReadout.Cost,
+        CharacterReadout.Agents, CharacterReadout.Models, CharacterReadout.Model,
+    ];
 
     public bool IsDefault => this == Default;
 
@@ -33,8 +39,10 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Model => Model,
         CharacterReadout.Intelligence => Intelligence,
         CharacterReadout.Thinking => Thinking,
+        CharacterReadout.Latency => Latency,
         CharacterReadout.Network => Network,
         CharacterReadout.Cost => Cost,
+        CharacterReadout.Models => Models,
         _ => Agents,
     };
 
@@ -43,19 +51,26 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         CharacterReadout.Model => this with { Model = on },
         CharacterReadout.Intelligence => this with { Intelligence = on },
         CharacterReadout.Thinking => this with { Thinking = on },
+        CharacterReadout.Latency => this with { Latency = on },
         CharacterReadout.Network => this with { Network = on },
         CharacterReadout.Cost => this with { Cost = on },
+        CharacterReadout.Models => this with { Models = on },
         _ => this with { Agents = on },
     };
 
-    /// <summary><c>character.readouts.intel</c>, <c>.thinking</c>, <c>.network</c>, <c>.cost</c>, <c>.agents</c>, <c>.model</c>.</summary>
+    /// <summary>
+    /// <c>character.readouts.intel</c>, <c>.thinking</c>, <c>.latency</c>, <c>.network</c>, <c>.cost</c>, <c>.agents</c>,
+    /// <c>.models</c>, <c>.model</c>.
+    /// </summary>
     public static string TitleKey(CharacterReadout readout) => readout switch
     {
         CharacterReadout.Intelligence => "character.readouts.intel",
         CharacterReadout.Thinking => "character.readouts.thinking",
+        CharacterReadout.Latency => "character.readouts.latency",
         CharacterReadout.Network => "character.readouts.network",
         CharacterReadout.Cost => "character.readouts.cost",
         CharacterReadout.Agents => "character.readouts.agents",
+        CharacterReadout.Models => "character.readouts.models",
         _ => "character.readouts.model",
     };
 
@@ -64,9 +79,11 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
     {
         CharacterReadout.Intelligence => "intelligence",
         CharacterReadout.Thinking => "thinking",
+        CharacterReadout.Latency => "latency",
         CharacterReadout.Network => "network",
         CharacterReadout.Cost => "cost",
         CharacterReadout.Agents => "agents",
+        CharacterReadout.Models => "models",
         _ => "model",
     };
 
@@ -99,6 +116,8 @@ public sealed record CharacterReadouts(bool Model = false, bool Intelligence = t
         writer.WriteBoolean("network", Network);
         writer.WriteBoolean("cost", Cost);
         writer.WriteBoolean("agents", Agents);
+        writer.WriteBoolean("latency", Latency);
+        writer.WriteBoolean("models", Models);
         writer.WriteEndObject();
     }
 }

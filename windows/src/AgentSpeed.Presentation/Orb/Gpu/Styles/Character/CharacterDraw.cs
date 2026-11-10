@@ -12,8 +12,8 @@ namespace AgentSpeed.Presentation.Orb.Gpu.Styles;
 /// <summary>
 /// The <c>character</c> style on the GPU (DESIGN 2a.6, CHARACTERS 3–8): the skinned character of the chosen pack with its
 /// pose and character swaps, the ring of lights at her feet, the agent lights, her particles and the readout cards
-/// floating beside her — the speed at her right, the facts in a column at her left, the model above her head, always in
-/// front of her. The context's size is the footprint D (2 S). Without a character it draws the ring and the standard
+/// floating beside her — the speed at her right with the running models under it, the facts in a column at her left,
+/// the model above her head, always in front of her. The context's size is the footprint D (2 S). Without a character it draws the ring and the standard
 /// readout with <c>character.empty</c>. Allocates nothing on a warm frame except when an action starts.
 /// </summary>
 public sealed partial class CharacterDraw : IOrbStyleDraw
@@ -45,6 +45,7 @@ public sealed partial class CharacterDraw : IOrbStyleDraw
     private double _hudTime;
     private double _comet;
     private double _speedDrop;
+    private double _frameTime;
     private string? _lastModel;
     private bool _loading;
 
@@ -151,6 +152,7 @@ public sealed partial class CharacterDraw : IOrbStyleDraw
     /// <summary>Advances everything one frame (the macOS renderer's step): the stage, particles, hud, lightning and the cards.</summary>
     private void Step(in OrbFrame frame, OrbScene scene, bool snap)
     {
+        _frameTime = frame.Time;
         if (_ctx is not { } ctx || Content?.Pack is not { } pack || ctx.Size < 64)
         {
             _stage = null;
@@ -314,7 +316,8 @@ public sealed partial class CharacterDraw : IOrbStyleDraw
 
     private bool IsBusy => _lightning.IsActive || (_stage is { } stage
         && (stage.Outgoing is not null || stage.Incoming is not null || stage.Current.FadingPose is not null || _hud.PeakAge is not null
-            || _particles.IsLively || _wings.IsFading || _hud.HasPulses));
+            || _particles.IsLively || _wings.IsFading || _hud.HasPulses || _models.IsMoving(_frameTime)
+            || Readings?.Latency.IsFading(_frameTime) == true));
 
     /// <summary>The style model the orb drives (update, snap, pulse, peak, demand).</summary>
     private sealed class CharacterModel(CharacterDraw draw) : IOrbStyleModel

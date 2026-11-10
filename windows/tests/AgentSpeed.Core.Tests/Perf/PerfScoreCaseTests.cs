@@ -1,5 +1,6 @@
 using System.Text.Json;
 using System.Text.Json.Nodes;
+using AgentSpeed.Core.Engine;
 using AgentSpeed.Core.Perf;
 
 namespace AgentSpeed.Core.Tests.Perf;
@@ -25,13 +26,15 @@ public sealed class PerfScoreCaseTests
 
     public static TheoryData<string> RangeNames() => Names("range");
 
+    public static TheoryData<string> ReadoutNames() => Names("readouts");
+
     [Fact]
     public void EveryCaseIsRun()
     {
         var root = Root.Value;
-        Assert.Equal((16, 7, 3, 1, 4, 3, 2), (root.GetProperty("latencyBins").GetArrayLength(), root.GetProperty("agents").GetArrayLength(),
+        Assert.Equal((16, 7, 3, 1, 4, 3, 2, 3), (root.GetProperty("latencyBins").GetArrayLength(), root.GetProperty("agents").GetArrayLength(),
             root.GetProperty("sets").GetArrayLength(), root.GetProperty("days").GetArrayLength(), root.GetProperty("pooled").GetArrayLength(),
-            root.GetProperty("baseline").GetArrayLength(), root.GetProperty("range").GetArrayLength()));
+            root.GetProperty("baseline").GetArrayLength(), root.GetProperty("range").GetArrayLength(), root.GetProperty("readouts").GetArrayLength()));
     }
 
     [Fact]
@@ -178,6 +181,79 @@ public sealed class PerfScoreCaseTests
         }
 
         PerfJson.AssertSame(item.GetProperty("expect"), actual, name);
+    }
+
+    /// <summary>
+    /// The readouts of a set (6.9 <i>Readouts of a set</i>) through the engine: its agents list, each agent's sample and
+    /// recent speed, then the set's first-content latency and running models.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(ReadoutNames))]
+    public void ReadoutsMatch(string name)
+    {
+        var item = Case("readouts", name);
+        var nowMs = item.GetProperty("nowMs").GetInt64();
+        var engine = new SpeedEngine(0);
+        foreach (var agent in item.GetProperty("agents").EnumerateArray())
+        {
+            engine.UpdateAgent(new AgentInfo(
+                agent.GetProperty("id").GetString()!,
+                EngineCaseTests.ParseSource(agent.GetProperty("source").GetString()!),
+                null,
+                agent.GetProperty("model").ValueKind == JsonValueKind.String ? agent.GetProperty("model").GetString() : null,
+                false,
+                EngineCaseTests.ParsePhase(agent.GetProperty("phase").GetString()!),
+                null,
+                agent.GetProperty("lastLineMs").GetInt64(),
+                agent.GetProperty("parentId").ValueKind == JsonValueKind.String ? agent.GetProperty("parentId").GetString() : null));
+        }
+
+        foreach (var response in item.GetProperty("responses").EnumerateArray())
+        {
+            engine.Upsert(PerfJson.Response(response), isCompletion: true, seeded: true);
+        }
+
+        var frame = engine.Compute(nowMs, 0, observeLive: false);
+        var latency = PerfSetReadouts.FirstLatency(frame.Agents.Select(a => a.Perf?.Latencies ?? []));
+        var models = PerfSetReadouts.RunningModels(frame.Agents.Select(a => new PerfRunner(a.Info.Model, a.Phase, a.RecentSpeed, a.Info.Source)));
+        var actual = new JsonObject
+        {
+            ["firstLatency"] = new JsonObject { ["ms"] = latency.Ms, ["n"] = latency.N },
+            ["models"] = new JsonArray([.. models.Select(m => (JsonNode?)new JsonObject
+            {
+                ["model"] = m.Model,
+                ["speed"] = m.Speed,
+                ["agents"] = m.Agents,
+                ["shown"] = m.Shown,
+            })]),
+        };
+        PerfJson.AssertSame(item.GetProperty("expect"), actual, name);
+    }
+
+    [Fact]
+    public void RunningModelsGroupByTheExactIdAndKeepTheFastestAgentsSource()
+    {
+        var rows = PerfSetReadouts.RunningModels(
+        [
+            new PerfRunner("glm-5", AgentPhase.Tools, null, SourceKind.ZCode),
+            new PerfRunner("glm-5", AgentPhase.Generating, 80.5, SourceKind.OpenCode),
+            new PerfRunner("GLM-5", AgentPhase.Generating, 12, SourceKind.ZCode),
+            new PerfRunner("glm-5", AgentPhase.Generating, 40, SourceKind.Kimi),
+            new PerfRunner("", AgentPhase.Generating, 300, SourceKind.Codex),
+            new PerfRunner("b-model", AgentPhase.Generating, null, SourceKind.Codex),
+            new PerfRunner("a-model", AgentPhase.Generating, null, SourceKind.Codex),
+        ]);
+        Assert.Equal(["glm-5", "GLM-5", "a-model", "b-model"], rows.Select(r => r.Model));
+        Assert.Equal((80.5, 81, 3, SourceKind.OpenCode), (rows[0].Speed!.Value, rows[0].Shown!.Value, rows[0].Agents, rows[0].Source));
+        Assert.Null(rows[2].Shown);
+    }
+
+    [Fact]
+    public void TheSetLatencyNeedsThreeValuesAcrossItsAgents()
+    {
+        Assert.Equal(new PerfSetLatency(null, 2), PerfSetReadouts.FirstLatency([[800], [], [1200]]));
+        Assert.Equal(new PerfSetLatency(900, 3), PerfSetReadouts.FirstLatency([[1200, 600], [900]]));
+        Assert.Equal(new PerfSetLatency(null, 0), PerfSetReadouts.FirstLatency(Array.Empty<IReadOnlyList<long>>()));
     }
 
     [Fact]
