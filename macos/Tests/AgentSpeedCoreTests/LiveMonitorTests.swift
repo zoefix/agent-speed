@@ -29,7 +29,9 @@ struct LiveMonitorTests {
             piRoot: directory.file("missing-pi"),
             openclawRoot: directory.file("missing-openclaw"),
             hermesRoot: directory.file("missing-hermes"),
-            droidRoot: directory.file("missing-droid")
+            droidRoot: directory.file("missing-droid"),
+            qoderRoot: directory.file("missing-qoder"),
+            qoderCliRoot: directory.file("missing-qoder-cli")
         ))
         monitor.start()
         defer { monitor.stop() }

@@ -36,6 +36,8 @@ struct ClaudeLine: Equatable, Sendable {
     var model: String?
     var stopReason: ClaudeStopReason = .none
     var usage: TokenUsage = .zero
+    /// `message.usage.input_tokens` alone, as a token value (Qoder CLI's input rule, METRICS 4.19).
+    var inputTokens = 0
     /// `message.usage.speed == "fast"` (METRICS 3.2).
     var fast = false
     var modes: ExecutionModes = .empty
@@ -154,7 +156,7 @@ enum ClaudeLineExtractor {
                     }
                 }
             } else if scanner.key(key, is: "usage") {
-                (line.usage, line.fast, line.modes) = try scanUsage(&scanner)
+                (line.usage, line.inputTokens, line.fast, line.modes) = try scanUsage(&scanner)
             } else if scanner.key(key, is: "content") {
                 (line.isInterrupt, line.hasToolUse, hasText) = try scanContent(&scanner)
             } else {
@@ -182,8 +184,9 @@ enum ClaudeLineExtractor {
         return marker
     }
 
-    private static func scanUsage(_ scanner: inout JSONScanner) throws(JSONScanError) -> (TokenUsage, fast: Bool, modes: ExecutionModes) {
-        guard try scanner.beginObjectIfPresent() else { return (.zero, false, .empty) }
+    private static func scanUsage(_ scanner: inout JSONScanner) throws(JSONScanError)
+        -> (TokenUsage, inputTokens: Int, fast: Bool, modes: ExecutionModes) {
+        guard try scanner.beginObjectIfPresent() else { return (.zero, 0, false, .empty) }
         var input = 0
         var cacheCreation = 0
         var cacheCreation1h = 0
@@ -220,7 +223,7 @@ enum ClaudeLineExtractor {
             output: output,
             reasoning: thinking
         )
-        return (usage, fast, ExecutionModeAdapters.claude(speed))
+        return (usage, input, fast, ExecutionModeAdapters.claude(speed))
     }
 
     /// One integer member of a nested object (`output_tokens_details.thinking_tokens`,

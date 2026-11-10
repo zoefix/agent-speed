@@ -182,6 +182,8 @@ enum HistoryLogicChecks {
         check("a Hermes logs folder added in Sources is read next to the home", hermesFolderSetting())
         check("csv source id of Factory Droid", HistoryCSV.sourceID(.droid) == "droid")
         check("csv source id of Devin", HistoryCSV.sourceID(.devin) == "devin")
+        check("csv source ids of Qoder IDE and Qoder CLI",
+              HistoryCSV.sourceID(.qoder) == "qoder" && HistoryCSV.sourceID(.qoderCli) == "qoder-cli")
         check("settings saved before Factory Droid load with it on and its sessions folder", droidSettingsUpgrade())
         check("a Factory Droid folder added in Sources is read next to ~/.factory/sessions", droidFolderSetting())
         let risky = DaySummary(

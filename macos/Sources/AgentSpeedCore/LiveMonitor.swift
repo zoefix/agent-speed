@@ -126,6 +126,22 @@ public final class LiveMonitor {
         return TranscriptLocations.defaultDevinRoots.contains { $0.displayFolder == folder && $0.database != nil }
     }
 
+    /// The folders that hold Qoder IDE's databases: `SharedClientCache/cache/db` of the international and the China
+    /// edition (the automatic entry of its location list).
+    public nonisolated static var defaultQoderRoots: [URL] {
+        TranscriptLocations.defaultQoderRoots.map { URL(fileURLWithPath: $0.displayFolder, isDirectory: true) }
+    }
+
+    /// Whether a folder names a Qoder IDE database now: `local.db` in it, in its `cache/db` or in its
+    /// `SharedClientCache/cache/db` folder (METRICS 4.18).
+    public nonisolated static func qoderLocationExists(_ url: URL) -> Bool {
+        QoderPaths.database(ofLocation: TranscriptDiscovery.normalizedRoot(url.path)) != nil
+    }
+
+    /// Qoder CLI's `projects` folders: `$QODER_CONFIG_DIR` or `~/.qoder`, then `$QODERCN_CONFIG_DIR` or `~/.qoder-cn`
+    /// (the automatic entry of its location list).
+    public nonisolated static var defaultQoderCliRoots: [URL] { TranscriptLocations.defaultQoderCliRoots }
+
     /// The sessions folder a configured Factory Droid folder names: its `sessions` folder when it has one (a `.factory`
     /// folder), else the folder itself (METRICS 4.16).
     public nonisolated static func droidSessionsFolder(_ url: URL) -> URL { DroidPaths.sessionsFolder(url) }

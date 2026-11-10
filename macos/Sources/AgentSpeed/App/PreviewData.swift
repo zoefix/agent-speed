@@ -52,6 +52,8 @@ enum PreviewData {
             source(.hermes, speed * 0.04, TokenTotals(requests: 38, input: 1_500_000, output: 31_000), 1),
             source(.droid, speed * 0.05, TokenTotals(requests: 41, input: 1_700_000, output: 33_000), 1),
             source(.devin, speed * 0.06, TokenTotals(requests: 52, input: 2_300_000, output: 41_000), 1),
+            source(.qoder, speed * 0.05, TokenTotals(requests: 46, input: 1_800_000, output: 30_000), 1),
+            source(.qoderCli, speed * 0.03, TokenTotals(requests: 24, input: 960_000, output: 14_000), 1),
         ]
         // Each source's intelligence sums are its agents' (METRICS 6.9: additive over agents and sources).
         let sources = measured.map { status in
@@ -206,7 +208,7 @@ enum PreviewData {
             switch source.kind {
             case .deepseek: source.available = false
             case .claudeDesktop: source.enabled = false
-            case .codex, .claudeCode, .opencode, .gemini, .omp, .antigravity, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .droid, .devin: return source
+            case .codex, .claudeCode, .opencode, .gemini, .omp, .antigravity, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .pi, .openclaw, .hermes, .droid, .devin, .qoder, .qoderCli: return source
             }
             source.sessionCount = 0
             source.live = .zero
@@ -273,6 +275,8 @@ enum PreviewData {
         case .hermes: 3
         case .droid: 2
         case .devin: 4
+        case .qoder: 5
+        case .qoderCli: 3
         }
     }
 }

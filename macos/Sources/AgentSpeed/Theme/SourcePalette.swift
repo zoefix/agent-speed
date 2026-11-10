@@ -22,6 +22,8 @@ extension SourceKind {
         case .hermes: RGBColor(hex: 0xB8860B)
         case .droid: RGBColor(hex: 0x9E5F46)
         case .devin: RGBColor(hex: 0x557F14)
+        case .qoder: RGBColor(hex: 0xB3329D)
+        case .qoderCli: RGBColor(hex: 0x7E61B6)
         }
     }
 

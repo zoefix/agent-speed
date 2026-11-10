@@ -58,7 +58,7 @@ struct ProbeArguments {
                                [--antigravity LOCATION]... [--workbuddy LOCATION]... [--workbuddy-ai LOCATION]...
                                [--zcode LOCATION]... [--kimi LOCATION]... [--grok-build LOCATION]... [--pi LOCATION]...
                                [--openclaw LOCATION]... [--hermes LOCATION]... [--droid LOCATION]...
-                               [--devin LOCATION]...
+                               [--devin LOCATION]... [--qoder LOCATION]... [--qoder-cli LOCATION]...
                LOCATION: a path, or @auto for the source's automatic roots; repeat a flag to read several
                AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY
         """
@@ -179,7 +179,7 @@ extension ProbeArguments {
         "--codex": .codex, "--claude": .claude, "--dsh": .dsh, "--opencode": .opencode, "--gemini": .gemini,
         "--omp": .omp, "--antigravity": .antigravity, "--workbuddy": .workbuddy, "--workbuddy-ai": .workbuddyAi,
         "--zcode": .zcode, "--kimi": .kimi, "--grok-build": .grokBuild, "--pi": .pi, "--openclaw": .openclaw,
-        "--hermes": .hermes, "--droid": .droid, "--devin": .devin,
+        "--hermes": .hermes, "--droid": .droid, "--devin": .devin, "--qoder": .qoder, "--qoder-cli": .qoderCli,
     ]
 
     static let automaticLocation = "@auto"

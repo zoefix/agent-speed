@@ -11,17 +11,19 @@ struct HistoryTests {
     /// Pi's custom session folder, OpenClaw's state folders) are used; `workbuddy` plays `~` of both WorkBuddy
     /// editions. `codex/sessions` is the automatic Codex root, so OpenClaw's agent-scoped Codex homes join it.
     /// `hermes/home` is the Hermes home (`$HERMES_HOME`), whose wall times are read in the fixture's zone; `droid`
-    /// plays `~` of Factory Droid, whose `.factory` folder is chosen (so its `sessions` folder is read).
+    /// plays `~` of Factory Droid, whose `.factory` folder is chosen (so its `sessions` folder is read); `qoder-cli`
+    /// plays Qoder CLI's config folder (`~/.qoder`), so its `projects` folder is read.
     static func configuration(fixtures root: URL) -> MonitorConfiguration {
         var configuration = MonitorConfiguration(
-            enabledSources: Set(SourceKind.allCases.prefix(10)).union([.pi, .openclaw, .hermes, .droid]),
+            enabledSources: Set(SourceKind.allCases.prefix(10)).union([.pi, .openclaw, .hermes, .droid, .qoderCli]),
             claudeRoot: root.appendingPathComponent("claude/projects", isDirectory: true),
             dshRoot: root.appendingPathComponent("dsh/sessions", isDirectory: true),
             opencodeRoot: root.appendingPathComponent("opencode/opencode.db"),
             geminiRoot: root.appendingPathComponent("gemini/tmp", isDirectory: true),
             workbuddyRoot: root.appendingPathComponent("workbuddy/.workbuddy", isDirectory: true),
             workbuddyAiRoot: root.appendingPathComponent("workbuddy/.workbuddy-ai", isDirectory: true),
-            droidRoot: root.appendingPathComponent("droid/.factory", isDirectory: true)
+            droidRoot: root.appendingPathComponent("droid/.factory", isDirectory: true),
+            qoderCliRoot: root.appendingPathComponent("qoder-cli", isDirectory: true)
         )
         configuration.automaticRoots = [
             .codex: [root.appendingPathComponent("codex/sessions", isDirectory: true)],

@@ -118,6 +118,9 @@ final class TranscriptSession {
     let hermes: HermesSource?
     /// Devin's CLI databases, when that source is enabled (METRICS 4.17).
     let devin: DevinSource?
+    /// Qoder IDE's databases, when that source is enabled (METRICS 4.18).
+    let qoder: QoderSource?
+    private var qoderLinks: [String: String] = [:]
     /// Today's start of the last seed or rediscovery, for databases found while running.
     private var todayStartMs: Int64 = 0
     private var zcodeLinks: [String: String] = [:]
@@ -161,6 +164,7 @@ final class TranscriptSession {
             ? HermesSource(roots: configuration.resolvedHermesRoots, timeZone: configuration.resolvedHermesTimeZone,
                            limits: limits) : nil
         devin = configuration.readsDevin ? DevinSource(roots: configuration.resolvedDevinRoots) : nil
+        qoder = configuration.readsQoder ? QoderSource(roots: configuration.resolvedQoderRoots) : nil
         modeContext = AgentModeContext(roots: roots.filter { $0.enabled && $0.readable }.map { ($0.family, $0.path) },
                                        geminiSettings: configuration.resolvedGeminiSettings)
         refreshAvailability()
@@ -170,7 +174,7 @@ final class TranscriptSession {
 
     var hasAvailableRoot: Bool {
         roots.contains { $0.enabled && $0.detected } || opencode?.isReady == true || zcode?.isReady == true
-            || openclaw?.detected == true || hermes?.detected == true || devin?.detected == true
+            || openclaw?.detected == true || hermes?.detected == true || devin?.detected == true || qoder?.detected == true
     }
 
     var watchedPaths: [String] {
@@ -180,6 +184,7 @@ final class TranscriptSession {
         for directory in openclaw?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         for directory in hermes?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         for directory in devin?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
+        for directory in qoder?.watchedDirectories ?? [] where !paths.contains(directory) { paths.append(directory) }
         return paths
     }
 
@@ -202,6 +207,12 @@ final class TranscriptSession {
     var devinLocation: (path: String, available: Bool) {
         let root = devin?.displayRoot ?? ""
         return (root.isEmpty ? configuration.resolvedDevinRoots.first?.displayFolder ?? "" : root, devin?.detected ?? false)
+    }
+
+    /// The Qoder IDE row's path (the first root that names a database that exists) and whether one does (METRICS 2.1).
+    var qoderLocation: (path: String, available: Bool) {
+        let root = qoder?.displayRoot ?? ""
+        return (root.isEmpty ? configuration.resolvedQoderRoots.first?.displayFolder ?? "" : root, qoder?.detected ?? false)
     }
 
     /// The OpenCode row's path (the first folder whose `opencode.db` exists) and whether any database exists.
@@ -383,6 +394,12 @@ final class TranscriptSession {
             summary.filesRead += devin.filesRead
             summary.bytesRead += devin.bytesRead
         }
+        if let qoder {
+            apply(qoder.seed(todayStartMs: todayStartMs, deduper: &deduper), source: .qoder, live: false)
+            summary.filesDiscovered += qoder.filesDiscovered
+            summary.filesRead += qoder.filesRead
+            summary.bytesRead += qoder.bytesRead
+        }
         refreshModeContext()
         summary.partialHistory = partialHistory
         summary.durationMs = Double(DispatchTime.now().uptimeNanoseconds - started) / 1_000_000
@@ -436,6 +453,10 @@ final class TranscriptSession {
         }
         if let hermes { changed = apply(hermes.handleChanges(atCanonicalPaths: paths, deduper: &deduper), live: true) || changed }
         if let devin { changed = apply(devin.handleChanges(atCanonicalPaths: paths, deduper: &deduper), live: true) || changed }
+        if let qoder {
+            changed = apply(qoder.handleChanges(atCanonicalPaths: paths, deduper: &deduper), source: .qoder, live: true)
+                || changed
+        }
         var handled: Set<String> = []
         for path in paths.sorted() {
             guard let (localPath, root) = localPath(forCanonical: path), handled.insert(localPath).inserted else { continue }
@@ -483,6 +504,7 @@ final class TranscriptSession {
         if let openclaw { changed = apply(openclaw.refreshIfChanged(deduper: &deduper), live: true) || changed }
         if let hermes { changed = apply(hermes.poll(nowMs: nowMs, deduper: &deduper), live: true) || changed }
         if let devin { changed = apply(devin.poll(deduper: &deduper), live: true) || changed }
+        if let qoder { changed = apply(qoder.poll(deduper: &deduper), source: .qoder, live: true) || changed }
         let hot = files.values.filter { nowMs - $0.lastStat.modifiedMs <= Self.hotWindowMs }
         for file in hot.sorted(by: { $0.path < $1.path }) {
             guard let stat = file.family.stat(file.path) else {
@@ -556,6 +578,10 @@ final class TranscriptSession {
         }
         if let hermes { changed = apply(hermes.rediscover(deduper: &deduper), live: true) || changed }
         if let devin { changed = apply(devin.rediscover(todayStartMs: todayStartMs, deduper: &deduper), live: true) || changed }
+        if let qoder {
+            changed = apply(qoder.rediscover(todayStartMs: todayStartMs, deduper: &deduper), source: .qoder, live: true)
+                || changed
+        }
         return refreshModeContext() || changed
     }
 
@@ -757,6 +783,7 @@ final class TranscriptSession {
         var parentLinks = self.parentLinks
         if parentLinksAreStale {
             let direct = opencodeLinks.merging(zcodeLinks) { first, _ in first }.merging(openclawLinks) { first, _ in first }
+                .merging(qoderLinks) { first, _ in first }
             parentLinks = AgentParents.resolve(Array(parentMembers.values), direct: direct)
         }
         var parents = parentLinks
@@ -779,6 +806,7 @@ final class TranscriptSession {
         if parentLinksAreStale || remoteParentsChanged {
             if parentLinksAreStale {
                 let direct = opencodeLinks.merging(zcodeLinks) { first, _ in first }.merging(openclawLinks) { first, _ in first }
+                    .merging(qoderLinks) { first, _ in first }
                 parentLinks = AgentParents.resolve(Array(parentMembers.values), direct: direct)
             }
             engine.setParents(remote.hasHosts ? parentLinks.merging(remote.parents) { local, _ in local } : parentLinks)
@@ -797,11 +825,13 @@ final class TranscriptSession {
     var malformedLines: Int {
         files.values.reduce(removedMalformedLines) { $0 + $1.parser.state.malformedLines } + (opencode?.malformedRows ?? 0)
             + (openclaw?.malformedRows ?? 0) + (hermes?.malformedLines ?? 0) + (devin?.malformedLines ?? 0)
+            + (qoder?.malformedLines ?? 0)
     }
 
     var unreadableFileCount: Int {
         unreadablePaths.count + (opencode?.unreadableCount ?? 0) + (zcode?.unreadableCount ?? 0)
             + (openclaw?.unreadableDatabaseCount ?? 0) + (hermes?.unreadableFileCount ?? 0) + (devin?.unreadableCount ?? 0)
+            + (qoder?.unreadableCount ?? 0)
     }
 
     /// Antigravity databases whose connection is open.
@@ -819,17 +849,18 @@ final class TranscriptSession {
         }
         if openclaw?.hasUnsupportedDatabase == true { sources.append(.openclaw) }
         if devin?.hasUnsupported == true { sources.append(.devin) }
+        if qoder?.hasUnsupported == true { sources.append(.qoder) }
         return sources
     }
 
-    /// Agents of each source with at least one line today; WorkBuddy, Kimi Code CLI, Grok Build, Pi and Factory Droid
-    /// count main sessions only (DESIGN 5).
+    /// Agents of each source with at least one line today; WorkBuddy, Kimi Code CLI, Grok Build, Pi, Factory Droid and
+    /// Qoder CLI count main sessions only (DESIGN 5).
     func sessionCounts(todayStartMs: Int64) -> [SourceKind: Int] {
         var counts: [SourceKind: Int] = [:]
         for file in files.values {
             let state = file.parser.state
             guard let last = state.lastLineMs, last >= todayStartMs, enabledSources.contains(state.source) else { continue }
-            if file.family.isWorkBuddy || [.kimi, .grokBuild, .pi, .droid].contains(file.family), state.isSubagent {
+            if file.family.isWorkBuddy || [.kimi, .grokBuild, .pi, .droid, .qoderCli].contains(file.family), state.isSubagent {
                 continue
             }
             counts[state.source, default: 0] += 1
@@ -841,6 +872,7 @@ final class TranscriptSession {
         if let openclaw { counts[.openclaw] = openclaw.activeSessionCount(todayStartMs: todayStartMs) }
         if let hermes { counts[.hermes] = hermes.activeSessionCount(todayStartMs: todayStartMs) }
         if let devin { counts[.devin] = devin.activeSessionCount(todayStartMs: todayStartMs) }
+        if let qoder { counts[.qoder] = qoder.activeSessionCount(todayStartMs: todayStartMs) }
         return counts
     }
 
@@ -970,17 +1002,22 @@ final class TranscriptSession {
         return true
     }
 
+    /// Devin's and Qoder IDE's databases (METRICS 4.17, 4.18); Qoder's sub-agent sessions name their parent.
     @discardableResult
-    private func apply(_ update: DevinSource.Update, live: Bool) -> Bool {
+    private func apply(_ update: DevinSource.Update, source: SourceKind = .devin, live: Bool) -> Bool {
         guard !update.isEmpty else { return false }
+        if source == .qoder, let links = qoder?.parentLinks, links != qoderLinks {
+            qoderLinks = links
+            parentLinksAreStale = true
+        }
         for entry in update.upserts {
             deliver(entry.upsert, project: entry.project, live: live && !entry.seeded,
                     agent: update.agents[entry.upsert.record.agentId])
         }
         for id in update.removedAgents { engine.removeAgent(id: id) }
         for (id, state) in update.agents {
-            if state.lastLineMs != nil, enabledSources.contains(.devin) {
-                engine.setAgent(EngineAgent(id: id, state: state))
+            if state.lastLineMs != nil, enabledSources.contains(source) {
+                engine.setAgent(EngineAgent(id: id, state: state, parentId: source == .qoder ? parentLinks[id] : nil))
             } else {
                 engine.removeAgent(id: id)
             }
