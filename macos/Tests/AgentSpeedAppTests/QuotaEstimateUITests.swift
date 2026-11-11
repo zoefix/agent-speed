@@ -59,9 +59,10 @@ struct QuotaEstimateUITests {
         #expect(lines.map(\.percentText) == ["12%", "95%", "27%"])
         #expect(lines.map(\.estimated) == [false, true, false])
         #expect(abs(lines[1].fraction - 0.954) < 1e-9, "the bar follows the live percent")
-        // The cells take the rate's digits (DESIGN 4 *Amount*: `$161`, ` / ≈$5,742`); the tooltip the full amount.
-        #expect(lines[1].amount == "US$161" && lines[1].amountCap == " / ≈US$5,742")
-        #expect(lines[2].amountCap == " / ≥US$737")
+        // The cells take the rate's digits and the cap no symbol (DESIGN 4 *Amount*: `US$161 / ≈5,742`); the tooltip
+        // the full amounts.
+        #expect(lines[1].amount == "US$161" && lines[1].amountCap == " / ≈5,742")
+        #expect(lines[2].amountCap == " / ≥737")
         // At confidence none only the used amount shows, and the tooltip has nothing to add.
         #expect(lines[0].amount == "US$3.10" && lines[0].amountCap == nil)
         #expect(lines[0].estimateDetails.isEmpty && lines[0].estimateNote == nil)
@@ -94,8 +95,8 @@ struct QuotaEstimateUITests {
         #expect(columns.percent > SourceQuotaColumns.width("100%", SourceQuotaColumns.percentFont), "a cell as wide as ≈100%")
     }
 
-    /// The long resets keep their column while they fit beside the shortest bar; otherwise the section shows the short
-    /// ones, or none, and each line's tooltip opens with its long reset.
+    /// Beside amounts the section shows the short resets, or none when even those do not fit beside the shortest bar,
+    /// and each line's tooltip opens with its long reset; without amounts the long resets stay.
     @Test func theResetsGiveWayToTheAmounts() {
         let model = Self.model()
         model.quota.preview(desktop: Self.desktop, cli: nil, nowMs: Self.now)
@@ -113,9 +114,19 @@ struct QuotaEstimateUITests {
             - 4 * SourceQuotaColumns.gap - SourceQuotaColumns.compactBar
         #expect(lines.map(\.tooltipReset) == [long[0], long[1], long[1]])
         #expect(lines.map(\.tooltipHead.first) == [long[0], long[1], long[1]])
-        let shown = lines.compactMap(\.reset)
-        #expect(shown.isEmpty || shown == lines.map { $0.resetShort! })
+        #expect(lines.map(\.reset) == lines.map(\.resetShort), "the short resets fit in zh-Hant with US$")
+        #expect(lines.map(\.reset) == ["1h", "10h", "10h"])
         #expect(fitted.columns.reset <= max(0, rest))
+    }
+
+    /// A cap of another currency drops its symbol too (`NT$1,235 / ≈4,560`).
+    @Test func theCapNeverRepeatsTheSymbol() {
+        let model = Self.model()
+        model.settings.currency = "TWD"
+        let text = QuotaEstimateText(l10n: model.l10n, cost: model.cost)
+        let (used, cap) = text.amountCell(Self.week)
+        #expect(used.hasPrefix("NT$") && !(cap ?? "").contains("$"))
+        #expect(cap == " / ≈" + model.cost.compactAmountNumber(microUsd: 5_742_000_000))
     }
 
     @Test func aWindowAfterItsResetTakesTheNewInstance() {

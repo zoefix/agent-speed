@@ -12,7 +12,7 @@ struct SourceQuotaLine: Identifiable, Equatable {
     /// The share of the window that has passed, while known (QUOTAS 7, *Pace*).
     var pace: Double?
     var reset: String?
-    /// The short reset (QUOTAS 7), for a section whose amounts leave no room for the long one.
+    /// The short reset (QUOTAS 7), which a section with amounts shows.
     var resetShort: String?
     /// The long reset, when the line shows the short one or none.
     var tooltipReset: String?
@@ -29,7 +29,7 @@ struct SourceQuotaLine: Identifiable, Equatable {
     var spoken: String
     /// The percent is extrapolated from this computer's spend (QUOTAS 10.7): a leading `≈`.
     var estimated = false
-    /// The used amount (QUOTAS 10.8), and ` / ≈$5,742` or ` / ≥$737` after it while an estimate exists.
+    /// The used amount (QUOTAS 10.8), and ` / ≈5,742` or ` / ≥598` after it while an estimate exists.
     var amount: String?
     var amountCap: String?
     /// The estimate's tooltip lines (DESIGN 4 *Tooltip*) and its closing note.
@@ -76,9 +76,9 @@ struct SourceQuotaColumns: Equatable {
     }
 
     /// The section's columns, and its lines with an age only where the age still fits after the reset: a line that
-    /// cannot hold both keeps its reset, and its tooltip keeps the time (DESIGN 4, *Quota lines*). With amounts, a
-    /// section whose long resets no longer fit beside the shortest bar shows the short ones, or none when even those do
-    /// not fit; the long reset then opens the tooltip.
+    /// cannot hold both keeps its reset, and its tooltip keeps the time (DESIGN 4, *Quota lines*). With amounts the
+    /// section shows the short resets, or none when even those do not fit beside the shortest bar; the long reset
+    /// then opens each line's tooltip (user's choice 2026-11-11).
     @MainActor static func fit<Key: Hashable>(_ quota: [Key: [SourceQuotaLine]], separator: String,
                                               inset: CGFloat = nameInset)
         -> (lines: [Key: [SourceQuotaLine]], columns: SourceQuotaColumns) {
@@ -92,7 +92,7 @@ struct SourceQuotaColumns: Equatable {
         let room = rest - minimumBar
         let resetRoom = rest - compactBar
         var form = ResetForm.long
-        if columns.amount > 0, all.contains(where: { width($0.reset ?? "", resetFont) > resetRoom }) {
+        if columns.amount > 0 {
             form = all.contains { width($0.resetShort ?? "", resetFont) > resetRoom } ? .none : .short
         }
         var fitted = quota

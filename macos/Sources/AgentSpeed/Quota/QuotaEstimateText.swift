@@ -23,14 +23,15 @@ struct QuotaEstimateText {
     let l10n: Localizer
     let cost: CostDisplay
 
-    /// `$161` and ` / ≈$5,742` (or ` / ≥$737`) in the compact digits, split so the cap can take the tertiary token.
+    /// `$4,938` and ` / ≈5,742` (or ` / ≥598`) in the compact digits, the cap without the symbol the used amount
+    /// already shows (user's choice 2026-11-11), split so the cap can take the tertiary token.
     func amountCell(_ e: QuotaEstimateDisplay) -> (used: String, cap: String?) {
         let used = cost.compactAmountText(microUsd: e.usedMicroUsd)
         let full: String
         if let cap = e.capMicroUsd {
-            full = l10n("quota.amount.cap", used, cost.compactAmountText(microUsd: cap))
+            full = l10n("quota.amount.cap", used, cost.compactAmountNumber(microUsd: cap))
         } else if e.hasEstimate, let low = e.lowMicroUsd {
-            full = l10n("quota.amount.atLeast", used, cost.compactAmountText(microUsd: low))
+            full = l10n("quota.amount.atLeast", used, cost.compactAmountNumber(microUsd: low))
         } else {
             return (used, nil)
         }
