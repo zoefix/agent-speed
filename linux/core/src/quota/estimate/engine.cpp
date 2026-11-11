@@ -317,6 +317,7 @@ void Engine::build(std::int64_t nowMs) {
 
     instancesAt();
     classEstimates();
+    inferPlans();
     currentInputs();
 }
 
@@ -375,6 +376,34 @@ void Engine::classEstimates() {
     }
 }
 
+void Engine::inferPlans() {
+    inferred_.clear();
+    std::set<std::string> own;
+    for (const auto& e : desktopOrgs_) own.insert(e.key);
+    if (own.empty()) return;
+    // A CLI key-timeline entry that names the organization a non-personal one.
+    for (const auto& [entry, org] : orgKeys_) {
+        if (entry.plan && !isPersonalClaudePlan(entry.plan)) own.erase(org);
+    }
+    // The newest local Desktop snapshot of each organization, with every window (a null reset too).
+    std::map<std::string, const SnapshotEvent*> newest;
+    for (const auto& s : snapshots_) {
+        if (s.source != "claudeDesktop" || s.machine != kLocal || !s.orgKey) continue;
+        auto& held = newest[*s.orgKey];
+        if (!held || s.observedMs >= held->observedMs) held = &s;
+    }
+    const auto anchors = planAnchors(estimates_);
+    const auto fiveHour = windowId("fiveHour", std::nullopt, 300);
+    for (const auto& key : own) {
+        std::vector<std::string> kinds;
+        if (const auto it = newest.find(key); it != newest.end()) {
+            for (const auto& w : it->second->windows) kinds.emplace_back(kindId(w.kind));
+        }
+        const auto estimate = estimates_.find(CapClass::of(key, std::nullopt, std::nullopt, fiveHour));
+        if (auto plan = inferClaudePlan(kinds, estimate == estimates_.end() ? nullptr : &estimate->second, anchors)) inferred_.emplace(key, std::move(*plan));
+    }
+}
+
 void Engine::currentInputs() {
     current_.clear();
     std::map<std::pair<std::string, std::string>, std::size_t> index;
@@ -419,6 +448,12 @@ void Engine::currentInputs() {
         in.sources = sources;
         in.plan = x.plan;
         in.tier = x.tier;
+        // An inferred plan fills only a missing one and never moves the class.
+        if (const auto inferred = inferred_.find(x.account); !x.plan && inferred != inferred_.end()) {
+            in.plan = inferred->second.plan;
+            in.tier = inferred->second.tier;
+            in.planInferred = true;
+        }
         in.kind = last.kind;
         in.name = last.name;
         in.minutes = last.minutes;

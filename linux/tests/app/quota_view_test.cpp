@@ -264,3 +264,34 @@ TEST(QuotaText, AnEstimateGivesTheLivePercentTheAmountAndTheDetails) {
     const std::vector<est::Entry> empty{none};
     EXPECT_TRUE(lineAt(quota_text::lines(snapshot, now, strings, quota_text::format(strings), &empty), 0).value("amount").toString().isEmpty());
 }
+
+// QUOTAS 10.2 and 10.8, DESIGN 4: an inferred plan reads quota.estimate.planInferred, with the tier after ` · ` when
+// known; a plan the vendor named keeps quota.estimate.plan.
+TEST(QuotaText, AnInferredPlanIsMarkedInTheDetails) {
+    Strings strings;
+    const auto now = nowMs();
+    const quota::Snapshot snapshot{SourceKind::ClaudeDesktop, now - 60'000, {quota::makeWindow(quota::Kind::SevenDay, 41, now + 3 * kHour + 12 * 60'000)}};
+    const auto planLine = [&](const est::Entry& e) {
+        const std::vector<est::Entry> estimates{e};
+        const auto details = lineAt(quota_text::lines(snapshot, now, strings, quota_text::format(strings), &estimates), 0).value("details").toStringList();
+        return details.size() == 7 ? details.at(5) : QStringLiteral("(%1 lines)").arg(details.size());
+    };
+    auto ultra = weekEstimate(now);
+    ultra.source = "claudeDesktop";
+    ultra.sources = {"claudeDesktop"};
+    ultra.plan = "claude_ultra";
+    ultra.tier.reset();
+    ultra.planInferred = true;
+    auto max5 = ultra;
+    max5.plan = "claude_max";
+    max5.tier = "default_claude_max_5x";
+    auto named = max5;
+    named.planInferred = false;
+    strings.setChoice(QStringLiteral("zh-Hant"));
+    EXPECT_EQ(planLine(ultra), QStringLiteral("方案：claude_ultra（依額度推算）"));
+    EXPECT_EQ(planLine(max5), QStringLiteral("方案：claude_max · default_claude_max_5x（依額度推算）"));
+    EXPECT_EQ(planLine(named), QStringLiteral("方案：claude_max · default_claude_max_5x"));
+    strings.setChoice(QStringLiteral("en"));
+    EXPECT_EQ(planLine(ultra), QStringLiteral("Plan: claude_ultra (inferred from the quota)"));
+    EXPECT_EQ(planLine(named), QStringLiteral("Plan: claude_max · default_claude_max_5x"));
+}

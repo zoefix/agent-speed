@@ -11,6 +11,7 @@
 #include "agentspeed/quota/estimate/accounts.hpp"
 #include "agentspeed/quota/estimate/entry.hpp"
 #include "agentspeed/quota/estimate/ledger.hpp"
+#include "agentspeed/quota/estimate/plan_inference.hpp"
 #include "agentspeed/quota/estimate/segments.hpp"
 #include "agentspeed/quota/estimate/vote.hpp"
 #include "agentspeed/quota/window.hpp"
@@ -134,6 +135,8 @@ public:
     const std::vector<Observation>& observations() const { return obs_; }
     const std::vector<InstanceRow>& instances() const { return insts_; }
     const std::map<CapClass, Estimate>& estimates() const { return estimates_; }
+    // QUOTAS 10.2: the plans inferred for the accounts Claude Desktop spends on as its own, by account.
+    const std::map<std::string, InferredPlan>& inferredPlans() const { return inferred_; }
     // One input per account-window (its newest instance), in report order but for the account tag.
     const std::vector<EntryInput>& current() const { return current_; }
     // REPORTING-EXTENSIONS 11.2 for the service of api origin `origin`: the entries of `accounts` (all without it) in
@@ -164,6 +167,7 @@ private:
     const std::string& pairAccount(const std::string& machine, const std::string& source);
     void instancesAt();
     void classEstimates();
+    void inferPlans();
     void currentInputs();
 
     Salt salt_;
@@ -190,6 +194,7 @@ private:
     std::vector<Observation> obs_;
     std::vector<InstanceRow> insts_;
     std::map<CapClass, Estimate> estimates_;
+    std::map<std::string, InferredPlan> inferred_;
     std::vector<EntryInput> current_;
 };
 

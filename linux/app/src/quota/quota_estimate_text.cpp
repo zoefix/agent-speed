@@ -96,7 +96,8 @@ Decoration decorate(const est::Entry& e, std::int64_t nowMs, const Strings& stri
     if (e.plan) {
         auto plan = QString::fromStdString(*e.plan);
         if (e.tier) plan += QStringLiteral(" · ") + QString::fromStdString(*e.tier);
-        d.details.push_back(strings.fmt(QStringLiteral("quota.estimate.plan"), {plan}));
+        // QUOTAS 10.2: an inferred plan is marked so (DESIGN 4 Sources row).
+        d.details.push_back(strings.fmt(e.planInferred ? QStringLiteral("quota.estimate.planInferred") : QStringLiteral("quota.estimate.plan"), {plan}));
     }
     if (d.estimated) d.details.push_back(strings.t(QStringLiteral("quota.estimate.live")));
     d.note = strings.t(QStringLiteral("quota.estimate.note"));
