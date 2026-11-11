@@ -6,10 +6,10 @@ if(AGENTSPEED_STATIC)
     set(OPENSSL_USE_STATIC_LIBS TRUE)
 endif()
 find_package(OpenSSL REQUIRED COMPONENTS Crypto)
-# zlib: the character packs and the quota readers (gzip bodies). The relay's static build (REMOTE 3.1) needs neither yet.
+# zlib: the character packs and the quota readers (gzip bodies), which the relay links too (REMOTE 11).
 pkg_check_modules(ZLIB IMPORTED_TARGET zlib)
-if((AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP) AND NOT ZLIB_FOUND)
-    message(FATAL_ERROR "zlib (pkg-config zlib) is required for the app and the tests")
+if((AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP OR AGENTSPEED_BUILD_RELAY) AND NOT ZLIB_FOUND)
+    message(FATAL_ERROR "zlib (pkg-config zlib) is required for the app, the relay and the tests")
 endif()
 
 # JSON and file-system helpers with no library dependency: the base and the status line helper share them.

@@ -9,6 +9,10 @@ add_executable(agentspeed_relay_tests
     relay_process.cpp
     serve_test.cpp
     zone_test.cpp
+    # Quotas (REMOTE 11)
+    http_wire_test.cpp
+    https_client_test.cpp
+    net_stub.cpp
 )
 target_link_libraries(agentspeed_relay_tests PRIVATE agentspeed_relay GTest::gtest_main)
 target_include_directories(agentspeed_relay_tests PRIVATE "${CMAKE_CURRENT_SOURCE_DIR}/../../tests")
