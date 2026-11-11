@@ -742,6 +742,21 @@ equal keys are one account); a chain never seen live is an account of its own, k
   non-null one, else its first later one: newer Codex builds write null); Claude CLI `oauthAccount.organizationType` and
   `organizationRateLimitTier` (observed `claude_max`, `default_claude_max_20x`); Desktop inherits them on a shared
   account; else null. A value is kept only when it is 1–64 characters of `[a-z0-9_.-]`, else null.
+- **Inferred plan** (user's request 2026-11-11: Desktop names no plan, and its credentials stay unread). An account
+  Claude Desktop spends on as its own (10.1) gets a plan from its windows and caps, unless the CLI names that
+  organization a non-personal one (`organizationType` not in the personal list of 10.1). In order:
+  - **Shape**: the newest Desktop snapshot of the account has a `sevenDay` window and no `fiveHour` window →
+    `claude_ultra`, tier null (some Ultra accounts lost the 5-hour window, user 2026-11-10).
+  - **Ratio**: Claude's plans give 5-hour usage in the ratio Pro 1 : Max 5x 5 : Max 20x 20. With the account's own
+    5-hour estimate `K` and each *anchor*, a 5-hour cap class of a Claude plan with a multiplier `m` (`claude_pro` of
+    any tier 1, `claude_max` with `default_claude_max_5x` 5, with `default_claude_max_20x` 20; anchors sorted by plan,
+    then tier with null first), `x = m · K / K_anchor`; the plan whose multiplier `mm` is nearest
+    (`|ln(x / mm)|`, at most `ln 1.5`; the first anchor and plan on a tie) wins: `claude_pro` (tier null),
+    `claude_max` with `default_claude_max_5x` or `default_claude_max_20x`. Both estimates need a cap and confidence
+    `medium` or `high`.
+  - Otherwise none. The result fills `plan` and `tier` of the account's entries and reports (user's choice
+    2026-11-11, over a field of its own) and is shown as inferred (10.8). It never forms a cap class: the class is
+    still `(account, window)`, so an inferred plan is never evidence for itself.
 - **Cap class.** A cap belongs to the plan, not to the person: estimates pool every account of the same
   `(vendor, plan, tier, window)` on this computer, so the user's several Codex accounts of one plan share their
   evidence. Without a plan the class is `(account, window)`.
@@ -861,8 +876,8 @@ Per cap class, pooling the current and the stored instances.
 - **Used**: `C⁺(S, now)`, this computer's and its hosts' measured spend in the current instance, in the display
   currency like other costs (METRICS 9.8; DESIGN 9 *Amount*).
 - **Cap**: `≈K̂`, or `≥atLeast`; nothing at confidence `none`.
-- **Details** (hover, DESIGN 4): account-wide used ≈, the published range, confidence, coverage, plan and tier, and
-  the number of windows it rests on.
+- **Details** (hover, DESIGN 4): account-wide used ≈, the published range, confidence, coverage, plan and tier (an
+  inferred plan marked so, 10.2), and the number of windows it rests on.
 
 ### 10.9 Validation
 
@@ -909,6 +924,11 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
 
 - Vendors meter in their own units; API-equivalent dollars approximate them (`mix` in reports shows the models).
 - History before the first launch gives Claude spend to the key read at launch (10.1).
+- The inferred plan (10.2) rests on the user's report that a missing 5-hour window means Ultra, and on Anthropic's
+  published 5-hour multipliers; a Pro or Max account that lost its 5-hour window would be called Ultra, an Ultra
+  account that kept it gets a Max or no plan, and team and enterprise organizations the CLI does not name are not
+  told apart (unverified). Without an anchor on the computer, an account with a 5-hour window gets no plan: there are
+  no published caps to compare with.
 - `λ` covers lags up to 2 minutes; Claude Desktop's cached value may be older than its `Date` (unverified).
 - Claude's 5-hour and weekly windows are assumed to count from `R − minutes` (unverified); the whole-hour slack of
   10.4 covers a rounded 5-hour reset.
@@ -940,7 +960,8 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
   `spec/tools/quota_estimate.py --write` / `--check-fixtures`, with account keys, the fingerprint (confirmation,
   contradiction, no overlap, a minute's jitter, another window, a pair only after `at`, a tie, the latest pair
   deciding), the Desktop merge rule and equal remote keys, plan
-  strings and Codex account chains, resolution, segments (cumulative, increments, λ, `tLo`, unpriced tokens, 100 %,
+  strings, the inferred plan (shape, ratio to a Max 20x and a Pro anchor, between plans, low confidence, an anchor
+  without a multiplier) and Codex account chains, resolution, segments (cumulative, increments, λ, `tLo`, unpriced tokens, 100 %,
   the five-hour slack, `modelWeek` filtering), instance intervals, the vote (ties, unbounded, a degenerate region,
   dropped weights), weights and half-lives, the estimate (published range, confidence, the lowered-cap rule), a plan
   change, the live percent before and after a reset, report entries (rounding of micro-USD and percent, checked
@@ -955,6 +976,8 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
     line is 6 s late;
   - the Desktop merge (personal plan, team plan, another organization, another account of the same organization,
     no CLI values, Desktop's value before the CLI's) and the key timeline (spend before the first key, a `/login`);
+  - the inferred plan (`plans` output): Desktop without a 5-hour window, of a team organization, at a quarter and at
+    half of the CLI's 5-hour cap;
   - cap classes: two accounts of one plan pooled, a null `plan_type` inheriting, no plan; the lowered-cap rule; a
     plan change inside a window;
   - the live percent before a reset and after it (five-hour first response, weekly `n · minutes`);

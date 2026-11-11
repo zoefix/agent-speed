@@ -23,6 +23,7 @@ LINE_MATCH_MS = 5_000
 OBSERVATIONS_PER_INSTANCE = 256
 MAX_ENTRIES = 16
 STORE_VERSION = 2
+FIVE_HOUR = qe.window_id("fiveHour", None, 300)
 
 
 def source_rank(source):
@@ -328,9 +329,32 @@ class Engine:
             out[cls] = qe.estimate(items, now_ms, qe.half_life_ms(int(minutes) if minutes.isdigit() else 0))
         return insts, out
 
+    def inferred_plans(self, ests):
+        """10.2: the inferred plan of each account Claude Desktop spends on as its own (not the CLI's), unless the CLI
+        names that organization a team or enterprise one: {key: (plan, tier, rule)}."""
+        own = {e[1] for e in self.desktop_orgs}
+        team = {org for c, org in self.org_keys.items() if c[2] is not None and c[2] not in qe.PERSONAL_CLAUDE_PLANS}
+        anchors = sorted(((cls[1].split("/", 1)[1], cls[2], e) for cls, e in ests.items()
+                          if cls[0] == "plan" and cls[1].startswith("anthropic/") and cls[3] == FIVE_HOUR),
+                         key=lambda a: (a[0], a[1] or ""))
+        newest = {}
+        for s in self.snapshots:
+            if s["source"] == "claudeDesktop":
+                k = qe.account_key(self.salt, "claudeDesktop", s["org"])
+                if k not in newest or s["observedMs"] >= newest[k]["observedMs"]:
+                    newest[k] = s
+        out = {}
+        for k in sorted(own - team):
+            kinds = [w["kind"] for w in newest[k]["windows"]] if k in newest else []
+            plan, tier, rule = qe.infer_claude_plan(kinds, ests.get(qe.class_of(k, None, None, FIVE_HOUR)), anchors)
+            if plan:
+                out[k] = (plan, tier, rule)
+        return out
+
     def entries(self, now_ms):
         """Report entries (REPORTING-EXTENSIONS 11.2): one per account-window, its newest instance."""
         insts, ests = self.estimates(now_ms)
+        inferred = self.inferred_plans(ests)
         current = {}
         for x in insts:
             k = (x["account"], x["wid"])
@@ -347,7 +371,8 @@ class Engine:
                 first_after = min(starts) if starts else None
             sources = sorted({r["source"] for r in self.responses if r.get("_account") == account
                               and r["endMs"] >= inst["S"]} | {last["source"]}, key=source_rank)
-            acc = {"account": account, "source": last["source"], "sources": sources, "plan": x["plan"], "tier": x["tier"],
+            plan, tier = (x["plan"], x["tier"]) if x["plan"] or account not in inferred else inferred[account][:2]
+            acc = {"account": account, "source": last["source"], "sources": sources, "plan": plan, "tier": tier,
                    "kind": last["kind"], "name": last["name"], "minutes": last["minutes"], "p": last["p"],
                    "t": last["t"], "R": inst["R"], "S": inst["S"], "accounts": {account},
                    "estimate": ests.get(x["class"]) or {"confidence": "none", "windows": 0},
@@ -539,6 +564,8 @@ def run(inp):
         out["estimates"] = {"|".join(str(c) for c in k): {f: fnum(e.get(f)) for f in
                                                           ("cap", "low", "high", "confidence", "windows")}
                             for k, e in sorted(ests.items(), key=lambda kv: str(kv[0]))}
+    if "plans" in want:
+        out["plans"] = {k: dict(zip(("plan", "tier", "rule"), v)) for k, v in eng.inferred_plans(ests).items()}
     if "entries" in want:
         out["entries"] = eng.entries(now)
     if "store" in want:
@@ -629,6 +656,44 @@ def claude_cases():
              [snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(1, R7)),
               snap("claudeCode", t + 20 * MINUTE, week=(2, R7 + 20_000))])):
         out.append(case(label, why, base + extra, t + HOUR, outputs=["responses", "instances", "entries"]))
+    return out
+
+
+def five_hour_claude(source, S, cap, steps, org=None, cost=1_000_000):
+    """`steps` responses 3 min apart in the 5h window that starts at S, each followed 30 s later by a snapshot with
+    the integer percent of the cap spent so far."""
+    R = sec(S + 300 * MINUTE)
+    events, spent = [], 0
+    for i in range(1, steps + 1):
+        spent += cost
+        end = S + i * 3 * MINUTE
+        events += [resp(source, end, cost, model=OPUS), snap(source, end + 30_000, org=org, five=(spent * 100 // cap, R))]
+    return events
+
+
+def inference_cases():
+    t = BASE + HOUR
+    R7 = BASE + 6 * DAY
+    out = []
+    for label, why, org_type, desk_org in (
+            ("Desktop without a 5-hour window", "Desktop's own account shows a weekly window and no 5-hour window: "
+             "claude_ultra (some Ultra accounts lost the 5-hour window, user 2026-11-10); the Fable window of the account "
+             "carries it too", "claude_max", "org-2"),
+            ("Desktop of a team organization", "the CLI names Desktop's organization a team one: nothing is inferred",
+             "claude_team", "org-1")):
+        ev = [profile(BASE, org_type=org_type), resp("claudeDesktop", t, 2_000_000, model=OPUS),
+              snap("claudeDesktop", t + MINUTE, org=desk_org, week=(5, R7), fable=(3, R7))]
+        out.append(case(label, why, ev, t + HOUR, outputs=["plans", "entries"]))
+    S = BASE + 10 * MINUTE
+    cli = [profile(BASE)] + five_hour_claude("claudeCode", S, 100_000_000, 20, cost=2_000_000)
+    for label, why, cap in (
+            ("Desktop at a quarter of the CLI's 5-hour cap", "the CLI's Max 20x account caps 5 h at ≈ $95 and "
+             "Desktop's own account at ≈ $23 (both medium): 20 · 23.4 / 94.9 ≈ 4.9, claude_max with "
+             "default_claude_max_5x", 25_000_000),
+            ("Desktop at half the CLI's 5-hour cap", "20 · 46.8 / 94.9 ≈ 9.9 lies more than 1.5 times away from 5 "
+             "and from 20: nothing is inferred", 50_000_000)):
+        ev = cli + five_hour_claude("claudeDesktop", S + MINUTE, cap, 8, org="org-2", cost=cap // 10)
+        out.append(case(label, why, ev, S + 3 * HOUR, outputs=["plans", "estimates", "entries"]))
     return out
 
 
@@ -836,6 +901,7 @@ def cases():
         "ledger": ledger_cases(),
         "chains": chain_cases(),
         "claude": claude_cases(),
+        "inference": inference_cases(),
         "keys": key_cases(),
         "classes": class_cases(),
         "loweredCap": cut_cases(),

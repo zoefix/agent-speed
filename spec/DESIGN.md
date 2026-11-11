@@ -2156,7 +2156,8 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
      exists, a hairline, then in secondary text: `quota.estimate.used`; `quota.estimate.cap` with the published range
      (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap exists; `quota.estimate.coverage` (integer
      percent) while known; the confidence line (`quota.estimate.confidence.*`) with `quota.estimate.windows` after
-     ` · `; `quota.estimate.plan` with the plan (and ` · ` tier) when known; `quota.estimate.live` while the percent
+     ` · `; `quota.estimate.plan` with the plan (and ` · ` tier) when known, `quota.estimate.planInferred` when inferred
+     (QUOTAS 10.2); `quota.estimate.live` while the percent
      is extrapolated; and last, in tertiary, `quota.estimate.note`. Non-USD currencies add the USD amount as section
      9 *Tooltips* says.
    - Accessibility: the row's label adds, after the cost, one `a11y.quota.window` per window
