@@ -5046,6 +5046,18 @@
     "en": "Traffic measuring is off",
     "ja": "通信量の計測はオフです"
   },
+  "report.section.quota": {
+    "zh-Hant": "額度（百分比、已用金額、估計上限）",
+    "zh-Hans": "额度（百分比、已用金额、估计上限）",
+    "en": "Quotas (percent, amount used, estimated cap)",
+    "ja": "利用枠（割合、使用額、推定上限）"
+  },
+  "report.section.quota.hint": {
+    "zh-Hant": "每個訂閱週期（5 小時、每週、單一模型每週）的廠商百分比、本機量到的 API 等值用量，以及估計的上限，附上方案名稱（例如 claude_max、promax），供大數據統計。不含任何帳號 ID、電子郵件或權杖，也不含時間點，只有距離重置的時間。",
+    "zh-Hans": "每个订阅周期（5 小时、每周、单个模型每周）的厂商百分比、本机测得的 API 等值用量，以及估计的上限，附上套餐名称（例如 claude_max、promax），供大数据统计。不含任何账号 ID、电子邮件或令牌，也不含时间点，只有距离重置的时间。",
+    "en": "For each subscription window (5-hour, weekly, a model's weekly limit): the vendor's percent, the API-equivalent usage measured here and the estimated cap, with the plan's name (such as claude_max or promax), for statistics. No account id, e-mail address or token, and no timestamps: only the time until the reset.",
+    "ja": "サブスクリプションの各期間（5 時間、週、モデル別の週）について、ベンダーの割合、このコンピュータで計測した API 換算の使用量、推定上限を、プラン名（claude_max、promax など）とともに統計のために送信します。アカウント ID、メールアドレス、トークン、時刻は含まず、リセットまでの時間だけを送ります。"
+  },
   "report.preview": {
     "zh-Hant": "預覽傳送內容…",
     "zh-Hans": "预览发送内容…",
@@ -7494,11 +7506,113 @@
     "en": "%d%% of the window has passed",
     "ja": "期間の %d%% が経過"
   },
+  "quota.amount.cap": {
+    "zh-Hant": "%@ / ≈%@",
+    "zh-Hans": "%@ / ≈%@",
+    "en": "%@ / ≈%@",
+    "ja": "%@ / ≈%@"
+  },
+  "quota.amount.atLeast": {
+    "zh-Hant": "%@ / ≥%@",
+    "zh-Hans": "%@ / ≥%@",
+    "en": "%@ / ≥%@",
+    "ja": "%@ / ≥%@"
+  },
+  "quota.estimate.used": {
+    "zh-Hant": "本機已用 %@",
+    "zh-Hans": "本机已用 %@",
+    "en": "%@ used on this computer",
+    "ja": "このコンピュータで %@ 使用"
+  },
+  "quota.estimate.cap": {
+    "zh-Hant": "上限約 %@（範圍 %@–%@）",
+    "zh-Hans": "上限约 %@（范围 %@–%@）",
+    "en": "Cap about %@ (range %@–%@)",
+    "ja": "上限 約 %@（範囲 %@–%@）"
+  },
+  "quota.estimate.atLeast": {
+    "zh-Hant": "上限至少 %@",
+    "zh-Hans": "上限至少 %@",
+    "en": "Cap at least %@",
+    "ja": "上限は %@ 以上"
+  },
+  "quota.estimate.account": {
+    "zh-Hant": "整個帳號約已用 %@",
+    "zh-Hans": "整个账号约已用 %@",
+    "en": "About %@ used by the whole account",
+    "ja": "アカウント全体で 約 %@ 使用"
+  },
+  "quota.estimate.coverage": {
+    "zh-Hant": "這台電腦看到這個週期 %d%% 的用量",
+    "zh-Hans": "这台电脑看到本周期 %d%% 的用量",
+    "en": "This computer saw %d%% of this window's usage",
+    "ja": "この期間の使用量のうち %d%% をこのコンピュータで確認"
+  },
+  "quota.estimate.confidence.high": {
+    "zh-Hant": "可信度高",
+    "zh-Hans": "可信度高",
+    "en": "High confidence",
+    "ja": "信頼度：高"
+  },
+  "quota.estimate.confidence.medium": {
+    "zh-Hant": "可信度中",
+    "zh-Hans": "可信度中",
+    "en": "Medium confidence",
+    "ja": "信頼度：中"
+  },
+  "quota.estimate.confidence.low": {
+    "zh-Hant": "可信度低",
+    "zh-Hans": "可信度低",
+    "en": "Low confidence",
+    "ja": "信頼度：低"
+  },
+  "quota.estimate.windows": {
+    "zh-Hant": "依據 %d 個週期",
+    "zh-Hans": "依据 %d 个周期",
+    "en": "Based on %d windows",
+    "ja": "%d 期間分に基づく"
+  },
+  "quota.estimate.plan": {
+    "zh-Hant": "方案：%@",
+    "zh-Hans": "套餐：%@",
+    "en": "Plan: %@",
+    "ja": "プラン：%@"
+  },
+  "quota.estimate.live": {
+    "zh-Hant": "≈ 百分比是依本機之後的用量推算，廠商下次更新時會取代",
+    "zh-Hans": "≈ 百分比按本机之后的用量推算，厂商下次更新时会替换",
+    "en": "≈ The percent is extrapolated from this computer's usage since; the vendor's next value replaces it",
+    "ja": "≈ この割合はその後のこのコンピュータの使用量からの推定で、ベンダーの次の値で置き換わります"
+  },
+  "quota.estimate.note": {
+    "zh-Hant": "以 API 等值美元估算，依據廠商的百分比和本機量到的用量；不是廠商公布的數字。",
+    "zh-Hans": "以 API 等值美元估算，依据厂商的百分比和本机测得的用量；不是厂商公布的数字。",
+    "en": "Estimated in API-equivalent US dollars from the vendor's percent and the usage measured here; not a number the vendor publishes.",
+    "ja": "ベンダーの割合とこのコンピュータで計測した使用量から API 換算の米ドルで推定した値です。ベンダーが公表する数値ではありません。"
+  },
   "a11y.quota.window": {
     "zh-Hant": "%@ 已用 %d%%，%@",
     "zh-Hans": "%@ 已用 %d%%，%@",
     "en": "%@ %d%% used, %@",
     "ja": "%@ %d%% 使用、%@"
+  },
+  "a11y.quota.amount": {
+    "zh-Hant": "已用 %@，上限約 %@",
+    "zh-Hans": "已用 %@，上限约 %@",
+    "en": "%@ used, cap about %@",
+    "ja": "%@ 使用、上限 約 %@"
+  },
+  "a11y.quota.amountNoCap": {
+    "zh-Hant": "已用 %@",
+    "zh-Hans": "已用 %@",
+    "en": "%@ used",
+    "ja": "%@ 使用"
+  },
+  "a11y.quota.estimated": {
+    "zh-Hant": "估計值",
+    "zh-Hans": "估计值",
+    "en": "estimated",
+    "ja": "推定値"
   },
   "a11y.quota.windowNoReset": {
     "zh-Hant": "%@ 已用 %d%%",
@@ -7621,10 +7735,10 @@
     "ja": "%@ に書き込めません。何も変更していません"
   },
   "privacy.quota": {
-    "zh-Hant": "額度：Codex 的額度來自它的對話紀錄；Claude Desktop 的額度來自 Desktop 自己留在本機的用量快取；Claude Code 的額度只在你開啟後，透過它的狀態列取得。Agent Speed 不讀取任何 Claude 登入憑證或權杖，也不向 Claude 傳送任何請求。其他 agent 的額度依各自的開關，讀取本機資料，或用該 agent 自己的登入、你貼上的 API Key，或你同意後讀取的瀏覽器登入，只向該 agent 的廠商查詢；這些登入資料只放在記憶體裡、用完即丟。額度不會上報，也不會傳到其他裝置。",
-    "zh-Hans": "额度：Codex 的额度来自它的对话记录；Claude Desktop 的额度来自 Desktop 自己留在本机的用量缓存；Claude Code 的额度只在你开启后，通过它的状态栏获取。Agent Speed 不读取任何 Claude 登录凭据或令牌，也不向 Claude 发送任何请求。其他 agent 的额度按各自的开关，读取本机数据，或用该 agent 自己的登录、你粘贴的 API Key，或你同意后读取的浏览器登录，只向该 agent 的厂商查询；这些登录数据只放在内存里、用完即丢。额度不会上报，也不会传到其他设备。",
-    "en": "Quotas: Codex's come from its session logs, Claude Desktop's from the usage response Desktop keeps in its own cache on this computer, and Claude Code's, only once you turn it on, from its status line. Agent Speed never reads Claude credentials or tokens and never sends a request to Claude. Other agents' quotas follow their own switches: local data, or a request to that agent's own vendor with the agent's sign-in, an API key you pasted, or, once you allow it, your browser sign-in. Those credentials stay in memory and are dropped after use. Quotas are not reported or sent to other devices.",
-    "ja": "利用枠：Codex の利用枠はセッション記録から、Claude Desktop の利用枠は Desktop がこのコンピュータに残す使用量のキャッシュから、Claude Code の利用枠はオンにした場合だけステータスラインから取得します。Agent Speed は Claude のサインイン情報やトークンを読み取らず、Claude にリクエストを送ることもありません。ほかの agent の利用枠はそれぞれのスイッチに従い、ローカルのデータを読むか、その agent 自身のサインイン、貼り付けた API キー、または許可したブラウザのサインインで、その agent のベンダーにだけ問い合わせます。これらの資格情報はメモリ上にだけ置き、使い終わったら破棄します。利用枠は送信されず、ほかのデバイスにも渡りません。"
+    "zh-Hant": "額度：Codex 的額度來自它的對話紀錄；Claude Desktop 的額度來自 Desktop 自己留在本機的用量快取；Claude Code 的額度只在你開啟後，透過它的狀態列取得。Agent Speed 不讀取任何 Claude 登入憑證或權杖，也不向 Claude 傳送任何請求。其他 agent 的額度依各自的開關，讀取本機資料，或用該 agent 自己的登入、你貼上的 API Key，或你同意後讀取的瀏覽器登入，只向該 agent 的廠商查詢；這些登入資料只放在記憶體裡、用完即丟。額度不會傳到其他裝置；只有在 API 上報的「額度」開關開啟、且服務支援時，才會上報百分比、已用金額、估計上限和方案名稱，從不包含帳號 ID。",
+    "zh-Hans": "额度：Codex 的额度来自它的对话记录；Claude Desktop 的额度来自 Desktop 自己留在本机的用量缓存；Claude Code 的额度只在你开启后，通过它的状态栏获取。Agent Speed 不读取任何 Claude 登录凭据或令牌，也不向 Claude 发送任何请求。其他 agent 的额度按各自的开关，读取本机数据，或用该 agent 自己的登录、你粘贴的 API Key，或你同意后读取的浏览器登录，只向该 agent 的厂商查询；这些登录数据只放在内存里、用完即丢。额度不会传到其他设备；只有在 API 上报的“额度”开关开启且服务支持时，才会上报百分比、已用金额、估计上限和套餐名称，从不包含账号 ID。",
+    "en": "Quotas: Codex's come from its session logs, Claude Desktop's from the usage response Desktop keeps in its own cache on this computer, and Claude Code's, only once you turn it on, from its status line. Agent Speed never reads Claude credentials or tokens and never sends a request to Claude. Other agents' quotas follow their own switches: local data, or a request to that agent's own vendor with the agent's sign-in, an API key you pasted, or, once you allow it, your browser sign-in. Those credentials stay in memory and are dropped after use. Quotas are not sent to other devices. Only while the Quotas switch of API reporting is on and the service takes them are the percent, amount used, estimated cap and plan name reported, never an account id.",
+    "ja": "利用枠：Codex の利用枠はセッション記録から、Claude Desktop の利用枠は Desktop がこのコンピュータに残す使用量のキャッシュから、Claude Code の利用枠はオンにした場合だけステータスラインから取得します。Agent Speed は Claude のサインイン情報やトークンを読み取らず、Claude にリクエストを送ることもありません。ほかの agent の利用枠はそれぞれのスイッチに従い、ローカルのデータを読むか、その agent 自身のサインイン、貼り付けた API キー、または許可したブラウザのサインインで、その agent のベンダーにだけ問い合わせます。これらの資格情報はメモリ上にだけ置き、使い終わったら破棄します。利用枠はほかのデバイスに渡りません。API 送信の「利用枠」スイッチがオンで、サービスが対応している場合だけ、割合、使用額、推定上限、プラン名を送信します。アカウント ID は送りません。"
   },
   "quota.window.month": {
     "zh-Hant": "月",

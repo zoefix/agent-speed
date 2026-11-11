@@ -986,9 +986,12 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     secondary token, then one line per window in QUOTAS 2 order.
   - A window line: the label (`5h`, `7d`, `Fable 7d`) at `0.9 t` in the secondary token, in a column as wide as the
     card's widest label; `0.5 t`; the bar, `5 t` long and `0.26 t` tall, fully rounded; `0.5 t`; the percent at `t` in
-    the value token, tabular, right-aligned in a cell as wide as `100%`; `0.4 t`; the short reset (QUOTAS 7: `42m`,
-    `3h`, `週五`) at `0.9 t` in the secondary token, in a cell as wide as the card's widest, nothing while unknown or
-    passed.
+    the value token, tabular, right-aligned in a cell as wide as `≈100%` (the `≈` of an extrapolated percent at
+    `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the used amount (QUOTAS 10.8, section 9 *Amount* with its
+    symbol, `$161`) at `0.9 t` in the value token, tabular, right-aligned in a cell as wide as the card's widest
+    amount, empty without spend; `0.4 t`; the short reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t` in the secondary
+    token, in a cell as wide as the card's widest, nothing while unknown or passed. The card shows no cap (user's
+    choice 2026-11-11: the dashboard has it).
   - Bar: track label 12 % (dark 16 %); fill the source color, amber `#F5A524` (light `#B86E00`) from 80 %, the system
     red from 95 %, when the percent takes the same red. Increase Contrast: the fill in the text color, the track in the
     disabled-text color.
@@ -997,10 +1000,12 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     out; a changed percent crossfades (0.2 s); a source joining or leaving fades its lines (0.25 s) as the card eases to
     its height. Reduce Motion: lengths change at once, fades stay.
   - Room: the card is as wide as its content and keeps the column's right edge. When it does not fit the room to the
-    orb's edge, the reset cells go first, then the bars shorten to `3 t`, then the header lines go (the dot moves before
-    the source's first label, `0.35 t` before it). Only then does the card spill over like the column's other cards.
+    orb's edge, the reset cells go first, then the amount cells, then the bars shorten to `3 t`, then the header lines
+    go (the dot moves before the source's first label, `0.35 t` before it). Only then does the card spill over like
+    the column's other cards.
   - Accessibility: after the today reading, `a11y.orb.quota` with each source's name followed by one
-    `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), sources joined
+    `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), each followed
+    by `a11y.quota.amountNoCap` with the used amount and, while extrapolated, `a11y.quota.estimated`, sources joined
     by `list.separator`.
 - **Balance** (user's choice 2026-11-11: "右邊這麼空…讓左側和右側自動放的卡片內容要看起來視覺是相等的"). The column's
   cards are split between her two sides so that their weight is as even as possible:
@@ -2117,9 +2122,17 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    placeholder for a 5-hour window.
    - Columns, from the name's leading edge: the label (`5h`, `7d`, `Fable 7d`), 11 pt medium, secondary, in a column
      as wide as the section's widest label; 8 pt; the bar, flexible, at least 88 pt; 8 pt; the percent, 11.5 pt
-     semibold tabular in the value color, right-aligned in a cell as wide as `100%`; 8 pt; the long reset (QUOTAS 7:
-     `3 小時 12 分後重置`, `週五 09:00 重置`), 11 pt secondary, in the rest of the row, its tail truncated. While the
-     snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+     semibold tabular in the value color, right-aligned in a cell as wide as `≈100%`; 8 pt; the amount (below); 8 pt;
+     the long reset (QUOTAS 7: `3 小時 12 分後重置`, `週五 09:00 重置`), 11 pt secondary, in the rest of the row, its
+     tail truncated. While the snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+   - **Percent** (QUOTAS 10.7; user's choice 2026-11-11): the live percent. While it is extrapolated, a leading `≈` in
+     the secondary token, kerned 1 pt to the digits; the bar follows the same value. A new vendor value replaces it
+     with the usual crossfade, and the `≈` fades with it.
+   - **Amount** (QUOTAS 10.8; user's choice 2026-11-11: percent, amount used and the estimated cap): the used amount
+     (section 9 *Amount*, display currency), 11 pt medium tabular in the value color; then, while an estimate exists,
+     `quota.amount.cap` (` / ≈$5,742`) or `quota.amount.atLeast` (` / ≥$737`) with the cap in the tertiary token. At
+     confidence `none` only the used amount shows; with no spend in the window and no estimate, the cell is empty. The
+     cell is left-aligned and as wide as the section's widest amount, so the reset times stay in one column.
    - Bar: 4 pt tall, fully rounded; track label 8 % (dark 12 %); fill the source color, amber `#F5A524` (light
      `#B86E00`) from 80 %, the system red from 95 %, when the percent takes the same red. The pace mark, while
      QUOTAS 7 gives one, is a 1 × 8 pt tick at the pace fraction, label 35 %, centered on the bar's height.
@@ -2127,9 +2140,16 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s; texts crossfade in 0.2 s.
      Reduce Motion: lengths change at once.
    - Tooltip of a line: `quota.updated` with the snapshot's time (time only today, else date and time) and, while
-     known, `quota.pace`.
+     known, `quota.pace`. While an estimate exists, a hairline, then in secondary text: `quota.estimate.used`;
+     `quota.estimate.cap` with the published range (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap
+     exists; `quota.estimate.coverage` (integer percent) while known; the confidence line
+     (`quota.estimate.confidence.*`) with `quota.estimate.windows` after ` · `; `quota.estimate.plan` with the plan
+     (and ` · ` tier) when known; `quota.estimate.live` while the percent is extrapolated; and last, in tertiary,
+     `quota.estimate.note`. Non-USD currencies add the USD amount as section 9 *Tooltips* says.
    - Accessibility: the row's label adds, after the cost, one `a11y.quota.window` per window
-     (`a11y.quota.windowNoReset` without a reset time), joined by `list.separator`.
+     (`a11y.quota.windowNoReset` without a reset time), each followed by `a11y.quota.amount` (or
+     `a11y.quota.amountNoCap`) and, while the percent is extrapolated, `a11y.quota.estimated`, joined by
+     `list.separator`.
    - Increase Contrast / Windows high contrast: fill and pace mark in the text color, track in the disabled-text color.
    - **Claude Code invitation**: while `quotaClaudeCli` is off and the invitation was not dismissed, the listed Claude
      Code row shows one line in place of quota lines: the link button `dashboard.quota.enableCli` (11 pt, accent color)
@@ -3800,8 +3820,12 @@ Top to bottom:
    is never shown again in full, never in the preview and never logged. Saving a key while reporting waits for one
    (`report.status.apiKey`) registers at once.
 5. **What's sent** (`report.sections`) — the caption `report.sections.hint`, then one switch per optional section:
-   `report.section.sources`, `report.section.models`, `report.section.cost` and `report.section.traffic` (the
-   agents' own traffic), all on by default. The computer's overall network traffic is never reported (REPORTING 1.3);
+   `report.section.sources`, `report.section.models`, `report.section.cost`, `report.section.traffic` (the
+   agents' own traffic) and `report.section.quota` (REPORTING-EXTENSIONS 11; user's choice 2026-11-11: its own switch,
+   on by default like the others), all on by default. Under the quota switch, the caption
+   `report.section.quota.hint` (11 pt secondary) says what it shares, always visible; the switch is off and disabled
+   with `report.section.notAccepted` while the service's known document does not advertise `quotaEstimate`.
+   The computer's overall network traffic is never reported (REPORTING 1.3);
    a switch stored for it by an earlier build is ignored. A section the service does not list is shown off and
    disabled with `report.section.notAccepted`; the traffic switch is disabled with `report.section.trafficOff` while
    traffic measuring is off (the report then says `status: "off"`). Under the models switch, the 11 pt secondary
@@ -3862,7 +3886,7 @@ yet confirmed, or by `report.service.review` (after a change, or when an accepte
 - Title `report.consent.title` (the service name), body `report.consent.body` (with the service's interval).
 - The service card (as in the pane); the **username field**, filled with the pane's name (by default the computer
   name, below) and editable here, with its caption `report.username.public` and the random button; the API key field when needed;
-  and the section switches with their defaults and captions (5 above, the models switch's caption included). The
+  and the section switches with their defaults and captions (5 above, the models and quota captions included). The
   preview shows the name exactly as it will be sent.
 - **Nothing is sent before `report.start`**: no key is created and no request — not even registration — is made while
   the sheet is open; only the discovery document has been fetched (REPORTING 3). Cancelling leaves no trace on the

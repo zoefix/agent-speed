@@ -29,6 +29,7 @@ jobs:
           python3 spec/tools/test_reporting_extensions.py
           python3 spec/tools/lan_reference.py --check-fixtures
           python3 spec/tools/quota_reference.py --check-fixtures
+          python3 spec/tools/quota_estimate.py --check-fixtures
       - name: Validate vehicle art
         run: python3 spec/tools/vehicles.py
       - name: Lint installer
