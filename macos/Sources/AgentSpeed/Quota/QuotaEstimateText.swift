@@ -39,15 +39,10 @@ struct QuotaEstimateText {
         return (used, String(full.dropFirst(used.count)))
     }
 
-    /// The used amount alone, for the orb card (which shows no cap).
-    func usedAmount(_ e: QuotaEstimateDisplay) -> String? {
-        e.showsAmount ? cost.compactAmountText(microUsd: e.usedMicroUsd) : nil
-    }
-
     /// `a11y.quota.amount` with the cap, else `a11y.quota.amountNoCap`.
-    func spokenAmount(_ e: QuotaEstimateDisplay, withCap: Bool) -> String {
+    func spokenAmount(_ e: QuotaEstimateDisplay) -> String {
         let used = cost.spoken(cost.amount(microUsd: e.usedMicroUsd).number)
-        if withCap, let cap = e.capMicroUsd {
+        if let cap = e.capMicroUsd {
             return l10n("a11y.quota.amount", used, cost.spoken(cost.amount(microUsd: cap).number))
         }
         return l10n("a11y.quota.amountNoCap", used)

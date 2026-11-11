@@ -177,7 +177,7 @@ extension AppModel {
         let text = QuotaEstimateText(l10n: l10n, cost: cost)
         if estimate.showsAmount {
             (line.amount, line.amountCap) = text.amountCell(estimate)
-            line.spoken += l10n("list.separator") + text.spokenAmount(estimate, withCap: true)
+            line.spoken += l10n("list.separator") + text.spokenAmount(estimate)
         }
         if estimate.estimated { line.spoken += l10n("list.separator") + l10n("a11y.quota.estimated") }
         line.estimateDetails = text.details(estimate)
