@@ -29,6 +29,8 @@ struct EntryInput {
     Estimate estimate;
     std::optional<std::int64_t> firstAfterReset;
     std::size_t order = 0;
+    // `plan` and `tier` were inferred (QUOTAS 10.2).
+    bool planInferred = false;
 };
 
 struct Entry {
@@ -54,10 +56,12 @@ struct Entry {
     int windows = 0;
     std::vector<MixShare> mix;
     int priceVersion = 1;
-    // Not reported: the unrounded live percent, the reset instant and the account, for the display.
+    // Not reported: the unrounded live percent, the reset instant, the account and whether the plan was inferred
+    // (QUOTAS 10.2, shown as such in 10.8), for the display.
     double liveExact = 0;
     std::optional<std::int64_t> resetsAtMs;
     std::string account;
+    bool planInferred = false;
 
     report::Json json() const;
     bool operator==(const Entry&) const = default;

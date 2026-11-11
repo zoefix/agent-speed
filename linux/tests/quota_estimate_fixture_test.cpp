@@ -5,6 +5,7 @@
 
 #include "agentspeed/quota/estimate/accounts.hpp"
 #include "agentspeed/quota/estimate/entry.hpp"
+#include "agentspeed/quota/estimate/plan_inference.hpp"
 #include "agentspeed/quota/estimate/segments.hpp"
 #include "agentspeed/quota/estimate/vote.hpp"
 #include "quota_estimate_support.hpp"
@@ -125,6 +126,33 @@ TEST(QuotaEstimateFixture, DesktopMergeAndSharedKeys) {
 TEST(QuotaEstimateFixture, Plans) {
     for (const auto& c : root()["accounts"]["plans"].elements()) {
         EXPECT_EQ(est::cleanPlan(c["value"]), textOf(c["expected"])) << c["value"].raw();
+    }
+}
+
+// QUOTAS 10.2 Inferred plan: the shape rule, the ratio to an anchor, and the cases that give nothing.
+TEST(QuotaEstimateFixture, InferPlan) {
+    const auto estimateOf = [](const Value& v) {
+        std::optional<est::Estimate> e;
+        if (!v.isObject()) return e;
+        e.emplace();
+        e->confidence = est::confidenceFromId(*v["confidence"].string()).value_or(est::Confidence::None);
+        e->cap = optNumber(v["cap"]);
+        return e;
+    };
+    const auto cases = root()["accounts"]["inferPlan"];
+    ASSERT_GT(cases.size(), 0u);
+    for (const auto& c : cases.elements()) {
+        SCOPED_TRACE(*c["why"].string());
+        std::vector<std::string> kinds;
+        for (const auto& k : c["kinds"].elements()) kinds.push_back(*k.string());
+        const auto own = estimateOf(c["own"]);
+        std::vector<est::PlanAnchor> anchors;
+        for (const auto& a : c["anchors"].elements()) anchors.push_back({*a["plan"].string(), textOf(a["tier"]), *estimateOf(a["estimate"])});
+        const auto got = est::inferClaudePlan(kinds, own ? &*own : nullptr, anchors);
+        const auto json = Json::object({{"plan", got ? Json::of(got->plan) : Json::null()},
+                                        {"tier", got ? optionalText(got->tier) : Json::null()},
+                                        {"rule", got ? Json::of(std::string(est::inferRuleId(got->rule))) : Json::null()}});
+        expectJson(json.compact(), c["expected"], "inferPlan");
     }
 }
 

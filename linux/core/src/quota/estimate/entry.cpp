@@ -69,6 +69,7 @@ Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger
     e.sources = in.sources;
     e.plan = in.plan;
     e.tier = in.tier;
+    e.planInferred = in.planInferred;
     e.kind = in.kind;
     e.name = in.name;
     e.minutes = in.minutes;

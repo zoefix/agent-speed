@@ -94,6 +94,15 @@ Json estimatesJson(const est::Engine& engine) {
     return Json::object(std::move(members));
 }
 
+// The reference's `plans` output: account key → {plan, tier, rule}.
+Json plansJson(const est::Engine& engine) {
+    std::vector<Json::Member> members;
+    for (const auto& [key, p] : engine.inferredPlans()) {
+        members.emplace_back(key, Json::object({{"plan", Json::of(p.plan)}, {"tier", optionalText(p.tier)}, {"rule", Json::of(std::string(est::inferRuleId(p.rule)))}}));
+    }
+    return Json::object(std::move(members));
+}
+
 Json entriesJson(const std::vector<est::Entry>& entries) {
     std::vector<Json> out;
     for (const auto& e : entries) out.push_back(e.json());
@@ -157,6 +166,7 @@ void check(const Value& c) {
     }
     if (want["instances"].valid()) expectJson(instancesJson(engine).compact(), want["instances"], "instances");
     if (want["estimates"].valid()) expectJson(estimatesJson(engine).compact(), want["estimates"], "estimates");
+    if (want["plans"].valid()) expectJson(plansJson(engine).compact(), want["plans"], "plans");
     if (want["entries"].valid()) expectJson(entriesJson(engine.entries(r.now, r.origin)).compact(), want["entries"], "entries");
     if (want["store"].valid()) {
         const auto text = est::storeJson(engine.store());
@@ -186,6 +196,7 @@ void checkGroup(const char* group) {
 TEST(QuotaEstimatePipeline, Ledger) { checkGroup("ledger"); }
 TEST(QuotaEstimatePipeline, CodexChains) { checkGroup("chains"); }
 TEST(QuotaEstimatePipeline, DesktopMerge) { checkGroup("claude"); }
+TEST(QuotaEstimatePipeline, InferredPlan) { checkGroup("inference"); }
 TEST(QuotaEstimatePipeline, KeyTimeline) { checkGroup("keys"); }
 TEST(QuotaEstimatePipeline, CapClasses) { checkGroup("classes"); }
 TEST(QuotaEstimatePipeline, LoweredCap) { checkGroup("loweredCap"); }
@@ -233,9 +244,54 @@ TEST(QuotaEstimatePipeline, TwoCodexAccountsAreTwoEntriesWithTheirOwnTags) {
     expectJson(entriesJson(entries).compact(), c["expected"]["entries"], "entries");
 }
 
+// QUOTAS 10.2: an inferred plan fills only Desktop's own account's entries, marked as inferred, and never forms a cap
+// class (no class of the inferred plan; Desktop's instances keep their account class).
+void expectInferredOnlyOnDesktop(const char* group, const std::string& name, const std::optional<std::string>& plan,
+                                 const std::optional<std::string>& tier) {
+    SCOPED_TRACE(name);
+    const auto c = pipelineCase(group, name);
+    ASSERT_TRUE(c.valid());
+    auto r = run(c["input"]);
+    const auto entries = r.engine->entries(r.now, r.origin);
+    ASSERT_FALSE(entries.empty());
+    bool desktop = false;
+    for (const auto& e : entries) {
+        if (e.source != "claudeDesktop") {
+            EXPECT_FALSE(e.planInferred) << e.source;
+            continue;
+        }
+        desktop = true;
+        EXPECT_EQ(e.plan, plan) << e.kind;
+        EXPECT_EQ(e.tier, tier) << e.kind;
+        EXPECT_EQ(e.planInferred, plan.has_value()) << e.kind;
+    }
+    EXPECT_TRUE(desktop);
+    for (const auto& x : r.engine->instances()) {
+        if (x.inst.obs.back().source == "claudeDesktop") {
+            EXPECT_FALSE(x.cls.byPlan) << x.window;
+        }
+    }
+    if (plan) {
+        for (const auto& [cls, _] : r.engine->estimates()) EXPECT_FALSE(cls.byPlan && cls.id == "anthropic/" + *plan && cls.tier == tier) << cls.joined();
+    }
+    expectJson(entriesJson(entries).compact(), c["expected"]["entries"], "entries");
+}
+
+TEST(QuotaEstimatePipeline, DesktopsOwnAccountWithoutAFiveHourWindowIsUltra) {
+    expectInferredOnlyOnDesktop("claude", "Desktop on another account of the organization", "claude_ultra", std::nullopt);
+    expectInferredOnlyOnDesktop("claude", "Desktop without CLI values", "claude_ultra", std::nullopt);
+    expectInferredOnlyOnDesktop("inference", "Desktop without a 5-hour window", "claude_ultra", std::nullopt);
+}
+
+TEST(QuotaEstimatePipeline, DesktopsPlanByRatioOrNone) {
+    expectInferredOnlyOnDesktop("inference", "Desktop at a quarter of the CLI's 5-hour cap", "claude_max", "default_claude_max_5x");
+    expectInferredOnlyOnDesktop("inference", "Desktop at half the CLI's 5-hour cap", std::nullopt, std::nullopt);
+    expectInferredOnlyOnDesktop("inference", "Desktop of a team organization", std::nullopt, std::nullopt);
+}
+
 // Every pipeline group of the fixture has a test above.
 TEST(QuotaEstimatePipeline, EveryGroupIsCovered) {
-    const std::set<std::string> covered{"ledger", "chains", "claude", "keys", "classes", "loweredCap", "planChange", "live", "store", "report", "cadence"};
+    const std::set<std::string> covered{"ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live", "store", "report", "cadence"};
     for (const auto& [name, _] : cases().root()["pipeline"].members()) EXPECT_TRUE(covered.contains(name)) << name;
 }
 
