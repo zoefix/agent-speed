@@ -240,22 +240,25 @@ std::optional<Store> parseStore(std::string_view bytes) {
     return out;
 }
 
-std::optional<Salt> loadOrCreateSalt(const std::string& folder) {
-    const auto path = folder + "/" + std::string(kSaltFileName);
+std::optional<std::string> loadOrCreateInstallId(const std::string& folder) {
+    const auto path = folder + "/" + std::string(kInstallIdFileName);
     auto read = files::readFile(path, 4096, false);
-    if (read.status == files::ReadStatus::Ok && read.bytes.size() == kSaltBytes) {
-        Salt salt(read.bytes.begin(), read.bytes.end());
+    if (read.status == files::ReadStatus::Ok && read.bytes.size() == kInstallIdBytes) {
+        auto id = saltHex(Salt(read.bytes.begin(), read.bytes.end()));
         ::explicit_bzero(read.bytes.data(), read.bytes.size());
-        return salt;
+        return id;
     }
     if (!read.bytes.empty()) ::explicit_bzero(read.bytes.data(), read.bytes.size());
     if (read.status == files::ReadStatus::Failed) return std::nullopt;
-    Salt salt(kSaltBytes);
-    if (RAND_bytes(salt.data(), static_cast<int>(salt.size())) != 1) return std::nullopt;
+    Salt id(kInstallIdBytes);
+    if (RAND_bytes(id.data(), static_cast<int>(id.size())) != 1) return std::nullopt;
     if (!files::makeFolders(folder, 0700)) return std::nullopt;
-    const std::string_view bytes(reinterpret_cast<const char*>(salt.data()), salt.size());
-    if (!files::replaceFile(path, bytes, 0600)) return std::nullopt;
-    return salt;
+    const std::string_view bytes(reinterpret_cast<const char*>(id.data()), id.size());
+    const bool written = files::replaceFile(path, bytes, 0600);
+    auto text = saltHex(id);
+    ::explicit_bzero(id.data(), id.size());
+    if (!written) return std::nullopt;
+    return text;
 }
 
 std::optional<Store> readStore(const std::string& file) {

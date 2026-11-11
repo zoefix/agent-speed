@@ -67,7 +67,7 @@ void sortUnique(std::vector<KeyEntry>& timeline) {
 
 }  // namespace
 
-Engine::Engine(Salt salt, int priceVersion) : salt_(std::move(salt)), priceVersion_(priceVersion) {}
+Engine::Engine(Salt salt, int priceVersion, std::string install) : salt_(std::move(salt)), priceVersion_(priceVersion), install_(std::move(install)) {}
 
 void Engine::add(Response response) { responses_.push_back(std::move(response)); }
 void Engine::add(CodexLine line) { lines_.push_back(std::move(line)); }
@@ -167,8 +167,14 @@ Engine::Timeline Engine::desktopTimeline(const Timeline& cli) const {
     return out;
 }
 
+const std::string& Engine::pairAccount(const std::string& machine, const std::string& source) {
+    auto [it, inserted] = pairKeys_.try_emplace(std::make_pair(machine, source));
+    if (inserted) it->second = pairKey(salt_, install_, machine, source);
+    return it->second;
+}
+
 std::string Engine::hostAccount(const std::string& machine, const std::string& source, const std::optional<std::string>& key) {
-    if (!key) return machine + ":" + source;
+    if (!key) return pairAccount(machine, source);
     const auto cacheKey = std::make_tuple(machine, source, *key);
     if (const auto it = hostShared_.find(cacheKey); it != hostShared_.end()) return it->second;
     std::vector<WindowPoint> local, host;
@@ -213,7 +219,7 @@ void Engine::build(std::int64_t nowMs) {
         } else if (isClaude(r.source)) {
             if (const auto* e = inForce(tl_[r.source], r.endMs)) take(i, e->key);
         } else {
-            take(i, r.machine + ":" + r.source);
+            take(i, pairAccount(r.machine, r.source));
         }
     }
 
@@ -254,7 +260,7 @@ void Engine::build(std::int64_t nowMs) {
             plan = e->plan;
             tier = e->tier;
         } else {
-            account = std::string(kLocal) + ":" + s.source;
+            account = pairAccount(std::string(kLocal), s.source);
         }
         auto tLo = t;
         if (s.source == "claudeCode") {
@@ -306,7 +312,7 @@ void Engine::build(std::int64_t nowMs) {
         if (r.machine == kLocal || !subscription(r)) continue;
         const auto it = hostTl_.find({r.machine, r.source});
         const auto* e = it == hostTl_.end() ? nullptr : inForce(it->second, r.endMs);
-        take(i, e ? e->key : r.machine + ":" + r.source);
+        take(i, e ? e->key : pairAccount(r.machine, r.source));
     }
 
     instancesAt();
@@ -426,14 +432,26 @@ void Engine::currentInputs() {
         rows.emplace_back(std::make_tuple(sourceRank(sources.front()), windowRank(last.kind, last.name, last.minutes, names), last.source), std::move(in));
     }
     std::stable_sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) { return std::get<0>(a) < std::get<0>(b); });
-    for (auto& [_, in] : rows) current_.push_back(std::move(in));
+    for (std::size_t i = 0; i < rows.size(); ++i) {
+        auto& in = std::get<1>(rows[i]);
+        in.order = i && std::get<0>(rows[i]) == std::get<0>(rows[i - 1]) ? current_.back().order : i;
+        current_.push_back(std::move(in));
+    }
 }
 
-std::vector<Entry> Engine::entries(std::int64_t nowMs) const {
-    std::vector<Entry> out;
+std::vector<Entry> Engine::entries(std::int64_t nowMs, std::string_view origin, const std::set<std::string>* accounts) const {
+    std::vector<std::pair<std::size_t, Entry>> rows;
     for (const auto& in : current_) {
+        if (!accounts || accounts->contains(in.account)) rows.emplace_back(in.order, reportEntry(in, nowMs, *ledger_, priceVersion_, origin));
+    }
+    // REPORTING-EXTENSIONS 11.2: one source's accounts of one window by their tag.
+    std::stable_sort(rows.begin(), rows.end(), [](const auto& a, const auto& b) {
+        return std::tie(a.first, a.second.accountTag) < std::tie(b.first, b.second.accountTag);
+    });
+    std::vector<Entry> out;
+    for (auto& [_, e] : rows) {
         if (out.size() >= kMaxEntries) break;
-        out.push_back(reportEntry(in, nowMs, *ledger_, priceVersion_));
+        out.push_back(std::move(e));
     }
     return out;
 }
@@ -442,7 +460,7 @@ std::optional<std::string> Engine::accountOf(const std::string& machine, const s
     if (machine != kLocal) {
         const auto it = hostTl_.find({machine, source});
         const auto* e = it == hostTl_.end() ? nullptr : inForce(it->second, nowMs_);
-        return e ? e->key : machine + ":" + source;
+        return e ? e->key : pairKey(salt_, install_, machine, source);
     }
     if (source == "codex") {
         const Line* newest = nullptr;
@@ -458,7 +476,7 @@ std::optional<std::string> Engine::accountOf(const std::string& machine, const s
         if (!e) return std::nullopt;
         return e->key;
     }
-    return std::string(kLocal) + ":" + source;
+    return pairKey(salt_, install_, kLocal, source);
 }
 
 }  // namespace agentspeed::quota::estimate

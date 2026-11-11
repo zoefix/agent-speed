@@ -15,8 +15,8 @@
 #include "agentspeed/quota/estimate/sign_in.hpp"
 
 // The app's quota estimate (QUOTAS 10): the engine's inputs as the history, the live engine, the quota readers and the
-// remote hosts feed them, rebuilt on demand, and the salt and estimate.json on disk. Thread-safe: every thread feeds
-// it, one builds.
+// remote hosts feed them, rebuilt on demand, and the install id and estimate.json on disk. Thread-safe: every thread
+// feeds it, one builds.
 namespace agentspeed::quota::estimate {
 
 // A response of the history or of the live engine in the ledger's form; `machine` is kLocal or the host's id.
@@ -27,12 +27,13 @@ std::optional<CodexLine> codexLineOf(const std::string& agentId, std::int64_t ts
 
 class Estimator {
 public:
-    // `folder`: `<data>/quota`; the salt is read there, or created, now. Without one there is no estimate.
+    // `folder`: `<data>/quota`; the install id is read there, or created, now. Without one there is no estimate.
     explicit Estimator(std::string folder);
 
-    bool available() const { return salt_.has_value(); }
-    const Salt& salt() const { return *salt_; }
-    // REMOTE 11.1 `salt`: 64 lowercase hex digits, "" without one. Never logged.
+    bool available() const { return install_.has_value(); }
+    // QUOTAS 10.1 accountSalt, which keys every account.
+    const Salt& salt() const { return accountSalt(); }
+    // REMOTE 11.1 `salt`: the account salt in 64 lowercase hex digits, "" without an estimate. Never logged.
     std::string saltText() const;
 
     // QUOTAS 10.3: the history's spend and Codex lines; what ended before `cutMs` comes from it, the rest from the live
@@ -54,8 +55,9 @@ public:
     // `<source>` (this computer) or `<source>@<machine>`.
     using Shown = std::map<std::string, std::vector<Entry>>;
     Shown build(std::int64_t nowMs, const std::set<std::pair<std::string, std::string>>& shown);
-    // REPORTING-EXTENSIONS 11.2 of the last build: the shown sources' accounts, in report order, at most 16.
-    std::vector<Entry> entries(std::int64_t nowMs) const;
+    // REPORTING-EXTENSIONS 11.2 of the last build for the service of api origin `origin`: the shown sources' accounts,
+    // one entry per account and window, in report order, at most 16.
+    std::vector<Entry> entries(std::int64_t nowMs, std::string_view origin) const;
     // estimate.json (QUOTAS 10.4): at most once a minute, or now with `force` (at quit).
     void save(std::int64_t nowMs, bool force = false);
 
@@ -65,7 +67,7 @@ private:
     void prune(std::int64_t nowMs);
 
     std::string folder_;
-    std::optional<Salt> salt_;
+    std::optional<std::string> install_;
     mutable std::mutex mutex_;
     int priceVersion_ = 1;
     std::vector<Response> history_;

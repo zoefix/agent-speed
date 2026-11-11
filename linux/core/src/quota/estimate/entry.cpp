@@ -4,6 +4,8 @@
 #include <map>
 #include <tuple>
 
+#include "agentspeed/quota/estimate/accounts.hpp"
+
 namespace agentspeed::quota::estimate {
 
 namespace {
@@ -14,8 +16,9 @@ Json optionalInt(const std::optional<std::int64_t>& v) { return v ? Json::of(*v)
 Json optionalText(const std::optional<std::string>& v) { return v ? Json::of(*v) : Json::null(); }
 Json optionalDecimal(const std::optional<double>& v, int places) { return v ? Json::decimal(*v, places) : Json::null(); }
 
-using Identity = std::tuple<std::vector<std::string>, std::string, std::optional<std::string>, std::int64_t>;
-Identity identityOf(const Entry& e) { return {e.sources, e.kind, e.name, e.minutes}; }
+// REPORTING-EXTENSIONS 11.4: (account, window) once per report.
+using Identity = std::tuple<std::string, std::string, std::optional<std::string>, std::int64_t>;
+Identity identityOf(const Entry& e) { return {e.accountTag, e.kind, e.name, e.minutes}; }
 
 }  // namespace
 
@@ -25,6 +28,7 @@ Json Entry::json() const {
     std::vector<Json> mixItems;
     for (const auto& m : mix) mixItems.push_back(Json::object({{"model", Json::of(m.model)}, {"share", Json::decimal(m.share, 3)}}));
     return Json::object({
+        {"account", Json::of(accountTag)},
         {"source", Json::of(source)},
         {"sources", Json::array(std::move(sourceIds))},
         {"plan", optionalText(plan)},
@@ -50,7 +54,7 @@ Json Entry::json() const {
     });
 }
 
-Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger, int priceVersion) {
+Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger, int priceVersion, std::string_view origin) {
     const auto& est = in.estimate;
     const auto cap = est.cap;
     const auto name = in.kind == "modelWeek" ? in.name : std::nullopt;
@@ -60,6 +64,7 @@ Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger
     const auto used = ledger.outer(in.account, name, start, nowMs);
     const auto observed = ledger.outer(in.account, name, in.S, in.t).costMicroUsd;
     Entry e;
+    if (!origin.empty()) e.accountTag = reportAccount(origin, in.account);
     e.source = in.source;
     e.sources = in.sources;
     e.plan = in.plan;

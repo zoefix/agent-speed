@@ -238,7 +238,11 @@ std::optional<std::vector<agentspeed::report::Json>> ReportController::quotaSect
                                                                                    const agentspeed::report::Discovery& discovery, bool on,
                                                                                    std::int64_t sentAtMs, bool leaving) const {
     if (!estimator_ || !acceptsQuota(discovery)) return std::nullopt;
-    const auto entries = on ? estimator_->entries(sentAtMs) : std::vector<agentspeed::quota::estimate::Entry>{};
+    // REPORTING-EXTENSIONS 11.2: the account tags are keyed by the api origin (scheme://host[:port], normalized as the
+    // reports' requests use it); the document's api was checked when it was read.
+    const auto api = agentspeed::report::ServiceUrl::parseApi(discovery.api, true);
+    if (!api) return std::nullopt;
+    const auto entries = on ? estimator_->entries(sentAtMs, api->origin()) : std::vector<agentspeed::quota::estimate::Entry>{};
     const auto sent = reporter.step(sentAtMs, entries, on, leaving);
     if (!sent) return std::nullopt;
     std::vector<agentspeed::report::Json> out;

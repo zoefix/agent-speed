@@ -13,8 +13,8 @@
 #include "agentspeed/quota/estimate/store_file.hpp"
 #include "agentspeed/report_body.hpp"
 
-// QUOTAS 10 in the app: the salt and estimate.json on disk, the sign-in keys, the feeds and remote hosts' accounts, and
-// the `quotas` section of a report (REPORTING-EXTENSIONS 11).
+// QUOTAS 10 in the app: the install id and estimate.json on disk, the sign-in keys, the feeds and remote hosts' accounts,
+// and the `quotas` section of a report (REPORTING-EXTENSIONS 11).
 namespace {
 
 namespace fs = std::filesystem;
@@ -47,17 +47,29 @@ mode_t modeOf(const std::string& path) {
     return st.st_mode & 0777;
 }
 
-TEST(QuotaEstimator, SaltAndStoreAreOwnerOnlyAndTheSaltStays) {
+std::string readText(const std::string& path) {
+    std::ifstream in(path, std::ios::binary);
+    return {std::istreambuf_iterator<char>(in), {}};
+}
+
+std::string hexOf(const std::string& bytes) {
+    return est::saltHex(est::Salt(bytes.begin(), bytes.end()));
+}
+
+// QUOTAS 10.1: the account salt is the fixed one; the random bytes of estimate-salt are the install id, which stays.
+TEST(QuotaEstimator, InstallIdAndStoreAreOwnerOnlyAndTheInstallIdStays) {
     Folder folder;
-    std::string salt;
+    const auto file = folder.quota() + "/estimate-salt";
+    std::string install;
     {
         est::Estimator estimator(folder.quota());
         ASSERT_TRUE(estimator.available());
-        salt = estimator.saltText();
-        EXPECT_EQ(salt.size(), 64u);
-        const auto file = folder.quota() + "/estimate-salt";
+        EXPECT_EQ(estimator.saltText(), est::saltHex(est::accountSalt()));
+        EXPECT_EQ(estimator.salt(), est::accountSalt());
         EXPECT_EQ(fs::file_size(file), 32u);
         EXPECT_EQ(modeOf(file), 0600u);
+        install = hexOf(readText(file));
+        EXPECT_NE(install, estimator.saltText());
         estimator.build(nowMs(), {});
         estimator.save(nowMs(), true);
         const auto store = folder.quota() + "/estimate.json";
@@ -65,14 +77,72 @@ TEST(QuotaEstimator, SaltAndStoreAreOwnerOnlyAndTheSaltStays) {
         EXPECT_EQ(modeOf(store), 0600u);
         const auto parsed = est::readStore(store);
         ASSERT_TRUE(parsed);
-        EXPECT_EQ(parsed->version, 1);
-        // No key or id text of the salt is in the store.
-        std::ifstream in(store);
-        const std::string text((std::istreambuf_iterator<char>(in)), {});
-        EXPECT_EQ(text.find(salt), std::string::npos);
+        EXPECT_EQ(parsed->version, 2);
+        // Neither the install id nor the account salt is in the store.
+        const auto text = readText(store);
+        EXPECT_EQ(text.find(install), std::string::npos);
+        EXPECT_EQ(text.find(estimator.saltText()), std::string::npos);
     }
     est::Estimator again(folder.quota());
-    EXPECT_EQ(again.saltText(), salt);
+    EXPECT_EQ(again.saltText(), est::saltHex(est::accountSalt()));
+    EXPECT_EQ(hexOf(readText(file)), install);
+}
+
+// QUOTAS 10.4: a store of version 1 (random salts) is ignored and replaced by version 2.
+TEST(QuotaEstimator, AVersionOneStoreIsIgnoredAndReplaced) {
+    Folder folder;
+    fs::create_directories(folder.quota());
+    const auto store = folder.quota() + "/estimate.json";
+    const auto now = nowMs();
+    const auto oldKey = std::string("0123456789abcdef");
+    std::ofstream(store) << R"({"version": 1, "observations": [], "instances": [], "keys": [{"source": "codex", "at": )" << now - kHour
+                         << R"(, "key": ")" << oldKey << R"(", "plan": null, "tier": null}]})";
+    est::Estimator e(folder.quota());
+    ASSERT_TRUE(e.available());
+    const auto key = est::accountKey(e.salt(), "codex", "acct-1");
+    e.setCodexAccount(now, est::SignedInAccount{key, {}, std::nullopt, std::nullopt});
+    e.build(now, {});
+    e.save(now, true);
+    const auto parsed = est::readStore(store);
+    ASSERT_TRUE(parsed);
+    EXPECT_EQ(parsed->version, 2);
+    ASSERT_EQ(parsed->keys.size(), 1u);
+    EXPECT_EQ(parsed->keys.front().entry.key, key);
+    EXPECT_EQ(readText(store).find(oldKey), std::string::npos);
+}
+
+// QUOTAS 10.1: a source without an id spends on the pair key of this install's id and the source.
+TEST(QuotaEstimator, ASourceWithoutAnIdIsKeyedByTheInstallId) {
+    Folder folder;
+    est::Estimator e(folder.quota());
+    ASSERT_TRUE(e.available());
+    const auto install = hexOf(readText(folder.quota() + "/estimate-salt"));
+    const auto now = nowMs();
+    est::Response r;
+    r.source = "kimi";
+    r.file = "agent-k";
+    r.startMs = now - 20 * kMin;
+    r.endMs = now - 19 * kMin;
+    r.model = "kimi-k2";
+    r.cost = 3'000'000;
+    e.putLive({{"local\x1fresp-k", r}});
+    est::SnapshotEvent s;
+    s.source = "kimi";
+    s.observedMs = now - 10 * kMin;
+    s.windows = {makeWindow(Kind::SevenDay, 12, now + 3 * kDay)};
+    e.addSnapshot(s);
+    const auto shown = e.build(now, {{"local", "kimi"}});
+    ASSERT_TRUE(shown.contains("kimi"));
+    const auto key = est::pairKey(est::accountSalt(), install, "local", "kimi");
+    EXPECT_EQ(shown.at("kimi").front().account, key);
+    EXPECT_EQ(shown.at("kimi").front().usedMicroUsd, 3'000'000);
+    EXPECT_NE(key, est::pairKey(est::accountSalt(), std::string(64, '0'), "local", "kimi"));
+    const auto entries = e.entries(now, "https://radar.example");
+    ASSERT_EQ(entries.size(), 1u);
+    EXPECT_EQ(entries.front().accountTag, est::reportAccount("https://radar.example", key));
+    const auto text = entries.front().json().compact();
+    EXPECT_EQ(text.find(key), std::string::npos);
+    EXPECT_EQ(text.find(install), std::string::npos);
 }
 
 TEST(QuotaEstimator, SignInFilesGiveKeysOnly) {
@@ -152,14 +222,27 @@ TEST(QuotaEstimator, AHostSharesTheLocalAccountOfItsKeyUnlessItsResetsContradict
     ASSERT_NE(week, local.end());
     EXPECT_EQ(week->usedMicroUsd, 20'000'000);
     EXPECT_EQ(week->plan, "pro");
-    // The report takes the shown accounts' entries, at most 16, without keys in its JSON.
-    const auto entries = e.entries(now);
+    // The report takes the shown accounts' entries, at most 16, without keys in its JSON: one per account and window,
+    // so host-other, an account of its own with the same sources, has its own 7-day entry and tag.
+    const std::string origin = "https://radar.example";
+    const auto entries = e.entries(now, origin);
     ASSERT_FALSE(entries.empty());
-    std::set<std::pair<std::vector<std::string>, std::string>> identities;
+    EXPECT_TRUE(e.entries(now, "").empty());
+    std::set<std::pair<std::string, std::string>> identities;
+    std::set<std::string> weekTags;
     for (const auto& x : entries) {
         EXPECT_EQ(x.json().compact().find(key), std::string::npos);
-        // REPORTING-EXTENSIONS 11.4: (sources, window) once, though host-other is an account of its own.
-        EXPECT_TRUE(identities.insert({x.sources, x.kind}).second) << x.kind;
+        EXPECT_EQ(x.accountTag, est::reportAccount(origin, x.account));
+        EXPECT_TRUE(identities.insert({x.accountTag, x.kind}).second) << x.kind;
+        if (x.kind == "sevenDay" && x.sources == std::vector<std::string>{"codex"}) weekTags.insert(x.accountTag);
+    }
+    EXPECT_EQ(weekTags, (std::set<std::string>{est::reportAccount(origin, key), est::reportAccount(origin, shown.at("codex@host-other").front().account)}));
+    // Another service sees other tags for the same accounts.
+    const auto other = e.entries(now, "https://other.example");
+    ASSERT_EQ(other.size(), entries.size());
+    for (const auto& x : other) {
+        EXPECT_EQ(x.accountTag, est::reportAccount("https://other.example", x.account));
+        EXPECT_FALSE(identities.contains({x.accountTag, x.kind}));
     }
 }
 

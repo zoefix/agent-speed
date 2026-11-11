@@ -50,7 +50,7 @@ public:
     void setWatch(bool on);
     // A newer price table became current.
     void pricesChanged() { apply(); }
-    // QUOTAS 10.1, REMOTE 11.1: the estimate's salt (64 hex digits, "" for none) that every host's quota config carries.
+    // QUOTAS 10.1, REMOTE 11.1: the account salt (64 hex digits, "" for none) that every host's quota config carries.
     void setEstimateSalt(const QString& salt);
     // Quitting: every relay's stdin closes and every ssh ends.
     void stop();
