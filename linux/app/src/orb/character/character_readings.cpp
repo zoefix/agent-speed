@@ -32,6 +32,7 @@ std::optional<CharacterReadings::Latency> CharacterReadings::latencyOf(const QVa
     out.number = number;
     out.unit = unitOf(strings.t(unitKey));
     out.spoken = strings.fmt(QStringLiteral("a11y.orb.latency"), {strings.fmt(unitKey, {number})});
+    out.tone = format::firstTokenLatencyTone(value);
     return out;
 }
 

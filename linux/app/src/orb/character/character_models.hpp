@@ -14,7 +14,7 @@ namespace orb {
 
 // The character orb's models card (DESIGN 2a.6, Models): per line the vendor's dot, the display name in the value token
 // cut at its end to the name width, and the speed right-aligned in tabular digits (`–` in the secondary token without
-// one), `tok/s` once after the first line's number; then the "+N" line. Lines glide and fade by ModelsMotion; HudWings
+// one), `tok/s` after each number that has a speed; then the "+N" line. Lines glide and fade by ModelsMotion; HudWings
 // picks its place and its name width from `shape`.
 class ModelsCard {
 public:
