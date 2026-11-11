@@ -32,7 +32,7 @@ internal sealed class RemoteHostsService : IDisposable
 
     public RemoteCoordinator Coordinator => _coordinator;
 
-    /// <summary>The estimate salt every host's quota config carries (REMOTE 11.1, QUOTAS 10.1); set before <see cref="Apply"/>.</summary>
+    /// <summary>The account salt every host's quota config carries (REMOTE 11.1, QUOTAS 10.1); set before <see cref="Apply"/>.</summary>
     public RemoteSalt? Salt { get; set; }
 
     /// <summary>The settings' hosts and master switch; applied only when they changed.</summary>

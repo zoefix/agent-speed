@@ -49,7 +49,8 @@ public sealed class QuotaEstimatePipelineTests
         var c = Root.GetProperty("pipeline").GetProperty("cadence");
         var e = c.GetProperty("entry");
         var w = e.GetProperty("window");
-        var entry = new QuotaReportEntry(SourceKind.Codex, [.. e.GetProperty("sources").EnumerateArray().Select(s => Source(s.GetString()))],
+        var entry = new QuotaReportEntry(e.GetProperty("account").GetString()!, SourceKind.Codex,
+            [.. e.GetProperty("sources").EnumerateArray().Select(s => Source(s.GetString()))],
             null, null, EstimateNames.ParseKind(w.GetProperty("kind").GetString())!.Value, OptionalString(w, "name"), w.GetProperty("minutes").GetInt32(),
             OptionalDouble(e, "usedPercent"), null, OptionalLong(e, "resetsInMs"), 0, false, e.GetProperty("usedMicroUsd").GetInt64(), null, 0,
             new QuotaEntryEstimate(null, null, null, EstimateConfidence.Medium, null, null, 0), [], 8);
@@ -66,7 +67,7 @@ public sealed class QuotaEstimatePipelineTests
             var change = step.GetProperty("change").GetString();
             if (change == "set")
             {
-                current = [.. current, current[0] with { Sources = [SourceKind.ClaudeCode] }];
+                current = [.. current, current[0] with { Account = "fedcba9876543210" }];
             }
             else if (change != "none")
             {
@@ -93,8 +94,59 @@ public sealed class QuotaEstimatePipelineTests
         _ => throw new InvalidDataException(change),
     };
 
+    /// <summary>
+    /// Seen 2026-11-11: a service rejected two Codex accounts of one window, which a report could not tell apart. They are two
+    /// entries with the same sources and window, told apart by their tags, two identities for the cadence, and ordered by
+    /// their tags, so the order follows the service.
+    /// </summary>
+    [Fact]
+    public void TwoCodexAccountsAreTwoTaggedEntriesOrderedByTheirTags()
+    {
+        var c = Root.GetProperty("pipeline").GetProperty("report").EnumerateArray().Single(x => x.GetProperty("name").GetString() == "two Codex accounts");
+        var input = c.GetProperty("input");
+        var (model, evaluation) = Evaluate(input);
+        var origin = input.GetProperty("origin").GetString()!;
+        var now = input.GetProperty("now").GetInt64();
+        var entries = evaluation.Entries(now, origin);
+        AssertSame(c.GetProperty("expected").GetProperty("entries"), EntriesJson(entries), "entries");
+        Assert.Equal(2, entries.Count);
+        Assert.All(entries, e => Assert.Equal([SourceKind.Codex], e.Sources));
+        Assert.Single(entries.Select(e => e.WindowId).Distinct());
+        Assert.Equal(2, entries.Select(e => e.Account).Distinct().Count());
+        var keys = model.ResponseAccounts.OfType<string>().ToHashSet();
+        Assert.Equal(2, keys.Count);
+        Assert.All(entries, e =>
+        {
+            Assert.True(AccountKeys.IsKey(e.Account), e.Account);
+            Assert.DoesNotContain(e.Account, keys);
+        });
+        Assert.Equal(keys.Select(k => AccountKeys.ReportTag(origin, k)).Order(StringComparer.Ordinal), entries.Select(e => e.Account));
+
+        // Another service sees other tags for the same accounts, and there the second account's tag sorts first.
+        var elsewhere = evaluation.Entries(now, "https://other.example");
+        Assert.Empty(elsewhere.Select(e => e.Account).Intersect(entries.Select(e => e.Account)));
+        Assert.Equal(elsewhere.Select(e => e.Account).Order(StringComparer.Ordinal), elsewhere.Select(e => e.Account));
+        Assert.Equal([40.0, 10.0], entries.Select(e => e.UsedPercent!.Value));
+        Assert.Equal([10.0, 40.0], elsewhere.Select(e => e.UsedPercent!.Value));
+
+        Assert.False(QuotaReportCadence.ShouldSend(entries, entries, 0, 1_000, false));
+        Assert.False(QuotaReportCadence.ShouldSend([entries[1], entries[0]], entries, 0, 1_000, false));
+        Assert.True(QuotaReportCadence.ShouldSend([entries[0]], entries, 0, 1_000, false), "an account leaving the set is a changed set");
+    }
+
     /// <summary>The reference's <c>run</c>: builds the model from the events and writes the requested outputs.</summary>
     internal static Dictionary<string, JsonNode?> Run(JsonElement inp)
+    {
+        var (model, evaluation) = Evaluate(inp);
+        var now = inp.GetProperty("now").GetInt64();
+        var want = inp.TryGetProperty("outputs", out var outputs)
+            ? outputs.EnumerateArray().Select(o => o.GetString()!).ToHashSet()
+            : ["responses", "instances", "estimates", "entries"];
+        return Outputs(inp, model, evaluation, now, want);
+    }
+
+    /// <summary>The model of a case's events and its evaluation at the case's <c>now</c>.</summary>
+    private static (EstimateModel Model, EstimateEvaluation Evaluation) Evaluate(JsonElement inp)
     {
         var salt = Convert.FromHexString(inp.GetProperty("salt").GetString()!);
         var input = new EstimateInput();
@@ -113,12 +165,12 @@ public sealed class QuotaEstimatePipelineTests
             input.Stored = EstimateStore.Parse(Encoding.UTF8.GetBytes(GeneratedStore(generated).ToJsonString()));
         }
 
-        var model = EstimateModel.Build(input, salt, 8);
-        var now = inp.GetProperty("now").GetInt64();
-        var want = inp.TryGetProperty("outputs", out var outputs)
-            ? outputs.EnumerateArray().Select(o => o.GetString()!).ToHashSet()
-            : ["responses", "instances", "estimates", "entries"];
-        var evaluation = EstimateEvaluation.Of(model, now);
+        var model = EstimateModel.Build(input, salt, inp.GetProperty("install").GetString()!, 8);
+        return (model, EstimateEvaluation.Of(model, inp.GetProperty("now").GetInt64()));
+    }
+
+    private static Dictionary<string, JsonNode?> Outputs(JsonElement inp, EstimateModel model, EstimateEvaluation evaluation, long now, HashSet<string> want)
+    {
         var result = new Dictionary<string, JsonNode?>();
         if (want.Contains("responses"))
         {
@@ -189,7 +241,7 @@ public sealed class QuotaEstimatePipelineTests
 
         if (want.Contains("entries"))
         {
-            result["entries"] = JsonNode.Parse(EntriesJson(evaluation.Entries(now)).GetRawText());
+            result["entries"] = JsonNode.Parse(EntriesJson(evaluation.Entries(now, inp.GetProperty("origin").GetString()!)).GetRawText());
         }
 
         if (want.Contains("store"))

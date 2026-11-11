@@ -101,7 +101,7 @@ internal sealed partial class ReportController
         // The quota entries as the next report that carries them would (REPORTING-EXTENSIONS 11.2).
         if ((draft?.ShareQuota ?? Preferences.ShareQuota) && document.Extensions.QuotaEstimate)
         {
-            options = options with { Quotas = CurrentQuotaEntries() };
+            options = options with { Quotas = CurrentQuotaEntries(document) };
         }
 
         if (webSocket)

@@ -32,7 +32,8 @@ public sealed class ReportQuotaTests
             : new QuotaEntryEstimate(512_345_678, 480_000_001, 546_000_000, confidence, 0.514, 126_348_902, 2);
         var minutes = kind == QuotaWindowKind.FiveHour ? 300 : 10_080;
         IReadOnlyList<SourceKind> sources = source == SourceKind.ClaudeDesktop ? [SourceKind.ClaudeCode, SourceKind.ClaudeDesktop] : [source];
-        return new QuotaReportEntry(source, sources, source == SourceKind.Codex ? "promax" : "claude_max", null, kind, name, minutes, used,
+        var account = AccountKeys.ReportTag(Service.Origin, AccountKeys.Key(AccountKeys.Salt, "test", ReportBody.SourceId(source)));
+        return new QuotaReportEntry(account, source, sources, source == SourceKind.Codex ? "promax" : "claude_max", null, kind, name, minutes, used,
             used is null ? null : 18_012_345, 406_787_655, used ?? 0, true, 67_902_725, used is null ? null : 61_729_625, 1, estimate,
             [new("gpt-5.5", 0.673), new("gpt-5.4-mini", 0.327)], 8);
     }
@@ -94,6 +95,17 @@ public sealed class ReportQuotaTests
 
         var quotas = Parse(ReportBody.Data(Envelope, Content, Sample, options)).GetProperty("quotas");
         Assert.Equal(ReportQuotas.Json(Entries()).ToCompactString(), quotas.GetRawText());
+    }
+
+    [Fact]
+    public void EachEntryLeadsWithItsAccountsTagAndNeverItsKey()
+    {
+        var key = AccountKeys.Key(AccountKeys.Salt, "test", "codex");
+        var entry = Parse(ReportBody.Data(Envelope, Content, Sample, Shared with { Quotas = Entries() })).GetProperty("quotas")[0];
+        var first = entry.EnumerateObject().First();
+        Assert.Equal(("account", AccountKeys.ReportTag(Service.Origin, key)), (first.Name, first.Value.GetString()));
+        Assert.True(AccountKeys.IsKey(first.Value.GetString()));
+        Assert.DoesNotContain(key, entry.GetRawText(), StringComparison.Ordinal);
     }
 
     [Fact]

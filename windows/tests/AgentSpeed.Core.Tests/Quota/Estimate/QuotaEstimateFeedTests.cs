@@ -20,8 +20,10 @@ public sealed class QuotaEstimateFeedTests : IDisposable
 {
     private const long Minute = 60_000;
     private const long Hour = 60 * Minute;
+    private const long Day = 24 * Hour;
     private const long Dollar = 1_000_000;
     private const long Now = CodexLines.T0 + 4 * Hour;
+    private const string Origin = "https://radar.example";
     private static readonly byte[] Salt = [.. Enumerable.Range(1, 32).Select(i => (byte)i)];
 
     private readonly TempDirectory _temp = new();
@@ -232,9 +234,12 @@ public sealed class QuotaEstimateFeedTests : IDisposable
         Assert.True(shown.CapMicroUsd is >= 7 * Dollar and <= 11 * Dollar, shown.CapMicroUsd?.ToString());
         Assert.Null(estimator.Display(SourceKind.ClaudeCode, null, windowId, Now));
 
-        var entry = Assert.Single(estimator.Entries(Now, _ => true));
+        var entry = Assert.Single(estimator.Entries(Now, Origin, _ => true));
         Assert.Equal((SourceKind.Codex, "pro", 40.0), (entry.Source, entry.Plan, entry.UsedPercent!.Value));
-        Assert.Empty(estimator.Entries(Now, s => s != SourceKind.Codex));
+        var key = estimator.Latest!.Model.CodexAccount!;
+        Assert.Equal(AccountKeys.ReportTag(Origin, key), entry.Account);
+        Assert.NotEqual(key, entry.Account);
+        Assert.Empty(estimator.Entries(Now, Origin, s => s != SourceKind.Codex));
     }
 
     [Fact]
@@ -259,7 +264,7 @@ public sealed class QuotaEstimateFeedTests : IDisposable
     }
 
     [Fact]
-    public void TheStoreAndTheSaltAreWrittenPrivatelyAndReadBackWithoutIds()
+    public void TheStoreAndTheInstallIdAreWrittenPrivatelyAndReadBackWithoutIds()
     {
         var data = _temp.Combine("data");
         var claude = _temp.WriteFile("claude/.claude.json",
@@ -275,17 +280,80 @@ public sealed class QuotaEstimateFeedTests : IDisposable
 
         var store = File.ReadAllText(Path.Combine(data, "quota", "estimate.json"));
         Assert.DoesNotContain("secret", store, StringComparison.Ordinal);
-        Assert.Contains(AccountKeys.Key(File.ReadAllBytes(Path.Combine(data, "quota", "estimate-salt")), "claude", "org-secret:user-secret"), store,
-            StringComparison.Ordinal);
+        Assert.Contains(AccountKeys.Key(AccountKeys.Salt, "claude", "org-secret:user-secret"), store, StringComparison.Ordinal);
+        var installBytes = File.ReadAllBytes(Path.Combine(data, "quota", "estimate-salt"));
+        Assert.Equal(EstimateInstallId.Bytes, installBytes.Length);
+        Assert.Equal(Convert.ToHexStringLower(installBytes), first.InstallId);
+        Assert.DoesNotContain(first.InstallId, store, StringComparison.Ordinal);
         var stored = EstimateStore.Read(Path.Combine(data, "quota", "estimate.json"))!;
+        Assert.Equal(EstimateLimits.StoreVersion, stored.Version);
         Assert.Single(stored.Observations);
         Assert.Single(stored.Keys);
 
+        // A second estimator reads the same install id back; the account salt is the same everywhere.
         clock += Hour;
         var second = new QuotaEstimator(data, null, clock: () => clock);
+        Assert.Equal(first.InstallId, second.InstallId);
         Assert.Equal(first.Salt, second.Salt);
+        Assert.Equal(Convert.ToHexStringLower(AccountKeys.Salt), second.Salt!.Hex);
+        Assert.NotEqual(first.InstallId, new QuotaEstimator(null, null).InstallId);
         Assert.True(second.BuildIfDue());
         Assert.Single(second.Latest!.Model.Observations);
+    }
+
+    /// <summary>QUOTAS 10.4: a version-1 store keyed its accounts with a random salt, so it is ignored and replaced.</summary>
+    [Fact]
+    public void AVersionOneStoreIsIgnoredAndReplaced()
+    {
+        var data = _temp.Combine("data");
+        const string oldKey = "0123456789abcdef";
+        var old = new QuotaObservation(oldKey, SourceKind.ClaudeCode, QuotaWindowKind.SevenDay, null, 10_080, 30, Now - 2 * Hour, Now - 2 * Hour,
+            Now + 50 * Hour, "claude_max", null);
+        var path = Path.Combine(data, "quota", "estimate.json");
+        Directory.CreateDirectory(Path.GetDirectoryName(path)!);
+        var keys = new[] { new StoredKey(SourceKind.ClaudeCode, Now - Day, oldKey, "claude_max", null) };
+        File.WriteAllBytes(path, EstimateStore.Serialize(new EstimateStoreData(1, [old], [], keys)));
+        Assert.Equal(1, EstimateStore.Read(path)!.Version);
+
+        var estimator = new QuotaEstimator(data, null, clock: () => Now);
+        estimator.SetEnabled([SourceKind.Kimi]);
+        estimator.Snapshot(new QuotaSnapshot(SourceKind.Kimi, Now - Minute, [QuotaWindow.Of(QuotaWindowKind.FiveHour, 4, Now + Hour)]));
+        Assert.True(estimator.BuildIfDue());
+        var observation = Assert.Single(estimator.Latest!.Model.Observations);
+        Assert.Equal(estimator.Latest.Model.AccountOf(SourceKind.Kimi, Now), observation.Account);
+        estimator.Flush();
+
+        var text = File.ReadAllText(path);
+        Assert.DoesNotContain(oldKey, text, StringComparison.Ordinal);
+        var stored = EstimateStore.Read(path)!;
+        Assert.Equal(2, stored.Version);
+        Assert.Equal([SourceKind.Kimi], stored.Observations.Select(o => o.Source));
+        Assert.Empty(stored.Keys);
+    }
+
+    /// <summary>
+    /// REMOTE 11.1: a host's key equal to this computer's is one account unless the fingerprint contradicts it; then it keeps
+    /// a key of its own, scoped to the host and source (no install id).
+    /// </summary>
+    [Fact]
+    public void AHostKeyThatTheFingerprintContradictsStaysApart()
+    {
+        var key = AccountKeys.Key(AccountKeys.Salt, AccountKeys.CodexVendor, "acct-1");
+        var reset = Now + 3 * Day;
+        EstimateModel Build(long hostReset, string install)
+        {
+            var input = new EstimateInput();
+            input.CodexKeys.Add((Now - Day, key));
+            input.CodexLines.Add(new CodexTokenLine("f", Now - Hour, [QuotaWindow.Of(QuotaWindowKind.SevenDay, 20, reset)], "pro"));
+            input.HostSnapshots.Add(new HostSnapshot("H", SourceKind.Codex, Now - 30 * Minute, [QuotaWindow.Of(QuotaWindowKind.SevenDay, 25, hostReset)],
+                key, "pro", null));
+            return EstimateModel.Build(input, AccountKeys.Salt, install, 8);
+        }
+
+        Assert.Equal(key, Build(reset + 20_000, "a").HostAccountOf("H", SourceKind.Codex, Now));
+        var apart = Build(reset + 19 * Hour, "a").HostAccountOf("H", SourceKind.Codex, Now);
+        Assert.Equal(AccountKeys.Key(AccountKeys.Salt, AccountKeys.HostVendor, "H:codex:" + key), apart);
+        Assert.Equal(apart, Build(reset + 19 * Hour, "b").HostAccountOf("H", SourceKind.Codex, Now));
     }
 
     [Fact]

@@ -5,7 +5,7 @@ namespace AgentSpeed.Core.Remote;
 
 /// <summary>
 /// What the app asks a host's relay to read (REMOTE 11.1): the sources whose quota switch is on, the master switch, Grok's
-/// live request, the host's Claude Code bridge and the estimate salt.
+/// live request, the host's Claude Code bridge and the account salt.
 /// </summary>
 public sealed record RemoteQuotaConfig
 {
@@ -38,7 +38,7 @@ public sealed record RemoteQuotaConfig
 
     public bool ClaudeBridge { get; init; }
 
-    /// <summary>The estimate salt (QUOTAS 10.1), so that the host computes the same account keys; null leaves the member out.</summary>
+    /// <summary>The account salt (QUOTAS 10.1), so that the host computes the same account keys; null leaves the member out.</summary>
     public RemoteSalt? Salt { get; init; }
 
     /// <summary>
@@ -78,13 +78,14 @@ public sealed record RemoteQuotaConfig
 /// <param name="ClaudeCode">Claude Code is enabled: the hosts' bridges may report its quota.</param>
 public sealed record RemoteQuotaSwitches(SourceSet Sources = default, bool GrokLive = false, bool ClaudeCode = true)
 {
-    /// <summary>The estimate salt every host's quota config carries (QUOTAS 10.1).</summary>
+    /// <summary>The account salt every host's quota config carries (QUOTAS 10.1).</summary>
     public RemoteSalt? Salt { get; init; }
 }
 
 /// <summary>
-/// The estimate salt as the relay receives it (REMOTE 11.1): 64 lowercase hex digits, kept in memory only. Its text never
-/// shows in <see cref="ToString"/>, so a logged config or settings record cannot carry it.
+/// The account salt as the relay receives it (REMOTE 11.1): 64 lowercase hex digits, kept in memory only (the same in every
+/// install since 2026-11-11). Its text never shows in <see cref="ToString"/>, so a logged config or settings record cannot
+/// carry it.
 /// </summary>
 public sealed record RemoteSalt
 {

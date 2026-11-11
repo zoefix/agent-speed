@@ -13,10 +13,12 @@ public class QuotaDemoEntriesTests
     [Fact]
     public void EveryDemoEstimateIsAnEntryThatKeepsTheReceiversRules()
     {
-        var entries = QuotaDemo.Entries(QuotaDemo.State(Now, two: false), Now);
+        const string origin = "https://radar.example";
+        var entries = QuotaDemo.Entries(QuotaDemo.State(Now, two: false), Now, origin);
         Assert.Equal([SourceKind.Codex, SourceKind.ClaudeCode, SourceKind.ClaudeCode, SourceKind.ClaudeDesktop], entries.Select(e => e.Source));
         Assert.All(entries, e =>
         {
+            Assert.True(AccountKeys.IsKey(e.Account), e.Account);
             Assert.Equal(e.Estimate.Confidence == EstimateConfidence.None, e.Estimate is { CapMicroUsd: null, LowMicroUsd: null, HighMicroUsd: null });
             Assert.True(e.ObservedUsedMicroUsd <= e.UsedMicroUsd);
             Assert.Contains(e.Source, e.Sources);
@@ -29,6 +31,11 @@ public class QuotaDemoEntriesTests
 
         var json = ReportQuotas.Json(entries).ToCompactString();
         Assert.Contains("\"window\":{\"kind\":\"fiveHour\",\"name\":null,\"minutes\":300}", json, StringComparison.Ordinal);
-        Assert.DoesNotContain("\"account\":", json, StringComparison.Ordinal);
+
+        // One tag per account and service: Claude Code's two windows share one, another service sees others.
+        Assert.Equal(3, entries.Select(e => e.Account).Distinct().Count());
+        Assert.Equal(entries[1].Account, entries[2].Account);
+        var elsewhere = QuotaDemo.Entries(QuotaDemo.State(Now, two: false), Now, "https://other.example");
+        Assert.Empty(elsewhere.Select(e => e.Account).Intersect(entries.Select(e => e.Account)));
     }
 }

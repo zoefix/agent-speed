@@ -65,11 +65,11 @@ internal static class QuotaDemo
             highCents * 10_000, confidence, coverage, capCents is { } cap ? (long)(cap * 10_000 * live / 100) : null, windows, plan, tier);
 
     /// <summary>
-    /// The report entries of a demo state's estimates (REPORTING-EXTENSIONS 11.2) as the report preview shows them: this
-    /// computer's windows in source order, the measured spend before the vendor's value a little under the whole, and a
-    /// demo model mix.
+    /// The report entries of a demo state's estimates (REPORTING-EXTENSIONS 11.2) as the report preview shows them for the
+    /// service of api origin <paramref name="origin"/>: this computer's windows in source order, each source a demo account
+    /// tagged for that service, the measured spend before the vendor's value a little under the whole, and a demo model mix.
     /// </summary>
-    public static IReadOnlyList<QuotaReportEntry> Entries(QuotaState state, long now)
+    public static IReadOnlyList<QuotaReportEntry> Entries(QuotaState state, long now, string origin)
     {
         var entries = new List<QuotaReportEntry>();
         foreach (var snapshot in state.Snapshots.Values.OrderBy(s => s.Source))
@@ -85,7 +85,8 @@ internal static class QuotaDemo
                 QuotaMixShare[] mix = snapshot.Source == SourceKind.Codex
                     ? [new("gpt-5.5", 1.0)]
                     : [new("claude-opus-5-5", 0.812), new("claude-fable-5-2", 0.171), new("claude-haiku-5-5", 0.017)];
-                entries.Add(new QuotaReportEntry(snapshot.Source, [snapshot.Source], e.Plan, e.Tier, window.Kind, window.Name, window.Minutes ?? 0,
+                var tag = AccountKeys.ReportTag(origin, AccountKeys.Key(AccountKeys.Salt, "demo", EstimateNames.Source(snapshot.Source)));
+                entries.Add(new QuotaReportEntry(tag, snapshot.Source, [snapshot.Source], e.Plan, e.Tier, window.Kind, window.Name, window.Minutes ?? 0,
                     window.UsedPercent, now - snapshot.ObservedMs, window.ResetsAtMs - now, Math.Round(e.LivePercent, 1), e.Estimated, e.UsedMicroUsd,
                     e.UsedMicroUsd * 97 / 100, 0, estimate, mix, 8) { AtMs = now });
             }

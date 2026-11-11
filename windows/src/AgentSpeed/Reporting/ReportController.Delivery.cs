@@ -229,7 +229,7 @@ internal sealed partial class ReportController
         var content = run.Window.Take(sample) with { Perf = TakePerf(sample) };
         var envelope = new ReportEnvelope(Client, identity.DeviceId, username, run.Id, ticket.Seq, UnixMs + _clockCorrection * 1000,
             ticket.WindowMs, ticket.Activity, run.Title.Level);
-        run.Bodies[ticket.Seq] = FittedWithQuotas(run.Quotas, envelope, content, sample, Options(document, Preferences.Sections)).Data;
+        run.Bodies[ticket.Seq] = FittedWithQuotas(run.Quotas, document, envelope, content, sample, Options(document, Preferences.Sections)).Data;
     }
 
     private ReportOptions Options(ReportDiscovery document, IEnumerable<ReportSection> switches)

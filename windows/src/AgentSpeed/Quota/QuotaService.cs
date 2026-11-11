@@ -96,7 +96,7 @@ internal sealed class QuotaService : IDisposable
     private volatile bool _helperEnsured;
     private volatile ClaudeCliBridgeStatus _cliStatus = ClaudeCliBridgeStatus.Off;
     private volatile QuotaState? _demo;
-    private volatile IReadOnlyList<QuotaReportEntry> _demoEntries = [];
+    private volatile Func<string, IReadOnlyList<QuotaReportEntry>>? _demoEntries;
     private volatile bool _disposed;
     private readonly QuotaEstimator? _estimator;
     private ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate> _estimates = ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate>.Empty;
@@ -302,12 +302,12 @@ internal sealed class QuotaService : IDisposable
     }
 
     /// <summary>
-    /// Fixed quotas for the developer capture (<c>op quota-demo</c>), with the report entries the preview shows meanwhile;
-    /// null returns to the real readers.
+    /// Fixed quotas for the developer capture (<c>op quota-demo</c>), with the report entries the preview shows meanwhile (per
+    /// api origin, which the tags depend on); null returns to the real readers.
     /// </summary>
-    public void SetDemo(QuotaState? demo, IReadOnlyList<QuotaReportEntry>? entries = null)
+    public void SetDemo(QuotaState? demo, Func<string, IReadOnlyList<QuotaReportEntry>>? entries = null)
     {
-        _demoEntries = demo is null ? [] : entries ?? [];
+        _demoEntries = demo is null ? null : entries;
         _demo = demo;
         if (demo is null)
         {
@@ -563,14 +563,16 @@ internal sealed class QuotaService : IDisposable
     }
 
     /// <summary>
-    /// The report's quota entries at <paramref name="nowMs"/> (REPORTING-EXTENSIONS 11.1, 11.2): only sources whose quota is
-    /// read here or on a host; thread-safe.
+    /// The report's quota entries at <paramref name="nowMs"/> for the service of api origin <paramref name="origin"/>
+    /// (REPORTING-EXTENSIONS 11.1, 11.2): only sources whose quota is read here or on a host, each account by its tag for
+    /// that service; thread-safe.
     /// </summary>
-    public IReadOnlyList<QuotaReportEntry> ReportEntries(long nowMs)
+    public IReadOnlyList<QuotaReportEntry> ReportEntries(long nowMs, string origin)
     {
+        ArgumentNullException.ThrowIfNull(origin);
         if (_demo is not null)
         {
-            return _demoEntries;
+            return _demoEntries?.Invoke(origin) ?? [];
         }
 
         if (_estimator is not { } estimator)
@@ -579,7 +581,7 @@ internal sealed class QuotaService : IDisposable
         }
 
         var inputs = _inputs;
-        return estimator.Entries(nowMs, s => inputs.Shown.Contains(s) || inputs.HostShown.Contains(s));
+        return estimator.Entries(nowMs, origin, s => inputs.Shown.Contains(s) || inputs.HostShown.Contains(s));
     }
 
     private static bool IsPhaseOne(SourceKind source) => source is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.ClaudeDesktop;

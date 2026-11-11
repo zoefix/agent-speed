@@ -97,6 +97,6 @@ public sealed class QuotaReportCadence
         return false;
     }
 
-    private static string Identity(QuotaReportEntry e) =>
-        string.Join(",", e.Sources.Select(EstimateNames.Source)) + "|" + e.WindowId;
+    /// <summary>(account, window): one entry per account and window in a report.</summary>
+    private static string Identity(QuotaReportEntry e) => e.Account + "|" + e.WindowId;
 }

@@ -6,11 +6,14 @@ public sealed record QuotaEntryEstimate(
     long? AccountUsedMicroUsd, int Windows);
 
 /// <summary>
-/// One account × window as reported (REPORTING-EXTENSIONS 11.2) and shown (QUOTAS 10.7, 10.8): the vendor's percent
-/// (null once its reset passed), the live percent, the measured spend and the estimate, at <see cref="AtMs"/>.
+/// One account × window as reported (REPORTING-EXTENSIONS 11.2) and shown (QUOTAS 10.7, 10.8): the account's tag for the
+/// service, the vendor's percent (null once its reset passed), the live percent, the measured spend and the estimate, at
+/// <see cref="AtMs"/>.
 /// </summary>
+/// <param name="Account">The account's tag for the reporting service (<see cref="AccountKeys.ReportTag"/>, 16 hex digits),
+/// never its id or key; empty on an entry that is only shown.</param>
 public sealed record QuotaReportEntry(
-    SourceKind Source, IReadOnlyList<SourceKind> Sources, string? Plan, string? Tier, QuotaWindowKind Kind, string? Name,
+    string Account, SourceKind Source, IReadOnlyList<SourceKind> Sources, string? Plan, string? Tier, QuotaWindowKind Kind, string? Name,
     int Minutes, double? UsedPercent, long? PercentAgeMs, long? ResetsInMs, double LivePercent, bool LiveEstimated,
     long UsedMicroUsd, long? ObservedUsedMicroUsd, long UnpricedRequests, QuotaEntryEstimate Estimate,
     IReadOnlyList<QuotaMixShare> Mix, int PriceVersion)
