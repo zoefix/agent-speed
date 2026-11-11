@@ -585,6 +585,13 @@
         "perfScore": {
           "$ref": "#/$defs/perfScoreLive"
         },
+        "quotas": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "$ref": "#/$defs/quotaEntry"
+          }
+        },
         "realtime": {
           "$ref": "#/$defs/realtime"
         }
@@ -924,6 +931,10 @@
         "perfScore": {
           "type": "integer",
           "minimum": 1
+        },
+        "quotaEstimate": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -1238,6 +1249,235 @@
           "type": "integer",
           "minimum": 0,
           "maximum": 180000000000
+        }
+      }
+    },
+    "quotaEntry": {
+      "description": "QUOTAS 11, REPORTING-EXTENSIONS 11 (extension quotaEstimate): one subscription account-window of the device. usedPercent is the vendor's value; livePercent extrapolates it with the measured spend; usedMicroUsd is the spend this device measured in the window; estimate is the cap in API-equivalent micro-USD inferred on the device. No account identifier is ever sent. Times are offsets from sentAt. A window whose reset has passed has usedPercent, percentAgeMs and observedUsedMicroUsd null.",
+      "type": "object",
+      "required": [
+        "source",
+        "sources",
+        "plan",
+        "tier",
+        "window",
+        "usedPercent",
+        "percentAgeMs",
+        "resetsInMs",
+        "livePercent",
+        "liveEstimated",
+        "usedMicroUsd",
+        "observedUsedMicroUsd",
+        "unpricedRequests",
+        "estimate",
+        "mix",
+        "priceVersion"
+      ],
+      "properties": {
+        "source": {
+          "$ref": "#/$defs/source"
+        },
+        "sources": {
+          "type": "array",
+          "minItems": 1,
+          "maxItems": 8,
+          "items": {
+            "$ref": "#/$defs/source"
+          }
+        },
+        "plan": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z0-9_.-]{1,64}$"
+        },
+        "tier": {
+          "type": [
+            "string",
+            "null"
+          ],
+          "pattern": "^[a-z0-9_.-]{1,64}$"
+        },
+        "window": {
+          "type": "object",
+          "required": [
+            "kind",
+            "name",
+            "minutes"
+          ],
+          "properties": {
+            "kind": {
+              "type": "string",
+              "enum": [
+                "fiveHour",
+                "sevenDay",
+                "modelWeek",
+                "other",
+                "month",
+                "credits"
+              ]
+            },
+            "name": {
+              "type": [
+                "string",
+                "null"
+              ],
+              "minLength": 1,
+              "maxLength": 64
+            },
+            "minutes": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 1,
+              "maximum": 527040
+            }
+          }
+        },
+        "usedPercent": {
+          "type": [
+            "number",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "percentAgeMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 691200000
+        },
+        "resetsInMs": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 31622400000
+        },
+        "livePercent": {
+          "type": "number",
+          "minimum": 0,
+          "maximum": 1000
+        },
+        "liveEstimated": {
+          "type": "boolean"
+        },
+        "usedMicroUsd": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "observedUsedMicroUsd": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "unpricedRequests": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 10000000
+        },
+        "estimate": {
+          "type": "object",
+          "required": [
+            "capMicroUsd",
+            "lowMicroUsd",
+            "highMicroUsd",
+            "confidence",
+            "coverage",
+            "accountUsedMicroUsd",
+            "windows"
+          ],
+          "properties": {
+            "capMicroUsd": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "lowMicroUsd": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "highMicroUsd": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "confidence": {
+              "type": "string",
+              "enum": [
+                "high",
+                "medium",
+                "low",
+                "none"
+              ]
+            },
+            "coverage": {
+              "type": [
+                "number",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 1
+            },
+            "accountUsedMicroUsd": {
+              "type": [
+                "integer",
+                "null"
+              ],
+              "minimum": 0,
+              "maximum": 9007199254740991
+            },
+            "windows": {
+              "type": "integer",
+              "minimum": 0,
+              "maximum": 64
+            }
+          }
+        },
+        "mix": {
+          "type": "array",
+          "maxItems": 3,
+          "items": {
+            "type": "object",
+            "required": [
+              "model",
+              "share"
+            ],
+            "properties": {
+              "model": {
+                "$ref": "#/$defs/modelId"
+              },
+              "share": {
+                "type": "number",
+                "minimum": 0,
+                "maximum": 1
+              }
+            }
+          }
+        },
+        "priceVersion": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },

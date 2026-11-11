@@ -6,13 +6,16 @@ dashboard's Sources rows show every source that has a quota; the `character` orb
 app runs and is signed in. The UI is DESIGN 4 (Sources), 2a.6 (*Readouts*, 額度) and 5 (Data sources); the fixtures are
 checked by `spec/tools/quota_reference.py --check-fixtures`. Status: specified 2026-11-10 (user's request); phase 1
 covers Codex, Claude Desktop and Claude Code; phase 2 (section 9) adds Grok Build, Devin, Antigravity, Kimi Code,
-Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy.
+Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy. Section 10 (2026-11-11) estimates each window's cap in
+API-equivalent dollars, shows the amount used and reports both when the user shares quotas.
 
 ## 1. Principles
 
-- **Display only.** A quota never changes a speed, a score, a cost or anything Agent Speed reports. Quotas are not
-  sent anywhere: they are not part of live reporting (REPORTING), the local network frame (LAN) or remote hosts
-  (REMOTE).
+- **Display, and reporting only when shared.** A quota never changes a speed, a score or a cost. Quotas are not part
+  of the local network frame (LAN), and remote hosts only send theirs to the app (REMOTE 11). The one exception is
+  live reporting: with the 額度 sharing switch on (on by default, DESIGN 11) and a service that advertises
+  `quotaEstimate`, reports carry each window's percent, measured spend and estimated cap (section 10,
+  REPORTING-EXTENSIONS 11), with the plan but never an account id.
 - **Claude: only what the Claude apps leave on this computer, and the official status line.** Agent Speed never reads
   Claude credentials, OAuth tokens, cookies or session tokens, and never sends a request to claude.ai or Anthropic.
   Anthropic does not permit third-party developers to "collect, store, or intermediate Claude.ai credentials or session
@@ -24,7 +27,8 @@ Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy.
   2026-11-10: a Claude Ultra account and a Codex `promax` plan with a weekly window only); such an account shows its
   weekly window alone, with no placeholder for the missing one.
 - **Each account on its own.** Claude Desktop and the Claude CLI may be signed in to different accounts (the user's
-  case), so `claudeDesktop` and `claudeCode` each carry their own snapshot and are never merged.
+  case), so `claudeDesktop` and `claudeCode` each carry their own snapshot and are never merged. Only the estimate
+  pools their spend, when they are provably one personal account (10.1).
 - **Phase 1 needs no network.** The Codex and Claude Desktop readers only read local files. The Claude CLI bridge
   writes one value into Claude Code's settings, and only after the user turns it on (section 5). Phase 2's vendor
   requests follow section 9.1 and NETWORK 9.
@@ -332,8 +336,11 @@ at least one window.
 ## 8. Privacy and risks
 
 - What is read: Codex's rollout lines (already read for speed), the Claude Desktop usage entry, the helper's quota
-  file, and the two signed-in markers of section 6. None of it leaves the computer, and only the snapshot is kept in
-  memory. Nothing quota-related is written except by the bridge (section 5).
+  file, and the two signed-in markers of section 6. Only the snapshot is kept in memory. Written: the bridge's files
+  (section 5) and the estimate's salt and store (10.1, 10.4), which hold account keys (keyed hashes), never ids.
+- What leaves the computer: with the 額度 sharing switch on and a service that takes them, the report entries of
+  REPORTING-EXTENSIONS 11 (percent, spend, estimate, plan and tier, model mix); nothing else, and never an account
+  id, e-mail address, key or salt. Remote hosts receive the salt over their SSH connection (REMOTE 11.1).
 - `privacy.quota` (DESIGN 5, About) says this.
 - **Claude Desktop's cache** is Desktop's private format, not an interface. A Desktop update may stop writing it, move
   it, change the key or the body.
@@ -660,7 +667,220 @@ A refusal leaves the browser out.
 - **Hosts**: `host_key` equal to the site or ending in `.<site>`. The `Cookie` header joins every such `name=value`
   that has not expired, in database order.
 
-## 10. Fixtures
+## 10. Estimates
+
+The vendors show a percent, never the size of the limit. Agent Speed estimates each window's cap in API-equivalent US
+dollars (METRICS 9) from the vendor's percent and the spend it measured itself, so that it can show the amount used
+and the cap, extrapolate the percent between vendor values, and report both to services that collect statistics
+(REPORTING-EXTENSIONS 11). User's request and decisions 2026-11-11 ("就算這個人沒用完額度也能預估出來…要做到極致的完美";
+the UI of 10.8, the live percent of 10.7, the 額度 sharing switch on by default, the plan but no account id in reports).
+The reference is `spec/tools/quota_estimate.py`, the simulation `quota_estimate_sim.py` (10.9) and the run over this
+computer's own logs `quota_estimate_local.py`. Everything in this section is an estimate: it is shown with `≈` and
+reported with its confidence, never as the vendor's number.
+
+**The idea.** In a window that started at `S`, the vendor's percent is `p = 100 · U / K`, where `U` is the account's
+usage so far and `K` the cap. Agent Speed sees `C`, the spend of this computer (and its hosts) on that account. Since
+`C ≤ U` whatever else the account does, `K ≥ 100 · C / p` always holds (a lower bound). When nothing else used the
+account, `C ≈ U` and `K ≤ 100 · C / p` holds too (an upper bound). Quantization, lag and unseen usage are handled by
+turning each observation into an interval of `K` (10.5) and letting the intervals of many windows vote (10.6).
+
+### 10.1 Accounts
+
+Spend and observations are pooled per account, identified on this computer by
+`key = first 16 hex digits of HMAC-SHA256(installSalt, "<vendor>:<id>")`.
+- `installSalt`: 32 random bytes in `<data>/quota/estimate-salt` (permissions 0600 on macOS and Linux; created when
+  first needed, with a temporary file and a rename). It is sent to remote hosts in the quota config (REMOTE 11.1) so
+  that they compute the same keys. It is never sent to reporting services and never logged; neither is a key.
+- `codex`: `tokens.account_id` of the `auth.json` that section 6 already parses in memory (nothing else of it).
+- `claudeCode`: `oauthAccount.organizationUuid` and `accountUuid` of `.claude.json` (section 6), as `<org>:<account>`.
+- `claudeDesktop`: the organization uuid of its usage entry's key (4.2). It shares the CLI's account when the uuid
+  equals the CLI's `organizationUuid` and the CLI's `organizationType` is a personal plan: `claude_free`,
+  `claude_pro`, `claude_max` or `claude_ultra`. A team or enterprise organization (`claude_team`,
+  `claude_enterprise`, any other value) is shared by its members, so Desktop then keeps its own account: a wrong merge
+  would add another member's spend to the lower bounds, a missed one only loses evidence. On a shared account the two
+  sources' spends add up.
+- Phase-2 sources and any source without an id: the account is the pair (computer or host, source).
+- **Key timeline.** A source's key can change (`/login`, `codex login`). Spend belongs to the key in force when the
+  response ended: the app keeps, per source, the key changes it saw (`<data>/quota/estimate.json`, 10.4) and gives
+  the first key it ever saw to the responses before it.
+- **Codex history.** Rollouts do not name the account, and users switch accounts (seen 2026-11-11: three Codex
+  accounts within 8 days, each used until 70–100 %). So a Codex response belongs to the window instances (10.4) of
+  the token count line that reports it (the line right after the response, at most 5 s later, in the same file), and
+  instances named by one line belong to one account (union-find over the instances). A chain observed while
+  `auth.json` gave a key takes that key; a chain never seen live is an account of its own. A response without such a
+  line (API-key sign-in, another provider, a bucket other than `codex`) is no subscription spend and is left out.
+- **Remote hosts.** The relay adds `account` (the key) to its quota line (REMOTE 11.1). A host's sources and this
+  computer's sources with equal keys are one account.
+
+### 10.2 Plan and cap class
+
+- `plan` and `tier`: Codex the newest `plan_type` of the account (a null `plan_type` takes the newest non-null one
+  of the same account: newer Codex builds write null); Claude CLI `oauthAccount.organizationType` and
+  `organizationRateLimitTier` (observed `claude_max`, `default_claude_max_20x`); Desktop inherits them on a shared
+  account; else null. A value is kept only when it is 1–64 characters of `[a-z0-9_.-]`, else null.
+- **Cap class.** A cap belongs to the plan, not to the person: estimates pool every account of the same
+  `(vendor, plan, tier, window)` on this computer, so the user's several Codex accounts of one plan share their
+  evidence. Without a plan the class is `(account, window)`.
+- A plan change moves the account to another class from that moment; the evidence of the old plan stays with it.
+  `window` is `kind`, `name` and `minutes` (section 2).
+
+### 10.3 Spend ledger
+
+Rows per (account, source, price-table model id, UTC minute of the response's `endMs`): `costMicroUsd` (METRICS 9.3),
+unpriced requests, and the input + output tokens of priced and of unpriced responses. Kept for the last 8 days.
+- Fed by the history analysis (the same parsing, dedupe and copied-history rules as METRICS 8, kept as per-file
+  per-minute contributions for minutes within 8 days), the live engine (an update replaces a response's earlier
+  contribution, as in history) and remote hosts' streamed responses.
+- Left out: responses whose provider is not the vendor's own subscription route (Codex `model_provider` other than
+  `openai`; Claude model ids in a Bedrock or Vertex form, METRICS 9.2 *cloud* step).
+- Sums over an account's rows, for a span `[a, b]`:
+  - `C⁻(a, b)`: the minutes wholly inside it (a lower bound of the spend that ended in the span; unpriced counts 0);
+  - `C⁺(a, b)`: the minutes touching it (an upper bound), with each unpriced token at the highest cost per token of
+    the account's priced models in the ledger (none priced: `∞`). Seen 2026-11-11: Codex's automatic-approval
+    reviewer has no price and would otherwise leave no upper bound at all.
+- A `modelWeek` window counts only the models whose price-table id contains each word of the window's name as a
+  `-`-separated token, case-insensitive (`Fable` ↔ `claude-fable-5-2`).
+
+### 10.4 Observations
+
+Every window with a numeric `usedPercent` and a known `resetsAtMs` gives an observation `(account, window, t, tLo, p,
+R)`: `t` its `observedMs`, `R` its reset.
+- **`tLo`**, the earliest moment the value may describe. Codex and the Claude CLI take the limits from the headers
+  of a response, which arrive when the response starts. Codex: the start of the response the token count follows.
+  Claude CLI: the start of the earliest `claudeCode` response of the account that started before `t` and ended at or
+  after `t − λ`. Otherwise `t`. (Sorted by `t`, Codex values drop by a point now and then: parallel agents' headers.)
+- **Resolution** `q` per (source, account, window): the finest of its stored values, a value's own being 1 for
+  integers (`23.0` included), 0.1 for one decimal, else 0.01. The vendor's rounding (down, nearest, up) is unknown, so
+  a value `p` stands for a true value in `(p − q, p + q)`.
+- **Instances.** Observations of one account and window whose `R` are within 2 minutes of the first are one window
+  instance. `S = max R − minutes` starts the lower-bound sums and `S⁺ = min R − minutes` the upper-bound ones; for a
+  `fiveHour` window whose `R` is a whole hour, `S⁺` is one more hour earlier (the reset may be rounded up). An
+  observation with `t` outside `[S⁺ − 1 min, R + 1 min]` is skipped.
+- **Sources of observations.** Codex: every token count line with rate limits (3), so that history exists at the
+  first launch. Claude CLI: each change of the quota file (5.5). Desktop: each new cache entry (4.4). Phase 2: each
+  response. Remote hosts: each quota line.
+- **Store.** `<data>/quota/estimate.json` (0600, a temporary file then a rename, written at most once a minute and at
+  quit): `{"version": 1, "observations": [...], "instances": [...], "keys": [...]}` with the last 8 days of
+  observations (runs of equal values keep their first and last), the closed instances' intervals (10.5, at most 64
+  per class, newest kept, each with its plan) and the key timeline of 10.1. Account keys are stored, ids never. A
+  file that does not parse is replaced.
+
+### 10.5 Segments
+
+With `λ = 2 min` and the sums of 10.3. Consecutive observations of an instance with equal `p` form a run, with its
+first time `t₁`, last time `t₂` and largest `tLo`.
+- **Cumulative** segment per run with `p > 0`:
+  - `lo = 100 · C⁻(S, tLo − λ) / (p + q)`;
+  - `hi = 100 · C⁺(S⁺, t₁ + λ) / (p − q)`, `∞` when `p − q ≤ 0`.
+  - A value of 100 or more gives no lower bound (vendors stop at 100 % while usage goes on); its `hi` uses
+    `p = 100`.
+- **Increment** segments: anchors are the runs with `p > 0`, each at least `max(3q, 10)` points above the previous
+  anchor. Each pair of anchors `a < b` (at most 32 pairs, the widest first) gives, with `Δ = p_b − p_a` and
+  `q₂ = q_a + q_b`:
+  - `lo = 100 · (C⁻(S, tLo_b − λ) − C⁺(S, t₁_a + λ)) / (Δ + q₂)`;
+  - `hi = 100 · (C⁺(S⁺, t₁_b + λ) − C⁻(S⁺, tLo_a − λ)) / (Δ − q₂)`.
+  An increment cancels any spend the vendor left uncounted before `a`.
+- Spend after the current time does not exist yet: a sum ends at `now` at the latest.
+- An instance keeps at most 64 segments: every increment and, evenly spaced, the cumulative ones.
+- Lower bounds hold even when usage is invisible here (other computers, claude.ai on the web or phone, Codex cloud):
+  that usage only raises `U`. Upper bounds hold only for clean spans.
+- **Instance interval.** `L` = the largest lower bound, `H` = the smallest upper bound not below `L` (an upper bound
+  below a lower bound of the same instance is provably wrong). When a cumulative lower bound lies above an increment's
+  upper bound, the vendor left part of the window's first spend uncounted (seen on the user's Codex accounts: a
+  straight line through their values crosses zero 3–10 points late), or an increment saw unseen usage: the instance
+  then uses its increments alone. An instance keeps `(L, H, pMax, tLast, R)`; closed ones are stored (10.4).
+- Worked example (the fixture `segments[0]`): $1 ends at `S + 10i min + 30 s` for `i = 1…60`, observations 2 % at
+  100 and 130 min, 5 % at 300, 12 % at 610, `q = 1`. Run 2 %: `lo = 100 · $12 / 3 = $400`, `hi = 100 · $10 / 1 =
+  $1000`. Run 5 %: `$29 / 6 · 100 = $483`, `$30 / 4 · 100 = $750`. Run 12 %: `$461`, `$545`. Increment 2 → 12 %:
+  `100 · ($60 − $10) / 12 = $417`, `100 · ($60 − $12) / 8 = $600`. Instance: `[$483, $545]`.
+
+### 10.6 Estimate
+
+Per cap class, pooling the current and the stored instances.
+- **Weight** of an instance: `w = min(1, pMax / 20) · 0.5^(age / halfLife)`, `age = now − tLast`, half-life 7 days
+  for windows of 10 000 minutes or more, else 2 days. `w < 0.05` is dropped.
+- **Lowered cap.** When the two newest instances with `H / L − 1 ≤ 0.08` agree with each other, older instances whose
+  `L` lies above both are dropped: unseen usage never raises a lower bound, a cut cap does.
+- **Vote** on `K`: `loss(K) = Σ w · ([K < L] + 0.25 · [K > H])`. Lower bounds are trusted four times more than upper
+  bounds. The loss is evaluated on every endpoint and every open cell between endpoints; the cells of least loss,
+  merged where they touch, form regions. The region with the most weight of instances holding it wins, then the
+  lowest. It is `[Klo, Khi]`.
+- **Cap** `K̂ = √(Klo · Khi)`. With `Khi = ∞` there is no cap, only `atLeast = Klo`.
+- **Published range** `[min(Klo, K̂ / 1.02), max(Khi, K̂ · 1.02)]`: a window of a few percent cannot claim more than
+  ±2 % (the vendors' metering is not exactly the API price list).
+- **Confidence**:
+  - `high`: `Khi / Klo − 1 ≤ 0.08`, the instances holding the region weigh ≥ 1.5, at least two of them are themselves
+    at most 8 % wide, and no instance's `L` lies above the region;
+  - `medium`: `Khi / Klo − 1 ≤ 0.25` and the holders weigh ≥ 0.5;
+  - `low`: any other estimate, `atLeast` included; `none`: no instance with a lower bound.
+- **Coverage** of the current instance: `C⁺(S, t) / (K̂ · p / 100)`, clamped to 0–1, when `p ≥ 5` (the share of the
+  account's usage this computer saw). **Account-wide used** ≈ `K̂ · p_live / 100`.
+
+### 10.7 Live percent
+
+- While `now < R` and a cap exists: `p_live = p + 100 · (C⁺(S, now) − C⁺(S, t)) / K̂`, at least `p` and at most
+  `max(100, p)`; it is *estimated* when it exceeds `p` by 0.5 or more. A new vendor value replaces it.
+- After `R`: a new instance starts, `S′ = R + n · minutes` (the latest such start not after `now`) for weekly and other
+  windows; for `fiveHour`, the minute of the first local response after `R` (none yet: 0 %, not estimated, no reset).
+  `R′ = S′ + minutes`, and `p_live = 100 · C⁺(S′, now) / K̂` (estimated) with `R′` as the reset.
+- Without a cap: the vendor value, then 0 % after `R` (section 2).
+
+### 10.8 Display data
+
+- **Used**: `C⁺(S, now)`, this computer's and its hosts' measured spend in the current instance, in the display
+  currency like other costs (METRICS 9.8; DESIGN 9 *Amount*).
+- **Cap**: `≈K̂`, or `≥atLeast`; nothing at confidence `none`.
+- **Details** (hover, DESIGN 4): account-wide used ≈, the published range, confidence, coverage, plan and tier, and
+  the number of windows it rests on.
+
+### 10.9 Validation
+
+**Simulation** (`quota_estimate_sim.py --accounts 100`, seed 7). Accounts with caps of $50–2000, two models, one to
+three parallel agents, responses of 5 s–8 min whose percent the vendor reports as of their start plus up to 20 s;
+four weekly windows each, used to 65–100 %. Relative error of `K̂`, median / 90th percentile in %, when the window's
+percent first reaches the given value (window n has n − 1 closed windows before it); then the share of `high`
+estimates whose published range holds the truth:
+
+| Scenario | w1 at 5 % | w1 at 20 % | w1 at 60 % | w2 at 20 % | w3 at 20 % | high holds truth |
+| --- | ---: | ---: | ---: | ---: | ---: | ---: |
+| clean, integer percent | 1.2 / 4.8 | 0.2 / 0.6 | 0.1 / 0.3 | 0.1 / 0.2 | 0.1 / 0.2 | 100 % |
+| clean, 0.1 % resolution | 0.3 / 1.2 | 0.1 / 0.2 | 0.0 / 0.1 | 0.0 / 0.1 | 0.0 / 0.1 | 100 % |
+| integer percent rounded down | 11.6 / 13.6 | 2.7 / 3.2 | 0.9 / 1.0 | 1.0 / 2.6 | 0.8 / 1.3 | 100 % |
+| 20 % of windows with 20–60 % unseen usage | 1.9 / 10.6 | 0.3 / 11.0 | 0.1 / 4.2 | 0.1 / 0.3 | 0.1 / 0.2 | 100 % |
+| 50 % of windows with 20–60 % unseen usage | 1.4 / 44.3 | 0.6 / 54.6 | 0.4 / 22.0 | 0.1 / 13.3 | 0.1 / 6.6 | 98.2 % |
+| vendor lag up to 3 min (λ is 2) | 3.6 / 11.2 | 0.5 / 2.0 | 0.3 / 0.8 | 0.1 / 0.6 | 0.1 / 0.4 | 100 % |
+| first 3–10 % of each window uncounted | 315 / 463 | 2.7 / 6.4 | 0.3 / 0.9 | 0.5 / 2.8 | 0.2 / 0.8 | 100 % |
+| vendor weights one model 20 % above its price | 3.8 / 8.4 | 3.1 / 5.7 | 2.8 / 5.4 | 3.2 / 5.3 | 2.5 / 4.4 | 32 % |
+| five-hour windows | 1.2 / 3.9 | 0.3 / 0.9 | 0.2 / 0.7 | 0.3 / 0.9 | 0.2 / 0.5 | 100 % |
+| cap raised 50 % from window 3 | 1.4 / 5.1 | 0.2 / 0.8 | 0.1 / 0.2 | 0.1 / 0.2 | 0.2 / 0.7 | 99.3 % |
+| cap cut by a third from window 3 | 1.3 / 4.9 | 0.2 / 0.8 | 0.1 / 0.2 | 0.1 / 0.2 | 50.0 / 50.2 | 100 % |
+
+- The targets hold: clean data within 5 % once one window reaches 20 %; half the windows contaminated, within 10 %
+  from the third window; `high` holds the truth in ≥ 90 % wherever the cap is well defined.
+- Tuning that got there, from the first design: one interval per instance before the vote (votes per segment let a
+  contaminated window with many segments outvote a clean one); `high` needs two narrow instances and no lower bound
+  above it (two contaminated windows otherwise agreed by chance); a value of 100 % gives no lower bound; increments
+  over every anchor pair, and increments alone when a window's start went uncounted; the ±2 % floor of the range.
+  The 0.25 penalty and λ = 2 min were kept.
+- Limits: a lowered cap is followed only from the second agreeing window (`low`/`medium` before); a vendor whose
+  metering weights models differently from the API prices gives a cap that depends on the model mix (2–4 %); an
+  account that is always partly used elsewhere looks like a smaller cap, and nothing on one computer can tell.
+
+**Real data** (2026-11-11, the user's Mac, read-only, `quota_estimate_local.py`): Codex `promax` 7d `≈$400`
+(`$392–408`, `medium`; the earlier window alone gives `$399–401`, the current one `$53` at 42 % with coverage 0.15:
+other usage of the account or a lowered cap, which a second window will tell). Claude `claude_max` /
+`default_claude_max_20x`, Desktop sharing the CLI's account: 7d `≈$5742` (`$5629–5857`, `medium`, at 99 %), Fable 7d
+`≈$598` (`$576–621`, `medium`, at 27 %), 5h `≈$832` (`$728–951`, `low`, one value of 12 %).
+
+### 10.10 Known approximations
+
+- Vendors meter in their own units; API-equivalent dollars approximate them (`mix` in reports shows the models).
+- History before the first launch gives Claude spend to the key read at launch (10.1).
+- `λ` covers lags up to 2 minutes; Claude Desktop's cached value may be older than its `Date` (unverified).
+- Claude's 5-hour and weekly windows are assumed to count from `R − minutes` (unverified); the whole-hour slack of
+  10.4 covers a rounded 5-hour reset.
+
+## 11. Fixtures
 
 `spec/fixtures/quota-cases.json` (written by `spec/tools/quota_reference.py --write`) holds the cases, and
 `spec/fixtures/quota/` holds the binary cache entries. The cases cover:
@@ -683,6 +903,13 @@ A refusal leaves the browser out.
   the user, not an object.
 - Reset passed, labels and order, and the long and short reset texts in the four languages for fixed `now` values in
   `Asia/Taipei`.
+- Estimates (section 10): `spec/fixtures/quota-estimate-cases.json`, written and checked by
+  `spec/tools/quota_estimate.py --write` / `--check-fixtures`, with account keys and the Desktop merge rule, plan
+  strings and Codex account chains, resolution, segments (cumulative, increments, λ, `tLo`, unpriced tokens, 100 %,
+  the five-hour slack, `modelWeek` filtering), instance intervals, the vote (ties, unbounded, a degenerate region,
+  dropped weights), weights and half-lives, the estimate (published range, confidence, the lowered-cap rule), a plan
+  change, the live percent before and after a reset, report entries (rounding of micro-USD and percent, checked
+  against `report-schema.json`) and the send cadence. Some values are also checked against hand-worked numbers.
 - Phase 2: every response shape of section 9 (Grok config from a log and from the API, Devin rows, Antigravity
   summaries and `GetUserStatus`, Kimi current and legacy, Gemini buckets, Factory limits, z.ai limits, Qoder and
   WorkBuddy summaries), named-window labels and order, and Chrome cookie decryption vectors for macOS `v10`, Linux

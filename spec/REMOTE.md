@@ -455,10 +455,15 @@ Not on hosts:
 
 - `start` gains an optional `quota` object, and the app sends a line `{"t": "quota", "config": {...}}` whenever it
   changes. The config is `{"sources": [<keys whose quota switch is on>], "network": <networkEnabled>, "grokLive":
-  bool, "claudeBridge": bool}`.
+  bool, "claudeBridge": bool, "salt": <64 hex digits>}`. `salt` is the app's estimate salt (QUOTAS 10.1); the relay
+  keeps it in memory only, never writes or logs it, and leaves `account` null without it.
 - The relay answers with one line per source:
-  - `{"t": "quota", "q": {source, observedMs, windows, running, signedIn, status}}` whenever it changes, at most once
-    a second;
+  - `{"t": "quota", "q": {source, observedMs, windows, running, signedIn, status, account, plan, tier}}` whenever it
+    changes, at most once a second;
+  - `account`: the source's account key (QUOTAS 10.1, from the host's `auth.json` `tokens.account_id` or
+    `~/.claude.json` `oauthAccount`), 16 lowercase hex digits, or null; `plan` and `tier` as QUOTAS 10.2, or null.
+    A host's sources and the app's own sources with equal keys are one account; the host's streamed responses (5)
+    feed the ledger of QUOTAS 10.3. Older relays send none of the three: their sources are accounts of their own;
   - `{"t": "quotaRemoved", "source"}` when a source's snapshot goes.
 - `windows` is an array of at most 16 `{kind, name, minutes, usedPercent, resetsAtMs}` (QUOTAS 2, 9.1).
   - `name` ≤ 64 characters or null.
@@ -515,7 +520,7 @@ The relay lists `/proc` every 15 s while `sources` is not empty: each process's 
 
 ## 10. Tests
 
-- **Relay**: protocol encoding unit tests; the quota fixtures of QUOTAS 10 through the relay's readers, its helper
+- **Relay**: protocol encoding unit tests; the quota fixtures of QUOTAS 11 through the relay's readers, its helper
   mode and its bridge against a temporary home; an end-to-end test that runs `agent-speed-relay serve` over the spec
   fixtures (`spec/fixtures`) as a fake home and checks that its responses and agent states equal
   `parser-expected.json` and its history equals `history-expected.json`.
