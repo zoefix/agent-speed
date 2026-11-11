@@ -31,5 +31,7 @@ public static class EstimateLimits
 
     public const int ObservationsPerInstance = 256;
     public const int MaxEntries = 16;
-    public const int StoreVersion = 1;
+
+    /// <summary>The version of <c>estimate.json</c>; version 1 keyed accounts with a random salt and is replaced.</summary>
+    public const int StoreVersion = 2;
 }

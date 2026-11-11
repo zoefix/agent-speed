@@ -5,7 +5,10 @@ public sealed partial class EstimateModel
     private readonly Dictionary<(string Host, SourceKind Source), List<KeyEntry>> _hostTimelines = [];
     private readonly Dictionary<(string Host, SourceKind Source, string Key), string> _hostAccounts = [];
 
-    /// <summary>The account a host's source spends on at <paramref name="atMs"/>: its key unless the fingerprint contradicts it, else the (host, source) pair.</summary>
+    /// <summary>
+    /// The account a host's source spends on at <paramref name="atMs"/>: its key, kept apart from an equal key of this computer
+    /// that the fingerprint contradicts; without a key, the (host, source) pair.
+    /// </summary>
     public string HostAccountOf(string host, SourceKind source, long atMs)
     {
         ArgumentNullException.ThrowIfNull(host);
@@ -51,7 +54,9 @@ public sealed partial class EstimateModel
                 var points = new WindowPointSet(mine.SelectMany(s => Points(s.ObservedMs, s.Windows)));
                 var at = mine.Max(s => s.ObservedMs);
                 var fingerprint = local.TryGetValue(key, out var theirs) ? WindowPointSet.Fingerprint(points, new WindowPointSet(theirs), at) : null;
-                _hostAccounts[(host, source, key)] = AccountMerge.KeysShare(fingerprint) ? key : HostPair(host, source) + "#" + key;
+                _hostAccounts[(host, source, key)] = AccountMerge.KeysShare(fingerprint)
+                    ? key
+                    : AccountKeys.Key(_salt, AccountKeys.HostVendor, host + ":" + EstimateNames.Source(source) + ":" + key);
             }
         }
     }

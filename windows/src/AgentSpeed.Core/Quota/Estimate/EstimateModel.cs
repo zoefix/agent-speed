@@ -1,3 +1,5 @@
+using System.Collections.Concurrent;
+
 namespace AgentSpeed.Core.Quota.Estimate;
 
 /// <summary>
@@ -7,6 +9,8 @@ namespace AgentSpeed.Core.Quota.Estimate;
 public sealed partial class EstimateModel
 {
     private readonly byte[] _salt;
+    private readonly string _install;
+    private readonly ConcurrentDictionary<(string Machine, SourceKind Source), string> _pairs = new();
     private readonly EstimateStoreData _stored;
     private readonly EstimateInput _input;
     private readonly Dictionary<SourceKind, List<KeyEntry>> _timelines = [];
@@ -15,10 +19,11 @@ public sealed partial class EstimateModel
     private List<KeyEntry> _desktopOrgs = [];
     private string?[] _accounts = [];
 
-    private EstimateModel(EstimateInput input, ReadOnlySpan<byte> salt, int priceVersion)
+    private EstimateModel(EstimateInput input, ReadOnlySpan<byte> salt, string install, int priceVersion)
     {
         _input = input;
         _salt = salt.ToArray();
+        _install = install;
         _stored = input.Stored is { Version: EstimateLimits.StoreVersion } stored ? stored : EstimateStoreData.Empty;
         PriceVersion = priceVersion;
     }
@@ -48,10 +53,13 @@ public sealed partial class EstimateModel
     /// <summary>Claude Desktop's own organization keys as they changed.</summary>
     public IReadOnlyList<KeyEntry> DesktopOrganizations => _desktopOrgs;
 
-    public static EstimateModel Build(EstimateInput input, ReadOnlySpan<byte> salt, int priceVersion)
+    /// <param name="salt">The account salt (<see cref="AccountKeys.Salt"/>).</param>
+    /// <param name="install">The install id (QUOTAS 10.1) that keys the accounts without an id.</param>
+    public static EstimateModel Build(EstimateInput input, ReadOnlySpan<byte> salt, string install, int priceVersion)
     {
         ArgumentNullException.ThrowIfNull(input);
-        var model = new EstimateModel(input, salt, priceVersion);
+        ArgumentNullException.ThrowIfNull(install);
+        var model = new EstimateModel(input, salt, install, priceVersion);
         model.BuildTimelines();
         var lines = model.ResolveCodex(out var lineOf);
         model.BuildHosts(lines);
@@ -71,9 +79,14 @@ public sealed partial class EstimateModel
     /// <summary>The account of the newest Codex token count line.</summary>
     public string? CodexAccount { get; private set; }
 
-    internal static string LocalPair(SourceKind source) => "local:" + EstimateNames.Source(source);
+    /// <summary>The account of this computer's source without an id: the pair (<c>local</c>, source) of this install.</summary>
+    internal string LocalPair(SourceKind source) => Pair(AccountKeys.LocalMachine, source);
 
-    internal static string HostPair(string host, SourceKind source) => host + ":" + EstimateNames.Source(source);
+    /// <summary>The account of a host's source that names none: the pair (host, source) of this install.</summary>
+    internal string HostPair(string host, SourceKind source) => Pair(host, source);
+
+    private string Pair(string machine, SourceKind source) =>
+        _pairs.GetOrAdd((machine, source), static (k, m) => AccountKeys.PairKey(m._salt, m._install, k.Machine, EstimateNames.Source(k.Source)), this);
 
     private void FillLedger(IReadOnlyList<CodexLineState> lines, int[] lineOf)
     {

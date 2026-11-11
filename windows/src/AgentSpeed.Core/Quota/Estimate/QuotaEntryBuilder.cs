@@ -8,9 +8,11 @@ public sealed record EntryBasis(
 /// <summary>A report entry at a moment (REPORTING-EXTENSIONS 11.2, QUOTAS 10.7, 10.8).</summary>
 public static class QuotaEntryBuilder
 {
-    public static QuotaReportEntry Build(EntryBasis b, long nowMs, SpendLedger ledger, int priceVersion)
+    /// <param name="account">The tag the entry carries for the account (<see cref="AccountKeys.ReportTag"/>); empty where nothing is sent.</param>
+    public static QuotaReportEntry Build(EntryBasis b, string account, long nowMs, SpendLedger ledger, int priceVersion)
     {
         ArgumentNullException.ThrowIfNull(b);
+        ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(ledger);
         var estimate = b.Estimate;
         var name = b.Kind == QuotaWindowKind.ModelWeek ? b.Name : null;
@@ -30,7 +32,7 @@ public static class QuotaEntryBuilder
             EstimateMath.Micro(cap), EstimateMath.Micro(estimate.Low), EstimateMath.Micro(estimate.High), estimate.Confidence, coverage,
             cap is { } c && c != 0 ? EstimateMath.Micro(c * live.Percent / 100) : null, estimate.Windows);
         return new QuotaReportEntry(
-            b.Source, b.Sources, b.Plan, b.Tier, b.Kind, b.Name, b.Minutes,
+            account, b.Source, b.Sources, b.Plan, b.Tier, b.Kind, b.Name, b.Minutes,
             passed ? null : EstimateMath.RoundHalfAway(b.P, 2),
             passed ? null : Math.Max(0, nowMs - b.T),
             live.ResetsAtMs is { } r ? Math.Max(0, r - nowMs) : null,

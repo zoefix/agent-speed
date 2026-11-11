@@ -2,6 +2,7 @@ using System.Text.Json;
 using System.Text.Json.Nodes;
 using AgentSpeed.Core.Quota;
 using AgentSpeed.Core.Quota.Estimate;
+using AgentSpeed.Core.Remote;
 using static AgentSpeed.Core.Tests.Quota.Estimate.EstimateFixture;
 
 namespace AgentSpeed.Core.Tests.Quota.Estimate;
@@ -39,9 +40,12 @@ public sealed class QuotaEstimateFixtureTests
     {
         var accounts = Root.GetProperty("accounts");
         var salt = Convert.FromHexString(accounts.GetProperty("salt").GetString()!);
+        Assert.Equal(3, accounts.GetProperty("keys").GetArrayLength());
         foreach (var k in accounts.GetProperty("keys").EnumerateArray())
         {
-            Assert.Equal(k.GetProperty("expected").GetString(), AccountKeys.Key(salt, k.GetProperty("vendor").GetString()!, k.GetProperty("id").GetString()!));
+            var (vendor, id) = (k.GetProperty("vendor").GetString()!, k.GetProperty("id").GetString()!);
+            Assert.Equal(k.GetProperty("expected").GetString(), AccountKeys.Key(salt, vendor, id));
+            Assert.Equal(k.GetProperty("expected").GetString(), AccountKeys.Key(AccountKeys.Salt, vendor, id));
         }
 
         foreach (var p in accounts.GetProperty("plans").EnumerateArray())
@@ -57,6 +61,59 @@ public sealed class QuotaEstimateFixtureTests
             .Select(l => chains.Link([.. l.EnumerateArray().Select(t => t.GetString()!)])).ToList();
         var got = roots.Select(r => chains.Find(r)).Select(r => names.TryGetValue(r, out var n) ? n : names[r] = "chain" + names.Count).ToList();
         Assert.Equal(accounts.GetProperty("chains").GetProperty("expected").EnumerateArray().Select(e => e.GetString()), got);
+    }
+
+    /// <summary>The account salt is the SHA-256 of its text, the same in every install, and what remote hosts receive.</summary>
+    [Fact]
+    public void TheAccountSaltIsFixed()
+    {
+        var accounts = Root.GetProperty("accounts");
+        var hex = accounts.GetProperty("salt").GetString();
+        Assert.Equal(AccountKeys.SaltText, accounts.GetProperty("saltText").GetString());
+        Assert.Equal(AccountKeys.SaltBytes, AccountKeys.Salt.Length);
+        Assert.Equal(hex, Convert.ToHexStringLower(AccountKeys.Salt));
+        Assert.Equal(hex, RemoteSalt.Of(AccountKeys.Salt)!.Hex);
+        Assert.Equal(hex, new QuotaEstimator(null, null).Salt!.Hex);
+        Assert.Equal(new QuotaEstimator(null, null).Salt, new QuotaEstimator(null, null).Salt);
+    }
+
+    /// <summary>An account without an id is the pair (this computer or one of its hosts, source) keyed with the install id.</summary>
+    [Fact]
+    public void AccountsWithoutAnIdArePairsOfTheInstall()
+    {
+        var accounts = Root.GetProperty("accounts");
+        var salt = Convert.FromHexString(accounts.GetProperty("salt").GetString()!);
+        var pairs = accounts.GetProperty("pairs").EnumerateArray().ToList();
+        Assert.Equal(3, pairs.Count);
+        foreach (var c in pairs)
+        {
+            Assert.Equal(c.GetProperty("expected").GetString(), AccountKeys.PairKey(salt, c.GetProperty("install").GetString()!,
+                c.GetProperty("machine").GetString()!, c.GetProperty("source").GetString()!));
+        }
+
+        // The model keys this computer's and a host's sources that name no account so (the third case's source is only a name).
+        var install = pairs[0].GetProperty("install").GetString()!;
+        var model = EstimateModel.Build(new EstimateInput(), salt, install, 8);
+        Assert.Equal((AccountKeys.LocalMachine, "kimi"), (pairs[0].GetProperty("machine").GetString(), pairs[0].GetProperty("source").GetString()));
+        Assert.Equal(pairs[0].GetProperty("expected").GetString(), model.AccountOf(SourceKind.Kimi, T0));
+        Assert.Equal("kimi", pairs[1].GetProperty("source").GetString());
+        Assert.Equal(pairs[1].GetProperty("expected").GetString(), model.HostAccountOf(pairs[1].GetProperty("machine").GetString()!, SourceKind.Kimi, T0));
+        Assert.NotEqual(model.AccountOf(SourceKind.Kimi, T0), EstimateModel.Build(new EstimateInput(), salt, "another", 8).AccountOf(SourceKind.Kimi, T0));
+    }
+
+    /// <summary>One account's tag differs per service, and two accounts' tags differ for one service.</summary>
+    [Fact]
+    public void ReportTagsDifferPerService()
+    {
+        var tags = Root.GetProperty("accounts").GetProperty("reportTags").EnumerateArray().ToList();
+        Assert.Equal(3, tags.Count);
+        foreach (var c in tags)
+        {
+            Assert.Equal(c.GetProperty("expected").GetString(), AccountKeys.ReportTag(c.GetProperty("origin").GetString()!, c.GetProperty("key").GetString()!));
+        }
+
+        Assert.Equal(3, tags.Select(t => t.GetProperty("expected").GetString()).Distinct().Count());
+        Assert.All(tags, t => Assert.True(AccountKeys.IsKey(t.GetProperty("expected").GetString())));
     }
 
     [Fact]
@@ -220,12 +277,14 @@ public sealed class QuotaEstimateFixtureTests
         var report = Root.GetProperty("report");
         var ledger = LedgerFrom(report.GetProperty("rows"));
         var input = report.GetProperty("input");
+        var tag = AccountKeys.ReportTag(report.GetProperty("origin").GetString()!, input.GetProperty("account").GetString()!);
         foreach (var c in report.GetProperty("entries").EnumerateArray())
         {
             var name = c.GetProperty("name").GetString()!;
             var estimate = name == "no estimate" ? CapEstimate.None : EstimateOf(input.GetProperty("estimate"));
-            var entry = QuotaEntryBuilder.Build(Basis(input, estimate), c.GetProperty("now").GetInt64(), ledger, 8);
+            var entry = QuotaEntryBuilder.Build(Basis(input, estimate), tag, c.GetProperty("now").GetInt64(), ledger, 8);
             AssertSame(c.GetProperty("expected"), EntryJson(entry), name);
+            Assert.StartsWith("{\"account\":\"" + tag + "\",", EntryJson(entry).GetRawText(), StringComparison.Ordinal);
         }
     }
 
@@ -235,10 +294,15 @@ public sealed class QuotaEstimateFixtureTests
         var report = Root.GetProperty("report");
         var ledger = LedgerFrom(report.GetProperty("rows"));
         var input = report.GetProperty("input");
+        var origin = report.GetProperty("origin").GetString()!;
         var now = report.GetProperty("entries")[0].GetProperty("now").GetInt64();
-        var a = QuotaEntryBuilder.Build(Basis(input, EstimateOf(input.GetProperty("estimate"))), now, ledger, 8);
+        var a = QuotaEntryBuilder.Build(Basis(input, EstimateOf(input.GetProperty("estimate"))),
+            AccountKeys.ReportTag(origin, input.GetProperty("account").GetString()!), now, ledger, 8);
         var b = a with { UsedMicroUsd = a.UsedMicroUsd + 5 };
         var c = a with { UsedPercent = 24.0 };
+
+        // Another account of the same source and window (seen 2026-11-11: two Codex accounts).
+        var another = AccountKeys.ReportTag(origin, AccountKeys.Key(AccountKeys.Salt, AccountKeys.CodexVendor, "acct-2"));
         foreach (var step in report.GetProperty("cadence").EnumerateArray())
         {
             var name = step.GetProperty("name").GetString()!;
@@ -251,12 +315,16 @@ public sealed class QuotaEstimateFixtureTests
                 {
                     "spend" => QuotaReportCadence.ShouldSend([b], [a], 0, ago!.Value, false),
                     "usedPercent" => QuotaReportCadence.ShouldSend([c], [a], 0, ago!.Value, false),
-                    "set" => QuotaReportCadence.ShouldSend([a, b with { Sources = [SourceKind.ClaudeCode] }], [a], 0, ago!.Value, false),
+                    "set" => QuotaReportCadence.ShouldSend([a, b with { Account = another }], [a], 0, ago!.Value, false),
                     var other => throw new InvalidDataException(other),
                 },
             };
             Assert.True(step.GetProperty("expected").GetBoolean() == got, name);
         }
+
+        // An entry is (account, window): other sources of the same account are the same entry, another account is not.
+        Assert.False(QuotaReportCadence.ShouldSend([a with { Sources = [SourceKind.Codex, SourceKind.ClaudeCode] }], [a], 0, 5_000, false));
+        Assert.True(QuotaReportCadence.ShouldSend([a with { Account = another }], [a], 0, 5_000, false));
     }
 
     private static CapEstimate EstimateOf(JsonElement e) => new(

@@ -145,7 +145,7 @@ public sealed partial class QuotaEstimator
         }
 
         var org = snapshot.Source == SourceKind.ClaudeDesktop && desktopOrganization is { Length: > 0 } uuid
-            ? AccountKeys.Key(_salt, AccountKeys.DesktopVendor, uuid)
+            ? AccountKeys.Key(AccountKeys.Salt, AccountKeys.DesktopVendor, uuid)
             : null;
         var item = new EstimateSnapshot(snapshot.Source, snapshot.ObservedMs, snapshot.Windows, org);
         lock (_gate)

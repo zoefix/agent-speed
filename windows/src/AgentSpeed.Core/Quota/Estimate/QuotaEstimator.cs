@@ -9,7 +9,7 @@ namespace AgentSpeed.Core.Quota.Estimate;
 /// the estimate when asked at most every 5 s while something changed and every minute anyway (weights decay, resets pass),
 /// and keeps <c>&lt;data&gt;/quota/estimate.json</c> (at most once a minute, and at quit). The surfaces read each window's
 /// estimate and the reports their entries from the latest build. Ids become keys as they arrive; neither ids, keys nor the
-/// salt are ever logged. Thread-safe.
+/// install id are ever logged. Thread-safe.
 /// </summary>
 public sealed partial class QuotaEstimator
 {
@@ -20,7 +20,7 @@ public sealed partial class QuotaEstimator
     private readonly Lock _gate = new();
     private readonly Lock _buildGate = new();
     private readonly Lock _latestGate = new();
-    private readonly byte[] _salt;
+    private readonly string _install;
     private readonly string? _storePath;
     private readonly PriceBook? _pricing;
     private readonly Func<long> _clock;
@@ -30,34 +30,36 @@ public sealed partial class QuotaEstimator
     private byte[]? _written;
     private bool _dirty = true;
 
-    /// <param name="dataDirectory">The app's data folder (<c>quota/estimate-salt</c>, <c>quota/estimate.json</c>); null, or a salt
-    /// that cannot be written, keeps everything in memory.</param>
+    /// <param name="dataDirectory">The app's data folder (<c>quota/estimate-salt</c> with the install id, <c>quota/estimate.json</c>);
+    /// null, or an install id that cannot be written, keeps everything in memory.</param>
     /// <param name="signIn">Where the sign-in files are (<see cref="QuotaSignIn.Files"/>); null reads none.</param>
     public QuotaEstimator(string? dataDirectory, PriceBook? pricing, (string CodexAuth, string ClaudeState)? signIn = null, Func<long>? clock = null)
     {
         _pricing = pricing;
         _clock = clock ?? (() => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
-        byte[]? salt = null;
+        string? install = null;
         if (dataDirectory is not null)
         {
             try
             {
-                salt = EstimateSalt.LoadOrCreate(Path.Combine(dataDirectory, "quota", "estimate-salt"));
+                install = EstimateInstallId.LoadOrCreate(Path.Combine(dataDirectory, "quota", "estimate-salt"));
                 _storePath = Path.Combine(dataDirectory, "quota", "estimate.json");
             }
             catch (Exception e) when (e is IOException or UnauthorizedAccessException)
             {
-                salt = null;
+                install = null;
             }
         }
 
-        _salt = salt ?? System.Security.Cryptography.RandomNumberGenerator.GetBytes(AccountKeys.SaltBytes);
-        _signIn = signIn is { } files ? new EstimateSignIn(_salt, files.CodexAuth, files.ClaudeState) : null;
-        Salt = RemoteSalt.Of(_salt);
+        _install = install ?? EstimateInstallId.Ephemeral();
+        _signIn = signIn is { } files ? new EstimateSignIn(AccountKeys.Salt, files.CodexAuth, files.ClaudeState) : null;
     }
 
-    /// <summary>The salt as the hosts' quota config carries it (REMOTE 11.1).</summary>
-    public RemoteSalt? Salt { get; }
+    /// <summary>The account salt as the hosts' quota config carries it (REMOTE 11.1): the same in every install.</summary>
+    public RemoteSalt? Salt { get; } = RemoteSalt.Of(AccountKeys.Salt);
+
+    /// <summary>The install id that keys the accounts without an id (tests).</summary>
+    internal string InstallId => _install;
 
     /// <summary>Called on the building thread after a failed build, with the exception's type only.</summary>
     public Action<string>? Log { get; set; }
@@ -103,7 +105,7 @@ public sealed partial class QuotaEstimator
                 _dirty = false;
             }
 
-            var model = EstimateModel.Build(input, _salt, _pricing?.CurrentVersion ?? PriceBook.Bundled.Version);
+            var model = EstimateModel.Build(input, AccountKeys.Salt, _install, _pricing?.CurrentVersion ?? PriceBook.Bundled.Version);
             var evaluation = EstimateEvaluation.Of(model, now);
             lock (_latestGate)
             {
@@ -163,13 +165,17 @@ public sealed partial class QuotaEstimator
         }
     }
 
-    /// <summary>The report entries at <paramref name="nowMs"/> (REPORTING-EXTENSIONS 11.2) of the sources <paramref name="include"/> keeps.</summary>
-    public IReadOnlyList<QuotaReportEntry> Entries(long nowMs, Func<SourceKind, bool> include)
+    /// <summary>
+    /// The report entries at <paramref name="nowMs"/> (REPORTING-EXTENSIONS 11.2) of the sources <paramref name="include"/>
+    /// keeps, each account tagged for the service of api origin <paramref name="origin"/>.
+    /// </summary>
+    public IReadOnlyList<QuotaReportEntry> Entries(long nowMs, string origin, Func<SourceKind, bool> include)
     {
+        ArgumentNullException.ThrowIfNull(origin);
         ArgumentNullException.ThrowIfNull(include);
         lock (_latestGate)
         {
-            return _latest?.Entries(nowMs, include) ?? [];
+            return _latest?.Entries(nowMs, origin, include) ?? [];
         }
     }
 

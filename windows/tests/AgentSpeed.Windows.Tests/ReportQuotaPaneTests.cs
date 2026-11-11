@@ -28,7 +28,9 @@ public class ReportQuotaPaneTests
 
     private static readonly Localizer Loc = new(Localizer.LoadEmbeddedTable(), LanguageCodes.En);
 
-    private static readonly QuotaReportEntry Entry = new(SourceKind.Codex, [SourceKind.Codex], "promax", null, QuotaWindowKind.SevenDay, null, 10_080,
+    private const string Key = "0123456789abcdef";
+
+    private static readonly QuotaReportEntry Entry = new(string.Empty, SourceKind.Codex, [SourceKind.Codex], "promax", null, QuotaWindowKind.SevenDay, null, 10_080,
         23.46, 18_012_345, 406_787_655, 24.7, true, 67_902_725, 61_729_625, 1,
         new QuotaEntryEstimate(512_345_678, 480_000_001, 546_000_000, EstimateConfidence.Medium, 0.514, 126_348_902, 2),
         [new("gpt-5.5", 0.673), new("gpt-5.4-mini", 0.327)], 8);
@@ -141,10 +143,11 @@ public class ReportQuotaPaneTests
         using (var harness = new Harness(Document("""{"perfScore":1,"quotaEstimate":1}""")))
         {
             long? askedAt = null;
-            harness.Report.QuotaEntries = now =>
+            string? askedFor = null;
+            harness.Report.QuotaEntries = (now, origin) =>
             {
-                askedAt = now;
-                return [Entry];
+                (askedAt, askedFor) = (now, origin);
+                return [Tagged(origin)];
             };
             var before = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
             using var body = JsonDocument.Parse(harness.Report.Preview()!.Body.ToCompactString());
@@ -153,6 +156,11 @@ public class ReportQuotaPaneTests
             var entry = Assert.Single(body.RootElement.GetProperty("quotas").EnumerateArray());
             Assert.Equal("promax", entry.GetProperty("plan").GetString());
             Assert.InRange(askedAt!.Value, before, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds());
+
+            // Tagged for the origin of the document's api, where reports go, and never by the key.
+            Assert.Equal("https://api.example.com", askedFor);
+            Assert.Equal(AccountKeys.ReportTag("https://api.example.com", Key), entry.GetProperty("account").GetString());
+            Assert.DoesNotContain(Key, body.RootElement.GetRawText(), StringComparison.Ordinal);
 
             harness.Report.SetShareQuota(false);
             askedAt = null;
@@ -168,7 +176,7 @@ public class ReportQuotaPaneTests
         using (var refused = new Harness(Document("""{"perfScore":1}""")))
         {
             var asked = false;
-            refused.Report.QuotaEntries = _ =>
+            refused.Report.QuotaEntries = (_, _) =>
             {
                 asked = true;
                 return [Entry];
@@ -177,13 +185,16 @@ public class ReportQuotaPaneTests
             Assert.False(asked);
         }
 
-        // Before the document is known the preview assumes the extension.
+        // Before the document is known the preview assumes the extension, and tags for the service URL as typed.
         using var assumed = new Harness(null);
-        assumed.Report.QuotaEntries = _ => [Entry];
+        assumed.Report.QuotaEntries = (_, origin) => [Tagged(origin)];
         var preview = assumed.Report.Preview()!;
         Assert.True(preview.Assumed);
-        Assert.NotNull(preview.Body["quotas"]);
+        using var quotas = JsonDocument.Parse(preview.Body["quotas"]!.ToCompactString());
+        Assert.Equal(AccountKeys.ReportTag(ServiceText, Key), quotas.RootElement[0].GetProperty("account").GetString());
     });
+
+    private static QuotaReportEntry Tagged(string origin) => Entry with { Account = AccountKeys.ReportTag(origin, Key) };
 
     private static void OnStaThread(Action work)
     {

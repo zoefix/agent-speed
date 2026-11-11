@@ -31,7 +31,7 @@ internal sealed partial class AppController
         ReportLog.Sink = line => AppLog.Info(line);
         _report = new ReportController(_ui, _settings, _hub, _traffic, _cost.Book, AppPaths.Version)
         {
-            QuotaEntries = nowMs => _quota?.ReportEntries(nowMs) ?? [],
+            QuotaEntries = (nowMs, origin) => _quota?.ReportEntries(nowMs, origin) ?? [],
         };
         _report.Changed += (_, _) => RefreshReportSurfaces();
         _report.ConsentChanged += (_, _) => OnConsentChanged();
