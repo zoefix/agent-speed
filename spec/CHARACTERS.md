@@ -35,6 +35,7 @@ poses/<band>/atlas.png
 | `minApp` | optional lowest app version that can play the pack |
 | `motion` | optional motion profile (section 5, Motion profile); without it the character moves like Claude |
 | `poses` | `{band: "poses/<band>"}` for the bands present |
+| `states` | optional `{state: "poses/<state>"}`: full-body poses of the moods of section 5, *Behavior* (`think`, `wait`, `cheer`, `sleepy`, `focus`, `greet`); a missing one keeps the band pose |
 | `preview` | `"preview.png"` |
 
 Bands are `idle`, `cruise`, `boost`, `overdrive`, `redline` (the effect tiers of METRICS 6). A band without a pose
@@ -302,6 +303,59 @@ no idle wrist sway: head, hands and flute all ride on the chest, and only the fi
 Appendages move at rest too: `TailSwish += (0.18 + 0.3 s) · sway · sin(π · beat phase + 0.5)` and `WingFlap +=
 0.12 · sin(2π · breath phase)`, each scaled by `1 − w` while an action of weight `w` drives the same parameter and
 clamped to its range; springs give them follow-through.
+
+### Behavior
+
+User's request 2026-11-11: each character should feel alive — she reacts to what the agents are doing and to the
+user's cursor, not only to the speed. A *mood* chooses her pose, face and actions; the speed band still drives the
+groove of section 5.
+
+**Inputs**, sampled every frame for the orb's tracked sources (METRICS 6.8):
+- `phase`: `generating` when any tracked agent is generating, else `tools` when any is waiting for a tool, else
+  `idle` (METRICS 1); `level` and `band` as before.
+- `waitMs`: while generating with no output yet, the time since the newest request started (the 首字 wait).
+- `idleMs`: while every tracked agent is idle, the time since the last response ended.
+- Events: `newPeak_A`, `responseCompleted`, and `trouble` (a tracked agent's work signals turn to going in circles,
+  or two tool results in a row failed, METRICS 6.10).
+- `hour`: the local hour.
+- `cursor`: the pointer in her canvas units relative to her face center, or none (outside the stage window's screen
+  by more than three of her heights, click-through on, or a platform that cannot read it: Wayland outside the
+  window). `click`: a single click on her figure that is not the first click of a double-click (it waits the
+  system's double-click time) and not the end of a drag.
+
+**Moods**, highest first; the first whose condition holds is the mood:
+
+| Mood | Condition | Pose | Face | Actions |
+| --- | --- | --- | --- | --- |
+| `cheer` | for 3.2 s after `newPeak_A` | `cheer` | `excited` | none |
+| `greet` | for 2.4 s after `phase` leaves `idle` from `rest` | `greet` | `smile` | none |
+| `poke` | for 1.6 s after a `click` | band pose | `surprised` 0.5 s, then `laugh` | none |
+| `trouble` | for 2.5 s after `trouble` | band pose | `worried` | `chin` |
+| `think` | `generating` and `waitMs` ≥ 4 s | `think` from 15 s, else the band pose | `thinking`, gaze `up` | `chin`, `idea`, `ponder` |
+| `work` | `generating` with output | band pose | the band's face (cruise `smile`, boost `smile`, overdrive `focused`, redline `excited`); talking | the band's pool |
+| `focus` | `tools` for ≥ 6 s | `focus` from 20 s, else the band pose | `focused` | `chin`, `nod` |
+| `rest` | `idle` and (`idleMs` ≥ 10 min, or `hour` 0–5 and `idleMs` ≥ 2 min) | `sleepy` | `sleepy`; long blinks | `yawn` every 20–40 s |
+| `wait` | `idle` | `wait` from 8 s, else idle | `smile` until 30 s, then none | the idle pool; `yawn` after 3 min |
+
+- A mood holds at least 1.2 s (events excepted), so a short tool call does not flicker between `work` and `focus`.
+- **Pose**: a mood pose the pack has replaces the band pose through the swap of section 6; leaving the mood swaps
+  back to the band pose. While a mood pose shows, band changes do not swap (they still change the groove).
+- **Face**: one expression at a time (`expr-<name>` of the pose, section 3 *Variants*), swapped during a blink as
+  before. Without the expression the face stays as drawn.
+- **Talking** (`work`, profile `talk`, the pose has `mouth-*`): mouth shapes `a`, `i`, `u`, `o` in random order at
+  `4 + 0.4 · level` syllables per second (at most 9), each held for 60–80 % of a syllable, `closed` between them and
+  for 0.2–0.5 s every 4–9 syllables; shapes cross-fade in 0.04 s. An expression with an open mouth (`laugh`,
+  `excited`, `surprised`, `yawn`) pauses talking.
+
+**Looking at the user.** While `cursor` is known and within three of her heights of her face:
+- the head turns toward it: `AngleX = 12° · clamp(dx / H, −1, 1)`, `AngleY = 8° · clamp(dy / H, −1, 1)` (`H` her
+  height), through the springs, blended in over 0.4 s and out over 0.8 s when the cursor leaves the range;
+- the eyes take the `gaze-<left|right|up|down>` patch of the larger of `|dx|`, `|dy|` once it passes 0.3 H, else
+  the drawn eyes; a blink shows `gaze-closed` for 0.12 s;
+- hovering her figure for 0.8 s gives `smile`; after 5 s of hovering, one of `wave`, `peace`, `cheek`, `wink`
+  (a gesture the pose has, else the face); leaving her figure after hovering ≥ 1 s gives `wave` once (idle and
+  cruise bands).
+- Moods `cheer`, `greet` and `poke` look at the user too; `think` looks up instead.
 
 ### Random numbers
 
