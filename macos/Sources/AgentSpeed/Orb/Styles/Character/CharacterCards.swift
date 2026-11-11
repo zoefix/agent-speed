@@ -467,7 +467,7 @@ struct CharacterCards {
 
     // MARK: Text
 
-    func scale(_ pen: CharacterBodyPainter) -> CGFloat { backing * max(1, pen.scale) }
+    func scale(_ pen: CharacterBodyPainter) -> CGFloat { backing * pen.rasterScale }
 
     /// A whole string from `x` (local); returns its advance.
     @discardableResult
