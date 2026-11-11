@@ -12,18 +12,28 @@ using AgentSpeed.Services;
 
 namespace AgentSpeed.Settings;
 
-/// <summary>One switch of <c>report.sections</c>.</summary>
-internal sealed class ReportSectionRow(ReportSection section, string titleKey, Action<ReportSection, bool> set) : ObservableObject
+/// <summary>One switch of <c>report.sections</c>: an optional section, or the 額度 switch with its hint (<see cref="Section"/> null).</summary>
+internal sealed class ReportSectionRow(ReportSection? section, string titleKey, Action<bool> set, string? hintKey = null) : ObservableObject
 {
     private bool _isOn;
     private bool _isEnabled;
     private string? _caption;
+    private string? _hint;
     private string _title = string.Empty;
     private bool _syncing;
 
-    public ReportSection Section { get; } = section;
+    /// <summary>A switch of <paramref name="section"/>.</summary>
+    public ReportSectionRow(ReportSection section, string titleKey, Action<ReportSection, bool> setSection)
+        : this(section, titleKey, on => setSection(section, on))
+    {
+    }
+
+    public ReportSection? Section { get; } = section;
 
     public string TitleKey { get; } = titleKey;
+
+    /// <summary>The always-visible caption's key (<c>report.section.quota.hint</c>), null for the section switches.</summary>
+    public string? HintKey { get; } = hintKey;
 
     public string Title { get => _title; set => Set(ref _title, value); }
 
@@ -34,7 +44,7 @@ internal sealed class ReportSectionRow(ReportSection section, string titleKey, A
         {
             if (Set(ref _isOn, value) && !_syncing)
             {
-                set(Section, value);
+                set(value);
             }
         }
     }
@@ -42,7 +52,38 @@ internal sealed class ReportSectionRow(ReportSection section, string titleKey, A
     public bool IsEnabled { get => _isEnabled; set => Set(ref _isEnabled, value); }
 
     /// <summary><c>report.section.notAccepted</c>, <c>report.section.trafficOff</c>, <c>report.section.models.perfScore</c> or <c>report.section.models.thinking</c>.</summary>
-    public string? Caption { get => _caption; set => Set(ref _caption, value); }
+    public string? Caption
+    {
+        get => _caption;
+        set
+        {
+            if (Set(ref _caption, value))
+            {
+                OnPropertyChanged(nameof(HelpText));
+            }
+        }
+    }
+
+    /// <summary>The localized hint under the caption; always shown while set.</summary>
+    public string? Hint
+    {
+        get => _hint;
+        set
+        {
+            if (Set(ref _hint, value))
+            {
+                OnPropertyChanged(nameof(HelpText));
+            }
+        }
+    }
+
+    /// <summary>What assistive technology reads after the switch's name: the caption, then the hint.</summary>
+    public string? HelpText => (_caption, _hint) switch
+    {
+        ({ Length: > 0 } caption, { Length: > 0 } hint) => caption + "\n" + hint,
+        ({ Length: > 0 } caption, _) => caption,
+        (_, var hint) => hint,
+    };
 
     public void Sync(bool on, bool enabled, string? caption)
     {
@@ -97,12 +138,14 @@ internal sealed class ReportPaneViewModel : ObservableObject, IDisposable
         Profile = new ReportProfileViewModel(report, localizer);
         _urlTimer = new DispatcherTimer(UrlDebounce, DispatcherPriority.Background, (_, _) => ValidateUrl(), dispatcher);
         _urlTimer.Stop();
+        Quota = new ReportSectionRow(null, ReportSectionCaption.Quota, _report.SetShareQuota, ReportSectionCaption.QuotaHint);
         Sections =
         [
             new ReportSectionRow(ReportSection.Sources, "report.section.sources", SetSection),
             new ReportSectionRow(ReportSection.Models, "report.section.models", SetSection),
             new ReportSectionRow(ReportSection.Cost, "report.section.cost", SetSection),
             new ReportSectionRow(ReportSection.Traffic, "report.section.traffic", SetSection),
+            Quota,
         ];
         RetryCommand = new RelayCommand(() => _report.Retry(), () => NetworkEnabled);
         StreamRetryCommand = new RelayCommand(() => _report.RetryStream(), () => NetworkEnabled);
@@ -390,7 +433,11 @@ internal sealed class ReportPaneViewModel : ObservableObject, IDisposable
 
     // 5. What's sent
 
+    /// <summary>The section switches, then the 額度 switch.</summary>
     public IReadOnlyList<ReportSectionRow> Sections { get; }
+
+    /// <summary>The 額度 switch (REPORTING-EXTENSIONS 11): off and disabled while the known document lacks <c>quotaEstimate</c>.</summary>
+    public ReportSectionRow Quota { get; }
 
     // 6. Status
 
@@ -553,11 +600,21 @@ internal sealed class ReportPaneViewModel : ObservableObject, IDisposable
         foreach (var row in Sections)
         {
             row.Title = _loc[row.TitleKey];
-            var accepted = discovery is null || discovery.Sections.Contains(row.Section);
-            var trafficOff = row.Section == ReportSection.Traffic && !trafficOn;
-            row.Sync(accepted && _report.Preferences.IsSectionOn(row.Section), accepted && !trafficOff,
-                ReportSectionCaption.KeyOf(row.Section, discovery, trafficOn) is { } caption ? _loc[caption] : null);
+            row.Hint = row.HintKey is { } hint ? _loc[hint] : null;
+            if (row.Section is not { } section)
+            {
+                continue;
+            }
+
+            var accepted = discovery is null || discovery.Sections.Contains(section);
+            var trafficOff = section == ReportSection.Traffic && !trafficOn;
+            row.Sync(accepted && _report.Preferences.IsSectionOn(section), accepted && !trafficOff,
+                ReportSectionCaption.KeyOf(section, discovery, trafficOn) is { } caption ? _loc[caption] : null);
         }
+
+        var quotaAccepted = ReportSectionCaption.AcceptsQuota(discovery);
+        Quota.Sync(quotaAccepted && _report.Preferences.ShareQuota, quotaAccepted,
+            ReportSectionCaption.QuotaKeyOf(discovery) is { } quotaCaption ? _loc[quotaCaption] : null);
 
         var others = _report.OtherIdentities;
         if (!others.Select(o => (o.Id, o.Username)).SequenceEqual(Others.Select(o => (o.Origin, (string?)o.Username))))

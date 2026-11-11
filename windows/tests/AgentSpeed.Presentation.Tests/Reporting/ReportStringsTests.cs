@@ -23,7 +23,7 @@ public partial class ReportStringsTests
         "report.apiKey.clear",
         "report.sections", "report.sections.hint", "report.section.sources", "report.section.models", "report.section.cost",
         "report.section.traffic", "report.section.notAccepted", "report.section.trafficOff", "report.section.models.perfScore",
-        "report.section.models.thinking",
+        "report.section.models.thinking", "report.section.quota", "report.section.quota.hint",
         "report.preview", "report.preview.title", "report.preview.hint", "report.preview.assumed", "report.preview.copy",
         "report.preview.next",
         "report.consent.title", "report.consent.body", "report.consent.never", "report.consent.honesty", "report.start",

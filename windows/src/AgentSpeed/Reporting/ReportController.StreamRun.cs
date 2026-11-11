@@ -40,6 +40,9 @@ internal sealed partial class ReportController
         /// <summary>The <c>serverTime</c> of the latest error, for the clock correction.</summary>
         public long? ServerTime { get; set; }
 
+        /// <summary>When <c>quotas</c> goes out (REPORTING-EXTENSIONS 11.3); a new run id starts empty.</summary>
+        public ReportQuotaRun Quotas { get; } = new();
+
         /// <summary><c>seq_conflict</c>: a new run id, window and title tracker; the scheduler restarted its sequence.</summary>
         public void NewRun(ReportSample sample)
         {
@@ -48,6 +51,7 @@ internal sealed partial class ReportController
             Title = new ReportTitleTracker();
             Reports.Clear();
             LastBuilt = null;
+            Quotas.NewRun();
         }
     }
 }

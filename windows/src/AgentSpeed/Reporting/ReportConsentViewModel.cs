@@ -24,12 +24,15 @@ internal sealed class ReportConsentViewModel : ObservableObject
         _loc = localizer;
         _trafficMeasured = trafficMeasured;
         _username = report.Consent?.Username ?? string.Empty;
+        Quota = new ReportSectionRow(null, ReportSectionCaption.Quota, on => _report.EditConsent(d => d with { ShareQuota = on }),
+            ReportSectionCaption.QuotaHint);
         Sections =
         [
             new ReportSectionRow(ReportSection.Sources, "report.section.sources", SetSection),
             new ReportSectionRow(ReportSection.Models, "report.section.models", SetSection),
             new ReportSectionRow(ReportSection.Cost, "report.section.cost", SetSection),
             new ReportSectionRow(ReportSection.Traffic, "report.section.traffic", SetSection),
+            Quota,
         ];
         StartCommand = new RelayCommand(() => _report.StartReporting(), () => CanStart);
         TransferCommand = new RelayCommand(() => _report.TransferUsername(), () => Draft is { IsStarting: false, OffersTransfer: true } && _report.NetworkEnabled);
@@ -107,7 +110,11 @@ internal sealed class ReportConsentViewModel : ObservableObject
 
     public string? ApiKeyError => Draft?.ApiKeyError is { } key ? _loc[key] : null;
 
+    /// <summary>The section switches with their defaults, then the 額度 switch.</summary>
     public IReadOnlyList<ReportSectionRow> Sections { get; }
+
+    /// <summary>The 額度 switch (REPORTING-EXTENSIONS 11) with its default and hint.</summary>
+    public ReportSectionRow Quota { get; }
 
     public bool IsStarting => Draft?.IsStarting == true;
 
@@ -139,11 +146,21 @@ internal sealed class ReportConsentViewModel : ObservableObject
             foreach (var row in Sections)
             {
                 row.Title = _loc[row.TitleKey];
-                var accepted = draft.Discovery.Sections.Contains(row.Section);
-                var trafficOff = row.Section == ReportSection.Traffic && !_trafficMeasured;
-                row.Sync(accepted && draft.Sections.Contains(row.Section), accepted && !trafficOff,
-                    ReportSectionCaption.KeyOf(row.Section, draft.Discovery, _trafficMeasured) is { } caption ? _loc[caption] : null);
+                row.Hint = row.HintKey is { } hint ? _loc[hint] : null;
+                if (row.Section is not { } section)
+                {
+                    continue;
+                }
+
+                var accepted = draft.Discovery.Sections.Contains(section);
+                var trafficOff = section == ReportSection.Traffic && !_trafficMeasured;
+                row.Sync(accepted && draft.Sections.Contains(section), accepted && !trafficOff,
+                    ReportSectionCaption.KeyOf(section, draft.Discovery, _trafficMeasured) is { } caption ? _loc[caption] : null);
             }
+
+            var quotaAccepted = ReportSectionCaption.AcceptsQuota(draft.Discovery);
+            Quota.Sync(quotaAccepted && draft.ShareQuota, quotaAccepted,
+                ReportSectionCaption.QuotaKeyOf(draft.Discovery) is { } quotaCaption ? _loc[quotaCaption] : null);
         }
 
         OnPropertyChanged(string.Empty);
