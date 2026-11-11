@@ -1002,6 +1002,23 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   - Accessibility: after the today reading, `a11y.orb.quota` with each source's name followed by one
     `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), sources joined
     by `list.separator`.
+- **Balance** (user's choice 2026-11-11: "右邊這麼空…讓左側和右側自動放的卡片內容要看起來視覺是相等的"). The column's
+  cards are split between her two sides so that their weight is as even as possible:
+  - The left keeps the column's first `n − k` shown cards. The last `k` continue on the right, under the models card
+    (or under the title chip while no models card shows), left edges on one line, in column order (so the 額度 card
+    goes first, then today).
+  - The right side's weight is the models card plus the moved cards; the speed and its title chip do not count. Each
+    side's weight is the sum of its cards' heights plus the gaps between them.
+  - `k` minimizes `|left − right|`. A tie goes to the smaller `k`; `k = 0` when the column alone is not heavier than
+    the right side.
+  - The split must fit both sides by the placement rules above. Otherwise the next best `k` that fits is used, and
+    the spill-over below decides when none does.
+  - **Steadiness.** The split is chosen again when a card appears or disappears, or when a side's weight changes by
+    more than `0.06 D` (a card growing or shrinking: a source joining the 額度 card, the models card gaining a row). The
+    new split must have held for 0.6 s.
+  - A card changes sides at most once in 4 s (12 s within 30 s of the last change), and fades as spill-over does
+    (0.18 s out, 0.3 s in). A card's accent edge is the one facing her on either side.
+  - Below S = 96 (LOD) there is no balance: the column keeps its first two shown cards on the left, as before.
 - **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
   its last cards continue under the speed at her right (under the models card while it shows), left edges on one
   line, in the same order. Only when no split
