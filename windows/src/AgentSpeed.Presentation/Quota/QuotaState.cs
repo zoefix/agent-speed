@@ -1,6 +1,7 @@
 using System.Collections.Immutable;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Quota.Network;
 using AgentSpeed.Core.Quota.Routes;
 using AgentSpeed.Core.Remote;
@@ -35,6 +36,13 @@ public sealed record QuotaState
 
     /// <summary>Every remote host's quota lines and bridge state (REMOTE 11.1), by host id.</summary>
     public ImmutableDictionary<string, HostQuotaState> Hosts { get; init; } = ImmutableDictionary<string, HostQuotaState>.Empty;
+
+    /// <summary>Each shown window's estimate (QUOTAS 10.7, 10.8): this computer's sources and every host's, by window.</summary>
+    public ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate> Estimates { get; init; } = ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate>.Empty;
+
+    /// <summary>The estimate of a source's window on this computer (<paramref name="hostId"/> null) or on a host.</summary>
+    public QuotaWindowEstimate? EstimateOf(SourceKind source, QuotaWindow window, string? hostId = null) =>
+        Estimates.GetValueOrDefault(new QuotaEstimateKey(hostId, source, EstimateNames.WindowId(window)));
 
     public QuotaRouteStatus? StatusOf(QuotaRoute route) => RouteStatuses.TryGetValue(route, out var status) ? status : null;
 
@@ -116,10 +124,14 @@ public sealed record QuotaState
         && ZcodeKeySaved == other.ZcodeKeySaved
         && Snapshots.Count == other.Snapshots.Count && Snapshots.All(p => other.Snapshots.TryGetValue(p.Key, out var o) && p.Value.Equals(o))
         && RouteStatuses.Count == other.RouteStatuses.Count && RouteStatuses.All(p => other.RouteStatuses.TryGetValue(p.Key, out var o) && p.Value == o)
-        && Hosts.Count == other.Hosts.Count && Hosts.All(p => other.Hosts.TryGetValue(p.Key, out var o) && p.Value.Equals(o));
+        && Hosts.Count == other.Hosts.Count && Hosts.All(p => other.Hosts.TryGetValue(p.Key, out var o) && p.Value.Equals(o))
+        && Estimates.Count == other.Estimates.Count && Estimates.All(p => other.Estimates.TryGetValue(p.Key, out var o) && p.Value == o);
 
     public override int GetHashCode() => HashCode.Combine(CliStatus, Snapshots.Count, Active.Count, Hosts.Count);
 }
+
+/// <summary>A window of a source on this computer (<see cref="HostId"/> null) or on a remote host; <see cref="WindowId"/> is <c>kind:name:minutes</c>.</summary>
+public readonly record struct QuotaEstimateKey(string? HostId, SourceKind Source, string WindowId);
 
 /// <summary>One remote host's quotas (REMOTE 11.1): each source's last <c>quota</c> line and the Claude Code bridge's state.</summary>
 public sealed record HostQuotaState
