@@ -59,11 +59,11 @@ struct QuotaEstimateUITests {
         #expect(lines.map(\.percentText) == ["12%", "95%", "27%"])
         #expect(lines.map(\.estimated) == [false, true, false])
         #expect(abs(lines[1].fraction - 0.954) < 1e-9, "the bar follows the live percent")
-        #expect(lines[1].amount == cost.amountText(microUsd: 161_000_000))
-        #expect(lines[1].amountCap == " / ≈" + cost.amountText(microUsd: 5_742_000_000))
-        #expect(lines[2].amountCap == " / ≥" + cost.amountText(microUsd: 737_000_000))
+        // The cells take the rate's digits (DESIGN 4 *Amount*: `$161`, ` / ≈$5,742`); the tooltip the full amount.
+        #expect(lines[1].amount == "US$161" && lines[1].amountCap == " / ≈US$5,742")
+        #expect(lines[2].amountCap == " / ≥US$737")
         // At confidence none only the used amount shows, and the tooltip has nothing to add.
-        #expect(lines[0].amount == cost.amountText(microUsd: 3_100_000) && lines[0].amountCap == nil)
+        #expect(lines[0].amount == "US$3.10" && lines[0].amountCap == nil)
         #expect(lines[0].estimateDetails.isEmpty && lines[0].estimateNote == nil)
         let details = lines[1].estimateDetails
         #expect(details.first == model.l10n("quota.estimate.used", cost.amountWithUSD(microUsd: 161_000_000)))
@@ -94,6 +94,30 @@ struct QuotaEstimateUITests {
         #expect(columns.percent > SourceQuotaColumns.width("100%", SourceQuotaColumns.percentFont), "a cell as wide as ≈100%")
     }
 
+    /// The long resets keep their column while they fit beside the shortest bar; otherwise the section shows the short
+    /// ones, or none, and each line's tooltip opens with its long reset.
+    @Test func theResetsGiveWayToTheAmounts() {
+        let model = Self.model()
+        model.quota.preview(desktop: Self.desktop, cli: nil, nowMs: Self.now)
+        let format = model.l10n.quotaFormat
+        let long = Self.desktop.windows.sorted { $0.resetsAtMs! < $1.resetsAtMs! }
+            .map { format.resetLong($0.resetsAtMs!, nowMs: Self.now) }
+        let plain = SourceQuotaColumns.fit([SourceKind.claudeDesktop: model.quotaLines(.claudeDesktop)], separator: " · ")
+        #expect(plain.lines[.claudeDesktop]!.map(\.reset) == [long[0], long[1], long[1]], "without amounts nothing changes")
+        #expect(plain.lines[.claudeDesktop]!.allSatisfy { $0.tooltipReset == nil })
+
+        model.quota.estimateLines = Self.estimates()
+        let fitted = SourceQuotaColumns.fit([SourceKind.claudeDesktop: model.quotaLines(.claudeDesktop)], separator: " · ")
+        let lines = fitted.lines[.claudeDesktop]!
+        let rest = SourceQuotaColumns.lineWidth - fitted.columns.label - fitted.columns.percent - fitted.columns.amount
+            - 4 * SourceQuotaColumns.gap - SourceQuotaColumns.compactBar
+        #expect(lines.map(\.tooltipReset) == [long[0], long[1], long[1]])
+        #expect(lines.map(\.tooltipHead.first) == [long[0], long[1], long[1]])
+        let shown = lines.compactMap(\.reset)
+        #expect(shown.isEmpty || shown == lines.map { $0.resetShort! })
+        #expect(fitted.columns.reset <= max(0, rest))
+    }
+
     @Test func aWindowAfterItsResetTakesTheNewInstance() {
         let passed = QuotaShownWindow(QuotaWindow(kind: .sevenDay, usedPercent: 80, resetsAtMs: Self.now - 1), nowMs: Self.now)
         #expect(passed.passed)
@@ -114,7 +138,7 @@ struct QuotaEstimateUITests {
         let source = CharacterQuotaText.sources([item], nowMs: Self.now, l10n: model.l10n, text: text)[0]
         #expect(source.lines.map(\.percentText) == ["12%", "95%", "27%"])
         #expect(source.lines.map(\.estimated) == [false, true, false])
-        #expect(source.lines[1].amount == model.cost.amountText(microUsd: 161_000_000))
+        #expect(source.lines[1].amount == "US$161")
         let sentence = CharacterQuotaText.sentence([item], nowMs: Self.now, l10n: model.l10n, text: text) ?? ""
         #expect(sentence.contains(model.l10n("a11y.quota.amountNoCap", model.cost.spoken(model.cost.amount(microUsd: 161_000_000).number))))
         #expect(sentence.contains(model.l10n("a11y.quota.estimated")))

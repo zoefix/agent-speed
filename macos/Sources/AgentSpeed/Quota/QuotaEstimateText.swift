@@ -23,14 +23,14 @@ struct QuotaEstimateText {
     let l10n: Localizer
     let cost: CostDisplay
 
-    /// `$161.00` and ` / ≈$5,742.00` (or ` / ≥$737.00`), split so the cap can take the tertiary token.
+    /// `$161` and ` / ≈$5,742` (or ` / ≥$737`) in the compact digits, split so the cap can take the tertiary token.
     func amountCell(_ e: QuotaEstimateDisplay) -> (used: String, cap: String?) {
-        let used = cost.amountText(microUsd: e.usedMicroUsd)
+        let used = cost.compactAmountText(microUsd: e.usedMicroUsd)
         let full: String
         if let cap = e.capMicroUsd {
-            full = l10n("quota.amount.cap", used, cost.amountText(microUsd: cap))
+            full = l10n("quota.amount.cap", used, cost.compactAmountText(microUsd: cap))
         } else if e.hasEstimate, let low = e.lowMicroUsd {
-            full = l10n("quota.amount.atLeast", used, cost.amountText(microUsd: low))
+            full = l10n("quota.amount.atLeast", used, cost.compactAmountText(microUsd: low))
         } else {
             return (used, nil)
         }
@@ -40,7 +40,7 @@ struct QuotaEstimateText {
 
     /// The used amount alone, for the orb card (which shows no cap).
     func usedAmount(_ e: QuotaEstimateDisplay) -> String? {
-        e.showsAmount ? cost.amountText(microUsd: e.usedMicroUsd) : nil
+        e.showsAmount ? cost.compactAmountText(microUsd: e.usedMicroUsd) : nil
     }
 
     /// `a11y.quota.amount` with the cap, else `a11y.quota.amountNoCap`.

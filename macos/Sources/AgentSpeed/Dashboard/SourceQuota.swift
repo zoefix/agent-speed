@@ -12,6 +12,10 @@ struct SourceQuotaLine: Identifiable, Equatable {
     /// The share of the window that has passed, while known (QUOTAS 7, *Pace*).
     var pace: Double?
     var reset: String?
+    /// The short reset (QUOTAS 7), for a section whose amounts leave no room for the long one.
+    var resetShort: String?
+    /// The long reset, when the line shows the short one or none.
+    var tooltipReset: String?
     /// `quota.age` while the snapshot is more than an hour old.
     var age: String?
     var level: QuotaLevel
@@ -33,12 +37,11 @@ struct SourceQuotaLine: Identifiable, Equatable {
     var estimateNote: String?
 
     var tooltip: String {
-        let head = [updated, tooltipAge, paceText].compactMap { $0 }
-        return (head + estimateDetails + [estimateNote].compactMap { $0 }).joined(separator: "\n")
+        (tooltipHead + estimateDetails + [estimateNote].compactMap { $0 }).joined(separator: "\n")
     }
 
     /// The lines above the tooltip's hairline.
-    var tooltipHead: [String] { [updated, tooltipAge, paceText].compactMap { $0 } }
+    var tooltipHead: [String] { [tooltipReset, updated, tooltipAge, paceText].compactMap { $0 } }
 }
 
 /// The columns every quota line of the section shares, so labels, bars, percents and resets line up from row to row.
@@ -73,7 +76,9 @@ struct SourceQuotaColumns: Equatable {
     }
 
     /// The section's columns, and its lines with an age only where the age still fits after the reset: a line that
-    /// cannot hold both keeps its reset, and its tooltip keeps the time (DESIGN 4, *Quota lines*).
+    /// cannot hold both keeps its reset, and its tooltip keeps the time (DESIGN 4, *Quota lines*). With amounts, a
+    /// section whose long resets no longer fit beside the shortest bar shows the short ones, or none when even those do
+    /// not fit; the long reset then opens the tooltip.
     @MainActor static func fit<Key: Hashable>(_ quota: [Key: [SourceQuotaLine]], separator: String,
                                               inset: CGFloat = nameInset)
         -> (lines: [Key: [SourceQuotaLine]], columns: SourceQuotaColumns) {
@@ -82,12 +87,22 @@ struct SourceQuotaColumns: Equatable {
         columns.label = all.map { width($0.label, labelFont) }.max() ?? 0
         columns.percent = width("≈100%", percentFont) + approximateKern
         columns.amount = all.map { width(($0.amount ?? "") + ($0.amountCap ?? ""), amountFont) }.max() ?? 0
-        let room = width(inset: inset) - columns.label - columns.percent - (columns.amount > 0 ? columns.amount + gap : 0)
-            - minimumBar - 3 * gap
+        let rest = width(inset: inset) - columns.label - columns.percent - (columns.amount > 0 ? columns.amount + gap : 0)
+            - 3 * gap
+        let room = rest - minimumBar
+        let resetRoom = rest - compactBar
+        var form = ResetForm.long
+        if columns.amount > 0, all.contains(where: { width($0.reset ?? "", resetFont) > resetRoom }) {
+            form = all.contains { width($0.resetShort ?? "", resetFont) > resetRoom } ? .none : .short
+        }
         var fitted = quota
         for (source, lines) in quota {
             fitted[source] = lines.map { line in
                 var line = line
+                if form != .long, line.reset != nil {
+                    line.tooltipReset = line.reset
+                    line.reset = form == .short ? line.resetShort : nil
+                }
                 if let age = line.age, width(tail(line.reset, age, separator), resetFont) > room {
                     line.age = nil
                     line.tooltipAge = age
@@ -98,6 +113,9 @@ struct SourceQuotaColumns: Equatable {
         columns.reset = fitted.values.flatMap { $0 }.map { width(tail($0.reset, $0.age, separator), resetFont) }.max() ?? 0
         return (fitted, columns)
     }
+
+    /// The reset a section shows (DESIGN 4 *Amount*).
+    private enum ResetForm { case long, short, none }
 
     static func tail(_ reset: String?, _ age: String?, _ separator: String) -> String {
         [reset, age].compactMap { $0 }.joined(separator: separator)
@@ -141,6 +159,7 @@ extension AppModel {
                 fraction: window.bar / 100,
                 pace: pace,
                 reset: window.resetsAtMs.map { format.resetLong($0, nowMs: now) },
+                resetShort: window.resetsAtMs.map { format.resetShort($0, nowMs: now) },
                 age: age,
                 level: QuotaLevel(percent: window.percent),
                 passed: window.passed,

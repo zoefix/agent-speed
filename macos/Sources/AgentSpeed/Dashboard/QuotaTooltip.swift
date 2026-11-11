@@ -9,6 +9,16 @@ struct QuotaTooltip: Equatable {
     var note: String?
 
     static let maxWidth: CGFloat = 300
+    static var font: NSFont { NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .regular) }
+    static var noteFont: NSFont { NSFont.systemFont(ofSize: 10.5) }
+
+    /// As wide as its widest line, at most `maxWidth`: the panel takes the view's fitting size, so the width is fixed
+    /// and the height follows from it.
+    var width: CGFloat {
+        let lines = (head + details).map { SourceQuotaColumns.width($0, Self.font) }
+            + [note.map { SourceQuotaColumns.width($0, Self.noteFont) } ?? 0]
+        return min(Self.maxWidth, lines.max() ?? 0)
+    }
 }
 
 struct QuotaTooltipView: View {
@@ -37,8 +47,8 @@ struct QuotaTooltipView: View {
         }
         .font(.system(size: 11))
         .monospacedDigit()
+        .frame(width: tooltip.width, alignment: .leading)
         .fixedSize(horizontal: false, vertical: true)
-        .frame(maxWidth: QuotaTooltip.maxWidth, alignment: .leading)
         .padding(.horizontal, 10)
         .padding(.vertical, 8)
         .background(.regularMaterial, in: RoundedRectangle(cornerRadius: 8, style: .continuous))
