@@ -142,12 +142,25 @@ public sealed class QuotaLocalReaderTests : IDisposable
         Assert.DoesNotContain(port, TcpListeners.Of(4));
     }
 
+    /// <summary>
+    /// On a real session the locator finds only processes that run as <c>language_server_*</c> (a CI runner may run one), and
+    /// none from an empty home's daemon files.
+    /// </summary>
     [WindowsFact]
     [SupportedOSPlatform("windows")]
-    public void ThisSessionHasNoAntigravityServer()
+    public void ThisSessionFindsOnlyRunningLanguageServers()
     {
         using var locator = new AntigravityProcessLocator(_root);
-        Assert.Empty(locator.Servers());
+        var servers = locator.Servers();
+        var running = System.Diagnostics.Process.GetProcesses()
+            .Where(p => p.ProcessName.StartsWith("language_server_", StringComparison.OrdinalIgnoreCase))
+            .Select(p => p.Id)
+            .ToHashSet();
+        Assert.All(servers, s => Assert.Contains(s.Pid, running));
+        if (running.Count == 0)
+        {
+            Assert.Empty(servers);
+        }
     }
 
     [Fact]
