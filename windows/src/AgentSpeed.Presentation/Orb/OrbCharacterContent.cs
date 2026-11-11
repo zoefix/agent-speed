@@ -35,6 +35,9 @@ public sealed record OrbCharacterContent
     /// <summary><c>cost.glyph</c> (費用).</summary>
     public string CostGlyph { get; init; } = string.Empty;
 
+    /// <summary><c>character.cost.today</c> (今日): the label of the cost card's 今日 row.</summary>
+    public string CostTodayGlyph { get; init; } = string.Empty;
+
     /// <summary><c>boards.today</c> with today's tokens; null hides the line.</summary>
     public string? TodayLine { get; init; }
 
@@ -110,6 +113,47 @@ public sealed class OrbCharacterReadings
 
     public OrbModelsQuietRule Models { get; } = new();
 
+    /// <summary>The 費用 card's 今日 row; null while the billable sources have no request today. No quiet rule.</summary>
+    public CostToday? CostToday { get; private set; }
+
+    /// <summary>How long the cost card's rate row takes to leave or come back over its 今日 row: a fade, then the card closes up.</summary>
+    public const double CostRateFade = 0.5;
+
+    private double _costRateShownAt = double.NegativeInfinity;
+
+    /// <summary>
+    /// The rate row's presence over the 今日 row at <paramref name="time"/>: 1 shown, 0 gone. It leaves only while the 今日 row
+    /// stays; without it the whole card fades instead.
+    /// </summary>
+    public double CostRatePresence(double time)
+    {
+        if (Cost.Money is null)
+        {
+            return 0;
+        }
+
+        if (CostToday is null)
+        {
+            return 1;
+        }
+
+        return Cost.IsLoud(time)
+            ? Math.Clamp((time - _costRateShownAt) / CostRateFade, 0, 1)
+            : 1 - Math.Clamp((time - Cost.QuietAt) / CostRateFade, 0, 1);
+    }
+
+    /// <summary>The rate row's opacity: it fades in the first half of its presence.</summary>
+    public double CostRateAlpha(double time) => Math.Clamp(2 * CostRatePresence(time) - 1, 0, 1);
+
+    /// <summary>The rate row's share of its room: the card opens or closes in the second half.</summary>
+    public double CostRateShare(double time) => Motion.Easing.SmoothStep(0, 1, Math.Min(1, 2 * CostRatePresence(time)));
+
+    public bool CostRateMoving(double time)
+    {
+        var p = CostRatePresence(time);
+        return p > 0 && p < 1;
+    }
+
     public bool NetworkLoud(double time) => Network.Reading is { } r && time < r.QuietAt;
 
     public bool PerformanceLoud(double time) => Performance.Reading is { } r && time < r.QuietAt;
@@ -119,11 +163,22 @@ public sealed class OrbCharacterReadings
     /// may have changed.
     /// </summary>
     public bool Apply(OrbLinesSample? performance, LiveMoney? money, bool generating, double time, OrbLatency? latency = null,
-        IReadOnlyList<OrbModelRow>? models = null)
+        IReadOnlyList<OrbModelRow>? models = null, CostToday? costToday = null)
     {
         var changed = Performance.Apply(performance, time);
         var before = Cost.Money;
+        var wasLoud = Cost.IsLoud(time);
+        var presence = CostRatePresence(time);
+        var hadToday = CostToday is not null;
         Cost.Apply(money, generating, time);
+        if (!wasLoud && Cost.IsLoud(time))
+        {
+            // Back from quiet: the row comes back from where it stood; a card that was hidden fades in whole.
+            _costRateShownAt = hadToday ? time - presence * CostRateFade : double.NegativeInfinity;
+        }
+
+        changed |= !Equals(CostToday, costToday);
+        CostToday = costToday;
         var latencyBefore = Latency;
         Latency = Latency.Next(latency, time);
         changed |= Models.Apply(models ?? [], time);
@@ -177,6 +232,11 @@ public static class OrbCharacterSpeech
             parts.Add(money.Unknown
                 ? localizer["a11y.board.costUnknown"]
                 : localizer.Format("a11y.board.cost", money.AtLeast ? localizer.Format("a11y.orb.costAtLeast", money.Number) : money.Number, currencyName));
+        }
+
+        if (on.Cost && readings.CostToday is { } today)
+        {
+            parts.Add(today.Spoken);
         }
 
         if (readings.Models.IsLoud(time) && on.Models && OrbModelsText.Spoken(readings.Models.Rows, localizer) is { } models)

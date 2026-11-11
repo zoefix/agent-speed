@@ -140,7 +140,8 @@ struct CharacterQuotaCardTests {
         let frame = Self.frame(content, disc: disc)
         let probe = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
         // A form asked for is the only one that fits.
-        let widths = form.map { wanted in (0..<4).map { $0 == wanted ? 1.0 : .infinity } } ?? probe.quotaWidths()
+        let count = CharacterCards.QuotaForm.allCases.count
+        let widths = form.map { wanted in (0..<count).map { $0 == wanted ? 1.0 : .infinity } } ?? probe.quotaWidths()
         dynamics.fitQuota(1 / 60, widths: widths, room: form == nil ? 1000 : 1, spare: 0, snap: true)
         return CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
     }

@@ -88,6 +88,9 @@ public sealed class HistoryService : IDisposable
     /// </summary>
     public Action<IReadOnlyList<PerfRecord>>? PerfRecordsUpdated { get; set; }
 
+    /// <summary>The quota estimate's share of the history after each complete run (QUOTAS 10.3), on the history thread.</summary>
+    public Action<Quota.Estimate.EstimateHistory>? EstimateUpdated { get; set; }
+
     /// <summary>
     /// Loads the day bindings and table copies of the store into <paramref name="book"/> (a quick read that never changes
     /// the store), before the live engine prices anything (METRICS 9.7). Returns the dates whose binding was repaired.
@@ -465,6 +468,11 @@ public sealed class HistoryService : IDisposable
             }
 
             PublishAll(HistoryState.Ready(DateTimeOffset.Now), analyzer, enabled, remote);
+            if (EstimateUpdated is { } estimate && analyzer.EstimateHistory is { } share)
+            {
+                estimate(share);
+            }
+
             if (report.BytesAnalyzed >= BigRunBytes)
             {
                 // A large analysis decoded gigabytes; return the freed memory instead of keeping it committed.

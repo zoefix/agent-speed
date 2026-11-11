@@ -961,7 +961,9 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     after 4 s; a change of place fades out and in (0.18 s / 0.3 s) instead of crossing her or another card.
   - Accessibility reads `a11y.orb.models` with one `a11y.orb.modelSpeed` per running model (the full id; the model
     alone while it has no speed), every running model, drawn or not, joined by `list.separator`, after the cost; the
-    首字 row adds `a11y.orb.latency` (the shown value with its unit) after the 性能 reading.
+    首字 row adds `a11y.orb.latency` (the shown value with its unit) after the 性能 reading, and the 費用 card's 今日 row
+    `a11y.orb.costToday` (the amount with the currency's name, `a11y.orb.costAtLeast` when partial, `cost.unknown` for
+    `–`) after the cost reading, whenever the row shows.
 - **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
   model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
   of her that rises under it. With no live model it shows the last one.
@@ -977,7 +979,11 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   Contrast: the value token. Shown while the value exists, fading in and out (0.25 s) as the card eases to its
   height, so an orb of sources without first-content times never shows the row), **network**
   (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
-  `–` when nothing is priced, and the money unit), **today** (`boards.today` with today's tokens over
+  `–` when nothing is priced, and the money unit; under it a row `今日 $12.34` at `t`, user's choice 2026-11-11: the
+  label `character.cost.today` in the secondary token and today's cost of the billable sources of `A` (METRICS 6.8,
+  `Σ todayCost_s`, 9.6) as section 9 *Amount* with its symbol in the value token, `≥` before it when part of today is
+  unpriced, `–` when nothing today is priced, shown while those sources have a request today; the rate row shows while
+  the card is loud and then fades (0.25 s) as the card closes up under it, leaving the 今日 row), **today** (`boards.today` with today's tokens over
   `agents.count`) and last **額度** (below). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
   every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
   apart; a hidden card's room closes up as it fades.
@@ -990,11 +996,9 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   - A window line: the label (`5h`, `7d`, `Fable 7d`) at `0.9 t` in the secondary token, in a column as wide as the
     card's widest label; `0.5 t`; the bar, `5 t` long and `0.26 t` tall, fully rounded; `0.5 t`; the percent at `t` in
     the value token, tabular, right-aligned in a cell as wide as `≈100%` (the `≈` of an extrapolated percent at
-    `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the used amount (QUOTAS 10.8, section 9 *Amount* with its
-    symbol, `$161`) at `0.9 t` in the value token, tabular, right-aligned in a cell as wide as the card's widest
-    amount, empty without spend; `0.4 t`; the short reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t` in the secondary
-    token, in a cell as wide as the card's widest, nothing while unknown or passed. The card shows no cap (user's
-    choice 2026-11-11: the dashboard has it).
+    `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the short reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t`
+    in the secondary token, in a cell as wide as the card's widest, nothing while unknown or passed. The card shows no
+    amount and no cap (user's choice 2026-11-11: "卡片太長了不好看，面板已經顯示過了"; the dashboard has them).
   - Bar: track label 12 % (dark 16 %); fill the source color, amber `#F5A524` (light `#B86E00`) from 80 %, the system
     red from 95 %, when the percent takes the same red. Increase Contrast: the fill in the text color, the track in the
     disabled-text color.
@@ -1003,13 +1007,11 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     out; a changed percent crossfades (0.2 s); a source joining or leaving fades its lines (0.25 s) as the card eases to
     its height. Reduce Motion: lengths change at once, fades stay.
   - Room: the card is as wide as its content and keeps the column's right edge. When it does not fit the room to the
-    orb's edge, the reset cells go first, then the amount cells, then the bars shorten to `3 t`, then the header lines
-    go (the dot moves before the source's first label, `0.35 t` before it). Only then does the card spill over like
-    the column's other cards.
+    orb's edge, the reset cells go first, then the bars shorten to `3 t`, then the header lines go (the dot moves before
+    the source's first label, `0.35 t` before it). Only then does the card spill over like the column's other cards.
   - Accessibility: after the today reading, `a11y.orb.quota` with each source's name followed by one
     `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), each followed
-    by `a11y.quota.amountNoCap` with the used amount and, while extrapolated, `a11y.quota.estimated`, sources joined
-    by `list.separator`.
+    by `a11y.quota.estimated` while extrapolated, sources joined by `list.separator`.
 - **Balance** (user's choice 2026-11-11: "右邊這麼空…讓左側和右側自動放的卡片內容要看起來視覺是相等的"). The column's
   cards are split between her two sides so that their weight is as even as possible:
   - The left keeps the column's first `n − k` shown cards. The last `k` continue on the right, under the models card
@@ -1048,8 +1050,9 @@ Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and un
 
 **Which cards show.** A card shows while it is switched on (`characterReadouts`, 2b; the speed always) and has
 something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
-resting or an agent generates, 費用 while money flows (or a generating set has no price), models while a model runs
-(an agent of the orb is not idle), each until 10 s after its last loud moment (the models card keeps its last rows
+resting or an agent generates, 費用 while money flows (or a generating set has no price) and, with no quiet rule,
+while its 今日 row has a value (user's choice 2026-11-11), models while a model runs (an agent of the orb is not idle),
+each until 10 s after its last loud moment (the models card keeps its last rows
 for those 10 s); today while there is a token today; 額度 while it has a source (QUOTAS 6), with no quiet rule: a
 quota does not change by the second, it is shown whenever it applies. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
 their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A
@@ -2126,29 +2129,36 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    - Columns, from the name's leading edge: the label (`5h`, `7d`, `Fable 7d`), 11 pt medium, secondary, in a column
      as wide as the section's widest label; 8 pt; the bar, flexible, at least 88 pt; 8 pt; the percent, 11.5 pt
      semibold tabular in the value color, right-aligned in a cell as wide as `≈100%`; 8 pt; the amount (below); 8 pt;
-     the long reset (QUOTAS 7: `3 小時 12 分後重置`, `週五 09:00 重置`), 11 pt secondary, in the rest of the row, its
-     tail truncated. While the snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+     the reset, 11 pt secondary, in the rest of the row, its tail truncated: the long reset (QUOTAS 7:
+     `3 小時 12 分後重置`, `週五 09:00 重置`) while no line of the section has an amount, else the short reset (QUOTAS 7:
+     `42m`, `3h`, `週五`; user's choice 2026-11-11: one line, `US$4,938 / ≈5,742  週五`), and none when even the short
+     resets do not fit beside the bar at its shortest (52 pt); the tooltip then opens with the long reset. While the
+     snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
    - **Percent** (QUOTAS 10.7; user's choice 2026-11-11): the live percent. While it is extrapolated, a leading `≈` in
      the secondary token, kerned 1 pt to the digits; the bar follows the same value. A new vendor value replaces it
      with the usual crossfade, and the `≈` fades with it.
    - **Amount** (QUOTAS 10.8; user's choice 2026-11-11: percent, amount used and the estimated cap): the used amount
-     (section 9 *Amount*, display currency), 11 pt medium tabular in the value color; then, while an estimate exists,
-     `quota.amount.cap` (` / ≈$5,742`) or `quota.amount.atLeast` (` / ≥$737`) with the cap in the tertiary token. At
-     confidence `none` only the used amount shows; with no spend in the window and no estimate, the cell is empty. The
-     cell is left-aligned and as wide as the section's widest amount, so the reset times stay in one column.
+     (section 9 *Amount* with its symbol, in the digits of the *Rate* table: whole units from 100, so `US$4,938`,
+     `US$209`, `US$12.30`; display currency), 11 pt medium tabular in the value color; then, while an estimate exists,
+     `quota.amount.cap` (` / ≈5,742`) or `quota.amount.atLeast` (` / ≥598`) with the cap in the tertiary token, in the
+     same digits without the symbol the used amount already shows, in every currency (`NT$1,235 / ≈4,560`; user's
+     choice 2026-11-11). At confidence `none` only the used amount shows; with no spend in the window and no estimate,
+     the cell is empty. The cell is left-aligned and as wide as the section's widest amount, so the reset times stay in
+     one column. The tooltip shows the amounts in full (section 9 *Amount*).
    - Bar: 4 pt tall, fully rounded; track label 8 % (dark 12 %); fill the source color, amber `#F5A524` (light
      `#B86E00`) from 80 %, the system red from 95 %, when the percent takes the same red. The pace mark, while
      QUOTAS 7 gives one, is a 1 × 8 pt tick at the pace fraction, label 35 %, centered on the bar's height.
    - Spacing: the first line 6 pt below the secondary line, lines 4 pt apart; the row eases to its new height (0.25 s).
    - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s; texts crossfade in 0.2 s.
      Reduce Motion: lengths change at once.
-   - Tooltip of a line: `quota.updated` with the snapshot's time (time only today, else date and time) and, while
-     known, `quota.pace`. While an estimate exists, a hairline, then in secondary text: `quota.estimate.used`;
-     `quota.estimate.cap` with the published range (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap
-     exists; `quota.estimate.coverage` (integer percent) while known; the confidence line
-     (`quota.estimate.confidence.*`) with `quota.estimate.windows` after ` · `; `quota.estimate.plan` with the plan
-     (and ` · ` tier) when known; `quota.estimate.live` while the percent is extrapolated; and last, in tertiary,
-     `quota.estimate.note`. Non-USD currencies add the USD amount as section 9 *Tooltips* says.
+   - Tooltip of a line: the long reset when the row shows the short one or none (above), then `quota.updated` with
+     the snapshot's time (time only today, else date and time) and, while known, `quota.pace`. While an estimate
+     exists, a hairline, then in secondary text: `quota.estimate.used`; `quota.estimate.cap` with the published range
+     (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap exists; `quota.estimate.coverage` (integer
+     percent) while known; the confidence line (`quota.estimate.confidence.*`) with `quota.estimate.windows` after
+     ` · `; `quota.estimate.plan` with the plan (and ` · ` tier) when known; `quota.estimate.live` while the percent
+     is extrapolated; and last, in tertiary, `quota.estimate.note`. Non-USD currencies add the USD amount as section
+     9 *Tooltips* says.
    - Accessibility: the row's label adds, after the cost, one `a11y.quota.window` per window
      (`a11y.quota.windowNoReset` without a reset time), each followed by `a11y.quota.amount` (or
      `a11y.quota.amountNoCap`) and, while the percent is extrapolated, `a11y.quota.estimated`, joined by

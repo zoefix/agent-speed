@@ -329,6 +329,7 @@ internal sealed partial class ReportController
             {
                 Username = identity?.Username ?? NextUsername(document.UsernameRules),
                 Sections = Preferences.Sections.ToHashSet(),
+                ShareQuota = Preferences.ShareQuota,
                 IsReview = review && identity?.IsRegistered == true,
             };
             ConsentChanged?.Invoke(this, EventArgs.Empty);
@@ -533,6 +534,7 @@ internal sealed partial class ReportController
         UpdatePreferences(p => p.Upsert(identity, out dropped) with
         {
             Sections = [.. ReportSections.All.Where(draft.Sections.Contains)],
+            ShareQuota = draft.ShareQuota,
             Enabled = true,
             // Turning reporting on in Settings answers the dashboard invitation too.
             Invite = p.Invite ?? ReportInviteAnswer.Accepted,

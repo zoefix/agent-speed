@@ -23,7 +23,10 @@ extension QuotaController {
             await MainActor.run {
                 guard let self else { return }
                 self.vendorInFlight = false
-                if self.vendor != readings { self.vendor = readings }
+                if self.vendor != readings {
+                    self.vendor = readings
+                    self.feedEstimate(vendor: readings)
+                }
                 if self.vendorRerun {
                     self.vendorRerun = false
                     self.runVendorRound(nowMs: QuotaController.nowMs())

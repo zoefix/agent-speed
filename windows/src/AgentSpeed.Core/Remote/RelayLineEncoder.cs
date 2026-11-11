@@ -112,12 +112,13 @@ internal static class RelayLineEncoder
 
     public static byte[]? Watch(bool on) => Line($"{{\"t\":\"watch\",\"on\":{(on ? "true" : "false")}}}");
 
-    /// <summary><c>{sources, network, grokLive, claudeBridge}</c>, the sources in source order.</summary>
+    /// <summary><c>{sources, network, grokLive, claudeBridge, salt}</c>, the sources in source order; <c>salt</c> only when known.</summary>
     private static string QuotaObject(RemoteQuotaConfig config)
     {
         var keys = string.Join(',', config.Sources.Select(s => ReportJson.Quoted(SourceNames.Of(s))));
+        var salt = config.Salt is { } known ? $",\"salt\":\"{known.Hex}\"" : string.Empty;
         return $"{{\"sources\":[{keys}],\"network\":{Literal(config.Network)},\"grokLive\":{Literal(config.GrokLive)},"
-            + $"\"claudeBridge\":{Literal(config.ClaudeBridge)}}}";
+            + $"\"claudeBridge\":{Literal(config.ClaudeBridge)}{salt}}}";
     }
 
     private static string Literal(bool value) => value ? "true" : "false";

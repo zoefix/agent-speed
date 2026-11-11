@@ -358,7 +358,9 @@ final class CharacterRenderer: CharacterLayerProvider {
         cardShown[HudCard.model.rawValue] = readouts.model && has(.model)
         cardShown[HudCard.performance.rawValue] = readings?.performanceLoud == true && has(.performance)
         cardShown[HudCard.network.rawValue] = readouts.network && readings?.networkLoud == true && has(.network)
-        cardShown[HudCard.cost.rawValue] = readouts.cost && readings?.costLoud == true && has(.cost)
+        // The 今日 row has no quiet rule: the card stays while there is a cost today (user's choice, 2026-11-11).
+        cardShown[HudCard.cost.rawValue] = readouts.cost && (readings?.costLoud == true || readings?.costToday != nil)
+            && has(.cost)
         cardShown[HudCard.agents.rawValue] = readouts.agents && !frame.isSmallCharacter && has(.agents)
         cardShown[models] = readouts.models && readings?.modelsLoud == true && has(.models)
         // No quiet rule: a quota does not change by the second, it shows whenever it applies.
@@ -520,7 +522,7 @@ final class CharacterRenderer: CharacterLayerProvider {
             }
         }
         if let unit = OrbTextCache.shared.texture(frame.content.unit, style: m.unitStyle, language: p.language,
-                                                  scale: scene.backingScale * max(1, p.scale)) {
+                                                  scale: scene.backingScale * p.rasterScale) {
             let unitCap = OrbTextCache.shared.capHeight(m.unitStyle)
             scene.add(p.text(unit, centerX: 0, baseline: 50 * q + unitCap, color: frame.tokens.secondaryText.opacity(p.alpha))
                 .outlined(ink.outline.opacity(ink.outline.alpha * 0.85 * p.alpha), width: ink.width(m.unit) * p.scale))

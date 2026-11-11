@@ -43,6 +43,18 @@ struct CharacterBodyPainter {
 
     var language: AppLanguage { frame.content.language }
 
+    /// The scale text is rasterized at: 1 up to 5 % above, then whole quarters. The cards breathe by about 1 % and fade
+    /// in from 96 %; a texture per frame's scale would rasterize every text of every card on every frame.
+    var rasterScale: CGFloat { Self.rasterScale(scale) }
+
+    static func rasterScale(_ scale: CGFloat) -> CGFloat { scale <= 1.05 ? 1 : (scale * 4).rounded(.up) / 4 }
+
+    /// The same painter at `factor` of its opacity.
+    func faded(_ factor: Double) -> CharacterBodyPainter {
+        CharacterBodyPainter(frame: frame, center: center, scale: scale, spin: spin, alpha: alpha * factor, metrics: metrics,
+                             contrast: contrast)
+    }
+
     /// A local offset (unscaled, unrotated) to a canvas point.
     func point(_ ox: CGFloat, _ oy: CGFloat) -> CGPoint {
         let c = CGFloat(cos(spin)), s = CGFloat(sin(spin))
@@ -60,7 +72,7 @@ struct CharacterBodyPainter {
 
     func texture(_ string: String, size: CGFloat, weight: NSFont.Weight, scene: OrbScene) -> OrbTextTexture? {
         OrbTextCache.shared.texture(string, style: OrbTextStyle(size: size, weight: weight, tracking: 0, padding: 1),
-                                    language: language, scale: scene.backingScale * max(1, scale))
+                                    language: language, scale: scene.backingScale * rasterScale)
     }
 
     /// Half the size of `chip(_:size:...)` for `string` (no dot), unscaled; nil when it cannot be drawn.

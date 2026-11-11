@@ -65,6 +65,21 @@ internal sealed partial class ReportPreviewWindow : Window
         System.Windows.Automation.AutomationProperties.SetName(NextPill, next ?? string.Empty);
     }
 
+    /// <summary>The developer capture: scrolls the body so that the member <paramref name="name"/> leads the view.</summary>
+    internal void ScrollToMember(string name)
+    {
+        Refresh();
+        _preview.UpdateLayout();
+        var quoted = "\"" + name + "\"";
+        var run = _preview.Document.Blocks.OfType<System.Windows.Documents.Paragraph>().SelectMany(p => p.Inlines.OfType<System.Windows.Documents.Run>())
+            .FirstOrDefault(r => r.Text.Contains(quoted, StringComparison.Ordinal));
+        if (run is not null)
+        {
+            var top = run.ContentStart.GetCharacterRect(System.Windows.Documents.LogicalDirection.Forward).Top;
+            _preview.ScrollToVerticalOffset(Math.Max(0, _preview.VerticalOffset + top - 12));
+        }
+    }
+
     private void OnCopy(object sender, RoutedEventArgs e)
     {
         if (_report.Preview() is { } preview)

@@ -317,7 +317,7 @@ public sealed partial class CharacterDraw : IOrbStyleDraw
     private bool IsBusy => _lightning.IsActive || (_stage is { } stage
         && (stage.Outgoing is not null || stage.Incoming is not null || stage.Current.FadingPose is not null || _hud.PeakAge is not null
             || _particles.IsLively || _wings.IsFading || _hud.HasPulses || _models.IsMoving(_frameTime) || _quota.IsMoving(_frameTime)
-            || Readings?.Latency.IsFading(_frameTime) == true));
+            || Readings?.Latency.IsFading(_frameTime) == true || Readings?.CostRateMoving(_frameTime) == true));
 
     /// <summary>The style model the orb drives (update, snap, pulse, peak, demand).</summary>
     private sealed class CharacterModel(CharacterDraw draw) : IOrbStyleModel

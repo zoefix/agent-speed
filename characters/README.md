@@ -43,8 +43,8 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 .venv/bin/python -m unittest characters.tests.test_reference
 ```
 
-Every other character builds the same way with her spec, which brings the rig hints (tail, wings, recovery of art
-See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
+Every character, Claude too, builds with her spec, which brings the rig hints (tail, wings, legs inside the skirt,
+recovery of art See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
 ([skytnt/anime-seg](https://huggingface.co/skytnt/anime-seg) `isnetis.onnx`, `--matte`) tells the white paper that
 shows through an axe blade or between hair and body from white clothing, so neither the recovered art nor any layer
 draws it:

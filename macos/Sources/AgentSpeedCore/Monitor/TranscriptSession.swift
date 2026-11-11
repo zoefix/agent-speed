@@ -99,6 +99,8 @@ final class TranscriptSession {
     private var indexes: [String: DirectoryIndex] = [:]
     private var deduper = Deduper()
     private var engine = SpeedEngine()
+    /// The quota estimate (QUOTAS 10.3, 10.4): every response the engine prices and every Codex token count read.
+    private let spendSink: (any QuotaSpendSink)?
     private var parentMembers: [String: AgentParents.Member] = [:]
     private var parentLinks: [String: String] = [:]
     private var parentLinksAreStale = false
@@ -146,13 +148,16 @@ final class TranscriptSession {
         configuration: MonitorConfiguration,
         limits: ReadingLimits = .standard,
         pricing: PriceBook? = nil,
+        spendSink: (any QuotaSpendSink)? = nil,
         clock: @escaping @Sendable () -> Int64 = { Clock.milliseconds(Date()) }
     ) {
         enabledSources = configuration.enabledSources
         self.configuration = configuration
         self.limits = limits
         self.clock = clock
+        self.spendSink = spendSink
         engine = SpeedEngine(pricing: pricing)
+        engine.spendSink = spendSink
         roots = configuration.allRoots().map { family, path, readable in
             Root(family: family, path: path, canonicalPath: path, enabled: configuration.reads(family), available: false,
                  readable: readable,
@@ -592,7 +597,7 @@ final class TranscriptSession {
     private func refreshModeContext() -> Bool {
         var sessions: [String: Set<String>] = [:]
         for file in files.values where file.family.isWorkBuddy {
-            let state = file.parser.state
+            let state = file.state
             if state.lastLineMs != nil, !state.isSubagent { sessions[file.root, default: []].insert(Self.sessionId(of: file)) }
         }
         guard modeContext.refresh(workBuddySessions: sessions) else { return false }
@@ -612,7 +617,7 @@ final class TranscriptSession {
 
     /// The parser's state with what the session-current stores and config files say.
     private func agentState(of file: TrackedFile) -> AgentState {
-        var state = file.parser.state
+        var state = file.state
         state.configuredModes = modeContext.configured(family: file.family, root: file.root, model: state.model)
         if file.family.isWorkBuddy { state.sessionModes = modeContext.session(root: file.root, sessionId: Self.sessionId(of: file)) }
         return state
@@ -673,7 +678,7 @@ final class TranscriptSession {
                 upserts.removeAll(keepingCapacity: true)
             }
             if !completions.isEmpty {
-                for completion in completions { deliver(completion, agentId: file.path, source: file.parser.state.source) }
+                for completion in completions { deliver(completion, agentId: file.path, source: file.state.source) }
                 completions.removeAll(keepingCapacity: true)
             }
         }
@@ -746,7 +751,7 @@ final class TranscriptSession {
         for item in completed {
             switch item {
             case .upsert(let upsert): deliver(upsert, project: project, live: true, agent: agentState(of: file))
-            case .tool(let completion): deliver(completion, agentId: file.path, source: file.parser.state.source)
+            case .tool(let completion): deliver(completion, agentId: file.path, source: file.state.source)
             }
         }
         finishRead(of: file, result: result.read)
@@ -759,6 +764,10 @@ final class TranscriptSession {
 
     private func finishRead(of file: TrackedFile, result: FileTailer.ReadResult) {
         file.wasRead = true
+        if let spendSink, file.collectsQuotaLines {
+            let lines = file.parser.takeCodexQuotaLines()
+            if !lines.isEmpty { spendSink.codexLines(lines) }
+        }
         if let quota = file.parser.codexQuota, quota.observedMs > codexQuota?.observedMs ?? .min { codexQuota = quota }
         if result.oversized || file.parser.hasPartialHistory { partialHistory = true }
         if result.failed {
@@ -826,7 +835,7 @@ final class TranscriptSession {
     var responses: [ResponseRecord] { engine.storedResponses }
 
     var malformedLines: Int {
-        files.values.reduce(removedMalformedLines) { $0 + $1.parser.state.malformedLines } + (opencode?.malformedRows ?? 0)
+        files.values.reduce(removedMalformedLines) { $0 + $1.state.malformedLines } + (opencode?.malformedRows ?? 0)
             + (openclaw?.malformedRows ?? 0) + (hermes?.malformedLines ?? 0) + (devin?.malformedLines ?? 0)
             + (qoder?.malformedLines ?? 0)
     }
@@ -861,7 +870,7 @@ final class TranscriptSession {
     func sessionCounts(todayStartMs: Int64) -> [SourceKind: Int] {
         var counts: [SourceKind: Int] = [:]
         for file in files.values {
-            let state = file.parser.state
+            let state = file.state
             guard let last = state.lastLineMs, last >= todayStartMs, enabledSources.contains(state.source) else { continue }
             if file.family.isWorkBuddy || [.kimi, .grokBuild, .pi, .droid, .qoderCli].contains(file.family), state.isSubagent {
                 continue
@@ -897,7 +906,7 @@ final class TranscriptSession {
     }
 
     private func syncAgent(_ file: TrackedFile) {
-        let state = file.parser.state
+        let state = file.state
         if state.lastLineMs != nil, enabledSources.contains(state.source) {
             let member = AgentParents.Member(id: file.path, family: file.family, thread: state.thread)
             if parentMembers.updateValue(member, forKey: file.path) != member { parentLinksAreStale = true }
@@ -913,7 +922,7 @@ final class TranscriptSession {
     }
 
     private func projectName(of file: TrackedFile) -> String {
-        file.parser.state.project ?? EngineAgent.fallbackProject(for: file.path)
+        file.state.project ?? EngineAgent.fallbackProject(for: file.path)
     }
 
     // MARK: - OpenCode
@@ -1058,13 +1067,14 @@ final class TranscriptSession {
             maxLineBytes: limits.maxLineBytes
         )
         nextFileID &+= 1
+        if spendSink != nil, family == .codex { tracked.collectsQuotaLines = true }
         files[file.path] = tracked
         return tracked
     }
 
     private func untrack(_ path: String) {
         guard let file = files.removeValue(forKey: path) else { return }
-        removedMalformedLines += file.parser.state.malformedLines
+        removedMalformedLines += file.state.malformedLines
         unreadablePaths.remove(path)
         removeAgent(path)
     }

@@ -74,6 +74,9 @@ struct ReportPreferences: Codable, Equatable, Sendable {
     var preset: ReportPreset = .codexRadar
     var customURL = ""
     var sections: Set<ReportSection> = defaultSections
+    /// The 額度 switch (`report.section.quota`, REPORTING-EXTENSIONS 11.1): on by default, its own key so that earlier
+    /// builds' stored sections keep it on.
+    var shareQuota = true
     /// `distantFuture` pauses until the user resumes.
     var pausedUntil: Date?
     var identities: [ReportIdentity] = []
@@ -97,6 +100,7 @@ struct ReportPreferences: Codable, Equatable, Sendable {
         // Names this build no longer knows (the retired `machineTraffic`) are ignored, the rest is kept.
         sections = (try? container.decode([String].self, forKey: .sections))
             .map { Set($0.compactMap(ReportSection.init(rawValue:))) } ?? Self.defaultSections
+        shareQuota = (try? container.decode(Bool.self, forKey: .shareQuota)) ?? true
         pausedUntil = try? container.decode(Date.self, forKey: .pausedUntil)
         identities = (try? container.decode([ReportIdentity].self, forKey: .identities)) ?? []
         invite = try? container.decode(ReportInvite.Answer.self, forKey: .invite)

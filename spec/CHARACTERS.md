@@ -108,10 +108,17 @@ shoulders to the hips (a cape in the skirt layer, a coat to the knees): then it 
 `wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
 move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
 cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
-is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice),
-and `props` (per band, points in canvas fractions on a held object the split spreads over other layers, such as a
-doll it takes for a second head: its face in `face`, its eyes in `irides`, its hair in `back hair`; build option
-`--band` names the band). Each point asks SAM on its own; the smallest mask it scores at least 0.8 joins the object,
+is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice;
+the hint also suits long-skirted art whose boots peek out under a hem that barely covers their tops, which would
+otherwise part from the hem in a hop or a flare. With it, each blob of drawn art no layer covers (blobs as in
+Recovery) that has at least 10 % of a 4 px ring on the skirt and 10 % on the shoes, and at least half of whose pixels
+are darker than paper, joins the shoe layer holding most of that ring: a shin See-Through left out between the hem
+and the boots, which would show the desktop. The piece is the patch of uncovered art the blob lies in, within 12 px
+of it, opaque, as opaque as the art is dark (darkness / 0.3) on its 1 px rim against the paper, and it runs on 2 px
+under the soft edges of the layers around it (covered, under 0.99, away from the paper), so the hem's edge never
+shows a dark line across the shin), and `props` (per band, points in canvas fractions on a held object the split
+spreads over other layers, such as a doll it takes for a second head: its face in `face`, its eyes in `irides`, its
+hair in `back hair`; build option `--band` names the band). Each point asks SAM on its own; the smallest mask it scores at least 0.8 joins the object,
 closed by 3 px, with enclosed gaps under 5 % of it filled (eyes, a mouth) and larger ones left out (a hand across it).
 The mask, grown by 2 px, becomes one `objects` layer named `prop` in the objects slot of the draw order, opaque
 inside SAM's mask and as opaque as the layers were on the grown rim. Every layer drawn above that slot gives up its

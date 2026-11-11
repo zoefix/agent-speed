@@ -1,6 +1,6 @@
 {
  "id": "glm",
- "packVersion": 1,
+ "packVersion": 2,
  "name": {
   "zh-Hant": "GLM 娘",
   "zh-Hans": "GLM 娘",
@@ -39,6 +39,7 @@
  "rig": {
   "recover": true,
   "tail": true,
-  "ears": true
+  "ears": true,
+  "legsInSkirt": true
  }
 }

@@ -8,7 +8,18 @@ final class TrackedFile {
     let root: String
     let fileID: FileID
     var reader: TranscriptReader
-    var parser: TranscriptParser
+    var parser: TranscriptParser {
+        didSet { cachedState = nil }
+    }
+    /// The parser's state, kept until the parser changes. Reading `parser.state` copies the whole parser; over thousands
+    /// of files on every publish (twice a second) that cost about a tenth of a core.
+    var state: AgentState {
+        if let cachedState { return cachedState }
+        let state = parser.state
+        cachedState = state
+        return state
+    }
+    private var cachedState: AgentState?
     /// For an Antigravity database, the `.db` with its `-wal` folded in (`FileStat.databaseStat`); for a Factory Droid
     /// session, the transcript with its sidecar's modification time (`DroidPaths.stat`).
     var lastStat: FileStat
@@ -22,6 +33,10 @@ final class TrackedFile {
     var isDirty = false
     /// Some read of the file completed (seeded or live).
     var wasRead = false
+    /// The parser keeps Codex token counts for the quota estimate (QUOTAS 10.4).
+    var collectsQuotaLines = false {
+        didSet { if collectsQuotaLines { parser.collectCodexQuotaLines() } }
+    }
 
     init(
         path: String,
@@ -44,6 +59,7 @@ final class TrackedFile {
     /// Parser state restarts after truncation or replacement; the global dedupe set is kept.
     func resetParser() {
         parser = TranscriptParser(family: family, agentId: path, fileID: fileID, root: root)
+        if collectsQuotaLines { parser.collectCodexQuotaLines() }
     }
 
     /// A Factory Droid session also changes when its sidecar does, whatever its modification time (METRICS 4.16).

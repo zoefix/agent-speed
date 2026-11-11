@@ -79,10 +79,13 @@ public struct ReportOptions: Equatable, Sendable {
     public var extensions: ReportExtensions
     /// `maxMessageBytes` of the WebSocket transport: the report message must fit as well (METRICS 11.9).
     public var messageLimit: Int?
+    /// The `quotas` this report carries (REPORTING-EXTENSIONS 11.2, 11.3); nil leaves the member out ("no change").
+    public var quotas: [QuotaReportEntry]?
 
     public init(sections: Set<ReportSection>, maxModels: Int = 16, bodyLimit: Int = 16_384, metric: SpeedMetric = .output,
                 redline: Double = 2000, priceVersion: Int = 1, extensions: ReportExtensions = .none,
-                messageLimit: Int? = nil) {
+                messageLimit: Int? = nil, quotas: [QuotaReportEntry]? = nil) {
+        self.quotas = quotas
         self.sections = sections
         self.maxModels = maxModels
         self.bodyLimit = bodyLimit
@@ -128,8 +131,9 @@ public enum ReportBody {
     public static let maxCount = 100_000
     public static let maxWindowMs: Int64 = 900_000
 
-    /// The body as sent: within `bodyLimit`, dropping the per-model breakdowns, then `models`, then `sources` when it
-    /// would not fit; the top-level `perfScore` (or legacy `taskScore`) always stays (METRICS 11.10 *Size*).
+    /// The body as sent: within `bodyLimit`, dropping `quotas` first (REPORTING-EXTENSIONS 11.3), then the per-model
+    /// breakdowns, then `models`, then `sources` when it would not fit; the top-level `perfScore` (or legacy
+    /// `taskScore`) always stays (METRICS 11.10 *Size*).
     public static func data(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
                             _ options: ReportOptions) -> Data {
         fitted(envelope, content, sample, options).data
@@ -142,6 +146,11 @@ public enum ReportBody {
         let scores = options.scoreMode
         var document = json(envelope, content, sample, options, scores: scores)
         var data = document.compactData
+        if !options.fits(data), options.quotas != nil {
+            options.quotas = nil
+            document = json(envelope, content, sample, options, scores: scores)
+            data = document.compactData
+        }
         if !options.fits(data), options.extensions.modelHarnessRequests || options.extensions.executionModes {
             options.extensions.modelHarnessRequests = false
             options.extensions.executionModes = false
@@ -227,6 +236,9 @@ public enum ReportBody {
             members.append(.init("taskScore", ReportPerfScoreValue.legacy(thinking: perf.thinking).json))
         case .none:
             break
+        }
+        if let quotas = options.quotas {
+            members.append(.init("quotas", .array(quotas.prefix(QuotaEstimateConstants.maxEntries).map(\.json))))
         }
         if let realtime = envelope.realtime {
             let mixed = sections.contains(.traffic) && sample.traffic.status == .ok

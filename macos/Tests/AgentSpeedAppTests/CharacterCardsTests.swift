@@ -60,6 +60,13 @@ struct CharacterCardsTests {
                                     performanceLoud: true, costLoud: true)
     }
 
+    @Test func breathingCardsKeepTheirTextTextures() {
+        for scale in [0.96, 0.988, 1.0, 1.012, 1.05] { #expect(CharacterBodyPainter.rasterScale(scale) == 1, "\(scale)") }
+        #expect(CharacterBodyPainter.rasterScale(1.06) == 1.25)
+        #expect(CharacterBodyPainter.rasterScale(1.3) == 1.5)
+        #expect(CharacterBodyPainter.rasterScale(2) == 2)
+    }
+
     @Test func cardsWithoutValuesHaveNoSize() {
         let cards = CharacterCards(frame: Self.frame(nil), character: Self.frame(nil).content.character, backing: 2)
         for card in [HudCard.performance, .network, .cost] { #expect(cards.size(card, model: nil).w == 0) }

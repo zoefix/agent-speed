@@ -86,6 +86,10 @@ extension ReportController {
         var options = options(for: document)
         options.sections = sections.intersection(document.sections)
         if websocket { options.messageLimit = (document.websocket ?? .standard).maxMessageBytes }
+        // The quota entries as the next report that carries them would (REPORTING-EXTENSIONS 11.2).
+        if sharesQuotas(document, on: draft?.shareQuota ?? preferences.shareQuota) {
+            options.quotas = currentQuotaEntries()
+        }
         var content = window.content(sample)
         // The completions the next build takes (METRICS 11.10); none before the consent sheet's Start.
         if draft == nil, options.perfScoreActive { content.perfStats = perfTracker.pending }

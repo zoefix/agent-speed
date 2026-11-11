@@ -666,6 +666,35 @@ class AppendageTests(unittest.TestCase):
         self.assertEqual(parts[0].alpha[35, 50], 0.0)
         self.assertEqual(parts[1].alpha[205, 208], 0.0)
 
+    def shin_layers(self, shin):
+        from characters.rig.layers import Layer
+        ref = np.ones((300, 300, 3), np.float32)
+        ref[40:100, 90:210] = 0.4
+        ref[130:220, 120:180] = 0.4
+        ref[100:130, 130:170] = shin
+        skirt = np.zeros((300, 300, 4), np.float32)
+        skirt[40:100, 90:210] = 1
+        skirt[99, 90:210, 3] = 0.85
+        boot = np.zeros((300, 300, 4), np.float32)
+        boot[130:220, 120:180] = 1
+        return ref, [Layer("footwear", "footwear", boot), Layer("bottomwear", "bottomwear", skirt)]
+
+    def test_a_shin_no_layer_holds_between_hem_and_boot_joins_the_boot(self):
+        from characters.rig.appendages import legs_under_hem
+        ref, parts = self.shin_layers((0.86, 0.72, 0.68))
+        self.assertGreater(legs_under_hem(parts, ref), 0)
+        self.assertEqual(parts[0].alpha[115, 150], 1.0)
+        np.testing.assert_allclose(parts[0].rgba[115, 150, :3], (0.86, 0.72, 0.68))
+        self.assertEqual(parts[0].alpha[99, 150], 1.0)
+        self.assertEqual(parts[0].alpha[115, 120], 0.0)
+
+    def test_paper_the_line_art_encloses_between_hem_and_boot_stays_out(self):
+        from characters.rig.appendages import legs_under_hem
+        ref, parts = self.shin_layers(1.0)
+        ref[100:130, 130] = ref[100:130, 169] = 0.2
+        self.assertEqual(legs_under_hem(parts, ref), 0)
+        self.assertEqual(parts[0].alpha[115, 150], 0.0)
+
 class WaistTests(unittest.TestCase):
     def layers(self, top, bottom):
         from characters.rig.layers import Layer

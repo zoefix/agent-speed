@@ -1,9 +1,10 @@
 {
  "id": "claude",
- "packVersion": 1,
+ "packVersion": 2,
  "name": {"zh-Hant": "Claude 娘", "zh-Hans": "Claude 娘", "en": "Claude-chan", "ja": "Claudeちゃん"},
  "vendors": ["anthropic"],
  "accent": "#D97757",
  "artist": {"name": "ZipZipPipe", "url": "https://genderswapai.com/zh-CN/ai-gijinka/claude"},
- "license": "Illustration by ZipZipPipe, used with the artist's permission."
+ "license": "Illustration by ZipZipPipe, used with the artist's permission.",
+ "rig": {"legsInSkirt": true}
 }

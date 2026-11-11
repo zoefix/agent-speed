@@ -178,6 +178,9 @@ struct ReportConsentSheet: View {
             ReportSectionToggles(model: model, selection: Binding(
                 get: { model.report.consent?.sections ?? [] },
                 set: { model.report.consent?.sections = $0 }
+            ), quota: Binding(
+                get: { model.report.consent?.shareQuota ?? true },
+                set: { model.report.consent?.shareQuota = $0 }
             ), discovery: draft.discovery)
             .disabled(draft.isStarting)
         } header: {

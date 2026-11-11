@@ -203,7 +203,8 @@ public sealed class ReportDiscovery
 
     /// <summary>
     /// What the preview assumes before a service's document is known (DESIGN 11, Preview window): the API at the service
-    /// URL, every section, the protocol's defaults and the performance score extension (METRICS 11.10). Never stored or confirmed.
+    /// URL, every section, the protocol's defaults, and the performance score (METRICS 11.10) and quota estimate
+    /// (REPORTING-EXTENSIONS 11) extensions. Never stored or confirmed; the real document can only advertise fewer.
     /// </summary>
     public static ReportDiscovery? Assumed(ReportServiceUrl service, string name)
     {
@@ -213,7 +214,7 @@ public sealed class ReportDiscovery
             ("versions", ReportJson.Array([ReportJson.Of(SupportedVersion)])),
             ("service", ReportJson.Object(("name", ReportJson.Of(name)), ("terms", ReportJson.Of(link)), ("privacy", ReportJson.Of(link)))),
             ("api", ReportJson.Of(service.Text)),
-            ("extensions", ReportJson.Object((ReportExtensions.PerfScoreName, ReportJson.Of(1)))));
+            ("extensions", ReportJson.Object((ReportExtensions.PerfScoreName, ReportJson.Of(1)), (ReportExtensions.QuotaEstimateName, ReportJson.Of(1)))));
         return Parse(json.ToCompactBytes(), service, out _);
     }
 
@@ -376,7 +377,8 @@ public sealed class ReportDiscovery
         var modes = root.ExtensionVersion("executionModes", ReportExtensions.NewestModesVersion);
         var extensions = new ReportExtensions(root.Extension("modelHarnessRequests"), modes > 0, root.Extension("profileAvatar"),
             root.Extension("sharedIdentity"), root.Extension(ReportWebSocketProtocol.Extension), root.Extension(ReportExtensions.TaskScoreName),
-            root.Extension(ReportExtensions.PerfScoreName), ExecutionModesVersion: Math.Max(modes, 1));
+            root.Extension(ReportExtensions.PerfScoreName), ExecutionModesVersion: Math.Max(modes, 1),
+            QuotaEstimate: root.Extension(ReportExtensions.QuotaEstimateName));
         return new ReportDiscovery
         {
             Versions = versions,

@@ -22,6 +22,9 @@ struct CodexParser: Sendable {
     private var subagentStartOrdinal: Int64?
     /// The account's limits from the newest token count of this file that had a window (QUOTAS 3).
     private(set) var quota: QuotaSnapshot?
+    /// Every token count with a window and a reset since the last take, for the quota estimate (QUOTAS 10.4); nil
+    /// while nobody collects them.
+    private var quotaLines: [QuotaCodexLine]?
 
     init(agentId: String, fileID: FileID) {
         self.agentId = agentId
@@ -42,6 +45,16 @@ struct CodexParser: Sendable {
 
     mutating func keepCompletionsOnly() {
         state.actions.storesActions = false
+    }
+
+    mutating func collectQuotaLines() {
+        if quotaLines == nil { quotaLines = [] }
+    }
+
+    mutating func takeQuotaLines() -> [QuotaCodexLine] {
+        guard let lines = quotaLines, !lines.isEmpty else { return [] }
+        quotaLines = []
+        return lines
     }
 
     mutating func consume(
@@ -162,6 +175,10 @@ struct CodexParser: Sendable {
     /// Whatever the usage rules do with the line; a token count without a usable window replaces nothing.
     private mutating func noteQuota(_ limits: CodexRateLimits, at timestamp: Int64) {
         let windows = limits.windows(timestampMs: timestamp)
+        if quotaLines != nil {
+            let line = QuotaCodexLine(file: agentId, ts: timestamp, windows: windows, plan: limits.planType)
+            if !line.windows.isEmpty { quotaLines?.append(line) }
+        }
         guard !windows.isEmpty, timestamp > quota?.observedMs ?? .min else { return }
         quota = QuotaSnapshot(source: .codex, observedMs: timestamp, windows: windows)
     }

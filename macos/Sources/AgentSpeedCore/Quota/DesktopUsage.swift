@@ -34,6 +34,13 @@ enum DesktopUsage {
         return after.isEmpty || after.first == UInt8(ascii: "?")
     }
 
+    /// The organization uuid of a usage URL (QUOTAS 10.1), lowercased; nil for any other URL.
+    static func organization(ofURL url: String) -> String? {
+        guard isUsageURL(url) else { return nil }
+        let prefix = "https://claude.ai/api/organizations/"
+        return String(url.dropFirst(prefix.count).prefix(36)).lowercased()
+    }
+
     private static func isHex(_ byte: UInt8) -> Bool {
         (UInt8(ascii: "0")...UInt8(ascii: "9")).contains(byte) || (UInt8(ascii: "a")...UInt8(ascii: "f")).contains(byte)
             || (UInt8(ascii: "A")...UInt8(ascii: "F")).contains(byte)

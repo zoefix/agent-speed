@@ -633,6 +633,11 @@ void OrbWindow::updateCharacter(const QVariantMap& snap, double time) {
         costCardNumber_.clear();
     }
     costCardAtLeast_ = flowing && snap.value(QStringLiteral("costPartial")).toBool();
+    const bool todayShown = snap.value(QStringLiteral("costTodayRequests")).toLongLong() > 0;
+    costTodayAmount_ = todayShown ? snap.value(QStringLiteral("costTodayAmount")).toString() : QString();
+    costTodayNumber_ = snap.value(QStringLiteral("costTodayNumber")).toString();
+    costTodayAtLeast_ = todayShown && snap.value(QStringLiteral("costTodayAtLeast")).toBool();
+    costTodayUnknown_ = todayShown && snap.value(QStringLiteral("costTodayUnknown")).toBool();
     costCardUnit_ = fill(strings_.t(QStringLiteral("cost.unitPerSecond")), {snap.value(QStringLiteral("costSymbol")).toString()});
 }
 
@@ -912,6 +917,10 @@ void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, 
         c.costAtLeast = costCardAtLeast_;
         c.costUnknown = costCardUnknown_;
         c.costOpacity = costOpacity_;
+        c.costTodayGlyph = strings_.t(QStringLiteral("character.cost.today"));
+        c.costTodayAmount = costTodayAmount_;
+        c.costTodayAtLeast = costTodayAtLeast_;
+        c.costTodayUnknown = costTodayUnknown_;
         c.todayLine = todayText_.isEmpty() ? QString() : fill(strings_.t(QStringLiteral("boards.today")), {todayText_});
         c.agentsLine = agentCount_ > 0 ? fill(strings_.t(QStringLiteral("agents.count")), {QString::number(agentCount_)}) : QString();
         if (const auto& latency = characterReadings_.latency(); latency && characterReadouts_.latency) {
@@ -1323,6 +1332,14 @@ void OrbWindow::updateLabel() {
             const QString shown = costCardAtLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {costCardNumber_}) : costCardNumber_;
             label += separator + fill(strings_.t(QStringLiteral("a11y.board.cost")), {shown, currency});
         }
+    }
+    // The 費用 card's 今日 row after the cost reading, whenever it shows.
+    if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.cost && !costTodayAmount_.isEmpty()) {
+        const QString amount = costTodayNumber_ + QLatin1Char(' ') + currency;
+        const QString spoken = costTodayUnknown_ ? strings_.t(QStringLiteral("cost.unknown"))
+                               : costTodayAtLeast_ ? fill(strings_.t(QStringLiteral("a11y.orb.costAtLeast")), {amount})
+                                                   : amount;
+        label += separator + fill(strings_.t(QStringLiteral("a11y.orb.costToday")), {spoken});
     }
     // The models card after the cost: every running model, drawn or not.
     if (isCharacter() && unavailable_.isEmpty() && characterReadouts_.models && characterReadings_.modelsOpacity() > 0.5) {

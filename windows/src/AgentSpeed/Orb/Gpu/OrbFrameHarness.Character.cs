@@ -144,8 +144,9 @@ internal static partial class OrbFrameHarness
     /// <summary>
     /// The 額度 card (DESIGN 2a.6) at 148 and 92 pt with two sources (Claude Desktop 7d + Fable 7d, Codex 7d), three
     /// (Claude Code 5h + 7d too) and hosts' sources after this computer's (DESIGN 13 <i>Host quotas</i>: Codex, then Codex
-    /// and Claude Code on <c>devbox</c> and Gemini CLI on <c>gpu-01.lab</c>), at rest so the live cards are quiet (below
-    /// S = 96 the column keeps two cards): <c>character-quota-ID-dark|light.png</c>.
+    /// and Claude Code on <c>devbox</c> and Gemini CLI on <c>gpu-01.lab</c>), each with the demo's estimates (QUOTAS 10.7: the
+    /// extrapolated percents), at rest so the live cards are quiet (below S = 96 the column keeps two cards):
+    /// <c>character-quota-ID-dark|light.png</c>.
     /// </summary>
     private static void CharacterQuotaSheets(GpuDevice device, OffscreenTarget target, CharacterPack pack, double scale, OrbReadoutStrings strings,
         string info, Localizer loc, string directory)
@@ -154,12 +155,9 @@ internal static partial class OrbFrameHarness
         var two = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: true), _ => true, now, loc);
         var three = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: false), _ => true, now, loc);
         var hosts = new[] { ("A0000000-0000-4000-8000-000000000001", "devbox"), ("A0000000-0000-4000-8000-000000000002", "gpu-01.lab") };
-        var remote = global::AgentSpeed.Quota.QuotaDemo.State(now, two: true) with
-        {
-            Hosts = global::AgentSpeed.Quota.QuotaDemo.Hosts(now, [.. hosts.Select(h => h.Item1)]),
-        };
+        var remote = global::AgentSpeed.Quota.QuotaDemo.WithHosts(global::AgentSpeed.Quota.QuotaDemo.State(now, two: true), now, [.. hosts.Select(h => h.Item1)]);
         var withHosts = OrbQuotaCard.Of(remote.CardItems(s => s is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.Gemini, _ => true, hosts,
-            hosts.Select(h => h.Item1).ToHashSet()), now, loc);
+            hosts.Select(h => h.Item1).ToHashSet()), now, loc, null, remote);
         foreach (var dark in new[] { true, false })
         {
             var rows = new List<List<BitmapSource>>();
@@ -195,6 +193,7 @@ internal static partial class OrbFrameHarness
         CharacterName = pack?.Manifest.Name.GetValueOrDefault(loc.LanguageCode) ?? pack?.Id,
         Accent = pack is null ? Rgba.FromHex("#D97757") : Rgba.FromHex(pack.Manifest.Accent),
         CostGlyph = loc["cost.glyph"],
+        CostTodayGlyph = loc["character.cost.today"],
         TodayLine = loc.Format("boards.today", SpeedFormat.Tokens(1_240_000)),
         AgentsLine = loc.Format("agents.count", 3),
         IntelligenceGlyph = loc["intel.glyph"],
@@ -217,6 +216,9 @@ internal static partial class OrbFrameHarness
         ]
         : [];
 
+    /// <summary>The cost card's 今日 row in every sheet: a day's cost so far.</summary>
+    private static readonly CostToday HarnessToday = new("$12.34", false, false, "today's cost 12.34");
+
     private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value, int models = 3)
     {
         var generating = value > 1;
@@ -227,7 +229,7 @@ internal static partial class OrbFrameHarness
             : null;
         orb.SetCharacterNetwork(time, network);
         orb.SetCharacterReadings(time, performance, money, generating, generating ? OrbLatency.Of(1180 + 40 * Math.Sin(time), loc) : null,
-            HarnessModels(value, models));
+            HarnessModels(value, models), HarnessToday);
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,

@@ -1,6 +1,6 @@
 {
  "id": "perplexity",
- "packVersion": 1,
+ "packVersion": 2,
  "name": {
   "zh-Hant": "Perplexity 娘",
   "zh-Hans": "Perplexity 娘",
@@ -37,6 +37,7 @@
   ]
  },
  "rig": {
-  "recover": true
+  "recover": true,
+  "legsInSkirt": true
  }
 }

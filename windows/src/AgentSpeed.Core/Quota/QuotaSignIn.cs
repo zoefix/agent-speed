@@ -41,11 +41,18 @@ public sealed class QuotaSignIn
     /// <summary><c>$CODEX_HOME/auth.json</c> (else <c>~/.codex</c>) and <c>$CLAUDE_CONFIG_DIR/.claude.json</c> (else <c>~/.claude.json</c>).</summary>
     public static QuotaSignIn ForThisComputer(Func<string, string?>? environment = null)
     {
+        var (codex, claude) = Files(environment);
+        return new QuotaSignIn(codex, claude);
+    }
+
+    /// <summary>The two files of <see cref="ForThisComputer"/>.</summary>
+    public static (string CodexAuth, string ClaudeState) Files(Func<string, string?>? environment = null)
+    {
         environment ??= Environment.GetEnvironmentVariable;
         var home = Environment.GetFolderPath(Environment.SpecialFolder.UserProfile);
         var codex = environment("CODEX_HOME") is { Length: > 0 } codexHome ? codexHome : Path.Combine(home, ".codex");
         var claude = environment("CLAUDE_CONFIG_DIR") is { Length: > 0 } config ? Path.Combine(config, ".claude.json") : Path.Combine(home, ".claude.json");
-        return new QuotaSignIn(Path.Combine(codex, "auth.json"), claude);
+        return (Path.Combine(codex, "auth.json"), claude);
     }
 
     public bool Codex => Check(_codex);

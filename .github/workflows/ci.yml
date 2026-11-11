@@ -79,7 +79,7 @@ jobs:
           set -o pipefail
           # The suites with network round trips (and their timeouts) run after the rest, on their own: with every test
           # started at once, a small runner can starve them past their timeouts.
-          network='HTTPFetcherTests|LanNetworkTests|Report(Discovery|DiscoveryFailure|EndToEnd|Invite|Profile|StreamEndToEnd)Tests'
+          network='HTTPFetcherTests|LanNetworkTests|RemoteEndToEndTests|Report(Discovery|DiscoveryFailure|EndToEnd|Invite|Profile|StreamEndToEnd)Tests'
           { swift test --skip "$network" && swift test --filter "$network"; } 2>&1 | tee "$RUNNER_TEMP/test.log" || {
             grep -E '✘ Test [^ ]+ (recorded|failed)|error:' "$RUNNER_TEMP/test.log" | head -10 | while IFS= read -r line; do echo "::error::$line"; done
             exit 1

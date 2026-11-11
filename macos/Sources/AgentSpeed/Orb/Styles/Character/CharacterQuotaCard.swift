@@ -3,9 +3,10 @@ import AgentSpeedCore
 import AppKit
 
 /// The 額度 card (DESIGN 2a.6): per source a header line (the source's color dot and its name), then one line per
-/// window — the label in a column as wide as the card's widest, the bar, the percent right-aligned in a `100%` cell
-/// and the short reset in a cell as wide as the widest. When the room to the orb's edge is short the reset cells go
-/// first, then the bars shorten from 5 t to 3 t, then the headers go and the dot moves before each source's first label.
+/// window — the label in a column as wide as the card's widest, the bar, the percent right-aligned in a `≈100%` cell
+/// (`≈` while extrapolated) and the short reset in a cell as wide as the widest; no amount (the dashboard has it). When
+/// the room to the orb's edge is short the reset cells go first, then the bars shorten from 5 t to 3 t, then the headers
+/// go and the dot moves before each source's first label.
 /// A remote host's source reads `<source> · <host>` (DESIGN 13): the host follows the name while the card's width
 /// holds it, else it takes its own line under the name (in the compact form, above the source's lines), shortened
 /// with an ellipsis when even that line is too short; the host never widens the card.
@@ -37,11 +38,14 @@ extension CharacterCards {
     /// The source's name leads its lines: the same size and token, a step heavier.
     var quotaNameStyle: OrbTextStyle { m.chip(quotaHeaderSize) }
     var quotaPercentStyle: OrbTextStyle { m.number(m.t) }
+    /// The `≈` before an extrapolated percent (QUOTAS 10.7), in the secondary token.
+    var quotaApproxStyle: OrbTextStyle { m.label(0.8 * m.t) }
 
     func quotaColumns() -> QuotaColumns? {
         let sources = dynamics.quota.sources
         guard !sources.isEmpty else { return nil }
-        var columns = QuotaColumns(label: 0, percent: digits("100%", quotaPercentStyle), reset: 0, header: 0)
+        var columns = QuotaColumns(label: 0, percent: advance("≈", quotaApproxStyle) + digits("100%", quotaPercentStyle),
+                                   reset: 0, header: 0)
         for source in sources {
             columns.header = max(columns.header, quotaDot + quotaDotGap + advance(source.name, quotaNameStyle))
             for line in source.lines {
@@ -245,15 +249,20 @@ extension CharacterCards {
                                   into scene: inout OrbScene) {
         let style = quotaPercentStyle
         func color(_ percent: Int) -> RGBColor { QuotaLevel(percent: percent) == .critical ? red.opacity(0.95) : ink.number }
-        if let old = line.oldPercent, line.percentMix < 1 {
-            let text = "\(old)%"
-            putDigits(text, style, pen, x: right - digits(text, style), baseline: baseline,
-                      color: color(old).opacity(alpha * (1 - line.percentMix)), into: &scene)
+        func draw(_ percent: Int, estimated: Bool, alpha: Double) {
+            let text = "\(percent)%"
+            let x = right - digits(text, style)
+            putDigits(text, style, pen, x: x, baseline: baseline, color: color(percent).opacity(alpha), into: &scene)
+            guard estimated else { return }
+            put("≈", quotaApproxStyle, pen, x: x - advance("≈", quotaApproxStyle), baseline: baseline,
+                color: ink.secondary.opacity(alpha), into: &scene)
         }
-        let text = "\(line.percent)%"
-        putDigits(text, style, pen, x: right - digits(text, style), baseline: baseline,
-                  color: color(line.percent).opacity(alpha * line.percentMix), into: &scene)
+        if let old = line.oldPercent, line.percentMix < 1 {
+            draw(old, estimated: line.oldEstimated, alpha: alpha * (1 - line.percentMix))
+        }
+        draw(line.percent, estimated: line.estimated, alpha: alpha * line.percentMix)
     }
+
 }
 
 /// The system red as it resolves on a dark or light card, kept until the system colors change, and the font metrics
