@@ -29,6 +29,8 @@ enum DumpQuota {
         let apps = QuotaProcessScan().scan(nowMs: nowMs)
         print("signedIn codex=\(codexSignIn.refresh(nowMs: nowMs)) claudeCode=\(claudeSignIn.refresh(nowMs: nowMs))")
         print("runs codex=\(apps.codex) claudeCode=\(apps.claudeCode) claudeDesktop=\(apps.claudeDesktop)")
+        // Desktop counts as signed in by its snapshot's age (QUOTAS 6).
+        if let desktop { print("claudeDesktop snapshot \((nowMs - desktop.observedMs) / 60_000) min old") }
     }
 
     static func line(_ name: String, _ snapshot: QuotaSnapshot?, nowMs: Int64) -> String {

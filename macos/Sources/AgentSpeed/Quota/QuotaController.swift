@@ -16,8 +16,9 @@ final class QuotaController {
     }
     static let phaseOneSources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop]
     static let tickInterval: TimeInterval = 5
-    /// Desktop only refreshes its cached response while signed in (QUOTAS 6).
-    static let desktopSignedInMs: Int64 = 45 * 60_000
+    /// Desktop only refreshes its cached response while signed in and in use (when its window comes to the front, then
+    /// every few minutes while it stays there), so a Desktop left in the background keeps an older one (QUOTAS 6).
+    static let desktopSignedInMs: Int64 = 24 * 3_600_000
     /// The dashboard lists a source with a quota observed this recently (DESIGN 4).
     static let listedWithinMs: Int64 = 24 * 3_600_000
 

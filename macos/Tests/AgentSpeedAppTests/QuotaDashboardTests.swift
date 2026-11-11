@@ -54,8 +54,8 @@ struct QuotaDashboardTests {
         #expect(model.quota.cardSnapshots(within: nil).map(\.source) == [.claudeCode, .claudeDesktop])
         #expect(model.quota.cardSnapshots(within: SourceSet(.claudeDesktop)).map(\.source) == [.claudeDesktop])
 
-        // Desktop counts as signed in only while it refreshed its response in the last 45 minutes.
-        model.quota.preview(desktop: Self.desktop(observedAgoMinutes: 46), cli: Self.cli, apps: apps,
+        // Desktop counts as signed in while it refreshed its response in the last 24 hours.
+        model.quota.preview(desktop: Self.desktop(observedAgoMinutes: 25 * 60), cli: Self.cli, apps: apps,
                             signedIn: [.claudeCode], nowMs: Self.now)
         #expect(model.quota.cardSnapshots(within: nil).map(\.source) == [.claudeCode])
 
@@ -63,6 +63,23 @@ struct QuotaDashboardTests {
         model.quota.preview(desktop: Self.desktop(), cli: Self.cli, apps: apps, signedIn: [], nowMs: Self.now)
         model.settings.quotaClaudeDesktop = false
         #expect(model.quota.cardSnapshots(within: nil).isEmpty)
+    }
+
+    /// Regression (2026-11-11): Claude Desktop fetches its usage only while its window is in front, so after an hour in
+    /// the background its snapshot is an hour old; the dashboard listed it, the 額度 card dropped it.
+    @Test func desktopLeftInTheBackgroundStaysOnTheCard() {
+        let model = Self.model()
+        let apps = QuotaApps(codex: true, claudeCode: true, claudeDesktop: true)
+        for minutes: Int64 in [46, 66, 3 * 60, 23 * 60] {
+            model.quota.preview(desktop: Self.desktop(observedAgoMinutes: minutes), cli: nil, apps: apps,
+                                signedIn: [.codex, .claudeCode], nowMs: Self.now)
+            #expect(model.quota.listedSources.contains(.claudeDesktop))
+            #expect(model.quota.cardSnapshots(within: nil).map(\.source) == [.claudeDesktop], "\(minutes) min old")
+        }
+        // Desktop quit: the dashboard keeps its quota, the card does not.
+        model.quota.preview(desktop: Self.desktop(observedAgoMinutes: 66), cli: nil,
+                            apps: QuotaApps(codex: true, claudeCode: true), signedIn: [.codex], nowMs: Self.now)
+        #expect(model.quota.listedSources.contains(.claudeDesktop) && model.quota.cardSnapshots(within: nil).isEmpty)
     }
 
     @Test func theDashboardListsQuotasOfTheLastDay() {

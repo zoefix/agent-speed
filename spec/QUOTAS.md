@@ -302,7 +302,7 @@ at least one window.
 | --- | --- | --- |
 | `codex` | a `codex` agent process (METRICS 10.5), or the Codex app's main process (macOS `/Applications/Codex.app/Contents/MacOS/Codex`; Windows `WindowsApps\OpenAI.Codex_*\app\Codex.exe`) | `$CODEX_HOME/auth.json`, else `~/.codex/auth.json`, parses as an object with `auth_mode == "chatgpt"` or a `tokens` object |
 | `claudeCode` | a `claudeCode` agent process (METRICS 10.5) | `$CLAUDE_CONFIG_DIR/.claude.json`, else `~/.claude.json`, has an `oauthAccount` object |
-| `claudeDesktop` | Claude Desktop's main process (macOS `/Applications/Claude.app/Contents/MacOS/Claude`, bundle id `com.anthropic.claudefordesktop`; Windows `WindowsApps\Claude_*\app\claude.exe` or `%LOCALAPPDATA%\AnthropicClaude\app-*\claude.exe`; Linux unverified) | its snapshot's `observedMs` is at most 45 minutes old: Desktop only refreshes it while signed in |
+| `claudeDesktop` | Claude Desktop's main process (macOS `/Applications/Claude.app/Contents/MacOS/Claude`, bundle id `com.anthropic.claudefordesktop`; Windows `WindowsApps\Claude_*\app\claude.exe` or `%LOCALAPPDATA%\AnthropicClaude\app-*\claude.exe`; Linux unverified) | its snapshot's `observedMs` is at most 24 hours old: Desktop only refreshes it while signed in and in use: when its window comes to the front, then every few minutes while it stays there (seen 2026-11-11; no refresh at all for over an hour while it ran in the background), so a shorter limit drops a Desktop that is signed in but left in the background |
 
 - Only the named keys are looked at. `auth.json` and `.claude.json` are parsed in memory and never copied, kept or
   logged.
