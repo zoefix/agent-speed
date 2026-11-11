@@ -273,8 +273,8 @@ struct QuotaEstimateFeedTests {
 
     // MARK: Cost
 
-    /// A busy week of one Claude account and Codex builds well within the estimator's 5 s interval (debug build, with
-    /// room for the other suites running beside it: about 1 s alone).
+    /// A busy week of one Claude account and Codex builds within the estimator's 5 s interval even in a debug build
+    /// beside the other suites (about 1 s alone): a guard against anything quadratic.
     @Test func aBusyWeekBuildsQuickly() {
         var inputs = QuotaEstimateInputs()
         let start = Self.now - 7 * 86_400_000
@@ -301,6 +301,6 @@ struct QuotaEstimateFeedTests {
         _ = build.entries(nowMs: Self.now)
         let seconds = Double(DispatchTime.now().uptimeNanoseconds - began) / 1e9
         #expect(!build.current.isEmpty)
-        #expect(seconds < 3, "\(seconds) s")
+        #expect(seconds < Double(QuotaEstimator.buildIntervalMs) / 1000, "\(seconds) s")
     }
 }
