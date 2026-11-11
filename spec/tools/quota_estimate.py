@@ -766,7 +766,14 @@ def build_cases():
         "plan": plan_cases(),
         "live": live_cases(),
         "report": report_cases(),
+        "pipeline": pipeline_cases(),
     }
+
+
+def pipeline_cases():
+    sys.path.insert(0, str(Path(__file__).resolve().parent))
+    import quota_estimate_pipeline as qp  # noqa: E402
+    return qp.cases()
 
 
 def canonical(obj):
@@ -789,6 +796,13 @@ HAND = {
     "live": [25.0, 20.0, 20, 3.0, 0.0, 40.0],
     "cadence": [True, False, True, True, True, True],
     "weights": [1.0, 0.5, 0.5, 0.5, 0.015625],
+    # QUOTAS 10.3: Opus 9 000 000 for 1000 tokens sets the rate; 500 unpriced tokens add 4 500 000.
+    "pipeline/ledger": [9_000_000, [12_000_000, 1], 16_500_000],
+    # QUOTAS 10.7: first response starts at R + 38 min 0 s (minute R + 37 min 47 s + 13 s), now R + 2 h.
+    "pipeline/live": [(None, 0.0, False, None), (None, 3.0, True, 13_067_000)],
+    "pipeline/store": {"observations": 256, "instances": 64, "keys": 1},
+    "pipeline/cadence": ["entries", "absent", "entries", "absent", "entries", "entries", "entries", "[]", "absent",
+                         "entries", "entries", "entries", "entries", "absent", "entries"],
 }
 
 
@@ -804,6 +818,23 @@ def hand_errors(cases):
         errors.append("send cadence differs from the worked values")
     if [c["expected"] for c in cases["weights"]] != HAND["weights"]:
         errors.append("weights differ from the worked values")
+    pl = cases["pipeline"]
+    s = pl["ledger"][0]["expected"]["sums"][0]
+    if [s["inner"], s["outer"], s["outerHigh"]] != HAND["pipeline/ledger"]:
+        errors.append("pipeline ledger sums differ from the worked values")
+    live = [tuple(e["expected"]["entries"][0][f] for f in ("usedPercent", "livePercent", "liveEstimated", "resetsInMs"))
+            for e in pl["live"][:2]]
+    if live != HAND["pipeline/live"]:
+        errors.append("pipeline live percent differs from the worked values")
+    if pl["store"][2]["expected"]["storeCounts"] != HAND["pipeline/store"]:
+        errors.append("store limits differ")
+    if pl["store"][0]["expected"]["estimates"] != pl["store"][1]["expected"]["estimates"]:
+        errors.append("the stored file does not give the same estimate back")
+    cut = list(pl["loweredCap"][0]["expected"]["estimates"].values())[0]
+    if not 59e6 < cut["cap"] < 61e6:
+        errors.append("lowered cap not followed")
+    if pl["cadence"]["expected"] != HAND["pipeline/cadence"]:
+        errors.append("pipeline cadence differs from the worked values")
     return errors
 
 
@@ -814,12 +845,17 @@ def check():
         print("quota-estimate-cases.json differs from the reference (run --write after reviewing)", file=sys.stderr)
         return 1
     cases = json.loads(expected)
-    errors = hand_errors(cases) + schema_check([e["expected"] for e in cases["report"]["entries"]])
+    piped = [e for group in cases["pipeline"].values() if isinstance(group, list)
+             for c in group for e in c["expected"].get("entries", [])]
+    errors = hand_errors(cases) + schema_check([e["expected"] for e in cases["report"]["entries"]] + piped)
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
-    print("quota estimate fixtures: ok (%d segment, %d vote, %d live, %d report cases)" % (
-        len(cases["segments"]), len(cases["vote"]), len(cases["live"]["cases"]), len(cases["report"]["entries"])))
+    pipeline = ", ".join("%s %d" % (k, len(v) if isinstance(v, list) else len(v["steps"]))
+                         for k, v in cases["pipeline"].items())
+    print("quota estimate fixtures: ok (%d segment, %d vote, %d live, %d report cases; pipeline: %s)" % (
+        len(cases["segments"]), len(cases["vote"]), len(cases["live"]["cases"]), len(cases["report"]["entries"]),
+        pipeline))
     return 0
 
 

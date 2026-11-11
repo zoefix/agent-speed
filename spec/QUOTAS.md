@@ -707,21 +707,24 @@ Spend and observations are pooled per account, identified on this computer by
   accounts within 8 days, each used until 70–100 %). So a Codex response belongs to the window instances (10.4) of
   the token count line that reports it (the line right after the response, at most 5 s later, in the same file), and
   instances named by one line belong to one account (union-find over the instances). A chain observed while
-  `auth.json` gave a key takes that key; a chain never seen live is an account of its own. A response without such a
+  `auth.json` gave a key takes that key (the key in force at its newest line read at or after the first key seen;
+equal keys are one account); a chain never seen live is an account of its own, keyed as vendor `codex-chain` with
+  id = its smallest instance tag in string order (`<kind>:<name>:<minutes>@<first R of the instance>`, R in ms). A response without such a
   line (API-key sign-in, another provider, a bucket other than `codex`) is no subscription spend and is left out.
 - **Remote hosts.** The relay adds `account` (the key) to its quota line (REMOTE 11.1). A host's sources and this
   computer's sources with equal keys are one account.
 
 ### 10.2 Plan and cap class
 
-- `plan` and `tier`: Codex the newest `plan_type` of the account (a null `plan_type` takes the newest non-null one
-  of the same account: newer Codex builds write null); Claude CLI `oauthAccount.organizationType` and
+- `plan` and `tier`: Codex the `plan_type` of the account (a null `plan_type` takes the account's nearest earlier
+  non-null one, else its first later one: newer Codex builds write null); Claude CLI `oauthAccount.organizationType` and
   `organizationRateLimitTier` (observed `claude_max`, `default_claude_max_20x`); Desktop inherits them on a shared
   account; else null. A value is kept only when it is 1–64 characters of `[a-z0-9_.-]`, else null.
 - **Cap class.** A cap belongs to the plan, not to the person: estimates pool every account of the same
   `(vendor, plan, tier, window)` on this computer, so the user's several Codex accounts of one plan share their
   evidence. Without a plan the class is `(account, window)`.
-- A plan change moves the account to another class from that moment; the evidence of the old plan stays with it.
+- A plan change moves the account to another class from that moment; the evidence of the old plan stays with it. An
+  instance that spans the change splits in two (same `R`), one per plan; the newer part is the current one.
   `window` is `kind`, `name` and `minutes` (section 2).
 
 ### 10.3 Spend ledger
@@ -761,8 +764,11 @@ R)`: `t` its `observedMs`, `R` its reset.
   response. Remote hosts: each quota line.
 - **Store.** `<data>/quota/estimate.json` (0600, a temporary file then a rename, written at most once a minute and at
   quit): `{"version": 1, "observations": [...], "instances": [...], "keys": [...]}` with the last 8 days of
-  observations (runs of equal values keep their first and last), the closed instances' intervals (10.5, at most 64
-  per class, newest kept, each with its plan) and the key timeline of 10.1. Account keys are stored, ids never. A
+  observations (runs of equal values keep their first and last; above 256 per instance each run keeps its last; still
+  above, 256 runs evenly spaced, first and last included), the closed instances' intervals (10.5, at most 64 per
+  class, newest kept, each with its class, account, `R`, `lo`, `hi` (null for unbounded), `pMax` and `tLast`) and the
+  key timeline of 10.1 (source, `at`, key, plan, tier). On load, stored observations and instances equal to fresh
+  ones count once. Account keys are stored, ids never. A
   file that does not parse is replaced.
 
 ### 10.5 Segments
@@ -821,7 +827,8 @@ Per cap class, pooling the current and the stored instances.
 - While `now < R` and a cap exists: `p_live = p + 100 · (C⁺(S, now) − C⁺(S, t)) / K̂`, at least `p` and at most
   `max(100, p)`; it is *estimated* when it exceeds `p` by 0.5 or more. A new vendor value replaces it.
 - After `R`: a new instance starts, `S′ = R + n · minutes` (the latest such start not after `now`) for weekly and other
-  windows; for `fiveHour`, the minute of the first local response after `R` (none yet: 0 %, not estimated, no reset).
+  windows; for `fiveHour`, the minute of the start of the first local response that started at or after `R` and has ended
+  (none yet: 0 %, not estimated, no reset).
   `R′ = S′ + minutes`, and `p_live = 100 · C⁺(S′, now) / K̂` (estimated) with `R′` as the reset.
 - Without a cap: the vendor value, then 0 % after `R` (section 2).
 
@@ -910,6 +917,23 @@ other usage of the account or a lowered cap, which a second window will tell). C
   dropped weights), weights and half-lives, the estimate (published range, confidence, the lowered-cap rule), a plan
   change, the live percent before and after a reset, report entries (rounding of micro-USD and percent, checked
   against `report-schema.json`) and the send cadence. Some values are also checked against hand-worked numbers.
+- The estimate pipeline (`pipeline` in the same file, from `spec/tools/quota_estimate_pipeline.py`): small raw inputs
+  (responses with start, end, model and cost or tokens; Codex token count lines; `auth.json` and `.claude.json`
+  changes; quota snapshots with Desktop's organization; a stored `estimate.json`) and the outputs a port must match,
+  each with a `why`:
+  - ledger sums `C⁻`/`C⁺` with an unpriced response priced at the highest rate, `modelWeek` token match, an
+    unbounded `C⁺`, Bedrock and non-`openai` routes left out;
+  - Codex chains: two accounts switching, one never seen live, a response without a token count line and one whose
+    line is 6 s late;
+  - the Desktop merge (personal plan, team plan, another organization) and the key timeline (spend before the first
+    key, a `/login`);
+  - cap classes: two accounts of one plan pooled, a null `plan_type` inheriting, no plan; the lowered-cap rule; a
+    plan change inside a window;
+  - the live percent before a reset and after it (five-hour first response, weekly `n · minutes`);
+  - the store: its shape, a read back giving the same estimate, the 256 and 64 limits, another version ignored;
+  - report entries (order, rounding, Desktop of a team organization) and a 15-step send cadence (spend only, 60 s,
+    percent, confidence, reset state, set change, a size drop counting as unsent, `[]` once when switched off, a new
+    run, leaving).
 - Phase 2: every response shape of section 9 (Grok config from a log and from the API, Devin rows, Antigravity
   summaries and `GetUserStatus`, Kimi current and legacy, Gemini buckets, Factory limits, z.ai limits, Qoder and
   WorkBuddy summaries), named-window labels and order, and Chrome cookie decryption vectors for macOS `v10`, Linux
