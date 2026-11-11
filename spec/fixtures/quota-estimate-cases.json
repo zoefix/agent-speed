@@ -385,6 +385,234 @@
     "expected": null
    }
   ],
+  "inferPlan": [
+   {
+    "why": "a weekly window and no 5-hour window: Ultra (some Ultra accounts lost the 5-hour window, user 2026-11-10)",
+    "kinds": [
+     "sevenDay",
+     "modelWeek"
+    ],
+    "own": null,
+    "anchors": [],
+    "expected": {
+     "plan": "claude_ultra",
+     "tier": null,
+     "rule": "shape"
+    }
+   },
+   {
+    "why": "no windows at all: unknown",
+    "kinds": [],
+    "own": null,
+    "anchors": [],
+    "expected": {
+     "plan": null,
+     "tier": null,
+     "rule": null
+    }
+   },
+   {
+    "why": "a 5-hour window and no anchor: unknown",
+    "kinds": [
+     "fiveHour",
+     "sevenDay"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 25000000.0
+    },
+    "anchors": [],
+    "expected": {
+     "plan": null,
+     "tier": null,
+     "rule": null
+    }
+   },
+   {
+    "why": "a quarter of a Max 20x account's 5-hour cap: Max 5x",
+    "kinds": [
+     "fiveHour",
+     "sevenDay"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 26000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": "claude_max",
+     "tier": "default_claude_max_5x",
+     "rule": "ratio"
+    }
+   },
+   {
+    "why": "a twentieth of it: Pro",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 4600000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": "claude_pro",
+     "tier": null,
+     "rule": "ratio"
+    }
+   },
+   {
+    "why": "about the same: Max 20x",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "high",
+     "cap": 120000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": "claude_max",
+     "tier": "default_claude_max_20x",
+     "rule": "ratio"
+    }
+   },
+   {
+    "why": "half of it, between Max 5x and Max 20x: unknown",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 50000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": null,
+     "tier": null,
+     "rule": null
+    }
+   },
+   {
+    "why": "own estimate of low confidence: unknown",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "low",
+     "cap": 25000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": null,
+     "tier": null,
+     "rule": null
+    }
+   },
+   {
+    "why": "the anchor of low confidence is skipped; a Pro anchor of any tier counts as 1",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 30000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_max",
+      "tier": "default_claude_max_20x",
+      "estimate": {
+       "confidence": "low",
+       "cap": 1000000.0
+      }
+     },
+     {
+      "plan": "claude_pro",
+      "tier": "default_claude_ai",
+      "estimate": {
+       "confidence": "medium",
+       "cap": 6000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": "claude_max",
+     "tier": "default_claude_max_5x",
+     "rule": "ratio"
+    }
+   },
+   {
+    "why": "an anchor of another plan has no multiplier",
+    "kinds": [
+     "fiveHour"
+    ],
+    "own": {
+     "confidence": "medium",
+     "cap": 25000000.0
+    },
+    "anchors": [
+     {
+      "plan": "claude_team",
+      "tier": null,
+      "estimate": {
+       "confidence": "medium",
+       "cap": 100000000.0
+      }
+     }
+    ],
+    "expected": {
+     "plan": null,
+     "tier": null,
+     "rule": null
+    }
+   }
+  ],
   "chains": {
    "lines": [
     [
@@ -6010,7 +6238,7 @@
        "sources": [
         "claudeDesktop"
        ],
-       "plan": null,
+       "plan": "claude_ultra",
        "tier": null,
        "window": {
         "kind": "sevenDay",
@@ -6134,7 +6362,7 @@
        "sources": [
         "claudeDesktop"
        ],
-       "plan": null,
+       "plan": "claude_ultra",
        "tier": null,
        "window": {
         "kind": "sevenDay",
@@ -6300,6 +6528,1888 @@
         "confidence": "low",
         "coverage": null,
         "accountUsedMicroUsd": 11547005,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
+   }
+  ],
+  "inference": [
+   {
+    "name": "Desktop without a 5-hour window",
+    "why": "Desktop's own account shows a weekly window and no 5-hour window: claude_ultra (some Ultra accounts lost the 5-hour window, user 2026-11-10); the Fable window of the account carries it too",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793927893000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 5,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 3,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-2"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "plans",
+      "entries"
+     ]
+    },
+    "expected": {
+     "plans": {
+      "2b2e8434ee469808": {
+       "plan": "claude_ultra",
+       "tier": null,
+       "rule": "shape"
+      }
+     },
+     "entries": [
+      {
+       "account": "aed672a15c9bb5f4",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": "claude_ultra",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 5.0,
+       "percentAgeMs": 3540000,
+       "resetsInMs": 511200000,
+       "livePercent": 5.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 2000000,
+       "observedUsedMicroUsd": 2000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "aed672a15c9bb5f4",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": "claude_ultra",
+       "tier": null,
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 3540000,
+       "resetsInMs": 511200000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 0,
+       "observedUsedMicroUsd": 0,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "Desktop of a team organization",
+    "why": "the CLI names Desktop's organization a team one: nothing is inferred",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_team",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793927893000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 5,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 3,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "plans",
+      "entries"
+     ]
+    },
+    "expected": {
+     "plans": {},
+     "entries": [
+      {
+       "account": "acc3c4f963e9699f",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 5.0,
+       "percentAgeMs": 3540000,
+       "resetsInMs": 511200000,
+       "livePercent": 5.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 2000000,
+       "observedUsedMicroUsd": 2000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "acc3c4f963e9699f",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 3540000,
+       "resetsInMs": 511200000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 0,
+       "observedUsedMicroUsd": 0,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "Desktop at a quarter of the CLI's 5-hour cap",
+    "why": "the CLI's Max 20x account caps 5 h at ≈ $95 and Desktop's own account at ≈ $23 (both medium): 20 · 23.4 / 94.9 ≈ 4.9, claude_max with default_claude_max_5x",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793924993000,
+       "endMs": 1793925013000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925043000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 2,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925173000,
+       "endMs": 1793925193000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925223000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 4,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925353000,
+       "endMs": 1793925373000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925403000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 6,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925533000,
+       "endMs": 1793925553000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925583000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 8,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925713000,
+       "endMs": 1793925733000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925763000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 10,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925893000,
+       "endMs": 1793925913000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925943000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 12,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926073000,
+       "endMs": 1793926093000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926123000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 14,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926253000,
+       "endMs": 1793926273000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926303000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 16,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926433000,
+       "endMs": 1793926453000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926483000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 18,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926613000,
+       "endMs": 1793926633000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926663000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 20,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926793000,
+       "endMs": 1793926813000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926843000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 22,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926973000,
+       "endMs": 1793926993000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927023000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 24,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927153000,
+       "endMs": 1793927173000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927203000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 26,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927333000,
+       "endMs": 1793927353000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927383000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 28,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927513000,
+       "endMs": 1793927533000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927563000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 30,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927693000,
+       "endMs": 1793927713000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927743000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 32,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927873000,
+       "endMs": 1793927893000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927923000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 34,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928053000,
+       "endMs": 1793928073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928103000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 36,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928233000,
+       "endMs": 1793928253000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928283000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 38,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928413000,
+       "endMs": 1793928433000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928463000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 40,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925053000,
+       "endMs": 1793925073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925103000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 10,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925233000,
+       "endMs": 1793925253000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925283000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 20,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925413000,
+       "endMs": 1793925433000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925463000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 30,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925593000,
+       "endMs": 1793925613000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925643000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 40,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925773000,
+       "endMs": 1793925793000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925823000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 50,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925953000,
+       "endMs": 1793925973000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926003000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 60,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793926133000,
+       "endMs": 1793926153000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926183000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 70,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793926313000,
+       "endMs": 1793926333000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2500000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926363000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 80,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      }
+     ],
+     "now": 1793935633000,
+     "outputs": [
+      "plans",
+      "estimates",
+      "entries"
+     ]
+    },
+    "expected": {
+     "estimates": {
+      "account|2b2e8434ee469808|fiveHour::300": {
+       "cap": 23387185.863,
+       "low": 21604938.272,
+       "high": 25316455.696,
+       "confidence": "medium",
+       "windows": 1
+      },
+      "plan|anthropic/claude_max|default_claude_max_20x|fiveHour::300": {
+       "cap": 94897990.062,
+       "low": 87804878.049,
+       "high": 102564102.564,
+       "confidence": "medium",
+       "windows": 1
+      }
+     },
+     "plans": {
+      "2b2e8434ee469808": {
+       "plan": "claude_max",
+       "tier": "default_claude_max_5x",
+       "rule": "ratio"
+      }
+     },
+     "entries": [
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 7170000,
+       "resetsInMs": 7200000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 40000000,
+       "observedUsedMicroUsd": 40000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 94897990,
+        "lowMicroUsd": 87804878,
+        "highMicroUsd": 102564103,
+        "confidence": "medium",
+        "coverage": 1.0,
+        "accountUsedMicroUsd": 37959196,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "aed672a15c9bb5f4",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_5x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 80.0,
+       "percentAgeMs": 9270000,
+       "resetsInMs": 7260000,
+       "livePercent": 80.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 20000000,
+       "observedUsedMicroUsd": 20000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 23387186,
+        "lowMicroUsd": 21604938,
+        "highMicroUsd": 25316456,
+        "confidence": "medium",
+        "coverage": 1.0,
+        "accountUsedMicroUsd": 18709749,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "Desktop at half the CLI's 5-hour cap",
+    "why": "20 · 46.8 / 94.9 ≈ 9.9 lies more than 1.5 times away from 5 and from 20: nothing is inferred",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793924993000,
+       "endMs": 1793925013000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925043000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 2,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925173000,
+       "endMs": 1793925193000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925223000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 4,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925353000,
+       "endMs": 1793925373000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925403000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 6,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925533000,
+       "endMs": 1793925553000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925583000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 8,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925713000,
+       "endMs": 1793925733000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925763000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 10,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793925893000,
+       "endMs": 1793925913000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793925943000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 12,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926073000,
+       "endMs": 1793926093000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926123000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 14,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926253000,
+       "endMs": 1793926273000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926303000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 16,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926433000,
+       "endMs": 1793926453000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926483000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 18,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926613000,
+       "endMs": 1793926633000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926663000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 20,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926793000,
+       "endMs": 1793926813000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793926843000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 22,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793926973000,
+       "endMs": 1793926993000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927023000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 24,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927153000,
+       "endMs": 1793927173000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927203000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 26,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927333000,
+       "endMs": 1793927353000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927383000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 28,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927513000,
+       "endMs": 1793927533000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927563000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 30,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927693000,
+       "endMs": 1793927713000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927743000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 32,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927873000,
+       "endMs": 1793927893000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927923000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 34,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928053000,
+       "endMs": 1793928073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928103000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 36,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928233000,
+       "endMs": 1793928253000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928283000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 38,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793928413000,
+       "endMs": 1793928433000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928463000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 40,
+         "resetsAtMs": 1793942833000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925053000,
+       "endMs": 1793925073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925103000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 10,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925233000,
+       "endMs": 1793925253000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925283000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 20,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925413000,
+       "endMs": 1793925433000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925463000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 30,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925593000,
+       "endMs": 1793925613000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925643000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 40,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925773000,
+       "endMs": 1793925793000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793925823000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 50,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793925953000,
+       "endMs": 1793925973000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926003000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 60,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793926133000,
+       "endMs": 1793926153000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926183000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 70,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793926313000,
+       "endMs": 1793926333000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 5000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793926363000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 80,
+         "resetsAtMs": 1793942893000
+        }
+       ],
+       "org": "org-2"
+      }
+     ],
+     "now": 1793935633000,
+     "outputs": [
+      "plans",
+      "estimates",
+      "entries"
+     ]
+    },
+    "expected": {
+     "estimates": {
+      "account|2b2e8434ee469808|fiveHour::300": {
+       "cap": 46774371.725,
+       "low": 43209876.543,
+       "high": 50632911.392,
+       "confidence": "medium",
+       "windows": 1
+      },
+      "plan|anthropic/claude_max|default_claude_max_20x|fiveHour::300": {
+       "cap": 94897990.062,
+       "low": 87804878.049,
+       "high": 102564102.564,
+       "confidence": "medium",
+       "windows": 1
+      }
+     },
+     "plans": {},
+     "entries": [
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 7170000,
+       "resetsInMs": 7200000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 40000000,
+       "observedUsedMicroUsd": 40000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 94897990,
+        "lowMicroUsd": 87804878,
+        "highMicroUsd": 102564103,
+        "confidence": "medium",
+        "coverage": 1.0,
+        "accountUsedMicroUsd": 37959196,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "aed672a15c9bb5f4",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 80.0,
+       "percentAgeMs": 9270000,
+       "resetsInMs": 7260000,
+       "livePercent": 80.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 40000000,
+       "observedUsedMicroUsd": 40000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 46774372,
+        "lowMicroUsd": 43209877,
+        "highMicroUsd": 50632911,
+        "confidence": "medium",
+        "coverage": 1.0,
+        "accountUsedMicroUsd": 37419497,
         "windows": 1
        },
        "mix": [

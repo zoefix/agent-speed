@@ -39,6 +39,10 @@ INSTANCE_JOIN_MS = 2 * MINUTE
 FINGERPRINT_MS = MINUTE
 HOUR_ROUNDED_SLACK_MS = HOUR
 PERSONAL_CLAUDE_PLANS = ("claude_free", "claude_pro", "claude_max", "claude_ultra")
+INFER_PLANS = (("claude_pro", None, 1), ("claude_max", "default_claude_max_5x", 5),
+               ("claude_max", "default_claude_max_20x", 20))
+INFER_TOLERANCE = 1.5
+INFER_CONFIDENCE = ("high", "medium")
 PLAN_PATTERN = re.compile(r"^[a-z0-9_.-]{1,64}$")
 SEND_EVERY_MS = 60_000
 PRECISION_FLOOR = 0.02
@@ -459,6 +463,40 @@ def class_of(account, plan, tier, wid):
     return ("plan", plan, tier, wid) if plan else ("account", account, wid)
 
 
+# 10.2 Inferred plan
+
+def claude_multiplier(plan, tier):
+    """The 5-hour usage of a Claude plan relative to Pro, when the plan is one of INFER_PLANS."""
+    if plan == "claude_pro":
+        return 1
+    return next((m for p, t, m in INFER_PLANS if p == plan and t == tier), None)
+
+
+def usable(est):
+    return bool(est) and est.get("confidence") in INFER_CONFIDENCE and bool(est.get("cap"))
+
+
+def infer_claude_plan(kinds, own, anchors):
+    """kinds: the window kinds of the account's newest snapshot; own: the account's 5-hour estimate (or None);
+    anchors: (plan, tier, 5-hour estimate) of the Claude cap classes with a vendor plan, sorted by plan and tier.
+    Returns (plan, tier, rule) with rule `shape`, `ratio` or None."""
+    if "sevenDay" in kinds and "fiveHour" not in kinds:
+        return "claude_ultra", None, "shape"
+    if not usable(own):
+        return None, None, None
+    best = None
+    for plan, tier, est in anchors:
+        m = claude_multiplier(plan, tier)
+        if m is None or not usable(est):
+            continue
+        scaled = m * own["cap"] / est["cap"]
+        for p, t, mm in INFER_PLANS:
+            d = abs(math.log(scaled / mm))
+            if d <= math.log(INFER_TOLERANCE) and (best is None or d < best[0]):
+                best = (d, p, t)
+    return (best[1], best[2], "ratio") if best else (None, None, None)
+
+
 def prune_closed(items, limit=INSTANCES_PER_CLASS):
     return sorted(items, key=lambda s: s["t"])[-limit:]
 
@@ -737,6 +775,27 @@ def account_cases():
                        "expected": fingerprint(a, b, at)})
     plans = [{"value": v, "expected": clean_plan(v)}
              for v in ("promax", "claude_max", "default_claude_max_20x", "Pro Max", "x" * 65, None, 3)]
+    medium = lambda cap: {"confidence": "medium", "cap": cap}  # noqa: E731
+    max20 = ("claude_max", "default_claude_max_20x", medium(100e6))
+    infer = []
+    for why, kinds, own, anchors in (
+            ("a weekly window and no 5-hour window: Ultra (some Ultra accounts lost the 5-hour window, user 2026-11-10)",
+             ["sevenDay", "modelWeek"], None, []),
+            ("no windows at all: unknown", [], None, []),
+            ("a 5-hour window and no anchor: unknown", ["fiveHour", "sevenDay"], medium(25e6), []),
+            ("a quarter of a Max 20x account's 5-hour cap: Max 5x", ["fiveHour", "sevenDay"], medium(26e6), [max20]),
+            ("a twentieth of it: Pro", ["fiveHour"], medium(4.6e6), [max20]),
+            ("about the same: Max 20x", ["fiveHour"], {"confidence": "high", "cap": 120e6}, [max20]),
+            ("half of it, between Max 5x and Max 20x: unknown", ["fiveHour"], medium(50e6), [max20]),
+            ("own estimate of low confidence: unknown", ["fiveHour"], {"confidence": "low", "cap": 25e6}, [max20]),
+            ("the anchor of low confidence is skipped; a Pro anchor of any tier counts as 1",
+             ["fiveHour"], medium(30e6), [("claude_max", "default_claude_max_20x", {"confidence": "low", "cap": 1e6}),
+                                          ("claude_pro", "default_claude_ai", medium(6e6))]),
+            ("an anchor of another plan has no multiplier", ["fiveHour"], medium(25e6),
+             [("claude_team", None, medium(100e6))])):
+        infer.append({"why": why, "kinds": kinds, "own": own,
+                      "anchors": [{"plan": p, "tier": t, "estimate": e} for p, t, e in anchors],
+                      "expected": dict(zip(("plan", "tier", "rule"), infer_claude_plan(kinds, own, anchors)))})
     ch = Chains()
     lines = [["5h@1", "7d@9"], ["5h@2", "7d@9"], ["5h@3", "7d@10"], ["5h@3", "7d@11"]]
     roots = [ch.link(l) for l in lines]
@@ -744,7 +803,7 @@ def account_cases():
     chains = [names.setdefault(r, "chain%d" % len(names)) for r in [ch.find(r) for r in roots]]
     return {"salt": salt.hex(), "saltText": "agent-speed quota account v1", "keys": keys, "pairs": pairs,
             "reportTags": tags, "fingerprints": prints, "desktopMerge": merge, "keysShare": keys_shared,
-            "plans": plans,
+            "plans": plans, "inferPlan": infer,
             "chains": {"lines": lines, "expected": chains}}
 
 

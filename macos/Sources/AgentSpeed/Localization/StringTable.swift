@@ -745,6 +745,7 @@ enum StringTable {
         "quota.estimate.live": Entry("≈ 百分比是依本機之後的用量推算，廠商下次更新時會取代", "≈ 百分比按本机之后的用量推算，厂商下次更新时会替换", "≈ The percent is extrapolated from this computer's usage since; the vendor's next value replaces it", "≈ この割合はその後のこのコンピュータの使用量からの推定で、ベンダーの次の値で置き換わります"),
         "quota.estimate.note": Entry("以 API 等值美元估算，依據廠商的百分比和本機量到的用量；不是廠商公布的數字。", "以 API 等值美元估算，依据厂商的百分比和本机测得的用量；不是厂商公布的数字。", "Estimated in API-equivalent US dollars from the vendor's percent and the usage measured here; not a number the vendor publishes.", "ベンダーの割合とこのコンピュータで計測した使用量から API 換算の米ドルで推定した値です。ベンダーが公表する数値ではありません。"),
         "quota.estimate.plan": Entry("方案：%@", "套餐：%@", "Plan: %@", "プラン：%@"),
+        "quota.estimate.planInferred": Entry("方案：%@（依額度推算）", "套餐：%@（依额度推算）", "Plan: %@ (inferred from the quota)", "プラン：%@（利用枠から推定）"),
         "quota.estimate.used": Entry("本機已用 %@", "本机已用 %@", "%@ used on this computer", "このコンピュータで %@ 使用"),
         "quota.estimate.windows": Entry("依據 %d 個週期", "依据 %d 个周期", "Based on %d windows", "%d 期間分に基づく"),
         "quota.pace": Entry("時間進度 %d%%", "时间进度 %d%%", "%d%% of the window has passed", "期間の %d%% が経過"),

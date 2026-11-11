@@ -7590,6 +7590,12 @@
     "en": "Plan: %@",
     "ja": "プラン：%@"
   },
+  "quota.estimate.planInferred": {
+    "zh-Hant": "方案：%@（依額度推算）",
+    "zh-Hans": "套餐：%@（依额度推算）",
+    "en": "Plan: %@ (inferred from the quota)",
+    "ja": "プラン：%@（利用枠から推定）"
+  },
   "quota.estimate.live": {
     "zh-Hant": "≈ 百分比是依本機之後的用量推算，廠商下次更新時會取代",
     "zh-Hans": "≈ 百分比按本机之后的用量推算，厂商下次更新时会替换",
