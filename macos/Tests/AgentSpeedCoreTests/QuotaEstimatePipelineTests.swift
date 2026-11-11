@@ -75,7 +75,20 @@ struct QuotaEstimatePipelineTests {
 
     // MARK: The reference's `run`
 
+    /// The fixture input's estimate at its `now`.
+    static func build(_ input: [String: Any]) throws -> QuotaEstimateBuild {
+        let (inputs, salt) = try inputs(input)
+        return QuotaEstimateBuild(inputs, salt: salt, nowMs: F.int(input["now"])!)
+    }
+
     static func run(_ input: [String: Any]) throws -> [String: Any] {
+        let (inputs, salt) = try inputs(input)
+        let now = F.int(input["now"])!
+        let build = QuotaEstimateBuild(inputs, salt: salt, nowMs: now)
+        return try outputs(build, input: input, now: now)
+    }
+
+    static func inputs(_ input: [String: Any]) throws -> (QuotaEstimateInputs, Data) {
         let salt = F.salt(F.string(input["salt"])!)
         var inputs = QuotaEstimateInputs()
         inputs.priceVersion = 8
@@ -115,8 +128,10 @@ struct QuotaEstimatePipelineTests {
             inputs.stored = QuotaEstimateStore.decode(try JSONSerialization.data(withJSONObject: generatedStore(generated)))
                 ?? .empty
         }
-        let now = F.int(input["now"])!
-        let build = QuotaEstimateBuild(inputs, salt: salt, nowMs: now)
+        return (inputs, salt)
+    }
+
+    static func outputs(_ build: QuotaEstimateBuild, input: [String: Any], now: Int64) throws -> [String: Any] {
         let want = input["outputs"] as? [String] ?? ["responses", "instances", "estimates", "entries"]
         var out: [String: Any] = [:]
         if want.contains("responses") {

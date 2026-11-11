@@ -2,11 +2,11 @@ import Foundation
 import Security
 
 /// Keeps the quota estimate (QUOTAS 10) up to date: it gathers the history's and the live engine's spend, Codex's
-/// token counts, the sign-in keys and every snapshot, builds the estimate at most every few seconds on its own queue,
+/// token counts, the sign-in keys and every snapshot, builds the estimate at most every 5 s on its own queue,
 /// hands each build to `onBuild` and keeps `estimate.json` (at most once a minute, and at quit). Ids become keys as
 /// they arrive; neither ids, keys nor the salt are ever logged.
 public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
-    public static let buildIntervalMs: Int64 = 2_000
+    public static let buildIntervalMs: Int64 = 5_000
     public static let heartbeatMs: Int64 = 60_000
     public static let writeIntervalMs: Int64 = 60_000
 
