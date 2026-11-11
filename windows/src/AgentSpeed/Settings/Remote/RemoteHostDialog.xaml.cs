@@ -1,6 +1,7 @@
 using System.ComponentModel;
 using System.Windows;
 using System.Windows.Media.Animation;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Theme;
 
 namespace AgentSpeed.Settings.Remote;
@@ -29,6 +30,7 @@ internal sealed partial class RemoteHostDialog : Window
         Loaded += (_, _) =>
         {
             ShowTestResult();
+            ShowBridgeMark();
             TurnChevron(animate: false);
             DestinationBox.Focus();
             DestinationBox.SelectAll();
@@ -37,6 +39,7 @@ internal sealed partial class RemoteHostDialog : Window
         {
             model.PropertyChanged -= OnModelChanged;
             model.CancelTest();
+            model.Detach();
         };
     }
 
@@ -71,6 +74,9 @@ internal sealed partial class RemoteHostDialog : Window
             case nameof(RemoteHostDialogViewModel.TestState):
                 ShowTestResult();
                 break;
+            case nameof(RemoteHostDialogViewModel.BridgeMark):
+                ShowBridgeMark();
+                break;
             case nameof(RemoteHostDialogViewModel.AdvancedExpanded):
                 TurnChevron(animate: !_reduceMotion);
                 if (_model.AdvancedExpanded)
@@ -93,6 +99,16 @@ internal sealed partial class RemoteHostDialog : Window
         };
         TestMark.Text = glyph;
         TestMark.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty, brush);
+    }
+
+    /// <summary>The bridge's line leads with the check while connected and the caution triangle on a problem (Settings' marks).</summary>
+    private void ShowBridgeMark()
+    {
+        var mark = _model.BridgeMark;
+        BridgeMark.Visibility = mark == RemoteBridgeMark.None ? Visibility.Collapsed : Visibility.Visible;
+        BridgeMark.Text = mark == RemoteBridgeMark.Ok ? "\uE73E" : "\uE7BA";
+        BridgeMark.SetResourceReference(System.Windows.Controls.TextBlock.ForegroundProperty,
+            mark == RemoteBridgeMark.Ok ? "SystemFillColorSuccessBrush" : "SystemFillColorCautionBrush");
     }
 
     private void TurnChevron(bool animate)

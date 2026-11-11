@@ -37,6 +37,49 @@ internal sealed partial class OrbManager
         RefreshCharacters();
     }
 
+    /// <summary>
+    /// Developer capture only: remote hosts the 額度 cards treat as connected although the sandbox never connects them. Null
+    /// in normal use.
+    /// </summary>
+    internal IReadOnlySet<string>? CaptureConnected
+    {
+        get => _captureConnected;
+        set
+        {
+            _captureConnected = value;
+            RefreshCharacters();
+        }
+    }
+
+    private IReadOnlySet<string>? _captureConnected;
+
+    /// <summary>
+    /// The 額度 card of an orb (DESIGN 2a.6, 13 <i>Host quotas</i>): this computer's sources while the orb tracks it, then each
+    /// tracked, connected host's in settings order with its display name.
+    /// </summary>
+    private OrbQuotaCard QuotaCard(OrbDefinition orb)
+    {
+        var hosts = Settings.RemoteHosts;
+        var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
+        bool Tracked(SourceKind s) => orb.TrackedSources?.Contains(s) ?? true;
+        if (hosts.Hosts.IsEmpty || _quota.Hosts.IsEmpty)
+        {
+            return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, [], EmptyHosts), now, _loc);
+        }
+
+        var names = hosts.DisplayNames();
+        var order = hosts.Hosts.Select(h => (h.Id, names.GetValueOrDefault(h.Id) ?? h.AutomaticName)).ToList();
+        var connected = new HashSet<string>(_speed.Snapshot.Hosts.Where(h => !h.IsLocal && h.IsConnected).Select(h => h.Id), StringComparer.Ordinal);
+        if (_captureConnected is { } captured)
+        {
+            connected.UnionWith(captured);
+        }
+
+        return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, order, connected), now, _loc);
+    }
+
+    private static readonly IReadOnlySet<string> EmptyHosts = new HashSet<string>();
+
     /// <summary>The vendors of an orb's live agents, fastest first (the automatic download's order).</summary>
     public IReadOnlyList<string> LiveVendors(string orbId) =>
         _entries.TryGetValue(orbId, out var entry)
@@ -112,9 +155,7 @@ internal sealed partial class OrbManager
             ThinkingGlyph = _loc["intel.thinking.glyph"],
             ModelsMore = _loc["character.models.more"],
             TokensUnit = _loc["unit.tokS"],
-            Quota = orb.CharacterReadouts.Quota
-                ? OrbQuotaCard.Of(_quota, s => orb.TrackedSources?.Contains(s) ?? true, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), _loc)
-                : OrbQuotaCard.Empty,
+            Quota = orb.CharacterReadouts.Quota ? QuotaCard(orb) : OrbQuotaCard.Empty,
         });
         var generating = reading.GeneratingSources.Count > 0;
         surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating,

@@ -483,7 +483,7 @@ internal sealed partial class DashboardViewModel : ObservableObject
         HasEstimate = snapshot.LiveEstimatedShare > 0.001 || snapshot.History.Count > 0 && snapshot.History[^1].Estimated.ValueFor(metric) > 0.05;
 
         UpdateSources(snapshot, metric, loc, unit, darkTheme);
-        UpdateHosts(snapshot, metric, loc, unit);
+        UpdateHosts(snapshot, metric, loc, unit, darkTheme);
         _lastAgents = snapshot.Agents;
         _lastMetric = metric;
         _lastLoc = loc;
@@ -522,7 +522,10 @@ internal sealed partial class DashboardViewModel : ObservableObject
             {
                 row.LiveKind = LiveValueKind.Dash;
                 row.LiveAccessibleName = loc["phase.idle"];
-                row.TodayText = quotaListed ? SpeedFormat.Tokens(0) : string.Empty;
+                // Listed for its quota alone (DESIGN 4): today's values at 0, the cost too, like every other row.
+                row.TodayText = !quotaListed ? string.Empty
+                    : Cost is { } zeroCost ? $"{SpeedFormat.Tokens(0)} · {zeroCost.TallyText(CostTally.Zero, 0)}"
+                    : SpeedFormat.Tokens(0);
                 row.Status = string.Empty;
                 row.IsDimmed = false;
                 row.ShowSettingsLink = false;

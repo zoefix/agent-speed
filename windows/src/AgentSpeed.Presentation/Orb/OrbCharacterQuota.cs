@@ -1,5 +1,6 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Remote;
 using AgentSpeed.Presentation.Colors;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Heat;
@@ -17,16 +18,43 @@ public sealed record OrbQuotaWindow(string Label, int Percent, double Bar, Quota
     public string PercentText => QuotaText.Percent(Percent);
 }
 
-/// <summary>A source of the 額度 card: its name and color and only the windows its account has.</summary>
-public sealed record OrbQuotaSource(SourceKind Source, string Name, Rgba Color, IReadOnlyList<OrbQuotaWindow> Windows)
+/// <summary>
+/// A source of the 額度 card: its name and color and only the windows its account has; a remote host's source also carries
+/// the host's name, so its header reads <c>&lt;source&gt; · &lt;host&gt;</c> (DESIGN 13 <i>Host quotas</i>).
+/// </summary>
+/// <param name="Host">The remote host's display name; null for this computer.</param>
+/// <param name="HostId">The remote host's id; null for this computer.</param>
+public sealed record OrbQuotaSource(SourceKind Source, string Name, Rgba Color, IReadOnlyList<OrbQuotaWindow> Windows, string? Host = null,
+    string? HostId = null)
 {
-    public bool Equals(OrbQuotaSource? other) =>
-        other is not null && Source == other.Source && Name == other.Name && Color == other.Color && Windows.SequenceEqual(other.Windows);
+    private readonly string? _host = Host;
 
-    public override int GetHashCode() => HashCode.Combine(Source, Name, Windows.Count);
+    public string? Host
+    {
+        get => _host;
+        init
+        {
+            _host = value;
+            HostTail = Tail(value);
+        }
+    }
+
+    /// <summary><c> · &lt;host&gt;</c> after the name, drawn in a dimmer ink; null for this computer.</summary>
+    public string? HostTail { get; private init; } = Tail(Host);
+
+    /// <summary>What motion follows from update to update: the same source on two hosts moves on its own.</summary>
+    public string Key => HostId is null ? Source.ToString() : Source + "@" + HostId;
+
+    private static string? Tail(string? host) => host is null ? null : " · " + host;
+
+    public bool Equals(OrbQuotaSource? other) =>
+        other is not null && Source == other.Source && Name == other.Name && Color == other.Color && Host == other.Host && HostId == other.HostId
+        && Windows.SequenceEqual(other.Windows);
+
+    public override int GetHashCode() => HashCode.Combine(Source, Name, HostId, Windows.Count);
 }
 
-/// <summary>The 額度 card's content: the orb's running, signed-in sources in source order and the card as spoken.</summary>
+/// <summary>The 額度 card's content: the orb's running, signed-in sources (this computer's, then each host's) and the card as spoken.</summary>
 public sealed record OrbQuotaCard(IReadOnlyList<OrbQuotaSource> Sources, string? Spoken)
 {
     public static OrbQuotaCard Empty { get; } = new([], null);
@@ -37,30 +65,39 @@ public sealed record OrbQuotaCard(IReadOnlyList<OrbQuotaSource> Sources, string?
 
     public override int GetHashCode() => HashCode.Combine(Sources.Count, Spoken);
 
-    /// <summary>
-    /// The card of an orb tracking <paramref name="sources"/> (null: every source): each active source with windows, its
-    /// windows in QUOTAS 2 order; spoken as <c>a11y.orb.quota</c> with each source's name and its windows.
-    /// </summary>
+    /// <summary>The card of an orb tracking <paramref name="sources"/> on this computer only (no host).</summary>
     public static OrbQuotaCard Of(QuotaState state, Func<SourceKind, bool> tracked, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(tracked);
+        return Of(state.CardItems(tracked, id => id == RemoteHost.LocalId, [], new HashSet<string>()), nowMs, loc, zone);
+    }
+
+    /// <summary>
+    /// The card of <paramref name="items"/> (<see cref="QuotaState.CardItems"/>): each item's windows in QUOTAS 2 order, a host
+    /// item's header <c>&lt;source&gt; · &lt;host&gt;</c>; spoken as <c>a11y.orb.quota</c> with each header and its windows.
+    /// </summary>
+    public static OrbQuotaCard Of(IReadOnlyList<QuotaCardItem> items, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
+    {
+        ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(loc);
-        var snapshots = state.CardSources(state.Active.Where(tracked));
-        if (snapshots.Count == 0)
+        if (items.Count == 0)
         {
             return Empty;
         }
 
-        var sources = new List<OrbQuotaSource>(snapshots.Count);
-        var spoken = new List<string>(snapshots.Count);
-        foreach (var snapshot in snapshots)
+        var sources = new List<OrbQuotaSource>(items.Count);
+        var spoken = new List<string>(items.Count);
+        foreach (var item in items)
         {
+            var snapshot = item.Snapshot;
             var name = loc[DisplayText.SourceKey(snapshot.Source)];
             var lines = QuotaLines.Of(snapshot, nowMs, loc, zone);
-            sources.Add(new OrbQuotaSource(snapshot.Source, name, HeatPalette.SourceColor(snapshot.Source),
-                [.. lines.Select(l => new OrbQuotaWindow(l.Label, l.Percent, l.Bar, l.Tone, l.ResetShort, l.Passed))]));
-            spoken.Add(name + " " + QuotaLines.Spoken(lines, loc));
+            var source = new OrbQuotaSource(snapshot.Source, name, HeatPalette.SourceColor(snapshot.Source),
+                [.. lines.Select(l => new OrbQuotaWindow(l.Label, l.Percent, l.Bar, l.Tone, l.ResetShort, l.Passed))], item.HostName,
+                item.HostName is null ? null : item.HostId);
+            sources.Add(source);
+            spoken.Add(name + source.HostTail + " " + QuotaLines.Spoken(lines, loc));
         }
 
         return new OrbQuotaCard(sources, loc.Format("a11y.orb.quota", string.Join(loc["list.separator"], spoken)));
@@ -201,10 +238,10 @@ public sealed class OrbQuotaMotion
     public void Sync(IReadOnlyList<OrbQuotaSource> sources, double time, bool reduceMotion, bool atOnce)
     {
         ArgumentNullException.ThrowIfNull(sources);
-        _sources.RemoveAll(s => atOnce ? !sources.Any(n => n.Source == s.Data.Source) : s.Gone(time));
+        _sources.RemoveAll(s => atOnce ? IndexOf(sources, s.Data.Key) < 0 : s.Gone(time));
         foreach (var source in _sources)
         {
-            if (!source.Leaving && !sources.Any(n => n.Source == source.Data.Source))
+            if (!source.Leaving && IndexOf(sources, source.Data.Key) < 0)
             {
                 source.LeaveAt = time;
             }
@@ -213,11 +250,12 @@ public sealed class OrbQuotaMotion
         for (var i = 0; i < sources.Count; i++)
         {
             var next = sources[i];
-            var source = _sources.FirstOrDefault(s => s.Data.Source == next.Source);
+            var source = _sources.FirstOrDefault(s => s.Data.Key == next.Key);
             if (source is null)
             {
+                // Before the first staying source that the card lists after it; a leaving one keeps its place.
                 source = new Source(next, atOnce ? double.NegativeInfinity : time);
-                var at = _sources.FindIndex(s => s.Data.Source > next.Source);
+                var at = _sources.FindIndex(s => IndexOf(sources, s.Data.Key) > i);
                 _sources.Insert(at < 0 ? _sources.Count : at, source);
             }
             else if (source.Leaving)
@@ -292,4 +330,17 @@ public sealed class OrbQuotaMotion
     }
 
     private static double Ramp(double time, double start, double duration) => Math.Clamp((time - start) / duration, 0, 1);
+
+    private static int IndexOf(IReadOnlyList<OrbQuotaSource> sources, string key)
+    {
+        for (var i = 0; i < sources.Count; i++)
+        {
+            if (sources[i].Key == key)
+            {
+                return i;
+            }
+        }
+
+        return -1;
+    }
 }

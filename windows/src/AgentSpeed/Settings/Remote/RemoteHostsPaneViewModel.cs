@@ -23,9 +23,12 @@ internal sealed class RemoteHostsPaneViewModel : ObservableObject
     private bool _reduceMotion;
 
     /// <param name="edit">Opens the Add / Edit dialog: a host to edit, or null to add one.</param>
-    /// <param name="confirmRemove">Asks <c>remote.remove.confirm</c> (name, relay folder); confirmed, and whether to delete the history.</param>
+    /// <param name="confirmRemove">
+    /// Asks <c>remote.remove.confirm</c> (name, host: its relay folder and, with its bridge on, <c>remote.quota.removeNote</c>);
+    /// confirmed, and whether to delete the history.
+    /// </param>
     public RemoteHostsPaneViewModel(RemoteHostsModel hosts, Localizer loc, Dispatcher dispatcher, Action<RemoteHost?> edit,
-        Func<string, string, (bool Confirmed, bool DeleteHistory)> confirmRemove)
+        Func<string, RemoteHost, (bool Confirmed, bool DeleteHistory)> confirmRemove)
     {
         _hosts = hosts;
         _loc = loc;
@@ -61,7 +64,7 @@ internal sealed class RemoteHostsPaneViewModel : ObservableObject
                 return;
             }
 
-            var (confirmed, deleteHistory) = confirmRemove(row.Name, host.EffectiveRelayFolder);
+            var (confirmed, deleteHistory) = confirmRemove(row.Name, host);
             if (confirmed)
             {
                 _hosts.Remove(host.Id, deleteHistory);
