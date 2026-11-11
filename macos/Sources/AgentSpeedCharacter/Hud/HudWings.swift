@@ -100,9 +100,10 @@ public struct HudFrame: Sendable {
 /// height, the model above her head, the facts in a column at her left from her shoulders down — kept clear of her
 /// outline, never behind her. Anchors trail her on soft springs, and every card floats on its own slow figure of
 /// eight, bobs, tilts and breathes, so the readout drifts like moons beside her while each value stays where the
-/// eye left it. A card that shows or hides fades and rises or sinks; the column closes up around it. When her left
-/// side has no room for the whole column (wide hair, a step to the left), its last cards continue under the speed on
-/// her right; a card changing sides fades out and back in at its new place instead of crossing her. The models card
+/// eye left it. A card that shows or hides fades and rises or sinks; the column closes up around it. The column's last
+/// cards continue under the speed on her right so that both sides weigh about the same (`HudBalance`), and more of
+/// them when her left side has no room for the rest (wide hair, a step to the left); a card changing sides fades out
+/// and back in at its new place instead of crossing her. The models card
 /// sits directly under the speed on its left edge (further right only where her outline under the speed needs it),
 /// the spill-over under it; its names narrow to the room (`HudNameWidth`), and only when even its narrowest form does
 /// not fit there does it move below the spill-over (up to 0.3 D down), then hide.
@@ -170,6 +171,9 @@ public struct HudWings: Sendable {
 
     /// How many cards of the column (in its order) stay at her left; the rest continue under the speed.
     public private(set) var split = HudCard.column.count
+    /// The column is split between her sides by weight (DESIGN 2a.6, *Balance*); off below S = 96, where its cards
+    /// stay at her left unless they spill over.
+    public var balances = true
     public private(set) var modelsPlace = ModelsPlace.under
     /// The models card's narrowest width (its rows without names), set by the renderer each frame; a place fits when
     /// this form fits there. Zero: the card's own width.
@@ -199,6 +203,9 @@ public struct HudWings: Sendable {
     var strain = 0.0
     var ease = 0.0
     var sinceChange = Double.infinity
+    var balance = HudBalance()
+    /// This frame's heights as the balance weighs them, kept so a warm frame allocates nothing.
+    var weighed = [Double](repeating: 0, count: HudCard.allCases.count)
     /// No split fits with one edge: each card hugs her outline.
     var hugging = false
     var placed = false
@@ -244,7 +251,7 @@ public struct HudWings: Sendable {
         }
         targets[HudCard.speed.rawValue] = speedAnchor(f, sizes[HudCard.speed.rawValue])
         targets[HudCard.model.rawValue] = modelAnchor(f, sizes[HudCard.model.rawValue])
-        columnAnchors(dt, f, sizes)
+        columnAnchors(dt, f, sizes, given: given, shown: shown)
         modelsAnchor(dt, f, sizes, shown: shown[HudCard.models.rawValue])
 
         let d = f.footprint
@@ -490,25 +497,43 @@ public struct HudWings: Sendable {
     /// The column: cards stacked from her shoulders down at her left (the shown share of each card taking its room),
     /// their right edges on one line clear of her outline at every row the column spans; the column moves up or down
     /// to the offset where it fits best. Cards from `split` on stack under the speed at her right, their left edges on
-    /// one line. The split follows the room with hysteresis (`spillAfter`, `returnAfter`); a card whose side changed
-    /// fades out where it was, jumps, and fades back in. Writes the column's `targets`.
-    mutating func columnAnchors(_ dt: Double, _ f: HudFrame, _ sizes: [(w: Double, h: Double)]) {
-        let count = HudCard.column.count
+    /// one line. The split is the most even one that fits (`HudBalance`), chosen again when a card appears or leaves or
+    /// a side's weight changes, once the new split has held for `spillAfter` and no sooner than `returnAfter` after the
+    /// last change (`settledReturn` after two changes within `settleWindow`). When the split overflows for
+    /// `spillAfter`, the most even one that fits is taken, else the spill-over's; a better one comes back once it has
+    /// fitted with room to spare for `returnAfter` (`settledReturn` within `settleWindow` of the last change). A card
+    /// whose side changed fades out where it was, jumps, and fades back in. Writes the column's `targets`.
+    mutating func columnAnchors(_ dt: Double, _ f: HudFrame, _ sizes: [(w: Double, h: Double)],
+                                given: [(w: Double, h: Double)], shown: [Bool]) {
         let before = split
         sinceChange += dt
-        defer { if placed, split != before { sinceChange = 0 } }
-        if !placed || still {
-            (split, hugging) = best(f, sizes)
+        defer {
+            if placed, split != before {
+                balance.lastGap = sinceChange
+                sinceChange = 0
+            }
+        }
+        let gap = HudWings.columnGap * f.footprint
+        HudBalance.weigh(given, shown: shown, models: modelsPlace != .hidden, into: &weighed)
+        let heights = weighed
+        let moving = balance.moving(heights)
+        if !placed || still || balance.balanced != balances {
+            choose(f, sizes, heights: heights)
             strain = 0
             ease = 0
         } else if fit(f, sizes, split: split, room: 0, reach: HudWings.reach, aligned: true).over > 0.5 {
             ease = 0
+            balance.pending = nil
             strain += dt
             if strain >= HudWings.spillAfter {
-                (split, hugging) = best(f, sizes)
+                choose(f, sizes, heights: heights)
                 strain = 0
             }
-        } else if let back = roomier(f, sizes) {
+        } else if balances, balance.isStale(heights, split: split, gap: gap, threshold: HudBalance.threshold * f.footprint) {
+            strain = 0
+            ease = 0
+            rebalance(dt, f, sizes, heights: heights, gap: gap, moving: moving)
+        } else if let back = better(f, sizes) {
             strain = 0
             ease += dt
             if ease >= (sinceChange < HudWings.settleWindow ? HudWings.settledReturn : HudWings.returnAfter) {
@@ -554,15 +579,71 @@ public struct HudWings: Sendable {
         }
     }
 
-    /// The most cards at her left, more than now, whose column fits near her shoulders with room to spare; nil when
-    /// none does.
-    mutating func roomier(_ f: HudFrame, _ sizes: [(w: Double, h: Double)]) -> Int? {
-        guard split < HudCard.column.count else { return nil }
-        for k in stride(from: HudCard.column.count, to: split, by: -1)
-        where fit(f, sizes, split: k, room: 0.04 * f.footprint, reach: HudWings.nearReach, aligned: true).over == 0 {
-            return k
+    /// Chooses the split at once: the splits ranked by weight (or the most cards at her left first, without balance),
+    /// the first that fits near her shoulders, else the spill-over's.
+    mutating func choose(_ f: HudFrame, _ sizes: [(w: Double, h: Double)], heights: [Double]) {
+        let gap = HudWings.columnGap * f.footprint
+        // Ranked again only when something changed, so a still card set allocates nothing.
+        if balance.balanced != balances || balance.order.isEmpty
+            || balance.isStale(heights, split: split, gap: gap, threshold: 0) {
+            balance.order = balances ? HudBalance.ranking(heights, gap: gap)
+                : Array(stride(from: HudCard.column.count, through: 0, by: -1))
+            balance.balanced = balances
+            balance.settle(heights)
         }
-        return nil
+        if let first = fitting(f, sizes, in: balance.order[...], room: 0) {
+            split = first
+            hugging = false
+        } else {
+            (split, hugging) = best(f, sizes)
+        }
+    }
+
+    /// The cards or their weights changed: the most even split that fits is taken once it has held for `spillAfter`,
+    /// and no sooner than `returnAfter` after the last change (`settledReturn` when the last two changes came within
+    /// `settleWindow`). When none fits, or it is the current one, the split stays. The heights are taken as the new
+    /// reference only once no card grows or shrinks any more, so a card still easing to its size is weighed in full.
+    mutating func rebalance(_ dt: Double, _ f: HudFrame, _ sizes: [(w: Double, h: Double)], heights: [Double], gap: Double,
+                            moving: Bool) {
+        balance.order = HudBalance.ranking(heights, gap: gap)
+        guard let next = fitting(f, sizes, in: balance.order[...], room: 0), next != split else {
+            if moving {
+                balance.pending = nil
+            } else {
+                balance.settle(heights)
+            }
+            return
+        }
+        if balance.pending != next {
+            balance.pending = next
+            balance.held = 0
+        }
+        balance.held += dt
+        let wait = balance.lastGap < HudWings.settleWindow ? HudWings.settledReturn : HudWings.returnAfter
+        guard balance.held >= HudWings.spillAfter, sinceChange >= wait else { return }
+        split = next
+        hugging = false
+        balance.pending = nil
+        if !moving { balance.settle(heights) }
+    }
+
+    /// The first of `splits` whose column fits near her shoulders with its right edges on one line; with `room`, with
+    /// that much to spare.
+    mutating func fitting(_ f: HudFrame, _ sizes: [(w: Double, h: Double)], in splits: ArraySlice<Int>,
+                          room: Double) -> Int? {
+        splits.first { split in
+            let over = fit(f, sizes, split: split, room: room, reach: HudWings.nearReach, aligned: true).over
+            return room > 0 ? over == 0 : over <= 0.5
+        }
+    }
+
+    /// A split ranked before the current one that fits near her shoulders with room to spare (the first such); nil when
+    /// none does. Without balance: more cards at her left.
+    mutating func better(_ f: HudFrame, _ sizes: [(w: Double, h: Double)]) -> Int? {
+        let order = balance.order
+        let rank = order.firstIndex(of: split) ?? order.count
+        guard rank > 0 else { return nil }
+        return fitting(f, sizes, in: order[..<rank], room: 0.04 * f.footprint)
     }
 
     /// The most cards at her left whose column fits with its right edges on one line, near her shoulders first
@@ -658,6 +739,12 @@ public struct HudWings: Sendable {
         }
         if write { rightEnd = y }
         if !left.isFinite { left = f.centerX + 0.04 * d }
+        // Under the models card, never left of its edge: the right side reads as one column.
+        if modelsPlace == .under, sizes[models].h > 0, presence[models] > 0.01 {
+            let slot = modelsSlot(f, sizes)
+            left = max(left, min(modelsEdge(f, height: sizes[models].h, top: slot.top, line: slot.left),
+                                 maxX - sizes[models].w))
+        }
         for k in split..<cards.count {
             let i = cards[k].rawValue
             let w = sizes[i].w + room

@@ -53,9 +53,16 @@ enum TrafficMode {
         }
     }
 
+    /// The quota sources' apps the table found this tick (QUOTAS 6), as the 額度 card reads them.
+    private static func quotaApps(_ apps: QuotaApps?) -> String {
+        guard let apps else { return "apps –" }
+        let running = apps.running.map(\.rawValue).sorted().joined(separator: ",")
+        return "apps desktop=\(apps.claudeDesktop) runs \(running.isEmpty ? "–" : running)"
+    }
+
     static func line(second: Int, snapshot: TrafficSnapshot, agents: [AgentStatus]) -> String {
         var parts = ["\(second)s", "machine \(rate(snapshot.machineLive)) today \(snapshot.machineToday.rx)/\(snapshot.machineToday.tx) B",
-                     state(snapshot.processState)]
+                     state(snapshot.processState), quotaApps(snapshot.quotaApps)]
         for source in SourceKind.allCases {
             guard let traffic = snapshot.sources[source] else { continue }
             let tools = traffic.liveWithTools.map { all in
