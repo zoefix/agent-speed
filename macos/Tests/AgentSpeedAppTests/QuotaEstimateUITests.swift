@@ -4,7 +4,7 @@ import Foundation
 import Testing
 
 /// The quota estimate in the UI (QUOTAS 10.7, 10.8; DESIGN 4 *Percent*, *Amount*, *Tooltip*, 2a.6, 11): the live
-/// percent with `≈`, the amount with the cap, the tooltip's details, what accessibility reads, the orb card's amount
+/// percent with `≈`, the amount with the cap, the tooltip's details, what accessibility reads, the orb card's live percent
 /// and the reporting pane's switch.
 @Suite("Quota estimate UI")
 @MainActor
@@ -140,23 +140,20 @@ struct QuotaEstimateUITests {
         #expect(waiting.passed && waiting.percent == 0)
     }
 
-    @Test func theOrbCardShowsTheAmountWithoutTheCap() {
+    /// The orb card shows the live percent but no amount (user's choice 2026-11-11: the dashboard has it).
+    @Test func theOrbCardShowsTheLivePercentWithoutAmounts() {
         let model = Self.model()
-        let text = QuotaEstimateText(l10n: model.l10n, cost: model.cost)
         var estimates: [String: QuotaEstimateDisplay] = [:]
         for (key, value) in Self.estimates() { estimates[key.window] = value }
         let item = QuotaCardItem(snapshot: Self.desktop, estimates: estimates)
-        let source = CharacterQuotaText.sources([item], nowMs: Self.now, l10n: model.l10n, text: text)[0]
+        let source = CharacterQuotaText.sources([item], nowMs: Self.now, l10n: model.l10n)[0]
         #expect(source.lines.map(\.percentText) == ["12%", "95%", "27%"])
         #expect(source.lines.map(\.estimated) == [false, true, false])
-        #expect(source.lines[1].amount == "US$161")
-        let sentence = CharacterQuotaText.sentence([item], nowMs: Self.now, l10n: model.l10n, text: text) ?? ""
-        #expect(sentence.contains(model.l10n("a11y.quota.amountNoCap", model.cost.spoken(model.cost.amount(microUsd: 161_000_000).number))))
+        let sentence = CharacterQuotaText.sentence([item], nowMs: Self.now, l10n: model.l10n) ?? ""
         #expect(sentence.contains(model.l10n("a11y.quota.estimated")))
-        #expect(!sentence.contains("5,742"), "the card reads no cap")
+        #expect(!sentence.contains("161") && !sentence.contains("5,742"), "the card reads no amount and no cap")
         // Without estimates the card is as before.
-        let plain = CharacterQuotaText.sources([QuotaCardItem(snapshot: Self.desktop)], nowMs: Self.now, l10n: model.l10n, text: text)[0]
-        #expect(plain.lines.map(\.amount) == [nil, nil, nil])
+        let plain = CharacterQuotaText.sources([QuotaCardItem(snapshot: Self.desktop)], nowMs: Self.now, l10n: model.l10n)[0]
         #expect(plain.lines.map(\.percentText) == ["12%", "94%", "27%"])
     }
 

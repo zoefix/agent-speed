@@ -4,19 +4,18 @@ import AppKit
 
 /// The 額度 card (DESIGN 2a.6): per source a header line (the source's color dot and its name), then one line per
 /// window — the label in a column as wide as the card's widest, the bar, the percent right-aligned in a `≈100%` cell
-/// (`≈` while extrapolated), the used amount right-aligned in a cell as wide as the widest and the short reset in a
-/// cell as wide as the widest. When the room to the orb's edge is short the reset cells go first, then the amount
-/// cells, then the bars shorten from 5 t to 3 t, then the headers go and the dot moves before each source's first label.
+/// (`≈` while extrapolated) and the short reset in a cell as wide as the widest; no amount (the dashboard has it). When
+/// the room to the orb's edge is short the reset cells go first, then the bars shorten from 5 t to 3 t, then the headers
+/// go and the dot moves before each source's first label.
 /// A remote host's source reads `<source> · <host>` (DESIGN 13): the host follows the name while the card's width
 /// holds it, else it takes its own line under the name (in the compact form, above the source's lines), shortened
 /// with an ellipsis when even that line is too short; the host never widens the card.
 extension CharacterCards {
     /// The card's forms, widest first.
     enum QuotaForm: Int, CaseIterable {
-        case full, noReset, noAmount, shortBars, compact
+        case full, noReset, shortBars, compact
 
         var hasReset: Bool { self == .full }
-        var hasAmount: Bool { self == .full || self == .noReset }
         var hasHeader: Bool { self != .compact }
         var barLength: CGFloat { self == .shortBars || self == .compact ? 3 : 5 }
     }
@@ -25,7 +24,6 @@ extension CharacterCards {
     struct QuotaColumns {
         var label: CGFloat
         var percent: CGFloat
-        var amount: CGFloat = 0
         var reset: CGFloat
         var header: CGFloat
     }
@@ -42,7 +40,6 @@ extension CharacterCards {
     var quotaPercentStyle: OrbTextStyle { m.number(m.t) }
     /// The `≈` before an extrapolated percent (QUOTAS 10.7), in the secondary token.
     var quotaApproxStyle: OrbTextStyle { m.label(0.8 * m.t) }
-    var quotaAmountStyle: OrbTextStyle { m.number(quotaHeaderSize) }
 
     func quotaColumns() -> QuotaColumns? {
         let sources = dynamics.quota.sources
@@ -53,9 +50,6 @@ extension CharacterCards {
             columns.header = max(columns.header, quotaDot + quotaDotGap + advance(source.name, quotaNameStyle))
             for line in source.lines {
                 columns.label = max(columns.label, advance(line.label, quotaLabelStyle))
-                for amount in [line.amount, line.oldAmount] {
-                    if let amount { columns.amount = max(columns.amount, digits(amount, quotaAmountStyle)) }
-                }
                 for reset in [line.reset, line.oldReset] {
                     if let reset { columns.reset = max(columns.reset, advance(reset, quotaLabelStyle)) }
                 }
@@ -68,7 +62,6 @@ extension CharacterCards {
     func quotaWidth(_ form: QuotaForm, _ c: QuotaColumns) -> CGFloat {
         let lead = form.hasHeader ? 0 : quotaDot + quotaDotGap
         var line = lead + c.label + 0.5 * m.t + form.barLength * m.t + 0.5 * m.t + c.percent
-        if form.hasAmount, c.amount > 0 { line += 0.4 * m.t + c.amount }
         if form.hasReset, c.reset > 0 { line += 0.4 * m.t + c.reset }
         return form.hasHeader ? max(line, c.header) : line
     }
@@ -145,9 +138,7 @@ extension CharacterCards {
         let barX = labelX + c.label + 0.5 * m.t
         let barLength = form.barLength * m.t
         let percentRight = barX + barLength + 0.5 * m.t + c.percent
-        let showsAmount = form.hasAmount && c.amount > 0
-        let amountRight = percentRight + 0.4 * m.t + c.amount
-        let resetX = (showsAmount ? amountRight : percentRight) + 0.4 * m.t
+        let resetX = percentRight + 0.4 * m.t
         var top = origin.y
         for source in dynamics.quota.sources {
             let sourceTop = top
@@ -212,7 +203,6 @@ extension CharacterCards {
                              into: &scene)
                 drawQuotaPercent(line, pen, right: percentRight, baseline: baseline, ink: ink, red: red, alpha: a,
                                  into: &scene)
-                if showsAmount { drawQuotaAmount(line, pen, right: amountRight, baseline: baseline, ink: ink, alpha: a, into: &scene) }
                 guard form.hasReset else { continue }
                 if let reset = line.reset, line.resetPresence > 0.01 {
                     put(reset, quotaLabelStyle, pen, x: resetX, baseline: baseline,
@@ -273,19 +263,6 @@ extension CharacterCards {
         draw(line.percent, estimated: line.estimated, alpha: alpha * line.percentMix)
     }
 
-    /// The used amount in tabular digits, right-aligned in its cell; a changed amount crossfades.
-    private func drawQuotaAmount(_ line: CharacterQuotaDynamics.Line, _ pen: CharacterBodyPainter, right: CGFloat,
-                                 baseline: CGFloat, ink: CharacterCardInk, alpha: Double, into scene: inout OrbScene) {
-        let style = quotaAmountStyle
-        if let old = line.oldAmount, line.amountMix < 1 {
-            putDigits(old, style, pen, x: right - digits(old, style), baseline: baseline,
-                      color: ink.number.opacity(alpha * (1 - line.amountMix)), into: &scene)
-        }
-        if let amount = line.amount {
-            putDigits(amount, style, pen, x: right - digits(amount, style), baseline: baseline,
-                      color: ink.number.opacity(alpha * line.amountMix), into: &scene)
-        }
-    }
 }
 
 /// The system red as it resolves on a dark or light card, kept until the system colors change, and the font metrics

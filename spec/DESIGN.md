@@ -996,11 +996,9 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   - A window line: the label (`5h`, `7d`, `Fable 7d`) at `0.9 t` in the secondary token, in a column as wide as the
     card's widest label; `0.5 t`; the bar, `5 t` long and `0.26 t` tall, fully rounded; `0.5 t`; the percent at `t` in
     the value token, tabular, right-aligned in a cell as wide as `≈100%` (the `≈` of an extrapolated percent at
-    `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the used amount (QUOTAS 10.8, section 9 *Amount* with its
-    symbol in the digits of the *Rate* table, `$161`, as in section 4's quota lines) at `0.9 t` in the value token,
-    tabular, right-aligned in a cell as wide as the card's widest amount, empty without spend; `0.4 t`; the short
-    reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t` in the secondary token, in a cell as wide as the card's widest,
-    nothing while unknown or passed. The card shows no cap (user's choice 2026-11-11: the dashboard has it).
+    `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the short reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t`
+    in the secondary token, in a cell as wide as the card's widest, nothing while unknown or passed. The card shows no
+    amount and no cap (user's choice 2026-11-11: "卡片太長了不好看，面板已經顯示過了"; the dashboard has them).
   - Bar: track label 12 % (dark 16 %); fill the source color, amber `#F5A524` (light `#B86E00`) from 80 %, the system
     red from 95 %, when the percent takes the same red. Increase Contrast: the fill in the text color, the track in the
     disabled-text color.
@@ -1009,13 +1007,11 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     out; a changed percent crossfades (0.2 s); a source joining or leaving fades its lines (0.25 s) as the card eases to
     its height. Reduce Motion: lengths change at once, fades stay.
   - Room: the card is as wide as its content and keeps the column's right edge. When it does not fit the room to the
-    orb's edge, the reset cells go first, then the amount cells, then the bars shorten to `3 t`, then the header lines
-    go (the dot moves before the source's first label, `0.35 t` before it). Only then does the card spill over like
-    the column's other cards.
+    orb's edge, the reset cells go first, then the bars shorten to `3 t`, then the header lines go (the dot moves before
+    the source's first label, `0.35 t` before it). Only then does the card spill over like the column's other cards.
   - Accessibility: after the today reading, `a11y.orb.quota` with each source's name followed by one
     `a11y.quota.window` per window (the long reset of QUOTAS 7; `a11y.quota.windowNoReset` without one), each followed
-    by `a11y.quota.amountNoCap` with the used amount and, while extrapolated, `a11y.quota.estimated`, sources joined
-    by `list.separator`.
+    by `a11y.quota.estimated` while extrapolated, sources joined by `list.separator`.
 - **Balance** (user's choice 2026-11-11: "右邊這麼空…讓左側和右側自動放的卡片內容要看起來視覺是相等的"). The column's
   cards are split between her two sides so that their weight is as even as possible:
   - The left keeps the column's first `n − k` shown cards. The last `k` continue on the right, under the models card

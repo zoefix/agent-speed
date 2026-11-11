@@ -174,16 +174,14 @@ final class OrbAccessibilityReporter {
     /// network speed, the cost rate, the running models, then 額度.
     private func characterSentence(_ l10n: Localizer) -> String? {
         guard let readings = runtime.feed.characterReadings, !runtime.isUnavailable else { return nil }
-        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n, quotaNowMs: model.quota.clockMs,
-                                        quotaText: QuotaEstimateText(l10n: l10n, cost: model.cost))
+        let parts = Self.characterParts(readings, currency: model.cost.currencyName, l10n, quotaNowMs: model.quota.clockMs)
         guard !parts.isEmpty else { return nil }
         return parts.joined(separator: l10n.language == .ja ? "、" : l10n.language.usesLatinCase ? ", " : "，")
     }
 
     /// The sentences of `characterSentence`, one per card that shows.
     static func characterParts(_ readings: OrbCharacterReadings, currency: String, _ l10n: Localizer,
-                               now: TimeInterval = Clock.now, quotaNowMs: Int64 = QuotaController.nowMs(),
-                               quotaText: QuotaEstimateText? = nil) -> [String] {
+                               now: TimeInterval = Clock.now, quotaNowMs: Int64 = QuotaController.nowMs()) -> [String] {
         let on = readings.readouts
         var parts: [String] = []
         if readings.performanceLoud, on.intelligence || on.thinking, let reading = readings.performance,
@@ -208,8 +206,7 @@ final class OrbAccessibilityReporter {
         if readings.modelsLoud, on.models, let models = CharacterReadoutText.modelsSentence(readings.models, l10n) {
             parts.append(models)
         }
-        if on.quota, let quota = CharacterQuotaText.sentence(readings.quota, nowMs: quotaNowMs, l10n: l10n,
-                                                             text: quotaText) {
+        if on.quota, let quota = CharacterQuotaText.sentence(readings.quota, nowMs: quotaNowMs, l10n: l10n) {
             parts.append(quota)
         }
         return parts
