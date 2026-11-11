@@ -127,6 +127,29 @@ struct QuotaEstimateFixtureTests {
         #expect(got == chains["expected"] as? [String])
     }
 
+    /// QUOTAS 10.2 *Inferred plan*: the shape rule, then the 5-hour ratio to the anchors.
+    @Test func inferPlan() {
+        let cases = F.list(F.object(F.cases["accounts"])["inferPlan"])
+        #expect(cases.count == 10)
+        func estimate(_ value: Any?) -> QuotaCapEstimate? {
+            guard let e = value as? [String: Any] else { return nil }
+            return QuotaCapEstimate(confidence: QuotaEstimateConfidence(rawValue: F.string(e["confidence"])!)!,
+                                    cap: F.double(e["cap"]), low: nil, high: nil, windows: 0)
+        }
+        for c in cases {
+            let kinds = (c["kinds"] as? [String] ?? []).map { QuotaWindowKind(rawValue: $0)! }
+            let anchors = F.list(c["anchors"]).map {
+                QuotaPlanInference.Anchor(plan: F.string($0["plan"])!, tier: F.string($0["tier"]),
+                                          estimate: estimate($0["estimate"])!)
+            }
+            let got = QuotaPlanInference.infer(kinds: kinds, own: estimate(c["own"]), anchors: anchors)
+            let row: [String: Any] = ["plan": got?.plan ?? NSNull(), "tier": got?.tier ?? NSNull(),
+                                      "rule": got?.rule.rawValue ?? NSNull()]
+            let diff = F.differences(row, c["expected"])
+            #expect(diff.isEmpty, "\(c["why"] ?? ""): \(diff)")
+        }
+    }
+
     @Test func segments() {
         let cases = F.list(F.cases["segments"])
         #expect(cases.count == 7)

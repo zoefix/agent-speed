@@ -67,7 +67,8 @@ struct QuotaEstimateText {
         let confidence = l10n("quota.estimate.confidence.\(e.confidence.rawValue)")
         lines.append(confidence + " · " + l10n("quota.estimate.windows", e.windows))
         if let plan = e.plan {
-            lines.append(l10n("quota.estimate.plan", [plan, e.tier].compactMap { $0 }.joined(separator: " · ")))
+            lines.append(l10n(e.planInferred ? "quota.estimate.planInferred" : "quota.estimate.plan",
+                              [plan, e.tier].compactMap { $0 }.joined(separator: " · ")))
         }
         if e.estimated { lines.append(l10n("quota.estimate.live")) }
         return lines

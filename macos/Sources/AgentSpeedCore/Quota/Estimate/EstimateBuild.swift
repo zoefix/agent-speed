@@ -19,6 +19,8 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
     let codex: QuotaCodexAccounts
     let instances: [QuotaBuiltInstance]
     public let estimates: [QuotaCapClass: QuotaCapEstimate]
+    /// The plans inferred for the accounts Claude Desktop spends on as its own (QUOTAS 10.2), by account.
+    public let inferredPlans: [String: QuotaInferredPlan]
     /// The newest instance of every account and window, in report order.
     let current: [QuotaEntryBase]
     /// The account of Codex's newest token count line.
@@ -124,8 +126,10 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
         self.instances = instances
         let estimates = Self.estimates(instances, stored: inputs.stored.instances, nowMs: nowMs)
         self.estimates = estimates
-        current = Self.current(instances, estimates: estimates, spend: inputs.spend, accounts: accounts,
-                               observations: observations, nowMs: nowMs)
+        let inferredPlans = Self.inferredPlans(timelines: timelines, snapshots: inputs.snapshots, estimates: estimates)
+        self.inferredPlans = inferredPlans
+        current = Self.current(instances, estimates: estimates, inferredPlans: inferredPlans, spend: inputs.spend,
+                               accounts: accounts, observations: observations, nowMs: nowMs)
         // The sums lines and reports read are ready before the build leaves this queue.
         for base in current { _ = ledger.outer([base.account], base.modelName, 0, 0) }
     }
