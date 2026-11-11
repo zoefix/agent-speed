@@ -39,22 +39,60 @@
   }
  ],
  "accounts": {
-  "salt": "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f",
+  "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+  "saltText": "agent-speed quota account v1",
   "keys": [
    {
     "vendor": "codex",
     "id": "acct-1",
-    "expected": "5cdbe01ce30740bc"
+    "expected": "eccb796a3815310b"
    },
    {
     "vendor": "claude",
     "id": "org-1:user-1",
-    "expected": "7f3aa6deae8b9ff4"
+    "expected": "08504137119396d6"
    },
    {
     "vendor": "claudeDesktop",
     "id": "org-1",
-    "expected": "35efe81788f204f3"
+    "expected": "1b8f03aa3d05a260"
+   }
+  ],
+  "pairs": [
+   {
+    "install": "00112233445566778899aabbccddeeff",
+    "machine": "local",
+    "source": "kimi",
+    "expected": "5db6fdb0fc30d2c6"
+   },
+   {
+    "install": "00112233445566778899aabbccddeeff",
+    "machine": "host-1",
+    "source": "kimi",
+    "expected": "c682c369fcbeb84e"
+   },
+   {
+    "install": "00112233445566778899aabbccddeeff",
+    "machine": "local",
+    "source": "geminiCli",
+    "expected": "f3460d128e26b9aa"
+   }
+  ],
+  "reportTags": [
+   {
+    "origin": "https://radar.example",
+    "key": "eccb796a3815310b",
+    "expected": "84f626294f8e56b4"
+   },
+   {
+    "origin": "https://other.example",
+    "key": "eccb796a3815310b",
+    "expected": "6d758dc9b52bd426"
+   },
+   {
+    "origin": "https://radar.example",
+    "key": "08504137119396d6",
+    "expected": "bad4311b75a5c6e6"
    }
   ],
   "fingerprints": [
@@ -4131,7 +4169,9 @@
     "model": "gpt-x"
    }
   ],
+  "origin": "https://radar.example",
   "input": {
+   "account": "eccb796a3815310b",
    "source": "codex",
    "sources": [
     "codex"
@@ -4161,6 +4201,7 @@
     "name": "live",
     "now": 1794121212345,
     "expected": {
+     "account": "84f626294f8e56b4",
      "source": "codex",
      "sources": [
       "codex"
@@ -4206,6 +4247,7 @@
     "name": "reset passed",
     "now": 1794531600000,
     "expected": {
+     "account": "84f626294f8e56b4",
      "source": "codex",
      "sources": [
       "codex"
@@ -4242,6 +4284,7 @@
     "name": "no estimate",
     "now": 1794121200000,
     "expected": {
+     "account": "84f626294f8e56b4",
      "source": "codex",
      "sources": [
       "codex"
@@ -4329,7 +4372,9 @@
     "name": "priced, unpriced and cloud responses",
     "why": "C- counts whole minutes inside, C+ every minute touched; the unpriced response's 500 tokens cost the highest priced rate (Opus, 9000 micro-USD per token); a Bedrock route is left out; modelWeek Fable counts only claude-fable-*",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -4413,9 +4458,9 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81",
-      "363b7bee52946d81",
+      "08504137119396d6",
+      "08504137119396d6",
+      "08504137119396d6",
       null
      ],
      "sums": [
@@ -4450,7 +4495,9 @@
     "name": "unpriced only",
     "why": "with no priced model the upper bound is unbounded (null)",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -4502,7 +4549,9 @@
     "name": "other Codex provider",
     "why": "a response whose model_provider is not openai is no subscription spend",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -4561,7 +4610,7 @@
     },
     "expected": {
      "responses": [
-      "1db1974dd363cb7a",
+      "4c8c86e357fe5ce5",
       null
      ]
     }
@@ -4572,7 +4621,9 @@
     "name": "two accounts switching",
     "why": "account A's two 5h instances share one weekly instance, so they are one chain; account B's lines name other instances and start after codex login gives B's key; A never seen live keeps a chain key of its own; a response with no token count line (API key) and one whose line comes 6 s later are left out",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -4830,19 +4881,19 @@
     },
     "expected": {
      "responses": [
-      "1db1974dd363cb7a",
-      "1db1974dd363cb7a",
-      "1db1974dd363cb7a",
-      "1db1974dd363cb7a",
-      "1db1974dd363cb7a",
-      "ac5945d0027bb00f",
-      "ac5945d0027bb00f",
+      "4c8c86e357fe5ce5",
+      "4c8c86e357fe5ce5",
+      "4c8c86e357fe5ce5",
+      "4c8c86e357fe5ce5",
+      "4c8c86e357fe5ce5",
+      "94ecc04a13f50058",
+      "94ecc04a13f50058",
       null,
       null
      ],
      "instances": [
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -4863,7 +4914,7 @@
        }
       },
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -4884,7 +4935,7 @@
        }
       },
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "sevenDay::10080",
        "plan": "pro",
        "tier": null,
@@ -4905,7 +4956,7 @@
        }
       },
       {
-       "account": "ac5945d0027bb00f",
+       "account": "94ecc04a13f50058",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -4926,7 +4977,7 @@
        }
       },
       {
-       "account": "ac5945d0027bb00f",
+       "account": "94ecc04a13f50058",
        "window": "sevenDay::10080",
        "plan": "pro",
        "tier": null,
@@ -4955,7 +5006,9 @@
     "name": "Desktop on a personal plan",
     "why": "same organization and a personal plan: Desktop spends on the CLI's account, sources list both, the two spends add up",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -5038,12 +5091,12 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81"
+      "08504137119396d6",
+      "08504137119396d6"
      ],
      "instances": [
       {
-       "account": "363b7bee52946d81",
+       "account": "08504137119396d6",
        "window": "fiveHour::300",
        "plan": "claude_max",
        "tier": "default_claude_max_20x",
@@ -5064,7 +5117,7 @@
        }
       },
       {
-       "account": "363b7bee52946d81",
+       "account": "08504137119396d6",
        "window": "sevenDay::10080",
        "plan": "claude_max",
        "tier": "default_claude_max_20x",
@@ -5087,6 +5140,7 @@
      ],
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeDesktop",
        "sources": [
         "claudeCode",
@@ -5125,6 +5179,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeDesktop",
        "sources": [
         "claudeCode",
@@ -5169,7 +5224,9 @@
     "name": "Desktop on a team plan",
     "why": "a team organization is shared by its members: Desktop keeps its own account (no plan, account class)",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -5252,18 +5309,19 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "2793656d3ffa9a0d"
+      "08504137119396d6",
+      "1b8f03aa3d05a260"
      ],
      "instances": [
       {
-       "account": "2793656d3ffa9a0d",
+       "account": "08504137119396d6",
        "window": "fiveHour::300",
-       "plan": null,
-       "tier": null,
+       "plan": "claude_team",
+       "tier": "default_claude_max_20x",
        "class": [
-        "account",
-        "2793656d3ffa9a0d",
+        "plan",
+        "anthropic/claude_team",
+        "default_claude_max_20x",
         "fiveHour::300"
        ],
        "R": 1793942233000,
@@ -5273,13 +5331,14 @@
        "bounds": null
       },
       {
-       "account": "2793656d3ffa9a0d",
+       "account": "08504137119396d6",
        "window": "sevenDay::10080",
-       "plan": null,
-       "tier": null,
+       "plan": "claude_team",
+       "tier": "default_claude_max_20x",
        "class": [
-        "account",
-        "2793656d3ffa9a0d",
+        "plan",
+        "anthropic/claude_team",
+        "default_claude_max_20x",
         "sevenDay::10080"
        ],
        "R": 1794442633000,
@@ -5289,14 +5348,13 @@
        "bounds": null
       },
       {
-       "account": "363b7bee52946d81",
+       "account": "1b8f03aa3d05a260",
        "window": "fiveHour::300",
-       "plan": "claude_team",
-       "tier": "default_claude_max_20x",
+       "plan": null,
+       "tier": null,
        "class": [
-        "plan",
-        "anthropic/claude_team",
-        "default_claude_max_20x",
+        "account",
+        "1b8f03aa3d05a260",
         "fiveHour::300"
        ],
        "R": 1793942233000,
@@ -5306,14 +5364,13 @@
        "bounds": null
       },
       {
-       "account": "363b7bee52946d81",
+       "account": "1b8f03aa3d05a260",
        "window": "sevenDay::10080",
-       "plan": "claude_team",
-       "tier": "default_claude_max_20x",
+       "plan": null,
+       "tier": null,
        "class": [
-        "plan",
-        "anthropic/claude_team",
-        "default_claude_max_20x",
+        "account",
+        "1b8f03aa3d05a260",
         "sevenDay::10080"
        ],
        "R": 1794442633000,
@@ -5325,6 +5382,7 @@
      ],
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -5362,6 +5420,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -5399,6 +5458,7 @@
        "priceVersion": 8
       },
       {
+       "account": "acc3c4f963e9699f",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -5436,6 +5496,7 @@
        "priceVersion": 8
       },
       {
+       "account": "acc3c4f963e9699f",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -5479,7 +5540,9 @@
     "name": "Desktop in another organization",
     "why": "another organization uuid never merges",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -5562,18 +5625,19 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "0b75fc4801f9723a"
+      "08504137119396d6",
+      "2b2e8434ee469808"
      ],
      "instances": [
       {
-       "account": "0b75fc4801f9723a",
+       "account": "08504137119396d6",
        "window": "fiveHour::300",
-       "plan": null,
-       "tier": null,
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
        "class": [
-        "account",
-        "0b75fc4801f9723a",
+        "plan",
+        "anthropic/claude_max",
+        "default_claude_max_20x",
         "fiveHour::300"
        ],
        "R": 1793942233000,
@@ -5583,13 +5647,14 @@
        "bounds": null
       },
       {
-       "account": "0b75fc4801f9723a",
+       "account": "08504137119396d6",
        "window": "sevenDay::10080",
-       "plan": null,
-       "tier": null,
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
        "class": [
-        "account",
-        "0b75fc4801f9723a",
+        "plan",
+        "anthropic/claude_max",
+        "default_claude_max_20x",
         "sevenDay::10080"
        ],
        "R": 1794442633000,
@@ -5599,14 +5664,13 @@
        "bounds": null
       },
       {
-       "account": "363b7bee52946d81",
+       "account": "2b2e8434ee469808",
        "window": "fiveHour::300",
-       "plan": "claude_max",
-       "tier": "default_claude_max_20x",
+       "plan": null,
+       "tier": null,
        "class": [
-        "plan",
-        "anthropic/claude_max",
-        "default_claude_max_20x",
+        "account",
+        "2b2e8434ee469808",
         "fiveHour::300"
        ],
        "R": 1793942233000,
@@ -5616,14 +5680,13 @@
        "bounds": null
       },
       {
-       "account": "363b7bee52946d81",
+       "account": "2b2e8434ee469808",
        "window": "sevenDay::10080",
-       "plan": "claude_max",
-       "tier": "default_claude_max_20x",
+       "plan": null,
+       "tier": null,
        "class": [
-        "plan",
-        "anthropic/claude_max",
-        "default_claude_max_20x",
+        "account",
+        "2b2e8434ee469808",
         "sevenDay::10080"
        ],
        "R": 1794442633000,
@@ -5635,6 +5698,7 @@
      ],
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -5672,6 +5736,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -5709,6 +5774,7 @@
        "priceVersion": 8
       },
       {
+       "account": "aed672a15c9bb5f4",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -5746,6 +5812,7 @@
        "priceVersion": 8
       },
       {
+       "account": "aed672a15c9bb5f4",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -5789,7 +5856,9 @@
     "name": "Desktop on another account of the organization",
     "why": "same organization and a personal plan, but the 7-day resets lie 19 h apart while both instances are live: two accounts (seen 2026-11-11), Desktop keeps its own",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -5858,28 +5927,12 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "2793656d3ffa9a0d"
+      "08504137119396d6",
+      "1b8f03aa3d05a260"
      ],
      "instances": [
       {
-       "account": "2793656d3ffa9a0d",
-       "window": "sevenDay::10080",
-       "plan": null,
-       "tier": null,
-       "class": [
-        "account",
-        "2793656d3ffa9a0d",
-        "sevenDay::10080"
-       ],
-       "R": 1794511033000,
-       "S": 1793906233000,
-       "Shi": 1793906233000,
-       "observations": 1,
-       "bounds": null
-      },
-      {
-       "account": "363b7bee52946d81",
+       "account": "08504137119396d6",
        "window": "sevenDay::10080",
        "plan": "claude_max",
        "tier": "default_claude_max_20x",
@@ -5894,10 +5947,27 @@
        "Shi": 1793837833000,
        "observations": 1,
        "bounds": null
+      },
+      {
+       "account": "1b8f03aa3d05a260",
+       "window": "sevenDay::10080",
+       "plan": null,
+       "tier": null,
+       "class": [
+        "account",
+        "1b8f03aa3d05a260",
+        "sevenDay::10080"
+       ],
+       "R": 1794511033000,
+       "S": 1793906233000,
+       "Shi": 1793906233000,
+       "observations": 1,
+       "bounds": null
       }
      ],
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -5935,6 +6005,7 @@
        "priceVersion": 8
       },
       {
+       "account": "acc3c4f963e9699f",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -5978,7 +6049,9 @@
     "name": "Desktop without CLI values",
     "why": "no CLI window to compare: the fingerprint is unknown and Desktop keeps its own account",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -6033,18 +6106,18 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "2793656d3ffa9a0d"
+      "08504137119396d6",
+      "1b8f03aa3d05a260"
      ],
      "instances": [
       {
-       "account": "2793656d3ffa9a0d",
+       "account": "1b8f03aa3d05a260",
        "window": "sevenDay::10080",
        "plan": null,
        "tier": null,
        "class": [
         "account",
-        "2793656d3ffa9a0d",
+        "1b8f03aa3d05a260",
         "sevenDay::10080"
        ],
        "R": 1794442633000,
@@ -6056,6 +6129,7 @@
      ],
      "entries": [
       {
+       "account": "acc3c4f963e9699f",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -6099,7 +6173,9 @@
     "name": "Desktop's value before the CLI's",
     "why": "Desktop's snapshot comes before any CLI value: the first comparable pair after it decides, so Desktop's earlier spend joins the CLI's account",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -6168,12 +6244,12 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81"
+      "08504137119396d6",
+      "08504137119396d6"
      ],
      "instances": [
       {
-       "account": "363b7bee52946d81",
+       "account": "08504137119396d6",
        "window": "sevenDay::10080",
        "plan": "claude_max",
        "tier": "default_claude_max_20x",
@@ -6196,6 +6272,7 @@
      ],
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode",
@@ -6242,7 +6319,9 @@
     "name": "spend before the first key and a /login",
     "why": "the response before the first key seen goes to that key; after the switch spend goes to the new key",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -6298,9 +6377,9 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81",
-      "f6f79f47080c4937"
+      "08504137119396d6",
+      "08504137119396d6",
+      "547480c12c4fcf31"
      ]
     }
    }
@@ -6310,7 +6389,9 @@
     "name": "two accounts, one plan",
     "why": "both accounts' instances pool in the class (openai/pro, 5h): two windows",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -6524,7 +6605,7 @@
     "expected": {
      "instances": [
       {
-       "account": "748a475b7d5f6cf7",
+       "account": "01fccfd8942a9ddb",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -6545,7 +6626,7 @@
        }
       },
       {
-       "account": "ac5945d0027bb00f",
+       "account": "94ecc04a13f50058",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -6581,7 +6662,9 @@
     "name": "null plan_type",
     "why": "lines with a null plan take the account's nearest earlier plan, else its first later one (account A is plus throughout); account Z never names a plan and keeps an account class",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -6809,7 +6892,7 @@
     "expected": {
      "instances": [
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "fiveHour::300",
        "plan": "plus",
        "tier": null,
@@ -6830,13 +6913,13 @@
        }
       },
       {
-       "account": "f30731adc0d273a8",
+       "account": "f694c562d00ba779",
        "window": "fiveHour::300",
        "plan": null,
        "tier": null,
        "class": [
         "account",
-        "f30731adc0d273a8",
+        "f694c562d00ba779",
         "fiveHour::300"
        ],
        "R": 1794201433000,
@@ -6851,7 +6934,7 @@
       }
      ],
      "estimates": {
-      "account|f30731adc0d273a8|fiveHour::300": {
+      "account|f694c562d00ba779|fiveHour::300": {
        "cap": 163663417.677,
        "low": 125000000.0,
        "high": 214285714.286,
@@ -6874,7 +6957,9 @@
     "name": "lowered cap",
     "why": "three windows at $100 then two at $60: the instances after the cut fall below the older ones' lower bounds, so the older evidence is dropped and the estimate is $60 (a last zero-cost turn with the same percent lets the cumulative bound count the final response)",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -7380,7 +7465,9 @@
     "name": "plan change inside a window",
     "why": "the instance splits at the change: the plus part stays in the plus class, the pro part starts the pro class; the entry shows the newer part",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -7537,7 +7624,7 @@
     "expected": {
      "instances": [
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "fiveHour::300",
        "plan": "plus",
        "tier": null,
@@ -7558,7 +7645,7 @@
        }
       },
       {
-       "account": "1db1974dd363cb7a",
+       "account": "4c8c86e357fe5ce5",
        "window": "fiveHour::300",
        "plan": "pro",
        "tier": null,
@@ -7597,6 +7684,7 @@
      },
      "entries": [
       {
+       "account": "5ec308ea87e1bf93",
        "source": "codex",
        "sources": [
         "codex"
@@ -7642,7 +7730,9 @@
     "name": "five-hour after reset, no use yet",
     "why": "after R with no local response yet: 0 %, not estimated, no reset",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -7791,6 +7881,7 @@
     "expected": {
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -7829,7 +7920,9 @@
     "name": "five-hour after reset, after the first response",
     "why": "the new instance starts at the minute of the first local response's start after R (R + 38 min), resets 5 h later; the percent is spend since then over the cap",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -7978,6 +8071,7 @@
     "expected": {
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -8021,7 +8115,9 @@
     "name": "weekly after reset",
     "why": "a weekly window restarts at R + n * minutes: 1.5 weeks after R that is R + 1 week, so the response 3 days after R no longer counts",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -8180,6 +8276,7 @@
     "expected": {
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -8223,7 +8320,9 @@
     "name": "before the reset",
     "why": "spend after the newest vendor value raises the live percent: p + 100 * (C+(S, now) - C+(S, t)) / K, estimated from 0.5 points up",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -8372,6 +8471,7 @@
     "expected": {
      "entries": [
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -8417,7 +8517,9 @@
     "name": "store written",
     "why": "runs of equal values keep their first and last observation; key changes are kept with their plan",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -8521,10 +8623,10 @@
       }
      },
      "store": {
-      "version": 1,
+      "version": 2,
       "observations": [
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8537,7 +8639,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8550,7 +8652,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8571,7 +8673,7 @@
          "default_claude_max_20x",
          "fiveHour::300"
         ],
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "R": 1793942233000,
         "lo": 80000000.0,
         "hi": 266666666.66666666,
@@ -8583,10 +8685,10 @@
        {
         "source": "claudeCode",
         "at": 1793924233000,
-        "key": "363b7bee52946d81",
+        "key": "08504137119396d6",
         "plan": "claude_max",
         "tier": "default_claude_max_20x",
-        "orgKey": "2793656d3ffa9a0d"
+        "orgKey": "1b8f03aa3d05a260"
        }
       ]
      }
@@ -8596,7 +8698,9 @@
     "name": "store read back",
     "why": "a later launch with only the responses and the stored file gives the same estimate: the stored keys attribute the spend, the stored observations rebuild the instance",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -8624,10 +8728,10 @@
       "estimates"
      ],
      "store": {
-      "version": 1,
+      "version": 2,
       "observations": [
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8640,7 +8744,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8653,7 +8757,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "fiveHour",
         "name": null,
@@ -8674,7 +8778,7 @@
          "default_claude_max_20x",
          "fiveHour::300"
         ],
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "R": 1793942233000,
         "lo": 80000000.0,
         "hi": 266666666.66666666,
@@ -8686,10 +8790,10 @@
        {
         "source": "claudeCode",
         "at": 1793924233000,
-        "key": "363b7bee52946d81",
+        "key": "08504137119396d6",
         "plan": "claude_max",
         "tier": "default_claude_max_20x",
-        "orgKey": "2793656d3ffa9a0d"
+        "orgKey": "1b8f03aa3d05a260"
        }
       ]
      }
@@ -8710,14 +8814,16 @@
     "name": "store limits",
     "why": "300 distinct values of one instance thin to 256 evenly spaced runs (first and last kept); 70 closed instances of one class keep the newest 64; generated store: observation i = 1..300 of k1 (claudeCode, sevenDay, plan claude_max) at t = tLo = t0 + i min with p = i / 10 and R = t0 + 6 d; closed instance i = 1..70 of class (plan, anthropic/claude_max, null, fiveHour::300) with R = t0 - 5 i h, lo 1e8, hi 2e8, pMax 40, tLast = R - 1 h; one key",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [],
      "now": 1793945833000,
      "outputs": [
       "storeCounts"
      ],
      "generatedStore": {
-      "version": 1,
+      "version": 2,
       "t0": 1793924233000,
       "account": "k1",
       "observations": 300,
@@ -8734,16 +8840,18 @@
    },
    {
     "name": "store of another version",
-    "why": "a file of another version is ignored (and replaced); the same generated store with version 2",
+    "why": "a file of another version is ignored (and replaced); the same generated store with version 1 (before the fixed account salt)",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [],
      "now": 1793945833000,
      "outputs": [
       "storeCounts"
      ],
      "generatedStore": {
-      "version": 2,
+      "version": 1,
       "t0": 1793924233000,
       "account": "k1",
       "observations": 300,
@@ -8762,7 +8870,9 @@
     "name": "store written with Desktop",
     "why": "Desktop's stored timeline holds its organization's own key; the shared key is derived",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -8831,8 +8941,8 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81"
+      "08504137119396d6",
+      "08504137119396d6"
      ],
      "estimates": {
       "plan|anthropic/claude_max|default_claude_max_20x|sevenDay::10080": {
@@ -8844,10 +8954,10 @@
       }
      },
      "store": {
-      "version": 1,
+      "version": 2,
       "observations": [
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "sevenDay",
         "name": null,
@@ -8860,7 +8970,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeDesktop",
         "kind": "sevenDay",
         "name": null,
@@ -8878,15 +8988,15 @@
        {
         "source": "claudeCode",
         "at": 1793924233000,
-        "key": "363b7bee52946d81",
+        "key": "08504137119396d6",
         "plan": "claude_max",
         "tier": "default_claude_max_20x",
-        "orgKey": "2793656d3ffa9a0d"
+        "orgKey": "1b8f03aa3d05a260"
        },
        {
         "source": "claudeDesktop",
         "at": 1793928193000,
-        "key": "2793656d3ffa9a0d",
+        "key": "1b8f03aa3d05a260",
         "plan": null,
         "tier": null
        }
@@ -8898,7 +9008,9 @@
     "name": "store read back with Desktop",
     "why": "only the responses and the stored file: the stored organization timeline and the stored windows of both sources give the same merge and estimate",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "response",
@@ -8927,10 +9039,10 @@
       "estimates"
      ],
      "store": {
-      "version": 1,
+      "version": 2,
       "observations": [
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeCode",
         "kind": "sevenDay",
         "name": null,
@@ -8943,7 +9055,7 @@
         "tier": "default_claude_max_20x"
        },
        {
-        "account": "363b7bee52946d81",
+        "account": "08504137119396d6",
         "source": "claudeDesktop",
         "kind": "sevenDay",
         "name": null,
@@ -8961,15 +9073,15 @@
        {
         "source": "claudeCode",
         "at": 1793924233000,
-        "key": "363b7bee52946d81",
+        "key": "08504137119396d6",
         "plan": "claude_max",
         "tier": "default_claude_max_20x",
-        "orgKey": "2793656d3ffa9a0d"
+        "orgKey": "1b8f03aa3d05a260"
        },
        {
         "source": "claudeDesktop",
         "at": 1793928193000,
-        "key": "2793656d3ffa9a0d",
+        "key": "1b8f03aa3d05a260",
         "plan": null,
         "tier": null
        }
@@ -8978,8 +9090,8 @@
     },
     "expected": {
      "responses": [
-      "363b7bee52946d81",
-      "363b7bee52946d81"
+      "08504137119396d6",
+      "08504137119396d6"
      ],
      "estimates": {
       "plan|anthropic/claude_max|default_claude_max_20x|sevenDay::10080": {
@@ -8998,7 +9110,9 @@
     "name": "entries and their order",
     "why": "Codex first, then the Claude account, then the team Desktop account; each account's windows unnamed by length, then named; percent at two decimals, micro-USD whole; a Desktop of a team organization lists itself only",
     "input": {
-     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
      "events": [
       {
        "type": "claudeProfile",
@@ -9124,6 +9238,7 @@
     "expected": {
      "entries": [
       {
+       "account": "68d5852f82ed75c4",
        "source": "codex",
        "sources": [
         "codex"
@@ -9161,6 +9276,7 @@
        "priceVersion": 8
       },
       {
+       "account": "68d5852f82ed75c4",
        "source": "codex",
        "sources": [
         "codex"
@@ -9198,6 +9314,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -9239,6 +9356,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -9280,6 +9398,7 @@
        "priceVersion": 8
       },
       {
+       "account": "bad4311b75a5c6e6",
        "source": "claudeCode",
        "sources": [
         "claudeCode"
@@ -9317,6 +9436,7 @@
        "priceVersion": 8
       },
       {
+       "account": "c4cd8d35eae1a676",
        "source": "claudeDesktop",
        "sources": [
         "claudeDesktop"
@@ -9355,11 +9475,165 @@
       }
      ]
     }
+   },
+   {
+    "name": "two Codex accounts",
+    "why": "two accounts of one source and window are two entries with the same sources and window and different account tags (seen 2026-11-11: a service rejected the pair before the tag existed)",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 3000000,
+       "tokens": 1000
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793927834500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 40,
+         "window_minutes": 10080,
+         "resets_at": 1794442633
+        }
+       }
+      },
+      {
+       "type": "codexAuth",
+       "at": 1793931433000,
+       "accountId": "acct-b"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "b",
+       "startMs": 1793935013000,
+       "endMs": 1793935033000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 2000000,
+       "tokens": 1000
+      },
+      {
+       "type": "tokenCount",
+       "file": "b",
+       "ts": 1793935034500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 10,
+         "window_minutes": 10080,
+         "resets_at": 1794370633
+        }
+       }
+      }
+     ],
+     "now": 1793938633000,
+     "outputs": [
+      "entries"
+     ]
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 10798500,
+       "resetsInMs": 504000000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "bbb0043d651656d5",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 10.0,
+       "percentAgeMs": 3598500,
+       "resetsInMs": 432000000,
+       "livePercent": 10.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 2000000,
+       "observedUsedMicroUsd": 2000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
    }
   ],
   "cadence": {
    "why": "a report carries `quotas` when it is the run's first, the set of entries, a vendor percent, a confidence or the reset state changed, 60 s passed since the last sent one, or the app leaves; spend alone waits; a section dropped for size counts as unsent; switching the section off sends `[]` once; a new run starts empty",
    "entry": {
+    "account": "0123456789abcdef",
     "sources": [
      "codex"
     ],

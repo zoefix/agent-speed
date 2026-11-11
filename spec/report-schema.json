@@ -1253,9 +1253,10 @@
       }
     },
     "quotaEntry": {
-      "description": "QUOTAS 11, REPORTING-EXTENSIONS 11 (extension quotaEstimate): one subscription account-window of the device. usedPercent is the vendor's value; livePercent extrapolates it with the measured spend; usedMicroUsd is the spend this device measured in the window; estimate is the cap in API-equivalent micro-USD inferred on the device. No account identifier is ever sent. Times are offsets from sentAt. A window whose reset has passed has usedPercent, percentAgeMs and observedUsedMicroUsd null.",
+      "description": "QUOTAS 11, REPORTING-EXTENSIONS 11 (extension quotaEstimate): one subscription account-window of the device. account is the account's tag for this service: a keyed hash of the account's key and the service's origin, the same for one account on all of the user's devices and different for every service; no account id, e-mail or key is ever sent. usedPercent is the vendor's value; livePercent extrapolates it with the measured spend; usedMicroUsd is the spend this device measured in the window; estimate is the cap in API-equivalent micro-USD inferred on the device. Times are offsets from sentAt. A window whose reset has passed has usedPercent, percentAgeMs and observedUsedMicroUsd null.",
       "type": "object",
       "required": [
+        "account",
         "source",
         "sources",
         "plan",
@@ -1274,6 +1275,11 @@
         "priceVersion"
       ],
       "properties": {
+        "account": {
+          "type": "string",
+          "pattern": "^[0-9a-f]{16}$",
+          "description": "REPORTING-EXTENSIONS 11.2: the account's tag for this service (16 lowercase hex digits). Unique with window in one report."
+        },
         "source": {
           "$ref": "#/$defs/source"
         },

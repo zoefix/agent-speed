@@ -455,8 +455,9 @@ Not on hosts:
 
 - `start` gains an optional `quota` object, and the app sends a line `{"t": "quota", "config": {...}}` whenever it
   changes. The config is `{"sources": [<keys whose quota switch is on>], "network": <networkEnabled>, "grokLive":
-  bool, "claudeBridge": bool, "salt": <64 hex digits>}`. `salt` is the app's estimate salt (QUOTAS 10.1); the relay
-  keeps it in memory only, never writes or logs it, and leaves `account` null without it.
+  bool, "claudeBridge": bool, "salt": <64 hex digits>}`. `salt` is the account salt of QUOTAS 10.1 (the same in every
+  install since 2026-11-11; the field stays so that relays need no change); the relay keeps it in memory only, never
+  writes or logs it, and leaves `account` null without it.
 - The relay answers with one line per source:
   - `{"t": "quota", "q": {source, observedMs, windows, running, signedIn, status, account, plan, tier}}` whenever it
     changes, at most once a second;

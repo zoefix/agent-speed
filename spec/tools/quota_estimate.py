@@ -47,8 +47,24 @@ HIGH_WIDTH = 0.08
 
 # 10.1 Accounts
 
+# The account salt is the same in every install, so that one account has one key on all of the user's computers and
+# a reporting service sees one tag for it (user's choice 2026-11-11). It keys a hash of an id that is itself random.
+ACCOUNT_SALT = hashlib.sha256(b"agent-speed quota account v1").digest()
+REPORT_TAG_DOMAIN = "agent-speed quota account|"
+
+
 def account_key(salt: bytes, vendor: str, ident: str) -> str:
     return hmac.new(salt, ("%s:%s" % (vendor, ident)).encode("utf-8"), hashlib.sha256).hexdigest()[:16]
+
+
+def pair_key(salt: bytes, install: str, machine: str, source: str) -> str:
+    """10.1: the key of an account without an id, the pair (this install's computer or one of its hosts, source)."""
+    return account_key(salt, "pair", "%s:%s:%s" % (install, machine, source))
+
+
+def report_account(origin: str, key: str) -> str:
+    """REPORTING-EXTENSIONS 11.2 `account`: an account's tag for one service, from its key and the service's origin."""
+    return hmac.new((REPORT_TAG_DOMAIN + origin).encode("utf-8"), key.encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
 def fingerprint(a, b, at):
@@ -486,8 +502,9 @@ def micro(x):
     return None if x is None else int(math.floor(x + 0.5))
 
 
-def report_entry(acc, now_ms, ledger, price_version):
-    """acc: {source, sources, plan, tier, kind, name, minutes, p, t, R, S, accounts, estimate, firstAfterReset}."""
+def report_entry(acc, now_ms, ledger, price_version, origin):
+    """acc: {account, source, sources, plan, tier, kind, name, minutes, p, t, R, S, accounts, estimate,
+    firstAfterReset}; origin: the service's api origin."""
     est = acc["estimate"]
     cap = est.get("cap")
     name = acc["name"] if acc["kind"] == "modelWeek" else None
@@ -501,6 +518,7 @@ def report_entry(acc, now_ms, ledger, price_version):
     if cap and acc["p"] >= 5:
         coverage = round_half_away(min(1.0, max(0.0, observed / (cap * acc["p"] / 100))), 3)
     return {
+        "account": report_account(origin, acc["account"]),
         "source": acc["source"],
         "sources": acc["sources"],
         "plan": acc["plan"],
@@ -530,7 +548,7 @@ def report_entry(acc, now_ms, ledger, price_version):
 
 def entry_identity(e):
     w = e["window"]
-    return (tuple(e["sources"]), w["kind"], w["name"], w["minutes"])
+    return (e["account"], w["kind"], w["name"], w["minutes"])
 
 
 def should_send(entries, last_sent, last_sent_ms, now_ms, leaving=False):
@@ -553,6 +571,8 @@ def should_send(entries, last_sent, last_sent_ms, now_ms, leaving=False):
 
 
 # Fixtures
+
+REPORT_ORIGIN = "https://radar.example"
 
 def obs(p, t, R, kind="sevenDay", minutes=10080, source="codex", tLo=None, name=None):
     return {"source": source, "kind": kind, "name": name, "minutes": minutes, "p": p, "t": t,
@@ -678,9 +698,15 @@ def weight_cases():
 
 
 def account_cases():
-    salt = bytes(range(32))
+    salt = ACCOUNT_SALT
     keys = [{"vendor": v, "id": i, "expected": account_key(salt, v, i)}
             for v, i in (("codex", "acct-1"), ("claude", "org-1:user-1"), ("claudeDesktop", "org-1"))]
+    install = "00112233445566778899aabbccddeeff"
+    pairs = [{"install": install, "machine": m, "source": src, "expected": pair_key(salt, install, m, src)}
+             for m, src in (("local", "kimi"), ("host-1", "kimi"), ("local", "geminiCli"))]
+    tags = [{"origin": o, "key": k, "expected": report_account(o, k)}
+            for o, k in (("https://radar.example", keys[0]["expected"]), ("https://other.example", keys[0]["expected"]),
+                         ("https://radar.example", keys[1]["expected"]))]
     merge = []
     for d, c, t, fp in (("org-1", "org-1", "claude_max", True), ("org-1", "org-1", "claude_max", None),
                         ("org-1", "org-1", "claude_max", False), ("org-1", "org-1", "claude_team", True),
@@ -716,7 +742,8 @@ def account_cases():
     roots = [ch.link(l) for l in lines]
     names = {}
     chains = [names.setdefault(r, "chain%d" % len(names)) for r in [ch.find(r) for r in roots]]
-    return {"salt": salt.hex(), "keys": keys, "fingerprints": prints, "desktopMerge": merge, "keysShare": keys_shared,
+    return {"salt": salt.hex(), "saltText": "agent-speed quota account v1", "keys": keys, "pairs": pairs,
+            "reportTags": tags, "fingerprints": prints, "desktopMerge": merge, "keysShare": keys_shared,
             "plans": plans,
             "chains": {"lines": lines, "expected": chains}}
 
@@ -776,14 +803,15 @@ def report_cases():
     rows.append({"at": S + 30 * HOUR, "cost": None, "model": "gpt-x"})
     led = ledger_from(rows)
     est = {"confidence": "medium", "cap": 512_345_678.4, "low": 480_000_000.5, "high": 546_000_000.49, "windows": 2}
-    base = {"source": "codex", "sources": ["codex"], "plan": "promax", "tier": None, "kind": "sevenDay", "name": None,
+    base = {"account": account_key(ACCOUNT_SALT, "codex", "acct-1"), "source": "codex", "sources": ["codex"],
+            "plan": "promax", "tier": None, "kind": "sevenDay", "name": None,
             "minutes": 10080, "p": 23.456, "t": S + 50 * HOUR, "R": R, "S": S, "accounts": {"a"}, "estimate": est}
     entries = []
     for label, now in (("live", S + 55 * HOUR + 12_345), ("reset passed", R + HOUR)):
-        entries.append({"name": label, "now": now, "expected": report_entry(base, now, led, 8)})
+        entries.append({"name": label, "now": now, "expected": report_entry(base, now, led, 8, REPORT_ORIGIN)})
     none_est = dict(base, estimate={"confidence": "none", "windows": 0})
     entries.append({"name": "no estimate", "now": S + 55 * HOUR,
-                    "expected": report_entry(none_est, S + 55 * HOUR, led, 8)})
+                    "expected": report_entry(none_est, S + 55 * HOUR, led, 8, REPORT_ORIGIN)})
     a = entries[0]["expected"]
     b = json.loads(json.dumps(a))
     b["usedMicroUsd"] += 5
@@ -798,10 +826,11 @@ def report_cases():
         {"name": "vendor percent changed", "lastSentMsAgo": 5_000, "change": "usedPercent",
          "expected": should_send([c], [a], 0, 5_000)},
         {"name": "entry added", "lastSentMsAgo": 5_000, "change": "set", "expected": should_send([a, dict(
-            b, sources=["claudeCode"])], [a], 0, 5_000)},
+            b, account=report_account(REPORT_ORIGIN, account_key(ACCOUNT_SALT, "codex", "acct-2")))], [a], 0, 5_000)},
         {"name": "leaving", "lastSentMsAgo": 1_000, "change": "none", "expected": should_send([a], [a], 0, 1_000, True)},
     ]
-    return {"rows": rows, "input": dict(base, accounts=["a"]), "entries": entries, "cadence": cadence}
+    return {"rows": rows, "origin": REPORT_ORIGIN, "input": dict(base, accounts=["a"]), "entries": entries,
+            "cadence": cadence}
 
 
 def build_cases():
