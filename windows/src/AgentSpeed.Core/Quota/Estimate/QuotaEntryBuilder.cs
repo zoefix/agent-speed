@@ -1,9 +1,12 @@
 namespace AgentSpeed.Core.Quota.Estimate;
 
-/// <summary>What a report entry is computed from: the newest vendor value of an account's window instance and its class estimate.</summary>
+/// <summary>
+/// What a report entry is computed from: the newest vendor value of an account's window instance and its class estimate;
+/// <paramref name="PlanInferred"/> when <paramref name="Plan"/> and <paramref name="Tier"/> were inferred (QUOTAS 10.2).
+/// </summary>
 public sealed record EntryBasis(
     SourceKind Source, IReadOnlyList<SourceKind> Sources, string? Plan, string? Tier, QuotaWindowKind Kind, string? Name, int Minutes,
-    double P, long T, long R, long S, string Account, CapEstimate Estimate, long? FirstAfterReset);
+    double P, long T, long R, long S, string Account, CapEstimate Estimate, long? FirstAfterReset, bool PlanInferred = false);
 
 /// <summary>A report entry at a moment (REPORTING-EXTENSIONS 11.2, QUOTAS 10.7, 10.8).</summary>
 public static class QuotaEntryBuilder
@@ -40,6 +43,7 @@ public static class QuotaEntryBuilder
             ledger.Mix(b.Account, name, start, nowMs), priceVersion)
         {
             AtMs = nowMs,
+            PlanInferred = b.PlanInferred,
         };
     }
 }

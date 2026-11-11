@@ -21,6 +21,9 @@ public sealed record QuotaReportEntry(
     /// <summary>When the entry was computed.</summary>
     public long AtMs { get; init; }
 
+    /// <summary><see cref="Plan"/> and <see cref="Tier"/> were inferred from the quota (QUOTAS 10.2); reports send them alike.</summary>
+    public bool PlanInferred { get; init; }
+
     /// <summary>The reset the live percent counts to: the vendor's, or the next instance's after it passed.</summary>
     public long? ResetsAtMs => ResetsInMs is { } inMs ? AtMs + inMs : null;
 

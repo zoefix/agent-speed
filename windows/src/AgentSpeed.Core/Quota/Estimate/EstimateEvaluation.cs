@@ -83,6 +83,7 @@ public sealed partial class EstimateEvaluation
         }
 
         Estimates = estimates;
+        InferPlans();
         FindCurrent();
     }
 

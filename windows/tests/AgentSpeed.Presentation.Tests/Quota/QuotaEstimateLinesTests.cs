@@ -42,9 +42,10 @@ public sealed class QuotaEstimateLinesTests
 
     private static QuotaWindowEstimate Estimate(QuotaWindow window, double live = 86, long used = 161 * Dollar, long? cap = 5742 * Dollar,
         long? low = 5600 * Dollar, long? high = 5900 * Dollar, EstimateConfidence confidence = EstimateConfidence.High, double? coverage = 0.634,
-        bool vendorPassed = false, long? resetsAtMs = -1, string? plan = "claude_max", string? tier = "default_claude_max_20x", int windows = 9) =>
+        bool vendorPassed = false, long? resetsAtMs = -1, string? plan = "claude_max", string? tier = "default_claude_max_20x", int windows = 9,
+        bool planInferred = false) =>
         new(Now - Minute, live, live - window.UsedPercent >= 0.5, resetsAtMs == -1 ? window.ResetsAtMs : resetsAtMs, vendorPassed, used, 0, cap, low,
-            high, confidence, coverage, cap is { } k ? (long)(k * live / 100) : null, windows, plan, tier);
+            high, confidence, coverage, cap is { } k ? (long)(k * live / 100) : null, windows, plan, tier, planInferred);
 
     private static QuotaState State(SourceKind source, QuotaSnapshot snapshot, params (QuotaWindow Window, QuotaWindowEstimate Estimate)[] estimates) => new()
     {
@@ -230,6 +231,26 @@ public sealed class QuotaEstimateLinesTests
         Assert.Contains("This computer saw 100% of this window's usage", week.Details);
         Assert.Contains("Medium confidence · Based on 9 windows", week.Details);
         Assert.Contains("Plan: claude_max", week.Details);
+    }
+
+    /// <summary>
+    /// An inferred plan reads <c>quota.estimate.planInferred</c> in place of <c>quota.estimate.plan</c> (DESIGN 4 <i>Tooltip</i>,
+    /// QUOTAS 10.2), with <c> · </c> and the tier when there is one; a plan the vendor names stays unmarked.
+    /// </summary>
+    [Fact]
+    public void TheTooltipMarksAnInferredPlan()
+    {
+        var ultra = Lines(ZhHant, Cost(ZhHant), Now, (Week, Estimate(Week, plan: "claude_ultra", tier: null, planInferred: true)))[1];
+        Assert.Contains("方案：claude_ultra（依額度推算）", ultra.Details);
+        Assert.DoesNotContain(ZhHant.Format("quota.estimate.plan", "claude_ultra"), ultra.Details);
+
+        var max5 = Lines((Week, Estimate(Week, tier: "default_claude_max_5x", planInferred: true)))[1];
+        Assert.Contains("Plan: claude_max · default_claude_max_5x (inferred from the quota)", max5.Details);
+        Assert.Equal(En.Format("quota.estimate.planInferred", "claude_max · default_claude_max_5x"), max5.Details[5]);
+
+        var named = Lines((Week, Estimate(Week)))[1];
+        Assert.Contains("Plan: claude_max · default_claude_max_20x", named.Details);
+        Assert.DoesNotContain(named.Details, d => d.Contains("inferred", StringComparison.Ordinal));
     }
 
     [Fact]

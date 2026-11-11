@@ -53,8 +53,11 @@ public sealed partial class EstimateEvaluation
         var last = current.Last;
         var instance = x.Instance;
         long? firstAfter = last.Kind == QuotaWindowKind.FiveHour ? Model.FirstStartAfter(x.Account, instance.R, nowMs) : null;
-        var basis = new EntryBasis(last.Source, current.Sources, x.Plan, x.Tier, last.Kind, last.Name, last.Minutes, last.P, last.T,
-            instance.R, instance.S, x.Account, Estimates.GetValueOrDefault(x.Class) ?? CapEstimate.None, firstAfter);
+        // An inferred plan fills only a missing one and never moves the class (QUOTAS 10.2).
+        var inferred = x.Plan is null ? InferredPlans.GetValueOrDefault(x.Account) : null;
+        var basis = new EntryBasis(last.Source, current.Sources, inferred?.Plan ?? x.Plan, inferred is null ? x.Tier : inferred.Tier, last.Kind,
+            last.Name, last.Minutes, last.P, last.T, instance.R, instance.S, x.Account, Estimates.GetValueOrDefault(x.Class) ?? CapEstimate.None,
+            firstAfter, inferred is not null);
         return QuotaEntryBuilder.Build(basis, tag, nowMs, Model.Ledger, Model.PriceVersion);
     }
 }

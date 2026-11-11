@@ -124,7 +124,8 @@ public static class QuotaEstimateText
     /// <summary>
     /// The tooltip's estimate lines in DESIGN 4's order: the used amount, the cap with its published range (or at least),
     /// the whole account's use while a cap exists, the coverage while known, the confidence with the windows it rests on, the
-    /// plan (and tier) when known, and the live note while extrapolated. A non-USD currency adds the USD amount (DESIGN 9).
+    /// plan (and tier) when known, marked when inferred (QUOTAS 10.2), and the live note while extrapolated. A non-USD currency
+    /// adds the USD amount (DESIGN 9).
     /// </summary>
     public static IReadOnlyList<string> Details(QuotaWindowEstimate estimate, CostDisplay? cost, Localizer loc)
     {
@@ -165,7 +166,8 @@ public static class QuotaEstimateText
 
         if (estimate.Plan is { Length: > 0 } plan)
         {
-            lines.Add(loc.Format("quota.estimate.plan", estimate.Tier is { Length: > 0 } tier ? plan + Dot + tier : plan));
+            lines.Add(loc.Format(estimate.PlanInferred ? "quota.estimate.planInferred" : "quota.estimate.plan",
+                estimate.Tier is { Length: > 0 } tier ? plan + Dot + tier : plan));
         }
 
         if (estimate.Estimated)
