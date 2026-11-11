@@ -55,6 +55,7 @@ HostQuotaConfig HostQuotaConfig::forHost(bool hostBridge, const QuotaSwitches& s
     config.network = switches.network;
     config.grokLive = switches.grokLive && config.sources.contains(SourceKind::GrokBuild);
     config.claudeBridge = hostBridge;
+    config.salt = switches.salt;
     return config;
 }
 

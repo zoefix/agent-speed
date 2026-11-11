@@ -197,6 +197,8 @@ struct QuotaSwitches {
     bool network = false;
     bool grokLive = false;
     bool claudeCode = false;
+    // QUOTAS 10.1: the app's estimate salt as 64 lowercase hex digits; empty: none (never logged).
+    std::string salt;
     bool operator==(const QuotaSwitches&) const = default;
 };
 
@@ -206,6 +208,8 @@ struct HostQuotaConfig {
     bool network = false;
     bool grokLive = false;
     bool claudeBridge = false;
+    // `salt` (REMOTE 11.1): 64 lowercase hex digits, empty when the app has none; kept in memory only.
+    std::string salt;
     bool operator==(const HostQuotaConfig&) const = default;
     // Claude Code counts only through the host's own bridge (`quotaClaudeCli`) and while Claude Code is enabled; the
     // bridge itself follows the host's switch alone, so it can always be restored.
@@ -220,6 +224,9 @@ struct HostQuota {
     bool running = false;
     bool signedIn = false;
     Status status = Status::Ok;
+    // QUOTAS 10.1 and 10.2: the source's account key (16 lowercase hex digits), plan and tier; null from older relays
+    // and without a salt.
+    std::optional<std::string> account, plan, tier;
     bool operator==(const HostQuota&) const = default;
 };
 std::string_view hostQuotaStatusId(HostQuota::Status status);
