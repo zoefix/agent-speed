@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Net.Http;
 using System.Runtime.Versioning;
 using AgentSpeed.Core.Quota.Local;
 using AgentSpeed.Core.Quota.Network;
@@ -41,6 +42,16 @@ public sealed class AntigravityEndToEndTests : IDisposable
         }
         """;
 
+    // The stand-in's first answer can take seconds on a busy runner (PowerShell compiles the loop), longer than the
+    // 2 s loopback timeout under test, so one request primes it.
+    private static async Task WarmUp(int port)
+    {
+        using var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        using var request = new HttpRequestMessage(HttpMethod.Post, $"http://127.0.0.1:{port}/warm") { Content = new StringContent("{}") };
+        request.Headers.Add("X-Codeium-Csrf-Token", "tok-123");
+        using var response = await client.SendAsync(request);
+    }
+
     private readonly string _root = Path.Combine(Path.GetTempPath(), "agentspeed-antigravity-" + Guid.NewGuid().ToString("N"));
     private Process? _server;
 
@@ -72,6 +83,7 @@ public sealed class AntigravityEndToEndTests : IDisposable
         }
 
         var port = int.Parse(File.ReadAllText(portFile).Trim(), System.Globalization.CultureInfo.InvariantCulture);
+        await WarmUp(port);
         using var locator = new AntigravityProcessLocator(_root);
         var server = Assert.Single(locator.Servers(), s => s.Pid == _server.Id);
         Assert.Contains(server.Endpoints, e => e.Port == port && e.Scheme == "http" && e.Token == "tok-123");

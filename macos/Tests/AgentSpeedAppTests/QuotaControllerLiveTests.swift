@@ -27,8 +27,8 @@ struct QuotaControllerLiveTests {
         return try Data(contentsOf: root.appendingPathComponent("spec/fixtures/quota/\(name)"))
     }
 
-    /// Yields the main actor, so the controller's results arrive.
-    static func waitUntil(_ condition: () -> Bool, seconds: Double = 5) async {
+    /// Yields the main actor, so the controller's results arrive; generous, since a busy CI runner starves it.
+    static func waitUntil(_ condition: () -> Bool, seconds: Double = 20) async {
         let deadline = Date().addingTimeInterval(seconds)
         while !condition(), Date() < deadline { try? await Task.sleep(for: .milliseconds(50)) }
     }
