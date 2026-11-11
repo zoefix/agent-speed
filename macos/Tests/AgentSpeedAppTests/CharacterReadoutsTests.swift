@@ -31,6 +31,30 @@ struct CharacterReadoutsTests {
         #expect(text(75_000) == "75 s", "whole seconds from 10 s, no minutes")
     }
 
+    @Test func latencyColorBandsFollowTheShownValue() {
+        func tone(_ ms: Double) -> CharacterReadoutText.LatencyTone { CharacterReadoutText.latency(ms: ms, language: .en).tone }
+        #expect(tone(850) == .quick)
+        #expect(tone(9949) == .quick, "9.9 s")
+        #expect(tone(9950) == .slow, "shown as 10 s")
+        #expect(tone(14_499) == .slow, "14 s")
+        #expect(tone(14_500) == .late, "shown as 15 s")
+        #expect(tone(75_000) == .late)
+    }
+
+    @Test func latencyColorsAreGreenAmberRedAndPlainWithIncreaseContrast() {
+        func ink(dark: Bool, contrast: Bool = false) -> CharacterCardInk {
+            CharacterCardInk(CharacterCardsTests.frame(nil, contrast: contrast, dark: dark), accent: nil)
+        }
+        #expect(ink(dark: true).latency(.quick) == RGBColor(hex: 0x30D158))
+        #expect(ink(dark: true).latency(.slow) == RGBColor(hex: 0xF5A524))
+        #expect(ink(dark: true).latency(.late) == RGBColor(hex: 0xFF453A))
+        #expect(ink(dark: false).latency(.quick) == RGBColor(hex: 0x248A3D))
+        #expect(ink(dark: false).latency(.slow) == RGBColor(hex: 0xB86E00))
+        #expect(ink(dark: false).latency(.late) == RGBColor(hex: 0xD70015))
+        let contrast = ink(dark: true, contrast: true)
+        #expect(contrast.latency(.late) == contrast.number)
+    }
+
     @Test func latencyUnitsAreLocalized() {
         let zh = CharacterReadoutText.latency(ms: 850, language: .zhHant)
         #expect(zh.number == "850" && zh.unit == "毫秒" && zh.spoken == "850 毫秒")
@@ -210,7 +234,7 @@ struct CharacterReadoutsTests {
         var scene = OrbScene(capacity: 64)
         dots.draw(.models, at: HudWings.Place(x: 200, y: 200, scale: 1, spin: 0, alpha: 1), size: size, model: nil,
                   right: true, into: &scene)
-        #expect(scene.texts.count == 3 + 2 + 1, "the digits of 142 and 74 and the unit once; no names")
+        #expect(scene.texts.count == 3 + 2 + 2, "the digits of 142 and 74, each with its unit; no names")
         for text in scene.texts where text.texture.size.height >= 5 {
             let left = CGFloat(text.instance.rect.x) + text.texture.padding
             #expect(left >= 200 - size.w / 2 + 1 && left + text.texture.advance <= 200 + size.w / 2 - 1)

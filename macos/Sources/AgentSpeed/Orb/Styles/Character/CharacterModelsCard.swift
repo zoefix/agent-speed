@@ -4,7 +4,7 @@ import CoreText
 
 /// The models card (DESIGN 2a.6, *Models*): one row per running model, fastest first — the vendor's accent dot, the
 /// model's display name at `t` in the value token (cut at its end to the name width) and its whole tok/s at the
-/// trailing edge in tabular digits, the unit once after the first row's number; at most four rows (two below S = 96)
+/// trailing edge in tabular digits, the unit after each row's number; at most four rows (two below S = 96)
 /// and a secondary `+N` line. The name width follows the room (`HudNameWidth`, kept in `CharacterCardDynamics`);
 /// without names the rows keep the dot and the speed. Rows glide and fade as the dynamics move them.
 extension CharacterCards {
@@ -49,8 +49,8 @@ extension CharacterCards {
                 numbers = max(numbers, digits(line.speed, m.number(m.t)))
             }
         }
-        let first = rows.first { $0.wanted }.flatMap { dynamics.modelLines[$0.id] }
-        let unit = first?.hasSpeed == true ? m.cellGap + advance(OrbLineMetrics.thinkingUnit, m.unit(m.t)) : 0
+        let timed = rows.contains { $0.wanted && dynamics.modelLines[$0.id]?.hasSpeed == true }
+        let unit = timed ? m.cellGap + advance(OrbLineMetrics.thinkingUnit, m.unit(m.t)) : 0
         return (natural, numbers, unit, more)
     }
 
@@ -86,7 +86,6 @@ extension CharacterCards {
         let nameLeft = origin.x + modelsDot + modelsDotGap
         // Increase Contrast marks every model in the system's highlight color.
         let highlight = frame.content.increaseContrast ? CharacterHighlight.color(dark: frame.dark) : nil
-        var unitDrawn = false
         for row in dynamics.modelRows.rows {
             let top = origin.y + CGFloat(row.slot) * pitch
             // A row the plate has not grown to yet fades instead of leaving it.
@@ -110,11 +109,10 @@ extension CharacterCards {
             let style = m.number(m.t)
             putDigits(line.speed, style, pen, x: numberRight - digits(line.speed, style), baseline: baseline,
                       color: (line.hasSpeed ? ink.number : ink.secondary).opacity(alpha), into: &scene)
-            if !unitDrawn, row.wanted, line.hasSpeed, layout.unit > 0 {
+            if line.hasSpeed, layout.unit > 0 {
                 put(OrbLineMetrics.thinkingUnit, m.unit(m.t), pen, x: numberRight + m.cellGap, baseline: baseline,
                     color: ink.secondary.opacity(alpha), into: &scene)
             }
-            if row.wanted { unitDrawn = true }
         }
     }
 }

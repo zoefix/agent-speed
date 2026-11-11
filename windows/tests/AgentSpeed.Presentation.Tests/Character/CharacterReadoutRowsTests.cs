@@ -113,6 +113,21 @@ public class CharacterReadoutRowsTests
         Assert.Equal((glyph, unit, spoken), (latency.Line.Glyph, latency.Line.Unit, latency.Spoken));
     }
 
+    [Theory]
+    [InlineData(850, OrbLatencyTone.Quick)]
+    [InlineData(9949, OrbLatencyTone.Quick)]
+    [InlineData(9950, OrbLatencyTone.Slow)]
+    [InlineData(14_499, OrbLatencyTone.Slow)]
+    [InlineData(14_500, OrbLatencyTone.Late)]
+    [InlineData(95_000, OrbLatencyTone.Late)]
+    public void TheLatencyColorFollowsTheShownValue(double ms, OrbLatencyTone tone)
+    {
+        var latency = OrbLatency.Of(ms, En)!;
+        Assert.Equal(tone, latency.Tone);
+        var shown = double.Parse(latency.Line.Number, System.Globalization.CultureInfo.InvariantCulture) / (latency.Line.Unit == "ms" ? 1000 : 1);
+        Assert.Equal(shown < 10 ? OrbLatencyTone.Quick : shown < 15 ? OrbLatencyTone.Slow : OrbLatencyTone.Late, tone);
+    }
+
     [Fact]
     public void NoLatencyMeansNoRow()
     {

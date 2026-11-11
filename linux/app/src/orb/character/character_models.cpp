@@ -47,7 +47,7 @@ ModelsCard::Columns ModelsCard::columns(const CardMetrics& m, const Texts& texts
         if (line.leaving() || !line.row) continue;
         c.number = std::max(c.number, advance(numberOf(*line.row), m.t, kNumberWeight));
         c.names = std::max(c.names, advance(displayName(line.row->model), m.t, kNameWeight));
-        if (line.to == 0 && line.row->speed) unit = true;
+        if (line.row->speed) unit = true;
     }
     c.unit = unit ? m.cellGap() + advance(texts.unit, kUnitScale * m.t, kUnitWeight) : 0;
     return c;
@@ -103,10 +103,9 @@ void ModelsCard::draw(Scene& scene, const Pen& pen, ac::CardSize size, const ac:
         const QString number = numberOf(row);
         scene.add(p.leading(number, m.t, kNumberWeight, numberRight - advance(number, m.t, kNumberWeight), baseline,
                             row.speed ? ink.number : ink.secondary));
-    }
-    if (c.unit > 0) {
-        scene.add(pen.leading(texts.unit, kUnitScale * m.t, kUnitWeight, numberRight + m.cellGap(), top + CardMetrics::baseline(m.t),
-                              ink.secondary));
+        if (c.unit > 0 && row.speed) {
+            scene.add(p.leading(texts.unit, kUnitScale * m.t, kUnitWeight, numberRight + m.cellGap(), baseline, ink.secondary));
+        }
     }
 }
 

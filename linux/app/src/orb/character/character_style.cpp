@@ -121,6 +121,16 @@ double chip(Scene& scene, const Pen& pen, bool dark, const QString& string, doub
     return hh * 2;
 }
 
+// The 首字 value's color (DESIGN 2a.6): green, amber or red by its band.
+Rgba latencyColor(format::LatencyTone tone, bool dark) {
+    switch (tone) {
+        case format::LatencyTone::Quick: return Rgba::hex(dark ? 0x30D158 : 0x248A3D);
+        case format::LatencyTone::Slow: return Rgba::hex(dark ? 0xF5A524 : 0xB86E00);
+        case format::LatencyTone::Late: break;
+    }
+    return Rgba::hex(dark ? 0xFF453A : 0xD70015);
+}
+
 Rgba accentOf(const std::shared_ptr<const ac::Pack>& pack) {
     if (!pack) return Rgba{0.85f, 0.47f, 0.34f, 1};
     const QColor c(QString::fromStdString(pack->manifest.accent));
@@ -743,20 +753,21 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
                     y += CardMetrics::rowHeight(m.p);
                 }
                 // A row that hides fades and the card closes up under it (思考 at zero, 首字 without a value).
-                const auto row = [&](double share, double gap, double column, const QString& glyph, const QString& value, const QString& unit) {
+                const auto row = [&](double share, double gap, double column, const QString& glyph, const QString& value, const QString& unit,
+                                     Rgba valueColor) {
                     const double rowTop = y + gap - (1 - share) * (CardMetrics::rowHeight(m.t) + gap);
                     y += share * (gap + CardMetrics::rowHeight(m.t));
                     if (share <= 0.01) return;
                     const double baseline = rowTop + CardMetrics::baseline(m.t);
                     const Pen faded = pen.faded(share);
                     scene.add(faded.leading(glyph, kUnitScale * m.t, 600, left, baseline, secondary));
-                    scene.add(faded.leading(value, m.t, 600, left + column, baseline, number));
+                    scene.add(faded.leading(value, m.t, 600, left + column, baseline, valueColor));
                     scene.add(faded.leading(unit, kUnitScale * m.t, 500, left + column + advance(value, m.t, 600) + m.cellGap(), baseline, secondary));
                 };
-                if (rows.thinking) row(rows.thinkingShare, score ? m.rowGap : 0, rows.thinkingColumn, in.thinkingGlyph, in.thinking, in.unit);
+                if (rows.thinking) row(rows.thinkingShare, score ? m.rowGap : 0, rows.thinkingColumn, in.thinkingGlyph, in.thinking, in.unit, number);
                 if (rows.latency) {
                     row(rows.latencyShare, score || rows.thinking ? m.rowGap : 0, rows.latencyColumn, content_.latencyGlyph, content_.latencyNumber,
-                        content_.latencyUnit);
+                        content_.latencyUnit, latencyColor(content_.latencyTone, dark));
                 }
                 break;
             }
