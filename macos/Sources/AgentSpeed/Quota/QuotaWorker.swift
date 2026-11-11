@@ -26,6 +26,10 @@ final class QuotaWorker: @unchecked Sendable {
         var bridgeStatus: StatusLineSettings.Status?
         var signedIn: Set<SourceKind>?
         var apps: QuotaApps?
+        /// The estimate's account keys (QUOTAS 10.1): the ids were turned into keys here.
+        var desktopOrgKey: String?
+        var codexKey: (key: String, at: Int64)?
+        var claudeProfile: QuotaClaudeProfile?
     }
 
     let queue = DispatchQueue(label: "AgentSpeed.quota", qos: .utility)
@@ -35,6 +39,8 @@ final class QuotaWorker: @unchecked Sendable {
     private var codexSignIn: QuotaSignIn
     private var claudeSignIn: QuotaSignIn
     private lazy var processes = QuotaProcessScan()
+    /// The estimate's keys (QUOTAS 10.1); nil leaves the ids unused.
+    private var keys: QuotaAccountKeys?
 
     init(bridge: ClaudeStatusLineBridge, desktopFolder: URL = DesktopQuotaReader.defaultFolder,
          signInFiles: (codex: URL, claude: URL) = (QuotaSignIn.codexFile, QuotaSignIn.claudeFile)) {
@@ -43,6 +49,10 @@ final class QuotaWorker: @unchecked Sendable {
         claudeSignIn = QuotaSignIn(.claudeCode, file: signInFiles.claude)
         desktopReader = DesktopQuotaReader(folder: desktopFolder)
         cliReader = ClaudeCliQuotaReader(file: bridge.quotaFile)
+    }
+
+    func setKeys(_ next: QuotaAccountKeys?) {
+        queue.async { [self] in keys = next }
     }
 
     func run(_ request: Request, completion: @escaping @Sendable (Result) -> Void) {
@@ -64,6 +74,9 @@ final class QuotaWorker: @unchecked Sendable {
         if request.desktop {
             if request.desktopStarted { desktopReader.requestSearch() }
             result.desktop = .some(desktopReader.poll(nowMs: request.nowMs, desktopRunning: request.desktopRunning))
+            if let keys, let organization = desktopReader.organization {
+                result.desktopOrgKey = keys.desktop(organization: organization)
+            }
         }
         if request.cli {
             cliReader.refresh()
@@ -76,6 +89,14 @@ final class QuotaWorker: @unchecked Sendable {
             if request.codexSignIn, codexSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.codex) }
             if request.claudeSignIn, claudeSignIn.refresh(nowMs: request.nowMs) { signedIn.insert(.claudeCode) }
             result.signedIn = signedIn
+            if let keys {
+                if request.codexSignIn, let identity = codexSignIn.identity, let key = keys.codex(identity) {
+                    result.codexKey = (key, codexSignIn.identityMs ?? request.nowMs)
+                }
+                if request.claudeSignIn, let identity = claudeSignIn.identity {
+                    result.claudeProfile = keys.claude(identity, at: claudeSignIn.identityMs ?? request.nowMs)
+                }
+            }
         }
         if request.scanProcesses { result.apps = processes.scan(nowMs: request.nowMs) }
         return result

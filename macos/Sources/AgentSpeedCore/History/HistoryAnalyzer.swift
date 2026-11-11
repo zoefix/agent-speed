@@ -65,6 +65,16 @@ final class HistoryAnalyzer {
         var cancelled = false
     }
 
+    static func clockMs() -> Int64 { Clock.milliseconds(Date()) }
+
+    /// The quota estimate's share of the history (QUOTAS 10.3) after a complete run; nil before one.
+    var estimateHistory: QuotaEstimateHistory? {
+        lastCompleteRunStartMs.map {
+            QuotaEstimateHistory(files: estimateFiles.filter { !$0.value.isEmpty },
+                                 cutMs: QuotaEstimateHistory.cut(analysisStartMs: $0))
+        }
+    }
+
     /// Half the cores, at most four: the first analysis stays short without crowding the machine.
     static var defaultWorkers: Int {
         max(2, min(maxWorkers, ProcessInfo.processInfo.activeProcessorCount / 2))
@@ -87,12 +97,22 @@ final class HistoryAnalyzer {
     private let qoderPlanner = QoderHistoryPlanner()
     /// Bumped whenever performance records are written.
     private(set) var perfVersion = 0
+    /// Every file's share of the quota estimate's ledger (QUOTAS 10.3), by path, with the version it was made with.
+    private(set) var estimateFiles: [String: QuotaEstimateFile] = [:]
+    private var estimateVersions: [String: Int64] = [:]
+    /// When the last complete run started: the history holds the spend that ended two minutes before it.
+    private(set) var lastCompleteRunStartMs: Int64?
+    private lazy var estimateModels = QuotaModelIds(pricing: pricing)
 
     init(database: HistoryDatabase, pricing: PriceBook = PriceBook()) throws {
         self.database = database
         self.pricing = pricing
         entries = try database.loadEntries()
         peaks = try database.peaks()
+        for (path, stored) in (try? database.estimateFiles()) ?? [:] {
+            estimateFiles[path] = stored.file
+            estimateVersions[path] = stored.version
+        }
         let repaired = pricing.restore(bindings: try database.priceBindings(), tables: try database.priceTables())
         if !repaired.isEmpty {
             PricingLog.logger.notice("Price bindings without a valid table rebound to the current table: \(repaired.count, privacy: .public)")
@@ -223,9 +243,11 @@ final class HistoryAnalyzer {
                 let droidIdentity = family == .droid ? DroidHistoryIdentity(path: path, stat: stat, parents: &droidParents) : nil
                 let size = droidIdentity?.size ?? stat.size
                 let modified = droidIdentity?.modified ?? stat.modifiedNs
+                let estimateMissing = estimateVersions[path] != QuotaEstimateFile.version
+                    && modified / 1_000_000 >= (options.nowMs ?? Self.clockMs()) - QuotaEstimateConstants.keepMs
                 if let previous, !zoneChanged, previous.version == options.analysisVersion,
                    previous.family == family.rawValue, previous.size == size, previous.modified == modified,
-                   !(repricing && previous.hasUnpriced) {
+                   !(repricing && previous.hasUnpriced), !estimateMissing {
                     continue
                 }
                 plan.files.append(PlannedFile(path: path, family: family, root: root, stat: stat, previous: previous,
@@ -490,7 +512,9 @@ final class HistoryAnalyzer {
         progress: (Progress) -> Void = { _ in }
     ) throws -> Report {
         let started = DispatchTime.now().uptimeNanoseconds
+        let startedMs = options.nowMs ?? Self.clockMs()
         var report = Report()
+        defer { if !report.cancelled { lastCompleteRunStartMs = startedMs } }
         let zone = options.timeZone.identifier
         let storedZone = try database.meta("timeZone")
         let zoneChanged = !entries.isEmpty && storedZone != zone
@@ -520,16 +544,25 @@ final class HistoryAnalyzer {
         var labeler = DayLabeler(timeZone: options.timeZone)
         var pending: [(path: String, entry: HistoryDatabase.Entry, keys: [UInt64])] = []
         var pendingPerf: [String: [PerfDayRecord]] = [:]
+        var pendingEstimates: [String: QuotaEstimateFile] = [:]
         var lastSave = DispatchTime.now().uptimeNanoseconds
+        func noteEstimate(_ path: String, _ records: some Sequence<ResponseRecord>, lines: [QuotaCodexLine] = []) {
+            let file = QuotaEstimateFile.make(records: records, lines: lines, pricing: pricing, models: estimateModels,
+                                              labeler: &labeler, nowMs: startedMs)
+            pendingEstimates[path] = file
+            estimateFiles[path] = file
+            estimateVersions[path] = QuotaEstimateFile.version
+        }
 
         func flush(force: Bool) throws {
             let now = DispatchTime.now().uptimeNanoseconds
             guard !pending.isEmpty, force || Int64(now - lastSave) / 1_000_000 >= options.saveIntervalMs else { return }
-            let ids = try database.save(pending, perfRecords: pendingPerf)
+            let ids = try database.save(pending, perfRecords: pendingPerf, estimates: pendingEstimates)
             for (path, id) in ids { entries[path]?.id = id }
             try saveBindings()
             pending.removeAll(keepingCapacity: true)
             pendingPerf.removeAll(keepingCapacity: true)
+            pendingEstimates.removeAll(keepingCapacity: true)
             lastSave = now
             perfVersion += 1
         }
@@ -558,11 +591,12 @@ final class HistoryAnalyzer {
                     continue
                 }
                 // Parsers bridge paths through NSString; drain those per file on this long-running thread.
-                let (days, keys, unknown, perf) = autoreleasepool {
-                    () -> ([UsageKey: DayAggregate], [UInt64], Bool, [PerfDayRecord]) in
+                let (days, keys, unknown, perf, estimate) = autoreleasepool {
+                    () -> ([UsageKey: DayAggregate], [UInt64], Bool, [PerfDayRecord], QuotaEstimateFile?) in
                     var parser = TranscriptParser(
                         family: file.family, agentId: file.path, fileID: FileID(truncatingIfNeeded: index), root: file.root)
                     parser.keepCompletionsOnly()
+                    parser.collectCodexQuotaLines()
                     if file.family == .droid { parser.droidUnreadableParent = droidUnreadableParents[file.path] }
                     var latest: [String: ResponseRecord] = [:]
                     var order = PerfCompletionOrder()
@@ -576,7 +610,7 @@ final class HistoryAnalyzer {
                     _ = parser.finishReadCycle(emit: take)
                     if file.family == .droid {
                         droidUnreadableParents[file.path] = parser.droidUnreadableParent
-                        if parser.droidOwnCountersUnknown { return ([:], deduper.finishFile(), true, []) }
+                        if parser.droidOwnCountersUnknown { return ([:], deduper.finishFile(), true, [], nil) }
                     }
                     parser.finishHistory(emit: take)
                     let source = parser.state.source
@@ -584,7 +618,15 @@ final class HistoryAnalyzer {
                     // The performance records of the file read whole (METRICS 6.11 *Records*).
                     var recorder = PerfRecorder(timeZone: options.timeZone)
                     order.record(into: &recorder, latest: latest, agentId: file.path, source: source)
-                    return (days, deduper.finishFile(), false, recorder.rows)
+                    // The quota estimate's share: the same responses, each with the file's final source.
+                    let estimate = QuotaEstimateFile.make(
+                        records: latest.values.map { record -> ResponseRecord in
+                            var record = record
+                            record.source = source
+                            return record
+                        }, lines: parser.takeCodexQuotaLines(), pricing: pricing, models: estimateModels,
+                        labeler: &labeler, nowMs: startedMs)
+                    return (days, deduper.finishFile(), false, recorder.rows, estimate)
                 }
                 if unknown {
                     // A Factory Droid session whose parent sidecar could not be read: not stored, so the next analysis
@@ -605,6 +647,11 @@ final class HistoryAnalyzer {
                 entries[file.path] = entry
                 pending.append((file.path, entry, keys))
                 pendingPerf[file.path] = perf
+                if let estimate {
+                    pendingEstimates[file.path] = estimate
+                    estimateFiles[file.path] = estimate
+                    estimateVersions[file.path] = QuotaEstimateFile.version
+                }
                 report.filesAnalyzed += 1
                 report.bytesAnalyzed += stat.size
                 try flush(force: false)
@@ -661,6 +708,7 @@ final class HistoryAnalyzer {
                 let records = session.records.filter { deduper.claim($0.key, for: session.fileID) != .otherFile }
                 let keys = deduper.finishFile()
                 pendingPerf[session.path] = Self.perfRecords(responses: records, source: .zcode, timeZone: options.timeZone)
+                noteEstimate(session.path, records)
                 let entry = HistoryDatabase.Entry(id: session.previous?.id, family: "zcode", size: Int64(records.count),
                                                   modified: session.modified, version: options.analysisVersion,
                                                   days: DayAggregate.contributions(of: records, source: .zcode, labeler: &labeler, pricing: pricing))
@@ -751,6 +799,7 @@ final class HistoryAnalyzer {
                 let records = planned.records.filter { deduper.claim($0.key, for: planned.fileID) != .otherFile }
                 let keys = deduper.finishFile()
                 pendingPerf[planned.key] = Self.perfRecords(responses: records, source: source, timeZone: options.timeZone)
+                noteEstimate(planned.key, records)
                 let entry = HistoryDatabase.Entry(id: previous?.id, family: family, size: planned.size,
                                                   modified: planned.modified, version: options.analysisVersion,
                                                   days: DayAggregate.contributions(of: records, source: source,

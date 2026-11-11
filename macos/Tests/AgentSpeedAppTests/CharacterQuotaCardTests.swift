@@ -140,7 +140,8 @@ struct CharacterQuotaCardTests {
         let frame = Self.frame(content, disc: disc)
         let probe = CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
         // A form asked for is the only one that fits.
-        let widths = form.map { wanted in (0..<4).map { $0 == wanted ? 1.0 : .infinity } } ?? probe.quotaWidths()
+        let count = CharacterCards.QuotaForm.allCases.count
+        let widths = form.map { wanted in (0..<count).map { $0 == wanted ? 1.0 : .infinity } } ?? probe.quotaWidths()
         dynamics.fitQuota(1 / 60, widths: widths, room: form == nil ? 1000 : 1, spare: 0, snap: true)
         return CharacterCards(frame: frame, character: content, backing: 2, dynamics: dynamics)
     }
@@ -163,20 +164,29 @@ struct CharacterQuotaCardTests {
     }
 
     @Test(.enabled(if: OrbGPU.shared != nil))
-    func theResetCellsGoFirstThenTheBarsShortenThenTheHeaders() throws {
-        let cards = Self.cards(Self.sources())
+    func theResetCellsGoFirstThenTheAmountsThenTheBarsShortenThenTheHeaders() throws {
+        var spent = Self.sources()
+        for s in spent.indices {
+            for l in spent[s].lines.indices { spent[s].lines[l].amount = "$161.00" }
+        }
+        let cards = Self.cards(spent)
         let widths = cards.quotaWidths()
-        #expect(widths.count == 4)
-        #expect(widths[0] > widths[1] && widths[1] > widths[2], "full, without resets, short bars")
-        #expect(abs((widths[1] - widths[2]) - 2 * Double(cards.m.t)) < 0.01, "bars from 5 t to 3 t")
+        #expect(widths.count == 5)
+        #expect(widths[0] > widths[1] && widths[1] > widths[2] && widths[2] > widths[3],
+                "full, without resets, without amounts, short bars")
+        let amount = Double(0.4 * cards.m.t + cards.digits("$161.00", cards.quotaAmountStyle))
+        #expect(abs((widths[1] - widths[2]) - amount) < 0.01, "the amount cells go after the reset cells")
+        #expect(abs((widths[2] - widths[3]) - 2 * Double(cards.m.t)) < 0.01, "bars from 5 t to 3 t")
+        let plain = Self.cards(Self.sources()).quotaWidths()
+        #expect(plain[1] == plain[2], "no spend: no amount cells to drop")
         let full = cards.size(.quota, model: nil)
         #expect(abs(full.w - widths[0]) < 0.01)
         // The compact form drops the headers, the dot before each source's first label.
-        let compact = Self.cards(Self.sources(), form: 3)
+        let compact = Self.cards(spent, form: 4)
         #expect(compact.quotaForm == .compact)
         #expect(abs(compact.size(.quota, model: nil).h - (full.h - 3 * Double(cards.m.rowHeight(0.9 * cards.m.t)
             + 0.25 * cards.m.t))) < 0.01)
-        #expect(abs(widths[3] - (widths[2] + Double(0.9 * cards.m.t))) < 0.01, "the lines are the widest here")
+        #expect(abs(widths[4] - (widths[3] + Double(0.9 * cards.m.t))) < 0.01, "the lines are the widest here")
         let named = Self.sources([QuotaSnapshot(source: .claudeDesktop, observedMs: Self.now, windows: [
             QuotaWindow(kind: .sevenDay, usedPercent: 5, resetsAtMs: nil),
         ])])

@@ -145,7 +145,10 @@ extension ReportController: ReportStreamSessionDelegate {
             client: client, deviceId: identity.deviceId, username: username, runId: session.runId, seq: ticket.seq,
             sentAtMs: ReportClock.unixMs + clockCorrection * 1000, windowMs: ticket.windowMs, activity: ticket.activity,
             titleLevel: stream.title.level, realtime: ReportRealtime(observationAgeMs: ticket.observationAgeMs))
-        return ReportBody.fitted(envelope, content, sample, options).data
+        let data = fittedWithQuotas(envelope, content, sample, options, document: document, cadence: &stream.quotaCadence,
+                                    leaving: ticket.activity == .leaving)
+        self.stream = stream
+        return data
     }
 
     func streamSessionCredentials(_ session: ReportStreamSession) -> ReportStreamCredentials? {

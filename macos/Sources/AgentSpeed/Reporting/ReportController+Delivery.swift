@@ -149,7 +149,8 @@ extension ReportController {
             client: client, deviceId: identity.deviceId, username: username, runId: run.id, seq: ticket.seq,
             sentAtMs: ReportClock.unixMs + clockCorrection * 1000, windowMs: ticket.windowMs, activity: ticket.activity,
             titleLevel: run.title.level)
-        run.bodies[ticket.seq] = ReportBody.data(envelope, content, sample, options)
+        run.bodies[ticket.seq] = fittedWithQuotas(envelope, content, sample, options, document: document,
+                                                  cadence: &run.quotaCadence, leaving: ticket.activity == .leaving)
         self.run = run
     }
 

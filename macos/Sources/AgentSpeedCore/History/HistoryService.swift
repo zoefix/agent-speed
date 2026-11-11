@@ -21,6 +21,8 @@ public final class HistoryService {
     private let store: HistoryStore
     private weak var liveStore: SpeedStore?
     private var worker: HistoryWorker?
+    /// Receives the quota estimate's share of the history after each complete run (QUOTAS 10.3), on the history queue.
+    public var estimateSink: (@Sendable (QuotaEstimateHistory) -> Void)?
     private var peakTimer: Timer?
     private var recordedPeak: (day: String, value: Double)?
 
@@ -78,6 +80,7 @@ public final class HistoryService {
         } remote: { [weak store] tooLarge in
             store?.publish(remoteTooLarge: tooLarge)
         }
+        worker.estimatePublisher = estimateSink
         self.worker = worker
         store.refreshHandler = { [weak self] showsProgress in self?.refresh(showsProgress: showsProgress) }
         store.clearHandler = { [weak self] in self?.clear() }
@@ -165,6 +168,8 @@ final class HistoryWorker: @unchecked Sendable {
     private let publisher: Publisher
     private let perfPublisher: PerfPublisher
     let remotePublisher: RemotePublisher
+    /// Set before `start()`.
+    var estimatePublisher: (@Sendable (QuotaEstimateHistory) -> Void)?
     private struct PerfStamp: Equatable {
         var local: Int
         var remote: Int
@@ -339,6 +344,7 @@ final class HistoryWorker: @unchecked Sendable {
             guard !report.cancelled else { return }
             post(.ready(updatedAt: Date()), days: true)
             postPerf()
+            if let estimatePublisher, let history = analyzer.estimateHistory { estimatePublisher(history) }
             if report.bytesAnalyzed >= Self.visibleRunBytes { malloc_zone_pressure_relief(nil, 0) }
         } catch {
             post(.failed("The usage history could not be updated."), days: true)

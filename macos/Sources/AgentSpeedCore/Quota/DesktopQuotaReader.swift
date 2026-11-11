@@ -59,11 +59,19 @@ public final class DesktopQuotaReader {
 
     /// The newest usage entry among the candidates.
     public var snapshot: QuotaSnapshot? {
+        newest.map { QuotaSnapshot(source: .claudeDesktop, observedMs: $0.observedMs, windows: $0.windows) }
+    }
+
+    /// The organization of the newest usage entry, for the estimate's account (QUOTAS 10.1); kept in memory only.
+    public var organization: String? {
+        newest.flatMap { DesktopUsage.organization(ofURL: $0.url) }
+    }
+
+    private var newest: DesktopUsage.Entry? {
         let entries = candidates.compactMap { name, candidate in
             candidate.entry.map { (entry: $0, mtimeMs: candidate.modifiedMs, tag: name) }
         }
-        guard let best = DesktopUsage.newest(entries.sorted { $0.tag < $1.tag }) else { return nil }
-        return QuotaSnapshot(source: .claudeDesktop, observedMs: best.entry.observedMs, windows: best.entry.windows)
+        return DesktopUsage.newest(entries.sorted { $0.tag < $1.tag })?.entry
     }
 
     public var candidateNames: [String] { candidates.keys.sorted() }

@@ -220,7 +220,8 @@ enum OrbContentBuilder {
             models: models,
             quota: readings.map { readings in
                 readings.quota.isEmpty ? []
-                    : CharacterQuotaText.sources(readings.quota, nowMs: model.quota.clockMs, l10n: l10n)
+                    : CharacterQuotaText.sources(readings.quota, nowMs: model.quota.clockMs, l10n: l10n,
+                                                 text: QuotaEstimateText(l10n: l10n, cost: model.cost))
             } ?? [],
             emptyLabel: l10n("character.empty")
         )

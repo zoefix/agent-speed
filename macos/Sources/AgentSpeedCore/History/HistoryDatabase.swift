@@ -37,8 +37,8 @@ final class HistoryDatabase {
     }
 
     /// Without `migrating`, a store of an older schema keeps its version and only gets `meta` and the side tables
-    /// created on every open (`day_traffic`, `contribution_unpriced`, `perf_records`, the remote hosts' tables); a new
-    /// store always gets the full schema. A newer store throws before anything is changed.
+    /// created on every open (`day_traffic`, `contribution_unpriced`, `perf_records`, `estimate_files`, the remote
+    /// hosts' tables); a new store always gets the full schema. A newer store throws before anything is changed.
     private init(path: String, migrating: Bool) throws {
         self.path = path
         if path != ":memory:" {
@@ -58,6 +58,7 @@ final class HistoryDatabase {
         try connection.execute(Self.trafficTableSQL)
         try connection.execute(Self.unpricedTableSQL)
         try connection.execute(Self.perfRecordsTableSQL)
+        try connection.execute(Self.estimateTableSQL)
         try createRemoteTables()
         try connection.execute(Self.retiredTablesSQL)
         if migrating || version == 0 { try connection.execute(Self.modeTableSQL) }
@@ -284,7 +285,8 @@ final class HistoryDatabase {
     /// their row ids by path. Every saved file's earlier performance records are replaced.
     @discardableResult
     func save(_ files: [(path: String, entry: Entry, keys: [UInt64])],
-              perfRecords: [String: [PerfDayRecord]] = [:]) throws -> [String: Int64] {
+              perfRecords: [String: [PerfDayRecord]] = [:],
+              estimates: [String: QuotaEstimateFile] = [:]) throws -> [String: Int64] {
         guard !files.isEmpty else { return [:] }
         return try connection.transaction {
             let upsert = try connection.prepare("""
@@ -325,6 +327,8 @@ final class HistoryDatabase {
                 try deleteUnpriced(fileId: id)
                 try deletePerfRecords(fileId: id)
                 if let records = perfRecords[path] { try savePerfRecords(records, fileId: id, version: entry.version) }
+                try deleteEstimate(fileId: id)
+                if let estimate = estimates[path] { try saveEstimate(estimate, fileId: id) }
                 for (key, day) in entry.days {
                     try saveModes(day.modes.values.sorted { $0.id < $1.id }, fileId: id, day: key.day, source: key.source)
                     try saveUnpriced(day.unpricedFacts, fileId: id, day: key.day, source: key.source, version: entry.version)
