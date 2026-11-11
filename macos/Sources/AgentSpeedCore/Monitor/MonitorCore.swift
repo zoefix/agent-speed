@@ -15,6 +15,7 @@ final class MonitorCore: RemoteFeedSink, @unchecked Sendable {
 
     private let configuration: MonitorConfiguration
     private let pricing: PriceBook?
+    private let spendSink: (any QuotaSpendSink)?
     private let mailbox: SnapshotMailbox
     /// `rediscoveryInterval`, except in tests.
     private let rediscoveryEvery: DispatchTimeInterval
@@ -50,12 +51,14 @@ final class MonitorCore: RemoteFeedSink, @unchecked Sendable {
         mailbox: SnapshotMailbox,
         subsets: Set<SubsetKey> = [],
         pricing: PriceBook? = nil,
+        spendSink: (any QuotaSpendSink)? = nil,
         remoteFeed: RemoteFeed? = nil,
         rediscoveryInterval: DispatchTimeInterval = MonitorCore.rediscoveryInterval,
         wholeFileReadHook: (@Sendable (String) -> Void)? = nil
     ) {
         self.configuration = configuration
         self.pricing = pricing
+        self.spendSink = spendSink
         self.mailbox = mailbox
         rediscoveryEvery = rediscoveryInterval
         self.subsets = OSAllocatedUnfairLock(initialState: subsets)
@@ -115,7 +118,7 @@ final class MonitorCore: RemoteFeedSink, @unchecked Sendable {
 
     private func bootstrap() {
         guard !isCancelled else { return }
-        let session = TranscriptSession(configuration: configuration, pricing: pricing)
+        let session = TranscriptSession(configuration: configuration, pricing: pricing, spendSink: spendSink)
         session.wholeFileReads = { [weak self] job in self?.scheduleWholeFileRead(job) }
         session.setPerfHistory(perfHistory)
         session.setReportWatch(reportWatch)

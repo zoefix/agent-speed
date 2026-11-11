@@ -210,6 +210,15 @@ struct TranscriptParser: Sendable {
     /// A Codex file's newest account limits (QUOTAS 3).
     var codexQuota: QuotaSnapshot? { codex?.quota }
 
+    /// A Codex file keeps every token count with limits for the quota estimate until they are taken (QUOTAS 10.4).
+    mutating func collectCodexQuotaLines() {
+        codex?.collectQuotaLines()
+    }
+
+    mutating func takeCodexQuotaLines() -> [QuotaCodexLine] {
+        codex?.takeQuotaLines() ?? []
+    }
+
     mutating func refreshMetadata(deduper: inout Deduper, emit: (ResponseUpsert) -> Void) -> Bool {
         grokBuild?.refreshMetadata(deduper: &deduper, emit: emit) ?? false
     }

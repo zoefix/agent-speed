@@ -17,6 +17,12 @@ namespace AgentSpeed.Presentation.Cost;
 /// <param name="Value">micro-USD per second, for the odometer's direction.</param>
 /// <param name="HoverLine">The hover line in money mode.</param>
 /// <param name="SpokenAmount">The value as read by accessibility (<c>0.0042 美元</c>, wrapped in <c>a11y.orb.costAtLeast</c> when partial).</param>
+/// <summary>
+/// The character orb's 費用 card 今日 row (DESIGN 2a.6): today's cost of the billable sources as an amount with its symbol
+/// (<c>$12.34</c>), <c>–</c> when nothing today is priced, and the row as accessibility reads it.
+/// </summary>
+public sealed record CostToday(string Amount, bool AtLeast, bool Unknown, string Spoken);
+
 public sealed record LiveMoney(
     string Number,
     string Unit,
@@ -211,6 +217,21 @@ public sealed class CostDisplay
             reading.State == CostState.SubscriptionOnly ? 0 : reading.MicroUsdPerSecond,
             hover,
             atLeast ? _loc.Format("a11y.orb.costAtLeast", spoken) : spoken);
+    }
+
+    /// <summary>The 今日 row of a cost reading; null while the billable sources have no request today.</summary>
+    public CostToday? Today(CostReading reading)
+    {
+        ArgumentNullException.ThrowIfNull(reading);
+        if (reading.TodayRequests <= 0)
+        {
+            return null;
+        }
+
+        var unknown = reading.Today.IsUnknown(reading.TodayRequests);
+        var atLeast = !unknown && reading.Today.UnpricedRequests > 0;
+        return new CostToday(unknown ? Dash : AmountText(reading.Today.CostMicroUsd), atLeast, unknown,
+            _loc.Format("a11y.orb.costToday", SpokenTally(reading.Today, reading.TodayRequests)));
     }
 
     /// <summary>The live money of a snapshot's billable sources (taskbar, dashboard hero).</summary>

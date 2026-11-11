@@ -20,6 +20,7 @@ final class OrbRuntime {
     private var characterNetwork = OrbLineQuietRule()
     private var characterPerformance = OrbLineQuietRule()
     private var characterCost = OrbCostQuietRule()
+    private var characterCostToday: CostToday?
     private var characterModels = OrbModelsQuietRule()
     private var characterLatency: Double?
     private var characterBits = false
@@ -56,6 +57,7 @@ final class OrbRuntime {
             characterNetwork = OrbLineQuietRule()
             characterPerformance = OrbLineQuietRule()
             characterCost = OrbCostQuietRule()
+            characterCostToday = nil
             characterModels = OrbModelsQuietRule()
             characterLatency = nil
         }
@@ -98,8 +100,14 @@ final class OrbRuntime {
             let generating = !reading.generatingSources.isEmpty
             characterPerformance.apply(score: PerfSetReading(score: reading.intelligence.score, agents: reading.agents),
                                        thinking: reading.intelligence.thinking, generating: generating, at: now)
-            characterCost.apply(cost.map { money($0, snapshot, reading: reading, isPreviewing: isPreviewing) },
-                                generating: generating, at: now)
+            if let cost {
+                let costReading = costReading(cost, snapshot, reading: reading, isPreviewing: isPreviewing)
+                characterCost.apply(cost.live(costReading, agentCount: reading.agents.count), generating: generating, at: now)
+                characterCostToday = cost.today(costReading)
+            } else {
+                characterCost.apply(nil, generating: generating, at: now)
+                characterCostToday = nil
+            }
             characterLatency = PerfSetReadouts.firstLatency(of: reading.agents).ms
             characterModels.apply(Self.models(of: reading.agents, prices: characters?.prices), at: now)
             publishCharacterReadings(at: now)
@@ -160,6 +168,7 @@ final class OrbRuntime {
         let performance = characterPerformance.reading
         let next = OrbCharacterReadings(
             readouts: config.characterReadouts, network: network, bits: characterBits, performance: performance, cost: characterCost.money,
+            costToday: characterCostToday,
             latencyMs: characterLatency, models: characterModels.rows, quota: characterQuota,
             networkLoud: network.map { now < $0.quietAt } ?? false,
             performanceLoud: performance.map { now < $0.quietAt } ?? false,
@@ -207,18 +216,18 @@ final class OrbRuntime {
             if feed.money != nil { feed.money = nil }
             return
         }
-        let money = money(cost, snapshot, reading: reading, isPreviewing: isPreviewing)
+        let money = cost.live(costReading(cost, snapshot, reading: reading, isPreviewing: isPreviewing),
+                              agentCount: reading.agents.count)
         if feed.money != money { feed.money = money }
     }
 
-    private func money(_ cost: CostDisplay, _ snapshot: SpeedSnapshot, reading: SubsetReading, isPreviewing: Bool) -> LiveMoney {
-        var costReading = OrbSubset.cost(snapshot, sources: isPreviewing ? nil : sourceSet,
-                                         hosts: isPreviewing ? nil : hostSet, billable: cost.billable)
-        if isPreviewing {
-            costReading = CostReading(microUsdPerSecond: reading.live.output * Self.previewMicroUsdPerToken,
-                                      liveOutput: reading.live.output)
+    private func costReading(_ cost: CostDisplay, _ snapshot: SpeedSnapshot, reading: SubsetReading,
+                             isPreviewing: Bool) -> CostReading {
+        guard !isPreviewing else {
+            return CostReading(microUsdPerSecond: reading.live.output * Self.previewMicroUsdPerToken,
+                               liveOutput: reading.live.output)
         }
-        return cost.live(costReading, agentCount: reading.agents.count)
+        return OrbSubset.cost(snapshot, sources: sourceSet, hosts: hostSet, billable: cost.billable)
     }
 
     static let previewMicroUsdPerToken = 15.0

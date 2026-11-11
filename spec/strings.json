@@ -2520,6 +2520,12 @@
     "en": "Fastest Model",
     "ja": "いちばん速いモデル"
   },
+  "character.cost.today": {
+    "zh-Hant": "今日",
+    "zh-Hans": "今日",
+    "en": "Today",
+    "ja": "今日"
+  },
   "character.latency.glyph": {
     "zh-Hant": "首字",
     "zh-Hans": "首字",
@@ -4139,6 +4145,12 @@
     "zh-Hans": "性能 %@，思考每秒 %@ 个 token",
     "en": "performance %@, thinking %@ tokens per second",
     "ja": "性能 %@、思考 毎秒 %@ トークン"
+  },
+  "a11y.orb.costToday": {
+    "zh-Hant": "今日費用 %@",
+    "zh-Hans": "今日费用 %@",
+    "en": "today's cost %@",
+    "ja": "今日の費用 %@"
   },
   "a11y.orb.latency": {
     "zh-Hant": "首字延遲 %@",

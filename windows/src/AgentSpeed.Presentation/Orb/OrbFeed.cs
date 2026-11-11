@@ -54,6 +54,9 @@ public sealed class OrbFeed
     /// <summary>The live cost rate of a <c>character</c> orb's cost card; else null.</summary>
     public LiveMoney? CardMoney { get; private set; }
 
+    /// <summary>The <c>character</c> cost card's 今日 row; null without a billable request today.</summary>
+    public CostToday? CardToday { get; private set; }
+
     /// <summary>Formats the money unit (the orb's sources without subscription sources unless included, METRICS 9.4).</summary>
     public CostDisplay? Cost { get; set; }
 
@@ -105,9 +108,11 @@ public sealed class OrbFeed
         Money = Unit == OrbUnit.Cost && !Character && Cost is { } cost
             ? cost.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, cost.Billable), Reading.Agents.Count)
             : null;
-        CardMoney = Character && Cost is { } card
-            ? card.Live(Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, card.Billable), Reading.Agents.Count)
+        var cardReading = Character && Cost is { } card
+            ? Previewing ? PreviewReading(Reading.Live.Output) : OrbSubset.Cost(snapshot, Sources, Hosts, card.Billable)
             : null;
+        CardMoney = cardReading is { } r ? Cost!.Live(r, Reading.Agents.Count) : null;
+        CardToday = cardReading is { } t ? Cost!.Today(t) : null;
         var value = Reading.Live.ValueFor(Metric);
         Value = double.IsFinite(value) && value > 0 ? value : 0;
         _tier.Update(Value, Redline, nowSeconds);

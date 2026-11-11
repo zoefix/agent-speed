@@ -13,11 +13,19 @@ struct QuotaCardItem: Equatable {
     /// The host's id and display name; nil for this Mac.
     var hostId: String?
     var hostName: String?
+    /// Each window's estimate (QUOTAS 10.7, 10.8) by window id, while its account has one.
+    var estimates: [String: QuotaEstimateDisplay] = [:]
 
-    init(snapshot: QuotaSnapshot, hostId: String? = nil, hostName: String? = nil) {
+    init(snapshot: QuotaSnapshot, hostId: String? = nil, hostName: String? = nil,
+         estimates: [String: QuotaEstimateDisplay] = [:]) {
         self.snapshot = snapshot
         self.hostId = hostId
         self.hostName = hostName
+        self.estimates = estimates
+    }
+
+    func estimate(_ window: QuotaWindow) -> QuotaEstimateDisplay? {
+        estimates[QuotaEstimateLineKey(source: snapshot.source, window: window).window]
     }
 
     var source: SourceKind { snapshot.source }
@@ -50,6 +58,8 @@ extension QuotaController {
         case .quota(let report):
             guard Self.hostShows(report.source, host: host, switches: settings.remoteQuotaSwitches) else { return }
             state.reports[report.source] = report
+            estimator?.snapshot(report.snapshot, host: hostId, account: report.account, plan: report.plan,
+                                tier: report.tier)
         case .quotaRemoved(_, let source):
             state.reports[source] = nil
         case .quotaBridge(let bridge):
@@ -57,7 +67,10 @@ extension QuotaController {
         default:
             return
         }
-        if hostQuotas[hostId] != state { hostQuotas[hostId] = state }
+        if hostQuotas[hostId] != state {
+            hostQuotas[hostId] = state
+            refreshEstimateLines()
+        }
     }
 
     /// Removed hosts and switched-off sources leave at once.
@@ -95,7 +108,9 @@ extension QuotaController {
     func cardItems(within sources: SourceSet?, hosts: Set<String>?, connected: Set<String>) -> [QuotaCardItem] {
         var items: [QuotaCardItem] = []
         if hosts?.contains(RemoteHost.localId) ?? true {
-            items = cardSnapshots(within: sources).map { QuotaCardItem(snapshot: $0) }
+            items = cardSnapshots(within: sources).map {
+                QuotaCardItem(snapshot: $0, estimates: cardEstimates($0, host: nil))
+            }
         }
         let document = settings.remoteHosts
         let names = document.displayNames()
@@ -105,7 +120,8 @@ extension QuotaController {
                 guard sources?.contains(source) ?? true, let report = reports[source], report.running, report.signedIn,
                       report.snapshot.hasWindows else { continue }
                 items.append(QuotaCardItem(snapshot: report.snapshot, hostId: host.id,
-                                           hostName: names[host.id] ?? host.automaticName))
+                                           hostName: names[host.id] ?? host.automaticName,
+                                           estimates: cardEstimates(report.snapshot, host: host.id)))
             }
         }
         return items

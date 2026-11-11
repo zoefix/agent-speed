@@ -55,8 +55,9 @@ public enum RelayLineEncoder {
 
     static func quotaObject(_ config: RemoteQuotaConfig) -> String {
         let keys = SourceKind.allCases.filter(config.sources.contains).map { quoted($0.rawValue) }.joined(separator: ",")
+        let salt = config.salt.map { ",\"salt\":\(quoted($0))" } ?? ""
         return "{\"sources\":[\(keys)],\"network\":\(config.network),\"grokLive\":\(config.grokLive),"
-            + "\"claudeBridge\":\(config.claudeBridge)}"
+            + "\"claudeBridge\":\(config.claudeBridge)\(salt)}"
     }
 
     public static func ping(id: Int64) -> Data? {

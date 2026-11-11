@@ -10,12 +10,20 @@ public struct RemoteQuotaConfig: Equatable, Sendable {
     public var network: Bool
     public var grokLive: Bool
     public var claudeBridge: Bool
+    /// The estimate salt as 64 hex digits (QUOTAS 10.1), so that the host computes the same account keys; the relay
+    /// keeps it in memory only. Never logged.
+    public var salt: String?
 
-    public init(sources: Set<SourceKind>, network: Bool, grokLive: Bool, claudeBridge: Bool) {
+    public init(sources: Set<SourceKind>, network: Bool, grokLive: Bool, claudeBridge: Bool, salt: String? = nil) {
         self.sources = sources.intersection(Self.hostSources)
         self.network = network
         self.grokLive = grokLive
         self.claudeBridge = claudeBridge
+        self.salt = salt.flatMap { Self.isSalt($0) ? $0 : nil }
+    }
+
+    static func isSalt(_ text: String) -> Bool {
+        text.utf8.count == 64 && text.utf8.allSatisfy { (0x30...0x39).contains($0) || (0x61...0x66).contains($0) }
     }
 
     public static let off = RemoteQuotaConfig(sources: [], network: false, grokLive: false, claudeBridge: false)
@@ -28,7 +36,7 @@ public struct RemoteQuotaConfig: Equatable, Sendable {
         if host.quotaClaudeCli, switches.claudeCode { sources.insert(.claudeCode) }
         if let enabled { sources.formIntersection(enabled) }
         return RemoteQuotaConfig(sources: sources, network: networkEnabled, grokLive: switches.grokLive && sources.contains(.grokBuild),
-                                 claudeBridge: host.quotaClaudeCli)
+                                 claudeBridge: host.quotaClaudeCli, salt: switches.salt)
     }
 }
 
@@ -38,11 +46,14 @@ public struct RemoteQuotaSwitches: Equatable, Sendable {
     public var grokLive: Bool
     /// Claude Code is enabled: the hosts' bridges may report its quota.
     public var claudeCode: Bool
+    /// The estimate salt (QUOTAS 10.1) as 64 hex digits.
+    public var salt: String?
 
-    public init(sources: Set<SourceKind> = [], grokLive: Bool = false, claudeCode: Bool = true) {
+    public init(sources: Set<SourceKind> = [], grokLive: Bool = false, claudeCode: Bool = true, salt: String? = nil) {
         self.sources = sources
         self.grokLive = grokLive
         self.claudeCode = claudeCode
+        self.salt = salt
     }
 }
 
@@ -58,13 +69,21 @@ public struct RemoteQuotaReport: Equatable, Sendable {
     public var running: Bool
     public var signedIn: Bool
     public var status: QuotaRouteStatus
+    /// The source's account key (QUOTAS 10.1), plan and tier (10.2); nil from older relays or without a salt.
+    public var account: String?
+    public var plan: String?
+    public var tier: String?
 
-    public init(hostId: String, snapshot: QuotaSnapshot, running: Bool, signedIn: Bool, status: QuotaRouteStatus) {
+    public init(hostId: String, snapshot: QuotaSnapshot, running: Bool, signedIn: Bool, status: QuotaRouteStatus,
+                account: String? = nil, plan: String? = nil, tier: String? = nil) {
         self.hostId = hostId
         self.snapshot = snapshot
         self.running = running
         self.signedIn = signedIn
         self.status = status
+        self.account = account
+        self.plan = plan
+        self.tier = tier
     }
 
     public var source: SourceKind { snapshot.source }

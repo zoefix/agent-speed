@@ -177,6 +177,9 @@ private:
     int agentCount_ = 0;
     QString costCardNumber_, costCardUnit_;
     bool costCardAtLeast_ = false, costCardUnknown_ = false;
+    // The cost card's 今日 row: empty while the billable sources have no request today. No quiet rule.
+    QString costTodayAmount_, costTodayNumber_;
+    bool costTodayAtLeast_ = false, costTodayUnknown_ = false;
     double costLastActive_ = -1e9, costOpacity_ = 0;
     // The 首字 row and the models card (DESIGN 2a.6) with their quiet rules.
     CharacterReadings characterReadings_;

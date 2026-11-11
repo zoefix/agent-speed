@@ -107,6 +107,12 @@ void apply(QVariantMap& orb, double time, const QString& language) {
     orb.insert(QStringLiteral("costUnknown"), false);
     orb.insert(QStringLiteral("costPartial"), false);
     orb.insert(QStringLiteral("costSubscriptionOnly"), false);
+    const auto today = money::format(money::amount(12'340'000, money::Decimal(1)), currency, language.toStdString(), money::Form::Amount);
+    orb.insert(QStringLiteral("costTodayRequests"), qint64{40});
+    orb.insert(QStringLiteral("costTodayAmount"), QString::fromStdString(today.text));
+    orb.insert(QStringLiteral("costTodayNumber"), QString::fromStdString(today.number));
+    orb.insert(QStringLiteral("costTodayUnknown"), false);
+    orb.insert(QStringLiteral("costTodayAtLeast"), false);
 }
 
 }  // namespace character_demo

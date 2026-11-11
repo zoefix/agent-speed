@@ -117,6 +117,9 @@ enum PreviewRenderer {
         if wants("quota") {
             QuotaPreviews.render(model: model, into: directory)
         }
+        if wants("estimate") {
+            QuotaEstimatePreviews.render(model: model, into: directory)
+        }
         if wants("quota2") {
             QuotaVendorPreviews.render(model: model, into: directory)
         }

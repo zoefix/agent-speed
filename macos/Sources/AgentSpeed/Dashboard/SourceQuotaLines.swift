@@ -2,7 +2,8 @@ import AgentSpeedCore
 import SwiftUI
 
 /// A Sources row's quota lines (DESIGN 4, *Quota lines*): one per window the account has, from the name's leading
-/// edge — the label, the bar with its pace mark, the percent and the long reset, in columns shared by the section.
+/// edge — the label, the bar with its pace mark, the percent (`≈` while extrapolated), the amount used with the
+/// estimated cap and the long reset, in columns shared by the section.
 struct SourceQuotaLines: View {
     let source: SourceKind
     let lines: [SourceQuotaLine]
@@ -48,12 +49,18 @@ private struct SourceQuotaLineView: View {
                      tick: strong ? Color.primary : Color.primary.opacity(0.35),
                      animation: barAnimation)
                 .frame(minWidth: SourceQuotaColumns.compactBar, maxWidth: .infinity)
-            Text(verbatim: line.percentText)
+            percent
                 .font(.system(size: 11.5, weight: .semibold).monospacedDigit())
-                .foregroundStyle(line.level == .critical ? Color(nsColor: .systemRed) : Color.primary)
                 .lineLimit(1)
                 .contentTransition(.opacity)
                 .frame(width: columns.percent, alignment: .trailing)
+            if columns.amount > 0 {
+                amount
+                    .font(.system(size: 11, weight: .medium).monospacedDigit())
+                    .lineLimit(1)
+                    .contentTransition(.opacity)
+                    .frame(width: columns.amount, alignment: .leading)
+            }
             if columns.reset > 0 {
                 tail
                     .font(.system(size: 11))
@@ -65,9 +72,27 @@ private struct SourceQuotaLineView: View {
             }
         }
         .animation(.easeOut(duration: 0.2), value: line.percentText)
+        .animation(.easeOut(duration: 0.2), value: line.estimated)
+        .animation(.easeOut(duration: 0.2), value: line.amount)
         .animation(.easeOut(duration: 0.2), value: line.reset)
         .contentShape(Rectangle())
-        .help(line.tooltip)
+        .quotaTooltip(QuotaTooltip(head: line.tooltipHead, details: line.estimateDetails, note: line.estimateNote),
+                      fallback: line.tooltip)
+    }
+
+    /// The live percent; while extrapolated a leading `≈` in the secondary token, kerned 1 pt to the digits.
+    private var percent: Text {
+        let digits = Text(verbatim: line.percentText)
+            .foregroundStyle(line.level == .critical ? Color(nsColor: .systemRed) : Color.primary)
+        guard line.estimated else { return digits }
+        return Text(verbatim: "≈").foregroundStyle(.dashboardSecondary).kerning(SourceQuotaColumns.approximateKern) + digits
+    }
+
+    /// The used amount in the value color, then the cap in tertiary.
+    private var amount: Text {
+        let used = Text(verbatim: line.amount ?? "").foregroundStyle(Color.primary)
+        guard let cap = line.amountCap else { return used }
+        return used + Text(verbatim: cap).foregroundStyle(.tertiary)
     }
 
     /// The long reset in secondary, then ` · ` and the age in tertiary while the snapshot is old.
