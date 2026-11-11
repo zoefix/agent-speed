@@ -97,31 +97,63 @@ class Engine:
     # accounts
 
     def timelines(self):
-        """Per source: [(at, accountKey, plan, tier)] from the events, merged with the stored timeline."""
+        """Per source: [(at, accountKey, plan, tier)] from the events, merged with the stored timeline. For Desktop the
+        stored and fresh entries are its organization's own keys; the keys it spends on are derived on every build."""
         tl = {"codex": [(at, key, None, None) for at, key in sorted(self.codex_auth)]}
-        cli = []
+        org_keys = {}
         for at, e in sorted(self.claude_profiles, key=lambda x: x[0]):
-            key = qe.account_key(self.salt, "claude", "%s:%s" % (e["org"], e["account"]))
-            cli.append((at, key, qe.clean_plan(e.get("orgType")), qe.clean_plan(e.get("tier")), e))
-        tl["claudeCode"] = [c[:4] for c in cli]
-        orgs = sorted((s["observedMs"], s["org"]) for s in self.snapshots if s["source"] == "claudeDesktop")
-        desk = []
-        for at in sorted({a for a, _ in orgs} | {c[0] for c in cli}):
-            org = in_force(orgs, at)
-            if org is None:
-                continue
-            c = in_force(cli, at)
-            if c and qe.desktop_shares_cli(org[1], c[4]["org"], c[4].get("orgType")):
-                desk.append((at, c[1], c[2], c[3]))
-            else:
-                desk.append((at, qe.account_key(self.salt, "claudeDesktop", org[1]), None, None))
-        tl["claudeDesktop"] = desk
+            entry = (at, qe.account_key(self.salt, "claude", "%s:%s" % (e["org"], e["account"])),
+                     qe.clean_plan(e.get("orgType")), qe.clean_plan(e.get("tier")))
+            tl.setdefault("claudeCode", []).append(entry)
+            org_keys[entry] = qe.account_key(self.salt, "claudeDesktop", e["org"])
         for k in self.stored["keys"]:
-            tl.setdefault(k["source"], [])
             entry = (k["at"], k["key"], k.get("plan"), k.get("tier"))
-            if entry not in tl[k["source"]]:
-                tl[k["source"]].append(entry)
-        return {s: sorted(set(v), key=lambda e: (e[0], e[1], str(e[2]), str(e[3]))) for s, v in tl.items()}
+            tl.setdefault(k["source"], []).append(entry)
+            if k["source"] == "claudeCode" and k.get("orgKey"):
+                org_keys.setdefault(entry, k["orgKey"])
+        for s in self.snapshots:
+            if s["source"] == "claudeDesktop":
+                tl.setdefault("claudeDesktop", []).append(
+                    (s["observedMs"], qe.account_key(self.salt, "claudeDesktop", s["org"]), None, None))
+        tl = {s: sorted(set(v), key=lambda e: (e[0], e[1], str(e[2]), str(e[3]))) for s, v in tl.items()}
+        tl.setdefault("claudeCode", [])
+        self.org_keys = org_keys
+        self.desktop_orgs = tl.pop("claudeDesktop", [])
+        tl["claudeDesktop"] = self.desktop_timeline(tl["claudeCode"])
+        return tl
+
+    def window_points(self, source):
+        """(t, windowId, R, minutes, account or None) of every fresh and stored observation of a Claude source."""
+        out = []
+        for s in self.snapshots:
+            if s["source"] == source:
+                out += [(s["observedMs"], qe.window_id(w["kind"], w.get("name"), w["minutes"]), w["resetsAtMs"],
+                         w["minutes"], None) for w in s["windows"] if w.get("resetsAtMs") is not None]
+        out += [(o["t"], qe.window_id(o["kind"], o["name"], o["minutes"]), o["R"], o["minutes"], o["account"])
+                for o in self.stored["observations"] if o["source"] == source]
+        return out
+
+    def desktop_timeline(self, cli):
+        """10.1: an entry at each entry of Desktop's organization timeline and of the CLI's key timeline: the CLI's key
+        while the organization matches, the plan is personal and the fingerprint of the two sources' windows confirms
+        it, else Desktop's own organization key. Organizations are compared by their Desktop keys."""
+        orgs = self.desktop_orgs
+        if not orgs:
+            return []
+        desk_w = [p[:4] for p in self.window_points("claudeDesktop")]
+        cli_w = [(p[:4], p[4] if p[4] is not None else (in_force(cli, p[0]) or (None, None))[1])
+                 for p in self.window_points("claudeCode")]
+        out = []
+        for at in sorted({o[0] for o in orgs} | {c[0] for c in cli}):
+            own = in_force(orgs, at)[1]
+            c = in_force(cli, at)
+            if c:
+                fp = qe.fingerprint(desk_w, [p for p, key in cli_w if key == c[1]], at)
+                if qe.desktop_shares_cli(own, self.org_keys.get(c), c[2], fp):
+                    out.append((at, c[1], c[2], c[3]))
+                    continue
+            out.append((at, own, None, None))
+        return out
 
     def codex(self, tl):
         """Codex token count lines: windows, the response each follows, chains and their accounts (10.1)."""
@@ -237,9 +269,14 @@ class Engine:
             source_accounts.setdefault(e[1], set()).add(src)
         seen = {(o["account"], o["kind"], o["name"], o["minutes"], o["t"], o["p"], o["R"]) for o in obs}
         for o in self.stored["observations"]:
+            o = dict(o)
+            if o["source"] == "claudeDesktop" and tl["claudeDesktop"]:
+                e = in_force(tl["claudeDesktop"], o["t"])
+                o["account"], o["plan"], o["tier"] = e[1], e[2], e[3]
             k = (o["account"], o["kind"], o["name"], o["minutes"], o["t"], o["p"], o["R"])
             if k not in seen:
-                obs.append(dict(o))
+                seen.add(k)
+                obs.append(o)
                 source_accounts.setdefault(o["account"], set()).add(o["source"])
         self.tl, self.ledger, self.obs, self.excluded, self.source_accounts = tl, ledger, obs, excluded, source_accounts
         return self
@@ -349,8 +386,10 @@ class Engine:
         instances = []
         for cls in sorted(closed, key=str):
             instances += sorted(closed[cls], key=lambda s: s["tLast"])[-qe.INSTANCES_PER_CLASS:]
-        keys = [{"source": src, "at": at, "key": key, "plan": plan, "tier": tier}
-                for src in sorted(self.tl) for at, key, plan, tier in self.tl[src]]
+        timelines = dict(self.tl, claudeDesktop=self.desktop_orgs)
+        keys = [dict({"source": src, "at": e[0], "key": e[1], "plan": e[2], "tier": e[3]},
+                     **({"orgKey": self.org_keys[e]} if src == "claudeCode" and e in self.org_keys else {}))
+                for src in sorted(timelines) for e in timelines[src]]
         return {"version": STORE_VERSION, "observations": observations, "instances": instances, "keys": keys}
 
 
@@ -572,6 +611,20 @@ def claude_cases():
               snap("claudeCode", t + 30_000, five=(2, R5), week=(1, R7)),
               snap("claudeDesktop", t + 6 * MINUTE, org=desk_org, five=(3, R5), week=(1, R7))]
         out.append(case(label, why, ev, t + HOUR, outputs=["responses", "instances", "entries"]))
+    base = [profile(BASE), resp("claudeCode", t, 4_000_000, model=OPUS, start=t - 50_000),
+            resp("claudeDesktop", t + 5 * MINUTE, 6_000_000, model=OPUS)]
+    for label, why, extra in (
+            ("Desktop on another account of the organization", "same organization and a personal plan, but the 7-day "
+             "resets lie 19 h apart while both instances are live: two accounts (seen 2026-11-11), Desktop keeps its "
+             "own", [snap("claudeCode", t + 30_000, week=(100, R7)),
+                     snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(0, R7 + 19 * HOUR))]),
+            ("Desktop without CLI values", "no CLI window to compare: the fingerprint is unknown and Desktop keeps its "
+             "own account", [snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(1, R7))]),
+            ("Desktop's value before the CLI's", "Desktop's snapshot comes before any CLI value: the first comparable "
+             "pair after it decides, so Desktop's earlier spend joins the CLI's account",
+             [snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(1, R7)),
+              snap("claudeCode", t + 20 * MINUTE, week=(2, R7 + 20_000))])):
+        out.append(case(label, why, base + extra, t + HOUR, outputs=["responses", "instances", "entries"]))
     return out
 
 
@@ -687,6 +740,16 @@ def store_cases():
     out.append(case("store of another version", "a file of another version is ignored (and replaced); the same "
                     "generated store with version 2", [], BASE + 6 * HOUR, outputs=["storeCounts"],
                     generatedStore=dict(gen, version=2)))
+    dev = [profile(BASE), resp("claudeCode", t, 4_000_000, model=OPUS, start=t - 50_000),
+           resp("claudeDesktop", t + 5 * MINUTE, 6_000_000, model=OPUS),
+           snap("claudeCode", t + 30_000, week=(1, R7)), snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(2, R7))]
+    desk = case("store written with Desktop", "Desktop's stored timeline holds its organization's own key; the shared "
+                "key is derived", dev, t + HOUR, outputs=["responses", "estimates", "store"])
+    out.append(desk)
+    out.append(case("store read back with Desktop", "only the responses and the stored file: the stored organization "
+                    "timeline and the stored windows of both sources give the same merge and estimate",
+                    [e for e in dev if e["type"] == "response"], t + HOUR, outputs=["responses", "estimates"],
+                    store=desk["expected"]["store"]))
     return out
 
 

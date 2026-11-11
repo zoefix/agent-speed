@@ -694,11 +694,24 @@ Spend and observations are pooled per account, identified on this computer by
 - `codex`: `tokens.account_id` of the `auth.json` that section 6 already parses in memory (nothing else of it).
 - `claudeCode`: `oauthAccount.organizationUuid` and `accountUuid` of `.claude.json` (section 6), as `<org>:<account>`.
 - `claudeDesktop`: the organization uuid of its usage entry's key (4.2). It shares the CLI's account when the uuid
-  equals the CLI's `organizationUuid` and the CLI's `organizationType` is a personal plan: `claude_free`,
-  `claude_pro`, `claude_max` or `claude_ultra`. A team or enterprise organization (`claude_team`,
-  `claude_enterprise`, any other value) is shared by its members, so Desktop then keeps its own account: a wrong merge
-  would add another member's spend to the lower bounds, a missed one only loses evidence. On a shared account the two
-  sources' spends add up.
+  equals the CLI's `organizationUuid`, the CLI's `organizationType` is a personal plan (`claude_free`, `claude_pro`,
+  `claude_max` or `claude_ultra`) and the two sources' fingerprint (below) confirms it. A team or enterprise
+  organization (`claude_team`, `claude_enterprise`, any other value) is shared by its members, so Desktop then keeps
+  its own account: a wrong merge would add another account's spend to the lower bounds, a missed one only loses
+  evidence. On a shared account the two sources' spends add up.
+  - Desktop's own account is keyed by its organization (`claudeDesktop:<org>`), and organizations are compared by
+    that key. Its timeline (below) holds those own keys; the key it spends on is derived again on every evaluation,
+    with an entry at each entry of its own timeline and of the CLI's: the CLI's key in force when the rule holds, its
+    own key otherwise.
+- **Fingerprint** of two sources at a moment `at`. Their observations (10.4) of one window form a *comparable pair*
+  when the two instances `[R − minutes, R]` overlap by more than a minute; resets within a minute of each other
+  *confirm* that the sources are one account, resets further apart *contradict* it. A pair is observed at the later
+  of its two times. The latest pair observed by `at` decides (the earlier time next, a contradiction first on a tie);
+  with none by then the first pair observed after it (so that history read at the first launch follows the first
+  evidence); with none at all the fingerprint is unknown. The inputs are every fresh and stored observation of the
+  first source and those of the second source under its key in force. Seen 2026-11-11: one organization uuid on two
+  Claude accounts, Desktop at 0 % while the CLI was at 100 %, their 7-day resets 19 h apart. Desktop shares only on a
+  confirmation, so without the CLI bridge it keeps its own account.
 - Phase-2 sources and any source without an id: the account is the pair (computer or host, source).
 - **Key timeline.** A source's key can change (`/login`, `codex login`). Spend belongs to the key in force when the
   response ended: the app keeps, per source, the key changes it saw (`<data>/quota/estimate.json`, 10.4) and gives
@@ -712,7 +725,7 @@ equal keys are one account); a chain never seen live is an account of its own, k
   id = its smallest instance tag in string order (`<kind>:<name>:<minutes>@<first R of the instance>`, R in ms). A response without such a
   line (API-key sign-in, another provider, a bucket other than `codex`) is no subscription spend and is left out.
 - **Remote hosts.** The relay adds `account` (the key) to its quota line (REMOTE 11.1). A host's sources and this
-  computer's sources with equal keys are one account.
+  computer's sources with equal keys are one account unless their fingerprint contradicts it (an unknown one shares).
 
 ### 10.2 Plan and cap class
 
@@ -767,9 +780,10 @@ R)`: `t` its `observedMs`, `R` its reset.
   observations (runs of equal values keep their first and last; above 256 per instance each run keeps its last; still
   above, 256 runs evenly spaced, first and last included), the closed instances' intervals (10.5, at most 64 per
   class, newest kept, each with its class, account, `R`, `lo`, `hi` (null for unbounded), `pMax` and `tLast`) and the
-  key timeline of 10.1 (source, `at`, key, plan, tier). On load, stored observations and instances equal to fresh
-  ones count once. Account keys are stored, ids never. A
-  file that does not parse is replaced.
+  key timeline of 10.1 (source, `at`, key, plan, tier; a `claudeCode` entry adds `orgKey`, its organization's
+  `claudeDesktop` key; `claudeDesktop` entries hold Desktop's own keys). On load, stored observations and instances
+  equal to fresh ones count once, and a stored Desktop observation takes the key Desktop spends on at its `t`. Account
+  keys are stored, ids never. A file that does not parse is replaced.
 
 ### 10.5 Segments
 
@@ -875,9 +889,11 @@ estimates whose published range holds the truth:
 
 **Real data** (2026-11-11, the user's Mac, read-only, `quota_estimate_local.py`): Codex `promax` 7d `≈$400`
 (`$392–408`, `medium`; the earlier window alone gives `$399–401`, the current one `$53` at 42 % with coverage 0.15:
-other usage of the account or a lowered cap, which a second window will tell). Claude `claude_max` /
-`default_claude_max_20x`, Desktop sharing the CLI's account: 7d `≈$5742` (`$5629–5857`, `medium`, at 99 %), Fable 7d
-`≈$598` (`$576–621`, `medium`, at 27 %), 5h `≈$832` (`$728–951`, `low`, one value of 12 %).
+other usage of the account or a lowered cap, which a second window will tell); later the same day `≈$397`
+(`$390–405`, `low`, at 57 %). Claude: a first run merged Desktop into the CLI's account on the organization alone and
+gave 7d `≈$5742`; the fingerprint then showed two accounts (above), so that figure added another account's spend to
+the lower bounds and is void. Separated, the CLI's `claude_max` / `default_claude_max_20x` 7d stood at 100 % (no lower
+bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
 
 ### 10.10 Known approximations
 
@@ -911,7 +927,9 @@ other usage of the account or a lowered cap, which a second window will tell). C
 - Reset passed, labels and order, and the long and short reset texts in the four languages for fixed `now` values in
   `Asia/Taipei`.
 - Estimates (section 10): `spec/fixtures/quota-estimate-cases.json`, written and checked by
-  `spec/tools/quota_estimate.py --write` / `--check-fixtures`, with account keys and the Desktop merge rule, plan
+  `spec/tools/quota_estimate.py --write` / `--check-fixtures`, with account keys, the fingerprint (confirmation,
+  contradiction, no overlap, a minute's jitter, another window, a pair only after `at`, a tie, the latest pair
+  deciding), the Desktop merge rule and equal remote keys, plan
   strings and Codex account chains, resolution, segments (cumulative, increments, λ, `tLo`, unpriced tokens, 100 %,
   the five-hour slack, `modelWeek` filtering), instance intervals, the vote (ties, unbounded, a degenerate region,
   dropped weights), weights and half-lives, the estimate (published range, confidence, the lowered-cap rule), a plan
@@ -925,12 +943,13 @@ other usage of the account or a lowered cap, which a second window will tell). C
     unbounded `C⁺`, Bedrock and non-`openai` routes left out;
   - Codex chains: two accounts switching, one never seen live, a response without a token count line and one whose
     line is 6 s late;
-  - the Desktop merge (personal plan, team plan, another organization) and the key timeline (spend before the first
-    key, a `/login`);
+  - the Desktop merge (personal plan, team plan, another organization, another account of the same organization,
+    no CLI values, Desktop's value before the CLI's) and the key timeline (spend before the first key, a `/login`);
   - cap classes: two accounts of one plan pooled, a null `plan_type` inheriting, no plan; the lowered-cap rule; a
     plan change inside a window;
   - the live percent before a reset and after it (five-hour first response, weekly `n · minutes`);
-  - the store: its shape, a read back giving the same estimate, the 256 and 64 limits, another version ignored;
+  - the store: its shape, a read back giving the same estimate (with and without Desktop), the 256 and 64 limits,
+    another version ignored;
   - report entries (order, rounding, Desktop of a team organization) and a 15-step send cadence (spend only, 60 s,
     percent, confidence, reset state, set change, a size drop counting as unsent, `[]` once when switched off, a new
     run, leaving).
