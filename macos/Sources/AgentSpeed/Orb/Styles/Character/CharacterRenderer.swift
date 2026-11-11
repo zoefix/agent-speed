@@ -522,7 +522,7 @@ final class CharacterRenderer: CharacterLayerProvider {
             }
         }
         if let unit = OrbTextCache.shared.texture(frame.content.unit, style: m.unitStyle, language: p.language,
-                                                  scale: scene.backingScale * max(1, p.scale)) {
+                                                  scale: scene.backingScale * p.rasterScale) {
             let unitCap = OrbTextCache.shared.capHeight(m.unitStyle)
             scene.add(p.text(unit, centerX: 0, baseline: 50 * q + unitCap, color: frame.tokens.secondaryText.opacity(p.alpha))
                 .outlined(ink.outline.opacity(ink.outline.alpha * 0.85 * p.alpha), width: ink.width(m.unit) * p.scale))
