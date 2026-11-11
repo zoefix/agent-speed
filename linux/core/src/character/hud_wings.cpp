@@ -103,7 +103,7 @@ void HudWings::update(double dt, double time, const HudFrame& f, const std::arra
         growth_[kModels].first.snap(form_.width(models));
         sizes_[kModels].w = form_.width(models);
     }
-    columnAnchors(dt, f);
+    columnAnchors(dt, f, wanted, shown);
     modelsAnchor(f);
 
     const double d = f.footprint;
@@ -205,25 +205,41 @@ std::pair<double, double> HudWings::modelAnchor(const HudFrame& f, CardSize size
     return {x, y};
 }
 
-void HudWings::columnAnchors(double dt, const HudFrame& f) {
+// The column: cards stacked from her shoulders down at her left, their right edges on one line clear of her outline;
+// cards from `split_` on stack under the speed at her right. The split is the most even one that fits (`HudBalance`),
+// chosen again when a card appears or leaves or a side's weight changes, once the new split has held for `kSpillAfter`
+// and no sooner than `changeWait()` after the last change. When the split overflows for `kSpillAfter`, the most even
+// one that fits is taken, else the spill-over's, no sooner than that either (the cards hug her outline meanwhile); a
+// better one comes back once it has fitted with room to spare for `kReturnAfter` (`kSettledReturn` within
+// `kSettleWindow` of the last change). A card whose side changed fades out where it was, jumps, and fades back in.
+void HudWings::columnAnchors(double dt, const HudFrame& f, const std::array<CardSize, kHudCardCount>& wanted,
+                             const std::array<bool, kHudCardCount>& shown) {
     const int before = split_;
     sinceChange_ += dt;
-    if (!placed_ || still) {
-        const Best b = best(f);
-        split_ = b.split;
-        hugging_ = b.hugging;
+    const double gap = kColumnGap * f.footprint;
+    weighed_ = HudBalance::heights(wanted, shown, modelsPlace_ != ModelsPlace::Hidden);
+    const bool moving = balance_.moving(weighed_);
+    bool waiting = false;
+    if (!placed_ || still || balance_.balanced != balances) {
+        choose(f, weighed_);
         strain_ = 0;
         ease_ = 0;
     } else if (fit(f, split_, 0, kReach, true).over > 0.5) {
         ease_ = 0;
+        balance_.pending.reset();
         strain_ += dt;
-        if (strain_ >= kSpillAfter) {
-            const Best b = best(f);
-            split_ = b.split;
-            hugging_ = b.hugging;
+        if (strain_ >= kSpillAfter && sinceChange_ >= changeWait()) {
+            choose(f, weighed_);
             strain_ = 0;
+        } else if (strain_ >= kSpillAfter) {
+            // A card changes sides at most once per `changeWait()`; until then the cards hug her outline where they are.
+            waiting = true;
         }
-    } else if (auto back = roomier(f)) {
+    } else if (balances && balance_.isStale(weighed_, split_, gap, HudBalance::kThreshold * f.footprint)) {
+        strain_ = 0;
+        ease_ = 0;
+        rebalance(dt, f, weighed_, gap, moving);
+    } else if (auto back = better(f)) {
         strain_ = 0;
         ease_ += dt;
         if (ease_ >= (sinceChange_ < kSettleWindow ? kSettledReturn : kReturnAfter)) {
@@ -236,37 +252,97 @@ void HudWings::columnAnchors(double dt, const HudFrame& f) {
         ease_ = 0;
         hugging_ = false;
     }
-    const Fit chosen = fit(f, split_, 0, kReach, !hugging_);
-    layout(f, split_, chosen.shift, !hugging_, 0, true);
+    const bool aligned = !hugging_ && !waiting;
+    const Fit chosen = fit(f, split_, 0, kReach, aligned);
+    layout(f, split_, chosen.shift, aligned, 0, true);
     for (std::size_t k = 0; k < kHudColumn.size(); ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
-        const bool wanted = static_cast<int>(k) >= split_;
-        if (wanted == right_[i]) {
+        const bool wantedRight = static_cast<int>(k) >= split_;
+        if (wantedRight == right_[i]) {
             hop_[i] = still ? 1 : std::min(1.0, hop_[i] + dt / kHopIn);
         } else if (presence_[i] == 0 || still || !placed_) {
-            right_[i] = wanted;
+            right_[i] = wantedRight;
             hop_[i] = 1;
             anchors_[i].first.snap(targets_[i].first);
             anchors_[i].second.snap(targets_[i].second);
         } else {
             hop_[i] = std::max(0.0, hop_[i] - dt / kHopOut);
             if (hop_[i] == 0) {
-                right_[i] = wanted;
+                right_[i] = wantedRight;
                 anchors_[i].first.snap(targets_[i].first);
                 anchors_[i].second.snap(targets_[i].second);
             }
         }
     }
-    if (placed_ && split_ != before) sinceChange_ = 0;
+    if (placed_ && split_ != before) {
+        balance_.lastGap = sinceChange_;
+        sinceChange_ = 0;
+    }
 }
 
-std::optional<int> HudWings::roomier(const HudFrame& f) {
-    const int count = static_cast<int>(kHudColumn.size());
-    if (split_ >= count) return std::nullopt;
-    for (int k = count; k > split_; --k) {
-        if (fit(f, k, 0.04 * f.footprint, kNearReach, true).over == 0) return k;
+// How long after the last change the split may change again, whether balance or spill-over moves the cards.
+double HudWings::changeWait() const { return balance_.lastGap < kSettleWindow ? kSettledReturn : kReturnAfter; }
+
+// Chooses the split at once: the splits ranked by weight (or the most cards at her left first, without balance), the
+// first that fits near her shoulders, else the spill-over's.
+void HudWings::choose(const HudFrame& f, const HudHeights& heights) {
+    const double gap = kColumnGap * f.footprint;
+    if (balance_.balanced != balances || balance_.order.empty() || balance_.isStale(heights, split_, gap, 0)) {
+        balance_.order = balances ? HudBalance::ranking(heights, gap) : HudBalance::byCount();
+        balance_.balanced = balances;
+        balance_.settle(heights);
+    }
+    if (const auto first = firstFitting(f, balance_.order.count, 0)) {
+        split_ = *first;
+        hugging_ = false;
+    } else {
+        const Best b = best(f);
+        split_ = b.split;
+        hugging_ = b.hugging;
+    }
+}
+
+// The cards or their weights changed: the most even split that fits is taken once it has held for `kSpillAfter`, and
+// no sooner than `changeWait()` after the last change. When none fits, or it is the current one, the split stays. The
+// heights become the new reference only once no card grows or shrinks any more, so a card still easing to its size is
+// weighed in full.
+void HudWings::rebalance(double dt, const HudFrame& f, const HudHeights& heights, double gap, bool moving) {
+    balance_.order = HudBalance::ranking(heights, gap);
+    const auto next = firstFitting(f, balance_.order.count, 0);
+    if (!next || *next == split_) {
+        if (moving) balance_.pending.reset();
+        else balance_.settle(heights);
+        return;
+    }
+    if (balance_.pending != next) {
+        balance_.pending = next;
+        balance_.held = 0;
+    }
+    balance_.held += dt;
+    if (balance_.held < kSpillAfter || sinceChange_ < changeWait()) return;
+    split_ = *next;
+    hugging_ = false;
+    balance_.pending.reset();
+    if (!moving) balance_.settle(heights);
+}
+
+// The first of the order's first `count` splits whose column fits near her shoulders with its right edges on one line;
+// with `room`, with that much to spare.
+std::optional<int> HudWings::firstFitting(const HudFrame& f, std::size_t count, double room) {
+    for (std::size_t i = 0; i < count; ++i) {
+        const int s = balance_.order.splits[i];
+        const double over = fit(f, s, room, kNearReach, true).over;
+        if (room > 0 ? over == 0 : over <= 0.5) return s;
     }
     return std::nullopt;
+}
+
+// A split ranked before the current one that fits near her shoulders with room to spare (the first such); nullopt when
+// none does. Without balance: more cards at her left.
+std::optional<int> HudWings::better(const HudFrame& f) {
+    const std::size_t rank = balance_.order.rank(split_);
+    if (rank == 0) return std::nullopt;
+    return firstFitting(f, rank, 0.04 * f.footprint);
 }
 
 HudWings::Best HudWings::best(const HudFrame& f) {
@@ -357,6 +433,11 @@ double HudWings::layout(const HudFrame& f, int s, double shift, bool aligned, do
         y += presence_[i] * (h + gap);
     }
     if (!std::isfinite(left)) left = f.centerX + 0.04 * d;
+    // Under the models card, never left of its edge: the right side reads as one column.
+    constexpr auto m = static_cast<std::size_t>(HudCard::Models);
+    if (modelsPlace_ == ModelsPlace::UnderSpeed && sizes_[m].h > 0 && presence_[m] > 0.01) {
+        left = std::max(left, std::min(modelsEdge(f, speedBottom() + gap, sizes_[m].h), maxX - sizes_[m].w));
+    }
     for (std::size_t k = split; k < kHudColumn.size(); ++k) {
         const auto i = static_cast<std::size_t>(index(kHudColumn[k]));
         const double w = sizes_[i].w + room;
@@ -399,12 +480,16 @@ std::optional<ModelsForm> HudWings::formFor(double room) const {
 }
 
 // Its left edge on the speed's line, or further right where her outline is wider under the speed, `kGap` clear of it.
+double HudWings::modelsEdge(const HudFrame& f, double top, double h) const {
+    const double line = targets_[0].first - sizes_[0].w / 2;
+    const auto e = f.silhouette.extent(top, top + h);
+    return e ? std::max(line, e->right + kGap * f.footprint) : line;
+}
+
 HudWings::ModelsFit HudWings::modelsFit(const HudFrame& f, double top) const {
     const double d = f.footprint;
     const double h = models.h;
-    const double line = targets_[0].first - sizes_[0].w / 2;
-    const auto e = f.silhouette.extent(top, top + h);
-    ModelsFit out{e ? std::max(line, e->right + kGap * d) : line, std::nullopt, std::nullopt};
+    ModelsFit out{modelsEdge(f, top, h), std::nullopt, std::nullopt};
     if (top + h > f.bounds.maxY - kMargin * d + 0.5) return out;
     const double room = f.bounds.maxX - kMargin * d - out.left;
     out.form = formFor(room);

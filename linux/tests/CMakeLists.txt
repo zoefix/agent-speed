@@ -6,6 +6,7 @@ FetchContent_MakeAvailable(googletest)
 
 add_executable(agentspeed_tests
     board_test.cpp
+    character_balance_test.cpp
     character_catalog_test.cpp
     character_fixture_test.cpp
     character_models_test.cpp

@@ -440,6 +440,8 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
         }
     }
     wings_.still = f.effects.level == 0;
+    // Below S = 96 the column keeps its two cards at her left (DESIGN 2a.6, *Balance*).
+    wings_.balances = d >= 192;
     wings_.models = modelsCard_.shape(CardMetrics(d), {content_.modelsMore, content_.speedUnit});
     const int splitBefore = wings_.split();
     wings_.update(dt, hudTime_, ac::HudFrame({0, 0, side, side}, *silhouette_, d, anchors), cardSizes_, cardShown_);
