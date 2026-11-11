@@ -105,7 +105,7 @@ internal sealed partial class ReportController
         {
             Stream = new ReportStreamBody(ticket.ObservationAgeMs, run.Scheduler.Limits.MaxMessageBytes),
         };
-        var (_, data) = ReportBody.Fitted(envelope, content, sample, options);
+        var (_, data) = FittedWithQuotas(run.Quotas, envelope, content, sample, options);
         run.Reports[ticket.Seq] = new StreamReport(data, ReportHash.Sha256Hex(data), ReportBody.Fits(data, options));
     }
 

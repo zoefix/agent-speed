@@ -37,6 +37,9 @@ internal sealed record ReportConsentDraft(ReportServiceUrl Service, ReportDiscov
 
     public IReadOnlySet<ReportSection> Sections { get; init; } = new HashSet<ReportSection>();
 
+    /// <summary>The 額度 switch (REPORTING-EXTENSIONS 11.1).</summary>
+    public bool ShareQuota { get; init; } = true;
+
     /// <summary>The identity is registered; the user reviews changed details only.</summary>
     public bool IsReview { get; init; }
 
@@ -651,5 +654,8 @@ internal sealed partial class ReportController : IDisposable
 
         /// <summary>Tickets whose next attempt is signed with the pending key.</summary>
         public HashSet<int> SignWithPending { get; } = [];
+
+        /// <summary>When <c>quotas</c> goes out (REPORTING-EXTENSIONS 11.3); a new run starts empty.</summary>
+        public ReportQuotaRun Quotas { get; } = new();
     }
 }

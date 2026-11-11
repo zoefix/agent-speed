@@ -1,4 +1,5 @@
 using AgentSpeed.Core.Perf;
+using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Traffic;
 
 namespace AgentSpeed.Core.Reporting;
@@ -87,6 +88,15 @@ public sealed record ReportOptions(
     /// <summary>The size rule dropped <c>models</c> from this report (METRICS 11.10, Size): the top-level score object stays.</summary>
     public bool ModelsDroppedForSize { get; init; }
 
+    /// <summary>
+    /// The <c>quotas</c> this report carries (REPORTING-EXTENSIONS 11.2, 11.3), only while the service advertises
+    /// <c>quotaEstimate</c>; null leaves the member out ("no change"), <c>[]</c> says there are none.
+    /// </summary>
+    public IReadOnlyList<QuotaReportEntry>? Quotas { get; init; }
+
+    /// <summary>The report carries the <c>quotas</c> member.</summary>
+    public bool CarriesQuotas => Quotas is not null && Extensions.QuotaEstimate;
+
     /// <summary>The report carries <c>models</c> by consent: the service lists it, <c>maxModels</c> ≥ 1 and the user's switch is on.</summary>
     private bool ModelsShared => MaxModels >= 1 && (ModelsDroppedForSize || Sections.Contains(ReportSection.Models));
 
@@ -116,7 +126,10 @@ public static class ReportBody
 
     private static readonly SourceKind[] SourceOrder = Enum.GetValues<SourceKind>();
 
-    /// <summary>The body as sent: within the body limit, dropping <c>models</c> and then <c>sources</c> when it would not fit.</summary>
+    /// <summary>
+    /// The body as sent: within the body limit, dropping <c>quotas</c> first (REPORTING-EXTENSIONS 11.3), then the per-model
+    /// breakdowns, <c>models</c> and <c>sources</c> when it would not fit.
+    /// </summary>
     public static byte[] Data(ReportEnvelope envelope, ReportWindowContent content, ReportSample sample, ReportOptions options) =>
         Fitted(envelope, content, sample, options).Data;
 
@@ -125,6 +138,13 @@ public static class ReportBody
     {
         var document = Json(envelope, content, sample, options);
         var data = document.ToCompactBytes();
+        if (!Fits(data, options) && options.CarriesQuotas)
+        {
+            options = options with { Quotas = null };
+            document = Json(envelope, content, sample, options);
+            data = document.ToCompactBytes();
+        }
+
         if (!Fits(data, options) && (options.Extensions.ExecutionModes || options.Extensions.ModelHarnessRequests))
         {
             options = options with { Extensions = options.Extensions with { ExecutionModes = false, ModelHarnessRequests = false } };
@@ -227,6 +247,11 @@ public static class ReportBody
         else if (scores == ReportScoreExtension.LegacyTask)
         {
             members.Add(("taskScore", ReportPerfValue.Legacy(sample.Facts.Perf.Thinking).Json));
+        }
+
+        if (options is { Quotas: { } quotas, Extensions.QuotaEstimate: true })
+        {
+            members.Add(("quotas", ReportQuotas.Json([.. quotas.Take(EstimateLimits.MaxEntries)])));
         }
 
         if (options.Stream is { } stream)
