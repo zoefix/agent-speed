@@ -4,7 +4,8 @@ import Foundation
 import Testing
 
 /// DESIGN 11 *Preview window* and REPORTING-EXTENSIONS 11: the preview shows the `quotas` the next report carries
-/// while the 額度 switch is on and the service advertises `quotaEstimate`, and never an account key.
+/// while the 額度 switch is on and the service advertises `quotaEstimate`, each account by its tag for the service and
+/// never by its key.
 @Suite("Quota estimate report preview")
 @MainActor
 struct QuotaEstimateReportPreviewTests {
@@ -20,15 +21,24 @@ struct QuotaEstimateReportPreviewTests {
         let rig = PreviewRig()
         defer { rig.tearDown() }
         let build = QuotaEstimatePreviews.demoBuild(now: Self.now)
-        rig.report.quotaEntries = { _ in build.entries(nowMs: Self.now) }
+        var origins: [String] = []
+        rig.report.quotaEntries = { _, origin in
+            origins.append(origin)
+            return build.entries(nowMs: Self.now, origin: origin)
+        }
         rig.report.preview(.reporting, username: "zoe-mbp")
         #expect(rig.report.discovery?.extensions?.quotaEstimate == true)
 
         let entries = try #require(try Self.quotas(rig.report.preview()))
         #expect(entries.map { $0["source"] as? String } == ["codex", "claudeCode"])
         #expect(entries.map { $0["plan"] as? String } == ["pro", "claude_max"])
+        let api = try #require(rig.report.discovery?.api.origin)
+        #expect(origins.last == api, "tagged for the origin reports go to")
         for entry in entries {
-            #expect(entry["account"] == nil && entry["key"] == nil, "no account key is ever reported")
+            let source = try #require(entry["source"] as? String)
+            let key = try #require(build.account(of: QuotaEstimateSource(source: source)))
+            #expect(entry["account"] as? String == QuotaAccounts.reportTag(origin: api, key: key))
+            #expect(entry["account"] as? String != key && entry["key"] == nil, "no account key is ever reported")
             let estimate = try #require(entry["estimate"] as? [String: Any])
             let cap = try #require((estimate["capMicroUsd"] as? NSNumber)?.doubleValue)
             let truth = entry["source"] as? String == "codex" ? 397e6 : 5742e6

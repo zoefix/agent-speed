@@ -91,14 +91,14 @@ struct QuotaTimelines {
     /// A remote host's sources (REMOTE 11.1): the relay's key when it gives one, kept apart from an equal local key
     /// that the fingerprint contradicts; older relays' sources are accounts of their own.
     static func host(_ source: QuotaEstimateSource, snapshots: [QuotaEstimateSnapshot],
-                     local: [QuotaObservation], salt: Data) -> [QuotaKeyEntry] {
+                     local: [QuotaObservation], salt: Data, install: String) -> [QuotaKeyEntry] {
         let host = source.host ?? ""
         let entries = QuotaKeyEntry.ordered(snapshots.compactMap { s in
             s.account.map { QuotaKeyEntry(at: s.observedMs, key: $0, plan: QuotaAccounts.cleanPlan(s.plan),
                                           tier: QuotaAccounts.cleanPlan(s.tier)) }
         })
         guard !entries.isEmpty else {
-            return [QuotaKeyEntry(at: 0, key: ownKey(source, salt: salt))]
+            return [QuotaKeyEntry(at: 0, key: ownKey(source, salt: salt, install: install))]
         }
         let hostPoints = snapshots.flatMap(\.points)
         var prints: [String: QuotaAccountFingerprint?] = [:]
@@ -117,9 +117,9 @@ struct QuotaTimelines {
         }
     }
 
-    /// The account of a host source that names none, or of a source without ids.
-    static func ownKey(_ source: QuotaEstimateSource, salt: Data) -> String {
-        guard let host = source.host else { return "local:\(source.source)" }
-        return QuotaAccounts.key(salt: salt, vendor: "host", id: "\(host):\(source.source)")
+    /// The account of a host source that names none, or of a source without ids: the pair (this computer or the
+    /// host, source), keyed with the install id so that it stays apart between computers.
+    static func ownKey(_ source: QuotaEstimateSource, salt: Data, install: String) -> String {
+        QuotaAccounts.pairKey(salt: salt, install: install, machine: source.host ?? RemoteHost.localId, source: source.source)
     }
 }

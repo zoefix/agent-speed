@@ -18,9 +18,26 @@ public struct QuotaEntryBase: Sendable {
     public var start: Int64
     public var estimate: QuotaCapEstimate
     public var firstAfterReset: Int64?
+    /// Where the entry goes in a report; the account's tag breaks the ties that remain.
+    var rank = QuotaEntryRank()
 
     public var window: String { QuotaEstimateWindow.id(kind: kind, name: name, minutes: minutes) }
     var modelName: String? { QuotaEstimateWindow.modelName(kind: kind, name: name) }
+}
+
+/// Report order (REPORTING-EXTENSIONS 11.2): the first source's rank, the window's (QUOTAS 2: unnamed by length,
+/// then named in the order the account showed them), then the source of the newest value.
+struct QuotaEntryRank: Comparable, Sendable {
+    var source = 0
+    var named = 0
+    var name = 0
+    var minutes = 0
+    var kind = 0
+    var newest = ""
+
+    static func < (a: Self, b: Self) -> Bool {
+        (a.source, a.named, a.name, a.minutes, a.kind, a.newest) < (b.source, b.named, b.name, b.minutes, b.kind, b.newest)
+    }
 }
 
 extension QuotaEstimateBuild {
@@ -60,7 +77,7 @@ extension QuotaEstimateBuild {
                 names[o.account, default: []].append(name)
             }
         }
-        var rows: [(rank: (Int, Int, Int, Int, Int), source: String, base: QuotaEntryBase)] = []
+        var rows: [QuotaEntryBase] = []
         for key in order {
             let (x, last) = newest[key]!
             let instance = x.instance
@@ -75,27 +92,32 @@ extension QuotaEstimateBuild {
             var sourceSet = Set(own.filter { spend[$0].endMs >= instance.start }.map { spend[$0].source })
             sourceSet.insert(last.source)
             let sources = sourceSet.sorted { (sourceRank($0), $0) < (sourceRank($1), $1) }
-            let base = QuotaEntryBase(
+            var rank = QuotaEntryRank(source: sourceRank(sources[0]), minutes: last.minutes, kind: last.kind.rank,
+                                      newest: last.source)
+            if let name = last.name, !name.isEmpty {
+                rank.named = 1
+                rank.name = names[key.account]?.firstIndex(of: name) ?? 0
+            }
+            rows.append(QuotaEntryBase(
                 account: key.account, source: last.source, sources: sources, plan: x.plan, tier: x.tier, kind: last.kind,
                 name: last.name, minutes: last.minutes, p: last.p, t: last.t, resetsMs: instance.resetsMs,
-                start: instance.start, estimate: estimates[x.capClass] ?? .none, firstAfterReset: firstAfter)
-            let windowRank: (Int, Int, Int, Int)
-            if let name = last.name, !name.isEmpty {
-                windowRank = (1, names[key.account]?.firstIndex(of: name) ?? 0, last.minutes, last.kind.rank)
-            } else {
-                windowRank = (0, 0, last.minutes, last.kind.rank)
-            }
-            let rank = (sourceRank(sources[0]), windowRank.0, windowRank.1, windowRank.2, windowRank.3)
-            rows.append((rank, last.source, base))
+                start: instance.start, estimate: estimates[x.capClass] ?? .none, firstAfterReset: firstAfter, rank: rank))
         }
-        return rows.stableSorted { $0.rank < $1.rank || ($0.rank == $1.rank && $0.source < $1.source) }.map(\.base)
+        return rows.stableSorted { $0.rank < $1.rank }
     }
 
-    /// The report entries at `nowMs` (REPORTING-EXTENSIONS 11.2), at most 16, of the sources `included` lets through.
-    public func entries(nowMs: Int64, including included: (String) -> Bool = { _ in true }) -> [QuotaReportEntry] {
-        Array(current.filter { included($0.source) }.prefix(QuotaEstimateConstants.maxEntries).map {
-            QuotaReportEntry($0, nowMs: nowMs, ledger: ledger, priceVersion: priceVersion)
-        })
+    /// The report entries for the service of api origin `origin` at `nowMs` (REPORTING-EXTENSIONS 11.2), at most 16,
+    /// of the sources `included` lets through. Each carries its account's tag for that service, which also orders
+    /// entries that tie otherwise (two accounts of one source and window).
+    public func entries(nowMs: Int64, origin: String, including included: (String) -> Bool = { _ in true })
+        -> [QuotaReportEntry] {
+        let tagged = current.filter { included($0.source) }.map {
+            (base: $0, tag: QuotaAccounts.reportTag(origin: origin, key: $0.account))
+        }
+        return tagged.stableSorted { ($0.base.rank, $0.tag) < ($1.base.rank, $1.tag) }
+            .prefix(QuotaEstimateConstants.maxEntries).map {
+                QuotaReportEntry($0.base, account: $0.tag, nowMs: nowMs, ledger: ledger, priceVersion: priceVersion)
+            }
     }
 
     /// The current base of an account and window.
@@ -107,7 +129,7 @@ extension QuotaEstimateBuild {
     public func account(of source: QuotaEstimateSource) -> String? {
         if let host = source.host {
             return QuotaKeyEntry.inForce(hostTimelines[source] ?? [], at: nowMs)?.key
-                ?? QuotaTimelines.ownKey(QuotaEstimateSource(source: source.source, host: host), salt: salt)
+                ?? QuotaTimelines.ownKey(QuotaEstimateSource(source: source.source, host: host), salt: salt, install: install)
         }
         switch source.source {
         case "codex":
@@ -116,7 +138,7 @@ extension QuotaEstimateBuild {
         case "claudeCode", "claudeDesktop":
             return QuotaKeyEntry.inForce(timelines.local[source.source] ?? [], at: nowMs)?.key
         default:
-            return QuotaTimelines.ownKey(source, salt: salt)
+            return QuotaTimelines.ownKey(source, salt: salt, install: install)
         }
     }
 

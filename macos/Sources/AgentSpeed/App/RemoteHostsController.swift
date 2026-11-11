@@ -14,7 +14,7 @@ final class RemoteHostsController {
         coordinator = RemoteCoordinator(monitor: monitor)
     }
 
-    /// `salt`: the estimate salt the hosts' relays key their accounts with (REMOTE 11.1).
+    /// `salt`: the account salt the hosts' relays key their accounts with (REMOTE 11.1).
     func start(settings: AppSettings, prices: PriceSyncController, salt: String? = nil) {
         let coordinator = coordinator
         loop = ObservationLoop { [weak settings, weak prices] in

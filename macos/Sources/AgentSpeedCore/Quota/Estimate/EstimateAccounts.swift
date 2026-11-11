@@ -23,17 +23,42 @@ public enum QuotaEstimateConstants {
     static let lineMatchMs: Int64 = 5_000
     static let observationsPerInstance = 256
     public static let maxEntries = 16
-    static let storeVersion = 1
+    public static let storeVersion = 2
 }
 
-/// Account keys, plan strings and the account-merge rules (QUOTAS 10.1, 10.2).
+/// Account keys, report tags, plan strings and the account-merge rules (QUOTAS 10.1, 10.2).
 public enum QuotaAccounts {
     static let personalClaudePlans: Set<String> = ["claude_free", "claude_pro", "claude_max", "claude_ultra"]
 
-    /// `first 16 hex digits of HMAC-SHA256(installSalt, "<vendor>:<id>")`.
+    /// The text whose SHA-256 is the account salt.
+    public static let saltText = "agent-speed quota account v1"
+    /// The account salt: the same in every install, so that one account has one key on all of the user's computers
+    /// and one report tag per service. Sent to remote hosts (REMOTE 11.1), never to a reporting service.
+    public static let salt = Data(SHA256.hash(data: Data(saltText.utf8)))
+    /// The salt as 64 lowercase hex digits, for the remote quota config.
+    public static var saltHex: String { hex(salt) }
+    static let reportTagDomain = "agent-speed quota account|"
+
+    /// `first 16 hex digits of HMAC-SHA256(accountSalt, "<vendor>:<id>")`.
     public static func key(salt: Data, vendor: String, id: String) -> String {
         let mac = HMAC<SHA256>.authenticationCode(for: Data("\(vendor):\(id)".utf8), using: SymmetricKey(data: salt))
-        return mac.prefix(8).map { String(format: "%02x", $0) }.joined()
+        return hex(mac.prefix(8))
+    }
+
+    /// The key of an account without an id: the pair (this install's computer, `local`, or one of its hosts, source).
+    public static func pairKey(salt: Data, install: String, machine: String, source: String) -> String {
+        key(salt: salt, vendor: "pair", id: "\(install):\(machine):\(source)")
+    }
+
+    /// REPORTING-EXTENSIONS 11.2 `account`: an account's tag for one service, keyed by the service's api origin, so
+    /// that services cannot match their tags.
+    public static func reportTag(origin: String, key: String) -> String {
+        let secret = SymmetricKey(data: Data((reportTagDomain + origin).utf8))
+        return hex(HMAC<SHA256>.authenticationCode(for: Data(key.utf8), using: secret).prefix(8))
+    }
+
+    static func hex(_ bytes: some Sequence<UInt8>) -> String {
+        bytes.map { String(format: "%02x", $0) }.joined()
     }
 
     /// Whether Claude Desktop spends on the CLI's account: the organization (compared by its `claudeDesktop` key)
@@ -72,7 +97,7 @@ public enum QuotaAccounts {
 public struct QuotaAccountKeys: Sendable {
     let salt: Data
 
-    public init(salt: Data) {
+    public init(salt: Data = QuotaAccounts.salt) {
         self.salt = salt
     }
 

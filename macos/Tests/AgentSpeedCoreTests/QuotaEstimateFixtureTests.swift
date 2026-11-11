@@ -31,10 +31,50 @@ struct QuotaEstimateFixtureTests {
     @Test func accountKeys() {
         let accounts = F.object(F.cases["accounts"])
         let salt = F.salt(F.string(accounts["salt"])!)
-        for k in F.list(accounts["keys"]) {
+        let keys = F.list(accounts["keys"])
+        #expect(keys.count == 3)
+        for k in keys {
             #expect(QuotaAccounts.key(salt: salt, vendor: F.string(k["vendor"])!, id: F.string(k["id"])!)
                 == F.string(k["expected"]))
+            #expect(QuotaAccounts.key(salt: QuotaAccounts.salt, vendor: F.string(k["vendor"])!, id: F.string(k["id"])!)
+                == F.string(k["expected"]), "the app keys with the fixture's salt")
         }
+    }
+
+    /// The account salt is the SHA-256 of its text, the same in every install, and what remote hosts receive.
+    @Test func theAccountSaltIsFixed() {
+        let accounts = F.object(F.cases["accounts"])
+        #expect(F.string(accounts["saltText"]) == QuotaAccounts.saltText)
+        #expect(QuotaAccounts.salt == F.salt(F.string(accounts["salt"])!))
+        #expect(QuotaAccounts.saltHex == F.string(accounts["salt"]))
+        #expect(QuotaAccounts.salt.count == 32)
+    }
+
+    @Test func accountsWithoutAnIdArePairsOfTheInstall() {
+        let accounts = F.object(F.cases["accounts"])
+        let salt = F.salt(F.string(accounts["salt"])!)
+        let pairs = F.list(accounts["pairs"])
+        #expect(pairs.count == 3)
+        for c in pairs {
+            #expect(QuotaAccounts.pairKey(salt: salt, install: F.string(c["install"])!, machine: F.string(c["machine"])!,
+                                          source: F.string(c["source"])!) == F.string(c["expected"]), "\(c)")
+        }
+        let install = F.string(pairs[0]["install"])!
+        let build = QuotaEstimateBuild(QuotaEstimateInputs(), salt: salt, install: install, nowMs: F.t0)
+        #expect(build.account(of: QuotaEstimateSource(source: "kimi")) == F.string(pairs[0]["expected"]))
+        #expect(build.account(of: QuotaEstimateSource(source: "kimi", host: "host-1")) == F.string(pairs[1]["expected"]),
+                "a host's source that names no account")
+        #expect(build.account(of: QuotaEstimateSource(source: "geminiCli")) == F.string(pairs[2]["expected"]))
+    }
+
+    @Test func reportTagsDifferPerService() {
+        let tags = F.list(F.object(F.cases["accounts"])["reportTags"])
+        #expect(tags.count == 3)
+        for c in tags {
+            #expect(QuotaAccounts.reportTag(origin: F.string(c["origin"])!, key: F.string(c["key"])!)
+                == F.string(c["expected"]), "\(c)")
+        }
+        #expect(Set(tags.compactMap { F.string($0["expected"]) }).count == 3)
     }
 
     @Test func fingerprints() {
@@ -205,6 +245,7 @@ struct QuotaEstimateFixtureTests {
         let ledger = F.ledger(F.list(report["rows"]))
         let input = F.object(report["input"])
         let estimate = F.object(input["estimate"])
+        let origin = F.string(report["origin"])!
         let base = QuotaEntryBase(
             account: "a", source: F.string(input["source"])!, sources: input["sources"] as? [String] ?? [],
             plan: F.string(input["plan"]), tier: F.string(input["tier"]),
@@ -220,7 +261,8 @@ struct QuotaEstimateFixtureTests {
         for c in entries {
             var b = base
             if F.string(c["name"]) == "no estimate" { b.estimate = .none }
-            let entry = QuotaReportEntry(b, nowMs: F.int(c["now"])!, ledger: ledger, priceVersion: 8)
+            let tag = QuotaAccounts.reportTag(origin: origin, key: F.string(input["account"])!)
+            let entry = QuotaReportEntry(b, account: tag, nowMs: F.int(c["now"])!, ledger: ledger, priceVersion: 8)
             let diff = F.differences(F.foundation(entry.json), c["expected"])
             #expect(diff.isEmpty, "\(c["name"] ?? ""): \(diff)")
         }
@@ -230,14 +272,17 @@ struct QuotaEstimateFixtureTests {
         let report = F.object(F.cases["report"])
         let first = F.object(F.list(report["entries"])[0]["expected"])
         let window = F.object(first["window"])
-        func entry(sources: [String]? = nil, percent: Double? = nil, spend: Int64 = 0) -> QuotaReportEntry {
-            QuotaReportEntry(sources: sources ?? (first["sources"] as! [String]),
+        func entry(account: String? = nil, percent: Double? = nil, spend: Int64 = 0) -> QuotaReportEntry {
+            QuotaReportEntry(account: account ?? F.string(first["account"])!, sources: first["sources"] as! [String],
                              kind: QuotaWindowKind(rawValue: F.string(window["kind"])!)!, name: F.string(window["name"]),
                              minutes: Int(F.int(window["minutes"])!), usedPercent: percent ?? F.double(first["usedPercent"]),
                              resetsInMs: F.int(first["resetsInMs"]), usedMicroUsd: F.int(first["usedMicroUsd"])! + spend,
                              confidence: .medium)
         }
         let a = entry(), b = entry(spend: 5), c = entry(percent: 24)
+        // Another account of the same source and window (seen 2026-11-11: two Codex accounts).
+        let other = QuotaAccounts.reportTag(origin: F.string(report["origin"])!,
+                                            key: QuotaAccounts.key(salt: QuotaAccounts.salt, vendor: "codex", id: "acct-2"))
         let cases = F.list(report["cadence"])
         #expect(cases.count == 6)
         for item in cases {
@@ -245,7 +290,7 @@ struct QuotaEstimateFixtureTests {
             let now: [QuotaReportEntry] = switch F.string(item["change"]) {
             case "spend": [b]
             case "usedPercent": [c]
-            case "set": [a, entry(sources: ["claudeCode"], spend: 5)]
+            case "set": [a, entry(account: other, spend: 5)]
             default: [a]
             }
             let due = QuotaReportCadence.due(now, last: ago == nil ? nil : [a], lastMs: 0, nowMs: ago ?? 0,

@@ -38,6 +38,37 @@ struct QuotaEstimatePipelineTests {
                            "report", "cadence"])
         #expect(F.list(Self.pipeline["claude"]).count == 6)
         #expect(F.list(Self.pipeline["store"]).count == 6)
+        #expect(F.list(Self.pipeline["report"]).count == 2)
+    }
+
+    /// Seen 2026-11-11: a service rejected two Codex accounts of one window, which a report could not tell apart. They
+    /// are two entries with the same sources and window, told apart by their tags, and two identities for the cadence.
+    @Test func twoCodexAccountsAreTwoTaggedEntries() throws {
+        let c = try #require(F.list(Self.pipeline["report"]).first { F.string($0["name"]) == "two Codex accounts" })
+        let input = F.object(c["input"])
+        let build = try Self.build(input)
+        let origin = F.string(input["origin"])!
+        let entries = build.entries(nowMs: F.int(input["now"])!, origin: origin)
+        let diff = F.differences(["entries": entries.map { F.foundation($0.json) }], c["expected"])
+        #expect(diff.isEmpty, "\(diff)")
+        #expect(entries.count == 2)
+        #expect(Set(entries.map(\.sources)) == [["codex"]])
+        #expect(Set(entries.map { "\($0.kind.rawValue):\($0.name ?? ""):\($0.minutes)" }).count == 1)
+        #expect(Set(entries.map(\.account)).count == 2)
+        #expect(Set(entries.map(\.identity)).count == 2)
+        let keys = Set(build.current.map(\.account))
+        for entry in entries {
+            #expect(entry.account.count == 16 && entry.account.allSatisfy(\.isHexDigit) && entry.account == entry.account.lowercased())
+            #expect(!keys.contains(entry.account), "a tag is never the account's key")
+        }
+        // Another service sees other tags for the same accounts.
+        let elsewhere = build.entries(nowMs: F.int(input["now"])!, origin: "https://other.example")
+        #expect(Set(elsewhere.map(\.account)).isDisjoint(with: entries.map(\.account)))
+        // The tag is the last tie-break: there the second account's tag sorts first.
+        #expect(elsewhere.map(\.account) == elsewhere.map(\.account).sorted())
+        #expect(elsewhere.map(\.usedPercent) == [10, 40] && entries.map(\.usedPercent) == [40, 10])
+        #expect(QuotaReportCadence.due([entries[0]], last: entries, lastMs: 0, nowMs: 1_000),
+                "an account leaving the set is a changed set")
     }
 
     @Test func cadence() {
@@ -45,7 +76,8 @@ struct QuotaEstimatePipelineTests {
         let e = F.object(cadence["entry"])
         let window = F.object(e["window"])
         var current = [QuotaReportEntry(
-            sources: e["sources"] as! [String], kind: QuotaWindowKind(rawValue: F.string(window["kind"])!)!,
+            account: F.string(e["account"])!, sources: e["sources"] as! [String],
+            kind: QuotaWindowKind(rawValue: F.string(window["kind"])!)!,
             name: F.string(window["name"]), minutes: Int(F.int(window["minutes"])!), usedPercent: F.double(e["usedPercent"]),
             resetsInMs: F.int(e["resetsInMs"]), usedMicroUsd: F.int(e["usedMicroUsd"])!,
             confidence: QuotaEstimateConfidence(rawValue: F.string(F.object(e["estimate"])["confidence"])!)!)]
@@ -56,7 +88,7 @@ struct QuotaEstimatePipelineTests {
             switch F.string(step["change"]) {
             case "set":
                 var added = current[0]
-                added.sources = ["claudeCode"]
+                added.account = "fedcba9876543210"
                 current.append(added)
             case "spend": current[0].usedMicroUsd += 1
             case "percent": current[0].usedPercent = (current[0].usedPercent ?? 0) + 1
@@ -78,14 +110,12 @@ struct QuotaEstimatePipelineTests {
     /// The fixture input's estimate at its `now`.
     static func build(_ input: [String: Any]) throws -> QuotaEstimateBuild {
         let (inputs, salt) = try inputs(input)
-        return QuotaEstimateBuild(inputs, salt: salt, nowMs: F.int(input["now"])!)
+        return QuotaEstimateBuild(inputs, salt: salt, install: F.string(input["install"])!, nowMs: F.int(input["now"])!)
     }
 
     static func run(_ input: [String: Any]) throws -> [String: Any] {
-        let (inputs, salt) = try inputs(input)
-        let now = F.int(input["now"])!
-        let build = QuotaEstimateBuild(inputs, salt: salt, nowMs: now)
-        return try outputs(build, input: input, now: now)
+        let build = try build(input)
+        return try outputs(build, input: input, now: F.int(input["now"])!)
     }
 
     static func inputs(_ input: [String: Any]) throws -> (QuotaEstimateInputs, Data) {
@@ -166,7 +196,7 @@ struct QuotaEstimatePipelineTests {
             out["estimates"] = estimates
         }
         if want.contains("entries") {
-            out["entries"] = build.entries(nowMs: now).map { F.foundation($0.json) }
+            out["entries"] = build.entries(nowMs: now, origin: F.string(input["origin"])!).map { F.foundation($0.json) }
         }
         if want.contains("store") {
             out["store"] = F.foundation(try build.store().encoded())
