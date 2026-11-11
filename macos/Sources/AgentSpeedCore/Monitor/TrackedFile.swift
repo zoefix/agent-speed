@@ -8,7 +8,18 @@ final class TrackedFile {
     let root: String
     let fileID: FileID
     var reader: TranscriptReader
-    var parser: TranscriptParser
+    var parser: TranscriptParser {
+        didSet { cachedState = nil }
+    }
+    /// The parser's state, kept until the parser changes. Reading `parser.state` copies the whole parser; over thousands
+    /// of files on every publish (twice a second) that cost about a tenth of a core.
+    var state: AgentState {
+        if let cachedState { return cachedState }
+        let state = parser.state
+        cachedState = state
+        return state
+    }
+    private var cachedState: AgentState?
     /// For an Antigravity database, the `.db` with its `-wal` folded in (`FileStat.databaseStat`); for a Factory Droid
     /// session, the transcript with its sidecar's modification time (`DroidPaths.stat`).
     var lastStat: FileStat
