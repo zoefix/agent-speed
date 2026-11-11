@@ -18,6 +18,7 @@ add_library(agentspeed_relay STATIC
     src/serve.cpp
     src/zone_file.cpp
     # Quotas (REMOTE 11)
+    src/quota_lines.cpp
     src/net/http_wire.cpp
     src/net/https_client.cpp
     src/net/proxy.cpp
