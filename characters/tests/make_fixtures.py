@@ -15,6 +15,7 @@ import numpy as np
 
 from characters.reference.hud import Odometer
 from characters.reference.motions import Director
+from characters.reference.motions.behavior import Inputs
 from characters.reference.motions.curves import Curve
 from characters.reference.motions.springs import SecondOrder
 from characters.reference.orbits import Orbit, eccentric_anomaly
@@ -243,10 +244,115 @@ def director_profile_cases():
             "params": list(params.values()), "schedule": schedule, "poseSides": POSE_SIDES, "cases": out}
 
 
+# A session for the behavior fixture (spec/CHARACTERS.md, Behavior): phases with the idle time each idle phase starts
+# at, requests (start, first output), a jump of the idle time, events, clicks and cursor keys in her heights.
+SESSION = {
+    "hour": 1,
+    "phases": [[0.0, "idle", 900.0], [3.0, "generating", 0.0], [33.0, "tools", 0.0], [49.0, "generating", 0.0],
+               [53.0, "idle", 0.0]],
+    "requests": [[3.0, 17.0], [49.0, 49.4]],
+    "idleJumps": [[83.0, 120.0]],
+    "levels": [[0.0, 0], [17.5, 1], [19.0, 2], [21.0, 3], [23.0, 5], [25.0, 7], [27.0, 9], [28.5, 10], [31.0, 8],
+               [33.5, 5], [35.0, 2], [37.0, 0], [50.0, 2], [52.0, 3], [55.0, 1], [57.0, 0]],
+    "events": [[28.5, "newPeak"], [40.0, "trouble"]],
+    "clicks": [69.0],
+    "cursor": [[59.0, 1.5, 0.95], [60.6, 0.55, 0.32], [61.5, 0.16, 0.3], [63.5, 0.05, 0.36], [65.5, 0.12, 0.26],
+               [69.0, 0.0, 0.32], [70.6, 0.03, 0.3], [72.2, -0.55, 0.15], [74.0, -1.6, -0.2]],
+    "over": [-0.24, 0.24, -0.1, 0.95],
+    "seconds": 92.0,
+}
+LIVING = [
+    {"name": "living", "seed": 7, "sides": ("right", "left"),
+     "states": ["think", "wait", "cheer", "sleepy", "focus", "greet"],
+     "expressions": ["smile", "laugh", "wink", "surprised", "thinking", "sleepy", "yawn", "focused", "worried",
+                     "excited"],
+     "mouths": ["a", "i", "u", "o"], "gazes": ["left", "right", "up", "down", "closed"],
+     "arms": ["wave", "peace", "thumbsup", "chin"]},
+    {"name": "sparse", "seed": 19, "sides": ("left", "right"), "states": ["cheer"],
+     "expressions": ["smile"], "mouths": ["a", "o", "closed"], "gazes": [], "arms": []},
+]
+
+
+def living_variants(case):
+    out = []
+    for kind, names, region in (("expr", case["expressions"], "face"), ("mouth", case["mouths"], "mouth"),
+                                ("gaze", case["gazes"], "eyes")):
+        out += [{"id": f"{kind}-{n}", "kind": "patch", "param": f"Var.{kind}-{n}", "region": region} for n in names]
+    side = case["sides"][0]
+    for k, gid in enumerate(case["arms"]):
+        out.append({"id": gid, "kind": "arm", "param": f"Var.{gid}", "side": side, "front": True,
+                    "arm": f"Arm.{side}@{gid}", "forearm": f"Forearm.{side}@{gid}",
+                    "lead": {f"Lift.{side}": round(0.2 + 0.1 * k, 2), f"Bend.{side}": round(-0.3 + 0.1 * k, 2)},
+                    "approach": {f"Arm.{side}@{gid}": round(-0.25 + 0.1 * k, 2), f"Forearm.{side}@{gid}": 0.1}})
+    return out
+
+
+def session_inputs(t, dt, doc=SESSION):
+    """The behavior inputs at time t of the SESSION script (see behavior_cases)."""
+    phase, idle_at, since = "idle", 0.0, 0.0
+    for start, name, at in doc["phases"]:
+        if t >= start:
+            phase, idle_at, since = name, at, start
+    wait = next((t - a for a, b in doc["requests"] if a <= t < b), None)
+    idle = 0.0
+    if phase == "idle":
+        idle = idle_at + t - since + sum(add for at, add in doc["idleJumps"] if t >= at)
+    keys, cursor = doc["cursor"], None
+    for (t0, x0, y0), (t1, x1, y1) in zip(keys, keys[1:]):
+        if t0 <= t <= t1:
+            k = (t - t0) / (t1 - t0)
+            cursor = (x0 + (x1 - x0) * k, y0 + (y1 - y0) * k)
+            break
+    x0, x1, y0, y1 = doc["over"]
+    over = cursor is not None and x0 <= cursor[0] <= x1 and y0 <= cursor[1] <= y1
+    events = tuple(name for at, name in doc["events"] if t - dt < at <= t)
+    click = over and any(t - dt < at <= t for at in doc["clicks"])
+    return Inputs(phase=phase, wait=wait, idle=idle, hour=doc["hour"], events=events, cursor=cursor, over=over,
+                  click=click)
+
+
+def behavior_cases():
+    base = json.loads((Path(__file__).parent / "director_params.json").read_text())
+    out = []
+    for case in LIVING:
+        variants = living_variants(case)
+        params = {p["id"]: p for p in base}
+        for v in variants:
+            params[v["param"]] = {"id": v["param"], "min": 0, "max": 1, "default": 0}
+            if v["kind"] == "arm":
+                for pid in (v["arm"], v["forearm"]):
+                    params[pid] = {"id": pid, "min": -1, "max": 1, "default": 0}
+        arm_out, arm_book = case["sides"]
+        d = Director(params, variants, seed=case["seed"], arm_out=arm_out, arm_book=arm_book, orb=1.0,
+                     celebrate=False, states=case["states"])
+        dt, frames = 1 / 60, []
+        for n in range(int(SESSION["seconds"] * 60)):
+            t = n / 60
+            d.set_level([lv for start, lv in SESSION["levels"] if t >= start][-1])
+            values = d.update(dt, session_inputs(t, dt))
+            if n % 20 == 0:
+                b = d.behavior
+                frames.append({"n": n, "mood": b.mood, "pose": d.pose_wanted(), "face": d.expr, "gaze": d.gaze_patch,
+                               "mouth": b.talk.shape, "gesture": d.last_gesture if d.gesture else None,
+                               "values": {k: round(v, 7) for k, v in sorted(values.items())}})
+        out.append({"name": case["name"], "seed": case["seed"], "armOut": arm_out, "armBook": arm_book, "orb": 1.0,
+                    "states": case["states"], "variants": variants, "frames": frames})
+    return {"about": "A living director (patch and arm variants, mood poses) stepped every 1/60 s: at step n, "
+                     "t = n/60, "
+                     "set_level(the last `levels` entry at or before t), then update(1/60, inputs at t). Inputs: phase "
+                     "and the idle time of the last `phases` entry at or before t (idle = its idle time + t - its "
+                     "start + every idleJumps amount whose time is at or before t, only while idle); wait = t - start "
+                     "of a request with start <= t < first, else null; cursor linear between `cursor` keys (t, x, y) "
+                     "and null outside them; over = cursor inside `over` [x0, x1, y0, y1]; events and clicks fire at "
+                     "the step whose (t - 1/60, t] holds their time, a click only while over. Frames hold every 20th "
+                     "step; values as director.json (1e-4); mood, pose, face, gaze, mouth and gesture exactly.",
+            "params": base, "session": SESSION, "cases": out}
+
+
 FILES = {"rng.json": rng_cases, "curves.json": curve_cases, "springs.json": spring_cases, "orbits.json": orbit_cases,
          "rig.json": rig_cases, "physics.json": physics_cases, "odometer.json": odometer_cases,
          "switch.json": switch_cases, "director.json": director_cases,
-         "director-profiles.json": director_profile_cases}
+         "director-profiles.json": director_profile_cases, "behavior.json": behavior_cases}
 
 
 def main(argv=None):

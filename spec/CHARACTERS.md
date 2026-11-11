@@ -18,6 +18,8 @@ manifest.json
 preview.png              512 x 640, the idle pose at rest on transparency, feet on the bottom edge
 poses/<band>/rig.json    one rig per speed band (section 3); idle is required
 poses/<band>/atlas.png
+poses/<state>/rig.json   optional mood poses of a living pack (section 5, Behavior), each a rig like a band pose
+poses/<state>/atlas.png
 ```
 
 `manifest.json`:
@@ -35,14 +37,15 @@ poses/<band>/atlas.png
 | `minApp` | optional lowest app version that can play the pack |
 | `motion` | optional motion profile (section 5, Motion profile); without it the character moves like Claude |
 | `poses` | `{band: "poses/<band>"}` for the bands present |
-| `states` | optional `{state: "poses/<state>"}`: full-body poses of the moods of section 5, *Behavior* (`think`, `wait`, `cheer`, `sleepy`, `focus`, `greet`); a missing one keeps the band pose |
+| `states` | optional `{state: "poses/<state>"}`: full-body poses of the moods of section 5, *Behavior*, for the states `think`, `wait`, `cheer`, `sleepy`, `focus`, `greet` (others are ignored); a missing one shows the band pose instead. Players that do not know the key ignore it: it never joins `poses`, whose keys stay bands |
 | `preview` | `"preview.png"` |
 
 Bands are `idle`, `cruise`, `boost`, `overdrive`, `redline` (the effect tiers of METRICS 6). A band without a pose
 uses the nearest lower band that has one.
 
 Players refuse a pack whose format or version they do not know, whose `minApp` is newer than the app, or that
-references a path outside the pack (`..`, absolute paths, symbolic links).
+references a path outside the pack (`..`, absolute paths, symbolic links), in `states` too. A pack with `states` or
+with face patches is a *living* pack (section 5, *Behavior*); it stays playable by players without that section.
 
 ## 2. Catalog and download
 
@@ -95,6 +98,26 @@ https://github.com/zoefix/agent-speed/releases/download/characters/catalog.json
    mipmaps and linear filtering.
 
 The rest pose (all defaults) reproduces the illustration exactly. Skinning may run on the CPU or the GPU.
+
+### Variants
+
+A pose's `variants` (characters/README.md) are parts that swap in over its drawn parts through the parameter
+`Var.<id>` (0 to 1, default 0, so a player that never moves it shows the pose as drawn):
+
+- `arm`: an arm, and the held object for the object arm, from a See-Through split of an edit of the pose image. Arm
+  gestures of section 5 play the variant whose id is theirs. An edit named `gesture-<name>` builds the arm variant
+  `<name>` (`wave`, `peace`, `thumbsup`, `chin`, `idea`, `fist`, `hairtuck`, `hip`, `shh`, `cheek`, `present`,
+  `salute`), except `gesture-stretch`, whose id is `reach` (the whole-body `stretch` keeps its name). The free arm
+  (the side that does not hold the object) carries them.
+- `face`: eyes, brows and mouth of a split face edit, with `Mouth.<id>` for its mouth (section 5).
+- `patch`: one part cut from an edit that changes only the face, with `region` `face` (the whole face: an
+  expression), `mouth` or `eyes`. Its part `face@<id>` is fully in by `Var` 0.5 while the parts it replaces fade out
+  to 1. Patches lie right above the face and below the bangs, by region: `face` lowest, then `mouth`, then `eyes`,
+  so a blink or a gaze shows over an expression and a talking mouth over it too. Ids name what they show:
+  `expr-<name>` (region `face`: `smile`, `laugh`, `wink`, `surprised`, `pout`, `shy`, `thinking`, `sleepy`, `yawn`,
+  `focused`, `smug`, `worried`, `excited`), `mouth-<a|i|u|o|closed>` (region `mouth`) and
+  `gaze-<left|right|up|down|closed>` (region `eyes`); sides are image sides. The build leaves out an edit that barely
+  changes its region (a `mouth-closed` on a face whose mouth is closed already).
 
 The build (`characters/rig`) bends the body at the waist: the top and the skirt layer weigh `chest` above it and
 `lower` below it, blending from 0.3 face heights above to 0.1 below, so a cape the skirt layer carries from the
@@ -249,6 +272,7 @@ tanh(angle of its segment relative to the previous one / degrees). See `characte
   leap (under 0.5 s), and an action that holds her up or down (stretch, yawn, tiptoe, curtsy) stays within ±0.2.
 - Second-order springs on most parameters (`springs.py`), so motion overshoots and settles.
 - Band change: the pose swap of section 6.
+- A living pack also follows the agents' phases and the user's cursor (*Behavior* below).
 
 Random numbers come from the generator below; with the same seed and the same level history every player produces
 the same parameters (fixture `director.json`; `director-profiles.json` with motion profiles).
@@ -306,56 +330,126 @@ clamped to its range; springs give them follow-through.
 
 ### Behavior
 
-User's request 2026-11-11: each character should feel alive — she reacts to what the agents are doing and to the
-user's cursor, not only to the speed. A *mood* chooses her pose, face and actions; the speed band still drives the
-groove of section 5.
+User's request 2026-11-11: each character feels alive. She reacts to what the agents of her orb are doing and to the
+user's cursor, not only to the speed: a *mood* picks her pose, her face, where she looks and which actions she plays,
+while the speed band still drives the groove, the beat and the band pose. `characters/reference/motions/behavior.py`
+and its use in `director.py` are normative; fixture `behavior.json`.
 
-**Inputs**, sampled every frame for the orb's tracked sources (METRICS 6.8):
-- `phase`: `generating` when any tracked agent is generating, else `tools` when any is waiting for a tool, else
-  `idle` (METRICS 1); `level` and `band` as before.
-- `waitMs`: while generating with no output yet, the time since the newest request started (the 首字 wait).
-- `idleMs`: while every tracked agent is idle, the time since the last response ended.
-- Events: `newPeak_A`, `responseCompleted`, and `trouble` (a tracked agent's work signals turn to going in circles,
-  or two tool results in a row failed, METRICS 6.10).
-- `hour`: the local hour.
-- `cursor`: the pointer in her canvas units relative to her face center, or none (outside the stage window's screen
-  by more than three of her heights, click-through on, or a platform that cannot read it: Wayland outside the
-  window). `click`: a single click on her figure that is not the first click of a double-click (it waits the
-  system's double-click time) and not the end of a drag.
+**Living packs.** A pack is *living* when its manifest lists `states` (section 1) or its idle pose has a `patch`
+variant (section 3, *Variants*). Only a living pack takes the inputs below; any other pack moves exactly as the rest
+of section 5 says, and a player that does not implement this section plays a living pack as an ordinary one (its
+mood poses unused, every `Var.` at 0, so the drawn face shows).
 
-**Moods**, highest first; the first whose condition holds is the mood:
+**Inputs**, sampled every frame for the orb's set `A` (METRICS 6.8); times in seconds:
 
-| Mood | Condition | Pose | Face | Actions |
+| Input | Value |
+| --- | --- |
+| `phase` | `generating` when an agent of `A` is generating, else `tools` when one waits for a tool, else `idle` (METRICS 1, with the 300 s staleness of 6.7) |
+| `wait` | while `phase` is `generating` and none of the generating agents of `A` has output since its `inFlightStartMs` (no response of it ends at or after that time and its in-flight response has no `firstMs`, METRICS 3.3): the time since the earliest such `inFlightStartMs`; otherwise none. Sources that log a response only when it ends wait until then |
+| `idle` | while `phase` is `idle`: the time since the newest `endMs` of a response of `A` (since the app started when there is none); otherwise 0 |
+| `hour` | the local hour, 0–23 |
+| events | `newPeak` (`newPeak_A`, METRICS 6.8); `trouble`: an agent of `A` starts *Looping* (METRICS 6.10), or a tool result read live fails right after the previous result of that agent failed too |
+| `cursor` | the pointer relative to her face in her heights: `((px − fx) / H, (py − fy) / H)`, screen axes (y down), `(fx, fy)` the center of the shown pose's face box at rest as placed on screen (section 6, plus `PosX`), `H` her height on screen; none while the pointer cannot be read (Wayland outside the window), the orb is click-through, hidden or being dragged, or the pointer is on another display |
+| `over` | the pointer is inside her hit capsule (DESIGN 2a.6) and no drag runs |
+| `click` | a single click on the capsule, as the unit toggle of DESIGN defines it (press and release within 4 pt and 0.5 s, fired once the system double-click time passed without a second click, never the end of a drag); a double-click still opens the dashboard and a right-click the menu |
+
+**Moods.** Two layers. *Event moods* start when their trigger comes and last a fixed time; a trigger during the mood
+restarts it. *State moods* follow the inputs; a new state mood replaces the current one only after it has lasted
+`1.2 s` (the first frame decides at once). The mood is the highest event mood running, else the state mood.
+
+| Mood | Kind | Trigger or condition | Lasts |
+| --- | --- | --- | --- |
+| `poke` | event | `click` | 1.6 s |
+| `cheer` | event | `newPeak` | 3.2 s |
+| `greet` | event | `phase` leaves `idle` while the state mood is `rest` | 2.4 s |
+| `trouble` | event | `trouble` | 2.5 s |
+| `think` | state | `phase` is `generating` and `wait` ≥ 3 s | |
+| `work` | state | `phase` is `generating`; or `tools` for less than 3 s | |
+| `focus` | state | `phase` has been `tools` for 3 s (its own clock, restarted by every phase change) | |
+| `rest` | state | `phase` is `idle`, and `idle` ≥ 600 s, or ≥ 120 s while `hour` is 0–5; and no click woke her (a `click` while the state mood is `rest` keeps her from resting for 60 s) | |
+| `wait` | state | `phase` is `idle` otherwise | |
+
+| Mood | Pose | Face | Looks | Actions |
 | --- | --- | --- | --- | --- |
-| `cheer` | for 3.2 s after `newPeak_A` | `cheer` | `excited` | none |
-| `greet` | for 2.4 s after `phase` leaves `idle` from `rest` | `greet` | `smile` | none |
-| `poke` | for 1.6 s after a `click` | band pose | `surprised` 0.5 s, then `laugh` | none |
-| `trouble` | for 2.5 s after `trouble` | band pose | `worried` | `chin` |
-| `think` | `generating` and `waitMs` ≥ 4 s | `think` from 15 s, else the band pose | `thinking`, gaze `up` | `chin`, `idea`, `ponder` |
-| `work` | `generating` with output | band pose | the band's face (cruise `smile`, boost `smile`, overdrive `focused`, redline `excited`); talking | the band's pool |
-| `focus` | `tools` for ≥ 6 s | `focus` from 20 s, else the band pose | `focused` | `chin`, `nod` |
-| `rest` | `idle` and (`idleMs` ≥ 10 min, or `hour` 0–5 and `idleMs` ≥ 2 min) | `sleepy` | `sleepy`; long blinks | `yawn` every 20–40 s |
-| `wait` | `idle` | `wait` from 8 s, else idle | `smile` until 30 s, then none | the idle pool; `yawn` after 3 min |
+| `poke` | the shown pose | `surprised` for 0.4 s from the click, then `laugh` | user | starts with `doubletake` |
+| `cheer` | `cheer` | `excited` | user | starts 0.55 s in with `hop` (with the `cheer` pose) or `jumpjoy`, else `hop` |
+| `greet` | `greet` | `smile` | user | without the `greet` pose starts 0.55 s in with `wave`, else `bow` |
+| `trouble` | the shown pose | `worried` | user | starts with `chin`, else `shake` |
+| `think` | `think` once `wait` ≥ 10 s | `thinking` | up | `chin`, `tilt`, `ponder`, 2–4 s apart |
+| `work` | band pose | as *Faces* below (band: idle none, cruise and boost `smile`, overdrive `focused`, redline `excited`) | user | the band's pool and gaps (as section 5) |
+| `focus` | `focus` once `tools` has lasted 12 s | `focused` | none | `chin`, `nod`, 3–6 s apart |
+| `rest` | `sleepy` | `sleepy`; dozing blinks | none | starts 0.55 s in with `yawn`; then `yawn` 20–40 s apart |
+| `wait` | `wait` once `idle` ≥ 20 s and no attention (below) | `smile` while `idle` < 6 s, else none | user | the idle pool and gaps without `yawn` and `stretch` until `idle` ≥ 180 s; entering `wait` from `work`, `think` or `focus` starts with `nod` |
 
-- A mood holds at least 1.2 s (events excepted), so a short tool call does not flicker between `work` and `focus`.
-- **Pose**: a mood pose the pack has replaces the band pose through the swap of section 6; leaving the mood swaps
-  back to the band pose. While a mood pose shows, band changes do not swap (they still change the groove).
-- **Face**: one expression at a time (`expr-<name>` of the pose, section 3 *Variants*), swapped during a blink as
-  before. Without the expression the face stays as drawn.
-- **Talking** (`work`, profile `talk`, the pose has `mouth-*`): mouth shapes `a`, `i`, `u`, `o` in random order at
-  `4 + 0.4 · level` syllables per second (at most 9), each held for 60–80 % of a syllable, `closed` between them and
-  for 0.2–0.5 s every 4–9 syllables; shapes cross-fade in 0.04 s. An expression with an open mouth (`laugh`,
-  `excited`, `surprised`, `yawn`) pauses talking.
+- **Actions.** A mood's first actions are tried in order when no action plays and their time has come (the first
+  one the pose can play starts); they are dropped when the mood changes before. They never cut a playing action
+  short. Between actions she picks from the mood's list, shuffled, skipping the last three played, after the mood's
+  gap × the profile's `gap` (a change of mood restarts that wait from the new mood's gap). The `work` and `wait`
+  lists take the band's signature actions of the profile (section 5, *Motion profile*); the other moods' lists only
+  drop what the profile does not allow. While the cursor is `over` her in `work` or `wait` she starts nothing from
+  her list. The arm gestures `thumbsup`, `shh`, `cheek`, `salute` and `reach` join those of section 5 (hold s,
+  flourish, expression, tiptoe: 1.4 bob smile no; 1.6 slow smile no; 1.8 slow shy no; 1.2 bob smile no; 1.6 slow
+  sleepy yes; `gestures.py`). In a living pack `yawn` and `hum` play in every pose; their face and lips show
+  where the pose has the patches.
+- **Pose.** The pose to show is the mood's pose of the table when the pack has that state; for `poke` and `trouble`
+  the pose that shows already; else the band pose (section 6). A band change swaps nothing while a mood pose shows.
+- **Faces.** One expression patch (`expr-<name>` of the shown pose) at a time; the name, in order: `poke` as above;
+  `yawn` while the `yawn` action plays; in moods other than `work` and `wait` the mood's face; else a hover `wink`
+  (below); else the playing action's expression (section 5 names map `smile` → `smile`, `happy` → `excited`,
+  `surprised` → `surprised`, `determined` → `focused`, `sleepy` → `sleepy`, `talk` → none, others as named; `giggle` →
+  `laugh`); else in `work` the band change face (section 5: `excited` for 1.2 s after the band rises, `surprised` when
+  it rises into redline, `smile` for 1.5 s after it falls); else the mood's face; else `smile` while hovered (below).
+  A name the pose has no patch for shows the drawn face.
+- **Gaze.** With no expression showing, the eyes take the patch `gaze-<direction>` of where she looks (below) when
+  the pose has it, else the drawn eyes and their `EyeBall` glance.
+- **Swaps and blinks.** When the wanted expression or gaze differs from the shown one she blinks at once and they
+  swap on the first frame her eyes are shut (`EyeOpen` ≤ 0.02), or, at a frame rate too low to show them shut (15
+  fps), on the first frame after the shut phase passed. A blink closes over 0.07 s, stays shut 0.04 s
+  (0.5–1.2 s while she rests: dozing, drawn from the behavior generator when the blink starts) and opens over
+  0.09 s; the next one comes 2–5 s later, or 0.25 s later when a draw of `random()` is at most 0.15 (a
+  double blink), from the director's generator. While a patch covers the eyes, a blink shows `gaze-closed` while the
+  eyes are under half open, except over `laugh` and `yawn`, whose eyes are shut already. Expression and gaze patches
+  fade in 0.05 s, `gaze-closed` in 0.03 s. A pose swap shows the new pose's face patches at once, without a blink.
+- **Talking.** Her lips move while (she is in `work`, `phase` is `generating`, `wait` is none and the level is at
+  least 1) or the playing action talks (`hum`, `sway`), unless the profile's `talk` is false or the expression is
+  `yawn` or `surprised`, with the mouth patches `mouth-a`, `-i`, `-u`, `-o` the pose has. A syllable lasts `1 /
+  min(9, 4 + 0.4 level)` s (rate taken when it starts): a shape drawn at random among them, never the previous one
+  (unless it is the only one), open for 60–80 % of it, then closed for the rest; after 4–9 syllables (drawn when
+  talking starts and after each pause) she pauses 0.2–0.5 s. Closed shows `mouth-closed` when the pose has it and
+  no expression shows, else nothing over the face. Mouth patches fade in 0.04 s and lie over the expression
+  (section 3, *Variants*).
+- **Looking.** Per mood she looks at the *user*, *up* or *none* (table). *User* with a `cursor` within 2 heights of
+  her face: the head targets `AngleX = 0.7 · clamp(x / 0.8)`, `AngleY = −0.5 · clamp(y / 0.8)` and the eyes
+  `EyeBallX = clamp(x / 0.3)`, `EyeBallY = clamp(y / 0.3)` (clamp to ±1; `AngleY` and `EyeBallY` signs as section 5,
+  up is `+AngleY`, `−EyeBallY`); the event moods without such a cursor look straight ahead (all 0). *Up*: `0.15`,
+  `0.3`, `0.3`, `−0.8`. The look weight rises to 1 over 0.4 s while it applies and falls to 0 over 0.8 s otherwise,
+  keeping the last target. Each parameter becomes `v (1 − k) + target · k` with `k` the weight times the share the
+  playing action leaves it (`1 − w` when the action moves it): the head after breathing and before the idle head
+  drift (so springs and drift still play), the eyes after the glance. The gaze direction: with a cursor whose larger
+  component `max(|x|, |y|)` is at least 0.35 (0.25 once a gaze shows), the side of the larger component (`left`,
+  `right`, `up`, `down`; the shown axis keeps until the other component exceeds it by a factor 1 / 0.75); `up` for
+  *up*; else none. The direction changes at most every 0.5 s.
+- **Hovering** (`over`, in `wait` and `work`): after 0.8 s she smiles (above) and has her *attention* until 8 s after
+  the cursor leaves her (the `wait` pose gives way meanwhile); after 4 s, once per hover, she plays one of `wave`,
+  `peace`, `thumbsup` the pose has (drawn from the behavior generator), else shows `wink` for 1.2 s when the pose has
+  it. Leaving her after at least 1 s of hovering, in the idle or cruise band, she plays `wave`, else `nod`.
 
-**Looking at the user.** While `cursor` is known and within three of her heights of her face:
-- the head turns toward it: `AngleX = 12° · clamp(dx / H, −1, 1)`, `AngleY = 8° · clamp(dy / H, −1, 1)` (`H` her
-  height), through the springs, blended in over 0.4 s and out over 0.8 s when the cursor leaves the range;
-- the eyes take the `gaze-<left|right|up|down>` patch of the larger of `|dx|`, `|dy|` once it passes 0.3 H, else
-  the drawn eyes; a blink shows `gaze-closed` for 0.12 s;
-- hovering her figure for 0.8 s gives `smile`; after 5 s of hovering, one of `wave`, `peace`, `cheek`, `wink`
-  (a gesture the pose has, else the face); leaving her figure after hovering ≥ 1 s gives `wave` once (idle and
-  cruise bands).
-- Moods `cheer`, `greet` and `poke` look at the user too; `think` looks up instead.
+**Random numbers.** The behavior has its own generator, seeded with the director's seed + 1 (mod 2^64): the hover
+gesture, the syllables and pauses, the dozing blinks. Everything else draws from the director's generator as in
+section 5; the director picks a new gap when the mood changes.
+
+**Order of a frame** (`Director.update(dt, inputs)`): the behavior (phase clock and triggers, then the state mood,
+the mood and its first actions, then hovering, then looking), a new gap if the mood changed; then section 5 as before
+(grooves, the action: first actions of the mood, else the list), with the head look after breathing, the eye look
+after the glance, and the face patches in place of section 5's face variants. The mood pose is read after the frame
+(`pose_wanted`) and swapped by section 6.
+
+**Missing assets.** Every rule above falls back on its own: a mood pose the pack lacks shows the band pose; an
+expression, gaze or mouth patch the shown pose lacks leaves that part as drawn (mood poses and band poses without
+patches show their drawn faces); without `gaze-closed` a blink over a patch shows nothing, and swaps still wait for
+the blink; without mouth patches she does not move her lips; a first action the pose cannot play gives way to the
+next of its list, then to nothing. Following the cursor, a face or gaze swap and talking count as acting for the
+frame policy (DESIGN 2a.6).
 
 ### Random numbers
 
@@ -374,11 +468,17 @@ flare, and returns to 0. A request while a swap runs is ignored; the next band c
 again. Each pose keeps its own physics, stepped every frame. The director's free and object arms follow the new
 pose's `objectSide`. Fixture `switch.json`.
 
-Poses are aligned on screen by the feet and scaled to match the idle pose by the middle of three ratios (idle over
-pose): the distance from the face center to the feet, the diagonal of the face box, and `torsoLength` (shoulder to
-hip midpoints from the pose estimator, written by the build). Any one of them can be thrown off by the pose (legs
-tucked in a jump shorten face-to-feet, a turned or tilted face changes its box), and the other two outvote it. A pose
-without `torsoLength` (packs built before it) is scaled by the face-to-feet ratio alone.
+In a living pack the pose to show is the mood's pose when it names one (section 5, *Behavior*), else the band pose,
+and every change of it, whatever the reason, is the same swap; while a mood pose shows a band change swaps nothing.
+On the swap the director takes the new pose's variants: an action playing a variant of the old pose stops on the
+edge-on frame, and the face patches of the new pose show at once. A mood pose is aligned and scaled as a band pose
+(below). A seated character crossfades as for bands.
+
+Poses, band and mood poses alike, are aligned on screen by the feet and scaled to match the idle pose by the middle of
+three ratios (idle over pose): the distance from the face center to the feet, the diagonal of the face box, and
+`torsoLength` (shoulder to hip midpoints from the pose estimator, written by the build). Any one of them can be thrown
+off by the pose (legs tucked in a jump shorten face-to-feet, a turned or tilted face changes its box), and the other two
+outvote it. A pose without `torsoLength` (packs built before it) is scaled by the face-to-feet ratio alone.
 
 ## 7. Which character an orb shows
 
@@ -460,9 +560,11 @@ frame rate (DESIGN 2a.6, Frame policy).
 
 ## 9. Conformance
 
-Every player loads each fixture in `spec/fixtures/characters/` and matches it within 1e-6 (1e-4 for `director.json`
-and `director-profiles.json` values): `rng`, `curves`, `springs`, `orbits` (positions and Kepler solutions), `rig`
-(world transforms, vertices, opacities of a small rig), `physics`, `odometer` (text and per-digit roll state),
-`switch`, `director`, `director-profiles` (three profiles with tail, wing and ear parameters: a flutist with pose
-hand sets, a seated silent character, a cat, each across pose changes).
-`python3 -m characters.tests.make_fixtures --check` keeps them in step with the reference.
+Every player loads each fixture in `spec/fixtures/characters/` and matches it within 1e-6 (1e-4 for `director.json`,
+`director-profiles.json` and `behavior.json` values): `rng`, `curves`, `springs`, `orbits` (positions and Kepler
+solutions), `rig` (world transforms, vertices, opacities of a small rig), `physics`, `odometer` (text and per-digit roll
+state), `switch`, `director`, `director-profiles` (three profiles with tail, wing and ear parameters: a flutist with
+pose hand sets, a seated silent character, a cat, each across pose changes), `behavior` (a scripted session of section
+5, *Behavior*, through every mood: a living pack with every mood pose, face patch and hover gesture, and a sparse one
+with one mood pose, one expression and three mouths; values within 1e-4, moods, poses, faces, gazes, mouth shapes and
+actions exactly). `python3 -m characters.tests.make_fixtures --check` keeps them in step with the reference.
