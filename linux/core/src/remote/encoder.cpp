@@ -21,6 +21,11 @@ std::optional<std::string> line(std::string text) {
 
 std::string zoneMembers(const Zone& zone) { return "\"id\":" + quoted(zone.id) + ",\"tzif\":" + quoted(encode::base64(zone.tzif)); }
 
+bool saltText(std::string_view salt) {
+    return salt.size() == 64 && std::all_of(salt.begin(), salt.end(), [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); });
+}
+
+// REMOTE 11.1; `salt` only when the app has one (QUOTAS 10.1).
 std::string quotaConfig(const HostQuotaConfig& config) {
     std::string keys;
     for (const auto source : config.sources) {
@@ -29,7 +34,8 @@ std::string quotaConfig(const HostQuotaConfig& config) {
     }
     const auto flag = [](bool on) { return on ? "true" : "false"; };
     return std::string("{\"sources\":[") + keys + "],\"network\":" + flag(config.network) + ",\"grokLive\":" + flag(config.grokLive) +
-           ",\"claudeBridge\":" + flag(config.claudeBridge) + "}";
+           ",\"claudeBridge\":" + flag(config.claudeBridge) + (saltText(config.salt) ? ",\"salt\":\"" + config.salt + "\"" : std::string()) +
+           "}";
 }
 
 bool byBytes(const std::string& a, const std::string& b) {
