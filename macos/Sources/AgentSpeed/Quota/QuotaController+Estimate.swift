@@ -37,6 +37,16 @@ extension QuotaController {
         estimateLines[QuotaEstimateLineKey(source: source, host: host, window: window)]
     }
 
+    /// A card source's estimates by window id.
+    func cardEstimates(_ snapshot: QuotaSnapshot, host: String?) -> [String: QuotaEstimateDisplay] {
+        var out: [String: QuotaEstimateDisplay] = [:]
+        for window in snapshot.windows {
+            let key = QuotaEstimateLineKey(source: snapshot.source, host: host, window: window)
+            if let display = estimateLines[key] { out[key.window] = display }
+        }
+        return out
+    }
+
     /// Every shown window of this Mac and of the hosts, from the newest build, at the controller's clock.
     func refreshEstimateLines() {
         guard let build = estimateBuild else { return }

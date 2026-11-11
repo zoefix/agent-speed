@@ -23,14 +23,30 @@ struct SourceQuotaLine: Identifiable, Equatable {
     /// The age, when the line has no room for it.
     var tooltipAge: String?
     var spoken: String
+    /// The percent is extrapolated from this computer's spend (QUOTAS 10.7): a leading `≈`.
+    var estimated = false
+    /// The used amount (QUOTAS 10.8), and ` / ≈$5,742` or ` / ≥$737` after it while an estimate exists.
+    var amount: String?
+    var amountCap: String?
+    /// The estimate's tooltip lines (DESIGN 4 *Tooltip*) and its closing note.
+    var estimateDetails: [String] = []
+    var estimateNote: String?
 
-    var tooltip: String { [updated, tooltipAge, paceText].compactMap { $0 }.joined(separator: "\n") }
+    var tooltip: String {
+        let head = [updated, tooltipAge, paceText].compactMap { $0 }
+        return (head + estimateDetails + [estimateNote].compactMap { $0 }).joined(separator: "\n")
+    }
+
+    /// The lines above the tooltip's hairline.
+    var tooltipHead: [String] { [updated, tooltipAge, paceText].compactMap { $0 } }
 }
 
 /// The columns every quota line of the section shares, so labels, bars, percents and resets line up from row to row.
 struct SourceQuotaColumns: Equatable {
     var label: CGFloat = 0
     var percent: CGFloat = 0
+    /// The used amount and cap (QUOTAS 10.8), left-aligned; 0 while no line has one.
+    var amount: CGFloat = 0
     var reset: CGFloat = 0
 
     static let gap: CGFloat = 8
@@ -42,6 +58,9 @@ struct SourceQuotaColumns: Equatable {
     static var labelFont: NSFont { NSFont.systemFont(ofSize: 11, weight: .medium) }
     static var percentFont: NSFont { NSFont.monospacedDigitSystemFont(ofSize: 11.5, weight: .semibold) }
     static var resetFont: NSFont { NSFont.systemFont(ofSize: 11) }
+    static var amountFont: NSFont { NSFont.monospacedDigitSystemFont(ofSize: 11, weight: .medium) }
+    /// The `≈` of an extrapolated percent, kerned 1 pt to the digits.
+    static let approximateKern: CGFloat = 1
 
     /// The lines' room in a Sources row: the dashboard's column less the dot and the gap before the name.
     static let nameInset: CGFloat = 8 + Spacing.s
@@ -61,8 +80,10 @@ struct SourceQuotaColumns: Equatable {
         var columns = SourceQuotaColumns()
         let all = quota.values.flatMap { $0 }
         columns.label = all.map { width($0.label, labelFont) }.max() ?? 0
-        columns.percent = width("100%", percentFont)
-        let room = width(inset: inset) - columns.label - columns.percent - minimumBar - 3 * gap
+        columns.percent = width("≈100%", percentFont) + approximateKern
+        columns.amount = all.map { width(($0.amount ?? "") + ($0.amountCap ?? ""), amountFont) }.max() ?? 0
+        let room = width(inset: inset) - columns.label - columns.percent - (columns.amount > 0 ? columns.amount + gap : 0)
+            - minimumBar - 3 * gap
         var fitted = quota
         for (source, lines) in quota {
             fitted[source] = lines.map { line in
@@ -93,22 +114,27 @@ struct SourceQuotaColumns: Equatable {
 extension AppModel {
     /// The quota lines of a listed source (DESIGN 4): its windows in QUOTAS 2 order while its switch is on.
     func quotaLines(_ source: SourceKind) -> [SourceQuotaLine] {
-        quota.lines(source).map(quotaLines) ?? []
+        quota.lines(source).map { quotaLines($0) } ?? []
     }
 
     /// A remote host's sources with a quota and their lines (DESIGN 13 *Host quotas*), in source order.
     func hostQuotaLines(_ hostId: String) -> [(source: SourceKind, lines: [SourceQuotaLine])] {
-        quota.hostSnapshots(hostId).map { ($0.source, quotaLines($0)) }
+        quota.hostSnapshots(hostId).map { ($0.source, quotaLines($0, host: hostId)) }
     }
 
-    func quotaLines(_ snapshot: QuotaSnapshot) -> [SourceQuotaLine] {
+    /// Each window with its estimate (QUOTAS 10.7, 10.8) while the account has one: the live percent and bar, the
+    /// amount used with the cap, and the estimate's tooltip lines.
+    func quotaLines(_ snapshot: QuotaSnapshot, host: String? = nil) -> [SourceQuotaLine] {
         let now = quota.clockMs
         let format = l10n.quotaFormat
         let age = format.age(observedMs: snapshot.observedMs, nowMs: now)
         let updated = l10n("quota.updated", Self.quotaTime(snapshot.observedMs, nowMs: now, locale: l10n.locale))
-        return snapshot.shown(nowMs: now, words: format.strings.words).map { window in
-            let pace = QuotaFormat.pace(window.window, nowMs: now)
-            return SourceQuotaLine(
+        return snapshot.shown(nowMs: now, words: format.strings.words).map { shown in
+            var window = shown
+            let estimate = quota.estimateLine(snapshot.source, host: host, window: shown.window)
+            if let estimate { window = window.live(estimate) }
+            let pace = window.passed ? nil : QuotaFormat.pace(window.window, nowMs: now)
+            var line = SourceQuotaLine(
                 label: window.label,
                 percent: window.percent,
                 percentText: window.percentText,
@@ -122,7 +148,21 @@ extension AppModel {
                 paceText: pace.map(format.paceText),
                 spoken: l10n.quotaWindowSpoken(window, nowMs: now)
             )
+            if let estimate { applyEstimate(estimate, to: &line) }
+            return line
         }
+    }
+
+    private func applyEstimate(_ estimate: QuotaEstimateDisplay, to line: inout SourceQuotaLine) {
+        line.estimated = estimate.estimated
+        let text = QuotaEstimateText(l10n: l10n, cost: cost)
+        if estimate.showsAmount {
+            (line.amount, line.amountCap) = text.amountCell(estimate)
+            line.spoken += l10n("list.separator") + text.spokenAmount(estimate, withCap: true)
+        }
+        if estimate.estimated { line.spoken += l10n("list.separator") + l10n("a11y.quota.estimated") }
+        line.estimateDetails = text.details(estimate)
+        line.estimateNote = estimate.hasEstimate ? l10n("quota.estimate.note") : nil
     }
 
     /// The snapshot's time: the time alone today, else the date and time.
