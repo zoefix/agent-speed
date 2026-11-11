@@ -20,6 +20,11 @@ public sealed partial class CharacterDraw
     private const double QuotaBarLong = 5;
     private const double QuotaBarShort = 3;
 
+    /// <summary>The <c>≈</c> of an extrapolated percent (a shared string: drawn every frame), its size and its gap to the digits, in t.</summary>
+    private const string QuotaApprox = QuotaEstimateText.Approx;
+    private const double QuotaApproxSize = 0.8;
+    private const double QuotaApproxGap = 0.08;
+
     private static readonly Rgba AmberDark = Rgba.FromHex("#F5A524");
     private static readonly Rgba AmberLight = Rgba.FromHex("#B86E00");
     private static readonly Rgba RedDark = Rgba.FromHex("#FF99A4");
@@ -74,9 +79,12 @@ public sealed partial class CharacterDraw
         _quota.Sync(sources, frame.Time, frame.Effects.ReduceMotion, atOnce: _wings.Presence[(int)HudCard.Quota] == 0);
     }
 
+    /// <param name="Percent">The <c>≈100%</c> cell.</param>
     private readonly record struct QuotaColumns(double Label, double Percent, double Reset, double Header);
 
     private static double QuotaSmall(in CardMetrics m) => 0.9 * m.T;
+
+    private static double QuotaApproxFont(in CardMetrics m) => QuotaApproxSize * m.T;
 
     private QuotaColumns QuotaColumnsOf(in CardMetrics m, double time)
     {
@@ -102,7 +110,8 @@ public sealed partial class CharacterDraw
             }
         }
 
-        return new QuotaColumns(label, DigitsWidth("100%", OrbFont.TrafficNumber, m.T), reset, header);
+        var percent = Advance(QuotaApprox, OrbFont.Unit, QuotaApproxFont(m)) + QuotaApproxGap * m.T + DigitsWidth("100%", OrbFont.TrafficNumber, m.T);
+        return new QuotaColumns(label, percent, reset, header);
     }
 
     private static double QuotaLineWidth(in QuotaColumns c, in CardMetrics m, QuotaForm form)
@@ -119,6 +128,10 @@ public sealed partial class CharacterDraw
 
     private static double QuotaWidth(in QuotaColumns c, in CardMetrics m, QuotaForm form) =>
         Math.Max(form == QuotaForm.Compact ? 0 : c.Header, QuotaLineWidth(c, m, form)) + 2 * m.PadX;
+
+    /// <summary>The card's width in a form at this frame's size (tests: the room order of DESIGN 2a.6).</summary>
+    internal double QuotaWidthOf(QuotaForm form, double time) =>
+        _ctx is { } ctx ? QuotaWidth(QuotaColumnsOf(new CardMetrics(ctx.Size), time), new CardMetrics(ctx.Size), form) : 0;
 
     /// <summary>
     /// The widest form that fits the room the column gives the card (with 0.04 D to spare before it widens again); the
@@ -259,9 +272,10 @@ public sealed partial class CharacterDraw
 
     /// <summary>
     /// The 額度 card: per source a header (its color dot and name, a host's source then <c>· host</c> in a dimmer ink) then a
-    /// line per window — the label in the card's label column, the bar, the percent right-aligned in a <c>100%</c> cell and
-    /// the short reset — each eased by <see cref="OrbQuotaMotion"/>. The compact form drops the headers and puts the dot
-    /// before the source's first label. A host that does not fit after the name takes its own line.
+    /// line per window — the label in the card's label column, the bar, the percent right-aligned in a <c>≈100%</c> cell (a
+    /// small secondary <c>≈</c> before an extrapolated one) and the short reset — each eased by <see cref="OrbQuotaMotion"/>.
+    /// The compact form drops the headers and puts the dot before the source's first label. A host that does not fit after
+    /// the name takes its own line.
     /// </summary>
     private void DrawQuota(OrbDrawList list, OrbGpuContext ctx, in Pen pen, (double W, double H) box, in CardMetrics m, in CardInk ink, bool right,
         double time)
@@ -278,6 +292,8 @@ public sealed partial class CharacterDraw
         var barLength = (_quotaForm >= QuotaForm.ShortBars ? QuotaBarShort : QuotaBarLong) * m.T;
         var percentRight = barLeft + barLength + 0.5 * m.T + columns.Percent;
         var resetLeft = percentRight + 0.4 * m.T;
+        var approx = QuotaApproxFont(m);
+        var approxRoom = Advance(QuotaApprox, OrbFont.Unit, approx) + QuotaApproxGap * m.T;
         var content = QuotaContent(columns, m);
         var thickness = 0.26 * m.T;
         var any = false;
@@ -354,14 +370,34 @@ public sealed partial class CharacterDraw
 
                 var number = data.Tone == QuotaTone.Critical && !ctx.HighContrast ? critical : ink.Number;
                 var fresh = window.PercentAlpha(time);
-                if (fresh < 1 && window.OldPercent.Length > 0)
+                var percentWidth = DigitsWidth(data.PercentText, OrbFont.TrafficNumber, m.T);
+
+                // What stays put while the other part changes is drawn once, whole; only what changes crossfades.
+                var fading = fresh < 1 && window.OldPercent.Length > 0;
+                var sameDigits = fading && window.OldPercent == data.PercentText;
+                var oldWidth = fading ? DigitsWidth(window.OldPercent, OrbFont.TrafficNumber, m.T) : percentWidth;
+                var sameApprox = fading && window.OldEstimated && data.Estimated && Math.Abs(oldWidth - percentWidth) < 0.01;
+                if (fading)
                 {
-                    var oldWidth = DigitsWidth(window.OldPercent, OrbFont.TrafficNumber, m.T);
-                    PutDigits(list, window.OldPercent, OrbFont.TrafficNumber, m.T, pen, percentRight - oldWidth, baseline, number.MultiplyAlpha(a * (1 - fresh)));
+                    if (!sameDigits)
+                    {
+                        PutDigits(list, window.OldPercent, OrbFont.TrafficNumber, m.T, pen, percentRight - oldWidth, baseline, number.MultiplyAlpha(a * (1 - fresh)));
+                    }
+
+                    if (window.OldEstimated && !sameApprox)
+                    {
+                        Put(list, QuotaApprox, OrbFont.Unit, approx, pen, percentRight - oldWidth - approxRoom, baseline,
+                            ink.Secondary.MultiplyAlpha(a * (1 - fresh)));
+                    }
                 }
 
-                var percentWidth = DigitsWidth(data.PercentText, OrbFont.TrafficNumber, m.T);
-                PutDigits(list, data.PercentText, OrbFont.TrafficNumber, m.T, pen, percentRight - percentWidth, baseline, number.MultiplyAlpha(a * fresh));
+                PutDigits(list, data.PercentText, OrbFont.TrafficNumber, m.T, pen, percentRight - percentWidth, baseline,
+                    number.MultiplyAlpha(a * (sameDigits ? 1 : fresh)));
+                if (data.Estimated)
+                {
+                    Put(list, QuotaApprox, OrbFont.Unit, approx, pen, percentRight - percentWidth - approxRoom, baseline,
+                        ink.Secondary.MultiplyAlpha(a * (sameApprox ? 1 : fresh)));
+                }
 
                 if (_quotaForm == QuotaForm.Full)
                 {

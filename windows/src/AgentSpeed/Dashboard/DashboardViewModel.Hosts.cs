@@ -167,7 +167,7 @@ internal sealed partial class DashboardViewModel
                 Hosts.Insert(i, new HostRow(listed[i].Id));
             }
 
-            var groups = HostQuotaGroups.Of(Quota, listed[i].Id, now, loc);
+            var groups = HostQuotaGroups.Of(Quota, listed[i].Id, now, loc, null, Cost);
             Hosts[i].SyncQuota(groups, SourceDot, dark, HighContrast);
             Fill(Hosts[i], listed[i], snapshot, remote!, metric, loc, unit, HostQuotaGroups.Spoken(groups, loc));
         }

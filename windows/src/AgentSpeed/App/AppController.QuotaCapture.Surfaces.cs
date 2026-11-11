@@ -48,7 +48,7 @@ internal sealed partial class AppController
             {
                 var ids = EnsureCaptureHosts(bridge: ClaudeCliBridgeStatus.Ok);
                 _settings.Update(s => s with { Quota = AllQuotaSwitches(s.Quota) });
-                quota.SetDemo(QuotaDemo.State(now, two: true) with { Hosts = QuotaDemo.Hosts(now, ids) });
+                quota.SetDemo(QuotaDemo.WithHosts(QuotaDemo.State(now, two: true), now, ids));
                 ShowCaptureConnected(ids);
                 return true;
             }
@@ -63,12 +63,11 @@ internal sealed partial class AppController
 
                 _settings.Update(s => s with { Quota = AllQuotaSwitches(s.Quota) });
                 var phase2 = QuotaDemo.Phase2(now);
-                quota.SetDemo(phase2 with
+                quota.SetDemo(QuotaDemo.WithHosts(phase2 with
                 {
                     Snapshots = phase2.Snapshots.Where(p => p.Key == SourceKind.Kimi).ToImmutableDictionary(),
                     Active = [SourceKind.Kimi],
-                    Hosts = QuotaDemo.Hosts(now, ids),
-                });
+                }, now, ids));
                 ShowCaptureConnected([ids[0]]);
                 return true;
             }

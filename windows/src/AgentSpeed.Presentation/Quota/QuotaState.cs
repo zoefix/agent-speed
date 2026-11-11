@@ -166,40 +166,82 @@ public enum QuotaTone
     Critical,
 }
 
-/// <summary>One window line of the dashboard's Sources row or the orb's 額度 card, every text ready.</summary>
+/// <summary>
+/// One window line of the dashboard's Sources row or the orb's 額度 card, every text ready. While the window has an estimate
+/// (QUOTAS 10.7, 10.8) the percent, bar and resets are the live ones and the amount, cap and details follow it.
+/// </summary>
 /// <param name="Bar">The bar's fill, 0…1.</param>
 /// <param name="Pace">The pace mark, 0…1; null while the reset is unknown or passed.</param>
 /// <param name="ResetLong">The dashboard's reset text; empty while unknown or passed.</param>
 /// <param name="ResetShort">The orb card's reset text; empty while unknown or passed.</param>
 /// <param name="Age">` · ` and <c>quota.age</c> while the snapshot is over an hour old; empty otherwise.</param>
+/// <param name="Tooltip"><c>quota.updated</c>, then <c>quota.pace</c> on its own line while known.</param>
+/// <param name="Spoken">The window as the dashboard row speaks it: with its amount and cap and, while extrapolated, the estimated note.</param>
 public sealed record QuotaLine(string Label, int Percent, double Bar, QuotaTone Tone, double? Pace, string ResetLong, string ResetShort, string Age,
     string Tooltip, string Spoken, bool Passed)
 {
     public string PercentText => QuotaText.Percent(Percent);
 
+    /// <summary>The percent is extrapolated (QUOTAS 10.7): a leading <c>≈</c>.</summary>
+    public bool Estimated { get; init; }
+
+    /// <summary>The dashboard's used amount (DESIGN 4 <i>Amount</i>); empty with no spend and no cap.</summary>
+    public string Amount { get; init; } = string.Empty;
+
+    /// <summary><c> / ≈5,742</c> or <c> / ≥737</c> after the amount, in tertiary; empty without a cap.</summary>
+    public string AmountCap { get; init; } = string.Empty;
+
+    /// <summary>The window as the 額度 card speaks it: without amounts, with the estimated note while extrapolated.</summary>
+    public string CardSpoken { get; init; } = string.Empty;
+
+    /// <summary>The estimate's tooltip lines, in secondary text under a hairline (DESIGN 4 <i>Tooltip</i>); empty without one.</summary>
+    public IReadOnlyList<string> Details { get; init; } = [];
+
+    /// <summary><c>quota.estimate.note</c>, last in the tooltip in tertiary; empty without an estimate.</summary>
+    public string Note { get; init; } = string.Empty;
+
+    public bool HasEstimate => Note.Length > 0;
+
     public static QuotaTone ToneOf(int percent) => percent >= 95 ? QuotaTone.Critical : percent >= 80 ? QuotaTone.Warning : QuotaTone.Normal;
 }
 
-/// <summary>Builds the window lines of a snapshot at a moment (QUOTAS 2, 7; DESIGN 4).</summary>
+/// <summary>Builds the window lines of a snapshot at a moment (QUOTAS 2, 7, 10.7, 10.8; DESIGN 4).</summary>
 public static class QuotaLines
 {
-    public static IReadOnlyList<QuotaLine> Of(QuotaSnapshot snapshot, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
+    /// <param name="estimates">Where the windows' estimates come from; without them every line shows the vendor's values alone.</param>
+    public static IReadOnlyList<QuotaLine> Of(QuotaSnapshot snapshot, long nowMs, Localizer loc, TimeZoneInfo? zone = null,
+        QuotaEstimateSource? estimates = null)
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(loc);
         var age = QuotaText.Age(snapshot.ObservedMs, nowMs, loc) is { } text ? " · " + text : string.Empty;
         var updated = QuotaText.Updated(snapshot.ObservedMs, nowMs, loc, zone);
         var shown = QuotaWindows.Shown(snapshot, nowMs, QuotaText.Labels(loc));
+        var cost = estimates?.Cost;
+        var note = loc["quota.estimate.note"];
         var lines = new QuotaLine[shown.Count];
         for (var i = 0; i < lines.Length; i++)
         {
-            var w = shown[i];
-            var pace = w.Passed ? null : QuotaWindows.Pace(w.Window, nowMs);
+            var vendor = shown[i];
+            var estimate = estimates?.Of(snapshot.Source, vendor, nowMs);
+            var w = estimate is null ? vendor : QuotaEstimateText.Live(vendor, estimate);
+            var pace = w.ResetsAtMs is not { } next ? null
+                : QuotaWindows.Pace(next == w.Window.ResetsAtMs ? w.Window : w.Window with { ResetsAtMs = next }, nowMs);
             var tooltip = pace is { } p ? updated + "\n" + QuotaText.Pace(p, loc) : updated;
+            var spoken = QuotaText.Spoken(w, nowMs, loc, zone);
+            var (amount, cap) = QuotaEstimateText.Amount(estimate, cost, loc);
             lines[i] = new QuotaLine(w.Label, w.Percent, w.Bar / 100, QuotaLine.ToneOf(w.Percent), pace,
                 w.ResetsAtMs is { } reset ? QuotaText.ResetLong(reset, nowMs, loc, zone) : string.Empty,
                 w.ResetsAtMs is { } r ? QuotaText.ResetShort(r, nowMs, loc, zone) : string.Empty,
-                age, tooltip, QuotaText.Spoken(w, nowMs, loc, zone), w.Passed);
+                age, tooltip, spoken + QuotaEstimateText.SpokenTail(estimate, cost, loc, withAmount: true), vendor.Passed)
+            {
+                Estimated = estimate?.Estimated == true,
+                Amount = amount,
+                AmountCap = cap,
+                CardSpoken = spoken + QuotaEstimateText.SpokenTail(estimate, cost, loc, withAmount: false),
+                Details = estimate is null ? [] : QuotaEstimateText.Details(estimate, cost, loc),
+                Note = estimate is null ? string.Empty : note,
+            };
         }
 
         return lines;

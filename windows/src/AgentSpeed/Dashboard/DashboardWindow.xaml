@@ -141,20 +141,37 @@
         </Style>
 
         <!-- One quota line (DESIGN 4, Quota lines), shared by Sources and Hosts: the label, the bar with its pace mark, the
-             percent, the long reset and the age, in the columns its section passes down (QuotaLinePanel.Columns, set from code).
-             A line without room for its age keeps the reset and moves the age to its tooltip. -->
+             percent (a secondary ≈ before an extrapolated one), the amount used with the estimated cap, the short reset and the
+             age, in the columns its section passes down (QuotaLinePanel.Columns, set from code). The tooltip starts with the long
+             reset; a line without room for its age keeps the reset and moves the age to its tooltip. -->
         <DataTemplate x:Key="QuotaLine" DataType="{x:Type quota:QuotaLineRow}">
-            <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent" ToolTipService.InitialShowDelay="500">
-                <quota:QuotaLinePanel.Style>
-                    <Style TargetType="quota:QuotaLinePanel">
-                        <Setter Property="ToolTip" Value="{Binding Tooltip}" />
-                        <Style.Triggers>
-                            <Trigger Property="AgeShown" Value="False">
-                                <Setter Property="ToolTip" Value="{Binding TooltipWithAge}" />
-                            </Trigger>
-                        </Style.Triggers>
-                    </Style>
-                </quota:QuotaLinePanel.Style>
+            <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent" ToolTipService.InitialShowDelay="500"
+                                  ToolTipService.ShowDuration="20000">
+                <quota:QuotaLinePanel.ToolTip>
+                    <ToolTip>
+                        <StackPanel MaxWidth="300">
+                            <TextBlock Text="{Binding TipReset}" Visibility="{Binding TipReset, Converter={StaticResource HasText}}" />
+                            <TextBlock Text="{Binding TipUpdated}" />
+                            <TextBlock Text="{Binding TipAge}"
+                                       Visibility="{Binding PlacementTarget.AgeShown, RelativeSource={RelativeSource AncestorType=ToolTip}, Converter={StaticResource Hidden}, FallbackValue=Collapsed}" />
+                            <TextBlock Text="{Binding TipPace}" Visibility="{Binding TipPace, Converter={StaticResource HasText}}" />
+                            <!-- The estimate (QUOTAS 10.8): a hairline, its details in secondary, the note last in tertiary. -->
+                            <StackPanel Visibility="{Binding HasEstimate, Converter={StaticResource Visible}}">
+                                <Rectangle Style="{StaticResource Hairline}" Margin="0,7,0,6" />
+                                <ItemsControl ItemsSource="{Binding Details}" Focusable="False" IsTabStop="False">
+                                    <ItemsControl.ItemTemplate>
+                                        <DataTemplate>
+                                            <TextBlock Text="{Binding}" Margin="0,1,0,1" TextWrapping="Wrap" Typography.NumeralAlignment="Tabular"
+                                                       Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                        </DataTemplate>
+                                    </ItemsControl.ItemTemplate>
+                                </ItemsControl>
+                                <TextBlock Text="{Binding Note}" Margin="0,6,0,0" FontSize="11" TextWrapping="Wrap"
+                                           Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                            </StackPanel>
+                        </StackPanel>
+                    </ToolTip>
+                </quota:QuotaLinePanel.ToolTip>
                 <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
                 <quota:QuotaBar Value="{Binding Bar}" Pace="{Binding Pace}" Passed="{Binding Passed}" Fill="{Binding Fill}"
                                 Track="{Binding DataContext.QuotaTrack, RelativeSource={RelativeSource AncestorType=Window}}"
@@ -163,8 +180,9 @@
                                 TickOpacity="{Binding DataContext.QuotaTickOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
                                 ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
                 <Grid>
-                    <TextBlock Text="100%" FontSize="11.5" FontWeight="SemiBold" Visibility="Hidden" Typography.NumeralAlignment="Tabular" />
-                    <quota:QuotaFadeText Text="{Binding PercentText}" HorizontalAlignment="Right"
+                    <TextBlock FontSize="11.5" FontWeight="SemiBold" Visibility="Hidden" Typography.NumeralAlignment="Tabular"><Run Text="≈" /><InlineUIContainer><FrameworkElement Width="1" /></InlineUIContainer><Run Text="100%" /></TextBlock>
+                    <quota:QuotaFadeText Text="{Binding PercentText}" Lead="{Binding PercentLead}" LeadGap="1" HorizontalAlignment="Right"
+                                         LeadBrush="{DynamicResource TextFillColorSecondaryBrush}"
                                          TextElement.FontSize="11.5" TextElement.FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"
                                          ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
                         <quota:QuotaFadeText.Style>
@@ -179,6 +197,10 @@
                         </quota:QuotaFadeText.Style>
                     </quota:QuotaFadeText>
                 </Grid>
+                <quota:QuotaFadeText Text="{Binding AmountText}" Tail="{Binding AmountCap}" TailBrush="{DynamicResource TextFillColorTertiaryBrush}"
+                                     TextElement.FontSize="11" TextElement.FontWeight="Medium" Typography.NumeralAlignment="Tabular"
+                                     TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
+                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
                 <quota:QuotaFadeText Text="{Binding ResetText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
                                      ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
                 <quota:QuotaFadeText Text="{Binding AgeText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorTertiaryBrush}"
