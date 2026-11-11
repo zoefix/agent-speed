@@ -34,7 +34,7 @@ internal sealed partial class AppController
             case "quota-demo" or "quota-demo-two":
                 var demo = QuotaDemo.State(now, two: op == "quota-demo-two");
                 _settings.Update(s => s with { Quota = s.Quota with { Codex = true, ClaudeDesktop = true, ClaudeCli = op == "quota-demo" } });
-                quota.SetDemo(demo);
+                quota.SetDemo(demo, QuotaDemo.Entries(demo, now));
                 break;
             case "quota-demo-off":
                 quota.SetDemo(null);

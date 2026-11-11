@@ -64,6 +64,36 @@ internal static class QuotaDemo
         new(now, live, live - window.UsedPercent >= 0.5, window.ResetsAtMs, false, usedCents * 10_000, 0, capCents * 10_000, lowCents * 10_000,
             highCents * 10_000, confidence, coverage, capCents is { } cap ? (long)(cap * 10_000 * live / 100) : null, windows, plan, tier);
 
+    /// <summary>
+    /// The report entries of a demo state's estimates (REPORTING-EXTENSIONS 11.2) as the report preview shows them: this
+    /// computer's windows in source order, the measured spend before the vendor's value a little under the whole, and a
+    /// demo model mix.
+    /// </summary>
+    public static IReadOnlyList<QuotaReportEntry> Entries(QuotaState state, long now)
+    {
+        var entries = new List<QuotaReportEntry>();
+        foreach (var snapshot in state.Snapshots.Values.OrderBy(s => s.Source))
+        {
+            foreach (var window in snapshot.Windows)
+            {
+                if (state.EstimateOf(snapshot.Source, window) is not { } e)
+                {
+                    continue;
+                }
+
+                var estimate = new QuotaEntryEstimate(e.CapMicroUsd, e.LowMicroUsd, e.HighMicroUsd, e.Confidence, e.Coverage, e.AccountUsedMicroUsd, e.Windows);
+                QuotaMixShare[] mix = snapshot.Source == SourceKind.Codex
+                    ? [new("gpt-5.5", 1.0)]
+                    : [new("claude-opus-5-5", 0.812), new("claude-fable-5-2", 0.171), new("claude-haiku-5-5", 0.017)];
+                entries.Add(new QuotaReportEntry(snapshot.Source, [snapshot.Source], e.Plan, e.Tier, window.Kind, window.Name, window.Minutes ?? 0,
+                    window.UsedPercent, now - snapshot.ObservedMs, window.ResetsAtMs - now, Math.Round(e.LivePercent, 1), e.Estimated, e.UsedMicroUsd,
+                    e.UsedMicroUsd * 97 / 100, 0, estimate, mix, 8) { AtMs = now });
+            }
+        }
+
+        return entries;
+    }
+
     private const long Minute = 60_000;
     private const long Hour = 60 * Minute;
     private const long Day = 24 * Hour;

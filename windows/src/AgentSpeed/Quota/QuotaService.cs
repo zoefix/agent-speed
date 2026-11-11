@@ -96,6 +96,7 @@ internal sealed class QuotaService : IDisposable
     private volatile bool _helperEnsured;
     private volatile ClaudeCliBridgeStatus _cliStatus = ClaudeCliBridgeStatus.Off;
     private volatile QuotaState? _demo;
+    private volatile IReadOnlyList<QuotaReportEntry> _demoEntries = [];
     private volatile bool _disposed;
     private readonly QuotaEstimator? _estimator;
     private ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate> _estimates = ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate>.Empty;
@@ -300,9 +301,13 @@ internal sealed class QuotaService : IDisposable
         Poke();
     }
 
-    /// <summary>Fixed quotas for the developer capture (<c>op quota-demo</c>); null returns to the real readers.</summary>
-    public void SetDemo(QuotaState? demo)
+    /// <summary>
+    /// Fixed quotas for the developer capture (<c>op quota-demo</c>), with the report entries the preview shows meanwhile;
+    /// null returns to the real readers.
+    /// </summary>
+    public void SetDemo(QuotaState? demo, IReadOnlyList<QuotaReportEntry>? entries = null)
     {
+        _demoEntries = demo is null ? [] : entries ?? [];
         _demo = demo;
         if (demo is null)
         {
@@ -563,6 +568,11 @@ internal sealed class QuotaService : IDisposable
     /// </summary>
     public IReadOnlyList<QuotaReportEntry> ReportEntries(long nowMs)
     {
+        if (_demo is not null)
+        {
+            return _demoEntries;
+        }
+
         if (_estimator is not { } estimator)
         {
             return [];
