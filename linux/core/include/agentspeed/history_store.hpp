@@ -65,6 +65,8 @@ struct StoredFile {
     Contributions days;
     // METRICS 6.11: the performance records of the file's agents per day, source and raw model, current version only.
     std::vector<perf::DayRecord> perf;
+    // QUOTAS 10.3: the file's recent spend for the quota estimate (`estimate_spend`).
+    EstimateFile estimate;
     bool hasUnpriced() const;
 };
 
@@ -132,5 +134,8 @@ private:
 // Compact JSON of one contribution and back (the `data` column).
 std::string encode(const DayAggregate& day);
 std::optional<DayAggregate> decode(std::string_view text);
+// Compact JSON of a file's estimate spend and back (`estimate_spend.data`); the version is kept apart.
+std::string encodeEstimate(const EstimateFile& estimate);
+std::optional<EstimateFile> decodeEstimate(std::string_view text);
 
 }  // namespace agentspeed::history

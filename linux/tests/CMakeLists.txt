@@ -24,6 +24,7 @@ add_executable(agentspeed_tests
     execution_modes_test.cpp
     harness_fixture_test.cpp
     hermes_test.cpp
+    history_estimate_test.cpp
     history_test.cpp
     host_subset_test.cpp
     json_test.cpp

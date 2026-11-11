@@ -3,6 +3,7 @@
 #include <functional>
 #include <map>
 #include <memory>
+#include <optional>
 #include <set>
 #include <string>
 #include <vector>
@@ -56,6 +57,9 @@ public:
     std::vector<perf::DayRecord> perfRecords(const std::set<SourceKind>* sources = nullptr) const;
     // METRICS 9.10 Reading: the unpriced facts of every stored contribution, merged per (day, source).
     std::vector<unpriced::Part> unpricedParts(const std::set<SourceKind>* sources = nullptr) const;
+    // QUOTAS 10.3: every stored file's estimate responses that ended and lines written at or after `sinceMs`, by path
+    // then as stored.
+    EstimateFile estimateSpend(std::int64_t sinceMs) const;
     void clear();
     pricing::PriceBook& prices() { return *prices_; }
 
@@ -89,7 +93,12 @@ private:
     void analyzeSessions(std::vector<DevinSession>& sessions, const char* family, SourceKind source, KeyLedger& ledger,
                          const DayLabeler& labeler, Report& report);
     void advance(Report& report);
-    bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const;
+    // The days and the estimate responses of an entry's responses.
+    void contribute(StoredFile& entry, const std::vector<ParsedResponse>& responses, SourceKind source, const DayLabeler& labeler);
+    // `writeNs`: when the file was last written, nullopt when unknown (database sessions).
+    bool unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force,
+                   std::optional<std::int64_t> writeNs) const;
+    bool missesEstimate(const StoredFile& previous, std::optional<std::int64_t> writeNs) const;
     const StoredFile* previousOf(const std::string& path) const;
     StoredFile& keep(StoredFile file, std::vector<std::uint64_t> owned);
     std::map<std::string, droid::SidecarSignature> droidUnreadableParents_;
@@ -103,6 +112,8 @@ private:
     std::map<std::string, double> peaks_;
     std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>> pending_;
     bool repricing_ = false;
+    // QUOTAS 10.3: the start of the estimate's 8 days, from the run's wall-clock start.
+    std::int64_t estimateSinceMs_ = 0;
     std::function<void(int, int)> progress_;
 };
 

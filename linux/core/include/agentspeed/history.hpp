@@ -103,6 +103,51 @@ using Contributions = std::map<DayKey, DayAggregate>;
 Contributions contributionsOf(const std::vector<ParsedResponse>& responses, SourceKind source, const DayLabeler& labeler,
                               pricing::PriceBook& prices);
 
+// QUOTAS 10.3: one final response of an analysed file that ended within 8 days of the analysis, as the quota
+// estimate's ledger takes it.
+struct EstimateResponse {
+    SourceKind source = SourceKind::Codex;
+    // The parser's agent id (one per Codex rollout).
+    std::string agentId;
+    // The price-table id or, when that is `unknown` or `local`, the logged model lowercased ("" without one).
+    std::string model;
+    std::optional<std::string> provider;
+    std::optional<std::int64_t> startMs;
+    std::int64_t endMs = 0;
+    // Priced as contributionsOf prices it; nullopt when unpriced.
+    std::optional<std::int64_t> costMicroUsd;
+    // Input + output.
+    std::int64_t tokens = 0;
+    std::int64_t requests = 1;
+    // A Claude model id in a Bedrock or Vertex form (METRICS 9.2 cloud step).
+    bool cloudRoute = false;
+    bool operator==(const EstimateResponse&) const = default;
+};
+// A Codex `token_count` line whose `payload.rate_limits` is an object (QUOTAS 3), within 8 days.
+struct EstimateLine {
+    std::string agentId;
+    std::int64_t ts = 0;
+    // The rate_limits object as compact JSON text.
+    std::string rateLimits;
+    bool operator==(const EstimateLine&) const = default;
+};
+struct EstimateFile {
+    static constexpr int kVersion = 1;
+    // 0: never analysed for the estimate.
+    int version = 0;
+    std::vector<EstimateResponse> responses;
+    std::vector<EstimateLine> lines;
+    bool operator==(const EstimateFile&) const = default;
+};
+inline constexpr std::int64_t kEstimateKeepMs = 8LL * 24 * 3'600'000;
+
+// The sources with a quota (QUOTAS 3–5, 9); only their spend is kept for the estimate.
+bool isQuotaSource(SourceKind source);
+// QUOTAS 10.3: the final responses that ended at or after `sinceMs`, of a quota source only, each priced as
+// contributionsOf prices it.
+std::vector<EstimateResponse> estimateResponsesOf(const std::vector<ParsedResponse>& responses, SourceKind source,
+                                                  const DayLabeler& labeler, pricing::PriceBook& prices, std::int64_t sinceMs);
+
 // One day and source of the history, as the UI and the fixtures read it.
 struct DailyUsage {
     DayKey key;

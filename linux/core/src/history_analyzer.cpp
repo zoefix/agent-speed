@@ -5,14 +5,17 @@
 #include <cmath>
 #include <fstream>
 
+#include "agentspeed/codex_parser.hpp"
 #include "agentspeed/discovery.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/harness.hpp"
 #include "agentspeed/hermes.hpp"
+#include "agentspeed/json.hpp"
 #include "agentspeed/openclaw.hpp"
 #include "agentspeed/opencode.hpp"
 #include "agentspeed/price_book.hpp"
+#include "agentspeed/pricing.hpp"
 #include "agentspeed/sqlite.hpp"
 #include "agentspeed/tailer.hpp"
 #include "agentspeed/actions.hpp"
@@ -160,6 +163,32 @@ private:
     std::vector<Done> done_;
 };
 
+// The text of a JSON value without the whitespace between its tokens.
+std::string compactJson(std::string_view raw) {
+    std::string out;
+    out.reserve(raw.size());
+    bool inString = false, escaped = false;
+    for (const char c : raw) {
+        if (inString) {
+            if (escaped) {
+                escaped = false;
+            } else if (c == '\\') {
+                escaped = true;
+            } else if (c == '"') {
+                inString = false;
+            }
+        } else if (c == ' ' || c == '\t' || c == '\n' || c == '\r') {
+            continue;
+        } else if (c == '"') {
+            inString = true;
+        }
+        out += c;
+    }
+    return out;
+}
+
+std::string estimateTag() { return "|e" + std::to_string(EstimateFile::kVersion); }
+
 std::int64_t droidIdentity(const discovery::DiscoveredFile& file) {
     const auto parent = droid::parentOfTranscript(file.path);
     const auto text = std::to_string(file.length) + ":" + std::to_string(file.writeNs) + "|" + droid::stampText(droid::sidecarOf(file.path)) +
@@ -228,9 +257,38 @@ const StoredFile* Analyzer::previousOf(const std::string& path) const {
     return it == entries_.end() ? nullptr : &it->second;
 }
 
-bool Analyzer::unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force) const {
+bool Analyzer::unchanged(const StoredFile* previous, const std::string& family, std::int64_t size, std::int64_t modified, bool force,
+                         std::optional<std::int64_t> writeNs) const {
     return previous && !force && previous->version == kVersion && previous->family == family && previous->size == size &&
-           previous->modified == modified && !(repricing_ && previous->hasUnpriced());
+           previous->modified == modified && !(repricing_ && previous->hasUnpriced()) && !missesEstimate(*previous, writeNs);
+}
+
+// QUOTAS 10.3: a file stored without its estimate spend is analysed once more when it may hold spend of the last 8 days.
+bool Analyzer::missesEstimate(const StoredFile& previous, std::optional<std::int64_t> writeNs) const {
+    if (previous.estimate.version == EstimateFile::kVersion) return false;
+    if (writeNs && *writeNs / 1'000'000 >= estimateSinceMs_) return true;
+    // A stored day that may hold such a response, whatever zone labelled it.
+    const auto firstDay = pricing::UtcDay(estimateSinceMs_ - 86'400'000).label();
+    return std::any_of(previous.days.begin(), previous.days.end(), [&](const auto& day) { return day.first.day >= firstDay; });
+}
+
+void Analyzer::contribute(StoredFile& entry, const std::vector<ParsedResponse>& responses, SourceKind source, const DayLabeler& labeler) {
+    entry.days = contributionsOf(responses, source, labeler, *prices_);
+    entry.estimate.responses = estimateResponsesOf(responses, source, labeler, *prices_, estimateSinceMs_);
+}
+
+EstimateFile Analyzer::estimateSpend(std::int64_t sinceMs) const {
+    EstimateFile out;
+    out.version = EstimateFile::kVersion;
+    for (const auto& [path, entry] : entries_) {
+        for (const auto& r : entry.estimate.responses) {
+            if (r.endMs >= sinceMs) out.responses.push_back(r);
+        }
+        for (const auto& l : entry.estimate.lines) {
+            if (l.ts >= sinceMs) out.lines.push_back(l);
+        }
+    }
+    return out;
 }
 
 std::vector<perf::DayRecord> Analyzer::perfRecords(const std::set<SourceKind>* sources) const {
@@ -272,6 +330,7 @@ void Analyzer::advance(Report& report) {
 
 StoredFile& Analyzer::keep(StoredFile file, std::vector<std::uint64_t> owned) {
     if (const auto* previous = previousOf(file.path)) file.id = previous->id;
+    file.estimate.version = EstimateFile::kVersion;
     auto& stored = entries_[file.path] = std::move(file);
     pending_.emplace_back(&stored, std::move(owned));
     return stored;
@@ -287,6 +346,8 @@ void Analyzer::flush(std::vector<std::pair<StoredFile*, std::vector<std::uint64_
 Report Analyzer::run(const SourceLocations& locations, const std::set<SourceKind>& enabled, std::shared_ptr<const TimeZone> zone,
                      const std::string& zoneId, const std::function<bool()>& cancelled, const std::function<void(int, int)>& progress) {
     Report report;
+    const auto now = std::chrono::duration_cast<std::chrono::milliseconds>(std::chrono::system_clock::now().time_since_epoch()).count();
+    estimateSinceMs_ = static_cast<std::int64_t>(now) - kEstimateKeepMs;
     const bool zoneChanged = !entries_.empty() && store_.meta("timeZone") != zoneId;
     const auto priceVersion = std::to_string(prices_->currentVersion());
     repricing_ = !entries_.empty() && store_.meta("priceTableVersion") != priceVersion;
@@ -355,7 +416,7 @@ void Analyzer::planFiles(const SourceLocations& locations, const std::set<Source
                 ++report.filesDiscovered;
                 const auto modified = family == RootFamily::Droid ? droidIdentity(file) : file.writeNs;
                 const auto* previous = previousOf(file.path);
-                if (unchanged(previous, familyName(family), file.length, modified, force)) continue;
+                if (unchanged(previous, familyName(family), file.length, modified, force, file.writeNs)) continue;
                 if (previous) work.replaced.insert(previous->id);
                 work.files.push_back({file.path, folder, family, file.length, file.writeNs, modified, previous});
             }
@@ -380,6 +441,13 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         work::ActionReader actions(file.path, 0);
         actions.setResultHandler([&](const work::Action& action) { sink.action(action); });
         if (work::hasActions(parser->source())) parser->setLineObserver(&actions);
+        // QUOTAS 10.3: the rate limits of the last 8 days.
+        std::vector<EstimateLine> lines;
+        if (auto* codex = dynamic_cast<CodexParser*>(parser.get())) {
+            codex->setRateLimitObserver([&lines, codex, since = estimateSinceMs_](const json::Value& limits, std::int64_t ts) {
+                if (ts >= since) lines.push_back({codex->agentId(), ts, compactJson(limits.raw())});
+            });
+        }
         auto* droidParser = dynamic_cast<droid::Parser*>(parser.get());
         TailResult result;
         try {
@@ -416,7 +484,8 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.size = file.family == RootFamily::Droid ? file.size : result.length;
         entry.modified = file.family == RootFamily::Droid ? file.identity : result.writeNs;
         entry.version = kVersion;
-        entry.days = contributionsOf(sink.items(), parser->source(), labeler, *prices_);
+        contribute(entry, sink.items(), parser->source(), labeler);
+        entry.estimate.lines = std::move(lines);
         entry.perf = sink.perfRecords(parser->agentId(), parser->source(), labeler);
         keep(std::move(entry), ledger.finish(parser->agentId()));
         advance(report);
@@ -443,7 +512,7 @@ void Analyzer::planOpenCode(const SourceLocations& locations, const std::set<Sou
         item.metaKey = std::string(kOpenCodeFamily) + ":" + path;
         item.identity = path + "|" + std::to_string(database->length) + ":" + std::to_string(database->writeNs) + "|" +
                         (wal ? std::to_string(wal->length) + ":" + std::to_string(wal->writeNs) : std::string("-")) + "|v" +
-                        std::to_string(kVersion) + "|" + zoneId;
+                        std::to_string(kVersion) + estimateTag() + "|" + zoneId;
         unchangedAt.push_back(!force && !reprices && store_.meta(item.metaKey) == item.identity);
         listed.push_back(std::move(item));
     }
@@ -511,7 +580,7 @@ void Analyzer::analyzeOpenCode(Work& work, KeyLedger& ledger, const DayLabeler& 
                 entry.size = rows;
                 entry.modified = std::max(info.updatedMs, lastUpdated);
                 entry.version = kVersion;
-                entry.days = contributionsOf(responses, SourceKind::OpenCode, labeler, *prices_);
+                contribute(entry, responses, SourceKind::OpenCode, labeler);
                 entry.perf = emittedRecords(responses, SourceKind::OpenCode, labeler);
                 keep(std::move(entry), ledger.finish(agent));
                 ++report.sessionsAnalyzed;
@@ -539,12 +608,12 @@ void Analyzer::planZCode(const SourceLocations& locations, const std::set<Source
         for (const auto& [p, e] : entries_) {
             if (e.family != kZCodeFamily || p.rfind(prefix, 0) != 0) continue;
             stored.insert(p.substr(prefix.size()));
-            storedUnchanged &= unchanged(&e, kZCodeFamily, stamp->length(), stamp->lastWriteNs(), false);
+            storedUnchanged &= unchanged(&e, kZCodeFamily, stamp->length(), stamp->lastWriteNs(), false, stamp->lastWriteNs());
             unpriced |= e.hasUnpriced();
         }
         Work::ZCodeWork item{path, stamp->length(), stamp->lastWriteNs(), seen, std::string(kZCodeFamily) + ":" + path,
                              path + "|" + std::to_string(stamp->length()) + ":" + std::to_string(stamp->lastWriteNs()) + "|v" +
-                                 std::to_string(kVersion) + "|" + zoneId};
+                                 std::to_string(kVersion) + estimateTag() + "|" + zoneId};
         // A database whose every session another database provides has no entries: its identity says it was read.
         const bool same = store_.meta(item.metaKey) == item.identity || (!stored.empty() && storedUnchanged);
         if (!force && !(repricing_ && unpriced) && same) {
@@ -602,7 +671,7 @@ void Analyzer::analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& lab
             entry.size = database.size;
             entry.modified = database.modified;
             entry.version = kVersion;
-            entry.days = contributionsOf(responses, SourceKind::ZCode, labeler, *prices_);
+            contribute(entry, responses, SourceKind::ZCode, labeler);
             entry.perf = emittedRecords(responses, SourceKind::ZCode, labeler);
             keep(std::move(entry), ledger.finish(id));
             advance(report);
@@ -614,7 +683,7 @@ void Analyzer::analyzeZCode(Work& work, KeyLedger& ledger, const DayLabeler& lab
 void Analyzer::planDevin(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
     if (!enabled.contains(SourceKind::Devin)) return;
     work.devin = devinPlanner_.plan(locations.devinRoots, [&](const std::string& key, std::int64_t size, std::int64_t modified) {
-        return unchanged(previousOf(key), kDevinFamily, size, modified, force);
+        return unchanged(previousOf(key), kDevinFamily, size, modified, force, std::nullopt);
     });
     report.filesDiscovered += devinPlanner_.discovered();
     report.filesUnreadable += devinPlanner_.unreadable();
@@ -631,7 +700,7 @@ void Analyzer::analyzeDevin(Work& work, KeyLedger& ledger, const DayLabeler& lab
 void Analyzer::planQoder(const SourceLocations& locations, const std::set<SourceKind>& enabled, bool force, Work& work, Report& report) {
     if (!enabled.contains(SourceKind::Qoder)) return;
     work.qoder = qoderPlanner_.plan(locations.qoderRoots, [&](const std::string& key, std::int64_t size, std::int64_t modified) {
-        return unchanged(previousOf(key), kQoderFamily, size, modified, force);
+        return unchanged(previousOf(key), kQoderFamily, size, modified, force, std::nullopt);
     });
     report.filesDiscovered += qoderPlanner_.discovered();
     report.filesUnreadable += qoderPlanner_.unreadable();
@@ -659,7 +728,7 @@ void Analyzer::analyzeSessions(std::vector<DevinSession>& sessions, const char* 
         entry.size = session.size;
         entry.modified = session.modified;
         entry.version = kVersion;
-        entry.days = contributionsOf(responses, source, labeler, *prices_);
+        contribute(entry, responses, source, labeler);
         entry.perf = emittedRecords(responses, source, labeler);
         keep(std::move(entry), ledger.finish(session.database));
         ++report.sessionsAnalyzed;
@@ -678,7 +747,8 @@ void Analyzer::planOpenClaw(const SourceLocations& locations, const std::set<Sou
         bool windowsUnpriced = false;
         for (const auto& [p, e] : entries_) windowsUnpriced |= e.family == kOpenClawFamily && p.rfind(prefix, 0) == 0 && e.hasUnpriced();
         const auto* previous = previousOf(path);
-        if (unchanged(previous, kOpenClawDatabaseFamily, stamp->length(), stamp->lastWriteNs(), force) && !(repricing_ && windowsUnpriced)) {
+        if (unchanged(previous, kOpenClawDatabaseFamily, stamp->length(), stamp->lastWriteNs(), force, stamp->lastWriteNs()) &&
+            !(repricing_ && windowsUnpriced)) {
             continue;
         }
         if (previous) work.replaced.insert(previous->id);
@@ -722,8 +792,7 @@ void Analyzer::analyzeOpenClaw(Work& work, KeyLedger& ledger, const DayLabeler& 
                 entry.modified = database.stamp.lastWriteNs();
                 entry.version = kVersion;
                 const auto sink = sinks.find(parser.get());
-                entry.days = contributionsOf(sink == sinks.end() ? std::vector<ParsedResponse>{} : sink->second->items(), SourceKind::OpenClaw,
-                                             labeler, *prices_);
+                contribute(entry, sink == sinks.end() ? std::vector<ParsedResponse>{} : sink->second->items(), SourceKind::OpenClaw, labeler);
                 if (sink != sinks.end()) entry.perf = sink->second->perfRecords(parser->agentId(), SourceKind::OpenClaw, labeler);
                 keep(std::move(entry), owned[parser->agentId()]);
             }
@@ -752,7 +821,7 @@ void Analyzer::planHermes(const SourceLocations& locations, const std::set<Sourc
             const auto* previous = previousOf(marker);
             bool sessionsUnpriced = false;
             for (const auto& [p, e] : entries_) sessionsUnpriced |= e.family == kHermesFamily && p.rfind(marker + "#", 0) == 0 && e.hasUnpriced();
-            if (unchanged(previous, kHermesLogFamily, s->length, s->writeNs, force) && !(repricing_ && sessionsUnpriced)) continue;
+            if (unchanged(previous, kHermesLogFamily, s->length, s->writeNs, force, s->writeNs) && !(repricing_ && sessionsUnpriced)) continue;
             if (previous) work.replaced.insert(previous->id);
             for (const auto& [p, e] : entries_) {
                 if (e.family == kHermesFamily && p.rfind(marker + "#", 0) == 0) work.replaced.insert(e.id);
@@ -811,7 +880,7 @@ void Analyzer::analyzeHermes(Work& work, KeyLedger& ledger, const DayLabeler& la
             entry.size = size;
             entry.modified = log.writeNs;
             entry.version = kVersion;
-            entry.days = contributionsOf(responses, SourceKind::Hermes, labeler, *prices_);
+            contribute(entry, responses, SourceKind::Hermes, labeler);
             entry.perf = sink.perfRecords(agent, SourceKind::Hermes, labeler, &agent);
             keep(std::move(entry), {});
         }
