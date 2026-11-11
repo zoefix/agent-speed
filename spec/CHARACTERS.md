@@ -235,6 +235,10 @@ tanh(angle of its segment relative to the previous one / degrees). See `characte
   gestures that need pose variants are skipped when a pose has none.
 - Hand acting per hand (finger ripple, taps, regrip, lift, flex, fan, count, drum, wrist follow-through).
 - Breathing, glances, blinks, wind from the speed.
+- `Squash` stretches (+) or squashes (−) her whole figure over her feet, face and all, so past ±0.2 (2 % taller and
+  1.2 % narrower, or the reverse) it reads as the art drawn out or pressed flat: it goes above 0.2 only for an instant
+  (under 0.25 s: a take-off, a landing, the turn of a pose swap) and below −0.2 only for that or the crouch before a
+  leap (under 0.5 s), and an action that holds her up or down (stretch, yawn, tiptoe, curtsy) stays within ±0.2.
 - Second-order springs on most parameters (`springs.py`), so motion overshoots and settles.
 - Band change: the pose swap of section 6.
 

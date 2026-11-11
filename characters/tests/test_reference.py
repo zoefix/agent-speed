@@ -469,6 +469,56 @@ class ProfileTests(unittest.TestCase):
         self.assertAlmostEqual(slow.bpm / fast.bpm, 0.5, places=6)
 
 
+class StretchTests(unittest.TestCase):
+    """Squash stretches (+) or squashes (-) her whole figure over the feet, face included: past HELD either way it
+    reads as the art drawn out or pressed flat, so only an instant of a take-off or a landing goes there, and the
+    crouch before a leap no longer than CROUCH (spec/CHARACTERS.md, Motion)."""
+
+    HELD, BRIEF, CROUCH = 0.2, 0.25, 0.5
+
+    def longest(self, series, dt, sign=1.0):
+        run = longest = 0.0
+        for v in series:
+            run = run + dt if sign * v > self.HELD + 1e-9 else 0.0
+            longest = max(longest, run)
+        return longest
+
+    def assert_in_shape(self, series, dt):
+        self.assertLess(self.longest(series, dt), self.BRIEF)
+        self.assertLess(self.longest(series, dt, -1.0), self.CROUCH)
+
+    def test_no_action_holds_her_drawn_out(self):
+        from characters.reference.motions.gestures import face_gesture, head_gesture
+        from characters.reference.motions.moves import PROFILE_MOVES, peek, pounce, sidestep
+        from characters.reference.motions import FACE_GESTURES, HEAD_GESTURES, MOVES
+        from characters.reference.stage import Switch
+        actions = {name: build("right", "left") for name, build in MOVES.items()}
+        actions.update({name: make("right", "left") for name, (make, _) in PROFILE_MOVES.items()})
+        actions.update({name: head_gesture(name) for name in HEAD_GESTURES})
+        actions.update({name: face_gesture(name) for name in FACE_GESTURES})
+        actions.update({"step": sidestep("right", "left", 0.5), "peek": peek("right", "left", 1.0),
+                        "pounce": pounce("right", "left", 1.0)})
+        dt = 1 / 240
+        for name, m in actions.items():
+            with self.subTest(name):
+                self.assert_in_shape([m.sample(n * dt).get("Squash", 0.0) for n in range(int(m.duration / dt) + 1)],
+                                     dt)
+        hop = Switch().hop
+        self.assert_in_shape([hop(n * dt) for n in range(int(0.52 / dt) + 1)], dt)
+
+    def test_she_is_never_held_drawn_out_in_any_band(self):
+        profile = {"signature": ["stretch", "yawn", "tiptoe", "curtsy", "hop", "pounce"], "bounce": 1.4}
+        d = Director(body_params(), arm_out="right", arm_book="left", orb=-1.0, profile=profile)
+        played, squash = set(), []
+        dt = 1 / 60
+        for n in range(int(240 / dt)):
+            d.set_level([0, 0, 2, 6, 10, 13, 3, 0][(n * 8) // int(240 / dt)])
+            squash.append(d.update(dt)["Squash"])
+            played.add(d.last_gesture)
+        self.assertTrue({"stretch", "yawn", "tiptoe", "curtsy"} <= played, played)
+        self.assert_in_shape(squash, dt)
+
+
 class AppendageTests(unittest.TestCase):
     def scene(self):
         from characters.rig.layers import Layer

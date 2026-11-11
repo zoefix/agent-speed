@@ -70,7 +70,7 @@ internal static class Gestures
             c.Set("AngleY", [(0, 0), (0.5, 0.45), (1.6, 0.4), (duration, 0)]);
             c.Set("AngleZ", [(0, 0), (0.6, -0.35), (duration, 0)]);
             c.Set("Breath", [(0, 0), (0.7, 1.0), (1.8, 0.2), (duration, 0)]);
-            c.Set("Squash", [(0, 0), (0.7, 0.45), (1.5, 0.4), (duration, 0)]);
+            c.Set("Squash", [(0, 0), (0.7, 0.15), (1.5, 0.13), (duration, 0)]);
             c.Set("Shoulder.left", [(0, 0), (0.7, 0.9), (1.6, 0.8), (duration, 0)]);
             c.Set("Shoulder.right", [(0, 0), (0.7, 0.9), (1.6, 0.8), (duration, 0)]);
             c.Set("FootPoint", [(0, 0), (0.7, 0.5), (1.5, 0.5), (duration, 0)]);

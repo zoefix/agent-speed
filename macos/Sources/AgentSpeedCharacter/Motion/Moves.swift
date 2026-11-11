@@ -130,7 +130,7 @@ enum Moves {
         let d = 2.0
         let hold: K = [(0, 0), (0.5, 1.0), (1.3, 1.0), (d, 0)]
         var c = CurveSet()
-        c.set("Squash", scaled(hold, -0.5))
+        c.set("Squash", scaled(hold, -0.17))
         c.set("PosY", scaled(hold, -0.04))
         c.set("AngleY", scaled(hold, -0.6))
         c.set("AngleZ", scaled(hold, 0.25))
@@ -148,7 +148,7 @@ enum Moves {
         c.set("FootPoint", [(0, 0), (0.25, 1.0), (1.7, 1.0), (d, 0)])
         c.set("FootLift", [(0, 0), (0.25, 0.3), (1.7, 0.3), (d, 0)])
         c.set("PosY", [(0, 0), (0.2, 0.04)] + Keys.oscillate(0.25, 1.7, 0.5, 0.025, base: 0.045) + [(d, 0)])
-        c.set("Squash", [(0, 0), (0.25, 0.3), (1.7, 0.25), (d, 0)])
+        c.set("Squash", [(0, 0), (0.25, 0.1), (1.7, 0.08), (d, 0)])
         c.set("Hip", [(0, 0)] + Keys.oscillate(0.2, 1.8, 1.0, 0.18) + [(d, 0)])
         c.set("Arm.\(out.rawValue)", [(0, 0), (0.3, 0.25), (1.6, 0.25), (d, 0)])
         c.set("Arm.\(book.rawValue)", [(0, 0), (0.3, 0.15), (1.6, 0.15), (d, 0)])
@@ -228,7 +228,7 @@ enum Moves {
     static func stretch(_ out: CharacterSide, _ book: CharacterSide) -> MotionSpec {
         let d = 2.8
         var c = CurveSet()
-        c.set("Squash", [(0, 0), (0.9, 0.6), (1.9, 0.55), (d, 0)])
+        c.set("Squash", [(0, 0), (0.9, 0.2), (1.9, 0.18), (d, 0)])
         c.set("AngleY", [(0, 0), (0.9, 0.45), (1.9, 0.4), (d, 0)])
         c.set("Lean", [(0, 0), (1.0, 0.2), (1.5, -0.2), (2.0, 0), (d, 0)])
         c.set("BodyAngleZ", [(0, 0), (1.0, 0.3), (1.5, -0.3), (2.0, 0), (d, 0)])

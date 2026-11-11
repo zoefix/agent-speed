@@ -111,7 +111,7 @@ def curtsy(out, book):
     def scaled(k):
         return [(t, v * k) for t, v in hold]
 
-    curves = {"Squash": scaled(-0.5), "PosY": scaled(-0.04), "AngleY": scaled(-0.6), "AngleZ": scaled(0.25),
+    curves = {"Squash": scaled(-0.17), "PosY": scaled(-0.04), "AngleY": scaled(-0.6), "AngleZ": scaled(0.25),
               "SkirtFlare": scaled(0.5), "Hip": scaled(-0.2), f"Arm.{out}": scaled(0.3), f"Arm.{book}": scaled(0.1),
               **_both("Shoulder", scaled(-0.3))}
     return Motion("curtsy", d, curves, fade=0.2, expression="smile")
@@ -123,7 +123,7 @@ def tiptoe(out, book):
         "FootPoint": [(0, 0), (0.25, 1.0), (1.7, 1.0), (d, 0)],
         "FootLift": [(0, 0), (0.25, 0.3), (1.7, 0.3), (d, 0)],
         "PosY": [(0, 0), (0.2, 0.04)] + oscillate(0.25, 1.7, 0.5, 0.025, base=0.045) + [(d, 0)],
-        "Squash": [(0, 0), (0.25, 0.3), (1.7, 0.25), (d, 0)],
+        "Squash": [(0, 0), (0.25, 0.1), (1.7, 0.08), (d, 0)],
         "Hip": [(0, 0)] + oscillate(0.2, 1.8, 1.0, 0.18) + [(d, 0)],
         f"Arm.{out}": [(0, 0), (0.3, 0.25), (1.6, 0.25), (d, 0)],
         f"Arm.{book}": [(0, 0), (0.3, 0.15), (1.6, 0.15), (d, 0)],
@@ -195,7 +195,7 @@ def run(out, book, step=0.32, steps=7):
 def stretch(out, book):
     d = 2.8
     curves = {
-        "Squash": [(0, 0), (0.9, 0.6), (1.9, 0.55), (d, 0)],
+        "Squash": [(0, 0), (0.9, 0.2), (1.9, 0.18), (d, 0)],
         "AngleY": [(0, 0), (0.9, 0.45), (1.9, 0.4), (d, 0)],
         "Lean": [(0, 0), (1.0, 0.2), (1.5, -0.2), (2.0, 0), (d, 0)],
         "BodyAngleZ": [(0, 0), (1.0, 0.3), (1.5, -0.3), (2.0, 0), (d, 0)],

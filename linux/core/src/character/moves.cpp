@@ -88,7 +88,7 @@ MotionSpec faceGesture(const std::string& name, double duration) {
         c.set("AngleY", {{0, 0}, {0.5, 0.45}, {1.6, 0.4}, {duration, 0}});
         c.set("AngleZ", {{0, 0}, {0.6, -0.35}, {duration, 0}});
         c.set("Breath", {{0, 0}, {0.7, 1.0}, {1.8, 0.2}, {duration, 0}});
-        c.set("Squash", {{0, 0}, {0.7, 0.45}, {1.5, 0.4}, {duration, 0}});
+        c.set("Squash", {{0, 0}, {0.7, 0.15}, {1.5, 0.13}, {duration, 0}});
         c.set("Shoulder.left", {{0, 0}, {0.7, 0.9}, {1.6, 0.8}, {duration, 0}});
         c.set("Shoulder.right", {{0, 0}, {0.7, 0.9}, {1.6, 0.8}, {duration, 0}});
         c.set("FootPoint", {{0, 0}, {0.7, 0.5}, {1.5, 0.5}, {duration, 0}});
@@ -179,7 +179,7 @@ MotionSpec curtsy(Side out, Side book) {
     const double d = 2.0;
     const K hold = {{0, 0}, {0.5, 1.0}, {1.3, 1.0}, {d, 0}};
     CurveSet c;
-    c.set("Squash", scaled(hold, -0.5));
+    c.set("Squash", scaled(hold, -0.17));
     c.set("PosY", scaled(hold, -0.04));
     c.set("AngleY", scaled(hold, -0.6));
     c.set("AngleZ", scaled(hold, 0.25));
@@ -197,7 +197,7 @@ MotionSpec tiptoe(Side out, Side book) {
     c.set("FootPoint", {{0, 0}, {0.25, 1.0}, {1.7, 1.0}, {d, 0}});
     c.set("FootLift", {{0, 0}, {0.25, 0.3}, {1.7, 0.3}, {d, 0}});
     c.set("PosY", cat({{{0, 0}, {0.2, 0.04}}, oscillate(0.25, 1.7, 0.5, 0.025, 0.045), {{d, 0}}}));
-    c.set("Squash", {{0, 0}, {0.25, 0.3}, {1.7, 0.25}, {d, 0}});
+    c.set("Squash", {{0, 0}, {0.25, 0.1}, {1.7, 0.08}, {d, 0}});
     c.set("Hip", cat({{{0, 0}}, oscillate(0.2, 1.8, 1.0, 0.18), {{d, 0}}}));
     c.set(sideKey("Arm", out), {{0, 0}, {0.3, 0.25}, {1.6, 0.25}, {d, 0}});
     c.set(sideKey("Arm", book), {{0, 0}, {0.3, 0.15}, {1.6, 0.15}, {d, 0}});
@@ -276,7 +276,7 @@ MotionSpec run(Side out, Side book, double step = 0.32, int steps = 7) {
 MotionSpec stretch(Side out, Side book) {
     const double d = 2.8;
     CurveSet c;
-    c.set("Squash", {{0, 0}, {0.9, 0.6}, {1.9, 0.55}, {d, 0}});
+    c.set("Squash", {{0, 0}, {0.9, 0.2}, {1.9, 0.18}, {d, 0}});
     c.set("AngleY", {{0, 0}, {0.9, 0.45}, {1.9, 0.4}, {d, 0}});
     c.set("Lean", {{0, 0}, {1.0, 0.2}, {1.5, -0.2}, {2.0, 0}, {d, 0}});
     c.set("BodyAngleZ", {{0, 0}, {1.0, 0.3}, {1.5, -0.3}, {2.0, 0}, {d, 0}});
