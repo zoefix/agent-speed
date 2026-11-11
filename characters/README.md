@@ -16,6 +16,16 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   aligned to the base art and split by See-Through. Their arms and faces become extra parts that swap in; the old and
   new arm turn to meet halfway so the swap is hidden. What the variants show behind the arms replaces See-Through's
   guess there, and each arm variant also carries its own copy of that area.
+- Face patches need no See-Through split, so hundreds of them cost seconds each: a ChatGPT edit of the pose image
+  that changes only the face is aligned to the art (the whole figure, then the head) and one part is cut from it by a
+  fixed region of the rig's own face layers (`face`: the face shrunk 3 px from its outline, so the jaw line stays;
+  `mouth`: around the mouth, 0.22 face widths to each side, from below the nose to above the chin; `eyes`: the eyes
+  grown by a quarter, clear of the brows). The cut is matched in color to the art on a ring just outside it (leaving
+  out what the edit changed there), feathered by 1.5 px, drawn right above the face and below the bangs, and holds the
+  base face under the bangs so nothing doubles when they move. It follows the face bone at its edge and the features
+  bone inside, as the base face does when the head turns. The build reports each edit's registration, how much of the
+  region it changed and how much of the cut's edge runs through that change, and leaves out an edit whose
+  registration fails or that barely changes its region.
 - `reference/` is the reference player (rig evaluation, physics, motions, effects) and a preview renderer that films
   the character beside a mock orb while the speed climbs and falls.
 - Hands get a wrist bone and three bones per finger. A hand pose model (RTMPose hand) finds the joints on the art and
@@ -38,10 +48,15 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --rest-check claude.png
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --out claude.mp4
 .venv/bin/python -m characters.reference.preview --package characters/build/claude --reel --out claude-actions.mp4
+.venv/bin/python -m characters.reference.preview --package characters/build/claude --variants-reel \
+    --out claude-variants.mp4 --variants-sheet claude-variants.png
 .venv/bin/python -m characters.reference.stage --package characters/build/claude --pose boost=characters/build/claude-boost \
     --out claude-stage.mp4
-.venv/bin/python -m unittest characters.tests.test_reference
+.venv/bin/python -m unittest characters.tests.test_reference characters.tests.test_patches
 ```
+
+A manifest entry of a face patch names its region and the edit, and no PSD:
+`{"id": "expr-laugh", "kind": "patch", "region": "face", "image": "expr-laugh.png"}`.
 
 Every character, Claude too, builds with her spec, which brings the rig hints (tail, wings, legs inside the skirt,
 recovery of art See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
@@ -69,7 +84,7 @@ draws it:
 | `physics` | Pendulum chains: `anchor`, `segments` (lengths), `inputs` (anchor x and y per parameter unit), `outputs` (parameter = tanh(segment angle relative to the previous segment / `degrees`)), `stiffness`, `damping`, `wind`. |
 | `parts` | Draw `order`, `vertices`, `uv` (atlas pixels), `triangles`, `influences` per vertex with `bones` and `weights` (sum 1). A vertex is the weighted sum of its bones' world transforms applied to it. |
 | `partDrivers` | `param`, `part`, `keys` [[value, opacity], …]. A part's opacity is the product of its drivers (1 without any). |
-| `variants` | `id`, `kind` (`arm`, `face`), `param` (`Var.<id>`, 0 to 1). Arms add `side`, `front`, `arm`, `forearm`, `lead` (values the old arm's parameters move to before the swap) and `approach` (values the new arm starts from). Faces add `mouth` (`Mouth.<id>`) and `eyesClosed`. |
+| `variants` | `id`, `kind` (`arm`, `face`, `patch`), `param` (`Var.<id>`, 0 to 1). Arms add `side`, `front`, `arm`, `forearm`, `lead` (values the old arm's parameters move to before the swap) and `approach` (values the new arm starts from). Faces add `mouth` (`Mouth.<id>`) and `eyesClosed`. Patches add `region` (`face`, `mouth`, `eyes`); their one part, `face@<id>`, is fully in by `Var` 0.5 while the parts it replaces fade out to 1, and the eyes it replaces no longer blink or glance while it shows. |
 
 Sides (`.left`, `.right`) are image sides.
 

@@ -36,6 +36,21 @@ def similarity(moving_rgb, fixed_rgb, ignore=None):
     return matrix, report
 
 
+def compose(*matrices):
+    """The 2x3 matrix that applies the given ones from the last to the first."""
+    out = np.eye(3)
+    for m in matrices:
+        out = out @ np.vstack([m, [0, 0, 1]])
+    return out[:2]
+
+
+def warp_rgb(rgb, matrix, size, background=1.0):
+    """Warps an opaque image; what falls outside it takes the background."""
+    rgba = np.concatenate([rgb, np.ones(rgb.shape[:2] + (1,), np.float32)], axis=2)
+    warped = warp_rgba(rgba, matrix, size)
+    return warped[..., :3] * warped[..., 3:4] + background * (1 - warped[..., 3:4])
+
+
 def warp_rgba(rgba, matrix, size):
     """Warps straight-alpha RGBA through premultiplied space so edges keep their color."""
     pre = rgba.copy()
