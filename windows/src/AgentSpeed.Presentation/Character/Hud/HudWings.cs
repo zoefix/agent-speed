@@ -502,8 +502,8 @@ public sealed class HudWings
     /// cards from <see cref="Split"/> on stack under the speed at her right. The split is the best one of the preferred
     /// order (<see cref="Rank"/>) that fits, chosen again when the cards or their weights change (<see cref="Steady"/>) and
     /// following the room with hysteresis (<see cref="SpillAfter"/>, <see cref="ReturnAfter"/>), never twice within
-    /// <see cref="ReturnAfter"/>; a card whose side changed fades out where it was, jumps, and fades back in. Writes the
-    /// column's targets.
+    /// <see cref="ChangeWait"/> (the cards hug her outline meanwhile); a card whose side changed fades out where it was,
+    /// jumps, and fades back in. Writes the column's targets.
     /// </summary>
     private void ColumnAnchors(double dt, HudFrame f, (double W, double H)[] sizes, IReadOnlyList<(double W, double H)> given,
         IReadOnlyList<bool> shown)
@@ -540,9 +540,9 @@ public sealed class HudWings
         {
             _ease = 0;
             _strain += dt;
-            if (_strain >= SpillAfter && _sinceChange < ReturnAfter)
+            if (_strain >= SpillAfter && _sinceChange < ChangeWait)
             {
-                // A card changes sides at most once in 4 s; until then the cards hug her outline where they are.
+                // A card changes sides at most once per ChangeWait; until then the cards hug her outline where they are.
                 _waiting = true;
             }
             else if (_strain >= SpillAfter)
@@ -638,13 +638,19 @@ public sealed class HudWings
         }
 
         _held += dt;
-        if (_held >= SpillAfter && _sinceChange >= (_lastGap < SettleWindow ? SettledReturn : ReturnAfter))
+        if (_held >= SpillAfter && _sinceChange >= ChangeWait)
         {
             Adopt();
             Split = candidate;
             _hugging = hugging;
         }
     }
+
+    /// <summary>
+    /// How long after the last change the split may change again: <see cref="ReturnAfter"/>, or <see cref="SettledReturn"/>
+    /// when the last two changes came within <see cref="SettleWindow"/>, whether balance or spill-over moves the cards.
+    /// </summary>
+    private double ChangeWait => _lastGap < SettleWindow ? SettledReturn : ReturnAfter;
 
     /// <summary>The pending order becomes the one the split follows.</summary>
     private void Adopt()
@@ -923,6 +929,13 @@ public sealed class HudWings
         if (!double.IsFinite(left))
         {
             left = f.CenterX + 0.04 * d;
+        }
+
+        // Under the models card, never left of its edge: the right side reads as one column.
+        var modelsCard = (int)HudCard.Models;
+        if (_modelsPlace == ModelsPlace.UnderSpeed && sizes[modelsCard].H > 0 && _presence[modelsCard] > 0.01)
+        {
+            left = Math.Max(left, Math.Min(ModelsLeft(f, ModelsUnder(f)), maxX - sizes[modelsCard].W));
         }
 
         for (var k = split; k < cards.Length; k++)

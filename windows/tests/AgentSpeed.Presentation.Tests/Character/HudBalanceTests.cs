@@ -24,8 +24,8 @@ public class HudBalanceTests
 
     private static bool[] Shown(double models) => [true, false, true, true, true, true, models > 0, true];
 
-    /// <summary>A slim body from y 80 to 400 around x 222, optionally with an arm held far out at her right over y0…y1.</summary>
-    private static HudFrame Frame((double Y0, double Y1)? arm = null)
+    /// <summary>A slim body from y 80 to 400 around x 222, optionally with an arm held out to x over y0…y1 (far out at her right by default).</summary>
+    private static HudFrame Frame((double Y0, double Y1)? arm = null, double armX = 400)
     {
         var s = new HudSilhouette(0, 444, 4);
         for (var y = 80.0; y <= 400; y += 2)
@@ -38,7 +38,7 @@ public class HudBalanceTests
         {
             for (var y = span.Y0; y <= span.Y1; y += 2)
             {
-                s.Add(400, y);
+                s.Add(armX, y);
             }
         }
 
@@ -51,11 +51,19 @@ public class HudBalanceTests
 
         public double Time { get; private set; }
 
+        /// <summary>When the split changed (the first frame's choice is not a change).</summary>
+        public List<double> Changes { get; } = [];
+
         public void For(double seconds, HudFrame f, (double W, double H)[] sizes, bool[] shown)
         {
             for (var n = 0; n < Math.Round(seconds * 60); n++, Time += Step)
             {
+                var before = Wings.Split;
                 Wings.Update(Step, Time, f, sizes, shown);
+                if (Time > 0 && Wings.Split != before)
+                {
+                    Changes.Add(Time);
+                }
             }
         }
     }
@@ -226,6 +234,59 @@ public class HudBalanceTests
         Assert.Equal(today, run.Wings.Split);
         run.For(0.4, Frame(), three, shown);
         Assert.Equal(quota, run.Wings.Split);
+    }
+
+    [Fact]
+    public void SpillOverWaitsForTheChangeLimitToo()
+    {
+        // Her arm reaches out at her left right after the split changed: today has no room there, but the cards hug her
+        // where they are until the split may change again.
+        var arm = Frame(arm: (100, 420), armX: 100);
+        var shown = Shown(ModelRows[2]);
+        var two = Sizes(ModelRows[2], TwoSources);
+        var three = Sizes(ModelRows[2], ThreeSources);
+        var run = Settled(ModelRows[2], TwoSources);
+        run.For(1, Frame(), three, shown);
+        Assert.Single(run.Changes);
+        run.For(2, arm, three, shown);
+        Assert.Single(run.Changes);
+        run.For(2, arm, three, shown);
+        Assert.Equal(2, run.Changes.Count);
+        Assert.True(run.Changes[1] - run.Changes[0] >= HudWings.ReturnAfter - 1e-9);
+        Assert.True(run.Wings.IsAtHerRight(HudCard.Agents));
+
+        // After two changes within 30 s, the spill-over waits 12 s.
+        var burst = Settled(ModelRows[2], ThreeSources);
+        burst.For(1, Frame(), two, shown);
+        burst.For(4.5, Frame(), three, shown);
+        Assert.Equal(2, burst.Changes.Count);
+        burst.For(10, arm, three, shown);
+        Assert.Equal(2, burst.Changes.Count);
+        burst.For(2, arm, three, shown);
+        Assert.Equal(3, burst.Changes.Count);
+        Assert.True(burst.Changes[2] - burst.Changes[1] >= HudWings.SettledReturn - 1e-9);
+        Assert.True(burst.Wings.IsAtHerRight(HudCard.Agents));
+    }
+
+    [Fact]
+    public void MovedCardsShareTheModelsCardsLeftEdgeOrLieFurtherRight()
+    {
+        // The owner's cards: 額度 under the models card on its left edge.
+        var wings = Settled(ModelRows[1], ThreeSources, still: true).Wings;
+        Assert.Equal([HudCard.Quota], Moved(wings));
+        Assert.Equal(Box(wings, HudCard.Models).Left, Box(wings, HudCard.Quota).Left, 6);
+
+        // Her hand at her right beside 額度 only: 額度 steps right of her, the models card keeps its line.
+        wings = Settled(ModelRows[1], ThreeSources, still: true, f: Frame(arm: (240, 300), armX: 300)).Wings;
+        Assert.Equal([HudCard.Quota], Moved(wings));
+        Assert.Equal(300 + HudWings.Gap * D, Box(wings, HudCard.Quota).Left, 6);
+        Assert.True(Box(wings, HudCard.Models).Left < Box(wings, HudCard.Quota).Left - 1);
+
+        // Her hand beside the models card only: 額度 follows it right instead of lying left of it.
+        wings = Settled(ModelRows[1], ThreeSources, still: true, f: Frame(arm: (202, 212), armX: 290)).Wings;
+        Assert.Equal([HudCard.Quota], Moved(wings));
+        Assert.Equal(290 + HudWings.Gap * D, Box(wings, HudCard.Models).Left, 6);
+        Assert.Equal(Box(wings, HudCard.Models).Left, Box(wings, HudCard.Quota).Left, 6);
     }
 
     [Fact]

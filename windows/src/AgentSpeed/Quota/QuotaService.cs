@@ -42,7 +42,13 @@ internal sealed class QuotaService : IDisposable
     private const long TickMs = 5_000;
     private const long BridgeCheckMs = 60_000;
     private const long DesktopListingMs = 60_000;
-    private const long DesktopSignedInMs = 45 * 60_000;
+
+    /// <summary>
+    /// Desktop only refreshes its cached response while signed in and in use (when its window comes to the front, then
+    /// every few minutes while it stays there), so a Desktop left in the background keeps an older one (QUOTAS 6).
+    /// </summary>
+    internal const long DesktopSignedInMs = 24 * 3_600_000L;
+
     private const long VendorRoundMs = 15_000;
 
     private readonly Dispatcher _ui;
@@ -441,7 +447,7 @@ internal sealed class QuotaService : IDisposable
                 active.Add(SourceKind.ClaudeCode);
             }
 
-            if (p.ClaudeDesktop && snapshots.TryGetValue(SourceKind.ClaudeDesktop, out var d) && now - d.ObservedMs <= DesktopSignedInMs)
+            if (DesktopOnCard(p.ClaudeDesktop, snapshots.GetValueOrDefault(SourceKind.ClaudeDesktop), now))
             {
                 active.Add(SourceKind.ClaudeDesktop);
             }
@@ -470,6 +476,10 @@ internal sealed class QuotaService : IDisposable
     }
 
     private static bool IsPhaseOne(SourceKind source) => source is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.ClaudeDesktop;
+
+    /// <summary>Claude Desktop is on the 額度 card while it runs and its snapshot is at most <see cref="DesktopSignedInMs"/> old.</summary>
+    internal static bool DesktopOnCard(bool runs, QuotaSnapshot? snapshot, long nowMs) =>
+        runs && snapshot is not null && nowMs - snapshot.ObservedMs <= DesktopSignedInMs;
 
     /// <summary>A vendor round every 15 s (sooner when something changed), beside the file round; the service keeps its own cadence.</summary>
     private void StartVendorRound(long now, QuotaInputs inputs)
