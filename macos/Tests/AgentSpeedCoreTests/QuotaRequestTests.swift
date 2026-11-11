@@ -168,13 +168,20 @@ struct QuotaTransportTests {
 
     static let transport = QuotaURLSessionTransport(protocolClasses: [Stub.self])
 
+    /// The stub answers at once; the long timeout only keeps a starved CI runner from failing it.
+    static func send(_ request: QuotaHTTPRequest) async throws(QuotaHTTPError) -> QuotaHTTPResponse {
+        var request = request
+        request.timeout = 60
+        return try await transport.send(request)
+    }
+
     @Test func aPostWithItsHeadersBodyAndDate() async throws {
         let request = QuotaRequests.workBuddySummary(cookie: "s=1", browserUserAgent: "Browser/1")
         Stub.replies.withLock {
             $0[request.url.absoluteString] = .init(headers: ["Date": "Tue, 10 Nov 2026 19:26:13 GMT", "Set-Cookie": "x=y"],
                                                    chunks: [Data(#"{"code":0}"#.utf8)])
         }
-        let response = try await Self.transport.send(request)
+        let response = try await Self.send(request)
         #expect(response.status == 200)
         #expect(response.body == Data(#"{"code":0}"#.utf8))
         #expect(response.dateMs == 1_794_338_773_000)
@@ -192,20 +199,20 @@ struct QuotaTransportTests {
         let request = QuotaRequests.kimiUsages(token: "secret", userAgent: "UA")
         Stub.replies.withLock { $0[request.url.absoluteString] = .init(redirect: "https://api.kimi.com/elsewhere") }
         Stub.replies.withLock { $0["https://api.kimi.com/elsewhere"] = .init(chunks: [Data("{}".utf8)]) }
-        await #expect(throws: QuotaHTTPError.redirected) { try await Self.transport.send(request) }
+        await #expect(throws: QuotaHTTPError.redirected) { try await Self.send(request) }
         #expect(Stub.seen.withLock { $0["https://api.kimi.com/elsewhere"] } == nil)
     }
 
     @Test func theCapAndErrorStatuses() async throws {
         let big = QuotaRequests.droidLimits(key: "k", userAgent: "UA")
         Stub.replies.withLock { $0[big.url.absoluteString] = .init(chunks: [Data(count: 200 << 10), Data(count: 100 << 10)]) }
-        await #expect(throws: QuotaHTTPError.tooLarge) { try await Self.transport.send(big) }
+        await #expect(throws: QuotaHTTPError.tooLarge) { try await Self.send(big) }
         let declared = QuotaRequests.grokBilling(token: "g", userAgent: "UA")
         Stub.replies.withLock { $0[declared.url.absoluteString] = .init(headers: ["Content-Length": "300000"], chunks: [Data(count: 300_000)]) }
-        await #expect(throws: QuotaHTTPError.tooLarge) { try await Self.transport.send(declared) }
+        await #expect(throws: QuotaHTTPError.tooLarge) { try await Self.send(declared) }
         let denied = QuotaRequests.zaiLimits(key: "z", region: .global, userAgent: "UA")
         Stub.replies.withLock { $0[denied.url.absoluteString] = .init(status: 401, chunks: [Data("nope".utf8)]) }
-        let response = try await Self.transport.send(denied)
+        let response = try await Self.send(denied)
         #expect(response.status == 401)
         #expect(response.body.isEmpty)
     }
@@ -214,7 +221,7 @@ struct QuotaTransportTests {
         var changed = QuotaRequests.kimiUsages(token: "t", userAgent: "UA")
         changed.url = URL(string: "https://api.anthropic.com/api/oauth/usage")!
         let request = changed
-        await #expect(throws: QuotaHTTPError.disallowedURL) { try await Self.transport.send(request) }
+        await #expect(throws: QuotaHTTPError.disallowedURL) { try await Self.send(request) }
         #expect(Stub.seen.withLock { $0[request.url.absoluteString] } == nil)
     }
 }
