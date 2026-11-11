@@ -130,7 +130,7 @@ enum Moves {
         let d = 2.0
         let hold: K = [(0, 0), (0.5, 1.0), (1.3, 1.0), (d, 0)]
         var c = CurveSet()
-        c.set("Squash", scaled(hold, -0.5))
+        c.set("Squash", scaled(hold, -0.17))
         c.set("PosY", scaled(hold, -0.04))
         c.set("AngleY", scaled(hold, -0.6))
         c.set("AngleZ", scaled(hold, 0.25))

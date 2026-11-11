@@ -1,5 +1,6 @@
-// `Squash` stretches her whole figure over the feet, face included: past kHeld it reads as the art drawn out, so only
-// an instant of a take-off or a landing goes there (spec/CHARACTERS.md, Motion). Ported from macOS StretchTests.
+// `Squash` stretches (+) or squashes (-) her whole figure over the feet, face included: past kHeld either way it reads
+// as the art drawn out or pressed flat, so only an instant of a take-off or a landing goes there, and the crouch before
+// a leap no longer than kCrouch (spec/CHARACTERS.md, Motion). Ported from macOS StretchTests.
 #include <gtest/gtest.h>
 
 #include <algorithm>
@@ -18,14 +19,20 @@ namespace {
 
 constexpr double kHeld = 0.2;
 constexpr double kBrief = 0.25;
+constexpr double kCrouch = 0.5;
 
-double longest(const std::vector<double>& series, double dt) {
+double longest(const std::vector<double>& series, double dt, double sign = 1) {
     double run = 0, best = 0;
     for (double v : series) {
-        run = v > kHeld + 1e-9 ? run + dt : 0;
+        run = sign * v > kHeld + 1e-9 ? run + dt : 0;
         best = std::max(best, run);
     }
     return best;
+}
+
+void expectInShape(const std::vector<double>& series, double dt, const std::string& name) {
+    EXPECT_LT(longest(series, dt), kBrief) << name << " stretched";
+    EXPECT_LT(longest(series, dt, -1), kCrouch) << name << " squashed";
 }
 
 std::vector<double> squash(const MotionSpec& m, double dt) {
@@ -50,7 +57,7 @@ TEST(CharacterStretch, NoActionHoldsHerDrawnOut) {
     actions.push_back(moves::peek(out, book, 1));
     actions.push_back(moves::pounce(out, book, 1));
     const double dt = 1.0 / 240;
-    for (const auto& m : actions) EXPECT_LT(longest(squash(m, dt), dt), kBrief) << m.name;
+    for (const auto& m : actions) expectInShape(squash(m, dt), dt, m.name);
 
     PoseSwitch swap;
     swap.request(1);
@@ -59,12 +66,12 @@ TEST(CharacterStretch, NoActionHoldsHerDrawnOut) {
         const auto step = swap.update(dt);
         hop.push_back(step.output ? step.output->squash : 0);
     }
-    EXPECT_LT(longest(hop, dt), kBrief) << "pose swap";
+    expectInShape(hop, dt, "pose swap");
 }
 
 TEST(CharacterStretch, SheIsNeverHeldDrawnOutInAnyBand) {
     fixtures::JsonFile f(fixtures::fixtureDir() / "characters" / "director.json");
-    const std::string text = R"({"signature": ["stretch", "yawn", "tiptoe", "hop", "pounce"], "bounce": 1.4})";
+    const std::string text = R"({"signature": ["stretch", "yawn", "tiptoe", "curtsy", "hop", "pounce"], "bounce": 1.4})";
     agentspeed::json::Document doc;
     ASSERT_TRUE(doc.parse(text));
     Director director(Param::decodeList(f.root()["params"]), 7, Side::Right, Side::Left, -1, false,
@@ -82,6 +89,6 @@ TEST(CharacterStretch, SheIsNeverHeldDrawnOutInAnyBand) {
         series.push_back(director.values()[slot]);
         if (auto g = director.activeGesture()) played.insert(*g);
     }
-    for (const char* g : {"stretch", "yawn", "tiptoe"}) EXPECT_TRUE(played.count(g)) << g;
-    EXPECT_LT(longest(series, dt), kBrief);
+    for (const char* g : {"stretch", "yawn", "tiptoe", "curtsy"}) EXPECT_TRUE(played.count(g)) << g;
+    expectInShape(series, dt, "director");
 }

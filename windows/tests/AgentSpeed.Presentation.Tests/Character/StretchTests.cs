@@ -4,24 +4,32 @@ using AgentSpeed.Presentation.Character;
 namespace AgentSpeed.Presentation.Tests.Character;
 
 /// <summary>
-/// <c>Squash</c> stretches her whole figure over the feet, face included: past <see cref="Held"/> it reads as the art
-/// drawn out, so only an instant of a take-off or a landing goes there (spec/CHARACTERS.md, Motion).
+/// <c>Squash</c> stretches (+) or squashes (-) her whole figure over the feet, face included: past <see cref="Held"/>
+/// either way it reads as the art drawn out or pressed flat, so only an instant of a take-off or a landing goes there,
+/// and the crouch before a leap no longer than <see cref="Crouch"/> (spec/CHARACTERS.md, Motion).
 /// </summary>
 public class StretchTests
 {
     private const double Held = 0.2;
     private const double Brief = 0.25;
+    private const double Crouch = 0.5;
 
-    private static double Longest(IEnumerable<double> series, double dt)
+    private static double Longest(IEnumerable<double> series, double dt, double sign = 1)
     {
         double run = 0, longest = 0;
         foreach (var v in series)
         {
-            run = v > Held + 1e-9 ? run + dt : 0;
+            run = sign * v > Held + 1e-9 ? run + dt : 0;
             longest = Math.Max(longest, run);
         }
 
         return longest;
+    }
+
+    private static void AssertInShape(IReadOnlyList<double> series, double dt, string name)
+    {
+        Assert.True(Longest(series, dt) < Brief, $"{name} stretched");
+        Assert.True(Longest(series, dt, -1) < Crouch, $"{name} squashed");
     }
 
     private static IEnumerable<double> Squash(MotionSpec m, double dt)
@@ -51,7 +59,7 @@ public class StretchTests
         const double dt = 1.0 / 240;
         foreach (var m in actions)
         {
-            Assert.True(Longest(Squash(m, dt), dt) < Brief, m.Name);
+            AssertInShape(Squash(m, dt).ToList(), dt, m.Name);
         }
 
         var swap = new PoseSwitch();
@@ -62,14 +70,14 @@ public class StretchTests
             hop.Add(swap.Update(dt).Output?.Squash ?? 0);
         }
 
-        Assert.True(Longest(hop, dt) < Brief, "pose swap");
+        AssertInShape(hop, dt, "pose swap");
     }
 
     [Fact]
     public void SheIsNeverHeldDrawnOutInAnyBand()
     {
         var parameters = CharacterFixture.Json("director.json").GetProperty("params").EnumerateArray().Select(CharacterParam.Decode).ToArray();
-        var profile = MotionProfile.Decode(JsonDocument.Parse("""{"signature": ["stretch", "yawn", "tiptoe", "hop", "pounce"], "bounce": 1.4}""").RootElement);
+        var profile = MotionProfile.Decode(JsonDocument.Parse("""{"signature": ["stretch", "yawn", "tiptoe", "curtsy", "hop", "pounce"], "bounce": 1.4}""").RootElement);
         var director = new CharacterDirector(parameters, 7, CharacterSide.Right, CharacterSide.Left, -1, celebrate: false, profile: profile);
         var squash = director.Space.Slot("Squash")!.Value;
         int[] levels = [0, 0, 2, 6, 10, 13, 3, 0];
@@ -88,7 +96,7 @@ public class StretchTests
             }
         }
 
-        Assert.Subset(played, new HashSet<string> { "stretch", "yawn", "tiptoe" });
-        Assert.True(Longest(series, dt) < Brief);
+        Assert.Subset(played, new HashSet<string> { "stretch", "yawn", "tiptoe", "curtsy" });
+        AssertInShape(series, dt, "director");
     }
 }

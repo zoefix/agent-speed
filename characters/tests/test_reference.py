@@ -470,17 +470,22 @@ class ProfileTests(unittest.TestCase):
 
 
 class StretchTests(unittest.TestCase):
-    """Squash stretches her whole figure over the feet, face included: past HELD it reads as the art drawn out, so
-    only an instant of a take-off or a landing goes there (spec/CHARACTERS.md, Motion)."""
+    """Squash stretches (+) or squashes (-) her whole figure over the feet, face included: past HELD either way it
+    reads as the art drawn out or pressed flat, so only an instant of a take-off or a landing goes there, and the
+    crouch before a leap no longer than CROUCH (spec/CHARACTERS.md, Motion)."""
 
-    HELD, BRIEF = 0.2, 0.25
+    HELD, BRIEF, CROUCH = 0.2, 0.25, 0.5
 
-    def longest(self, series, dt):
+    def longest(self, series, dt, sign=1.0):
         run = longest = 0.0
         for v in series:
-            run = run + dt if v > self.HELD + 1e-9 else 0.0
+            run = run + dt if sign * v > self.HELD + 1e-9 else 0.0
             longest = max(longest, run)
         return longest
+
+    def assert_in_shape(self, series, dt):
+        self.assertLess(self.longest(series, dt), self.BRIEF)
+        self.assertLess(self.longest(series, dt, -1.0), self.CROUCH)
 
     def test_no_action_holds_her_drawn_out(self):
         from characters.reference.motions.gestures import face_gesture, head_gesture
@@ -496,13 +501,13 @@ class StretchTests(unittest.TestCase):
         dt = 1 / 240
         for name, m in actions.items():
             with self.subTest(name):
-                squash = [m.sample(n * dt).get("Squash", 0.0) for n in range(int(m.duration / dt) + 1)]
-                self.assertLess(self.longest(squash, dt), self.BRIEF)
+                self.assert_in_shape([m.sample(n * dt).get("Squash", 0.0) for n in range(int(m.duration / dt) + 1)],
+                                     dt)
         hop = Switch().hop
-        self.assertLess(self.longest([hop(n * dt) for n in range(int(0.52 / dt) + 1)], dt), self.BRIEF, "pose swap")
+        self.assert_in_shape([hop(n * dt) for n in range(int(0.52 / dt) + 1)], dt)
 
     def test_she_is_never_held_drawn_out_in_any_band(self):
-        profile = {"signature": ["stretch", "yawn", "tiptoe", "hop", "pounce"], "bounce": 1.4}
+        profile = {"signature": ["stretch", "yawn", "tiptoe", "curtsy", "hop", "pounce"], "bounce": 1.4}
         d = Director(body_params(), arm_out="right", arm_book="left", orb=-1.0, profile=profile)
         played, squash = set(), []
         dt = 1 / 60
@@ -510,8 +515,8 @@ class StretchTests(unittest.TestCase):
             d.set_level([0, 0, 2, 6, 10, 13, 3, 0][(n * 8) // int(240 / dt)])
             squash.append(d.update(dt)["Squash"])
             played.add(d.last_gesture)
-        self.assertTrue({"stretch", "yawn", "tiptoe"} <= played, played)
-        self.assertLess(self.longest(squash, dt), self.BRIEF)
+        self.assertTrue({"stretch", "yawn", "tiptoe", "curtsy"} <= played, played)
+        self.assert_in_shape(squash, dt)
 
 
 class AppendageTests(unittest.TestCase):

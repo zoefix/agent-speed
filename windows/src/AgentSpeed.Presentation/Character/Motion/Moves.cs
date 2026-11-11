@@ -147,7 +147,7 @@ internal static partial class Moves
         const double d = 2.0;
         (double, double)[] hold = [(0, 0), (0.5, 1.0), (1.3, 1.0), (d, 0)];
         var c = new CurveSet();
-        c.Set("Squash", Scaled(hold, -0.5));
+        c.Set("Squash", Scaled(hold, -0.17));
         c.Set("PosY", Scaled(hold, -0.04));
         c.Set("AngleY", Scaled(hold, -0.6));
         c.Set("AngleZ", Scaled(hold, 0.25));

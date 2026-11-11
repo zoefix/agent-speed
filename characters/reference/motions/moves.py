@@ -111,7 +111,7 @@ def curtsy(out, book):
     def scaled(k):
         return [(t, v * k) for t, v in hold]
 
-    curves = {"Squash": scaled(-0.5), "PosY": scaled(-0.04), "AngleY": scaled(-0.6), "AngleZ": scaled(0.25),
+    curves = {"Squash": scaled(-0.17), "PosY": scaled(-0.04), "AngleY": scaled(-0.6), "AngleZ": scaled(0.25),
               "SkirtFlare": scaled(0.5), "Hip": scaled(-0.2), f"Arm.{out}": scaled(0.3), f"Arm.{book}": scaled(0.1),
               **_both("Shoulder", scaled(-0.3))}
     return Motion("curtsy", d, curves, fade=0.2, expression="smile")

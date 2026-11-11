@@ -179,7 +179,7 @@ MotionSpec curtsy(Side out, Side book) {
     const double d = 2.0;
     const K hold = {{0, 0}, {0.5, 1.0}, {1.3, 1.0}, {d, 0}};
     CurveSet c;
-    c.set("Squash", scaled(hold, -0.5));
+    c.set("Squash", scaled(hold, -0.17));
     c.set("PosY", scaled(hold, -0.04));
     c.set("AngleY", scaled(hold, -0.6));
     c.set("AngleZ", scaled(hold, 0.25));
