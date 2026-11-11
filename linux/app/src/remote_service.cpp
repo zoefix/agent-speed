@@ -147,7 +147,15 @@ remote::QuotaSwitches RemoteService::quotaSwitches() const {
     out.network = prefs_.networkEnabled();
     out.grokLive = prefs_.quotaSwitch(QStringLiteral("quotaGrokBuildLive"));
     out.claudeCode = enabled.contains(agentspeed::SourceKind::ClaudeCode);
+    out.salt = estimateSalt_;
     return out;
+}
+
+void RemoteService::setEstimateSalt(const QString& salt) {
+    const auto text = salt.toStdString();
+    if (text == estimateSalt_) return;
+    estimateSalt_ = text;
+    apply();
 }
 
 void RemoteService::apply() {

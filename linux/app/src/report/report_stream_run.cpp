@@ -112,7 +112,11 @@ void ReportController::applyStream(const std::vector<agentspeed::report::stream:
             auto opts = options(*discovery_, switches());
             opts.stream = agentspeed::report::StreamBody{action.value < 0 ? std::nullopt : std::optional<std::int64_t>(action.value),
                                                          s.scheduler->limits().maxMessageBytes};
-            const auto body = agentspeed::report::fitted(envelope, content, *sample, opts).data;
+            opts.quotas = quotaSection(s.quotas, *discovery_, settings_.quotaOn(), envelope.sentAtMs,
+                                       envelope.activity == agentspeed::report::Activity::Leaving);
+            auto built = agentspeed::report::fitted(envelope, content, *sample, opts);
+            if (built.quotasDropped) s.quotas.dropped();
+            const auto body = std::move(built.data);
             s.bodies[action.seq] = {body, agentspeed::report::sha256Hex(body)};
             s.lastBuilt = sentLive(*sample);
             s.lastScores = scoreSignature(*sample);

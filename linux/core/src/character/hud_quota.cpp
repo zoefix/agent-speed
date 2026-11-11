@@ -212,8 +212,9 @@ void QuotaMotion::mergeLines(std::vector<Line>& lines, const std::vector<QuotaLi
             line.barTo = target.bar;
             line.barAt = still ? kNever : time;
         }
-        if (target.percent != line.data.percent) {
+        if (target.percent != line.data.percent || target.estimated != line.data.estimated) {
             line.oldPercent = line.data.percent;
+            line.oldEstimated = line.data.estimated;
             line.percentAt = time;
         }
         if (!target.reset.empty() && target.reset != line.reset) {

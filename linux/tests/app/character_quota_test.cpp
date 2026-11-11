@@ -13,11 +13,19 @@ namespace {
 
 using orb::CharacterQuota;
 
-QVariantMap window(const char* label, int percent, double fraction, const char* shortReset, const char* spoken, bool passed = false) {
-    return {{QStringLiteral("label"), QString::fromUtf8(label)},       {QStringLiteral("percent"), percent},
+// A line as QuotaView makes it; the dashboard's `spoken` adds the amount and the cap, the card's `spokenCard` neither.
+QVariantMap window(const char* label, int percent, double fraction, const char* shortReset, const char* spoken, bool passed = false,
+                   bool estimated = false) {
+    return {{QStringLiteral("label"), QString::fromUtf8(label)},
+            {QStringLiteral("percent"), percent},
             {QStringLiteral("percentText"), QString::number(percent) + QLatin1Char('%')},
-            {QStringLiteral("fraction"), fraction},                    {QStringLiteral("short"), QString::fromUtf8(shortReset)},
-            {QStringLiteral("spoken"), QString::fromUtf8(spoken)},      {QStringLiteral("passed"), passed}};
+            {QStringLiteral("fraction"), fraction},
+            {QStringLiteral("short"), QString::fromUtf8(shortReset)},
+            {QStringLiteral("spoken"), QString::fromUtf8(spoken) + QStringLiteral(", $92 used, cap about $400")},
+            {QStringLiteral("spokenCard"), QString::fromUtf8(spoken)},
+            {QStringLiteral("passed"), passed},
+            {QStringLiteral("amount"), QStringLiteral("$92")},
+            {QStringLiteral("estimated"), estimated}};
 }
 
 QVariantMap item(const char* key, const char* source, const QString& name, QVariantList lines) {
@@ -38,7 +46,7 @@ Strings& english() {
 TEST(CharacterQuota, ItemsBecomeTheCardsSourcesWithOnlyTheirWindows) {
     auto& strings = english();
     const QVariantList items = {
-        item("codex", "codex", QStringLiteral("Codex"), {window("7d", 23, 0.234, "Sun", "7d 23% used, resets Sun 09:00")}),
+        item("codex", "codex", QStringLiteral("Codex"), {window("7d", 23, 0.234, "Sun", "7d 23% used, resets Sun 09:00", false, true)}),
         item("claudeCode", "claudeCode", QStringLiteral("Claude Code"),
              {window("5h", 0, 0, "", "5h 0% used", true), window("7d", 103, 1.03, "19h", "7d 100% used, resets in 19 h")}),
     };
@@ -54,11 +62,14 @@ TEST(CharacterQuota, ItemsBecomeTheCardsSourcesWithOnlyTheirWindows) {
     EXPECT_EQ(codex.lines[0].percent, 23);
     EXPECT_NEAR(codex.lines[0].bar, 0.234, 1e-9);
     EXPECT_EQ(codex.lines[0].reset, "Sun");
+    // QUOTAS 10.7: the `≈` of an extrapolated percent.
+    EXPECT_TRUE(codex.lines[0].estimated);
     const auto& claude = (*quota.sources)[1];
     EXPECT_EQ(claude.color, 0xFF8A65u);
     ASSERT_EQ(claude.lines.size(), 2u);
     EXPECT_TRUE(claude.lines[0].passed);
     EXPECT_TRUE(claude.lines[0].reset.empty());
+    EXPECT_FALSE(claude.lines[0].estimated);
     // The bar and the percent never leave 0…100 %.
     EXPECT_EQ(claude.lines[1].percent, 100);
     EXPECT_EQ(claude.lines[1].bar, 1);
@@ -80,8 +91,8 @@ TEST(CharacterQuota, AHostsSourceKeepsItsHostApart) {
     EXPECT_EQ(quota.spoken, QStringLiteral("Quota: Codex · devbox · 2 7d 58% used"));
 }
 
-// Accessibility (after the other cards): `a11y.orb.quota` with each source's name followed by its windows, every window
-// and source joined by `list.separator`.
+// Accessibility (after the other cards): `a11y.orb.quota` with each source's name followed by its windows (the card's
+// reading: no amount, no cap), every window and source joined by `list.separator`.
 TEST(CharacterQuota, AccessibilityReadsEverySourceWithItsWindows) {
     auto& strings = english();
     const QVariantList items = {
@@ -113,8 +124,22 @@ TEST(CharacterQuota, TheQuotaViewsItemsReadWhole) {
     EXPECT_EQ(keys, (std::vector<std::string>{"codex", "claudeCode", "codex", "claudeCode"}));
     EXPECT_EQ(hosts, (std::vector<std::string>{"", "", "devbox", "devbox"}));
     EXPECT_EQ((*quota.sources)[2].name, "Codex");
-    EXPECT_TRUE(quota.spoken.startsWith(QStringLiteral("Quota: Codex 7d 23% used")));
+    // The demo's estimates (QUOTAS 10.7): Codex 7d shows the live 25 % with its `≈`, read as estimated; the card reads
+    // no amount and no cap (the dashboard has them).
+    const auto& codex = (*quota.sources)[0].lines[0];
+    EXPECT_EQ(codex.percent, 25);
+    EXPECT_TRUE(codex.estimated);
+    const auto& week = (*quota.sources)[1].lines[1];
+    EXPECT_EQ(week.percent, 96);
+    EXPECT_FALSE(week.estimated) << "a percent the vendor gave";
+    EXPECT_TRUE(quota.spoken.startsWith(QStringLiteral("Quota: Codex 7d 25% used")));
+    const QString codexSpoken = quota.spoken.section(QStringLiteral(", Claude Code "), 0, 0);
+    EXPECT_TRUE(codexSpoken.endsWith(QStringLiteral(", estimated"))) << codexSpoken.toStdString();
+    EXPECT_FALSE(quota.spoken.contains(QStringLiteral(" used, cap about"))) << "the card reads no cap";
+    EXPECT_FALSE(quota.spoken.contains(QStringLiteral("$"))) << "nor an amount";
     EXPECT_TRUE(quota.spoken.contains(QStringLiteral("Claude Code · devbox 5h 67% used")));
+    // A host's source without an estimate has no `≈`.
+    for (const auto& l : (*quota.sources)[3].lines) EXPECT_FALSE(l.estimated);
     // This computer alone.
     const auto local = CharacterQuota::of(view.cardItems({QStringLiteral("codex")}, {QStringLiteral("local")}, false), strings);
     ASSERT_EQ(local.sources->size(), 1u);

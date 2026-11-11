@@ -3,6 +3,7 @@
 #include <QCoreApplication>
 
 #include "agentspeed/quota/codex.hpp"
+#include "agentspeed/quota/estimate/estimator.hpp"
 #include "agentspeed/quota/sources.hpp"
 #include "preferences.hpp"
 #include "quota/quota_view.hpp"
@@ -11,13 +12,13 @@
 namespace quota = agentspeed::quota;
 
 QuotaService::QuotaService(Preferences& prefs, QuotaView& view, RemoteService& remote, std::shared_ptr<quota::CodexCollector> codex,
-                           QObject* parent)
-    : QObject(parent), prefs_(prefs), view_(view), remote_(remote), codex_(std::move(codex)) {
+                           std::shared_ptr<quota::estimate::Estimator> estimator, QObject* parent)
+    : QObject(parent), prefs_(prefs), view_(view), remote_(remote), codex_(std::move(codex)), estimator_(std::move(estimator)) {
     qRegisterMetaType<QuotaPublication>();
     qRegisterMetaType<QuotaWorkerSettings>();
     thread_.setObjectName(QStringLiteral("quota"));
     // QUOTAS 5.1: the helper ships beside the app's executable.
-    worker_ = new QuotaWorker(codex_, QCoreApplication::applicationDirPath() + QStringLiteral("/agent-speed-statusline"));
+    worker_ = new QuotaWorker(codex_, QCoreApplication::applicationDirPath() + QStringLiteral("/agent-speed-statusline"), estimator_);
     worker_->moveToThread(&thread_);
     connect(&thread_, &QThread::started, worker_, &QuotaWorker::start);
     connect(&thread_, &QThread::finished, worker_, &QObject::deleteLater);
@@ -43,7 +44,19 @@ QuotaService::QuotaService(Preferences& prefs, QuotaView& view, RemoteService& r
         });
     }
     // REMOTE 11.1: the hosts' lines, from the coordinator's thread to the view.
-    remote_.setQuotaSink([view = &view_](const agentspeed::remote::RelayMessage& message) {
+    remote_.setQuotaSink([view = &view_, estimator = estimator_](const agentspeed::remote::RelayMessage& message) {
+        // QUOTAS 10.4: every quota line of a host is an observation, keyed by the account its relay sent (10.1).
+        if (const auto* q = std::get_if<agentspeed::remote::HostQuota>(&message); q && estimator && !q->snapshot.windows.empty()) {
+            quota::estimate::SnapshotEvent event;
+            event.source = std::string(agentspeed::sourceId(q->snapshot.source));
+            event.machine = q->hostId;
+            event.observedMs = q->snapshot.observedMs;
+            event.windows = q->snapshot.windows;
+            event.account = q->account;
+            event.plan = q->plan;
+            event.tier = q->tier;
+            estimator->addSnapshot(std::move(event));
+        }
         QMetaObject::invokeMethod(view, [view, message] { view->applyHost(message); }, Qt::QueuedConnection);
     });
     connect(&remote_, &RemoteService::hostsChanged, this, &QuotaService::refreshHosts);
@@ -90,6 +103,11 @@ QuotaWorkerSettings QuotaService::settings() const {
     s.networkEnabled = prefs_.networkEnabled();
     s.zcodeRegion = prefs_.quotaZcodeRegion();
     s.dashboardOpen = dashboardOpen_;
+    const auto connected = remote_.connectedHosts();
+    for (const auto& [host, sources] : remote_.hostQuotaSources()) {
+        if (!connected.contains(host)) continue;
+        for (const auto& source : sources) s.hostShown.emplace(host.toStdString(), source.toStdString());
+    }
     return s;
 }
 
@@ -104,4 +122,7 @@ void QuotaService::refreshInvite() {
     view_.setInvite(claudeCode && !prefs_.quotaSwitch(QStringLiteral("quotaClaudeCli")) && !prefs_.quotaCliInviteDismissed());
 }
 
-void QuotaService::refreshHosts() { view_.setHosts(remote_.hostNames(), remote_.connectedHosts(), remote_.hostQuotaSources()); }
+void QuotaService::refreshHosts() {
+    view_.setHosts(remote_.hostNames(), remote_.connectedHosts(), remote_.hostQuotaSources());
+    push();
+}

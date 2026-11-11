@@ -8,6 +8,7 @@
 
 #include <sys/utsname.h>
 
+#include "agentspeed/quota/estimate/estimator.hpp"
 #include "preferences.hpp"
 #include "strings.hpp"
 
@@ -195,7 +196,8 @@ std::set<agentspeed::report::Section> ReportController::acceptedSections(const a
     return out;
 }
 
-QVariantList ReportController::sectionRows(const std::set<agentspeed::report::Section>& on, const std::optional<agentspeed::report::Discovery>& discovery) const {
+QVariantList ReportController::sectionRows(const std::set<agentspeed::report::Section>& on, bool quota,
+                                           const std::optional<agentspeed::report::Discovery>& discovery) const {
     QVariantList rows;
     for (const auto section : agentspeed::report::kAllSections) {
         const std::string id = agentspeed::report::sectionName(section);
@@ -214,7 +216,35 @@ QVariantList ReportController::sectionRows(const std::set<agentspeed::report::Se
                                 {QStringLiteral("note"), note},
                                 {QStringLiteral("noteIsCaption"), accepted && !trafficOff}});
     }
+    // DESIGN 11: the quota switch with its hint, always visible; off and disabled unless the known document says
+    // `quotaEstimate: 1` (REPORTING-EXTENSIONS 11.1).
+    const bool accepted = !discovery || acceptsQuota(*discovery);
+    const auto hint = t("report.section.quota.hint");
+    rows.append(QVariantMap{{QStringLiteral("key"), QStringLiteral("quota")},
+                            {QStringLiteral("label"), strings_.t(QStringLiteral("report.section.quota"))},
+                            {QStringLiteral("on"), accepted && quota},
+                            {QStringLiteral("enabled"), accepted},
+                            {QStringLiteral("note"), accepted ? hint : t("report.section.notAccepted") + QLatin1Char('\n') + hint},
+                            {QStringLiteral("noteIsCaption"), true}});
     return rows;
+}
+
+bool ReportController::acceptsQuota(const agentspeed::report::Discovery& discovery) {
+    const auto it = discovery.extensions.find("quotaEstimate");
+    return it != discovery.extensions.end() && it->second == 1;
+}
+
+std::optional<std::vector<agentspeed::report::Json>> ReportController::quotaSection(agentspeed::quota::estimate::Reporter& reporter,
+                                                                                   const agentspeed::report::Discovery& discovery, bool on,
+                                                                                   std::int64_t sentAtMs, bool leaving) const {
+    if (!estimator_ || !acceptsQuota(discovery)) return std::nullopt;
+    const auto entries = on ? estimator_->entries(sentAtMs) : std::vector<agentspeed::quota::estimate::Entry>{};
+    const auto sent = reporter.step(sentAtMs, entries, on, leaving);
+    if (!sent) return std::nullopt;
+    std::vector<agentspeed::report::Json> out;
+    out.reserve(sent->size());
+    for (const auto& e : *sent) out.push_back(e.json());
+    return out;
 }
 
 bool ReportController::discoveryStale() const {
@@ -465,11 +495,12 @@ void ReportController::clearApiKey() {
     notify();
 }
 
-QVariantList ReportController::sections() const { return sectionRows(switches(), discovery_); }
+QVariantList ReportController::sections() const { return sectionRows(switches(), settings_.quotaOn(), discovery_); }
 
 bool ReportController::scoreCaption() const { return !discovery_ || discovery_->has("perfScore") || discovery_->has("taskScore"); }
 
 void ReportController::setSection(const QString& key, bool on) {
+    if (key == QLatin1String("quota")) settings_.setQuota(on);
     if (const auto section = agentspeed::report::sectionFromName(sv(key))) settings_.setSection(*section, on);
     notify();
 }

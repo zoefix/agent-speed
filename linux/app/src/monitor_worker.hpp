@@ -19,6 +19,9 @@
 class QTimer;
 namespace agentspeed::quota {
 class CodexCollector;
+namespace estimate {
+class Estimator;
+}
 }
 class Strings;
 
@@ -41,6 +44,8 @@ struct WorkerOptions {
     std::shared_ptr<agentspeed::remote::Feed> remoteFeed;
     // QUOTAS 3: every Codex parser hands its `rate_limits` to this collector.
     std::shared_ptr<agentspeed::quota::CodexCollector> codexQuota;
+    // QUOTAS 10.1, 10.3: the estimate takes every Codex line with its agent and, every 5 s, the responses held.
+    std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator;
 };
 
 using TrafficRows = std::vector<agentspeed::traffic::HistoryRow>;
@@ -125,6 +130,8 @@ private:
     QTimer* timer_ = nullptr;
     qint64 lastPollMs_ = 0;
     qint64 lastTickMs_ = 0;
+    qint64 lastEstimateMs_ = 0;
+    void feedEstimate(qint64 now);
     // newPeak (METRICS 6.4): the peak before this tick, the time of the last event, and the day they belong to.
     double peakBefore_ = -1;
     qint64 lastPeakEventMs_ = 0;

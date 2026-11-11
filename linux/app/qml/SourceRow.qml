@@ -14,6 +14,7 @@ Item {
     property bool invite: false
     property real labelWidth: 0
     property real percentWidth: 0
+    property real amountWidth: 0
     property real resetWidth: 0
     signal inviteAccepted()
     signal inviteDismissed()
@@ -96,6 +97,7 @@ Item {
             sourceColor: Theme.sourceColor(row.source)
             labelWidth: row.labelWidth
             percentWidth: row.percentWidth
+            amountWidth: row.amountWidth
             resetWidth: row.resetWidth
         }
         QuotaInvite {

@@ -11,6 +11,7 @@
 #include <tuple>
 #include <vector>
 
+#include "agentspeed/quota/estimate/entry.hpp"
 #include "agentspeed/report_body.hpp"
 #include "agentspeed/report_scheduler.hpp"
 #include "agentspeed/report_profile.hpp"
@@ -26,6 +27,9 @@ class Preferences;
 class Strings;
 namespace agentspeed::pricing {
 class PriceBook;
+}
+namespace agentspeed::quota::estimate {
+class Estimator;
 }
 
 // Live reporting (DESIGN 11, METRICS 11, REPORTING): the API pane, the consent sheet, the preview, the dashboard
@@ -301,6 +305,8 @@ public:
     // Development aid: reports to a local reference server (loopback http only, spec/tools/report_server.py) without
     // the consent clicks, and logs the status. Returns false for any other URL.
     bool startSelfTest(const QString& url);
+    // REPORTING-EXTENSIONS 11: the quota estimate whose entries `quotas` carries.
+    void setEstimator(std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator) { estimator_ = std::move(estimator); }
     // Where the statistics watch goes (the monitor worker): on, and the responses and calls the reports took.
     void setWatchSink(std::function<void(bool, qint64, qint64)> sink) { watchSink_ = std::move(sink); }
     // The preview body with its keys in `keyColor` (DESIGN 11: keys secondary, values in the label color).
@@ -326,6 +332,7 @@ private:
         std::set<agentspeed::report::Section> sections;
         bool review = false, starting = false, offersTransfer = false;
         QString usernameError, apiKeyError, failure;
+        bool quota = true;
     };
     // The WebSocket run (METRICS 11.9): its scheduler, window and the bodies awaiting an answer.
     struct Stream {
@@ -337,6 +344,7 @@ private:
         std::optional<std::array<double, 6>> lastBuilt;             // the live values of the last built report, rounded as sent
         std::string lastScores;                                      // its perfScore objects (METRICS 11.10 WebSocket)
         bool lastActive = false;
+        agentspeed::quota::estimate::Reporter quotas;
     };
     struct Run {
         QString id;
@@ -345,6 +353,7 @@ private:
         agentspeed::report::TitleTracker title;
         std::map<int, std::string> bodies;
         std::set<int> signWithPending;
+        agentspeed::quota::estimate::Reporter quotas;
     };
     enum class RenameKind { None, Working };
 
@@ -365,7 +374,12 @@ private:
     std::set<agentspeed::report::Section> acceptedSections(const agentspeed::report::Discovery& discovery,
                                                          const std::set<agentspeed::report::Section>& switches) const;
     std::set<agentspeed::report::Section> switches() const;
-    QVariantList sectionRows(const std::set<agentspeed::report::Section>& on, const std::optional<agentspeed::report::Discovery>& discovery) const;
+    QVariantList sectionRows(const std::set<agentspeed::report::Section>& on, bool quota, const std::optional<agentspeed::report::Discovery>& discovery) const;
+    // REPORTING-EXTENSIONS 11.1: only `quotaEstimate: 1` turns the section on.
+    static bool acceptsQuota(const agentspeed::report::Discovery& discovery);
+    // The `quotas` of a report built at `sentAtMs` by the run's cadence (11.3): nullopt when absent.
+    std::optional<std::vector<agentspeed::report::Json>> quotaSection(agentspeed::quota::estimate::Reporter& reporter, const agentspeed::report::Discovery& discovery,
+                                                                      bool on, std::int64_t sentAtMs, bool leaving) const;
     bool hasApiKey() const { return !apiKey_.isEmpty(); }
     bool discoveryStale() const;
     void saveIdentity();
@@ -454,6 +468,7 @@ private:
     std::vector<std::int64_t> streamLatency_;
     std::optional<std::optional<agentspeed::report::StreamSettings>> pendingStreamSettings_;
     std::function<void(bool, qint64, qint64)> watchSink_;
+    std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator_;
     std::optional<std::tuple<bool, qint64, qint64>> sentWatch_;
     std::vector<agentspeed::report::Event> pendingEvents_;
     std::shared_ptr<const agentspeed::report::Sample> lastSample_;

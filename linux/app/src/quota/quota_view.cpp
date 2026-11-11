@@ -73,6 +73,7 @@ void QuotaView::setPublication(const QuotaPublication& publication) {
     rawStatuses_ = publication.statuses;
     setCli(publication.cliPath.isEmpty() ? cliPath_ : publication.cliPath, publication.cliState);
     setZcodeKeySaved(publication.zcodeKeySaved);
+    estimates_ = publication.estimates;
     rebuild();
 }
 
@@ -80,6 +81,23 @@ void QuotaView::setInvite(bool on) {
     if (demo_ || inviteOn_ == on) return;
     inviteOn_ = on;
     rebuild();
+}
+
+void QuotaView::setEstimates(Estimates estimates) {
+    if (demo_ || estimates == estimates_) return;
+    estimates_ = std::move(estimates);
+    rebuild();
+}
+
+void QuotaView::setMoney(quota_estimate_text::Money money) {
+    if (money == money_) return;
+    money_ = std::move(money);
+    rebuild();
+}
+
+const std::vector<agentspeed::quota::estimate::Entry>* QuotaView::estimatesOf(const QString& key) const {
+    const auto it = estimates_.find(key);
+    return it == estimates_.end() ? nullptr : &it->second;
 }
 
 void QuotaView::applyHost(const remote::RelayMessage& message) {
@@ -185,7 +203,7 @@ void QuotaView::rebuild() {
     QStringList listed;
     for (const auto& s : local_) {
         if (!hasWindows(s.snapshot)) continue;
-        const auto l = quota_text::lines(*s.snapshot, nowMs, strings_, format);
+        const auto l = quota_text::lines(*s.snapshot, nowMs, strings_, format, estimatesOf(key(s.source)), money_);
         lines.insert(key(s.source), l);
         spoken.insert(key(s.source), quota_text::spoken(l, strings_));
         if (nowMs - s.snapshot->observedMs <= kListedWithinMs) listed.push_back(key(s.source));
@@ -197,7 +215,7 @@ void QuotaView::rebuild() {
         for (const auto& [source, report] : host.reports) {
             if (!demo_ && (shown == hostShown_.end() || !shown->second.contains(key(source)))) continue;
             if (report.snapshot.windows.empty() || nowMs - report.snapshot.observedMs > kListedWithinMs) continue;
-            const auto l = quota_text::lines(report.snapshot, nowMs, strings_, format);
+            const auto l = quota_text::lines(report.snapshot, nowMs, strings_, format, estimatesOf(key(source) + QLatin1Char('@') + hostId), money_);
             rows.push_back(QVariantMap{{QStringLiteral("source"), key(source)},
                                        {QStringLiteral("name"), strings_.t(QStringLiteral("source.") + key(source))},
                                        {QStringLiteral("lines"), l},
@@ -236,7 +254,7 @@ QVariantList QuotaView::cardItems(const QStringList& sources, const QStringList&
             out.push_back(QVariantMap{{QStringLiteral("key"), key(s.source)},
                                       {QStringLiteral("source"), key(s.source)},
                                       {QStringLiteral("name"), strings_.t(QStringLiteral("source.") + key(s.source))},
-                                      {QStringLiteral("lines"), quota_text::lines(*s.snapshot, nowMs, strings_, format)}});
+                                      {QStringLiteral("lines"), quota_text::lines(*s.snapshot, nowMs, strings_, format, estimatesOf(key(s.source)), money_)}});
         }
     }
     for (const auto& [hostId, name] : hostNames_) {
@@ -250,10 +268,63 @@ QVariantList QuotaView::cardItems(const QStringList& sources, const QStringList&
             out.push_back(QVariantMap{{QStringLiteral("key"), key(source) + QLatin1Char('@') + hostId},
                                       {QStringLiteral("source"), key(source)},
                                       {QStringLiteral("name"), strings_.t(QStringLiteral("source.") + key(source)) + QStringLiteral(" · ") + name},
-                                      {QStringLiteral("lines"), quota_text::lines(report.snapshot, nowMs, strings_, format)}});
+                                      {QStringLiteral("lines"), quota_text::lines(report.snapshot, nowMs, strings_, format,
+                                                                                   estimatesOf(key(source) + QLatin1Char('@') + hostId), money_)}});
         }
     }
     return out;
+}
+
+// Demo mode: estimates of the demo's Codex, Claude and host windows (screenshots of DESIGN 4 and 2a.6).
+void QuotaView::loadDemoEstimates(std::int64_t nowMs, const QString& host) {
+    namespace est = agentspeed::quota::estimate;
+    constexpr std::int64_t h = 3'600'000, m = 60'000, usd = 1'000'000;
+    const auto entry = [&](const char* source, const char* kind, std::optional<std::string> name, std::int64_t minutes, double vendor, double live,
+                           std::int64_t resetsAtMs, double used, std::optional<double> cap, double low, std::optional<double> high, est::Confidence confidence,
+                           int windows, std::optional<std::string> plan, std::optional<std::string> tier, std::optional<double> coverage) {
+        est::Entry e;
+        e.source = source;
+        e.sources = {source};
+        e.kind = kind;
+        e.name = std::move(name);
+        e.minutes = minutes;
+        e.usedPercent = vendor;
+        e.liveExact = live;
+        e.livePercent = live;
+        e.liveEstimated = live - vendor >= 0.5;
+        e.resetsAtMs = resetsAtMs;
+        e.usedMicroUsd = static_cast<std::int64_t>(used * usd);
+        if (cap) e.capMicroUsd = static_cast<std::int64_t>(*cap * usd);
+        e.lowMicroUsd = static_cast<std::int64_t>(low * usd);
+        if (high) e.highMicroUsd = static_cast<std::int64_t>(*high * usd);
+        e.confidence = confidence;
+        e.coverage = coverage;
+        if (cap) e.accountUsedMicroUsd = static_cast<std::int64_t>(*cap * live / 100 * usd);
+        e.windows = windows;
+        e.plan = std::move(plan);
+        e.tier = std::move(tier);
+        return e;
+    };
+    using C = est::Confidence;
+    const std::optional<std::string> none;
+    estimates_ = {
+        {QStringLiteral("codex"), {entry("codex", "sevenDay", none, 10080, 23, 24.6, nowMs + 4 * 24 * h + 5 * h, 92.4, 400, 392, 408, C::Medium, 2, "promax", none, 0.86)}},
+        {QStringLiteral("claudeCode"),
+         {entry("claudeCode", "fiveHour", none, 300, 41, 43.2, nowMs + 3 * h + 12 * m, 36.1, 83.6, 82.0, 85.3, C::High, 9, "claude_max", "default_claude_max_20x", 0.97),
+          entry("claudeCode", "sevenDay", none, 10080, 96, 96, nowMs + 19 * h + 40 * m, 4938.2, 5742, 5629, 5857, C::Medium, 1, "claude_max", "default_claude_max_20x", 0.9)}},
+        {QStringLiteral("claudeDesktop"),
+         {entry("claudeDesktop", "sevenDay", none, 10080, 86, 86.4, nowMs + 2 * 24 * h + 6 * h, 209.3, 832, 801, 864, C::Low, 2, "claude_team", none, 0.29),
+          entry("claudeDesktop", "modelWeek", std::string("Fable"), 10080, 27, 27, nowMs + 2 * 24 * h + 6 * h, 41.2, std::nullopt, 152, std::nullopt, C::Low, 1,
+                "claude_team", none, std::nullopt)}},
+        {QStringLiteral("codex@") + host,
+         {entry("codex", "fiveHour", none, 300, 12, 13.1, nowMs + 1 * h + 50 * m, 4.8, 37.5, 36.4, 38.6, C::Medium, 3, "pro", none, 0.94),
+          entry("codex", "sevenDay", none, 10080, 58, 58, nowMs + 3 * 24 * h + 2 * h, 61.0, std::nullopt, 0, std::nullopt, C::None, 0, "pro", none, std::nullopt)}},
+    };
+    for (auto& [_, list] : estimates_) {
+        for (auto& e : list) {
+            if (e.confidence == C::None) e.lowMicroUsd.reset();
+        }
+    }
 }
 
 void QuotaView::loadDemo(std::int64_t nowMs) {
@@ -295,6 +366,7 @@ void QuotaView::loadDemo(std::int64_t nowMs) {
     };
     report(SourceKind::Codex, {w(Kind::FiveHour, 12, nowMs + 1 * h + 50 * m), w(Kind::SevenDay, 58, nowMs + 3 * 24 * h + 2 * h)});
     report(SourceKind::ClaudeCode, {w(Kind::FiveHour, 67, nowMs + 2 * h + 5 * m), w(Kind::SevenDay, 34, nowMs + 5 * 24 * h)});
+    loadDemoEstimates(nowMs, host);
     demoHost.bridge = remote::HostQuotaBridge{host.toStdString(), remote::HostQuotaBridge::State::Ok, "~/.claude/settings.json"};
     // Every kind of status line once; AGENT_SPEED_QUOTA_DEMO=<cli state> picks the bridge's (ok by default).
     const auto at = nowMs - 4 * m;

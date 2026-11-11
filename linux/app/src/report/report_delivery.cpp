@@ -175,7 +175,11 @@ void ReportController::build(const agentspeed::report::Ticket& ticket, const age
     envelope.windowMs = ticket.windowMs;
     envelope.activity = ticket.activity;
     envelope.titleLevel = run_->title.level();
-    run_->bodies[ticket.seq] = agentspeed::report::fitted(envelope, content, sample, options(*discovery_, switches())).data;
+    auto opts = options(*discovery_, switches());
+    opts.quotas = quotaSection(run_->quotas, *discovery_, settings_.quotaOn(), envelope.sentAtMs, envelope.activity == agentspeed::report::Activity::Leaving);
+    auto built = agentspeed::report::fitted(envelope, content, sample, opts);
+    if (built.quotasDropped) run_->quotas.dropped();
+    run_->bodies[ticket.seq] = std::move(built.data);
 }
 
 void ReportController::send(const agentspeed::report::Ticket& ticket) {

@@ -17,6 +17,7 @@
 
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
+#include "agentspeed/quota/estimate/estimator.hpp"
 #include "agentspeed/remote_protocol.hpp"
 #include "agentspeed/tz.hpp"
 #include "format.hpp"
@@ -175,7 +176,12 @@ void HistoryWorker::analyze() {
             sinceProgress.restart();
             emit progress(done, total);
         };
-        analyzer_->run(locations, enabled, agentspeed::localZone(environment), zoneId, [this] { return cancelled_.load(); }, onProgress);
+        const auto report = analyzer_->run(locations, enabled, agentspeed::localZone(environment), zoneId, [this] { return cancelled_.load(); }, onProgress);
+        // QUOTAS 10.3: the spend that ended before the run started (two minutes of slack) comes from the history.
+        if (estimator_ && !report.cancelled) {
+            estimator_->setHistory(analyzer_->estimateSpend(lastRunMs_ - agentspeed::history::kEstimateKeepMs),
+                                   (lastRunMs_ - 120'000) / 60'000 * 60'000);
+        }
     } catch (const std::exception& error) {
         qWarning("history analysis failed: %s", error.what());
     }
