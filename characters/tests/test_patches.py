@@ -235,3 +235,25 @@ class ReelTests(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+class PatchOrderTests(unittest.TestCase):
+    def test_patches_lie_above_the_face_eyes_over_mouths_over_expressions(self):
+        from characters.rig.build import ordered_parts
+        base = face_layers()
+        loaded = [Variant(vid, "patch", None, [layer(f"face@{vid}", "face", ellipse(*CENTER, 50, 50), SKIN)],
+                          ["mouth"], region=region)
+                  for vid, region in (("gaze-left", "eyes"), ("mouth-a", "mouth"), ("expr-smile", "face"))]
+        names = [layer_.name for layer_, _ in ordered_parts(base, loaded)]
+        face = names.index("face")
+        self.assertEqual(names[face + 1:face + 4], ["face@expr-smile", "face@mouth-a", "face@gaze-left"])
+        self.assertEqual(names[face + 4], base[2].name)
+
+
+class PackStateTests(unittest.TestCase):
+    def test_a_pack_takes_only_known_mood_poses(self):
+        from characters.rig import pack
+        spec = {"id": "x", "packVersion": 1, "name": {}, "vendors": [], "accent": "#000000"}
+        with tempfile.TemporaryDirectory() as out:
+            with self.assertRaises(ValueError):
+                pack.build(spec, {"idle": out}, out, {"nap": out})

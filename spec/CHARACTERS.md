@@ -99,6 +99,12 @@ https://github.com/zoefix/agent-speed/releases/download/characters/catalog.json
 
 The rest pose (all defaults) reproduces the illustration exactly. Skinning may run on the CPU or the GPU.
 
+The build (`characters/rig`) bends the body at the waist: the top and the skirt layer weigh `chest` above it and
+`lower` below it, blending from 0.3 face heights above to 0.1 below, so a cape the skirt layer carries from the
+shoulders moves with the chest. The waist is halfway between the top's lower edge and the skirt's upper edge, unless
+the pose estimator finds both shoulders and both hips and that point lies outside 0.5–0.9 of the way from the
+shoulders to the hips (a cape in the skirt layer, a coat to the knees): then it is at 0.65 of the way.
+
 ### Variants
 
 A pose's `variants` (characters/README.md) are parts that swap in over its drawn parts through the parameter
@@ -117,13 +123,8 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
   `expr-<name>` (region `face`: `smile`, `laugh`, `wink`, `surprised`, `pout`, `shy`, `thinking`, `sleepy`, `yawn`,
   `focused`, `smug`, `worried`, `excited`), `mouth-<a|i|u|o|closed>` (region `mouth`) and
   `gaze-<left|right|up|down|closed>` (region `eyes`); sides are image sides. The build leaves out an edit that barely
-  changes its region (a `mouth-closed` on a face whose mouth is closed already).
-
-The build (`characters/rig`) bends the body at the waist: the top and the skirt layer weigh `chest` above it and
-`lower` below it, blending from 0.3 face heights above to 0.1 below, so a cape the skirt layer carries from the
-shoulders moves with the chest. The waist is halfway between the top's lower edge and the skirt's upper edge, unless
-the pose estimator finds both shoulders and both hips and that point lies outside 0.5–0.9 of the way from the
-shoulders to the hips (a cape in the skirt layer, a coat to the knees): then it is at 0.65 of the way.
+  changes its region (a `mouth-closed` on a face whose mouth is closed already), and an arm edit whose split draws
+  both arms as one layer (a hand across the face center).
 
 ### Appendages
 

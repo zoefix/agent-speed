@@ -38,6 +38,10 @@ illustration ──See-Through──▶ layered PSD ──rig.build──▶ pac
   swing), one action at a time (arm gestures, two-arm combos, hops, a spin, side steps, a curtsy, a sway dance,
   running in place, head and face gestures), and second-order springs on top so every move overshoots and settles.
   Curves pass through their keys on a monotone cubic (PCHIP).
+- A living pack (face patches, mood poses) also takes the app's inputs: `reference/motions/behavior.py` turns the
+  agents' phases, a new peak, trouble and the user's cursor into a mood that picks her pose, expression, gaze, lip
+  flaps and actions, and she turns her head toward the cursor (spec/CHARACTERS.md, Behavior). `reference/session.py`
+  films a scripted session of it on the stage, the cursor drawn.
 
 ## Run
 
@@ -52,11 +56,28 @@ python3 -m venv .venv && .venv/bin/pip install -r characters/requirements.txt
     --out claude-variants.mp4 --variants-sheet claude-variants.png
 .venv/bin/python -m characters.reference.stage --package characters/build/claude --pose boost=characters/build/claude-boost \
     --out claude-stage.mp4
-.venv/bin/python -m unittest characters.tests.test_reference characters.tests.test_patches
+.venv/bin/python -m unittest characters.tests.test_reference characters.tests.test_patches characters.tests.test_behavior
 ```
 
 A manifest entry of a face patch names its region and the edit, and no PSD:
-`{"id": "expr-laugh", "kind": "patch", "region": "face", "image": "expr-laugh.png"}`.
+`{"id": "expr-laugh", "kind": "patch", "region": "face", "image": "expr-laugh.png"}`. Patch ids are `expr-<name>`
+(region `face`), `mouth-<a|i|u|o|closed>` (`mouth`) and `gaze-<left|right|up|down|closed>` (`eyes`). An arm gesture
+edit `gesture-<name>.png`, once See-Through has split it, is an arm variant with id `<name>` (`gesture-stretch` is
+`reach`) on the free side: `{"id": "wave", "kind": "arm", "side": "right", "psd": "gesture-wave.psd",
+"image": "gesture-wave.png"}`.
+
+Mood poses build like band poses, from their own PSD and art, and join the pack as states; the session film plays
+them with the band poses:
+
+```bash
+.venv/bin/python -m characters.rig.build --psd claude-think.psd --reference claude-think.png --name claude-think \
+    --out characters/build/claude-think --spec characters/specs/claude.json
+.venv/bin/python -m characters.rig.pack --spec characters/specs/claude.json --pose idle=characters/build/claude \
+    --pose cruise=characters/build/claude-cruise ... --state think=characters/build/claude-think ... --out dist
+.venv/bin/python -m characters.reference.session --package dist/claude/poses/idle --pose cruise=dist/claude/poses/cruise \
+    ... --state think=dist/claude/poses/think ... --spec characters/specs/claude.json --out claude-session.mp4 \
+    --captions claude-session.txt
+```
 
 Every character, Claude too, builds with her spec, which brings the rig hints (tail, wings, legs inside the skirt,
 recovery of art See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
@@ -84,7 +105,7 @@ draws it:
 | `physics` | Pendulum chains: `anchor`, `segments` (lengths), `inputs` (anchor x and y per parameter unit), `outputs` (parameter = tanh(segment angle relative to the previous segment / `degrees`)), `stiffness`, `damping`, `wind`. |
 | `parts` | Draw `order`, `vertices`, `uv` (atlas pixels), `triangles`, `influences` per vertex with `bones` and `weights` (sum 1). A vertex is the weighted sum of its bones' world transforms applied to it. |
 | `partDrivers` | `param`, `part`, `keys` [[value, opacity], …]. A part's opacity is the product of its drivers (1 without any). |
-| `variants` | `id`, `kind` (`arm`, `face`, `patch`), `param` (`Var.<id>`, 0 to 1). Arms add `side`, `front`, `arm`, `forearm`, `lead` (values the old arm's parameters move to before the swap) and `approach` (values the new arm starts from). Faces add `mouth` (`Mouth.<id>`) and `eyesClosed`. Patches add `region` (`face`, `mouth`, `eyes`); their one part, `face@<id>`, is fully in by `Var` 0.5 while the parts it replaces fade out to 1, and the eyes it replaces no longer blink or glance while it shows. |
+| `variants` | `id`, `kind` (`arm`, `face`, `patch`), `param` (`Var.<id>`, 0 to 1). Arms add `side`, `front`, `arm`, `forearm`, `lead` (values the old arm's parameters move to before the swap) and `approach` (values the new arm starts from). Faces add `mouth` (`Mouth.<id>`) and `eyesClosed`. Patches add `region` (`face`, `mouth`, `eyes`); their one part, `face@<id>`, is fully in by `Var` 0.5 while the parts it replaces fade out to 1, and the eyes it replaces no longer blink or glance while it shows (a blink over a patch shows `gaze-closed`). Patches are drawn by region, `face`, then `mouth`, then `eyes`, all above the face and below the bangs. |
 
 Sides (`.left`, `.right`) are image sides.
 

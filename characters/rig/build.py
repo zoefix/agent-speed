@@ -9,7 +9,8 @@ The optional manifest lists pose and expression variants:
                 {"id": "expr-laugh", "kind": "patch", "region": "face", "image": "expr-laugh.png"}]}
 
 A patch is an edit of the pose image that changes only the face (region `face`, `mouth` or `eyes`); it needs no PSD.
-An edit whose registration fails or that barely changes its region is left out with a message.
+An edit whose registration fails or that barely changes its region is left out with a message, and so is an arm
+variant whose split has no layer for that arm.
 """
 import argparse
 import json
@@ -116,8 +117,13 @@ def object_bone(layer, lm):
     return f"hand.{side}" if side in lm["hands"] else f"forearm.{side}"
 
 
+PATCH_ORDER = ("face", "mouth", "eyes")
+
+
 def ordered_parts(base, loaded):
-    """Base parts keep their order; variant parts sit right above what they replace, raised arms on top."""
+    """Base parts keep their order; variant parts sit right above what they replace, raised arms on top. Face patches
+    lie above the face by region, eyes over mouths over whole faces, so a blink or a talking mouth shows over an
+    expression."""
     index = {layer.name: i for i, layer in enumerate(base)}
     slots = [(float(i), layer, None) for i, layer in enumerate(base)]
     top = float(len(base))
@@ -129,7 +135,8 @@ def ordered_parts(base, loaded):
                 continue
             base_name = layer.name.split("@")[0]
             anchor = index.get(base_name, index.get(v.replaces[0], len(base)))
-            slots.append((anchor + 0.5 + 0.001 * k, layer, v))
+            region = 0.01 * PATCH_ORDER.index(v.region) if v.kind == "patch" else 0.0
+            slots.append((anchor + 0.5 + region + 0.001 * k, layer, v))
     return [(layer, v) for _, layer, v in sorted(slots, key=lambda s: s[0])]
 
 
@@ -254,6 +261,13 @@ def main(argv=None):
             try:
                 v = variants.load(spec, reference, size, lm, object_side, base_names, patch_base)
             except patches.Rejected as e:
+                rejected.append(spec["id"])
+                print(f"variant {spec['id']:<11} rejected: {e}")
+                continue
+            except ValueError as e:
+                if spec["kind"] != "arm":
+                    raise
+                # A split that drew both arms as one layer (a hand across the face center) gives no arm to swap.
                 rejected.append(spec["id"])
                 print(f"variant {spec['id']:<11} rejected: {e}")
                 continue
