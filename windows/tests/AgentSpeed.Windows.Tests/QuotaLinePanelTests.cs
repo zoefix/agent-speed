@@ -181,6 +181,53 @@ public class QuotaLinePanelTests
     }
 
     [Fact]
+    public void ASectionWithAmountsSwitchesEveryLineToItsShortResetAndOneWithoutKeepsTheLongOnes()
+    {
+        var (withAmounts, without) = OnStaThread(() =>
+        {
+            (bool Short, double Width, bool Line2Short) Lay(string amount)
+            {
+                var columns = new QuotaColumns();
+                var stack = new StackPanel { Width = SourcesWidth };
+                foreach (var a in new[] { amount, string.Empty })
+                {
+                    var panel = new QuotaLinePanel { Columns = columns, Height = 16 };
+                    panel.Children.Add(Text("7d", 11, FontWeights.Medium));
+                    panel.Children.Add(new QuotaBar { Value = 0.4 });
+                    panel.Children.Add(Text("≈100%", 11.5, FontWeights.SemiBold));
+                    panel.Children.Add(Text(a, 11, FontWeights.Medium));
+                    var cell = new QuotaResetCell();
+                    cell.Children.Add(Text("週五 09:00 重置", 11, FontWeights.Normal));
+                    cell.Children.Add(Text("週五", 11, FontWeights.Normal));
+                    panel.Children.Add(cell);
+                    panel.Children.Add(Text(string.Empty, 11, FontWeights.Normal));
+                    stack.Children.Add(panel);
+                }
+
+                for (var pass = 0; pass < 3; pass++)
+                {
+                    stack.Measure(new Size(SourcesWidth, double.PositiveInfinity));
+                    stack.Arrange(new Rect(0, 0, SourcesWidth, stack.DesiredSize.Height));
+                    stack.UpdateLayout();
+                }
+
+                var first = (QuotaLinePanel)stack.Children[0];
+                var second = (QuotaLinePanel)stack.Children[1];
+                return (first.ShortResets && ((QuotaResetCell)first.Children[4]).UseShort, first.Children[4].DesiredSize.Width,
+                    second.ShortResets && ((QuotaResetCell)second.Children[4]).UseShort);
+            }
+
+            return (Lay("US$4,938 / ≈5,742"), Lay(string.Empty));
+        });
+
+        Assert.True(withAmounts.Short);
+        Assert.True(withAmounts.Line2Short);
+        Assert.False(without.Short);
+        Assert.False(without.Line2Short);
+        Assert.True(withAmounts.Width < without.Width, $"{withAmounts.Width} < {without.Width}");
+    }
+
+    [Fact]
     public void WithoutAnyAmountTheResetFollowsThePercent()
     {
         var placed = OnStaThread(() => Lay(SourcesWidth, ("5h", "3 小時後重置", string.Empty), ("7d", "週五 09:00 重置", string.Empty)));

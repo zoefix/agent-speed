@@ -5,12 +5,13 @@ namespace AgentSpeed.Dashboard.Quota;
 
 /// <summary>
 /// The widths every quota line of a section shares (DESIGN 4): the widest label, the <c>≈100%</c> cell, the widest amount
-/// and the widest reset text (with its age where the age is shown), so bars, percents and resets line up across rows. Lines
-/// report what they need and are measured again when a shared width changes. Each section (Sources, Hosts) has its own.
+/// and the widest reset text (with its age where the age is shown, and without it in <see cref="ResetText"/>), so bars,
+/// percents and resets line up across rows. Lines report what they need and are measured again when a shared width changes.
+/// Each section (Sources, Hosts) has its own.
 /// </summary>
 internal sealed class QuotaColumns
 {
-    private readonly Dictionary<QuotaLinePanel, (double Label, double Percent, double Amount, double Reset)> _wants = [];
+    private readonly Dictionary<QuotaLinePanel, (double Label, double Percent, double Amount, double Reset, double ResetText)> _wants = [];
 
     public double Label { get; private set; }
 
@@ -21,9 +22,12 @@ internal sealed class QuotaColumns
 
     public double Reset { get; private set; }
 
-    public void Report(QuotaLinePanel line, double label, double percent, double amount, double reset)
+    /// <summary>The widest reset text alone: the section's short resets show only while all of them fit.</summary>
+    public double ResetText { get; private set; }
+
+    public void Report(QuotaLinePanel line, double label, double percent, double amount, double reset, double resetText)
     {
-        _wants[line] = (label, percent, amount, reset);
+        _wants[line] = (label, percent, amount, reset, resetText);
         Recompute(except: line);
     }
 
@@ -41,12 +45,14 @@ internal sealed class QuotaColumns
         var percent = _wants.Count == 0 ? 0 : _wants.Values.Max(w => w.Percent);
         var amount = _wants.Count == 0 ? 0 : _wants.Values.Max(w => w.Amount);
         var reset = _wants.Count == 0 ? 0 : _wants.Values.Max(w => w.Reset);
-        if (Math.Abs(label - Label) < 0.01 && Math.Abs(percent - Percent) < 0.01 && Math.Abs(amount - Amount) < 0.01 && Math.Abs(reset - Reset) < 0.01)
+        var resetText = _wants.Count == 0 ? 0 : _wants.Values.Max(w => w.ResetText);
+        if (Math.Abs(label - Label) < 0.01 && Math.Abs(percent - Percent) < 0.01 && Math.Abs(amount - Amount) < 0.01 && Math.Abs(reset - Reset) < 0.01
+            && Math.Abs(resetText - ResetText) < 0.01)
         {
             return;
         }
 
-        (Label, Percent, Amount, Reset) = (label, percent, amount, reset);
+        (Label, Percent, Amount, Reset, ResetText) = (label, percent, amount, reset, resetText);
         foreach (var line in _wants.Keys)
         {
             if (!ReferenceEquals(line, except))
@@ -60,11 +66,13 @@ internal sealed class QuotaColumns
 /// <summary>
 /// One quota line (DESIGN 4): the label in the section's label column, 8, the bar (flexible, at least
 /// <see cref="CompactBar"/>), 8, the percent right-aligned in a cell as wide as <c>≈100%</c>, 8, the amount left-aligned in
-/// the section's amount column and 8 after it (neither while no line of the section has an amount), then the short reset in
-/// the rest of the row, whole or not at all (the tooltip's first line always has the long one), and the age after it. The
+/// the section's amount column and 8 after it (neither while no line of the section has an amount), then the reset in the
+/// rest of the row and the age after it. The reset is the long one, its tail truncated, while no line of the section has an
+/// amount; beside amounts it is the short one (<see cref="ShortResets"/>, owner's choice 2026-11-11), shown only while every
+/// short reset of the section fits beside a <see cref="CompactBar"/> bar, and the tooltip then opens with the long one. The
 /// age is shown only while the line still holds it with a <see cref="MinBar"/> bar; otherwise the reset keeps its room and
-/// the age moves to the tooltip (<see cref="AgeShown"/>). Children in that order: label, bar, percent cell, amount, reset,
-/// age.
+/// the age moves to the tooltip (<see cref="AgeShown"/>). Children in that order: label, bar, percent cell, amount, reset
+/// (a <see cref="QuotaResetCell"/>), age.
 /// </summary>
 internal sealed class QuotaLinePanel : Panel
 {
@@ -100,6 +108,12 @@ internal sealed class QuotaLinePanel : Panel
 
     /// <summary>False while the line has an age it cannot hold: the tooltip carries it instead.</summary>
     public static readonly DependencyProperty AgeShownProperty = AgeShownKey.DependencyProperty;
+
+    private static readonly DependencyPropertyKey ShortResetsKey = DependencyProperty.RegisterReadOnly(
+        nameof(ShortResets), typeof(bool), typeof(QuotaLinePanel), new PropertyMetadata(false));
+
+    /// <summary>The section has amounts: the line shows the short reset (or none), and its tooltip opens with the long one.</summary>
+    public static readonly DependencyProperty ShortResetsProperty = ShortResetsKey.DependencyProperty;
 
     private const int LabelChild = 0;
     private const int BarChild = 1;
@@ -140,6 +154,11 @@ internal sealed class QuotaLinePanel : Panel
 
     public bool AgeShown => (bool)GetValue(AgeShownProperty);
 
+    public bool ShortResets => (bool)GetValue(ShortResetsProperty);
+
+    /// <summary>The section's short resets all fit the room the line gives its reset.</summary>
+    private bool ResetFits(double room) => !ShortResets || room + 0.5 >= Math.Max(Columns?.ResetText ?? 0, _natural.Reset);
+
     private bool HasAge => _natural.Age > 0;
 
     private double ResetNeed => _natural.Reset + (HasAge && _ageFits ? _natural.Age : 0);
@@ -175,10 +194,18 @@ internal sealed class QuotaLinePanel : Panel
             height = Math.Max(height, InternalChildren[i].DesiredSize.Height);
         }
 
+        var columns = Columns;
+        var shortResets = Math.Max(columns?.Amount ?? 0, Whole(Desired(AmountChild))) > 0;
+        SetValue(ShortResetsKey, shortResets);
+        if (InternalChildren.Count > ResetChild && InternalChildren[ResetChild] is QuotaResetCell cell && cell.UseShort != shortResets)
+        {
+            cell.UseShort = shortResets;
+            cell.Measure(infinite);
+        }
+
         _natural = (Desired(LabelChild), Desired(PercentChild), Whole(Desired(AmountChild)), Whole(Desired(ResetChild)), Whole(Desired(AgeChild)));
         var available = double.IsFinite(availableSize.Width) ? availableSize.Width : MinBar * 3;
-        var columns = Columns;
-        columns?.Report(this, _natural.Label, _natural.Percent, _natural.Amount, ResetNeed);
+        columns?.Report(this, _natural.Label, _natural.Percent, _natural.Amount, ResetNeed, _natural.Reset);
 
         // The age stays only while the reset and the age fit beside a comfortable bar in the section's columns.
         var label = Math.Max(columns?.Label ?? 0, _natural.Label);
@@ -188,7 +215,7 @@ internal sealed class QuotaLinePanel : Panel
         if (fits != _ageFits)
         {
             _ageFits = fits;
-            columns?.Report(this, _natural.Label, _natural.Percent, _natural.Amount, ResetNeed);
+            columns?.Report(this, _natural.Label, _natural.Percent, _natural.Amount, ResetNeed, _natural.Reset);
         }
 
         SetValue(AgeShownKey, !HasAge || _ageFits);
@@ -217,8 +244,8 @@ internal sealed class QuotaLinePanel : Panel
         Place(AmountChild, x, amount, h, alignRight: false);
         x += AmountPart(amount);
 
-        // The short reset shows whole or not at all.
-        var resetShown = reset + 0.5 >= _natural.Reset;
+        // Beside amounts the short resets show whole, or not at all.
+        var resetShown = ResetFits(reset);
         Place(ResetChild, x, resetShown ? reset : 0, h, alignRight: false);
         if (InternalChildren.Count > ResetChild)
         {

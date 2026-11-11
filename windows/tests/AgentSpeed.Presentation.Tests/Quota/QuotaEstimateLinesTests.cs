@@ -66,18 +66,20 @@ public sealed class QuotaEstimateLinesTests
     // MARK: Amount
 
     [Fact]
-    public void TheAmountShowsTheUsedAmountThenTheEstimatedCapWithoutItsSymbol()
+    public void TheAmountShowsTheUsedAmountThenTheEstimatedCapWithoutItsSymbolInTheRatesDigits()
     {
         var week = Lines((Week, Estimate(Week)))[1];
-        Assert.Equal("$161.00", week.Amount);
-        Assert.Equal(" / ≈5,742.00", week.AmountCap);
+        Assert.Equal("$161", week.Amount);
+        Assert.Equal(" / ≈5,742", week.AmountCap);
+        var small = Lines((Week, Estimate(Week, used: 12_300_000, cap: 83_200_000)))[1];
+        Assert.Equal(("$12.30", " / ≈83.20"), (small.Amount, small.AmountCap));
     }
 
     [Fact]
     public void AnAccountWithOnlyALowerBoundShowsAtLeast()
     {
         var week = Lines((Week, Estimate(Week, cap: null, low: 737 * Dollar, high: null, confidence: EstimateConfidence.Low)))[1];
-        Assert.Equal(("$161.00", " / ≥737.00"), (week.Amount, week.AmountCap));
+        Assert.Equal(("$161", " / ≥737"), (week.Amount, week.AmountCap));
     }
 
     [Fact]
@@ -85,7 +87,7 @@ public sealed class QuotaEstimateLinesTests
     {
         var none = Estimate(Week, cap: null, low: null, high: null, confidence: EstimateConfidence.None, coverage: null);
         var spent = Lines((Week, none))[1];
-        Assert.Equal(("$161.00", string.Empty), (spent.Amount, spent.AmountCap));
+        Assert.Equal(("$161", string.Empty), (spent.Amount, spent.AmountCap));
 
         var idle = Lines((Week, none with { UsedMicroUsd = 0 }))[1];
         Assert.Equal((string.Empty, string.Empty), (idle.Amount, idle.AmountCap));
@@ -95,7 +97,7 @@ public sealed class QuotaEstimateLinesTests
     public void ACapWithoutSpendStillShowsTheZero()
     {
         var week = Lines((Week, Estimate(Week, used: 0)))[1];
-        Assert.Equal(("$0.00", " / ≈5,742.00"), (week.Amount, week.AmountCap));
+        Assert.Equal(("$0", " / ≈5,742"), (week.Amount, week.AmountCap));
     }
 
     [Fact]
@@ -237,6 +239,7 @@ public sealed class QuotaEstimateLinesTests
         var week = Lines(loc, Cost(loc, "TWD", 32.5m), Now, (Week, Estimate(Week, used: 160 * Dollar)))[1];
         Assert.Equal("NT$5,200", week.Amount);
         Assert.Equal(" / ≈186,615", week.AmountCap);
+        Assert.DoesNotContain("NT$", week.AmountCap, StringComparison.Ordinal);
         Assert.Equal("本機已用 NT$5,200（US$160.00）", week.Details[0]);
         Assert.StartsWith("上限約 NT$186,615（US$5,742.00）（範圍 NT$182,000–NT$191,750）", week.Details[1], StringComparison.Ordinal);
     }
@@ -295,7 +298,7 @@ public sealed class QuotaEstimateLinesTests
 
         var groups = HostQuotaGroups.Of(state, Host, Now, En, TimeZoneInfo.Utc, Cost());
         var codex = Assert.Single(groups[0].Lines);
-        Assert.Equal(("$42.00", " / ≈5,742.00", true), (codex.Amount, codex.AmountCap, codex.Estimated));
+        Assert.Equal(("$42.00", " / ≈5,742", true), (codex.Amount, codex.AmountCap, codex.Estimated));
         var kimi = Assert.Single(groups[1].Lines);
         Assert.Equal((string.Empty, false), (kimi.Amount, kimi.HasEstimate));
         Assert.Contains("42.00 US Dollar used, cap about 5,742.00 US Dollar, estimated", HostQuotaGroups.Spoken(groups, En), StringComparison.Ordinal);

@@ -141,16 +141,19 @@
         </Style>
 
         <!-- One quota line (DESIGN 4, Quota lines), shared by Sources and Hosts: the label, the bar with its pace mark, the
-             percent (a secondary ≈ before an extrapolated one), the amount used with the estimated cap, the short reset and the
-             age, in the columns its section passes down (QuotaLinePanel.Columns, set from code). The tooltip starts with the long
-             reset; a line without room for its age keeps the reset and moves the age to its tooltip. -->
+             percent (a secondary ≈ before an extrapolated one), the amount used with the estimated cap, the reset (the short one
+             beside amounts, when the tooltip starts with the long one) and the age, in the columns its section passes down
+             (QuotaLinePanel.Columns, set from code). A line without room for its age keeps the reset and moves the age to its
+             tooltip. -->
         <DataTemplate x:Key="QuotaLine" DataType="{x:Type quota:QuotaLineRow}">
             <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent" ToolTipService.InitialShowDelay="500"
                                   ToolTipService.ShowDuration="20000">
                 <quota:QuotaLinePanel.ToolTip>
                     <ToolTip>
                         <StackPanel MaxWidth="300">
-                            <TextBlock Text="{Binding TipReset}" Visibility="{Binding TipReset, Converter={StaticResource HasText}}" />
+                            <StackPanel Visibility="{Binding PlacementTarget.ShortResets, RelativeSource={RelativeSource AncestorType=ToolTip}, Converter={StaticResource Visible}, FallbackValue=Collapsed}">
+                                <TextBlock Text="{Binding TipReset}" Visibility="{Binding TipReset, Converter={StaticResource HasText}}" />
+                            </StackPanel>
                             <TextBlock Text="{Binding TipUpdated}" />
                             <TextBlock Text="{Binding TipAge}"
                                        Visibility="{Binding PlacementTarget.AgeShown, RelativeSource={RelativeSource AncestorType=ToolTip}, Converter={StaticResource Hidden}, FallbackValue=Collapsed}" />
@@ -201,8 +204,12 @@
                                      TextElement.FontSize="11" TextElement.FontWeight="Medium" Typography.NumeralAlignment="Tabular"
                                      TextElement.Foreground="{DynamicResource TextFillColorPrimaryBrush}"
                                      ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
-                <quota:QuotaFadeText Text="{Binding ResetText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <quota:QuotaResetCell TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}">
+                    <quota:QuotaFadeText Text="{Binding ResetText}"
+                                         ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                    <quota:QuotaFadeText Text="{Binding ResetShort}"
+                                         ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                </quota:QuotaResetCell>
                 <quota:QuotaFadeText Text="{Binding AgeText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorTertiaryBrush}"
                                      ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
             </quota:QuotaLinePanel>

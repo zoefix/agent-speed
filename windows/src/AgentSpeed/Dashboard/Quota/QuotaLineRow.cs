@@ -7,9 +7,9 @@ using AgentSpeed.Presentation.Quota;
 namespace AgentSpeed.Dashboard.Quota;
 
 /// <summary>
-/// One quota line of a Sources or host row (DESIGN 4): kept across updates so its bar and texts move instead of jumping. The
-/// row shows the short reset; its tooltip reads the long reset, the snapshot's time, the age when the line has no room for
-/// it, the pace, then the estimate's details.
+/// One quota line of a Sources or host row (DESIGN 4): kept across updates so its bar and texts move instead of jumping. Its
+/// tooltip reads the long reset when the line shows the short one (or none), the snapshot's time, the age when the line has
+/// no room for it, the pace, then the estimate's details.
 /// </summary>
 internal sealed class QuotaLineRow : ObservableObject
 {
@@ -31,6 +31,7 @@ internal sealed class QuotaLineRow : ObservableObject
     private double _pace = double.NaN;
     private bool _passed;
     private string _reset = string.Empty;
+    private string _resetShort = string.Empty;
     private string _age = string.Empty;
     private Brush _fill = Brushes.Gray;
     private bool _critical;
@@ -56,12 +57,16 @@ internal sealed class QuotaLineRow : ObservableObject
 
     public bool Passed { get => _passed; private set => Set(ref _passed, value); }
 
+    /// <summary>The long reset (QUOTAS 7), shown while no line of the section has an amount.</summary>
     public string ResetText { get => _reset; private set => Set(ref _reset, value); }
+
+    /// <summary>The short reset (<c>3h</c>, <c>週五</c>), shown beside amounts.</summary>
+    public string ResetShort { get => _resetShort; private set => Set(ref _resetShort, value); }
 
     /// <summary><c> · 2 小時前更新</c> in tertiary while the snapshot is over an hour old (without the separator after no reset).</summary>
     public string AgeText { get => _age; private set => Set(ref _age, value); }
 
-    /// <summary>The tooltip's first line, the long reset (QUOTAS 7); empty while unknown or passed.</summary>
+    /// <summary>The tooltip's first line while the line shows the short reset or none: the long one; empty while unknown or passed.</summary>
     public string TipReset { get => _tipReset; private set => Set(ref _tipReset, value); }
 
     /// <summary><c>quota.updated</c>.</summary>
@@ -119,10 +124,11 @@ internal sealed class QuotaLineRow : ObservableObject
         AmountCap = line.AmountCap;
         Bar = line.Bar;
         Pace = line.Pace ?? double.NaN;
-        ResetText = line.ResetShort;
+        ResetText = line.ResetLong;
+        ResetShort = line.ResetShort;
         TipReset = line.ResetLong;
         var age = line.Age.StartsWith(Separator, StringComparison.Ordinal) ? line.Age[Separator.Length..] : line.Age;
-        AgeText = line.ResetShort.Length > 0 || age.Length == 0 ? line.Age : age;
+        AgeText = line.ResetLong.Length > 0 || age.Length == 0 ? line.Age : age;
         var lineBreak = line.Tooltip.IndexOf('\n', StringComparison.Ordinal);
         TipUpdated = lineBreak < 0 ? line.Tooltip : line.Tooltip[..lineBreak];
         TipPace = lineBreak < 0 ? string.Empty : line.Tooltip[(lineBreak + 1)..];

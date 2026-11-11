@@ -61,10 +61,10 @@ public static class QuotaEstimateText
     }
 
     /// <summary>
-    /// The dashboard's amount cell: the used amount with its symbol, then <c>quota.amount.cap</c> (<c> / ≈5,742</c>) or
-    /// <c>quota.amount.atLeast</c> (<c> / ≥737</c>), the cap in the same formatting without the symbol (owner's choice
-    /// 2026-11-11: the row then holds the short reset), split off as the cap part; only the used amount at confidence
-    /// <c>none</c>; nothing without spend and cap.
+    /// The dashboard's amount cell in the rate's digits: the used amount with its symbol (<c>US$4,938</c>), then
+    /// <c>quota.amount.cap</c> (<c> / ≈5,742</c>) or <c>quota.amount.atLeast</c> (<c> / ≥598</c>), the cap in the same digits
+    /// without the symbol (owner's choice 2026-11-11: the row then holds the short reset), split off as the cap part; only
+    /// the used amount at confidence <c>none</c>; nothing without spend and cap.
     /// </summary>
     public static (string Used, string Cap) Amount(QuotaWindowEstimate? estimate, CostDisplay? cost, Localizer loc)
     {
@@ -74,11 +74,11 @@ public static class QuotaEstimateText
             return (string.Empty, string.Empty);
         }
 
-        var used = cost.AmountText(estimate.UsedMicroUsd);
+        var used = cost.CompactAmountText(estimate.UsedMicroUsd);
         var full = CapOf(estimate) switch
         {
-            (CapKind.About, var cap) => loc.Format("quota.amount.cap", used, cost.Amount(cap).Number),
-            (CapKind.AtLeast, var low) => loc.Format("quota.amount.atLeast", used, cost.Amount(low).Number),
+            (CapKind.About, var cap) => loc.Format("quota.amount.cap", used, cost.CompactAmountNumber(cap)),
+            (CapKind.AtLeast, var low) => loc.Format("quota.amount.atLeast", used, cost.CompactAmountNumber(low)),
             _ => null,
         };
         if (full is null)
