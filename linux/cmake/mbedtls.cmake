@@ -17,10 +17,13 @@ if(MbedTLS_FOUND)
 endif()
 
 include(FetchContent)
+# Extracted files get the extraction time (CMake 3.24+; CI's Ubuntu 22.04 has 3.22).
+if(POLICY CMP0135)
+    cmake_policy(SET CMP0135 NEW)
+endif()
 FetchContent_Declare(mbedtls
     URL https://github.com/Mbed-TLS/mbedtls/releases/download/mbedtls-3.6.6/mbedtls-3.6.6.tar.bz2
-    URL_HASH SHA256=8fb65fae8dcae5840f793c0a334860a411f884cc537ea290ce1c52bb64ca007a
-    DOWNLOAD_EXTRACT_TIMESTAMP TRUE)
+    URL_HASH SHA256=8fb65fae8dcae5840f793c0a334860a411f884cc537ea290ce1c52bb64ca007a)
 set(ENABLE_PROGRAMS OFF CACHE BOOL "" FORCE)
 set(ENABLE_TESTING OFF CACHE BOOL "" FORCE)
 set(USE_SHARED_MBEDTLS_LIBRARY OFF CACHE BOOL "" FORCE)
