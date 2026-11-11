@@ -83,12 +83,6 @@ void QuotaView::setInvite(bool on) {
     rebuild();
 }
 
-void QuotaView::setEstimates(Estimates estimates) {
-    if (demo_ || estimates == estimates_) return;
-    estimates_ = std::move(estimates);
-    rebuild();
-}
-
 void QuotaView::setMoney(quota_estimate_text::Money money) {
     if (money == money_) return;
     money_ = std::move(money);

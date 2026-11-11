@@ -96,10 +96,9 @@ public:
     void setPublication(const QuotaPublication& publication);
     // DESIGN 4 invitation: Claude Code is enabled, its bridge is off and the invitation was not dismissed.
     void setInvite(bool on);
-    // QUOTAS 10.7, 10.8: the account-window entries each shown source spends on, by `<source>` (this computer) or
-    // `<source>@<host id>`, and the display currency their amounts are in.
+    // QUOTAS 10.7, 10.8: the account-window entries each shown source spends on come with the publication, by
+    // `<source>` (this computer) or `<source>@<host id>`; their amounts are in the display currency.
     using Estimates = std::map<QString, std::vector<agentspeed::quota::estimate::Entry>>;
-    void setEstimates(Estimates estimates);
     void setMoney(quota_estimate_text::Money money);
     // REMOTE 11.1: a host's quota line (`quota`, `quotaRemoved`, `quotaBridge`).
     void applyHost(const agentspeed::remote::RelayMessage& message);

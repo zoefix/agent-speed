@@ -1,6 +1,7 @@
 #include "agentspeed/quota/estimate/estimator.hpp"
 
 #include <algorithm>
+#include <tuple>
 
 #include "agentspeed/json.hpp"
 #include "agentspeed/quota/codex.hpp"
@@ -208,9 +209,19 @@ std::vector<Entry> Estimator::entries(std::int64_t nowMs) const {
     }
     std::vector<Entry> out;
     if (!engine) return out;
+    // REPORTING-EXTENSIONS 11.4: (sources, window) once per report; of two accounts (a host's whose resets contradict
+    // this computer's), the newest vendor value's.
+    using Identity = std::tuple<std::vector<std::string>, std::string, std::optional<std::string>, std::int64_t>;
+    std::map<Identity, const EntryInput*> newest;
+    for (const auto& in : engine->current()) {
+        if (!accounts.contains(in.account)) continue;
+        auto& held = newest[{in.sources, in.kind, in.name, in.minutes}];
+        if (!held || in.t > held->t) held = &in;
+    }
     for (const auto& in : engine->current()) {
         if (out.size() >= kMaxEntries) break;
-        if (accounts.contains(in.account)) out.push_back(reportEntry(in, nowMs, engine->ledger(), engine->priceVersion()));
+        const auto held = newest.find({in.sources, in.kind, in.name, in.minutes});
+        if (held != newest.end() && held->second == &in) out.push_back(reportEntry(in, nowMs, engine->ledger(), engine->priceVersion()));
     }
     return out;
 }

@@ -5,6 +5,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <set>
 
 #include "agentspeed/json.hpp"
 #include "agentspeed/quota/estimate/estimator.hpp"
@@ -154,7 +155,12 @@ TEST(QuotaEstimator, AHostSharesTheLocalAccountOfItsKeyUnlessItsResetsContradict
     // The report takes the shown accounts' entries, at most 16, without keys in its JSON.
     const auto entries = e.entries(now);
     ASSERT_FALSE(entries.empty());
-    for (const auto& x : entries) EXPECT_EQ(x.json().compact().find(key), std::string::npos);
+    std::set<std::pair<std::vector<std::string>, std::string>> identities;
+    for (const auto& x : entries) {
+        EXPECT_EQ(x.json().compact().find(key), std::string::npos);
+        // REPORTING-EXTENSIONS 11.4: (sources, window) once, though host-other is an account of its own.
+        EXPECT_TRUE(identities.insert({x.sources, x.kind}).second) << x.kind;
+    }
 }
 
 // History before the cut, the live engine after it: a response is never counted twice.
