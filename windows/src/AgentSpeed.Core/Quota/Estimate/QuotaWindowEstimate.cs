@@ -5,12 +5,12 @@ namespace AgentSpeed.Core.Quota.Estimate;
 /// <see cref="LivePercent"/> replaces the vendor's percent (and its bar); <see cref="Estimated"/> marks it with <c>≈</c>.
 /// <see cref="ResetsAtMs"/> is the reset it counts to (the next instance's after the vendor's passed; null while unknown).
 /// The cap is <see cref="CapMicroUsd"/>, or only <see cref="LowMicroUsd"/> as "at least" when it is null; nothing at
-/// <see cref="EstimateConfidence.None"/>.
+/// <see cref="EstimateConfidence.None"/>. <see cref="PlanInferred"/> marks a plan inferred from the quota (QUOTAS 10.2, 10.8).
 /// </summary>
 public sealed record QuotaWindowEstimate(
     long AtMs, double LivePercent, bool Estimated, long? ResetsAtMs, bool VendorPassed, long UsedMicroUsd, long UnpricedRequests,
     long? CapMicroUsd, long? LowMicroUsd, long? HighMicroUsd, EstimateConfidence Confidence, double? Coverage, long? AccountUsedMicroUsd,
-    int Windows, string? Plan, string? Tier)
+    int Windows, string? Plan, string? Tier, bool PlanInferred = false)
 {
     public bool HasCap => CapMicroUsd is not null;
 
@@ -23,6 +23,6 @@ public sealed record QuotaWindowEstimate(
         var e = entry.Estimate;
         return new QuotaWindowEstimate(entry.AtMs, entry.LivePercent, entry.LiveEstimated, entry.ResetsAtMs, entry.UsedPercent is null,
             entry.UsedMicroUsd, entry.UnpricedRequests, e.CapMicroUsd, e.LowMicroUsd, e.HighMicroUsd, e.Confidence, e.Coverage,
-            e.AccountUsedMicroUsd, e.Windows, entry.Plan, entry.Tier);
+            e.AccountUsedMicroUsd, e.Windows, entry.Plan, entry.Tier, entry.PlanInferred);
     }
 }

@@ -94,6 +94,82 @@ public sealed class QuotaEstimatePipelineTests
         _ => throw new InvalidDataException(change),
     };
 
+    [Fact]
+    public void EveryGroupIsCovered()
+    {
+        var groups = Root.GetProperty("pipeline").EnumerateObject().ToDictionary(g => g.Name, g => g.Value);
+        Assert.Equal(["cadence", "chains", "classes", "claude", "inference", "keys", "ledger", "live", "loweredCap", "planChange", "report", "store"],
+            groups.Keys.Order(StringComparer.Ordinal));
+        Assert.Equal(6, groups["claude"].GetArrayLength());
+        Assert.Equal(4, groups["inference"].GetArrayLength());
+        Assert.Equal(6, groups["store"].GetArrayLength());
+        Assert.Equal(2, groups["report"].GetArrayLength());
+    }
+
+    /// <summary>
+    /// QUOTAS 10.2: Desktop's own account takes the plan its windows show (Ultra without a 5-hour window) in the entries of two
+    /// Desktop cases, which carried none before.
+    /// </summary>
+    [Theory]
+    [InlineData("Desktop on another account of the organization")]
+    [InlineData("Desktop without CLI values")]
+    public void DesktopsOwnAccountWithoutAFiveHourWindowIsUltra(string name)
+    {
+        var c = Case("claude", name);
+        var (model, evaluation) = Evaluate(c.GetProperty("input"));
+        var now = c.GetProperty("input").GetProperty("now").GetInt64();
+        var entries = evaluation.Entries(now, c.GetProperty("input").GetProperty("origin").GetString()!);
+        AssertSame(c.GetProperty("expected").GetProperty("entries"), EntriesJson(entries), name);
+        var desktop = Assert.Single(entries, e => e.Source == SourceKind.ClaudeDesktop);
+        Assert.Equal(((string?)PlanInference.Ultra, (string?)null, true), (desktop.Plan, desktop.Tier, desktop.PlanInferred));
+        Assert.Equal(PlanInferenceRule.Shape, evaluation.InferredPlans[model.AccountOf(SourceKind.ClaudeDesktop, now)!].Rule);
+        Assert.All(entries.Where(e => e.Source != SourceKind.ClaudeDesktop), e => Assert.False(e.PlanInferred));
+    }
+
+    /// <summary>
+    /// QUOTAS 10.2, 10.8: the display data marks an inferred plan, a plan the CLI names stays unmarked, and the inferred plan
+    /// never forms a cap class.
+    /// </summary>
+    [Fact]
+    public void TheDisplayMarksAnInferredPlan()
+    {
+        var week = EstimateNames.WindowId(QuotaWindowKind.SevenDay, null, 10_080);
+        QuotaWindowEstimate? Shown(EstimateModel model, EstimateEvaluation evaluation, SourceKind source, string window, long now) =>
+            model.AccountOf(source, now) is { } account && evaluation.EntryFor(account, window, now) is { } entry ? QuotaWindowEstimate.From(entry) : null;
+        (EstimateModel, EstimateEvaluation, long) Build(string name)
+        {
+            var input = Case("inference", name).GetProperty("input");
+            var (model, evaluation) = Evaluate(input);
+            return (model, evaluation, input.GetProperty("now").GetInt64());
+        }
+
+        var (ultra, ultraEvaluation, ultraNow) = Build("Desktop without a 5-hour window");
+        var shown = Shown(ultra, ultraEvaluation, SourceKind.ClaudeDesktop, week, ultraNow)!;
+        Assert.Equal(((string?)PlanInference.Ultra, (string?)null, true), (shown.Plan, shown.Tier, shown.PlanInferred));
+        Assert.Equal([PlanInferenceRule.Shape], ultraEvaluation.InferredPlans.Values.Select(p => p.Rule));
+        Assert.All(ultraEvaluation.Instances, x => Assert.False(x.Class.IsPlan));
+
+        var (team, teamEvaluation, teamNow) = Build("Desktop of a team organization");
+        var plain = Shown(team, teamEvaluation, SourceKind.ClaudeDesktop, week, teamNow)!;
+        Assert.Equal(((string?)null, false), (plain.Plan, plain.PlanInferred));
+        Assert.Empty(teamEvaluation.InferredPlans);
+
+        var (quarter, quarterEvaluation, quarterNow) = Build("Desktop at a quarter of the CLI's 5-hour cap");
+        var own = Shown(quarter, quarterEvaluation, SourceKind.ClaudeDesktop, PlanInference.FiveHour, quarterNow)!;
+        Assert.Equal(("claude_max", "default_claude_max_5x", true), (own.Plan, own.Tier, own.PlanInferred));
+        var named = Shown(quarter, quarterEvaluation, SourceKind.ClaudeCode, PlanInference.FiveHour, quarterNow)!;
+        Assert.Equal(("claude_max", "default_claude_max_20x", false), (named.Plan, named.Tier, named.PlanInferred));
+        Assert.DoesNotContain(quarterEvaluation.Estimates.Keys, k => k.Tier == "default_claude_max_5x");
+        Assert.Equal(PlanInferenceRule.Ratio, Assert.Single(quarterEvaluation.InferredPlans).Value.Rule);
+
+        var (half, halfEvaluation, halfNow) = Build("Desktop at half the CLI's 5-hour cap");
+        Assert.Empty(halfEvaluation.InferredPlans);
+        Assert.False(Shown(half, halfEvaluation, SourceKind.ClaudeDesktop, PlanInference.FiveHour, halfNow)!.PlanInferred);
+    }
+
+    private static JsonElement Case(string group, string name) =>
+        Root.GetProperty("pipeline").GetProperty(group).EnumerateArray().Single(x => x.GetProperty("name").GetString() == name);
+
     /// <summary>
     /// Seen 2026-11-11: a service rejected two Codex accounts of one window, which a report could not tell apart. They are two
     /// entries with the same sources and window, told apart by their tags, two identities for the cadence, and ordered by
@@ -237,6 +313,17 @@ public sealed class QuotaEstimatePipelineTests
             }
 
             result["estimates"] = estimates;
+        }
+
+        if (want.Contains("plans"))
+        {
+            var plans = new JsonObject();
+            foreach (var (account, p) in evaluation.InferredPlans.OrderBy(p => p.Key, StringComparer.Ordinal))
+            {
+                plans[account] = new JsonObject { ["plan"] = p.Plan, ["tier"] = p.Tier, ["rule"] = PlanInference.Name(p.Rule) };
+            }
+
+            result["plans"] = plans;
         }
 
         if (want.Contains("entries"))

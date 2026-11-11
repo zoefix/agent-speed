@@ -116,6 +116,37 @@ public sealed class QuotaEstimateFixtureTests
         Assert.All(tags, t => Assert.True(AccountKeys.IsKey(t.GetProperty("expected").GetString())));
     }
 
+    /// <summary>QUOTAS 10.2 <i>Inferred plan</i>: the shape rule, then the 5-hour ratio to the anchors.</summary>
+    [Fact]
+    public void InferPlan()
+    {
+        var cases = Root.GetProperty("accounts").GetProperty("inferPlan").EnumerateArray().ToList();
+        Assert.Equal(10, cases.Count);
+        static CapEstimate? Estimate(JsonElement e) => e.ValueKind != JsonValueKind.Object
+            ? null
+            : new CapEstimate(e.GetProperty("confidence").GetString() switch
+            {
+                "high" => EstimateConfidence.High,
+                "medium" => EstimateConfidence.Medium,
+                "low" => EstimateConfidence.Low,
+                _ => EstimateConfidence.None,
+            }, OptionalDouble(e, "cap"), null, null, 0);
+        foreach (var c in cases)
+        {
+            var kinds = c.GetProperty("kinds").EnumerateArray().Select(k => EstimateNames.ParseKind(k.GetString())!.Value).ToList();
+            var anchors = c.GetProperty("anchors").EnumerateArray()
+                .Select(a => new PlanAnchor(a.GetProperty("plan").GetString()!, OptionalString(a, "tier"), Estimate(a.GetProperty("estimate"))!)).ToList();
+            var got = PlanInference.Infer(kinds, Estimate(c.GetProperty("own")), anchors);
+            var actual = new JsonObject
+            {
+                ["plan"] = got?.Plan,
+                ["tier"] = got?.Tier,
+                ["rule"] = got is null ? null : PlanInference.Name(got.Rule),
+            };
+            AssertSame(c.GetProperty("expected"), ToElement(actual), c.GetProperty("why").GetString()!);
+        }
+    }
+
     [Fact]
     public void FingerprintsAndMerges()
     {

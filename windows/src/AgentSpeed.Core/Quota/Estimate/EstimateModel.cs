@@ -53,6 +53,25 @@ public sealed partial class EstimateModel
     /// <summary>Claude Desktop's own organization keys as they changed.</summary>
     public IReadOnlyList<KeyEntry> DesktopOrganizations => _desktopOrgs;
 
+    /// <summary>The organization key of each Claude CLI key-timeline entry that has one (fresh and stored).</summary>
+    internal IReadOnlyDictionary<KeyEntry, string> OrgKeys => _orgKeys;
+
+    /// <summary>This computer's newest Claude Desktop snapshot of each organization key, every window of it (QUOTAS 10.2).</summary>
+    internal Dictionary<string, EstimateSnapshot> NewestDesktopSnapshots()
+    {
+        var newest = new Dictionary<string, EstimateSnapshot>(StringComparer.Ordinal);
+        foreach (var s in _input.Snapshots)
+        {
+            if (s is { Source: SourceKind.ClaudeDesktop, DesktopOrgKey: { } org }
+                && (!newest.TryGetValue(org, out var current) || s.ObservedMs >= current.ObservedMs))
+            {
+                newest[org] = s;
+            }
+        }
+
+        return newest;
+    }
+
     /// <param name="salt">The account salt (<see cref="AccountKeys.Salt"/>).</param>
     /// <param name="install">The install id (QUOTAS 10.1) that keys the accounts without an id.</param>
     public static EstimateModel Build(EstimateInput input, ReadOnlySpan<byte> salt, string install, int priceVersion)
