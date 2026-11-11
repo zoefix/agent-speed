@@ -71,8 +71,10 @@ private:
     int reads_ = 0;
 };
 
-// Claude Desktop is signed in while its snapshot is at most 45 minutes old: Desktop only refreshes it while signed in.
-constexpr std::int64_t kDesktopSignedInMs = 45 * 60'000;
+// Claude Desktop is signed in while its snapshot is at most 24 hours old: Desktop only refreshes it while signed in and
+// in use (when its window comes to the front, then every few minutes while it stays there), so a Desktop left in the
+// background keeps an older one (QUOTAS 6).
+constexpr std::int64_t kDesktopSignedInMs = 24 * 3'600'000LL;
 bool desktopSignedIn(const std::optional<Snapshot>& snapshot, std::int64_t nowMs);
 
 }  // namespace agentspeed::quota

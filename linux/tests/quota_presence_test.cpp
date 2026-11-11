@@ -142,3 +142,17 @@ TEST(QuotaPresence, MarkerPathsAndDesktopSignIn) {
     EXPECT_FALSE(desktopSignedIn(snapshot, 1'000'001 + kDesktopSignedInMs));
     EXPECT_FALSE(desktopSignedIn(std::nullopt, 0));
 }
+
+// Regression (2026-11-11): Claude Desktop fetches its usage only while its window is in front, so after hours in the
+// background its snapshot is hours old and it is still signed in; a day old, it is not.
+TEST(QuotaPresence, DesktopLeftInTheBackgroundStaysSignedIn) {
+    constexpr std::int64_t kMinute = 60'000;
+    const std::int64_t now = 100 * 24 * 60 * kMinute;
+    quota::Snapshot snapshot;
+    for (std::int64_t minutes : {46LL, 66LL, 3 * 60LL, 23 * 60LL, 24 * 60LL}) {
+        snapshot.observedMs = now - minutes * kMinute;
+        EXPECT_TRUE(desktopSignedIn(snapshot, now)) << minutes << " min old";
+    }
+    snapshot.observedMs = now - 25 * 60 * kMinute;
+    EXPECT_FALSE(desktopSignedIn(snapshot, now));
+}
