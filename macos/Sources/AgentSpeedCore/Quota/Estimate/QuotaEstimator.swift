@@ -209,11 +209,13 @@ public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     func inputs(nowMs: Int64) -> QuotaEstimateInputs {
         var inputs = QuotaEstimateInputs()
         let cut = history?.cutMs ?? .min
+        let keep = nowMs - QuotaEstimateConstants.keepMs
         var lines: [QuotaCodexLine.ID: QuotaCodexLine] = [:]
+        // A file left unchanged keeps the share it was analysed with: only its last 8 days count.
         for file in (history?.files ?? [:]).keys.sorted() {
             let share = history!.files[file]!
-            inputs.spend += share.spend.filter { $0.endMs < cut }
-            for line in share.lines { lines[line.id] = line }
+            inputs.spend += share.spend.filter { $0.endMs < cut && $0.endMs >= keep }
+            for line in share.lines where line.ts >= keep { lines[line.id] = line }
         }
         for (_, item) in live.sorted(by: { ($0.value.endMs, $0.key) < ($1.value.endMs, $1.key) })
         where item.host != nil || item.endMs >= cut {

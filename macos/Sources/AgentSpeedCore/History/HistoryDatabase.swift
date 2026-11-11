@@ -37,8 +37,8 @@ final class HistoryDatabase {
     }
 
     /// Without `migrating`, a store of an older schema keeps its version and only gets `meta` and the side tables
-    /// created on every open (`day_traffic`, `contribution_unpriced`, `perf_records`, the remote hosts' tables); a new
-    /// store always gets the full schema. A newer store throws before anything is changed.
+    /// created on every open (`day_traffic`, `contribution_unpriced`, `perf_records`, `estimate_files`, the remote
+    /// hosts' tables); a new store always gets the full schema. A newer store throws before anything is changed.
     private init(path: String, migrating: Bool) throws {
         self.path = path
         if path != ":memory:" {
