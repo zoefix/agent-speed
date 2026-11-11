@@ -200,10 +200,10 @@ public sealed class OrbGpuOrb
     /// and the running models; true when anything shown changed.
     /// </summary>
     public bool SetCharacterReadings(double now, OrbLinesSample? performance, Cost.LiveMoney? money, bool generating, OrbLatency? latency = null,
-        IReadOnlyList<OrbModelRow>? models = null)
+        IReadOnlyList<OrbModelRow>? models = null, Cost.CostToday? costToday = null)
     {
         Scene.Update(Math.Max(Scene.Time, now));
-        return _characterReadings.Apply(performance, money, generating, Scene.Time, latency, models);
+        return _characterReadings.Apply(performance, money, generating, Scene.Time, latency, models, costToday);
     }
 
     /// <summary>The <c>character</c> network card's traffic sample; true when anything shown changed.</summary>

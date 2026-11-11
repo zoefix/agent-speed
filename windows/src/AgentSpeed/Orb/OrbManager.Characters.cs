@@ -148,6 +148,7 @@ internal sealed partial class OrbManager
             CharacterName = installed?.Manifest.Name.For(language),
             Accent = installed is not null && CharacterManifest.Rgb(installed.Manifest.Accent) is { } rgb ? new Rgba(rgb.R, rgb.G, rgb.B) : Rgba.FromHex("#D97757"),
             CostGlyph = _loc["cost.glyph"],
+            CostTodayGlyph = _loc["character.cost.today"],
             TodayLine = today > 0 ? _loc.Format("boards.today", SpeedFormat.Tokens(today)) : null,
             AgentsLine = reading.Agents.Count > 0 ? _loc.Format("agents.count", reading.Agents.Count) : null,
             Bits = Settings.Traffic.Bits,
@@ -159,7 +160,7 @@ internal sealed partial class OrbManager
         });
         var generating = reading.GeneratingSources.Count > 0;
         surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating,
-            OrbLatency.Of(PerfSetReadouts.FirstLatency(reading.Agents).Ms, _loc), ModelRows(reading.Agents));
+            OrbLatency.Of(PerfSetReadouts.FirstLatency(reading.Agents).Ms, _loc), ModelRows(reading.Agents), entry.Feed.CardToday);
     }
 
     /// <summary>

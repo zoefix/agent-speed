@@ -296,6 +296,15 @@ QString CharacterStyle::modelText() const {
     return {};
 }
 
+double CharacterStyle::costRatePresence() const {
+    return content_.costTodayAmount.isEmpty() ? 1.0 : std::clamp(content_.costOpacity, 0.0, 1.0);
+}
+
+double CharacterStyle::costRateShare() const {
+    const double p = std::min(1.0, 2 * costRatePresence());
+    return p * p * (3 - 2 * p);
+}
+
 CharacterStyle::PerfRows CharacterStyle::perfRows(const CardMetrics& m) const {
     const auto& in = content_.intel;
     PerfRows r;
@@ -358,11 +367,25 @@ std::array<double, 2> CharacterStyle::cardSize(HudCard card, const Frame& f) con
             return plate(cells.lineWidth(m.t), 2 * CardMetrics::rowHeight(m.t) + m.rowGap);
         }
         case HudCard::Cost: {
-            if (content_.costNumber.isEmpty()) return {0, 0};
-            double w = advance(content_.costGlyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25 + advance(content_.costNumber, m.p, 600);
-            if (content_.costAtLeast) w += advance(QStringLiteral("≥"), kUnitScale * m.p, 500) + 0.08 * m.p;
-            if (!content_.costUnknown) w += m.cellGap() + advance(content_.costUnit, kUnitScale * m.t, 500);
-            return plate(w, CardMetrics::rowHeight(m.p));
+            const double share = costRateShare();
+            const bool rate = share > 0 && !content_.costNumber.isEmpty();
+            const bool today = !content_.costTodayAmount.isEmpty();
+            if (!rate && !today) return {0, 0};
+            double w = 0, h = 0;
+            if (rate) {
+                double rw = advance(content_.costGlyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25 + advance(content_.costNumber, m.p, 600);
+                if (content_.costAtLeast) rw += advance(QStringLiteral("≥"), kUnitScale * m.p, 500) + 0.08 * m.p;
+                if (!content_.costUnknown) rw += m.cellGap() + advance(content_.costUnit, kUnitScale * m.t, 500);
+                w = share * rw;
+                h = share * CardMetrics::rowHeight(m.p);
+            }
+            if (today) {
+                double tw = advance(content_.costTodayGlyph, kUnitScale * m.t, 600) + m.glyphGap() + advance(content_.costTodayAmount, m.t, 600);
+                if (content_.costTodayAtLeast) tw += advance(QStringLiteral("≥"), kUnitScale * m.t, 500) + 0.08 * m.t;
+                w = std::max(w, tw);
+                h += (rate ? share * m.rowGap : 0) + CardMetrics::rowHeight(m.t);
+            }
+            return plate(w, h);
         }
         case HudCard::Agents: {
             double w = 0;
@@ -432,7 +455,8 @@ void CharacterStyle::layoutCards(double dt, const Frame& f, const ac::Performer&
     cardShown_[1] = r.model && has(HudCard::Model);
     cardShown_[2] = content_.intel.opacity > 0.5 && has(HudCard::Performance);
     cardShown_[3] = r.network && content_.net.opacity > 0.5 && has(HudCard::Network);
-    cardShown_[4] = r.cost && content_.costOpacity > 0.5 && has(HudCard::Cost);
+    // The 今日 row has no quiet rule: the card stays while there is a cost today (user's choice, 2026-11-11).
+    cardShown_[4] = r.cost && (content_.costOpacity > 0.5 || !content_.costTodayAmount.isEmpty()) && has(HudCard::Cost);
     cardShown_[5] = r.agents && d >= 192 && has(HudCard::Agents);
     cardShown_[models] = r.models && content_.modelsOpacity > 0.5 && has(HudCard::Models);
     // No quiet rule: a quota does not change by the second, it shows whenever it applies; once the wings have measured its
@@ -803,17 +827,36 @@ void CharacterStyle::drawCards(Scene& scene, const Frame& f) {
             }
             case HudCard::Cost: {
                 plate(pen, size.w, size.h, std::nullopt, spine);
-                const double baseline = top + CardMetrics::baseline(m.p);
-                double x = left;
-                scene.add(pen.leading(content_.costGlyph, kUnitScale * m.p, 600, x, baseline, secondary));
-                x += advance(content_.costGlyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25;
-                if (content_.costAtLeast) {
-                    scene.add(pen.leading(QStringLiteral("≥"), kUnitScale * m.p, 500, x, baseline, secondary));
-                    x += advance(QStringLiteral("≥"), kUnitScale * m.p, 500) + 0.08 * m.p;
+                const double share = costRateShare();
+                const bool rate = share > 0 && !content_.costNumber.isEmpty();
+                if (rate && costRateAlpha() > 0.01) {
+                    const Pen faded = pen.faded(costRateAlpha());
+                    const double baseline = top + CardMetrics::baseline(m.p);
+                    double x = left;
+                    scene.add(faded.leading(content_.costGlyph, kUnitScale * m.p, 600, x, baseline, secondary));
+                    x += advance(content_.costGlyph, kUnitScale * m.p, 600) + m.glyphGap() * 1.25;
+                    if (content_.costAtLeast) {
+                        scene.add(faded.leading(QStringLiteral("≥"), kUnitScale * m.p, 500, x, baseline, secondary));
+                        x += advance(QStringLiteral("≥"), kUnitScale * m.p, 500) + 0.08 * m.p;
+                    }
+                    scene.add(faded.leading(content_.costNumber, m.p, 600, x, baseline, content_.costUnknown ? secondary : number));
+                    x += advance(content_.costNumber, m.p, 600);
+                    if (!content_.costUnknown) {
+                        scene.add(faded.leading(content_.costUnit, kUnitScale * m.t, 500, x + m.cellGap(), baseline, secondary));
+                    }
                 }
-                scene.add(pen.leading(content_.costNumber, m.p, 600, x, baseline, content_.costUnknown ? secondary : number));
-                x += advance(content_.costNumber, m.p, 600);
-                if (!content_.costUnknown) scene.add(pen.leading(content_.costUnit, kUnitScale * m.t, 500, x + m.cellGap(), baseline, secondary));
+                if (!content_.costTodayAmount.isEmpty()) {
+                    // 今日 $12.34 at t under the rate: the label in the secondary token, the amount in the value token.
+                    const double baseline = top + (rate ? share * (CardMetrics::rowHeight(m.p) + m.rowGap) : 0) + CardMetrics::baseline(m.t);
+                    double x = left;
+                    scene.add(pen.leading(content_.costTodayGlyph, kUnitScale * m.t, 600, x, baseline, secondary));
+                    x += advance(content_.costTodayGlyph, kUnitScale * m.t, 600) + m.glyphGap();
+                    if (content_.costTodayAtLeast) {
+                        scene.add(pen.leading(QStringLiteral("≥"), kUnitScale * m.t, 500, x, baseline, secondary));
+                        x += advance(QStringLiteral("≥"), kUnitScale * m.t, 500) + 0.08 * m.t;
+                    }
+                    scene.add(pen.leading(content_.costTodayAmount, m.t, 600, x, baseline, content_.costTodayUnknown ? secondary : number));
+                }
                 break;
             }
             case HudCard::Agents: {

@@ -48,7 +48,7 @@ static void addCost(QVariantMap& map, const agentspeed::Snapshot& snap, const st
     const auto rate = Decimal::parse(c.rate.toStdString()).value_or(Decimal(1));
     const auto language = c.language.toStdString();
     double liveCost = 0, weight = 0, knownWeight = 0, liveOutput = 0;
-    std::int64_t todayCost = 0, unpriced = 0;
+    std::int64_t todayCost = 0, unpriced = 0, requests = 0;
     bool anyBillable = false, anyEnabled = false;
     for (const auto& row : snap.sources) {
         if (!row.enabled || (set && !contains(*set, row.source))) continue;
@@ -62,6 +62,7 @@ static void addCost(QVariantMap& map, const agentspeed::Snapshot& snap, const st
         knownWeight += w * row.liveCostKnownShare;
         todayCost += row.todayCostMicroUsd;
         unpriced += row.unpricedRequests;
+        requests += row.todayRequests;
     }
     const double knownShare = weight > 0 ? knownWeight / weight : 1;
     const auto live = agentspeed::money::format(agentspeed::money::ratePerSecond(liveCost, rate), currency, language, Form::Rate);
@@ -74,6 +75,13 @@ static void addCost(QVariantMap& map, const agentspeed::Snapshot& snap, const st
     map.insert(QStringLiteral("costSubscriptionOnly"), anyEnabled && !anyBillable);
     map.insert(QStringLiteral("costTodayText"), todayCost == 0 && unpriced > 0 ? QStringLiteral("–")
                                                                                 : QString::fromStdString((unpriced > 0 ? "≥" : "") + today.text));
+    // The character orb's 費用 card 今日 row (DESIGN 2a.6): shown while the billable sources have a request today.
+    const bool todayUnknown = requests > 0 && unpriced >= requests;
+    map.insert(QStringLiteral("costTodayRequests"), static_cast<qint64>(requests));
+    map.insert(QStringLiteral("costTodayAmount"), todayUnknown ? QStringLiteral("–") : QString::fromStdString(today.text));
+    map.insert(QStringLiteral("costTodayNumber"), QString::fromStdString(today.number));
+    map.insert(QStringLiteral("costTodayUnknown"), todayUnknown);
+    map.insert(QStringLiteral("costTodayAtLeast"), !todayUnknown && unpriced > 0);
 }
 
 QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vector<OrbSpec>& orbs, const OrbContext& c,

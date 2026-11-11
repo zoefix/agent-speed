@@ -2,6 +2,7 @@
 
 #include <QColor>
 #include <QString>
+#include <algorithm>
 #include <array>
 #include <map>
 #include <memory>
@@ -42,6 +43,10 @@ struct CharacterContent {
     QString costGlyph, costNumber, costUnit;
     bool costAtLeast = false, costUnknown = false;
     double costOpacity = 0;  // the cost card's quiet rule
+    // The 今日 row under the rate: today's amount (empty without a request today); while it shows, the rate row leaves
+    // with the quiet rule's fade instead of the whole card.
+    QString costTodayGlyph, costTodayAmount;
+    bool costTodayAtLeast = false, costTodayUnknown = false;
     QString todayLine, agentsLine;
     // The 性能 card's 首字 row: its label, value and unit, and its fade (empty while switched off or without a value).
     QString latencyGlyph, latencyNumber, latencyUnit;
@@ -111,6 +116,10 @@ private:
         double w = 0, h = 0;
     };
     PerfRows perfRows(const cards::CardMetrics& m) const;
+    // The cost card's rate row over its 今日 row: it fades out, then the card closes up under it (whole without 今日).
+    double costRatePresence() const;
+    double costRateAlpha() const { return std::clamp(2 * costRatePresence() - 1, 0.0, 1.0); }
+    double costRateShare() const;
     std::array<double, 2> cardSize(agentspeed::character::HudCard card, const Frame& f) const;
     QString modelText() const;
     CharacterLightning::Strength lightningStrength(const Frame& f) const;

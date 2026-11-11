@@ -58,7 +58,7 @@ internal interface IOrbSurface
     /// models).
     /// </summary>
     void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating,
-        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models);
+        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models, Presentation.Cost.CostToday? costToday);
 
     /// <summary>One traffic sample of the <c>character</c> network card (null while not measured).</summary>
     void SetCharacterNetwork(Presentation.Orb.Lines.OrbLinesSample? network);
