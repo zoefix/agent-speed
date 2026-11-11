@@ -469,6 +469,51 @@ class ProfileTests(unittest.TestCase):
         self.assertAlmostEqual(slow.bpm / fast.bpm, 0.5, places=6)
 
 
+class StretchTests(unittest.TestCase):
+    """Squash stretches her whole figure over the feet, face included: past HELD it reads as the art drawn out, so
+    only an instant of a take-off or a landing goes there (spec/CHARACTERS.md, Motion)."""
+
+    HELD, BRIEF = 0.2, 0.25
+
+    def longest(self, series, dt):
+        run = longest = 0.0
+        for v in series:
+            run = run + dt if v > self.HELD + 1e-9 else 0.0
+            longest = max(longest, run)
+        return longest
+
+    def test_no_action_holds_her_drawn_out(self):
+        from characters.reference.motions.gestures import face_gesture, head_gesture
+        from characters.reference.motions.moves import PROFILE_MOVES, peek, pounce, sidestep
+        from characters.reference.motions import FACE_GESTURES, HEAD_GESTURES, MOVES
+        from characters.reference.stage import Switch
+        actions = {name: build("right", "left") for name, build in MOVES.items()}
+        actions.update({name: make("right", "left") for name, (make, _) in PROFILE_MOVES.items()})
+        actions.update({name: head_gesture(name) for name in HEAD_GESTURES})
+        actions.update({name: face_gesture(name) for name in FACE_GESTURES})
+        actions.update({"step": sidestep("right", "left", 0.5), "peek": peek("right", "left", 1.0),
+                        "pounce": pounce("right", "left", 1.0)})
+        dt = 1 / 240
+        for name, m in actions.items():
+            with self.subTest(name):
+                squash = [m.sample(n * dt).get("Squash", 0.0) for n in range(int(m.duration / dt) + 1)]
+                self.assertLess(self.longest(squash, dt), self.BRIEF)
+        hop = Switch().hop
+        self.assertLess(self.longest([hop(n * dt) for n in range(int(0.52 / dt) + 1)], dt), self.BRIEF, "pose swap")
+
+    def test_she_is_never_held_drawn_out_in_any_band(self):
+        profile = {"signature": ["stretch", "yawn", "tiptoe", "hop", "pounce"], "bounce": 1.4}
+        d = Director(body_params(), arm_out="right", arm_book="left", orb=-1.0, profile=profile)
+        played, squash = set(), []
+        dt = 1 / 60
+        for n in range(int(240 / dt)):
+            d.set_level([0, 0, 2, 6, 10, 13, 3, 0][(n * 8) // int(240 / dt)])
+            squash.append(d.update(dt)["Squash"])
+            played.add(d.last_gesture)
+        self.assertTrue({"stretch", "yawn", "tiptoe"} <= played, played)
+        self.assertLess(self.longest(squash, dt), self.BRIEF)
+
+
 class AppendageTests(unittest.TestCase):
     def scene(self):
         from characters.rig.layers import Layer

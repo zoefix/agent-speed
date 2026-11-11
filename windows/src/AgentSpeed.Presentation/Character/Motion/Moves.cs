@@ -166,7 +166,7 @@ internal static partial class Moves
         c.Set("FootPoint", [(0, 0), (0.25, 1.0), (1.7, 1.0), (d, 0)]);
         c.Set("FootLift", [(0, 0), (0.25, 0.3), (1.7, 0.3), (d, 0)]);
         c.Set("PosY", [(0, 0), (0.2, 0.04), .. Keys.Oscillate(0.25, 1.7, 0.5, 0.025, baseValue: 0.045), (d, 0)]);
-        c.Set("Squash", [(0, 0), (0.25, 0.3), (1.7, 0.25), (d, 0)]);
+        c.Set("Squash", [(0, 0), (0.25, 0.1), (1.7, 0.08), (d, 0)]);
         c.Set("Hip", [(0, 0), .. Keys.Oscillate(0.2, 1.8, 1.0, 0.18), (d, 0)]);
         c.Set($"Arm.{output.Key()}", [(0, 0), (0.3, 0.25), (1.6, 0.25), (d, 0)]);
         c.Set($"Arm.{book.Key()}", [(0, 0), (0.3, 0.15), (1.6, 0.15), (d, 0)]);
@@ -260,7 +260,7 @@ internal static partial class Moves
     {
         const double d = 2.8;
         var c = new CurveSet();
-        c.Set("Squash", [(0, 0), (0.9, 0.6), (1.9, 0.55), (d, 0)]);
+        c.Set("Squash", [(0, 0), (0.9, 0.2), (1.9, 0.18), (d, 0)]);
         c.Set("AngleY", [(0, 0), (0.9, 0.45), (1.9, 0.4), (d, 0)]);
         c.Set("Lean", [(0, 0), (1.0, 0.2), (1.5, -0.2), (2.0, 0), (d, 0)]);
         c.Set("BodyAngleZ", [(0, 0), (1.0, 0.3), (1.5, -0.3), (2.0, 0), (d, 0)]);
