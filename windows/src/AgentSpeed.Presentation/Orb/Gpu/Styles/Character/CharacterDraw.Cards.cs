@@ -156,6 +156,7 @@ public sealed partial class CharacterDraw
         }
 
         _wings.Still = frame.Effects.ReduceMotion || frame.Effects.Level == EffectsIntensity.Off;
+        _wings.Balance = !IsSmall(ctx);
         _wings.Update(dt, _hudTime, new HudFrame((0, 0, side, side), _silhouette, d, anchors), _cardSizes, _cardShown);
     }
 

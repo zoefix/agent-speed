@@ -150,7 +150,9 @@ public sealed record HudFrame((double MinX, double MinY, double MaxX, double Max
 /// around it. When her left side has no room for the whole column, its last cards continue under the speed on her right
 /// (under the models card while it shows); a card changing sides fades out and back in at its new place instead of
 /// crossing her. Where her right side is crowded under the speed, the models card steps right of her outline and narrows,
-/// then moves down past the spilled cards (up to 0.3 D below them) before it hides.
+/// then moves down past the spilled cards (up to 0.3 D below them) before it hides. With <see cref="Balance"/> the column's
+/// last cards also move under the models card until both sides weigh about the same, chosen again only when a card comes,
+/// goes or changes size.
 /// </summary>
 public sealed class HudWings
 {
@@ -175,6 +177,12 @@ public sealed class HudWings
 
     /// <summary>The room (× D) a hidden or lowered models card needs to spare before it comes back.</summary>
     public const double ModelsSpare = 0.04;
+
+    /// <summary>How far (× D) a side's weight may move before the balance is chosen again.</summary>
+    public const double Reweigh = 0.06;
+
+    /// <summary>Weights this close (points) are a tie, which goes to fewer moved cards.</summary>
+    private const double Tie = 0.5;
 
     private const double Dodge = 0.06;
     private const double NearReach = 0.12;
@@ -209,8 +217,25 @@ public sealed class HudWings
     private double _modelsTop;
     private bool _snapModels;
     private double _sinceChange = double.PositiveInfinity;
+    private double _lastGap = double.PositiveInfinity;
     private bool _hugging;
+    private bool _waiting;
     private bool _placed;
+
+    // The splits in order of preference (committed and pending), the cards and weights they were chosen for, and the
+    // pending split's hold.
+    private readonly int[] _rank = new int[HudCards.Column.Length + 1];
+    private readonly int[] _next = new int[HudCards.Column.Length + 1];
+    private readonly double[] _odds = new double[HudCards.Column.Length + 1];
+    private readonly int[] _shownAt = new int[HudCards.Column.Length];
+    private readonly bool[] _basisShown = new bool[HudCards.Count];
+    private readonly double[] _basisHeight = new double[HudCards.Count];
+    private bool _basisBalance;
+    private int _rankCount;
+    private int _nextCount;
+    private bool _pending;
+    private int _candidate = -1;
+    private double _held;
 
     /// <summary>Where the models card goes: right under the speed, below the spilled cards, or nowhere (it hides).</summary>
     public enum ModelsPlace
@@ -292,7 +317,13 @@ public sealed class HudWings
     /// <summary>How many cards of the column (in its order) stay at her left; the rest continue under the speed.</summary>
     public int Split { get; private set; } = HudCards.Column.Length;
 
-    /// <summary>The card is drawn at her right (the speed, the models card, and column cards that spilled over).</summary>
+    /// <summary>
+    /// Splits the column between her two sides so they weigh about the same (DESIGN 2a.6, Balance). Off below S = 96, where
+    /// the column stays at her left and only spills over.
+    /// </summary>
+    public bool Balance { get; set; } = true;
+
+    /// <summary>The card is drawn at her right (the speed, the models card, and column cards moved there by the balance or the spill-over).</summary>
     public bool IsAtHerRight(HudCard card) => card is HudCard.Speed or HudCard.Models || _right[(int)card];
 
     /// <summary>
@@ -338,7 +369,7 @@ public sealed class HudWings
             _presence[(int)HudCard.Models] = 0;
         }
 
-        ColumnAnchors(dt, f, _sizes);
+        ColumnAnchors(dt, f, _sizes, given, shown);
         ModelsAnchor(f);
 
         var d = f.Footprint;
@@ -468,17 +499,40 @@ public sealed class HudWings
 
     /// <summary>
     /// The column: cards stacked from her shoulders down at her left, their right edges on one line clear of her outline;
-    /// cards from <see cref="Split"/> on stack under the speed at her right. The split follows the room with hysteresis
-    /// (<see cref="SpillAfter"/>, <see cref="ReturnAfter"/>); a card whose side changed fades out where it was, jumps, and
-    /// fades back in. Writes the column's targets.
+    /// cards from <see cref="Split"/> on stack under the speed at her right. The split is the best one of the preferred
+    /// order (<see cref="Rank"/>) that fits, chosen again when the cards or their weights change (<see cref="Steady"/>) and
+    /// following the room with hysteresis (<see cref="SpillAfter"/>, <see cref="ReturnAfter"/>), never twice within
+    /// <see cref="ReturnAfter"/>; a card whose side changed fades out where it was, jumps, and fades back in. Writes the
+    /// column's targets.
     /// </summary>
-    private void ColumnAnchors(double dt, HudFrame f, (double W, double H)[] sizes)
+    private void ColumnAnchors(double dt, HudFrame f, (double W, double H)[] sizes, IReadOnlyList<(double W, double H)> given,
+        IReadOnlyList<bool> shown)
     {
         var before = Split;
         _sinceChange += dt;
+        _waiting = false;
+        if (Reweighed(given, shown, f.Footprint) || !_placed)
+        {
+            _pending = true;
+        }
+
+        if (_pending)
+        {
+            _nextCount = Rank(given, shown, ColumnGap * f.Footprint, _next);
+            if (!_placed)
+            {
+                Adopt();
+            }
+        }
+
         if (!_placed || Still)
         {
-            (Split, _hugging) = Best(f, sizes);
+            if (_pending)
+            {
+                Steady(dt, f, sizes);
+            }
+
+            (Split, _hugging) = Best(f, sizes, _rank, _rankCount);
             _strain = 0;
             _ease = 0;
         }
@@ -486,11 +540,27 @@ public sealed class HudWings
         {
             _ease = 0;
             _strain += dt;
-            if (_strain >= SpillAfter)
+            if (_strain >= SpillAfter && _sinceChange < ReturnAfter)
             {
-                (Split, _hugging) = Best(f, sizes);
+                // A card changes sides at most once in 4 s; until then the cards hug her outline where they are.
+                _waiting = true;
+            }
+            else if (_strain >= SpillAfter)
+            {
+                if (_pending)
+                {
+                    Adopt();
+                }
+
+                (Split, _hugging) = Best(f, sizes, _rank, _rankCount);
                 _strain = 0;
             }
+        }
+        else if (_pending)
+        {
+            _strain = 0;
+            _ease = 0;
+            Steady(dt, f, sizes);
         }
         else if (Roomier(f, sizes) is { } back)
         {
@@ -510,8 +580,9 @@ public sealed class HudWings
             _hugging = false;
         }
 
-        var chosen = Fit(f, sizes, Split, 0, Reach, aligned: !_hugging);
-        Layout(f, sizes, Split, chosen.Shift, aligned: !_hugging, room: 0, write: true);
+        var aligned = !_hugging && !_waiting;
+        var chosen = Fit(f, sizes, Split, 0, Reach, aligned);
+        Layout(f, sizes, Split, chosen.Shift, aligned, room: 0, write: true);
         for (var k = 0; k < HudCards.Column.Length; k++)
         {
             var i = (int)HudCards.Column[k];
@@ -541,23 +612,157 @@ public sealed class HudWings
 
         if (_placed && Split != before)
         {
+            _lastGap = _sinceChange;
             _sinceChange = 0;
         }
     }
 
-    /// <summary>The most cards at her left, more than now, whose column fits near her shoulders with room to spare; null when none does.</summary>
-    private int? Roomier(HudFrame f, (double W, double H)[] sizes)
+    /// <summary>
+    /// The pending order's best split that fits: kept once it has held for <see cref="SpillAfter"/>, at most once in
+    /// <see cref="ReturnAfter"/> (<see cref="SettledReturn"/> while the last two changes came within
+    /// <see cref="SettleWindow"/> of each other). Taken at once when it is the split in place.
+    /// </summary>
+    private void Steady(double dt, HudFrame f, (double W, double H)[] sizes)
     {
-        if (Split >= HudCards.Column.Length)
+        var (candidate, hugging) = Best(f, sizes, _next, _nextCount);
+        if (candidate == Split)
         {
-            return null;
+            Adopt();
+            return;
         }
 
-        for (var k = HudCards.Column.Length; k > Split; k--)
+        if (candidate != _candidate)
         {
-            if (Fit(f, sizes, k, 0.04 * f.Footprint, NearReach, aligned: true).Over == 0)
+            _candidate = candidate;
+            _held = 0;
+        }
+
+        _held += dt;
+        if (_held >= SpillAfter && _sinceChange >= (_lastGap < SettleWindow ? SettledReturn : ReturnAfter))
+        {
+            Adopt();
+            Split = candidate;
+            _hugging = hugging;
+        }
+    }
+
+    /// <summary>The pending order becomes the one the split follows.</summary>
+    private void Adopt()
+    {
+        Array.Copy(_next, _rank, _nextCount);
+        _rankCount = _nextCount;
+        _pending = false;
+        _candidate = -1;
+        _held = 0;
+    }
+
+    /// <summary>Whether the card weighs on a side: a shown card of the column, or the models card while it is placed.</summary>
+    private bool Weighs(HudCard card, IReadOnlyList<bool> shown) =>
+        card == HudCard.Models ? shown[(int)card] && _modelsPlace != ModelsPlace.Hidden : HudCards.Column.Contains(card) && shown[(int)card];
+
+    /// <summary>
+    /// Whether the split must be chosen again since the last time: a card that weighs came or went, the balance was switched,
+    /// or a side's weight moved by more than <see cref="Reweigh"/> × D. Remembers what it compared against when it did.
+    /// </summary>
+    private bool Reweighed(IReadOnlyList<(double W, double H)> given, IReadOnlyList<bool> shown, double d)
+    {
+        var changed = Balance != _basisBalance;
+        double left = 0, right = 0;
+        for (var i = 0; i < HudCards.Count && !changed; i++)
+        {
+            var card = (HudCard)i;
+            var on = Weighs(card, shown);
+            changed = on != _basisShown[i];
+            if (on && !changed)
             {
-                return k;
+                var moved = given[i].H - _basisHeight[i];
+                if (card != HudCard.Models && HudCards.Column.IndexOf(card) < Split)
+                {
+                    left += moved;
+                }
+                else
+                {
+                    right += moved;
+                }
+            }
+        }
+
+        if (!changed && Math.Abs(left) <= Reweigh * d && Math.Abs(right) <= Reweigh * d)
+        {
+            return false;
+        }
+
+        for (var i = 0; i < HudCards.Count; i++)
+        {
+            _basisShown[i] = Weighs((HudCard)i, shown);
+            _basisHeight[i] = given[i].H;
+        }
+
+        _basisBalance = Balance;
+        return true;
+    }
+
+    /// <summary>
+    /// The splits in order of preference, into <paramref name="into"/>: with <see cref="Balance"/>, by how evenly they weigh
+    /// her two sides (a side's cards' heights and the gaps between them; her right is the models card and the moved cards),
+    /// a tie to fewer moved cards; without, the most cards at her left first. A split is the column index of the first moved
+    /// shown card (the column's length for none). Returns how many there are.
+    /// </summary>
+    private int Rank(IReadOnlyList<(double W, double H)> given, IReadOnlyList<bool> shown, double gap, int[] into)
+    {
+        var cards = HudCards.Column;
+        var n = 0;
+        for (var k = 0; k < cards.Length; k++)
+        {
+            if (Weighs(cards[k], shown))
+            {
+                _shownAt[n++] = k;
+            }
+        }
+
+        var models = Weighs(HudCard.Models, shown);
+        for (var moved = 0; moved <= n; moved++)
+        {
+            double left = 0, right = models ? given[(int)HudCard.Models].H : 0;
+            var rightCount = models ? 1 : 0;
+            for (var j = 0; j < n; j++)
+            {
+                var h = given[(int)cards[_shownAt[j]]].H;
+                if (j < n - moved)
+                {
+                    left += h + (j > 0 ? gap : 0);
+                }
+                else
+                {
+                    right += h + (rightCount++ > 0 ? gap : 0);
+                }
+            }
+
+            var split = moved == 0 ? cards.Length : _shownAt[n - moved];
+            var odds = Balance ? Math.Abs(left - right) : moved;
+            var at = moved;
+            while (at > 0 && odds < _odds[at - 1] - Tie)
+            {
+                into[at] = into[at - 1];
+                _odds[at] = _odds[at - 1];
+                at--;
+            }
+
+            into[at] = split;
+            _odds[at] = odds;
+        }
+
+        return n + 1;
+    }
+
+    /// <summary>The best-ranked split, ahead of the one in place, whose column fits near her shoulders with room to spare; null when none does.</summary>
+    private int? Roomier(HudFrame f, (double W, double H)[] sizes)
+    {
+        for (var r = 0; r < _rankCount && _rank[r] != Split; r++)
+        {
+            if (Fit(f, sizes, _rank[r], 0.04 * f.Footprint, NearReach, aligned: true).Over == 0)
+            {
+                return _rank[r];
             }
         }
 
@@ -565,30 +770,29 @@ public sealed class HudWings
     }
 
     /// <summary>
-    /// The most cards at her left whose column fits with its right edges on one line, near her shoulders first, then
-    /// anywhere in reach; when none fits, each card hugging her outline where it overflows least.
+    /// The best-ranked split whose column fits with its right edges on one line, near her shoulders first, then anywhere in
+    /// reach; when none fits, each card hugging her outline where it overflows least.
     /// </summary>
-    private (int Split, bool Hugging) Best(HudFrame f, (double W, double H)[] sizes)
+    private (int Split, bool Hugging) Best(HudFrame f, (double W, double H)[] sizes, int[] rank, int count)
     {
-        var count = HudCards.Column.Length;
         foreach (var reach in Reaches)
         {
-            for (var split = count; split >= 0; split--)
+            for (var r = 0; r < count; r++)
             {
-                if (Fit(f, sizes, split, 0, reach, aligned: true).Over <= 0.5)
+                if (Fit(f, sizes, rank[r], 0, reach, aligned: true).Over <= 0.5)
                 {
-                    return (split, false);
+                    return (rank[r], false);
                 }
             }
         }
 
-        var best = (Split: count, Over: double.PositiveInfinity);
-        for (var split = count; split >= 0; split--)
+        var best = (Split: rank[0], Over: double.PositiveInfinity);
+        for (var r = 0; r < count; r++)
         {
-            var over = Fit(f, sizes, split, 0, Reach, aligned: false).Over;
+            var over = Fit(f, sizes, rank[r], 0, Reach, aligned: false).Over;
             if (over < best.Over - 0.5)
             {
-                best = (split, over);
+                best = (rank[r], over);
             }
         }
 

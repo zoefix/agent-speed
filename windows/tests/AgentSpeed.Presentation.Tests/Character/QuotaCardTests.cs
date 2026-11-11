@@ -140,7 +140,7 @@ public sealed class QuotaCardTests
         var (orb, glyphs) = Run(148, OrbQuotaCard.Of(State(claudeCode: false), _ => true, Now, En, TimeZoneInfo.Utc));
         var draw = Assert.IsType<CharacterDraw>(orb.Style);
         Assert.True(draw.Wings.Places[(int)HudCard.Quota].Alpha > 0.9);
-        Assert.False(draw.Wings.IsAtHerRight(HudCard.Quota));
+        Assert.Equal(draw.Wings.Split <= HudCards.Column.IndexOf(HudCard.Quota), draw.Wings.IsAtHerRight(HudCard.Quota));
         Assert.Superset(new HashSet<string> { "Codex", "Claude Desktop", "7d", "Fable 7d" }, glyphs.Texts);
         Assert.Contains(glyphs.Texts, t => t.Contains('%', StringComparison.Ordinal) || t == "%");
         Assert.Equal(2, draw.QuotaLines.Count);
