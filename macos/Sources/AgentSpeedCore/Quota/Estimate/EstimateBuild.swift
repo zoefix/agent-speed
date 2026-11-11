@@ -5,6 +5,8 @@ import Foundation
 public final class QuotaEstimateBuild: @unchecked Sendable {
     public let nowMs: Int64
     let salt: Data
+    /// The install id that keys the accounts without an id (QUOTAS 10.1).
+    let install: String
     let priceVersion: Int
     let inputs: QuotaEstimateInputs
     let timelines: QuotaTimelines
@@ -22,9 +24,10 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
     /// The account of Codex's newest token count line.
     let newestCodexAccount: String?
 
-    public init(_ inputs: QuotaEstimateInputs, salt: Data, nowMs: Int64) {
+    public init(_ inputs: QuotaEstimateInputs, salt: Data, install: String, nowMs: Int64) {
         self.nowMs = nowMs
         self.salt = salt
+        self.install = install
         priceVersion = inputs.priceVersion
         self.inputs = inputs
         let timelines = QuotaTimelines(inputs: inputs)
@@ -43,7 +46,7 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
             case "claudeCode", "claudeDesktop":
                 accounts[i] = QuotaKeyEntry.inForce(timelines.local[s.source] ?? [], at: s.endMs)?.key
             default:
-                accounts[i] = QuotaTimelines.ownKey(QuotaEstimateSource(source: s.source), salt: salt)
+                accounts[i] = QuotaTimelines.ownKey(QuotaEstimateSource(source: s.source), salt: salt, install: install)
             }
         }
 
@@ -63,7 +66,8 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
                 guard let found = QuotaKeyEntry.inForce(timelines.local[s.source] ?? [], at: s.observedMs) else { continue }
                 entry = found
             default:
-                entry = QuotaKeyEntry(at: 0, key: QuotaTimelines.ownKey(QuotaEstimateSource(source: s.source), salt: salt))
+                entry = QuotaKeyEntry(at: 0, key: QuotaTimelines.ownKey(QuotaEstimateSource(source: s.source), salt: salt,
+                                                                        install: install))
             }
             let tLo = s.source == "claudeCode" ? claudeStarts.earliest(account: entry.key, before: s.observedMs) : s.observedMs
             observations += Self.observations(of: s, entry: entry, tLo: tLo)
@@ -80,7 +84,7 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
         var hostTimelines: [QuotaEstimateSource: [QuotaKeyEntry]] = [:]
         for source in hostSources {
             hostTimelines[source] = QuotaTimelines.host(source, snapshots: hostSnapshots[source] ?? [],
-                                                        local: localForHosts, salt: salt)
+                                                        local: localForHosts, salt: salt, install: install)
         }
         self.hostTimelines = hostTimelines
         for (i, s) in inputs.spend.enumerated() where s.host != nil && s.isSubscription {

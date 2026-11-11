@@ -84,8 +84,9 @@ final class ReportController {
     @ObservationIgnored let userAgent: String
     @ObservationIgnored let defaults: UserDefaults
     @ObservationIgnored var run: ReportRun?
-    /// The quota estimate's entries at a moment (REPORTING-EXTENSIONS 11.2), from the quota controller.
-    @ObservationIgnored var quotaEntries: (@MainActor (Int64) -> [QuotaReportEntry])?
+    /// The quota estimate's entries at a moment for the service of an api origin (REPORTING-EXTENSIONS 11.2), from the
+    /// quota controller.
+    @ObservationIgnored var quotaEntries: (@MainActor (_ nowMs: Int64, _ origin: String) -> [QuotaReportEntry])?
     /// The WebSocket transport session; only while WebSocket is effective (HTTP's `run` is nil then).
     @ObservationIgnored var stream: ReportStreamRun?
     @ObservationIgnored let streamTransport: any ReportStreamTransport

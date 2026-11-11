@@ -57,7 +57,7 @@ extension QuotaEstimateBuild {
               let base = base(account: account, window: QuotaEstimateWindow.id(kind: window.kind, name: window.name,
                                                                                 minutes: minutes))
         else { return nil }
-        let entry = QuotaReportEntry(base, nowMs: nowMs, ledger: ledger, priceVersion: priceVersion)
+        let entry = QuotaReportEntry(base, account: "", nowMs: nowMs, ledger: ledger, priceVersion: priceVersion)
         return QuotaEstimateDisplay(
             percent: entry.livePercent, estimated: entry.liveEstimated, resetsMs: entry.resetsInMs.map { nowMs + $0 },
             usedMicroUsd: entry.usedMicroUsd, unpricedRequests: entry.unpricedRequests,

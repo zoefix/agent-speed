@@ -111,7 +111,7 @@ public struct QuotaEstimateStore: Codable, Equatable, Sendable {
     public var instances: [Instance]
     public var keys: [Key]
 
-    public init(version: Int = 1, observations: [Observation] = [],
+    public init(version: Int = QuotaEstimateConstants.storeVersion, observations: [Observation] = [],
                 instances: [Instance] = [], keys: [Key] = []) {
         self.version = version
         self.observations = observations
@@ -127,8 +127,8 @@ public struct QuotaEstimateStore: Codable, Equatable, Sendable {
         data.appendingPathComponent("quota/estimate.json")
     }
 
-    /// The stored file of this version; nil when it is missing, of another version or does not parse (the next write
-    /// replaces it).
+    /// The stored file of this version; nil when it is missing, of another version (version 1 keyed accounts with a
+    /// random salt) or does not parse (the next write replaces it).
     public static func decode(_ data: Data) -> QuotaEstimateStore? {
         struct Head: Decodable { var version: Int? }
         guard let head = try? JSONDecoder().decode(Head.self, from: data),

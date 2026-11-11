@@ -9,9 +9,10 @@ extension ReportController {
         (on ?? preferences.shareQuota) && document?.extensions?.quotaEstimate == true
     }
 
-    /// The entries now, from the quota estimate; none without it.
-    func currentQuotaEntries() -> [QuotaReportEntry] {
-        quotaEntries?(ReportClock.unixMs) ?? []
+    /// The entries now for the service of `document`, each account tagged for its api origin (the origin reports go
+    /// to); none without the quota estimate.
+    func currentQuotaEntries(for document: ReportDiscovery) -> [QuotaReportEntry] {
+        quotaEntries?(ReportClock.unixMs, document.api.origin) ?? []
     }
 
     /// The body as sent with this report's `quotas`, recording what it carried in `cadence`.
@@ -21,7 +22,8 @@ extension ReportController {
         var options = options
         let on = sharesQuotas(document)
         let now = ReportClock.monotonicMs
-        options.quotas = cadence.pending(nowMs: now, entries: on ? currentQuotaEntries() : [], on: on, leaving: leaving)
+        options.quotas = cadence.pending(nowMs: now, entries: on ? currentQuotaEntries(for: document) : [], on: on,
+                                         leaving: leaving)
         let fitted = ReportBody.fitted(envelope, content, sample, options)
         cadence.commit(fitted.json["quotas"] == nil ? nil : options.quotas, nowMs: now, on: on)
         return fitted.data

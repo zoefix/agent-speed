@@ -1,6 +1,7 @@
 import Foundation
 
-/// One `quotas` entry of a report (REPORTING-EXTENSIONS 11.2): one account's window, without any account id.
+/// One `quotas` entry of a report (REPORTING-EXTENSIONS 11.2): one account's window, the account named only by its tag
+/// for the service.
 public struct QuotaReportEntry: Equatable, Sendable {
     public struct Mix: Equatable, Sendable {
         public var model: String
@@ -17,6 +18,8 @@ public struct QuotaReportEntry: Equatable, Sendable {
         public var windows: Int
     }
 
+    /// The account's tag for the service (16 hex digits): never its id or key.
+    public var account: String
     public var source: String
     public var sources: [String]
     public var plan: String?
@@ -37,7 +40,8 @@ public struct QuotaReportEntry: Equatable, Sendable {
     public var mix: [Mix]
     public var priceVersion: Int
 
-    init(_ base: QuotaEntryBase, nowMs: Int64, ledger: QuotaEstimateLedger, priceVersion: Int) {
+    /// `account`: the tag sent for the account (`QuotaAccounts.reportTag`), empty where nothing is sent.
+    init(_ base: QuotaEntryBase, account: String, nowMs: Int64, ledger: QuotaEstimateLedger, priceVersion: Int) {
         let accounts: Set<String> = [base.account]
         let filter = base.modelName
         let cap = base.estimate.cap
@@ -54,6 +58,7 @@ public struct QuotaReportEntry: Equatable, Sendable {
         if let cap, cap > 0, base.p >= 5 {
             coverage = QuotaEstimateRounding.halfAway(min(1, max(0, Double(observed) / (cap * base.p / 100))), digits: 3)
         }
+        self.account = account
         source = base.source
         sources = base.sources
         plan = base.plan
@@ -79,8 +84,9 @@ public struct QuotaReportEntry: Equatable, Sendable {
     }
 
     /// The fields the send cadence compares, for entries that only carry those.
-    public init(sources: [String], kind: QuotaWindowKind, name: String?, minutes: Int, usedPercent: Double?,
-                resetsInMs: Int64?, usedMicroUsd: Int64, confidence: QuotaEstimateConfidence) {
+    public init(account: String, sources: [String], kind: QuotaWindowKind, name: String?, minutes: Int,
+                usedPercent: Double?, resetsInMs: Int64?, usedMicroUsd: Int64, confidence: QuotaEstimateConfidence) {
+        self.account = account
         source = sources.first ?? ""
         self.sources = sources
         self.kind = kind
@@ -101,6 +107,7 @@ public struct QuotaReportEntry: Equatable, Sendable {
     /// The entry as sent, members in the schema's order.
     public var json: ReportJSON {
         .object([
+            "account": .string(account),
             "source": .string(source),
             "sources": .array(sources.map(ReportJSON.string)),
             "plan": plan.map(ReportJSON.string) ?? .null,
@@ -129,15 +136,15 @@ public struct QuotaReportEntry: Equatable, Sendable {
         ])
     }
 
-    /// `(sources, window)`: one entry per account and window in a report.
+    /// `(account, window)`: one entry per account and window in a report.
     struct Identity: Hashable {
-        var sources: [String]
+        var account: String
         var kind: QuotaWindowKind
         var name: String?
         var minutes: Int
     }
 
-    var identity: Identity { Identity(sources: sources, kind: kind, name: name, minutes: minutes) }
+    var identity: Identity { Identity(account: account, kind: kind, name: name, minutes: minutes) }
 }
 
 extension QuotaReportEntry.Estimate {

@@ -57,7 +57,7 @@ enum QuotaEstimatePreviews {
             model.report.preview(.off, username: "")
         }
         let build = demoBuild(now: now)
-        model.report.quotaEntries = { _ in build.entries(nowMs: now) }
+        model.report.quotaEntries = { _, origin in build.entries(nowMs: now, origin: origin) }
         model.report.preview(.reporting, username: "小明的 MacBook Pro")
         for dark in [false, true] {
             let scheme = dark ? "dark" : "light"
@@ -106,7 +106,7 @@ enum QuotaEstimatePreviews {
     /// $5,742 and $397. For the report previews (REPORTING-EXTENSIONS 11.2).
     static func demoBuild(now: Int64) -> QuotaEstimateBuild {
         let minute: Int64 = 60_000, day: Int64 = 86_400_000, week = 7 * day
-        let salt = Data(repeating: 7, count: 32)
+        let salt = QuotaAccounts.salt
         let at = now / minute * minute
         var inputs = QuotaEstimateInputs()
         inputs.priceVersion = 1
@@ -143,7 +143,7 @@ enum QuotaEstimatePreviews {
             }
         }
         inputs.codexKeys = [QuotaKeyEntry(at: at - 9 * day, key: QuotaAccounts.key(salt: salt, vendor: "codex", id: "demo"))]
-        return QuotaEstimateBuild(inputs, salt: salt, nowMs: now)
+        return QuotaEstimateBuild(inputs, salt: salt, install: "demo", nowMs: now)
     }
 
     private static func sources(_ model: AppModel) -> some View {

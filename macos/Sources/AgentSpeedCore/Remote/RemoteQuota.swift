@@ -10,7 +10,7 @@ public struct RemoteQuotaConfig: Equatable, Sendable {
     public var network: Bool
     public var grokLive: Bool
     public var claudeBridge: Bool
-    /// The estimate salt as 64 hex digits (QUOTAS 10.1), so that the host computes the same account keys; the relay
+    /// The account salt as 64 hex digits (QUOTAS 10.1), so that the host computes the same account keys; the relay
     /// keeps it in memory only. Never logged.
     public var salt: String?
 
@@ -46,7 +46,7 @@ public struct RemoteQuotaSwitches: Equatable, Sendable {
     public var grokLive: Bool
     /// Claude Code is enabled: the hosts' bridges may report its quota.
     public var claudeCode: Bool
-    /// The estimate salt (QUOTAS 10.1) as 64 hex digits.
+    /// The account salt (QUOTAS 10.1) as 64 hex digits.
     public var salt: String?
 
     public init(sources: Set<SourceKind> = [], grokLive: Bool = false, claudeCode: Bool = true, salt: String? = nil) {

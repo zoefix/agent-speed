@@ -37,12 +37,12 @@ extension QuotaController {
         estimateLines[QuotaEstimateLineKey(source: source, host: host, window: window)]
     }
 
-    /// The report's entries at `nowMs` (REPORTING-EXTENSIONS 11.2): only sources whose quota is read here or on a
-    /// host (11.1).
-    func reportEntries(nowMs: Int64) -> [QuotaReportEntry] {
+    /// The report's entries at `nowMs` for the service of api origin `origin` (REPORTING-EXTENSIONS 11.2): only
+    /// sources whose quota is read here or on a host (11.1).
+    func reportEntries(nowMs: Int64, origin: String) -> [QuotaReportEntry] {
         guard let build = estimateBuild else { return [] }
         let hosts = settings.remoteQuotaSwitches.sources
-        return build.entries(nowMs: nowMs) { name in
+        return build.entries(nowMs: nowMs, origin: origin) { name in
             guard let source = SourceKind(rawValue: name) else { return false }
             return settings.showsQuota(source) || hosts.contains(source)
         }

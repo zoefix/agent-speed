@@ -129,7 +129,7 @@ final class AppModel {
                                   appData: Self.appDataDirectory)
         lan = LanController(settings: settings, store: store)
         quota = QuotaController(settings: settings, store: store, traffic: traffic, data: Self.appDataDirectory)
-        report.quotaEntries = { [weak quota] now in quota?.reportEntries(nowMs: now) ?? [] }
+        report.quotaEntries = { [weak quota] now, origin in quota?.reportEntries(nowMs: now, origin: origin) ?? [] }
         characters = CharacterLibrary.standard(defaults: settings.storage)
         characters.networkEnabled = { [weak settings] in settings?.networkEnabled ?? false }
         gauge.redline = settings.redline

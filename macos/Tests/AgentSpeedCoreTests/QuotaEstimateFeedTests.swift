@@ -8,6 +8,7 @@ struct QuotaEstimateFeedTests {
     static let minute: Int64 = 60_000
     static let now: Int64 = 1_794_000_000_000
     static let salt = Data((0..<32).map { UInt8($0) })
+    static let install = "00112233445566778899aabbccddeeff"
 
     static func record(_ key: String, _ source: SourceKind = .codex, start: Int64, end: Int64, model: String = "gpt-5.5",
                        provider: String? = nil, file: String = "/r/a.jsonl") -> ResponseRecord {
@@ -135,7 +136,7 @@ struct QuotaEstimateFeedTests {
 
     // MARK: Remote hosts (REMOTE 11.1)
 
-    @Test func relayLinesCarryTheAccountAndTheConfigTheSalt() throws {
+    @Test func relayLinesCarryTheAccountAndTheConfigTheAccountSalt() throws {
         let decoder = RelayLineDecoder(hostId: "h")
         func report(_ extra: [String: Any]) -> RemoteQuotaReport? {
             var q: [String: Any] = ["source": "codex", "observedMs": RelayLines.baseMs, "windows": [], "running": true,
@@ -151,7 +152,8 @@ struct QuotaEstimateFeedTests {
         #expect(older.account == nil && older.plan == nil)
         #expect(report(["account": "not-a-key", "plan": "Pro Max"])?.account == nil)
         #expect(report(["account": "not-a-key", "plan": "Pro Max"])?.plan == nil)
-        let hex = QuotaEstimateSalt.hex(Self.salt)
+        let hex = QuotaEstimator(data: nil, pricing: nil).saltHex
+        #expect(hex == QuotaAccounts.saltHex && hex.count == 64, "every install sends the same account salt")
         let config = RemoteQuotaConfig(sources: [.codex], network: true, grokLive: false, claudeBridge: false, salt: hex)
         let line = try JSONParser.parse(try #require(RelayLineEncoder.quota(config)))
         #expect(line["config"]?["salt"]?.string == hex)
@@ -174,11 +176,13 @@ struct QuotaEstimateFeedTests {
                                                endMs: Self.now - 40_000, costMicroUsd: 1_000_000)]
             return inputs
         }
-        let shared = QuotaEstimateBuild(inputs(hostReset: reset + 20_000), salt: Self.salt, nowMs: Self.now)
+        let shared = QuotaEstimateBuild(inputs(hostReset: reset + 20_000), salt: Self.salt, install: Self.install,
+                                        nowMs: Self.now)
         let local = shared.account(of: QuotaEstimateSource(source: "codex"))
         #expect(local != nil && shared.account(of: QuotaEstimateSource(source: "codex", host: "h")) == local)
         #expect(shared.spendAccounts == [local])
-        let apart = QuotaEstimateBuild(inputs(hostReset: reset + 19 * 3_600_000), salt: Self.salt, nowMs: Self.now)
+        let apart = QuotaEstimateBuild(inputs(hostReset: reset + 19 * 3_600_000), salt: Self.salt, install: Self.install,
+                                       nowMs: Self.now)
         #expect(apart.account(of: QuotaEstimateSource(source: "codex", host: "h")) != local)
     }
 
@@ -199,14 +203,39 @@ struct QuotaEstimateFeedTests {
             let attributes = try FileManager.default.attributesOfItem(atPath: folder.file(name).path)
             #expect((attributes[.posixPermissions] as? NSNumber)?.intValue == 0o600, "\(name)")
         }
-        #expect(try Data(contentsOf: folder.file("quota/estimate-salt")).count == 32)
+        let installBytes = try Data(contentsOf: folder.file("quota/estimate-salt"))
+        #expect(installBytes.count == 32)
+        #expect(estimator.install == installBytes.map { String(format: "%02x", $0) }.joined(), "the file holds the install id")
         let store = try #require(QuotaEstimateStore.load(data: folder.url))
         #expect(store.observations.map(\.p) == [4])
         #expect(store.keys.contains { $0.source == "claudeCode" && $0.orgKey != nil })
         let text = try String(contentsOf: folder.file("quota/estimate.json"), encoding: .utf8)
         #expect(!text.contains("\"o\"") && !text.contains("\"u\""), "ids are never stored")
-        // A second estimator reads the same salt back.
-        #expect(QuotaEstimator(data: folder.url, pricing: nil).saltHex == estimator.saltHex)
+        // A second estimator reads the same install id back; the account salt is the same everywhere.
+        let again = QuotaEstimator(data: folder.url, pricing: nil)
+        #expect(again.install == estimator.install)
+        #expect(again.saltHex == QuotaAccounts.saltHex && estimator.saltHex == QuotaAccounts.saltHex)
+        #expect(QuotaEstimator(data: nil, pricing: nil).install != estimator.install, "another install, another id")
+        #expect(store.version == 2)
+    }
+
+    /// QUOTAS 10.4: a version-1 store keyed its accounts with a random salt, so it is ignored and replaced.
+    @Test func aVersionOneStoreIsReplaced() throws {
+        let folder = try TempDirectory()
+        let old = QuotaEstimateStore(version: 1, observations: [], instances: [], keys: [
+            QuotaEstimateStore.Key(source: "claudeCode", at: Self.now - 3_600_000, key: "0123456789abcdef", plan: "claude_max",
+                                   tier: nil)])
+        try folder.write("quota/estimate.json", String(decoding: try old.encoded(), as: UTF8.self))
+        #expect(QuotaEstimateStore.load(data: folder.url) == nil)
+        let clock = Self.now
+        let estimator = QuotaEstimator(data: folder.url, pricing: PriceBook(), clock: { clock })
+        estimator.setEnabled([.claudeCode])
+        estimator.snapshot(QuotaSnapshot(source: .claudeCode, observedMs: Self.now - 60_000, windows: [
+            QuotaWindow(kind: .fiveHour, usedPercent: 4, resetsAtMs: Self.now + 3_600_000)]))
+        estimator.flush()
+        let store = try #require(QuotaEstimateStore.load(data: folder.url))
+        #expect(store.version == QuotaEstimateConstants.storeVersion)
+        #expect(!store.keys.contains { $0.key == "0123456789abcdef" }, "nothing of the old file is kept")
     }
 
     @Test func historyHoldsTheSpendBeforeItsCutAndTheLiveEngineAfter() throws {
@@ -237,7 +266,8 @@ struct QuotaEstimateFeedTests {
         let input = EstimateFixtures.object(EstimateFixtures.list(EstimateFixtures.object(
             EstimateFixtures.cases["pipeline"])["report"])[0]["input"])
         let build = try QuotaEstimatePipelineTests.build(input)
-        let entries = build.entries(nowMs: EstimateFixtures.int(input["now"])!)
+        let entries = build.entries(nowMs: EstimateFixtures.int(input["now"])!,
+                                    origin: EstimateFixtures.string(input["origin"])!)
         #expect(entries.count == 6)
         let (content, sample) = ReportBodyTests.busySample()
         var options = ReportBodyTests.everything
@@ -298,8 +328,8 @@ struct QuotaEstimateFeedTests {
         inputs.claudeProfiles = [QuotaClaudeProfile(at: start, organization: "o", account: "u", organizationType: "claude_max",
                                                     tier: nil, salt: Self.salt)]
         let began = DispatchTime.now().uptimeNanoseconds
-        let build = QuotaEstimateBuild(inputs, salt: Self.salt, nowMs: Self.now)
-        _ = build.entries(nowMs: Self.now)
+        let build = QuotaEstimateBuild(inputs, salt: Self.salt, install: Self.install, nowMs: Self.now)
+        _ = build.entries(nowMs: Self.now, origin: "https://radar.example")
         let seconds = Double(DispatchTime.now().uptimeNanoseconds - began) / 1e9
         #expect(!build.current.isEmpty)
         #expect(seconds < Double(QuotaEstimator.buildIntervalMs) / 1000, "\(seconds) s")

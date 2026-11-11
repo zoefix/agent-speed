@@ -1,24 +1,24 @@
 import Foundation
-import Security
 
 /// Keeps the quota estimate (QUOTAS 10) up to date: it gathers the history's and the live engine's spend, Codex's
 /// token counts, the sign-in keys and every snapshot, builds the estimate at most every 5 s on its own queue,
 /// hands each build to `onBuild` and keeps `estimate.json` (at most once a minute, and at quit). Ids become keys as
-/// they arrive; neither ids, keys nor the salt are ever logged.
+/// they arrive; neither ids, keys nor the install id are ever logged.
 public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     public static let buildIntervalMs: Int64 = 5_000
     public static let heartbeatMs: Int64 = 60_000
     public static let writeIntervalMs: Int64 = 60_000
 
-    /// The estimate salt as hex for the remote hosts' quota config (REMOTE 11.1).
-    public let saltHex: String
+    /// The account salt as hex for the remote hosts' quota config (REMOTE 11.1).
+    public var saltHex: String { QuotaAccounts.saltHex }
     /// Where sign-in ids become keys.
-    public var keys: QuotaAccountKeys { QuotaAccountKeys(salt: salt) }
+    public var keys: QuotaAccountKeys { QuotaAccountKeys() }
     /// Called on the estimator's queue with every build.
     public var onBuild: (@Sendable (QuotaEstimateBuild) -> Void)?
 
     private let queue = DispatchQueue(label: "app.agentspeed.estimate", qos: .utility)
-    private let salt: Data
+    /// The install id (QUOTAS 10.1), for the accounts without an id.
+    let install: String
     private let data: URL?
     private let persists: Bool
     private let pricing: PriceBook?
@@ -45,22 +45,19 @@ public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     public private(set) var latest: QuotaEstimateBuild?
 
     /// `data` is the app's data folder (`<data>/quota/estimate-salt`, `estimate.json`); nil keeps everything in
-    /// memory, as does a salt that cannot be written.
+    /// memory, as does an install id that cannot be written.
     public init(data: URL?, pricing: PriceBook?, clock: @escaping @Sendable () -> Int64 = { Int64((Date().timeIntervalSince1970 * 1000).rounded(.down)) }) {
         self.data = data
         self.pricing = pricing
         models = pricing.map(QuotaModelIds.init(pricing:))
         self.clock = clock
-        if let data, let salt = QuotaEstimateSalt.loadOrCreate(data: data) {
-            self.salt = salt
+        if let data, let install = QuotaInstallId.loadOrCreate(data: data) {
+            self.install = install
             persists = true
         } else {
-            var bytes = [UInt8](repeating: 0, count: QuotaEstimateSalt.byteCount)
-            _ = SecRandomCopyBytes(kSecRandomDefault, bytes.count, &bytes)
-            salt = Data(bytes)
+            install = QuotaInstallId.ephemeral()
             persists = false
         }
-        saltHex = QuotaEstimateSalt.hex(salt)
         if persists, let data {
             queue.async { [self] in stored = QuotaEstimateStore.load(data: data) ?? .empty }
         }
@@ -197,7 +194,7 @@ public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     private func buildNow() {
         let now = clock()
         prune(nowMs: now)
-        let build = QuotaEstimateBuild(inputs(nowMs: now), salt: salt, nowMs: now)
+        let build = QuotaEstimateBuild(inputs(nowMs: now), salt: QuotaAccounts.salt, install: install, nowMs: now)
         dirty = false
         lastBuildMs = now
         latest = build
