@@ -944,8 +944,9 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   fastest first — the vendor's accent dot (the theme color of an installed character of the model's vendor, CHARACTERS
   7, else of the catalog's, else the secondary token; Increase Contrast: the system highlight color; a model run by
   several agents takes the vendor of its fastest agent), the model's **display name** at `t` in the value token, and
-  its speed at the trailing edge, a whole number of tok/s in tabular digits with the unit `tok/s` once, after the
-  first row's number when it has one, in the secondary token (`–` while the model has no timed response yet). The
+  its speed at the trailing edge, a whole number of tok/s in tabular digits with the unit `tok/s` after each row's
+  number in the secondary token (user's choice 2026-11-11; it was once, after the first row), in a cell the card
+  keeps while any row has a speed (`–` and no unit while the model has no timed response yet). The
   display name is the id without a trailing date (`-YYYYMMDD` or `-YYYY-MM-DD`: `claude-sonnet-4-5-20250929` →
   `claude-sonnet-4-5`; user's choice, 2026-11-10), truncated at its end with `…` beyond the name width. At most 4
   rows; more models add a fifth, secondary line `character.models.more` (`+3 個模型`), counting every running model
@@ -970,9 +971,11 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   `首字 1.2 s` at `t`, `character.readouts.latency`, on by default, user's choice 2026-11-10: the orb's first-content
   latency of METRICS 6.9 *Readouts of a set*, its label `character.latency.glyph`, the value in the value token and
   the unit in the secondary one — below 1 s whole milliseconds rounded to the nearest 10 with `perf.unit.ms`
-  (`850 ms`), from 1 s one decimal with `perf.unit.s` (`1.2 s`), from 10 s whole seconds (`14 s`); shown while the
-  value exists, fading in and out (0.25 s) as the card eases to its height, so an orb of sources without first-content
-  times never shows the row), **network**
+  (`850 ms`), from 1 s one decimal with `perf.unit.s` (`1.2 s`), from 10 s whole seconds (`14 s`). The value's color
+  follows the value as shown (user's choice 2026-11-11): below 10 s green (`#30D158`, light `#248A3D`), 10–14 s amber
+  (`#F5A524`, light `#B86E00`), from 15 s red (`#FF453A`, light `#D70015`); it changes with the value. Increase
+  Contrast: the value token. Shown while the value exists, fading in and out (0.25 s) as the card eases to its
+  height, so an orb of sources without first-content times never shows the row), **network**
   (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
   `–` when nothing is priced, and the money unit), **today** (`boards.today` with today's tokens over
   `agents.count`) and last **額度** (below). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
