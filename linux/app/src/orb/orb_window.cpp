@@ -918,6 +918,7 @@ void OrbWindow::drawStyle(Style& style, Frame f, const ReadoutContent& content, 
             c.latencyGlyph = latency->glyph;
             c.latencyNumber = latency->number;
             c.latencyUnit = latency->unit;
+            c.latencyTone = latency->tone;
             c.latencyOpacity = characterReadings_.latencyOpacity();
         }
         // The rows go along even while the card is switched off, so it fades out with them.

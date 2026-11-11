@@ -6,6 +6,8 @@
 #include <optional>
 #include <vector>
 
+#include "format.hpp"
+
 class Strings;
 
 namespace orb {
@@ -22,6 +24,7 @@ public:
     struct Latency {
         QString glyph, number, unit;  // `首字`, `850`, `毫秒`
         QString spoken;               // a11y.orb.latency: the shown value with its unit
+        format::LatencyTone tone = format::LatencyTone::Quick;
         bool operator==(const Latency&) const = default;
     };
     struct Model {

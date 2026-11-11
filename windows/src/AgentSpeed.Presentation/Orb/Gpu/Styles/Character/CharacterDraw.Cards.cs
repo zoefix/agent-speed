@@ -53,6 +53,17 @@ public sealed partial class CharacterDraw
     /// <summary>The colors of the cards: frosted glass, a hairline rim, a soft shadow, a sheen, the value and secondary tokens, her accent.</summary>
     private readonly record struct CardInk(Rgba Fill, Rgba Rim, Rgba Shadow, Rgba Sheen, Rgba Number, Rgba Secondary, Rgba Accent)
     {
+        private static readonly Rgba[] DarkLatency = [Rgba.FromHex("#30D158"), Rgba.FromHex("#F5A524"), Rgba.FromHex("#FF453A")];
+        private static readonly Rgba[] LightLatency = [Rgba.FromHex("#248A3D"), Rgba.FromHex("#B86E00"), Rgba.FromHex("#D70015")];
+
+        /// <summary>Whether the 首字 value takes its band's color (not with a high-contrast theme) and on a dark card.</summary>
+        public bool LatencyColors { get; init; }
+
+        public bool Dark { get; init; }
+
+        /// <summary>The 首字 value's color (DESIGN 2a.6): green, amber or red by its band; a high-contrast theme keeps the value token.</summary>
+        public Rgba Latency(OrbLatencyTone tone) => LatencyColors ? (Dark ? DarkLatency : LightLatency)[(int)tone] : Number;
+
         public static CardInk Of(OrbGpuContext ctx, Rgba accent)
         {
             if (ctx.HighContrast)
@@ -72,7 +83,7 @@ public sealed partial class CharacterDraw
                 Rgba.White.WithAlpha(dark ? 0.1 : 0.75),
                 ink.WithAlpha(0.9),
                 (dark ? Rgba.White : Rgba.Black).WithAlpha(0.55),
-                accent);
+                accent) { LatencyColors = true, Dark = dark };
         }
     }
 
@@ -299,8 +310,10 @@ public sealed partial class CharacterDraw
     private sealed record PerformanceLayout(OrbScoreFrame? Score, string ScoreText, string? Outgoing, double ScoreWidth, OrbLine? Thinking,
         double ThinkingWidth, double ThinkingAlpha, double ThinkingShare, double Height)
     {
-        /// <summary>The 首字 row (DESIGN 2a.6): its line, width, opacity and share of its room as it fades in or out.</summary>
+        /// <summary>The 首字 row (DESIGN 2a.6): its line, color band, width, opacity and share of its room as it fades in or out.</summary>
         public OrbLine? Latency { get; init; }
+
+        public OrbLatencyTone LatencyTone { get; init; }
 
         public double LatencyWidth { get; init; }
 
@@ -347,11 +360,13 @@ public sealed partial class CharacterDraw
         }
 
         OrbLine? latency = null;
+        var latencyTone = OrbLatencyTone.Quick;
         double latencyWidth = 0, latencyAlpha = 0, latencyShare = 0;
         var fade = Readings?.Latency ?? OrbLatencyFade.None;
         if (readouts.Latency && fade.Latency is { } shown && !fade.IsGone(frame.Time))
         {
             latency = shown.Line;
+            latencyTone = shown.Tone;
             latencyWidth = Advance(shown.Line.Glyph, OrbFont.Title, CardMetrics.Small(m.T)) + m.GlyphGap
                 + DigitsWidth(shown.Line.Number, OrbFont.TrafficNumber, m.T) + m.CellGap + Advance(shown.Line.Unit, OrbFont.Unit, CardMetrics.Small(m.T));
             latencyAlpha = fade.Alpha(frame.Time);
@@ -382,6 +397,7 @@ public sealed partial class CharacterDraw
         return new PerformanceLayout(score, scoreText, outgoing, scoreWidth, thinking, thinkingWidth, thinkingAlpha, thinkingShare, height)
         {
             Latency = latency,
+            LatencyTone = latencyTone,
             LatencyWidth = latencyWidth,
             LatencyAlpha = latencyAlpha,
             LatencyShare = latencyShare,
@@ -465,7 +481,7 @@ public sealed partial class CharacterDraw
 
                 if (rows.Latency is { } latency && rows.LatencyAlpha > 0.01)
                 {
-                    DrawRow(list, latency, pen, left, y, rows.LatencyAlpha, m, ink);
+                    DrawRow(list, latency, pen, left, y, rows.LatencyAlpha, m, ink, ink.Latency(rows.LatencyTone));
                 }
 
                 break;
@@ -528,12 +544,16 @@ public sealed partial class CharacterDraw
         }
     }
 
-    /// <summary>A row at <c>t</c> of the 性能 card (思考, 首字): the label and unit in the secondary token, the number in the value token.</summary>
-    private void DrawRow(OrbDrawList list, in OrbLine line, in Pen pen, double left, double top, double alpha, in CardMetrics m, in CardInk ink)
+    /// <summary>
+    /// A row at <c>t</c> of the 性能 card (思考, 首字): the label and unit in the secondary token, the number in the value token or
+    /// <paramref name="number"/>.
+    /// </summary>
+    private void DrawRow(OrbDrawList list, in OrbLine line, in Pen pen, double left, double top, double alpha, in CardMetrics m, in CardInk ink,
+        Rgba? number = null)
     {
         var baseline = top + CardMetrics.Baseline(m.T);
         var x = left + Put(list, line.Glyph, OrbFont.Title, CardMetrics.Small(m.T), pen, left, baseline, ink.Secondary.MultiplyAlpha(alpha)) + m.GlyphGap;
-        x += PutDigits(list, line.Number, OrbFont.TrafficNumber, m.T, pen, x, baseline, ink.Number.MultiplyAlpha(alpha)) + m.CellGap;
+        x += PutDigits(list, line.Number, OrbFont.TrafficNumber, m.T, pen, x, baseline, (number ?? ink.Number).MultiplyAlpha(alpha)) + m.CellGap;
         Put(list, line.Unit, OrbFont.Unit, CardMetrics.Small(m.T), pen, x, baseline, ink.Secondary.MultiplyAlpha(alpha));
     }
 

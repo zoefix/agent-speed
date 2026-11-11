@@ -32,6 +32,16 @@ void stepFor(CharacterReadings& r, double& t, double seconds) {
 
 }  // namespace
 
+TEST(CharacterLatency, TheColorBandFollowsTheShownValue) {
+    using format::LatencyTone;
+    EXPECT_EQ(format::firstTokenLatencyTone(850), LatencyTone::Quick);
+    EXPECT_EQ(format::firstTokenLatencyTone(9949), LatencyTone::Quick);   // 9.9 s
+    EXPECT_EQ(format::firstTokenLatencyTone(9950), LatencyTone::Slow);    // shown as 10 s
+    EXPECT_EQ(format::firstTokenLatencyTone(14'499), LatencyTone::Slow);  // 14 s
+    EXPECT_EQ(format::firstTokenLatencyTone(14'500), LatencyTone::Late);  // shown as 15 s
+    EXPECT_EQ(format::firstTokenLatencyTone(75'000), LatencyTone::Late);
+}
+
 TEST(CharacterLatency, RoundsOnceAndTheUnitFollowsTheRoundedValue) {
     const auto at = [](double ms) {
         const auto [number, unit] = format::firstTokenLatency(ms);

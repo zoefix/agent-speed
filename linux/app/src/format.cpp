@@ -94,6 +94,12 @@ std::pair<QString, QString> firstTokenLatency(double ms) {
     return {QString::number(static_cast<std::int64_t>(std::floor(v / 1000 + 0.5))), QStringLiteral("perf.unit.s")};
 }
 
+LatencyTone firstTokenLatencyTone(double ms) {
+    const double v = std::max(0.0, ms);
+    if (static_cast<std::int64_t>(std::floor(v / 100 + 0.5)) < 100) return LatencyTone::Quick;
+    return static_cast<std::int64_t>(std::floor(v / 1000 + 0.5)) < 15 ? LatencyTone::Slow : LatencyTone::Late;
+}
+
 QString cappedPercent(double share) {
     auto whole = static_cast<std::int64_t>(std::floor(share * 100 + 0.5));
     if (share < 1 && whole >= 100) whole = 99;

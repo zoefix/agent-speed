@@ -14,6 +14,7 @@
 #include "agentspeed/character/pack.hpp"
 #include "agentspeed/character/performer.hpp"
 #include "agentspeed/character/selection.hpp"
+#include "format.hpp"
 #include "orb/character/character_cards.hpp"
 #include "orb/character/character_lightning.hpp"
 #include "orb/character/character_models.hpp"
@@ -44,6 +45,7 @@ struct CharacterContent {
     QString todayLine, agentsLine;
     // The 性能 card's 首字 row: its label, value and unit, and its fade (empty while switched off or without a value).
     QString latencyGlyph, latencyNumber, latencyUnit;
+    format::LatencyTone latencyTone = format::LatencyTone::Quick;
     double latencyOpacity = 0;
     // The models card's rows, fastest first, its quiet rule's fade (0 while switched off) and its texts.
     std::vector<agentspeed::character::ModelRow> models;
