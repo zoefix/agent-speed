@@ -19,6 +19,8 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
     public let estimates: [QuotaCapClass: QuotaCapEstimate]
     /// The newest instance of every account and window, in report order.
     let current: [QuotaEntryBase]
+    /// The account of Codex's newest token count line.
+    let newestCodexAccount: String?
 
     public init(_ inputs: QuotaEstimateInputs, salt: Data, nowMs: Int64) {
         self.nowMs = nowMs
@@ -30,6 +32,7 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
         let codex = QuotaCodexAccounts(lines: inputs.codexLines, spend: inputs.spend,
                                        keys: timelines.local["codex"] ?? [], salt: salt)
         self.codex = codex
+        newestCodexAccount = codex.lines.max { $0.line.ts < $1.line.ts }?.account
 
         var accounts = [String?](repeating: nil, count: inputs.spend.count)
         for (i, s) in inputs.spend.enumerated() where s.host == nil {
@@ -119,6 +122,8 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
         self.estimates = estimates
         current = Self.current(instances, estimates: estimates, spend: inputs.spend, accounts: accounts,
                                observations: observations, nowMs: nowMs)
+        // The sums lines and reports read are ready before the build leaves this queue.
+        for base in current { _ = ledger.outer([base.account], base.modelName, 0, 0) }
     }
 
     private static func observations(of s: QuotaEstimateSnapshot, entry: QuotaKeyEntry, tLo: Int64) -> [QuotaObservation] {

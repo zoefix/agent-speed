@@ -51,6 +51,8 @@ struct SpeedEngine: Sendable {
     /// Responses held per remote host (REMOTE 5.6); a host above `remoteResponseLimit` loses its oldest first.
     private var remoteResponseCounts: [String: Int] = [:]
     var remoteResponseLimit = RemoteLimits.responses
+    /// The quota estimate's ledger follows every priced response (QUOTAS 10.3).
+    var spendSink: (any QuotaSpendSink)?
 
     init(pricing: PriceBook? = nil) {
         self.pricing = pricing
@@ -97,6 +99,7 @@ struct SpeedEngine: Sendable {
         let old = responses.updateValue(record, forKey: record.key)
         projects[record.key] = project
         ledger?.replace(old, with: record)
+        spendSink?.spend(record)
         if old == nil, record.host != RemoteHost.localId { countRemote(record.host) }
         if let provider = record.provider { agentProviders[record.agentId] = provider }
         let isLiveCompletion = isCompletion && emitsEvents && nowMs.map { record.endMs >= $0 - Self.completionEventMaxAgeMs } ?? false
@@ -389,6 +392,7 @@ struct SpeedEngine: Sendable {
             priced.costMicroUsd = cost
             responses[key] = priced
             ledger?.replace(record, with: priced)
+            spendSink?.spend(priced)
             if reportLedger.isCounted(key) { reportLedger.grow(priced, modelId: reportModelId(of: priced)) }
         }
     }

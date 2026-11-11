@@ -91,6 +91,8 @@ final class AppModel {
     @ObservationIgnored let remoteHistory = RemoteHistorySync()
     /// Network traffic measuring (METRICS 10); live runs only.
     @ObservationIgnored private var trafficController: TrafficController?
+    /// The quota estimate (QUOTAS 10); live runs only.
+    @ObservationIgnored private(set) var estimator: QuotaEstimator?
     @ObservationIgnored private var historyStartTimer: Timer?
     @ObservationIgnored private var demo: DemoDriver?
     @ObservationIgnored private var demoLoops = false
@@ -215,6 +217,10 @@ final class AppModel {
         traffic.start()
         let monitor = LiveMonitor(store: store, configuration: settings.monitorConfiguration, pricing: priceBook)
         self.monitor = monitor
+        let estimator = QuotaEstimator(data: Self.appDataDirectory, pricing: priceBook)
+        self.estimator = estimator
+        quota.attach(estimator)
+        monitor.spendSink = estimator
         appliedConfiguration = settings.monitorConfiguration
         monitor.setSubsets(orbSubsets.union(boardSubsets))
         // The hosts reach the monitor's feed before it starts, so a Mac without local sources still goes live.
@@ -228,8 +234,9 @@ final class AppModel {
             let names = document.displayNames()
             self.remoteHistory.setHosts(document.hosts.map { (id: $0.id, name: names[$0.id] ?? $0.automaticName) })
         })
-        remoteHosts.start(settings: settings, prices: prices)
+        remoteHosts.start(settings: settings, prices: prices, salt: estimator.saltHex)
         monitor.start()
+        estimator.start()
         quota.activate()
         report.perfWatchHandler = { [weak monitor] epoch in monitor?.setReportWatch(epoch) }
         report.activate()
@@ -302,6 +309,7 @@ final class AppModel {
         historyStartTimer = nil
         let service = HistoryService(store: history, configuration: settings.monitorConfiguration, liveStore: store,
                                      pricing: priceBook, remote: remoteHistory)
+        if let estimator { service.estimateSink = { [weak estimator] in estimator?.historyUpdated($0) } }
         // The stored performance records give the score card its baselines (METRICS 6.11).
         history.perfRecordsHandler = { [weak self] records in self?.monitor?.setPerfHistory(records) }
         historyService = service
@@ -350,6 +358,8 @@ final class AppModel {
         historyService?.stop()
         remoteHosts?.stop()
         monitor?.stop()
+        estimator?.flush()
+        estimator?.stop()
         loops.forEach { $0.cancel() }
         loops.removeAll()
     }

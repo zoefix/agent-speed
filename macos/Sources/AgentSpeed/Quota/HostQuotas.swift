@@ -50,6 +50,8 @@ extension QuotaController {
         case .quota(let report):
             guard Self.hostShows(report.source, host: host, switches: settings.remoteQuotaSwitches) else { return }
             state.reports[report.source] = report
+            estimator?.snapshot(report.snapshot, host: hostId, account: report.account, plan: report.plan,
+                                tier: report.tier)
         case .quotaRemoved(_, let source):
             state.reports[source] = nil
         case .quotaBridge(let bridge):
@@ -57,7 +59,10 @@ extension QuotaController {
         default:
             return
         }
-        if hostQuotas[hostId] != state { hostQuotas[hostId] = state }
+        if hostQuotas[hostId] != state {
+            hostQuotas[hostId] = state
+            refreshEstimateLines()
+        }
     }
 
     /// Removed hosts and switched-off sources leave at once.

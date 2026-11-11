@@ -14,14 +14,17 @@ final class RemoteHostsController {
         coordinator = RemoteCoordinator(monitor: monitor)
     }
 
-    func start(settings: AppSettings, prices: PriceSyncController) {
+    /// `salt`: the estimate salt the hosts' relays key their accounts with (REMOTE 11.1).
+    func start(settings: AppSettings, prices: PriceSyncController, salt: String? = nil) {
         let coordinator = coordinator
         loop = ObservationLoop { [weak settings, weak prices] in
             guard let settings, let prices else { return }
             // Reading the table status re-runs this when a newer table becomes current.
             _ = prices.table
+            var quota = settings.remoteQuotaSwitches
+            quota.salt = salt
             coordinator.update(hosts: settings.remoteHosts, networkEnabled: settings.networkEnabled,
-                               priceTable: prices.book.current.data, quota: settings.remoteQuotaSwitches)
+                               priceTable: prices.book.current.data, quota: quota)
         }
         let workspace = NSWorkspace.shared.notificationCenter
         observers.append((workspace, workspace.addObserver(forName: NSWorkspace.didWakeNotification, object: nil,

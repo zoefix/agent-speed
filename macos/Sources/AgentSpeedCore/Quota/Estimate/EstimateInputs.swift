@@ -125,7 +125,7 @@ public struct QuotaClaudeProfile: Hashable, Sendable {
     public init(at: Int64, organization: String, account: String, organizationType: String?, tier: String?, salt: Data) {
         entry = QuotaKeyEntry(at: at, key: QuotaAccounts.key(salt: salt, vendor: "claude", id: "\(organization):\(account)"),
                               plan: QuotaAccounts.cleanPlan(organizationType), tier: QuotaAccounts.cleanPlan(tier))
-        orgKey = QuotaAccounts.key(salt: salt, vendor: "claudeDesktop", id: organization)
+        orgKey = QuotaAccounts.key(salt: salt, vendor: "claudeDesktop", id: organization.lowercased())
     }
 
     public init(entry: QuotaKeyEntry, orgKey: String) {
@@ -180,4 +180,11 @@ public struct QuotaEstimateInputs: Sendable {
     public var priceVersion: Int = 0
 
     public init() {}
+}
+
+/// Where the live engine hands the quota estimate its responses (local and remote) and Codex token counts
+/// (QUOTAS 10.3, 10.4). Called on the monitor's queue: implementations only queue the work.
+public protocol QuotaSpendSink: AnyObject, Sendable {
+    func spend(_ record: ResponseRecord)
+    func codexLines(_ lines: [QuotaCodexLine])
 }

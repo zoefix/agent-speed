@@ -99,6 +99,8 @@ final class TranscriptSession {
     private var indexes: [String: DirectoryIndex] = [:]
     private var deduper = Deduper()
     private var engine = SpeedEngine()
+    /// The quota estimate (QUOTAS 10.3, 10.4): every response the engine prices and every Codex token count read.
+    private let spendSink: (any QuotaSpendSink)?
     private var parentMembers: [String: AgentParents.Member] = [:]
     private var parentLinks: [String: String] = [:]
     private var parentLinksAreStale = false
@@ -146,13 +148,16 @@ final class TranscriptSession {
         configuration: MonitorConfiguration,
         limits: ReadingLimits = .standard,
         pricing: PriceBook? = nil,
+        spendSink: (any QuotaSpendSink)? = nil,
         clock: @escaping @Sendable () -> Int64 = { Clock.milliseconds(Date()) }
     ) {
         enabledSources = configuration.enabledSources
         self.configuration = configuration
         self.limits = limits
         self.clock = clock
+        self.spendSink = spendSink
         engine = SpeedEngine(pricing: pricing)
+        engine.spendSink = spendSink
         roots = configuration.allRoots().map { family, path, readable in
             Root(family: family, path: path, canonicalPath: path, enabled: configuration.reads(family), available: false,
                  readable: readable,
@@ -759,6 +764,10 @@ final class TranscriptSession {
 
     private func finishRead(of file: TrackedFile, result: FileTailer.ReadResult) {
         file.wasRead = true
+        if let spendSink, file.collectsQuotaLines {
+            let lines = file.parser.takeCodexQuotaLines()
+            if !lines.isEmpty { spendSink.codexLines(lines) }
+        }
         if let quota = file.parser.codexQuota, quota.observedMs > codexQuota?.observedMs ?? .min { codexQuota = quota }
         if result.oversized || file.parser.hasPartialHistory { partialHistory = true }
         if result.failed {
@@ -1058,6 +1067,7 @@ final class TranscriptSession {
             maxLineBytes: limits.maxLineBytes
         )
         nextFileID &+= 1
+        if spendSink != nil, family == .codex { tracked.collectsQuotaLines = true }
         files[file.path] = tracked
         return tracked
     }

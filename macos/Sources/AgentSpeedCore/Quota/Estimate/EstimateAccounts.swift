@@ -68,6 +68,35 @@ public enum QuotaAccounts {
     }
 }
 
+/// Turns sign-in ids into account keys where they are read, so that ids go no further (QUOTAS 10.1).
+public struct QuotaAccountKeys: Sendable {
+    let salt: Data
+
+    public init(salt: Data) {
+        self.salt = salt
+    }
+
+    public func codex(accountId: String) -> String {
+        QuotaAccounts.key(salt: salt, vendor: "codex", id: accountId)
+    }
+
+    public func claude(_ identity: QuotaSignInIdentity, at: Int64) -> QuotaClaudeProfile? {
+        guard case .claude(let organization, let account, let type, let tier) = identity else { return nil }
+        return QuotaClaudeProfile(at: at, organization: organization, account: account, organizationType: type, tier: tier,
+                                  salt: salt)
+    }
+
+    public func codex(_ identity: QuotaSignInIdentity) -> String? {
+        guard case .codex(let accountId) = identity else { return nil }
+        return codex(accountId: accountId)
+    }
+
+    /// Claude Desktop's organization as its `claudeDesktop` key, which the CLI's organization is compared by.
+    public func desktop(organization: String) -> String {
+        QuotaAccounts.key(salt: salt, vendor: "claudeDesktop", id: organization.lowercased())
+    }
+}
+
 /// One observed window for the fingerprint: when, which window, its reset and its length.
 public struct QuotaFingerprintPoint: Hashable, Sendable {
     public var t: Int64

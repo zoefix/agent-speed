@@ -43,6 +43,10 @@ final class QuotaController {
     var zcodeKeySaved: Bool?
     /// Every remote host's quota lines and bridge state (REMOTE 11.1), by host id.
     var hostQuotas: [String: HostQuotaState] = [:]
+    /// The estimate of every shown window (QUOTAS 10.7, 10.8), refreshed with each build and each minute.
+    var estimateLines: [QuotaEstimateLineKey: QuotaEstimateDisplay] = [:]
+    @ObservationIgnored var estimator: QuotaEstimator?
+    @ObservationIgnored var estimateBuild: QuotaEstimateBuild?
     /// The clock the texts follow, in whole minutes (resets and ages move on each minute).
     private(set) var minuteMs: Int64
     /// Previews fix the clock.
@@ -73,7 +77,7 @@ final class QuotaController {
     @ObservationIgnored let settings: AppSettings
     @ObservationIgnored private let store: SpeedStore
     @ObservationIgnored private let traffic: TrafficStore
-    @ObservationIgnored private let worker: QuotaWorker
+    @ObservationIgnored let worker: QuotaWorker
     @ObservationIgnored private var timer: Timer?
     @ObservationIgnored private var ticks = 0
     @ObservationIgnored private var roundInFlight = false
@@ -215,7 +219,11 @@ final class QuotaController {
     func tick(force: Bool = false) {
         let now = Self.nowMs()
         let minute = Self.minute(now)
-        if minute != minuteMs { minuteMs = minute }
+        if minute != minuteMs {
+            minuteMs = minute
+            refreshEstimateLines()
+        }
+        estimator?.setEnabled(Set(Self.sources.filter(settings.showsQuota)))
         // The vendor service keeps its own cadence and runs beside the file round.
         if force { runVendorRound(nowMs: now) }
         guard !roundInFlight else { return }
@@ -252,6 +260,7 @@ final class QuotaController {
     private func apply(_ result: QuotaWorker.Result) {
         roundInFlight = false
         let readsDesktop = settings.showsQuota(.claudeDesktop), readsCli = settings.showsQuota(.claudeCode)
+        feedEstimate(result, desktop: readsDesktop, cli: readsCli)
         if let desktop = result.desktop, readsDesktop, self.desktop != desktop { self.desktop = desktop }
         if !readsDesktop, desktop != nil { desktop = nil }
         if let cli = result.cli, readsCli, self.cli != cli { self.cli = cli }

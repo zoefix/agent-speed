@@ -111,7 +111,7 @@ extension QuotaEstimateBuild {
         }
         switch source.source {
         case "codex":
-            if let newest = codex.lines.max(by: { $0.line.ts < $1.line.ts }) { return newest.account }
+            if let newestCodexAccount { return newestCodexAccount }
             return QuotaKeyEntry.inForce(timelines.local["codex"] ?? [], at: nowMs)?.key
         case "claudeCode", "claudeDesktop":
             return QuotaKeyEntry.inForce(timelines.local[source.source] ?? [], at: nowMs)?.key
