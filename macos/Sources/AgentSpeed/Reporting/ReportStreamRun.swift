@@ -21,6 +21,8 @@ struct ReportStreamRun {
     var delivered = 0
     /// The stop already turned into the shared problem it stands for.
     var handledStop: ReportStreamScheduler.Stop?
+    /// When `quotas` goes out (REPORTING-EXTENSIONS 11.3); a new run id starts empty.
+    var quotaCadence = QuotaReportCadence()
 
     @MainActor var scheduler: ReportStreamScheduler { session.scheduler }
 
@@ -29,5 +31,6 @@ struct ReportStreamRun {
         window = ReportWindow(sample)
         title = ReportTitleTracker()
         lastBuilt = nil
+        quotaCadence = QuotaReportCadence()
     }
 }

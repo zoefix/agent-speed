@@ -37,6 +37,17 @@ extension QuotaController {
         estimateLines[QuotaEstimateLineKey(source: source, host: host, window: window)]
     }
 
+    /// The report's entries at `nowMs` (REPORTING-EXTENSIONS 11.2): only sources whose quota is read here or on a
+    /// host (11.1).
+    func reportEntries(nowMs: Int64) -> [QuotaReportEntry] {
+        guard let build = estimateBuild else { return [] }
+        let hosts = settings.remoteQuotaSwitches.sources
+        return build.entries(nowMs: nowMs) { name in
+            guard let source = SourceKind(rawValue: name) else { return false }
+            return settings.showsQuota(source) || hosts.contains(source)
+        }
+    }
+
     /// A card source's estimates by window id.
     func cardEstimates(_ snapshot: QuotaSnapshot, host: String?) -> [String: QuotaEstimateDisplay] {
         var out: [String: QuotaEstimateDisplay] = [:]

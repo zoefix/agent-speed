@@ -178,17 +178,30 @@ public struct QuotaReportCadence: Sendable {
     /// had no room for it, so it counts as unsent.
     public mutating func step(nowMs: Int64, entries: [QuotaReportEntry], on: Bool = true, leaving: Bool = false,
                               fits: Bool = true) -> [QuotaReportEntry]? {
+        let carried = pending(nowMs: nowMs, entries: entries, on: on, leaving: leaving)
+        guard fits else { return nil }
+        commit(carried, nowMs: nowMs, on: on)
+        return carried
+    }
+
+    /// What a report at `nowMs` should carry, before the size rule.
+    public func pending(nowMs: Int64, entries: [QuotaReportEntry], on: Bool, leaving: Bool = false) -> [QuotaReportEntry]? {
+        guard on else { return cleared ? nil : [] }
+        return Self.due(entries, last: last, lastMs: lastMs ?? 0, nowMs: nowMs, leaving: leaving) ? entries : nil
+    }
+
+    /// Records what the finished report carried: nil when it carried nothing (or the size rule dropped it); `[]`
+    /// with the section off clears, so the next report sent with it on starts over.
+    public mutating func commit(_ carried: [QuotaReportEntry]?, nowMs: Int64, on: Bool) {
+        guard let carried else { return }
         guard on else {
-            if cleared { return nil }
             cleared = true
             last = nil
             lastMs = nil
-            return []
+            return
         }
-        guard Self.due(entries, last: last, lastMs: lastMs ?? 0, nowMs: nowMs, leaving: leaving), fits else { return nil }
-        last = entries
+        last = carried
         lastMs = nowMs
         cleared = false
-        return entries
     }
 }
