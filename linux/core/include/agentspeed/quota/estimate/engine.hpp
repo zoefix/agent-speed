@@ -109,10 +109,11 @@ struct InstanceRow {
     bool closed = false;
 };
 
-// Each build starts from the events added so far; the results stay until the next build.
+// Each build starts from the events added so far; the results stay until the next build. `install` (QUOTAS 10.1
+// installId, hex) keys the accounts without an id.
 class Engine {
 public:
-    explicit Engine(Salt salt, int priceVersion = 8);
+    explicit Engine(Salt salt, int priceVersion = 8, std::string install = {});
 
     void add(Response response);
     void add(CodexLine line);
@@ -133,12 +134,14 @@ public:
     const std::vector<Observation>& observations() const { return obs_; }
     const std::vector<InstanceRow>& instances() const { return insts_; }
     const std::map<CapClass, Estimate>& estimates() const { return estimates_; }
-    // One input per account-window (its newest instance), in report order.
+    // One input per account-window (its newest instance), in report order but for the account tag.
     const std::vector<EntryInput>& current() const { return current_; }
-    std::vector<Entry> entries(std::int64_t nowMs) const;
+    // REPORTING-EXTENSIONS 11.2 for the service of api origin `origin`: the entries of `accounts` (all without it) in
+    // report order, the account tag last, at most 16.
+    std::vector<Entry> entries(std::int64_t nowMs, std::string_view origin, const std::set<std::string>* accounts = nullptr) const;
     Store store() const;
     // The account a displayed source spends on now: Codex its newest line's, the Claude sources their timeline's, a
-    // host's source its relay's key (shared or not), any other `<machine>:<source>`.
+    // host's source its relay's key (shared or not), any other the pair key of (machine, source).
     std::optional<std::string> accountOf(const std::string& machine, const std::string& source) const;
 
 private:
@@ -158,12 +161,14 @@ private:
     std::vector<std::pair<WindowPoint, std::optional<std::string>>> windowPoints(const std::string& source) const;
     void codex();
     std::string hostAccount(const std::string& machine, const std::string& source, const std::optional<std::string>& key);
+    const std::string& pairAccount(const std::string& machine, const std::string& source);
     void instancesAt();
     void classEstimates();
     void currentInputs();
 
     Salt salt_;
     int priceVersion_ = 8;
+    std::string install_;
     std::vector<Response> responses_;
     std::vector<CodexLine> lines_;
     std::vector<std::pair<std::int64_t, std::string>> codexAuth_;
@@ -177,6 +182,7 @@ private:
     std::map<KeyEntry, std::string> orgKeys_;
     std::map<std::pair<std::string, std::string>, Timeline> hostTl_;
     std::map<std::tuple<std::string, std::string, std::string>, std::string> hostShared_;
+    std::map<std::pair<std::string, std::string>, std::string> pairKeys_;
     std::vector<Line> parsedLines_;
     std::vector<std::optional<std::size_t>> responseLine_;
     std::vector<std::optional<std::string>> responseAccounts_;

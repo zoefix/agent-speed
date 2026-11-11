@@ -19,6 +19,15 @@ json::Value accounts() {
 
 Salt fixtureSalt() { return *saltOf(*accounts()["salt"].string()); }
 
+// The fixture's key of (vendor, id).
+std::string fixtureKey(const std::string& vendor, const std::string& id) {
+    for (const auto& k : accounts()["keys"].elements()) {
+        if (*k["vendor"].string() == vendor && *k["id"].string() == id) return *k["expected"].string();
+    }
+    ADD_FAILURE() << "no fixture key for " << vendor << ":" << id;
+    return {};
+}
+
 // A document with the text it points into.
 struct Parsed {
     std::string text;
@@ -72,7 +81,7 @@ TEST(RelayQuotaAccounts, CodexKeyFromTheAuthFileOnly) {
         R"({"auth_mode":"chatgpt","OPENAI_API_KEY":null,"tokens":{"id_token":"never","access_token":"never","refresh_token":"never",)"
         R"("account_id":"acct-1"},"last_refresh":"2026-11-10T00:00:00Z"})";
     auto facts = accountFacts(AccountKind::Codex, auth, salt);
-    EXPECT_EQ(facts.account, "5cdbe01ce30740bc");
+    EXPECT_EQ(facts.account, fixtureKey("codex", "acct-1"));
     EXPECT_FALSE(facts.plan);
     EXPECT_FALSE(facts.tier);
     ASSERT_TRUE(facts.identity);
@@ -95,7 +104,7 @@ TEST(RelayQuotaAccounts, ClaudeCodeKeyPlanAndTierFromTheOauthAccount) {
                              R"("organizationUuid":"org-1","organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x",)"
                              R"("displayName":"never"},"projects":{}})";
     auto facts = accountFacts(AccountKind::ClaudeCode, file, salt);
-    EXPECT_EQ(facts.account, "7f3aa6deae8b9ff4");
+    EXPECT_EQ(facts.account, fixtureKey("claude", "org-1:user-1"));
     EXPECT_EQ(facts.plan, "claude_max");
     EXPECT_EQ(facts.tier, "default_claude_max_20x");
     // The plan and tier need no salt; the key needs both uuids.
@@ -125,7 +134,7 @@ TEST(RelayQuotaAccounts, TheFileIsReadAtMostOnceAMinuteAndWhenItOrTheSaltChanges
     // A new salt gives new keys at once.
     file.refresh(now + 1'000, true, salt);
     EXPECT_EQ(file.reads(), 2);
-    EXPECT_EQ(file.facts().account, "5cdbe01ce30740bc");
+    EXPECT_EQ(file.facts().account, fixtureKey("codex", "acct-1"));
     file.refresh(now + 2'000, true, salt);
     EXPECT_EQ(file.reads(), 2);
     // A changed file waits for the minute, an unchanged one is not read again.
@@ -133,7 +142,7 @@ TEST(RelayQuotaAccounts, TheFileIsReadAtMostOnceAMinuteAndWhenItOrTheSaltChanges
     home.touch(".codex/auth.json", 5);
     file.refresh(now + 30'000, true, salt);
     EXPECT_EQ(file.reads(), 2);
-    EXPECT_EQ(file.facts().account, "5cdbe01ce30740bc");
+    EXPECT_EQ(file.facts().account, fixtureKey("codex", "acct-1"));
     file.refresh(now + 61'000, true, salt);
     EXPECT_EQ(file.reads(), 3);
     EXPECT_EQ(file.facts().account, accountKey(salt, "codex", "acct-2"));
@@ -145,7 +154,7 @@ TEST(RelayQuotaAccounts, TheFileIsReadAtMostOnceAMinuteAndWhenItOrTheSaltChanges
     EXPECT_EQ(file.facts(), AccountFacts{});
     home.write(".codex/auth.json", R"({"tokens":{"account_id":"acct-1"}})");
     file.refresh(now + 400'000, true, salt);
-    EXPECT_EQ(file.facts().account, "5cdbe01ce30740bc");
+    EXPECT_EQ(file.facts().account, fixtureKey("codex", "acct-1"));
     file.refresh(now + 400'000, false, salt);
     EXPECT_EQ(file.facts(), AccountFacts{});
 }

@@ -102,6 +102,7 @@ Json entriesJson(const std::vector<est::Entry>& entries) {
 
 struct Run {
     est::Salt salt;
+    std::string origin;
     std::unique_ptr<est::Engine> engine;
     std::int64_t now = 0;
 };
@@ -109,7 +110,8 @@ struct Run {
 Run run(const Value& input) {
     Run r;
     r.salt = saltFromHex(*input["salt"].string());
-    r.engine = std::make_unique<est::Engine>(r.salt);
+    r.origin = *input["origin"].string();
+    r.engine = std::make_unique<est::Engine>(r.salt, 8, *input["install"].string());
     for (const auto& e : input["events"].elements()) addEvent(*r.engine, r.salt, e);
     if (input["store"].valid()) {
         const auto parsed = est::parseStore(fixtures::compactJson(input["store"]));
@@ -155,7 +157,7 @@ void check(const Value& c) {
     }
     if (want["instances"].valid()) expectJson(instancesJson(engine).compact(), want["instances"], "instances");
     if (want["estimates"].valid()) expectJson(estimatesJson(engine).compact(), want["estimates"], "estimates");
-    if (want["entries"].valid()) expectJson(entriesJson(engine.entries(r.now)).compact(), want["entries"], "entries");
+    if (want["entries"].valid()) expectJson(entriesJson(engine.entries(r.now, r.origin)).compact(), want["entries"], "entries");
     if (want["store"].valid()) {
         const auto text = est::storeJson(engine.store());
         expectJson(text, want["store"], "store");
@@ -192,6 +194,45 @@ TEST(QuotaEstimatePipeline, LivePercent) { checkGroup("live"); }
 TEST(QuotaEstimatePipeline, Store) { checkGroup("store"); }
 TEST(QuotaEstimatePipeline, ReportEntries) { checkGroup("report"); }
 
+Value pipelineCase(const char* group, const std::string& name) {
+    for (const auto& c : cases().root()["pipeline"][group].elements()) {
+        if (*c["name"].string() == name) return c;
+    }
+    return {};
+}
+
+// REPORTING-EXTENSIONS 11.4: two Codex accounts of one window are two entries, told apart by their tags only (seen
+// 2026-11-11: a service rejected the pair before the tag existed).
+TEST(QuotaEstimatePipeline, TwoCodexAccountsAreTwoEntriesWithTheirOwnTags) {
+    const auto c = pipelineCase("report", "two Codex accounts");
+    ASSERT_TRUE(c.valid());
+    const auto input = c["input"];
+    auto r = run(input);
+    const auto entries = r.engine->entries(r.now, r.origin);
+    ASSERT_EQ(entries.size(), 2u);
+    for (const auto& e : entries) {
+        EXPECT_EQ(e.sources, std::vector<std::string>{"codex"});
+        EXPECT_EQ(e.kind, "sevenDay");
+        EXPECT_EQ(e.accountTag.size(), 16u);
+    }
+    EXPECT_NE(entries[0].accountTag, entries[1].accountTag);
+    EXPECT_LT(entries[0].accountTag, entries[1].accountTag);
+    const auto salt = saltFromHex(*input["salt"].string());
+    std::set<std::string> tags;
+    for (const auto* id : {"acct-a", "acct-b"}) tags.insert(est::reportAccount(r.origin, est::accountKey(salt, "codex", id)));
+    EXPECT_EQ(tags, (std::set<std::string>{entries[0].accountTag, entries[1].accountTag}));
+    // Neither the key nor the id is in the JSON; the cadence sees two entries of one window, not one changed entry.
+    for (const auto& e : entries) {
+        const auto text = e.json().compact();
+        EXPECT_EQ(text.find(e.account), std::string::npos);
+        EXPECT_EQ(text.find("acct-"), std::string::npos);
+    }
+    EXPECT_FALSE(est::shouldSend(entries, &entries, 0, 1'000));
+    const std::vector<est::Entry> one{entries[0]};
+    EXPECT_TRUE(est::shouldSend(entries, &one, 0, 1'000));
+    expectJson(entriesJson(entries).compact(), c["expected"]["entries"], "entries");
+}
+
 // Every pipeline group of the fixture has a test above.
 TEST(QuotaEstimatePipeline, EveryGroupIsCovered) {
     const std::set<std::string> covered{"ledger", "chains", "claude", "keys", "classes", "loweredCap", "planChange", "live", "store", "report", "cadence"};
@@ -202,6 +243,7 @@ TEST(QuotaEstimatePipeline, SendCadence) {
     const auto c = cases().root()["pipeline"]["cadence"];
     const auto e = c["entry"];
     est::Entry base;
+    base.accountTag = *e["account"].string();
     for (const auto& s : e["sources"].elements()) base.sources.push_back(*s.string());
     base.kind = *e["window"]["kind"].string();
     base.name = textOf(e["window"]["name"]);
@@ -218,7 +260,7 @@ TEST(QuotaEstimatePipeline, SendCadence) {
         const auto change = *s["change"].string();
         if (change == "set") {
             auto added = current.front();
-            added.sources = {"claudeCode"};
+            added.accountTag = "fedcba9876543210";
             current.push_back(added);
         } else if (change != "none") {
             auto x = current.front();

@@ -32,7 +32,7 @@ inline constexpr std::size_t kSegmentsPerInstance = 64;
 inline constexpr std::size_t kInstancesPerClass = 64;
 inline constexpr std::size_t kObservationsPerInstance = 256;
 inline constexpr std::size_t kMaxEntries = 16;
-inline constexpr int kStoreVersion = 1;
+inline constexpr int kStoreVersion = 2;
 inline constexpr double kInfinity = std::numeric_limits<double>::infinity();
 
 // Python's `//` and the minute an instant falls in.

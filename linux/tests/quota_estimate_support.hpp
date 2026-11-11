@@ -121,12 +121,12 @@ inline est::Observation observation(const Value& v, const std::string& account =
     return o;
 }
 
-// The reference's ledger_from(): account `a`, source codex, model gpt-5.5 unless stated.
-inline est::Ledger ledgerFrom(const Value& rows) {
+// The reference's ledger_from(): account `a` (or `account`), source codex, model gpt-5.5 unless stated.
+inline est::Ledger ledgerFrom(const Value& rows, const std::string& account = "a") {
     est::Ledger led;
     for (const auto& r : rows.elements()) {
         const auto cost = optNumber(r["cost"]);
-        led.add(textOf(r["account"]).value_or("a"), textOf(r["source"]).value_or("codex"), textOf(r["model"]).value_or("gpt-5.5"), integer(r["at"]),
+        led.add(textOf(r["account"]).value_or(account), textOf(r["source"]).value_or("codex"), textOf(r["model"]).value_or("gpt-5.5"), integer(r["at"]),
                 cost ? std::optional<std::int64_t>(static_cast<std::int64_t>(*cost)) : std::nullopt, r["requests"].valid() ? integer(r["requests"]) : 1);
     }
     return led;

@@ -3,6 +3,7 @@
 #include <cstdint>
 #include <optional>
 #include <string>
+#include <string_view>
 #include <vector>
 
 #include "agentspeed/quota/estimate/ledger.hpp"
@@ -13,7 +14,8 @@
 // entry is what the dashboard and the 額度 card show (QUOTAS 10.8).
 namespace agentspeed::quota::estimate {
 
-// What an entry is computed from: the account-window's newest vendor value and its instance.
+// What an entry is computed from: the account-window's newest vendor value and its instance. `order` is its place in
+// the report order before the account tag (equal for equal source, window and source ranks).
 struct EntryInput {
     std::string source;
     std::vector<std::string> sources;
@@ -26,9 +28,12 @@ struct EntryInput {
     std::string account;
     Estimate estimate;
     std::optional<std::int64_t> firstAfterReset;
+    std::size_t order = 0;
 };
 
 struct Entry {
+    // REPORTING-EXTENSIONS 11.2 `account`: the account's tag for the report's service; empty for the display.
+    std::string accountTag;
     std::string source;
     std::vector<std::string> sources;
     std::optional<std::string> plan, tier;
@@ -58,10 +63,11 @@ struct Entry {
     bool operator==(const Entry&) const = default;
 };
 
-Entry reportEntry(const EntryInput& input, std::int64_t nowMs, const Ledger& ledger, int priceVersion);
+// `origin`: the reporting service's api origin, which keys the account tag; empty for the display (no tag).
+Entry reportEntry(const EntryInput& input, std::int64_t nowMs, const Ledger& ledger, int priceVersion, std::string_view origin = {});
 
-// Whether a report carries `quotas`: the run's first, a changed set, a new vendor percent, confidence or reset state,
-// 60 s since the last one sent, or leaving.
+// Whether a report carries `quotas`: the run's first, a changed set (entries are told apart by account tag and window),
+// a new vendor percent, confidence or reset state, 60 s since the last one sent, or leaving.
 bool shouldSend(const std::vector<Entry>& entries, const std::vector<Entry>* lastSent, std::int64_t lastSentMs, std::int64_t nowMs,
                 bool leaving = false);
 

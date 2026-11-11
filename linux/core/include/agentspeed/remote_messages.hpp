@@ -197,7 +197,7 @@ struct QuotaSwitches {
     bool network = false;
     bool grokLive = false;
     bool claudeCode = false;
-    // QUOTAS 10.1: the app's estimate salt as 64 lowercase hex digits; empty: none (never logged).
+    // QUOTAS 10.1: the account salt as 64 lowercase hex digits; empty: none (never logged).
     std::string salt;
     bool operator==(const QuotaSwitches&) const = default;
 };

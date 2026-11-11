@@ -1,7 +1,6 @@
 #include "agentspeed/quota/estimate/estimator.hpp"
 
 #include <algorithm>
-#include <tuple>
 
 #include "agentspeed/json.hpp"
 #include "agentspeed/quota/codex.hpp"
@@ -49,8 +48,8 @@ std::optional<CodexLine> codexLineOf(const std::string& agentId, std::int64_t ts
 }
 
 Estimator::Estimator(std::string folder) : folder_(std::move(folder)) {
-    salt_ = loadOrCreateSalt(folder_);
-    if (!salt_) return;
+    install_ = loadOrCreateInstallId(folder_);
+    if (!install_) return;
     if (auto stored = readStore(storeFile(folder_)); stored && stored->version == kStoreVersion) stored_ = std::move(*stored);
     // The timeline's newest keys: a launch that reads the same sign-in adds no entry.
     std::optional<std::int64_t> codexAt, claudeAt;
@@ -65,7 +64,7 @@ Estimator::Estimator(std::string folder) : folder_(std::move(folder)) {
     }
 }
 
-std::string Estimator::saltText() const { return salt_ ? saltHex(*salt_) : std::string(); }
+std::string Estimator::saltText() const { return install_ ? saltHex(accountSalt()) : std::string(); }
 
 std::string Estimator::shownKey(const std::string& machine, const std::string& source) {
     return machine == kLocal ? source : source + "@" + machine;
@@ -161,12 +160,12 @@ void Estimator::prune(std::int64_t nowMs) {
 }
 
 Estimator::Shown Estimator::build(std::int64_t nowMs, const std::set<std::pair<std::string, std::string>>& shown) {
-    if (!salt_) return {};
+    if (!install_) return {};
     std::shared_ptr<Engine> engine;
     {
         const std::lock_guard lock(mutex_);
         prune(nowMs);
-        engine = std::make_shared<Engine>(*salt_, priceVersion_);
+        engine = std::make_shared<Engine>(accountSalt(), priceVersion_, *install_);
         for (const auto& r : history_) engine->add(r);
         for (const auto& [_, r] : live_) {
             if (r.machine != kLocal || r.endMs >= cutMs_) engine->add(r);
@@ -199,7 +198,7 @@ Estimator::Shown Estimator::build(std::int64_t nowMs, const std::set<std::pair<s
     return out;
 }
 
-std::vector<Entry> Estimator::entries(std::int64_t nowMs) const {
+std::vector<Entry> Estimator::entries(std::int64_t nowMs, std::string_view origin) const {
     std::shared_ptr<const Engine> engine;
     std::set<std::string> accounts;
     {
@@ -207,30 +206,15 @@ std::vector<Entry> Estimator::entries(std::int64_t nowMs) const {
         engine = built_;
         accounts = shownAccounts_;
     }
-    std::vector<Entry> out;
-    if (!engine) return out;
-    // REPORTING-EXTENSIONS 11.4: (sources, window) once per report; of two accounts (a host's whose resets contradict
-    // this computer's), the newest vendor value's.
-    using Identity = std::tuple<std::vector<std::string>, std::string, std::optional<std::string>, std::int64_t>;
-    std::map<Identity, const EntryInput*> newest;
-    for (const auto& in : engine->current()) {
-        if (!accounts.contains(in.account)) continue;
-        auto& held = newest[{in.sources, in.kind, in.name, in.minutes}];
-        if (!held || in.t > held->t) held = &in;
-    }
-    for (const auto& in : engine->current()) {
-        if (out.size() >= kMaxEntries) break;
-        const auto held = newest.find({in.sources, in.kind, in.name, in.minutes});
-        if (held != newest.end() && held->second == &in) out.push_back(reportEntry(in, nowMs, engine->ledger(), engine->priceVersion()));
-    }
-    return out;
+    if (!engine || origin.empty()) return {};
+    return engine->entries(nowMs, origin, &accounts);
 }
 
 void Estimator::save(std::int64_t nowMs, bool force) {
     std::shared_ptr<const Engine> engine;
     {
         const std::lock_guard lock(mutex_);
-        if (!salt_ || !built_) return;
+        if (!install_ || !built_) return;
         if (!force && savedMs_ && nowMs - *savedMs_ < kMinute) return;
         savedMs_ = nowMs;
         engine = built_;

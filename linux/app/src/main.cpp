@@ -161,7 +161,8 @@ int main(int argc, char* argv[]) {
     remote.setSelectionStores(&orbStore, &boardStore);
     gRemoteFeed = remote.feed();
     gCodexQuota = std::make_shared<agentspeed::quota::CodexCollector>();
-    // QUOTAS 10: the quota estimate, its salt and estimate.json in `<data>/quota`; hosts get the salt (REMOTE 11.1).
+    // QUOTAS 10: the quota estimate, its install id and estimate.json in `<data>/quota`; hosts get the account salt
+    // (REMOTE 11.1).
     gEstimator = std::make_shared<agentspeed::quota::estimate::Estimator>(
         agentspeed::quota::quotaFolderOf(agentspeed::quota::dataFolder(agentspeed::quota::processEnvironment())));
     remote.setEstimateSalt(QString::fromStdString(gEstimator->saltText()));

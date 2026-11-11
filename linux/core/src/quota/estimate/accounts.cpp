@@ -25,21 +25,55 @@ std::string hex(const unsigned char* bytes, std::size_t count) {
     return out;
 }
 
+// The first 16 hex digits of HMAC-SHA256(key, message); empty when the hash fails.
+std::string hmacTag(const unsigned char* key, std::size_t keyLength, std::string_view message) {
+    unsigned char digest[EVP_MAX_MD_SIZE];
+    unsigned int length = 0;
+    const auto* result = HMAC(EVP_sha256(), key, static_cast<int>(keyLength), reinterpret_cast<const unsigned char*>(message.data()), message.size(),
+                              digest, &length);
+    std::string tag = result && length >= 8 ? hex(digest, 8) : std::string();
+    ::explicit_bzero(digest, sizeof digest);
+    return tag;
+}
+
+Salt makeAccountSalt() {
+    Salt salt(EVP_MAX_MD_SIZE);
+    unsigned int length = 0;
+    if (EVP_Digest(kAccountSaltText.data(), kAccountSaltText.size(), salt.data(), &length, EVP_sha256(), nullptr) != 1) length = 0;
+    salt.resize(length);
+    return salt;
+}
+
 }  // namespace
+
+const Salt& accountSalt() {
+    static const Salt salt = makeAccountSalt();
+    return salt;
+}
 
 std::string accountKey(const Salt& salt, std::string_view vendor, std::string_view id) {
     std::string message;
     message.reserve(vendor.size() + 1 + id.size());
     message.append(vendor).append(1, ':').append(id);
-    unsigned char digest[EVP_MAX_MD_SIZE];
-    unsigned int length = 0;
-    const auto* result = HMAC(EVP_sha256(), salt.data(), static_cast<int>(salt.size()), reinterpret_cast<const unsigned char*>(message.data()),
-                              message.size(), digest, &length);
+    auto key = hmacTag(salt.data(), salt.size(), message);
     ::explicit_bzero(message.data(), message.size());
-    if (!result || length < 8) return {};
-    auto key = hex(digest, 8);
-    ::explicit_bzero(digest, sizeof digest);
     return key;
+}
+
+std::string pairKey(const Salt& salt, std::string_view install, std::string_view machine, std::string_view source) {
+    std::string id;
+    id.reserve(install.size() + machine.size() + source.size() + 2);
+    id.append(install).append(1, ':').append(machine).append(1, ':').append(source);
+    auto key = accountKey(salt, "pair", id);
+    ::explicit_bzero(id.data(), id.size());
+    return key;
+}
+
+std::string reportAccount(std::string_view origin, std::string_view key) {
+    std::string domain;
+    domain.reserve(kReportTagDomain.size() + origin.size());
+    domain.append(kReportTagDomain).append(origin);
+    return hmacTag(reinterpret_cast<const unsigned char*>(domain.data()), domain.size(), key);
 }
 
 std::string saltHex(const Salt& salt) { return hex(salt.data(), salt.size()); }

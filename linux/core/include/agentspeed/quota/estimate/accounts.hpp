@@ -10,15 +10,25 @@
 #include "agentspeed/json.hpp"
 
 // QUOTAS 10.1 and 10.2: account keys, the fingerprint of two sources, the Desktop merge rule, plan strings and the Codex
-// account chains.
+// account chains; REPORTING-EXTENSIONS 11.2: an account's tag for one reporting service.
 namespace agentspeed::quota::estimate {
 
 using Salt = std::vector<unsigned char>;
-inline constexpr std::size_t kSaltBytes = 32;
+inline constexpr std::size_t kInstallIdBytes = 32;
+inline constexpr std::string_view kAccountSaltText = "agent-speed quota account v1";
+inline constexpr std::string_view kReportTagDomain = "agent-speed quota account|";
 
+// QUOTAS 10.1 accountSalt: the SHA-256 of kAccountSaltText, the same in every install.
+const Salt& accountSalt();
 // The first 16 lowercase hex digits of HMAC-SHA256(salt, "<vendor>:<id>"); empty when the hash fails.
 std::string accountKey(const Salt& salt, std::string_view vendor, std::string_view id);
-// 64 lowercase hex digits (REMOTE 11.1 `salt`).
+// QUOTAS 10.1: the key of an account without an id, the pair (machine, source) of one install: vendor `pair`, id
+// `<install>:<machine>:<source>` (`machine` is `local` or the host's id).
+std::string pairKey(const Salt& salt, std::string_view install, std::string_view machine, std::string_view source);
+// REPORTING-EXTENSIONS 11.2 `account`: the first 16 lowercase hex digits of HMAC-SHA256(kReportTagDomain + origin, key),
+// `origin` the service's api origin; empty when the hash fails.
+std::string reportAccount(std::string_view origin, std::string_view key);
+// Lowercase hex (REMOTE 11.1 `salt`: 64 digits).
 std::string saltHex(const Salt& salt);
 
 // One observation of a window as the fingerprint compares them: when, which window, its reset and length.

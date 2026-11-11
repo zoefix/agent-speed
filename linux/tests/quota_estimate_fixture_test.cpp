@@ -1,6 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <map>
+#include <set>
 
 #include "agentspeed/quota/estimate/accounts.hpp"
 #include "agentspeed/quota/estimate/entry.hpp"
@@ -42,13 +43,45 @@ TEST(QuotaEstimateFixture, Resolution) {
     for (const auto& c : root()["resolution"].elements()) EXPECT_EQ(est::resolution(number(c["p"])), number(c["expected"])) << c["p"].raw();
 }
 
+// QUOTAS 10.1: the account salt is the SHA-256 of its text, the same in every install.
+TEST(QuotaEstimateFixture, AccountSalt) {
+    const auto a = root()["accounts"];
+    EXPECT_EQ(*a["saltText"].string(), est::kAccountSaltText);
+    EXPECT_EQ(est::saltHex(est::accountSalt()), *a["salt"].string());
+    EXPECT_EQ(est::accountSalt(), saltFromHex(*a["salt"].string()));
+}
+
 TEST(QuotaEstimateFixture, AccountKeys) {
     const auto a = root()["accounts"];
     const auto salt = saltFromHex(*a["salt"].string());
+    ASSERT_GT(a["keys"].size(), 0u);
     for (const auto& k : a["keys"].elements()) {
         EXPECT_EQ(est::accountKey(salt, *k["vendor"].string(), *k["id"].string()), *k["expected"].string());
     }
     EXPECT_EQ(est::saltHex(salt), *a["salt"].string());
+}
+
+// QUOTAS 10.1: an account without an id is the pair (machine, source) of one install.
+TEST(QuotaEstimateFixture, PairKeys) {
+    const auto a = root()["accounts"];
+    ASSERT_GT(a["pairs"].size(), 0u);
+    for (const auto& p : a["pairs"].elements()) {
+        EXPECT_EQ(est::pairKey(est::accountSalt(), *p["install"].string(), *p["machine"].string(), *p["source"].string()), *p["expected"].string())
+            << *p["machine"].string() << " " << *p["source"].string();
+    }
+}
+
+// REPORTING-EXTENSIONS 11.2 `account`: one account's tag differs between services, two accounts' within one.
+TEST(QuotaEstimateFixture, ReportTags) {
+    const auto a = root()["accounts"];
+    ASSERT_GT(a["reportTags"].size(), 0u);
+    std::set<std::string> tags;
+    for (const auto& t : a["reportTags"].elements()) {
+        const auto tag = est::reportAccount(*t["origin"].string(), *t["key"].string());
+        EXPECT_EQ(tag, *t["expected"].string()) << *t["origin"].string() << " " << *t["key"].string();
+        tags.insert(tag);
+    }
+    EXPECT_EQ(tags.size(), a["reportTags"].size());
 }
 
 TEST(QuotaEstimateFixture, Fingerprints) {
@@ -249,7 +282,8 @@ est::EntryInput reportInput(const Value& v) {
     in.t = integer(v["t"]);
     in.R = integer(v["R"]);
     in.S = integer(v["S"]);
-    in.account = *v["accounts"].at(0).string();
+    // The reference keys the ledger by `accounts` and the tag by `account`; the port keys both by the account.
+    in.account = *v["account"].string();
     const auto e = v["estimate"];
     in.estimate.confidence = est::confidenceFromId(*e["confidence"].string()).value_or(est::Confidence::None);
     in.estimate.cap = optNumber(e["cap"]);
@@ -261,14 +295,15 @@ est::EntryInput reportInput(const Value& v) {
 
 TEST(QuotaEstimateFixture, ReportEntries) {
     const auto c = root()["report"];
-    const auto led = ledgerFrom(c["rows"]);
+    const auto origin = *c["origin"].string();
     const auto base = reportInput(c["input"]);
+    const auto led = ledgerFrom(c["rows"], base.account);
     std::vector<est::Entry> made;
     for (const auto& e : c["entries"].elements()) {
         SCOPED_TRACE(*e["name"].string());
         auto in = base;
         if (*e["name"].string() == "no estimate") in.estimate = est::Estimate{};
-        const auto entry = est::reportEntry(in, integer(e["now"]), led, 8);
+        const auto entry = est::reportEntry(in, integer(e["now"]), led, 8, origin);
         expectJson(entry.json().compact(), e["expected"], "entry");
         made.push_back(entry);
     }
@@ -279,7 +314,7 @@ TEST(QuotaEstimateFixture, ReportEntries) {
     auto d = a;
     d.usedPercent = 24.0;
     auto added = b;
-    added.sources = {"claudeCode"};
+    added.accountTag = est::reportAccount(origin, est::accountKey(est::accountSalt(), "codex", "acct-2"));
     const std::vector<est::Entry> sent{a};
     const std::vector<bool> results{
         est::shouldSend({a}, nullptr, 0, 0),
