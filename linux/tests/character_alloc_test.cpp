@@ -64,3 +64,27 @@ TEST(CharacterPerformer, StepsWithoutAllocatingOnceWarm) {
     }
     EXPECT_GT(quiet, 0);
 }
+
+TEST(CharacterHudWings, BalancedFramesAllocateNothingOnceWarm) {
+    HudSilhouette s(0, 444, 4);
+    for (double y = 80; y <= 400; y += 2) {
+        s.add(190, y);
+        s.add(254, y);
+    }
+    const HudFrame f({0, 0, 444, 444}, s, 296, 222, 80, 170, 140);
+    std::array<CardSize, kHudCardCount> sizes = {{{84, 62}, {90, 18}, {90, 38.5}, {78, 26.4}, {110, 18}, {86, 26.4}, {130, 16.3}, {150, 85}}};
+    std::array<bool, kHudCardCount> shown{};
+    shown.fill(true);
+    HudWings wings;
+    wings.models = ModelsShape{8, 130, 0, 0, 130, 16.3};
+    for (int n = 0; n < 120; ++n) wings.update(1.0 / 60, n / 60.0, f, sizes, shown);
+    allocations = 0;
+    counting = true;
+    // A source joining 額度 and leaving again: the split is chosen again, in place.
+    for (int n = 0; n < 600; ++n) {
+        sizes[static_cast<std::size_t>(index(HudCard::Quota))].h = n < 300 ? 55 : 85;
+        wings.update(1.0 / 60, 2 + n / 60.0, f, sizes, shown);
+    }
+    counting = false;
+    EXPECT_EQ(allocations, 0);
+}

@@ -3,7 +3,9 @@
 
 #include <algorithm>
 #include <cstdlib>
+#include <string>
 
+#include "agentspeed/character/hud_quota.hpp"
 #include "agentspeed/character/hud_wings.hpp"
 #include "agentspeed/character/performer.hpp"
 #include "character_support.hpp"
@@ -53,10 +55,14 @@ std::size_t at(HudCard c) { return static_cast<std::size_t>(index(c)); }
 
 }  // namespace
 
-TEST(HudWings, CardsSitBesideHerNeverOverHer) {
+class HudWingsBalances : public ::testing::TestWithParam<bool> {};
+
+TEST_P(HudWingsBalances, CardsSitBesideHerNeverOverHer) {
+    const bool balances = GetParam();
     const auto f = frame();
     HudWings wings;
     wings.still = true;
+    wings.balances = balances;
     wings.update(1.0 / 60, 0, f, kSizes, kAll);
     std::vector<HudCard> cards = {HudCard::Speed};
     cards.insert(cards.end(), kHudColumn.begin(), kHudColumn.end());
@@ -66,12 +72,20 @@ TEST(HudWings, CardsSitBesideHerNeverOverHer) {
         EXPECT_TRUE(p.x - kSizes[at(card)].w / 2 >= 0 && p.x + kSizes[at(card)].w / 2 <= 444);
     }
     EXPECT_GT(wings.places()[0].x, 254);
-    for (HudCard card : kHudColumn) EXPECT_LT(wings.places()[at(card)].x, 190);
+    if (balances) EXPECT_LT(wings.split(), kWhole);
+    else EXPECT_EQ(wings.split(), kWhole);
+    for (HudCard card : kHudColumn) {
+        if (!kAll[at(card)]) continue;
+        if (wings.isAtHerRight(card)) EXPECT_GT(wings.places()[at(card)].x, 254) << index(card);
+        else EXPECT_LT(wings.places()[at(card)].x, 190) << index(card);
+    }
     const auto& model = wings.places()[1];
     EXPECT_LT(std::fabs(model.x - 222), 1e-9);
     EXPECT_LT(model.y + kSizes[1].h / 2, 80);
     std::vector<double> ys;
-    for (HudCard card : kHudColumn) ys.push_back(wings.places()[at(card)].y);
+    for (HudCard card : kHudColumn) {
+        if (kAll[at(card)]) ys.push_back(wings.places()[at(card)].y);
+    }
     EXPECT_TRUE(std::is_sorted(ys.begin(), ys.end()));
 }
 
@@ -87,6 +101,8 @@ TEST(HudWings, AHiddenCardFadesAndTheColumnClosesUp) {
     const auto f = frame();
     HudWings wings;
     wings.still = true;
+    // The column on her left alone: with balance the remaining cards may change sides too.
+    wings.balances = false;
     auto shown = kAll;
     wings.update(1.0 / 60, 0, f, kSizes, shown);
     const double before = wings.places()[at(HudCard::Cost)].y;
@@ -142,6 +158,7 @@ TEST(HudWings, TheColumnContinuesAtHerRightWhenHerLeftIsFull) {
 
 TEST(HudWings, CardsComeBackOnlyAfterHerLeftStaysClear) {
     HudWings wings;
+    wings.balances = false;
     double t = 0;
     for (int n = 0; n < 120; ++n, t += 1.0 / 60) wings.update(1.0 / 60, t, wideHairFrame(), kSizes, kAll);
     const int spilled = wings.split();
@@ -153,15 +170,21 @@ TEST(HudWings, CardsComeBackOnlyAfterHerLeftStaysClear) {
     for (HudCard card : kHudColumn) EXPECT_LT(wings.places()[at(card)].x, 190);
 }
 
-TEST(HudWings, APassingGestureMovesNoCard) {
+TEST_P(HudWingsBalances, APassingGestureMovesNoCard) {
     HudWings wings;
+    wings.balances = GetParam();
     double t = 0;
+    int first = -1;
     for (int n = 0; n < 300; ++n, t += 1.0 / 60) {
         const bool hair = n % 120 >= 60 && n % 120 < 72;
         wings.update(1.0 / 60, t, hair ? wideHairFrame() : frame(), kSizes, kAll);
-        EXPECT_EQ(wings.split(), kWhole);
+        if (first < 0) first = wings.split();
+        EXPECT_EQ(wings.split(), first);
     }
+    EXPECT_TRUE(GetParam() || first == kWhole);
 }
+
+INSTANTIATE_TEST_SUITE_P(Balance, HudWingsBalances, ::testing::Bool());
 
 TEST(HudWings, FloatsDifferPerCard) {
     const auto a = HudWings::floatOf(HudCard::Performance, 3);
@@ -409,6 +432,7 @@ TEST(HudWingsQuota, ItIsTheColumnsLastCard) {
     const auto f = frame();
     HudWings wings;
     wings.still = true;
+    wings.balances = false;
     const auto sizes = withQuota({120, 60});
     wings.update(1.0 / 60, 0, f, sizes, allShown());
     const auto& quota = wings.places()[at(HudCard::Quota)];
@@ -440,10 +464,12 @@ TEST(HudWingsQuota, ItsNarrowestFormDecidesWhetherTheColumnSpills) {
     const auto sizes = withQuota({170, 40});
     HudWings wide;
     wide.still = true;
+    wide.balances = false;
     wide.update(1.0 / 60, 0, f, sizes, allShown());
     EXPECT_LT(wide.split(), kWhole) << "without a narrower form it spills";
     HudWings narrow;
     narrow.still = true;
+    narrow.balances = false;
     narrow.quotaNarrowest = 120;
     narrow.update(1.0 / 60, 0, f, sizes, allShown());
     EXPECT_EQ(narrow.split(), kWhole);
@@ -462,7 +488,9 @@ TEST(HudWingsQuota, ASpilledCardMeasuresItsRoomToTheRightEdge) {
 }
 
 // AGENT_SPEED_CHARACTER_PACKS (a folder of unpacked packs): every pack dances through the bands for 60 s at a 148 pt
-// orb while the cards follow her outline; prints how often cards changed sides and how many card-frames cover her.
+// orb while the cards follow her outline, with the owner's cards (性能 with 首字, network, 費用, today, 額度 with three
+// sources, three models rows); prints how often cards changed sides and how many card-frames cover her.
+// `AGENT_SPEED_HUD_BALANCE=0`: the spill-over alone, for comparison.
 TEST(HudWingsPack, CardsStayBesideEveryCharacter) {
     const char* rootEnv = std::getenv("AGENT_SPEED_CHARACTER_PACKS");
     if (!rootEnv) GTEST_SKIP() << "AGENT_SPEED_CHARACTER_PACKS not set";
@@ -473,16 +501,25 @@ TEST(HudWingsPack, CardsStayBesideEveryCharacter) {
     }
     std::sort(ids.begin(), ids.end());
     const double d = 296, side = 444;
-    const std::array<CardSize, kHudCardCount> sizes = {{{84, 62}, {90, 18}, {80, 28}, {64, 27}, {96, 18}, {62, 27}, {0, 0}, {0, 0}}};
+    auto sizes = std::array<CardSize, kHudCardCount>{{{84, 62}, {90, 18}, {90, 38.5}, {78, 26.4}, {110, 18}, {86, 26.4}, {0, 0}, {150, 85}}};
+    // 額度's forms as the renderer fits them to its room: full, no resets, short bars, no headers.
+    const QuotaWidths quotaWidths = {150, 130, 115, 104};
+    const std::array<double, 4> quotaHeights = {85, 85, 85, 57};
+    const char* balanceEnv = std::getenv("AGENT_SPEED_HUD_BALANCE");
+    const bool balances = !balanceEnv || std::string(balanceEnv) != "0";
     // Three running models at t = 8: names of 9 t, a 26 pt speed column and 18 pt of unit.
     const ModelsShape models{8, 2 * 6.4 + 8.32 + 6.4 + 26 + 18, 96, 0, 2 * 6.4 + 8.32 + 26 + 18, 2 * 4.4 + 3 * 7.36 + 2 * 2.4};
     auto shown = kAll;
     shown[at(HudCard::Models)] = true;
+    shown[at(HudCard::Quota)] = true;
     const std::vector<int> levels = {2, 5, 8, 11, 13, 9, 4, 1};
     for (const auto& id : ids) {
         Performer performer(Pack::load(fs::path(rootEnv) / id), 11);
         HudWings wings;
         wings.models = models;
+        wings.balances = balances;
+        wings.quotaNarrowest = 104;
+        FormFit form;
         HudSilhouette silhouette(0, side, 2);
         std::vector<double> scratch;
         const double ppp = 0.86 * d / performer.idleHeight();
@@ -493,6 +530,9 @@ TEST(HudWingsPack, CardsStayBesideEveryCharacter) {
             performer.step(1.0 / 60, levels[std::min<std::size_t>(levels.size() - 1, static_cast<std::size_t>(n / 450))]);
             const auto anchors = performer.trace(silhouette, 222, 222 + 0.45 * d, ppp, scratch);
             const HudFrame f({0, 0, side, side}, silhouette, d, anchors);
+            form.update(1.0 / 60, quotaWidths, wings.quotaRoom(), 0.04 * d, n == 0);
+            const auto q = static_cast<std::size_t>(form.form());
+            sizes[at(HudCard::Quota)] = {quotaWidths[q], quotaHeights[q]};
             wings.update(1.0 / 60, n / 60.0, f, sizes, shown);
             ++places[static_cast<std::size_t>(wings.modelsPlace())];
             if (!wings.modelsForm().names) ++dots;

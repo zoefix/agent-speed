@@ -7,22 +7,11 @@
 #include <optional>
 #include <vector>
 
+#include "agentspeed/character/hud_balance.hpp"
+#include "agentspeed/character/hud_card.hpp"
 #include "agentspeed/character/springs.hpp"
 
 namespace agentspeed::character {
-
-// The cards of the character's floating readout (DESIGN 2a.6, *Readouts*): the speed on her right with the running
-// models under it, the model above her head, and the column of facts on her left, top to bottom, 額度 last. New cards go
-// last, so the others keep their float phases.
-enum class HudCard { Speed = 0, Model = 1, Performance = 2, Network = 3, Cost = 4, Agents = 5, Models = 6, Quota = 7 };
-
-constexpr int kHudCardCount = 8;
-constexpr std::array<HudCard, kHudCardCount> kHudCards = {HudCard::Speed, HudCard::Model,  HudCard::Performance, HudCard::Network,
-                                                          HudCard::Cost,  HudCard::Agents, HudCard::Models,      HudCard::Quota};
-// The left column, top to bottom.
-constexpr std::array<HudCard, 5> kHudColumn = {HudCard::Performance, HudCard::Network, HudCard::Cost, HudCard::Agents, HudCard::Quota};
-
-inline int index(HudCard c) { return static_cast<int>(c); }
 
 // Her outline this frame as horizontal bands of `step` points from `top`: each band's leftmost and rightmost x of her
 // drawn parts. Built by the renderer from the skinned vertices, so the cards clear an arm held out, a raised staff or
@@ -77,10 +66,6 @@ struct HudFrame {
         : HudFrame(b, std::move(s), d, a.centerX, a.headTop, a.chest, a.shoulders) {}
 };
 
-struct CardSize {
-    double w = 0, h = 0;
-};
-
 // The models card's widths (DESIGN 2a.6, Models, *Place and width*), in points: `fixed` plus its name column, the
 // widest name cut to the name width (9 t, narrowed as far as 4 t), and never narrower than `floor` (the "+N" line);
 // `dots` wide with the dots and speeds only.
@@ -103,9 +88,10 @@ struct ModelsForm {
 enum class ModelsPlace { UnderSpeed, Lower, Hidden };
 
 // Places the readout cards beside her (DESIGN 2a.6): each has its own anchor, kept clear of her outline, never behind
-// her; anchors trail her on soft springs and every card floats on its own slow figure of eight. When her left side
-// has no room for the whole column, its last cards continue under the speed on her right (under the models card while
-// it shows); a card changing sides fades out and back in at its new place instead of crossing her. The models card
+// her; anchors trail her on soft springs and every card floats on its own slow figure of eight. The column's last
+// cards continue under the speed on her right (under the models card while it shows) so that both sides weigh about the
+// same (`HudBalance`), and more of them when her left side has no room for the rest; a card changing sides fades out
+// and back in at its new place instead of crossing her. The models card
 // narrows its names, then drops them, then moves down past the spilled cards, and only then hides. The 額度 card takes
 // the widest of its forms that fits its room, so only its narrowest form decides whether the column spills.
 class HudWings {
@@ -153,6 +139,8 @@ public:
     const std::array<double, kHudCardCount>& presence() const { return presence_; }
     const std::array<CardSize, kHudCardCount>& sizes() const { return sizes_; }
     int split() const { return split_; }
+    // No split fits with one edge: each card hugs her outline.
+    bool hugging() const { return hugging_; }
     bool isAtHerRight(HudCard card) const {
         return card == HudCard::Speed || card == HudCard::Models || right_[static_cast<std::size_t>(index(card))];
     }
@@ -166,6 +154,9 @@ public:
 
     // No float, tilt or breathing (Reduce Motion, effects Off): the cards still keep clear of her.
     bool still = false;
+    // The column is split between her sides by weight (DESIGN 2a.6, *Balance*); off below S = 96, where its cards stay
+    // at her left unless they spill over.
+    bool balances = true;
     // The models card's widths and height this frame.
     ModelsShape models;
     // The 額度 card's narrowest form (no resets, short bars, no headers; points), 0 for none: the renderer sets it every
@@ -189,14 +180,20 @@ private:
     bool intrudes(HudCard card, double x, double y, const HudFrame& f) const;
     std::pair<double, double> speedAnchor(const HudFrame& f, CardSize size) const;
     std::pair<double, double> modelAnchor(const HudFrame& f, CardSize size) const;
-    void columnAnchors(double dt, const HudFrame& f);
-    std::optional<int> roomier(const HudFrame& f);
+    void columnAnchors(double dt, const HudFrame& f, const std::array<CardSize, kHudCardCount>& wanted,
+                       const std::array<bool, kHudCardCount>& shown);
+    void choose(const HudFrame& f, const HudHeights& heights);
+    void rebalance(double dt, const HudFrame& f, const HudHeights& heights, double gap, bool moving);
+    std::optional<int> firstFitting(const HudFrame& f, std::size_t count, double room);
+    std::optional<int> better(const HudFrame& f);
+    double changeWait() const;
     Best best(const HudFrame& f);
     Fit fit(const HudFrame& f, int split, double room, double reach, bool aligned);
     double layout(const HudFrame& f, int split, double shift, bool aligned, double room, bool write);
     std::optional<ModelsForm> formFor(double room) const;
     double speedBottom() const;
     double spillBottom(const HudFrame& f) const;
+    double modelsEdge(const HudFrame& f, double top, double h) const;
     ModelsFit modelsFit(const HudFrame& f, double top) const;
     std::optional<double> lowerTop(const HudFrame& f, bool spare) const;
     void chooseModels(double dt, const HudFrame& f, bool shown);
@@ -224,6 +221,8 @@ private:
     double strain_ = 0;
     double ease_ = 0;
     double sinceChange_ = std::numeric_limits<double>::infinity();
+    HudBalance balance_;
+    HudHeights weighed_{};
     bool hugging_ = false;
     bool placed_ = false;
 };
