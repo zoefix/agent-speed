@@ -56,6 +56,7 @@ struct CharacterCardInk {
     let number: RGBColor
     let secondary: RGBColor
     let accent: RGBColor
+    private let latencyTones: (quick: RGBColor, slow: RGBColor, late: RGBColor)
 
     init(_ frame: OrbFrame, accent: RGBColor?) {
         let dark = frame.dark
@@ -70,6 +71,18 @@ struct CharacterCardInk {
         number = ink.opacity(contrast ? 0.98 : 0.9)
         secondary = (dark ? RGBColor.white : RGBColor.black).opacity(contrast ? 0.74 : 0.55)
         self.accent = accent ?? RGBColor(red: 0.85, green: 0.47, blue: 0.34)
+        latencyTones = contrast ? (number, number, number)
+            : dark ? (RGBColor(hex: 0x30D158), RGBColor(hex: 0xF5A524), RGBColor(hex: 0xFF453A))
+            : (RGBColor(hex: 0x248A3D), RGBColor(hex: 0xB86E00), RGBColor(hex: 0xD70015))
+    }
+
+    /// The 首字 value's color (DESIGN 2a.6): green, amber or red by its band; Increase Contrast keeps the value token.
+    func latency(_ tone: CharacterReadoutText.LatencyTone) -> RGBColor {
+        switch tone {
+        case .quick: latencyTones.quick
+        case .slow: latencyTones.slow
+        case .late: latencyTones.late
+        }
     }
 }
 
@@ -338,16 +351,19 @@ struct CharacterCards {
         // 首字 fades where it stands as the card eases to its height.
         guard let latency = rows.latency, rows.latencyShare > 0.01 else { return }
         drawRow(Localizer.string("character.latency.glyph", language: language), number: latency.number, unit: latency.unit,
-                pen, x: origin.x, baseline: top + m.baseline(m.t), alpha: Double(rows.latencyShare), ink: ink, into: &scene)
+                pen, x: origin.x, baseline: top + m.baseline(m.t), alpha: Double(rows.latencyShare), ink: ink,
+                numberColor: ink.latency(latency.tone), into: &scene)
     }
 
-    /// A row at `t`: its glyph, the number in the value token and the unit in the secondary one.
+    /// A row at `t`: its glyph, the number in the value token (or `numberColor`) and the unit in the secondary one.
     private func drawRow(_ glyph: String, number: String, unit: String, _ pen: CharacterBodyPainter, x left: CGFloat,
-                         baseline: CGFloat, alpha a: Double, ink: CharacterCardInk, into scene: inout OrbScene) {
+                         baseline: CGFloat, alpha a: Double, ink: CharacterCardInk, numberColor: RGBColor? = nil,
+                         into scene: inout OrbScene) {
         var x = left
         x += put(glyph, m.glyph(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a), into: &scene)
         x += m.glyphGap
-        x += putDigits(number, m.number(m.t), pen, x: x, baseline: baseline, color: ink.number.opacity(a), into: &scene)
+        x += putDigits(number, m.number(m.t), pen, x: x, baseline: baseline, color: (numberColor ?? ink.number).opacity(a),
+                       into: &scene)
         x += m.cellGap
         put(unit, m.unit(m.t), pen, x: x, baseline: baseline, color: ink.secondary.opacity(a), into: &scene)
     }

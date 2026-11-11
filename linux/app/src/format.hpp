@@ -30,5 +30,8 @@ QString cappedPercent(double share);
 // The character orb's 首字 row (DESIGN 2a.6) as {number, unit key}: below 1 s whole milliseconds to the nearest 10, from
 // 1 s one decimal, from 10 s whole seconds; each rounding half away from zero, the unit following the rounded value.
 std::pair<QString, QString> firstTokenLatency(double ms);
+// The 首字 value's color band from the value as firstTokenLatency shows it: below 10 s, 10–14 s, from 15 s (DESIGN 2a.6).
+enum class LatencyTone { Quick, Slow, Late };
+LatencyTone firstTokenLatencyTone(double ms);
 
 }  // namespace format

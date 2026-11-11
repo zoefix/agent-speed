@@ -5,11 +5,18 @@ enum CharacterReadoutText {
     /// The speed of a model without a timed response yet.
     static let noSpeed = "–"
 
-    /// A latency as the 首字 row shows it: the number (value token), its unit (secondary token), and both as read.
+    /// The 首字 value's color band, from the value as shown: below 10 s, 10–14 s, from 15 s (user's choice, 2026-11-11).
+    enum LatencyTone: Equatable {
+        case quick, slow, late
+    }
+
+    /// A latency as the 首字 row shows it: the number (value token), its unit (secondary token), both as read, and the
+    /// number's color band.
     struct Latency: Equatable {
         var number: String
         var unit: String
         var spoken: String
+        var tone: LatencyTone
     }
 
     /// Below 1 s whole milliseconds rounded to the nearest 10 (`850 ms`), from 1 s one decimal (`1.2 s`), from 10 s
@@ -17,16 +24,18 @@ enum CharacterReadoutText {
     /// follows the rounded value.
     nonisolated static func latency(ms: Double, language: AppLanguage) -> Latency {
         let tens = PerfScoreText.rounded(ms / 10)
-        if tens < 100 { return latency(String(tens * 10), unitKey: "perf.unit.ms", language) }
+        if tens < 100 { return latency(String(tens * 10), unitKey: "perf.unit.ms", .quick, language) }
         let tenths = PerfScoreText.rounded(ms / 100)
-        if tenths < 100 { return latency("\(tenths / 10).\(tenths % 10)", unitKey: "perf.unit.s", language) }
-        return latency(String(PerfScoreText.rounded(ms / 1000)), unitKey: "perf.unit.s", language)
+        if tenths < 100 { return latency("\(tenths / 10).\(tenths % 10)", unitKey: "perf.unit.s", .quick, language) }
+        let seconds = PerfScoreText.rounded(ms / 1000)
+        return latency(String(seconds), unitKey: "perf.unit.s", seconds < 15 ? .slow : .late, language)
     }
 
-    private nonisolated static func latency(_ number: String, unitKey: String, _ language: AppLanguage) -> Latency {
+    private nonisolated static func latency(_ number: String, unitKey: String, _ tone: LatencyTone,
+                                            _ language: AppLanguage) -> Latency {
         let format = Localizer.string(unitKey, language: language)
         let unit = format.replacingOccurrences(of: "%@", with: "").trimmingCharacters(in: .whitespaces)
-        return Latency(number: number, unit: unit, spoken: format.replacingOccurrences(of: "%@", with: number))
+        return Latency(number: number, unit: unit, spoken: format.replacingOccurrences(of: "%@", with: number), tone: tone)
     }
 
     /// The models card's last line for the models it has no room for (`+3 個模型`).

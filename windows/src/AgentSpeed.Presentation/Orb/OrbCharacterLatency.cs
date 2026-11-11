@@ -4,9 +4,19 @@ using AgentSpeed.Presentation.Orb.Lines;
 
 namespace AgentSpeed.Presentation.Orb;
 
-/// <summary>The 性能 card's 首字 row (DESIGN 2a.6): its line (label, value, unit) and what the orb's label reads for it.</summary>
+/// <summary>The 首字 value's color band, from the value as shown: below 10 s, 10–14 s, from 15 s (user's choice, 2026-11-11).</summary>
+public enum OrbLatencyTone
+{
+    Quick,
+    Slow,
+    Late,
+}
+
+/// <summary>The 性能 card's 首字 row (DESIGN 2a.6): its line (label, value, unit), what the orb's label reads for it and its color band.</summary>
 public sealed record OrbLatency(OrbLine Line, string Spoken)
 {
+    public OrbLatencyTone Tone { get; init; }
+
     /// <summary>
     /// A first-content latency in ms as the row shows it, each rounding taken once, half away from zero, the unit following
     /// the rounded value: below 1 s whole milliseconds to the nearest 10 (<c>850 ms</c>), from 1 s one decimal (<c>1.2 s</c>),
@@ -23,7 +33,18 @@ public sealed record OrbLatency(OrbLine Line, string Spoken)
         var (number, key) = Number(Math.Max(0, value));
         var spoken = localizer.Format(key, number);
         return new OrbLatency(new OrbLine(localizer["character.latency.glyph"], number, localizer.Format(key, string.Empty).Trim()),
-            localizer.Format("a11y.orb.latency", spoken));
+            localizer.Format("a11y.orb.latency", spoken)) { Tone = ToneOf(Math.Max(0, value)) };
+    }
+
+    /// <summary>The color band of the value as <see cref="Number"/> shows it.</summary>
+    public static OrbLatencyTone ToneOf(double ms)
+    {
+        if (Math.Round(ms / 1000, 1, MidpointRounding.AwayFromZero) < 10)
+        {
+            return OrbLatencyTone.Quick;
+        }
+
+        return Math.Round(ms / 1000, MidpointRounding.AwayFromZero) < 15 ? OrbLatencyTone.Slow : OrbLatencyTone.Late;
     }
 
     /// <summary>The value and the unit's format key (<c>perf.unit.ms</c> or <c>perf.unit.s</c>).</summary>

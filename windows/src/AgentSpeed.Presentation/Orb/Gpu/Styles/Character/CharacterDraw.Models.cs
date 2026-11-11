@@ -57,7 +57,7 @@ public sealed partial class CharacterDraw
             {
                 longest = Math.Max(longest, Advance(DisplayName(row.Model), OrbFont.Info, m.T));
                 number = Math.Max(number, DigitsWidth(row.Number, OrbFont.TrafficNumber, m.T));
-                unit |= !line.Leaving && line.To == 0 && row.Speed is not null;
+                unit |= !line.Leaving && row.Speed is not null;
             }
             else
             {
@@ -148,8 +148,8 @@ public sealed partial class CharacterDraw
 
     /// <summary>
     /// The models card: per line the vendor's dot, the display name in the value token (none in the narrowest form) and the
-    /// speed right-aligned in tabular digits (<c>–</c> in the secondary token without one), <c>tok/s</c> once after the first
-    /// row's number when it has one; the more line in the secondary token. Lines glide and fade by
+    /// speed right-aligned in tabular digits (<c>–</c> in the secondary token without one), <c>tok/s</c> after each row's
+    /// number that has a speed; the more line in the secondary token. Lines glide and fade by
     /// <see cref="OrbModelsMotion"/>. With a high-contrast theme every dot takes the theme's highlight, like the model chip's.
     /// </summary>
     private void DrawModels(OrbDrawList list, in Pen pen, (double W, double H) box, in CardMetrics m, in CardInk ink, bool right, double time,
@@ -189,11 +189,10 @@ public sealed partial class CharacterDraw
             var width = DigitsWidth(row.Number, OrbFont.TrafficNumber, m.T);
             PutDigits(list, row.Number, OrbFont.TrafficNumber, m.T, pen, numberRight - width, baseline,
                 (row.Speed is null ? ink.Secondary : ink.Number).MultiplyAlpha(a));
-        }
-
-        if (columns.Unit > 0)
-        {
-            Put(list, SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T), pen, numberRight + m.CellGap, top + CardMetrics.Baseline(m.T), ink.Secondary);
+            if (columns.Unit > 0 && row.Speed is not null)
+            {
+                Put(list, SpeedUnit, OrbFont.Unit, CardMetrics.Small(m.T), pen, numberRight + m.CellGap, baseline, ink.Secondary.MultiplyAlpha(a));
+            }
         }
     }
 }
