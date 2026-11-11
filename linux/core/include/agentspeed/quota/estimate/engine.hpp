@@ -34,6 +34,7 @@ struct Response {
     std::string model;
     std::optional<std::int64_t> cost;
     std::int64_t tokens = 0;
+    std::int64_t requests = 1;
     std::optional<std::string> provider;
     // A Claude model id in a Bedrock or Vertex form (METRICS 9.2 cloud step).
     bool cloudRoute = false;

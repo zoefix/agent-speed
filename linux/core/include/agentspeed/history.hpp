@@ -17,6 +17,7 @@ namespace agentspeed {
 class TimeZone;
 namespace pricing {
 class PriceBook;
+class PriceTable;
 }
 }  // namespace agentspeed
 
@@ -143,6 +144,10 @@ inline constexpr std::int64_t kEstimateKeepMs = 8LL * 24 * 3'600'000;
 
 // The sources with a quota (QUOTAS 3–5, 9); only their spend is kept for the estimate.
 bool isQuotaSource(SourceKind source);
+// QUOTAS 10.3: one response in the estimate's form, priced at `cost`: the model id of `table` (else of `latest`, else
+// the logged model lowercased) and the cloud route by `table`'s resolver. The live engine's responses take it too.
+EstimateResponse estimateResponseOf(const ParsedResponse& response, SourceKind source, std::optional<std::int64_t> cost,
+                                    const pricing::PriceTable& table, const pricing::PriceTable& latest);
 // QUOTAS 10.3: the final responses that ended at or after `sinceMs`, of a quota source only, each priced as
 // contributionsOf prices it.
 std::vector<EstimateResponse> estimateResponsesOf(const std::vector<ParsedResponse>& responses, SourceKind source,

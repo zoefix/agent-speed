@@ -23,6 +23,7 @@ struct Spend {
 struct MixShare {
     std::string model;
     double share = 0;
+    bool operator==(const MixShare&) const = default;
 };
 
 // Sums are cached per (account, name) until the next change; the cache is guarded, so a built ledger can be read from

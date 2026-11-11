@@ -49,11 +49,13 @@ struct Entry {
     int windows = 0;
     std::vector<MixShare> mix;
     int priceVersion = 1;
-    // Not reported: the unrounded live percent and the reset instant, for the display.
+    // Not reported: the unrounded live percent, the reset instant and the account, for the display.
     double liveExact = 0;
     std::optional<std::int64_t> resetsAtMs;
+    std::string account;
 
     report::Json json() const;
+    bool operator==(const Entry&) const = default;
 };
 
 Entry reportEntry(const EntryInput& input, std::int64_t nowMs, const Ledger& ledger, int priceVersion);

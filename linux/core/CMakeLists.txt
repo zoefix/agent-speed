@@ -199,9 +199,11 @@ add_library(agentspeed_estimate STATIC
     src/quota/estimate/engine_codex.cpp
     src/quota/estimate/engine_store.cpp
     src/quota/estimate/entry.cpp
+    src/quota/estimate/estimator.cpp
     src/quota/estimate/ledger.cpp
     src/quota/estimate/model.cpp
     src/quota/estimate/segments.cpp
+    src/quota/estimate/sign_in.cpp
     src/quota/estimate/store_file.cpp
     src/quota/estimate/vote.cpp
 )

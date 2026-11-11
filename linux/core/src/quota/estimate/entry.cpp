@@ -74,6 +74,7 @@ Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger
     }
     if (live.resetsMs) e.resetsInMs = std::max<std::int64_t>(0, *live.resetsMs - nowMs);
     e.resetsAtMs = live.resetsMs;
+    e.account = in.account;
     e.livePercent = roundHalfAway(live.percent, 1);
     e.liveExact = live.percent;
     e.liveEstimated = live.estimated;

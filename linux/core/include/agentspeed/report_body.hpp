@@ -6,6 +6,7 @@
 #include <optional>
 #include <set>
 #include <string>
+#include <vector>
 
 #include "agentspeed/report_json.hpp"
 #include "agentspeed/report_scheduler.hpp"
@@ -64,6 +65,8 @@ struct Options {
     int priceVersion = 1;
     Extensions extensions;
     std::optional<StreamBody> stream;
+    // REPORTING-EXTENSIONS 11: the `quotas` entries this report carries (nullopt: absent, by the send cadence).
+    std::optional<std::vector<Json>> quotas;
     bool modelsDroppedForSize = false;
     bool modelsByConsent() const { return maxModels >= 1 && (modelsDroppedForSize || sections.contains(Section::Models)); }
     // METRICS 11.10 Active, and the retired taskScore (thinking only) when the service advertises it but not perfScore.
@@ -202,8 +205,11 @@ std::string formatInstant(std::int64_t ms);
 struct Fitted {
     Json json;
     std::string data;
+    // `quotas` was left out for size: the cadence counts it as unsent (REPORTING-EXTENSIONS 11.3).
+    bool quotasDropped = false;
 };
-// The body as sent: within the body limit, dropping models and then sources when it would not fit (REPORTING 6.8).
+// The body as sent: within the body limit, dropping `quotas` first, then models and sources when it would not fit
+// (REPORTING 6.8, REPORTING-EXTENSIONS 11.3).
 Fitted fitted(const Envelope& envelope, const WindowContent& content, const Sample& sample, Options options);
 Json body(const Envelope& envelope, const WindowContent& content, const Sample& sample, const Options& options);
 

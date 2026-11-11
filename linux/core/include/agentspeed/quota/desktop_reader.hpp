@@ -48,6 +48,8 @@ public:
     const std::optional<Snapshot>& snapshot() const { return snapshot_; }
     // The file the snapshot came from.
     const std::optional<std::string>& snapshotFile() const { return snapshotFile_; }
+    // Its usage URL (QUOTAS 10.1: the organization of Desktop's account).
+    const std::optional<std::string>& snapshotUrl() const { return snapshotUrl_; }
     std::vector<std::string> candidates() const;
     const std::string& folder() const { return folder_; }
 
@@ -79,6 +81,7 @@ private:
     std::map<std::string, Candidate> candidates_;
     std::optional<Snapshot> snapshot_;
     std::optional<std::string> snapshotFile_;
+    std::optional<std::string> snapshotUrl_;
     bool searchWanted_ = true;
     std::optional<std::int64_t> searchedMs_;
     std::optional<std::int64_t> checkedMs_;

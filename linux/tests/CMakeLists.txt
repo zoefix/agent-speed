@@ -50,6 +50,7 @@ add_executable(agentspeed_tests
     # Quota estimates (QUOTAS 10)
     quota_estimate_fixture_test.cpp
     quota_estimate_pipeline_test.cpp
+    quota_estimator_test.cpp
     # Quota phase 2
     quota_antigravity_test.cpp
     quota_cookies_test.cpp
@@ -147,6 +148,7 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
+        ../app/src/quota/quota_estimate_text.cpp
         ../app/src/quota/quota_text.cpp
         ../app/src/quota/quota_transport.cpp
         ../app/src/quota/quota_view.cpp

@@ -319,30 +319,33 @@ std::vector<EstimateResponse> estimateResponsesOf(const std::vector<ParsedRespon
                                                   const DayLabeler& labeler, pricing::PriceBook& prices, std::int64_t sinceMs) {
     std::vector<EstimateResponse> out;
     if (!isQuotaSource(source)) return out;
-    const bool claude = source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop;
     for (const auto& r : responses) {
         if (!r.final || r.endMs < sinceMs) continue;
         const auto day = labeler.label(r.endMs);
         if (!day) continue;
-        EstimateResponse e;
-        e.source = source;
-        e.agentId = r.agentId;
-        e.provider = r.provider;
-        e.startMs = r.startMs;
-        e.endMs = r.endMs;
-        e.costMicroUsd = prices.cost(r, *day);
-        e.tokens = r.tokens.total();
-        e.requests = r.requestCount;
         // The table the cost came from first, as PriceBook::cost tries them.
-        const auto bound = prices.table(prices.versionForDay(*day));
-        const auto latest = prices.current();
-        e.model = bound->reportModelId(r.model, r.provider);
-        if (e.model == "unknown" && latest->version() != bound->version()) e.model = latest->reportModelId(r.model, r.provider);
-        if (e.model == "unknown" || e.model == "local") e.model = r.model ? pricing::lower(*r.model) : std::string();
-        e.cloudRoute = claude && r.model && isCloudForm(bound->resolver(), *r.model);
-        out.push_back(std::move(e));
+        const auto cost = prices.cost(r, *day);
+        out.push_back(estimateResponseOf(r, source, cost, *prices.table(prices.versionForDay(*day)), *prices.current()));
     }
     return out;
+}
+
+EstimateResponse estimateResponseOf(const ParsedResponse& r, SourceKind source, std::optional<std::int64_t> cost, const pricing::PriceTable& table,
+                                    const pricing::PriceTable& latest) {
+    EstimateResponse e;
+    e.source = source;
+    e.agentId = r.agentId;
+    e.provider = r.provider;
+    e.startMs = r.startMs;
+    e.endMs = r.endMs;
+    e.costMicroUsd = cost;
+    e.tokens = r.tokens.total();
+    e.requests = r.requestCount;
+    e.model = table.reportModelId(r.model, r.provider);
+    if (e.model == "unknown" && latest.version() != table.version()) e.model = latest.reportModelId(r.model, r.provider);
+    if (e.model == "unknown" || e.model == "local") e.model = r.model ? pricing::lower(*r.model) : std::string();
+    e.cloudRoute = (source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop) && r.model && isCloudForm(table.resolver(), *r.model);
+    return e;
 }
 
 bool KeyLedger::tryClaim(const std::string& key, const std::string& agentId, std::string* owner) {
