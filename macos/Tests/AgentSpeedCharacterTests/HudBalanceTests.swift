@@ -240,6 +240,35 @@ private func split(moving cards: [HudCard]) -> Int {
         #expect(run.changes[2] - run.changes[1] >= HudWings.settledReturn - 1e-9)
     }
 
+    @Test func spillOverWaitsForTheChangeLimitToo() {
+        // Her arm reaches over the column right after the split changed: 費用 has no room, but the cards hug her where
+        // they are until the split may change again.
+        var arm = body()
+        for y in stride(from: 130.0, through: 260, by: 2) { arm.silhouette.add(222 - 100, y) }
+        let f = body(), two = owner(sources: 2, rows: 2), three = owner(sources: 3, rows: 2)
+        var run = Run()
+        run.run(1, f, two, shown)
+        run.run(1, f, three, shown)
+        #expect(run.changes.count == 1)
+        run.run(2, arm, three, shown)
+        #expect(run.changes.count == 1)
+        run.run(2, arm, three, shown)
+        #expect(run.changes.count == 2)
+        #expect(run.changes[1] - run.changes[0] >= HudWings.returnAfter - 1e-9)
+        #expect(run.wings.split <= split(moving: [.cost, .agents, .quota]))
+        // After two changes within 30 s, the spill-over waits 12 s.
+        var burst = Run()
+        burst.run(1, f, two, shown)
+        burst.run(1, f, three, shown)
+        burst.run(4.5, f, two, shown)
+        #expect(burst.changes.count == 2)
+        burst.run(10, arm, two, shown)
+        #expect(burst.changes.count == 2)
+        burst.run(2, arm, two, shown)
+        #expect(burst.changes.count == 3)
+        #expect(burst.changes[2] - burst.changes[1] >= HudWings.settledReturn - 1e-9)
+    }
+
     @Test func aSplitThatDoesNotFitGivesWayToTheNextBest() {
         // Her wings spread at her right under the speed: no card fits there, so the column stays at her left.
         var f = body()

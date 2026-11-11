@@ -208,6 +208,11 @@ public struct HudWings: Sendable {
     var weighed = [Double](repeating: 0, count: HudCard.allCases.count)
     /// No split fits with one edge: each card hugs her outline.
     var hugging = false
+    /// How long after the last change the split may change again: `returnAfter`, or `settledReturn` when the last two
+    /// changes came within `settleWindow`, whether balance or spill-over moves the cards.
+    var changeWait: Double {
+        balance.lastGap < HudWings.settleWindow ? HudWings.settledReturn : HudWings.returnAfter
+    }
     var placed = false
     /// Seconds the models card's place has not fitted, or a better place has; its top below the spill-over; and
     /// where the right side's cards end (the bottom of the last one plus the gap), from the last layout.
@@ -500,7 +505,8 @@ public struct HudWings: Sendable {
     /// one line. The split is the most even one that fits (`HudBalance`), chosen again when a card appears or leaves or
     /// a side's weight changes, once the new split has held for `spillAfter` and no sooner than `returnAfter` after the
     /// last change (`settledReturn` after two changes within `settleWindow`). When the split overflows for
-    /// `spillAfter`, the most even one that fits is taken, else the spill-over's; a better one comes back once it has
+    /// `spillAfter`, the most even one that fits is taken, else the spill-over's, no sooner than that either (the cards
+    /// hug her outline meanwhile); a better one comes back once it has
     /// fitted with room to spare for `returnAfter` (`settledReturn` within `settleWindow` of the last change). A card
     /// whose side changed fades out where it was, jumps, and fades back in. Writes the column's `targets`.
     mutating func columnAnchors(_ dt: Double, _ f: HudFrame, _ sizes: [(w: Double, h: Double)],
@@ -517,6 +523,7 @@ public struct HudWings: Sendable {
         HudBalance.weigh(given, shown: shown, models: modelsPlace != .hidden, into: &weighed)
         let heights = weighed
         let moving = balance.moving(heights)
+        var waiting = false
         if !placed || still || balance.balanced != balances {
             choose(f, sizes, heights: heights)
             strain = 0
@@ -525,9 +532,12 @@ public struct HudWings: Sendable {
             ease = 0
             balance.pending = nil
             strain += dt
-            if strain >= HudWings.spillAfter {
+            if strain >= HudWings.spillAfter, sinceChange >= changeWait {
                 choose(f, sizes, heights: heights)
                 strain = 0
+            } else if strain >= HudWings.spillAfter {
+                // A card changes sides at most once per `changeWait`; until then the cards hug her outline where they are.
+                waiting = true
             }
         } else if balances, balance.isStale(heights, split: split, gap: gap, threshold: HudBalance.threshold * f.footprint) {
             strain = 0
@@ -546,8 +556,9 @@ public struct HudWings: Sendable {
             ease = 0
             hugging = false
         }
-        let chosen = fit(f, sizes, split: split, room: 0, reach: HudWings.reach, aligned: !hugging)
-        layout(f, sizes, split: split, shift: chosen.shift, aligned: !hugging, room: 0, write: true)
+        let aligned = !hugging && !waiting
+        let chosen = fit(f, sizes, split: split, room: 0, reach: HudWings.reach, aligned: aligned)
+        layout(f, sizes, split: split, shift: chosen.shift, aligned: aligned, room: 0, write: true)
         for (k, card) in HudCard.column.enumerated() {
             let i = card.rawValue
             let wanted = k >= split
@@ -619,8 +630,7 @@ public struct HudWings: Sendable {
             balance.held = 0
         }
         balance.held += dt
-        let wait = balance.lastGap < HudWings.settleWindow ? HudWings.settledReturn : HudWings.returnAfter
-        guard balance.held >= HudWings.spillAfter, sinceChange >= wait else { return }
+        guard balance.held >= HudWings.spillAfter, sinceChange >= changeWait else { return }
         split = next
         hugging = false
         balance.pending = nil
