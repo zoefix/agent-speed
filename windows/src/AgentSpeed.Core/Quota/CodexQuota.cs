@@ -15,6 +15,9 @@ internal sealed class CodexRateLimits
 
     public CodexRateSlot? Secondary { get; private init; }
 
+    /// <summary><c>plan_type</c> when it is a string (QUOTAS 10.2); cleaned by the estimate.</summary>
+    public string? PlanType { get; private init; }
+
     /// <summary>Reads the value at the reader's current token; null when it is not an object.</summary>
     public static CodexRateLimits? Read(ref Utf8JsonReader reader)
     {
@@ -26,6 +29,7 @@ internal sealed class CodexRateLimits
 
         var counts = true;
         CodexRateSlot? primary = null, secondary = null;
+        string? plan = null;
         while (reader.Read() && reader.TokenType == JsonTokenType.PropertyName)
         {
             if (reader.ValueTextEquals("limit_id"u8))
@@ -45,6 +49,12 @@ internal sealed class CodexRateLimits
                 reader.Read();
                 secondary = ReadSlot(ref reader);
             }
+            else if (reader.ValueTextEquals("plan_type"u8))
+            {
+                reader.Read();
+                plan = reader.TokenType == JsonTokenType.String && reader.ValueSpan.Length <= 64 ? reader.GetString() : null;
+                reader.TrySkip();
+            }
             else
             {
                 reader.Read();
@@ -52,7 +62,7 @@ internal sealed class CodexRateLimits
             }
         }
 
-        return new CodexRateLimits { Counts = counts, Primary = primary, Secondary = secondary };
+        return new CodexRateLimits { Counts = counts, Primary = primary, Secondary = secondary, PlanType = plan };
     }
 
     private static CodexRateSlot? ReadSlot(ref Utf8JsonReader reader)
