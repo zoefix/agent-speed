@@ -43,6 +43,12 @@ struct CharacterBodyPainter {
 
     var language: AppLanguage { frame.content.language }
 
+    /// The same painter at `factor` of its opacity.
+    func faded(_ factor: Double) -> CharacterBodyPainter {
+        CharacterBodyPainter(frame: frame, center: center, scale: scale, spin: spin, alpha: alpha * factor, metrics: metrics,
+                             contrast: contrast)
+    }
+
     /// A local offset (unscaled, unrotated) to a canvas point.
     func point(_ ox: CGFloat, _ oy: CGFloat) -> CGPoint {
         let c = CGFloat(cos(spin)), s = CGFloat(sin(spin))

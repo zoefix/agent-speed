@@ -7,8 +7,9 @@ import Foundation
 /// `AGENT_SPEED_ORB_READOUTS` switches cards: a comma list of `CharacterReadout` names, each optionally prefixed with
 /// `-` to switch it off (`model` turns the model chip on). `AGENT_SPEED_ORB_LATENCY` gives the 首字 row a value (ms) and
 /// `AGENT_SPEED_ORB_MODELS` the models card its rows: a comma list of `id=tok/s` (`id=-` before a timed response), the
-/// vendor resolved from the price table. `AGENT_SPEED_ORB_QUOTA` gives the 額度 card its sources: `;`-separated
-/// `source=label:percent:reset,…` with the reset as `+42m`, `+3h`, `+5d` from now, `-` unknown or `passed`, e.g.
+/// vendor resolved from the price table. `AGENT_SPEED_ORB_COST_TODAY` gives the 費用 card's 今日 row an amount in
+/// micro-USD (`+` after it marks part of today unpriced). `AGENT_SPEED_ORB_QUOTA` gives the 額度 card its sources:
+/// `;`-separated `source=label:percent:reset,…` with the reset as `+42m`, `+3h`, `+5d` from now, `-` unknown or `passed`, e.g.
 /// `claudeDesktop=7d:94:+10h,Fable 7d:27:+10h;codex=7d:25:+5d`; `source@host=…` is that source on a remote host, and
 /// a label may name a group (`Gemini 5h`), a month (`mo`) or credits.
 @MainActor
@@ -19,11 +20,17 @@ struct CharacterDemoReadings {
     private var nextTick = -Double.infinity
     let readouts: CharacterReadouts
     let latencyMs: Double?
+    let costToday: CostTally?
     let models: [OrbModelReading]
     let quota: [QuotaCardItem]
 
     init(environment: [String: String], prices: PriceTable? = nil) {
         latencyMs = environment["AGENT_SPEED_ORB_LATENCY"].flatMap(Double.init)
+        costToday = environment["AGENT_SPEED_ORB_COST_TODAY"].flatMap { text in
+            Int64(text.trimmingCharacters(in: CharacterSet(charactersIn: "+"))).map {
+                CostTally(costMicroUsd: $0, unpricedRequests: text.hasSuffix("+") ? 1 : 0)
+            }
+        }
         models = (environment["AGENT_SPEED_ORB_MODELS"] ?? "").split(separator: ",").compactMap { item in
             let parts = item.split(separator: "=", maxSplits: 1).map(String.init)
             guard let id = parts.first, !id.isEmpty else { return nil }
@@ -59,6 +66,7 @@ struct CharacterDemoReadings {
         cost.apply(display.live(reading, agentCount: 3), generating: generating, at: time)
         return OrbCharacterReadings(
             readouts: readouts, network: network.reading, bits: false, performance: performance.reading, cost: cost.money,
+            costToday: costToday.flatMap { display.today(CostReading(today: $0, todayRequests: 40)) },
             latencyMs: latencyMs, models: models, quota: quota,
             networkLoud: network.reading.map { time < $0.quietAt } ?? false,
             performanceLoud: performance.reading.map { time < $0.quietAt } ?? false,

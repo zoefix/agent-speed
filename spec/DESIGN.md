@@ -961,7 +961,9 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     after 4 s; a change of place fades out and in (0.18 s / 0.3 s) instead of crossing her or another card.
   - Accessibility reads `a11y.orb.models` with one `a11y.orb.modelSpeed` per running model (the full id; the model
     alone while it has no speed), every running model, drawn or not, joined by `list.separator`, after the cost; the
-    首字 row adds `a11y.orb.latency` (the shown value with its unit) after the 性能 reading.
+    首字 row adds `a11y.orb.latency` (the shown value with its unit) after the 性能 reading, and the 費用 card's 今日 row
+    `a11y.orb.costToday` (the amount with the currency's name, `a11y.orb.costAtLeast` when partial, `cost.unknown` for
+    `–`) after the cost reading, whenever the row shows.
 - **Model** (`character.readouts.model`, off by default): a glass chip with the vendor's accent dot and the fastest
   model's name, centered over her head `0.03 D` above its top (face, hair, headwear and ears), pushed up past anything
   of her that rises under it. With no live model it shows the last one.
@@ -977,7 +979,11 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   Contrast: the value token. Shown while the value exists, fading in and out (0.25 s) as the card eases to its
   height, so an orb of sources without first-content times never shows the row), **network**
   (`↓` over `↑`, fixed cells as in section 10), **費用** (`cost.glyph`, the live cost rate at `p` with `≥` when partial,
-  `–` when nothing is priced, and the money unit), **today** (`boards.today` with today's tokens over
+  `–` when nothing is priced, and the money unit; under it a row `今日 $12.34` at `t`, user's choice 2026-11-11: the
+  label `character.cost.today` in the secondary token and today's cost of the billable sources of `A` (METRICS 6.8,
+  `Σ todayCost_s`, 9.6) as section 9 *Amount* with its symbol in the value token, `≥` before it when part of today is
+  unpriced, `–` when nothing today is priced, shown while those sources have a request today; the rate row shows while
+  the card is loud and then fades (0.25 s) as the card closes up under it, leaving the 今日 row), **today** (`boards.today` with today's tokens over
   `agents.count`) and last **額度** (below). `t = max(8, 0.027 D)` pt. The cards' right edges share one line `0.035 D` clear of her outline over
   every row the column spans; the column may move up or down (±0.04 … 0.12 D) to where it fits. Cards are `0.022 D`
   apart; a hidden card's room closes up as it fades.
@@ -1048,8 +1054,9 @@ Numbers are the value token at 90 % (98 % with Increase Contrast), glyphs and un
 
 **Which cards show.** A card shows while it is switched on (`characterReadouts`, 2b; the speed always) and has
 something to say, by the quiet rule of section 10: network while `↓ + ↑ ≥ 1 KB/s`, 性能 while its score is live or
-resting or an agent generates, 費用 while money flows (or a generating set has no price), models while a model runs
-(an agent of the orb is not idle), each until 10 s after its last loud moment (the models card keeps its last rows
+resting or an agent generates, 費用 while money flows (or a generating set has no price) and, with no quiet rule,
+while its 今日 row has a value (user's choice 2026-11-11), models while a model runs (an agent of the orb is not idle),
+each until 10 s after its last loud moment (the models card keeps its last rows
 for those 10 s); today while there is a token today; 額度 while it has a source (QUOTAS 6), with no quiet rule: a
 quota does not change by the second, it is shown whenever it applies. Cards fade in over 0.35 s rising 0.02 D, and out over 0.5 s;
 their plates ease to a new size (3.2 Hz, critically damped) instead of jumping when their text changes. A

@@ -200,6 +200,9 @@ final class OrbAccessibilityReporter {
                 : l10n("a11y.board.cost", money.atLeast ? l10n("a11y.orb.costAtLeast", money.number) : money.number,
                        currency))
         }
+        if on.cost, let today = readings.costToday {
+            parts.append(today.spoken)
+        }
         if readings.modelsLoud, on.models, let models = CharacterReadoutText.modelsSentence(readings.models, l10n) {
             parts.append(models)
         }

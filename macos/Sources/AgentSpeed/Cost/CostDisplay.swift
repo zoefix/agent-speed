@@ -25,6 +25,18 @@ struct LiveMoney: Equatable {
                                        hoverLine: "", spokenAmount: "0")
 }
 
+/// The character orb's 費用 card 今日 row (DESIGN 2a.6): today's cost of the billable sources as an amount with its
+/// symbol (`$12.34`), `–` when nothing today is priced, and the row as accessibility reads it.
+struct CostToday: Equatable {
+    /// `$12.34`, or `–`.
+    var amount: String
+    /// Part of today is unpriced: a small `≥` precedes the amount.
+    var atLeast: Bool
+    var unknown: Bool
+    /// `a11y.orb.costToday` with the amount.
+    var spoken: String
+}
+
 /// Formats costs in the display currency for the UI language with the rates in use (METRICS 9.8, DESIGN 9) and knows
 /// which sources count (METRICS 9.4). Observable: views re-render when the currency, language, rates or marks change.
 @MainActor
@@ -146,6 +158,16 @@ final class CostDisplay {
             hoverLine: hover,
             spokenAmount: atLeast ? l10n("a11y.orb.costAtLeast", spokenNumber) : spokenNumber
         )
+    }
+
+    /// The 今日 row of a cost reading; nil while the billable sources have no request today.
+    func today(_ reading: CostReading) -> CostToday? {
+        guard reading.todayRequests > 0 else { return nil }
+        let unknown = reading.today.isUnknown(requests: reading.todayRequests)
+        let atLeast = !unknown && reading.today.unpricedRequests > 0
+        return CostToday(amount: unknown ? "–" : amountText(microUsd: reading.today.costMicroUsd), atLeast: atLeast,
+                         unknown: unknown,
+                         spoken: l10n("a11y.orb.costToday", spokenTally(reading.today, requests: reading.todayRequests)))
     }
 
     /// Up to two model names, then `+n`.
