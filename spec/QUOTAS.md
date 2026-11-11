@@ -339,10 +339,11 @@ at least one window.
 
 - What is read: Codex's rollout lines (already read for speed), the Claude Desktop usage entry, the helper's quota
   file, and the two signed-in markers of section 6. Only the snapshot is kept in memory. Written: the bridge's files
-  (section 5) and the estimate's salt and store (10.1, 10.4), which hold account keys (keyed hashes), never ids.
+  (section 5) and the estimate's install id and store (10.1, 10.4), which hold account keys (keyed hashes), never ids.
 - What leaves the computer: with the 額度 sharing switch on and a service that takes them, the report entries of
-  REPORTING-EXTENSIONS 11 (percent, spend, estimate, plan and tier, model mix); nothing else, and never an account
-  id, e-mail address, key or salt. Remote hosts receive the salt over their SSH connection (REMOTE 11.1).
+  REPORTING-EXTENSIONS 11 (each account's tag for that service, percent, spend, estimate, plan and tier, model mix);
+  nothing else, and never an account id, e-mail address or key. Remote hosts receive the account salt over their SSH
+  connection (REMOTE 11.1).
 - `privacy.quota` (DESIGN 5, About) says this.
 - **Claude Desktop's cache** is Desktop's private format, not an interface. A Desktop update may stop writing it, move
   it, change the key or the body.
@@ -688,11 +689,16 @@ turning each observation into an interval of `K` (10.5) and letting the interval
 
 ### 10.1 Accounts
 
-Spend and observations are pooled per account, identified on this computer by
-`key = first 16 hex digits of HMAC-SHA256(installSalt, "<vendor>:<id>")`.
-- `installSalt`: 32 random bytes in `<data>/quota/estimate-salt` (permissions 0600 on macOS and Linux; created when
-  first needed, with a temporary file and a rename). It is sent to remote hosts in the quota config (REMOTE 11.1) so
-  that they compute the same keys. It is never sent to reporting services and never logged; neither is a key.
+Spend and observations are pooled per account, identified by
+`key = first 16 hex digits of HMAC-SHA256(accountSalt, "<vendor>:<id>")`.
+- `accountSalt`: the SHA-256 of the ASCII text `agent-speed quota account v1`, the same in every install, so that one
+  account has one key on all of the user's computers and its report tag (REPORTING-EXTENSIONS 11.2) is the same from
+  each of them (user's choice 2026-11-11, after a service rejected two Codex accounts that a report could not tell
+  apart). The ids it keys are random, so a key reveals nothing; still, keys are never logged and never sent to a
+  reporting service. It is sent to remote hosts in the quota config (REMOTE 11.1), as before.
+- `installId`: 32 random bytes in `<data>/quota/estimate-salt` (the file keeps its name; permissions 0600 on macOS and
+  Linux; created when first needed, with a temporary file and a rename), in hex. It only keys accounts without an id
+  (below), so that those stay apart between computers. It never leaves the computer and is never logged.
 - `codex`: `tokens.account_id` of the `auth.json` that section 6 already parses in memory (nothing else of it).
 - `claudeCode`: `oauthAccount.organizationUuid` and `accountUuid` of `.claude.json` (section 6), as `<org>:<account>`.
 - `claudeDesktop`: the organization uuid of its usage entry's key (4.2). It shares the CLI's account when the uuid
@@ -714,7 +720,8 @@ Spend and observations are pooled per account, identified on this computer by
   first source and those of the second source under its key in force. Seen 2026-11-11: one organization uuid on two
   Claude accounts, Desktop at 0 % while the CLI was at 100 %, their 7-day resets 19 h apart. Desktop shares only on a
   confirmation, so without the CLI bridge it keeps its own account.
-- Phase-2 sources and any source without an id: the account is the pair (computer or host, source).
+- Phase-2 sources and any source without an id: the account is the pair (computer or host, source), keyed as vendor
+  `pair` with id `<installId>:<machine>:<source>` (`machine` is `local` or the host's id).
 - **Key timeline.** A source's key can change (`/login`, `codex login`). Spend belongs to the key in force when the
   response ended: the app keeps, per source, the key changes it saw (`<data>/quota/estimate.json`, 10.4) and gives
   the first key it ever saw to the responses before it.
@@ -778,7 +785,8 @@ R)`: `t` its `observedMs`, `R` its reset.
   first launch. Claude CLI: each change of the quota file (5.5). Desktop: each new cache entry (4.4). Phase 2: each
   response. Remote hosts: each quota line.
 - **Store.** `<data>/quota/estimate.json` (0600, a temporary file then a rename, written at most once a minute and at
-  quit): `{"version": 1, "observations": [...], "instances": [...], "keys": [...]}` with the last 8 days of
+  quit): `{"version": 2, "observations": [...], "instances": [...], "keys": [...]}` (version 1 keyed accounts with a
+  random salt and is replaced) with the last 8 days of
   observations (runs of equal values keep their first and last; above 256 per instance each run keeps its last; still
   above, 256 runs evenly spaced, first and last included), the closed instances' intervals (10.5, at most 64 per
   class, newest kept, each with its class, account, `R`, `lo`, `hi` (null for unbounded), `pMax` and `tLast`) and the

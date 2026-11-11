@@ -5065,10 +5065,10 @@
     "ja": "利用枠（割合、使用額、推定上限）"
   },
   "report.section.quota.hint": {
-    "zh-Hant": "每個訂閱週期（5 小時、每週、單一模型每週）的廠商百分比、本機量到的 API 等值用量，以及估計的上限，附上方案名稱（例如 claude_max、promax），供大數據統計。不含任何帳號 ID、電子郵件或權杖，也不含時間點，只有距離重置的時間。",
-    "zh-Hans": "每个订阅周期（5 小时、每周、单个模型每周）的厂商百分比、本机测得的 API 等值用量，以及估计的上限，附上套餐名称（例如 claude_max、promax），供大数据统计。不含任何账号 ID、电子邮件或令牌，也不含时间点，只有距离重置的时间。",
-    "en": "For each subscription window (5-hour, weekly, a model's weekly limit): the vendor's percent, the API-equivalent usage measured here and the estimated cap, with the plan's name (such as claude_max or promax), for statistics. No account id, e-mail address or token, and no timestamps: only the time until the reset.",
-    "ja": "サブスクリプションの各期間（5 時間、週、モデル別の週）について、ベンダーの割合、このコンピュータで計測した API 換算の使用量、推定上限を、プラン名（claude_max、promax など）とともに統計のために送信します。アカウント ID、メールアドレス、トークン、時刻は含まず、リセットまでの時間だけを送ります。"
+    "zh-Hant": "每個訂閱週期（5 小時、每週、單一模型每週）的廠商百分比、本機量到的 API 等值用量，以及估計的上限，附上方案名稱（例如 claude_max、promax），供大數據統計。每個帳號只附上這個服務專用的代號，用來分辨同一個 agent 的不同帳號；不含任何帳號 ID、電子郵件或權杖，也不含時間點，只有距離重置的時間。",
+    "zh-Hans": "每个订阅周期（5 小时、每周、单个模型每周）的厂商百分比、本机测得的 API 等值用量，以及估计的上限，附上套餐名称（例如 claude_max、promax），供大数据统计。每个账号只附上这个服务专用的代号，用来区分同一个 agent 的不同账号；不含任何账号 ID、电子邮件或令牌，也不含时间点，只有距离重置的时间。",
+    "en": "For each subscription window (5-hour, weekly, a model's weekly limit): the vendor's percent, the API-equivalent usage measured here and the estimated cap, with the plan's name (such as claude_max or promax), for statistics. Each account carries only a tag for this service, to tell one agent's accounts apart: no account id, e-mail address or token, and no timestamps, only the time until the reset.",
+    "ja": "サブスクリプションの各期間（5 時間、週、モデル別の週）について、ベンダーの割合、このコンピュータで計測した API 換算の使用量、推定上限を、プラン名（claude_max、promax など）とともに統計のために送信します。各アカウントにはこのサービス専用の識別子だけを付け、同じ agent の複数のアカウントを区別します。アカウント ID、メールアドレス、トークン、時刻は含まず、リセットまでの時間だけを送ります。"
   },
   "report.preview": {
     "zh-Hant": "預覽傳送內容…",

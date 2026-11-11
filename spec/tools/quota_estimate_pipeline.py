@@ -22,7 +22,7 @@ VENDOR = {"codex": "openai", "claudeCode": "anthropic", "claudeDesktop": "anthro
 LINE_MATCH_MS = 5_000
 OBSERVATIONS_PER_INSTANCE = 256
 MAX_ENTRIES = 16
-STORE_VERSION = 1
+STORE_VERSION = 2
 
 
 def source_rank(source):
@@ -63,8 +63,10 @@ def thin(observations):
 
 
 class Engine:
-    def __init__(self, salt: bytes, price_version=8):
+    def __init__(self, salt: bytes, price_version=8, install="", origin=""):
         self.salt = salt
+        self.install = install
+        self.origin = origin
         self.price_version = price_version
         self.responses = []
         self.lines = []
@@ -240,7 +242,7 @@ class Engine:
                     continue
                 acc = e[1]
             else:
-                acc = "%s:%s" % (r.get("machine", "local"), src)
+                acc = qe.pair_key(self.salt, self.install, r.get("machine", "local"), src)
             r["_account"] = acc
             ledger.add(acc, src, r["model"], r["endMs"], r.get("costMicroUsd"), tokens=r.get("tokens", 0))
             source_accounts.setdefault(acc, set()).add(src)
@@ -345,7 +347,7 @@ class Engine:
                 first_after = min(starts) if starts else None
             sources = sorted({r["source"] for r in self.responses if r.get("_account") == account
                               and r["endMs"] >= inst["S"]} | {last["source"]}, key=source_rank)
-            acc = {"source": last["source"], "sources": sources, "plan": x["plan"], "tier": x["tier"],
+            acc = {"account": account, "source": last["source"], "sources": sources, "plan": x["plan"], "tier": x["tier"],
                    "kind": last["kind"], "name": last["name"], "minutes": last["minutes"], "p": last["p"],
                    "t": last["t"], "R": inst["R"], "S": inst["S"], "accounts": {account},
                    "estimate": ests.get(x["class"]) or {"confidence": "none", "windows": 0},
@@ -354,8 +356,8 @@ class Engine:
             for o in sorted(self.obs, key=lambda o: o["t"]):
                 if o["account"] == account and o["name"] and o["name"] not in names:
                     names.append(o["name"])
-            e = qe.report_entry(acc, now_ms, self.ledger, self.price_version)
-            rows.append(((source_rank(sources[0]), window_rank(e["window"], names), last["source"]), e))
+            e = qe.report_entry(acc, now_ms, self.ledger, self.price_version, self.origin)
+            rows.append(((source_rank(sources[0]), window_rank(e["window"], names), last["source"], e["account"]), e))
         return [e for _, e in sorted(rows, key=lambda r: r[0])][:MAX_ENTRIES]
 
     # persistence (10.4)
@@ -422,7 +424,9 @@ class Reporter:
 
 MINUTE, HOUR, DAY = qe.MINUTE, qe.HOUR, qe.DAY
 BASE = qe.T0 + 17 * MINUTE + 13_000
-SALT = bytes(range(100, 132))
+SALT = qe.ACCOUNT_SALT
+INSTALL = "00112233445566778899aabbccddeeff"
+ORIGIN = "https://radar.example"
 FABLE = "claude-fable-5-2"
 OPUS = "claude-opus-5-5"
 
@@ -500,7 +504,7 @@ def generated_store(g):
 
 
 def run(inp):
-    eng = Engine(bytes.fromhex(inp["salt"]))
+    eng = Engine(bytes.fromhex(inp["salt"]), install=inp["install"], origin=inp["origin"])
     for e in inp["events"]:
         eng.add(dict(e))
     if "store" in inp:
@@ -547,7 +551,7 @@ def run(inp):
 
 
 def case(name, why, events, now, **extra):
-    inp = {"salt": SALT.hex(), "events": events, "now": now}
+    inp = {"salt": SALT.hex(), "install": INSTALL, "origin": ORIGIN, "events": events, "now": now}
     inp.update(extra)
     return {"name": name, "why": why, "input": inp, "expected": run(inp)}
 
@@ -730,7 +734,7 @@ def store_cases():
     out.append(case("store read back", "a later launch with only the responses and the stored file gives the same "
                     "estimate: the stored keys attribute the spend, the stored observations rebuild the instance",
                     again, R5 + HOUR, outputs=["estimates"], store=first["expected"]["store"]))
-    gen = {"version": 1, "t0": BASE, "account": "k1", "observations": 300, "instances": 70}
+    gen = {"version": STORE_VERSION, "t0": BASE, "account": "k1", "observations": 300, "instances": 70}
     why = ("generated store: observation i = 1..300 of k1 (claudeCode, sevenDay, plan claude_max) at t = tLo = t0 + i "
            "min with p = i / 10 and R = t0 + 6 d; closed instance i = 1..70 of class (plan, anthropic/claude_max, "
            "null, fiveHour::300) with R = t0 - 5 i h, lo 1e8, hi 2e8, pMax 40, tLast = R - 1 h; one key")
@@ -738,8 +742,8 @@ def store_cases():
                     "last kept); 70 closed instances of one class keep the newest 64; " + why, [], BASE + 6 * HOUR,
                     outputs=["storeCounts"], generatedStore=gen))
     out.append(case("store of another version", "a file of another version is ignored (and replaced); the same "
-                    "generated store with version 2", [], BASE + 6 * HOUR, outputs=["storeCounts"],
-                    generatedStore=dict(gen, version=2)))
+                    "generated store with version 1 (before the fixed account salt)", [], BASE + 6 * HOUR,
+                    outputs=["storeCounts"], generatedStore=dict(gen, version=1)))
     dev = [profile(BASE), resp("claudeCode", t, 4_000_000, model=OPUS, start=t - 50_000),
            resp("claudeDesktop", t + 5 * MINUTE, 6_000_000, model=OPUS),
            snap("claudeCode", t + 30_000, week=(1, R7)), snap("claudeDesktop", t + 6 * MINUTE, org="org-1", week=(2, R7))]
@@ -763,13 +767,22 @@ def report_cases():
           snap("claudeCode", t + 10_000, week=(1.25, R7), fable=(3.333, R7), five=(2.5, R5)),
           snap("claudeDesktop", t + 8 * MINUTE, org="org-team", five=(7, R5 + 60_000))]
     ev += codex_turn("a", t + 9 * MINUTE, 7_654_321, "pro", five=(4, sec(R5 + 3 * MINUTE)), week=(1, sec(R7 + HOUR)))
-    return [case("entries and their order", "Codex first, then the Claude account, then the team Desktop account; each "
-                 "account's windows unnamed by length, then named; percent at two decimals, micro-USD whole; a "
-                 "Desktop of a team organization lists itself only", ev, t + 30 * MINUTE, outputs=["entries"])]
+    out = [case("entries and their order", "Codex first, then the Claude account, then the team Desktop account; each "
+                "account's windows unnamed by length, then named; percent at two decimals, micro-USD whole; a "
+                "Desktop of a team organization lists itself only", ev, t + 30 * MINUTE, outputs=["entries"])]
+    two = [{"type": "codexAuth", "at": BASE, "accountId": "acct-a"}]
+    two += codex_turn("a", t, 3_000_000, "pro", week=(40, sec(R7)))
+    two += [{"type": "codexAuth", "at": t + HOUR, "accountId": "acct-b"}]
+    two += codex_turn("b", t + 2 * HOUR, 2_000_000, "pro", week=(10, sec(R7 - 20 * HOUR)))
+    out.append(case("two Codex accounts", "two accounts of one source and window are two entries with the same sources "
+                    "and window and different account tags (seen 2026-11-11: a service rejected the pair before the "
+                    "tag existed)", two, t + 3 * HOUR, outputs=["entries"]))
+    return out
 
 
 def reporter_case():
-    e = {"sources": ["codex"], "window": {"kind": "sevenDay", "name": None, "minutes": 10080}, "usedPercent": 20.0,
+    e = {"account": "0123456789abcdef", "sources": ["codex"], "window": {"kind": "sevenDay", "name": None, "minutes": 10080},
+         "usedPercent": 20.0,
          "resetsInMs": 1_000_000, "usedMicroUsd": 1, "estimate": {"confidence": "medium"}}
 
     def variant(change, prev):
@@ -807,7 +820,7 @@ def reporter_case():
         if s.get("newRun"):
             rep.new_run()
         if s["change"] == "set":
-            cur = cur + [dict(cur[0], sources=["claudeCode"])]
+            cur = cur + [dict(cur[0], account="fedcba9876543210")]
         elif s["change"] != "none":
             cur = [variant(s["change"], cur[0])] + cur[1:]
         q = rep.step(s["at"], cur, s.get("switch", True), s.get("leaving", False), s.get("fits", True))
