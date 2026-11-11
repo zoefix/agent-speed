@@ -371,6 +371,7 @@ final class CharacterRenderer: CharacterLayerProvider {
             }
         }
         wings.still = frame.effects.reduceMotion || frame.effects.level == .off
+        wings.balances = !frame.isSmallCharacter
         wings.update(dt, time: hudTime, frame: HudFrame(bounds: (0, 0, side, side), silhouette: silhouette!, footprint: d,
                                                          anchors: anchors),
                      sizes: cardSizes, shown: cardShown)

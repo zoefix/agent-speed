@@ -33,10 +33,12 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
 }
 
 @Suite struct HudWingsTests {
-    @Test func cardsSitBesideHerNeverOverHer() {
+    @Test(arguments: [false, true])
+    func cardsSitBesideHerNeverOverHer(balances: Bool) {
         let f = frame()
         var wings = HudWings()
         wings.still = true
+        wings.balances = balances
         wings.update(1 / 60, time: 0, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: HudCard.allCases.count))
         for card in [HudCard.speed] + HudCard.column {
             let p = wings.places[card.rawValue]
@@ -44,7 +46,10 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
             #expect(p.x - sizes[card.rawValue].w / 2 >= 0 && p.x + sizes[card.rawValue].w / 2 <= 444)
         }
         #expect(wings.places[HudCard.speed.rawValue].x > 254)
-        for card in HudCard.column { #expect(wings.places[card.rawValue].x < 190) }
+        #expect(balances ? wings.split < HudCard.column.count : wings.split == HudCard.column.count)
+        for card in HudCard.column {
+            #expect(wings.isAtHerRight(card) ? wings.places[card.rawValue].x > 254 : wings.places[card.rawValue].x < 190)
+        }
         let model = wings.places[HudCard.model.rawValue]
         #expect(abs(model.x - 222) < 1e-9 && model.y + sizes[1].h / 2 < 80)
         let ys = HudCard.column.map { wings.places[$0.rawValue].y }
@@ -116,6 +121,7 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
     @Test func cardsComeBackOnlyAfterHerLeftStaysClear() {
         var wings = HudWings()
         wings.still = false
+        wings.balances = false
         let shown = [Bool](repeating: true, count: HudCard.allCases.count)
         var t = 0.0
         for _ in 0..<120 {
@@ -138,17 +144,22 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
         for card in HudCard.column { #expect(wings.places[card.rawValue].x < 190) }
     }
 
-    @Test func aPassingGestureMovesNoCard() {
+    @Test(arguments: [false, true])
+    func aPassingGestureMovesNoCard(balances: Bool) {
         var wings = HudWings()
+        wings.balances = balances
         let shown = [Bool](repeating: true, count: HudCard.allCases.count)
         var t = 0.0
+        var first: Int?
         for n in 0..<300 {
             // The wide hair for 0.2 s (12 frames) of every 2 s.
             let f = n % 120 >= 60 && n % 120 < 72 ? wideHairFrame() : frame()
             wings.update(1 / 60, time: t, frame: f, sizes: sizes, shown: shown)
             t += 1 / 60
-            #expect(wings.split == HudCard.column.count)
+            if first == nil { first = wings.split }
+            #expect(wings.split == first)
         }
+        #expect(balances || first == HudCard.column.count)
     }
 
     /// Her outline with something held out to her right from `from` to `to` (y), reaching `reach` past her center.
@@ -397,7 +408,8 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
 }
 
 /// `AGENT_SPEED_CHARACTER_PACKS` (a folder of unpacked packs): every pack dances through the bands for 60 s at a 148 pt
-/// orb while the cards follow her outline; prints how often cards changed sides and checks none ever covers her.
+/// orb while the cards follow her outline, with the owner's cards (性能 with 首字, network, 費用, today, 額度 with three
+/// sources, one models row); prints how often cards changed sides and how many card-frames covered her.
 @Suite struct HudWingsPackTests {
     @Test(.enabled(if: ProcessInfo.processInfo.environment["AGENT_SPEED_CHARACTER_PACKS"] != nil))
     func cardsStayBesideEveryCharacter() throws {
@@ -408,21 +420,36 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
             ProcessInfo.processInfo.environment["AGENT_SPEED_CHARACTER_IDS"].map { $0.split(separator: ",").contains(Substring(id)) } ?? true
         }
         let d = 296.0, side = 444.0
-        let sizes: [(w: Double, h: Double)] = [(84, 62), (90, 18), (80, 28), (64, 27), (96, 18), (62, 27), (110, 40)]
+        var sizes: [(w: Double, h: Double)] = [(84, 62), (90, 18), (90, 38.5), (78, 26.4), (110, 18), (86, 26.4), (130, 16.3),
+                                               (150, 85)]
+        // 額度's forms as the renderer fits them to its room: full, no resets, short bars, no headers.
+        let quotaForms: [(w: Double, h: Double)] = [(150, 85), (130, 85), (115, 85), (104, 57)]
+        let shown = HudCard.allCases.map { $0 != .model }
         let levels = [2, 5, 8, 11, 13, 9, 4, 1]
         for id in ids {
             var performer = CharacterPerformer(pack: try CharacterPack.load(from: root.appendingPathComponent(id)), seed: 11)
             var wings = HudWings()
+            // `AGENT_SPEED_HUD_BALANCE=0`: the spill-over alone, for comparison.
+            wings.balances = ProcessInfo.processInfo.environment["AGENT_SPEED_HUD_BALANCE"] != "0"
+            // The renderer's narrowest forms: 額度 without headers, short bars and resets; the models rows without names.
+            wings.quotaNarrowest = 104
+            wings.modelsNarrowest = 62
+            var form = HudFormFit()
             var silhouette = HudSilhouette(top: 0, bottom: side, step: 2)
             var scratch: [Double] = []
             let ppp = 0.86 * d / performer.idleHeight
             var changes = 0, last = -1, covered = 0
+            var coveredBy: [HudCard: Int] = [:]
             for n in 0..<3600 {
                 performer.step(1.0 / 60, level: levels[min(levels.count - 1, n / 450)])
                 let anchors = performer.trace(into: &silhouette, feetOnScreen: (222, 222 + 0.45 * d), pointsPerPixel: ppp,
                                               scratch: &scratch)
                 let f = HudFrame(bounds: (0, 0, side, side), silhouette: silhouette, footprint: d, anchors: anchors)
-                wings.update(1.0 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: [Bool](repeating: true, count: HudCard.allCases.count))
+                form.update(1.0 / 60, widths: quotaForms.map(\.w), room: wings.quotaRoom, spare: 0.04 * d, snap: n == 0)
+                sizes[HudCard.quota.rawValue] = quotaForms[form.form]
+                // The models card's names narrow to its room, down to the dots and speeds.
+                sizes[HudCard.models.rawValue].w = min(130, max(wings.modelsNarrowest, wings.modelsRoom))
+                wings.update(1.0 / 60, time: Double(n) / 60, frame: f, sizes: sizes, shown: shown)
                 if wings.split != last {
                     changes += last < 0 ? 0 : 1
                     if last >= 0 { print("hud \(id): split \(last) → \(wings.split) at \(String(format: "%.1f", Double(n) / 60)) s") }
@@ -433,10 +460,13 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
                     let w = wings.sizes[card.rawValue].w, h = wings.sizes[card.rawValue].h
                     guard p.alpha > 0.5, let e = silhouette.extent(p.y - h / 2 + 4, p.y + h / 2 - 4) else { continue }
                     let enters = p.x < anchors.centerX ? p.x + w / 2 - e.left : e.right - (p.x - w / 2)
-                    if enters > 6 { covered += 1 }
+                    if enters > 6 {
+                        covered += 1
+                        coveredBy[card, default: 0] += 1
+                    }
                 }
             }
-            print("hud \(id): \(changes) side changes in 60 s, \(covered) covered card-frames, split \(wings.split)")
+            print("hud \(id): \(changes) side changes in 60 s, \(covered) covered card-frames \(coveredBy), split \(wings.split)")
         }
     }
 }
@@ -456,6 +486,7 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
         let f = frame()
         var wings = HudWings()
         wings.still = true
+        wings.balances = false
         let all = sized(quota: (120, 60))
         wings.update(1 / 60, time: 0, frame: f, sizes: all, shown: [Bool](repeating: true, count: HudCard.allCases.count))
         let quota = wings.places[HudCard.quota.rawValue], agents = wings.places[HudCard.agents.rawValue]
@@ -489,10 +520,12 @@ private func overlaps(_ p: HudWings.Place, _ size: (w: Double, h: Double), _ f: 
         let shown = [Bool](repeating: true, count: HudCard.allCases.count)
         var wide = HudWings()
         wide.still = true
+        wide.balances = false
         wide.update(1 / 60, time: 0, frame: f, sizes: all, shown: shown)
         #expect(wide.split < HudCard.column.count, "without a narrower form it spills")
         var narrow = HudWings()
         narrow.still = true
+        narrow.balances = false
         narrow.quotaNarrowest = 120
         narrow.update(1 / 60, time: 0, frame: f, sizes: all, shown: shown)
         #expect(narrow.split == HudCard.column.count)
