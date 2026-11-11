@@ -191,6 +191,23 @@ else()
 endif()
 endif()
 
+# Quota estimates (QUOTAS 10): the app's alone; the relay only sends the keys (REMOTE 11.1).
+if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
+add_library(agentspeed_estimate STATIC
+    src/quota/estimate/accounts.cpp
+    src/quota/estimate/engine.cpp
+    src/quota/estimate/engine_codex.cpp
+    src/quota/estimate/engine_store.cpp
+    src/quota/estimate/entry.cpp
+    src/quota/estimate/ledger.cpp
+    src/quota/estimate/model.cpp
+    src/quota/estimate/segments.cpp
+    src/quota/estimate/store_file.cpp
+    src/quota/estimate/vote.cpp
+)
+target_link_libraries(agentspeed_estimate PUBLIC agentspeed_quota OpenSSL::Crypto)
+endif()
+
 # The character player (spec/CHARACTERS.md): rig, physics, motion, director, performer and readout layout. Plain C++.
 if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
 add_library(agentspeed_character STATIC
@@ -277,5 +294,5 @@ if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
         src/report/mode_rows.cpp
         src/report/usernames.cpp
     )
-    target_link_libraries(agentspeed_core PUBLIC agentspeed_base agentspeed_quota agentspeed_character PkgConfig::ICU)
+    target_link_libraries(agentspeed_core PUBLIC agentspeed_base agentspeed_quota agentspeed_estimate agentspeed_character PkgConfig::ICU)
 endif()
