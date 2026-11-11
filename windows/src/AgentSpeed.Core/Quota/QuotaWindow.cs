@@ -28,12 +28,16 @@ public sealed record QuotaWindow(QuotaWindowKind Kind, string? Name, int? Minute
     public const int FiveHourMinutes = 300;
     public const int WeekMinutes = 10080;
 
-    /// <summary>A window with the kind's own length (300 for 5 h, 10080 for the weekly kinds) unless one is given.</summary>
+    /// <summary>A month without known ends counts 30 days (QUOTAS 9.1).</summary>
+    public const int MonthMinutes = 43200;
+
+    /// <summary>A window with the kind's own length (300 for 5 h, 10080 for the weekly kinds, 43200 for a month) unless one is given.</summary>
     public static QuotaWindow Of(QuotaWindowKind kind, double usedPercent, long? resetsAtMs, string? name = null, int? minutes = null) =>
         new(kind, name, minutes ?? kind switch
         {
             QuotaWindowKind.FiveHour => FiveHourMinutes,
             QuotaWindowKind.SevenDay or QuotaWindowKind.ModelWeek => WeekMinutes,
+            QuotaWindowKind.Month => MonthMinutes,
             _ => null,
         }, usedPercent, resetsAtMs);
 }

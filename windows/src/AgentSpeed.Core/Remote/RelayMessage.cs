@@ -82,6 +82,18 @@ internal abstract record RelayMessage
 
     public sealed record Error(RelayError Value) : RelayMessage;
 
+    /// <summary>A source's quota on the host (REMOTE 11.1); times are the host's until converted.</summary>
+    public sealed record Quota(RemoteQuotaReport Value) : RelayMessage;
+
+    /// <summary>A source's quota snapshot on the host went.</summary>
+    public sealed record QuotaRemoved(string HostId, SourceKind Source) : RelayMessage;
+
+    /// <summary>The state of the host's Claude Code status line bridge (REMOTE 11.3).</summary>
+    public sealed record QuotaBridge(RemoteQuotaBridge Value) : RelayMessage;
+
+    /// <summary>A <c>quota</c>, <c>quotaRemoved</c> or <c>quotaBridge</c> line: display only, never live data or history.</summary>
+    public bool IsQuota => this is Quota or QuotaRemoved or QuotaBridge;
+
     /// <summary>A <c>historyFailed</c> error: it ends a history run, not the relay.</summary>
     public bool IsHistoryFailure => this is Error { Value.Code: RelayErrorCode.HistoryFailed };
 }

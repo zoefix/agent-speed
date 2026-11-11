@@ -137,23 +137,31 @@ internal static partial class OrbFrameHarness
             : 1;
 
     /// <summary>
-    /// The 額度 card (DESIGN 2a.6) at 148 and 92 pt with two sources (Claude Desktop 7d + Fable 7d, Codex 7d) and three
-    /// (Claude Code 5h + 7d too), at rest so the live cards are quiet (below S = 96 the column keeps two cards):
-    /// <c>character-quota-ID-dark|light.png</c>.
+    /// The 額度 card (DESIGN 2a.6) at 148 and 92 pt with two sources (Claude Desktop 7d + Fable 7d, Codex 7d), three
+    /// (Claude Code 5h + 7d too) and hosts' sources after this computer's (DESIGN 13 <i>Host quotas</i>: Codex, then Codex
+    /// and Claude Code on <c>devbox</c> and Gemini CLI on <c>gpu-01.lab</c>), at rest so the live cards are quiet (below
+    /// S = 96 the column keeps two cards): <c>character-quota-ID-dark|light.png</c>.
     /// </summary>
     private static void CharacterQuotaSheets(GpuDevice device, OffscreenTarget target, CharacterPack pack, double scale, OrbReadoutStrings strings,
         string info, Localizer loc, string directory)
     {
         var now = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
-        var two = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: true), _ => true, now, loc);
-        var three = OrbQuotaCard.Of(global::AgentSpeed.App.QuotaDemo.State(now, two: false), _ => true, now, loc);
+        var two = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: true), _ => true, now, loc);
+        var three = OrbQuotaCard.Of(global::AgentSpeed.Quota.QuotaDemo.State(now, two: false), _ => true, now, loc);
+        var hosts = new[] { ("A0000000-0000-4000-8000-000000000001", "devbox"), ("A0000000-0000-4000-8000-000000000002", "gpu-01.lab") };
+        var remote = global::AgentSpeed.Quota.QuotaDemo.State(now, two: true) with
+        {
+            Hosts = global::AgentSpeed.Quota.QuotaDemo.Hosts(now, [.. hosts.Select(h => h.Item1)]),
+        };
+        var withHosts = OrbQuotaCard.Of(remote.CardItems(s => s is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.Gemini, _ => true, hosts,
+            hosts.Select(h => h.Item1).ToHashSet()), now, loc);
         foreach (var dark in new[] { true, false })
         {
             var rows = new List<List<BitmapSource>>();
             foreach (var size in new[] { 148.0, 92.0 })
             {
                 var row = new List<BitmapSource>();
-                foreach (var card in new[] { two, three })
+                foreach (var card in new[] { two, three, withHosts })
                 {
                     var (bitmap, _) = CharacterStill(device, target, pack, size, scale, dark, 0, strings, info, loc, 4.0,
                         EffectsIntensity.Standard, quota: card);

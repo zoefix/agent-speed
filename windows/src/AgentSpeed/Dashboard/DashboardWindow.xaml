@@ -140,6 +140,52 @@
             </Setter>
         </Style>
 
+        <!-- One quota line (DESIGN 4, Quota lines), shared by Sources and Hosts: the label, the bar with its pace mark, the
+             percent, the long reset and the age, in the columns its section passes down (QuotaLinePanel.Columns, set from code).
+             A line without room for its age keeps the reset and moves the age to its tooltip. -->
+        <DataTemplate x:Key="QuotaLine" DataType="{x:Type quota:QuotaLineRow}">
+            <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent" ToolTipService.InitialShowDelay="500">
+                <quota:QuotaLinePanel.Style>
+                    <Style TargetType="quota:QuotaLinePanel">
+                        <Setter Property="ToolTip" Value="{Binding Tooltip}" />
+                        <Style.Triggers>
+                            <Trigger Property="AgeShown" Value="False">
+                                <Setter Property="ToolTip" Value="{Binding TooltipWithAge}" />
+                            </Trigger>
+                        </Style.Triggers>
+                    </Style>
+                </quota:QuotaLinePanel.Style>
+                <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="Medium" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                <quota:QuotaBar Value="{Binding Bar}" Pace="{Binding Pace}" Passed="{Binding Passed}" Fill="{Binding Fill}"
+                                Track="{Binding DataContext.QuotaTrack, RelativeSource={RelativeSource AncestorType=Window}}"
+                                TrackOpacity="{Binding DataContext.QuotaTrackOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
+                                Tick="{Binding DataContext.QuotaTick, RelativeSource={RelativeSource AncestorType=Window}}"
+                                TickOpacity="{Binding DataContext.QuotaTickOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
+                                ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <Grid>
+                    <TextBlock Text="100%" FontSize="11.5" FontWeight="SemiBold" Visibility="Hidden" Typography.NumeralAlignment="Tabular" />
+                    <quota:QuotaFadeText Text="{Binding PercentText}" HorizontalAlignment="Right"
+                                         TextElement.FontSize="11.5" TextElement.FontWeight="SemiBold" Typography.NumeralAlignment="Tabular"
+                                         ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
+                        <quota:QuotaFadeText.Style>
+                            <Style TargetType="quota:QuotaFadeText">
+                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                                <Style.Triggers>
+                                    <DataTrigger Binding="{Binding Critical}" Value="True">
+                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
+                                    </DataTrigger>
+                                </Style.Triggers>
+                            </Style>
+                        </quota:QuotaFadeText.Style>
+                    </quota:QuotaFadeText>
+                </Grid>
+                <quota:QuotaFadeText Text="{Binding ResetText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                <quota:QuotaFadeText Text="{Binding AgeText}" TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+            </quota:QuotaLinePanel>
+        </DataTemplate>
+
         <!-- The Claude Code invitation's link (DESIGN 4): 11 pt in the accent color, its text on the quota labels' line. -->
         <Style x:Key="QuotaInviteLink" TargetType="Button" BasedOn="{StaticResource LinkButton}">
             <Setter Property="FontSize" Value="11" />
@@ -291,7 +337,7 @@
                     <!-- Sources -->
                     <Rectangle Style="{StaticResource Hairline}" Margin="0,16,0,12" />
                     <TextBlock Text="{loc:Loc dashboard.sources}" Style="{StaticResource BodyStrongText}" Margin="0,0,0,6" />
-                    <ItemsControl ItemsSource="{Binding Sources}" Focusable="False">
+                    <ItemsControl x:Name="SourcesList" ItemsSource="{Binding Sources}" Focusable="False">
                         <ItemsControl.ItemTemplate>
                             <DataTemplate DataType="{x:Type dash:SourceRow}">
                                 <!-- The row's line is exactly 30 DIP in every state; quota lines (DESIGN 4) grow the row under it,
@@ -335,48 +381,9 @@
                                         <dash:SourceRowButton.Below>
                                             <quota:EasedHeight ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
                                                 <ItemsControl ItemsSource="{Binding QuotaLines}" Focusable="False" IsTabStop="False" Margin="18,0,0,6"
+                                                              ItemTemplate="{StaticResource QuotaLine}"
                                                               Opacity="{Binding IsDimmed, Converter={StaticResource Dim}}"
-                                                              Visibility="{Binding HasQuota, Converter={StaticResource Visible}}">
-                                                    <ItemsControl.ItemTemplate>
-                                                        <DataTemplate DataType="{x:Type quota:QuotaLineRow}">
-                                                            <quota:QuotaLinePanel Height="16" Margin="0,0,0,4" Background="Transparent"
-                                                                                  Columns="{Binding DataContext.QuotaColumns, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                  ToolTip="{Binding Tooltip}" ToolTipService.InitialShowDelay="500">
-                                                                <TextBlock Text="{Binding Label}" FontSize="11" FontWeight="Medium"
-                                                                           Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                                <quota:QuotaBar Value="{Binding Bar}" Pace="{Binding Pace}" Passed="{Binding Passed}" Fill="{Binding Fill}"
-                                                                                Track="{Binding DataContext.QuotaTrack, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                TrackOpacity="{Binding DataContext.QuotaTrackOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                Tick="{Binding DataContext.QuotaTick, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                TickOpacity="{Binding DataContext.QuotaTickOpacity, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                                                ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                                <Grid>
-                                                                    <TextBlock Text="100%" FontSize="11.5" FontWeight="SemiBold" Visibility="Hidden"
-                                                                               Typography.NumeralAlignment="Tabular" />
-                                                                    <quota:QuotaFadeText Text="{Binding PercentText}" HorizontalAlignment="Right"
-                                                                                         TextElement.FontSize="11.5" TextElement.FontWeight="SemiBold"
-                                                                                         Typography.NumeralAlignment="Tabular"
-                                                                                         ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
-                                                                        <quota:QuotaFadeText.Style>
-                                                                            <Style TargetType="quota:QuotaFadeText">
-                                                                                <Setter Property="TextElement.Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
-                                                                                <Style.Triggers>
-                                                                                    <DataTrigger Binding="{Binding Critical}" Value="True">
-                                                                                        <Setter Property="TextElement.Foreground" Value="{DynamicResource SystemFillColorCriticalBrush}" />
-                                                                                    </DataTrigger>
-                                                                                </Style.Triggers>
-                                                                            </Style>
-                                                                        </quota:QuotaFadeText.Style>
-                                                                    </quota:QuotaFadeText>
-                                                                </Grid>
-                                                                <quota:QuotaFadeText Text="{Binding ResetText}" Tail="{Binding AgeText}"
-                                                                                     TextElement.FontSize="11" TextElement.Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                                                     TailBrush="{DynamicResource TextFillColorTertiaryBrush}"
-                                                                                     ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                            </quota:QuotaLinePanel>
-                                                        </DataTemplate>
-                                                    </ItemsControl.ItemTemplate>
-                                                </ItemsControl>
+                                                              Visibility="{Binding HasQuota, Converter={StaticResource Visible}}" />
                                             </quota:EasedHeight>
                                         </dash:SourceRowButton.Below>
                                     </dash:SourceRowButton>
@@ -403,46 +410,70 @@
                     <StackPanel Visibility="{Binding ShowsHosts, Converter={StaticResource Visible}}">
                         <Rectangle Style="{StaticResource Hairline}" Margin="0,12,0,12" />
                         <TextBlock Text="{loc:Loc remote.hosts}" Style="{StaticResource BodyStrongText}" Margin="0,0,0,6" />
-                        <ItemsControl ItemsSource="{Binding Hosts}" Focusable="False" AutomationProperties.Name="{loc:Loc remote.hosts}">
+                        <ItemsControl x:Name="HostsList" ItemsSource="{Binding Hosts}" Focusable="False" AutomationProperties.Name="{loc:Loc remote.hosts}">
                             <ItemsControl.ItemTemplate>
                                 <DataTemplate DataType="{x:Type dash:HostRow}">
-                                    <Grid Height="30">
-                                        <dash:SourceRowButton Style="{StaticResource SourceRowButton}" Click="OnHostRow" Tag="{Binding Id}" ShowChevron="True"
-                                                              ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}"
-                                                              ToolTip="{loc:Loc remote.dashboard.hint}" ToolTipService.InitialShowDelay="900"
-                                                              AutomationProperties.Name="{Binding AccessibleName}"
-                                                              AutomationProperties.HelpText="{loc:Loc remote.dashboard.hint}">
+                                    <!-- The row's line is 30 DIP; a remote host's quota sub-lines (DESIGN 13, Host quotas) grow the row under
+                                         it, inside its plate: each source's dot and name, then its quota lines indented under the name. -->
+                                    <dash:SourceRowButton Style="{StaticResource SourceRowButton}" Click="OnHostRow" Tag="{Binding Id}" ShowChevron="True"
+                                                          ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}"
+                                                          ToolTip="{loc:Loc remote.dashboard.hint}" ToolTipService.InitialShowDelay="900"
+                                                          AutomationProperties.Name="{Binding AccessibleName}"
+                                                          AutomationProperties.HelpText="{loc:Loc remote.dashboard.hint}">
+                                        <Grid>
+                                            <Grid.ColumnDefinitions>
+                                                <ColumnDefinition Width="18" />
+                                                <ColumnDefinition Width="*" />
+                                            </Grid.ColumnDefinitions>
+                                            <controls:HostStatusDot Kind="{Binding Dot}" HorizontalAlignment="Left"
+                                                                    ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                            <history:MiddleTrimmedText x:Name="HostName" Grid.Column="1" Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"
+                                                                       Foreground="{DynamicResource TextFillColorPrimaryBrush}" ToolTip="{Binding Name}" />
+                                        </Grid>
+                                        <dash:SourceRowButton.Trailing>
                                             <Grid>
                                                 <Grid.ColumnDefinitions>
-                                                    <ColumnDefinition Width="18" />
-                                                    <ColumnDefinition Width="*" />
+                                                    <ColumnDefinition Width="Auto" />
+                                                    <ColumnDefinition Width="86" />
                                                 </Grid.ColumnDefinitions>
-                                                <controls:HostStatusDot Kind="{Binding Dot}" HorizontalAlignment="Left"
-                                                                        ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                <history:MiddleTrimmedText x:Name="HostName" Grid.Column="1" Text="{Binding Name}" FontSize="13" VerticalAlignment="Center"
-                                                                           Foreground="{DynamicResource TextFillColorPrimaryBrush}" ToolTip="{Binding Name}" />
+                                                <TextBlock Text="{Binding TodayText}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
+                                                           Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                <dash:LiveValue Grid.Column="1" Text="{Binding LiveText}" Kind="{Binding LiveKind}"
+                                                                TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
+                                                                HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                                Visibility="{Binding ShowsLive, Converter={StaticResource Visible}}"
+                                                                AutomationProperties.Name="{Binding LiveAccessibleName}"
+                                                                ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
+                                                <TextBlock Grid.Column="1" Text="{Binding Word}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"
+                                                           TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
+                                                           Visibility="{Binding ShowsWord, Converter={StaticResource Visible}}" />
                                             </Grid>
-                                            <dash:SourceRowButton.Trailing>
-                                                <Grid>
-                                                    <Grid.ColumnDefinitions>
-                                                        <ColumnDefinition Width="Auto" />
-                                                        <ColumnDefinition Width="86" />
-                                                    </Grid.ColumnDefinitions>
-                                                    <TextBlock Text="{Binding TodayText}" FontSize="12" VerticalAlignment="Center" Margin="8,0,0,0"
-                                                               Typography.NumeralAlignment="Tabular" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
-                                                    <dash:LiveValue Grid.Column="1" Text="{Binding LiveText}" Kind="{Binding LiveKind}"
-                                                                    TextElement.FontSize="13" TextElement.FontWeight="SemiBold"
-                                                                    HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                                    Visibility="{Binding ShowsLive, Converter={StaticResource Visible}}"
-                                                                    AutomationProperties.Name="{Binding LiveAccessibleName}"
-                                                                    ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}" />
-                                                    <TextBlock Grid.Column="1" Text="{Binding Word}" FontSize="12" HorizontalAlignment="Right" VerticalAlignment="Center"
-                                                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}"
-                                                               Visibility="{Binding ShowsWord, Converter={StaticResource Visible}}" />
-                                                </Grid>
-                                            </dash:SourceRowButton.Trailing>
-                                        </dash:SourceRowButton>
-                                    </Grid>
+                                        </dash:SourceRowButton.Trailing>
+                                        <dash:SourceRowButton.Below>
+                                            <quota:EasedHeight ReduceMotion="{Binding DataContext.ReduceMotion, RelativeSource={RelativeSource AncestorType=Window}}">
+                                                <ItemsControl ItemsSource="{Binding QuotaGroups}" Focusable="False" IsTabStop="False" Margin="18,0,0,4"
+                                                              Visibility="{Binding HasQuota, Converter={StaticResource Visible}}">
+                                                    <ItemsControl.ItemTemplate>
+                                                        <DataTemplate DataType="{x:Type dash:HostQuotaGroupRow}">
+                                                            <StackPanel Margin="0,0,0,2">
+                                                                <Grid Height="12">
+                                                                    <Grid.ColumnDefinitions>
+                                                                        <ColumnDefinition Width="12" />
+                                                                        <ColumnDefinition Width="*" />
+                                                                    </Grid.ColumnDefinitions>
+                                                                    <Ellipse Width="6" Height="6" Fill="{Binding DotBrush}" HorizontalAlignment="Left" VerticalAlignment="Center" />
+                                                                    <TextBlock Grid.Column="1" Text="{Binding Name}" FontSize="11" FontWeight="Medium" VerticalAlignment="Center"
+                                                                               TextTrimming="CharacterEllipsis" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                                                                </Grid>
+                                                                <ItemsControl ItemsSource="{Binding Lines}" Focusable="False" IsTabStop="False" Margin="12,3,0,0"
+                                                                              ItemTemplate="{StaticResource QuotaLine}" />
+                                                            </StackPanel>
+                                                        </DataTemplate>
+                                                    </ItemsControl.ItemTemplate>
+                                                </ItemsControl>
+                                            </quota:EasedHeight>
+                                        </dash:SourceRowButton.Below>
+                                    </dash:SourceRowButton>
                                     <DataTemplate.Triggers>
                                         <DataTrigger Binding="{Binding IsConnected}" Value="False">
                                             <Setter TargetName="HostName" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />

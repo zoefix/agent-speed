@@ -57,6 +57,8 @@ internal sealed partial class DashboardWindow : Window
         InitializeComponent();
         DataContext = viewModel;
         _model = viewModel;
+        Quota.QuotaLinePanel.SetColumns(SourcesList, viewModel.QuotaColumns);
+        Quota.QuotaLinePanel.SetColumns(HostsList, viewModel.HostQuotaColumns);
         _fade = new RowFade(AgentsItems);
         _heights.Stepped += OnHeightsStepped;
         _heights.Settled += OnHeightsSettled;

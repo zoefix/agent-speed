@@ -81,12 +81,17 @@ internal static class RelayLineEncoder
 {
     public const int MaxLineBytes = 4 << 20;
 
-    public static byte[]? Start(long todayStartMs, IEnumerable<SourceKind> sources, RemoteZone zone, RemotePriceTableJson prices)
+    /// <param name="quota">REMOTE 11.1: what the relay reads for quotas; null leaves the member out.</param>
+    public static byte[]? Start(long todayStartMs, IEnumerable<SourceKind> sources, RemoteZone zone, RemotePriceTableJson prices, RemoteQuotaConfig? quota = null)
     {
         var keys = string.Join(',', sources.Distinct().Order().Select(s => ReportJson.Quoted(SourceNames.Of(s))));
+        var quotaMember = quota is null ? string.Empty : ",\"quota\":" + QuotaObject(quota);
         return Line($"{{\"t\":\"start\",\"protocol\":{RemoteProtocol.Version},\"todayStartMs\":{todayStartMs},"
-            + $"\"sources\":[{keys}],\"zone\":{ZoneObject(zone)},\"prices\":{prices.Text}}}");
+            + $"\"sources\":[{keys}],\"zone\":{ZoneObject(zone)},\"prices\":{prices.Text}{quotaMember}}}");
     }
+
+    /// <summary>REMOTE 11.1: sent whenever the quota config changes.</summary>
+    public static byte[]? Quota(RemoteQuotaConfig config) => Line($"{{\"t\":\"quota\",\"config\":{QuotaObject(config)}}}");
 
     public static byte[]? Ping(long id) => Line($"{{\"t\":\"ping\",\"id\":{id}}}");
 
@@ -106,6 +111,16 @@ internal static class RelayLineEncoder
     }
 
     public static byte[]? Watch(bool on) => Line($"{{\"t\":\"watch\",\"on\":{(on ? "true" : "false")}}}");
+
+    /// <summary><c>{sources, network, grokLive, claudeBridge}</c>, the sources in source order.</summary>
+    private static string QuotaObject(RemoteQuotaConfig config)
+    {
+        var keys = string.Join(',', config.Sources.Select(s => ReportJson.Quoted(SourceNames.Of(s))));
+        return $"{{\"sources\":[{keys}],\"network\":{Literal(config.Network)},\"grokLive\":{Literal(config.GrokLive)},"
+            + $"\"claudeBridge\":{Literal(config.ClaudeBridge)}}}";
+    }
+
+    private static string Literal(bool value) => value ? "true" : "false";
 
     private static string ZoneObject(RemoteZone zone) =>
         $"{{\"id\":{ReportJson.Quoted(zone.Id)},\"tzif\":{ReportJson.Quoted(Convert.ToBase64String(zone.Tzif))}}}";

@@ -294,6 +294,36 @@
     "en": "Folder",
     "ja": "フォルダ"
   },
+  "win.settings.quota.zcode.hint": {
+    "zh-Hant": "貼上 GLM Coding Plan 的 API Key，它會存在 Windows 認證管理員，只用來向智譜查詢額度。",
+    "zh-Hans": "粘贴 GLM Coding Plan 的 API Key，它会存在 Windows 凭据管理器，只用来向智谱查询额度。",
+    "en": "Paste your GLM Coding Plan API key. It is kept in Windows Credential Manager and only used to ask Zhipu for your quota.",
+    "ja": "GLM Coding Plan の API キーを貼り付けてください。Windows 資格情報マネージャーに保存し、Zhipu への利用枠の問い合わせにだけ使います。"
+  },
+  "win.settings.quota.zcode.saved": {
+    "zh-Hant": "已存在 Windows 認證管理員",
+    "zh-Hans": "已存入 Windows 凭据管理器",
+    "en": "Saved in Windows Credential Manager",
+    "ja": "Windows 資格情報マネージャーに保存済み"
+  },
+  "win.settings.quota.cookies.confirm.message": {
+    "zh-Hant": "Agent Speed 會從這台電腦的瀏覽器讀取 %@ 的 Cookie，只用來向 %@ 查詢你的額度，只放在記憶體裡，用完即丟，不會存檔或傳到其他地方。Chrome 和 Edge 執行時會鎖住自己的 Cookie，較新的版本還會加上只有瀏覽器本身能解開的保護，這兩種情況都讀不到；Firefox 可以正常讀取。",
+    "zh-Hans": "Agent Speed 会从这台电脑的浏览器读取 %@ 的 Cookie，只用来向 %@ 查询你的额度，只放在内存里，用完即丢，不会存盘或传到其他地方。Chrome 和 Edge 运行时会锁住自己的 Cookie，较新的版本还会加上只有浏览器本身能解开的保护，这两种情况都读不到；Firefox 可以正常读取。",
+    "en": "Agent Speed will read the %@ cookies from the browsers on this computer, only to ask %@ for your quota. They stay in memory, are dropped after use, and are never saved or sent anywhere else. Chrome and Edge lock their cookies while they run, and newer versions also protect them so that only the browser itself can read them; either way they can’t be read. Firefox works.",
+    "ja": "Agent Speed はこのコンピュータのブラウザから %@ の Cookie を読み取り、%@ に利用枠を問い合わせるためだけに使います。Cookie はメモリ上にだけ置き、使い終わったら破棄し、保存したりほかへ送ったりしません。Chrome と Edge は実行中に Cookie をロックし、新しいバージョンではブラウザ自身しか読めない保護もかけるため、どちらの場合も読み取れません。Firefox なら問題なく読み取れます。"
+  },
+  "win.settings.quota.status.browserLocked": {
+    "zh-Hant": "瀏覽器執行時鎖住了 Cookie，關閉瀏覽器或改用 Firefox",
+    "zh-Hans": "浏览器运行时锁住了 Cookie，关闭浏览器或改用 Firefox",
+    "en": "The browser locks its cookies while it runs; close it or use Firefox",
+    "ja": "ブラウザの実行中は Cookie がロックされます。ブラウザを閉じるか Firefox を使ってください"
+  },
+  "win.settings.quota.status.browserProtected": {
+    "zh-Hant": "Chrome／Edge 的 Cookie 受應用程式綁定加密保護，無法讀取；可改用 Firefox",
+    "zh-Hans": "Chrome／Edge 的 Cookie 受应用绑定加密保护，无法读取；可改用 Firefox",
+    "en": "Chrome and Edge protect their cookies with app-bound encryption, which can’t be read; Firefox works",
+    "ja": "Chrome／Edge の Cookie はアプリバインド暗号化で保護されていて読み取れません。Firefox なら読み取れます"
+  },
   "win.settings.taskbar.floating": {
     "zh-Hant": "無法直接嵌入工作列，目前以浮動方式顯示在工作列上方。",
     "zh-Hans": "无法直接嵌入任务栏，目前以浮动方式显示在任务栏上方。",

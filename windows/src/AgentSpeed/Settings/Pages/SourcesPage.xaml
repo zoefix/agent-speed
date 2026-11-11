@@ -55,11 +55,77 @@
             </DataTemplate.Triggers>
         </DataTemplate>
 
-        <!-- A quota switch of the group (DESIGN 5, 額度): a gauge in the dot column, the title, its hint as the caption and, for
-             the Claude CLI bridge, a status line (warning style with Reconnect when the status line was replaced). -->
-        <DataTemplate x:Key="QuotaRow" DataType="{x:Type sources:QuotaToggleViewModel}">
-            <Grid>
-                <Rectangle Style="{StaticResource Hairline}" VerticalAlignment="Top" />
+        <!-- ZCode's key and region under its switch (QUOTAS 9.8): labels on the title's line, fields on the switch's trailing
+             edge. A pasted key is saved to Credential Manager on Enter or when focus leaves, and is never shown again. -->
+        <DataTemplate x:Key="ZcodeFieldRows" DataType="{x:Type sources:ZcodeFieldsViewModel}">
+            <StackPanel x:Name="FieldsRoot">
+                <Rectangle Style="{StaticResource Hairline}" Margin="36,0,0,0" />
+                <Grid Margin="16,10,16,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="KeyLabel" Grid.Column="1" Text="{loc:Loc settings.quota.zcode.key}" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,16,0" />
+                    <Grid Grid.Column="2" Margin="0,0,12,0" HorizontalAlignment="Right" VerticalAlignment="Center">
+                        <!-- Both states keep their room, so the row never changes height when the key is saved or removed. -->
+                        <Grid x:Name="KeyEntry" Width="240" HorizontalAlignment="Right">
+                            <PasswordBox x:Name="ZcodeKeyBox" FontSize="13" MaxLength="1024" KeyDown="OnZcodeKeyDown" LostKeyboardFocus="OnZcodeKeyLostFocus"
+                                         PasswordChanged="OnZcodeKeyChanged" AutomationProperties.Name="{loc:Loc settings.quota.zcode.key}"
+                                         AutomationProperties.HelpText="{loc:Loc settings.quota.zcode.keyPlaceholder}" />
+                            <TextBlock x:Name="KeyPlaceholder" Text="{loc:Loc settings.quota.zcode.keyPlaceholder}" IsHitTestVisible="False" FontSize="13"
+                                       Margin="12,0,12,1" VerticalAlignment="Center" TextTrimming="CharacterEllipsis"
+                                       Foreground="{DynamicResource TextFillColorTertiaryBrush}" />
+                        </Grid>
+                        <StackPanel x:Name="KeySaved" Orientation="Horizontal" HorizontalAlignment="Right" Visibility="Hidden">
+                            <controls:SymbolGlyph x:Name="KeyGlyph" Style="{StaticResource SymbolIcon}" Text="&#xE8D7;" FontSize="13" Margin="0,1,7,0"
+                                                  Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <TextBlock x:Name="KeySavedText" Text="{loc:Loc win.settings.quota.zcode.saved}" FontSize="13" VerticalAlignment="Center"
+                                       TextWrapping="NoWrap" Foreground="{DynamicResource TextFillColorSecondaryBrush}" />
+                            <Button x:Name="ZcodeRemove" Content="{loc:Loc settings.quota.zcode.remove}" Command="{Binding RemoveCommand}"
+                                    Click="OnZcodeRemoveClick" MinWidth="80" Margin="14,0,0,0"
+                                    AutomationProperties.HelpText="{loc:Loc win.settings.quota.zcode.saved}" />
+                        </StackPanel>
+                    </Grid>
+                </Grid>
+                <Rectangle Style="{StaticResource Hairline}" Margin="36,0,0,0" />
+                <Grid Margin="16,10,16,10">
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="20" />
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <TextBlock x:Name="RegionLabel" Grid.Column="1" Text="{loc:Loc settings.quota.zcode.region}" FontSize="14" VerticalAlignment="Center"
+                               Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextTrimming="CharacterEllipsis" Margin="0,0,16,0" />
+                    <ComboBox Grid.Column="2" Width="240" Margin="0,0,12,0" VerticalAlignment="Center" SelectedIndex="{Binding RegionIndex, Mode=TwoWay}"
+                              AutomationProperties.Name="{loc:Loc settings.quota.zcode.region}">
+                        <ComboBoxItem Content="{loc:Loc settings.quota.zcode.regionGlobal}" />
+                        <ComboBoxItem Content="{loc:Loc settings.quota.zcode.regionCn}" />
+                    </ComboBox>
+                </Grid>
+            </StackPanel>
+            <DataTemplate.Triggers>
+                <DataTrigger Binding="{Binding IsSaved}" Value="True">
+                    <Setter TargetName="KeyEntry" Property="Visibility" Value="Hidden" />
+                    <Setter TargetName="KeySaved" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding IsEnabled, ElementName=FieldsRoot}" Value="False">
+                    <Setter TargetName="KeyLabel" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                    <Setter TargetName="RegionLabel" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                    <Setter TargetName="KeyGlyph" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                    <Setter TargetName="KeySavedText" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                </DataTrigger>
+            </DataTemplate.Triggers>
+        </DataTemplate>
+
+        <!-- A quota switch of the group (DESIGN 5, 額度): a gauge in the dot column, the title, its hint and a quieter note as the
+             caption, and a status line (a glyph before secondary text; the bridge offers Reconnect inside it). Grok's live
+             request is indented under the switch it needs; ZCode adds its key and region while on. A disabled source dims the
+             row and nothing can be switched (QUOTAS 9.1). -->
+        <DataTemplate x:Key="QuotaRow" DataType="{x:Type sources:QuotaRowViewModel}">
+            <StackPanel x:Name="Root" IsEnabled="{Binding CanSwitch}">
+                <Rectangle x:Name="Divider" Style="{StaticResource Hairline}" VerticalAlignment="Top" />
                 <Grid Margin="16,11,16,12" MinHeight="40">
                     <Grid.ColumnDefinitions>
                         <ColumnDefinition Width="20" />
@@ -67,7 +133,7 @@
                         <ColumnDefinition Width="Auto" />
                     </Grid.ColumnDefinitions>
                     <!-- Two small quota bars in the dot column: the row reads as the source's quota lines. -->
-                    <StackPanel Width="11" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-1,6,0,0" IsHitTestVisible="False"
+                    <StackPanel x:Name="Gauge" Width="11" HorizontalAlignment="Left" VerticalAlignment="Top" Margin="-1,6,0,0" IsHitTestVisible="False"
                                 SnapsToDevicePixels="True">
                         <Grid Height="3">
                             <Border CornerRadius="1.5" Background="{DynamicResource TextFillColorSecondaryBrush}" Opacity="0.3" />
@@ -78,16 +144,24 @@
                             <Border CornerRadius="1.5" Background="{DynamicResource TextFillColorSecondaryBrush}" Width="4" HorizontalAlignment="Left" />
                         </Grid>
                     </StackPanel>
-                    <StackPanel Grid.Column="1" VerticalAlignment="Center" Margin="0,0,24,0">
-                        <TextBlock Text="{Binding Title}" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextWrapping="Wrap" />
-                        <TextBlock Text="{Binding Hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17" Margin="0,3,0,0" />
+                    <StackPanel x:Name="Texts" Grid.Column="1" VerticalAlignment="Center" Margin="0,0,24,0">
+                        <TextBlock x:Name="Title" Text="{Binding Title}" FontSize="14" Foreground="{DynamicResource TextFillColorPrimaryBrush}" TextWrapping="Wrap" />
+                        <TextBlock x:Name="Hint" Text="{Binding Hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17" Margin="0,3,0,0"
+                                   Visibility="{Binding HasHint, Converter={StaticResource Visible}}" />
+                        <TextBlock x:Name="Note" Text="{Binding Note}" Style="{StaticResource CaptionText}" Foreground="{DynamicResource TextFillColorTertiaryBrush}"
+                                   TextWrapping="Wrap" LineHeight="17" Margin="0,2,0,0" Visibility="{Binding HasNote, Converter={StaticResource Visible}}" />
                         <Grid x:Name="StatusLine" Margin="0,7,0,0" Visibility="{Binding HasStatus, Converter={StaticResource Visible}}">
                             <Grid.ColumnDefinitions>
                                 <ColumnDefinition Width="Auto" />
                                 <ColumnDefinition Width="*" />
                             </Grid.ColumnDefinitions>
-                            <controls:SymbolGlyph x:Name="StatusGlyph" Style="{StaticResource SymbolIcon}" Text="&#xE73E;" FontSize="12" Margin="0,3,6,0"
-                                                  VerticalAlignment="Top" Foreground="{DynamicResource SystemFillColorSuccessBrush}" Visibility="Collapsed" />
+                            <Grid x:Name="StatusGlyph" Width="12" Height="12" Margin="0,3,6,0" VerticalAlignment="Top" Visibility="Collapsed">
+                                <controls:SymbolGlyph x:Name="StatusIcon" Style="{StaticResource SymbolIcon}" Text="&#xE73E;" FontSize="12"
+                                                      Foreground="{DynamicResource SystemFillColorSuccessBrush}" />
+                                <!-- Paused: a ring with two bars, drawn with the symbol font so it stays crisp. -->
+                                <controls:SymbolGlyph x:Name="PauseBars" Style="{StaticResource SymbolIcon}" Text="&#xF8AE;" FontSize="6"
+                                                      Foreground="{DynamicResource TextFillColorSecondaryBrush}" Visibility="Collapsed" />
+                            </Grid>
                             <!-- Reconnect is a link inside the status text, so a long path wraps with it. -->
                             <TextBlock x:Name="StatusText" Grid.Column="1" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17"
                                        AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="{Binding Status}">
@@ -98,19 +172,62 @@
                         </Grid>
                     </StackPanel>
                     <CheckBox Grid.Column="2" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsOn, Mode=TwoWay}" VerticalAlignment="Center"
-                              AutomationProperties.Name="{Binding Title}" AutomationProperties.HelpText="{Binding Hint}" />
+                              AutomationProperties.Name="{Binding Title}" AutomationProperties.HelpText="{Binding HelpText}"
+                              AutomationProperties.ItemStatus="{Binding Status}" />
                 </Grid>
-            </Grid>
+
+                <!-- ZCode's key and region (QUOTAS 9.8), built only for the ZCode switch. -->
+                <ContentControl x:Name="ZcodeFields" Content="{Binding Zcode}" ContentTemplate="{StaticResource ZcodeFieldRows}" Focusable="False"
+                                IsTabStop="False" Visibility="{Binding ShowsZcodeFields, Converter={StaticResource Visible}}" />
+            </StackPanel>
             <DataTemplate.Triggers>
-                <DataTrigger Binding="{Binding IsConnected}" Value="True">
+                <DataTrigger Binding="{Binding IsIndented}" Value="True">
+                    <Setter TargetName="Divider" Property="Margin" Value="36,0,0,0" />
+                    <Setter TargetName="Gauge" Property="Visibility" Value="Collapsed" />
+                    <Setter TargetName="Texts" Property="Margin" Value="20,0,24,0" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusMark}" Value="Ok">
                     <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
                 </DataTrigger>
-                <DataTrigger Binding="{Binding IsWarning}" Value="True">
+                <DataTrigger Binding="{Binding StatusMark}" Value="Warning">
                     <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
-                    <Setter TargetName="StatusGlyph" Property="Text" Value="&#xE7BA;" />
-                    <Setter TargetName="StatusGlyph" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
-                    <Setter TargetName="StatusText" Property="Foreground" Value="{DynamicResource TextFillColorPrimaryBrush}" />
+                    <Setter TargetName="StatusIcon" Property="Text" Value="&#xE7BA;" />
+                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource SystemFillColorCautionBrush}" />
                 </DataTrigger>
+                <DataTrigger Binding="{Binding StatusMark}" Value="NetworkOff">
+                    <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="StatusIcon" Property="Text" Value="&#xEB5E;" />
+                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding StatusMark}" Value="Paused">
+                    <Setter TargetName="StatusGlyph" Property="Visibility" Value="Visible" />
+                    <Setter TargetName="StatusIcon" Property="Text" Value="&#xEA3A;" />
+                    <Setter TargetName="StatusIcon" Property="Foreground" Value="{DynamicResource TextFillColorSecondaryBrush}" />
+                    <Setter TargetName="PauseBars" Property="Visibility" Value="Visible" />
+                </DataTrigger>
+                <DataTrigger Binding="{Binding CanSwitch}" Value="False">
+                    <Setter TargetName="Gauge" Property="Opacity" Value="0.45" />
+                    <Setter TargetName="Title" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                    <Setter TargetName="Hint" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                    <Setter TargetName="Note" Property="Foreground" Value="{DynamicResource TextFillColorDisabledBrush}" />
+                </DataTrigger>
+                <MultiDataTrigger>
+                    <MultiDataTrigger.Conditions>
+                        <Condition Binding="{Binding ShowsZcodeFields}" Value="True" />
+                        <Condition Binding="{Binding DataContext.SourcesPane.ReduceMotion, RelativeSource={RelativeSource AncestorType=UserControl}}" Value="False" />
+                    </MultiDataTrigger.Conditions>
+                    <MultiDataTrigger.EnterActions>
+                        <BeginStoryboard>
+                            <Storyboard>
+                                <DoubleAnimation Storyboard.TargetName="ZcodeFields" Storyboard.TargetProperty="Opacity" From="0" To="1" Duration="0:0:0.2">
+                                    <DoubleAnimation.EasingFunction>
+                                        <CubicEase EasingMode="EaseOut" />
+                                    </DoubleAnimation.EasingFunction>
+                                </DoubleAnimation>
+                            </Storyboard>
+                        </BeginStoryboard>
+                    </MultiDataTrigger.EnterActions>
+                </MultiDataTrigger>
             </DataTemplate.Triggers>
         </DataTemplate>
 

@@ -12,8 +12,9 @@ public sealed class RemoteHostStatusEventArgs(string hostId, RemoteHostStatus st
 
 /// <summary>
 /// Connects the remote hosts of the settings to the live monitor (REMOTE 2, 4.4, 7): owns the connections, keeps them in
-/// step with the hosts, the network master switch, the monitor's enabled sources and report watch and the price table,
-/// routes live events to the monitor and history events to <see cref="HistorySink"/>. Callable from any thread.
+/// step with the hosts, the network master switch, the monitor's enabled sources and report watch, the price table and the
+/// quota switches, routes live events to the monitor, history events to <see cref="HistorySink"/> and quota lines to
+/// <see cref="QuotaReceived"/>. Callable from any thread.
 /// </summary>
 public sealed class RemoteCoordinator : IDisposable
 {
@@ -29,6 +30,7 @@ public sealed class RemoteCoordinator : IDisposable
     private readonly Timer _priceTimer;
     private RemoteHostsDocument _document = RemoteHostsDocument.Empty;
     private bool _networkEnabled = true;
+    private RemoteQuotaSwitches _quotaSwitches = new();
     private bool _configured;
     private Applied? _applied;
     private int? _pricedVersion;
@@ -58,6 +60,13 @@ public sealed class RemoteCoordinator : IDisposable
 
     /// <summary>A host's status changed (any thread).</summary>
     public event EventHandler<RemoteHostStatusEventArgs>? StatusChanged;
+
+    /// <summary>
+    /// A configured host's <c>quota</c>, <c>quotaRemoved</c> or <c>quotaBridge</c> line (REMOTE 11.1), times already local;
+    /// raised on the remote event thread, in order (marshal to the UI). Quotas are display only: they never reach the
+    /// monitor or the history.
+    /// </summary>
+    public event EventHandler<RemoteQuotaEventArgs>? QuotaReceived;
 
     /// <summary>The hosts last applied.</summary>
     public RemoteHostsDocument Document
@@ -94,10 +103,11 @@ public sealed class RemoteCoordinator : IDisposable
     }
 
     /// <summary>
-    /// The settings: hosts and the network master switch (REMOTE 2.3). Applied only when something changed; a change of hosts
-    /// or enabled sources may reconnect.
+    /// The settings: hosts, the network master switch (REMOTE 2.3) and the quota switches (REMOTE 11.1; null keeps the last
+    /// ones, none on before the first). Applied only when something changed; a change of hosts or enabled sources may
+    /// reconnect, a change of quota switches or of a host's bridge never does.
     /// </summary>
-    public void Update(RemoteHostsDocument hosts, bool networkEnabled)
+    public void Update(RemoteHostsDocument hosts, bool networkEnabled, RemoteQuotaSwitches? quota = null)
     {
         ArgumentNullException.ThrowIfNull(hosts);
         lock (_lock)
@@ -105,6 +115,7 @@ public sealed class RemoteCoordinator : IDisposable
             ObjectDisposedException.ThrowIf(_disposed, this);
             _document = hosts;
             _networkEnabled = networkEnabled;
+            _quotaSwitches = quota ?? _quotaSwitches;
             _configured = true;
             var ids = hosts.Hosts.Select(h => h.Id).ToHashSet(StringComparer.Ordinal);
             foreach (var id in _statuses.Keys.Where(id => !ids.Contains(id)).ToList())
@@ -118,6 +129,9 @@ public sealed class RemoteCoordinator : IDisposable
 
     /// <summary><i>Retry now</i>.</summary>
     public void RetryNow(string hostId) => _hub.RetryNow(hostId);
+
+    /// <summary>The host's relay installs its Claude Code bridge again (a status line the user replaced, REMOTE 11.3).</summary>
+    public void ReapplyQuota(string hostId) => _hub.ReapplyQuota(hostId);
 
     /// <summary>The computer woke from sleep (<c>SystemEvents.PowerModeChanged</c> Resume): hosts waiting for their back-off retry at once.</summary>
     public void NoteWake() => _hub.NoteWake();
@@ -195,7 +209,8 @@ public sealed class RemoteCoordinator : IDisposable
 
             var table = _pricing?.Current ?? PriceBook.Bundled;
             _pricedVersion = _pricing?.CurrentVersion;
-            next = new Applied(_document, _networkEnabled, SourceSet.From(_monitor.Configuration.EnabledSources), table.Version, table.Data);
+            next = new Applied(_document, _networkEnabled, SourceSet.From(_monitor.Configuration.EnabledSources), table.Version, table.Data,
+                _quotaSwitches);
             if (next.Equals(_applied))
             {
                 next = next with { Unchanged = true };
@@ -211,23 +226,27 @@ public sealed class RemoteCoordinator : IDisposable
         if (!next.Unchanged)
         {
             _feed.SetHosts([.. next.Document.Hosts.Select(h => new RemoteHostInfo(h.Id, names.GetValueOrDefault(h.Id) ?? h.AutomaticName))]);
-            _hub.Update(next.Document.Hosts, next.NetworkEnabled, next.Sources, next.PriceData);
+            _hub.Update(next.Document.Hosts, next.NetworkEnabled, next.Sources, next.PriceData, next.Quota);
         }
 
         _hub.SetWatch(_monitor.ReportWatchOn);
     }
 
-    private void Route(RemoteHostEvent hostEvent)
+    /// <summary>Where an event goes: the live feed (the monitor), the history sink, or only <see cref="QuotaReceived"/>.</summary>
+    internal static (bool Live, bool History, bool Quota) RouteOf(RemoteHostEvent hostEvent) => hostEvent.Kind switch
     {
-        var (live, history) = hostEvent.Kind switch
-        {
-            RemoteHostEventKind.Status => (true, true),
-            RemoteHostEventKind.HistoryDue => (false, true),
-            RemoteHostEventKind.Message { Value: RelayMessage.HistoryDay or RelayMessage.HistoryPerf or RelayMessage.HistoryDone or RelayMessage.HistoryProgress } =>
-                (false, true),
-            RemoteHostEventKind.Message { Value: var message } when message.IsHistoryFailure => (false, true),
-            _ => (true, false),
-        };
+        RemoteHostEventKind.Status => (true, true, false),
+        RemoteHostEventKind.HistoryDue => (false, true, false),
+        RemoteHostEventKind.Message { Value: RelayMessage.HistoryDay or RelayMessage.HistoryPerf or RelayMessage.HistoryDone or RelayMessage.HistoryProgress } =>
+            (false, true, false),
+        RemoteHostEventKind.Message { Value: var message } when message.IsHistoryFailure => (false, true, false),
+        RemoteHostEventKind.Message { Value: var message } when message.IsQuota => (false, false, true),
+        _ => (true, false, false),
+    };
+
+    internal void Route(RemoteHostEvent hostEvent)
+    {
+        var (live, history, quota) = RouteOf(hostEvent);
         if (live)
         {
             _feed.Receive(hostEvent);
@@ -236,6 +255,11 @@ public sealed class RemoteCoordinator : IDisposable
         if (history)
         {
             HistorySink?.RemoteHistory(hostEvent, _requests);
+        }
+
+        if (quota)
+        {
+            RouteQuota(hostEvent);
         }
 
         if (hostEvent.Kind is RemoteHostEventKind.Status { Value: var status })
@@ -254,14 +278,46 @@ public sealed class RemoteCoordinator : IDisposable
         }
     }
 
-    private sealed record Applied(RemoteHostsDocument Document, bool NetworkEnabled, SourceSet Sources, int PriceVersion, byte[] PriceData)
+    /// <summary>Hands a configured host's quota line to <see cref="QuotaReceived"/>; a removed host's lines are dropped.</summary>
+    private void RouteQuota(RemoteHostEvent hostEvent)
+    {
+        if (hostEvent.Kind is not RemoteHostEventKind.Message { Value: var message })
+        {
+            return;
+        }
+
+        var args = message switch
+        {
+            RelayMessage.Quota { Value: var report } => new RemoteQuotaEventArgs(hostEvent.HostId, report: report),
+            RelayMessage.QuotaRemoved { Source: var source } => new RemoteQuotaEventArgs(hostEvent.HostId, removedSource: source),
+            RelayMessage.QuotaBridge { Value: var bridge } => new RemoteQuotaEventArgs(hostEvent.HostId, bridge: bridge),
+            _ => null,
+        };
+        if (args is null)
+        {
+            return;
+        }
+
+        lock (_lock)
+        {
+            if (_document.Host(hostEvent.HostId) is null)
+            {
+                return;
+            }
+        }
+
+        QuotaReceived?.Invoke(this, args);
+    }
+
+    private sealed record Applied(
+        RemoteHostsDocument Document, bool NetworkEnabled, SourceSet Sources, int PriceVersion, byte[] PriceData, RemoteQuotaSwitches Quota)
     {
         public bool Unchanged { get; init; }
 
         public bool Equals(Applied? other) => other is not null && Document == other.Document && NetworkEnabled == other.NetworkEnabled
-            && Sources == other.Sources && PriceVersion == other.PriceVersion;
+            && Sources == other.Sources && PriceVersion == other.PriceVersion && Quota == other.Quota;
 
-        public override int GetHashCode() => HashCode.Combine(Document, NetworkEnabled, Sources, PriceVersion);
+        public override int GetHashCode() => HashCode.Combine(Document, NetworkEnabled, Sources, PriceVersion, Quota);
     }
 
     private sealed class Requests(RemoteHub hub) : IRemoteHistoryRequests

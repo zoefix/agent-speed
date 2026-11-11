@@ -25,7 +25,15 @@ public sealed partial class CharacterDraw
     private static readonly Rgba RedDark = Rgba.FromHex("#FF99A4");
     private static readonly Rgba RedLight = Rgba.FromHex("#C42B1C");
 
+    /// <summary>
+    /// The host's dimmer ink after the name (DESIGN 13 <i>Host quotas</i>), as a share of the secondary token's; high contrast
+    /// keeps the secondary token whole.
+    /// </summary>
+    private const double QuotaHostInk = 0.72;
+
     private readonly OrbQuotaMotion _quota = new();
+    private readonly Dictionary<(string Host, double Room), string> _quotaHosts = [];
+    private double _quotaHostsSize;
     private QuotaForm _quotaForm = QuotaForm.Full;
     private IReadOnlyList<OrbQuotaSource>? _quotaSynced;
     private IReadOnlyList<OrbQuotaSource> _quotaFirst = [];
@@ -140,8 +148,32 @@ public sealed partial class CharacterDraw
 
     private static double QuotaRow(in CardMetrics m) => CardMetrics.RowHeight(m.T);
 
+    /// <summary>The card's content width in the current form (the plate less its padding).</summary>
+    private double QuotaContent(in QuotaColumns c, in CardMetrics m) => QuotaWidth(c, m, _quotaForm) - 2 * m.PadX;
+
+    /// <summary>
+    /// A host's source whose <c>· host</c> does not fit after its name in the card's width takes a line of its own under the
+    /// name (in the compact form, above the source's lines): the host never widens the card.
+    /// </summary>
+    private bool QuotaHostOwnLine(OrbQuotaMotion.Source source, in QuotaColumns c, in CardMetrics m)
+    {
+        if (source.Data.HostTail is not { } tail)
+        {
+            return false;
+        }
+
+        if (_quotaForm == QuotaForm.Compact)
+        {
+            return true;
+        }
+
+        var small = QuotaSmall(m);
+        var header = 0.55 * m.T + 0.4 * m.T + Advance(source.Data.Name, OrbFont.Info, small) + Advance(tail, OrbFont.Info, small);
+        return header > QuotaContent(c, m) + 0.5;
+    }
+
     /// <summary>A source's block height in the current form.</summary>
-    private double QuotaBlock(OrbQuotaMotion.Source source, in CardMetrics m)
+    private double QuotaBlock(OrbQuotaMotion.Source source, in QuotaColumns c, in CardMetrics m)
     {
         var n = source.Windows.Count;
         if (n == 0)
@@ -150,8 +182,36 @@ public sealed partial class CharacterDraw
         }
 
         var lines = n * QuotaRow(m) + (n - 1) * 0.25 * m.T;
-        return _quotaForm == QuotaForm.Compact ? lines : QuotaHeader(m) + 0.25 * m.T + lines;
+        var headers = (_quotaForm == QuotaForm.Compact ? 0 : 1) + (QuotaHostOwnLine(source, c, m) ? 1 : 0);
+        return headers * (QuotaHeader(m) + 0.25 * m.T) + lines;
     }
+
+    /// <summary>The host's name cut with an ellipsis to <paramref name="room"/> (cached: its glyphs are measured one by one).</summary>
+    private string QuotaHostFitted(string host, double room, double size)
+    {
+        if (Advance(host, OrbFont.Info, size) <= room + 0.5)
+        {
+            return host;
+        }
+
+        if (_quotaHostsSize != size || _quotaHosts.Count > 32)
+        {
+            _quotaHosts.Clear();
+            _quotaHostsSize = size;
+        }
+
+        var key = (host, Math.Round(room * 2) / 2);
+        if (!_quotaHosts.TryGetValue(key, out var text))
+        {
+            text = TruncatedHost(host, room, size);
+            _quotaHosts[key] = text;
+        }
+
+        return text;
+    }
+
+    // Apart, so the measuring closure is only made on a cache miss.
+    private string TruncatedHost(string host, double room, double size) => OrbModelName.Truncate(host, room, e => Advance(e, OrbFont.Info, size));
 
     private (double W, double H) QuotaSize(in CardMetrics m, double time)
     {
@@ -160,6 +220,7 @@ public sealed partial class CharacterDraw
             return (0, 0);
         }
 
+        var columns = QuotaColumnsOf(m, time);
         var height = 0.0;
         var any = false;
         var all = _quota.Sources;
@@ -172,7 +233,7 @@ public sealed partial class CharacterDraw
                 continue;
             }
 
-            height += share * ((any ? 0.45 * m.T : 0) + QuotaBlock(source, m));
+            height += share * ((any ? 0.45 * m.T : 0) + QuotaBlock(source, columns, m));
             any = true;
         }
 
@@ -181,7 +242,7 @@ public sealed partial class CharacterDraw
             return (0, 0);
         }
 
-        return (QuotaWidth(QuotaColumnsOf(m, time), m, _quotaForm), height + 2 * m.PadY);
+        return (QuotaWidth(columns, m, _quotaForm), height + 2 * m.PadY);
     }
 
     private (Rgba Track, Rgba Warning, Rgba Critical) QuotaInk(OrbGpuContext ctx, in CardInk ink)
@@ -197,9 +258,10 @@ public sealed partial class CharacterDraw
     }
 
     /// <summary>
-    /// The 額度 card: per source a header (its color dot and name) then a line per window — the label in the card's label
-    /// column, the bar, the percent right-aligned in a <c>100%</c> cell and the short reset — each eased by
-    /// <see cref="OrbQuotaMotion"/>. The compact form drops the headers and puts the dot before the source's first label.
+    /// The 額度 card: per source a header (its color dot and name, a host's source then <c>· host</c> in a dimmer ink) then a
+    /// line per window — the label in the card's label column, the bar, the percent right-aligned in a <c>100%</c> cell and
+    /// the short reset — each eased by <see cref="OrbQuotaMotion"/>. The compact form drops the headers and puts the dot
+    /// before the source's first label. A host that does not fit after the name takes its own line.
     /// </summary>
     private void DrawQuota(OrbDrawList list, OrbGpuContext ctx, in Pen pen, (double W, double H) box, in CardMetrics m, in CardInk ink, bool right,
         double time)
@@ -216,6 +278,7 @@ public sealed partial class CharacterDraw
         var barLength = (_quotaForm >= QuotaForm.ShortBars ? QuotaBarShort : QuotaBarLong) * m.T;
         var percentRight = barLeft + barLength + 0.5 * m.T + columns.Percent;
         var resetLeft = percentRight + 0.4 * m.T;
+        var content = QuotaContent(columns, m);
         var thickness = 0.26 * m.T;
         var any = false;
         var all = _quota.Sources;
@@ -238,12 +301,28 @@ public sealed partial class CharacterDraw
             var a = alpha;
             var dot = 0.55 * m.T;
             var color = ctx.HighContrast ? ink.Accent : source.Data.Color;
+            var nameLeft = left + dot + 0.4 * m.T;
+            var ownLine = QuotaHostOwnLine(source, columns, m);
+            var hostInk = ink.Secondary.MultiplyAlpha(a * (ctx.HighContrast ? 1 : QuotaHostInk));
             if (!compact)
             {
                 var baseline = y + CardMetrics.Baseline(small);
                 var (dx, dy) = pen.Point(left + dot / 2, baseline - 0.33 * small);
                 list.Add(OrbGpuInstance.Circle(dx, dy, dot / 2 * pen.Scale, color.MultiplyAlpha(a * pen.Alpha)));
-                Put(list, source.Data.Name, OrbFont.Info, small, pen, left + dot + 0.4 * m.T, baseline, ink.Secondary.MultiplyAlpha(a));
+                var name = Put(list, source.Data.Name, OrbFont.Info, small, pen, nameLeft, baseline, ink.Secondary.MultiplyAlpha(a));
+                if (source.Data.HostTail is { } tail && !ownLine)
+                {
+                    Put(list, tail, OrbFont.Info, small, pen, nameLeft + name, baseline, hostInk);
+                }
+
+                y += share * (QuotaHeader(m) + 0.25 * m.T);
+            }
+
+            if (ownLine && source.Data.Host is { } host)
+            {
+                var x = compact ? left : nameLeft;
+                var text = QuotaHostFitted(host, content - (x - left), small);
+                Put(list, text, OrbFont.Info, small, pen, x, y + CardMetrics.Baseline(small), hostInk);
                 y += share * (QuotaHeader(m) + 0.25 * m.T);
             }
 

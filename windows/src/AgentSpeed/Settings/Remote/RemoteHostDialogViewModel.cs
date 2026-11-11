@@ -1,4 +1,5 @@
 using System.Windows.Input;
+using System.Windows.Threading;
 using AgentSpeed.Controls;
 using AgentSpeed.Core.Remote;
 using AgentSpeed.Presentation.Localization;
@@ -19,29 +20,47 @@ internal enum RemoteTestState
 
 /// <summary>
 /// The Add / Edit dialog (DESIGN 13): the destination checked as you type (REMOTE 2.1), the name with the automatic name as its
-/// placeholder, Advanced with the relay folder, and <i>Test Connection</i> with its result inline. Save stays disabled while a
-/// field is invalid; editing a field clears a test result.
+/// placeholder, Advanced with the relay folder, the host's Claude Code bridge (<i>Host quotas</i>: turning it on asks first,
+/// its state under the switch), and <i>Test Connection</i> with its result inline. Save stays disabled while a field is
+/// invalid; editing a field clears a test result.
 /// </summary>
 internal sealed class RemoteHostDialogViewModel : ObservableObject
 {
     private readonly RemoteHostsModel _hosts;
     private readonly Localizer _loc;
+    private readonly IRemoteHostQuota? _quota;
     private RemoteHostDraft _draft;
+    private RemoteBridgeLine _bridge = RemoteBridgeLine.None;
     private bool _destinationEdited;
     private bool _advancedExpanded;
     private RemoteTestState _testState;
     private string _testText = string.Empty;
     private RemoteConnectionTest? _test;
 
-    public RemoteHostDialogViewModel(RemoteHostsModel hosts, Localizer loc, RemoteHost? editing)
+    /// <param name="quota">The host's quotas and the bridge's confirmation; null leaves the switch without a state line.</param>
+    public RemoteHostDialogViewModel(RemoteHostsModel hosts, Localizer loc, RemoteHost? editing, IRemoteHostQuota? quota = null)
     {
         _hosts = hosts;
         _loc = loc;
+        _quota = quota;
         _draft = new RemoteHostDraft(editing);
         _destinationEdited = editing is not null;
         _advancedExpanded = !string.IsNullOrEmpty(editing?.RelayFolder);
         TestCommand = new RelayCommand(RunTest, () => TestUnavailableReason is null && _testState != RemoteTestState.Running);
         ToggleAdvancedCommand = new RelayCommand(() => AdvancedExpanded = !AdvancedExpanded);
+        ReconnectCommand = new RelayCommand(() =>
+        {
+            if (_draft.Original is { } original)
+            {
+                _quota?.Reconnect(original.Id);
+            }
+        });
+        if (_quota is not null)
+        {
+            _quota.Changed += RefreshBridge;
+        }
+
+        RefreshBridge();
     }
 
     /// <summary>Saved (the dialog closes).</summary>
@@ -50,6 +69,8 @@ internal sealed class RemoteHostDialogViewModel : ObservableObject
     public ICommand TestCommand { get; }
 
     public ICommand ToggleAdvancedCommand { get; }
+
+    public ICommand ReconnectCommand { get; }
 
     public bool IsEditing => _draft.IsEditing;
 
@@ -139,6 +160,113 @@ internal sealed class RemoteHostDialogViewModel : ObservableObject
     public bool AdvancedCollapsed => !_advancedExpanded;
 
     public bool CanSave => _draft.IsValid && (IsEditing || _hosts.Document.CanAdd);
+
+    /// <summary>
+    /// <c>remote.quota.claudeCli</c>, saved with the host. Turning it on asks first: the switch stays off until the
+    /// confirmation is accepted; turning it off needs no question.
+    /// </summary>
+    public bool QuotaClaudeCli
+    {
+        get => _draft.QuotaClaudeCli;
+        set
+        {
+            if (value == _draft.QuotaClaudeCli)
+            {
+                return;
+            }
+
+            if (!value || _quota is null)
+            {
+                _draft = _draft with { QuotaClaudeCli = value };
+                BridgeChanged();
+                return;
+            }
+
+            // After the click is handled, so the dialog opens over a settled switch; Cancel puts it back.
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Input, () =>
+            {
+                if (_quota.ConfirmBridge(BridgeHostName, BridgeSettingsPath))
+                {
+                    _draft = _draft with { QuotaClaudeCli = true };
+                }
+
+                BridgeChanged();
+            });
+        }
+    }
+
+    /// <summary>The host's name in the confirmation's title: its display name, else the name typed or the automatic one.</summary>
+    public string BridgeHostName
+    {
+        get
+        {
+            if (_draft.Original is { } original)
+            {
+                return _hosts.Document.DisplayName(original.Id) ?? original.AutomaticName;
+            }
+
+            var name = _draft.Name.Trim();
+            return name.Length > 0 ? name : NamePlaceholder is { Length: > 0 } automatic ? automatic : _draft.CleanDestination;
+        }
+    }
+
+    /// <summary>The settings file on the host: the one its bridge reported, else Claude Code's default.</summary>
+    public string BridgeSettingsPath => _draft.Original is { } original && _quota is not null
+        ? RemoteHostQuotaText.SettingsPath(_quota.Of(original.Id))
+        : RemoteHostQuotaText.DefaultSettingsPath;
+
+    /// <summary>The bridge's state under the switch, while the saved host and the draft both have it on.</summary>
+    public string BridgeText => _bridge.Text;
+
+    public bool ShowsBridge => !_bridge.IsEmpty;
+
+    public RemoteBridgeMark BridgeMark => _bridge.Mark;
+
+    /// <summary>The status line was replaced: Reconnect follows the text.</summary>
+    public bool ShowsReconnect => _bridge.Reconnect;
+
+    public string ReconnectGap => _bridge.Reconnect ? "   " : string.Empty;
+
+    public string ReconnectLink => _bridge.Reconnect ? _loc["settings.quota.cli.reconnect"] : string.Empty;
+
+    public string ReconnectText => _loc["settings.quota.cli.reconnect"];
+
+    /// <summary>The dialog closed: it stops following the quotas.</summary>
+    public void Detach()
+    {
+        if (_quota is not null)
+        {
+            _quota.Changed -= RefreshBridge;
+        }
+    }
+
+    private void RefreshBridge()
+    {
+        var original = _draft.Original;
+        var shown = _quota is not null && original is { QuotaClaudeCli: true } && _draft.QuotaClaudeCli;
+        var next = shown
+            ? RemoteHostQuotaText.Bridge(_quota!.Of(original!.Id), shown, DateTimeOffset.UtcNow.ToUnixTimeMilliseconds(), _loc)
+            : RemoteBridgeLine.None;
+        if (next == _bridge)
+        {
+            return;
+        }
+
+        _bridge = next;
+        foreach (var name in new[]
+                 {
+                     nameof(BridgeText), nameof(ShowsBridge), nameof(BridgeMark), nameof(ShowsReconnect), nameof(ReconnectGap), nameof(ReconnectLink),
+                 })
+        {
+            OnPropertyChanged(name);
+        }
+    }
+
+    private void BridgeChanged()
+    {
+        OnPropertyChanged(nameof(QuotaClaudeCli));
+        RefreshBridge();
+    }
 
     public RemoteTestState TestState
     {

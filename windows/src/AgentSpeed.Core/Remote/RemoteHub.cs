@@ -10,6 +10,9 @@ internal sealed class RemoteHub
     private static readonly Lazy<RemotePriceTableJson> BundledPrices =
         new(() => RemotePriceTableJson.From(Pricing.PriceBook.Bundled.Data) ?? throw new InvalidOperationException("The bundled price table is not JSON."));
 
+    /// <summary>How much longer than a connection's own limit the hub keeps a retiring connection.</summary>
+    private static readonly TimeSpan RetireGrace = TimeSpan.FromSeconds(5);
+
     private readonly RemoteEnvironment _environment;
     private readonly RemoteQueue _eventQueue;
     private readonly Action<RemoteHostEvent> _onEvent;
@@ -21,6 +24,9 @@ internal sealed class RemoteHub
 
     /// <summary>The status the hub itself reported for a host without a connection (<c>disabled</c>, <c>networkOff</c>, invalid).</summary>
     private readonly Dictionary<string, RemoteStatus> _idleStatuses = new(StringComparer.Ordinal);
+
+    /// <summary>Removed hosts whose relay restores their Claude Code status line before it stops (REMOTE 2.4).</summary>
+    private readonly Dictionary<string, RemoteConnection> _retiring = new(StringComparer.Ordinal);
     private RemoteSessionSettings? _settings;
 
     public RemoteHub(RemoteEnvironment environment, RemoteQueue eventQueue, Action<RemoteHostEvent> onEvent)
@@ -35,19 +41,32 @@ internal sealed class RemoteHub
     /// every host while the master switch is off). A host whose destination or folder changed reconnects, and every host
     /// does when the enabled sources change. A new price table goes to the running relays without a reconnect;
     /// <paramref name="priceTable"/> is the current table's JSON (an invalid one keeps the previous, else the bundled, table).
+    /// <paramref name="quota"/> holds the app's quota switches (none on when null): each host's config adds its own Claude Code
+    /// bridge (REMOTE 11.1) and goes to its relay without a reconnect. A removed host whose bridge is on restores its status
+    /// line first (REMOTE 2.4).
     /// </summary>
-    public void Update(IReadOnlyList<RemoteHost> hosts, bool networkEnabled, SourceSet enabledSources, ReadOnlyMemory<byte> priceTable) => _queue.Sync(() =>
+    public void Update(IReadOnlyList<RemoteHost> hosts, bool networkEnabled, SourceSet enabledSources, ReadOnlyMemory<byte> priceTable,
+        RemoteQuotaSwitches? quota = null) => _queue.Sync(() =>
     {
+        var switches = quota ?? new RemoteQuotaSwitches();
         var prices = RemotePriceTableJson.From(priceTable.Span) ?? _settings?.Prices ?? BundledPrices.Value;
-        var next = new RemoteSessionSettings(enabledSources, prices, _settings?.Watch ?? false);
+        var shared = new RemoteSessionSettings(enabledSources, prices, _settings?.Watch ?? false);
         var sourcesChanged = _settings is { } previous && previous.Sources != enabledSources;
-        _settings = next;
+        _settings = shared;
 
         var valid = RemoteHostsDocument.Normalized(hosts);
         var ids = valid.Select(h => h.Id).ToHashSet(StringComparer.Ordinal);
         foreach (var id in _connections.Keys.Where(id => !ids.Contains(id)).ToList())
         {
-            RemoveConnection(id, null);
+            if (networkEnabled && _connectedHosts.GetValueOrDefault(id)?.QuotaClaudeCli == true && _connections.Remove(id, out var leaving))
+            {
+                _connectedHosts.Remove(id);
+                Retire(id, leaving);
+            }
+            else
+            {
+                RemoveConnection(id, null);
+            }
         }
 
         foreach (var id in _idleStatuses.Keys.Where(id => !ids.Contains(id)).ToList())
@@ -77,6 +96,7 @@ internal sealed class RemoteHub
             }
 
             _idleStatuses.Remove(host.Id);
+            var config = RemoteQuotaConfig.ForHost(host, switches, networkEnabled, enabledSources);
             if (_connections.TryGetValue(host.Id, out var existing))
             {
                 var edited = !_connectedHosts.TryGetValue(host.Id, out var made) || made.ConnectionIdentity != host.ConnectionIdentity;
@@ -88,16 +108,23 @@ internal sealed class RemoteHub
                 {
                     _connectedHosts[host.Id] = host;
                     existing.UpdatePrices(prices);
+                    existing.UpdateQuota(config);
                     continue;
                 }
             }
 
-            var connection = new RemoteConnection(host, next, _environment, _eventQueue, _onEvent);
+            var connection = new RemoteConnection(host, shared with { Quota = config }, _environment, _eventQueue, _onEvent);
             _connections[host.Id] = connection;
             _connectedHosts[host.Id] = host;
             connection.Start();
         }
     });
+
+    /// <summary>
+    /// Sends the host's quota config without and again with its Claude Code bridge: its relay turns the bridge off (leaving a
+    /// replaced status line alone) and installs it again (QUOTAS 5.2, 5.3).
+    /// </summary>
+    public void ReapplyQuota(string hostId) => _queue.Sync(() => _connections.GetValueOrDefault(hostId)?.ReapplyQuota());
 
     /// <summary><i>Retry now</i> (or a fresh look after the user fixed something on the host).</summary>
     public void RetryNow(string hostId) => _queue.Sync(() => _connections.GetValueOrDefault(hostId)?.RetryNow());
@@ -144,12 +171,44 @@ internal sealed class RemoteHub
         {
             RemoveConnection(id, null);
         }
+
+        foreach (var connection in _retiring.Values)
+        {
+            connection.Stop();
+        }
+
+        _retiring.Clear();
     });
 
     /// <summary>Hosts with a connection (tests and diagnostics).</summary>
     public IReadOnlySet<string> ConnectedHostIds => _queue.Sync(() => (IReadOnlySet<string>)_connections.Keys.ToHashSet(StringComparer.Ordinal));
 
+    /// <summary>Removed hosts that are restoring their status line before they stop (tests and diagnostics).</summary>
+    public IReadOnlySet<string> RetiringHostIds => _queue.Sync(() => (IReadOnlySet<string>)_retiring.Keys.ToHashSet(StringComparer.Ordinal));
+
     internal RemoteConnection? Connection(string hostId) => _queue.Sync(() => _connections.GetValueOrDefault(hostId));
+
+    internal RemoteConnection? RetiringConnection(string hostId) => _queue.Sync(() => _retiring.GetValueOrDefault(hostId));
+
+    /// <summary>The connection stops by itself (bridge off, its limit, the relay ending); this only bounds how long the hub holds it.</summary>
+    private void Retire(string id, RemoteConnection connection)
+    {
+        if (_retiring.Remove(id, out var earlier))
+        {
+            earlier.Stop();
+        }
+
+        _retiring[id] = connection;
+        connection.Retire();
+        _environment.Scheduling.Schedule(_environment.Scheduling.Now + RemoteConnection.RetireLimit + RetireGrace, _queue, () =>
+        {
+            if (_retiring.TryGetValue(id, out var current) && ReferenceEquals(current, connection))
+            {
+                _retiring.Remove(id);
+                connection.Stop();
+            }
+        });
+    }
 
     private void RemoveConnection(string id, RemoteStatus? finalStatus)
     {

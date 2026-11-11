@@ -284,6 +284,32 @@ public sealed record AppSettings
     /// <summary>Live reporting (DESIGN 11, Storage): settings and service identities, never keys.</summary>
     public ReportPreferences Report { get; init; } = ReportPreferences.Default;
 
+    /// <summary>Whether a source's quota is read and shown (QUOTAS 9.1): the source is enabled and its quota switch is on.</summary>
+    public bool ShowsQuota(SourceKind source) => IsSourceEnabled(source) && Quota.IsOn(source);
+
+    /// <summary>
+    /// The phase 2 routes that may run (QUOTAS 9.1): the source enabled and its switch on; Grok's live request only with
+    /// its log's switch; Qoder's shared account while either Qoder source is enabled.
+    /// </summary>
+    public IReadOnlySet<Core.Quota.Routes.QuotaRoute> QuotaRoutes =>
+        Core.Quota.Routes.QuotaRoutes.All.Where(RouteIsOn).ToHashSet();
+
+    public bool RouteIsOn(Core.Quota.Routes.QuotaRoute route) => route switch
+    {
+        Core.Quota.Routes.QuotaRoute.GrokBuildLive => ShowsQuota(SourceKind.GrokBuild) && Quota.GrokBuildLive,
+        Core.Quota.Routes.QuotaRoute.Qoder => Quota.Qoder && (IsSourceEnabled(SourceKind.Qoder) || IsSourceEnabled(SourceKind.QoderCli)),
+        _ => ShowsQuota(Core.Quota.Routes.QuotaRoutes.Source(route)),
+    };
+
+    /// <summary>
+    /// The switches every remote host reads with (REMOTE 11.1): enabled sources only; Claude Code is each host's own
+    /// switch, and only while Claude Code is enabled.
+    /// </summary>
+    public Core.Remote.RemoteQuotaSwitches RemoteQuotaSwitches => new(
+        SourceSet.From(Core.Remote.RemoteQuotaConfig.HostSources.Where(s => s != SourceKind.ClaudeCode && ShowsQuota(s))),
+        RouteIsOn(Core.Quota.Routes.QuotaRoute.GrokBuildLive),
+        IsSourceEnabled(SourceKind.ClaudeCode));
+
     public bool IsSourceEnabled(SourceKind kind) => kind switch
     {
         SourceKind.Codex => CodexEnabled,

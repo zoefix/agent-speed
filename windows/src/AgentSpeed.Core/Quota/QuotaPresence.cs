@@ -5,9 +5,9 @@ using AgentSpeed.Core.Traffic.Monitor;
 namespace AgentSpeed.Core.Quota;
 
 /// <summary>
-/// Which quota apps run (QUOTAS 6): a <c>codex</c> or <c>claudeCode</c> agent process (METRICS 10.5), the Codex app's
-/// main process, and Claude Desktop's main process. Its own light listing of this session's processes, classified by the
-/// traffic rules; paths are read once per process. Not thread-safe.
+/// Which quota apps run (QUOTAS 6, 9): every source's agent processes (METRICS 10.5), the Codex app's main process,
+/// Claude Desktop's main process and Devin Desktop's. Its own light listing of this session's processes, classified by
+/// the traffic rules; paths are read once per process. Not thread-safe.
 /// </summary>
 public sealed partial class QuotaPresence : IDisposable
 {
@@ -22,6 +22,9 @@ public sealed partial class QuotaPresence : IDisposable
 
     [GeneratedRegex("/windowsapps/openai\\.codex_[^/]*/app/codex(\\.exe)?$", RegexOptions.CultureInvariant)]
     private static partial Regex CodexApp();
+
+    [GeneratedRegex("/programs/devin/devin(\\.exe)?$", RegexOptions.CultureInvariant)]
+    private static partial Regex DevinApp();
 
     internal QuotaPresence(IProcessLister lister, TrafficPlatform platform)
     {
@@ -43,13 +46,45 @@ public sealed partial class QuotaPresence : IDisposable
     /// <summary>Claude Desktop's main process appeared in the latest listing (it was not in the one before).</summary>
     public bool ClaudeDesktopStarted { get; private set; }
 
+    /// <summary>Devin Desktop's main process (Windows: an assumed install path, METRICS 10.5).</summary>
+    public bool DevinDesktop { get; private set; }
+
+    /// <summary>The sources with a live agent process.</summary>
+    public IReadOnlySet<SourceKind> Agents { get; private set; } = new HashSet<SourceKind>();
+
     public bool Runs(SourceKind source) => source switch
     {
         SourceKind.Codex => Codex,
         SourceKind.ClaudeCode => ClaudeCode,
         SourceKind.ClaudeDesktop => ClaudeDesktop,
-        _ => false,
+        SourceKind.Devin => DevinDesktop || Agents.Contains(SourceKind.Devin),
+        _ => Agents.Contains(source),
     };
+
+    /// <summary>Every source that runs, for the vendor readers' cadence (QUOTAS 9.1).</summary>
+    public IReadOnlySet<SourceKind> Running
+    {
+        get
+        {
+            var all = new HashSet<SourceKind>(Agents);
+            if (Codex)
+            {
+                all.Add(SourceKind.Codex);
+            }
+
+            if (ClaudeDesktop)
+            {
+                all.Add(SourceKind.ClaudeDesktop);
+            }
+
+            if (DevinDesktop)
+            {
+                all.Add(SourceKind.Devin);
+            }
+
+            return all;
+        }
+    }
 
     /// <summary>Lists when <see cref="ListIntervalMs"/> passed (or <paramref name="force"/>); true when a state changed.</summary>
     public bool Refresh(long nowMs, bool force = false)
@@ -67,7 +102,8 @@ public sealed partial class QuotaPresence : IDisposable
         }
 
         _table.Refresh(_entries, _lister, nowMs);
-        bool codex = false, code = false, desktop = false;
+        bool codex = false, code = false, desktop = false, devin = false;
+        var agents = new HashSet<SourceKind>();
         foreach (var record in _table.Records.Values)
         {
             if (!record.Alive)
@@ -79,18 +115,20 @@ public sealed partial class QuotaPresence : IDisposable
             {
                 codex |= agent.Source == SourceKind.Codex;
                 code |= agent.Source == SourceKind.ClaudeCode;
+                agents.Add(agent.Source);
             }
 
             if (record.Executable.Length > 0)
             {
                 desktop |= IsClaudeDesktopMain(record.Executable);
                 codex |= IsCodexApp(record.Executable);
+                devin |= _platform.IsWindows && DevinApp().IsMatch(_platform.Normalize(record.Executable));
             }
         }
 
-        var changed = codex != Codex || code != ClaudeCode || desktop != ClaudeDesktop;
+        var changed = codex != Codex || code != ClaudeCode || desktop != ClaudeDesktop || devin != DevinDesktop || !agents.SetEquals(Agents);
         ClaudeDesktopStarted = desktop && !ClaudeDesktop;
-        (Codex, ClaudeCode, ClaudeDesktop) = (codex, code, desktop);
+        (Codex, ClaudeCode, ClaudeDesktop, DevinDesktop, Agents) = (codex, code, desktop, devin, agents);
         return changed;
     }
 

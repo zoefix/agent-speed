@@ -619,6 +619,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
         try
         {
             _remote = new RemoteHostsService(_monitor, AppPaths.Version, _cost.Book);
+            _remote.Coordinator.QuotaReceived += OnRemoteQuota;
             _remote.Apply(Settings);
             _remoteHosts?.Attach(_remote);
         }
@@ -1025,6 +1026,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             AttachReporting(_dashboard);
             _dashboard.IsVisibleChanged += (_, _) =>
             {
+                _quota?.SetDashboardOpen(_dashboard?.IsVisible == true);
                 if (_dashboard?.IsVisible != true)
                 {
                     _dashboardTimer?.Stop();
@@ -1206,7 +1208,8 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _history?.OnHostsChanged();
         }
 
-        if (previous.RemoteHosts != current.RemoteHosts || previous.NetworkEnabled != current.NetworkEnabled)
+        if (previous.RemoteHosts != current.RemoteHosts || previous.NetworkEnabled != current.NetworkEnabled
+            || previous.RemoteQuotaSwitches != current.RemoteQuotaSwitches)
         {
             try
             {

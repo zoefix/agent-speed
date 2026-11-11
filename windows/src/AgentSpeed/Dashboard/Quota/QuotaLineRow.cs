@@ -20,6 +20,7 @@ internal sealed class QuotaLineRow : ObservableObject
     private string _reset = string.Empty;
     private string _age = string.Empty;
     private string _tooltip = string.Empty;
+    private string _tooltipWithAge = string.Empty;
     private Brush _fill = Brushes.Gray;
     private bool _critical;
 
@@ -37,10 +38,13 @@ internal sealed class QuotaLineRow : ObservableObject
 
     public string ResetText { get => _reset; private set => Set(ref _reset, value); }
 
-    /// <summary><c> · 2 小時前更新</c> in tertiary while the snapshot is over an hour old.</summary>
+    /// <summary><c> · 2 小時前更新</c> in tertiary while the snapshot is over an hour old (without the separator after no reset).</summary>
     public string AgeText { get => _age; private set => Set(ref _age, value); }
 
     public string Tooltip { get => _tooltip; private set => Set(ref _tooltip, value); }
+
+    /// <summary>The tooltip of a line with no room for its age: the age after the snapshot's time.</summary>
+    public string TooltipWithAge { get => _tooltipWithAge; private set => Set(ref _tooltipWithAge, value); }
 
     public Brush Fill { get => _fill; private set => Set(ref _fill, value); }
 
@@ -57,8 +61,10 @@ internal sealed class QuotaLineRow : ObservableObject
         Bar = line.Bar;
         Pace = line.Pace ?? double.NaN;
         ResetText = line.ResetLong;
-        AgeText = line.Age;
+        var age = line.Age.StartsWith(Separator, StringComparison.Ordinal) ? line.Age[Separator.Length..] : line.Age;
+        AgeText = line.ResetLong.Length > 0 || age.Length == 0 ? line.Age : age;
         Tooltip = line.Tooltip;
+        TooltipWithAge = age.Length == 0 ? line.Tooltip : WithAge(line.Tooltip, age);
         Critical = line.Tone == QuotaTone.Critical && !highContrast;
         Fill = highContrast ? SystemColors.WindowTextBrush : line.Tone switch
         {
@@ -66,6 +72,15 @@ internal sealed class QuotaLineRow : ObservableObject
             QuotaTone.Warning => dark ? AmberDark : AmberLight,
             _ => source,
         };
+    }
+
+    private const string Separator = " · ";
+
+    /// <summary><c>quota.updated</c>, the age, then the pace while known.</summary>
+    private static string WithAge(string tooltip, string age)
+    {
+        var lineBreak = tooltip.IndexOf('\n', StringComparison.Ordinal);
+        return lineBreak < 0 ? tooltip + "\n" + age : tooltip[..lineBreak] + "\n" + age + tooltip[lineBreak..];
     }
 
     private static Brush CriticalBrush() => Application.Current?.TryFindResource("SystemFillColorCriticalBrush") as Brush ?? Brushes.IndianRed;

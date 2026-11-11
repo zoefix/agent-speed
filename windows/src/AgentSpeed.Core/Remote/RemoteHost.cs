@@ -42,6 +42,9 @@ public sealed record RemoteHost
         init => _relayFolder = string.IsNullOrEmpty(value) ? null : value;
     }
 
+    /// <summary>The host's Claude Code status line bridge (REMOTE 11.3); absent = false. Changing it never reconnects.</summary>
+    public bool QuotaClaudeCli { get; init; }
+
     /// <summary>Unknown members as one JSON object text; null when there are none.</summary>
     public string? ExtraJson { get; init; }
 
@@ -58,6 +61,6 @@ public sealed record RemoteHost
     /// <summary>The host part of <see cref="Destination"/>: without <c>ssh://</c>, user and port.</summary>
     public string AutomaticName => RemoteHostValidation.AutomaticName(Destination);
 
-    /// <summary>What reconnects a running connection when it changes (an edit): everything but the name and the switch.</summary>
+    /// <summary>What reconnects a running connection when it changes (an edit): everything but the name and the switches.</summary>
     internal (string Destination, string Folder) ConnectionIdentity => (Destination, EffectiveRelayFolder);
 }

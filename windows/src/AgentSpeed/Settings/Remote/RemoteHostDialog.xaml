@@ -140,6 +140,42 @@
                 </StackPanel>
             </Border>
 
+            <!-- The host's Claude Code bridge (DESIGN 13, Host quotas): the switch with its caption, then the bridge's state as
+                 Settings → Data Sources words it (a glyph before secondary text; Reconnect inside the text when replaced). -->
+            <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="16,13,16,14">
+                <Grid>
+                    <Grid.ColumnDefinitions>
+                        <ColumnDefinition Width="*" />
+                        <ColumnDefinition Width="Auto" />
+                    </Grid.ColumnDefinitions>
+                    <StackPanel VerticalAlignment="Center" Margin="0,0,20,0">
+                        <TextBlock Text="{loc:Loc remote.quota.claudeCli}" FontSize="13" TextWrapping="Wrap" LineHeight="19"
+                                   Foreground="{DynamicResource TextFillColorPrimaryBrush}" />
+                        <TextBlock Text="{loc:Loc remote.quota.claudeCli.hint}" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17"
+                                   Margin="0,3,0,0" />
+                        <Grid Margin="0,7,0,0" Visibility="{Binding ShowsBridge, Converter={StaticResource Visible}}">
+                            <Grid.ColumnDefinitions>
+                                <ColumnDefinition Width="Auto" />
+                                <ColumnDefinition Width="*" />
+                            </Grid.ColumnDefinitions>
+                            <controls:SymbolGlyph x:Name="BridgeMark" Style="{StaticResource SymbolIcon}" FontSize="12" Width="12" Height="12"
+                                                  Margin="0,3,6,0" VerticalAlignment="Top" Visibility="Collapsed" />
+                            <TextBlock Grid.Column="1" Style="{StaticResource CaptionText}" TextWrapping="Wrap" LineHeight="17"
+                                       AutomationProperties.LiveSetting="Polite" AutomationProperties.Name="{Binding BridgeText}">
+                                <Run Text="{Binding BridgeText, Mode=OneWay}" /><Run Text="{Binding ReconnectGap, Mode=OneWay}" /><Hyperlink
+                                    Command="{Binding ReconnectCommand}" Focusable="{Binding ShowsReconnect}" TextDecorations="{x:Null}"
+                                    Foreground="{DynamicResource AccentTextFillColorPrimaryBrush}"
+                                    AutomationProperties.Name="{Binding ReconnectText}"><Run Text="{Binding ReconnectLink, Mode=OneWay}" /></Hyperlink>
+                            </TextBlock>
+                        </Grid>
+                    </StackPanel>
+                    <CheckBox x:Name="BridgeSwitch" Grid.Column="1" Style="{StaticResource ToggleSwitch}" VerticalAlignment="Center"
+                              IsChecked="{Binding QuotaClaudeCli, Mode=TwoWay}"
+                              AutomationProperties.Name="{loc:Loc remote.quota.claudeCli}" AutomationProperties.HelpText="{loc:Loc remote.quota.claudeCli.hint}"
+                              AutomationProperties.ItemStatus="{Binding BridgeText}" />
+                </Grid>
+            </Border>
+
             <!-- Test Connection and its result inline -->
             <Border Style="{StaticResource Card}" Margin="0,8,0,0" Padding="16,12,16,12">
                 <Grid>

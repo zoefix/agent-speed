@@ -93,6 +93,9 @@ internal sealed partial class RelayLineDecoder
         "historyDone" => new RelayMessage.HistoryDone(f.Count("days"), f.Count("analyzed")),
         "historyProgress" => new RelayMessage.HistoryProgress(f.Fraction("value")),
         "error" => new RelayMessage.Error(DecodeError(f)),
+        "quota" => DecodeQuota(f),
+        "quotaRemoved" => DecodeQuotaRemoved(f),
+        "quotaBridge" => DecodeQuotaBridge(f),
         _ => null,
     };
 

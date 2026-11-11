@@ -1,3 +1,5 @@
+using AgentSpeed.Core.Quota;
+
 namespace AgentSpeed.Core.Remote;
 
 /// <summary>The protocol state of one running relay (REMOTE 5, 6, 8.2).</summary>
@@ -46,7 +48,8 @@ internal sealed partial class RemoteConnection
     {
         _session.LastLineAt = Now;
         ScheduleSilenceCheck();
-        Send(RelayLineEncoder.Start(_environment.TodayStartMs(Now), _settings.Sources, RemoteZone.Current(_environment.TimeZone()), _settings.Prices));
+        Send(RelayLineEncoder.Start(_environment.TodayStartMs(Now), _settings.Sources, RemoteZone.Current(_environment.TimeZone()), _settings.Prices,
+            _settings.Quota));
         if (_settings.Watch)
         {
             Send(RelayLineEncoder.Watch(true));
@@ -59,7 +62,7 @@ internal sealed partial class RemoteConnection
         var (lines, oversized) = _session.Framer.Consume(data);
         foreach (var line in lines)
         {
-            if (_stage != Stage.Run || _endReason is not null)
+            if (_stopped || _stage != Stage.Run || _endReason is not null)
             {
                 return;
             }
@@ -162,8 +165,16 @@ internal sealed partial class RemoteConnection
                 _session.AgentIds.Remove(removed);
                 Emit(new RemoteHostEventKind.Message(message, !_session.Ready));
                 break;
-            case RelayMessage.Response or RelayMessage.Tool:
+            case RelayMessage.Response or RelayMessage.Tool or RelayMessage.Quota:
                 EmitConverted(message);
+                break;
+            case RelayMessage.QuotaBridge { Value.State: var state }:
+                Emit(new RemoteHostEventKind.Message(message, !_session.Ready));
+                if (_retiring && state == ClaudeCliBridgeStatus.Off)
+                {
+                    Halt();
+                }
+
                 break;
             case RelayMessage.HistoryDone:
                 Emit(new RemoteHostEventKind.Message(message, !_session.Ready));

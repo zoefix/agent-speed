@@ -1,5 +1,7 @@
 using AgentSpeed.Controls;
 using AgentSpeed.Core.Remote;
+using AgentSpeed.Presentation.Quota;
+using AgentSpeed.Presentation.Remote;
 using AgentSpeed.Presentation.Settings;
 using AgentSpeed.Remote;
 using AgentSpeed.Settings.Remote;
@@ -55,7 +57,7 @@ internal sealed partial class AppController
             return;
         }
 
-        var dialog = new RemoteHostDialog(new RemoteHostDialogViewModel(hosts, _loc, host), _theme.ReduceMotion);
+        var dialog = new RemoteHostDialog(new RemoteHostDialogViewModel(hosts, _loc, host, new HostQuotaLink(this)), _theme.ReduceMotion);
         _remoteDialog = dialog;
         try
         {
@@ -70,10 +72,63 @@ internal sealed partial class AppController
     /// <summary>The dialog open now, for the developer capture.</summary>
     private RemoteHostDialog? _remoteDialog;
 
-    /// <summary><c>remote.remove.confirm</c> with <c>remote.remove.files</c> and <i>Also delete its usage history</i> (off).</summary>
-    private (bool Confirmed, bool DeleteHistory) ConfirmRemoveRemoteHost(string name, string folder) =>
+    /// <summary>
+    /// Turning a host's <c>quotaClaudeCli</c> on (DESIGN 13 <i>Host quotas</i>): asks over the editor with the host's name and the
+    /// settings path on the host. The switch is saved with the host; the relay edits the file once it applies the config.
+    /// </summary>
+    private bool ConfirmHostBridge(string hostName, string settingsPath) =>
+        ConfirmDialog.ShowAccent(_remoteDialog is { IsVisible: true } ? _remoteDialog : _settingsWindow, _loc["app.name"],
+            _loc.Format("remote.quota.claudeCli.confirm.title", hostName), _loc.Format("remote.quota.claudeCli.confirm.message", settingsPath),
+            _loc["settings.quota.claudeCli.confirm.ok"], _loc["history.cancel"]);
+
+    /// <summary><i>Reconnect</i> under a host's replaced status line: its relay runs QUOTAS 5.2 again (REMOTE 11.3).</summary>
+    private void ReconnectHostBridge(string hostId)
+    {
+        try
+        {
+            _remote?.Coordinator.ReapplyQuota(hostId);
+        }
+        catch (ObjectDisposedException)
+        {
+        }
+    }
+
+    /// <summary>The host editor's view of the quotas: the service's state and changes, the confirmation and Reconnect.</summary>
+    private sealed class HostQuotaLink(AppController app) : IRemoteHostQuota
+    {
+        public event Action? Changed
+        {
+            add
+            {
+                if (app._quota is { } quota)
+                {
+                    quota.Changed += value;
+                }
+            }
+
+            remove
+            {
+                if (app._quota is { } quota)
+                {
+                    quota.Changed -= value;
+                }
+            }
+        }
+
+        public HostQuotaState Of(string hostId) => app.Quota.HostOf(hostId);
+
+        public bool ConfirmBridge(string hostName, string settingsPath) => app.ConfirmHostBridge(hostName, settingsPath);
+
+        public void Reconnect(string hostId) => app.ReconnectHostBridge(hostId);
+    }
+
+    /// <summary>
+    /// <c>remote.remove.confirm</c> with <c>remote.remove.files</c>, <c>remote.quota.removeNote</c> for a host whose bridge is on
+    /// (REMOTE 2.4), and <i>Also delete its usage history</i> (off).
+    /// </summary>
+    private (bool Confirmed, bool DeleteHistory) ConfirmRemoveRemoteHost(string name, RemoteHost host) =>
         ConfirmDialog.ShowWithOption(_settingsWindow, _loc["app.name"], _loc.Format("remote.remove.confirm", name),
-            _loc.Format("remote.remove.files", folder), _loc["remote.remove.button"], _loc["history.cancel"], _loc["remote.remove.deleteHistory"]);
+            RemoteHostQuotaText.RemovalBody(host, _loc), _loc["remote.remove.button"], _loc["history.cancel"], _loc["remote.remove.deleteHistory"]);
 
     /// <summary>A dashboard Hosts row: the Usage History window on that host, every source.</summary>
     private void ShowHostHistory(string host)
