@@ -141,6 +141,15 @@ public sealed class CostDisplay
     /// <summary><c>$12.34</c>, <c>NT$1,235</c>.</summary>
     public string AmountText(long microUsd) => Amount(microUsd).Text;
 
+    /// <summary>
+    /// An amount in the rate's digits with its symbol (<c>US$4,938</c>, <c>US$209</c>, <c>US$12.30</c>): the quota lines, where
+    /// the cents of an estimate would only crowd out the reset (DESIGN 4 <i>Amount</i>).
+    /// </summary>
+    public string CompactAmountText(long microUsd) => MoneyFormat.WithSymbol(Symbol, CompactAmountNumber(microUsd));
+
+    /// <summary><see cref="CompactAmountText"/> without the symbol: a quota line's cap after its used amount (<c>US$4,938 / ≈5,742</c>).</summary>
+    public string CompactAmountNumber(long microUsd) => MoneyFormat.Number(MoneyFormat.Amount(microUsd, Rate), Currency.Digits, MoneyForm.Rate);
+
     /// <summary>The amount in US dollars (tooltips show it next to another currency).</summary>
     public string UsdText(long microUsd) =>
         MoneyFormat.Format(MoneyFormat.Amount(microUsd, 1m), Currencies.CurrencyOrUsd(Currency.UsdCode), Language, MoneyForm.Amount).Text;

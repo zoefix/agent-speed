@@ -31,6 +31,9 @@ internal sealed record HistoryOptions
 
     /// <summary>The bounds of each remote host's stored rows (REMOTE 8.3 <i>Bounds</i>).</summary>
     public RemoteHistoryLimits RemoteLimits { get; init; } = new();
+
+    /// <summary>The clock of the quota estimate's 8 days (QUOTAS 10.3); tests fix it.</summary>
+    public Func<long> NowMs { get; init; } = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 }
 
 internal readonly record struct HistoryProgress(int FilesDone, int FilesTotal, long BytesDone, long BytesTotal)
@@ -93,6 +96,7 @@ internal sealed partial class HistoryAnalyzer
         _options = options ?? new HistoryOptions();
         Pricing = pricing ?? new PriceBook();
         _entries = store.LoadFiles(PathComparer);
+        LoadEstimates();
         _peaks = store.Peaks();
         var repaired = Pricing.Restore(store.PriceBindings(), store.PriceTables());
         if (repaired.Count > 0)
@@ -201,11 +205,12 @@ internal sealed partial class HistoryAnalyzer
         Action<HistoryProgress>? progress = null)
     {
         var stopwatch = Stopwatch.StartNew();
+        var startedMs = _options.NowMs();
         var zoneId = zone.Id;
         var zoneChanged = _entries.Count > 0 && !string.Equals(_store.Meta(ZoneMeta), zoneId, StringComparison.Ordinal);
         var priceVersion = Pricing.CurrentVersion.ToString(CultureInfo.InvariantCulture);
         var repricing = _entries.Count > 0 && !string.Equals(_store.Meta(PriceVersionMeta), priceVersion, StringComparison.Ordinal);
-        var plan = BuildPlan(locations, enabled, zoneChanged, repricing, zoneId, cancellationToken);
+        var plan = BuildPlan(locations, enabled, zoneChanged, repricing, zoneId, startedMs, cancellationToken);
         PlanHermes(plan, locations, enabled, zoneChanged, repricing, zone);
         var state = new HistoryProgress(0, plan.Files.Count + plan.SessionCount + plan.ZCodeSessions.Count + plan.OpenClawDatabases.Count
             + plan.HermesLogs.Count + plan.DevinSessions.Count + plan.QoderSessions.Count, 0, plan.Files.Sum(f => f.Size) + plan.HermesLogs.Sum(l => l.Size));
@@ -243,7 +248,7 @@ internal sealed partial class HistoryAnalyzer
                 try
                 {
                     cancelled = !AnalyzeFiles(plan.Files, ledger, labeler, pending, Flush, ref state, ref analyzed, ref bytes, ref unreadable,
-                        progress, cancellationToken);
+                        progress, startedMs, cancellationToken);
                     if (!cancelled)
                     {
                         cancelled = !AnalyzeOpenClaw(plan.OpenClawDatabases, ledger, labeler, pending, Flush, ref state, ref analyzed, ref bytes,
@@ -259,19 +264,19 @@ internal sealed partial class HistoryAnalyzer
                     if (!cancelled)
                     {
                         cancelled = !AnalyzeZCodeSessions(plan.ZCodeSessions, ledger, labeler, pending, Flush, ref state, ref sessions,
-                            progress, cancellationToken);
+                            progress, startedMs, cancellationToken);
                     }
 
                     if (!cancelled)
                     {
                         cancelled = !AnalyzeDevinSessions(plan.DevinSessions, ledger, labeler, pending, Flush, ref state, ref sessions,
-                            progress, cancellationToken);
+                            progress, startedMs, cancellationToken);
                     }
 
                     if (!cancelled)
                     {
                         cancelled = !AnalyzeQoderSessions(plan.QoderSessions, ledger, labeler, pending, Flush, ref state, ref sessions,
-                            progress, cancellationToken);
+                            progress, startedMs, cancellationToken);
                     }
 
                     foreach (var database in plan.OpenCode)
@@ -294,6 +299,7 @@ internal sealed partial class HistoryAnalyzer
 
             if (!cancelled)
             {
+                _lastCompleteStartMs = startedMs;
                 _store.SetMeta(ZoneMeta, zoneId);
                 _store.SetMeta(PriceVersionMeta, priceVersion);
                 if (plan.HermesZone is { } hermesZone)
@@ -341,6 +347,7 @@ internal sealed partial class HistoryAnalyzer
         bool zoneChanged,
         bool repricing,
         string zoneId,
+        long nowMs,
         CancellationToken cancellationToken)
     {
         var plan = new Plan();
@@ -368,7 +375,7 @@ internal sealed partial class HistoryAnalyzer
                 if (previous is not null && !zoneChanged && previous.Version == _options.Version
                     && string.Equals(previous.Family, familyName, StringComparison.Ordinal)
                     && previous.Size == file.Length && previous.Modified == modified
-                    && !(repricing && previous.HasUnpriced))
+                    && !(repricing && previous.HasUnpriced) && !EstimateMissing(family, file.Path, ToMs(file.LastWriteUtc), nowMs))
                 {
                     continue;
                 }
@@ -391,7 +398,7 @@ internal sealed partial class HistoryAnalyzer
             PlanOpenCode(plan, locations.OpenCodeRoots, zoneChanged, repricing, zoneId);
         }
 
-        PlanZCode(plan, locations, enabled, zoneChanged, repricing, cancellationToken);
+        PlanZCode(plan, locations, enabled, zoneChanged, repricing, nowMs, cancellationToken);
         PlanOpenClaw(plan, locations, enabled, zoneChanged, repricing);
         PlanDevin(plan, locations, enabled, zoneChanged, repricing);
         PlanQoder(plan, locations, enabled, zoneChanged, repricing);
@@ -427,6 +434,7 @@ internal sealed partial class HistoryAnalyzer
         ref long bytes,
         ref int unreadable,
         Action<HistoryProgress>? progress,
+        long nowMs,
         CancellationToken cancellationToken)
     {
         if (files.Count == 0)
@@ -446,6 +454,7 @@ internal sealed partial class HistoryAnalyzer
 
             state = state with { FilesDone = state.FilesDone + 1, BytesDone = state.BytesDone + file.Size };
             var sink = new LatestResponses(merge: file.Family == RootFamily.Claude, prepared.Parser.Completions);
+            CollectEstimateLines(prepared.Parser);
             var applied = false;
             if (prepared is { Error: null, Batch: { } batch })
             {
@@ -503,6 +512,7 @@ internal sealed partial class HistoryAnalyzer
                 Days = DayAggregate.Contributions(sink.Items.Values, prepared.Parser.Source, labeler, Pricing),
                 PerfRecords = PerfRecordsOf(prepared.Parser.Completions, sink.Items, prepared.Parser.AgentId, prepared.Parser.Source, labeler),
             };
+            NoteEstimate(entry, file.Family, sink.Items.Values, prepared.Parser.Source, labeler, nowMs, prepared.Parser);
             _entries[file.Path] = entry;
             pending.Add((entry, owned));
             FileAnalyzed?.Invoke(file.Path, sink.Items.Values);

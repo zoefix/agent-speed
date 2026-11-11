@@ -2,6 +2,7 @@ using System.Collections.Immutable;
 using AgentSpeed.Controls;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Quota.Network;
 using AgentSpeed.Core.Quota.Routes;
 using AgentSpeed.Presentation.Orb;
@@ -20,15 +21,32 @@ namespace AgentSpeed.App;
 internal sealed partial class AppController
 {
     private QuotaService? _quota;
+    private QuotaEstimator? _estimator;
 
     /// <summary>The quotas as the surfaces show them now.</summary>
     internal QuotaState Quota => _quota?.State ?? QuotaState.Empty;
+
+    /// <summary>
+    /// The quota estimate (QUOTAS 10), created before the monitor so that the live engine, the history, the hosts' quota config
+    /// and the reports all reach it.
+    /// </summary>
+    private void CreateEstimator()
+    {
+        try
+        {
+            _estimator ??= new QuotaEstimator(AppPaths.DataDirectory, _cost.Book, QuotaSignIn.Files()) { Log = AppLog.Info };
+        }
+        catch (Exception ex)
+        {
+            AppLog.Error("The quota estimate failed to start.", ex);
+        }
+    }
 
     private void StartQuota()
     {
         try
         {
-            _quota = new QuotaService(_ui, () => _monitor?.CodexQuota.Snapshot, sandboxed: _launch.CaptureDir is not null);
+            _quota = new QuotaService(_ui, () => _monitor?.CodexQuota.Snapshot, sandboxed: _launch.CaptureDir is not null, estimator: _estimator);
             _quota.Changed += OnQuotaChanged;
             _quota.Apply(Settings);
             UpdateQuotaDemand();

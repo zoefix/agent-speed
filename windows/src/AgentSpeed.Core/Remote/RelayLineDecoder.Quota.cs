@@ -1,5 +1,6 @@
 using System.Globalization;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Quota.Network;
 
 namespace AgentSpeed.Core.Remote;
@@ -52,9 +53,27 @@ internal sealed partial class RelayLineDecoder
             "notRunning" => QuotaRouteStatus.Of(QuotaStatusKind.NotRunning),
             _ => throw new RemoteLineException(RemoteLineErrorKind.OutOfRange, "q.status"),
         };
+
+        // QUOTAS 10.1, 10.2: absent from older relays; a value of another form counts as unknown.
+        var account = OptionalText(f, "account", 16) is { } accountKey && AccountKeys.IsKey(accountKey) ? accountKey : null;
+        var plan = AccountKeys.CleanPlan(OptionalText(f, "plan", 64));
+        var tier = AccountKeys.CleanPlan(OptionalText(f, "tier", 64));
         return source is { } known
-            ? new RelayMessage.Quota(new RemoteQuotaReport(HostId, new QuotaSnapshot(known, observed, QuotaWindows.Ordered(windows)), running, signedIn, status))
+            ? new RelayMessage.Quota(new RemoteQuotaReport(HostId, new QuotaSnapshot(known, observed, QuotaWindows.Ordered(windows)), running, signedIn,
+                status, account, plan, tier))
             : null;
+    }
+
+    private static string? OptionalText(RemoteFields f, string key, int maxBytes)
+    {
+        try
+        {
+            return f.OptionalString(key, maxBytes);
+        }
+        catch (RemoteLineException)
+        {
+            return null;
+        }
     }
 
     private static QuotaWindow DecodeQuotaWindow(RemoteFields w, string path)

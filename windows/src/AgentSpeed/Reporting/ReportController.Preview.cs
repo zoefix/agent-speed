@@ -98,6 +98,12 @@ internal sealed partial class ReportController
         var envelope = new ReportEnvelope(Client, deviceId, username, http?.Id ?? stream?.Id ?? _previewRunId, seq, UnixMs + _clockCorrection * 1000,
             Math.Max(0, now - start), activity, http?.Title.Level ?? stream?.Title.Level ?? 0);
         var options = Options(document, sections);
+        // The quota entries as the next report that carries them would (REPORTING-EXTENSIONS 11.2).
+        if ((draft?.ShareQuota ?? Preferences.ShareQuota) && document.Extensions.QuotaEstimate)
+        {
+            options = options with { Quotas = CurrentQuotaEntries() };
+        }
+
         if (webSocket)
         {
             var limits = stream?.Scheduler.Limits ?? document.WebSocket ?? ReportStreamSettings.Default;

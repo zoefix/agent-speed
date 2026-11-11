@@ -47,6 +47,12 @@ public sealed class DesktopQuotaReader
     /// <summary>The file the snapshot came from (diagnostics, tests).</summary>
     public string? SnapshotFile { get; private set; }
 
+    /// <summary>
+    /// The organization uuid of the snapshot's usage entry (QUOTAS 10.1), lowercase; it becomes an account key at once and is
+    /// never stored or logged.
+    /// </summary>
+    public string? Organization { get; private set; }
+
     public int CandidateCount => _candidates.Count;
 
     /// <summary>The last search read this many entry headers.</summary>
@@ -61,6 +67,7 @@ public sealed class DesktopQuotaReader
         _candidates.Clear();
         Snapshot = null;
         SnapshotFile = null;
+        Organization = null;
         _lastCheckMs = null;
         _lastSearchMs = null;
         _searchWanted = true;
@@ -216,6 +223,7 @@ public sealed class DesktopQuotaReader
         var best = Choose(_candidates.Values.Select(c => (c.Path, c.Entry, c.ModifiedMs)));
         Snapshot = best?.Snapshot;
         SnapshotFile = best?.File;
+        Organization = best?.Organization;
     }
 
     private static DesktopUsageEntry? Read(string path, long modifiedMs)
@@ -245,7 +253,7 @@ public sealed class DesktopQuotaReader
     /// The newest observation among usage entries (ties: the newer file); its windows may be empty (the account lost its
     /// limits). Null without any usage entry.
     /// </summary>
-    internal static (QuotaSnapshot Snapshot, string File)? Choose(IEnumerable<(string File, DesktopUsageEntry? Entry, long ModifiedMs)> entries)
+    internal static (QuotaSnapshot Snapshot, string File, string? Organization)? Choose(IEnumerable<(string File, DesktopUsageEntry? Entry, long ModifiedMs)> entries)
     {
         (long Observed, long Modified, string File, DesktopUsageEntry Entry)? best = null;
         foreach (var (file, entry, modified) in entries)
@@ -262,7 +270,8 @@ public sealed class DesktopQuotaReader
         }
 
         return best is { } found
-            ? (new QuotaSnapshot(SourceKind.ClaudeDesktop, found.Observed, DesktopUsageBody.Windows(found.Entry.Body)), found.File)
+            ? (new QuotaSnapshot(SourceKind.ClaudeDesktop, found.Observed, DesktopUsageBody.Windows(found.Entry.Body)), found.File,
+                DesktopCacheEntry.OrganizationOf(found.Entry.Url))
             : null;
     }
 }

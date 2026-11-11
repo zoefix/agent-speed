@@ -9,9 +9,10 @@ using AgentSpeed.Theme;
 namespace AgentSpeed.Windows.Tests;
 
 /// <summary>
-/// DESIGN 4, Quota lines, measured with the Windows fonts: lines of one section share the label column, the bar's ends and
-/// the percent cell however long a phase 2 label is; the reset keeps its room before the bar's comfort, and an age shows only
-/// where it fits beside a comfortable bar (otherwise it goes to the tooltip).
+/// DESIGN 4, Quota lines, measured with the Windows fonts: lines of one section share the label column, the bar's ends,
+/// the percent cell and the amount column however long a phase 2 label is; the reset keeps its room before the bar's comfort
+/// and shows whole or not at all, and an age shows only where it fits beside a comfortable bar (otherwise it goes to the
+/// tooltip).
 /// </summary>
 public class QuotaLinePanelTests
 {
@@ -22,33 +23,44 @@ public class QuotaLinePanelTests
     private const double HostsWidth = SourcesWidth - 12;
 
     private sealed record Placed(double LabelRight, double BarLeft, double BarWidth, double PercentRight, double ResetLeft, double ResetWidth,
-        double ResetNatural, bool AgeShown, double AgeOpacity, double AgeLeft);
+        double ResetNatural, bool AgeShown, double AgeOpacity, double AgeLeft)
+    {
+        public double AmountLeft { get; init; }
+
+        public double AmountWidth { get; init; }
+
+        public double ResetOpacity { get; init; }
+    }
 
     private static readonly FontFamily Ui = AppFonts.Ui(LanguageCodes.ZhHant);
 
     private static TextBlock Text(string text, double size, FontWeight weight) =>
         new() { Text = text, FontSize = size, FontWeight = weight, FontFamily = Ui, TextWrapping = TextWrapping.NoWrap, TextTrimming = TextTrimming.CharacterEllipsis };
 
-    private static QuotaLinePanel Line(QuotaColumns columns, string label, string reset, string age)
+    private static QuotaLinePanel Line(QuotaColumns columns, string label, string reset, string age, string amount = "")
     {
         var panel = new QuotaLinePanel { Columns = columns, Height = 16 };
         panel.Children.Add(Text(label, 11, FontWeights.Medium));
         panel.Children.Add(new QuotaBar { Value = 0.4 });
         var cell = new Grid();
-        cell.Children.Add(Text("100%", 11.5, FontWeights.SemiBold));
+        cell.Children.Add(Text("≈100%", 11.5, FontWeights.SemiBold));
         panel.Children.Add(cell);
+        panel.Children.Add(Text(amount, 11, FontWeights.Medium));
         panel.Children.Add(Text(reset, 11, FontWeights.Normal));
         panel.Children.Add(Text(age, 11, FontWeights.Normal));
         return panel;
     }
 
-    private static Placed[] Lay(double width, params (string Label, string Reset, string Age)[] lines)
+    private static Placed[] Lay(double width, params (string Label, string Reset, string Age)[] lines) =>
+        Lay(width, [.. lines.Select(l => (l.Label, l.Reset, l.Age, string.Empty))]);
+
+    private static Placed[] Lay(double width, (string Label, string Reset, string Age, string Amount)[] lines)
     {
         var columns = new QuotaColumns();
         var stack = new StackPanel { Width = width };
-        foreach (var (label, reset, age) in lines)
+        foreach (var (label, reset, age, amount) in lines)
         {
-            stack.Children.Add(Line(columns, label, reset, age));
+            stack.Children.Add(Line(columns, label, reset, age, amount));
         }
 
         for (var pass = 0; pass < 3; pass++)
@@ -61,11 +73,16 @@ public class QuotaLinePanelTests
         return [.. stack.Children.OfType<QuotaLinePanel>().Select(p =>
         {
             Rect Box(int i) => LayoutInformation.GetLayoutSlot((FrameworkElement)p.Children[i]);
-            var reset = (TextBlock)p.Children[3];
+            var reset = (TextBlock)p.Children[4];
             var natural = Text(reset.Text, reset.FontSize, reset.FontWeight);
             natural.Measure(new Size(double.PositiveInfinity, double.PositiveInfinity));
-            return new Placed(Box(0).Right, Box(1).Left, Box(1).Width, Box(2).Right, Box(3).Left, Box(3).Width, natural.DesiredSize.Width,
-                p.AgeShown, p.Children[4].Opacity, Box(4).Left);
+            return new Placed(Box(0).Right, Box(1).Left, Box(1).Width, Box(2).Right, Box(4).Left, Box(4).Width, natural.DesiredSize.Width,
+                p.AgeShown, p.Children[5].Opacity, Box(5).Left)
+            {
+                AmountLeft = Box(3).Left,
+                AmountWidth = Box(3).Width,
+                ResetOpacity = p.Children[4].Opacity,
+            };
         })];
     }
 
@@ -116,6 +133,105 @@ public class QuotaLinePanelTests
         // With the long label the section's bar would fall under its comfort: the age goes, the reset stays whole.
         Assert.All(placed, p => Assert.False(p.AgeShown));
         Assert.All(placed, p => Assert.Equal(0.0, p.AgeOpacity, 3));
+        Assert.All(placed, p => Assert.True(p.ResetWidth >= p.ResetNatural - 0.01));
+    }
+
+    [Fact]
+    public void TheAmountColumnIsAsWideAsTheWidestAmountSoTheResetsStayInOneColumn()
+    {
+        var placed = OnStaThread(() => Lay(SourcesWidth,
+        [
+            ("5h", "3h", string.Empty, "US$209 / ≈832"),
+            ("7d", "週五", string.Empty, "US$4,938 / ≈5,742"),
+            ("Fable 7d", "週五", string.Empty, string.Empty),
+        ]));
+        Assert.All(placed, p => Assert.Equal(placed[0].PercentRight, p.PercentRight, 3));
+        Assert.All(placed, p => Assert.Equal(placed[0].PercentRight + QuotaLinePanel.Gap, p.AmountLeft, 3));
+        Assert.All(placed, p => Assert.Equal(placed[0].ResetLeft, p.ResetLeft, 3));
+        var widest = placed.Max(p => p.AmountWidth);
+        Assert.True(placed[0].ResetLeft >= placed[0].AmountLeft + widest + QuotaLinePanel.Gap - 0.01, $"{placed[0].ResetLeft} after {widest}");
+        Assert.True(placed[0].BarWidth >= QuotaLinePanel.CompactBar - 0.01);
+    }
+
+    [Fact]
+    public void TheShortResetFitsBesideTheAmountAndShowsWhole()
+    {
+        var placed = OnStaThread(() => Lay(SourcesWidth,
+        [
+            ("5h", "3h", string.Empty, "US$209 / ≈832"),
+            ("7d", "週五", " · 2 小時前更新", "NT$161,235 / ≈186,615"),
+        ]));
+        Assert.All(placed, p => Assert.Equal(1.0, p.ResetOpacity, 3));
+        Assert.All(placed, p => Assert.True(p.ResetWidth >= p.ResetNatural - 0.01, $"{p.ResetWidth} for {p.ResetNatural}"));
+        Assert.All(placed, p => Assert.True(p.BarWidth >= QuotaLinePanel.CompactBar - 0.01));
+    }
+
+    [Fact]
+    public void AShortResetWithoutRoomGoesWholeAndTakesTheAgeWithIt()
+    {
+        var placed = OnStaThread(() => Lay(150,
+        [
+            ("Claude/GPT 7d", "週五", " · 2 小時前更新", "US$4,938 / ≈5,742"),
+        ]));
+        var line = Assert.Single(placed);
+        Assert.Equal(0.0, line.ResetOpacity, 3);
+        Assert.Equal(0.0, line.ResetWidth, 3);
+        Assert.Equal(0.0, line.AgeOpacity, 3);
+        Assert.False(line.AgeShown);
+    }
+
+    [Fact]
+    public void ASectionWithAmountsSwitchesEveryLineToItsShortResetAndOneWithoutKeepsTheLongOnes()
+    {
+        var (withAmounts, without) = OnStaThread(() =>
+        {
+            (bool Short, double Width, bool Line2Short) Lay(string amount)
+            {
+                var columns = new QuotaColumns();
+                var stack = new StackPanel { Width = SourcesWidth };
+                foreach (var a in new[] { amount, string.Empty })
+                {
+                    var panel = new QuotaLinePanel { Columns = columns, Height = 16 };
+                    panel.Children.Add(Text("7d", 11, FontWeights.Medium));
+                    panel.Children.Add(new QuotaBar { Value = 0.4 });
+                    panel.Children.Add(Text("≈100%", 11.5, FontWeights.SemiBold));
+                    panel.Children.Add(Text(a, 11, FontWeights.Medium));
+                    var cell = new QuotaResetCell();
+                    cell.Children.Add(Text("週五 09:00 重置", 11, FontWeights.Normal));
+                    cell.Children.Add(Text("週五", 11, FontWeights.Normal));
+                    panel.Children.Add(cell);
+                    panel.Children.Add(Text(string.Empty, 11, FontWeights.Normal));
+                    stack.Children.Add(panel);
+                }
+
+                for (var pass = 0; pass < 3; pass++)
+                {
+                    stack.Measure(new Size(SourcesWidth, double.PositiveInfinity));
+                    stack.Arrange(new Rect(0, 0, SourcesWidth, stack.DesiredSize.Height));
+                    stack.UpdateLayout();
+                }
+
+                var first = (QuotaLinePanel)stack.Children[0];
+                var second = (QuotaLinePanel)stack.Children[1];
+                return (first.ShortResets && ((QuotaResetCell)first.Children[4]).UseShort, first.Children[4].DesiredSize.Width,
+                    second.ShortResets && ((QuotaResetCell)second.Children[4]).UseShort);
+            }
+
+            return (Lay("US$4,938 / ≈5,742"), Lay(string.Empty));
+        });
+
+        Assert.True(withAmounts.Short);
+        Assert.True(withAmounts.Line2Short);
+        Assert.False(without.Short);
+        Assert.False(without.Line2Short);
+        Assert.True(withAmounts.Width < without.Width, $"{withAmounts.Width} < {without.Width}");
+    }
+
+    [Fact]
+    public void WithoutAnyAmountTheResetFollowsThePercent()
+    {
+        var placed = OnStaThread(() => Lay(SourcesWidth, ("5h", "3 小時後重置", string.Empty), ("7d", "週五 09:00 重置", string.Empty)));
+        Assert.All(placed, p => Assert.Equal(p.PercentRight + QuotaLinePanel.Gap, p.ResetLeft, 3));
         Assert.All(placed, p => Assert.True(p.ResetWidth >= p.ResetNatural - 0.01));
     }
 

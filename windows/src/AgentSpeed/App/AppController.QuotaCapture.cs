@@ -10,7 +10,8 @@ internal sealed partial class AppController
 {
     /// <summary>
     /// Developer capture operations (only with <c>--capture-dir</c>): <c>quota-demo</c> (Claude Desktop 7d + Fable 7d, Claude
-    /// Code 5h + 7d, Codex 7d, all running), <c>quota-demo-two</c> (Claude Desktop and Codex), <c>quota-demo-off</c>,
+    /// Code 5h + 7d, Codex 7d, all running, with their estimates), <c>quota-demo-two</c> (Claude Desktop and Codex),
+    /// <c>quota-demo-off</c>, <c>quota-tip</c> (the first estimated line's tooltip, saved as it shows),
     /// <c>quota-cli-&lt;waiting|ok|replaced|unreadable|failed&gt;</c> (Settings' status line), <c>quota-cli-off</c>,
     /// <c>quota-invite</c> (the dashboard's Claude Code invitation), <c>quota-confirm</c> (the bridge's dialog) and
     /// <c>quota-cli-install</c> / <c>quota-cli-uninstall</c> (the bridge itself, without the dialog).
@@ -22,7 +23,7 @@ internal sealed partial class AppController
             return false;
         }
 
-        if (RunQuotaSettingsCapture(op) || RunQuotaSurfaceCapture(op))
+        if (RunQuotaSettingsCapture(op) || RunQuotaSurfaceCapture(op) || RunQuotaEstimateCapture(op))
         {
             return true;
         }
@@ -33,7 +34,7 @@ internal sealed partial class AppController
             case "quota-demo" or "quota-demo-two":
                 var demo = QuotaDemo.State(now, two: op == "quota-demo-two");
                 _settings.Update(s => s with { Quota = s.Quota with { Codex = true, ClaudeDesktop = true, ClaudeCli = op == "quota-demo" } });
-                quota.SetDemo(demo);
+                quota.SetDemo(demo, QuotaDemo.Entries(demo, now));
                 break;
             case "quota-demo-off":
                 quota.SetDemo(null);
@@ -99,4 +100,7 @@ internal sealed partial class AppController
 
     /// <summary>The dashboard, Hosts, host editor and orb captures (<c>AppController.QuotaCapture.Surfaces.cs</c>).</summary>
     private partial bool RunQuotaSurfaceCapture(string op);
+
+    /// <summary>The estimate tooltip's capture (<c>AppController.QuotaCapture.Estimate.cs</c>).</summary>
+    private partial bool RunQuotaEstimateCapture(string op);
 }

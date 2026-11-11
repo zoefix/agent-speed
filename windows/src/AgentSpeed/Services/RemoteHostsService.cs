@@ -32,6 +32,9 @@ internal sealed class RemoteHostsService : IDisposable
 
     public RemoteCoordinator Coordinator => _coordinator;
 
+    /// <summary>The estimate salt every host's quota config carries (REMOTE 11.1, QUOTAS 10.1); set before <see cref="Apply"/>.</summary>
+    public RemoteSalt? Salt { get; set; }
+
     /// <summary>The settings' hosts and master switch; applied only when they changed.</summary>
     public void Apply(AppSettings settings)
     {
@@ -43,7 +46,7 @@ internal sealed class RemoteHostsService : IDisposable
 
         var names = settings.RemoteHosts.DisplayNames();
         History.SetHosts([.. settings.RemoteHosts.Hosts.Select(h => (h.Id, names[h.Id]))]);
-        _coordinator.Update(settings.RemoteHosts, settings.NetworkEnabled, settings.RemoteQuotaSwitches);
+        _coordinator.Update(settings.RemoteHosts, settings.NetworkEnabled, settings.RemoteQuotaSwitches with { Salt = Salt });
     }
 
     /// <summary>

@@ -55,7 +55,8 @@ internal sealed partial class OrbManager
 
     /// <summary>
     /// The 額度 card of an orb (DESIGN 2a.6, 13 <i>Host quotas</i>): this computer's sources while the orb tracks it, then each
-    /// tracked, connected host's in settings order with its display name.
+    /// tracked, connected host's in settings order with its display name, each window with its estimate's live percent
+    /// (QUOTAS 10.7).
     /// </summary>
     private OrbQuotaCard QuotaCard(OrbDefinition orb)
     {
@@ -64,7 +65,7 @@ internal sealed partial class OrbManager
         bool Tracked(SourceKind s) => orb.TrackedSources?.Contains(s) ?? true;
         if (hosts.Hosts.IsEmpty || _quota.Hosts.IsEmpty)
         {
-            return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, [], EmptyHosts), now, _loc);
+            return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, [], EmptyHosts), now, _loc, null, _quota);
         }
 
         var names = hosts.DisplayNames();
@@ -75,7 +76,7 @@ internal sealed partial class OrbManager
             connected.UnionWith(captured);
         }
 
-        return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, order, connected), now, _loc);
+        return OrbQuotaCard.Of(_quota.CardItems(Tracked, orb.Hosts.Tracks, order, connected), now, _loc, null, _quota);
     }
 
     private static readonly IReadOnlySet<string> EmptyHosts = new HashSet<string>();

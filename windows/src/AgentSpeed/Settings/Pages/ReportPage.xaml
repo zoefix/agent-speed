@@ -367,9 +367,11 @@
                                     <TextBlock Text="{Binding Title}" Style="{StaticResource BodyText}" Opacity="{Binding IsEnabled, Converter={StaticResource EnabledOpacity}}" />
                                     <TextBlock Text="{Binding Caption}" Style="{StaticResource Footnote}" Margin="0,1,0,0"
                                                Visibility="{Binding Caption, Converter={StaticResource HasText}}" />
+                                    <TextBlock Text="{Binding Hint}" Style="{StaticResource Footnote}" Margin="0,1,0,0"
+                                               Visibility="{Binding Hint, Converter={StaticResource HasText}}" />
                                 </StackPanel>
                                 <CheckBox Grid.Column="1" Style="{StaticResource ToggleSwitch}" IsChecked="{Binding IsOn, Mode=TwoWay}" IsEnabled="{Binding IsEnabled}"
-                                          AutomationProperties.Name="{Binding Title}" AutomationProperties.HelpText="{Binding Caption}" />
+                                          AutomationProperties.Name="{Binding Title}" AutomationProperties.HelpText="{Binding HelpText}" />
                                 <Rectangle Grid.ColumnSpan="2" Style="{StaticResource Hairline}" VerticalAlignment="Bottom" Margin="-16,0,-16,0" />
                             </Grid>
                         </DataTemplate>

@@ -10,10 +10,14 @@ using AgentSpeed.Presentation.Quota;
 
 namespace AgentSpeed.Presentation.Orb;
 
-/// <summary>One window line of the 額度 card (DESIGN 2a.6): its label, percent, bar share, tone and short reset.</summary>
+/// <summary>
+/// One window line of the 額度 card (DESIGN 2a.6): its label, percent, bar share, tone and short reset. The card shows no
+/// amount (owner's choice 2026-11-11: the dashboard has it).
+/// </summary>
 /// <param name="Bar">0…1.</param>
 /// <param name="Reset">The short reset (<c>42m</c>, <c>3h</c>, <c>週五</c>); empty while unknown or passed.</param>
-public sealed record OrbQuotaWindow(string Label, int Percent, double Bar, QuotaTone Tone, string Reset, bool Passed)
+/// <param name="Estimated">The percent is extrapolated (QUOTAS 10.7): a small <c>≈</c> leads it.</param>
+public sealed record OrbQuotaWindow(string Label, int Percent, double Bar, QuotaTone Tone, string Reset, bool Passed, bool Estimated = false)
 {
     public string PercentText => QuotaText.Percent(Percent);
 }
@@ -65,19 +69,21 @@ public sealed record OrbQuotaCard(IReadOnlyList<OrbQuotaSource> Sources, string?
 
     public override int GetHashCode() => HashCode.Combine(Sources.Count, Spoken);
 
-    /// <summary>The card of an orb tracking <paramref name="sources"/> on this computer only (no host).</summary>
+    /// <summary>The card of an orb tracking <paramref name="sources"/> on this computer only (no host), with the state's estimates.</summary>
     public static OrbQuotaCard Of(QuotaState state, Func<SourceKind, bool> tracked, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(tracked);
-        return Of(state.CardItems(tracked, id => id == RemoteHost.LocalId, [], new HashSet<string>()), nowMs, loc, zone);
+        return Of(state.CardItems(tracked, id => id == RemoteHost.LocalId, [], new HashSet<string>()), nowMs, loc, zone, state);
     }
 
     /// <summary>
-    /// The card of <paramref name="items"/> (<see cref="QuotaState.CardItems"/>): each item's windows in QUOTAS 2 order, a host
-    /// item's header <c>&lt;source&gt; · &lt;host&gt;</c>; spoken as <c>a11y.orb.quota</c> with each header and its windows.
+    /// The card of <paramref name="items"/> (<see cref="QuotaState.CardItems"/>): each item's windows in QUOTAS 2 order with the
+    /// live percent of <paramref name="estimates"/>' estimates (QUOTAS 10.7), a host item's header
+    /// <c>&lt;source&gt; · &lt;host&gt;</c>; spoken as <c>a11y.orb.quota</c> with each header and its windows.
     /// </summary>
-    public static OrbQuotaCard Of(IReadOnlyList<QuotaCardItem> items, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
+    public static OrbQuotaCard Of(IReadOnlyList<QuotaCardItem> items, long nowMs, Localizer loc, TimeZoneInfo? zone = null,
+        QuotaState? estimates = null)
     {
         ArgumentNullException.ThrowIfNull(items);
         ArgumentNullException.ThrowIfNull(loc);
@@ -88,27 +94,29 @@ public sealed record OrbQuotaCard(IReadOnlyList<OrbQuotaSource> Sources, string?
 
         var sources = new List<OrbQuotaSource>(items.Count);
         var spoken = new List<string>(items.Count);
+        var separator = loc["list.separator"];
         foreach (var item in items)
         {
             var snapshot = item.Snapshot;
             var name = loc[DisplayText.SourceKey(snapshot.Source)];
-            var lines = QuotaLines.Of(snapshot, nowMs, loc, zone);
-            var source = new OrbQuotaSource(snapshot.Source, name, HeatPalette.SourceColor(snapshot.Source),
-                [.. lines.Select(l => new OrbQuotaWindow(l.Label, l.Percent, l.Bar, l.Tone, l.ResetShort, l.Passed))], item.HostName,
-                item.HostName is null ? null : item.HostId);
-            sources.Add(source);
-            spoken.Add(name + source.HostTail + " " + QuotaLines.Spoken(lines, loc));
+            var source = estimates is null ? null : new QuotaEstimateSource(estimates, null, item.HostId);
+            var lines = QuotaLines.Of(snapshot, nowMs, loc, zone, source);
+            var card = new OrbQuotaSource(snapshot.Source, name, HeatPalette.SourceColor(snapshot.Source),
+                [.. lines.Select(l => new OrbQuotaWindow(l.Label, l.Percent, l.Bar, l.Tone, l.ResetShort, l.Passed, l.Estimated))],
+                item.HostName, item.HostName is null ? null : item.HostId);
+            sources.Add(card);
+            spoken.Add(name + card.HostTail + " " + string.Join(separator, lines.Select(l => l.CardSpoken)));
         }
 
-        return new OrbQuotaCard(sources, loc.Format("a11y.orb.quota", string.Join(loc["list.separator"], spoken)));
+        return new OrbQuotaCard(sources, loc.Format("a11y.orb.quota", string.Join(separator, spoken)));
     }
 }
 
 /// <summary>
 /// The 額度 card's lines as they move (DESIGN 2a.6, 額度 Motion): a bar eases to its new length (0.4 s, ease-out) and a
-/// reset empties it over 0.6 s while its reset cell fades out; a changed percent crossfades (0.2 s); a source joining or
-/// leaving fades its lines (0.25 s). Reduce Motion: lengths change at once, fades stay. Lines that come with the card
-/// itself show at once (the card fades in). Times are seconds on the shared orb clock.
+/// reset empties it over 0.6 s while its reset cell fades out; a changed percent crossfades (0.2 s) with its <c>≈</c>; a
+/// source joining or leaving fades its lines (0.25 s). Reduce Motion: lengths change at once, fades stay. Lines that come
+/// with the card itself show at once (the card fades in). Times are seconds on the shared orb clock.
 /// </summary>
 public sealed class OrbQuotaMotion
 {
@@ -126,6 +134,7 @@ public sealed class OrbQuotaMotion
             BarTo = BarFrom = data.Bar;
             BarAt = PercentAt = ResetAt = double.NegativeInfinity;
             OldPercent = data.PercentText;
+            OldEstimated = data.Estimated;
             OldReset = data.Reset;
         }
 
@@ -143,6 +152,9 @@ public sealed class OrbQuotaMotion
 
         /// <summary>The percent shown before the latest change (crossfading out).</summary>
         public string OldPercent { get; private set; }
+
+        /// <summary>The old percent's <c>≈</c>: it fades with the percent it led.</summary>
+        public bool OldEstimated { get; private set; }
 
         internal double PercentAt { get; private set; }
 
@@ -177,6 +189,7 @@ public sealed class OrbQuotaMotion
                 BarFrom = BarTo = next.Bar;
                 BarAt = PercentAt = ResetAt = double.NegativeInfinity;
                 OldPercent = next.PercentText;
+                OldEstimated = next.Estimated;
                 OldReset = next.Reset;
                 return;
             }
@@ -190,9 +203,10 @@ public sealed class OrbQuotaMotion
                 BarDuration = BarSine ? ResetEmpty : BarEase;
             }
 
-            if (next.PercentText != previous.PercentText)
+            if (next.PercentText != previous.PercentText || next.Estimated != previous.Estimated)
             {
                 OldPercent = previous.PercentText;
+                OldEstimated = previous.Estimated;
                 PercentAt = time;
             }
 

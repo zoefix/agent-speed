@@ -1,6 +1,7 @@
 using AgentSpeed.Core;
 using AgentSpeed.Core.Quota;
 using AgentSpeed.Core.Remote;
+using AgentSpeed.Presentation.Cost;
 using AgentSpeed.Presentation.Formatting;
 using AgentSpeed.Presentation.Localization;
 using AgentSpeed.Presentation.Quota;
@@ -94,10 +95,14 @@ public sealed record HostQuotaGroup(SourceKind Source, string Name, IReadOnlyLis
     public string Spoken(Localizer loc) => Name + " " + QuotaLines.Spoken(Lines, loc);
 }
 
-/// <summary>The quota sub-lines of a host row: each source with windows observed within a day, in source order.</summary>
+/// <summary>
+/// The quota sub-lines of a host row: each source with windows observed within a day, in source order, with the host's
+/// estimates (QUOTAS 10.7, 10.8) formatted by <paramref name="cost"/>.
+/// </summary>
 public static class HostQuotaGroups
 {
-    public static IReadOnlyList<HostQuotaGroup> Of(QuotaState state, string hostId, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
+    public static IReadOnlyList<HostQuotaGroup> Of(QuotaState state, string hostId, long nowMs, Localizer loc, TimeZoneInfo? zone = null,
+        CostDisplay? cost = null)
     {
         ArgumentNullException.ThrowIfNull(state);
         ArgumentNullException.ThrowIfNull(loc);
@@ -108,9 +113,10 @@ public static class HostQuotaGroups
 
         var snapshots = state.HostSnapshots(hostId, nowMs);
         var groups = new List<HostQuotaGroup>(snapshots.Count);
+        var estimates = new QuotaEstimateSource(state, cost, hostId);
         foreach (var snapshot in snapshots)
         {
-            var lines = QuotaLines.Of(snapshot, nowMs, loc, zone);
+            var lines = QuotaLines.Of(snapshot, nowMs, loc, zone, estimates);
             if (lines.Count > 0)
             {
                 groups.Add(new HostQuotaGroup(snapshot.Source, loc[DisplayText.SourceKey(snapshot.Source)], lines));

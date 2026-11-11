@@ -611,7 +611,9 @@ internal sealed partial class DashboardViewModel : ObservableObject
     /// </summary>
     private string UpdateQuota(SourceRow row, bool quotaOn, long now, Localizer loc, bool dark)
     {
-        IReadOnlyList<QuotaLine> lines = quotaOn && Quota.Of(row.Kind) is { HasWindows: true } snapshot ? QuotaLines.Of(snapshot, now, loc) : [];
+        IReadOnlyList<QuotaLine> lines = quotaOn && Quota.Of(row.Kind) is { HasWindows: true } snapshot
+            ? QuotaLines.Of(snapshot, now, loc, null, new QuotaEstimateSource(Quota, Cost))
+            : [];
         QuotaLineRow.Sync(row.QuotaLines, lines, row.DotBrush, dark, HighContrast);
         var invitation = row.Kind == SourceKind.ClaudeCode && !QuotaSettings.ClaudeCli && !QuotaSettings.CliInviteDismissed && row.IsListed
             && lines.Count == 0;

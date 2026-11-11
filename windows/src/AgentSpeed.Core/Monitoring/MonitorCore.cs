@@ -124,6 +124,13 @@ internal sealed partial class MonitorCore : IDisposable
     /// <summary>Receives the Codex rollouts' limits (QUOTAS 3); set before seeding.</summary>
     internal Quota.CodexQuotaCollector? CodexQuota { get; init; }
 
+    /// <summary>Receives every response the engine holds (QUOTAS 10.3); set before seeding.</summary>
+    internal Action<ParsedResponse>? Spent
+    {
+        get => _engine.Spent;
+        init => _engine.Spent = value;
+    }
+
     /// <summary>Live reporting's statistics watch (METRICS 11.10), as last published; the monitor thread sets it before reading.</summary>
     internal Reporting.ReportPerfWatch PerfWatch { get; set; } = Reporting.ReportPerfWatch.Off;
 

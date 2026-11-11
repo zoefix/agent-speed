@@ -53,6 +53,13 @@ internal static partial class DesktopCacheEntry
 
     public static bool IsUsageUrl(string url) => UsageUrl().IsMatch(url);
 
+    /// <summary>The organization uuid of a usage URL, lowercase; null for any other URL.</summary>
+    public static string? OrganizationOf(string url)
+    {
+        const string Prefix = "https://claude.ai/api/organizations/";
+        return IsUsageUrl(url) ? url.Substring(Prefix.Length, 36).ToLowerInvariant() : null;
+    }
+
     /// <summary>
     /// The key of an entry from its first bytes (<see cref="HeaderSize"/> + key length), or null when the header is not a
     /// version-5 simple-cache header. <paramref name="keyLength"/> tells how many bytes the key needs.

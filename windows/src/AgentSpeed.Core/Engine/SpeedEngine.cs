@@ -91,6 +91,9 @@ internal sealed class SpeedEngine
 
     public int RemoteResponseLimit { get; set; } = Remote.RemoteLimits.Responses;
 
+    /// <summary>Every response the engine holds, as priced, local or a host's (the quota estimate's ledger, QUOTAS 10.3).</summary>
+    public Action<ParsedResponse>? Spent { get; set; }
+
     public IReadOnlyDictionary<string, AgentInfo> Agents => _agents;
 
     public void UpdateAgent(in AgentInfo agent) => _agents[agent.Id] = agent;
@@ -132,6 +135,7 @@ internal sealed class SpeedEngine
         }
 
         _responses[response.Key] = new Stored(response);
+        Spent?.Invoke(response);
         if (response.Provider is { } provider)
         {
             _agentProviders[response.AgentId] = provider;
@@ -666,6 +670,8 @@ internal sealed class SpeedEngine
             {
                 _responses[priced.Key] = new Stored(priced);
             }
+
+            Spent?.Invoke(priced);
 
             if (_reportLedger.IsCounted(priced.Key))
             {

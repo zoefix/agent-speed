@@ -92,6 +92,12 @@ public sealed record ReportPreferences
     /// <summary>The section switches that are on, in section order.</summary>
     public ImmutableArray<ReportSection> Sections { get; init; } = DefaultSections;
 
+    /// <summary>
+    /// The 額度 switch (<c>report.section.quota</c>, REPORTING-EXTENSIONS 11.1): on by default, its own key so that the
+    /// sections stored by earlier builds keep it on.
+    /// </summary>
+    public bool ShareQuota { get; init; } = true;
+
     /// <summary><see cref="DateTimeOffset.MaxValue"/> pauses until the user resumes.</summary>
     public DateTimeOffset? PausedUntil { get; init; }
 
@@ -200,10 +206,11 @@ public sealed record ReportPreferences
 
     public bool Equals(ReportPreferences? other) =>
         other is not null && Enabled == other.Enabled && Preset == other.Preset && CustomUrl == other.CustomUrl
-        && Sections.SequenceEqual(other.Sections) && PausedUntil == other.PausedUntil && Identities.SequenceEqual(other.Identities)
-        && Invite == other.Invite && Username == other.Username && HttpServices.SequenceEqual(other.HttpServices, StringComparer.Ordinal);
+        && Sections.SequenceEqual(other.Sections) && ShareQuota == other.ShareQuota && PausedUntil == other.PausedUntil
+        && Identities.SequenceEqual(other.Identities) && Invite == other.Invite && Username == other.Username
+        && HttpServices.SequenceEqual(other.HttpServices, StringComparer.Ordinal);
 
-    public override int GetHashCode() => HashCode.Combine(Enabled, Preset, CustomUrl, Identities.Length, Invite, Username, HttpServices.Length);
+    public override int GetHashCode() => HashCode.Combine(Enabled, Preset, CustomUrl, ShareQuota, Identities.Length, Invite, Username, HttpServices.Length);
 }
 
 /// <summary>The <c>report</c> object of the settings file. Tolerant: an invalid member falls back to its default.</summary>
@@ -224,6 +231,7 @@ public static class ReportSettingsJson
         }
 
         w.WriteEndArray();
+        w.WriteBoolean("shareQuota", p.ShareQuota);
         if (p.PausedUntil is { } until)
         {
             w.WriteString("pausedUntil", until == DateTimeOffset.MaxValue ? "indefinite" : Stamp(until));
@@ -342,6 +350,8 @@ public static class ReportSettingsJson
             Preset = Text(r, "preset") == "custom" ? ReportPreset.Custom : ReportPreset.CodexRadar,
             CustomUrl = Text(r, "customUrl") ?? string.Empty,
             Sections = sections,
+            // Only an explicit false turns it off: settings of earlier builds have no such member.
+            ShareQuota = !(r.TryGetProperty("shareQuota", out var quota) && quota.ValueKind == JsonValueKind.False),
             PausedUntil = paused,
             Identities = [.. identities],
             Invite = Text(r, "invite") switch
