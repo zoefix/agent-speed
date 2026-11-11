@@ -62,7 +62,8 @@ internal sealed partial class HistoryAnalyzer
             var id = database.AgentId(session.Id);
             var previous = _entries.GetValueOrDefault(id);
             if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == QoderFamily
-                && previous.Size == stat.Count && previous.Modified == stat.MaxRowId && !(repricing && previous.HasUnpriced))
+                && previous.Size == stat.Count && previous.Modified == stat.MaxRowId && !(repricing && previous.HasUnpriced)
+                && !EstimateMissing(RootFamily.Qoder, id, null, 0))
             {
                 continue;
             }
@@ -121,7 +122,7 @@ internal sealed partial class HistoryAnalyzer
 
     private bool AnalyzeQoderSessions(List<PlannedQoderSession> sessions, KeyLedger ledger, DayLabeler labeler,
         List<(StoredFile, ulong[])> pending, Action<bool> flush, ref HistoryProgress state, ref int analyzed,
-        Action<HistoryProgress>? progress, CancellationToken cancellationToken)
+        Action<HistoryProgress>? progress, long nowMs, CancellationToken cancellationToken)
     {
         foreach (var session in sessions)
         {
@@ -147,6 +148,7 @@ internal sealed partial class HistoryAnalyzer
                 Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, SourceKind.Qoder, labeler, Pricing),
                 PerfRecords = PerfRecordsOf(completions, responses, session.Id, SourceKind.Qoder, labeler),
             };
+            NoteEstimate(entry, RootFamily.Qoder, responses.Values, SourceKind.Qoder, labeler, nowMs);
             _entries[session.Id] = entry;
             pending.Add((entry, ledger.FinishFile()));
             analyzed++;

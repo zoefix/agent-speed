@@ -63,7 +63,8 @@ internal sealed partial class HistoryAnalyzer
             var modified = DevinModified(stat.MaxRowId, session.Model);
             var previous = _entries.GetValueOrDefault(id);
             if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == DevinFamily
-                && previous.Size == stat.Count && previous.Modified == modified && !(repricing && previous.HasUnpriced))
+                && previous.Size == stat.Count && previous.Modified == modified && !(repricing && previous.HasUnpriced)
+                && !EstimateMissing(RootFamily.Devin, id, null, 0))
             {
                 continue;
             }
@@ -119,7 +120,7 @@ internal sealed partial class HistoryAnalyzer
 
     private bool AnalyzeDevinSessions(List<PlannedDevinSession> sessions, KeyLedger ledger, DayLabeler labeler,
         List<(StoredFile, ulong[])> pending, Action<bool> flush, ref HistoryProgress state, ref int analyzed,
-        Action<HistoryProgress>? progress, CancellationToken cancellationToken)
+        Action<HistoryProgress>? progress, long nowMs, CancellationToken cancellationToken)
     {
         foreach (var session in sessions)
         {
@@ -145,6 +146,7 @@ internal sealed partial class HistoryAnalyzer
                 Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, SourceKind.Devin, labeler, Pricing),
                 PerfRecords = PerfRecordsOf(completions, responses, session.Id, SourceKind.Devin, labeler),
             };
+            NoteEstimate(entry, RootFamily.Devin, responses.Values, SourceKind.Devin, labeler, nowMs);
             _entries[session.Id] = entry;
             pending.Add((entry, ledger.FinishFile()));
             analyzed++;

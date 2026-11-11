@@ -14,7 +14,7 @@ internal sealed partial class HistoryAnalyzer
     /// ZCode's databases in list order (METRICS 2.1, 8): every database is read whole; a session an earlier database of the
     /// list provides is left out, and unchanged sessions keep their entries (<c>&lt;database&gt;#&lt;session&gt;</c>).
     /// </summary>
-    private void PlanZCode(Plan plan, SourceLocations locations, IReadOnlySet<SourceKind> enabled, bool zoneChanged, bool repricing,
+    private void PlanZCode(Plan plan, SourceLocations locations, IReadOnlySet<SourceKind> enabled, bool zoneChanged, bool repricing, long nowMs,
         CancellationToken cancellationToken)
     {
         if (!enabled.Contains(SourceKind.ZCode))
@@ -44,7 +44,8 @@ internal sealed partial class HistoryAnalyzer
                     plan.Discovered++;
                     var previous = _entries.GetValueOrDefault(id);
                     if (previous is not null && !zoneChanged && previous.Version == _options.Version && previous.Family == "zcode"
-                        && previous.Size == stamp.Length && previous.Modified == stamp.LastWriteUtc.Ticks && !(repricing && previous.HasUnpriced))
+                        && previous.Size == stamp.Length && previous.Modified == stamp.LastWriteUtc.Ticks && !(repricing && previous.HasUnpriced)
+                        && !EstimateMissing(RootFamily.ZCode, id, ToMs(stamp.LastWriteUtc), nowMs))
                     {
                         continue;
                     }
@@ -65,7 +66,7 @@ internal sealed partial class HistoryAnalyzer
 
     private bool AnalyzeZCodeSessions(List<PlannedZCodeSession> sessions, KeyLedger ledger, DayLabeler labeler,
         List<(StoredFile, ulong[])> pending, Action<bool> flush, ref HistoryProgress state, ref int analyzed,
-        Action<HistoryProgress>? progress, CancellationToken cancellationToken)
+        Action<HistoryProgress>? progress, long nowMs, CancellationToken cancellationToken)
     {
         foreach (var session in sessions)
         {
@@ -91,6 +92,7 @@ internal sealed partial class HistoryAnalyzer
                 Version = _options.Version, Days = DayAggregate.Contributions(responses.Values, SourceKind.ZCode, labeler, Pricing),
                 PerfRecords = PerfRecordsOf(completions, responses, session.Id, SourceKind.ZCode, labeler),
             };
+            NoteEstimate(entry, RootFamily.ZCode, responses.Values, SourceKind.ZCode, labeler, nowMs);
             _entries[session.Id] = entry;
             pending.Add((entry, ledger.FinishFile()));
             analyzed++;

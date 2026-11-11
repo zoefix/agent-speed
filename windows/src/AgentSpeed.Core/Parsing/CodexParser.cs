@@ -40,6 +40,9 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     /// <summary>Receives the account's limits of this computer's rollouts (QUOTAS 3); null elsewhere (history, remote hosts).</summary>
     public Quota.CodexQuotaCollector? Quota { get; init; }
 
+    /// <summary>Collects every token count line with a window for the quota estimate (QUOTAS 10.4); null while nobody does.</summary>
+    internal List<Quota.Estimate.CodexTokenLine>? EstimateLines { get; set; }
+
     /// <summary>Time of the first <c>session_meta</c>, i.e. when the rollout was created.</summary>
     public long? CreatedMs => _fileCreatedMs;
 
@@ -184,7 +187,12 @@ internal sealed class CodexParser : TranscriptParser<CodexLine>
     {
         if (line.PayloadKind == CodexPayloadKind.TokenCount && line.RateLimits is { } limits)
         {
-            Quota?.Observe(limits, ts);
+            var windows = limits.Windows(ts);
+            Quota?.Observe(windows, ts, AgentId, limits.PlanType);
+            if (EstimateLines is { } lines && windows.Count > 0)
+            {
+                lines.Add(new Quota.Estimate.CodexTokenLine(AgentId, ts, windows, limits.PlanType));
+            }
         }
 
         switch (line.PayloadKind)

@@ -181,7 +181,21 @@ public sealed class CodexQuotaCollector
     /// <summary>Increases whenever <see cref="Snapshot"/> changes.</summary>
     public int Version { get; private set; }
 
+    /// <summary>Every token count line with a window as it is read, for the quota estimate (QUOTAS 10.4); on the reading thread.</summary>
+    public Action<Estimate.CodexTokenLine>? LineRead { get; set; }
+
     internal void Observe(CodexRateLimits limits, long timestampMs) => Observe(limits.Windows(timestampMs), timestampMs);
+
+    /// <param name="file">The rollout the line is in (its parser's agent id), for <see cref="LineRead"/>.</param>
+    internal void Observe(IReadOnlyList<QuotaWindow> windows, long timestampMs, string file, string? planType)
+    {
+        if (windows.Count > 0 && LineRead is { } read)
+        {
+            read(new Estimate.CodexTokenLine(file, timestampMs, windows, planType));
+        }
+
+        Observe(windows, timestampMs);
+    }
 
     internal void Observe(IReadOnlyList<QuotaWindow> windows, long timestampMs)
     {

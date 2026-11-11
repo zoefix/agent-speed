@@ -2,6 +2,7 @@ using System.Buffers.Binary;
 using System.Runtime.InteropServices;
 using AgentSpeed.Core.IO.Sqlite;
 using AgentSpeed.Core.Perf;
+using AgentSpeed.Core.Quota.Estimate;
 
 namespace AgentSpeed.Core.History;
 
@@ -32,6 +33,9 @@ internal sealed class StoredFile
 
     /// <summary>Some response has no known price (METRICS 9.7 re-analysis).</summary>
     public bool HasUnpriced => Days.Values.Any(d => d.HasUnpriced);
+
+    /// <summary>The quota estimate's share of the file (QUOTAS 10.3), written with it; null keeps none.</summary>
+    public EstimateFileShare? Estimate { get; set; }
 }
 
 /// <summary>
@@ -332,6 +336,7 @@ internal sealed partial class HistoryStore : IDisposable
                 SaveModes(entry);
                 SaveUnpriced(entry);
                 SavePerfRecords(entry);
+                SaveEstimate(entry);
                 foreach (var (key, day) in entry.Days)
                 {
                     var source = SourceNames.Of(key.Source);
@@ -624,6 +629,7 @@ internal sealed partial class HistoryStore : IDisposable
             connection.Execute(ModesSchema);
             connection.Execute(UnpricedSchema);
             connection.Execute(PerfRecordsSchema);
+            connection.Execute(EstimateSchema);
             CreateRemoteTables(connection);
             return new HistoryStore(connection);
         }

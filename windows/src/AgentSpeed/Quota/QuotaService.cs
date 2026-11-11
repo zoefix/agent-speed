@@ -7,6 +7,7 @@ using AgentSpeed.Core;
 using AgentSpeed.Core.Network;
 using AgentSpeed.Core.Quota;
 using AgentSpeed.Core.Quota.Cookies;
+using AgentSpeed.Core.Quota.Estimate;
 using AgentSpeed.Core.Quota.Local;
 using AgentSpeed.Core.Quota.Network;
 using AgentSpeed.Core.Quota.Routes;
@@ -16,16 +17,30 @@ using AgentSpeed.Presentation.Settings;
 
 namespace AgentSpeed.Quota;
 
-/// <summary>What the quota readers may do: the switches, the sources whose quota shows, the phase 2 routes and the network.</summary>
-internal sealed record QuotaInputs(QuotaSettings Quota, IReadOnlySet<SourceKind> Shown, IReadOnlySet<QuotaRoute> Routes, bool Network)
+/// <summary>
+/// What the quota readers may do: the switches, the sources whose quota shows, the phase 2 routes, the network and the
+/// sources the hosts read (<paramref name="HostShown"/>, REMOTE 11.1).
+/// </summary>
+internal sealed record QuotaInputs(QuotaSettings Quota, IReadOnlySet<SourceKind> Shown, IReadOnlySet<QuotaRoute> Routes, bool Network,
+    IReadOnlySet<SourceKind> HostShown)
 {
     public static QuotaInputs Default { get; } = Of(AppSettings.Default);
 
-    public static QuotaInputs Of(AppSettings settings) =>
-        new(settings.Quota, QuotaSettings.Sources.Where(settings.ShowsQuota).ToHashSet(), settings.QuotaRoutes, settings.NetworkEnabled);
+    public static QuotaInputs Of(AppSettings settings)
+    {
+        var switches = settings.RemoteQuotaSwitches;
+        var hosts = switches.Sources.ToHashSet();
+        if (switches.ClaudeCode && settings.RemoteHosts.Hosts.Any(h => h.QuotaClaudeCli))
+        {
+            hosts.Add(SourceKind.ClaudeCode);
+        }
+
+        return new(settings.Quota, QuotaSettings.Sources.Where(settings.ShowsQuota).ToHashSet(), settings.QuotaRoutes, settings.NetworkEnabled, hosts);
+    }
 
     public bool Equals(QuotaInputs? other) =>
-        other is not null && Quota == other.Quota && Network == other.Network && Shown.SetEquals(other.Shown) && Routes.SetEquals(other.Routes);
+        other is not null && Quota == other.Quota && Network == other.Network && Shown.SetEquals(other.Shown) && Routes.SetEquals(other.Routes)
+        && HostShown.SetEquals(other.HostShown);
 
     public override int GetHashCode() => HashCode.Combine(Quota, Network, Shown.Count, Routes.Count);
 }
@@ -35,7 +50,8 @@ internal sealed record QuotaInputs(QuotaSettings Quota, IReadOnlySet<SourceKind>
 /// Claude CLI from the bridge's quota file, the phase 2 readers of QUOTAS 9 through the vendor service, every remote
 /// host's lines (REMOTE 11), and which of their apps run and are signed in. Polls on a worker every 5 s (each reader
 /// keeps its own cadence; a vendor round every 15 s runs beside it) and publishes <see cref="State"/> on the UI thread.
-/// Nothing runs for a source that is disabled or a switch that is off.
+/// Each poll also feeds the quota estimate (QUOTAS 10) and shows each window's estimate from its latest build. Nothing
+/// runs for a source that is disabled or a switch that is off.
 /// </summary>
 internal sealed class QuotaService : IDisposable
 {
@@ -81,12 +97,16 @@ internal sealed class QuotaService : IDisposable
     private volatile ClaudeCliBridgeStatus _cliStatus = ClaudeCliBridgeStatus.Off;
     private volatile QuotaState? _demo;
     private volatile bool _disposed;
+    private readonly QuotaEstimator? _estimator;
+    private ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate> _estimates = ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate>.Empty;
 
     /// <param name="sandboxed">The developer capture: no browser is read, the ZCode key stays in memory and no vendor is asked.</param>
-    public QuotaService(Dispatcher ui, Func<QuotaSnapshot?> codex, bool sandboxed = false)
+    /// <param name="estimator">The quota estimate the polls feed and show (QUOTAS 10); null shows the vendor's values alone.</param>
+    public QuotaService(Dispatcher ui, Func<QuotaSnapshot?> codex, bool sandboxed = false, QuotaEstimator? estimator = null)
     {
         _ui = ui;
         _codex = codex;
+        _estimator = estimator;
         Bridge = new ClaudeCliBridge(ClaudeCliPaths.Default(dataFolder: AppPaths.DataDirectory), OpenHelper);
         _desktop = new DesktopQuotaReader(DesktopCacheFolders);
         _cli = new ClaudeCliQuotaReader(Bridge.Paths.QuotaFile);
@@ -212,6 +232,7 @@ internal sealed class QuotaService : IDisposable
                 }
 
                 state = state with { Reports = state.Reports.SetItem(report.Source, report) };
+                _estimator?.HostQuota(report);
             }
             else if (line.RemovedSource is { } source)
             {
@@ -240,6 +261,7 @@ internal sealed class QuotaService : IDisposable
             {
                 if (document.Hosts.FirstOrDefault(h => h.Id == id) is not { } host)
                 {
+                    _estimator?.ForgetHost(id);
                     continue;
                 }
 
@@ -462,9 +484,11 @@ internal sealed class QuotaService : IDisposable
             }
         }
 
+        var shownSnapshots = snapshots.ToImmutable();
         return new QuotaState
         {
-            Snapshots = snapshots.ToImmutable(),
+            Snapshots = shownSnapshots,
+            Estimates = Estimate(shownSnapshots, now, shown),
             Active = active.ToImmutable(),
             CliStatus = _cliStatus,
             CliFileTime = settings.ClaudeCli ? _cli.FileTime : null,
@@ -473,6 +497,79 @@ internal sealed class QuotaService : IDisposable
             ZcodeKeySaved = _zcodeKeySaved,
             Hosts = _hosts,
         };
+    }
+
+    /// <summary>
+    /// Feeds the estimate with this poll (switches, sign-ins, snapshots), builds it when due and returns each shown window's
+    /// estimate, this computer's and every host's; an estimate that shows the same as before keeps its earlier value. Under
+    /// the gate.
+    /// </summary>
+    private ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate> Estimate(ImmutableDictionary<SourceKind, QuotaSnapshot> snapshots, long now,
+        IReadOnlySet<SourceKind> shown)
+    {
+        if (_estimator is not { } estimator)
+        {
+            return ImmutableDictionary<QuotaEstimateKey, QuotaWindowEstimate>.Empty;
+        }
+
+        estimator.SetEnabled(shown);
+        estimator.RefreshSignIns(now, shown.Contains(SourceKind.Codex), shown.Contains(SourceKind.ClaudeCode) || shown.Contains(SourceKind.ClaudeDesktop));
+        foreach (var snapshot in snapshots.Values)
+        {
+            estimator.Snapshot(snapshot, snapshot.Source == SourceKind.ClaudeDesktop ? _desktop.Organization : null);
+        }
+
+        estimator.BuildIfDue();
+        var previous = _estimates;
+        var next = ImmutableDictionary.CreateBuilder<QuotaEstimateKey, QuotaWindowEstimate>();
+        void Add(string? host, QuotaSnapshot snapshot)
+        {
+            foreach (var window in snapshot.Windows)
+            {
+                var key = new QuotaEstimateKey(host, snapshot.Source, EstimateNames.WindowId(window));
+                if (estimator.Display(snapshot.Source, host, key.WindowId, now) is { } estimate)
+                {
+                    next[key] = previous.TryGetValue(key, out var shownBefore) && shownBefore == estimate with { AtMs = shownBefore.AtMs } ? shownBefore : estimate;
+                }
+            }
+        }
+
+        foreach (var snapshot in snapshots.Values)
+        {
+            Add(null, snapshot);
+        }
+
+        ImmutableDictionary<string, HostQuotaState> hosts;
+        lock (_hostsGate)
+        {
+            hosts = _hosts;
+        }
+
+        foreach (var (id, host) in hosts)
+        {
+            foreach (var report in host.Reports.Values)
+            {
+                Add(id, report.Snapshot);
+            }
+        }
+
+        _estimates = next.ToImmutable();
+        return _estimates;
+    }
+
+    /// <summary>
+    /// The report's quota entries at <paramref name="nowMs"/> (REPORTING-EXTENSIONS 11.1, 11.2): only sources whose quota is
+    /// read here or on a host; thread-safe.
+    /// </summary>
+    public IReadOnlyList<QuotaReportEntry> ReportEntries(long nowMs)
+    {
+        if (_estimator is not { } estimator)
+        {
+            return [];
+        }
+
+        var inputs = _inputs;
+        return estimator.Entries(nowMs, s => inputs.Shown.Contains(s) || inputs.HostShown.Contains(s));
     }
 
     private static bool IsPhaseOne(SourceKind source) => source is SourceKind.Codex or SourceKind.ClaudeCode or SourceKind.ClaudeDesktop;
@@ -588,6 +685,15 @@ internal sealed class QuotaService : IDisposable
             // A poll still running finishes before the process listing goes away.
             _presence?.Dispose();
             _antigravity?.Dispose();
+        }
+
+        try
+        {
+            _estimator?.Flush();
+        }
+        catch (Exception ex)
+        {
+            AppLog.Warn("Quota: the estimate could not be saved.", ex);
         }
 
         _transport.Dispose();

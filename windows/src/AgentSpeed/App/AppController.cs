@@ -588,6 +588,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
     private void StartMonitor()
     {
+        CreateEstimator();
         if (_launch.ReportE2E is not null)
         {
             AppLog.Info("--report-e2e: the live monitor stays off; a synthetic engine feed drives live reporting.");
@@ -596,7 +597,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         try
         {
-            _monitor = new LiveMonitor(_hub, Settings.ToMonitorConfiguration(), _cost.Book);
+            _monitor = new LiveMonitor(_hub, Settings.ToMonitorConfiguration(), _cost.Book) { Estimator = _estimator };
             RequestSubsets(Settings);
             _monitor.Start();
         }
@@ -618,7 +619,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
 
         try
         {
-            _remote = new RemoteHostsService(_monitor, AppPaths.Version, _cost.Book);
+            _remote = new RemoteHostsService(_monitor, AppPaths.Version, _cost.Book) { Salt = _estimator?.Salt };
             _remote.Coordinator.QuotaReceived += OnRemoteQuota;
             _remote.Apply(Settings);
             _remoteHosts?.Attach(_remote);
@@ -1132,6 +1133,7 @@ internal sealed partial class AppController : IAppCommands, IOrbHost, IDisposabl
             _historyService = new HistoryService(_historyHub, Settings.ToMonitorConfiguration(), pricing: _cost.Book, remote: _remote?.History)
             {
                 PerfRecordsUpdated = records => _monitor?.SetPerfRecords(records),
+                EstimateUpdated = share => _estimator?.HistoryUpdated(share),
             };
             _historyService.Start();
         }

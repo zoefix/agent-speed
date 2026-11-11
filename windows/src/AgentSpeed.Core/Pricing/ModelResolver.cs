@@ -191,6 +191,23 @@ public sealed class ModelResolver
         return null;
     }
 
+    /// <summary>The <c>cloud</c> step of METRICS 9.2 changes the key: a model id in a Bedrock or Vertex form (QUOTAS 10.3).</summary>
+    internal bool IsCloudForm(string model)
+    {
+        string? previous = null;
+        foreach (var (step, key, _) in Candidates(model))
+        {
+            if (step == "cloud")
+            {
+                return previous is not null && !string.Equals(previous, key, StringComparison.Ordinal);
+            }
+
+            previous = key;
+        }
+
+        return false;
+    }
+
     /// <summary>The normalization steps of METRICS 9.2, in order; a null key is the <c>free</c> step.</summary>
     internal IEnumerable<(string Step, string? Key, bool Fast)> Candidates(string model)
     {
