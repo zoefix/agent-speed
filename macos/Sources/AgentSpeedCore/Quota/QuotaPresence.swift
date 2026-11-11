@@ -81,9 +81,18 @@ public final class QuotaProcessScan: @unchecked Sendable {
     }
 }
 
+/// The account a sign-in file names, for the estimate's keys (QUOTAS 10.1): kept in memory only and turned into a key
+/// at once, never stored or logged.
+public enum QuotaSignInIdentity: Equatable, Sendable {
+    /// `auth.json` `tokens.account_id`.
+    case codex(accountId: String)
+    /// `.claude.json` `oauthAccount`.
+    case claude(organization: String, account: String, organizationType: String?, tier: String?)
+}
+
 /// The signed-in markers of QUOTAS 6. Only the named keys are looked at; the files are scanned in memory, nothing of
-/// them is copied, kept or logged, and no token ever becomes a string. A file is read again only when it changed, and
-/// at most once a minute.
+/// them is copied, kept or logged, and no token ever becomes a string. The account ids of QUOTAS 10.1 stay in memory
+/// for the estimate's keys. A file is read again only when it changed, and at most once a minute.
 public struct QuotaSignIn: Sendable {
     public static let rereadAfterMs: Int64 = 60_000
     static let maxFileBytes = 64 << 20
@@ -100,6 +109,9 @@ public struct QuotaSignIn: Sendable {
     private var stamp: (size: Int64, modifiedNs: Int64)?
     private var readMs: Int64?
     public private(set) var signedIn = false
+    /// The account of the last read and the file's modification time then (capped at the read).
+    public private(set) var identity: QuotaSignInIdentity?
+    public private(set) var identityMs: Int64?
 
     public init(_ marker: Marker, file: URL) {
         self.marker = marker
@@ -130,6 +142,7 @@ public struct QuotaSignIn: Sendable {
         guard let stat = FileStat.stat(file.path), stat.isRegularFile else {
             stamp = nil
             signedIn = false
+            identity = nil
             return false
         }
         let changed = stamp.map { $0.size != stat.size || $0.modifiedNs != stat.modifiedNs } ?? true
@@ -138,26 +151,64 @@ public struct QuotaSignIn: Sendable {
         stamp = (stat.size, stat.modifiedNs)
         guard stat.size <= Int64(Self.maxFileBytes), let data = try? Data(contentsOf: file, options: .uncached) else {
             signedIn = false
+            identity = nil
             return false
         }
-        signedIn = data.withUnsafeBytes { Self.check(marker, $0) }
+        let read = data.withUnsafeBytes { Self.read(marker, $0) }
+        signedIn = read.found
+        identity = read.identity
+        identityMs = min(nowMs, stat.modifiedNs / 1_000_000)
         return signedIn
     }
 
     /// Scans the top-level object for the marker's keys, skipping (and validating) everything else.
     static func check(_ marker: Marker, _ bytes: UnsafeRawBufferPointer) -> Bool {
+        read(marker, bytes).found
+    }
+
+    /// The marker and the account ids beside it: only `tokens.account_id`, or `oauthAccount`'s organization, account,
+    /// organization type and rate limit tier; every other value is skipped unread.
+    static func read(_ marker: Marker, _ bytes: UnsafeRawBufferPointer) -> (found: Bool, identity: QuotaSignInIdentity?) {
         var scanner = JSONScanner(bytes)
         var found = false
+        var identity: QuotaSignInIdentity?
         do {
             try scanner.beginObject()
             while let key = try scanner.nextMember() {
                 switch marker {
                 case .codex where scanner.key(key, is: "auth_mode"):
                     if try scanner.readStringMatch(["chatgpt"]) == 0 { found = true }
-                case .codex where scanner.key(key, is: "tokens"), .claudeCode where scanner.key(key, is: "oauthAccount"):
-                    if try scanner.beginObjectIfPresent() {
-                        found = true
-                        while try scanner.nextMember() != nil { try scanner.skipValue() }
+                case .codex where scanner.key(key, is: "tokens"):
+                    guard try scanner.beginObjectIfPresent() else { continue }
+                    found = true
+                    var accountId: String?
+                    while let member = try scanner.nextMember() {
+                        if scanner.key(member, is: "account_id") {
+                            accountId = try scanner.readNonEmptyString()
+                        } else {
+                            try scanner.skipValue()
+                        }
+                    }
+                    identity = accountId.map { .codex(accountId: $0) }
+                case .claudeCode where scanner.key(key, is: "oauthAccount"):
+                    guard try scanner.beginObjectIfPresent() else { continue }
+                    found = true
+                    var organization: String?, account: String?, type: String?, tier: String?
+                    while let member = try scanner.nextMember() {
+                        if scanner.key(member, is: "organizationUuid") {
+                            organization = try scanner.readNonEmptyString()
+                        } else if scanner.key(member, is: "accountUuid") {
+                            account = try scanner.readNonEmptyString()
+                        } else if scanner.key(member, is: "organizationType") {
+                            type = try scanner.readNonEmptyString()
+                        } else if scanner.key(member, is: "organizationRateLimitTier") {
+                            tier = try scanner.readNonEmptyString()
+                        } else {
+                            try scanner.skipValue()
+                        }
+                    }
+                    if let organization, let account {
+                        identity = .claude(organization: organization, account: account, organizationType: type, tier: tier)
                     }
                 default:
                     try scanner.skipValue()
@@ -165,8 +216,8 @@ public struct QuotaSignIn: Sendable {
             }
             try scanner.finish()
         } catch {
-            return false
+            return (false, nil)
         }
-        return found
+        return (found, identity)
     }
 }

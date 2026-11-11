@@ -317,14 +317,16 @@ at least one window.
 ## 7. Formatting
 
 - **Percent**: `23%`, the integer of section 2 and `%`, with no space in any language.
-- **Reset, long** (dashboard). `d = resetsAtMs − now`:
+- **Reset, long** (dashboard; a quota line's tooltip while its row shows the short one, DESIGN 4).
+  `d = resetsAtMs − now`:
   - `d < 1 h`: `quota.reset.in` with `quota.duration.m`, e.g. `42 分後重置`.
   - `d < 24 h`: `quota.reset.in` with `quota.duration.hm`, e.g. `3 小時 12 分後重置`. Minutes are rounded down; an exact
     hour drops its minutes: `quota.duration.h`.
   - Otherwise: `quota.reset.at` with the weekday's short name and the 24-hour time from the platform's formatter in the
     app language, e.g. `週五 09:00 重置`. When the weekday is today's (a reset 6–7 days away), the numeric month and day
     replace it: `11/17 09:00 重置`.
-- **Reset, short** (orb card), the same in every language:
+- **Reset, short** (orb card; the dashboard's quota lines beside an amount, DESIGN 4), the same in every
+  language:
   - `d < 1 h` → `42m`;
   - `d < 24 h` → `3h` (hours rounded down);
   - otherwise the weekday's short name (`週五`, `周五`, `Fri`, `金`), or `M/d` when it is today's weekday.

@@ -95,6 +95,17 @@ final class CostDisplay {
     /// `$12.34`, `NT$1,235`.
     func amountText(microUsd: Int64) -> String { amount(microUsd: microUsd).text }
 
+    /// An amount with the rate's digits (`$161`, `$5,742`, `$12.30`): the quota cells, where the cents of an
+    /// estimate would only crowd out the reset (DESIGN 4 *Amount*, 2a.6).
+    func compactAmountText(microUsd: Int64) -> String {
+        MoneyFormat.withSymbol(symbol, compactAmountNumber(microUsd: microUsd))
+    }
+
+    /// `compactAmountText` without the symbol: a quota line's cap after its used amount (`US$4,938 / ≈5,742`).
+    func compactAmountNumber(microUsd: Int64) -> String {
+        MoneyFormat.number(MoneyFormat.amount(microUsd: microUsd, rate: rate), digits: currency.digits, form: .rate)
+    }
+
     /// The amount in US dollars (tooltips show it next to another currency).
     func usdText(microUsd: Int64) -> String {
         MoneyFormat.format(MoneyFormat.amount(microUsd: microUsd, rate: 1), currency: currencies.currencyOrUSD(Currency.usdCode),

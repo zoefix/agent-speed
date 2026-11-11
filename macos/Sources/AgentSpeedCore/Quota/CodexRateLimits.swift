@@ -13,6 +13,8 @@ struct CodexRateLimits: Equatable, Sendable {
     var isCodexBucket = true
     var primary: Slot?
     var secondary: Slot?
+    /// `plan_type` as written (QUOTAS 10.2); newer builds write null.
+    var planType: String?
 
     /// The windows this line gives, `primary` first; a kind seen twice keeps the first. `timestampMs` is the line's
     /// time, which an older Codex's `resets_in_seconds` counts from.
@@ -69,6 +71,8 @@ extension CodexRateLimits {
                 limits.primary = try scanSlot(&scanner)
             } else if scanner.key(key, is: "secondary") {
                 limits.secondary = try scanSlot(&scanner)
+            } else if scanner.key(key, is: "plan_type") {
+                limits.planType = try scanner.readString()
             } else {
                 try scanner.skipValue()
             }

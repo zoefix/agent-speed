@@ -997,10 +997,10 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
     card's widest label; `0.5 t`; the bar, `5 t` long and `0.26 t` tall, fully rounded; `0.5 t`; the percent at `t` in
     the value token, tabular, right-aligned in a cell as wide as `≈100%` (the `≈` of an extrapolated percent at
     `0.8 t` in the secondary token, QUOTAS 10.7); `0.4 t`; the used amount (QUOTAS 10.8, section 9 *Amount* with its
-    symbol, `$161`) at `0.9 t` in the value token, tabular, right-aligned in a cell as wide as the card's widest
-    amount, empty without spend; `0.4 t`; the short reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t` in the secondary
-    token, in a cell as wide as the card's widest, nothing while unknown or passed. The card shows no cap (user's
-    choice 2026-11-11: the dashboard has it).
+    symbol in the digits of the *Rate* table, `$161`, as in section 4's quota lines) at `0.9 t` in the value token,
+    tabular, right-aligned in a cell as wide as the card's widest amount, empty without spend; `0.4 t`; the short
+    reset (QUOTAS 7: `42m`, `3h`, `週五`) at `0.9 t` in the secondary token, in a cell as wide as the card's widest,
+    nothing while unknown or passed. The card shows no cap (user's choice 2026-11-11: the dashboard has it).
   - Bar: track label 12 % (dark 16 %); fill the source color, amber `#F5A524` (light `#B86E00`) from 80 %, the system
     red from 95 %, when the percent takes the same red. Increase Contrast: the fill in the text color, the track in the
     disabled-text color.
@@ -2133,29 +2133,36 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    - Columns, from the name's leading edge: the label (`5h`, `7d`, `Fable 7d`), 11 pt medium, secondary, in a column
      as wide as the section's widest label; 8 pt; the bar, flexible, at least 88 pt; 8 pt; the percent, 11.5 pt
      semibold tabular in the value color, right-aligned in a cell as wide as `≈100%`; 8 pt; the amount (below); 8 pt;
-     the long reset (QUOTAS 7: `3 小時 12 分後重置`, `週五 09:00 重置`), 11 pt secondary, in the rest of the row, its
-     tail truncated. While the snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+     the reset, 11 pt secondary, in the rest of the row, its tail truncated: the long reset (QUOTAS 7:
+     `3 小時 12 分後重置`, `週五 09:00 重置`) while no line of the section has an amount, else the short reset (QUOTAS 7:
+     `42m`, `3h`, `週五`; user's choice 2026-11-11: one line, `US$4,938 / ≈5,742  週五`), and none when even the short
+     resets do not fit beside the bar at its shortest (52 pt); the tooltip then opens with the long reset. While the
+     snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
    - **Percent** (QUOTAS 10.7; user's choice 2026-11-11): the live percent. While it is extrapolated, a leading `≈` in
      the secondary token, kerned 1 pt to the digits; the bar follows the same value. A new vendor value replaces it
      with the usual crossfade, and the `≈` fades with it.
    - **Amount** (QUOTAS 10.8; user's choice 2026-11-11: percent, amount used and the estimated cap): the used amount
-     (section 9 *Amount*, display currency), 11 pt medium tabular in the value color; then, while an estimate exists,
-     `quota.amount.cap` (` / ≈$5,742`) or `quota.amount.atLeast` (` / ≥$737`) with the cap in the tertiary token. At
-     confidence `none` only the used amount shows; with no spend in the window and no estimate, the cell is empty. The
-     cell is left-aligned and as wide as the section's widest amount, so the reset times stay in one column.
+     (section 9 *Amount* with its symbol, in the digits of the *Rate* table: whole units from 100, so `US$4,938`,
+     `US$209`, `US$12.30`; display currency), 11 pt medium tabular in the value color; then, while an estimate exists,
+     `quota.amount.cap` (` / ≈5,742`) or `quota.amount.atLeast` (` / ≥598`) with the cap in the tertiary token, in the
+     same digits without the symbol the used amount already shows, in every currency (`NT$1,235 / ≈4,560`; user's
+     choice 2026-11-11). At confidence `none` only the used amount shows; with no spend in the window and no estimate,
+     the cell is empty. The cell is left-aligned and as wide as the section's widest amount, so the reset times stay in
+     one column. The tooltip shows the amounts in full (section 9 *Amount*).
    - Bar: 4 pt tall, fully rounded; track label 8 % (dark 12 %); fill the source color, amber `#F5A524` (light
      `#B86E00`) from 80 %, the system red from 95 %, when the percent takes the same red. The pace mark, while
      QUOTAS 7 gives one, is a 1 × 8 pt tick at the pace fraction, label 35 %, centered on the bar's height.
    - Spacing: the first line 6 pt below the secondary line, lines 4 pt apart; the row eases to its new height (0.25 s).
    - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s; texts crossfade in 0.2 s.
      Reduce Motion: lengths change at once.
-   - Tooltip of a line: `quota.updated` with the snapshot's time (time only today, else date and time) and, while
-     known, `quota.pace`. While an estimate exists, a hairline, then in secondary text: `quota.estimate.used`;
-     `quota.estimate.cap` with the published range (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap
-     exists; `quota.estimate.coverage` (integer percent) while known; the confidence line
-     (`quota.estimate.confidence.*`) with `quota.estimate.windows` after ` · `; `quota.estimate.plan` with the plan
-     (and ` · ` tier) when known; `quota.estimate.live` while the percent is extrapolated; and last, in tertiary,
-     `quota.estimate.note`. Non-USD currencies add the USD amount as section 9 *Tooltips* says.
+   - Tooltip of a line: the long reset when the row shows the short one or none (above), then `quota.updated` with
+     the snapshot's time (time only today, else date and time) and, while known, `quota.pace`. While an estimate
+     exists, a hairline, then in secondary text: `quota.estimate.used`; `quota.estimate.cap` with the published range
+     (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap exists; `quota.estimate.coverage` (integer
+     percent) while known; the confidence line (`quota.estimate.confidence.*`) with `quota.estimate.windows` after
+     ` · `; `quota.estimate.plan` with the plan (and ` · ` tier) when known; `quota.estimate.live` while the percent
+     is extrapolated; and last, in tertiary, `quota.estimate.note`. Non-USD currencies add the USD amount as section
+     9 *Tooltips* says.
    - Accessibility: the row's label adds, after the cost, one `a11y.quota.window` per window
      (`a11y.quota.windowNoReset` without a reset time), each followed by `a11y.quota.amount` (or
      `a11y.quota.amountNoCap`) and, while the percent is extrapolated, `a11y.quota.estimated`, joined by

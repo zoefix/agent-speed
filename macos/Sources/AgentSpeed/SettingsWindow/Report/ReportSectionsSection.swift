@@ -17,7 +17,8 @@ struct ReportSectionsSection: View {
                         report.setSection(section, on: new.contains(section))
                     }
                 }
-            ), discovery: report.discovery)
+            ), quota: Binding(get: { report.preferences.shareQuota }, set: { report.setShareQuota($0) }),
+               discovery: report.discovery)
             HStack {
                 Spacer()
                 Button(l10n("report.preview")) { ReportPreviewWindow.show(model: model) }
@@ -31,10 +32,12 @@ struct ReportSectionsSection: View {
     }
 }
 
-/// The four section switches, shared by the pane and the consent sheet.
+/// The section switches and the 額度 switch, shared by the pane and the consent sheet.
 struct ReportSectionToggles: View {
     let model: AppModel
     @Binding var selection: Set<ReportSection>
+    /// The 額度 switch (REPORTING-EXTENSIONS 11): gated by the `quotaEstimate` extension, not by `sections`.
+    @Binding var quota: Bool
     /// The service's document; nil while it is unknown (every switch stays usable).
     let discovery: ReportDiscovery?
 
@@ -76,6 +79,20 @@ struct ReportSectionToggles: View {
             }
             .disabled(!listed || (isTraffic && !trafficOn))
         }
+        let accepted = Self.acceptsQuota(discovery)
+        Toggle(isOn: Binding(get: { accepted && quota }, set: { quota = $0 })) {
+            VStack(alignment: .leading, spacing: 2) {
+                RowTitle(l10n("report.section.quota"))
+                if !accepted { Footnote(l10n("report.section.notAccepted")) }
+                Footnote(l10n("report.section.quota.hint"))
+            }
+        }
+        .disabled(!accepted)
+    }
+
+    /// The quota switch is usable while the known document advertises `quotaEstimate`, and before any is known.
+    static func acceptsQuota(_ discovery: ReportDiscovery?) -> Bool {
+        discovery.map { $0.extensions?.quotaEstimate == true } ?? true
     }
 }
 

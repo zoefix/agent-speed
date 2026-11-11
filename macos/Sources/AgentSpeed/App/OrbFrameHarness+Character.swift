@@ -11,7 +11,9 @@ import Foundation
 /// micro-USD (`+` after it marks part of today unpriced). `AGENT_SPEED_ORB_QUOTA` gives the 額度 card its sources:
 /// `;`-separated `source=label:percent:reset,…` with the reset as `+42m`, `+3h`, `+5d` from now, `-` unknown or `passed`, e.g.
 /// `claudeDesktop=7d:94:+10h,Fable 7d:27:+10h;codex=7d:25:+5d`; `source@host=…` is that source on a remote host, and
-/// a label may name a group (`Gemini 5h`), a month (`mo`) or credits.
+/// a label may name a group (`Gemini 5h`), a month (`mo`) or credits. A fourth field gives the window an estimate
+/// (QUOTAS 10.8) with that amount used in micro-USD, and a trailing `~` marks its percent as extrapolated (10.7):
+/// `claudeDesktop=7d:95:+10h:161000000~`.
 @MainActor
 struct CharacterDemoReadings {
     private var network = OrbLineQuietRule()
@@ -83,15 +85,25 @@ struct CharacterDemoReadings {
             guard parts.count == 2 else { return nil }
             let key = parts[0].split(separator: "@", maxSplits: 1).map(String.init)
             guard let source = SourceKind(rawValue: key[0]) else { return nil }
+            var estimates: [String: QuotaEstimateDisplay] = [:]
             let windows = parts[1].split(separator: ",").compactMap { entry -> QuotaWindow? in
                 let fields = entry.split(separator: ":").map(String.init)
-                guard fields.count == 3, let used = Double(fields[1]) else { return nil }
+                guard (3...4).contains(fields.count), let used = Double(fields[1]) else { return nil }
                 let (kind, name, minutes) = parseWindow(fields[0])
-                return QuotaWindow(kind: kind, name: name, minutes: minutes, usedPercent: used,
-                                   resetsAtMs: reset(fields[2], nowMs: nowMs))
+                let window = QuotaWindow(kind: kind, name: name, minutes: minutes, usedPercent: used,
+                                         resetsAtMs: reset(fields[2], nowMs: nowMs))
+                if fields.count == 4 {
+                    let estimated = fields[3].hasSuffix("~")
+                    let amount = Int64(estimated ? String(fields[3].dropLast()) : fields[3]) ?? 0
+                    estimates[QuotaEstimateLineKey(source: source, window: window).window] = QuotaEstimateDisplay(
+                        percent: used, estimated: estimated, resetsMs: window.resetsAtMs, usedMicroUsd: amount,
+                        confidence: .medium)
+                }
+                return window
             }
             let snapshot = QuotaSnapshot(source: source, observedMs: nowMs - 60_000, windows: windows)
-            return QuotaCardItem(snapshot: snapshot, hostId: key.count > 1 ? key[1] : nil, hostName: key.count > 1 ? key[1] : nil)
+            return QuotaCardItem(snapshot: snapshot, hostId: key.count > 1 ? key[1] : nil, hostName: key.count > 1 ? key[1] : nil,
+                                 estimates: estimates)
         }
         // This Mac's sources first, then each host's, each in source order.
         return items.sorted { lhs, rhs in

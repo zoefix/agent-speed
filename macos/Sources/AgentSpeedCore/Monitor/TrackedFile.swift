@@ -22,6 +22,10 @@ final class TrackedFile {
     var isDirty = false
     /// Some read of the file completed (seeded or live).
     var wasRead = false
+    /// The parser keeps Codex token counts for the quota estimate (QUOTAS 10.4).
+    var collectsQuotaLines = false {
+        didSet { if collectsQuotaLines { parser.collectCodexQuotaLines() } }
+    }
 
     init(
         path: String,
@@ -44,6 +48,7 @@ final class TrackedFile {
     /// Parser state restarts after truncation or replacement; the global dedupe set is kept.
     func resetParser() {
         parser = TranscriptParser(family: family, agentId: path, fileID: fileID, root: root)
+        if collectsQuotaLines { parser.collectCodexQuotaLines() }
     }
 
     /// A Factory Droid session also changes when its sidecar does, whatever its modification time (METRICS 4.16).

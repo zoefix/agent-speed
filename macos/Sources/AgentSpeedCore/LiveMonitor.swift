@@ -19,6 +19,8 @@ public final class LiveMonitor {
     let remoteFeed = RemoteFeed()
     /// Follows the enabled sources and the report watch.
     weak var remote: RemoteCoordinator?
+    /// The quota estimate's live feed (QUOTAS 10.3); set before `start()`.
+    public var spendSink: (any QuotaSpendSink)?
 
     public init(store: SpeedStore, configuration: MonitorConfiguration = MonitorConfiguration(), pricing: PriceBook? = nil) {
         self.store = store
@@ -35,7 +37,7 @@ public final class LiveMonitor {
             store?.publishLive(snapshot, events: events)
         }
         let core = MonitorCore(configuration: configuration, mailbox: mailbox, subsets: subsets, pricing: pricing,
-                               remoteFeed: remoteFeed)
+                               spendSink: spendSink, remoteFeed: remoteFeed)
         self.mailbox = mailbox
         self.core = core
         core.start()

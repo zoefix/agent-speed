@@ -24,6 +24,13 @@ struct CharacterQuotaDynamics {
         var percent: Int
         var oldPercent: Int?
         var percentMix = 1.0
+        /// The `≈` of an extrapolated percent, crossfading with the percent.
+        var estimated = false
+        var oldEstimated = false
+        /// The used amount drawn and the one it replaces (crossfade).
+        var amount: String?
+        var oldAmount: String?
+        var amountMix = 1.0
         /// The reset text drawn (kept while its cell fades out), the one it replaces, and the cell's presence.
         var reset: String?
         var oldReset: String?
@@ -33,7 +40,7 @@ struct CharacterQuotaDynamics {
         var passed: Bool
 
         var isMoving: Bool {
-            (presence > 0 && presence < 1) || progress < 1 || percentMix < 1 || resetMix < 1
+            (presence > 0 && presence < 1) || progress < 1 || percentMix < 1 || resetMix < 1 || amountMix < 1
                 || resetPresence != (resetWanted ? 1 : 0)
         }
     }
@@ -108,7 +115,8 @@ struct CharacterQuotaDynamics {
             guard var line = lines.first(where: { $0.label == target.label }) else {
                 return Line(label: target.label, presence: appearing ? 1 : 0, wanted: true, bar: instant ? target.bar : 0,
                             from: instant ? target.bar : 0, to: target.bar, progress: instant ? 1 : 0,
-                            percent: target.percent, reset: target.reset, resetPresence: target.reset == nil ? 0 : 1,
+                            percent: target.percent, estimated: target.estimated, amount: target.amount,
+                            reset: target.reset, resetPresence: target.reset == nil ? 0 : 1,
                             resetWanted: target.reset != nil, passed: target.passed)
             }
             line.wanted = true
@@ -118,10 +126,17 @@ struct CharacterQuotaDynamics {
                 line.progress = instant ? 1 : 0
                 line.duration = target.passed && !line.passed ? resetEmpty : barEase
             }
-            if target.percent != line.percent {
+            if target.percent != line.percent || target.estimated != line.estimated {
                 line.oldPercent = line.percent
+                line.oldEstimated = line.estimated
                 line.percent = target.percent
+                line.estimated = target.estimated
                 line.percentMix = 0
+            }
+            if target.amount != line.amount {
+                line.oldAmount = line.amount
+                line.amount = target.amount
+                line.amountMix = 0
             }
             if let reset = target.reset, reset != line.reset {
                 line.oldReset = line.resetPresence > 0 ? line.reset : nil
@@ -152,6 +167,8 @@ struct CharacterQuotaDynamics {
                 line.bar = line.from + (line.to - line.from) * k
                 line.percentMix = min(1, line.percentMix + dt / Self.crossfade)
                 if line.percentMix >= 1 { line.oldPercent = nil }
+                line.amountMix = min(1, line.amountMix + dt / Self.crossfade)
+                if line.amountMix >= 1 { line.oldAmount = nil }
                 line.resetMix = min(1, line.resetMix + dt / Self.crossfade)
                 if line.resetMix >= 1 { line.oldReset = nil }
                 // A passed reset fades its cell with the emptying bar; a new one comes in like a crossfade.

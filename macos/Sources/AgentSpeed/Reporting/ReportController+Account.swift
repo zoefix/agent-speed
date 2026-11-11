@@ -85,6 +85,12 @@ extension ReportController {
         updatePerfWatch()
     }
 
+    /// The 額度 switch (REPORTING-EXTENSIONS 11.1); off sends `quotas: []` once.
+    func setShareQuota(_ on: Bool) {
+        updatePreferences { $0.shareQuota = on }
+        clearRejection()
+    }
+
     func pause(for duration: TimeInterval?) {
         let until = duration.map { Date().addingTimeInterval($0) } ?? .distantFuture
         let wasPaused = preferences.isPaused
@@ -214,7 +220,7 @@ extension ReportController {
             self.consent = ConsentDraft(
                 service: service, discovery: document, deviceId: identity?.deviceId ?? ReportCanonical.newUUID(),
                 username: username, apiKey: "", sections: self.preferences.sections,
-                isReview: review && identity?.isRegistered == true)
+                shareQuota: self.preferences.shareQuota, isReview: review && identity?.isRegistered == true)
         }
         if case .ready(let document) = serviceState, !review {
             open(document)
@@ -340,6 +346,7 @@ extension ReportController {
         updatePreferences { preferences in
             dropped = preferences.upsert(identity)
             preferences.sections = draft.sections
+            preferences.shareQuota = draft.shareQuota
             preferences.enabled = true
             // Turning reporting on in Settings answers the dashboard invitation too.
             if preferences.invite == nil { preferences.invite = .accepted }
