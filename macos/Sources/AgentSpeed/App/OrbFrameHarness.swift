@@ -19,7 +19,8 @@ import AppKit
 /// - `character[-light][-t<seconds>][-s<size>][-still]`: the `character` style over the tour (`-still`: one PNG at
 ///   `-t`), with the cards of `CharacterDemoReadings`.
 /// `AGENT_SPEED_ORB_FPS` (30) and `AGENT_SPEED_ORB_SECONDS` limit the clips; `AGENT_SPEED_ORB_LANGUAGE` (`zh-Hant`)
-/// sets the language.
+/// sets the language. `AGENT_SPEED_ORB_SPEED` holds the tour at that many tok/s; `AGENT_SPEED_ORB_SECONDS` then sets the
+/// clip's length.
 @MainActor
 enum OrbFrameHarness {
     struct Clip {
@@ -121,7 +122,9 @@ enum OrbFrameHarness {
             try? FileManager.default.removeItem(at: frames)
             try? FileManager.default.createDirectory(at: frames, withIntermediateDirectories: true)
             let started = Date()
-            let count = record(clip, model: model, fps: fps, seconds: min(limit ?? .infinity, clip.duration), into: frames, directory: directory)
+            let held = environment["AGENT_SPEED_ORB_SPEED"] != nil && clip.duration > 0
+            let seconds = held ? limit ?? clip.duration : min(limit ?? .infinity, clip.duration)
+            let count = record(clip, model: model, fps: fps, seconds: seconds, into: frames, directory: directory)
             report += String(format: "%@: %d frames in %.1f s\n", clip.name, count, Date().timeIntervalSince(started))
             if clip.duration == 0 {
                 try? FileManager.default.removeItem(at: frames)
@@ -210,6 +213,7 @@ enum OrbFrameHarness {
         var random = OrbRandom(seed: 99)
         var tourTime = 0.0
         let dt = 1.0 / 60
+        let hold = ProcessInfo.processInfo.environment["AGENT_SPEED_ORB_SPEED"].flatMap(Double.init)
         func advance() {
             tourTime += dt
             castAt(tourTime)
@@ -221,7 +225,7 @@ enum OrbFrameHarness {
             }
             for cell in cells {
                 if tourHover { cell.stage.hovered = tourTime >= 50.5 && tourTime < 52.6 }
-                cell.stage.step(dt) { _ in OrbTour.value(at: tourTime.truncatingRemainder(dividingBy: OrbTour.length)) }
+                cell.stage.step(dt) { _ in hold ?? OrbTour.value(at: tourTime.truncatingRemainder(dividingBy: OrbTour.length)) }
                 if let fire { cell.stage.animatorPulse(speed: fire.0, output: fire.1) }
                 cell.stage.newPeakRule(tourTime: tourTime)
             }
