@@ -94,7 +94,15 @@ bool flag(const json::Value& v, bool& out) {
     return true;
 }
 
-// `{sources, network, grokLive, claudeBridge}`; keys of sources a host cannot read are dropped (REMOTE 11).
+int hexDigit(char c) {
+    if (c >= '0' && c <= '9') return c - '0';
+    if (c >= 'a' && c <= 'f') return c - 'a' + 10;
+    if (c >= 'A' && c <= 'F') return c - 'A' + 10;
+    return -1;
+}
+
+// `{sources, network, grokLive, claudeBridge, salt}`; keys of sources a host cannot read are dropped (REMOTE 11), and a
+// salt that is not one counts as absent (an older app sends none).
 std::optional<QuotaConfig> quotaConfigOf(const json::Value& v) {
     if (!v.isObject()) return std::nullopt;
     QuotaConfig config;
@@ -106,10 +114,22 @@ std::optional<QuotaConfig> quotaConfigOf(const json::Value& v) {
     for (const auto source : *sources) {
         if (remote::quotas::hostReads(source)) config.sources.insert(source);
     }
+    if (const auto salt = stringOf(v["salt"])) config.salt = saltOf(*salt);
     return config;
 }
 
 }  // namespace
+
+std::optional<Salt> saltOf(std::string_view hex) {
+    Salt salt{};
+    if (hex.size() != salt.size() * 2) return std::nullopt;
+    for (std::size_t i = 0; i < salt.size(); ++i) {
+        const int high = hexDigit(hex[2 * i]), low = hexDigit(hex[2 * i + 1]);
+        if (high < 0 || low < 0) return std::nullopt;
+        salt[i] = static_cast<unsigned char>(high * 16 + low);
+    }
+    return salt;
+}
 
 std::optional<std::string> boundedText(const std::optional<std::string>& text, std::size_t max) {
     if (!text) return std::nullopt;

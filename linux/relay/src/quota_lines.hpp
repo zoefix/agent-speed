@@ -21,8 +21,9 @@ std::optional<std::string> displayText(std::string_view text, std::size_t maxCod
 // reset outside 2000–2100 becomes null.
 std::vector<quota::Window> sendableWindows(const std::vector<quota::Window>& windows);
 
-// `{"t":"quota","q":{source, observedMs, windows, running, signedIn, status}}`; empty when `observedMs` is not a time
-// the app accepts or the source is not one a host reads.
+// `{"t":"quota","q":{source, observedMs, windows, running, signedIn, status, account, plan, tier}}`, an account that is
+// not a key or a plan or tier that is not plan text as null; empty when `observedMs` is not a time the app accepts or
+// the source is not one a host reads.
 std::string quotaLine(const remote::HostQuota& report);
 std::string quotaRemovedLine(SourceKind source);
 // `{"t":"quotaBridge","state","settingsPath"}`; a path the app could not show goes as "" (the app then names the default).

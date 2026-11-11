@@ -13,6 +13,7 @@ add_executable(agentspeed_relay_tests
     http_wire_test.cpp
     https_client_test.cpp
     net_stub.cpp
+    quota_accounts_test.cpp
     quota_executable_test.cpp
     quota_protocol_test.cpp
     quota_session_test.cpp

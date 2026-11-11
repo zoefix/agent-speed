@@ -7,6 +7,7 @@
 #include <chrono>
 #include <filesystem>
 #include <fstream>
+#include <map>
 #include <memory>
 
 #include "agentspeed/quota/cli_quota.hpp"
@@ -449,5 +450,54 @@ TEST(RelayCodexQuota, EveryFixtureCaseFromRolloutsToTheQuotaLine) {
             quota_test::expectWindows(q->snapshot.windows, expected["windows"]);
         }
         host.stop();
+    }
+}
+
+TEST(RelayCodexQuota, LinesCarryTheAccountKeysAndPlansButNeverTheSalt) {
+    const fixtures::JsonFile estimates(fixtures::fixtureDir() / "quota-estimate-cases.json");
+    const auto accounts = estimates.root()["accounts"];
+    const auto salt = *accounts["salt"].string();
+    std::map<std::string, std::string> expected;
+    for (const auto& k : accounts["keys"].elements()) expected[*k["vendor"].string()] = *k["expected"].string();
+
+    Host host;
+    const auto c = quota_test::section("codex").at(0);
+    writeFile(host.home / ".codex/sessions/2026/11/10/rollout-2026-11-10T00-00-00-main.jsonl",
+              sessionMeta("2020-01-01T00:00:00Z", "main") + "\n" + fixtures::compactJson(c["lines"].at(0)["line"]) + "\n");
+    writeFile(host.home / ".codex/auth.json", R"({"auth_mode":"chatgpt","tokens":{"access_token":"secret-token","account_id":"acct-1"}})");
+    writeFile(host.home / ".claude.json", R"({"oauthAccount":{"organizationUuid":"org-1","accountUuid":"user-1",)"
+                                          R"("organizationType":"claude_max","organizationRateLimitTier":"default_claude_max_20x"}})");
+    host.start(R"({"sources":["codex","claudeCode"],"network":false,"grokLive":false,"claudeBridge":false,"salt":")" + salt + R"("})");
+    std::vector<std::string> texts;
+    std::optional<remote::HostQuota> codex, claude;
+    const auto deadline = std::chrono::steady_clock::now() + kWait;
+    while ((!codex || !claude) && std::chrono::steady_clock::now() < deadline) {
+        const auto text = host.relay->readLine(std::chrono::milliseconds(500));
+        if (!text) continue;
+        texts.push_back(*text);
+        const Line line(*text);
+        if (const auto* q = quotaOf(line)) (q->snapshot.source == SourceKind::Codex ? codex : claude) = *q;
+    }
+    ASSERT_TRUE(codex && claude);
+    EXPECT_FALSE(codex->snapshot.windows.empty());
+    EXPECT_EQ(codex->account, expected["codex"]);
+    EXPECT_EQ(codex->plan, "promax");
+    EXPECT_FALSE(codex->tier);
+    EXPECT_EQ(claude->account, expected["claude"]);
+    EXPECT_EQ(claude->plan, "claude_max");
+    EXPECT_EQ(claude->tier, "default_claude_max_20x");
+    host.stop();
+    for (const auto& text : texts) {
+        EXPECT_EQ(text.find(salt), std::string::npos) << text;
+        EXPECT_EQ(text.find("acct-1"), std::string::npos) << text;
+        EXPECT_EQ(text.find("secret"), std::string::npos) << text;
+    }
+    // Nothing of the salt or the accounts is written on the host.
+    for (const auto& entry : fs::recursive_directory_iterator(host.folder)) {
+        if (!entry.is_regular_file()) continue;
+        const auto bytes = readFile(entry.path());
+        for (const auto& secret : {salt, expected["codex"], expected["claude"], std::string("acct-1")}) {
+            EXPECT_EQ(bytes.find(secret), std::string::npos) << entry.path();
+        }
     }
 }

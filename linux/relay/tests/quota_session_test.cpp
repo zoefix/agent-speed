@@ -9,6 +9,7 @@
 #include "agentspeed/remote_protocol.hpp"
 #include "fixture_support.hpp"
 #include "net_stub.hpp"
+#include "quota_accounts.hpp"
 #include "quota_session.hpp"
 #include "quota_vendor_support.hpp"
 
@@ -84,6 +85,8 @@ public:
     std::shared_ptr<FakeLocator> antigravity = std::make_shared<FakeLocator>();
     net::ClientOptions client;
     std::unique_ptr<QuotaSession> session;
+    // The host's wall clock.
+    std::int64_t now = kNow;
 
     Rig() {
         path_ = home.file("relay-lines");
@@ -117,11 +120,11 @@ public:
         options.client = client;
         options.running = [this] { return running; };
         options.antigravity = antigravity;
-        session = std::make_unique<QuotaSession>(*out_, std::move(enabled), std::move(options), [] { return kNow; });
+        session = std::make_unique<QuotaSession>(*out_, std::move(enabled), std::move(options), [this] { return now; });
     }
 
-    void configure(std::set<SourceKind> sources, bool network, bool grokLive = false) {
-        session->setConfig(QuotaConfig{std::move(sources), network, grokLive, false});
+    void configure(std::set<SourceKind> sources, bool network, bool grokLive = false, std::optional<Salt> salt = std::nullopt) {
+        session->setConfig(QuotaConfig{std::move(sources), network, grokLive, false, salt});
     }
 
     // Ticks until `done` holds (true) or 10 s pass (false).
@@ -203,6 +206,31 @@ void expectHealthy(const remote::HostQuota& q) {
     EXPECT_EQ(q.status, remote::HostQuota::Status::Ok);
 }
 
+// QUOTAS 10.1: the fixture's salt (hex) and its expected keys by vendor.
+json::Value accountCases() {
+    static const fixtures::JsonFile file(fixtures::fixtureDir() / "quota-estimate-cases.json");
+    return file.root()["accounts"];
+}
+std::string saltHex() { return *accountCases()["salt"].string(); }
+Salt fixtureSalt() { return *saltOf(saltHex()); }
+std::string expectedKey(const std::string& vendor) {
+    for (const auto& k : accountCases()["keys"].elements()) {
+        if (k["vendor"].equals(vendor)) return *k["expected"].string();
+    }
+    return {};
+}
+
+// The ids of the fixture's keys (`acct-1`, `org-1:user-1`), with everything else that must never leave the host.
+const std::string kCodexAuth = R"({"auth_mode":"chatgpt","OPENAI_API_KEY":null,"tokens":{"id_token":"secret-id-token",)"
+                               R"("access_token":"secret-access-token","refresh_token":"secret-refresh-token","account_id":"acct-1"}})";
+const std::string kClaudeAccount = R"({"numStartups":3,"oauthAccount":{"accountUuid":"user-1","emailAddress":"secret@example.com",)"
+                                   R"("organizationUuid":"org-1","organizationType":"claude_max",)"
+                                   R"("organizationRateLimitTier":"default_claude_max_20x","displayName":"secret-name"}})";
+
+std::string codexRateLimits(const std::string& plan) {
+    return R"({"limit_id":"codex","plan_type":)" + plan + R"(,"primary":{"used_percent":23.0,"window_minutes":10080,"resets_at":1794897479}})";
+}
+
 }  // namespace
 
 TEST(RelayQuotaSession, VendorFixturesThroughTheRelaysReadersAndClient) {
@@ -218,7 +246,7 @@ TEST(RelayQuotaSession, VendorFixturesThroughTheRelaysReadersAndClient) {
     const std::set<SourceKind> sources = {SourceKind::GrokBuild, SourceKind::Kimi, SourceKind::Gemini, SourceKind::Droid, SourceKind::Antigravity};
     rig.running = sources;
     rig.start(sources);
-    rig.configure(sources, true, true);
+    rig.configure(sources, true, true, fixtureSalt());
     ASSERT_TRUE(rig.runUntil([&] {
         for (const auto source : sources) {
             if (!rig.hasWindows(source)) return false;
@@ -236,7 +264,12 @@ TEST(RelayQuotaSession, VendorFixturesThroughTheRelaysReadersAndClient) {
         SCOPED_TRACE(std::string(sourceId(source)));
         expectHealthy(*rig.last(source));
         EXPECT_EQ(rig.last(source)->snapshot.observedMs, kNow);
+        // QUOTAS 10.1: phase 2 sources have no id; their account is the pair (host, source).
+        EXPECT_FALSE(rig.last(source)->account);
+        EXPECT_FALSE(rig.last(source)->plan);
+        EXPECT_FALSE(rig.last(source)->tier);
     }
+    EXPECT_EQ(rig.dump().find(saltHex()), std::string::npos);
 
     // Exactly the headers QUOTAS 9 lists, the host's own credentials, and nothing else.
     std::map<std::string, std::string> byLine;
@@ -414,4 +447,103 @@ TEST(RelayQuotaSession, CodexAndTheClaudeCodeBridgeFile) {
     EXPECT_EQ(rig.reports(SourceKind::Codex).size(), 1u);
     // An unchanged report is not sent again.
     EXPECT_EQ(rig.reports(SourceKind::ClaudeCode).size(), 1u);
+}
+
+TEST(RelayQuotaSession, AccountKeysPlansAndTiersFromTheHostsSignIns) {
+    Rig rig;
+    rig.home.write(".codex/auth.json", kCodexAuth);
+    rig.home.write(".claude.json", kClaudeAccount);
+    rig.running = {SourceKind::Codex, SourceKind::ClaudeCode};
+    rig.start({SourceKind::Codex, SourceKind::ClaudeCode});
+    const std::set<SourceKind> sources = {SourceKind::Codex, SourceKind::ClaudeCode};
+
+    // Without a salt (an older app): no account, but the plans and the tier.
+    rig.configure(sources, false);
+    const auto promax = codexRateLimits(R"("promax")");
+    json::Document limits;
+    ASSERT_TRUE(limits.parse(promax));
+    rig.session->codexObserver()(limits.root(), kNow - 60'000);
+    ASSERT_TRUE(rig.runUntil([&] { return rig.hasWindows(SourceKind::Codex) && rig.last(SourceKind::ClaudeCode); })) << rig.dump();
+    auto codex = *rig.last(SourceKind::Codex);
+    EXPECT_FALSE(codex.account);
+    EXPECT_EQ(codex.plan, "promax");
+    EXPECT_FALSE(codex.tier);
+    auto claude = *rig.last(SourceKind::ClaudeCode);
+    EXPECT_FALSE(claude.account);
+    EXPECT_EQ(claude.plan, "claude_max");
+    EXPECT_EQ(claude.tier, "default_claude_max_20x");
+
+    // The salt arrives: the keys follow at once, as the app computes them.
+    rig.configure(sources, false, false, fixtureSalt());
+    ASSERT_TRUE(rig.runUntil([&] { return rig.last(SourceKind::Codex)->account && rig.last(SourceKind::ClaudeCode)->account; })) << rig.dump();
+    codex = *rig.last(SourceKind::Codex);
+    EXPECT_EQ(codex.account, expectedKey("codex"));
+    EXPECT_EQ(codex.plan, "promax");
+    claude = *rig.last(SourceKind::ClaudeCode);
+    EXPECT_EQ(claude.account, expectedKey("claude"));
+    EXPECT_EQ(claude.plan, "claude_max");
+    EXPECT_EQ(claude.tier, "default_claude_max_20x");
+    // Nothing changed: nothing sent again.
+    const auto sent = rig.reports(SourceKind::Codex).size();
+    rig.settle(5);
+    EXPECT_EQ(rig.reports(SourceKind::Codex).size(), sent);
+
+    // A newer Codex writes no plan: the account's own stays.
+    const auto unnamed = codexRateLimits("null");
+    ASSERT_TRUE(limits.parse(unnamed));
+    rig.session->codexObserver()(limits.root(), kNow - 30'000);
+    ASSERT_TRUE(rig.runUntil([&] { return rig.last(SourceKind::Codex)->snapshot.observedMs == kNow - 30'000; })) << rig.dump();
+    EXPECT_EQ(rig.last(SourceKind::Codex)->plan, "promax");
+
+    // `codex login` with another account: a new key, and that account's plan is not known yet.
+    rig.home.write(".codex/auth.json", R"({"auth_mode":"chatgpt","tokens":{"account_id":"acct-2"}})");
+    rig.home.touch(".codex/auth.json", 5);
+    rig.now += 61'000;
+    ASSERT_TRUE(rig.runUntil([&] { return rig.last(SourceKind::Codex)->account != expectedKey("codex"); })) << rig.dump();
+    codex = *rig.last(SourceKind::Codex);
+    EXPECT_EQ(codex.account, accountKey(fixtureSalt(), "codex", "acct-2"));
+    EXPECT_FALSE(codex.plan);
+
+    // A plan or tier that is not plan text is none.
+    rig.home.write(".claude.json", R"({"oauthAccount":{"organizationUuid":"org-1","accountUuid":"user-1","organizationType":"Claude Max"}})");
+    rig.home.touch(".claude.json", 5);
+    rig.now += 61'000;
+    ASSERT_TRUE(rig.runUntil([&] { return !rig.last(SourceKind::ClaudeCode)->tier; })) << rig.dump();
+    claude = *rig.last(SourceKind::ClaudeCode);
+    EXPECT_EQ(claude.account, expectedKey("claude"));
+    EXPECT_FALSE(claude.plan);
+
+    // Switched off and on again with another salt: new keys, nothing kept from before.
+    Salt other = fixtureSalt();
+    other[0] ^= 0xFF;
+    rig.configure({}, false, false, other);
+    rig.configure(sources, false, false, other);
+    ASSERT_TRUE(rig.runUntil([&] {
+        const auto q = rig.last(SourceKind::ClaudeCode);
+        return q && q->account == accountKey(other, "claude", "org-1:user-1");
+    })) << rig.dump();
+
+    // The salt, the ids and every other value of those files stay on the host.
+    const auto written = rig.dump();
+    for (const auto& secret : {saltHex(), std::string("acct-1"), std::string("acct-2"), std::string("org-1"), std::string("user-1"),
+                               std::string("secret"), std::string("example.com")}) {
+        EXPECT_EQ(written.find(secret), std::string::npos) << secret;
+    }
+}
+
+TEST(RelayQuotaSession, NoAccountWithoutAnId) {
+    Rig rig;
+    rig.home.write(".codex/auth.json", R"({"auth_mode":"apikey","OPENAI_API_KEY":"sk-secret"})");
+    rig.home.write(".claude.json", R"({"oauthAccount":{"emailAddress":"secret@example.com"}})");
+    rig.start({SourceKind::Codex, SourceKind::ClaudeCode});
+    rig.configure({SourceKind::Codex, SourceKind::ClaudeCode}, false, false, fixtureSalt());
+    ASSERT_TRUE(rig.runUntil([&] { return rig.last(SourceKind::Codex) && rig.last(SourceKind::ClaudeCode); })) << rig.dump();
+    for (const auto source : {SourceKind::Codex, SourceKind::ClaudeCode}) {
+        const auto q = *rig.last(source);
+        EXPECT_FALSE(q.account);
+        EXPECT_FALSE(q.plan);
+        EXPECT_FALSE(q.tier);
+    }
+    EXPECT_TRUE(rig.last(SourceKind::ClaudeCode)->signedIn);
+    EXPECT_EQ(rig.dump().find("secret"), std::string::npos);
 }
