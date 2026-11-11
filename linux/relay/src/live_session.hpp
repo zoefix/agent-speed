@@ -33,6 +33,8 @@ public:
         statusDue_ = true;
     }
     void setWatch(bool on) { watch_ = on; }
+    // QUOTAS 3: every Codex parser of every monitor (a restart's too) hands its `rate_limits` here. Set before `start`.
+    void setRateLimitObserver(std::function<void(const json::Value&, std::int64_t)> observer) { rateLimits_ = std::move(observer); }
     // One tick of the live loop (every ~500 ms): a poll at most once a second, then whatever is due.
     void tick();
 
@@ -70,6 +72,7 @@ private:
     Output& out_;
     const std::set<SourceKind> enabled_;
     Clock wallClock_;
+    std::function<void(const json::Value&, std::int64_t)> rateLimits_;
     std::unique_ptr<Monitor> monitor_;
     std::int64_t todayStartMs_ = 0;
     bool watch_ = false;

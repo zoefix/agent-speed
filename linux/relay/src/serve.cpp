@@ -73,8 +73,10 @@ private:
 
 std::shared_ptr<const pricing::PriceTable> tableOf(const std::string& json) { return pricing::PriceTable::load(json); }
 
+// The quota session outlives the live one, whose monitor feeds its Codex collector.
 struct Session {
     std::unique_ptr<HistoryWorker> history;
+    std::unique_ptr<QuotaSession> quota;
     std::unique_ptr<LiveSession> live;
 };
 
@@ -93,6 +95,9 @@ void apply(Command& command, Session& session) {
                 session.history->request(std::move(c.digests));
             } else if constexpr (std::is_same_v<T, WatchCommand>) {
                 session.live->setWatch(c.on);
+            } else if constexpr (std::is_same_v<T, QuotaCommand>) {
+                session.quota->setConfig(c.config);
+                session.quota->tick();
             }
         },
         command);
@@ -152,8 +157,17 @@ int serve(int inFd, int outFd, const ServeOptions& options) {
     try {
         session.history = std::make_unique<HistoryWorker>(out, options.folder, start->sources, tableOf(start->prices));
         session.history->setZone(start->zoneId, start->zoneTzif);
+        auto quotaOptions = options.quota;
+        quotaOptions.folder = options.folder;
+        quotaOptions.version = options.version;
+        session.quota = std::make_unique<QuotaSession>(out, start->sources, std::move(quotaOptions), options.clock);
+        // The config is applied before seeding, so the seeded rollouts' rate limits count (QUOTAS 3); the first reports
+        // follow the seeding.
+        if (start->quota) session.quota->setConfig(*start->quota);
         session.live = std::make_unique<LiveSession>(out, start->sources, options.clock);
+        session.live->setRateLimitObserver(session.quota->codexObserver());
         session.live->start(start->todayStartMs);
+        session.quota->tick();
         auto next = SteadyClock::now() + options.tick;
         while (!out.broken()) {
             std::vector<Command> commands;
@@ -166,6 +180,7 @@ int serve(int inFd, int outFd, const ServeOptions& options) {
             }
             if (SteadyClock::now() >= next) {
                 session.live->tick();
+                session.quota->tick();
                 next = SteadyClock::now() + options.tick;
             }
         }
