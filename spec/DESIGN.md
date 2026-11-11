@@ -1005,8 +1005,10 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
 - **Balance** (user's choice 2026-11-11: "右邊這麼空…讓左側和右側自動放的卡片內容要看起來視覺是相等的"). The column's
   cards are split between her two sides so that their weight is as even as possible:
   - The left keeps the column's first `n − k` shown cards. The last `k` continue on the right, under the models card
-    (or under the title chip while no models card shows), left edges on one line, in column order (so the 額度 card
-    goes first, then today).
+    (or under the title chip while no models card shows), keeping the column's top-to-bottom order. So the 額度 card
+    is the first to move, then today, and on the right today stays above 額度.
+  - Their left edges share one line with the models card's, or lie further right where her outline needs it. A moved
+    card is never further left than the models card, so the right side reads as one column.
   - The right side's weight is the models card plus the moved cards; the speed and its title chip do not count. Each
     side's weight is the sum of its cards' heights plus the gaps between them.
   - `k` minimizes `|left − right|`. A tie goes to the smaller `k`; `k = 0` when the column alone is not heavier than
@@ -1016,8 +1018,10 @@ raised arm, a held-out staff or open wings push a card away instead of covering 
   - **Steadiness.** The split is chosen again when a card appears or disappears, or when a side's weight changes by
     more than `0.06 D` (a card growing or shrinking: a source joining the 額度 card, the models card gaining a row). The
     new split must have held for 0.6 s.
-  - A card changes sides at most once in 4 s (12 s within 30 s of the last change), and fades as spill-over does
-    (0.18 s out, 0.3 s in). A card's accent edge is the one facing her on either side.
+  - A card changes sides at most once in 4 s. If its previous change came less than 30 s after the one before, the
+    wait is 12 s. This holds whether balance or spill-over moves it, so a dance never makes a card flicker between
+    sides.
+  - Cards fade as spill-over does (0.18 s out, 0.3 s in). A card's accent edge is the one facing her on either side.
   - Below S = 96 (LOD) there is no balance: the column keeps its first two shown cards on the left, as before.
 - **Spill-over**: when her left side cannot hold the whole column near her shoulders (wide hair, a step to the left),
   its last cards continue under the speed at her right (under the models card while it shows), left edges on one
