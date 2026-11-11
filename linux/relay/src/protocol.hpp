@@ -26,12 +26,23 @@ inline constexpr std::size_t kMaxOutputLine = 1u << 20;
 inline constexpr std::int64_t kMinTimeMs = 946'684'800'000;
 inline constexpr std::int64_t kMaxTimeMs = 4'102'444'800'000;
 
+// REMOTE 11.1: the sources whose quota switch is on, the master switch, Grok's live request and the host's bridge.
+struct QuotaConfig {
+    std::set<SourceKind> sources;
+    bool network = false;
+    bool grokLive = false;
+    bool claudeBridge = false;
+    bool operator==(const QuotaConfig&) const = default;
+};
+
 struct StartCommand {
     std::int64_t protocol = 0;
     std::int64_t todayStartMs = 0;
     std::set<SourceKind> sources;
     std::string zoneId, zoneTzif;
     std::string prices;  // the table's JSON text
+    // Absent (an older app) or not a valid config: the relay reads no quota and leaves the bridge alone.
+    std::optional<QuotaConfig> quota;
 };
 struct PingCommand {
     std::int64_t id = 0;
@@ -51,7 +62,11 @@ struct HistoryCommand {
 struct WatchCommand {
     bool on = false;
 };
-using Command = std::variant<StartCommand, PingCommand, TodayCommand, PricesCommand, ZoneCommand, HistoryCommand, WatchCommand>;
+struct QuotaCommand {
+    QuotaConfig config;
+};
+using Command =
+    std::variant<StartCommand, PingCommand, TodayCommand, PricesCommand, ZoneCommand, HistoryCommand, WatchCommand, QuotaCommand>;
 
 // Nullopt for a line that is not a valid command: not a JSON object, an unknown `t`, a missing field or a wrong type.
 std::optional<Command> decodeCommand(std::string_view line);

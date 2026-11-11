@@ -81,7 +81,8 @@ public:
     bool installHelper(const std::string& helperSource, mode_t mode = 0755) const;
     // QUOTAS 5.2: copies the helper, keeps the current status line in the sidecar and the settings in the backup (unless
     // the line is ours already), then points `statusLine` at the copy. A failure leaves the settings as they were.
-    TurnOnResult turnOn(const std::string& helperSource) const;
+    // `helperMode`: a host's copy is 0700 (REMOTE 11.3).
+    TurnOnResult turnOn(const std::string& helperSource, mode_t helperMode = 0755) const;
     // QUOTAS 5.3: the previous status line back while ours is still there (a line the user set meanwhile stays), then
     // the sidecar, the backup and the quota file go. Allowed whatever the source's switches say. False when the settings
     // could not be written back: the sidecar and the backup then stay for another attempt.

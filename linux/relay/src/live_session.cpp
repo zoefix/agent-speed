@@ -44,6 +44,7 @@ void LiveSession::build() {
     monitor_->setResponseObserver([this](const ParsedResponse& r, bool completion) { onResponse(r, completion); });
     monitor_->setToolObserver([this](const std::string& id, SourceKind source, const work::Action& a) { onTool(id, source, a); });
     monitor_->setSeedProgress([this](std::size_t done, std::size_t total) { onSeedProgress(done, total); });
+    if (rateLimits_) monitor_->setRateLimitObserver(rateLimits_);
 }
 
 void LiveSession::seed() {

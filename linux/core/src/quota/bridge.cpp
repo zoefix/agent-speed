@@ -44,7 +44,7 @@ bool Bridge::installHelper(const std::string& helperSource, mode_t mode) const {
     return files::makeFolders(files::parentOf(paths_.helperCopy), 0700) && files::replaceFile(paths_.helperCopy, source.bytes, mode);
 }
 
-TurnOnResult Bridge::turnOn(const std::string& helperSource) const {
+TurnOnResult Bridge::turnOn(const std::string& helperSource, mode_t helperMode) const {
     std::string text;
     const auto read = readSettings(text);
     if (read == Read::Failed) return TurnOnResult::Failed;
@@ -52,7 +52,7 @@ TurnOnResult Bridge::turnOn(const std::string& helperSource) const {
     const auto current = read == Read::Text ? std::optional<std::string>(text) : std::nullopt;
     const auto edit = turnOnEdit(current, command_, readSidecar());
     if (!edit.readable || !edit.settings) return TurnOnResult::Unreadable;
-    if (!installHelper(helperSource)) return TurnOnResult::Failed;
+    if (!installHelper(helperSource, helperMode)) return TurnOnResult::Failed;
     if (!edit.wasOurs) {
         if (!edit.previous || !files::makeFolders(paths_.quotaFolder, 0700) ||
             !files::replaceFile(paths_.sidecar(), ordered_json::write(*edit.previous) + "\n", 0600)) {

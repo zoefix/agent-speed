@@ -3,6 +3,7 @@
 #include <algorithm>
 
 #include "agentspeed/json.hpp"
+#include "agentspeed/remote_messages.hpp"
 #include "json_out.hpp"
 
 namespace agentspeed::relay {
@@ -87,6 +88,27 @@ std::optional<std::set<SourceKind>> sourcesOf(const json::Value& v) {
     return out;
 }
 
+bool flag(const json::Value& v, bool& out) {
+    if (!v.isBool()) return false;
+    out = v.isTrue();
+    return true;
+}
+
+// `{sources, network, grokLive, claudeBridge}`; keys of sources a host cannot read are dropped (REMOTE 11).
+std::optional<QuotaConfig> quotaConfigOf(const json::Value& v) {
+    if (!v.isObject()) return std::nullopt;
+    QuotaConfig config;
+    auto sources = sourcesOf(v["sources"]);
+    if (!sources || !flag(v["network"], config.network) || !flag(v["grokLive"], config.grokLive) ||
+        !flag(v["claudeBridge"], config.claudeBridge)) {
+        return std::nullopt;
+    }
+    for (const auto source : *sources) {
+        if (remote::quotas::hostReads(source)) config.sources.insert(source);
+    }
+    return config;
+}
+
 }  // namespace
 
 std::optional<std::string> boundedText(const std::optional<std::string>& text, std::size_t max) {
@@ -127,6 +149,7 @@ std::optional<Command> decodeCommand(std::string_view line) {
         start.zoneId = *zoneId;
         start.zoneTzif = *tzif;
         start.prices = std::string(prices.raw());
+        start.quota = quotaConfigOf(root["quota"]);
         return start;
     }
     if (*type == "today") {
@@ -158,6 +181,11 @@ std::optional<Command> decodeCommand(std::string_view line) {
         const auto on = root["on"];
         if (!on.isBool()) return std::nullopt;
         return WatchCommand{on.isTrue()};
+    }
+    if (*type == "quota") {
+        auto config = quotaConfigOf(root["config"]);
+        if (!config) return std::nullopt;
+        return QuotaCommand{std::move(*config)};
     }
     return std::nullopt;
 }

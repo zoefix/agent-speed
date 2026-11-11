@@ -5,6 +5,8 @@
 #include <functional>
 #include <string>
 
+#include "quota_session.hpp"
+
 // `agent-speed-relay serve` (REMOTE 3.2, 5): the protocol on two file descriptors until the input closes.
 namespace agentspeed::relay {
 
@@ -21,6 +23,8 @@ struct ServeOptions {
     std::chrono::milliseconds inputSilence{150'000};
     // Called once by the reading thread when the input reached its end (the executable arms a hard exit there).
     std::function<void()> onInputClosed;
+    // REMOTE 11: where the quota readers look and how they ask; `folder` and `version` are filled in from above.
+    QuotaOptions quota;
 };
 
 // 0 when the input closed, 1 after a fatal `error` line, a failed write or input silence.
