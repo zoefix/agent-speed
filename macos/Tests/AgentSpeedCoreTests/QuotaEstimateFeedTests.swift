@@ -273,25 +273,26 @@ struct QuotaEstimateFeedTests {
 
     // MARK: Cost
 
-    /// A busy week of one Claude account and Codex builds within the estimator's 5 s interval even in a debug build
-    /// beside the other suites (about 1 s alone): a guard against anything quadratic.
+    /// A busy week of one Claude account and Codex builds well within the estimator's 5 s interval even in a debug build
+    /// beside the other suites: a guard against anything quadratic. It stays small, so that its own work does not
+    /// starve the suites that run beside it on a shared CI runner (a 20 000-response week once took 22 s there).
     @Test func aBusyWeekBuildsQuickly() {
         var inputs = QuotaEstimateInputs()
         let start = Self.now - 7 * 86_400_000
         let codexReset = Self.now + 86_400_000
-        for i in 0..<20_000 {
-            let end = start + Int64(i) * 30_000
-            let file = "/r/\(i / 500).jsonl"
+        for i in 0..<8_000 {
+            let end = start + Int64(i) * 75_000
+            let file = "/r/\(i / 200).jsonl"
             inputs.spend.append(QuotaEstimateSpend(source: i % 2 == 0 ? "codex" : "claudeCode", model: "gpt-5.5",
                                                    startMs: end - 20_000, endMs: end, costMicroUsd: 50_000, file: file))
             if i % 2 == 0 {
                 inputs.codexLines.append(QuotaCodexLine(file: file, ts: end + 1_000, windows: [
                     QuotaWindow(kind: .fiveHour, usedPercent: Double(i % 100), resetsAtMs: end - end % 18_000_000 + 18_000_000),
-                    QuotaWindow(kind: .sevenDay, usedPercent: Double(i / 200), resetsAtMs: codexReset),
+                    QuotaWindow(kind: .sevenDay, usedPercent: Double(i / 80), resetsAtMs: codexReset),
                 ], plan: "pro"))
             } else if i % 10 == 1 {
                 inputs.snapshots.append(QuotaEstimateSnapshot(source: "claudeCode", observedMs: end + 2_000, windows: [
-                    QuotaWindow(kind: .sevenDay, usedPercent: Double(i / 250), resetsAtMs: codexReset + 3_600_000)]))
+                    QuotaWindow(kind: .sevenDay, usedPercent: Double(i / 100), resetsAtMs: codexReset + 3_600_000)]))
             }
         }
         inputs.claudeProfiles = [QuotaClaudeProfile(at: start, organization: "o", account: "u", organizationType: "claude_max",
