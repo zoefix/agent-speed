@@ -17,6 +17,8 @@ struct OrbCharacterReadings: Equatable {
     var performance: OrbLineReading?
     /// The live cost rate; nil before the first loud moment.
     var cost: LiveMoney?
+    /// The 費用 card's 今日 row; nil while the billable sources have no request today. No quiet rule.
+    var costToday: CostToday?
     /// 首字, the orb's first-content latency in ms (METRICS 6.9 *Readouts of a set*); nil while it has none.
     var latencyMs: Double?
     /// The running models, fastest first; the last ones are kept while the card is quiet.

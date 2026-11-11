@@ -195,6 +195,7 @@ internal static partial class OrbFrameHarness
         CharacterName = pack?.Manifest.Name.GetValueOrDefault(loc.LanguageCode) ?? pack?.Id,
         Accent = pack is null ? Rgba.FromHex("#D97757") : Rgba.FromHex(pack.Manifest.Accent),
         CostGlyph = loc["cost.glyph"],
+        CostTodayGlyph = loc["character.cost.today"],
         TodayLine = loc.Format("boards.today", SpeedFormat.Tokens(1_240_000)),
         AgentsLine = loc.Format("agents.count", 3),
         IntelligenceGlyph = loc["intel.glyph"],
@@ -217,6 +218,9 @@ internal static partial class OrbFrameHarness
         ]
         : [];
 
+    /// <summary>The cost card's 今日 row in every sheet: a day's cost so far.</summary>
+    private static readonly CostToday HarnessToday = new("$12.34", false, false, "today's cost 12.34");
+
     private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value, int models = 3)
     {
         var generating = value > 1;
@@ -227,7 +231,7 @@ internal static partial class OrbFrameHarness
             : null;
         orb.SetCharacterNetwork(time, network);
         orb.SetCharacterReadings(time, performance, money, generating, generating ? OrbLatency.Of(1180 + 40 * Math.Sin(time), loc) : null,
-            HarnessModels(value, models));
+            HarnessModels(value, models), HarnessToday);
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,

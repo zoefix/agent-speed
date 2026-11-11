@@ -277,9 +277,9 @@ internal sealed class GpuOrbSurface : IOrbSurface, IOrbFrameClient, IDisposable
     }
 
     public void SetCharacterReadings(Presentation.Orb.Lines.OrbLinesSample? performance, Presentation.Cost.LiveMoney? money, bool generating,
-        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models)
+        Presentation.Orb.OrbLatency? latency, IReadOnlyList<Presentation.Orb.OrbModelRow> models, Presentation.Cost.CostToday? costToday)
     {
-        if (_orb.SetCharacterReadings(Now(), performance, money, generating, latency, models))
+        if (_orb.SetCharacterReadings(Now(), performance, money, generating, latency, models, costToday))
         {
             _clock.Kick(this);
         }

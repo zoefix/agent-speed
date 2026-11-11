@@ -10,6 +10,8 @@ struct CharacterCardDynamics {
 
     private(set) var latency: CharacterReadoutText.Latency?
     private(set) var latencyPresence = 0.0
+    /// The 費用 card's rate row over its 今日 row: 1 shown, 0 gone; it fades out, then the card closes up under it.
+    private(set) var costRatePresence = 1.0
     private(set) var modelRows = HudRows()
     /// The names' width on the models card; nil keeps only the dots and the speeds.
     private(set) var names = HudNameWidth()
@@ -24,7 +26,16 @@ struct CharacterCardDynamics {
     private(set) var quota = CharacterQuotaDynamics()
     private(set) var quotaFit = HudFormFit()
 
-    var isMoving: Bool { (latencyPresence > 0 && latencyPresence < 1) || modelRows.isMoving || quota.isMoving }
+    var isMoving: Bool {
+        (latencyPresence > 0 && latencyPresence < 1) || (costRatePresence > 0 && costRatePresence < 1) || modelRows.isMoving
+            || quota.isMoving
+    }
+
+    /// The rate row's opacity: it fades in the first half of its presence.
+    var costRateAlpha: Double { min(1, max(0, 2 * costRatePresence - 1)) }
+
+    /// The rate row's share of its room: the card opens or closes in the second half.
+    var costRateShare: Double { Easing.smoothstep(0, 1, min(1, 2 * costRatePresence)) }
 
     /// Picks the 額度 card's form for `room` from its forms' `widths` (widest first). `snap` while it is off screen.
     mutating func fitQuota(_ dt: Double, widths: [Double], room: Double, spare: Double, snap: Bool) {
@@ -57,6 +68,12 @@ struct CharacterCardDynamics {
         latencyPresence = primed ? (target > latencyPresence ? min(target, latencyPresence + dt / Self.fade)
             : max(target, latencyPresence - dt / Self.fade)) : target
         if latencyPresence == 0 { latency = nil }
+        // The rate row leaves only while the 今日 row stays; without it the whole card fades.
+        let readings = character?.readings
+        let rateTarget = readings?.cost != nil && (readings?.costLoud == true || readings?.costToday == nil) ? 1.0 : 0.0
+        let rateStep = dt / (2 * Self.fade)
+        costRatePresence = primed ? (rateTarget > costRatePresence ? min(rateTarget, costRatePresence + rateStep)
+            : max(rateTarget, costRatePresence - rateStep)) : rateTarget
         primed = true
 
         let models = character?.models ?? []
