@@ -1,7 +1,7 @@
 #include <gtest/gtest.h>
 
 #include <chrono>
-#include <format>
+#include <ctime>
 #include <fstream>
 
 #include "agentspeed/codex_parser.hpp"
@@ -28,8 +28,12 @@ std::string sessionMeta(const std::string& timestamp, const std::string& extra =
 }
 
 std::string isoOf(std::int64_t ms) {
-    const auto seconds = std::chrono::sys_seconds(std::chrono::seconds(ms / 1000));
-    return std::format("{:%FT%T}Z", seconds);
+    const std::time_t seconds = static_cast<std::time_t>(ms / 1000);
+    std::tm utc{};
+    gmtime_r(&seconds, &utc);
+    char text[32];
+    std::strftime(text, sizeof text, "%Y-%m-%dT%H:%M:%SZ", &utc);
+    return text;
 }
 
 std::string tokenCount(const std::string& timestamp, double used) {
