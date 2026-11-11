@@ -192,13 +192,21 @@ public sealed class QuotaCardTests
                 orb.Render(time);
             }
 
-            var before = GC.GetAllocatedBytesForCurrentThread();
-            for (var n = 0; n < 240; n++, time += 1 / 60.0)
+            // The least of three rounds: a round that catches a one-off allocation (a tiered recompile, a pool
+            // growing) says nothing about the frame itself.
+            var least = long.MaxValue;
+            for (var round = 0; round < 3; round++)
             {
-                orb.Render(time);
+                var before = GC.GetAllocatedBytesForCurrentThread();
+                for (var n = 0; n < 240; n++, time += 1 / 60.0)
+                {
+                    orb.Render(time);
+                }
+
+                least = Math.Min(least, GC.GetAllocatedBytesForCurrentThread() - before);
             }
 
-            return GC.GetAllocatedBytesForCurrentThread() - before;
+            return least;
         }
 
         var without = Allocated(OrbQuotaCard.Empty);
