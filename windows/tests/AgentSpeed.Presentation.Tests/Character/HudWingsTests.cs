@@ -1,8 +1,9 @@
 using AgentSpeed.Presentation.Character;
+using Xunit.Abstractions;
 
 namespace AgentSpeed.Presentation.Tests.Character;
 
-public class HudWingsTests
+public class HudWingsTests(ITestOutputHelper output)
 {
     private static readonly (double W, double H)[] Sizes = [(80, 40), (90, 18), (78, 34), (70, 30), (74, 16), (86, 16), (96, 36), (88, 40)];
 
@@ -53,7 +54,7 @@ public class HudWingsTests
     public void CardsSitBesideHerNeverOverHer()
     {
         var f = Frame();
-        var wings = new HudWings { Still = true };
+        var wings = new HudWings { Still = true, Balance = false };
         wings.Update(1 / 60.0, 0, f, Sizes, AllShown);
         foreach (var card in HudCards.Column.Prepend(HudCard.Speed))
         {
@@ -91,7 +92,7 @@ public class HudWingsTests
     public void AHiddenCardFadesAndTheColumnClosesUp()
     {
         var f = Frame();
-        var wings = new HudWings { Still = true };
+        var wings = new HudWings { Still = true, Balance = false };
         var shown = AllShown.ToArray();
         wings.Update(1 / 60.0, 0, f, Sizes, shown);
         var before = wings.Places[(int)HudCard.Cost].Y;
@@ -162,7 +163,7 @@ public class HudWingsTests
     [Fact]
     public void CardsComeBackOnlyAfterHerLeftStaysClear()
     {
-        var wings = new HudWings { Still = false };
+        var wings = new HudWings { Still = false, Balance = false };
         var t = 0.0;
         for (var i = 0; i < 120; i++)
         {
@@ -195,7 +196,7 @@ public class HudWingsTests
     [Fact]
     public void APassingGestureMovesNoCard()
     {
-        var wings = new HudWings();
+        var wings = new HudWings { Balance = false };
         var t = 0.0;
         for (var n = 0; n < 300; n++)
         {
@@ -203,6 +204,38 @@ public class HudWingsTests
             wings.Update(1 / 60.0, t, f, Sizes, AllShown);
             t += 1 / 60.0;
             Assert.Equal(HudCards.Column.Length, wings.Split);
+        }
+    }
+
+    [Fact]
+    public void CardsNeverChangeSidesTwiceWithinFourSeconds()
+    {
+        // Wide hair at her left and an arm far out at her right take turns every 0.7 s: each side overflows in turn.
+        var crowdedRight = Frame();
+        for (var y = 150.0; y <= 400; y += 2)
+        {
+            crowdedRight.Silhouette.Add(400, y);
+        }
+
+        var wings = new HudWings { Balance = false };
+        var changes = new List<double>();
+        var split = -1;
+        for (var n = 0; n < 1200; n++)
+        {
+            var time = n / 60.0;
+            wings.Update(1 / 60.0, time, n / 42 % 2 == 0 ? WideHairFrame() : crowdedRight, Sizes, AllShown);
+            if (split >= 0 && wings.Split != split)
+            {
+                changes.Add(time);
+            }
+
+            split = wings.Split;
+        }
+
+        Assert.True(changes.Count >= 3, $"{changes.Count} changes");
+        for (var i = 1; i < changes.Count; i++)
+        {
+            Assert.True(changes[i] - changes[i - 1] >= HudWings.ReturnAfter - 1e-6, $"changes at {changes[i - 1]:0.00} s and {changes[i]:0.00} s");
         }
     }
 
@@ -263,6 +296,90 @@ public class HudWingsTests
 
             Assert.True(covered < 3600, $"{Path.GetFileName(dir)}: {covered} covered card-frames");
         }
+    }
+
+    /// <summary>
+    /// <c>AGENT_SPEED_CHARACTER_PACKS</c>: every pack dances through the bands for 120 s at 148 and 120 pt with the owner's
+    /// cards (性能 with three rows, network, 費用, today, 額度 with two sources narrowing to its room as the renderer does,
+    /// the models card with two rows), with the balance and without: no card changes sides twice within 4 s, and the
+    /// balance leaves cards over her hardly more often than the column alone (1 % of the card-frames).
+    /// </summary>
+    [Fact]
+    public void TheBalanceHoldsThroughEveryDance()
+    {
+        if (Environment.GetEnvironmentVariable("AGENT_SPEED_CHARACTER_PACKS") is not { Length: > 0 } root)
+        {
+            return;
+        }
+
+        foreach (var dir in Directory.GetDirectories(root).Where(p => File.Exists(Path.Combine(p, "manifest.json"))).Order(StringComparer.Ordinal))
+        {
+            foreach (var orb in new[] { 148.0, 120.0 })
+            {
+                var alone = Dance(dir, orb, balance: false);
+                var balanced = Dance(dir, orb, balance: true);
+                output.WriteLine($"{Path.GetFileName(dir)} {orb} pt: side changes {alone.Changes} → {balanced.Changes}, "
+                    + $"covered card-frames {alone.Covered} → {balanced.Covered}, split {balanced.Split}");
+                Assert.True(balanced.Covered <= alone.Covered + DanceFrames * HudCards.Column.Length / 100,
+                    $"{Path.GetFileName(dir)} {orb} pt: {balanced.Covered} covered card-frames, {alone.Covered} without the balance");
+            }
+        }
+    }
+
+    private const int DanceFrames = 7200;
+
+    private static (int Changes, int Covered, int Split) Dance(string dir, double orb, bool balance)
+    {
+        int[] levels = [2, 5, 8, 11, 13, 9, 4, 1];
+        var d = 2 * orb;
+        var side = 1.5 * d;
+        var t = Math.Max(8, 0.027 * d);
+        (double W, double H)[] sizes =
+        [
+            (0.3 * d, 0.16 * d), (90, 18), (9 * t, 4.8 * t), (8.8 * t, 3.3 * t), (9.2 * t, 2.25 * t), (10.8 * t, 3.3 * t),
+            (16 * t, 3.24 * t), (15.5 * t, 6.7 * t),
+        ];
+        var performer = new CharacterPerformer(CharacterPack.Load(dir), seed: 11);
+        var wings = new HudWings { ModelsNarrowest = 7 * t, QuotaNarrowest = 12 * t, Balance = balance };
+        var silhouette = new HudSilhouette(0, side, Math.Max(2, Math.Round(d / 150)));
+        var scratch = Array.Empty<double>();
+        var ppp = 0.86 * d / performer.IdleHeight;
+        var last = new double[HudCards.Count];
+        Array.Fill(last, double.NegativeInfinity);
+        var sides = new bool[HudCards.Count];
+        var changes = 0;
+        var covered = 0;
+        for (var n = 0; n < DanceFrames; n++)
+        {
+            var time = n / 60.0;
+            performer.Step(1.0 / 60, levels[n / 900 % levels.Length]);
+            var anchors = performer.Trace(silhouette, (side / 2, side / 2 + 0.45 * d), ppp, ref scratch);
+            sizes[(int)HudCard.Quota].W = Math.Min(15.5 * t, Math.Max(12 * t, wings.QuotaRoom));
+            wings.Update(1.0 / 60, time, new HudFrame((0, 0, side, side), silhouette, d, anchors), sizes, WithModels);
+            foreach (var card in HudCards.Column)
+            {
+                var i = (int)card;
+                var right = wings.IsAtHerRight(card);
+                if (n > 0 && right != sides[i])
+                {
+                    changes++;
+                    Assert.True(time - last[i] >= HudWings.ReturnAfter - 1e-9,
+                        $"{Path.GetFileName(dir)} {orb} pt, balance {balance}: {card} changed sides at {last[i]:0.00} s and again at {time:0.00} s");
+                    last[i] = time;
+                }
+
+                sides[i] = right;
+                var p = wings.Places[i];
+                var (w, h) = wings.Sizes[i];
+                if (p.Alpha > 0.5 && silhouette.Extent(p.Y - h / 2 + 4, p.Y + h / 2 - 4) is { } e
+                    && (right ? e.Right - (p.X - w / 2) : p.X + w / 2 - e.Left) > 6)
+                {
+                    covered++;
+                }
+            }
+        }
+
+        return (changes, covered, wings.Split);
     }
 }
 
