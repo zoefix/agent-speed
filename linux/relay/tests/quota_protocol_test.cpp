@@ -16,6 +16,8 @@ namespace {
 
 constexpr std::int64_t kNow = 1794338773000;
 const std::string kHost = "8C0D6B0A-1111-4222-8333-444455556666";
+// A JSON `\u` escape.
+const std::string kEscape = std::string(1, '\\') + "u";
 const std::string kStart =
     R"({"t":"start","protocol":1,"todayStartMs":1794268800000,"sources":["codex"],"zone":{"id":"UTC","tzif":""},"prices":{})";
 
@@ -77,6 +79,74 @@ TEST(RelayQuotaProtocol, DecodesTheConfigOfStartAndOfAQuotaLine) {
     EXPECT_EQ(config->sources, (std::set<SourceKind>{SourceKind::ClaudeCode, SourceKind::Gemini, SourceKind::Antigravity,
                                                      SourceKind::GrokBuild, SourceKind::Droid}));
     EXPECT_TRUE(config->grokLive);
+}
+
+TEST(RelayQuotaProtocol, DecodesTheSaltAndCountsAnInvalidOneAsAbsent) {
+    const std::string hex = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    Salt bytes{};
+    for (std::size_t i = 0; i < bytes.size(); ++i) bytes[i] = static_cast<unsigned char>(i);
+    auto command = decodeCommand(kStart + R"(,"quota":{"sources":["codex"],"network":false,"grokLive":false,"claudeBridge":false,"salt":")" +
+                                 hex + R"("}})");
+    ASSERT_TRUE(command);
+    EXPECT_EQ(std::get<StartCommand>(*command).quota->salt, bytes);
+    auto config = configOf(R"({"t":"quota","config":{"sources":[],"network":false,"grokLive":false,"claudeBridge":false,"salt":")" + hex + R"("}})");
+    ASSERT_TRUE(config);
+    EXPECT_EQ(config->salt, bytes);
+    EXPECT_EQ(saltOf("000102030405060708090A0B0C0D0E0F101112131415161718191A1B1C1D1E1F"), bytes);
+
+    // A JSON escape is the character it stands for.
+    config = configOf(R"({"t":"quota","config":{"sources":[],"network":false,"grokLive":false,"claudeBridge":false,"salt":")" +
+                      kEscape + "0030" + hex.substr(1) + R"("}})");
+    ASSERT_TRUE(config);
+    EXPECT_EQ(config->salt, bytes);
+
+    // An older app sends none; anything but 64 hex digits is none too, and the rest of the config stands.
+    for (const std::string& salt : {std::string(), std::string(R"(,"salt":null)"), std::string(R"(,"salt":7)"), std::string(R"(,"salt":"")"),
+                                   R"(,"salt":")" + hex.substr(2) + "\"", R"(,"salt":")" + hex + "00\"", R"(,"salt":")" + hex.substr(1) + "g\"",
+                                   R"(,"salt":[")" + hex + "\"]"}) {
+        config = configOf(R"({"t":"quota","config":{"sources":["kimi"],"network":true,"grokLive":false,"claudeBridge":false)" + salt + "}}");
+        ASSERT_TRUE(config) << salt;
+        EXPECT_FALSE(config->salt) << salt;
+        EXPECT_EQ(config->sources, std::set<SourceKind>{SourceKind::Kimi});
+    }
+}
+
+TEST(RelayQuotaProtocol, TheAppReadsTheAccountPlanAndTier) {
+    auto r = hostReport({quota::makeWindow(quota::Kind::SevenDay, 23, 1794897479000)}, SourceKind::ClaudeCode);
+    r.account = "7f3aa6deae8b9ff4";
+    r.plan = "claude_max";
+    r.tier = "default_claude_max_20x";
+    auto line = quotaLine(r);
+    EXPECT_NE(line.find(R"(,"status":"ok","account":"7f3aa6deae8b9ff4","plan":"claude_max","tier":"default_claude_max_20x"}})"),
+              std::string::npos)
+        << line;
+    auto message = decoded(line);
+    const auto* q = std::get_if<remote::HostQuota>(&message);
+    ASSERT_TRUE(q);
+    EXPECT_EQ(q->account, r.account);
+    EXPECT_EQ(q->plan, r.plan);
+    EXPECT_EQ(q->tier, r.tier);
+
+    // None of them: null.
+    line = quotaLine(hostReport({}, SourceKind::Codex));
+    EXPECT_NE(line.find(R"(,"account":null,"plan":null,"tier":null}})"), std::string::npos) << line;
+    message = decoded(line);
+    q = std::get_if<remote::HostQuota>(&message);
+    ASSERT_TRUE(q);
+    EXPECT_FALSE(q->account);
+    EXPECT_FALSE(q->plan);
+    EXPECT_FALSE(q->tier);
+
+    // What is not a key or plan text goes as null.
+    r.account = "7F3AA6DEAE8B9FF4";
+    r.plan = "Claude Max";
+    r.tier = std::string(65, 't');
+    line = quotaLine(r);
+    EXPECT_NE(line.find(R"(,"account":null,"plan":null,"tier":null}})"), std::string::npos) << line;
+    r.account = "7f3aa6deae8b9ff";
+    r.plan = "";
+    r.tier = "pro\\n";
+    EXPECT_NE(quotaLine(r).find(R"(,"account":null,"plan":null,"tier":null}})"), std::string::npos);
 }
 
 TEST(RelayQuotaProtocol, KeepsOnlySourcesAHostReads) {

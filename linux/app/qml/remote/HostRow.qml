@@ -19,6 +19,7 @@ Item {
     property var quotaSources: []
     property real labelWidth: 0
     property real percentWidth: 0
+    property real amountWidth: 0
     property real resetWidth: 0
     readonly property real nameInset: dot.x + dot.width + 10
     implicitHeight: 30 + (quotaSources.length > 0 ? quota.implicitHeight + 6 : 0)
@@ -147,6 +148,7 @@ Item {
                     sourceColor: Theme.sourceColor(modelData.source)
                     labelWidth: row.labelWidth
                     percentWidth: row.percentWidth
+                    amountWidth: row.amountWidth
                     resetWidth: row.resetWidth
                 }
             }

@@ -41,6 +41,9 @@ Q_DECLARE_METATYPE(HistoryDetails)
 namespace agentspeed::pricing {
 class PriceBook;
 }
+namespace agentspeed::quota::estimate {
+class Estimator;
+}
 
 // Sends a `history` request to a host's relay (REMOTE 8.2): "<day>/<source>" → digest of every day held for it.
 using RemoteHistoryRequester = std::function<void(const std::string& host, const std::map<std::string, std::string>& digests)>;
@@ -68,6 +71,8 @@ public:
     void deleteRemoteHost(std::string id);
     // Thread-safe: how `historyDue` is answered, and how connected hosts are asked again after Clear history.
     void setRemoteRequester(RemoteHistoryRequester requester);
+    // Before start: every complete analysis hands the estimate its spend of the last 8 days (QUOTAS 10.3).
+    void setEstimator(std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator) { estimator_ = std::move(estimator); }
 
 public slots:
     void start();
@@ -108,6 +113,7 @@ private:
     agentspeed::SourceLocations locations_;
     std::set<agentspeed::SourceKind> enabled_;
     std::atomic<bool> cancelled_{false};
+    std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator_;
     QTimer* timer_ = nullptr;
     qint64 lastDayStart_ = 0;
     qint64 lastRunMs_ = 0;

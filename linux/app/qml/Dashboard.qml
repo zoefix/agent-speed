@@ -155,22 +155,45 @@ Window {
         }
     }
 
-    // DESIGN 4 Quota lines: the columns every line of a section shares, and each line's age only where it still fits
-    // after the reset (a line that cannot hold both keeps the reset; its tooltip keeps the age).
+    // DESIGN 4 Quota lines: the columns every line of a section shares. The reset cell shows the long reset while no
+    // line of the section has an amount, else the short one (user's choice 2026-11-11: `US$4,938 / ≈5,742  週五`), or
+    // none when even that does not fit beside the bar at its shortest; the tooltip opens with the long reset whenever the
+    // row does not show it. Each line's age shows only where it still fits after the reset (a line that cannot hold both
+    // keeps the reset; its tooltip keeps the age).
     FontMetrics { id: quotaLabelMetrics; font.pixelSize: 11; font.weight: Font.Medium }
     FontMetrics { id: quotaPercentMetrics; font.pixelSize: 12; font.weight: Font.DemiBold; font.features: Theme.tabular }
+    FontMetrics { id: quotaAmountMetrics; font.pixelSize: 11; font.weight: Font.Medium; font.features: Theme.tabular }
     FontMetrics { id: quotaResetMetrics; font.pixelSize: 11 }
+    function quotaWidth(metrics, text) { return text.length > 0 ? Math.ceil(metrics.advanceWidth(text)) + 1 : 0 }
     function quotaFit(groups, width) {
-        var label = 0, reset = 0
-        var percent = Math.ceil(quotaPercentMetrics.advanceWidth("100%")) + 1
-        for (var g = 0; g < groups.length; ++g)
-            for (var i = 0; i < groups[g].length; ++i) label = Math.max(label, Math.ceil(quotaLabelMetrics.advanceWidth(groups[g][i].label)) + 1)
-        var room = width - label - percent - 88 - 3 * 8
+        var label = 0, amount = 0, shortReset = 0, reset = 0
+        // A cell as wide as `≈100%`, its `≈` kerned 1 px to the digits (QuotaLine).
+        var percent = quotaWidth(quotaPercentMetrics, "≈100%") + 1
+        for (var g = 0; g < groups.length; ++g) {
+            for (var i = 0; i < groups[g].length; ++i) {
+                var each = groups[g][i]
+                label = Math.max(label, quotaWidth(quotaLabelMetrics, each.label))
+                amount = Math.max(amount, quotaWidth(quotaAmountMetrics, (each.amount || "") + (each.cap || "")))
+                shortReset = Math.max(shortReset, quotaWidth(quotaResetMetrics, each.short || ""))
+            }
+        }
+        var fixed = label + percent + (amount > 0 ? amount + 8 : 0) + 3 * 8
+        // Where the amounts leave the bar under 40 px even without resets, the label column gives way (its labels elide).
+        var squeeze = Math.min(label, Math.max(0, 40 - (width - fixed)))
+        label -= squeeze
+        fixed -= squeeze
+        var form = amount <= 0 ? "long" : shortReset > width - fixed - 52 ? "none" : "short"
+        var room = width - fixed - 88
         var fitted = []
         for (var k = 0; k < groups.length; ++k) {
             var out = []
             for (var j = 0; j < groups[k].length; ++j) {
                 var line = Object.assign({}, groups[k][j])
+                if (form !== "long") {
+                    line.reset = form === "short" ? (line.short || "") : ""
+                } else if (line.reset.length > 0 && line.tooltip.startsWith(line.reset + "\n")) {
+                    line.tooltip = line.tooltip.substring(line.reset.length + 1)
+                }
                 var tail = line.reset
                 if (line.age.length > 0) {
                     var both = line.reset.length > 0 ? line.reset + " · " + line.age : line.age
@@ -187,8 +210,14 @@ Window {
             fitted.push(out)
         }
         // The bar keeps at least 52 px; the reset column gives way first.
-        reset = Math.min(reset, Math.max(0, width - label - percent - 52 - 3 * 8))
-        return { groups: fitted, label: label, percent: percent, reset: reset }
+        reset = Math.min(reset, Math.max(0, width - fixed - 52))
+        return { groups: fitted, label: label, percent: percent, amount: amount, reset: reset }
+    }
+    // Development aid: --quota-tooltip=<source>:<label> keeps that Sources line's tooltip open (snapshots).
+    readonly property string quotaTipPin: {
+        const args = Qt.application.arguments
+        for (let i = 0; i < args.length; ++i) if (args[i].startsWith("--quota-tooltip=")) return args[i].substring(16)
+        return ""
     }
     property int sourceRev: 0
     readonly property var sourceQuota: {
@@ -203,8 +232,11 @@ Window {
         }
         const fit = quotaFit(groups, 328 - 22)
         const map = {}
-        for (let k = 0; k < keys.length; ++k) map[keys[k]] = fit.groups[k]
-        return { lines: map, label: fit.label, percent: fit.percent, reset: fit.reset, rev: quotas.revision }
+        for (let k = 0; k < keys.length; ++k) {
+            for (const line of fit.groups[k]) line.pinned = root.quotaTipPin === keys[k] + ":" + line.label
+            map[keys[k]] = fit.groups[k]
+        }
+        return { lines: map, label: fit.label, percent: fit.percent, amount: fit.amount, reset: fit.reset, rev: quotas.revision }
     }
 
     // DESIGN 13 Host quotas: every host's source sub-lines, their lines indented under the source's name, in columns
@@ -227,7 +259,8 @@ Window {
             if (!hosts[keys[g]]) hosts[keys[g]] = []
             hosts[keys[g]].push({ source: owners[g].source, name: owners[g].name, spoken: owners[g].spoken, lines: fit.groups[g] })
         }
-        return { hosts: hosts, label: fit.label, percent: fit.percent, reset: fit.reset, rev: quotas.revision + hostModel.count }
+        return { hosts: hosts, label: fit.label, percent: fit.percent, amount: fit.amount, reset: fit.reset,
+                 rev: quotas.revision + hostModel.count }
     }
 
     property real capsuleColumn: 0
@@ -628,6 +661,7 @@ Window {
                             invite: source === "claudeCode" && quotas.invite
                             labelWidth: root.sourceQuota.label
                             percentWidth: root.sourceQuota.percent
+                            amountWidth: root.sourceQuota.amount
                             resetWidth: root.sourceQuota.reset
                             onInviteAccepted: quotas.openCliSettings()
                             onInviteDismissed: prefs.quotaCliInviteDismissed = true
@@ -659,6 +693,7 @@ Window {
                                 quotaSources: root.hostQuota.hosts[key] || []
                                 labelWidth: root.hostQuota.label
                                 percentWidth: root.hostQuota.percent
+                                amountWidth: root.hostQuota.amount
                                 resetWidth: root.hostQuota.reset
                             }
                             add: Transition { NumberAnimation { property: "opacity"; from: 0; to: 1; duration: 220 } }

@@ -29,6 +29,7 @@ qt_add_executable(agent-speed
     src/characters/character_library.cpp
     src/characters/character_transport.cpp
     src/preferences.cpp
+    src/quota/quota_estimate_text.cpp
     src/quota/quota_text.cpp
     src/quota/quota_service.cpp
     src/quota/quota_transport.cpp
@@ -193,6 +194,7 @@ set(agent_speed_qml
     qml/quota/QuotaLine.qml
     qml/quota/QuotaLines.qml
     qml/quota/QuotaToggle.qml
+    qml/quota/QuotaTooltip.qml
 )
 # Serve every file from the module root, so the implicit directory import sees the qmldir (and the Theme singleton).
 foreach(file IN LISTS agent_speed_qml)

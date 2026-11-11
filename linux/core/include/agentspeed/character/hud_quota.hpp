@@ -18,14 +18,16 @@ namespace agentspeed::character {
 enum class QuotaLevel { Normal, Warning, Critical };
 QuotaLevel quotaLevel(int percent);
 
-// One window line: its label (`5h`, `7d`, `Fable 7d`), the shown percent, the bar's fill (0…1) and the short reset
-// (`42m`, `3h`, `週五`; empty while unknown or passed).
+// One window line: its label (`5h`, `7d`, `Fable 7d`), the shown percent (`estimated`: extrapolated, QUOTAS 10.7, drawn
+// with a leading `≈`), the bar's fill (0…1) and the short reset (`42m`, `3h`, `週五`; empty while unknown or passed). The
+// card shows no amount and no cap (the dashboard has them).
 struct QuotaLine {
     std::string label;
     int percent = 0;
     double bar = 0;
     std::string reset;
     bool passed = false;
+    bool estimated = false;
     bool operator==(const QuotaLine&) const = default;
 };
 
@@ -54,6 +56,7 @@ inline bool hasHeaders(QuotaForm f) { return f != QuotaForm::Compact; }
 struct QuotaMetrics {
     double t = 8;
     double small() const { return 0.9 * t; }  // labels, names, hosts and resets
+    double approx() const { return 0.8 * t; }  // the `≈` of an extrapolated percent
     double dot() const { return 0.55 * t; }
     double dotGap() const { return 0.35 * t; }
     double barGap() const { return 0.5 * t; }  // label to bar, bar to the percent cell
@@ -66,7 +69,7 @@ struct QuotaMetrics {
     double headerRow() const { return 0.92 * small(); }
 };
 
-// The card's columns over every source and line it draws, in points: the widest label, the `100%` cell, the widest
+// The card's columns over every source and line it draws, in points: the widest label, the `≈100%` cell, the widest
 // short reset (0 while no line has one) and the widest header (the dot, its gap and the name).
 struct QuotaColumns {
     double label = 0, percent = 0, reset = 0, header = 0;
@@ -122,10 +125,10 @@ private:
 };
 
 // The card's lines as they move (額度 Motion): a bar eases to its new length (0.4 s, ease-out) and a reset empties it
-// over 0.6 s while its reset cell fades out; a changed percent or reset crossfades (0.2 s); a source or window joining
-// or leaving fades (0.25 s) as the card eases to its height. `still` (effects Off) changes lengths at once; the fades
-// stay. The sources of a card that appears come with it, their bars growing from empty; sources and lines that leave
-// keep their place and text while they fade. Times are seconds on one clock.
+// over 0.6 s while its reset cell fades out; a changed percent (with its `≈`) or reset crossfades (0.2 s); a source or
+// window joining or leaving fades (0.25 s) as the card eases to its height. `still` (effects Off) changes lengths at
+// once; the fades stay. The sources of a card that appears come with it, their bars growing from empty; sources and
+// lines that leave keep their place and text while they fade. Times are seconds on one clock.
 class QuotaMotion {
 public:
     static constexpr double kFade = 0.25;
@@ -151,6 +154,7 @@ public:
         double barAt = -std::numeric_limits<double>::infinity();
         double barDuration = kBarEase;
         std::optional<int> oldPercent;  // the percent before the latest change, crossfading out
+        bool oldEstimated = false;      // and whether it had its `≈`
         double percentAt = -std::numeric_limits<double>::infinity();
         std::string reset;     // the reset drawn, kept while its cell fades out
         std::string oldReset;  // the reset it replaced, crossfading out

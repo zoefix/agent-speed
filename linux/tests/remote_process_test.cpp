@@ -10,6 +10,7 @@
 #include <future>
 #include <thread>
 
+#include "agentspeed/quota/estimate/estimator.hpp"
 #include "agentspeed/remote_coordinator.hpp"
 #include "agentspeed/remote_transport.hpp"
 
@@ -293,6 +294,92 @@ TEST_F(RemoteEndToEnd, InstallsRunsSyncsHistoryAndStopsTheRelay) {
     }
     hub->stop();
     EXPECT_FALSE(hub->statuses().empty());
+}
+
+// QUOTAS 10.1, REMOTE 11.1: the app sends its salt; the relay keys the host's Codex sign-in with it and sends the key,
+// the plan and no id; the host's source and this computer's of the same key are one account in the estimate.
+TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
+    const auto quotaFolder = root_ / "app/quota";
+    quota::estimate::Estimator estimator(quotaFolder.string());
+    ASSERT_TRUE(estimator.available());
+    const std::int64_t r5 = (now_ + 4 * 3'600'000) / 1000, r7 = (now_ + 5 * std::int64_t{86'400'000}) / 1000;
+    const auto limits = R"({"limit_id":"codex","plan_type":"pro","primary":{"used_percent":12.0,"window_minutes":300,"resets_at":)" +
+                        std::to_string(r5) + R"(},"secondary":{"used_percent":40.0,"window_minutes":10080,"resets_at":)" + std::to_string(r7) + "}}";
+    std::ofstream(session_, std::ios::app) << R"({"timestamp":")" << iso(now_ - 10'000)
+                                           << R"(","type":"event_msg","payload":{"type":"token_count","info":null,"rate_limits":)" << limits << "}}\n";
+    std::ofstream(root_ / "home/.codex/auth.json") << R"({"auth_mode":"chatgpt","tokens":{"access_token":"secret-e2e","account_id":"acct-e2e"}})";
+
+    const auto host = Host::make("7A0D6B0A-1111-4222-8333-444455556666", "dev@devbox", std::nullopt, true, std::string("~/.cache/agent-speed"));
+    auto hub = coordinator(std::make_shared<Feed>());
+    std::mutex mutex;
+    std::optional<HostQuota> received;
+    std::vector<std::string> lines;
+    hub->setQuotaSink([&](const HostEvent& e) {
+        const auto* m = std::get_if<HostEvent::Message>(&e.kind);
+        const auto* q = m ? std::get_if<HostQuota>(&m->message) : nullptr;
+        if (!q || q->snapshot.source != SourceKind::Codex || q->snapshot.windows.empty()) return;
+        std::lock_guard lock(mutex);
+        received = *q;
+    });
+    QuotaSwitches switches;
+    switches.sources = {SourceKind::Codex};
+    switches.salt = estimator.saltText();
+    hub->update(HostsDocument({host}), true, {SourceKind::Codex}, "", switches);
+    ASSERT_TRUE(eventually([&] {
+        std::lock_guard lock(mutex);
+        return received && received->account;
+    }));
+    hub->stop();
+    const auto key = quota::estimate::accountKey(estimator.salt(), "codex", "acct-e2e");
+    EXPECT_EQ(received->account, key);
+    EXPECT_EQ(received->plan, "pro");
+    EXPECT_FALSE(received->tier);
+
+    // This computer: the same Codex account, a response and the token count line that follows it.
+    estimator.setCodexEnabled(true);
+    estimator.setCodexAccount(now_ - 3'600'000, quota::estimate::signedInAccount(quota::estimate::AccountSource::Codex,
+                                                                                R"({"tokens":{"account_id":"acct-e2e"}})", estimator.salt()));
+    quota::estimate::Response response;
+    response.source = "codex";
+    response.file = "local-agent";
+    response.startMs = now_ - 30 * 60'000;
+    response.endMs = now_ - 29 * 60'000;
+    response.model = "gpt-5.5";
+    response.cost = 7'000'000;
+    response.tokens = 2000;
+    response.provider = "openai";
+    estimator.putLive({{"local\x1fresp-local", response}});
+    agentspeed::json::Document doc;
+    ASSERT_TRUE(doc.parse(limits));
+    auto line = quota::estimate::codexLineOf("local-agent", response.endMs + 1'000, doc.root());
+    ASSERT_TRUE(line);
+    estimator.addCodexLine(*line);
+    // The host's line as QuotaService hands it over.
+    quota::estimate::SnapshotEvent event;
+    event.source = "codex";
+    event.machine = host.id;
+    event.observedMs = received->snapshot.observedMs;
+    event.windows = received->snapshot.windows;
+    event.account = received->account;
+    event.plan = received->plan;
+    event.tier = received->tier;
+    estimator.addSnapshot(event);
+    const auto shown = estimator.build(now_, {{"local", "codex"}, {host.id, "codex"}});
+    ASSERT_TRUE(shown.contains("codex"));
+    ASSERT_TRUE(shown.contains("codex@" + host.id));
+    EXPECT_EQ(shown.at("codex").front().account, key);
+    EXPECT_EQ(shown.at("codex@" + host.id).front().account, key);
+    for (const auto& e : shown.at("codex@" + host.id)) {
+        EXPECT_EQ(e.plan, "pro");
+        EXPECT_EQ(e.usedMicroUsd, 7'000'000) << e.kind;  // this computer's spend counts in the shared account
+    }
+    // Nothing of the salt, the key or the id is written on the host.
+    for (const auto& entry : fs::recursive_directory_iterator(root_ / "home/.cache")) {
+        if (!entry.is_regular_file()) continue;
+        std::ifstream in(entry.path(), std::ios::binary);
+        const std::string bytes((std::istreambuf_iterator<char>(in)), {});
+        for (const auto& secret : {estimator.saltText(), key, std::string("acct-e2e")}) EXPECT_EQ(bytes.find(secret), std::string::npos) << entry.path();
+    }
 }
 
 TEST_F(RemoteEndToEnd, AnInstalledRelayIsNotUploadedAgainAndTheTestProbeReadsTheSystem) {

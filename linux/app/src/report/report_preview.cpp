@@ -65,6 +65,11 @@ void ReportController::refreshPreview() {
     if (!known) opts.extensions.perfScore = true;
     const bool ws = !consent_ && usesWebSocket();
     if (ws) opts.stream = agentspeed::report::StreamBody{std::nullopt, document.websocket->maxMessageBytes};
+    // The section as the next report would carry it, without moving the run's cadence.
+    auto cadence = run_ ? run_->quotas : agentspeed::quota::estimate::Reporter{};
+    auto assumed = document;
+    if (!known) assumed.extensions["quotaEstimate"] = 1;
+    opts.quotas = quotaSection(cadence, assumed, consent_ ? consent_->quota : settings_.quotaOn(), envelope.sentAtMs, false);
     const auto built = agentspeed::report::fitted(envelope, content, sample, opts);
     previewBody_ = qs(built.json.pretty());
     previewCopy_ = previewBody_;

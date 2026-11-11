@@ -157,16 +157,19 @@ void Reader::choose() {
     if (!best) {
         snapshot_.reset();
         snapshotFile_.reset();
+        snapshotUrl_.reset();
         return;
     }
     snapshot_ = Snapshot{SourceKind::ClaudeDesktop, best->entry.observedMs, best->entry.windows};
     snapshotFile_ = best->file;
+    snapshotUrl_ = best->entry.url;
 }
 
 void Reader::forget() {
     candidates_.clear();
     snapshot_.reset();
     snapshotFile_.reset();
+    snapshotUrl_.reset();
     searchWanted_ = true;
     searchedMs_.reset();
     checkedMs_.reset();

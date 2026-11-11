@@ -8,6 +8,8 @@
 #include "agentspeed/quota/cli_quota.hpp"
 #include "agentspeed/quota/codex.hpp"
 #include "agentspeed/quota/desktop_reader.hpp"
+#include "agentspeed/quota/estimate/estimator.hpp"
+#include "agentspeed/quota/estimate/sign_in.hpp"
 #include "agentspeed/quota/paths.hpp"
 #include "agentspeed/quota/presence.hpp"
 #include "agentspeed/quota/sources.hpp"
@@ -44,11 +46,13 @@ QString abbreviated(const std::string& path) {
 
 }  // namespace
 
-QuotaWorker::QuotaWorker(std::shared_ptr<quota::CodexCollector> codex, QString helperSource)
-    : codex_(std::move(codex)), helperSource_(std::move(helperSource)) {}
+QuotaWorker::QuotaWorker(std::shared_ptr<quota::CodexCollector> codex, QString helperSource, std::shared_ptr<quota::estimate::Estimator> estimator)
+    : codex_(std::move(codex)), helperSource_(std::move(helperSource)), estimator_(std::move(estimator)) {}
 
 QuotaWorker::~QuotaWorker() {
     if (transport_) transport_->abortAll();
+    // QUOTAS 10.4: estimate.json at quit.
+    if (estimator_ && estimatedMs_) estimator_->save(QDateTime::currentMSecsSinceEpoch(), true);
 }
 
 void QuotaWorker::start() {
@@ -65,6 +69,8 @@ void QuotaWorker::start() {
     bridge_ = std::make_unique<quota::bridge::Bridge>(paths);
     codexMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::Codex, quota::codexAuthFile(environment));
     claudeMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::ClaudeCode, quota::claudeAccountFile(environment));
+    codexAccount_ = std::make_unique<quota::estimate::AccountFile>(quota::estimate::AccountSource::Codex, quota::codexAuthFile(environment));
+    claudeAccount_ = std::make_unique<quota::estimate::AccountFile>(quota::estimate::AccountSource::ClaudeCode, quota::claudeAccountFile(environment));
     running_ = std::make_unique<quota::RunningSources>(linuxEnv());
     processes_ = std::make_unique<agentspeed::traffic::sampler::ProcessReader>();
     timer_ = new QTimer(this);
@@ -207,7 +213,47 @@ void QuotaWorker::tick() {
     inputs.readLocalNow = readLocalNow_;
     readLocalNow_ = false;
     vendors_->tick(inputs);
+    feedEstimate(nowMs, codexOn, cliOn, desktopOn);
     publish(nowMs);
+}
+
+void QuotaWorker::feedEstimate(std::int64_t nowMs, bool codexOn, bool cliOn, bool desktopOn) {
+    namespace est = quota::estimate;
+    if (!estimator_ || !estimator_->available()) return;
+    const auto& salt = estimator_->salt();
+    estimator_->setCodexEnabled(codexOn);
+    codexAccount_->refresh(nowMs, codexOn, salt);
+    estimator_->setCodexAccount(nowMs, codexAccount_->account());
+    // Desktop shares the CLI's account only by the CLI's organization (QUOTAS 10.1).
+    claudeAccount_->refresh(nowMs, cliOn || (desktopOn && enabled(SourceKind::ClaudeCode)), salt);
+    estimator_->setClaudeAccount(nowMs, claudeAccount_->account());
+    const auto feed = [&](SourceKind source, const std::optional<quota::Snapshot>& snapshot, std::optional<std::string> orgKey) {
+        if (!snapshot || snapshot->windows.empty()) return;
+        const auto fed = fedMs_.find(source);
+        if (fed != fedMs_.end() && fed->second == snapshot->observedMs) return;
+        fedMs_[source] = snapshot->observedMs;
+        est::SnapshotEvent event;
+        event.source = std::string(agentspeed::sourceId(source));
+        event.observedMs = snapshot->observedMs;
+        event.windows = snapshot->windows;
+        event.orgKey = std::move(orgKey);
+        estimator_->addSnapshot(std::move(event));
+    };
+    if (cliOn) feed(SourceKind::ClaudeCode, cliFile_->snapshot(), std::nullopt);
+    if (desktopOn) {
+        const auto& url = desktop_->snapshotUrl();
+        feed(SourceKind::ClaudeDesktop, desktop_->snapshot(), url ? est::desktopOrgKey(*url, salt) : std::nullopt);
+    }
+    const auto& readings = vendors_->readings();
+    for (const auto route : quota::kVendorRoutes) {
+        if (route == quota::VendorRoute::GrokBuildLive) continue;
+        const auto source = quota::vendorRouteSource(route);
+        const auto sources = route == quota::VendorRoute::Qoder ? std::vector<SourceKind>{SourceKind::Qoder, SourceKind::QoderCli}
+                                                                : std::vector<SourceKind>{source};
+        for (const auto s : sources) {
+            if (enabled(s) && on(quota::routeOf(s)->switchKey)) feed(s, readings.snapshot(s), std::nullopt);
+        }
+    }
 }
 
 void QuotaWorker::publish(std::int64_t nowMs) {
@@ -249,8 +295,20 @@ void QuotaWorker::publish(std::int64_t nowMs) {
         out.statuses[QStringLiteral("quotaClaudeCli")] = {cliState_, {}, snapshot ? snapshot->observedMs : 0};
     }
     out.zcodeKeySaved = zcodeKeySaved_;
+    // QUOTAS 10: the estimates of the shown sources, built every 5 s.
+    if (estimator_ && estimator_->available() && (!estimatedMs_ || nowMs - *estimatedMs_ >= 5'000)) {
+        estimatedMs_ = nowMs;
+        std::set<std::pair<std::string, std::string>> shown = settings_.hostShown;
+        for (const auto& s : out.sources) {
+            if (s.snapshot && !s.snapshot->windows.empty()) shown.emplace(std::string(quota::estimate::kLocal), std::string(agentspeed::sourceId(s.source)));
+        }
+        estimates_.clear();
+        for (auto& [key, entries] : estimator_->build(nowMs, shown)) estimates_[QString::fromStdString(key)] = std::move(entries);
+        estimator_->save(nowMs);
+    }
+    out.estimates = estimates_;
     if (last_ && last_->sources == out.sources && last_->statuses == out.statuses && last_->cliState == out.cliState &&
-        last_->cliPath == out.cliPath && last_->zcodeKeySaved == out.zcodeKeySaved) {
+        last_->cliPath == out.cliPath && last_->zcodeKeySaved == out.zcodeKeySaved && last_->estimates == out.estimates) {
         return;
     }
     last_ = out;

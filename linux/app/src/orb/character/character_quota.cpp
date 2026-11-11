@@ -42,8 +42,9 @@ CharacterQuota CharacterQuota::of(const QVariantList& items, const Strings& stri
             l.bar = std::clamp(line.value(QStringLiteral("fraction")).toDouble(), 0.0, 1.0);
             l.reset = line.value(QStringLiteral("short")).toString().toStdString();
             l.passed = line.value(QStringLiteral("passed")).toBool();
+            l.estimated = line.value(QStringLiteral("estimated")).toBool();
             s.lines.push_back(std::move(l));
-            windows.push_back(line.value(QStringLiteral("spoken")).toString());
+            windows.push_back(line.value(QStringLiteral("spokenCard")).toString());
         }
         spoken.push_back(name + QLatin1Char(' ') + windows.join(separator));
         sources->push_back(std::move(s));

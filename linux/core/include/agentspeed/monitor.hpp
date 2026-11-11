@@ -150,6 +150,10 @@ public:
     // QUOTAS 3: installed on every Codex parser, those tracked already and later ones, so seeding feeds it too. Called
     // on the monitor's thread; copied history never reaches it.
     void setRateLimitObserver(std::function<void(const json::Value& rateLimits, std::int64_t timestampMs)> observer);
+    // QUOTAS 10.1 Codex history: the same lines with the agent (rollout) they belong to.
+    void setRateLimitLineObserver(std::function<void(const std::string& agentId, const json::Value& rateLimits, std::int64_t timestampMs)> observer);
+    // QUOTAS 10.3: every response held (today and the retention window) with its host and its cost.
+    void forEachPriced(const std::function<void(const ParsedResponse&, const std::string& host, std::optional<std::int64_t> costMicroUsd)>& visit) const;
     // An agent's actions (METRICS 6.10 Storage) and working directory (10.6), when it has them.
     const work::ActionReader* actionsFor(const std::string& id) const { return actionsOf(id); }
     std::optional<std::string> cwdOf(const std::string& id) const;
@@ -305,6 +309,8 @@ private:
     std::function<void(const std::string&, SourceKind, const work::Action&)> toolObserver_;
     std::function<void(std::size_t, std::size_t)> seedProgress_;
     std::function<void(const json::Value&, std::int64_t)> rateLimitObserver_;
+    std::function<void(const std::string&, const json::Value&, std::int64_t)> rateLimitLineObserver_;
+    void observeRateLimits(Tracked& file);
 };
 
 }  // namespace agentspeed

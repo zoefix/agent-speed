@@ -200,6 +200,11 @@ public:
         return out;
     }
 
+    template <typename Visit>
+    void forEachPriced(const Visit& visit) const {
+        for (const auto& [_, s] : byKey_) visit(s.parsed, s.engine.host, s.engine.costMicroUsd);
+    }
+
     std::vector<ParsedResponse> responses() const {
         std::vector<ParsedResponse> out;
         out.reserve(byKey_.size());

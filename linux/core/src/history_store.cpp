@@ -218,6 +218,106 @@ std::optional<DayAggregate> decode(std::string_view text) {
     return d;
 }
 
+std::string encodeEstimate(const EstimateFile& e) {
+    std::map<std::string, std::size_t> agents;
+    std::string names;
+    const auto agent = [&](const std::string& id) {
+        const auto [it, added] = agents.try_emplace(id, agents.size());
+        if (added) {
+            if (!names.empty()) names += ',';
+            appendString(names, id);
+        }
+        return std::to_string(it->second);
+    };
+    std::string rows;
+    for (const auto& r : e.responses) {
+        if (!rows.empty()) rows += ',';
+        rows += '[' + agent(r.agentId) + ',';
+        appendString(rows, sourceId(r.source));
+        rows += ',';
+        appendString(rows, r.model);
+        rows += ',';
+        if (r.provider) {
+            appendString(rows, *r.provider);
+        } else {
+            rows += "null";
+        }
+        rows += ',';
+        appendOptional(rows, r.startMs);
+        rows += ',' + std::to_string(r.endMs) + ',';
+        appendOptional(rows, r.costMicroUsd);
+        rows += ',' + std::to_string(r.tokens) + ',' + std::to_string(r.requests) + (r.cloudRoute ? ",true]" : ",false]");
+    }
+    std::string lines;
+    for (const auto& l : e.lines) {
+        if (!lines.empty()) lines += ',';
+        lines += '[' + agent(l.agentId) + ',' + std::to_string(l.ts) + ',';
+        // The object as it is; any other text as a string.
+        json::Document object;
+        if (object.parse(l.rateLimits) && object.root().isObject()) {
+            lines += l.rateLimits;
+        } else {
+            appendString(lines, l.rateLimits);
+        }
+        lines += ']';
+    }
+    return "{\"a\":[" + names + "],\"r\":[" + rows + "],\"l\":[" + lines + "]}";
+}
+
+std::optional<EstimateFile> decodeEstimate(std::string_view text) {
+    json::Document document;
+    if (!document.parse(text) || !document.root().isObject()) return std::nullopt;
+    const auto root = document.root();
+    if (!root["a"].isArray() || !root["r"].isArray() || !root["l"].isArray()) return std::nullopt;
+    std::vector<std::string> agents;
+    for (const auto& a : root["a"].elements()) {
+        auto id = a.string();
+        if (!id) return std::nullopt;
+        agents.push_back(std::move(*id));
+    }
+    const auto agentOf = [&](const json::Value& v) -> const std::string* {
+        const auto index = v.ordinal();
+        return index && static_cast<std::uint64_t>(*index) < agents.size() ? &agents[static_cast<std::size_t>(*index)] : nullptr;
+    };
+    const auto integer = [](const json::Value& v) { return v.isIntegerLiteral() ? v.truncated() : std::nullopt; };
+    const auto optionalInteger = [&](const json::Value& v, std::optional<std::int64_t>& out) {
+        if (v.isNull()) return true;
+        out = integer(v);
+        return out.has_value();
+    };
+    EstimateFile e;
+    for (const auto& row : root["r"].elements()) {
+        const auto c = row.elements();
+        if (c.size() != 10) return std::nullopt;
+        const auto* agent = agentOf(c[0]);
+        const auto source = c[1].isString() ? sourceFromId(*c[1].string()) : std::nullopt;
+        const auto endMs = integer(c[5]), tokens = integer(c[7]), requests = integer(c[8]);
+        if (!agent || !source || !c[2].isString() || !(c[3].isNull() || c[3].isString()) || !endMs || !tokens || !requests || !c[9].isBool()) {
+            return std::nullopt;
+        }
+        EstimateResponse r;
+        r.source = *source;
+        r.agentId = *agent;
+        r.model = *c[2].string();
+        r.provider = c[3].string();
+        if (!optionalInteger(c[4], r.startMs) || !optionalInteger(c[6], r.costMicroUsd)) return std::nullopt;
+        r.endMs = *endMs;
+        r.tokens = *tokens;
+        r.requests = *requests;
+        r.cloudRoute = c[9].isTrue();
+        e.responses.push_back(std::move(r));
+    }
+    for (const auto& row : root["l"].elements()) {
+        const auto c = row.elements();
+        if (c.size() != 3) return std::nullopt;
+        const auto* agent = agentOf(c[0]);
+        const auto ts = integer(c[1]);
+        if (!agent || !ts || !(c[2].isObject() || c[2].isString())) return std::nullopt;
+        e.lines.push_back({*agent, *ts, c[2].isObject() ? std::string(c[2].raw()) : *c[2].string()});
+    }
+    return e;
+}
+
 std::unique_ptr<Store> Store::open(const std::string& path) {
     std::error_code ec;
     std::filesystem::create_directories(std::filesystem::path(path).parent_path(), ec);
@@ -227,7 +327,7 @@ std::unique_ptr<Store> Store::open(const std::string& path) {
     store->db_.execute("CREATE TABLE IF NOT EXISTS meta(key TEXT PRIMARY KEY, value TEXT)");
     const auto schema = store->meta("schema");
     if (schema && *schema != std::to_string(kSchema)) {
-        for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables"}) {
+        for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "estimate_spend"}) {
             store->db_.execute(std::string("DROP TABLE IF EXISTS ") + table);
         }
         store->db_.execute("DELETE FROM meta");
@@ -259,6 +359,8 @@ void Store::createSchema() {
     db_.execute(
         "CREATE TABLE IF NOT EXISTS day_traffic(day TEXT, key TEXT, rx INTEGER, tx INTEGER, rx_tools INTEGER, tx_tools INTEGER,"
         " sampled_ms INTEGER, PRIMARY KEY (day, key)) WITHOUT ROWID");
+    // QUOTAS 10.3: each file's recent spend for the quota estimate; a file without a row was never analysed for it.
+    db_.execute("CREATE TABLE IF NOT EXISTS estimate_spend(file_id INTEGER PRIMARY KEY, version INTEGER NOT NULL, data TEXT NOT NULL)");
 }
 
 void Store::saveTraffic(const std::vector<traffic::HistoryRow>& rows) {
@@ -350,6 +452,16 @@ std::map<std::string, StoredFile> Store::loadFiles() const {
         r.activeMs = records.getInt64(17);
         files[it->second].perf.push_back(std::move(row));
     }
+    auto spend = db_.prepare("SELECT file_id, version, data FROM estimate_spend");
+    while (spend.step()) {
+        const auto it = byId.find(spend.getInt64(0));
+        if (it == byId.end()) continue;
+        // A row that does not parse leaves the file to be analysed again.
+        if (auto estimate = decodeEstimate(spend.getText(2))) {
+            estimate->version = static_cast<int>(spend.getInt64(1));
+            files[it->second].estimate = std::move(*estimate);
+        }
+    }
     return files;
 }
 
@@ -368,6 +480,9 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
             " reason_duration_ms_sum, cache_n, cache_input, cache_cached, tool_n, tool_ln_sum, tool_failed, active_ms, version)"
             " VALUES(?1, ?2, ?3, ?4, ?5, ?6, ?7, ?8, ?9, ?10, ?11, ?12, ?13, ?14, ?15, ?16, ?17, ?18, ?19)"
             " ON CONFLICT(file_id, day, source, model) DO NOTHING");
+        auto saveEstimate = db_.prepare(
+            "INSERT INTO estimate_spend(file_id, version, data) VALUES(?1, ?2, ?3)"
+            " ON CONFLICT(file_id) DO UPDATE SET version=excluded.version, data=excluded.data");
         for (auto& [file, hashes] : files) {
             upsert.reset();
             upsert.bind(1, std::string_view(file->path)).bind(2, std::string_view(file->family)).bind(3, file->size).bind(4, file->modified);
@@ -398,6 +513,10 @@ void Store::save(std::vector<std::pair<StoredFile*, std::vector<std::uint64_t>>>
                 insertRecord.bind(19, static_cast<std::int64_t>(file->version));
                 insertRecord.step();
             }
+            saveEstimate.reset();
+            saveEstimate.bind(1, file->id).bind(2, static_cast<std::int64_t>(file->estimate.version));
+            saveEstimate.bind(3, std::string_view(encodeEstimate(file->estimate)));
+            saveEstimate.step();
         }
         db_.execute("COMMIT");
     } catch (...) {
@@ -483,7 +602,7 @@ void Store::setMeta(const std::string& key, const std::string& value) {
 }
 
 void Store::clear() {
-    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "perf_records", "day_traffic"}) {
+    for (const char* table : {"files", "contributions", "peaks", "bindings", "price_tables", "perf_records", "day_traffic", "estimate_spend"}) {
         db_.execute(std::string("DELETE FROM ") + table);
     }
     db_.execute("DELETE FROM meta WHERE key<>'schema'");

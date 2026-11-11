@@ -33,11 +33,14 @@ class ProcessReader;
 // the host's Claude Code bridge, Grok Build's log and live request, Antigravity's loopback server, Kimi, Gemini and
 // Droid with the host's own sign-ins) and sent as `quota`, `quotaRemoved` and `quotaBridge` lines. Nothing is read
 // for a source that is not in the config's `sources` and enabled in `start`, and nothing asks the network unless the
-// config's `network` is on. Driven by the relay's loop; requests run on the transport's own thread.
+// config's `network` is on. Codex's and Claude Code's lines carry their account key (with the config's salt), plan and
+// tier (QUOTAS 10.1, 10.2). Driven by the relay's loop; requests run on the transport's own thread.
 namespace agentspeed::relay {
 
 class RelayTransport;
 class HostBridge;
+class AccountFile;
+class CodexPlans;
 
 struct QuotaOptions {
     std::string folder;
@@ -81,10 +84,13 @@ private:
         std::optional<quota::Snapshot> snapshot;
         bool running = false, signedIn = false;
         remote::HostQuota::Status status = remote::HostQuota::Status::Ok;
+        std::optional<std::string> account, plan, tier;
+        bool operator==(const Sent&) const = default;
     };
 
     void build();
     void refresh(std::int64_t nowMs, std::int64_t steady);
+    void refreshAccounts(std::int64_t nowMs);
     void report(std::int64_t nowMs);
     remote::HostQuota reportOf(SourceKind source) const;
     void sendBridge(remote::HostQuotaBridge::State state);
@@ -95,9 +101,11 @@ private:
     Clock clock_;
     quota::Environment environment_;
     std::shared_ptr<quota::CodexCollector> codex_;
+    std::shared_ptr<CodexPlans> codexPlans_;
     std::unique_ptr<HostBridge> bridge_;
     std::unique_ptr<quota::cli::FileReader> cliFile_;
     std::unique_ptr<quota::SignInMarker> codexMarker_, claudeMarker_;
+    std::unique_ptr<AccountFile> codexAccount_, claudeAccount_;
     std::unique_ptr<quota::RunningSources> runningSources_;
     std::unique_ptr<traffic::sampler::ProcessReader> processes_;
     std::unique_ptr<RelayTransport> transport_;

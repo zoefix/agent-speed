@@ -458,6 +458,7 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
     } else if (score == ScoreExtension::Legacy) {
         json.add("taskScore", legacyValue(perf.thinking));
     }
+    if (options.quotas) json.add("quotas", Json::array(*options.quotas));
     if (options.stream) {
         const bool mixed = sections.contains(Section::Traffic) && sample.traffic.status == TrafficStatus::Ok;
         json.add("realtime", realtime(mixed, envelope.sentAtMs, options.stream->observationAgeMs));
@@ -468,6 +469,13 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
 Fitted fitted(const Envelope& envelope, const WindowContent& content, const Sample& sample, Options options) {
     auto document = body(envelope, content, sample, options);
     auto data = document.compact();
+    bool quotasDropped = false;
+    if (!fits(data, options) && options.quotas) {
+        options.quotas.reset();
+        quotasDropped = true;
+        document = body(envelope, content, sample, options);
+        data = document.compact();
+    }
     if (!fits(data, options) && (options.extensions.executionModes || options.extensions.modelHarnessRequests)) {
         options.extensions.executionModes = options.extensions.modelHarnessRequests = false;
         document = body(envelope, content, sample, options);
@@ -480,7 +488,7 @@ Fitted fitted(const Envelope& envelope, const WindowContent& content, const Samp
         document = body(envelope, content, sample, options);
         data = document.compact();
     }
-    return {std::move(document), std::move(data)};
+    return {std::move(document), std::move(data), quotasDropped};
 }
 
 }  // namespace agentspeed::report

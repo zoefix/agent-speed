@@ -23,6 +23,12 @@ const QString& percentCell() {
     return cell;
 }
 
+// The `≈` before an extrapolated percent (QUOTAS 10.7).
+const QString& approxSign() {
+    static const QString sign = QStringLiteral("≈");
+    return sign;
+}
+
 const QString& hostSeparator() {
     static const QString separator = QStringLiteral(" · ");
     return separator;
@@ -84,7 +90,7 @@ ac::QuotaColumns QuotaCard::columns(const CardMetrics& m, double time) const {
     auto& c = columns_;
     c = {};
     columnsAt_ = {time, m.t};
-    c.percent = advance(percentCell(), m.t, kNumberWeight);
+    c.percent = advance(approxSign(), q.approx(), kLabelWeight) + advance(percentCell(), m.t, kNumberWeight);
     for (const auto& source : motion_.sources()) {
         c.header = std::max(c.header, q.dot() + q.dotGap() + advance(text(source.name), q.small(), kNameWeight));
         for (const auto& line : source.lines) {
@@ -153,6 +159,8 @@ void QuotaCard::draw(Scene& scene, const Pen& pen, ac::CardSize box, const CardM
     const double nameX = left + dot + q.dotGap();
     const double nameMiddle = capHeight(small, kNameWeight) / 2;
     const double digitMiddle = capHeight(m.t, kNumberWeight) / 2;
+    // The smaller `≈` centered on the digits' middle rather than sitting on their baseline.
+    const double approxLift = digitMiddle - capHeight(q.approx(), kLabelWeight) / 2;
     const auto measureHost = [small](std::string_view s) {
         return advance(QString::fromUtf8(s.data(), static_cast<qsizetype>(s.size())), small, kLabelWeight);
     };
@@ -218,20 +226,24 @@ void QuotaCard::draw(Scene& scene, const Pen& pen, ac::CardSize box, const CardM
             const auto level = ac::quotaLevel(line.data.percent);
             const Rgba fill = level == ac::QuotaLevel::Critical ? red : level == ac::QuotaLevel::Warning ? amber : tint;
             bar(scene, p, left + l.bar, middle, barLength, q.barHeight(), line.bar(time), track, fill);
-            // The percent right-aligned in its cell; a changed value crossfades, and from 95 % it takes the bar's red.
-            const auto percentInk = [&](int percent) {
-                return ac::quotaLevel(percent) == ac::QuotaLevel::Critical ? red.opacity(0.95) : ink.number;
+            // The percent right-aligned in its cell, an extrapolated one after its `≈`; a changed value crossfades with
+            // its `≈`, and from 95 % it takes the bar's red.
+            const double right = left + percentRight;
+            const auto drawPercent = [&](int value, bool estimated, double alpha) {
+                if (alpha <= 0.01) return;
+                const Pen faded = pen.faded(alpha);
+                const QString shown = percentText(value);
+                const double x = right - advance(shown, m.t, kNumberWeight);
+                const Rgba color = ac::quotaLevel(value) == ac::QuotaLevel::Critical ? red.opacity(0.95) : ink.number;
+                scene.add(faded.leading(shown, m.t, kNumberWeight, x, baseline, color));
+                if (estimated) {
+                    scene.add(faded.leading(approxSign(), q.approx(), kLabelWeight, x - advance(approxSign(), q.approx(), kLabelWeight),
+                                            baseline - approxLift, ink.secondary));
+                }
             };
             const double mix = line.percentMix(time);
-            const double right = left + percentRight;
-            if (line.oldPercent && mix < 1) {
-                const QString old = percentText(*line.oldPercent);
-                scene.add(pen.faded(a * (1 - mix)).leading(old, m.t, kNumberWeight, right - advance(old, m.t, kNumberWeight), baseline,
-                                                           percentInk(*line.oldPercent)));
-            }
-            const QString percent = percentText(line.data.percent);
-            scene.add(pen.faded(a * mix).leading(percent, m.t, kNumberWeight, right - advance(percent, m.t, kNumberWeight), baseline,
-                                                 percentInk(line.data.percent)));
+            if (line.oldPercent && mix < 1) drawPercent(*line.oldPercent, line.oldEstimated, a * (1 - mix));
+            drawPercent(line.data.percent, line.data.estimated, a * mix);
             if (resetShare <= 0.01) continue;
             // A passed reset fades its cell with the emptying bar; a new one comes in like a crossfade.
             const double cell = a * resetShare * line.resetPresence.value(time);

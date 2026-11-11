@@ -1,5 +1,6 @@
 #pragma once
 
+#include <array>
 #include <cstdint>
 #include <deque>
 #include <map>
@@ -26,12 +27,19 @@ inline constexpr std::size_t kMaxOutputLine = 1u << 20;
 inline constexpr std::int64_t kMinTimeMs = 946'684'800'000;
 inline constexpr std::int64_t kMaxTimeMs = 4'102'444'800'000;
 
-// REMOTE 11.1: the sources whose quota switch is on, the master switch, Grok's live request and the host's bridge.
+// QUOTAS 10.1: the app's estimate salt, kept in memory only: never written, logged or sent back.
+using Salt = std::array<unsigned char, 32>;
+// 64 hex digits; anything else is no salt.
+std::optional<Salt> saltOf(std::string_view hex);
+
+// REMOTE 11.1: the sources whose quota switch is on, the master switch, Grok's live request, the host's bridge and the
+// salt of the account keys.
 struct QuotaConfig {
     std::set<SourceKind> sources;
     bool network = false;
     bool grokLive = false;
     bool claudeBridge = false;
+    std::optional<Salt> salt;
     bool operator==(const QuotaConfig&) const = default;
 };
 

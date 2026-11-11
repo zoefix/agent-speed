@@ -27,6 +27,10 @@ class FileReader;
 namespace desktop {
 class Reader;
 }
+namespace estimate {
+class AccountFile;
+class Estimator;
+}
 }  // namespace agentspeed::quota
 namespace agentspeed::traffic::sampler {
 class ProcessReader;
@@ -42,6 +46,8 @@ struct QuotaWorkerSettings {
     bool networkEnabled = false;
     QString zcodeRegion = QStringLiteral("global");
     bool dashboardOpen = false;
+    // QUOTAS 10.1: the connected hosts' sources that show (host id, source id), whose estimates are built.
+    std::set<std::pair<std::string, std::string>> hostShown;
     bool operator==(const QuotaWorkerSettings&) const = default;
 };
 Q_DECLARE_METATYPE(QuotaWorkerSettings)
@@ -53,7 +59,8 @@ Q_DECLARE_METATYPE(QuotaWorkerSettings)
 class QuotaWorker : public QObject {
     Q_OBJECT
 public:
-    QuotaWorker(std::shared_ptr<agentspeed::quota::CodexCollector> codex, QString helperSource);
+    QuotaWorker(std::shared_ptr<agentspeed::quota::CodexCollector> codex, QString helperSource,
+                std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator = nullptr);
     ~QuotaWorker() override;
 
 public slots:
@@ -79,6 +86,8 @@ private:
     bool on(std::string_view key) const;
     bool enabled(agentspeed::SourceKind source) const;
     void refreshBridge(std::int64_t nowMs);
+    // QUOTAS 10.1, 10.4: the sign-ins' keys and every new vendor value, for the estimate.
+    void feedEstimate(std::int64_t nowMs, bool codexOn, bool cliOn, bool desktopOn);
     void publish(std::int64_t nowMs);
 
     std::shared_ptr<agentspeed::quota::CodexCollector> codex_;
@@ -102,4 +111,9 @@ private:
     bool readLocalNow_ = false;
     bool helperInstalled_ = false;
     std::optional<QuotaPublication> last_;
+    std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator_;
+    std::unique_ptr<agentspeed::quota::estimate::AccountFile> codexAccount_, claudeAccount_;
+    std::map<agentspeed::SourceKind, std::int64_t> fedMs_;
+    std::optional<std::int64_t> estimatedMs_;
+    std::map<QString, std::vector<agentspeed::quota::estimate::Entry>> estimates_;
 };

@@ -71,6 +71,42 @@ TEST(RemoteQuota, DecodesAQuotaLine) {
     EXPECT_TRUE(decoded<HostQuota>(quotaLine("[]")).snapshot.windows.empty());
 }
 
+TEST(RemoteQuota, DecodesTheAccountPlanAndTier) {
+    const auto withMembers = [](const std::string& members) {
+        auto line = quotaLine(kWindows, "codex");
+        return line.insert(line.size() - 2, members);
+    };
+    auto q = decoded<HostQuota>(withMembers(R"(,"account":"5cdbe01ce30740bc","plan":"promax","tier":null)"));
+    EXPECT_EQ(q.account, "5cdbe01ce30740bc");
+    EXPECT_EQ(q.plan, "promax");
+    EXPECT_FALSE(q.tier);
+    q = decoded<HostQuota>(withMembers(R"(,"account":"7f3aa6deae8b9ff4","plan":"claude_max","tier":"default_claude_max_20x")"));
+    EXPECT_EQ(q.tier, "default_claude_max_20x");
+    // An older relay sends none of them; null is none.
+    q = decoded<HostQuota>(quotaLine());
+    EXPECT_FALSE(q.account);
+    EXPECT_FALSE(q.plan);
+    EXPECT_FALSE(q.tier);
+    q = decoded<HostQuota>(withMembers(R"(,"account":null,"plan":null,"tier":null)"));
+    EXPECT_FALSE(q.account);
+    EXPECT_FALSE(q.plan);
+
+    // An account that is not a key makes the line invalid (5.6).
+    for (const auto* account : {R"("5CDBE01CE30740BC")", R"("5cdbe01ce30740b")", R"("5cdbe01ce30740bc0")", R"("5cdbe01ce30740bg")", R"("")", "7",
+                                "true", R"(["5cdbe01ce30740bc"])"}) {
+        EXPECT_TRUE(invalid(withMembers(std::string(R"(,"account":)") + account))) << account;
+    }
+    // QUOTAS 10.2: a plan or tier that is not 1–64 characters of [a-z0-9_.-] is none.
+    for (const std::string& plan : {std::string(R"("Pro")"), std::string(R"("claude max")"), std::string(R"("")"), std::string("7"),
+                                   std::string(R"({"name":"pro"})"), "\"" + std::string(65, 'p') + "\"", std::string(R"("pro\n")")}) {
+        q = decoded<HostQuota>(withMembers(R"(,"plan":)" + plan + R"(,"tier":)" + plan));
+        EXPECT_FALSE(q.plan) << plan;
+        EXPECT_FALSE(q.tier) << plan;
+    }
+    EXPECT_EQ(decoded<HostQuota>(withMembers(R"(,"plan":")" + std::string(64, 'p') + "\"")).plan, std::string(64, 'p'));
+    EXPECT_EQ(decoded<HostQuota>(withMembers(R"(,"plan":")" + kEscape + R"(0070ro")")).plan, "pro");
+}
+
 TEST(RemoteQuota, SourcesAHostCannotReadAreIgnored) {
     for (const auto* source : {"claudeDesktop", "devin", "zcode", "qoder", "qoderCli", "workbuddy", "deepseek", "futureAgent"}) {
         EXPECT_TRUE(ignored(quotaLine(kWindows, source))) << source;
@@ -177,17 +213,34 @@ TEST(RemoteQuota, HostConfigFollowsTheSwitchesAndTheHostsBridge) {
 }
 
 TEST(RemoteQuota, EncodesStartQuotaAndTheConfigLine) {
-    HostQuotaConfig config{{SourceKind::Codex, SourceKind::ClaudeCode, SourceKind::Kimi}, true, false, true};
+    HostQuotaConfig config{{SourceKind::Codex, SourceKind::ClaudeCode, SourceKind::Kimi}, true, false, true, {}};
     const auto start = encode::start(1, {SourceKind::Codex}, Zone{"UTC", utcTzif()}, "{}", config);
     ASSERT_TRUE(start);
     EXPECT_NE(start->find(R"(,"quota":{"sources":["codex","claudeCode","kimi"],"network":true,"grokLive":false,"claudeBridge":true}})"),
               std::string::npos)
         << *start;
     EXPECT_EQ(encode::start(1, {SourceKind::Codex}, Zone{"UTC", utcTzif()}, "{}")->find("quota"), std::string::npos);
-    EXPECT_EQ(*encode::quota(HostQuotaConfig{{}, false, false, false}),
+    EXPECT_EQ(*encode::quota(HostQuotaConfig{{}, false, false, false, {}}),
               "{\"t\":\"quota\",\"config\":{\"sources\":[],\"network\":false,\"grokLive\":false,\"claudeBridge\":false}}\n");
     json::Document doc;
     EXPECT_TRUE(doc.parse(*encode::quota(config)));
+}
+
+TEST(RemoteQuota, TheConfigCarriesTheSaltOnlyWhenTheAppHasOne) {
+    const std::string salt = "000102030405060708090a0b0c0d0e0f101112131415161718191a1b1c1d1e1f";
+    QuotaSwitches switches{{SourceKind::Codex}, false, false, false, salt};
+    const auto config = HostQuotaConfig::forHost(false, switches);
+    EXPECT_EQ(config.salt, salt);
+    EXPECT_EQ(*encode::quota(config), "{\"t\":\"quota\",\"config\":{\"sources\":[\"codex\"],\"network\":false,\"grokLive\":false,"
+                                      "\"claudeBridge\":false,\"salt\":\"" + salt + "\"}}\n");
+    const auto start = encode::start(1, {SourceKind::Codex}, Zone{"UTC", utcTzif()}, "{}", config);
+    ASSERT_TRUE(start);
+    EXPECT_NE(start->find(R"("claudeBridge":false,"salt":")" + salt + R"("}})"), std::string::npos) << *start;
+    // None, or not one: the relay leaves `account` null.
+    for (const std::string& none : {std::string(), salt.substr(1), std::string(64, 'G'), std::string(64, 'A'), salt + "0"}) {
+        switches.salt = none;
+        EXPECT_EQ(encode::quota(HostQuotaConfig::forHost(false, switches))->find("salt"), std::string::npos) << none;
+    }
 }
 
 TEST(RemoteQuota, HostDocumentKeepsTheBridgeSwitch) {
@@ -259,7 +312,7 @@ protected:
 };
 
 TEST_F(RemoteQuotaConnection, StartCarriesTheConfigAndChangesFollowWithoutAReconnect) {
-    QuotaSwitches switches{{SourceKind::Codex, SourceKind::Kimi, SourceKind::ClaudeCode}, true, false, true};
+    QuotaSwitches switches{{SourceKind::Codex, SourceKind::Kimi, SourceKind::ClaudeCode}, true, false, true, {}};
     auto& relay = run(false, switches);
     const auto first = relay.input();
     EXPECT_NE(first.find(R"("quota":{"sources":["codex","kimi"],"network":true,"grokLive":false,"claudeBridge":false})"), std::string::npos)
@@ -279,7 +332,7 @@ TEST_F(RemoteQuotaConnection, StartCarriesTheConfigAndChangesFollowWithoutARecon
 }
 
 TEST_F(RemoteQuotaConnection, QuotaLinesReachTheSinkAndInvalidOnesAreCounted) {
-    auto& relay = run(true, QuotaSwitches{{SourceKind::Kimi}, true, false, true});
+    auto& relay = run(true, QuotaSwitches{{SourceKind::Kimi}, true, false, true, {}});
     relay.line(helloLine());
     relay.line(quotaLine());
     relay.line(R"({"t":"quotaRemoved","source":"kimi"})");

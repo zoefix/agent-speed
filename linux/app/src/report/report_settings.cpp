@@ -60,6 +60,17 @@ void ReportSettings::setSection(agentspeed::report::Section section, bool on) {
     settings_.setValue(QStringLiteral("report/sectionsOff"), off);
 }
 
+bool ReportSettings::quotaOn() const {
+    return !settings_.value(QStringLiteral("report/sectionsOff")).toStringList().contains(QStringLiteral("quota"));
+}
+
+void ReportSettings::setQuota(bool on) {
+    auto off = settings_.value(QStringLiteral("report/sectionsOff")).toStringList();
+    off.removeAll(QStringLiteral("quota"));
+    if (!on) off.append(QStringLiteral("quota"));
+    settings_.setValue(QStringLiteral("report/sectionsOff"), off);
+}
+
 qint64 ReportSettings::pauseUntil() const { return settings_.value(QStringLiteral("report/pauseUntil"), 0).toLongLong(); }
 void ReportSettings::setPauseUntil(qint64 value) { settings_.setValue(QStringLiteral("report/pauseUntil"), value); }
 QString ReportSettings::invite() const { return settings_.value(QStringLiteral("report/invite"), QStringLiteral("unanswered")).toString(); }

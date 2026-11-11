@@ -9,6 +9,9 @@
 
 namespace agentspeed::quota {
 class CodexCollector;
+namespace estimate {
+class Estimator;
+}
 }
 class Preferences;
 class QuotaView;
@@ -20,8 +23,9 @@ class RemoteService;
 class QuotaService : public QObject {
     Q_OBJECT
 public:
+    // `estimator` (QUOTAS 10): fed by the worker and the hosts' quota lines; null without one.
     QuotaService(Preferences& prefs, QuotaView& view, RemoteService& remote, std::shared_ptr<agentspeed::quota::CodexCollector> codex,
-                 QObject* parent = nullptr);
+                 std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator = nullptr, QObject* parent = nullptr);
     ~QuotaService() override;
 
     // The collector the monitor's Codex parsers feed (QUOTAS 3).
@@ -41,6 +45,7 @@ private:
     QuotaView& view_;
     RemoteService& remote_;
     std::shared_ptr<agentspeed::quota::CodexCollector> codex_;
+    std::shared_ptr<agentspeed::quota::estimate::Estimator> estimator_;
     QThread thread_;
     QuotaWorker* worker_ = nullptr;
     QTimer hostsTimer_;

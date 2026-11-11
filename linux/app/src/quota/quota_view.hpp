@@ -11,8 +11,10 @@
 #include <optional>
 #include <vector>
 
+#include "agentspeed/quota/estimate/entry.hpp"
 #include "agentspeed/quota/window.hpp"
 #include "agentspeed/remote_messages.hpp"
+#include "quota/quota_estimate_text.hpp"
 
 class Strings;
 
@@ -40,6 +42,8 @@ struct QuotaPublication {
     QString cliState = QStringLiteral("off");
     QString cliPath;
     bool zcodeKeySaved = false;
+    // QUOTAS 10.7, 10.8: the entries each shown source spends on (`<source>`, `<source>@<host id>`).
+    std::map<QString, std::vector<agentspeed::quota::estimate::Entry>> estimates;
 };
 Q_DECLARE_METATYPE(QuotaPublication)
 
@@ -92,6 +96,10 @@ public:
     void setPublication(const QuotaPublication& publication);
     // DESIGN 4 invitation: Claude Code is enabled, its bridge is off and the invitation was not dismissed.
     void setInvite(bool on);
+    // QUOTAS 10.7, 10.8: the account-window entries each shown source spends on come with the publication, by
+    // `<source>` (this computer) or `<source>@<host id>`; their amounts are in the display currency.
+    using Estimates = std::map<QString, std::vector<agentspeed::quota::estimate::Entry>>;
+    void setMoney(quota_estimate_text::Money money);
     // REMOTE 11.1: a host's quota line (`quota`, `quotaRemoved`, `quotaBridge`).
     void applyHost(const agentspeed::remote::RelayMessage& message);
     // The configured hosts' names, which of them are connected, and which sources each host may show (its switches).
@@ -164,6 +172,10 @@ private:
     std::map<QString, QSet<QString>> hostShown_;
     bool inviteOn_ = false;
     bool demo_ = false;
+    Estimates estimates_;
+    quota_estimate_text::Money money_;
+    const std::vector<agentspeed::quota::estimate::Entry>* estimatesOf(const QString& key) const;
+    void loadDemoEstimates(std::int64_t nowMs, const QString& host);
 
     QVariantMap lines_, spoken_, hostLines_, statuses_;
     QStringList listed_;

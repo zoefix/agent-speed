@@ -5,6 +5,7 @@
 
 #include "json_out.hpp"
 #include "protocol.hpp"
+#include "quota_accounts.hpp"
 
 namespace agentspeed::relay {
 
@@ -92,6 +93,12 @@ std::string quotaLine(const remote::HostQuota& report) {
     j.key("running").boolean(report.running);
     j.key("signedIn").boolean(report.signedIn);
     j.key("status").string(remote::hostQuotaStatusId(report.status));
+    const auto checked = [](const std::optional<std::string>& text, bool (*valid)(std::string_view)) {
+        return text && valid(*text) ? text : std::nullopt;
+    };
+    j.key("account").optionalString(checked(report.account, isAccountKey));
+    j.key("plan").optionalString(checked(report.plan, isPlanText));
+    j.key("tier").optionalString(checked(report.tier, isPlanText));
     return j.endObject().endObject().take();
 }
 

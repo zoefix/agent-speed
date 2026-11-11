@@ -42,6 +42,9 @@ public:
     void setCustomUrl(const QString& text);
     bool sectionOn(agentspeed::report::Section section) const;
     void setSection(agentspeed::report::Section section, bool on);
+    // REPORTING-EXTENSIONS 11.1 `report.section.quota`, on by default.
+    bool quotaOn() const;
+    void setQuota(bool on);
     // 0: not paused; −1: until the user resumes; else the end in Unix ms.
     qint64 pauseUntil() const;
     void setPauseUntil(qint64 value);

@@ -12,8 +12,8 @@ namespace {
 
 constexpr double kInf = std::numeric_limits<double>::infinity();
 
-QuotaLine line(const char* label, int percent, const char* reset = "", bool passed = false) {
-    return {label, percent, percent / 100.0, reset, passed};
+QuotaLine line(const char* label, int percent, const char* reset = "", bool passed = false, bool estimated = false) {
+    return {label, percent, percent / 100.0, reset, passed, estimated};
 }
 
 QuotaSource source(const char* key, std::vector<QuotaLine> lines, const char* host = "") {
@@ -55,7 +55,7 @@ TEST(QuotaCard, TheFillTurnsAmberFromEightyAndRedFromNinetyFive) {
     EXPECT_EQ(quotaLevel(100), QuotaLevel::Critical);
 }
 
-// A window line: the label column, 0.5 t, the bar (5 t, 3 t once shortened), 0.5 t, the `100%` cell, 0.4 t, the reset.
+// A window line: the label column, 0.5 t, the bar (5 t, 3 t once shortened), 0.5 t, the `≈100%` cell, 0.4 t, the reset.
 TEST(QuotaCard, ALineSetsItsCellsInColumns) {
     const QuotaMetrics m{8};
     const auto full = quotaLineLayout(QuotaForm::Full, columns(), m);
@@ -71,6 +71,7 @@ TEST(QuotaCard, ALineSetsItsCellsInColumns) {
     EXPECT_DOUBLE_EQ(compact.barLength, 24);
     EXPECT_DOUBLE_EQ(m.barHeight(), 0.26 * 8);
     EXPECT_DOUBLE_EQ(m.small(), 0.9 * 8);
+    EXPECT_DOUBLE_EQ(m.approx(), 0.8 * 8);
 }
 
 // 額度 Room: the reset cells go first, then the bars shorten, then the headers go; the plate adds its padding.
@@ -183,6 +184,31 @@ TEST(QuotaMotion, AResetEmptiesTheBarOverSixTenthsWhileItsCellFades) {
     motion.sync(passed, false, t, false);
     EXPECT_TRUE(motion.sources()[2].lines[0].oldReset.empty());
     EXPECT_NEAR(motion.sources()[2].lines[0].resetPresence.value(t + 0.1), 0.5, 1e-9);
+}
+
+// A percent that turns extrapolated crossfades with its `≈` even when its number stays; the card has no amount.
+TEST(QuotaMotion, APercentTurningEstimatedCrossfadesWithItsSign) {
+    QuotaMotion motion;
+    double t = 0;
+    motion.sync(card(), false, t, true);
+    EXPECT_FALSE(motion.moving(t));
+    auto next = card();
+    next[0].lines[0] = line("7d", 25, "週一", false, true);
+    motion.sync(next, false, t, false);
+    const auto& l = motion.sources()[0].lines[0];
+    ASSERT_TRUE(l.oldPercent.has_value());
+    EXPECT_EQ(*l.oldPercent, 25);
+    EXPECT_FALSE(l.oldEstimated);
+    EXPECT_TRUE(l.data.estimated);
+    EXPECT_NEAR(l.percentMix(t + 0.1), 0.5, 1e-9);
+    EXPECT_TRUE(motion.moving(t + 0.1));
+    run(motion, next, t, 0.3);
+    EXPECT_EQ(motion.sources()[0].lines[0].percentMix(t), 1);
+    EXPECT_FALSE(motion.moving(t));
+    // And back: the vendor's next value replaces it, the `≈` fading with the old percent.
+    motion.sync(card(), false, t, false);
+    EXPECT_TRUE(motion.sources()[0].lines[0].oldEstimated);
+    EXPECT_FALSE(motion.sources()[0].lines[0].data.estimated);
 }
 
 // A changed reset text crossfades in its cell.

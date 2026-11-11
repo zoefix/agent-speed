@@ -11,8 +11,10 @@
 
 #include "agentspeed/character/store.hpp"
 #include "agentspeed/demo.hpp"
+#include "agentspeed/history.hpp"
 #include "agentspeed/money.hpp"
 #include "agentspeed/price_book.hpp"
+#include "agentspeed/quota/estimate/estimator.hpp"
 #include "agentspeed/unpriced.hpp"
 #include "format.hpp"
 #include "heat.hpp"
@@ -82,6 +84,11 @@ void MonitorWorker::startMonitor(qint64 now) {
     const TrafficRows carried = monitor_ ? monitor_->trafficToday(now) : TrafficRows{};
     monitor_ = std::make_unique<agentspeed::Monitor>(options_.config);
     if (options_.codexQuota) monitor_->setRateLimitObserver(options_.codexQuota->observer());
+    if (auto estimator = options_.estimator) {
+        monitor_->setRateLimitLineObserver([estimator](const std::string& agent, const agentspeed::json::Value& limits, std::int64_t ts) {
+            if (auto line = agentspeed::quota::estimate::codexLineOf(agent, ts, limits)) estimator->addCodexLine(std::move(*line));
+        });
+    }
     monitor_->restoreTraffic(carried);
     monitor_->setTrafficEnabled(options_.trafficEnabled);
     monitor_->setPerfBaselines(baselines_);
@@ -626,12 +633,30 @@ void MonitorWorker::tick() {
         auto remote = monitor_->takeCompletions();
         completions.insert(completions.end(), remote.begin(), remote.end());
     }
+    if (now - lastEstimateMs_ >= 5'000) feedEstimate(now);
     const auto snap = monitor_->snapshot(now, todayStart);
     publish(snap, completions, now, todayStart);
     const auto traffic = agentspeed::report::TrafficSample::from(snap.traffic, options_.trafficIncludeTools, options_.config.enabled, monitor_->epoch());
     const ReportTick tick{std::make_shared<const agentspeed::report::Sample>(agentspeed::report::Sample::from(snap, traffic)), steadyMs(), now, observed};
     emit reportTick(tick);
     emit lanTick(tick);
+}
+
+// QUOTAS 10.3: the responses the engine holds (this computer's and the hosts'), priced, for the spend ledger.
+void MonitorWorker::feedEstimate(qint64 now) {
+    lastEstimateMs_ = now;
+    const auto& estimator = options_.estimator;
+    if (!estimator || !monitor_) return;
+    const auto table = options_.config.prices ? options_.config.prices->current() : agentspeed::pricing::PriceBook::bundled();
+    std::vector<std::pair<std::string, agentspeed::quota::estimate::Response>> responses;
+    monitor_->forEachPriced([&](const agentspeed::ParsedResponse& r, const std::string& host, std::optional<std::int64_t> cost) {
+        if (!agentspeed::history::isQuotaSource(r.source)) return;
+        const auto machine = host == agentspeed::remote::kLocalHost ? std::string(agentspeed::quota::estimate::kLocal) : host;
+        responses.emplace_back(machine + "\x1f" + r.key,
+                               agentspeed::quota::estimate::responseOf(agentspeed::history::estimateResponseOf(r, r.source, cost, *table, *table), machine));
+    });
+    estimator->setPriceVersion(table->version());
+    estimator->putLive(std::move(responses));
 }
 
 void MonitorWorker::setReportWatch(bool on, qint64 responses, qint64 calls) {

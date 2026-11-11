@@ -283,6 +283,71 @@ Contributions contributionsOf(const std::vector<ParsedResponse>& responses, Sour
     return days;
 }
 
+namespace {
+
+// METRICS 9.2: the candidate chain has a `cloud` step that changed the key (a Bedrock or Vertex form).
+bool isCloudForm(const pricing::ModelResolver& resolver, const std::string& model) {
+    const auto chain = resolver.candidates(model);
+    for (std::size_t i = 1; i < chain.size(); ++i) {
+        if (std::string_view(chain[i].step) == "cloud") return chain[i].key != chain[i - 1].key;
+    }
+    return false;
+}
+
+}  // namespace
+
+bool isQuotaSource(SourceKind source) {
+    switch (source) {
+        case SourceKind::Codex:
+        case SourceKind::ClaudeCode:
+        case SourceKind::ClaudeDesktop:
+        case SourceKind::GrokBuild:
+        case SourceKind::Devin:
+        case SourceKind::Antigravity:
+        case SourceKind::Kimi:
+        case SourceKind::Gemini:
+        case SourceKind::Droid:
+        case SourceKind::ZCode:
+        case SourceKind::Qoder:
+        case SourceKind::QoderCli:
+        case SourceKind::WorkBuddy: return true;
+        default: return false;
+    }
+}
+
+std::vector<EstimateResponse> estimateResponsesOf(const std::vector<ParsedResponse>& responses, SourceKind source,
+                                                  const DayLabeler& labeler, pricing::PriceBook& prices, std::int64_t sinceMs) {
+    std::vector<EstimateResponse> out;
+    if (!isQuotaSource(source)) return out;
+    for (const auto& r : responses) {
+        if (!r.final || r.endMs < sinceMs) continue;
+        const auto day = labeler.label(r.endMs);
+        if (!day) continue;
+        // The table the cost came from first, as PriceBook::cost tries them.
+        const auto cost = prices.cost(r, *day);
+        out.push_back(estimateResponseOf(r, source, cost, *prices.table(prices.versionForDay(*day)), *prices.current()));
+    }
+    return out;
+}
+
+EstimateResponse estimateResponseOf(const ParsedResponse& r, SourceKind source, std::optional<std::int64_t> cost, const pricing::PriceTable& table,
+                                    const pricing::PriceTable& latest) {
+    EstimateResponse e;
+    e.source = source;
+    e.agentId = r.agentId;
+    e.provider = r.provider;
+    e.startMs = r.startMs;
+    e.endMs = r.endMs;
+    e.costMicroUsd = cost;
+    e.tokens = r.tokens.total();
+    e.requests = r.requestCount;
+    e.model = table.reportModelId(r.model, r.provider);
+    if (e.model == "unknown" && latest.version() != table.version()) e.model = latest.reportModelId(r.model, r.provider);
+    if (e.model == "unknown" || e.model == "local") e.model = r.model ? pricing::lower(*r.model) : std::string();
+    e.cloudRoute = (source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop) && r.model && isCloudForm(table.resolver(), *r.model);
+    return e;
+}
+
 bool KeyLedger::tryClaim(const std::string& key, const std::string& agentId, std::string* owner) {
     const auto hash = fnv1a(key);
     if (settled_.contains(hash)) {

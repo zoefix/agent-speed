@@ -78,6 +78,7 @@ void ReportController::openConsent(bool review) {
     if (!service_) return;
     Draft draft{*service_, discovery_, {}, apiKey_, switches(), review, false, false, {}, {}, {}};
     draft.username = identity_ && identity_->registered ? identity_->username : nextUsername();
+    draft.quota = settings_.quotaOn();
     consent_ = std::move(draft);
     fetchDiscovery(true);
     emit consentRequested();
@@ -107,7 +108,9 @@ QString ReportController::consentUsernameError() const {
 bool ReportController::consentApiKeyVisible() const { return consent_ && consent_->discovery && consent_->discovery->apiKeyMode != "none"; }
 bool ReportController::consentApiKeyRequired() const { return consent_ && consent_->discovery && consent_->discovery->apiKeyMode == "required"; }
 QString ReportController::consentApiKeyError() const { return consent_ ? consent_->apiKeyError : QString(); }
-QVariantList ReportController::consentSections() const { return consent_ ? sectionRows(consent_->sections, consent_->discovery) : QVariantList(); }
+QVariantList ReportController::consentSections() const {
+    return consent_ ? sectionRows(consent_->sections, consent_->quota, consent_->discovery) : QVariantList();
+}
 QString ReportController::consentFailure() const { return consent_ ? consent_->failure : QString(); }
 
 bool ReportController::consentReady() const {
@@ -135,6 +138,7 @@ void ReportController::setConsentApiKey(const QString& key) {
 
 void ReportController::setConsentSection(const QString& key, bool on) {
     if (!consent_) return;
+    if (key == QLatin1String("quota")) consent_->quota = on;
     if (const auto section = agentspeed::report::sectionFromName(sv(key))) {
         if (on) consent_->sections.insert(*section);
         else consent_->sections.erase(*section);
@@ -181,6 +185,7 @@ void ReportController::transferConsent() {
     const auto discovery = *consent_->discovery;
     const auto service = consent_->service;
     for (const auto section : agentspeed::report::kAllSections) settings_.setSection(section, consent_->sections.contains(section));
+    settings_.setQuota(consent_->quota);
     settings_.setUsername(consent_->username == defaultUsername() ? QString() : consent_->username);
     // A review of an identity that is already registered confirms the document again; nothing is sent.
     if (consent_->review && identity_ && identity_->registered && key_) {

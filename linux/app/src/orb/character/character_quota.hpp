@@ -17,14 +17,15 @@ struct CharacterQuota {
     using Sources = std::vector<agentspeed::character::QuotaSource>;
 
     std::shared_ptr<const Sources> sources = std::make_shared<const Sources>();
-    // `a11y.orb.quota`: each source's name followed by its windows' `a11y.quota.window`, all joined by `list.separator`;
-    // empty without a source.
+    // `a11y.orb.quota`: each source's name followed by its windows' `a11y.quota.window`, each with `a11y.quota.estimated`
+    // while extrapolated, all joined by `list.separator`; empty without a source.
     QString spoken;
 
     bool empty() const { return sources->empty(); }
 
-    // From QuotaView::cardItems ({key, source, name, lines}). A remote host's source (DESIGN 13) keeps its host apart
-    // from the name, so the card can set it after the name or on a line of its own.
+    // From QuotaView::cardItems ({key, source, name, lines}; a line's `estimated` and `spokenCard`). A remote host's
+    // source (DESIGN 13) keeps its host apart from the name, so the card can set it after the name or on a line of its
+    // own.
     static CharacterQuota of(const QVariantList& items, const Strings& strings);
 };
 

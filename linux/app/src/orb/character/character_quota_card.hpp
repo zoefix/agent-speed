@@ -15,9 +15,10 @@ namespace orb {
 
 // The character orb's 額度 card (DESIGN 2a.6, 額度): per source a header line (its color dot and name, the host after
 // it or on a line of its own), then a line per window — the label in a column as wide as the widest, the bar, the
-// percent right-aligned in a `100%` cell and the short reset in a cell as wide as the widest. It takes the widest of its
-// forms that fits the room the column gives it (QuotaForm); lines move by QuotaMotion. When it empties or is switched
-// off it fades out with its last lines and starts afresh once gone.
+// percent right-aligned in a `≈100%` cell (`≈` while extrapolated) and the short reset in a cell as wide as the widest;
+// no amount and no cap (the dashboard has them). It takes the widest of its forms that fits the room the column gives
+// it (QuotaForm); lines move by QuotaMotion. When it empties or is switched off it fades out with its last lines and
+// starts afresh once gone.
 class QuotaCard {
 public:
     struct Ink {

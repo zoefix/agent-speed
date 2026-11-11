@@ -1,3 +1,5 @@
+#include <algorithm>
+
 #include "fields.hpp"
 
 // REMOTE 11.1: the relay's quota lines, validated by 5.6. A source a host does not read is ignored, like an unknown
@@ -9,6 +11,8 @@ std::size_t codePoints(std::string_view text);
 namespace {
 
 constexpr std::size_t kKeyBytes = 64;
+constexpr std::size_t kAccountDigits = 16;
+constexpr std::size_t kPlanCharacters = 64;
 
 std::optional<SourceKind> hostSource(const Fields& f) {
     const auto key = f.string("source", kKeyBytes);
@@ -45,6 +49,24 @@ HostQuota::Status status(const Fields& q) {
     fail(LineError::Kind::OutOfRange, q.name("status"));
 }
 
+// QUOTAS 10.1: 16 lowercase hex digits; absent or null from older relays and without a salt.
+std::optional<std::string> account(const Fields& q) {
+    auto key = q.optionalString("account", kAccountDigits);
+    const auto lowerHex = [](char c) { return (c >= '0' && c <= '9') || (c >= 'a' && c <= 'f'); };
+    if (key && (key->size() != kAccountDigits || !std::all_of(key->begin(), key->end(), lowerHex))) {
+        fail(LineError::Kind::OutOfRange, q.name("account"));
+    }
+    return key;
+}
+
+// QUOTAS 10.2: kept only when it is 1–64 characters of [a-z0-9_.-]; anything else is no value.
+std::optional<std::string> planText(const Fields& q, std::string_view key) {
+    auto text = q.value()[key].string();
+    const auto allowed = [](char c) { return (c >= 'a' && c <= 'z') || (c >= '0' && c <= '9') || c == '_' || c == '.' || c == '-'; };
+    if (!text || text->empty() || text->size() > kPlanCharacters || !std::all_of(text->begin(), text->end(), allowed)) return std::nullopt;
+    return text;
+}
+
 }  // namespace
 
 std::optional<RelayMessage> quotaLine(const Fields& f, const std::string& hostId) {
@@ -60,6 +82,9 @@ std::optional<RelayMessage> quotaLine(const Fields& f, const std::string& hostId
     out.running = q.boolean("running");
     out.signedIn = q.boolean("signedIn");
     out.status = status(q);
+    out.account = account(q);
+    out.plan = planText(q, "plan");
+    out.tier = planText(q, "tier");
     if (!source) return std::nullopt;
     out.snapshot.source = *source;
     return out;
