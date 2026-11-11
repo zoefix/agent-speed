@@ -90,6 +90,11 @@ internal static partial class OrbFrameHarness
             CharacterQuotaSheets(device, target, pack, scale, strings, info, loc, directory);
         }
 
+        foreach (var pack in packs.Take(BalanceSheetPacks()))
+        {
+            CharacterBalanceSheets(device, target, pack, scale, strings, info, loc, directory, report);
+        }
+
         var empty = new List<List<BitmapSource>>();
         foreach (var dark in new[] { true, false })
         {
@@ -198,17 +203,21 @@ internal static partial class OrbFrameHarness
         TokensUnit = loc["unit.tokS"],
     };
 
-    /// <summary>The demo's running models: two timed, one without a timed response yet, a long dated id.</summary>
-    private static IReadOnlyList<OrbModelRow> HarnessModels(double value) => value > 1
+    /// <summary>The demo's running models (the first <paramref name="count"/>): timed ones, one without a timed response yet, a long dated id.</summary>
+    private static IReadOnlyList<OrbModelRow> HarnessModels(double value, int count = 3) => value > 1
         ?
         [
-            new OrbModelRow("claude-opus-5-5", (int)Math.Round(value * 0.62), Rgba.FromHex("#D97757")),
-            new OrbModelRow("gpt-6.1-sol", (int)Math.Round(value * 0.41), Rgba.FromHex("#10A37F")),
-            new OrbModelRow("gemini-4-argon-preview-2026-11-01", null, Rgba.FromHex("#4C8DF6")),
+            .. new[]
+            {
+                new OrbModelRow("claude-opus-5-5", (int)Math.Round(value * 0.62), Rgba.FromHex("#D97757")),
+                new OrbModelRow("gpt-6.1-sol", (int)Math.Round(value * 0.41), Rgba.FromHex("#10A37F")),
+                new OrbModelRow("gemini-4-argon-preview-2026-11-01", null, Rgba.FromHex("#4C8DF6")),
+                new OrbModelRow("kimi-k3", (int)Math.Round(value * 0.18), Rgba.FromHex("#6E56CF")),
+            }.Take(count),
         ]
         : [];
 
-    private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value)
+    private static void FeedCharacter(OrbGpuOrb orb, Localizer loc, double time, double value, int models = 3)
     {
         var generating = value > 1;
         var rx = value * 52 * (1 + 0.35 * Math.Sin(time * 1.7));
@@ -218,12 +227,12 @@ internal static partial class OrbFrameHarness
             : null;
         orb.SetCharacterNetwork(time, network);
         orb.SetCharacterReadings(time, performance, money, generating, generating ? OrbLatency.Of(1180 + 40 * Math.Sin(time), loc) : null,
-            HarnessModels(value));
+            HarnessModels(value, models));
     }
 
     private static (BitmapSource? Bitmap, double BuildSeconds) CharacterStill(GpuDevice device, OffscreenTarget target, CharacterPack? pack, double size,
         double scale, bool dark, double value, OrbReadoutStrings strings, string info, Localizer loc, double seconds, EffectsIntensity level,
-        int warmFrames = 0, OrbQuotaCard? quota = null)
+        int warmFrames = 0, OrbQuotaCard? quota = null, int models = 3)
     {
         var effects = new EffectsPolicy(level);
         var d = OrbStyles.FootprintDiameter(OrbStyle.Character, size);
@@ -236,7 +245,7 @@ internal static partial class OrbFrameHarness
         SourceKind[] agents = value > 0 ? [SourceKind.Codex, SourceKind.ClaudeCode] : [];
         var time = 100.0;
         orb.SetData(time, value, tier, title, agents, info, null);
-        FeedCharacter(orb, loc, time, value);
+        FeedCharacter(orb, loc, time, value, models);
         orb.SnapNext();
         device.Atlas.BeginFrame();
         orb.Render(time);
@@ -250,7 +259,7 @@ internal static partial class OrbFrameHarness
             if (time >= nextTick)
             {
                 nextTick = time + 0.5;
-                FeedCharacter(orb, loc, time, value);
+                FeedCharacter(orb, loc, time, value, models);
             }
 
             device.Atlas.BeginFrame();
