@@ -22,11 +22,13 @@ public struct QuotaEstimateDisplay: Equatable, Sendable {
     public var windows: Int
     public var plan: String?
     public var tier: String?
+    /// The plan was inferred from the quota (QUOTAS 10.2), shown as such (10.8).
+    public var planInferred: Bool
 
     public init(percent: Double, estimated: Bool, resetsMs: Int64?, usedMicroUsd: Int64, unpricedRequests: Int64 = 0,
                 confidence: QuotaEstimateConfidence, capMicroUsd: Int64? = nil, lowMicroUsd: Int64? = nil,
                 highMicroUsd: Int64? = nil, coverage: Double? = nil, accountUsedMicroUsd: Int64? = nil, windows: Int = 0,
-                plan: String? = nil, tier: String? = nil) {
+                plan: String? = nil, tier: String? = nil, planInferred: Bool = false) {
         self.percent = percent
         self.estimated = estimated
         self.resetsMs = resetsMs
@@ -41,6 +43,7 @@ public struct QuotaEstimateDisplay: Equatable, Sendable {
         self.windows = windows
         self.plan = plan
         self.tier = tier
+        self.planInferred = planInferred
     }
 
     /// An estimate exists (a cap or a lower bound).
@@ -64,6 +67,6 @@ extension QuotaEstimateBuild {
             confidence: entry.estimate.confidence, capMicroUsd: entry.estimate.capMicroUsd,
             lowMicroUsd: entry.estimate.lowMicroUsd, highMicroUsd: entry.estimate.highMicroUsd,
             coverage: entry.estimate.coverage, accountUsedMicroUsd: entry.estimate.accountUsedMicroUsd,
-            windows: entry.estimate.windows, plan: entry.plan, tier: entry.tier)
+            windows: entry.estimate.windows, plan: entry.plan, tier: entry.tier, planInferred: base.planInferred)
     }
 }

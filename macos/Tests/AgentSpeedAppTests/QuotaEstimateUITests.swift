@@ -82,6 +82,26 @@ struct QuotaEstimateUITests {
         #expect(lines[1].spoken.hasPrefix("7d 已用 95%"))
     }
 
+    /// An inferred plan reads `quota.estimate.planInferred` in place of `quota.estimate.plan` (DESIGN 4 *Tooltip*,
+    /// QUOTAS 10.2), with ` · ` and the tier when there is one.
+    @Test func theTooltipMarksAnInferredPlan() {
+        let model = Self.model()
+        let text = QuotaEstimateText(l10n: model.l10n, cost: model.cost)
+        var ultra = Self.week
+        ultra.plan = "claude_ultra"
+        ultra.tier = nil
+        ultra.planInferred = true
+        let details = text.details(ultra)
+        #expect(details.contains("方案：claude_ultra（依額度推算）"))
+        #expect(!details.contains(model.l10n("quota.estimate.plan", "claude_ultra")))
+        var max5 = ultra
+        max5.plan = "claude_max"
+        max5.tier = "default_claude_max_5x"
+        #expect(text.details(max5).contains(model.l10n("quota.estimate.planInferred", "claude_max · default_claude_max_5x")))
+        #expect(text.details(Self.week).contains(model.l10n("quota.estimate.plan", "claude_max · default_claude_max_20x")),
+                "a plan the vendor names stays unmarked")
+    }
+
     @Test func theAmountColumnKeepsTheResetsInOneColumn() {
         let model = Self.model()
         model.quota.preview(desktop: Self.desktop, cli: nil, nowMs: Self.now)

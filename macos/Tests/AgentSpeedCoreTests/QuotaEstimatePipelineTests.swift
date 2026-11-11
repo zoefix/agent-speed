@@ -9,8 +9,8 @@ struct QuotaEstimatePipelineTests {
 
     static var pipeline: [String: Any] { F.object(F.cases["pipeline"]) }
 
-    @Test(arguments: ["ledger", "chains", "claude", "keys", "classes", "loweredCap", "planChange", "live", "store",
-                      "report"])
+    @Test(arguments: ["ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live",
+                      "store", "report"])
     func group(_ name: String) throws {
         let cases = F.list(Self.pipeline[name])
         #expect(!cases.isEmpty)
@@ -34,11 +34,45 @@ struct QuotaEstimatePipelineTests {
 
     @Test func everyGroupIsCovered() {
         let groups = Set(Self.pipeline.keys)
-        #expect(groups == ["ledger", "chains", "claude", "keys", "classes", "loweredCap", "planChange", "live", "store",
-                           "report", "cadence"])
+        #expect(groups == ["ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live",
+                           "store", "report", "cadence"])
         #expect(F.list(Self.pipeline["claude"]).count == 6)
+        #expect(F.list(Self.pipeline["inference"]).count == 4)
         #expect(F.list(Self.pipeline["store"]).count == 6)
         #expect(F.list(Self.pipeline["report"]).count == 2)
+    }
+
+    /// QUOTAS 10.2, 10.8: the display data marks an inferred plan, a plan the CLI names stays unmarked, and the inferred
+    /// plan never forms a cap class.
+    @Test func theDisplayMarksAnInferredPlan() throws {
+        let cases = F.list(Self.pipeline["inference"])
+        func build(_ name: String) throws -> (QuotaEstimateBuild, Int64) {
+            let c = try #require(cases.first { F.string($0["name"]) == name })
+            let input = F.object(c["input"])
+            return (try Self.build(input), F.int(input["now"])!)
+        }
+        let desktop = QuotaEstimateSource(source: "claudeDesktop"), cli = QuotaEstimateSource(source: "claudeCode")
+        let week = QuotaWindow(kind: .sevenDay, usedPercent: 0, resetsAtMs: nil)
+        let five = QuotaWindow(kind: .fiveHour, usedPercent: 0, resetsAtMs: nil)
+
+        let (ultra, ultraNow) = try build("Desktop without a 5-hour window")
+        let shown = try #require(ultra.display(source: desktop, window: week, nowMs: ultraNow))
+        #expect(shown.plan == "claude_ultra" && shown.tier == nil && shown.planInferred)
+        #expect(ultra.inferredPlans.values.map(\.rule) == [.shape])
+        #expect(ultra.instances.allSatisfy { if case .account = $0.capClass { true } else { false } })
+
+        let (team, teamNow) = try build("Desktop of a team organization")
+        let plain = try #require(team.display(source: desktop, window: week, nowMs: teamNow))
+        #expect(plain.plan == nil && !plain.planInferred && team.inferredPlans.isEmpty)
+
+        let (quarter, quarterNow) = try build("Desktop at a quarter of the CLI's 5-hour cap")
+        let own = try #require(quarter.display(source: desktop, window: five, nowMs: quarterNow))
+        #expect(own.plan == "claude_max" && own.tier == "default_claude_max_5x" && own.planInferred)
+        let named = try #require(quarter.display(source: cli, window: five, nowMs: quarterNow))
+        #expect(named.plan == "claude_max" && named.tier == "default_claude_max_20x" && !named.planInferred)
+        #expect(!quarter.estimates.keys.contains {
+            if case .plan(_, let tier, _) = $0 { tier == "default_claude_max_5x" } else { false }
+        }, "no class of the inferred plan")
     }
 
     /// Seen 2026-11-11: a service rejected two Codex accounts of one window, which a report could not tell apart. They
@@ -194,6 +228,11 @@ struct QuotaEstimatePipelineTests {
                                             "confidence": e.confidence.rawValue, "windows": e.windows]
             }
             out["estimates"] = estimates
+        }
+        if want.contains("plans") {
+            out["plans"] = build.inferredPlans.mapValues { p -> [String: Any] in
+                ["plan": p.plan, "tier": p.tier ?? NSNull(), "rule": p.rule.rawValue]
+            }
         }
         if want.contains("entries") {
             out["entries"] = build.entries(nowMs: now, origin: F.string(input["origin"])!).map { F.foundation($0.json) }

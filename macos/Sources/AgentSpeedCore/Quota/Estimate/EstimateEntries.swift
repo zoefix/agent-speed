@@ -18,6 +18,8 @@ public struct QuotaEntryBase: Sendable {
     public var start: Int64
     public var estimate: QuotaCapEstimate
     public var firstAfterReset: Int64?
+    /// `plan` and `tier` were inferred from the quota (QUOTAS 10.2).
+    public var planInferred = false
     /// Where the entry goes in a report; the account's tag breaks the ties that remain.
     var rank = QuotaEntryRank()
 
@@ -47,10 +49,11 @@ extension QuotaEstimateBuild {
         sourceOrder.firstIndex(of: source) ?? sourceOrder.count
     }
 
-    /// One base per account and window, its newest instance, in report order (source order, then QUOTAS 2).
+    /// One base per account and window, its newest instance, in report order (source order, then QUOTAS 2). An account
+    /// without a plan takes its inferred one (QUOTAS 10.2).
     static func current(_ instances: [QuotaBuiltInstance], estimates: [QuotaCapClass: QuotaCapEstimate],
-                        spend: [QuotaEstimateSpend], accounts: [String?], observations: [QuotaObservation],
-                        nowMs: Int64) -> [QuotaEntryBase] {
+                        inferredPlans: [String: QuotaInferredPlan], spend: [QuotaEstimateSpend], accounts: [String?],
+                        observations: [QuotaObservation], nowMs: Int64) -> [QuotaEntryBase] {
         struct Key: Hashable {
             var account: String
             var window: String
@@ -98,10 +101,13 @@ extension QuotaEstimateBuild {
                 rank.named = 1
                 rank.name = names[key.account]?.firstIndex(of: name) ?? 0
             }
+            // It fills only a missing plan and never moves the class.
+            let inferred = x.plan == nil ? inferredPlans[key.account] : nil
             rows.append(QuotaEntryBase(
-                account: key.account, source: last.source, sources: sources, plan: x.plan, tier: x.tier, kind: last.kind,
-                name: last.name, minutes: last.minutes, p: last.p, t: last.t, resetsMs: instance.resetsMs,
-                start: instance.start, estimate: estimates[x.capClass] ?? .none, firstAfterReset: firstAfter, rank: rank))
+                account: key.account, source: last.source, sources: sources, plan: inferred?.plan ?? x.plan,
+                tier: inferred.map(\.tier) ?? x.tier, kind: last.kind, name: last.name, minutes: last.minutes, p: last.p,
+                t: last.t, resetsMs: instance.resetsMs, start: instance.start, estimate: estimates[x.capClass] ?? .none,
+                firstAfterReset: firstAfter, planInferred: inferred != nil, rank: rank))
         }
         return rows.stableSorted { $0.rank < $1.rank }
     }
