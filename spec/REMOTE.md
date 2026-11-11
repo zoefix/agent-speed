@@ -462,8 +462,9 @@ Not on hosts:
     changes, at most once a second;
   - `account`: the source's account key (QUOTAS 10.1, from the host's `auth.json` `tokens.account_id` or
     `~/.claude.json` `oauthAccount`), 16 lowercase hex digits, or null; `plan` and `tier` as QUOTAS 10.2, or null.
-    A host's sources and the app's own sources with equal keys are one account; the host's streamed responses (5)
-    feed the ledger of QUOTAS 10.3. Older relays send none of the three: their sources are accounts of their own;
+    A host's sources and the app's own sources with equal keys are one account unless their fingerprint contradicts it
+    (QUOTAS 10.1); the host's streamed responses (5) feed the ledger of QUOTAS 10.3. Older relays send none of the
+    three: their sources are accounts of their own;
   - `{"t": "quotaRemoved", "source"}` when a source's snapshot goes.
 - `windows` is an array of at most 16 `{kind, name, minutes, usedPercent, resetsAtMs}` (QUOTAS 2, 9.1).
   - `name` ≤ 64 characters or null.

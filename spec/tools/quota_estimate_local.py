@@ -152,7 +152,12 @@ def claude(index):
             snap = {"observedMs": parsed["observedMs"], "windows": qr.desktop_windows(parsed["body"])}
             snaps.append(("claudeDesktop", snap, org))
             desktop_org = org
-    shared = qe.desktop_shares_cli(desktop_org, cli_org, cli_type)
+    def points(source):
+        return [(snap["observedMs"], qe.window_id(w["kind"], w.get("name"), w["minutes"]), w["resetsAtMs"], w["minutes"])
+                for src, snap, _ in snaps if src == source for w in snap["windows"] if w.get("resetsAtMs")]
+
+    fp = qe.fingerprint(points("claudeDesktop"), points("claudeCode"), NOW)
+    shared = qe.desktop_shares_cli(desktop_org, cli_org, cli_type, fp)
     files = [p for _, p, src, _ in ref.startup_files("/nonexistent", str(HOME / ".claude" / "projects"), "/nonexistent",
                                                      limit=10 ** 9)
              if os.path.getmtime(p) * 1000 >= SINCE - qe.DAY]
@@ -189,7 +194,7 @@ def claude(index):
                             "minutes": w["minutes"], "p": float(w["usedPercent"]), "t": t, "tLo": t_lo,
                             "R": w["resetsAtMs"], "plan": plan if account == "cli" else None,
                             "tier": tier if account == "cli" else None})
-    return obs, ledger, {"files": len(files), "responses": count, "desktopSharesCli": shared,
+    return obs, ledger, {"files": len(files), "responses": count, "desktopSharesCli": shared, "fingerprint": fp,
                          "snapshots": len(snaps)}
 
 

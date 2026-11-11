@@ -36,6 +36,7 @@ SEGMENTS_PER_INSTANCE = 64
 INSTANCES_PER_CLASS = 64
 INCREMENT_STEP = 10.0
 INSTANCE_JOIN_MS = 2 * MINUTE
+FINGERPRINT_MS = MINUTE
 HOUR_ROUNDED_SLACK_MS = HOUR
 PERSONAL_CLAUDE_PLANS = ("claude_free", "claude_pro", "claude_max", "claude_ultra")
 PLAN_PATTERN = re.compile(r"^[a-z0-9_.-]{1,64}$")
@@ -50,8 +51,36 @@ def account_key(salt: bytes, vendor: str, ident: str) -> str:
     return hmac.new(salt, ("%s:%s" % (vendor, ident)).encode("utf-8"), hashlib.sha256).hexdigest()[:16]
 
 
-def desktop_shares_cli(desktop_org, cli_org, cli_org_type) -> bool:
-    return bool(desktop_org) and desktop_org == cli_org and cli_org_type in PERSONAL_CLAUDE_PLANS
+def fingerprint(a, b, at):
+    """10.1: whether two sources' windows say they are one account at `at`.
+
+    `a` and `b` are [(t, windowId, R, minutes)]. A pair is comparable when it is the same window and both instances were
+    live together for more than a minute; resets within a minute confirm (True), further apart contradict (False).
+    A pair is observed at the later of its two times. The latest pair observed by `at` decides (the earlier time next,
+    a contradiction first on a tie); with none by then, the first pair observed after `at`; None without any pair."""
+    pairs = []
+    for ta, wa, ra, ma in a:
+        for tb, wb, rb, mb in b:
+            if wb != wa or min(ra, rb) - max(ra - ma * MINUTE, rb - mb * MINUTE) <= FINGERPRINT_MS:
+                continue
+            same = abs(ra - rb) <= FINGERPRINT_MS
+            pairs.append(((max(ta, tb), min(ta, tb), not same), same))
+    if not pairs:
+        return None
+    by_at = [p for p in pairs if p[0][0] <= at]
+    return max(by_at)[1] if by_at else min(pairs, key=lambda p: (p[0][0], p[0][1], not p[0][2]))[1]
+
+
+def desktop_shares_cli(desktop_org, cli_org, cli_org_type, fingerprint_state) -> bool:
+    """Desktop spends on the CLI's account only when the organization matches, the plan is personal and the windows'
+    resets confirm it (10.1): an equal organization alone has been seen on two different accounts."""
+    return (bool(desktop_org) and desktop_org == cli_org and cli_org_type in PERSONAL_CLAUDE_PLANS
+            and fingerprint_state is True)
+
+
+def keys_share(fingerprint_state) -> bool:
+    """Equal keys on two computers are one account unless the latest comparable pair contradicts it (10.1)."""
+    return fingerprint_state is not False
 
 
 def clean_plan(value):
@@ -653,9 +682,33 @@ def account_cases():
     keys = [{"vendor": v, "id": i, "expected": account_key(salt, v, i)}
             for v, i in (("codex", "acct-1"), ("claude", "org-1:user-1"), ("claudeDesktop", "org-1"))]
     merge = []
-    for d, c, t in (("org-1", "org-1", "claude_max"), ("org-1", "org-1", "claude_team"), ("org-1", "org-2", "claude_pro"),
-                    ("org-1", "org-1", None), ("org-1", "org-1", "claude_enterprise"), (None, None, "claude_max")):
-        merge.append({"desktopOrg": d, "cliOrg": c, "cliOrgType": t, "expected": desktop_shares_cli(d, c, t)})
+    for d, c, t, fp in (("org-1", "org-1", "claude_max", True), ("org-1", "org-1", "claude_max", None),
+                        ("org-1", "org-1", "claude_max", False), ("org-1", "org-1", "claude_team", True),
+                        ("org-1", "org-2", "claude_pro", True), ("org-1", "org-1", None, True),
+                        ("org-1", "org-1", "claude_enterprise", True), (None, None, "claude_max", True)):
+        merge.append({"desktopOrg": d, "cliOrg": c, "cliOrgType": t, "fingerprint": fp,
+                      "expected": desktop_shares_cli(d, c, t, fp)})
+    keys_shared = [{"fingerprint": fp, "expected": keys_share(fp)} for fp in (True, None, False)]
+    W, F, R = "sevenDay", "fiveHour", T0 + 7 * DAY
+    prints = []
+    for why, a, b, at in (
+            ("same reset: one account", [(T0 + HOUR, W, R, 10080)], [(T0 + 2 * HOUR, W, R + 30_000, 10080)], T0 + DAY),
+            ("resets 19 h apart while both live: two accounts (seen 2026-11-11)",
+             [(T0 + HOUR, W, R, 10080)], [(T0 + 2 * HOUR, W, R + 19 * HOUR, 10080)], T0 + DAY),
+            ("next instance of one account does not overlap: no pair",
+             [(T0 + HOUR, W, R, 10080)], [(R + HOUR, W, R + 7 * DAY, 10080)], R + DAY),
+            ("instances touching within a minute of jitter: no pair",
+             [(T0 + HOUR, W, R, 10080)], [(R + HOUR, W, R + 7 * DAY + 50_000, 10080)], R + DAY),
+            ("only other windows: no pair", [(T0 + HOUR, W, R, 10080)], [(T0 + HOUR, F, T0 + 5 * HOUR, 300)], T0 + DAY),
+            ("observed only after `at`: the first pair after it decides",
+             [(T0 + HOUR, W, R, 10080)], [(T0 + 3 * DAY, W, R, 10080)], T0 + DAY),
+            ("a confirmation and a contradiction observed at the same time: the contradiction",
+             [(T0 + HOUR, W, R, 10080)], [(T0 + HOUR, W, R, 10080), (T0 + HOUR, W, R + 19 * HOUR, 10080)], T0 + DAY),
+            ("the latest pair decides: an old contradiction, then a confirmation",
+             [(T0 + HOUR, W, R, 10080), (T0 + 10 * DAY, W, R + 7 * DAY, 10080)],
+             [(T0 + 2 * HOUR, W, R + 19 * HOUR, 10080), (T0 + 10 * DAY + HOUR, W, R + 7 * DAY, 10080)], T0 + 11 * DAY)):
+        prints.append({"why": why, "a": [list(x) for x in a], "b": [list(x) for x in b], "at": at,
+                       "expected": fingerprint(a, b, at)})
     plans = [{"value": v, "expected": clean_plan(v)}
              for v in ("promax", "claude_max", "default_claude_max_20x", "Pro Max", "x" * 65, None, 3)]
     ch = Chains()
@@ -663,7 +716,8 @@ def account_cases():
     roots = [ch.link(l) for l in lines]
     names = {}
     chains = [names.setdefault(r, "chain%d" % len(names)) for r in [ch.find(r) for r in roots]]
-    return {"salt": salt.hex(), "keys": keys, "desktopMerge": merge, "plans": plans,
+    return {"salt": salt.hex(), "keys": keys, "fingerprints": prints, "desktopMerge": merge, "keysShare": keys_shared,
+            "plans": plans,
             "chains": {"lines": lines, "expected": chains}}
 
 

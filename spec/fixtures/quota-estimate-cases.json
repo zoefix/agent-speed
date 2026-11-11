@@ -57,41 +57,263 @@
     "expected": "35efe81788f204f3"
    }
   ],
+  "fingerprints": [
+   {
+    "why": "same reset: one account",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1793930400000,
+      "sevenDay",
+      1794528030000,
+      10080
+     ]
+    ],
+    "at": 1794009600000,
+    "expected": true
+   },
+   {
+    "why": "resets 19 h apart while both live: two accounts (seen 2026-11-11)",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1793930400000,
+      "sevenDay",
+      1794596400000,
+      10080
+     ]
+    ],
+    "at": 1794009600000,
+    "expected": false
+   },
+   {
+    "why": "next instance of one account does not overlap: no pair",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1794531600000,
+      "sevenDay",
+      1795132800000,
+      10080
+     ]
+    ],
+    "at": 1794614400000,
+    "expected": null
+   },
+   {
+    "why": "instances touching within a minute of jitter: no pair",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1794531600000,
+      "sevenDay",
+      1795132850000,
+      10080
+     ]
+    ],
+    "at": 1794614400000,
+    "expected": null
+   },
+   {
+    "why": "only other windows: no pair",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1793926800000,
+      "fiveHour",
+      1793941200000,
+      300
+     ]
+    ],
+    "at": 1794009600000,
+    "expected": null
+   },
+   {
+    "why": "observed only after `at`: the first pair after it decides",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1794182400000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "at": 1794009600000,
+    "expected": true
+   },
+   {
+    "why": "a confirmation and a contradiction observed at the same time: the contradiction",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ],
+     [
+      1793926800000,
+      "sevenDay",
+      1794596400000,
+      10080
+     ]
+    ],
+    "at": 1794009600000,
+    "expected": false
+   },
+   {
+    "why": "the latest pair decides: an old contradiction, then a confirmation",
+    "a": [
+     [
+      1793926800000,
+      "sevenDay",
+      1794528000000,
+      10080
+     ],
+     [
+      1794787200000,
+      "sevenDay",
+      1795132800000,
+      10080
+     ]
+    ],
+    "b": [
+     [
+      1793930400000,
+      "sevenDay",
+      1794596400000,
+      10080
+     ],
+     [
+      1794790800000,
+      "sevenDay",
+      1795132800000,
+      10080
+     ]
+    ],
+    "at": 1794873600000,
+    "expected": true
+   }
+  ],
   "desktopMerge": [
    {
     "desktopOrg": "org-1",
     "cliOrg": "org-1",
     "cliOrgType": "claude_max",
+    "fingerprint": true,
     "expected": true
    },
    {
     "desktopOrg": "org-1",
     "cliOrg": "org-1",
+    "cliOrgType": "claude_max",
+    "fingerprint": null,
+    "expected": false
+   },
+   {
+    "desktopOrg": "org-1",
+    "cliOrg": "org-1",
+    "cliOrgType": "claude_max",
+    "fingerprint": false,
+    "expected": false
+   },
+   {
+    "desktopOrg": "org-1",
+    "cliOrg": "org-1",
     "cliOrgType": "claude_team",
+    "fingerprint": true,
     "expected": false
    },
    {
     "desktopOrg": "org-1",
     "cliOrg": "org-2",
     "cliOrgType": "claude_pro",
+    "fingerprint": true,
     "expected": false
    },
    {
     "desktopOrg": "org-1",
     "cliOrg": "org-1",
     "cliOrgType": null,
+    "fingerprint": true,
     "expected": false
    },
    {
     "desktopOrg": "org-1",
     "cliOrg": "org-1",
     "cliOrgType": "claude_enterprise",
+    "fingerprint": true,
     "expected": false
    },
    {
     "desktopOrg": null,
     "cliOrg": null,
     "cliOrgType": "claude_max",
+    "fingerprint": true,
+    "expected": false
+   }
+  ],
+  "keysShare": [
+   {
+    "fingerprint": true,
+    "expected": true
+   },
+   {
+    "fingerprint": null,
+    "expected": true
+   },
+   {
+    "fingerprint": false,
     "expected": false
    }
   ],
@@ -5562,6 +5784,457 @@
       }
      ]
     }
+   },
+   {
+    "name": "Desktop on another account of the organization",
+    "why": "same organization and a personal plan, but the 7-day resets lie 19 h apart while both instances are live: two accounts (seen 2026-11-11), Desktop keeps its own",
+    "input": {
+     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927783000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928113000,
+       "endMs": 1793928133000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 6000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927863000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 100,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 0,
+         "resetsAtMs": 1794511033000
+        }
+       ],
+       "org": "org-1"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "responses",
+      "instances",
+      "entries"
+     ]
+    },
+    "expected": {
+     "responses": [
+      "363b7bee52946d81",
+      "2793656d3ffa9a0d"
+     ],
+     "instances": [
+      {
+       "account": "2793656d3ffa9a0d",
+       "window": "sevenDay::10080",
+       "plan": null,
+       "tier": null,
+       "class": [
+        "account",
+        "2793656d3ffa9a0d",
+        "sevenDay::10080"
+       ],
+       "R": 1794511033000,
+       "S": 1793906233000,
+       "Shi": 1793906233000,
+       "observations": 1,
+       "bounds": null
+      },
+      {
+       "account": "363b7bee52946d81",
+       "window": "sevenDay::10080",
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "class": [
+        "plan",
+        "anthropic/claude_max",
+        "default_claude_max_20x",
+        "sevenDay::10080"
+       ],
+       "R": 1794442633000,
+       "S": 1793837833000,
+       "Shi": 1793837833000,
+       "observations": 1,
+       "bounds": null
+      }
+     ],
+     "entries": [
+      {
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 100.0,
+       "percentAgeMs": 3570000,
+       "resetsInMs": 511200000,
+       "livePercent": 100.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 4000000,
+       "observedUsedMicroUsd": 4000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 0.0,
+       "percentAgeMs": 3240000,
+       "resetsInMs": 579600000,
+       "livePercent": 0.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 6000000,
+       "observedUsedMicroUsd": 6000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "Desktop without CLI values",
+    "why": "no CLI window to compare: the fingerprint is unknown and Desktop keeps its own account",
+    "input": {
+     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927783000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928113000,
+       "endMs": 1793928133000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 6000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "responses",
+      "instances",
+      "entries"
+     ]
+    },
+    "expected": {
+     "responses": [
+      "363b7bee52946d81",
+      "2793656d3ffa9a0d"
+     ],
+     "instances": [
+      {
+       "account": "2793656d3ffa9a0d",
+       "window": "sevenDay::10080",
+       "plan": null,
+       "tier": null,
+       "class": [
+        "account",
+        "2793656d3ffa9a0d",
+        "sevenDay::10080"
+       ],
+       "R": 1794442633000,
+       "S": 1793837833000,
+       "Shi": 1793837833000,
+       "observations": 1,
+       "bounds": null
+      }
+     ],
+     "entries": [
+      {
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 3240000,
+       "resetsInMs": 511200000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 6000000,
+       "observedUsedMicroUsd": 6000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "Desktop's value before the CLI's",
+    "why": "Desktop's snapshot comes before any CLI value: the first comparable pair after it decides, so Desktop's earlier spend joins the CLI's account",
+    "input": {
+     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927783000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928113000,
+       "endMs": 1793928133000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 6000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793929033000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442653000
+        }
+       ]
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "responses",
+      "instances",
+      "entries"
+     ]
+    },
+    "expected": {
+     "responses": [
+      "363b7bee52946d81",
+      "363b7bee52946d81"
+     ],
+     "instances": [
+      {
+       "account": "363b7bee52946d81",
+       "window": "sevenDay::10080",
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "class": [
+        "plan",
+        "anthropic/claude_max",
+        "default_claude_max_20x",
+        "sevenDay::10080"
+       ],
+       "R": 1794442653000,
+       "S": 1793837853000,
+       "Shi": 1793837833000,
+       "observations": 2,
+       "bounds": {
+        "lo": 333333333.333,
+        "hi": 1000000000.0,
+        "offset": false
+       }
+      }
+     ],
+     "entries": [
+      {
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 2400000,
+       "resetsInMs": 511220000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 10000000,
+       "observedUsedMicroUsd": 10000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 577350269,
+        "lowMicroUsd": 333333333,
+        "highMicroUsd": 1000000000,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 11547005,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
    }
   ],
   "keys": [
@@ -7912,7 +8585,8 @@
         "at": 1793924233000,
         "key": "363b7bee52946d81",
         "plan": "claude_max",
-        "tier": "default_claude_max_20x"
+        "tier": "default_claude_max_20x",
+        "orgKey": "2793656d3ffa9a0d"
        }
       ]
      }
@@ -8014,7 +8688,8 @@
         "at": 1793924233000,
         "key": "363b7bee52946d81",
         "plan": "claude_max",
-        "tier": "default_claude_max_20x"
+        "tier": "default_claude_max_20x",
+        "orgKey": "2793656d3ffa9a0d"
        }
       ]
      }
@@ -8080,6 +8755,240 @@
       "observations": 0,
       "instances": 0,
       "keys": 0
+     }
+    }
+   },
+   {
+    "name": "store written with Desktop",
+    "why": "Desktop's stored timeline holds its organization's own key; the shared key is derived",
+    "input": {
+     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927783000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928113000,
+       "endMs": 1793928133000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 6000000,
+       "tokens": 1000
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793927863000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "responses",
+      "estimates",
+      "store"
+     ]
+    },
+    "expected": {
+     "responses": [
+      "363b7bee52946d81",
+      "363b7bee52946d81"
+     ],
+     "estimates": {
+      "plan|anthropic/claude_max|default_claude_max_20x|sevenDay::10080": {
+       "cap": 365148371.67,
+       "low": 133333333.333,
+       "high": 1000000000.0,
+       "confidence": "low",
+       "windows": 1
+      }
+     },
+     "store": {
+      "version": 1,
+      "observations": [
+       {
+        "account": "363b7bee52946d81",
+        "source": "claudeCode",
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080,
+        "t": 1793927863000,
+        "tLo": 1793927783000,
+        "p": 1.0,
+        "R": 1794442633000,
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x"
+       },
+       {
+        "account": "363b7bee52946d81",
+        "source": "claudeDesktop",
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080,
+        "t": 1793928193000,
+        "tLo": 1793928193000,
+        "p": 2.0,
+        "R": 1794442633000,
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x"
+       }
+      ],
+      "instances": [],
+      "keys": [
+       {
+        "source": "claudeCode",
+        "at": 1793924233000,
+        "key": "363b7bee52946d81",
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x",
+        "orgKey": "2793656d3ffa9a0d"
+       },
+       {
+        "source": "claudeDesktop",
+        "at": 1793928193000,
+        "key": "2793656d3ffa9a0d",
+        "plan": null,
+        "tier": null
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "store read back with Desktop",
+    "why": "only the responses and the stored file: the stored organization timeline and the stored windows of both sources give the same merge and estimate",
+    "input": {
+     "salt": "6465666768696a6b6c6d6e6f707172737475767778797a7b7c7d7e7f80818283",
+     "events": [
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927783000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928113000,
+       "endMs": 1793928133000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 6000000,
+       "tokens": 1000
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "responses",
+      "estimates"
+     ],
+     "store": {
+      "version": 1,
+      "observations": [
+       {
+        "account": "363b7bee52946d81",
+        "source": "claudeCode",
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080,
+        "t": 1793927863000,
+        "tLo": 1793927783000,
+        "p": 1.0,
+        "R": 1794442633000,
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x"
+       },
+       {
+        "account": "363b7bee52946d81",
+        "source": "claudeDesktop",
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080,
+        "t": 1793928193000,
+        "tLo": 1793928193000,
+        "p": 2.0,
+        "R": 1794442633000,
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x"
+       }
+      ],
+      "instances": [],
+      "keys": [
+       {
+        "source": "claudeCode",
+        "at": 1793924233000,
+        "key": "363b7bee52946d81",
+        "plan": "claude_max",
+        "tier": "default_claude_max_20x",
+        "orgKey": "2793656d3ffa9a0d"
+       },
+       {
+        "source": "claudeDesktop",
+        "at": 1793928193000,
+        "key": "2793656d3ffa9a0d",
+        "plan": null,
+        "tier": null
+       }
+      ]
+     }
+    },
+    "expected": {
+     "responses": [
+      "363b7bee52946d81",
+      "363b7bee52946d81"
+     ],
+     "estimates": {
+      "plan|anthropic/claude_max|default_claude_max_20x|sevenDay::10080": {
+       "cap": 365148371.67,
+       "low": 133333333.333,
+       "high": 1000000000.0,
+       "confidence": "low",
+       "windows": 1
+      }
      }
     }
    }
