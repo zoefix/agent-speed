@@ -212,6 +212,47 @@ def fill_holes(parts, reference, bare=None, enclosed=0.9, touch=0.15, ring=3, ma
     return filled
 
 
+def legs_under_hem(parts, reference, bare=None, touch=0.1, drawn=0.5, reach=12):
+    """For legs drawn inside the skirt (`legsInSkirt`): gives each blob of drawn art no layer covers (as in
+    recover_missing) that touches both the skirt and the shoes, at least `touch` of a 4 px ring on each, to the shoe
+    layer holding most of that ring: a shin See-Through left out between the hem and the boots, which would show the
+    desktop. Its pixels must be mostly drawn (at least `drawn` of them darker than paper), so paper the line art
+    encloses between the boots stays out. The piece is the patch of uncovered art the blob lies in, within `reach` px
+    of it; opaque, and as opaque as the art is dark on its 1 px rim against the paper. It also runs on 2 px under the
+    soft edges of the layers around it (covered, but under 0.99), away from the paper, so the hem's soft edge never
+    shows the desktop through as a dark line across the shin. Returns the pixels added."""
+    shoes = [p for p in parts if p.tag in ("footwear", "legwear")]
+    skirt = [p.alpha > 0.5 for p in parts if p.tag == "bottomwear"]
+    if not shoes or not skirt:
+        return 0
+    total = coverage(parts)
+    labels, _, covered, art = _missing(parts, reference, bare)
+    h, w = labels.shape
+    ink = (1 - reference.min(axis=2)) > 0.05
+    darkness = np.clip((1 - reference.min(axis=2)) / 0.3, 0, 1)
+    loose, _ = ndimage.label(art & ~covered)
+    added = 0
+    for i, found in enumerate(ndimage.find_objects(labels), 1):
+        if found is None:
+            continue
+        box = _around(found, reach, (h, w))
+        blob = labels[box] == i
+        held = [_touch(blob, [p.alpha[box] > 0.5]) for p in shoes]
+        if max(held) < touch or _touch(blob, [m[box] for m in skirt]) < touch or ink[box][blob].mean() < drawn:
+            continue
+        ids = np.unique(loose[box][blob])
+        piece = np.isin(loose[box], ids[ids > 0])
+        rim = ndimage.binary_dilation(~(art[box] | covered[box]), SQUARE, iterations=1)
+        alpha = np.where(rim, darkness[box], 1.0)
+        under = ndimage.binary_dilation(piece, SQUARE, iterations=2) & covered[box] & (total[box] < 0.99) & ~rim
+        piece |= under
+        view = shoes[int(np.argmax(held))].rgba[box]
+        view[..., :3] = np.where(piece[..., None], reference[box], view[..., :3])
+        view[..., 3] = np.where(piece, np.maximum(view[..., 3], alpha), view[..., 3])
+        added += int(piece.sum())
+    return added
+
+
 def _geodesic(mask, start):
     """Geodesic distance from `start` (x, y) inside `mask` (gaps of a few pixels bridged), and the farthest point."""
     ys, xs = np.nonzero(mask)
