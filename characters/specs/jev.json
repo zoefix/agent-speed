@@ -47,7 +47,6 @@
   ]
  },
  "rig": {
-  "recover": true,
   "rigidLower": true,
   "bodyInArms": true
  }

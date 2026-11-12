@@ -11,6 +11,10 @@ The optional manifest lists pose and expression variants:
 A patch is an edit of the pose image that changes only the face (region `face`, `mouth` or `eyes`); it needs no PSD.
 An edit whose registration fails or that barely changes its region is left out with a message, and so is an arm
 variant whose split has no layer for that arm.
+
+The build refuses a pose (exit status 1, no package left at --out) whose rig at rest does not match the art, or that
+draws no feet while the character's idle pose (--idle, its built package) does (checks.py). --check stops after
+the layers and prints those checks without building a package.
 """
 import argparse
 import json
@@ -19,7 +23,7 @@ from pathlib import Path
 import numpy as np
 
 from ..reference.motions.profile import AT_MOUTH
-from . import appendages, atlas, hands, layers, mesh, package, params, patches, pose, skeleton, variants
+from . import appendages, atlas, checks, hands, layers, mesh, package, params, patches, pose, skeleton, variants
 
 
 def landmark_summary(lm):
@@ -140,19 +144,34 @@ def ordered_parts(base, loaded):
     return [(layer, v) for _, layer, v in sorted(slots, key=lambda s: s[0])]
 
 
+def refuse(name, out, problems):
+    """Fails the build of `name` with its `problems`, leaving no package at `out`: a package built before would be
+    packed in its place."""
+    if out:
+        for file in ("rig.json", "atlas.png"):
+            (Path(out) / file).unlink(missing_ok=True)
+    raise SystemExit(f"{name}: refused, no package written\n" + "\n".join(f"  {p}" for p in problems))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--psd", required=True)
     ap.add_argument("--reference", required=True)
     ap.add_argument("--name", required=True)
-    ap.add_argument("--out", required=True)
+    ap.add_argument("--out")
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
     ap.add_argument("--spec", help="the character's spec: its `rig` hints "
-                                   "(recover, tail, wings, ears, staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
+                                   "(tail, wings, ears, staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
+    ap.add_argument("--idle", help="the character's idle pose (its built package): refuse this pose if it draws no "
+                                   "feet while the idle pose does")
+    ap.add_argument("--check", action="store_true", help="stop after the layers and print the checks as JSON "
+                                                         "(exit status 1 when one fails); no package")
     args = ap.parse_args(argv)
+    if not args.out and not args.check:
+        ap.error("--out is required unless --check")
     character = json.loads(Path(args.spec).read_text()) if args.spec else {}
     hints = character.get("rig", {})
 
@@ -170,17 +189,7 @@ def main(argv=None):
         figure = matte.figure(reference, args.matte)
         bare = matte.paper(reference, figure, covered=layers.coverage(parts) > 0.5)
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
-    recovered = (appendages.recover_missing(parts, reference, hints, bare=bare, figure=figure)
-                 if hints.get("recover") else [])
-    if recovered:
-        print(f"recovered from the art no layer covered: {', '.join(recovered)}")
-    if hints.get("recover"):
-        print(f"fragments attached to the layer they were cut from: "
-              f"{appendages.attach_fragments(parts, reference, bare=bare, figure=figure)}")
-        print(f"holes between layers filled: {appendages.fill_holes(parts, reference, bare=bare)} px")
-    if hints.get("legsInSkirt"):
-        print(f"legs between the hem and the shoes given to the shoes: "
-              f"{appendages.legs_under_hem(parts, reference, bare=bare)} px")
+    print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
     moved = layers.tail_from_hair(parts, reference, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
     if moved:
         print(f"tail drawn into the front hair given back to the tail: {moved} px")
@@ -208,7 +217,16 @@ def main(argv=None):
         print(f"hats drawn into the top given to the head: {hats}")
     print(f"hidden legs repainted from the legs that show: {layers.fill_hidden_legs(parts)} px")
     layers.grow_underlays(parts)
-    rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
+    feet = checks.has_feet(checks.layer_bottoms(parts), size[1])
+    problems = checks.feet_problems(checks.pose_has_feet(args.idle), feet) if args.idle else []
+    if args.check:
+        rest = checks.rest_metrics(layers.composite(parts), reference)
+        problems += checks.rest_problems(rest)
+        print(json.dumps({"check": args.name, "feet": feet, "footwear": any(p.tag == checks.FEET for p in parts),
+                          **rest, "problems": problems}))
+        raise SystemExit(1 if problems else 0)
+    if problems:
+        refuse(args.name, args.out, problems)
 
     torso = pose.torso(args.reference, size)
     lm = skeleton.landmarks(parts, torso)
@@ -287,7 +305,10 @@ def main(argv=None):
         print(f"behind the arms: {filled} px repainted from variants, {unknown} px left as See-Through guessed")
         for v in loaded:
             v.backdrop = None
-        rest_diff = float(np.abs(layers.composite(parts) - reference).mean() * 255)
+    rest = checks.rest_metrics(layers.composite(parts), reference)
+    problems = checks.rest_problems(rest)
+    if problems:
+        refuse(args.name, args.out, problems)
     bone_index = {b.name: i for i, b in enumerate(bones)}
 
     meshes, report = [], []
@@ -342,7 +363,8 @@ def main(argv=None):
     print(json.dumps({
         "package": str(path), "parts": len(entries), "bones": len(bones), "params": len(plist) + len(vparams),
         "variants": len(loaded), "rejected": rejected, "vertices": int(sum(len(e["vertices"]) // 2 for e in entries)),
-        "atlas": list(sheet.shape[1::-1]), "rest_mean_abs_diff": round(rest_diff, 3),
+        "atlas": list(sheet.shape[1::-1]), "rest_mean_abs_diff": rest["mean_abs_diff"],
+        "rest_px_diff_gt_32_pct": rest["px_diff_gt_32_pct"],
     }))
 
 
