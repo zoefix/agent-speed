@@ -2,6 +2,8 @@
 
   python3 -m characters.reference.preview --package characters/build/claude --out claude.mp4
   python3 -m characters.reference.preview --package characters/build/claude --rest-check claude.png
+  python3 -m characters.reference.preview --package characters/build/claude --variants-reel --out variants.mp4 \
+      --variants-sheet variants.png
 """
 import argparse
 import json
@@ -142,19 +144,32 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--rest-check")
     ap.add_argument("--frames")
-    ap.add_argument("--fps", type=int, default=60)
+    ap.add_argument("--fps", type=int, help="frames per second (60, or 30 for the variants reel)")
     ap.add_argument("--seconds", type=float, default=TIMELINE[-1][0])
     ap.add_argument("--size", default="1280x760")
     ap.add_argument("--reel", action="store_true", help="steady cruise speed; play every gesture and expression in turn")
     ap.add_argument("--frame-every", type=float, default=0.5, help="seconds between saved frames")
+    ap.add_argument("--variants-reel", action="store_true",
+                    help="film each variant easing in and out at rest, cropped to the upper body (needs --out)")
+    ap.add_argument("--variants-sheet", help="save the head at rest and with each variant fully in")
     args = ap.parse_args(argv)
 
     doc, atlas = package.read(args.package)
     rig = Rig(doc)
     if args.rest_check:
         print(json.dumps(rest_check(rig, atlas, args.rest_check)))
-        if not args.out:
+        if not args.out and not args.variants_sheet:
             return
+    if args.variants_reel or args.variants_sheet:
+        from . import variants_reel
+        if args.variants_sheet:
+            print(json.dumps(variants_reel.sheet(doc, atlas, rig, args.variants_sheet)))
+        if args.variants_reel:
+            if not args.out:
+                ap.error("--variants-reel needs --out")
+            print(json.dumps(variants_reel.film(doc, atlas, rig, args.out, fps=args.fps or 30)))
+        return
+    args.fps = args.fps or 60
 
     w, h = (int(v) for v in args.size.split("x"))
     orb_d = int(h * 0.44)

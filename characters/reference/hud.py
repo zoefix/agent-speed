@@ -7,6 +7,7 @@ lying on the floor. Agents are small lights orbiting her waist. Numbers roll dig
 """
 import math
 from functools import lru_cache
+from pathlib import Path
 
 import numpy as np
 from PIL import Image, ImageDraw, ImageFont
@@ -15,8 +16,16 @@ from .motions.springs import SecondOrder
 from .orbits import Orbit
 from .rng import Rng
 
-DIGITS_FONT = "/System/Library/Fonts/SFNS.ttf"
-CJK_FONT = "/System/Library/Fonts/STHeiti Medium.ttc"
+
+def first_font(*paths):
+    """The first of these font files that exists (macOS, Windows, Linux), else the first."""
+    return next((p for p in paths if Path(p).exists()), paths[0])
+
+
+DIGITS_FONT = first_font("/System/Library/Fonts/SFNS.ttf", "C:/Windows/Fonts/segoeui.ttf",
+                         "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf")
+CJK_FONT = first_font("/System/Library/Fonts/STHeiti Medium.ttc", "C:/Windows/Fonts/msjh.ttc",
+                      "/usr/share/fonts/opentype/noto/NotoSansCJK-Regular.ttc")
 HEAT = [(0.0, (61, 220, 132)), (0.35, (255, 213, 74)), (0.7, (255, 138, 61)), (1.0, (255, 59, 59))]
 WHITE_HOT = (255, 247, 214)
 GOLD = (255, 200, 80)

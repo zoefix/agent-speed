@@ -1,7 +1,9 @@
 """Pose and expression variants: generated images aligned to the base, split by See-Through, grafted as parts.
 
 An arm variant replaces one arm (and the held object when it is the object arm); a face variant replaces the eyes,
-eyebrows and mouth. Each variant has a parameter `Var.<id>` (0..1) that fades its parts in and the replaced parts out.
+eyebrows and mouth. A patch variant needs no See-Through split: it cuts one part from an edit that changes only the
+face, by a fixed region of the base face (patches.py). Each variant has a parameter `Var.<id>` (0..1) that fades its
+parts in and the replaced parts out.
 """
 import json
 import math
@@ -11,7 +13,7 @@ from pathlib import Path
 import numpy as np
 
 from . import layers as L
-from . import pose, register, skeleton
+from . import patches, pose, register, skeleton
 from .params import BEND_RANGE, LIFT_RANGE, VARIANT_ARM_RANGE, VARIANT_FOREARM_RANGE
 
 FACE_TAGS = ("eyewhite", "irides", "eyelash", "eyebrow", "mouth")
@@ -32,6 +34,7 @@ class Variant:
     lead_fore_deg: float = 0.0
     approach_fore_deg: float = 0.0
     backdrop: dict | None = None
+    region: str | None = None
 
 
 def load_manifest(path):
@@ -41,19 +44,10 @@ def load_manifest(path):
     for spec in doc["variants"]:
         spec = dict(spec)
         for key in ("psd", "image"):
-            spec[key] = str((path.parent / spec[key]).resolve())
+            if key in spec:
+                spec[key] = str((path.parent / spec[key]).resolve())
         out.append(spec)
     return out
-
-
-def _compose(outer, inner):
-    a = np.vstack([outer, [0, 0, 1]])
-    b = np.vstack([inner, [0, 0, 1]])
-    return (a @ b)[:2]
-
-
-def _opaque(rgb):
-    return np.concatenate([rgb, np.ones(rgb.shape[:2] + (1,), np.float32)], axis=2)
 
 
 def _aligned(spec, base_reference, size, center_x, head_box=None):
@@ -64,14 +58,13 @@ def _aligned(spec, base_reference, size, center_x, head_box=None):
     matrix, report = register.similarity(image, base_reference)
     if head_box is not None:
         x0, y0, x1, y1 = (int(v) for v in head_box)
-        coarse = register.warp_rgba(_opaque(image), matrix, size)[..., :3]
+        coarse = register.warp_rgb(image, matrix, size)
         local, local_report = register.similarity(coarse[y0:y1, x0:x1], base_reference[y0:y1, x0:x1])
         shift = np.array([[1, 0, x0], [0, 1, y0]], np.float64)
         unshift = np.array([[1, 0, -x0], [0, 1, -y0]], np.float64)
-        matrix = _compose(shift, _compose(local, _compose(unshift, matrix)))
+        matrix = register.compose(shift, local, unshift, matrix)
         report["head"] = local_report
-    warped = register.warp_rgba(_opaque(image), matrix, size)
-    image = warped[..., :3] * warped[..., 3:4] + (1 - warped[..., 3:4])
+    image = register.warp_rgb(image, matrix, size)
     for layer in vlayers:
         layer.rgba = register.warp_rgba(layer.rgba, matrix, size)
     return L.split_pairs(vlayers, center_x), image, report, matrix
@@ -163,9 +156,21 @@ def face_variant(spec, base_reference, size, lm, base_names):
     return Variant(vid, "face", None, take, replaces, report=report)
 
 
-def load(spec, base_reference, size, lm, object_side, base_names):
+def patch_variant(spec, base):
+    """One part cut from an edit by the region `spec["region"]` of the base face (`patches.Base`), drawn right above
+    the face and below the bangs; raises patches.Rejected for an edit the build should leave out."""
+    vid, region = spec["id"], spec.get("region")
+    if region not in patches.REPLACES:
+        raise ValueError(f"{vid}: region must be one of {sorted(patches.REPLACES)}, not {region!r}")
+    rgba, replaces, report = patches.cut(base, spec["image"], region)
+    return Variant(vid, "patch", None, [L.Layer(f"face@{vid}", "face", rgba)], replaces, report=report, region=region)
+
+
+def load(spec, base_reference, size, lm, object_side, base_names, patch_base=None):
     if spec["kind"] == "arm":
         return arm_variant(spec, base_reference, size, lm, object_side)
     if spec["kind"] == "face":
         return face_variant(spec, base_reference, size, lm, base_names)
+    if spec["kind"] == "patch":
+        return patch_variant(spec, patch_base)
     raise ValueError(f"unknown variant kind {spec['kind']}")

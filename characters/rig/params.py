@@ -228,10 +228,13 @@ def variant_controls(variants, part_names):
         def control(name):
             return mouth if v.kind == "face" and name.split("@")[0].split(".")[0] == "mouth" else p
 
-        # The new arm is mostly in before the old one fades, so the swap barely turns see-through.
+        # The new arm is mostly in before the old one fades, so the swap barely turns see-through. A patch lies under
+        # the parts it replaces, so it is fully in by halfway: the face then cross-fades evenly instead of dimming.
         fade_in, fade_out = [[0, 0], [1, 1]], [[0, 1], [1, 0]]
         if v.kind == "arm":
             fade_in, fade_out = [[0, 0], [0.6, 1]], [[0.4, 1], [1, 0]]
+        elif v.kind == "patch":
+            fade_in = [[0, 0], [0.5, 1]]
         for part in v.parts:
             part_drivers.append({"param": control(part.name), "part": part.name, "keys": fade_in})
         for name in v.replaces:
@@ -240,6 +243,8 @@ def variant_controls(variants, part_names):
         entry = {"id": v.id, "kind": v.kind, "param": p}
         if v.kind == "face":
             entry.update({"mouth": mouth, "eyesClosed": not any(part.tag == "irides" for part in v.parts)})
+        if v.kind == "patch":
+            entry["region"] = v.region
         if v.kind == "arm":
             s = v.side
             arm_p, fore_p = f"Arm.{s}@{v.id}", f"Forearm.{s}@{v.id}"

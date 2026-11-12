@@ -5,7 +5,12 @@
 
 The optional manifest lists pose and expression variants:
   {"variants": [{"id": "wave", "kind": "arm", "side": "right", "psd": "wave.psd", "image": "wave.png"},
-                {"id": "smile", "kind": "face", "psd": "smile.psd", "image": "smile.png"}]}
+                {"id": "smile", "kind": "face", "psd": "smile.psd", "image": "smile.png"},
+                {"id": "expr-laugh", "kind": "patch", "region": "face", "image": "expr-laugh.png"}]}
+
+A patch is an edit of the pose image that changes only the face (region `face`, `mouth` or `eyes`); it needs no PSD.
+An edit whose registration fails or that barely changes its region is left out with a message, and so is an arm
+variant whose split has no layer for that arm.
 """
 import argparse
 import json
@@ -14,7 +19,7 @@ from pathlib import Path
 import numpy as np
 
 from ..reference.motions.profile import AT_MOUTH
-from . import appendages, atlas, hands, layers, mesh, package, params, pose, skeleton, variants
+from . import appendages, atlas, hands, layers, mesh, package, params, patches, pose, skeleton, variants
 
 
 def landmark_summary(lm):
@@ -112,8 +117,13 @@ def object_bone(layer, lm):
     return f"hand.{side}" if side in lm["hands"] else f"forearm.{side}"
 
 
+PATCH_ORDER = ("face", "mouth", "eyes")
+
+
 def ordered_parts(base, loaded):
-    """Base parts keep their order; variant parts sit right above what they replace, raised arms on top."""
+    """Base parts keep their order; variant parts sit right above what they replace, raised arms on top. Face patches
+    lie above the face by region, eyes over mouths over whole faces, so a blink or a talking mouth shows over an
+    expression."""
     index = {layer.name: i for i, layer in enumerate(base)}
     slots = [(float(i), layer, None) for i, layer in enumerate(base)]
     top = float(len(base))
@@ -125,7 +135,8 @@ def ordered_parts(base, loaded):
                 continue
             base_name = layer.name.split("@")[0]
             anchor = index.get(base_name, index.get(v.replaces[0], len(base)))
-            slots.append((anchor + 0.5 + 0.001 * k, layer, v))
+            region = 0.01 * PATCH_ORDER.index(v.region) if v.kind == "patch" else 0.0
+            slots.append((anchor + 0.5 + region + 0.001 * k, layer, v))
     return [(layer, v) for _, layer, v in sorted(slots, key=lambda s: s[0])]
 
 
@@ -240,11 +251,26 @@ def main(argv=None):
                 object_attach[name] = "head"
     lm["objectSide"] = object_side
 
-    loaded = []
+    loaded, rejected = [], []
     if args.variants:
         base_names = [p.name for p in parts]
+        patch_base = None
         for spec in variants.load_manifest(args.variants):
-            v = variants.load(spec, reference, size, lm, object_side, base_names)
+            if spec["kind"] == "patch" and patch_base is None:
+                patch_base = patches.Base(parts, reference, lm["face"])
+            try:
+                v = variants.load(spec, reference, size, lm, object_side, base_names, patch_base)
+            except patches.Rejected as e:
+                rejected.append(spec["id"])
+                print(f"variant {spec['id']:<11} rejected: {e}")
+                continue
+            except ValueError as e:
+                if spec["kind"] != "arm":
+                    raise
+                # A split that drew both arms as one layer (a hand across the face center) gives no arm to swap.
+                rejected.append(spec["id"])
+                print(f"variant {spec['id']:<11} rejected: {e}")
+                continue
             loaded.append(v)
             if v.kind == "arm":
                 bones.append(skeleton.Bone(f"arm.{v.side}@{v.id}", f"shoulder.{v.side}", v.arm["shoulder"]))
@@ -280,6 +306,8 @@ def main(argv=None):
             influences = [(f"ear.{layer.side}", np.ones(len(vertices)))]
         elif layer.tag == "backdrop":
             influences = skeleton.weights_by_owner(vertices, patch_tags[layer.name], lm)
+        elif v is not None and v.kind == "patch":
+            influences = patches.weights(vertices, layer.alpha, lm["faceWidth"])
         elif v is not None and v.kind == "arm":
             attach = f"forearm.{v.side}@{v.id}"
             influences = skeleton.weights_for(layer, vertices, lm, attach, arm=v.arm, suffix=f"@{v.id}")
@@ -306,11 +334,14 @@ def main(argv=None):
                          entries, landmark_summary(lm), part_drivers, vmeta)
     print("\n".join(report))
     for v in loaded:
+        if v.kind == "patch":
+            print(f"variant {v.id:<11} patch region={v.region} report={json.dumps(v.report)}")
+            continue
         print(f"variant {v.id:<11} {v.kind:<4} side={v.side} front={v.front} parts={len(v.parts)} "
               f"registration={json.dumps(v.report)}")
     print(json.dumps({
         "package": str(path), "parts": len(entries), "bones": len(bones), "params": len(plist) + len(vparams),
-        "variants": len(loaded), "vertices": int(sum(len(e["vertices"]) // 2 for e in entries)),
+        "variants": len(loaded), "rejected": rejected, "vertices": int(sum(len(e["vertices"]) // 2 for e in entries)),
         "atlas": list(sheet.shape[1::-1]), "rest_mean_abs_diff": round(rest_diff, 3),
     }))
 

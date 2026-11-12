@@ -1,10 +1,12 @@
 """Assembles a downloadable character pack from one rig package per speed band, and updates the catalog.
 
   python3 -m characters.rig.pack --spec characters/specs/claude.json --pose idle=build/claude \\
-      --pose cruise=build/claude-cruise ... --out dist [--catalog dist/catalog.json --base-url URL]
+      --pose cruise=build/claude-cruise ... [--state think=build/claude-think ...] --out dist \\
+      [--catalog dist/catalog.json --base-url URL]
 
-The pack is a zip holding manifest.json, preview.png and poses/<band>/{rig.json, atlas.png}; the catalog lists every
-pack with its size and SHA-256 so the app can verify a download before it unpacks it (spec/CHARACTERS.md).
+The pack is a zip holding manifest.json, preview.png and poses/<band>/{rig.json, atlas.png}, and for each mood pose
+poses/<state>/ listed under the manifest's `states`; the catalog lists every pack with its size and SHA-256 so the app
+can verify a download before it unpacks it (spec/CHARACTERS.md).
 """
 import argparse
 import hashlib
@@ -16,6 +18,7 @@ from pathlib import Path
 import numpy as np
 from PIL import Image
 
+from ..reference.motions.behavior import STATES
 from . import package
 
 FORMAT = "agent-speed-character-pack"
@@ -66,26 +69,33 @@ def preview(pose_dir, size=(512, 640)):
     return out
 
 
-def build(spec, poses, out_dir):
+def _copy_pose(source, root, name):
+    doc, _ = package.read(source)
+    target = root / "poses" / name
+    target.mkdir()
+    for file in ("rig.json", doc["atlas"]["file"]):
+        shutil.copy2(Path(source) / file, target / file)
+    return f"poses/{name}"
+
+
+def build(spec, poses, out_dir, states=None):
     if "idle" not in poses:
         raise ValueError("a pack needs at least the idle pose")
+    states = states or {}
+    unknown = set(states) - set(STATES)
+    if unknown:
+        raise ValueError(f"unknown states {sorted(unknown)}")
     root = Path(out_dir) / spec["id"]
     if root.exists():
         shutil.rmtree(root)
     (root / "poses").mkdir(parents=True)
-    manifest_poses = {}
-    for band in BANDS:
-        if band not in poses:
-            continue
-        doc, _ = package.read(poses[band])
-        target = root / "poses" / band
-        target.mkdir()
-        for name in ("rig.json", doc["atlas"]["file"]):
-            shutil.copy2(Path(poses[band]) / name, target / name)
-        manifest_poses[band] = f"poses/{band}"
+    manifest_poses = {band: _copy_pose(poses[band], root, band) for band in BANDS if band in poses}
+    manifest_states = {state: _copy_pose(states[state], root, state) for state in STATES if state in states}
     preview(poses["idle"]).save(root / "preview.png", optimize=True)
     manifest = {"format": FORMAT, "version": VERSION, **{k: spec[k] for k in SPEC_KEYS - BUILD_ONLY if k in spec},
                 "poses": manifest_poses, "preview": "preview.png"}
+    if manifest_states:
+        manifest["states"] = manifest_states
     (root / "manifest.json").write_text(json.dumps(manifest, ensure_ascii=False, indent=1))
 
     archive = Path(out_dir) / f"{spec['id']}-{spec['packVersion']}.zip"
@@ -120,6 +130,7 @@ def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--spec", required=True)
     ap.add_argument("--pose", action="append", default=[], help="band=package directory")
+    ap.add_argument("--state", action="append", default=[], help="mood pose: state=package directory")
     ap.add_argument("--out", required=True)
     ap.add_argument("--catalog")
     ap.add_argument("--base-url", default="https://github.com/zoefix/agent-speed/releases/download/characters")
@@ -131,7 +142,8 @@ def main(argv=None):
         if band not in BANDS:
             raise ValueError(f"unknown band {band}")
         poses[band] = path
-    manifest, archive, digest = build(spec, poses, args.out)
+    states = dict(item.split("=", 1) for item in args.state)
+    manifest, archive, digest = build(spec, poses, args.out, states)
     shutil.copy2(Path(args.out) / spec["id"] / "preview.png", Path(args.out) / f"{spec['id']}-preview.png")
     entry = catalog_entry(manifest, archive, digest, args.base_url)
     if args.catalog:

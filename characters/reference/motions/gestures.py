@@ -21,7 +21,15 @@ GESTURES = {
     "hug": (2.4, "sway", "smile", True),
     "raise": (1.4, "pump", "happy", False),
     "open": (3.4, "read", None, False),
+    "thumbsup": (1.4, "bob", "smile", False),
+    "shh": (1.6, "slow", "smile", False),
+    "cheek": (1.8, "slow", "shy", False),
+    "salute": (1.2, "bob", "smile", False),
+    "reach": (1.6, "slow", "sleepy", True),
 }
+# Arm gestures cut from edits named gesture-<name> (spec/CHARACTERS.md, Behavior): the variant id is the name, except
+# `stretch`, whose arm-up gesture is `reach` (the whole-body `stretch` keeps its name).
+GESTURE_IDS = {"stretch": "reach"}
 # id -> (gesture of the object arm, gesture of the free arm, hold seconds, expression)
 COMBOS = {
     "cheer": ("raise", "fist", 1.4, "happy"),
