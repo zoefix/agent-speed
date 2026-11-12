@@ -889,6 +889,14 @@ void OrbWindow::renderFrame() {
     in.resumed = resumed || resumeStyle_;
     resumeStyle_ = false;
     drawStyle(*style_, in, content, measure);
+    // Development aid: AGENT_SPEED_ORB_TRACE=1 prints a living character's state once a second (CHARACTERS 5, Behavior).
+    static const bool traceCharacter = qEnvironmentVariableIntValue("AGENT_SPEED_ORB_TRACE") == 1;
+    if (traceCharacter && t - characterTracedAt_ >= 1) {
+        if (const auto* character = dynamic_cast<const CharacterStyle*>(style_.get())) {
+            characterTracedAt_ = t;
+            qInfo("orb %s: %s", qPrintable(id_), qPrintable(character->behaviorTrace()));
+        }
+    }
     scene_.alphaScale = 1;
     addBezel(scene_, f);
     highlight_ = highlighted_ ? std::min(1.0, highlight_ + dt / 0.15) : std::max(0.0, highlight_ - dt / 0.15);

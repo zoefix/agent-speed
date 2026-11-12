@@ -306,6 +306,7 @@ private:
     bool celebratePeaks_ = true;
     bool pointerInside_ = false;
     QPointF pointerAt_;
+    double characterTracedAt_ = -1e9;
 
     // Dragging: the disc follows the pointer, pulled toward a touching position near another orb.
     bool dragging_ = false;
