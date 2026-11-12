@@ -123,6 +123,7 @@ if(AGENTSPEED_BUILD_APP)
     add_executable(agentspeed_app_tests
         app/board_fade_test.cpp
         app/character_library_test.cpp
+        app/character_live_test.cpp
         app/character_quota_test.cpp
         app/character_readings_test.cpp
         app/devin_settings_test.cpp
@@ -144,6 +145,8 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/lan/lan_server.cpp
         ../app/src/lan/lan_targets.cpp
         ../app/src/format.cpp
+        ../app/src/orb/character/character_activity.cpp
+        ../app/src/orb/character/character_live.cpp
         ../app/src/orb/character/character_quota.cpp
         ../app/src/orb/character/character_readings.cpp
         ../app/src/orb/idle_fade.cpp
