@@ -30,6 +30,7 @@
 #include "characters/character_library.hpp"
 #include "orbs/character_demo.hpp"
 #include "orbs/orb_manager.hpp"
+#include "orb/character/character_session.hpp"
 #include "orb/preview.hpp"
 #include "hero/hero_item.hpp"
 #include "preferences.hpp"
@@ -128,6 +129,14 @@ int main(int argc, char* argv[]) {
     QApplication::setQuitOnLastWindowClosed(false);
     QQuickStyle::setStyle(QStringLiteral("Fusion"));
     const bool softwareRendering = chooseGraphicsBackend();
+    // Development aid: AGENT_SPEED_ORB_SESSION=<script.json> with --orb-session=<folder> plays the living pack at
+    // AGENT_SPEED_ORB_PACK through the scripted session offscreen, saves its frames there and quits.
+    for (const auto& arg : app.arguments()) {
+        if (arg.startsWith(QStringLiteral("--orb-session="))) {
+            return orb::runCharacterSession(qEnvironmentVariable("AGENT_SPEED_ORB_SESSION"),
+                                            qEnvironmentVariable("AGENT_SPEED_ORB_PACK").toStdString(), arg.mid(14));
+        }
+    }
 
     const bool demo = app.arguments().contains(QStringLiteral("--demo"));
     const bool hidden = app.arguments().contains(QStringLiteral("--hidden"));
