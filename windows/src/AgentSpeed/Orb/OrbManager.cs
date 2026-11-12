@@ -324,6 +324,7 @@ internal sealed partial class OrbManager : IDisposable
             var feed = entry.Feed;
             feed.Previewing = _speed.IsPreviewing;
             feed.Character = entry.Definition.Style == OrbStyle.Character;
+            feed.CharacterLive.CelebratesPeaks = Settings.CelebratePeaks;
             var fired = feed.Update(snapshot, now);
             if (entry.Definition.Traffic == OrbTraffic.Intelligence && !feed.Character)
             {
@@ -333,6 +334,7 @@ internal sealed partial class OrbManager : IDisposable
             Push(entry, single);
             if (fired)
             {
+                feed.CharacterLive.NotePeak();
                 entry.Window.Surface.Peak();
             }
         }
@@ -421,8 +423,10 @@ internal sealed partial class OrbManager : IDisposable
                         ? response.TotalTokens / d.TotalSeconds
                         : response.Speed ?? entry.Feed.Value;
                     entry.Window.Surface.Pulse(speed, tokens);
+                    entry.Feed.NoteResponseEnd(response.EndedAt);
                     break;
                 case SpeedEvent.NewPeak:
+                    entry.Feed.CharacterLive.NotePeak();
                     entry.Window.Surface.Peak();
                     break;
             }
@@ -641,6 +645,11 @@ internal sealed partial class OrbManager : IDisposable
             : new OrbWindow(orb.Id, () => _speed.Now, _clock, seed);
         window.SetLanguage(AppFonts.XmlLanguageFor(_loc.LanguageCode));
         var entry = new Entry(orb, window, new OrbFeed(orb.Id));
+        if (window is GpuOrbWindow gpu)
+        {
+            gpu.CharacterLive = entry.Feed.CharacterLive;
+        }
+
         if (_pendingFlights.Remove(orb.Id, out var from))
         {
             entry.FlyFrom = from;

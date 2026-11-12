@@ -52,6 +52,27 @@ public sealed class RigDocument
         public IReadOnlyDictionary<string, Hand>? Hands { get; init; }
     }
 
+    /// <summary>
+    /// A part set that swaps in over the drawn parts through <c>Var.&lt;id&gt;</c> (spec/CHARACTERS.md, Variants): an
+    /// <c>arm</c> gesture, a <c>face</c> edit or a face <c>patch</c> (<c>expr-*</c>, <c>mouth-*</c>, <c>gaze-*</c>).
+    /// </summary>
+    public sealed record Variant(string Id, string Kind, string Param)
+    {
+        public string? Side { get; init; }
+
+        public bool? Front { get; init; }
+
+        public string? Arm { get; init; }
+
+        public string? Forearm { get; init; }
+
+        public IReadOnlyDictionary<string, double>? Lead { get; init; }
+
+        public IReadOnlyDictionary<string, double>? Approach { get; init; }
+
+        public string? Region { get; init; }
+    }
+
     public required string FormatName { get; init; }
 
     public required int FormatVersion { get; init; }
@@ -73,6 +94,8 @@ public sealed class RigDocument
     public Chain[] Physics { get; init; } = [];
 
     public PartDriver[] PartDrivers { get; init; } = [];
+
+    public Variant[] Variants { get; init; } = [];
 
     public required Part[] Parts { get; init; }
 
@@ -100,6 +123,7 @@ public sealed class RigDocument
             Drivers = RigJson.OptionalArray(c, "drivers", DecodeDriver),
             Physics = RigJson.OptionalArray(c, "physics", DecodeChain),
             PartDrivers = RigJson.OptionalArray(c, "partDrivers", DecodePartDriver),
+            Variants = c.TryGetProperty("variants", out var variants) ? DecodeVariants(variants) : [],
             Parts = RigJson.Array(RigJson.Required(c, "parts"), DecodePart),
         };
     }
@@ -115,6 +139,41 @@ public sealed class RigDocument
         RigJson.Double(e, "stiffness"),
         RigJson.Double(e, "damping"),
         RigJson.Double(e, "wind"));
+
+    /// <exception cref="JsonException">A required key is missing or a key is of the wrong type.</exception>
+    public static Variant DecodeVariant(JsonElement e) => new(RigJson.String(e, "id"), RigJson.String(e, "kind"), RigJson.String(e, "param"))
+    {
+        Side = RigJson.OptionalString(e, "side"),
+        Front = RigJson.OptionalBool(e, "front"),
+        Arm = RigJson.OptionalString(e, "arm"),
+        Forearm = RigJson.OptionalString(e, "forearm"),
+        Lead = RigJson.OptionalNumbers(e, "lead"),
+        Approach = RigJson.OptionalNumbers(e, "approach"),
+        Region = RigJson.OptionalString(e, "region"),
+    };
+
+    /// <summary>The variants of a list, skipping the items it cannot read, so one odd variant never costs the whole rig.</summary>
+    public static Variant[] DecodeVariants(JsonElement list)
+    {
+        if (list.ValueKind != JsonValueKind.Array)
+        {
+            return [];
+        }
+
+        var variants = new List<Variant>();
+        foreach (var item in list.EnumerateArray())
+        {
+            try
+            {
+                variants.Add(DecodeVariant(item));
+            }
+            catch (JsonException)
+            {
+            }
+        }
+
+        return variants.ToArray();
+    }
 
     private static Atlas DecodeAtlas(JsonElement e) => new(RigJson.String(e, "file"), RigJson.Ints(RigJson.Required(e, "size")));
 
@@ -233,6 +292,38 @@ internal static class RigJson
     }
 
     public static double Double(JsonElement e, string name) => Number(Required(e, name));
+
+    public static bool? OptionalBool(JsonElement e, string name)
+    {
+        if (!Object(e).TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        return v.ValueKind switch
+        {
+            JsonValueKind.True => true,
+            JsonValueKind.False => false,
+            _ => throw new JsonException($"{name} is not a boolean."),
+        };
+    }
+
+    /// <summary>An optional object of numbers by key.</summary>
+    public static Dictionary<string, double>? OptionalNumbers(JsonElement e, string name)
+    {
+        if (!Object(e).TryGetProperty(name, out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        var map = new Dictionary<string, double>(StringComparer.Ordinal);
+        foreach (var p in Object(v).EnumerateObject())
+        {
+            map[p.Name] = Number(p.Value);
+        }
+
+        return map;
+    }
 
     public static double? OptionalDouble(JsonElement e, string name) =>
         Object(e).TryGetProperty(name, out var v) && v.ValueKind != JsonValueKind.Null ? Number(v) : null;

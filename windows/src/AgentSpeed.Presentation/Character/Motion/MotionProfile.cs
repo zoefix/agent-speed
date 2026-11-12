@@ -176,22 +176,46 @@ public sealed record MotionProfile
     /// <summary>The band's pool: the base actions it allows, then each signature action that fits the band three times in all.</summary>
     internal List<string> Pool(IReadOnlyList<string> baseActions, SpeedBand band)
     {
-        var output = baseActions.Where(Allows).ToList();
-        foreach (var a in Signature)
+        var output = new List<string>();
+        Pool(baseActions, band, output);
+        return output;
+    }
+
+    /// <summary>As <see cref="Pool(IReadOnlyList{string}, SpeedBand)"/>, into <paramref name="output"/> (cleared first) without allocating.</summary>
+    internal void Pool(IReadOnlyList<string> baseActions, SpeedBand band, List<string> output)
+    {
+        output.Clear();
+        for (var i = 0; i < baseActions.Count; i++)
         {
+            if (Allows(baseActions[i]))
+            {
+                output.Add(baseActions[i]);
+            }
+        }
+
+        for (var s = 0; s < Signature.Count; s++)
+        {
+            var a = Signature[s];
             if (!ActionBands.TryGetValue(a, out var range) || !Allows(a) || range.Low > band || band > range.High)
             {
                 continue;
             }
 
-            var copies = baseActions.Contains(a) ? 2 : 3;
+            var copies = 3;
+            for (var i = 0; i < baseActions.Count; i++)
+            {
+                if (baseActions[i] == a)
+                {
+                    copies = 2;
+                    break;
+                }
+            }
+
             for (var i = 0; i < copies; i++)
             {
                 output.Add(a);
             }
         }
-
-        return output;
     }
 
     /// <summary>How a groove's value for <paramref name="name"/> scales: bounce, sway or energy (motions/rhythm.py, groove_scale).</summary>
@@ -213,5 +237,8 @@ public sealed record MotionProfile
             : 1;
     }
 
-    internal string? PoseHandsFor(SpeedBand band) => PoseHands.TryGetValue(band.Key(), out var set) ? set : null;
+    internal string? PoseHandsFor(SpeedBand band) => PoseHandsFor(band.Key());
+
+    /// <summary>The hand set of a pose by name: a band's, none for a mood pose.</summary>
+    internal string? PoseHandsFor(string pose) => PoseHands.TryGetValue(pose, out var set) ? set : null;
 }

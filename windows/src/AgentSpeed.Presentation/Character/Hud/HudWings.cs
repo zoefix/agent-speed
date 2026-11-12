@@ -104,6 +104,10 @@ public sealed class HudSilhouette
         }
     }
 
+    /// <summary>Whether a point lies on her outline: inside the band's extent, with <paramref name="slack"/> points around it.</summary>
+    public bool Contains(double x, double y, double slack = 0) =>
+        Extent(y - slack, y + slack) is { } e && x >= e.Left - slack && x <= e.Right + slack;
+
     /// <summary>Her leftmost and rightmost x over the bands that <c>y0…y1</c> touches, null when she has nothing there.</summary>
     public (double Left, double Right)? Extent(double y0, double y1)
     {

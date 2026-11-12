@@ -430,7 +430,7 @@ internal sealed class SpeedEngine
         }
 
         liveCost = PerSecond(liveCost, seconds);
-        var agents = BuildAgents(nowMs, measured, estimated, agentIntelligence, recent, valid, seconds, out var generating, out var tools);
+        var agents = BuildAgents(nowMs, measured, estimated, agentIntelligence, recent, valid, latestEnd, seconds, out var generating, out var tools);
         AddPerfScores(intelligence, agents, cells);
         var history = BuildHistory(nowMs, valid, estimates);
         var events = DrainCompletions(nowMs);
@@ -816,6 +816,7 @@ internal sealed class SpeedEngine
         Dictionary<string, IntelligenceSums> intelligence,
         Dictionary<string, SpeedPair> recent,
         List<Stored> validNewestFirst,
+        Dictionary<string, long> latestEnd,
         double seconds,
         out int generating,
         out int tools)
@@ -830,17 +831,54 @@ internal sealed class SpeedEngine
             var perf = PerfEvaluator.Evaluate(agent.Source, phase == AgentPhase.Idle,
                 samples.TryGetValue(agent.Id, out var sample) ? sample : [], agent.Work, nowMs, PerfBaselines);
             var score = PerfSetValue.Of(agent.Id, agent.LastLineMs ?? 0, perf);
+            long? lastEnd = latestEnd.TryGetValue(agent.Id, out var end) ? end : null;
             return new AgentFrame(agent, phase, live, recentSpeed)
             {
                 Intelligence = new AgentIntelligence(intelligence.GetValueOrDefault(agent.Id) with { Score = score }, score),
                 Perf = perf,
                 Work = WorkSignals.Of(agent.Work, nowMs),
+                OutputSinceInFlight = agent.InFlightStartMs is { } start && lastEnd >= start,
+                LastEndMs = lastEnd,
+                RepeatFailureMs = RepeatFailure(agent.Work),
             };
         });
 
         generating = list.Count(a => a.Phase == AgentPhase.Generating);
         tools = list.Count(a => a.Phase == AgentPhase.Tools);
         return list;
+    }
+
+    /// <summary>
+    /// The result time of the newest tool result when it was read live and failed right after the agent's previous
+    /// result failed too (CHARACTERS 5, <i>Behavior</i>, <c>trouble</c>): results in the order they were read, a later
+    /// call winning a tie.
+    /// </summary>
+    internal static long? RepeatFailure(IReadOnlyList<WorkAction> actions)
+    {
+        WorkAction? newest = null;
+        WorkAction? previous = null;
+        foreach (var action in actions)
+        {
+            if (action.ResultMs is not { } at)
+            {
+                continue;
+            }
+
+            if (newest?.ResultMs is { } newestAt && at < newestAt)
+            {
+                if (previous?.ResultMs is not { } previousAt || at >= previousAt)
+                {
+                    previous = action;
+                }
+            }
+            else
+            {
+                previous = newest;
+                newest = action;
+            }
+        }
+
+        return newest is { Failed: true, Seeded: false } failed && previous is { Failed: true } ? failed.ResultMs : null;
     }
 
     /// <summary>

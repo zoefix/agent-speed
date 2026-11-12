@@ -12,7 +12,7 @@ public enum PerformerEventKind
 {
     Petals,
 
-    /// <summary>The band's pose was swapped at the edge-on instant.</summary>
+    /// <summary>The pose was swapped at the edge-on instant: the band's, or a mood pose (with the band at the time).</summary>
     PoseSwapped,
 }
 
@@ -36,7 +36,8 @@ public readonly record struct PosePlacement(double Scale, double FeetX, double F
 /// One character on stage: its poses, one director over the union of their parameters, physics per pose, the pose swap
 /// and the placement of each pose (characters/reference/stage.py). Step it once per frame with the speed level; then
 /// read <see cref="ActivePose"/>, <see cref="World"/> and <see cref="Opacities"/> to draw. No heap allocation per frame
-/// except when an action starts.
+/// except when an action starts. A living pack also takes the agents' phases and the user's cursor
+/// (<see cref="BehaviorInputs"/>): the mood's pose swaps in like a band pose, and the director plays the shown pose's face.
 /// </summary>
 public sealed partial class CharacterPerformer
 {
@@ -45,6 +46,9 @@ public sealed partial class CharacterPerformer
     public const double PosYTravel = 2.0;
     public const double CrossfadeDuration = 0.3;
     private const int ExitTarget = -1;
+
+    /// <summary>A head turn toward a moved cursor settles within this (the head springs).</summary>
+    private const double FollowSettle = 0.6;
 
     private readonly CharacterPhysics[] _physics;
     private readonly int[][] _slotMaps;
@@ -58,6 +62,9 @@ public sealed partial class CharacterPerformer
     private double[] _fadingOpacities = [];
     private bool _pendingExit;
     private bool _calm;
+    private bool _started;
+    private (double X, double Y)? _lastCursor;
+    private double _cursorMovedAt = double.NegativeInfinity;
 
     public CharacterPerformer(CharacterPack pack, ulong seed = 7, double orb = 1)
     {
@@ -78,7 +85,9 @@ public sealed partial class CharacterPerformer
 
         var idle = pack.Poses[0].Rig;
         var book = CharacterSides.Parse(idle.Landmarks.ObjectSide) ?? CharacterSide.Left;
-        Director = new CharacterDirector(parameters, seed, book.Other(), book, orb, celebrate: false, profile: pack.Manifest.Motion ?? new MotionProfile());
+        Living = pack.IsLiving;
+        Director = new CharacterDirector(parameters, seed, book.Other(), book, orb, celebrate: false, profile: pack.Manifest.Motion ?? new MotionProfile(),
+            variants: Living ? idle.Variants : null, states: Living ? pack.States : null);
         var space = Director.Space;
         _slots = new Slots(space);
         Values = new double[space.Count];
@@ -115,6 +124,9 @@ public sealed partial class CharacterPerformer
     public CharacterPack Pack { get; }
 
     public CharacterDirector Director { get; }
+
+    /// <summary>A living pack (spec/CHARACTERS.md, Behavior): the director gets the shown pose's variants and the mood poses.</summary>
+    public bool Living { get; }
 
     public int ActivePose { get; private set; }
 
@@ -205,19 +217,83 @@ public sealed partial class CharacterPerformer
         return 1;
     }
 
-    /// <summary>The pose index a band shows: its own, else the nearest lower band's.</summary>
+    /// <summary>The pose index a band shows: its own, else the nearest lower band's (never a mood pose).</summary>
     public int PoseIndex(SpeedBand band)
     {
         var best = 0;
         for (var i = 0; i < Pack.Poses.Count; i++)
         {
-            if (Pack.Poses[i].Band <= band)
+            if (Pack.Poses[i].State is null && Pack.Poses[i].Band <= band)
             {
                 best = i;
             }
         }
 
         return best;
+    }
+
+    /// <summary>
+    /// The pose to show (section 6 with Behavior): the mood's pose when the pack has it, the shown pose while a poke or
+    /// trouble keeps it, else the band's.
+    /// </summary>
+    public int WantedPose
+    {
+        get
+        {
+            var band = Director.Band ?? SpeedBand.Idle;
+            if (Director.PoseWanted() is not { } mood)
+            {
+                return PoseIndex(band);
+            }
+
+            if (mood.State is not { } state)
+            {
+                return ActivePose;
+            }
+
+            for (var i = 0; i < Pack.Poses.Count; i++)
+            {
+                if (Pack.Poses[i].State == state)
+                {
+                    return i;
+                }
+            }
+
+            return PoseIndex(band);
+        }
+    }
+
+    /// <summary>The band a swap into the shown pose reports: its own for a band pose, the director's for a mood pose.</summary>
+    private SpeedBand SwappedBand
+    {
+        get
+        {
+            var pose = Pack.Poses[ActivePose];
+            return pose.State is null ? pose.Band : Director.Band ?? SpeedBand.Idle;
+        }
+    }
+
+    /// <summary>Hands the director the sides, the name and (in a living pack) the variants of the pose now shown.</summary>
+    private void AdoptActivePose()
+    {
+        var pose = Pack.Poses[ActivePose];
+        var book = CharacterSides.Parse(pose.Rig.Landmarks.ObjectSide) ?? Director.Book;
+        Director.SetSides(book.Other(), book, pose.Name, Living ? pose.Rig.Variants : null);
+    }
+
+    /// <summary>
+    /// The center of the shown pose's face box at rest, where she stands now, in screen points (y down): the point the
+    /// cursor input is measured from (spec/CHARACTERS.md, Behavior, Inputs). <paramref name="feetOnScreen"/> and
+    /// <paramref name="pointsPerPixel"/> as for <see cref="HudLayout"/>.
+    /// </summary>
+    public (double X, double Y) FaceCenter((double X, double Y) feetOnScreen, double pointsPerPixel)
+    {
+        var placement = ActivePlacement;
+        var (x, y) = ActiveRig.Landmarks.Face is { Length: 4 } f
+            ? ((f[0] + f[2]) / 2, (f[1] + f[3]) / 2)
+            : (placement.FeetX, placement.FeetY - 0.9 * IdleHeight / placement.Scale);
+        var p = placement.Screen(x, y, feetOnScreen, pointsPerPixel);
+        return (p.X + BodyOffset.Dx * pointsPerPixel, p.Y);
     }
 
     public CharacterRig ActiveRig => Pack.Poses[ActivePose].Rig;
@@ -229,10 +305,11 @@ public sealed partial class CharacterPerformer
     public double Intensity => Director.Intensity;
 
     /// <summary>
-    /// True while she acts out something (a gesture, a move, a hand fidget aside) or turns to swap poses: the frames that
-    /// need the full 60 fps.
+    /// True while she acts out something (a gesture, a move, a hand fidget aside), turns to swap poses, or in a living pack
+    /// follows a moving cursor, swaps a face or talks: the frames that need the full 60 fps (DESIGN 2a.6).
     /// </summary>
-    public bool IsActing => Director.ActiveGesture is not null || _poseSwitch.IsRunning || FadingPose is not null;
+    public bool IsActing => Director.ActiveGesture is not null || _poseSwitch.IsRunning || FadingPose is not null
+        || Director.IsLivingBusy(Director.Time - _cursorMovedAt < FollowSettle);
 
     /// <summary>The character's sideways and upward travel this frame (side steps, hops), in idle canvas pixels (y down).</summary>
     public (double Dx, double Dy) BodyOffset =>
@@ -241,25 +318,22 @@ public sealed partial class CharacterPerformer
     /// <summary>Asks the character to turn edge-on so another one can take over (<see cref="CharacterStage"/>).</summary>
     public void RequestExit() => _pendingExit = true;
 
-    private CharacterSide BookOfActive() => CharacterSides.Parse(ActiveRig.Landmarks.ObjectSide) ?? Director.Book;
-
     /// <summary>Starts this character on the edge-on instant in the pose of <paramref name="level"/>, turning back toward the viewer.</summary>
     public void EnterEdgeOn(int level)
     {
         ActivePose = PoseIndex(SpeedBands.OfLevel(level));
-        var book = BookOfActive();
         Director.SetLevel(level);
-        Director.SetSides(book.Other(), book, Pack.Poses[ActivePose].Band);
+        AdoptActivePose();
         _poseSwitch.EnterEdgeOn();
+        _started = true;
     }
 
     /// <summary>Starts this character in the pose of <paramref name="level"/>, facing the viewer (a calm character change).</summary>
     public void EnterAtRest(int level)
     {
         ActivePose = PoseIndex(SpeedBands.OfLevel(level));
-        var book = BookOfActive();
         Director.SetLevel(level);
-        Director.SetSides(book.Other(), book, Pack.Poses[ActivePose].Band);
+        AdoptActivePose();
     }
 
     /// <summary>
@@ -293,13 +367,43 @@ public sealed partial class CharacterPerformer
         }
     }
 
-    /// <summary>Advances one frame at speed level 0...13.</summary>
-    public void Step(double dt, int level)
+    /// <summary>
+    /// Advances one frame at speed level 0...13. <paramref name="inputs"/> (the agents' phases and the user's cursor) drive
+    /// the moods of a living pack; any other pack ignores them.
+    /// </summary>
+    public void Step(double dt, int level, BehaviorInputs? inputs = null)
     {
         _events.Clear();
         ExitReached = false;
         Director.SetLevel(level);
-        Director.Update(dt);
+        var fed = Living ? inputs : null;
+        if (fed?.Cursor is { } cursor)
+        {
+            if (_lastCursor is not { } last || Math.Abs(last.X - cursor.X) >= 1e-4 || Math.Abs(last.Y - cursor.Y) >= 1e-4)
+            {
+                _cursorMovedAt = Director.Time + dt;
+            }
+
+            _lastCursor = cursor;
+        }
+        else if (_lastCursor is not null)
+        {
+            _lastCursor = null;
+            _cursorMovedAt = Director.Time + dt;
+        }
+
+        Director.Update(dt, fed);
+        if (fed is not null && !_started)
+        {
+            // The first frame with inputs shows the mood's pose at once, without a turn.
+            _started = true;
+            var first = WantedPose;
+            if (first != ActivePose && !_pendingExit && !_poseSwitch.IsRunning)
+            {
+                ActivePose = first;
+                AdoptActivePose();
+            }
+        }
         foreach (var e in Director.Events)
         {
             if (e == DirectorEvent.Petals)
@@ -324,31 +428,26 @@ public sealed partial class CharacterPerformer
             }
         }
 
-        if ((Calm || Director.Profile.Seated) && !_pendingExit && Director.Band is { } calmBand && PoseIndex(calmBand) != ActivePose
-            && !_poseSwitch.IsRunning)
+        var wanted = WantedPose;
+        if ((Calm || Director.Profile.Seated) && !_pendingExit && Director.Band is not null && wanted != ActivePose && !_poseSwitch.IsRunning)
         {
             // Reduce Motion, and a character in a chair, crossfade poses instead of turning.
             FadingPose = ActivePose;
             CopyInto(ref _fadingWorld, _world);
             CopyInto(ref _fadingOpacities, _opacities);
             FadeProgress = 0;
-            ActivePose = PoseIndex(calmBand);
-            var book = BookOfActive();
-            Director.SetSides(book.Other(), book, Pack.Poses[ActivePose].Band);
-            _events.Add(PerformerEvent.PoseSwapped(Pack.Poses[ActivePose].Band));
+            ActivePose = wanted;
+            AdoptActivePose();
+            _events.Add(PerformerEvent.PoseSwapped(SwappedBand));
         }
         else if (_pendingExit && !_poseSwitch.IsRunning)
         {
             _poseSwitch.Request(ExitTarget);
             _pendingExit = false;
         }
-        else if (!_pendingExit && Director.Band is { } band)
+        else if (!_pendingExit && Director.Band is not null && wanted != ActivePose)
         {
-            var wanted = PoseIndex(band);
-            if (wanted != ActivePose)
-            {
-                _poseSwitch.Request(wanted);
-            }
+            _poseSwitch.Request(wanted);
         }
 
         var (swap, output, swapped) = _poseSwitch.Update(dt);
@@ -369,9 +468,8 @@ public sealed partial class CharacterPerformer
             else
             {
                 ActivePose = target;
-                var book = BookOfActive();
-                Director.SetSides(book.Other(), book, Pack.Poses[target].Band);
-                _events.Add(PerformerEvent.PoseSwapped(Pack.Poses[target].Band));
+                AdoptActivePose();
+                _events.Add(PerformerEvent.PoseSwapped(SwappedBand));
             }
         }
 
@@ -440,7 +538,8 @@ public sealed class CharacterStage(CharacterPerformer performer)
         Current.RequestExit();
     }
 
-    public void Step(double dt, int level)
+    /// <summary>Advances the characters one frame; the one leaving and the one arriving see the inputs without the click and the hover.</summary>
+    public void Step(double dt, int level, BehaviorInputs? inputs = null)
     {
         Swapped = false;
         if (Current.Calm != Calm)
@@ -449,10 +548,11 @@ public sealed class CharacterStage(CharacterPerformer performer)
         }
 
         Current.Amplitude = Amplitude;
+        var quiet = inputs is { } given ? given with { Click = false, Over = false } : (BehaviorInputs?)null;
         if (Outgoing is { } o)
         {
             o.Amplitude = Amplitude;
-            o.Step(dt, level);
+            o.Step(dt, level, quiet);
         }
 
         if (Outgoing is not null)
@@ -475,11 +575,11 @@ public sealed class CharacterStage(CharacterPerformer performer)
             Swapped = true;
         }
 
-        Current.Step(dt, level);
+        Current.Step(dt, level, inputs);
         if (Current.ExitReached && Incoming is { } next)
         {
             next.EnterEdgeOn(level);
-            next.Step(dt, level);
+            next.Step(dt, level, quiet);
             Current = next;
             Incoming = null;
             Swapped = true;

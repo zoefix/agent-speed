@@ -17,6 +17,9 @@ public sealed class OrbFeed
     private readonly SubsetPeakTracker _peak = new();
     private bool _configured;
     private long _lastNowMs;
+    private CharacterActivity? _activity;
+    private double _clockAt;
+    private DateTimeOffset _wallAt;
 
     public OrbFeed(string id)
     {
@@ -50,6 +53,9 @@ public sealed class OrbFeed
 
     /// <summary>A <c>character</c> orb: its speed stays in tok/s and the cost rate goes to its card (<see cref="CardMoney"/>, DESIGN 2a.6).</summary>
     public bool Character { get; set; }
+
+    /// <summary>What a living character reacts to (CHARACTERS 5, <i>Behavior</i>), read by her renderer every frame.</summary>
+    public OrbCharacterLive CharacterLive { get; } = new();
 
     /// <summary>The live cost rate of a <c>character</c> orb's cost card; else null.</summary>
     public LiveMoney? CardMoney { get; private set; }
@@ -117,6 +123,10 @@ public sealed class OrbFeed
         Value = double.IsFinite(value) && value > 0 ? value : 0;
         _tier.Update(Value, Redline, nowSeconds);
         _title.Update(Value, Redline, nowSeconds);
+        if (Character)
+        {
+            UpdateCharacterActivity(snapshot, nowSeconds);
+        }
 
         if (TracksEverything || snapshot.Timestamp == DateTimeOffset.MinValue)
         {
@@ -132,6 +142,37 @@ public sealed class OrbFeed
         _lastNowMs = nowMs;
         var dayStart = snapshot.DayStart == DateTimeOffset.MinValue ? 0 : snapshot.DayStart.ToUnixTimeMilliseconds();
         return _peak.Update(Reading.Live.Output, Reading.MeasuredPeakOutput, dayStart, nowMs);
+    }
+
+    /// <summary>
+    /// The inputs of a living character from the orb's agents (CHARACTERS 5, <i>Behavior</i>, <i>Inputs</i>): phase, wait,
+    /// idle time, hour and trouble; the idle time starts at the orb's first reading.
+    /// </summary>
+    private void UpdateCharacterActivity(SpeedSnapshot snapshot, double now)
+    {
+        var wall = snapshot.Timestamp == DateTimeOffset.MinValue ? DateTimeOffset.UtcNow : snapshot.Timestamp;
+        _clockAt = now;
+        _wallAt = wall;
+        var last = snapshot.LastResponse is { } response && Accepts(new SpeedEvent.ResponseCompleted(response)) ? response.EndedAt : (DateTimeOffset?)null;
+        _activity ??= new CharacterActivity(wall);
+        if (_activity.Update(Reading.Agents, last))
+        {
+            CharacterLive.NoteTrouble();
+        }
+
+        CharacterLive.Update(_activity, now, wall);
+    }
+
+    /// <summary>A response of the orb's sources ended (its completion event): a living character's idle time restarts from it.</summary>
+    public void NoteResponseEnd(DateTimeOffset end)
+    {
+        if (!Character || _activity is null)
+        {
+            return;
+        }
+
+        _activity.NoteResponseEnd(end);
+        CharacterLive.IdleSince = OrbCharacterLive.ClockOf(_activity.IdleSince, _clockAt, _wallAt);
     }
 
     private static CostReading PreviewReading(double output) => CostReading.Zero with

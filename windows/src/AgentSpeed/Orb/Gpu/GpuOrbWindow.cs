@@ -19,7 +19,7 @@ namespace AgentSpeed.Orb.Gpu;
 /// (WS_EX_TRANSPARENT toggled by the cursor's position); dragging asks the owner for the assisted target and follows it
 /// through a critically damped spring; positions are physical pixels of the disc center.
 /// </summary>
-internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
+internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPointer
 {
     private const double DragSlop = 3;
     private const double DragSettle = 0.12;
@@ -73,6 +73,10 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     private string _unitHint = string.Empty;
     private string? _discHint;
     private bool _unitHover;
+
+    private readonly CharacterClickRule _figureClick = new(OrbNative.GetDoubleClickTime() / 1000.0);
+    private DispatcherTimer? _figureTimer;
+    private OrbCharacterLive? _characterLive;
 
     public GpuOrbWindow(string orbId, Func<double> clock, OrbClock orbClock, uint seed, GpuDevice device)
     {
@@ -133,6 +137,52 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
     public event EventHandler? UnitToggleRequested;
 
     public Func<PointD, PointD>? DragAssist { get; set; }
+
+    /// <summary>The orb's living-character inputs (CHARACTERS 5, <i>Behavior</i>): this window hands them the pointer and single clicks.</summary>
+    public OrbCharacterLive? CharacterLive
+    {
+        get => _characterLive;
+        set
+        {
+            if (_characterLive is { } old && ReferenceEquals(old.Pointer, this))
+            {
+                old.Pointer = null;
+            }
+
+            _characterLive = value;
+            if (value is not null)
+            {
+                value.Pointer = this;
+            }
+        }
+    }
+
+    /// <summary>
+    /// The pointer as fractions of the window's side (CHARACTERS 5, <c>cursor</c>): read only while the orb shows and
+    /// takes the mouse, no drag moves it, the session is unlocked and the pointer is on the orb's display (physical
+    /// pixels on both sides, per-monitor DPI aware).
+    /// </summary>
+    (double X, double Y)? IOrbCharacterPointer.PointerFraction
+    {
+        get
+        {
+            if (_closed || _options.ClickThrough || (_dragging && _dragMoved) || _surface.Locked || !_host.IsVisible || _host.Handle == 0
+                || !User32.GetCursorPos(out var cursor) || !User32.GetWindowRect(_host.Handle, out var rect))
+            {
+                return null;
+            }
+
+            var side = rect.Right - rect.Left;
+            if (side <= 0 || User32.MonitorFromPoint(cursor, MONITOR.DEFAULTTONEAREST) != User32.MonitorFromWindow(_host.Handle, MONITOR.DEFAULTTONEAREST))
+            {
+                return null;
+            }
+
+            return ((double)(cursor.X - rect.Left) / side, (double)(cursor.Y - rect.Top) / side);
+        }
+    }
+
+    bool IOrbCharacterPointer.IsDragging => _dragging && _dragMoved;
 
     public void SetDimmed(bool dimmed)
     {
@@ -354,6 +404,9 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 
         _closed = true;
         _unitTimer?.Stop();
+        _figureTimer?.Stop();
+        _figureClick.Cancel();
+        CharacterLive = null;
         SetUnitHover(false);
         _housekeeping.Stop();
         _passThroughPoll.Stop();
@@ -404,9 +457,12 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
 
         Interacted?.Invoke(this, EventArgs.Empty);
         _unitToggle.Press(new PointD(x / DisplayScale, y / DisplayScale), _clock(), IsOnUnit(x, y), doubleClick ? 2 : 1);
+        _figureClick.Down(_clock(), x / DisplayScale, y / DisplayScale, doubleClick ? 2 : 1,
+            armed: _characterLive is not null && _surface.InstrumentStyle == OrbStyle.Character && !_options.ClickThrough);
         if (doubleClick)
         {
             _unitTimer?.Stop();
+            _figureTimer?.Stop();
             _dragging = false;
             DashboardRequested?.Invoke(this, EventArgs.Empty);
             return;
@@ -440,6 +496,50 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
             _unitTimer.Tick -= OnUnitDue;
             _unitTimer.Tick += OnUnitDue;
             _unitTimer.Start();
+        }
+
+        FigureRelease(moved);
+    }
+
+    /// <summary>
+    /// A single click on a living character's orb (CHARACTERS 5, <c>click</c>): handed to her renderer once the system
+    /// double-click time passed without a second click; the renderer tells whether it landed on her drawn figure.
+    /// </summary>
+    private void FigureRelease(bool moved)
+    {
+        if (!User32.GetCursorPos(out var cursor) || !User32.GetWindowRect(_host.Handle, out var rect))
+        {
+            _figureClick.Cancel();
+            return;
+        }
+
+        _figureClick.DoubleClickInterval = OrbNative.GetDoubleClickTime() / 1000.0;
+        if (_figureClick.Up(_clock(), (cursor.X - rect.Left) / DisplayScale, (cursor.Y - rect.Top) / DisplayScale, moved) is not { } delay)
+        {
+            return;
+        }
+
+        _figureTimer ??= new DispatcherTimer(DispatcherPriority.Input, Dispatcher.CurrentDispatcher);
+        _figureTimer.Stop();
+        _figureTimer.Interval = TimeSpan.FromSeconds(Math.Max(0.01, delay + 0.005));
+        _figureTimer.Tick -= OnFigureDue;
+        _figureTimer.Tick += OnFigureDue;
+        _figureTimer.Start();
+    }
+
+    private void OnFigureDue(object? sender, EventArgs e)
+    {
+        _figureTimer?.Stop();
+        if (_closed || _figureClick.Take(_clock() + 0.01) is not { } press)
+        {
+            return;
+        }
+
+        var side = _pixels / DisplayScale;
+        if (side > 0 && _characterLive is { } live)
+        {
+            live.Click((press.X / side, press.Y / side));
+            _surface.Kick();
         }
     }
 
@@ -602,6 +702,8 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput
         if (!_dragMoved)
         {
             _dragMoved = true;
+            _figureClick.Cancel();
+            _figureTimer?.Stop();
             _followX = new CriticalSpring(DragSettle, _center.X);
             _followY = new CriticalSpring(DragSettle, _center.Y);
         }

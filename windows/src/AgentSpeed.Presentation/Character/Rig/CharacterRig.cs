@@ -164,6 +164,7 @@ public sealed class CharacterRig
 
         Physics = doc.Physics;
         Landmarks = doc.LandmarkSet;
+        Variants = doc.Variants.Where(v => paramIndex.ContainsKey(v.Param)).ToArray();
     }
 
     public string Name { get; }
@@ -195,6 +196,9 @@ public sealed class CharacterRig
     public RigDocument.Chain[] Physics { get; }
 
     public RigDocument.Landmarks Landmarks { get; }
+
+    /// <summary>Variants whose parameter the rig has.</summary>
+    public RigDocument.Variant[] Variants { get; }
 
     public int BoneCount => Parents.Length;
 

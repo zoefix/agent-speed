@@ -158,6 +158,7 @@ internal sealed partial class OrbManager
             ModelsMore = _loc["character.models.more"],
             TokensUnit = _loc["unit.tokS"],
             Quota = orb.CharacterReadouts.Quota ? QuotaCard(orb) : OrbQuotaCard.Empty,
+            Live = entry.Feed.CharacterLive,
         });
         var generating = reading.GeneratingSources.Count > 0;
         surface.SetCharacterReadings(IntelligenceSample(reading), entry.Feed.CardMoney, generating,

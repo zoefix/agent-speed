@@ -152,6 +152,9 @@ public sealed record CharacterManifest
 
     public string Preview { get; init; } = "preview.png";
 
+    /// <summary>The mood poses of a living pack by state (CHARACTERS 1, 5 <i>Behavior</i>); unknown states are ignored.</summary>
+    public IReadOnlyDictionary<string, string>? States { get; init; }
+
     /// <summary>Checks everything a player relies on; <paramref name="appVersion"/> (<c>x.y.z</c>) rejects packs that need a newer app.</summary>
     /// <exception cref="CharacterPackException">The manifest is refused.</exception>
     public void Validate(string? appVersion)
@@ -187,6 +190,14 @@ public sealed record CharacterManifest
         if (!CharacterArchive.IsSafe(Preview))
         {
             throw new CharacterPackException(CharacterPackErrorKind.UnsafePath, Preview);
+        }
+
+        foreach (var path in States?.Values ?? [])
+        {
+            if (!CharacterArchive.IsSafe(path))
+            {
+                throw new CharacterPackException(CharacterPackErrorKind.UnsafePath, path);
+            }
         }
 
         if (MinApp is not null && SemanticVersion.ParseOrNull(MinApp) is { } needed && SemanticVersion.ParseOrNull(appVersion) is { } current
@@ -250,6 +261,16 @@ public sealed record CharacterManifest
             poses[pose.Name] = pose.Value.ValueKind == JsonValueKind.String ? pose.Value.GetString()! : throw new JsonException("Bad pose.");
         }
 
+        Dictionary<string, string>? states = null;
+        if (e.TryGetProperty("states", out var st) && st.ValueKind != JsonValueKind.Null)
+        {
+            states = st.ValueKind == JsonValueKind.Object ? new Dictionary<string, string>(StringComparer.Ordinal) : throw new JsonException("Bad states.");
+            foreach (var state in st.EnumerateObject())
+            {
+                states[state.Name] = state.Value.ValueKind == JsonValueKind.String ? state.Value.GetString()! : throw new JsonException("Bad state.");
+            }
+        }
+
         return new CharacterManifest
         {
             Format = Required("format"),
@@ -264,6 +285,7 @@ public sealed record CharacterManifest
             MinApp = Optional("minApp"),
             Poses = poses,
             Preview = Required("preview"),
+            States = states,
         };
     }
 
@@ -330,6 +352,17 @@ public sealed record CharacterManifest
 
         w.WriteEndObject();
         w.WriteString("preview", Preview);
+        if (States is not null)
+        {
+            w.WriteStartObject("states");
+            foreach (var (state, path) in States)
+            {
+                w.WriteString(state, path);
+            }
+
+            w.WriteEndObject();
+        }
+
         w.WriteEndObject();
     }
 
