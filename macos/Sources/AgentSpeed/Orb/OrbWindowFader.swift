@@ -25,7 +25,7 @@ final class OrbWindowFader {
         self.panel = panel
     }
 
-    func setShown(_ shown: Bool) {
+    func setShown(_ shown: Bool, motion: IdleFade.Motion? = nil) {
         guard shown != isShown, let panel else { return }
         isShown = shown
         if shown {
@@ -33,9 +33,9 @@ final class OrbWindowFader {
                 panel.alphaValue = 0
                 panel.orderFrontRegardless()
             }
-            fade(to: targetAlpha, duration: 0.2, timing: .easeOut)
+            fade(to: targetAlpha, duration: motion?.duration ?? 0.2, timing: motion?.timing ?? .easeOut)
         } else {
-            fade(to: 0, duration: 0.2, timing: .easeOut) { [weak self] in
+            fade(to: 0, duration: motion?.duration ?? 0.2, timing: motion?.timing ?? .easeOut) { [weak self] in
                 guard let self, !self.isShown else { return }
                 self.panel?.orderOut(nil)
             }
@@ -103,11 +103,12 @@ final class OrbWindowFader {
 @MainActor
 final class OrbWindowIdleDimmer {
     private let gauge: LiveGauge
+    private let observesActivity: Bool
     private let enabled: @MainActor () -> Bool
     private let interaction: OrbInteraction
     private let apply: (Bool) -> Void
     private let now: @MainActor () -> TimeInterval
-    private let armedAt: TimeInterval
+    private var armedAt: TimeInterval
     private var pointerLeftAt: TimeInterval = -.infinity
     private var wasEngaged = false
     private var timer: Timer?
@@ -118,9 +119,11 @@ final class OrbWindowIdleDimmer {
         enabled: @escaping @MainActor () -> Bool,
         interaction: OrbInteraction,
         now: @escaping @MainActor () -> TimeInterval = { Clock.now },
+        observesActivity: Bool = false,
         apply: @escaping (Bool) -> Void
     ) {
         self.gauge = gauge
+        self.observesActivity = observesActivity
         self.enabled = enabled
         self.interaction = interaction
         self.now = now
@@ -136,12 +139,16 @@ final class OrbWindowIdleDimmer {
     }
 
     /// Decides again (the switch changed; the setting is not observed).
-    func refresh() {
+    func refresh(resetDelay: Bool = false) {
+        if resetDelay { armedAt = now() }
         evaluate()
     }
 
     private func evaluate() {
         let enabled = enabled()
+        // Ingests keep arriving even while rendering is paused. Observe these too so
+        // fresh activity restores a hidden orb before the tier's hysteresis settles.
+        if observesActivity { _ = gauge.revision }
         let idle = gauge.tier == .idle
         let engaged = interaction.isHovered || interaction.isDragging
         let now = self.now()

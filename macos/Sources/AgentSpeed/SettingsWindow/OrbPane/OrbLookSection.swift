@@ -110,9 +110,17 @@ struct OrbSwitchesSection: View {
             SettingToggle(title: l10n("menu.clickThrough"), subtitle: l10n("mac.settings.orb.clickThroughHint"), isOn: Binding(
                 get: { orb.clickThrough }, set: { orbs.setClickThrough($0, of: id) }
             ))
-            SettingToggle(title: l10n("settings.orb.fadeIdle"), isOn: Binding(
-                get: { orb.fadeWhenIdle }, set: { orbs.setFadeWhenIdle($0, of: id) }
-            ))
+            Picker(l10n("mac.settings.orb.idleBehavior"), selection: Binding(
+                get: { orb.idleBehavior }, set: { orbs.setIdleBehavior($0, of: id) }
+            )) {
+                ForEach(OrbIdleBehavior.allCases, id: \.self) { behavior in
+                    Text(l10n("mac.settings.orb.idleBehavior." + behavior.rawValue)).tag(behavior)
+                }
+            }
+            if orb.idleBehavior == .hide {
+                Text(l10n("mac.settings.orb.idleBehavior.hideHint"))
+                    .font(.caption).foregroundStyle(.secondary)
+            }
             SettingToggle(title: l10n("settings.orb.allSpaces"), isOn: Binding(
                 get: { orb.allSpaces }, set: { orbs.setAllSpaces($0, of: id) }
             ))

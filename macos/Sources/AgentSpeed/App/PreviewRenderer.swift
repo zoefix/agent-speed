@@ -26,6 +26,9 @@ enum PreviewRenderer {
         if wants("orb") {
             SurfacePreviews.renderOrbs(model: model, into: directory)
         }
+        if only?.contains("idle") == true {
+            OrbsPreviews.renderIdleBehavior(model: model, into: directory)
+        }
         if wants("orbs") {
             OrbsPreviews.render(model: model, into: directory)
         }

@@ -42,8 +42,9 @@ final class OrbWindowController {
     private let animator: OrbWindowAnimator
     private let pointer = OrbWindowPointerTracker()
     private let fader: OrbWindowFader
+    private let idleNow: @MainActor () -> TimeInterval
     private let visibility: OrbWindowVisibilityMonitor
-    private var dimmer: OrbWindowIdleDimmer?
+    private(set) var dimmer: OrbWindowIdleDimmer?
     private var reporter: OrbAccessibilityReporter?
     private var loops: [ObservationLoop] = []
     private let chipPanel = OrbChipPanel(interactive: false)
@@ -63,12 +64,15 @@ final class OrbWindowController {
     private var dragRegion: [CGRect] = []
     private var cursorPushed = false
     private var appliedDiameter: CGFloat
+    private var idleHidden = false
     private var wantsShown = false
     private var isClosing = false
     /// Waiting for a staggered entrance to start (the disc still sits at its origin).
     private var isEntering = false
 
-    init(model: AppModel, runtime: OrbRuntime, manager: OrbWindowManaging) {
+    init(model: AppModel, runtime: OrbRuntime, manager: OrbWindowManaging,
+         idleNow: @escaping @MainActor () -> TimeInterval = { Clock.now }) {
+        self.idleNow = idleNow
         self.model = model
         self.runtime = runtime
         self.manager = manager
@@ -147,10 +151,11 @@ final class OrbWindowController {
             if self.chipPanel.isShown { self.showChip(refreshOnly: true) }
         })
         loops.append(ObservationLoop { [weak self] in self?.refreshNameplate() })
-        dimmer = OrbWindowIdleDimmer(gauge: runtime.feed.gauge, enabled: { [weak self] in self?.config.fadeWhenIdle ?? false },
-                                     interaction: interaction) { [weak self] dimmed in
+        dimmer = OrbWindowIdleDimmer(gauge: runtime.feed.gauge, enabled: { [weak self] in
+            (self?.config.idleBehavior ?? .keepVisible) != .keepVisible
+        }, interaction: interaction, now: idleNow, observesActivity: true) { [weak self] dimmed in
             guard let self else { return }
-            self.fader.setDimmed(dimmed, reduceMotion: self.model.accessibility.reduceMotion)
+            self.applyIdleState(dimmed)
         }
         reporter = OrbAccessibilityReporter(model: model, runtime: runtime, host: host)
         installAccessibilityActions()
@@ -200,7 +205,7 @@ final class OrbWindowController {
         self.config = config
         applyConfiguration()
         if previous.sources != config.sources { showSourcesBriefly() }
-        if previous.fadeWhenIdle != config.fadeWhenIdle { dimmer?.refresh() }
+        if previous.idleBehavior != config.idleBehavior { dimmer?.refresh(resetDelay: true) }
     }
 
     private func applyConfiguration() {
@@ -364,12 +369,27 @@ final class OrbWindowController {
     /// Shows or hides the window (its `visible` flag and the master switch).
     func setShown(_ shown: Bool) {
         wantsShown = shown
+        updatePresentation()
+    }
+
+    private func applyIdleState(_ idle: Bool) {
+        let hidden = idle && config.idleBehavior == .hide
+        let changed = hidden != idleHidden
+        idleHidden = hidden
+        fader.setDimmed(idle && config.idleBehavior == .fade, reduceMotion: reduceMotion)
+        if changed {
+            updatePresentation(motion: IdleFade.motion(dimming: hidden, reduceMotion: reduceMotion))
+        }
+    }
+
+    private func updatePresentation(motion: IdleFade.Motion? = nil) {
+        let shown = wantsShown && !idleHidden
         guard !isClosing, shown != fader.isShown else { return }
         if shown {
-            fader.setShown(true)
+            fader.setShown(true, motion: motion)
         } else {
             animator.finish()
-            fader.setShown(false)
+            fader.setShown(false, motion: motion)
             chipPanel.hide()
             host.setHighlighted(false)
         }
@@ -592,7 +612,7 @@ final class OrbWindowController {
     /// Shows the chip, or widens the plate to it, for 2 s (also after a sources change).
     private func showSourcesBriefly(after delay: TimeInterval = 0) {
         let show = { @MainActor [weak self] in
-            guard let self, self.fader.isShown || self.wantsShown else { return }
+            guard let self, !self.idleHidden && (self.fader.isShown || self.wantsShown) else { return }
             self.chipUntil = Clock.now + 2
             self.showChip()
             self.chipTimer?.invalidate()
@@ -619,6 +639,7 @@ final class OrbWindowController {
     }
 
     private func showChip(refreshOnly: Bool = false) {
+        guard !idleHidden else { chipPanel.hide(); return }
         if nameplate.foldsChip {
             chipPanel.hide()
             if !refreshOnly { nameplate.setExpanded(true) }

@@ -44,7 +44,8 @@ public enum OrbEditing {
             traffic: template.traffic,
             showName: template.showName,
             character: template.character,
-            characterReadouts: template.characterReadouts
+            characterReadouts: template.characterReadouts,
+            idleBehavior: template.idleBehavior
         )
         return inserting(orb, after: template.id, in: doc)
     }
@@ -185,6 +186,10 @@ public enum OrbEditing {
 
     public static func setOpacity(_ opacity: Double, of id: String, in doc: OrbsDocument) -> OrbsDocument {
         update(id, in: doc) { $0.opacity = OrbConfig.cleanOpacity(opacity) }
+    }
+
+    public static func setIdleBehavior(_ behavior: OrbIdleBehavior, of id: String, in doc: OrbsDocument) -> OrbsDocument {
+        update(id, in: doc) { $0.idleBehavior = behavior }
     }
 
     public static func setToggle(_ key: WritableKeyPath<OrbConfig, Bool>, _ value: Bool, of id: String, in doc: OrbsDocument) -> OrbsDocument {

@@ -422,6 +422,16 @@ its opacity over 0.6 s ease-in-out; restore instantly on activity (the tier leav
 switch is turned off, and fade again about 2 s after the pointer leaves. Reduce Motion: the fade is a cut too. The fade
 is the only motion it adds: once faded, an idle window draws no more than an idle one that is not faded.
 
+**macOS orb idle behavior.** The orb editor replaces the fade switch with a per-orb `idleBehavior` picker:
+`keepVisible` (Keep visible), `fade` (Fade), `hide` (Hide completely). `hide` uses the same 60 s delay and
+hover/drag deferral, fades to zero over 0.6 s, then orders the window out and stops pointer tracking. Its name
+plate, source chip and character cards disappear with it. It keeps receiving source updates and restores on the
+first active speed sample, over 0.12 s, at the same position and configured opacity. Moving the pointer across
+the old position does not restore it. Reduce Motion cuts both transitions. Manual visibility and the master
+switch take precedence; automatic hiding never writes `visible`. Changing the idle behavior restores the window
+(if manually enabled) and gives it a fresh 60 s delay. Boards keep their existing fade switch and tier-based
+restoration; Windows and Linux are unchanged.
+
 Hover: the orb scales to 1.03 (spring), the title label crossfades to a compact info line
 (`今日 1.2M · 3 個 agent`, counted over the orb's sources), and the cursor shows it is draggable. An orb tracking a
 subset of sources also shows its source chip (2b).
@@ -1236,7 +1246,8 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `character` | `character` style only: a character pack id (CHARACTERS 1), or absent = Auto, following the fastest model vendor (CHARACTERS 7). An id that is not installed counts as Auto. |
 | `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `quota` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
-| `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
+| `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). On macOS `fadeWhenIdle` is a legacy compatibility field, true only for `idleBehavior = "fade"`. |
+| `idleBehavior` | macOS: `"keepVisible"` · `"fade"` · `"hide"`. A valid value takes precedence over `fadeWhenIdle`; absent, malformed or unknown values fall back to the legacy boolean (`true` → `fade`, otherwise `keepVisible`). Written alongside the legacy field without changing the document version. Add, Duplicate and Split copy it; Merge keeps the target's. |
 | `visible` | Hides one orb without removing it. |
 | `redlineOutput`, `redlineTotal` | `null` = the General redline of that metric; otherwise this orb's redline (same ranges). Heat, tiers and titles of the orb use it. |
 | `unit` | `"tokens"` (tok/s, default) or `"cost"` (the money unit of section 9); unknown → `"tokens"`. Copied by Add, Duplicate and Split. Heat, tiers and titles always follow tokens. |
@@ -3054,7 +3065,8 @@ accent color for selection, no extra borders. The pane scrolls when taller than 
    - `orbs.showName` popup — `orbs.showName.auto` with the current automatic result, a separator, `orbs.showName.on`,
      `orbs.showName.off` (2b Name plate); changing it fades the desktop plate in or out live.
    - Switches: `menu.alwaysOnTop`; `menu.clickThrough` with the platform hint (the orb is then controlled from the menu
-     bar / taskbar orb submenu); `settings.orb.fadeIdle`; `settings.orb.allSpaces` (macOS). Footer: the platform's
+     bar / taskbar orb submenu); `settings.orb.fadeIdle` (on macOS, the `mac.settings.orb.idleBehavior` picker
+     instead, with `keepVisible` / `fade` / `hide` and the `hideHint` caption for `hide`); `settings.orb.allSpaces` (macOS). Footer: the platform's
      Reset Position for this orb (it returns to the default corner, or to the creation placement rule when another orb
      is there).
    - **`orbs.advanced`** disclosure (collapsed; its summary lists `orbs.name`, `titles.theme`, `settings.redline`):
