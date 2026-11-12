@@ -36,6 +36,11 @@ public:
     };
     // Her leftmost and rightmost x over the bands that `y0…y1` touches, nullopt when she has nothing there.
     std::optional<Extent> extent(double y0, double y1) const;
+    // Whether a point lies on her outline: inside the band's extent, with `slack` points around it.
+    bool contains(double x, double y, double slack = 0) const {
+        const auto e = extent(y - slack, y + slack);
+        return e && x >= e->left - slack && x <= e->right + slack;
+    }
 
 private:
     double top_, step_;

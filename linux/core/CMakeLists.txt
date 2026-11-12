@@ -214,8 +214,11 @@ endif()
 # The character player (spec/CHARACTERS.md): rig, physics, motion, director, performer and readout layout. Plain C++.
 if(AGENTSPEED_BUILD_TESTS OR AGENTSPEED_BUILD_APP)
 add_library(agentspeed_character STATIC
+    src/character/arm_gestures.cpp
+    src/character/behavior.cpp
     src/character/curve.cpp
     src/character/director.cpp
+    src/character/director_living.cpp
     src/character/hand_actor.cpp
     src/character/hud.cpp
     src/character/hud_balance.cpp

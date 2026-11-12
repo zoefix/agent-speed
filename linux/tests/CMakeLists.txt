@@ -9,6 +9,7 @@ add_executable(agentspeed_tests
     character_balance_test.cpp
     character_catalog_test.cpp
     character_fixture_test.cpp
+    character_living_test.cpp
     character_models_test.cpp
     character_performer_test.cpp
     character_quota_test.cpp

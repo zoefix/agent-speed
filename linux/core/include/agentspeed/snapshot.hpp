@@ -47,6 +47,13 @@ struct AgentRow {
     double thinkingShare = 0;
     // `local`, or the remote host the agent runs on (REMOTE 2.2).
     std::string host = "local";
+    // The facts a character reacts to (CHARACTERS 5, Behavior): while generating, when its in-flight request started
+    // (METRICS 3.3) and whether output came since (a response of it ended at or after that time); the newest end of
+    // its responses; the result time of a live tool result that failed right after its previous result failed too.
+    std::optional<std::int64_t> inFlightSinceMs;
+    bool outputSinceInFlight = false;
+    std::optional<std::int64_t> lastResponseEndMs;
+    std::optional<std::int64_t> repeatFailureMs;
 };
 
 // 性能 and 思考 of one set of sources (METRICS 6.9 Sets and groups, Live thinking): an orb, the tray, a board.

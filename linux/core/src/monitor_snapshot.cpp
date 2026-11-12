@@ -65,6 +65,7 @@ void Monitor::scoreAgents(Snapshot& snap, const std::vector<engine::Response>& r
             perf::applyBaseline(value.score, baseline == perfBaselines_.end() ? std::nullopt : std::optional<double>(baseline->second));
         }
         value.workSignals = work::signalsOf(actions, nowMs);
+        row.repeatFailureMs = work::repeatFailure(actions);
         values[row.id] = {row.id, info.lastLineMs, value.score.form, value.score.score};
         readers[row.id] = {value.score.latencies, info.model, perf::effectivePhase(info.phase, info.lastLineMs, nowMs),
                            perf::recentSpeed(byAgent[row.id], nowMs), info.source};
@@ -225,6 +226,11 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
 
     std::map<std::string, std::vector<engine::Response>> byAgent;
     for (const auto& r : recent) byAgent[r.agentId].push_back(r);
+    std::map<std::string, std::int64_t> latestEnd;
+    for (const auto& r : responses) {
+        auto [it, fresh] = latestEnd.try_emplace(r.agentId, r.endMs);
+        if (!fresh) it->second = std::max(it->second, r.endMs);
+    }
     const auto list = engine::agentList(recent, agents, nowMs);
     std::map<std::string, int> depth;
     std::map<std::string, const engine::Agent*> engineAgents;
@@ -250,6 +256,9 @@ Snapshot Monitor::snapshot(std::int64_t nowMs, std::int64_t todayStartMs) {
         row.subagent = info.isSubagent;
         row.parentId = self.parentId;
         row.lastLineMs = info.lastLineMs;
+        if (const auto end = latestEnd.find(id); end != latestEnd.end()) row.lastResponseEndMs = end->second;
+        row.outputSinceInFlight = info.inFlightStartMs && row.lastResponseEndMs && *row.lastResponseEndMs >= *info.inFlightStartMs;
+        if (row.phase == Phase::Generating) row.inFlightSinceMs = info.inFlightStartMs;
         if (const auto effort = effort_speed::current(ModeKind::Effort, info.modes, info.sessionModes, info.configuredModes); effort.known()) {
             row.effort = effort.mode;
             row.effortConfigured = effort.evidence == "configured";

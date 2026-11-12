@@ -10,13 +10,12 @@
 
 namespace agentspeed::character {
 
-// Head gestures with the body joining in (motions/gestures.py). Arm gestures, two-arm combos and face gestures need
-// pose or expression variants; packs without them leave those out (spec/CHARACTERS.md, Motion).
+// Head gestures with the body joining in (motions/gestures.py). Arm gestures and two-arm combos (arm_gestures.hpp) need
+// the pose's arm variants, which only a living pack hands the director; face gestures need an expression, a signature
+// or a living pack (spec/CHARACTERS.md, Motion and Behavior).
 namespace gestures {
 const std::vector<std::string>& head();
 const std::vector<std::string>& face();
-const std::vector<std::string>& arm();
-const std::vector<std::string>& combos();
 MotionSpec headGesture(const std::string& name);
 MotionSpec faceGesture(const std::string& name, double duration = 2.4);
 }  // namespace gestures

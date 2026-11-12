@@ -40,10 +40,14 @@ struct MotionProfile {
     bool allows(const std::string& action) const;
     // The band's pool: the base actions it allows, then each signature action that fits the band three times in all.
     std::vector<std::string> pool(const std::vector<std::string>& base, Band band) const;
+    // As above into `out` (cleared first), pointing at `base` and the signature, without allocating once it has room.
+    void pool(const std::vector<std::string>& base, Band band, std::vector<const std::string*>& out) const;
     // How a groove's value for `name` scales: bounce, sway or energy (motions/rhythm.py, groove_scale).
     double grooveScale(const std::string& name) const;
     // The pose band's hand set, if any.
     std::optional<std::string> poseHand(Band band) const;
+    // The hand set of a pose by name: a band's, none for a mood pose.
+    std::optional<std::string> poseHand(const std::string& pose) const;
 };
 
 }  // namespace agentspeed::character

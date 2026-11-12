@@ -98,3 +98,56 @@ inline std::filesystem::path make(const std::map<std::string, std::string>& band
 }
 
 }  // namespace tiny_pack
+
+// Living packs on disk (spec/CHARACTERS.md, Behavior): the tiny rig with face patches, and mood poses after the bands.
+namespace living_pack {
+
+inline const std::vector<std::string>& patches() {
+    static const std::vector<std::string> p = {"expr-smile", "expr-thinking", "mouth-a", "mouth-o", "gaze-left", "gaze-right", "gaze-closed"};
+    return p;
+}
+
+// The tiny rig with face patches as parameters and `patch` variants.
+inline std::string rigJSON(const std::vector<std::string>& ids = patches(), double faceTop = 10) {
+    tiny_pack::RigOptions o;
+    o.faceTop = faceTop;
+    std::string rig = tiny_pack::rigJSON(o);
+    std::string params, variants;
+    for (const auto& id : ids) {
+        const std::string region = id.rfind("expr", 0) == 0 ? "face" : id.rfind("mouth", 0) == 0 ? "mouth" : "eyes";
+        params += R"(,{"id":"Var.)" + id + R"(","min":0,"max":1,"default":0})";
+        if (!variants.empty()) variants += ",";
+        variants += R"({"id":")" + id + R"(","kind":"patch","param":"Var.)" + id + R"(","region":")" + region + "\"}";
+    }
+    const std::string lean = R"({"id":"Lean","min":-1,"max":1,"default":0}])";
+    rig.replace(rig.find(lean), lean.size(), lean.substr(0, lean.size() - 1) + params + "]");
+    const std::string none = R"("variants":[])";
+    rig.replace(rig.find(none), none.size(), R"("variants":[)" + variants + "]");
+    return rig;
+}
+
+// A pack with an idle and a cruise band pose and the given mood poses; `extra` adds raw `states` members and
+// `members` raw manifest members.
+inline std::filesystem::path make(const std::vector<std::string>& states, const std::string& extra = "",
+                                  const std::string& idle = rigJSON(), const std::string& members = "",
+                                  const std::string& id = "tiny") {
+    std::string map;
+    for (const auto& state : states) {
+        if (!map.empty()) map += ",";
+        map += "\"" + state + "\":\"poses/" + state + "\"";
+    }
+    if (!extra.empty()) map += (map.empty() ? "" : ",") + extra;
+    tiny_pack::ManifestOptions o;
+    o.id = id;
+    o.extra = R"(,"states":{)" + map + "}" + members;
+    const auto root = tiny_pack::make({{"idle", idle}, {"cruise", idle}}, o);
+    tiny_pack::RigOptions mood;
+    mood.faceTop = 20;
+    for (const auto& state : states) {
+        tiny_pack::write(root / "poses" / state / "rig.json", tiny_pack::rigJSON(mood));
+        tiny_pack::write(root / "poses" / state / "atlas.png", std::string(1, '\0'));
+    }
+    return root;
+}
+
+}  // namespace living_pack

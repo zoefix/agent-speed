@@ -109,5 +109,27 @@ KeyList cat(std::initializer_list<KeyList> parts) {
     return out;
 }
 
+MotionSpec merge(const std::string& name, const std::vector<const MotionSpec*>& motions, const std::vector<double>& delays,
+                 std::optional<std::string> expression) {
+    CurveSet curves;
+    std::vector<MotionEvent> events;
+    double end = 0, travel = 0;
+    bool talk = false;
+    for (std::size_t i = 0; i < std::min(motions.size(), delays.size()); ++i) {
+        const MotionSpec& m = *motions[i];
+        const double dt = delays[i];
+        for (std::size_t j = 0; j < m.curves.names().size(); ++j) {
+            curves.assign(m.curves.names()[j], shift(sortedKeys(m.curves.keys()[j]), dt));
+        }
+        for (const auto& e : m.events) events.push_back({e.time + dt, e.name});
+        end = std::max(end, m.duration + dt);
+    }
+    for (const auto* m : motions) {
+        talk = talk || m->talk;
+        travel += m->travel;
+    }
+    return MotionSpec(name, end, std::move(curves), false, 0.12, std::move(expression), talk, std::move(events), travel);
+}
+
 }  // namespace keys
 }  // namespace agentspeed::character

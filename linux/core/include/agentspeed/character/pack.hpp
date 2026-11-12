@@ -37,6 +37,9 @@ struct PackManifest {
     std::map<std::string, std::string> poses;  // band → folder inside the pack
     std::string preview;
     std::optional<MotionProfile> motion;
+    // Mood poses of a living pack: state → folder inside the pack (spec/CHARACTERS.md, Behavior); empty when the key is
+    // missing or not a map of strings.
+    std::map<std::string, std::string> states;
 
     // Throws CharacterError(Unreadable) for malformed JSON or a missing required key.
     static PackManifest decode(std::string_view text);
@@ -44,18 +47,27 @@ struct PackManifest {
     bool playable(const std::string& version) const;
 };
 
-// One band's illustration: its rig and the atlas image the renderer loads.
+// One band's illustration, or a mood pose of a living pack: its rig and the atlas image the renderer loads. A mood
+// pose has its `state` (`think`, `wait`, ...) and the idle band.
 struct Pose {
     Band band;
     Rig rig;
     std::filesystem::path atlas;
+    std::optional<std::string> state;
+
+    // The band or the state, as the director names the pose.
+    std::string name() const { return state ? *state : std::string(character::name(band)); }
 };
 
-// An unpacked character pack: its manifest and one rig per band present (idle is required).
+// An unpacked character pack: its manifest, one rig per band present (idle is required) and the mood poses of a
+// living pack after them.
 struct Pack {
     std::filesystem::path root;
     PackManifest manifest;
-    std::vector<Pose> poses;  // present bands in band order; the first is idle
+    std::vector<Pose> poses;  // present bands in band order (the first is idle), then the mood poses in state order
+    std::vector<std::string> states;  // the mood states that have a pose
+    // Living (spec/CHARACTERS.md, Behavior): the manifest lists mood poses or the idle pose has a face patch.
+    bool living = false;
 
     const std::string& id() const { return manifest.id; }
     std::filesystem::path preview() const { return root / manifest.preview; }

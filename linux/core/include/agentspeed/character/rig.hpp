@@ -84,6 +84,22 @@ struct RigDocument {
         std::optional<std::string> objectSide;
         std::map<std::string, Hand> hands;
     };
+    // A part set that swaps in over the drawn parts through `Var.<id>` (spec/CHARACTERS.md, Variants): an `arm`
+    // gesture, a `face` edit or a face `patch` (`expr-*`, `mouth-*`, `gaze-*`).
+    struct Variant {
+        std::string id, kind, param;
+        std::optional<std::string> side;
+        std::optional<bool> front;
+        std::optional<std::string> arm, forearm;
+        std::optional<std::map<std::string, double>> lead, approach;
+        std::optional<std::string> region;
+        bool operator==(const Variant&) const = default;
+
+        // Throws CharacterError(Unreadable) when a required key is missing or a key is of the wrong type.
+        static Variant decode(const json::Value& v);
+        // The variants of a list, skipping the items it cannot read, so one odd variant never costs the whole rig.
+        static std::vector<Variant> decodeList(const json::Value& v);
+    };
 
     std::string format;
     std::int64_t version = 0;
@@ -97,6 +113,7 @@ struct RigDocument {
     std::vector<Driver> drivers;
     std::vector<Chain> physics;
     std::vector<PartDriver> partDrivers;
+    std::vector<Variant> variants;
     std::vector<Part> parts;
 
     // Throws CharacterError(Unreadable) for malformed JSON or a missing required key.
@@ -160,6 +177,8 @@ public:
     std::vector<Part> parts;
     std::vector<RigDocument::Chain> physics;
     RigDocument::Landmarks landmarks;
+    // Variants whose parameter the rig has.
+    std::vector<RigDocument::Variant> variants;
 
     int boneCount() const { return static_cast<int>(parents.size()); }
     std::vector<double> defaults() const;
