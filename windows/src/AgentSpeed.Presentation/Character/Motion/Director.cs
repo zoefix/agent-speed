@@ -10,8 +10,13 @@ public enum DirectorEvent
 /// Turns the speed level into parameter values (motions/director.py): a groove per band on a beat clock, one action at a
 /// time from the band's pool, hand acting, breathing, glances, blinks and wind, then springs. Side steps move the
 /// character around its spot, away from the orb, and she stays where she lands.
+/// <para>
+/// A living pack (face patches or mood poses) also takes the app's inputs with every update: the behavior picks the mood,
+/// and with it the actions, the face patches, the talking mouth and where she looks (Director.Living.cs). Without inputs,
+/// or for any other pack, the director moves exactly as before.
+/// </para>
 /// </summary>
-public sealed class CharacterDirector
+public sealed partial class CharacterDirector
 {
     private static readonly IReadOnlyDictionary<SpeedBand, string[]> Pools = new Dictionary<SpeedBand, string[]>
     {
@@ -21,6 +26,9 @@ public sealed class CharacterDirector
         [SpeedBand.Overdrive] = ["fist", "present", "hip", "idea", "hops", "run", "spin", "step", "doubletake", "cheer", "proud", "hop"],
         [SpeedBand.Redline] = ["fist", "raise", "peace", "jumpjoy", "run", "spin", "hops", "cheer", "hooray", "jump"],
     };
+
+    /// <summary>The idle pool while she waits, before yawning and stretching join it.</summary>
+    private static readonly string[] WaitEarly = Pools[SpeedBand.Idle].Where(a => a is not ("yawn" or "stretch")).ToArray();
 
     private static readonly string[] Celebrations = ["jumpjoy", "spin", "cheer", "hop"];
 
@@ -78,6 +86,7 @@ public sealed class CharacterDirector
     private readonly SecondOrder[] _springs;
     private readonly bool[] _hasSpring;
     private readonly bool[] _springLive;
+    private readonly List<string> _pool = new(32);
     private bool _armsHeld;
     private bool _headHeld;
     private Rng _rng;
@@ -92,7 +101,8 @@ public sealed class CharacterDirector
     private double _breathPhase;
 
     public CharacterDirector(IEnumerable<CharacterParam> parameters, ulong seed = 7, CharacterSide output = CharacterSide.Right,
-        CharacterSide book = CharacterSide.Left, double orb = -1, bool celebrate = true, MotionProfile? profile = null)
+        CharacterSide book = CharacterSide.Left, double orb = -1, bool celebrate = true, MotionProfile? profile = null,
+        IReadOnlyList<RigDocument.Variant>? variants = null, IReadOnlyList<string>? states = null)
     {
         Space = new ParamSpace(parameters);
         _slots = new Slots(Space);
@@ -144,14 +154,24 @@ public sealed class CharacterDirector
 
             k++;
         }
+
+        SetVariants(variants ?? []);
+        if (states is { Count: > 0 } || !_faces.Expressions.IsEmpty || !_faces.Mouths.IsEmpty || !_faces.Gazes.IsEmpty)
+        {
+            Behavior = new CharacterBehavior(seed, states);
+            RefreshBehaviorOptions();
+        }
     }
 
     public ParamSpace Space { get; }
 
     public MotionProfile Profile { get; }
 
-    /// <summary>The band of the pose on screen, for its hand set.</summary>
-    public SpeedBand PoseBand { get; private set; } = SpeedBand.Idle;
+    /// <summary>The pose on screen (a band, or a mood pose of a living pack), for its hand set.</summary>
+    public string PoseName { get; private set; } = SpeedBand.Idle.Key();
+
+    /// <summary>The band of the pose on screen; null while a mood pose shows.</summary>
+    public SpeedBand? PoseBand => SpeedBands.Parse(PoseName);
 
     public CharacterSide Out { get; private set; }
 
@@ -188,16 +208,36 @@ public sealed class CharacterDirector
     public string? ActiveGesture => _gesture is null ? null : LastGesture;
 
     /// <summary>Which arm swings free and which holds the object, for a new pose (of <paramref name="poseBand"/>, for its hand set).</summary>
-    public void SetSides(CharacterSide output, CharacterSide book, SpeedBand? poseBand = null)
+    public void SetSides(CharacterSide output, CharacterSide book, SpeedBand? poseBand = null) =>
+        SetSides(output, book, poseBand?.Key(), null);
+
+    /// <summary>
+    /// As <see cref="SetSides(CharacterSide, CharacterSide, SpeedBand?)"/> for a pose by name (a band or a mood pose). With
+    /// <paramref name="variants"/>, the new pose's variants replace the old pose's: an action playing an old variant stops
+    /// (the swap is edge-on) and the face patches take the new pose's at once.
+    /// </summary>
+    public void SetSides(CharacterSide output, CharacterSide book, string? pose, IReadOnlyList<RigDocument.Variant>? variants)
     {
         Out = output;
         Book = book;
-        if (poseBand is { } pb)
+        if (variants is not null)
         {
-            PoseBand = pb;
+            if (_gesture is { } g && PlaysVariant(g.Motion))
+            {
+                _gesture = null;
+            }
+
+            SetVariants(variants);
+            RefreshBehaviorOptions();
+            _snapFaces = true;
         }
 
-        var set = Profile.PoseHandsFor(PoseBand);
+        if (pose is not null)
+        {
+            PoseName = pose;
+        }
+
+        var set = Profile.PoseHandsFor(PoseName);
         foreach (var hand in _hands)
         {
             hand.Holds = hand.Side == book;
@@ -214,23 +254,52 @@ public sealed class CharacterDirector
         _grooves.Add(new GrooveLayer(Band ?? SpeedBand.Idle, 0, 1));
     }
 
-    private bool Can(params string[] names) => names.All(Space.IsParam);
+    private bool Can(string name) => Space.IsParam(name);
+
+    private bool Can(string a, string b) => Space.IsParam(a) && Space.IsParam(b);
+
+    private static bool PlaysVariant(CharacterMotion motion)
+    {
+        foreach (var entry in motion.Entries)
+        {
+            if (entry.Name.StartsWith("Var.", StringComparison.Ordinal))
+            {
+                return true;
+            }
+        }
+
+        return false;
+    }
 
     private MotionSpec? Spec(string gid)
     {
-        if (Gestures.Arm.Contains(gid) || Gestures.Combos.Contains(gid))
-        {
-            return null;
-        }
-
         if (Grounded && Airborne.Contains(gid))
         {
             return null;
         }
 
+        if (ArmGestures.Arms.TryGetValue(gid, out var a))
+        {
+            return Arm(gid) is { } m ? ArmGestures.ArmGesture(m, a.Hold, a.Flourish, a.Expression, a.Tiptoe && Can("FootPoint")) : null;
+        }
+
+        if (ArmGestures.Combos.TryGetValue(gid, out var combo))
+        {
+            return Arm(combo.Book) is { } bookArm && Arm(combo.Free) is { } freeArm
+                ? ArmGestures.Combo(gid, bookArm, freeArm, combo.Hold, combo.Expression)
+                : null;
+        }
+
         if (gid == "jumpjoy")
         {
-            return Can("PosY", "Squash") ? Moves.Jump(Out, Book, arms: true) : null;
+            if (!Can("PosY", "Squash"))
+            {
+                return null;
+            }
+
+            var cheer = Spec("cheer");
+            var body = Moves.Jump(Out, Book, arms: cheer is null);
+            return cheer is null ? body : Keys.Merge("jumpjoy", [cheer, body], [0, 0.2], "happy");
         }
 
         if (gid == "step")
@@ -257,7 +326,15 @@ public sealed class CharacterDirector
 
         if (Moves.Profile.TryGetValue(gid, out var needs))
         {
-            return needs.Any(Space.IsParam) ? Moves.ProfileMove(gid, Out, Book) : null;
+            foreach (var need in needs)
+            {
+                if (Space.IsParam(need))
+                {
+                    return Moves.ProfileMove(gid, Out, Book);
+                }
+            }
+
+            return null;
         }
 
         if (Moves.Names.Contains(gid))
@@ -270,9 +347,11 @@ public sealed class CharacterDirector
             return Gestures.HeadGesture(gid);
         }
 
-        if (Gestures.Face.Contains(gid) && Profile.Signature.Contains(gid))
+        if (Gestures.Face.Contains(gid))
         {
-            return Gestures.FaceGesture(gid);
+            // A living pack yawns and hums in every pose: the face and the lips follow when the pose has patches.
+            var face = gid == "yawn" ? "sleepy" : "talk";
+            return _faces.FaceIds.Contains(face) || Profile.Signature.Contains(gid) || _active ? Gestures.FaceGesture(gid) : null;
         }
 
         return null;
@@ -289,6 +368,15 @@ public sealed class CharacterDirector
         var motion = spec.Bind(space.Slot);
         var hard = motion.Entries.Select(e => Hard.Any(h => e.Name.StartsWith(h, StringComparison.Ordinal))).ToArray();
         _gesture = new Playing(motion, hard);
+        foreach (var entry in motion.Entries)
+        {
+            if (entry.Name.Contains('@', StringComparison.Ordinal) && _hasSpring[entry.Slot])
+            {
+                _springs[entry.Slot].Snap(entry.Curve.Start);
+                _springLive[entry.Slot] = true;
+            }
+        }
+
         MotionStarts++;
         LastGesture = gid;
         _recent.Add(gid);
@@ -325,15 +413,26 @@ public sealed class CharacterDirector
             var rising = band > current;
             Band = band;
             PlayGroove(band);
-            if (rising && Celebrate && (_gesture is null || _gesture.T > 0.5 * _gesture.Motion.Duration))
+            if (rising)
             {
-                foreach (var gid in _rng.Sample(Celebrations, Celebrations.Length))
+                if (Celebrate && (_gesture is null || _gesture.T > 0.5 * _gesture.Motion.Duration))
                 {
-                    if (StartGesture(gid))
+                    foreach (var gid in _rng.Sample(Celebrations, Celebrations.Length))
                     {
-                        break;
+                        if (StartGesture(gid))
+                        {
+                            break;
+                        }
                     }
                 }
+
+                _eventFace = band == SpeedBand.Redline ? "surprised" : "happy";
+                _eventUntil = Time + 1.2;
+            }
+            else
+            {
+                _eventFace = "smile";
+                _eventUntil = Time + 1.5;
             }
 
             _nextGesture = Time + 1.5;
@@ -387,6 +486,23 @@ public sealed class CharacterDirector
         _present[slot] = true;
     }
 
+    /// <summary>The share of a parameter the playing action leaves to the layers below it.</summary>
+    private double IdleShare(int slot)
+    {
+        if (_gesture is { } g)
+        {
+            foreach (var entry in g.Motion.Entries)
+            {
+                if (entry.Slot == slot)
+                {
+                    return 1 - g.W;
+                }
+            }
+        }
+
+        return 1;
+    }
+
     /// <summary>Adds an idle motion of an appendage, scaled down while an action drives the same parameter, within its range.</summary>
     private void AddIdle(int slot, double v)
     {
@@ -395,34 +511,79 @@ public sealed class CharacterDirector
             return;
         }
 
-        var share = 1.0;
-        if (_gesture is { } g)
+        Write(slot, Math.Min(Math.Max(Values[slot] + IdleShare(slot) * v, p.Min), p.Max));
+    }
+
+    /// <summary>The gap range between actions: the band's, or the mood's in a living pack (without building the pool).</summary>
+    private (double Low, double High) CurrentGaps()
+    {
+        var band = Band ?? SpeedBand.Idle;
+        return _active && Behavior is { } behavior ? behavior.Gaps(band, Gaps) : Gaps[band];
+    }
+
+    /// <summary>The actions to pick from into <see cref="_pool"/>, without the last three played: the band's, or the mood's in a living pack.</summary>
+    private void FillPool()
+    {
+        var band = Band ?? SpeedBand.Idle;
+        if (!_active || Behavior is not { } behavior)
         {
-            foreach (var entry in g.Motion.Entries)
+            Profile.Pool(Pools[band], band, _pool);
+        }
+        else
+        {
+            var (actions, signature) = behavior.Pool(band, Pools[band], Pools[SpeedBand.Idle], WaitEarly);
+            if (signature is { } bandOfSignature)
             {
-                if (entry.Slot == slot)
+                Profile.Pool(actions, bandOfSignature, _pool);
+            }
+            else
+            {
+                _pool.Clear();
+                for (var i = 0; i < actions.Count; i++)
                 {
-                    share = 1 - g.W;
-                    break;
+                    if (Profile.Allows(actions[i]))
+                    {
+                        _pool.Add(actions[i]);
+                    }
                 }
             }
         }
 
-        Write(slot, Math.Min(Math.Max(Values[slot] + share * v, p.Min), p.Max));
+        var kept = 0;
+        for (var i = 0; i < _pool.Count; i++)
+        {
+            if (!_recent.Contains(_pool[i]))
+            {
+                _pool[kept++] = _pool[i];
+            }
+        }
+
+        _pool.RemoveRange(kept, _pool.Count - kept);
     }
 
-    private void ApplyGesture(double dt)
+    /// <summary>Plays the action under way, or starts one; returns the motion that played this frame.</summary>
+    private CharacterMotion? ApplyGesture(double dt)
     {
         if (_gesture is not { } g)
         {
-            if (Time >= _nextGesture)
+            if (_active)
             {
-                var band = Band!.Value;
-                var pool = Profile.Pool(Pools[band], band).Where(a => !_recent.Contains(a)).ToList();
-                _rng.Shuffle(pool);
-                foreach (var gid in pool)
+                foreach (var gid in Behavior!.TakeQueue())
                 {
                     if (StartGesture(gid))
+                    {
+                        return null;
+                    }
+                }
+            }
+
+            if (Time >= _nextGesture && !(_active && Behavior!.Attending))
+            {
+                FillPool();
+                _rng.Shuffle(_pool);
+                for (var i = 0; i < _pool.Count; i++)
+                {
+                    if (StartGesture(_pool[i]))
                     {
                         break;
                     }
@@ -431,7 +592,7 @@ public sealed class CharacterDirector
                 _nextGesture = Time + 1.0;
             }
 
-            return;
+            return null;
         }
 
         g.T += dt;
@@ -459,15 +620,22 @@ public sealed class CharacterDirector
         {
             StageX += m.Travel;
             _gesture = null;
-            var gap = Gaps[Band!.Value];
+            var gap = CurrentGaps();
             _nextGesture = Time + _rng.Uniform(gap.Low * Profile.Gap, gap.High * Profile.Gap);
+            return null;
         }
+
+        return m;
     }
 
-    /// <summary>Advances one frame; the parameters land in <see cref="Values"/> (read the rig's own through <see cref="Space"/>).</summary>
-    public void Update(double dt)
+    /// <summary>
+    /// Advances one frame; the parameters land in <see cref="Values"/> (read the rig's own through <see cref="Space"/>).
+    /// <paramref name="inputs"/> drive the moods of a living pack; without them nothing changes.
+    /// </summary>
+    public void Update(double dt, BehaviorInputs? inputs = null)
     {
         Time += dt;
+        Feel(dt, inputs);
         Intensity += (Level / 13.0 - Intensity) * Math.Min(1.0, dt * 2.5);
         var s = Intensity;
         var t = Time;
@@ -487,7 +655,7 @@ public sealed class CharacterDirector
         }
 
         BlendGrooves(dt);
-        ApplyGesture(dt);
+        var playing = ApplyGesture(dt);
         Write(_slots.PosX, Values[_slots.PosX] + StageX);
         if (_armsHeld)
         {
@@ -523,6 +691,13 @@ public sealed class CharacterDirector
 
         _breathPhase += dt / (4.2 - 2.4 * s);
         Write(_slots.Breath, Math.Max(Values[_slots.Breath], 0.5 - 0.5 * Math.Cos(2 * Math.PI * _breathPhase)));
+        if (_active)
+        {
+            var target = Behavior!.LookTarget;
+            Look(_slots.AngleX, target.AngleX);
+            Look(_slots.AngleY, target.AngleY);
+        }
+
         var amp = 0.06 + 0.12 * s;
         Write(_slots.AngleX, Values[_slots.AngleX] + amp * (Math.Sin(t * 0.83) + 0.5 * Math.Sin(t * 1.91 + 1.3)));
         Write(_slots.AngleY, Values[_slots.AngleY] + amp * 0.7 * Math.Sin(t * 1.17 + 0.4));
@@ -568,7 +743,19 @@ public sealed class CharacterDirector
         Write(_slots.EyeBallX, Math.Max(-1, Math.Min(1, Values[_slots.EyeBallX] + 0.35 * _gaze.X)));
         Write(_slots.EyeBallY, Math.Max(-1, Math.Min(1, Values[_slots.EyeBallY] + 0.35 * _gaze.Y)));
 
-        var openness = Blink(dt);
+        double openness;
+        if (_active)
+        {
+            var target = Behavior!.LookTarget;
+            Look(_slots.EyeBallX, target.EyeBallX);
+            Look(_slots.EyeBallY, target.EyeBallY);
+            openness = LivingFace(dt, playing);
+        }
+        else
+        {
+            openness = Blink(dt);
+        }
+
         foreach (var slot in _slots.EyeOpen)
         {
             if (_present[slot])

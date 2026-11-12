@@ -27,7 +27,8 @@ namespace AgentSpeed.Orb.Gpu;
 /// <c>AGENT_SPEED_ORB_FRAMES_CHARACTERS</c>, a comma list of ids) at idle, cruise, boost, overdrive and redline, at 148 pt
 /// and 72 pt (or the sizes of <c>AGENT_SPEED_ORB_FRAMES_SIZES</c>, a comma list), dark and light (<c>character-ID-dark|light.png</c>); a 6 s tour of the first one at 148 pt dark as numbered
 /// frames every 0.25 s with a pose swap and the cards floating (<c>character-tour/</c>); the empty state; and the build and
-/// GPU cost of a frame. The cards follow a demo reading through the app's own quiet rules.
+/// GPU cost of a frame. The cards follow a demo reading through the app's own quiet rules. With <c>AGENT_SPEED_ORB_SESSION</c> the
+/// first pack plays that scripted session instead (OrbFrameHarness.Session.cs).
 /// </summary>
 internal static partial class OrbFrameHarness
 {
@@ -60,6 +61,11 @@ internal static partial class OrbFrameHarness
         }
 
         report.AppendLine(CultureInfo.InvariantCulture, $"characters: {packs.Count} packs from {folder}");
+        if (packs.Count > 0 && CharacterSession(device, target, packs[0], scale, strings, info, loc, directory, report))
+        {
+            return;
+        }
+
         foreach (var pack in packs)
         {
             foreach (var dark in new[] { true, false })

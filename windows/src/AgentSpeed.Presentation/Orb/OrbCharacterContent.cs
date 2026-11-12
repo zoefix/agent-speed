@@ -60,6 +60,9 @@ public sealed record OrbCharacterContent
 
     /// <summary>The 額度 card: the orb's sources whose app runs and is signed in, with their windows (QUOTAS 6).</summary>
     public OrbQuotaCard Quota { get; init; } = OrbQuotaCard.Empty;
+
+    /// <summary>The agents' phases and the pointer for a living character (the same object for the orb's life); null for previews.</summary>
+    public OrbCharacterLive? Live { get; init; }
 }
 
 /// <summary>

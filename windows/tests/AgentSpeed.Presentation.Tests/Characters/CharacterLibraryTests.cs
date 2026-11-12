@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.Json;
 using AgentSpeed.Core;
 using AgentSpeed.Core.Network;
 using AgentSpeed.Core.Pricing;
@@ -59,6 +60,70 @@ public class CharacterManifestTests
         Assert.NotNull(new CharacterArtist("a", "https://example.com/x").Link);
         Assert.Null(new CharacterArtist("a", "http://example.com/x").Link);
         Assert.Null(new CharacterArtist("a", "javascript:alert(1)").Link);
+    }
+
+    [Fact]
+    public void MoodPosesSurviveARoundTripAndUnknownStatesAreKept()
+    {
+        var manifest = CharacterPackFixture.Manifest() with
+        {
+            States = new Dictionary<string, string> { ["think"] = "poses/think", ["dance"] = "poses/dance" },
+        };
+        manifest.Validate("1.7.0");
+
+        using var doc = JsonDocument.Parse(manifest.ToJson());
+        var decoded = CharacterManifest.Decode(doc.RootElement);
+        decoded.Validate("1.7.0");
+
+        Assert.Equal(manifest.States, decoded.States);
+        Assert.Equal(["idle"], decoded.Poses.Keys);
+    }
+
+    [Fact]
+    public void AManifestWithoutStatesWritesNone()
+    {
+        var manifest = CharacterPackFixture.Manifest();
+        using var doc = JsonDocument.Parse(manifest.ToJson());
+        Assert.False(doc.RootElement.TryGetProperty("states", out _));
+        Assert.Null(CharacterManifest.Decode(doc.RootElement).States);
+    }
+
+    [Theory]
+    [InlineData("../think")]
+    [InlineData("/etc/think")]
+    [InlineData("poses\\think")]
+    [InlineData("poses/../../think")]
+    public void AStatePathOutsideThePackIsRefusedLikeAPose(string path)
+    {
+        var manifest = CharacterPackFixture.Manifest() with { States = new Dictionary<string, string> { ["think"] = "poses/think", ["wait"] = path } };
+        var error = Assert.Throws<CharacterPackException>(() => manifest.Validate(null));
+        Assert.Equal((CharacterPackErrorKind.UnsafePath, path), (error.Kind, error.Detail));
+
+        using var fixture = new CharacterPackFixture();
+        var folder = fixture.Pack(manifest);
+        var stored = Assert.Throws<CharacterPackException>(() => CharacterStore.Manifest(folder, "1.7.0"));
+        Assert.Equal((CharacterPackErrorKind.UnsafePath, path), (stored.Kind, stored.Detail));
+    }
+
+    [Theory]
+    [InlineData("""{"think":5}""", false)]
+    [InlineData("""["poses/think"]""", false)]
+    [InlineData("""null""", true)]
+    [InlineData("""{}""", true)]
+    public void StatesMustMapToPaths(string states, bool accepted)
+    {
+        var json = Encoding.UTF8.GetString(CharacterPackFixture.Manifest().ToJson());
+        using var doc = JsonDocument.Parse(json[..^1] + ",\"states\":" + states + "}");
+        if (accepted)
+        {
+            var decoded = CharacterManifest.Decode(doc.RootElement).States;
+            Assert.Equal(states == "null", decoded is null);
+            Assert.Empty(decoded ?? new Dictionary<string, string>());
+        }
+        else
+        {
+            Assert.Throws<JsonException>(() => CharacterManifest.Decode(doc.RootElement));
+        }
     }
 }
 

@@ -11,6 +11,15 @@ internal sealed record AgentFrame(AgentInfo Info, AgentPhase Phase, Rate Live, d
 
     /// <summary>What the agent's recent tool calls say (METRICS 6.10).</summary>
     public Work.WorkSignals Work { get; init; } = Core.Work.WorkSignals.None;
+
+    /// <summary>A response of the agent ended at or after its in-flight request started (CHARACTERS 5, <i>Behavior</i>).</summary>
+    public bool OutputSinceInFlight { get; init; }
+
+    /// <summary>The newest end of the agent's responses.</summary>
+    public long? LastEndMs { get; init; }
+
+    /// <summary>The result time of a live tool result that failed right after the agent's previous result failed too.</summary>
+    public long? RepeatFailureMs { get; init; }
 }
 
 /// <summary>Everything the engine computes for one instant (METRICS 6).</summary>

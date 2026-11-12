@@ -42,6 +42,9 @@ public sealed record PackManifest
     /// <summary>The character's motion personality; null moves like Claude.</summary>
     public MotionProfile? Motion { get; init; }
 
+    /// <summary>Mood poses of a living pack: state → folder inside the pack (spec/CHARACTERS.md, Behavior).</summary>
+    public IReadOnlyDictionary<string, string> States { get; init; } = new Dictionary<string, string>(StringComparer.Ordinal);
+
     /// <exception cref="JsonException">A required key is missing or of the wrong type.</exception>
     public static PackManifest Decode(JsonElement e)
     {
@@ -72,7 +75,26 @@ public sealed record PackManifest
             Poses = StringMap(RigJson.Required(e, "poses")),
             Preview = RigJson.String(e, "preview"),
             Motion = e.TryGetProperty("motion", out var m) && m.ValueKind == JsonValueKind.Object ? MotionProfile.Decode(m) : null,
+            States = OptionalStringMap(e, "states"),
         };
+    }
+
+    /// <summary>A map of strings, empty when it is missing or not one.</summary>
+    private static Dictionary<string, string> OptionalStringMap(JsonElement e, string key)
+    {
+        if (!e.TryGetProperty(key, out var v) || v.ValueKind == JsonValueKind.Null)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
+
+        try
+        {
+            return StringMap(v);
+        }
+        catch (JsonException)
+        {
+            return new Dictionary<string, string>(StringComparer.Ordinal);
+        }
     }
 
     private static Dictionary<string, string> StringMap(JsonElement e)
@@ -153,10 +175,19 @@ public sealed class PackLoadException : Exception
     public static PackLoadException Rig(string band, CharacterRigException error) => new("rig", $"{band} {error.Message}", error);
 }
 
-/// <summary>One band's illustration: its rig and the atlas image the renderer loads.</summary>
-public sealed record CharacterPose(SpeedBand Band, CharacterRig Rig, string AtlasPath);
+/// <summary>One band's illustration, or a mood pose of a living pack: its rig and the atlas image the renderer loads.</summary>
+/// <param name="Band">The band of a band pose; idle for a mood pose.</param>
+/// <param name="State">The mood state of a mood pose (<c>think</c>, <c>wait</c>, ...); null for a band pose.</param>
+public sealed record CharacterPose(SpeedBand Band, CharacterRig Rig, string AtlasPath, string? State = null)
+{
+    /// <summary>The band or the state, as the director names the pose.</summary>
+    public string Name => State ?? Band.Key();
+}
 
-/// <summary>An unpacked character pack: its manifest and one rig per band present (idle is required).</summary>
+/// <summary>
+/// An unpacked character pack: its manifest, one rig per band present (idle is required) and the mood poses of a living
+/// pack after them.
+/// </summary>
 public sealed class CharacterPack
 {
     private const long MaxJsonBytes = 64L << 20;
@@ -166,14 +197,22 @@ public sealed class CharacterPack
         Root = root;
         Manifest = manifest;
         Poses = poses;
+        States = poses.Where(p => p.State is not null).Select(p => p.State!).ToArray();
+        IsLiving = manifest.States.Count > 0 || poses[0].Rig.Variants.Any(v => v.Kind == "patch");
     }
 
     public string Root { get; }
 
     public PackManifest Manifest { get; }
 
-    /// <summary>Present bands in band order; the first is idle.</summary>
+    /// <summary>Present bands in band order (the first is idle), then the mood poses that loaded, in state order.</summary>
     public IReadOnlyList<CharacterPose> Poses { get; }
+
+    /// <summary>The mood states that have a pose.</summary>
+    public IReadOnlyList<string> States { get; }
+
+    /// <summary>Living (spec/CHARACTERS.md, Behavior): the manifest lists mood poses or the idle pose has a face patch.</summary>
+    public bool IsLiving { get; }
 
     public string Id => Manifest.Id;
 
@@ -246,6 +285,40 @@ public sealed class CharacterPack
         if (poses.Count == 0 || poses[0].Band != SpeedBand.Idle)
         {
             throw PackLoadException.MissingIdlePose();
+        }
+
+        // A mood pose that is missing or unreadable shows the band pose instead; one that leads outside is refused.
+        foreach (var stateFolder in manifest.States.Values)
+        {
+            _ = Resolve(stateFolder, root);
+        }
+
+        foreach (var state in CharacterBehavior.StateNames)
+        {
+            if (!manifest.States.TryGetValue(state, out var stateFolder))
+            {
+                continue;
+            }
+
+            var dir = Resolve(stateFolder, root);
+            var rigPath = Resolve("rig.json", dir, root);
+            CharacterRig rig;
+            try
+            {
+                rig = new CharacterRig(RigDocument.Decode(ReadLimited(rigPath, MaxJsonBytes)));
+            }
+            catch (Exception ex) when (ex is IOException or JsonException or UnauthorizedAccessException or CharacterRigException)
+            {
+                continue;
+            }
+
+            var atlas = Resolve(rig.AtlasFile, dir, root);
+            if (!File.Exists(atlas))
+            {
+                continue;
+            }
+
+            poses.Add(new CharacterPose(SpeedBand.Idle, rig, atlas, state));
         }
 
         return new CharacterPack(root, manifest, poses.ToArray());

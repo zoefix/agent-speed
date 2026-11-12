@@ -135,6 +135,21 @@ public sealed record AgentStatus(
 
     /// <summary>The agent runs on this computer.</summary>
     public bool IsLocal => Host == Remote.RemoteHost.LocalId;
+
+    /// <summary>While generating: when its in-flight request started (METRICS 3.3); null otherwise.</summary>
+    public DateTimeOffset? InFlightSince { get; init; }
+
+    /// <summary>Output came since its in-flight request started: a response of it ended at or after that time.</summary>
+    public bool OutputSinceInFlight { get; init; }
+
+    /// <summary>The newest end of its responses; null when it has none.</summary>
+    public DateTimeOffset? LastResponseEnd { get; init; }
+
+    /// <summary>
+    /// The result time of its newest tool result when that result, read live, failed right after its previous result
+    /// failed too (CHARACTERS 5, <i>Behavior</i>, <c>trouble</c>); null otherwise.
+    /// </summary>
+    public DateTimeOffset? RepeatFailureAt { get; init; }
 }
 
 /// <param name="Available">The root folder exists and is readable.</param>

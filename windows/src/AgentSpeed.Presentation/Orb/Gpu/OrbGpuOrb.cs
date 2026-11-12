@@ -331,6 +331,7 @@ public sealed class OrbGpuOrb
         if (style is CharacterDraw characterStyle)
         {
             characterStyle.Glyphs = Readout.Glyphs;
+            characterStyle.ContentScale = contentScale * Math.Round((1 + 0.03 * Scene.Hover) * 2000) / 2000;
         }
         UpdateDialUnit(ctx, style, config);
         var frame = Frame(now, dt, config, StackShift(ctx, style) / ctx.Size);

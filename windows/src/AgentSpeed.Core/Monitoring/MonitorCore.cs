@@ -845,6 +845,10 @@ internal sealed partial class MonitorCore : IDisposable
             {
                 Modes = a.Info.Modes, SessionModes = a.Info.SessionModes, ConfiguredModes = a.Info.ConfiguredModes,
                 Intelligence = a.Intelligence, Perf = a.Perf, Work = a.Work, Host = a.Info.Host,
+                InFlightSince = a.Phase == AgentPhase.Generating && a.Info.InFlightStartMs is { } start ? UnixTime.FromMs(start) : null,
+                OutputSinceInFlight = a.OutputSinceInFlight,
+                LastResponseEnd = a.LastEndMs is { } end ? UnixTime.FromMs(end) : null,
+                RepeatFailureAt = a.RepeatFailureMs is { } failure ? UnixTime.FromMs(failure) : null,
             })
             .ToList();
 
