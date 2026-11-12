@@ -83,6 +83,8 @@ public struct CharacterManifest: Codable, Equatable, Hashable, Sendable {
     public var minApp: String?
     public var poses: [String: String]
     public var preview: String
+    /// The mood poses of a living pack by state (CHARACTERS 1, 5 *Behavior*); unknown states are ignored.
+    public var states: [String: String]?
 
     public init(
         id: String, packVersion: Int, name: CharacterNames, vendors: [String], accent: String,
@@ -113,6 +115,9 @@ public struct CharacterManifest: Codable, Equatable, Hashable, Sendable {
             guard CharacterPackLayout.isSafe(path) else { throw CharacterPackError.unsafePath(path) }
         }
         guard CharacterPackLayout.isSafe(preview) else { throw CharacterPackError.unsafePath(preview) }
+        for path in (states ?? [:]).values where !CharacterPackLayout.isSafe(path) {
+            throw CharacterPackError.unsafePath(path)
+        }
         if let minApp, let appVersion, let needed = SemanticVersion(minApp), let current = SemanticVersion(appVersion),
            current < needed, current != SemanticVersion(major: 0, minor: 0, patch: 0) {
             throw CharacterPackError.newerApp(minApp)

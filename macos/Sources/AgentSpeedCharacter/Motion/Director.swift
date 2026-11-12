@@ -8,6 +8,10 @@ public enum DirectorEvent: String, Sendable {
 /// Turns the speed level into parameter values (motions/director.py): a groove per band on a beat clock, one action
 /// at a time from the band's pool, hand acting, breathing, glances, blinks and wind, then springs. Side steps move the
 /// character around its spot, away from the orb, and she stays where she lands.
+///
+/// A living pack (face patches or mood poses) also takes the app's inputs with every update: the behavior picks the
+/// mood, and with it the actions, the face patches, the talking mouth and where she looks (Director+Living.swift).
+/// Without inputs, or for any other pack, the director moves exactly as before.
 public struct CharacterDirector: Sendable {
     static let pools: [SpeedBand: [String]] = [
         .idle: ["open", "chin", "hairtuck", "hug", "yawn", "stretch", "lookaround", "tilt", "foottap", "ponder", "step",
@@ -46,8 +50,10 @@ public struct CharacterDirector: Sendable {
     public let space: ParamSpace
     let slots: Slots
     public let profile: MotionProfile
-    /// The band of the pose on screen, for its hand set.
-    public private(set) var poseBand: SpeedBand = .idle
+    /// The pose on screen (a band, or a mood pose of a living pack), for its hand set.
+    public private(set) var poseName = SpeedBand.idle.rawValue
+    /// The band of the pose on screen; nil while a mood pose shows.
+    public var poseBand: SpeedBand? { SpeedBand(rawValue: poseName) }
     /// Groove scale per slot (the profile's bounce, sway and energy) and the slots a seated character never moves.
     private let grooveScale: [Double]
     private let frozen: [Int]
@@ -93,11 +99,35 @@ public struct CharacterDirector: Sendable {
     private var grooveWeight: [Double]
     private var grooveTouched: [Int] = []
 
+    /// The shown pose's variants: arm gestures by id, the ids of face edits, and its face patches.
+    var meta: [String: RigDocument.Variant] = [:]
+    var faceIDs: Set<String> = []
+    var expressions = PatchGroup()
+    var mouths = PatchGroup()
+    var gazes = PatchGroup()
+    /// The open mouth shapes the pose has, in `Talk.shapes` order.
+    var talkShapes: [String] = []
+    public internal(set) var behavior: CharacterBehavior?
+    /// True for the frames that had inputs, in a living pack.
+    public internal(set) var active = false
+    public internal(set) var mood: CharacterMood?
+    /// The expression and gaze patches shown, by name.
+    public internal(set) var expression: String?
+    public internal(set) var gazePatch: String?
+    var snapFaces = false
+    /// A face or gaze swap waits for a blink, or a patch is still fading.
+    var facePending = false
+    var blinkHold = 0.04
+    var blinkSkipped = false
+    var eventFace: String?
+    var eventUntil = 0.0
+
     /// Whether a gesture is playing, and its name.
     public var activeGesture: String? { gesture == nil ? nil : lastGesture }
 
     public init(params: [CharacterParam], seed: UInt64 = 7, out: CharacterSide = .right, book: CharacterSide = .left,
-                orb: Double = -1, celebrate: Bool = true, profile: MotionProfile = MotionProfile()) {
+                orb: Double = -1, celebrate: Bool = true, profile: MotionProfile = MotionProfile(),
+                variants: [RigDocument.Variant] = [], states: [String] = []) {
         space = ParamSpace(params: params)
         slots = Slots(space)
         self.profile = profile
@@ -132,6 +162,11 @@ public struct CharacterDirector: Sendable {
             hand.setMode(profile.poseHands[SpeedBand.idle.rawValue])
             hands.append(hand)
         }
+        setVariants(variants)
+        if !states.isEmpty || !expressions.isEmpty || !mouths.isEmpty || !gazes.isEmpty {
+            behavior = CharacterBehavior(seed: seed, states: states)
+            refreshBehaviorOptions()
+        }
     }
 
     var springs: [SecondOrder?]
@@ -140,26 +175,58 @@ public struct CharacterDirector: Sendable {
 
     /// Which arm swings free and which holds the object, for a new pose (of `poseBand`, for its hand set).
     public mutating func setSides(out: CharacterSide, book: CharacterSide, poseBand: SpeedBand? = nil) {
+        setSides(out: out, book: book, pose: poseBand?.rawValue, variants: nil)
+    }
+
+    /// As `setSides(out:book:poseBand:)` for a pose by name (a band or a mood pose). With `variants`, the new pose's
+    /// variants replace the old pose's: an action playing an old variant stops (the swap is edge-on) and the face
+    /// patches take the new pose's at once.
+    public mutating func setSides(out: CharacterSide, book: CharacterSide, pose: String?,
+                                  variants: [RigDocument.Variant]?) {
         self.out = out
         self.book = book
-        if let poseBand { self.poseBand = poseBand }
+        if let variants {
+            if let g = gesture, g.motion.entries.contains(where: { $0.name.hasPrefix("Var.") }) { gesture = nil }
+            setVariants(variants)
+            refreshBehaviorOptions()
+            snapFaces = true
+        }
+        if let pose { poseName = pose }
+        let hand = profile.poseHands[poseName]
         for i in hands.indices {
             hands[i].holds = hands[i].side == book
-            hands[i].setMode(profile.poseHands[self.poseBand.rawValue])
+            hands[i].setMode(hand)
         }
-        armsHeld = profile.poseHands[self.poseBand.rawValue].map(MotionProfile.twoHanded.contains) ?? false
-        headHeld = profile.poseHands[self.poseBand.rawValue].map(MotionProfile.atMouth.contains) ?? false
+        armsHeld = hand.map(MotionProfile.twoHanded.contains) ?? false
+        headHeld = hand.map(MotionProfile.atMouth.contains) ?? false
         for i in grooves.indices { grooves[i].target = 0 }
         grooves.append(GrooveLayer(band: band ?? .idle, w: 0, target: 1))
     }
 
     func can(_ names: String...) -> Bool { names.allSatisfy { space.isParam($0) } }
 
+    func arm(_ gid: String) -> RigDocument.Variant? {
+        guard let m = meta[gid], m.kind == "arm" else { return nil }
+        return m
+    }
+
     mutating func spec(_ gid: String) -> MotionSpec? {
-        if Gestures.arm.contains(gid) || Gestures.combos.contains(gid) { return nil }
         if grounded, CharacterDirector.airborne.contains(gid) { return nil }
+        if let a = Gestures.armSpecs[gid] {
+            guard let m = arm(gid) else { return nil }
+            return Gestures.armGesture(m, hold: a.hold, flourish: a.flourish, expression: a.expression,
+                                       tiptoe: a.tiptoe && can("FootPoint"))
+        }
+        if let c = Gestures.comboSpecs[gid] {
+            guard let a = arm(c.book), let b = arm(c.free) else { return nil }
+            return Gestures.combo(gid, book: a, free: b, hold: c.hold, expression: c.expression)
+        }
         if gid == "jumpjoy" {
-            return can("PosY", "Squash") ? Moves.jump(out, book, arms: true) : nil
+            guard can("PosY", "Squash") else { return nil }
+            let cheer = spec("cheer")
+            let body = Moves.jump(out, book, arms: cheer == nil)
+            guard let cheer else { return body }
+            return Keys.merge("jumpjoy", [cheer, body], delays: [0, 0.2], expression: "happy")
         }
         if gid == "step" {
             guard can("PosX", "PosY") else { return nil }
@@ -174,7 +241,12 @@ public struct CharacterDirector: Sendable {
         }
         if Moves.names.contains(gid) { return can("PosY", "Squash") ? Moves.make(gid, out: out, book: book) : nil }
         if Gestures.head.contains(gid) { return Gestures.headGesture(gid) }
-        if Gestures.face.contains(gid), profile.signature.contains(gid) { return Gestures.faceGesture(gid) }
+        if Gestures.face.contains(gid) {
+            // A living pack yawns and hums in every pose: the face and the lips follow when the pose has patches.
+            let needs = gid == "yawn" ? "sleepy" : "talk"
+            let ok = faceIDs.contains(needs) || profile.signature.contains(gid) || active
+            return ok ? Gestures.faceGesture(gid) : nil
+        }
         return nil
     }
 
@@ -185,6 +257,10 @@ public struct CharacterDirector: Sendable {
         let motion = spec.bind { space.slot($0) }
         let hard = motion.entries.map { e in CharacterDirector.hard.contains { e.name.hasPrefix($0) } }
         gesture = Playing(motion: motion, hard: hard)
+        for entry in motion.entries where entry.name.contains("@") && springs[entry.slot] != nil {
+            springs[entry.slot]!.snap(entry.curve.start)
+            springLive[entry.slot] = true
+        }
         motionStarts += 1
         lastGesture = gid
         recent = Array((recent + [gid]).suffix(3))
@@ -213,6 +289,11 @@ public struct CharacterDirector: Sendable {
                         if startGesture(gid) { break }
                     }
                 }
+                eventFace = band == .redline ? "surprised" : "happy"
+                eventUntil = time + 1.2
+            } else {
+                eventFace = "smile"
+                eventUntil = time + 1.5
             }
             nextGesture = time + 1.5
         }
@@ -253,18 +334,43 @@ public struct CharacterDirector: Sendable {
         present[slot] = true
     }
 
+    /// The share of a parameter the playing action leaves to the layers below it.
+    func idleShare(_ slot: Int) -> Double {
+        if let g = gesture, g.motion.entries.contains(where: { $0.slot == slot }) { return 1 - g.w }
+        return 1
+    }
+
     /// Adds an idle motion of an appendage, scaled down while an action drives the same parameter, within its range.
     mutating func addIdle(_ slot: Int, _ v: Double) {
         guard let p = space.params[slot] else { return }
-        var share = 1.0
-        if let g = gesture, g.motion.entries.contains(where: { $0.slot == slot }) { share = 1 - g.w }
-        write(slot, min(max(values[slot] + share * v, p.min), p.max))
+        write(slot, min(max(values[slot] + idleShare(slot) * v, p.min), p.max))
+    }
+
+    /// The gap range between actions: the band's, or the mood's in a living pack (without building the pool).
+    func currentGaps() -> (Double, Double) {
+        let band = self.band ?? .idle
+        guard active, let behavior else { return CharacterDirector.gaps[band]! }
+        return behavior.gaps(band: band)
+    }
+
+    /// The actions to pick from and the gap range: the band's, or the mood's in a living pack.
+    func currentPool() -> ([String], (Double, Double)) {
+        let band = self.band ?? .idle
+        guard active, let behavior else {
+            return (profile.pool(CharacterDirector.pools[band]!, band), CharacterDirector.gaps[band]!)
+        }
+        let (actions, gaps, signature) = behavior.pool(band: band)
+        if let signature { return (profile.pool(actions, signature), gaps) }
+        return (actions.filter { profile.allows($0) }, gaps)
     }
 
     mutating func applyGesture(_ dt: Double) -> Motion? {
         guard var g = gesture else {
-            if time >= nextGesture {
-                var pool = profile.pool(CharacterDirector.pools[band!]!, band!).filter { !recent.contains($0) }
+            if active {
+                for gid in behavior!.takeQueue() where startGesture(gid) { return nil }
+            }
+            if time >= nextGesture, !(active && behavior!.attending) {
+                var pool = currentPool().0.filter { !recent.contains($0) }
                 rng.shuffle(&pool)
                 for gid in pool where startGesture(gid) { break }
                 nextGesture = time + 1.0
@@ -286,7 +392,7 @@ public struct CharacterDirector: Sendable {
         if g.t >= m.duration {
             stageX += m.travel
             gesture = nil
-            let gap = CharacterDirector.gaps[band!]!
+            let gap = currentGaps()
             nextGesture = time + rng.uniform(gap.0 * profile.gap, gap.1 * profile.gap)
             return nil
         }
@@ -294,9 +400,11 @@ public struct CharacterDirector: Sendable {
         return m
     }
 
-    /// Advances one frame; the parameters land in `values` (read the rig's own through `space`).
-    public mutating func update(_ dt: Double) {
+    /// Advances one frame; the parameters land in `values` (read the rig's own through `space`). `inputs` drive the
+    /// moods of a living pack; without them nothing changes.
+    public mutating func update(_ dt: Double, inputs: BehaviorInputs? = nil) {
         time += dt
+        feel(dt, inputs)
         intensity += (Double(level) / 13 - intensity) * min(1.0, dt * 2.5)
         let s = intensity, t = time
         beat.update(dt, band ?? .idle)
@@ -310,7 +418,7 @@ public struct CharacterDirector: Sendable {
             }
         }
         blendGrooves(dt)
-        _ = applyGesture(dt)
+        let playing = applyGesture(dt)
         write(slots.posX, values[slots.posX] + stageX)
         if armsHeld {
             for slot in armSlots { write(slot, space.params[slot]!.default) }
@@ -332,6 +440,11 @@ public struct CharacterDirector: Sendable {
 
         breathPhase += dt / (4.2 - 2.4 * s)
         write(slots.breath, max(values[slots.breath], 0.5 - 0.5 * cos(2 * Double.pi * breathPhase)))
+        if active {
+            let target = behavior!.lookTarget
+            look(slots.angleX, target.0)
+            look(slots.angleY, target.1)
+        }
         let amp = 0.06 + 0.12 * s
         write(slots.angleX, values[slots.angleX] + amp * (sin(t * 0.83) + 0.5 * sin(t * 1.91 + 1.3)))
         write(slots.angleY, values[slots.angleY] + amp * 0.7 * sin(t * 1.17 + 0.4))
@@ -361,7 +474,15 @@ public struct CharacterDirector: Sendable {
         write(slots.eyeBallX, max(-1, min(1, values[slots.eyeBallX] + 0.35 * gaze.0)))
         write(slots.eyeBallY, max(-1, min(1, values[slots.eyeBallY] + 0.35 * gaze.1)))
 
-        let openness = blink(dt)
+        let openness: Double
+        if active {
+            let target = behavior!.lookTarget
+            look(slots.eyeBallX, target.2)
+            look(slots.eyeBallY, target.3)
+            openness = livingFace(dt, playing)
+        } else {
+            openness = blink(dt)
+        }
         for slot in slots.eyeOpen where present[slot] {
             values[slot] = min(values[slot], openness)
         }

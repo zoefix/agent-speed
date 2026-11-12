@@ -108,6 +108,10 @@ enum SnapshotBuilder {
             )
             agent.sessionModes = row.agent.sessionModes
             agent.configuredModes = row.agent.configuredModes
+            agent.inFlightSince = row.phase == .generating ? row.agent.inFlightStartMs.map(date) : nil
+            agent.outputSinceInFlight = row.outputSinceInFlight
+            agent.lastResponseEnd = row.lastEndMs.map(date)
+            agent.repeatFailureAt = row.repeatFailureMs.map(date)
             return agent
         }
         let sources = SourceKind.allCases.map { kind in

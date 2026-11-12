@@ -1,14 +1,13 @@
 import Foundation
 
-/// Head gestures with the body joining in (motions/gestures.py). Arm gestures, two-arm combos and face gestures need
-/// pose or expression variants; packs without them leave those out (spec/CHARACTERS.md, Motion).
+/// Head gestures with the body joining in (motions/gestures.py). Arm gestures and two-arm combos (ArmGestures.swift)
+/// need the pose's arm variants, which only a living pack hands the director; face gestures need an expression, a
+/// signature or a living pack (spec/CHARACTERS.md, Motion and Behavior).
 enum Gestures {
     typealias K = [(Double, Double)]
 
     static let head = ["nod", "shake", "tilt", "lookaround", "giggle", "doubletake"]
     static let face = ["yawn", "hum"]
-    static let arm = ["wave", "peace", "fist", "idea", "chin", "hairtuck", "present", "hip", "hug", "raise", "open"]
-    static let combos = ["cheer", "hooray", "eureka", "ponder", "cuddle", "proud"]
 
     static func headGesture(_ name: String) -> MotionSpec {
         var c = CurveSet()

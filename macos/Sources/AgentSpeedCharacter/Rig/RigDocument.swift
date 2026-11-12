@@ -83,6 +83,43 @@ public struct RigDocument: Decodable, Sendable {
         public var hands: [String: Hand]?
     }
 
+    /// A part set that swaps in over the drawn parts through `Var.<id>` (spec/CHARACTERS.md, Variants): an `arm`
+    /// gesture, a `face` edit or a face `patch` (`expr-*`, `mouth-*`, `gaze-*`).
+    public struct Variant: Decodable, Sendable, Equatable {
+        public var id: String
+        public var kind: String
+        public var param: String
+        public var side: String?
+        public var front: Bool?
+        public var arm: String?
+        public var forearm: String?
+        public var lead: [String: Double]?
+        public var approach: [String: Double]?
+        public var region: String?
+    }
+
+    /// Decodes a list while skipping the items it cannot read, so one odd variant never costs the whole rig.
+    struct Lenient<T: Decodable>: Decodable {
+        var items: [T]
+
+        init(from decoder: Decoder) throws {
+            var c = try decoder.unkeyedContainer()
+            var items: [T] = []
+            while !c.isAtEnd {
+                if let item = try? c.decode(T.self) {
+                    items.append(item)
+                } else {
+                    _ = try? c.decode(Skip.self)
+                }
+            }
+            self.items = items
+        }
+
+        private struct Skip: Decodable {
+            init(from decoder: Decoder) {}
+        }
+    }
+
     public var format: String
     public var version: Int
     public var name: String
@@ -94,10 +131,12 @@ public struct RigDocument: Decodable, Sendable {
     public var drivers: [Driver]
     public var physics: [Chain]
     public var partDrivers: [PartDriver]
+    public var variants: [Variant]
     public var parts: [Part]
 
     enum CodingKeys: String, CodingKey {
-        case format, version, name, canvas, atlas, landmarks, bones, params, drivers, physics, partDrivers, parts
+        case format, version, name, canvas, atlas, landmarks, bones, params, drivers, physics, partDrivers, variants,
+             parts
     }
 
     public init(from decoder: Decoder) throws {
@@ -113,6 +152,7 @@ public struct RigDocument: Decodable, Sendable {
         drivers = try c.decodeIfPresent([Driver].self, forKey: .drivers) ?? []
         physics = try c.decodeIfPresent([Chain].self, forKey: .physics) ?? []
         partDrivers = try c.decodeIfPresent([PartDriver].self, forKey: .partDrivers) ?? []
+        variants = (try? c.decodeIfPresent(Lenient<Variant>.self, forKey: .variants))??.items ?? []
         parts = try c.decode([Part].self, forKey: .parts)
     }
 

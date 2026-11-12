@@ -92,6 +92,7 @@ enum OrbSceneBuilder {
             )
             frame.speedLevel = unavailable ? 0 : gauge.title.rawValue
             frame.readoutValue = gauge.readoutValue
+            frame.contentScale = contentScale
             return frame
         }
 

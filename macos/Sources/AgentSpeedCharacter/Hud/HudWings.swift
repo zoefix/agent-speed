@@ -52,6 +52,12 @@ public struct HudSilhouette: Sendable {
         }
     }
 
+    /// Whether a point lies on her outline: inside the band's extent, with `slack` points around it.
+    public func contains(_ x: Double, _ y: Double, slack: Double = 0) -> Bool {
+        guard let e = extent(y - slack, y + slack) else { return false }
+        return x >= e.left - slack && x <= e.right + slack
+    }
+
     /// Her leftmost and rightmost x over the bands that `y0…y1` touches, nil when she has nothing there.
     public func extent(_ y0: Double, _ y1: Double) -> (left: Double, right: Double)? {
         let a = max(0, Int(((min(y0, y1) - top) / step).rounded(.down)))

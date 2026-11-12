@@ -495,6 +495,7 @@ struct SpeedEngine: Sendable {
         var baselines = perfBaselines
         defer { perfBaselines = baselines }
         let history = perfHistory
+        let ends = latestEndsByAgent()
         func status(of agent: EngineAgent) -> EngineAgentStatus {
             let isFresh = agent.lastLineMs.map { nowMs - $0 <= Self.staleMs } ?? false
             let phase = isFresh ? agent.phase : .idle
@@ -505,6 +506,7 @@ struct SpeedEngine: Sendable {
                 perf.baseline = baselines.baseline(history, source: agent.source, model: perf.model ?? "", today: today)
             }
             intelligence.score = perf.value(agentId: agent.id, lastLineMs: agent.lastLineMs, idle: phase == .idle)
+            let lastEnd = ends[agent.id]
             return EngineAgentStatus(
                 agent: agent,
                 phase: phase,
@@ -512,7 +514,10 @@ struct SpeedEngine: Sendable {
                 recentSpeed: references.recent(for: agent.id)?.output,
                 intelligence: intelligence,
                 perf: perf,
-                signals: WorkSignals(agent.actions, nowMs: nowMs)
+                signals: WorkSignals(agent.actions, nowMs: nowMs),
+                outputSinceInFlight: agent.inFlightStartMs.map { start in lastEnd.map { $0 >= start } ?? false } ?? false,
+                lastEndMs: lastEnd,
+                repeatFailureMs: Self.repeatFailure(agent.actions)
             )
         }
         var listed: [String: EngineAgentStatus] = [:]
@@ -541,6 +546,24 @@ struct SpeedEngine: Sendable {
             }
         }
         return (AgentListOrder.arrange(listed), all, bySource, byCell)
+    }
+
+    /// The result time of the newest tool result when it was read live and failed right after the agent's previous
+    /// result failed too (results in the order they were read; a later call wins a tie).
+    static func repeatFailure(_ actions: [ToolAction]) -> Int64? {
+        var newest: ToolAction?
+        var previous: ToolAction?
+        for action in actions {
+            guard let at = action.resultMs else { continue }
+            if let nAt = newest?.resultMs, at < nAt {
+                if previous?.resultMs.map({ at >= $0 }) ?? true { previous = action }
+            } else {
+                previous = newest
+                newest = action
+            }
+        }
+        guard let newest, newest.failed == true, !newest.seeded, previous?.failed == true else { return nil }
+        return newest.resultMs
     }
 
     // MARK: - Summaries

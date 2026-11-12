@@ -20,7 +20,9 @@ import AppKit
 ///   `-t`), with the cards of `CharacterDemoReadings`.
 /// `AGENT_SPEED_ORB_FPS` (30) and `AGENT_SPEED_ORB_SECONDS` limit the clips; `AGENT_SPEED_ORB_LANGUAGE` (`zh-Hant`)
 /// sets the language. `AGENT_SPEED_ORB_SPEED` holds the tour at that many tok/s; `AGENT_SPEED_ORB_SECONDS` then sets the
-/// clip's length.
+/// clip's length. `AGENT_SPEED_ORB_SESSION` scripts a living character's inputs and speed for the `character` clip
+/// (`CharacterSessionScript`); the clip then lasts the session's `seconds`. `AGENT_SPEED_ORB_TRACE=1` writes her mood, pose,
+/// face, gaze, mouth and action per frame to `DIR/<clip>-trace.txt`.
 @MainActor
 enum OrbFrameHarness {
     struct Clip {
@@ -123,7 +125,10 @@ enum OrbFrameHarness {
             try? FileManager.default.createDirectory(at: frames, withIntermediateDirectories: true)
             let started = Date()
             let held = environment["AGENT_SPEED_ORB_SPEED"] != nil && clip.duration > 0
-            let seconds = held ? limit ?? clip.duration : min(limit ?? .infinity, clip.duration)
+            var seconds = held ? limit ?? clip.duration : min(limit ?? .infinity, clip.duration)
+            if case .character = clip.kind, clip.duration > 0, let session = CharacterSessionScript.load(environment) {
+                seconds = limit ?? max(0, (session.seconds ?? clip.duration) - clip.start)
+            }
             let count = record(clip, model: model, fps: fps, seconds: seconds, into: frames, directory: directory)
             report += String(format: "%@: %d frames in %.1f s\n", clip.name, count, Date().timeIntervalSince(started))
             if clip.duration == 0 {
@@ -149,6 +154,9 @@ enum OrbFrameHarness {
         var cells: [Cell] = []
         var castAt: (Double) -> Void = { _ in }
         var demoAt: () -> Void = {}
+        var session: CharacterSessionScript?
+        var sessionAt: (Double) -> Void = { _ in }
+        var trace: (() -> String)?
         func stage(_ style: OrbStyleKind, _ diameter: CGFloat) -> OrbPreviewStage {
             let stage = OrbPreviewStage(model: model, style: style, diameter: diameter, dark: clip.dark, level: clip.level,
                                         reduceMotion: clip.reduceMotion)
@@ -197,6 +205,17 @@ enum OrbFrameHarness {
                     character.feed.characterReadings = next
                 }
             }
+            session = CharacterSessionScript.load(environment)
+            if let script = session {
+                sessionAt = { time in
+                    script.apply(at: time, dt: 1.0 / 60, now: character.time + 1.0 / 60, to: character.feed.characterLive) {
+                        character.animator.celebrate(at: character.time + 1.0 / 60)
+                    }
+                }
+            }
+            if environment["AGENT_SPEED_ORB_TRACE"] == "1" {
+                trace = { ((character.animator.renderer as? CharacterStyle)?.provider as? CharacterRenderer)?.behaviorTrace ?? "-" }
+            }
             cells.append(Cell(stage: character, center: CGPoint(x: disc * 0.75, y: disc * 0.75), label: nil))
         case .hero(let style), .still(let style, _):
             let big: CGFloat = 240
@@ -218,6 +237,7 @@ enum OrbFrameHarness {
             tourTime += dt
             castAt(tourTime)
             demoAt()
+            sessionAt(tourTime)
             let reference = cells[0].stage
             var fire: (Double, Int)?
             if reference.gauge.tier != .idle, random.next() < (0.3 + 1.5 * reference.gauge.heat(at: reference.time)) * dt {
@@ -225,17 +245,27 @@ enum OrbFrameHarness {
             }
             for cell in cells {
                 if tourHover { cell.stage.hovered = tourTime >= 50.5 && tourTime < 52.6 }
-                cell.stage.step(dt) { _ in hold ?? OrbTour.value(at: tourTime.truncatingRemainder(dividingBy: OrbTour.length)) }
+                cell.stage.step(dt) { _ in
+                    session?.speed(at: tourTime) ?? hold
+                        ?? OrbTour.value(at: tourTime.truncatingRemainder(dividingBy: OrbTour.length))
+                }
                 if let fire { cell.stage.animatorPulse(speed: fire.0, output: fire.1) }
-                cell.stage.newPeakRule(tourTime: tourTime)
+                if session == nil { cell.stage.newPeakRule(tourTime: tourTime) }
             }
         }
         while tourTime < clip.start - 1e-9 { advance() }
         let total = Int((seconds * fps).rounded())
         let stepsPerFrame = max(1, Int((60 / fps).rounded()))
         var written = 0
+        var traced = ""
+        defer {
+            if trace != nil {
+                try? traced.write(to: directory.appendingPathComponent("\(clip.name)-trace.txt"), atomically: true, encoding: .utf8)
+            }
+        }
         for index in 0..<max(1, total) {
             if total > 0 { for _ in 0..<stepsPerFrame { advance() } }
+            if let trace { traced += String(format: "f%05d t=%.2f ", index, tourTime) + trace() + "\n" }
             guard let image = compose(cells, size: size, dark: clip.dark) else { continue }
             let url: URL
             if clip.duration == 0 {

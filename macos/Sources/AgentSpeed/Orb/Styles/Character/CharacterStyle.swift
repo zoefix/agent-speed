@@ -26,7 +26,7 @@ final class CharacterStyle: OrbStyleRenderer {
     static let ringSquash: CGFloat = 0.17
     static let ringLights = 96
 
-    private let provider: CharacterLayerProvider?
+    let provider: CharacterLayerProvider?
     private var providerDrew = false
     private var comet = 0.0
 
