@@ -1085,6 +1085,7 @@ void OrbWindow::dragTo(QPointF global) {
     if (!moved_ && std::hypot(delta.x(), delta.y()) < 4) return;
     if (!moved_) {
         moved_ = true;
+        characterLive_->dragging = true;
         emit dragChanged(id_, true);
     }
     moveDisc(QPointF(pressPosition_ + delta.toPoint()) + center());
