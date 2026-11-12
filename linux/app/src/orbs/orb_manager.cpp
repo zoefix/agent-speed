@@ -92,6 +92,8 @@ OrbManager::OrbManager(const Strings& strings, const Preferences& prefs, OrbsSto
     connect(&Appearance::instance(), &Appearance::changed, this, &OrbManager::layoutPlates);
     connect(&prefs_, &Preferences::redlineChanged, this, &OrbManager::sync);
     connect(&prefs_, &Preferences::metricChanged, this, &OrbManager::sync);
+    celebratePeaks_ = prefs_.celebratePeaks();
+    connect(&prefs_, &Preferences::celebratePeaksChanged, this, [this] { setCelebratePeaks(prefs_.celebratePeaks()); });
     sync();
 }
 
@@ -319,6 +321,7 @@ void OrbManager::sync() {
             orb.window->setCharacters(characters_);
             orb.window->forceDark(forcedDark_);
             orb.window->setEffectsLevel(effectsLevel_);
+            orb.window->setCelebratePeaks(celebratePeaks_);
             orb.plate = std::make_unique<NamePlate>();
             auto* window = orb.window.get();
             auto* plate = orb.plate.get();
@@ -443,6 +446,11 @@ void OrbManager::setNames(const QString& names) {
     layoutPlates();
     emit namesChanged();
     emit listChanged();
+}
+
+void OrbManager::setCelebratePeaks(bool on) {
+    celebratePeaks_ = on;
+    for (auto& [id, orb] : orbs_) orb.window->setCelebratePeaks(on);
 }
 
 void OrbManager::setEffectsLevel(int level) {

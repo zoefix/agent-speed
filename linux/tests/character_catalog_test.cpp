@@ -111,6 +111,31 @@ TEST(CharacterManifest, BadManifestsAreRefused) {
     EXPECT_EQ(failure([] { (void)CharacterManifest::decode("{}"); })->kind(), PackError::Format);
 }
 
+// CHARACTERS 1: a living pack's mood poses, unknown states kept, paths as safe as a pose's.
+TEST(CharacterManifest, MoodPosesDecodeAndTheirPathsMustStayInsideThePack) {
+    auto text = [](const std::string& states) {
+        auto json = manifestJSON();
+        return json.substr(0, json.size() - 1) + R"(,"states":)" + states + "}";
+    };
+    const auto m = CharacterManifest::decode(text(R"({"think":"poses/think","dance":"poses/dance"})"));
+    ASSERT_TRUE(m.states);
+    EXPECT_EQ(m.states->at("think"), "poses/think");
+    EXPECT_EQ(m.states->at("dance"), "poses/dance");
+    EXPECT_NO_THROW(m.validate("1.8.0"));
+    EXPECT_FALSE(manifest().states);
+    EXPECT_FALSE(CharacterManifest::decode(text("null")).states);
+    for (const char* path : {"../think", "/etc", "poses/../../x"}) {
+        const auto unsafe = failure([&] { CharacterManifest::decode(text(std::string(R"({"think":")") + path + "\"}")).validate(std::nullopt); });
+        ASSERT_TRUE(unsafe) << path;
+        EXPECT_EQ(unsafe->kind(), PackError::UnsafePath) << path;
+    }
+    for (const char* states : {"3", R"({"think":3})", R"(["poses/think"])"}) {
+        const auto bad = failure([&] { (void)CharacterManifest::decode(text(states)); });
+        ASSERT_TRUE(bad) << states;
+        EXPECT_EQ(bad->kind(), PackError::Format) << states;
+    }
+}
+
 TEST(CharacterManifest, AMissingBandUsesTheNearestLowerOne) {
     const auto m = manifest("claude", 1, {{"idle", "poses/idle"}, {"boost", "poses/boost"}});
     EXPECT_EQ(m.pose(Band::Idle), "poses/idle");

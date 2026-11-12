@@ -57,6 +57,7 @@ qt_add_executable(agent-speed
     src/hero/hero_painter.cpp
     src/hero/hero_stage.cpp
     src/orb/body.cpp
+    src/orb/character/character_activity.cpp
     src/orb/character/character_assets.cpp
     src/orb/character/character_lightning.cpp
     src/orb/character/character_models.cpp
@@ -64,7 +65,9 @@ qt_add_executable(agent-speed
     src/orb/character/character_quota.cpp
     src/orb/character/character_quota_card.cpp
     src/orb/character/character_readings.cpp
+    src/orb/character/character_live.cpp
     src/orb/character/character_style.cpp
+    src/orb/character/screen_lock.cpp
     src/orb/orb_accessible.cpp
     src/orb/color.cpp
     src/orb/gauge.cpp

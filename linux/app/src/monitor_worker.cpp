@@ -239,6 +239,11 @@ QVariantMap MonitorWorker::toVariant(const agentspeed::Snapshot& snap) const {
         row.insert(QStringLiteral("effortConfigured"), a.effortConfigured);
         row.insert(QStringLiteral("speedConfigured"), a.speedConfigured);
         row.insert(QStringLiteral("looping"), a.perf && a.perf->workSignals.looping.has_value());
+        // CHARACTERS 5, Behavior: the facts a living character reacts to (absent when unknown).
+        if (a.inFlightSinceMs) row.insert(QStringLiteral("inFlightSinceMs"), static_cast<qint64>(*a.inFlightSinceMs));
+        row.insert(QStringLiteral("outputSinceInFlight"), a.outputSinceInFlight);
+        if (a.lastResponseEndMs) row.insert(QStringLiteral("lastResponseEndMs"), static_cast<qint64>(*a.lastResponseEndMs));
+        if (a.repeatFailureMs) row.insert(QStringLiteral("repeatFailureMs"), static_cast<qint64>(*a.repeatFailureMs));
         row.insert(QStringLiteral("liveThinking"), a.liveThinking);
         // The row's status as accessibility reads it: the phase, and for an idle agent how long ago it last wrote.
         QString status;

@@ -93,6 +93,7 @@ QVariantList OrbViews::compute(const agentspeed::Snapshot& snap, const std::vect
         const auto& orb = orbs[i];
         QVariantMap map;
         map.insert(QStringLiteral("id"), orb.id);
+        map.insert(QStringLiteral("nowMs"), c.nowMs);
         const QVariant scoreSet = setOffset + i < static_cast<std::size_t>(sets.size()) ? sets[static_cast<qsizetype>(setOffset + i)] : QVariant();
         map.insert(QStringLiteral("scoreSets"), scoreSet.isValid() ? QVariantList{scoreSet} : QVariantList{});
         State state = states_.contains(orb.id) ? states_[orb.id] : State{};

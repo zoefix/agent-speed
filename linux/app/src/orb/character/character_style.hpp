@@ -17,6 +17,7 @@
 #include "agentspeed/character/selection.hpp"
 #include "format.hpp"
 #include "orb/character/character_cards.hpp"
+#include "orb/character/character_live.hpp"
 #include "orb/character/character_lightning.hpp"
 #include "orb/character/character_models.hpp"
 #include "orb/character/character_particles.hpp"
@@ -59,6 +60,10 @@ struct CharacterContent {
     // The 額度 card's sources (null or empty: none), in source order; they go along while it is switched off, so it
     // fades out with them.
     std::shared_ptr<const std::vector<agentspeed::character::QuotaSource>> quota;
+    // What a living character reacts to (the same object for the orb's life; null for previews), and the hover scale
+    // the scene is drawn at around the window's center.
+    std::shared_ptr<CharacterLive> live;
+    double contentScale = 1;
 };
 
 // `character` (DESIGN 2a.6): the skinned character of the chosen pack with its pose and character swaps, the ring of
@@ -89,6 +94,10 @@ public:
     // Her capsule and her outline this frame (the accessible cards read what shows).
     const agentspeed::character::HudWings& wings() const { return wings_; }
     bool drawing() const { return stage_.has_value() && drew_; }
+    // Her mood, pose, face, gaze, mouth and action this frame, for the frame harness's trace.
+    QString behaviorTrace() const;
+    // The performer on stage, if any (the frame harness).
+    const agentspeed::character::Performer* performer() const { return stage_ ? &stage_->current() : nullptr; }
 
 private:
     struct Geometry {
@@ -127,6 +136,7 @@ private:
 
     CharacterContent content_;
     std::optional<agentspeed::character::Stage> stage_;
+    CharacterLiveReader liveReader_;
     std::string shownPack_;
     std::map<std::string, std::shared_ptr<const agentspeed::character::Pack>> loaded_;
     agentspeed::character::CharacterHud hud_{5, 1};
