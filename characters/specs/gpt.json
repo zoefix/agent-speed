@@ -41,7 +41,6 @@
   ]
  },
  "rig": {
-  "recover": true,
   "tail": true,
   "wings": true,
   "legsInSkirt": true

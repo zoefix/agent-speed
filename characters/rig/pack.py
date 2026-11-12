@@ -6,7 +6,8 @@
 
 The pack is a zip holding manifest.json, preview.png and poses/<band>/{rig.json, atlas.png}, and for each mood pose
 poses/<state>/ listed under the manifest's `states`; the catalog lists every pack with its size and SHA-256 so the app
-can verify a download before it unpacks it (spec/CHARACTERS.md).
+can verify a download before it unpacks it (spec/CHARACTERS.md). A pack whose idle pose draws feet and another pose
+draws none is refused (checks.py).
 """
 import argparse
 import hashlib
@@ -19,7 +20,7 @@ import numpy as np
 from PIL import Image
 
 from ..reference.motions.behavior import STATES
-from . import package
+from . import checks, package
 
 FORMAT = "agent-speed-character-pack"
 CATALOG = "agent-speed-character-catalog"
@@ -85,6 +86,11 @@ def build(spec, poses, out_dir, states=None):
     unknown = set(states) - set(STATES)
     if unknown:
         raise ValueError(f"unknown states {sorted(unknown)}")
+    idle = checks.pose_has_feet(poses["idle"])
+    problems = [f"{name}: {problem}" for name, path in {**poses, **states}.items() if name != "idle"
+                for problem in checks.feet_problems(idle, checks.pose_has_feet(path))]
+    if problems:
+        raise ValueError("pack refused:\n" + "\n".join(f"  {p}" for p in problems))
     root = Path(out_dir) / spec["id"]
     if root.exists():
         shutil.rmtree(root)

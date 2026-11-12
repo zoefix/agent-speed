@@ -1,7 +1,8 @@
 """Tails, wings and animal ears: landmarks, bones and skinning weights (spec/CHARACTERS.md, Appendages).
 
-See-Through sometimes leaves an appendage out of every layer (DeepSeek's whale tail); `recover_missing` turns the
-art no layer covers into a layer of its own, tagged from the character's hints, so it still draws and can move.
+See-Through sometimes leaves a part out of every layer (DeepSeek's whale tail, the boots of one of Claude's poses);
+`recover` gives the art no layer covers to a layer, a new one tagged from where it lies and the character's hints
+or the layer it was cut from, so it still draws and can move.
 A tail is a chain of three bones along its midline from the root where it meets the body; each wing turns about its
 root next to the spine; each animal ear turns about its base.
 """
@@ -69,12 +70,14 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     the chin becomes the tail (when no layer is tagged tail), with `wings` the largest blob below the eyes becomes the
     wings, either only when it is at least `min_limb` of the face's box (a scrap of dress must not flap); blobs by the
     head become headwear (above the face) or ears (beside it), so they turn with the head; when the split made no
-    footwear, a blob reaching the bottom of the figure (within 2 % of the canvas) that touches the legwear is a shoe,
-    `footwear`, so it moves with the leg; a blob no larger than the footwear with at least 15 % of its rim on it (a
-    calf above a kicked-up slipper) is `legwear`; an `extra` blob no larger than the tail with at least 15 % of its
-    rim on the tail (its base, cut short) joins the tail layer; any other blob joins the back as `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below
-    `min_figure` on average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in.
-    Returns the names added."""
+    footwear, a blob reaching the bottom of the figure (within 2 % of the canvas) that touches the legwear, or whose
+    center lies below the skirt's hem (boots under a long skirt, with no legwear layer), is a shoe, `footwear`, so it
+    moves with the leg, and a second such blob joins the first; a blob no larger than the footwear with at least 15 %
+    of its rim on it (a calf above a kicked-up slipper) is `legwear`; an `extra` blob no larger than the tail with at
+    least 15 % of its rim on the tail (its base, cut short) joins the tail layer; any other blob joins the back as
+    `extra`. A grey blob (mean chroma below `max_chroma`) the figure matte (matte.figure) scores below `min_figure` on
+    average is the shadow drawn on the floor and stays out; a coloured one (a hologram) stays in. Returns the names
+    added (`<name>+` for a blob that joined a layer)."""
     h, w = reference.shape[:2]
     labels, sizes, _, _ = _missing(parts, reference, bare)
     if not len(sizes):
@@ -82,7 +85,10 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
     keep = [i + 1 for i, s in enumerate(sizes) if s >= min_share * h * w]
     keep = _drawn(keep, labels, reference, figure, min_figure, max_chroma)
     tags = {p.tag for p in parts}
-    legs = [p.alpha > 0.5 for p in parts if p.tag == "legwear"] if "footwear" not in tags else []
+    shod = "footwear" in tags
+    legs = [p.alpha > 0.5 for p in parts if p.tag == "legwear"]
+    hem = _hem(parts)
+    shoes = None
     feet = [p.alpha > 0.5 for p in parts if p.tag == "footwear"]
     feet_area = sum(int(f.sum()) for f in feet)
     rows = np.nonzero(foreground(reference, bare=bare).any(axis=1))[0]
@@ -103,8 +109,9 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         cy, cx = ys.mean(), xs.mean()
         by_head = cy < chin and fx0 - 1.2 * fw < cx < fx1 + 1.2 * fw
         big = sizes[i - 1] >= limb
-        shoe = ys.max() >= bottom - 0.02 * h and any((ndimage.binary_dilation(blob, iterations=3) & leg).any()
-                                                      for leg in legs)
+        shoe = not shod and ys.max() >= bottom - 0.02 * h and (
+            (hem is not None and cy > hem)
+            or any((ndimage.binary_dilation(blob, iterations=3) & leg).any() for leg in legs))
         if shoe:
             tag = "footwear"
         elif hints.get("tail") and "tail" not in tags and cy > chin and big:
@@ -127,9 +134,12 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
         if (tag == "extra" and tail is not None and sizes[i - 1] <= (tail.alpha > 0.5).sum()
                 and _touch(blob, [tail.alpha > 0.5]) >= 0.15):
             # The rest of a tail the split cut short (its base, its tip) joins the tail, so it swings with it.
-            tail.rgba[..., :3] = np.where(blob[..., None], reference, tail.rgba[..., :3])
-            tail.rgba[..., 3] = np.maximum(tail.alpha, rgba[..., 3])
+            _join(tail, blob, rgba, reference)
             added.append(f"{tail.name}+")
+            continue
+        if tag == "footwear" and shoes is not None:
+            _join(shoes, blob, rgba, reference)
+            added.append(f"{shoes.name}+")
             continue
         names = {p.name for p in parts}
         name, n = tag, 1
@@ -142,8 +152,40 @@ def recover_missing(parts, reference, hints, min_share=0.0005, bare=None, min_li
                   len(parts))
         parts.insert(at, layer)
         tags.add(tag)
+        if tag == "footwear":
+            shoes = layer
         added.append(name)
     return added
+
+
+def _hem(parts):
+    """The lowest row the skirt (bottomwear) is opaque on; None without a skirt."""
+    rows = [np.nonzero((p.alpha > 0.5).any(axis=1))[0] for p in parts if p.tag == "bottomwear"]
+    rows = [r for r in rows if len(r)]
+    return int(max(r.max() for r in rows)) if rows else None
+
+
+def _join(layer, blob, rgba, reference):
+    layer.rgba[..., :3] = np.where(blob[..., None], reference, layer.rgba[..., :3])
+    layer.rgba[..., 3] = np.maximum(layer.alpha, rgba[..., 3])
+
+
+def recover(parts, reference, hints, bare=None, figure=None):
+    """Gives the art no layer covers to a layer, for every character: sizeable blobs (recover_missing), pieces cut
+    off a layer (attach_fragments), gaps between layers (fill_holes) and, with the `legsInSkirt` hint, the shins
+    between the hem and the shoes (legs_under_hem). See-Through can leave a part of one pose out of every layer (the
+    boots of one pose of a series), so this never waits for a hint. Returns a report line per step."""
+    out = []
+    recovered = recover_missing(parts, reference, hints, bare=bare, figure=figure)
+    if recovered:
+        out.append(f"recovered from the art no layer covered: {', '.join(recovered)}")
+    out.append(f"fragments attached to the layer they were cut from: "
+               f"{attach_fragments(parts, reference, bare=bare, figure=figure)}")
+    out.append(f"holes between layers filled: {fill_holes(parts, reference, bare=bare)} px")
+    if hints.get("legsInSkirt"):
+        out.append(f"legs between the hem and the shoes given to the shoes: "
+                   f"{legs_under_hem(parts, reference, bare=bare)} px")
+    return out
 
 
 def attach_fragments(parts, reference, bare=None, figure=None, min_share=0.0005, touch=12, enclosed=0.9, ring=3,

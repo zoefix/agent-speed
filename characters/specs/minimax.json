@@ -38,7 +38,6 @@
   ]
  },
  "rig": {
-  "recover": true,
   "rigidLower": true
  }
 }

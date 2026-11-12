@@ -15,6 +15,7 @@ import numpy as np
 from PIL import Image, ImageDraw, ImageFont
 
 from ..rig import package
+from ..rig.checks import rest_metrics
 from ..rig.layers import load_reference
 from ..rig.params import POS_X
 from . import effects
@@ -133,9 +134,7 @@ def rest_check(rig, atlas, reference_path):
     renderer.begin((1, 1, 1, 1))
     renderer.character(rig.pose(rig.defaults()), 1.0, (0.0, 0.0), rig.opacities(rig.defaults()))
     frame = renderer.finish()[..., :3].astype(np.float32) / 255
-    ref = load_reference(reference_path, rig.canvas)
-    diff = np.abs(frame - ref).mean(axis=2) * 255
-    return {"mean_abs_diff": round(float(diff.mean()), 3), "px_diff_gt_32_pct": round(float((diff > 32).mean() * 100), 3)}
+    return rest_metrics(frame, load_reference(reference_path, rig.canvas))
 
 
 def main(argv=None):

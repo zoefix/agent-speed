@@ -129,7 +129,7 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
 ### Appendages
 
 `characters/rig/appendages.py` rigs tails, wings and animal ears from the See-Through layers. A character's spec
-(`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `recover`, `tail`,
+(`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `tail`,
 `wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
 move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
 cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
@@ -176,16 +176,19 @@ layer named `<arm> body`, drawn right after the arm, so a robe's front edge besi
 of the leg (waist to feet) apart, one kicked up behind, has no `foot` bone either: the one bone for both feet would
 pivot between them and tear the raised leg from the skirt, so legs and shoes follow `lower`.
 
-- **Recovery** (`recover`): See-Through sometimes leaves a piece of the art out of every layer. The figure is
+- **Recovery** (every character, no hint): See-Through sometimes leaves a piece of the art out of every layer, and
+  in one pose of a series where the others have it (the boots of Claude's `think`). The figure is
   everything not white, with areas enclosed by line art filled, less the bare paper; what no layer covers (2 px away
   from covered pixels, opened by 2 px, blobs of at least 0.05 % of the canvas) becomes a layer of its own, opaque
   inside and as opaque as the art is dark on its rim (darkness / 0.3). The largest blob below the chin is the tail
   with the `tail` hint and no tail layer; with `wings`, the largest blob below the eyes and away from the head is the
   wings; either only when it covers at least 0.4 of the face's bounding box. Blobs by the head are `headwear` above
   the face and `ears` beside it; when the split made no footwear, a blob reaching the bottom of the figure (within
-  2 % of the canvas) that touches the legwear is a shoe, `footwear`, checked first so a shoe is never taken for the
-  tail; a blob no larger than the footwear with at least 15 % of a 4 px ring on it (a calf above a kicked-up slipper)
-  is `legwear`; any other blob is `extra`, drawn with the tail. With `--matte`, a grey blob (mean
+  2 % of the canvas) that touches the legwear, or whose center lies below the skirt's hem (the lowest row the
+  `bottomwear` is opaque on: boots under a long skirt, with no legwear layer), is a shoe, `footwear`, checked first so
+  a shoe is never taken for the tail, and a second such blob joins the first; a blob no larger than the footwear
+  with at least 15 % of a 4 px ring on it (a calf above a kicked-up slipper) is `legwear`; any other blob is
+  `extra`, drawn with the tail. With `--matte`, a grey blob (mean
   chroma, brightest minus darkest channel, below 0.15) the matte scores below 0.5 on average is the shadow drawn on
   the floor and stays out; a coloured one the matte also misses (a hologram) stays in. A smaller blob (the same
   grey rule applies) that sticks out of the layers, its 3 px ring under 90 % covered, goes to the layer holding most
@@ -195,8 +198,19 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   as opaque as the art is dark (darkness / 0.3) on its 1 px rim against the paper. Then every remaining patch of
   the figure no layer covers (opacity above 0.5), up to 0.2 % of the canvas, whose 3 px surrounding ring is at least
   90 % covered goes to the lowest layer holding at least 15 % of that ring, opaque and painted from the art: a gap
-  between belt straps shows the robe behind them instead of a white speck. Packs without the hint are built exactly
-  as before.
+  between belt straps shows the robe behind them instead of a white speck. Recovery runs before the shins under
+  the hem are given to the shoes (`legsInSkirt`), so recovered boots take them too.
+- **Checks**: the build refuses a pose (exit status 1, and no package left at its output: one built before would be
+  packed in its place) when its rig at rest does not match the art, or when the character's idle pose (build option
+  `--idle`, its built package) draws feet and this pose draws none: the pose would stand on her hem, as the feet are
+  its lowest drawn row (section 6). A pose draws feet when it has a `footwear` part, or `legwear` whose lowest row is
+  at least 2 % of the canvas height below the hem of the `bottomwear` (of the `topwear` without one): tall boots or
+  talons the split drew with the legs. The rest check is the layers composited at rest on white against the
+  art: the mean absolute difference over the canvas (0 to 255) must be at most 1.0 and the share of pixels off by more
+  than 32 at most 0.55 %. Every sound pose built so far stays at or under 0.82 and 0.40 %; Claude's `think` without
+  its boots read 1.16 and 0.70 %. `--check` stops after the layers and prints both checks as JSON, without a
+  package. The pack refuses a pose or mood pose that draws no feet when the idle pose does (the lowest row of a
+  part being its lowest vertex there).
 - **Bare paper** (build option `--matte`, an anime figure matte such as skytnt/anime-seg `isnetis.onnx`): generated
   art sits on white, which also shows through enclosed gaps (an axe blade, hair beside the body). Bare paper is every
   pixel whose darkest channel is above 0.96 and that the matte scores below 0.5, plus every enclosed (not touching the

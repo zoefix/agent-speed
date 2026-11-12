@@ -42,7 +42,6 @@
   }
  },
  "rig": {
-  "recover": true,
   "tail": true,
   "ears": true,
   "rigidLower": true,

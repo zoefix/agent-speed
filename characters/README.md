@@ -67,11 +67,13 @@ edit `gesture-<name>.png`, once See-Through has split it, is an arm variant with
 "image": "gesture-wave.png"}`.
 
 Mood poses build like band poses, from their own PSD and art, and join the pack as states; the session film plays
-them with the band poses:
+them with the band poses. With `--idle` the build refuses a pose that draws no feet while the idle pose does, and
+every build refuses one whose rig at rest does not match the art (`--check` only prints both checks, no package);
+the pack refuses a pose without feet too:
 
 ```bash
 .venv/bin/python -m characters.rig.build --psd claude-think.psd --reference claude-think.png --name claude-think \
-    --out characters/build/claude-think --spec characters/specs/claude.json
+    --out characters/build/claude-think --spec characters/specs/claude.json --idle characters/build/claude
 .venv/bin/python -m characters.rig.pack --spec characters/specs/claude.json --pose idle=characters/build/claude \
     --pose cruise=characters/build/claude-cruise ... --state think=characters/build/claude-think ... --out dist
 .venv/bin/python -m characters.reference.session --package dist/claude/poses/idle --pose cruise=dist/claude/poses/cruise \
@@ -79,8 +81,9 @@ them with the band poses:
     --captions claude-session.txt
 ```
 
-Every character, Claude too, builds with her spec, which brings the rig hints (tail, wings, legs inside the skirt,
-recovery of art See-Through missed) and, for the stage, her motion profile, particles and accent. The anime figure matte
+Every character, Claude too, builds with her spec, which brings the rig hints (tail, wings, legs inside the skirt) and,
+for the stage, her motion profile, particles and accent. Art See-Through left out of every layer (a tail, the boots of
+one pose) is recovered for every character. The anime figure matte
 ([skytnt/anime-seg](https://huggingface.co/skytnt/anime-seg) `isnetis.onnx`, `--matte`) tells the white paper that
 shows through an axe blade or between hair and body from white clothing, so neither the recovered art nor any layer
 draws it:
