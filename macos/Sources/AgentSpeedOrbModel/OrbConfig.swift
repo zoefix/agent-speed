@@ -1,6 +1,11 @@
 import AgentSpeedCore
 import Foundation
 
+/// Idle presentation is independent of the user's manual visibility setting.
+public enum OrbIdleBehavior: String, Codable, CaseIterable, Sendable {
+    case keepVisible, fade, hide
+}
+
 /// One floating orb (DESIGN 2b, Data model). Decoding is tolerant: missing fields take their defaults and
 /// out-of-range values are clamped, so a hand-edited or newer document never fails to load.
 public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
@@ -17,7 +22,12 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
     public var opacity: Double
     public var alwaysOnTop: Bool
     public var clickThrough: Bool
-    public var fadeWhenIdle: Bool
+    public var idleBehavior: OrbIdleBehavior
+    /// Compatibility with legacy callers and documents.
+    public var fadeWhenIdle: Bool {
+        get { idleBehavior == .fade }
+        set { idleBehavior = newValue ? .fade : .keepVisible }
+    }
     /// macOS only.
     public var allSpaces: Bool
     public var visible: Bool
@@ -62,7 +72,8 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
         showName: Bool? = nil,
         hosts: OrbHostSelection = .all,
         character: String? = nil,
-        characterReadouts: CharacterReadouts = .default
+        characterReadouts: CharacterReadouts = .default,
+        idleBehavior: OrbIdleBehavior? = nil
     ) {
         self.id = id
         self.name = Self.cleanName(name)
@@ -72,7 +83,7 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
         self.opacity = Self.cleanOpacity(opacity)
         self.alwaysOnTop = alwaysOnTop
         self.clickThrough = clickThrough
-        self.fadeWhenIdle = fadeWhenIdle
+        self.idleBehavior = idleBehavior ?? (fadeWhenIdle ? .fade : .keepVisible)
         self.allSpaces = allSpaces
         self.visible = visible
         self.redlineOutput = Self.cleanRedline(redlineOutput)
@@ -122,6 +133,7 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
 extension OrbConfig: Codable {
     enum CodingKeys: String, CodingKey {
         case id, name, sources, style, size, opacity, alwaysOnTop, clickThrough, fadeWhenIdle, allSpaces, visible
+        case idleBehavior
         case redlineOutput, redlineTotal, titleTheme, unit, traffic, showName, hosts, character, characterReadouts
     }
 
@@ -154,7 +166,8 @@ extension OrbConfig: Codable {
             showName: value(Bool.self, .showName),
             hosts: value(OrbHostSelection.self, .hosts) ?? .all,
             character: value(String.self, .character),
-            characterReadouts: value(CharacterReadouts.self, .characterReadouts) ?? .default
+            characterReadouts: value(CharacterReadouts.self, .characterReadouts) ?? .default,
+            idleBehavior: value(OrbIdleBehavior.self, .idleBehavior)
         )
     }
 
@@ -175,6 +188,7 @@ extension OrbConfig: Codable {
         try container.encode(alwaysOnTop, forKey: .alwaysOnTop)
         try container.encode(clickThrough, forKey: .clickThrough)
         try container.encode(fadeWhenIdle, forKey: .fadeWhenIdle)
+        try container.encode(idleBehavior, forKey: .idleBehavior)
         try container.encode(allSpaces, forKey: .allSpaces)
         try container.encode(visible, forKey: .visible)
         try container.encode(redlineOutput, forKey: .redlineOutput)

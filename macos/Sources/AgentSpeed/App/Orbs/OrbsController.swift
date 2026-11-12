@@ -403,6 +403,10 @@ final class OrbsController {
         setDocument(OrbEditing.setToggle(\.clickThrough, value, of: id, in: document))
     }
 
+    func setIdleBehavior(_ behavior: OrbIdleBehavior, of id: String) {
+        setDocument(OrbEditing.setIdleBehavior(behavior, of: id, in: document))
+    }
+
     func setFadeWhenIdle(_ value: Bool, of id: String) {
         setDocument(OrbEditing.setToggle(\.fadeWhenIdle, value, of: id, in: document))
     }

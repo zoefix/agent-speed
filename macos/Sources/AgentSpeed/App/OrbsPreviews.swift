@@ -41,6 +41,25 @@ enum OrbsPreviews {
         }
     }
 
+    /// Isolated idle settings, without reading or changing the user's application defaults.
+    static func renderIdleBehavior(model: AppModel, into directory: URL) {
+        model.settings.language = .zhHans
+        model.l10n.apply(.zhHans)
+        guard let id = model.orbs.orbs.first?.id else { return }
+        for behavior in OrbIdleBehavior.allCases {
+            model.orbs.setIdleBehavior(behavior, of: id)
+            guard let orb = model.orbs.orb(id) else { continue }
+            for dark in [false, true] {
+                PreviewSnapshot.writeHosted(
+                    Form { OrbSwitchesSection(model: model, orb: orb) }
+                        .formStyle(.grouped).frame(width: 650, height: 380).appEnvironment(model),
+                    dark: dark,
+                    to: directory.appendingPathComponent("idle-\(behavior.rawValue)-\(dark ? "dark" : "light").png")
+                )
+            }
+        }
+    }
+
     // MARK: Desktop compositions
 
     private struct Orb {

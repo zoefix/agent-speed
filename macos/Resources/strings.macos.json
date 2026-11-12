@@ -605,5 +605,35 @@
     "zh-Hans": "在“设置 → API → 局域网”开启后，Agent Speed 会让局域网内的设备读取实时速度，并把速度发送到你添加的设备。",
     "en": "When you turn it on in Settings → API → Local Network, Agent Speed lets devices on your network read the live speed and sends it to devices you add.",
     "ja": "「設定 → API → ローカルネットワーク」でオンにすると、Agent Speed はネットワーク内のデバイスにライブ速度を読み取らせ、追加したデバイスへ送信します。"
+  },
+  "mac.settings.orb.idleBehavior": {
+    "zh-Hant": "閒置時",
+    "zh-Hans": "空闲时",
+    "en": "When idle",
+    "ja": "待機中"
+  },
+  "mac.settings.orb.idleBehavior.keepVisible": {
+    "zh-Hant": "保持顯示",
+    "zh-Hans": "保持显示",
+    "en": "Keep visible",
+    "ja": "表示を維持"
+  },
+  "mac.settings.orb.idleBehavior.fade": {
+    "zh-Hant": "淡出",
+    "zh-Hans": "淡出",
+    "en": "Fade",
+    "ja": "薄くする"
+  },
+  "mac.settings.orb.idleBehavior.hide": {
+    "zh-Hant": "完全隱藏",
+    "zh-Hans": "完全隐藏",
+    "en": "Hide completely",
+    "ja": "完全に隠す"
+  },
+  "mac.settings.orb.idleBehavior.hideHint": {
+    "zh-Hant": "閒置 60 秒後隱藏，AI 恢復活動時自動顯示。",
+    "zh-Hans": "空闲 60 秒后隐藏，AI 恢复活动时自动显示。",
+    "en": "Hide after 60 seconds idle; show automatically when AI activity resumes.",
+    "ja": "60 秒間待機すると隠れ、AI の活動再開時に自動表示します。"
   }
 }
