@@ -177,7 +177,7 @@ class FaceTests(unittest.TestCase):
     def test_an_expression_swaps_while_the_eyes_are_shut(self):
         d = director()
         frames = []
-        run(d, 1.0, level=3, phase="generating", frames=frames)
+        run(d, 4.0, phase="tools", frames=frames)
         swaps = [k for k in range(1, len(frames)) if frames[k][2] != frames[k - 1][2]]
         self.assertTrue(swaps)
         for k in swaps:
@@ -231,27 +231,50 @@ class FaceTests(unittest.TestCase):
 
 
 class TalkTests(unittest.TestCase):
-    def test_syllables_follow_the_level_and_never_repeat_a_shape(self):
+    def test_she_talks_in_phrases_of_a_o_u_with_pauses_and_silences(self):
         talk = Talk(Rng(5))
-        shapes, opens = [], 0
+        shapes, opens, open_frames, stages = [], 0, 0, set()
         prev = None
-        for _ in range(60 * 20):
-            s = talk.update(DT, True, 13, ["a", "i", "u", "o"])
-            if s is not None and s != prev:
-                shapes.append(s)
-            opens += s is not None and prev is None
-            prev = s
-        self.assertTrue(all(a != b for a, b in zip(shapes, shapes[1:])))
-        self.assertLess(opens / 20, 9.0 + 1e-9)
-        self.assertGreater(opens / 20, 5.0)
+        for _ in range(60 * 120):
+            shape = talk.update(DT, True, 13, ["a", "i", "u", "o"])
+            stages.add(talk.stage)
+            if shape is not None and prev is None:
+                shapes.append(shape)
+                opens += 1
+            open_frames += shape is not None
+            prev = shape
+        self.assertNotIn("i", shapes)
+        share = {s: shapes.count(s) / len(shapes) for s in "aou"}
+        self.assertGreater(share["a"], 0.45)
+        self.assertGreater(share["o"], 0.12)
+        self.assertGreater(share["u"], 0.05)
+        self.assertLessEqual({"open", "gap", "pause", "silence"}, stages)
+        self.assertLess(opens / 120, 7.0 * 0.75, "the pauses and silences thin out the syllables")
+        self.assertLess(open_frames / (60 * 120), 0.5)
+
+    def test_a_syllable_rate_stays_between_five_and_seven(self):
+        for level in (1, 13):
+            talk = Talk(Rng(level))
+            for _ in range(60 * 30):
+                talk.update(DT, True, level, ["a", "o", "u"])
+                self.assertTrue(5.0 <= talk.rate <= 7.0, talk.rate)
+
+    def test_a_group_waits_for_the_face_to_clear(self):
+        talk = Talk(Rng(2))
+        for _ in range(30):
+            self.assertIsNone(talk.update(DT, True, 3, ["a", "o"], clear=False))
+        self.assertTrue(talk.speaking)
+        opened = [talk.update(DT, True, 3, ["a", "o"], clear=True) for _ in range(30)]
+        self.assertTrue(any(opened))
 
     def test_she_talks_only_while_output_flows(self):
         d = director()
-        values = run(d, 3.0, level=4, phase="generating")
+        run(d, 3.0, level=4, phase="generating")
         frames = []
-        run(d, 3.0, level=4, phase="generating", frames=frames)
+        run(d, 8.0, level=4, phase="generating", frames=frames)
         opened = max(max(f[4][f"Var.mouth-{s}"] for s in "aiuo") for f in frames)
         self.assertGreater(opened, 0.99)
+        self.assertEqual(max(f[4]["Var.mouth-i"] for f in frames), 0.0)
         frames = []
         run(d, 2.0, level=0, phase="generating", wait=1.0, frames=frames)
         values = frames[-1][4]
@@ -263,6 +286,24 @@ class TalkTests(unittest.TestCase):
         frames = []
         run(d, 4.0, level=4, phase="generating", frames=frames)
         self.assertEqual(max(max(f[4][f"Var.mouth-{s}"] for s in "aiuo") for f in frames), 0.0)
+
+
+    def test_mouths_switch_on_a_frame_and_never_mix_with_an_expression(self):
+        d = director()
+        frames = []
+        run(d, 20.0, level=4, phase="generating", frames=frames)
+        spoke = smiled = False
+        for _, _, expr, gaze, values in frames:
+            mouths = [values[f"Var.mouth-{s}"] for s in "aiuo"]
+            self.assertTrue(all(m in (0.0, 1.0) for m in mouths), mouths)
+            self.assertLessEqual(sum(mouths), 1.0)
+            if any(mouths):
+                spoke = True
+                self.assertIsNone(expr)
+                self.assertIsNone(gaze)
+                self.assertFalse(any(values[f"Var.expr-{e}"] for e in ("smile", "excited", "focused")))
+            smiled |= expr == "smile"
+        self.assertTrue(spoke and smiled, "she smiles in the silences between groups of phrases")
 
 
 class LookTests(unittest.TestCase):

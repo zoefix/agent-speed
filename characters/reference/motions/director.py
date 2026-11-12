@@ -39,11 +39,10 @@ BAND_FACE = {"idle": None, "cruise": "smile", "boost": "smile", "overdrive": "de
 GAPS = {"idle": (2.4, 4.4), "cruise": (0.9, 2.2), "boost": (0.7, 1.8), "overdrive": (0.4, 1.3), "redline": (0.3, 1.0)}
 STAGE = 0.55
 # Face patch rates (seconds for a full swap); a blink over a patch shows `gaze-closed` while the eyes are half shut.
-PATCH_FADE, BLINK_FADE, MOUTH_FADE = 0.05, 0.03, 0.04
+# Mouth shapes switch on a frame: a blend of two mouths would show both.
+PATCH_FADE, BLINK_FADE = 0.05, 0.03
 # Expressions whose eyes are shut already: no blink over them.
 EYES_SHUT = ("laugh", "yawn")
-# Expressions that stop the lips.
-MOUTH_BUSY = ("yawn", "surprised")
 # A dozing blink holds the eyes shut this long.
 DOZE = (0.5, 1.2)
 
@@ -380,11 +379,16 @@ class Director:
         """Face patches: one expression, or the gaze where she looks, swapped while she blinks; a blink over a patch
         shows `gaze-closed`; the lips move through the mouth patches while she talks."""
         b = self.behavior
+        shapes = [s for s, _ in SHAPES if s in self.mouths]
+        talk = (b.talking() and self.level >= 1) or (gesture is not None and gesture.talk)
+        talk = talk and self.profile.talk and bool(shapes) and not (gesture is not None and gesture.name == "yawn")
+        # While she speaks (a group of phrases until its silence) the face is drawn: no expression, no gaze.
+        speaking = talk and b.talk.speaking
         event_face = self.event_face if self.time < self.event_until else None
-        wanted = b.face(gesture, event_face, self.band)
+        wanted = None if speaking else b.face(gesture, event_face, self.band)
         if wanted not in self.expressions:
             wanted = None
-        gaze = b.gaze if wanted is None and b.gaze in self.gazes else None
+        gaze = b.gaze if not speaking and wanted is None and b.gaze in self.gazes else None
         change = (wanted, gaze) != (self.expr, self.gaze_patch)
         openness = self._doze_blink(dt, force=change, doze=b.mood == "rest")
         if self.snap_faces or (change and (openness <= 0.02 or self.blink_skipped)):
@@ -400,13 +404,12 @@ class Director:
             else:
                 self._slew(values, pid, 1.0 if name == self.gaze_patch else 0.0, dt, PATCH_FADE)
 
-        talk = (b.talking() and self.level >= 1) or (gesture is not None and gesture.talk)
-        talk = talk and self.profile.talk and self.expr not in MOUTH_BUSY
-        shape = b.talk.update(dt, talk, self.level, [s for s in SHAPES if s in self.mouths])
-        if shape is None and talk and self.expr is None:
+        clear = self.expr is None and all(self.patch_weights.get(pid, 0.0) <= 0.0 for pid in self.expressions.values())
+        shape = b.talk.update(dt, talk, self.level, shapes, clear)
+        if shape is None and talk and b.talk.stage == "gap":
             shape = "closed"
         for name, pid in self.mouths.items():
-            self._slew(values, pid, 1.0 if name == shape else 0.0, dt, MOUTH_FADE)
+            self.patch_weights[pid] = values[pid] = 1.0 if name == shape else 0.0
         self.snap_faces = False
 
         for side in ("left", "right"):

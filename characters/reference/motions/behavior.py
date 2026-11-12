@@ -54,11 +54,14 @@ MOOD_POOLS = {"think": (("chin", "tilt", "ponder"), (2.0, 4.0)), "focus": (("chi
               "rest": (("yawn",), (20.0, 40.0))}
 WAIT_LATE = ("yawn", "stretch")
 
-SHAPES = ("a", "i", "u", "o")
-SYLLABLES, MAX_SYLLABLES = (4.0, 0.4), 9.0
-OPEN = (0.6, 0.8)
-PHRASE, PAUSE = (4, 6), (0.2, 0.5)
-
+# Anime lip flap, not lip sync: the open shapes and how often each comes (`mouth-i`, the teeth, never talks).
+SHAPES = (("a", 0.6), ("o", 0.25), ("u", 0.15))
+# Syllables per phrase (3 + index(6)), phrases per group (2 + index(3)); syllables per second uniform(5, 6) + 0.1 per
+# level, at most 7; the open share of a syllable; the pause between phrases and the silence after a group.
+PHRASE_SYLLABLES, GROUP_PHRASES = (3, 6), (2, 3)
+RATE, RATE_GAIN, RATE_MAX = (5.0, 6.0), 0.1, 7.0
+OPEN = (0.55, 0.70)
+PAUSE, SILENCE = (0.4, 1.2), (2.0, 5.0)
 
 @dataclass(frozen=True)
 class Inputs:
@@ -81,43 +84,77 @@ def _clamp(v, lo=-1.0, hi=1.0):
 
 
 class Talk:
-    """Lip flaps: syllables of open shapes in random order, closed between them, a pause every few syllables."""
+    """Lip flaps in phrases: a group of 2–4 phrases of 3–8 syllables, a pause between phrases, a silence after the
+    group. A group waits until the face is clear of expressions (`clear`) before its first syllable; `speaking` is
+    true from then on until its silence, and the director shows the drawn face meanwhile."""
 
     def __init__(self, rng):
         self.rng = rng
-        self.on, self.shape, self.prev = False, None, None
-        self.stage, self.left, self.gap, self.count = None, 0.0, 0.0, 0
+        self.on, self.shape, self.stage = False, None, None
+        self.left, self.gap, self.syllables, self.phrases, self.rate = 0.0, 0.0, 0, 0, RATE[0]
 
-    def _syllable(self, rate, shapes):
-        options = [s for s in shapes if s != self.prev] or list(shapes)
-        self.shape = self.prev = self.rng.choice(options)
-        span = 1.0 / rate
+    @property
+    def speaking(self):
+        return self.stage != "silence"
+
+    def _pick(self, shapes):
+        options = [(s, w) for s, w in SHAPES if s in shapes]
+        x = self.rng.random() * sum(w for _, w in options)
+        for shape, w in options:
+            x -= w
+            if x < 0:
+                return shape
+        return options[-1][0]
+
+    def _phrase(self, level):
+        self.syllables = PHRASE_SYLLABLES[0] + self.rng.index(PHRASE_SYLLABLES[1])
+        self.rate = min(RATE_MAX, self.rng.uniform(*RATE) + RATE_GAIN * level)
+
+    def _syllable(self, shapes):
+        self.shape = self._pick(shapes)
+        span = 1.0 / self.rate
         opened = span * self.rng.uniform(*OPEN)
         self.stage, self.gap = "open", span - opened
         self.left += opened
 
-    def update(self, dt, on, level, shapes):
-        """The open shape now, or None for closed."""
+    def update(self, dt, on, level, shapes, clear=True):
+        """The open shape now, or None for closed. `shapes` are the mouth shapes the pose has."""
+        shapes = [s for s, _ in SHAPES if s in shapes]
         if not on or not shapes:
             self.on, self.shape, self.stage, self.left = False, None, None, 0.0
             return None
-        rate = min(MAX_SYLLABLES, SYLLABLES[0] + SYLLABLES[1] * level)
         if not self.on:
-            self.on, self.left = True, 0.0
-            self.count = PHRASE[0] + self.rng.index(PHRASE[1])
-            self._syllable(rate, shapes)
+            self.on, self.stage, self.left = True, "ready", 0.0
+            self.phrases = GROUP_PHRASES[0] + self.rng.index(GROUP_PHRASES[1])
+        if self.stage == "ready":
+            if not clear:
+                return None
+            self.left = 0.0
+            self._phrase(level)
+            self._syllable(shapes)
         self.left -= dt
         while self.left <= 0:
             if self.stage == "open":
                 self.stage, self.shape = "gap", None
                 self.left += self.gap
-                self.count -= 1
-            elif self.stage == "gap" and self.count <= 0:
-                self.stage = "pause"
-                self.left += self.rng.uniform(*PAUSE)
-                self.count = PHRASE[0] + self.rng.index(PHRASE[1])
+                self.syllables -= 1
+            elif self.stage == "gap" and self.syllables > 0:
+                self._syllable(shapes)
+            elif self.stage == "gap":
+                self.phrases -= 1
+                if self.phrases > 0:
+                    self.stage = "pause"
+                    self.left += self.rng.uniform(*PAUSE)
+                else:
+                    self.stage = "silence"
+                    self.left += self.rng.uniform(*SILENCE)
+            elif self.stage == "pause":
+                self._phrase(level)
+                self._syllable(shapes)
             else:
-                self._syllable(rate, shapes)
+                self.stage, self.left = "ready", 0.0
+                self.phrases = GROUP_PHRASES[0] + self.rng.index(GROUP_PHRASES[1])
+                break
         return self.shape
 
 

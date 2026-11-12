@@ -400,9 +400,10 @@ restarts it. *State moods* follow the inputs; a new state mood replaces the curr
   `surprised` → `surprised`, `determined` → `focused`, `sleepy` → `sleepy`, `talk` → none, others as named; `giggle` →
   `laugh`); else in `work` the band change face (section 5: `excited` for 1.2 s after the band rises, `surprised` when
   it rises into redline, `smile` for 1.5 s after it falls); else the mood's face; else `smile` while hovered (below).
-  A name the pose has no patch for shows the drawn face.
-- **Gaze.** With no expression showing, the eyes take the patch `gaze-<direction>` of where she looks (below) when
-  the pose has it, else the drawn eyes and their `EyeBall` glance.
+  A name the pose has no patch for shows the drawn face. While she speaks (*Talking*) no expression shows: the drawn
+  face and the mouth shapes only.
+- **Gaze.** With no expression showing and while she does not speak, the eyes take the patch `gaze-<direction>` of
+  where she looks (below) when the pose has it, else the drawn eyes and their `EyeBall` glance.
 - **Swaps and blinks.** When the wanted expression or gaze differs from the shown one she blinks at once and they
   swap on the first frame her eyes are shut (`EyeOpen` ≤ 0.02), or, at a frame rate too low to show them shut (15
   fps), on the first frame after the shut phase passed. A blink closes over 0.07 s, stays shut 0.04 s
@@ -411,14 +412,18 @@ restarts it. *State moods* follow the inputs; a new state mood replaces the curr
   double blink), from the director's generator. While a patch covers the eyes, a blink shows `gaze-closed` while the
   eyes are under half open, except over `laugh` and `yawn`, whose eyes are shut already. Expression and gaze patches
   fade in 0.05 s, `gaze-closed` in 0.03 s. A pose swap shows the new pose's face patches at once, without a blink.
-- **Talking.** Her lips move while (she is in `work`, `phase` is `generating`, `wait` is none and the level is at
-  least 1) or the playing action talks (`hum`, `sway`), unless the profile's `talk` is false or the expression is
-  `yawn` or `surprised`, with the mouth patches `mouth-a`, `-i`, `-u`, `-o` the pose has. A syllable lasts `1 /
-  min(9, 4 + 0.4 level)` s (rate taken when it starts): a shape drawn at random among them, never the previous one
-  (unless it is the only one), open for 60–80 % of it, then closed for the rest; after 4–9 syllables (drawn when
-  talking starts and after each pause) she pauses 0.2–0.5 s. Closed shows `mouth-closed` when the pose has it and
-  no expression shows, else nothing over the face. Mouth patches fade in 0.04 s and lie over the expression
-  (section 3, *Variants*).
+- **Talking** is an anime lip flap, not lip sync. She talks while (she is in `work`, `phase` is `generating`, `wait` is
+  none and the level is at least 1) or the playing action talks (`hum`, `sway`), unless the profile's `talk` is false,
+  the `yawn` action plays or the pose has none of `mouth-a`, `mouth-o`, `mouth-u` (`mouth-i`, the teeth, never
+  talks). She talks in groups of 2–4 phrases; a phrase is 3–8 syllables at `min(7, uniform(5, 6) + 0.1 level)`
+  syllables per second (drawn when the phrase starts); a syllable shows one shape for 55–70 % of it, drawn with
+  weights `a` 0.6, `o` 0.25, `u` 0.15 among those the pose has, then closed for the rest (`mouth-closed` when the pose
+  has it, else the drawn mouth). Phrases are 0.4–1.2 s apart, and a group is followed by 2–5 s of silence, so she
+  does not talk all the time. She *speaks* from the start of a group until its silence: the face is drawn then (no
+  expression and no gaze patch; the expression leaves at a blink, and the group's first syllable waits until it has
+  faded out), and the expressions of *Faces* come back, at a blink, in the silence. Mouth shapes switch on a frame,
+  with no fade (a blend of two mouths would show both); they lie over the face (section 3, *Variants*). The counts
+  are drawn when the group, the phrase or the syllable starts, from the behavior generator.
 - **Looking.** Per mood she looks at the *user*, *up* or *none* (table). *User* with a `cursor` within 2 heights of
   her face: the head targets `AngleX = 0.7 · clamp(x / 0.8)`, `AngleY = −0.5 · clamp(y / 0.8)` and the eyes
   `EyeBallX = clamp(x / 0.3)`, `EyeBallY = clamp(y / 0.3)` (clamp to ±1; `AngleY` and `EyeBallY` signs as section 5,
@@ -436,8 +441,8 @@ restarts it. *State moods* follow the inputs; a new state mood replaces the curr
   it. Leaving her after at least 1 s of hovering, in the idle or cruise band, she plays `wave`, else `nod`.
 
 **Random numbers.** The behavior has its own generator, seeded with the director's seed + 1 (mod 2^64): the hover
-gesture, the syllables and pauses, the dozing blinks. Everything else draws from the director's generator as in
-section 5; the director picks a new gap when the mood changes.
+gesture, the groups, phrases, syllables, pauses and silences of talking, the dozing blinks. Everything else draws from
+the director's generator as in section 5; the director picks a new gap when the mood changes.
 
 **Order of a frame** (`Director.update(dt, inputs)`): the behavior (phase clock and triggers, then the state mood,
 the mood and its first actions, then hovering, then looking), a new gap if the mood changed; then section 5 as before
@@ -447,10 +452,10 @@ after the glance, and the face patches in place of section 5's face variants. Th
 
 **Missing assets.** Every rule above falls back on its own: a mood pose the pack lacks shows the band pose; an
 expression, gaze or mouth patch the shown pose lacks leaves that part as drawn (mood poses and band poses without
-patches show their drawn faces); without `gaze-closed` a blink over a patch shows nothing, and swaps still wait for
-the blink; without mouth patches she does not move her lips; a first action the pose cannot play gives way to the
-next of its list, then to nothing. Following the cursor, a face or gaze swap and talking count as acting for the
-frame policy (DESIGN 2a.6).
+patches show their drawn faces); without `gaze-closed` a blink over a patch shows nothing, and swaps still wait for the
+blink; without `mouth-a`, `mouth-o` or `mouth-u` she does not move her lips (and her expressions stay while the speed
+streams); a first action the pose cannot play gives way to the next of its list, then to nothing. Following the cursor,
+a face or gaze swap and talking count as acting for the frame policy (DESIGN 2a.6).
 
 ### Random numbers
 

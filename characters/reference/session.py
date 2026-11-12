@@ -5,7 +5,8 @@ user's cursor approaching, hovering, clicking and leaving, with the cursor drawn
       --state think=build/claude-think ... --spec characters/specs/claude.json --out session.mp4 \\
       --captions session.txt
 
-The script is SCRIPT below: times in seconds. Inputs follow spec/CHARACTERS.md, Behavior.
+The script is SCRIPT below: times in seconds. Inputs follow spec/CHARACTERS.md, Behavior. With --closeup it films
+her head and shoulders instead while she streams in each pose of CLOSEUP: talking in phrases, smiling in the silences.
 """
 import argparse
 import json
@@ -56,6 +57,13 @@ SCRIPT = {
         (82.5, "兩分鐘後，深夜：又睏了（rest）"),
     ],
 }
+
+
+# Close-up takes: caption, the band poses the stage keeps besides idle, seconds, and the speed (tok/s).
+CLOSEUP = [("idle 姿勢：一句一句地說，句間停頓", (), 8.0, 16.0),
+           ("cruise 姿勢：說話時是原本的臉，停下來才微笑", ("cruise",), 8.0, 16.0)]
+# The head and shoulders on the stage, in fractions of its frame (x0, y0, x1, y1), and the warm-up before filming.
+CLOSEUP_CROP, CLOSEUP_WARMUP = (0.31, 0.1, 0.69, 0.42), 2.0
 
 
 def _at(keys, t, default=None):
@@ -184,6 +192,52 @@ class Overlay:
             r.image(self.arrow, x - 0.08 * s, y - 0.04 * s, s, s)
 
 
+def _label(frame, caption, status, size):
+    img = Image.fromarray(frame)
+    for text, y, px, alpha in ((caption, 0.03, size, 200), (status, 0.93, int(size * 0.62), 150)):
+        tex = pill_texture(text, px, CJK_FONT if any(ord(c) > 0x2E80 for c in text) else DIGITS_FONT,
+                           fill=(14, 16, 24, alpha))
+        pill = Image.fromarray(tex)
+        img.paste(pill, ((img.width - pill.width) // 2, int(img.height * y)), pill)
+    return np.asarray(img)
+
+
+def closeup(args, spec):
+    """Films the head and shoulders while she streams: one take per CLOSEUP entry, each on a fresh stage."""
+    w, h = (int(v) for v in args.size.split("x"))
+    x0, y0, x1, y1 = (int(round(f * d)) // 2 * 2 for f, d in zip(CLOSEUP_CROP, (w, h, w, h)))
+    poses = dict(p.split("=", 1) for p in args.pose)
+    ff = subprocess.Popen(["ffmpeg", "-y", "-loglevel", "error", "-f", "rawvideo", "-pix_fmt", "rgb24",
+                           "-s", f"{x1 - x0}x{y1 - y0}", "-r", str(args.fps), "-i", "-", "-c:v", "libx264", "-preset",
+                           "slow", "-crf", "16", "-pix_fmt", "yuv420p", "-movflags", "+faststart", args.out],
+                          stdin=subprocess.PIPE)
+    dt, log, clock = 1 / args.fps, [], 0.0
+    inputs = Inputs(phase="generating", hour=14)
+    for caption, keep, seconds, speed in CLOSEUP:
+        stage = Stage(args.package, (w, h), [(b, poses[b]) for b in keep], spec=spec, living=True)
+        d = stage.director
+        for n in range(int(round((CLOSEUP_WARMUP + seconds) * args.fps))):
+            t = (n + 1) * dt
+            frame = stage.step(dt, t, speed, inputs)
+            if t <= CLOSEUP_WARMUP:
+                continue
+            clock += dt
+            shape = d.behavior.talk.shape
+            status = (f"{stage._name(stage.active)} · mouth {shape or '-'} · face {d.expr or '-'} · "
+                      f"{'speaking' if d.behavior.talk.on and d.behavior.talk.speaking else 'silent'}")
+            ff.stdin.write(np.ascontiguousarray(_label(frame[y0:y1, x0:x1, :3], caption, status,
+                                                       int(0.03 * (x1 - x0)))).tobytes())
+            log.append({"t": round(clock, 3), "pose": stage._name(stage.active), "mouth": shape, "face": d.expr,
+                        "stage": d.behavior.talk.stage})
+    ff.stdin.close()
+    ff.wait()
+    Path(args.out).with_suffix(".log.json").write_text(json.dumps(log, ensure_ascii=False), encoding="utf-8")
+    opened = sum(1 for e in log if e["mouth"])
+    print(json.dumps({"seconds": round(clock, 2), "size": [x1 - x0, y1 - y0], "open_share": round(opened / len(log), 3),
+                      "shapes": {k: sum(1 for e in log if e["mouth"] == k) for k in "aiou"},
+                      "faces": sorted({e["face"] for e in log if e["face"]})}))
+
+
 def main(argv=None):
     ap = argparse.ArgumentParser(description=__doc__, formatter_class=argparse.RawDescriptionHelpFormatter)
     ap.add_argument("--package", required=True, help="the idle pose")
@@ -197,8 +251,12 @@ def main(argv=None):
     ap.add_argument("--fps", type=int, default=30)
     ap.add_argument("--size", default="1350x1350")
     ap.add_argument("--seconds", type=float)
+    ap.add_argument("--closeup", action="store_true", help="film the head and shoulders while she talks (CLOSEUP)")
     args = ap.parse_args(argv)
     spec = json.loads(Path(args.spec).read_text()) if args.spec else {}
+    if args.closeup:
+        closeup(args, spec)
+        return
     w, h = (int(v) for v in args.size.split("x"))
     stage = Stage(args.package, (w, h), [p.split("=", 1) for p in args.pose],
                   [s.split("=", 1) for s in args.state], spec=spec, living=True)
