@@ -3,7 +3,7 @@ import Foundation
 /// What happened in a performer's frame, for effects the renderer adds (petals, a sound, ...).
 public enum PerformerEvent: Sendable, Equatable {
     case petals
-    /// The band's pose was swapped at the edge-on instant.
+    /// The pose was swapped at the edge-on instant: the band's, or a mood pose (with the band at the time).
     case poseSwapped(band: SpeedBand)
 }
 
@@ -71,6 +71,15 @@ public struct CharacterPerformer: Sendable {
     let slots: Slots
     let faceWidth: Double
     static let exitTarget = -1
+    /// A living pack (spec/CHARACTERS.md, Behavior): the director gets the shown pose's variants and the mood poses.
+    public let living: Bool
+    /// The first step with inputs shows the mood pose at once, without a turn.
+    var started = false
+    /// The pointer's last cursor and when it last moved, for the frame policy.
+    var lastCursor: (x: Double, y: Double)?
+    var cursorMovedAt = -Double.infinity
+    /// A head turn toward a moved cursor settles within this (the head springs).
+    static let followSettle = 0.6
 
     public init(pack: CharacterPack, seed: UInt64 = 7, orb: Double = 1) {
         self.pack = pack
@@ -81,8 +90,10 @@ public struct CharacterPerformer: Sendable {
         }
         let idle = pack.poses[0].rig
         let book = CharacterSide(rawValue: idle.landmarks.objectSide ?? "") ?? .left
+        living = pack.isLiving
         let director = CharacterDirector(params: params, seed: seed, out: book.other, book: book, orb: orb,
-                                         celebrate: false, profile: pack.manifest.motion ?? MotionProfile())
+                                         celebrate: false, profile: pack.manifest.motion ?? MotionProfile(),
+                                         variants: living ? idle.variants : [], states: living ? pack.states : [])
         self.director = director
         let space = director.space
         slots = Slots(space)
@@ -140,17 +151,55 @@ public struct CharacterPerformer: Sendable {
     /// The pose index a band shows: its own, else the nearest lower band's.
     public func poseIndex(for band: SpeedBand) -> Int {
         var best = 0
-        for (i, pose) in pack.poses.enumerated() where pose.band <= band { best = i }
+        for (i, pose) in pack.poses.enumerated() where pose.state == nil && pose.band <= band { best = i }
         return best
+    }
+
+    /// The pose to show (section 6 with Behavior): the mood's pose when the pack has it, the shown pose while a poke or
+    /// trouble keeps it, else the band's.
+    public var wantedPose: Int {
+        let band = director.band ?? .idle
+        switch director.poseWanted() {
+        case .keep: return activePose
+        case .state(let name): return pack.poses.firstIndex { $0.state == name } ?? poseIndex(for: band)
+        case nil: return poseIndex(for: band)
+        }
+    }
+
+    /// The band a swap into the shown pose reports: its own for a band pose, the director's for a mood pose.
+    var swappedBand: SpeedBand {
+        let pose = pack.poses[activePose]
+        return pose.state == nil ? pose.band : director.band ?? .idle
+    }
+
+    /// Hands the director the sides, the name and (in a living pack) the variants of the pose now shown.
+    mutating func adoptActivePose() {
+        let pose = pack.poses[activePose]
+        let book = CharacterSide(rawValue: pose.rig.landmarks.objectSide ?? "") ?? director.book
+        director.setSides(out: book.other, book: book, pose: pose.name, variants: living ? pose.rig.variants : nil)
+    }
+
+    /// The center of the shown pose's face box at rest, where she stands now, in screen points (y down): the point the
+    /// cursor input is measured from (spec/CHARACTERS.md, Behavior, Inputs).
+    public func faceCenter(feetOnScreen: (Double, Double), pointsPerPixel: Double) -> (x: Double, y: Double) {
+        let rig = activeRig
+        let face = rig.landmarks.face ?? []
+        let (x, y) = face.count == 4 ? ((face[0] + face[2]) / 2, (face[1] + face[3]) / 2)
+            : (activePlacement.feet.x, activePlacement.feet.y - 0.9 * idleHeight / activePlacement.scale)
+        let p = activePlacement.screen(x, y, feetOnScreen: feetOnScreen, pointsPerPixel: pointsPerPixel)
+        return (p.0 + bodyOffset.dx * pointsPerPixel, p.1)
     }
 
     public var activeRig: CharacterRig { pack.poses[activePose].rig }
     public var activePlacement: PosePlacement { placements[activePose] }
     public var band: SpeedBand? { director.band }
     public var intensity: Double { director.intensity }
-    /// True while she acts out something (a gesture, a move, a hand fidget aside) or turns to swap poses: the frames
-    /// that need the full 60 fps.
-    public var isActing: Bool { director.activeGesture != nil || poseSwitch.isRunning || fadingPose != nil }
+    /// True while she acts out something (a gesture, a move, a hand fidget aside), turns to swap poses, or in a living
+    /// pack follows a moving cursor, swaps a face or talks: the frames that need the full 60 fps (DESIGN 2a.6).
+    public var isActing: Bool {
+        director.activeGesture != nil || poseSwitch.isRunning || fadingPose != nil
+            || director.isLivingBusy(following: director.time - cursorMovedAt < CharacterPerformer.followSettle)
+    }
 
     /// The character's sideways and upward travel this frame (side steps, hops), in idle canvas pixels (y down).
     public var bodyOffset: (dx: Double, dy: Double) {
@@ -165,10 +214,10 @@ public struct CharacterPerformer: Sendable {
     /// Starts this character on the edge-on instant in the pose of `level`, turning back toward the viewer.
     public mutating func enterEdgeOn(level: Int) {
         activePose = poseIndex(for: SpeedBand(level: level))
-        let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
         director.setLevel(level)
-        director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
+        adoptActivePose()
         poseSwitch.enterEdgeOn()
+        started = true
     }
 
     /// The floating readout's geometry for this frame (characters/reference/stage.py): the idle pose's feet at
@@ -194,17 +243,35 @@ public struct CharacterPerformer: Sendable {
     /// Starts this character in the pose of `level`, facing the viewer (a calm character change).
     public mutating func enterAtRest(level: Int) {
         activePose = poseIndex(for: SpeedBand(level: level))
-        let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
         director.setLevel(level)
-        director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
+        adoptActivePose()
     }
 
-    /// Advances one frame at speed level 0...13.
-    public mutating func step(_ dt: Double, level: Int) {
+    /// Advances one frame at speed level 0...13. `inputs` (the agents' phases and the user's cursor) drive the moods
+    /// of a living pack; any other pack ignores them.
+    public mutating func step(_ dt: Double, level: Int, inputs: BehaviorInputs? = nil) {
         events.removeAll(keepingCapacity: true)
         exitReached = false
         director.setLevel(level)
-        director.update(dt)
+        let inputs = living ? inputs : nil
+        if let cursor = inputs?.cursor {
+            if let last = lastCursor, abs(last.x - cursor.x) < 1e-4, abs(last.y - cursor.y) < 1e-4 {} else {
+                cursorMovedAt = director.time + dt
+            }
+            lastCursor = cursor
+        } else if lastCursor != nil {
+            lastCursor = nil
+            cursorMovedAt = director.time + dt
+        }
+        director.update(dt, inputs: inputs)
+        if inputs != nil, !started {
+            started = true
+            let wanted = wantedPose
+            if wanted != activePose, !pendingExit, !poseSwitch.isRunning {
+                activePose = wanted
+                adoptActivePose()
+            }
+        }
         for e in director.events where e == .petals { events.append(.petals) }
         director.events.removeAll(keepingCapacity: true)
         for i in values.indices { values[i] = director.values[i] }
@@ -215,21 +282,20 @@ public struct CharacterPerformer: Sendable {
         }
 
         // Reduce Motion, and a character in a chair, crossfade poses instead of turning.
-        if calm || director.profile.seated, !pendingExit, let band = director.band, poseIndex(for: band) != activePose,
+        let wanted = wantedPose
+        if calm || director.profile.seated, !pendingExit, director.band != nil, wanted != activePose,
            !poseSwitch.isRunning {
             fadingPose = activePose
             fadingWorld = world
             fadingOpacities = opacities
             fadeProgress = 0
-            activePose = poseIndex(for: band)
-            let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
-            director.setSides(out: book.other, book: book, poseBand: pack.poses[activePose].band)
-            events.append(.poseSwapped(band: pack.poses[activePose].band))
+            activePose = wanted
+            adoptActivePose()
+            events.append(.poseSwapped(band: swappedBand))
         } else if pendingExit, !poseSwitch.isRunning {
             poseSwitch.request(CharacterPerformer.exitTarget)
             pendingExit = false
-        } else if !pendingExit, let band = director.band {
-            let wanted = poseIndex(for: band)
+        } else if !pendingExit, director.band != nil {
             if wanted != activePose { poseSwitch.request(wanted) }
         }
         let (swap, output, swapped) = poseSwitch.update(dt)
@@ -244,9 +310,8 @@ public struct CharacterPerformer: Sendable {
                 exitReached = true
             } else {
                 activePose = target
-                let book = CharacterSide(rawValue: activeRig.landmarks.objectSide ?? "") ?? director.book
-                director.setSides(out: book.other, book: book, poseBand: pack.poses[target].band)
-                events.append(.poseSwapped(band: pack.poses[target].band))
+                adoptActivePose()
+                events.append(.poseSwapped(band: swappedBand))
             }
         }
         for i in physics.indices {
@@ -287,13 +352,16 @@ public struct CharacterStage: Sendable {
     public private(set) var outgoing: CharacterPerformer?
     public private(set) var outgoingFade = 1.0
 
-    public mutating func step(_ dt: Double, level: Int) {
+    public mutating func step(_ dt: Double, level: Int, inputs: BehaviorInputs? = nil) {
         swapped = false
         if current.calm != calm { current.calm = calm }
         current.amplitude = amplitude
+        var quiet = inputs
+        quiet?.click = false
+        quiet?.over = false
         if var o = outgoing {
             o.amplitude = amplitude
-            o.step(dt, level: level)
+            o.step(dt, level: level, inputs: quiet)
             outgoing = o
         }
         if outgoing != nil {
@@ -309,10 +377,10 @@ public struct CharacterStage: Sendable {
             incoming = nil
             swapped = true
         }
-        current.step(dt, level: level)
+        current.step(dt, level: level, inputs: inputs)
         if current.exitReached, var next = incoming {
             next.enterEdgeOn(level: level)
-            next.step(dt, level: level)
+            next.step(dt, level: level, inputs: quiet)
             current = next
             incoming = nil
             swapped = true

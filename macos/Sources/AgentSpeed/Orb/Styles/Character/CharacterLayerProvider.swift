@@ -27,6 +27,8 @@ struct OrbCharacterContent: Equatable {
     var quota: [CharacterQuotaSource] = []
     /// Shown in place of the character while none is installed.
     var emptyLabel: String
+    /// The agents' phases and the pointer, for a living character (the same object for the orb's life).
+    var live: OrbCharacterLive?
 }
 
 /// One row of the models card: the model id, its speed as shown (`–` before a timed response) and its vendor's accent.

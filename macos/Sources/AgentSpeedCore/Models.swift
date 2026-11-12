@@ -136,6 +136,15 @@ public struct AgentStatus: Identifiable, Equatable, Sendable {
     public var signals: WorkSignals
     /// `local`, or the remote host the agent runs on (REMOTE 2.2).
     public var host: String
+    /// While generating: when its in-flight request started (METRICS 3.3), and whether output came since then (a
+    /// response of it ended at or after that time).
+    public var inFlightSince: Date?
+    public var outputSinceInFlight = false
+    /// The newest end of its responses.
+    public var lastResponseEnd: Date?
+    /// The result time of its newest tool result when that result, read live, failed right after its previous result
+    /// failed too (CHARACTERS 5, Behavior, `trouble`); nil otherwise.
+    public var repeatFailureAt: Date?
 
     public init(
         id: String,

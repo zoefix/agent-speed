@@ -72,6 +72,8 @@ public struct CharacterRig: Sendable {
     public let parts: [Part]
     public let physics: [RigDocument.Chain]
     public let landmarks: RigDocument.Landmarks
+    /// Variants whose parameter the rig has.
+    public let variants: [RigDocument.Variant]
 
     public init(_ doc: RigDocument) throws {
         guard doc.format == RigDocument.format, doc.version == RigDocument.version else {
@@ -144,6 +146,7 @@ public struct CharacterRig: Sendable {
         }
         physics = doc.physics
         landmarks = doc.landmarks
+        variants = doc.variants.filter { paramIndex[$0.param] != nil }
     }
 
     static func channel(_ name: String) -> Channel? {

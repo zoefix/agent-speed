@@ -25,6 +25,9 @@ final class OrbRuntime {
     private var characterLatency: Double?
     private var characterBits = false
     private var characterQuota: [QuotaCardItem] = []
+    /// The agents' phases, waits and troubles a living character reacts to (CHARACTERS 5, Behavior); it starts with
+    /// the orb's first reading.
+    private var characterActivity: CharacterActivity?
 
     init(config: OrbConfig) {
         id = config.id
@@ -111,7 +114,22 @@ final class OrbRuntime {
             characterLatency = PerfSetReadouts.firstLatency(of: reading.agents).ms
             characterModels.apply(Self.models(of: reading.agents, prices: characters?.prices), at: now)
             publishCharacterReadings(at: now)
+            updateCharacterActivity(snapshot, settings: settings, isPreviewing: isPreviewing, now: now)
         }
+    }
+
+    /// The inputs of a living character from the orb's agents: phase, wait, idle time, hour and trouble.
+    private func updateCharacterActivity(_ snapshot: SpeedSnapshot, settings: AppSettings, isPreviewing: Bool,
+                                         now: TimeInterval) {
+        let last = snapshot.lastResponse.flatMap { summary in
+            OrbSubset.accepts(.responseCompleted(summary), sources: isPreviewing ? nil : sourceSet,
+                              hosts: isPreviewing ? nil : hostSet) ? summary.endedAt : nil
+        }
+        var activity = characterActivity ?? CharacterActivity(start: Date(timeIntervalSinceReferenceDate: now))
+        if activity.update(agents: reading.agents, lastResponseEnd: last) { feed.characterLive.noteTrouble() }
+        characterActivity = activity
+        feed.characterLive.update(activity, now: now)
+        feed.characterLive.celebratesPeaks = settings.celebratePeaks
     }
 
     /// The 額度 card (DESIGN 2a.6, 13 *Host quotas*): the orb's sources whose app runs and is signed in, on this Mac
@@ -243,8 +261,16 @@ final class OrbRuntime {
         guard OrbSubset.accepts(event, sources: isPreviewing ? nil : sourceSet, hosts: isPreviewing ? nil : hostSet)
         else { return }
         switch event {
-        case .responseCompleted(let response): feed.emit(.response(output: response.outputTokens, speed: response.speed))
-        case .newPeak: feed.emit(.newPeak)
+        case .responseCompleted(let response):
+            if config.style == .character, var activity = characterActivity {
+                activity.noteResponseEnd(response.endedAt)
+                characterActivity = activity
+                feed.characterLive.idleSince = activity.idleSince.timeIntervalSinceReferenceDate
+            }
+            feed.emit(.response(output: response.outputTokens, speed: response.speed))
+        case .newPeak:
+            feed.characterLive.notePeak()
+            feed.emit(.newPeak)
         }
     }
 
@@ -258,7 +284,10 @@ final class OrbRuntime {
         let dayStartMs = Int64((snapshot.dayStart.timeIntervalSince1970 * 1000).rounded())
         let fired = tracker.update(liveOutput: reading.live.output, measuredPeakOutput: snapshot.subsetPeaks[key],
                                    dayStartMs: dayStartMs, nowMs: nowMs)
-        if fired { feed.emit(.newPeak) }
+        if fired {
+            feed.characterLive.notePeak()
+            feed.emit(.newPeak)
+        }
     }
 
     // MARK: Bezel

@@ -3,8 +3,11 @@ import Foundation
 import Testing
 @testable import AgentSpeedCharacter
 
-/// Counts heap allocations made on one thread through the system's malloc logger hook.
+/// Counts heap allocations made on one thread through the system's malloc logger hook; one count at a time (the hook
+/// and the counter are shared, and tests run in parallel).
 enum AllocationProbe {
+    static let lock = NSLock()
+
     typealias Logger = @convention(c) (UInt32, UInt, UInt, UInt, UInt, UInt32) -> Void
 
     nonisolated(unsafe) static var count = 0
@@ -14,6 +17,8 @@ enum AllocationProbe {
 
     static func allocations(_ body: () -> Void) -> Int? {
         guard let slot else { return nil }
+        lock.lock()
+        defer { lock.unlock() }
         count = 0
         thread = pthread_self()
         slot.pointee = { type, _, _, _, _, _ in

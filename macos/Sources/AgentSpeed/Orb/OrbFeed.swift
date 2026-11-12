@@ -38,6 +38,8 @@ final class OrbFeed {
     var characterID: String?
     /// The cards of a `character` orb besides the speed (DESIGN 2a.6, Readouts); nil for other styles.
     var characterReadings: OrbCharacterReadings?
+    /// What a living character reacts to (CHARACTERS 5, Behavior), read by her renderer every frame.
+    @ObservationIgnored let characterLive = OrbCharacterLive()
 
     @ObservationIgnored private var listeners: [UUID: @MainActor (OrbFeedEvent) -> Void] = [:]
 

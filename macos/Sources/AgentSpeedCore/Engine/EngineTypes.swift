@@ -108,6 +108,11 @@ struct EngineAgentStatus: Equatable, Sendable {
     /// Its performance score with the facts of the score card (METRICS 6.9 *Facts*).
     var perf: PerfEvaluation?
     var signals: WorkSignals = .none
+    /// The facts a character reacts to (CHARACTERS 5, Behavior): output since the in-flight request started, the
+    /// newest end of its responses, and a live tool result that failed right after a failed one.
+    var outputSinceInFlight = false
+    var lastEndMs: Int64?
+    var repeatFailureMs: Int64?
 }
 
 /// Everything the engine computes for one instant.

@@ -55,6 +55,9 @@ final class OrbWindowController {
 
     /// The click on the unit line (DESIGN 9) and its hover affordance.
     private let unitToggle = OrbUnitToggle()
+    /// A single click on a living character (CHARACTERS 5, Behavior, `click`).
+    private var figureClick = SingleClickRule(doubleClickInterval: NSEvent.doubleClickInterval)
+    private var figureClickTimer: Timer?
     private var unitHovered = false
     private var unitHoverTimer: Timer?
 
@@ -95,6 +98,7 @@ final class OrbWindowController {
 
         panel.contentView = host
         panel.ignoresMouseEvents = true
+        runtime.feed.characterLive.window = panel
         host.delegate = self
         host.onAppearanceChange = { [weak self] dark in
             self?.presenter.dark = dark
@@ -417,6 +421,8 @@ final class OrbWindowController {
     private func updatePointer(at location: NSPoint) {
         guard drag == nil else { return }
         let interactive = fader.isShown && !config.clickThrough && !pointer.isForeignDragActive && !isClosing
+        let live = runtime.feed.characterLive
+        if live.pointerAllowed != interactive { live.pointerAllowed = interactive }
         let inside = interactive && host.discContains(screenPoint: location)
         let onPlate = interactive && !inside && nameplate.contains(screenPoint: location)
         let nearPlate = onPlate || (interactive && interaction.isHovered
@@ -522,6 +528,8 @@ final class OrbWindowController {
 
     private func beginDragging() {
         interaction.isDragging = true
+        runtime.feed.characterLive.isDragging = true
+        figureClick.cancel()
         host.cursor = .closedHand
         nameplate.cursor = .closedHand
         NSCursor.closedHand.push()
@@ -533,6 +541,7 @@ final class OrbWindowController {
         drag = nil
         dragInterruptedMotion = false
         if interaction.isDragging { interaction.isDragging = false }
+        runtime.feed.characterLive.isDragging = false
         if cursorPushed {
             NSCursor.pop()
             cursorPushed = false
@@ -747,6 +756,10 @@ extension OrbWindowController: OrbHostViewDelegate {
             return
         }
         unitToggle.mouseDown(event, onUnit: event.window === panel && isOnUnit(local: host.convert(event.locationInWindow, from: nil)))
+        let press = NSEvent.mouseLocation
+        figureClick.doubleClickInterval = NSEvent.doubleClickInterval
+        figureClick.down(time: event.timestamp, x: press.x, y: press.y, clickCount: event.clickCount,
+                         armed: config.style == .character && event.window === panel)
         if event.clickCount >= 2 {
             endDragging()
             model.commands?.showDashboard()
@@ -787,6 +800,10 @@ extension OrbWindowController: OrbHostViewDelegate {
         guard let session = drag else { return }
         let moved = session.isMoving || dragInterruptedMotion
         unitToggle.mouseUp(event, moved: moved)
+        let lift = NSEvent.mouseLocation
+        if let delay = figureClick.up(time: event.timestamp, x: lift.x, y: lift.y, moved: moved) {
+            scheduleFigureClick(after: delay)
+        }
         let velocity = session.releaseVelocity()
         drag = nil
         if moved { release(velocity: velocity) }
@@ -806,5 +823,22 @@ extension OrbWindowController: OrbHostViewDelegate {
 
     func hostPress() {
         model.commands?.showDashboard()
+    }
+
+    /// Hands a single click on the orb to her renderer once the double-click time passed without a second click; the
+    /// renderer tells whether it landed on her drawn figure.
+    private func scheduleFigureClick(after delay: TimeInterval) {
+        figureClickTimer?.invalidate()
+        let timer = Timer(timeInterval: delay, repeats: false) { [weak self] _ in
+            MainActor.assumeIsolated {
+                guard let self else { return }
+                self.figureClickTimer = nil
+                guard let point = self.figureClick.take(now: ProcessInfo.processInfo.systemUptime) else { return }
+                self.runtime.feed.characterLive.click(at: NSPoint(x: point.x, y: point.y))
+                self.presenter.canvas.setNeedsFrame()
+            }
+        }
+        RunLoop.main.add(timer, forMode: .common)
+        figureClickTimer = timer
     }
 }

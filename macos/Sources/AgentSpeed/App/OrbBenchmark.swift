@@ -10,7 +10,8 @@ import Darwin
 ///
 /// `AGENT_SPEED_BENCH_STYLES` (comma separated) limits the styles, `AGENT_SPEED_BENCH_QUICK=1` runs only the single
 /// 148 pt orb scenarios, `AGENT_SPEED_BENCH_SECONDS` sets the measuring window (10), `AGENT_SPEED_BENCH_DISPLAY_SYNC=0`
-/// turns `displaySync` off.
+/// turns `displaySync` off. `AGENT_SPEED_BENCH_CLICK_THROUGH=0` lets the orbs take the pointer; `AGENT_SPEED_BENCH_AGENTS=idle`
+/// sets every agent idle (a living character waits, then rests).
 @MainActor
 final class OrbBenchmark {
     enum Check {
@@ -39,7 +40,7 @@ final class OrbBenchmark {
         let size: CGFloat
         let count: Int
         let states: [State]
-        var clickThrough = true
+        var clickThrough = ProcessInfo.processInfo.environment["AGENT_SPEED_BENCH_CLICK_THROUGH"] != "0"
     }
 
     struct Row {
@@ -229,6 +230,9 @@ final class OrbBenchmark {
     private func publish(model: AppModel, speed: Double, redline: Double) {
         // One snapshot per speed, re-stamped: the harness itself should cost next to nothing.
         var snapshot = snapshots[speed] ?? PreviewData.snapshot(speed: speed, redline: redline)
+        if ProcessInfo.processInfo.environment["AGENT_SPEED_BENCH_AGENTS"] == "idle" {
+            for i in snapshot.agents.indices { snapshot.agents[i].phase = .idle }
+        }
         snapshots[speed] = snapshot
         snapshot.timestamp = Date()
         var events: [SpeedEvent] = []

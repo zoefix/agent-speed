@@ -104,6 +104,8 @@ struct OrbFrame {
     var speedLevel = 0
     /// The value the readout shows (tok/s), for styles that roll their own digits.
     var readoutValue = 0.0
+    /// The hover scale the scene is drawn at around the canvas center.
+    var contentScale: CGFloat = 1
 
     var tokens: OrbTokens { content.tokens }
     var dark: Bool { content.tokens.isDark }

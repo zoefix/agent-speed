@@ -222,7 +222,8 @@ enum OrbContentBuilder {
                 readings.quota.isEmpty ? []
                     : CharacterQuotaText.sources(readings.quota, nowMs: model.quota.clockMs, l10n: l10n)
             } ?? [],
-            emptyLabel: l10n("character.empty")
+            emptyLabel: l10n("character.empty"),
+            live: feed.characterLive
         )
     }
 }

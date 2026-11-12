@@ -22,6 +22,7 @@ final class AppDelegate: NSObject, NSApplicationDelegate, AppCommands {
 
     func applicationDidFinishLaunching(_ notification: Notification) {
         CharacterLayers.factory = { CharacterRenderer() }
+        CharacterScreenLock.start()
         if let directory = options.previewDirectory {
             PreviewRenderer.run(into: directory)
             NSApp.terminate(nil)
