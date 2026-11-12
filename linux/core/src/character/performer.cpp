@@ -32,8 +32,10 @@ Side bookOf(const Rig& rig, Side fallback) {
 Performer::Performer(std::shared_ptr<const Pack> pack, std::uint64_t seed, double orb)
     : pack_(std::move(pack)),
       director_(unionParams(*pack_), seed, other(bookOf(pack_->poses[0].rig, Side::Left)),
-                bookOf(pack_->poses[0].rig, Side::Left), orb, false, pack_->manifest.motion.value_or(MotionProfile())),
-      slots_(director_.space()) {
+                bookOf(pack_->poses[0].rig, Side::Left), orb, false, pack_->manifest.motion.value_or(MotionProfile()),
+                pack_->living ? &pack_->poses[0].rig.variants : nullptr,
+                pack_->living ? pack_->states : std::vector<std::string>()),
+      slots_(director_.space()), living_(pack_->living) {
     const auto& space = director_.space();
     const auto& idle = pack_->poses[0].rig;
     values_.assign(static_cast<std::size_t>(space.count()), 0);
@@ -96,9 +98,34 @@ double Performer::poseScale(const std::array<std::optional<double>, 3>& base,
 int Performer::poseIndex(Band band) const {
     int best = 0;
     for (std::size_t i = 0; i < pack_->poses.size(); ++i) {
-        if (pack_->poses[i].band <= band) best = static_cast<int>(i);
+        if (!pack_->poses[i].state && pack_->poses[i].band <= band) best = static_cast<int>(i);
     }
     return best;
+}
+
+int Performer::wantedPose() const {
+    const Band band = director_.band().value_or(Band::Idle);
+    const auto mood = director_.poseWanted();
+    if (!mood) return poseIndex(band);
+    if (mood->keep()) return activePose_;
+    for (std::size_t i = 0; i < pack_->poses.size(); ++i) {
+        if (pack_->poses[i].state && *pack_->poses[i].state == mood->state) return static_cast<int>(i);
+    }
+    return poseIndex(band);
+}
+
+Band Performer::swappedBand() const {
+    const auto& pose = pack_->poses[static_cast<std::size_t>(activePose_)];
+    return pose.state ? director_.band().value_or(Band::Idle) : pose.band;
+}
+
+std::pair<double, double> Performer::faceCenter(double feetX, double feetY, double ppp) const {
+    const auto& placement = activePlacement();
+    const auto& face = activeRig().landmarks.face;
+    const double x = face && face->size() == 4 ? ((*face)[0] + (*face)[2]) / 2 : placement.feetX;
+    const double y = face && face->size() == 4 ? ((*face)[1] + (*face)[3]) / 2 : placement.feetY - 0.9 * idleHeight_ / placement.scale;
+    const auto p = placement.screen(x, y, feetX, feetY, ppp);
+    return {p.first + bodyOffset().first * ppp, p.second};
 }
 
 std::pair<double, double> Performer::bodyOffset() const {
@@ -111,24 +138,24 @@ void Performer::setCalm(bool calm) {
     director_.grounded = calm;
 }
 
-void Performer::applySides(int pose) {
-    const Side book = bookOf(pack_->poses[static_cast<std::size_t>(pose)].rig, director_.book());
-    director_.setSides(other(book), book, pack_->poses[static_cast<std::size_t>(pose)].band);
+void Performer::adoptActivePose() {
+    const auto& pose = pack_->poses[static_cast<std::size_t>(activePose_)];
+    const Side book = bookOf(pose.rig, director_.book());
+    director_.setSides(other(book), book, pose.name(), living_ ? &pose.rig.variants : nullptr);
 }
 
 void Performer::enterEdgeOn(int level) {
     activePose_ = poseIndex(bandOf(level));
-    const Side book = bookOf(activeRig(), director_.book());
     director_.setLevel(level);
-    director_.setSides(other(book), book, pack_->poses[static_cast<std::size_t>(activePose_)].band);
+    adoptActivePose();
     poseSwitch_.enterEdgeOn();
+    started_ = true;
 }
 
 void Performer::enterAtRest(int level) {
     activePose_ = poseIndex(bandOf(level));
-    const Side book = bookOf(activeRig(), director_.book());
     director_.setLevel(level);
-    director_.setSides(other(book), book, pack_->poses[static_cast<std::size_t>(activePose_)].band);
+    adoptActivePose();
 }
 
 HudLayout Performer::hudLayout(double feetX, double feetY, double ppp, double unit) const {
@@ -150,11 +177,31 @@ void Performer::damp() {
     }
 }
 
-void Performer::step(double dt, int level) {
+void Performer::step(double dt, int level, const BehaviorInputs* inputs) {
     events_.clear();
     exitReached_ = false;
     director_.setLevel(level);
-    director_.update(dt);
+    const BehaviorInputs* fed = living_ ? inputs : nullptr;
+    if (fed && fed->cursor) {
+        const auto& cursor = *fed->cursor;
+        if (!lastCursor_ || std::fabs(lastCursor_->first - cursor.first) >= 1e-4 || std::fabs(lastCursor_->second - cursor.second) >= 1e-4) {
+            cursorMovedAt_ = director_.time() + dt;
+        }
+        lastCursor_ = cursor;
+    } else if (lastCursor_) {
+        lastCursor_.reset();
+        cursorMovedAt_ = director_.time() + dt;
+    }
+    director_.update(dt, fed);
+    if (fed && !started_) {
+        // The first frame with inputs shows the mood's pose at once, without a turn.
+        started_ = true;
+        const int first = wantedPose();
+        if (first != activePose_ && !pendingExit_ && !poseSwitch_.isRunning()) {
+            activePose_ = first;
+            adoptActivePose();
+        }
+    }
     for (auto e : director_.events) {
         if (e == DirectorEvent::Petals) events_.push_back({PerformerEvent::Kind::Petals});
     }
@@ -167,21 +214,20 @@ void Performer::step(double dt, int level) {
     }
 
     const auto band = director_.band();
-    if ((calm_ || director_.profile().seated) && !pendingExit_ && band && poseIndex(*band) != activePose_ &&
-        !poseSwitch_.isRunning()) {
+    const int wanted = wantedPose();
+    if ((calm_ || director_.profile().seated) && !pendingExit_ && band && wanted != activePose_ && !poseSwitch_.isRunning()) {
         fadingPose_ = activePose_;
         fadingWorld_ = world_;
         fadingOpacities_ = opacities_;
         fadeProgress_ = 0;
-        activePose_ = poseIndex(*band);
-        applySides(activePose_);
-        events_.push_back({PerformerEvent::Kind::PoseSwapped, pack_->poses[static_cast<std::size_t>(activePose_)].band});
+        activePose_ = wanted;
+        adoptActivePose();
+        events_.push_back({PerformerEvent::Kind::PoseSwapped, swappedBand()});
     } else if (pendingExit_ && !poseSwitch_.isRunning()) {
         poseSwitch_.request(kExitTarget);
         pendingExit_ = false;
-    } else if (!pendingExit_ && band) {
-        const int wanted = poseIndex(*band);
-        if (wanted != activePose_) poseSwitch_.request(wanted);
+    } else if (!pendingExit_ && band && wanted != activePose_) {
+        poseSwitch_.request(wanted);
     }
     const auto sw = poseSwitch_.update(dt);
     if (sw.output) {
@@ -198,8 +244,8 @@ void Performer::step(double dt, int level) {
             exitReached_ = true;
         } else {
             activePose_ = target;
-            applySides(target);
-            events_.push_back({PerformerEvent::Kind::PoseSwapped, pack_->poses[static_cast<std::size_t>(target)].band});
+            adoptActivePose();
+            events_.push_back({PerformerEvent::Kind::PoseSwapped, swappedBand()});
         }
     }
     for (std::size_t i = 0; i < physics_.size(); ++i) {
@@ -285,13 +331,20 @@ void Stage::switchTo(Performer next) {
     current_.requestExit();
 }
 
-void Stage::step(double dt, int level) {
+void Stage::step(double dt, int level, const BehaviorInputs* inputs) {
     swapped_ = false;
     if (current_.calm() != calm) current_.setCalm(calm);
     current_.amplitude = amplitude;
+    BehaviorInputs quietInputs;
+    if (inputs) {
+        quietInputs = *inputs;
+        quietInputs.click = false;
+        quietInputs.over = false;
+    }
+    const BehaviorInputs* quiet = inputs ? &quietInputs : nullptr;
     if (outgoing_) {
         outgoing_->amplitude = amplitude;
-        outgoing_->step(dt, level);
+        outgoing_->step(dt, level, quiet);
     }
     if (outgoing_) {
         outgoingFade_ = std::min(1.0, outgoingFade_ + dt / Performer::kCrossfadeDuration);
@@ -307,12 +360,12 @@ void Stage::step(double dt, int level) {
         current_ = std::move(next);
         swapped_ = true;
     }
-    current_.step(dt, level);
+    current_.step(dt, level, inputs);
     if (current_.exitReached() && incoming_) {
         Performer next = std::move(*incoming_);
         incoming_.reset();
         next.enterEdgeOn(level);
-        next.step(dt, level);
+        next.step(dt, level, quiet);
         current_ = std::move(next);
         swapped_ = true;
     }

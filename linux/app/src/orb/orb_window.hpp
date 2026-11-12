@@ -12,6 +12,8 @@
 
 #include "agentspeed/character/pack.hpp"
 #include "agentspeed/character/selection.hpp"
+#include "orb/character/character_activity.hpp"
+#include "orb/character/character_live.hpp"
 #include "orb/character/character_quota.hpp"
 #include "orb/character/character_readings.hpp"
 #include "orb/gauge.hpp"
@@ -58,6 +60,10 @@ public:
     // The 額度 card's items of a `character` orb (QuotaView::cardItems for its sources and hosts, DESIGN 2a.6).
     void setQuota(const QVariantList& items);
     void setEffectsLevel(int level);
+    // Settings, Effects: a new peak cheers a living character only while peaks are celebrated.
+    void setCelebratePeaks(bool on) { celebratePeaks_ = on; }
+    // What a living character reacts to (CHARACTERS 5, Behavior), the same object for the orb's life.
+    const std::shared_ptr<CharacterLive>& characterLive() const { return characterLive_; }
     // The master switch and the orb's own visibility together.
     void setShown(bool shown);
     // Settings highlight (DESIGN 2b Identity at a glance): an accent ring outside the disc.
@@ -163,6 +169,11 @@ private:
     void addBezel(Scene& scene, const Frame& frame) const;
     void addHighlight(Scene& scene, const Frame& frame) const;
     bool onUnit(QPointF local) const;
+    // The pointer in window points for a living character (CHARACTERS 5, Behavior, `cursor`), or nullopt while it may
+    // not be read: not a character, click-through, hidden, dragged, the screen locked, or the pointer on another display.
+    // X11 reads it anywhere on the orb's screen; Wayland only while it is over the window.
+    std::optional<QPointF> pointerLocal() const;
+    void figureDue();
     void updateLabel();
     void announceUnit();
     void setUnitHover(bool on);
@@ -285,6 +296,17 @@ private:
     bool highlighted_ = false;
     double highlight_ = 0;
     QTimer unitTimer_;  // a single click on the unit waits out the double-click interval
+
+    // A living character (CHARACTERS 5, Behavior): her live inputs, the orb's agents' activity (from its first reading),
+    // the single click on her figure, and the pointer over the window (Wayland).
+    std::shared_ptr<CharacterLive> characterLive_ = std::make_shared<CharacterLive>();
+    std::optional<CharacterActivity> characterActivity_;
+    CharacterClickRule figureClick_{0.4};
+    QTimer figureTimer_;
+    bool celebratePeaks_ = true;
+    bool pointerInside_ = false;
+    QPointF pointerAt_;
+    double characterTracedAt_ = -1e9;
 
     // Dragging: the disc follows the pointer, pulled toward a touching position near another orb.
     bool dragging_ = false;

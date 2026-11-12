@@ -75,6 +75,8 @@ public:
     void setNames(const QString& names);
     int effectsLevel() const { return effectsLevel_; }
     void setEffectsLevel(int level);
+    // Settings, Effects: new peaks cheer living characters only while peaks are celebrated.
+    void setCelebratePeaks(bool on);
     QString selected() const { return selected_; }
     void select(const QString& id);
     QString banner() const { return banner_; }
@@ -187,6 +189,7 @@ private:
     bool forcedDark_ = false;
     QString names_ = QStringLiteral("auto");
     int effectsLevel_ = 2;
+    bool celebratePeaks_ = true;
     QString selected_;
     QString banner_;
     QTimer bannerTimer_;

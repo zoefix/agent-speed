@@ -87,6 +87,9 @@ KeyList ballistic(double start, double air, double height, int samples = 10);
 // Keys delayed by dt, holding the first value meanwhile.
 std::vector<CurveKey> shift(const std::vector<CurveKey>& keys, double dt);
 KeyList cat(std::initializer_list<KeyList> parts);
+// Plays motions together, each after its delay; a later motion wins a parameter both use (motions/curves.py, merge).
+MotionSpec merge(const std::string& name, const std::vector<const MotionSpec*>& motions, const std::vector<double>& delays,
+                 std::optional<std::string> expression);
 }  // namespace keys
 
 }  // namespace agentspeed::character

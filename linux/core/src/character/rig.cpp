@@ -106,6 +106,58 @@ RigDocument::Chain RigDocument::Chain::decode(const json::Value& e) {
     return c;
 }
 
+namespace {
+
+std::optional<bool> optBool(const json::Value& o, std::string_view key) {
+    auto v = o[key];
+    if (!v || v.isNull()) return std::nullopt;
+    if (!v.isBool()) jr::fail(key);
+    return v.isTrue();
+}
+
+std::optional<std::map<std::string, double>> optNumberMap(const json::Value& o, std::string_view key) {
+    auto v = o[key];
+    if (!v || v.isNull()) return std::nullopt;
+    if (!v.isObject()) jr::fail(key);
+    std::map<std::string, double> out;
+    for (const auto& [k, e] : v.members()) {
+        auto d = jr::number(e);
+        if (!d) jr::fail(key);
+        out[k] = *d;
+    }
+    return out;
+}
+
+}  // namespace
+
+RigDocument::Variant RigDocument::Variant::decode(const json::Value& v) {
+    if (!v.isObject()) jr::fail("variants");
+    Variant out;
+    out.id = jr::needString(v, "id");
+    out.kind = jr::needString(v, "kind");
+    out.param = jr::needString(v, "param");
+    out.side = jr::optString(v, "side");
+    out.front = optBool(v, "front");
+    out.arm = jr::optString(v, "arm");
+    out.forearm = jr::optString(v, "forearm");
+    out.lead = optNumberMap(v, "lead");
+    out.approach = optNumberMap(v, "approach");
+    out.region = jr::optString(v, "region");
+    return out;
+}
+
+std::vector<RigDocument::Variant> RigDocument::Variant::decodeList(const json::Value& v) {
+    std::vector<Variant> out;
+    if (!v.isArray()) return out;
+    for (const auto& e : v.elements()) {
+        try {
+            out.push_back(decode(e));
+        } catch (const CharacterError&) {
+        }
+    }
+    return out;
+}
+
 RigDocument RigDocument::decode(std::string_view text) {
     json::Document doc;
     if (!doc.parse(text)) throw CharacterError(Kind::Unreadable, "rig.json");
@@ -140,6 +192,7 @@ RigDocument RigDocument::decode(const json::Value& root) {
     d.partDrivers = objects<PartDriver>(root, "partDrivers", false, [](const json::Value& v) {
         return PartDriver{jr::needString(v, "param"), jr::needString(v, "part"), keyList(v, "keys")};
     });
+    d.variants = Variant::decodeList(root["variants"]);
     d.parts = objects<Part>(root, "parts", true, [](const json::Value& v) {
         Part p;
         p.name = jr::needString(v, "name");
@@ -276,6 +329,9 @@ Rig::Rig(const RigDocument& doc) {
     }
     physics = doc.physics;
     landmarks = doc.landmarks;
+    for (const auto& v : doc.variants) {
+        if (paramIndex.count(v.param)) variants.push_back(v);
+    }
 }
 
 std::vector<double> Rig::defaults() const {

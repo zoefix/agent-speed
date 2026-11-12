@@ -136,6 +136,21 @@ std::vector<std::string> MotionProfile::pool(const std::vector<std::string>& bas
     return out;
 }
 
+void MotionProfile::pool(const std::vector<std::string>& base, Band band, std::vector<const std::string*>& out) const {
+    out.clear();
+    for (const auto& a : base) {
+        if (allows(a)) out.push_back(&a);
+    }
+    for (const auto& a : signature) {
+        auto it = actionBands().find(a);
+        if (it == actionBands().end() || !allows(a)) continue;
+        const auto [lo, hi] = it->second;
+        if (!(lo <= band && band <= hi)) continue;
+        const int copies = contains(base, a) ? 2 : 3;
+        for (int i = 0; i < copies; ++i) out.push_back(&a);
+    }
+}
+
 double MotionProfile::grooveScale(const std::string& n) const {
     if (n == "PosY" || n == "Squash" || n == "FootPoint" || n == "FootLift" || n == "SkirtFlare") return bounce;
     if (n == "Hip" || n == "BodyAngleZ" || n == "Lean" || n == "AngleZ") return sway;
@@ -143,8 +158,10 @@ double MotionProfile::grooveScale(const std::string& n) const {
     return 1;
 }
 
-std::optional<std::string> MotionProfile::poseHand(Band band) const {
-    auto it = poseHands.find(name(band));
+std::optional<std::string> MotionProfile::poseHand(Band band) const { return poseHand(std::string(name(band))); }
+
+std::optional<std::string> MotionProfile::poseHand(const std::string& pose) const {
+    auto it = poseHands.find(pose);
     if (it == poseHands.end()) return std::nullopt;
     return it->second;
 }

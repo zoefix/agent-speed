@@ -17,7 +17,7 @@ namespace agentspeed::character {
 struct PerformerEvent {
     enum class Kind { Petals, PoseSwapped };
     Kind kind;
-    Band band = Band::Idle;  // PoseSwapped: the band's pose shown now
+    Band band = Band::Idle;  // PoseSwapped: the band of the pose shown now (the director's for a mood pose)
     bool operator==(const PerformerEvent&) const = default;
 };
 
@@ -38,6 +38,8 @@ struct PosePlacement {
 // One character on stage: its poses, one director over the union of their parameters, physics per pose, the pose
 // swap and the placement of each pose (characters/reference/stage.py). Step it once per frame with the speed level;
 // then read `activePose`, `world` and `opacities` to draw. No heap allocation per frame except when an action starts.
+// A living pack also takes the agents' phases and the user's cursor (`BehaviorInputs`): the mood's pose swaps in like a
+// band pose, and the director plays the shown pose's face.
 class Performer {
 public:
     static constexpr double kPosX = 3.0;
@@ -51,8 +53,16 @@ public:
     // The middle of the three ratios, so one that the pose throws off is outvoted; face to feet alone otherwise.
     static double poseScale(const std::array<std::optional<double>, 3>& base, const std::array<std::optional<double>, 3>& pose);
 
-    // The pose index a band shows: its own, else the nearest lower band's.
+    // The pose index a band shows: its own, else the nearest lower band's (never a mood pose).
     int poseIndex(Band band) const;
+    // The pose to show (section 6 with Behavior): the mood's pose when the pack has it, the shown pose while a poke or
+    // trouble keeps it, else the band's.
+    int wantedPose() const;
+    // A living pack: the director gets the shown pose's variants and the mood poses.
+    bool living() const { return living_; }
+    // The center of the shown pose's face box at rest where she stands now, in screen points (y down): the point the
+    // cursor input is measured from (spec/CHARACTERS.md, Behavior, Inputs).
+    std::pair<double, double> faceCenter(double feetX, double feetY, double pointsPerPixel) const;
 
     const Pack& pack() const { return *pack_; }
     const std::shared_ptr<const Pack>& packPointer() const { return pack_; }
@@ -73,8 +83,12 @@ public:
     double fadeProgress() const { return fadeProgress_; }
     std::optional<Band> band() const { return director_.band(); }
     double intensity() const { return director_.intensity(); }
-    // True while she acts out something or turns to swap poses: the frames that need the full 60 fps.
-    bool isActing() const { return director_.activeGesture().has_value() || poseSwitch_.isRunning() || fadingPose_.has_value(); }
+    // True while she acts out something or turns to swap poses, or in a living pack follows a moving cursor, swaps a
+    // face or talks: the frames that need the full 60 fps (DESIGN 2a.6).
+    bool isActing() const {
+        return director_.activeGesture().has_value() || poseSwitch_.isRunning() || fadingPose_.has_value() ||
+               director_.livingBusy(director_.time() - cursorMovedAt_ < kFollowSettle);
+    }
     // The character's sideways and upward travel this frame, in idle canvas pixels (y down).
     std::pair<double, double> bodyOffset() const;
 
@@ -87,8 +101,9 @@ public:
     void requestExit() { pendingExit_ = true; }
     void enterEdgeOn(int level);
     void enterAtRest(int level);
-    // Advances one frame at speed level 0...13.
-    void step(double dt, int level);
+    // Advances one frame at speed level 0...13. `inputs` (the agents' phases and the user's cursor) drive the moods of a
+    // living pack; any other pack ignores them.
+    void step(double dt, int level, const BehaviorInputs* inputs = nullptr);
 
     // The floating readout's geometry for this frame (characters/reference/stage.py).
     HudLayout hudLayout(double feetX, double feetY, double pointsPerPixel, double unit) const;
@@ -101,9 +116,14 @@ public:
 
 private:
     static constexpr int kExitTarget = -1;
+    // A head turn toward a moved cursor settles within this (the head springs).
+    static constexpr double kFollowSettle = 0.6;
 
     void damp();
-    void applySides(int pose);
+    // Hands the director the sides, the name and (in a living pack) the variants of the pose now shown.
+    void adoptActivePose();
+    // The band a swap into the shown pose reports: its own for a band pose, the director's for a mood pose.
+    Band swappedBand() const;
 
     std::shared_ptr<const Pack> pack_;
     Director director_;
@@ -127,6 +147,10 @@ private:
     bool pendingExit_ = false;
     Slots slots_;
     double faceWidth_ = 10;
+    bool living_ = false;
+    bool started_ = false;
+    std::optional<std::pair<double, double>> lastCursor_;
+    double cursorMovedAt_ = -1e9;
 };
 
 // The character an orb shows and the turn between two characters (spec/CHARACTERS.md, Which character): the current
@@ -137,7 +161,9 @@ public:
 
     // Starts the turn to another character; a newer request replaces one still waiting.
     void switchTo(Performer next);
-    void step(double dt, int level);
+    // Advances the characters one frame; the one leaving and the one arriving see the inputs without the click and the
+    // hover.
+    void step(double dt, int level, const BehaviorInputs* inputs = nullptr);
 
     const Performer& current() const { return current_; }
     Performer& current() { return current_; }

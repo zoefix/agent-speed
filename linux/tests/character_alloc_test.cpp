@@ -2,6 +2,7 @@
 // replacement of the global operator new that only counts while a probe runs on this thread.
 #include <gtest/gtest.h>
 
+#include <cmath>
 #include <cstdlib>
 #include <new>
 
@@ -60,6 +61,42 @@ TEST(CharacterPerformer, StepsWithoutAllocatingOnceWarm) {
         if (performer.director().motionStarts() == starts) {
             ++quiet;
             EXPECT_EQ(allocations, 0) << "allocations in a window without new actions";
+        }
+    }
+    EXPECT_GT(quiet, 0);
+}
+
+TEST(CharacterPerformer, TalkingAndFollowingTheCursorAllocateNothingOnceWarm) {
+    const std::vector<std::string> patches = {"expr-smile", "expr-wink", "expr-thinking", "mouth-a", "mouth-o",
+                                              "mouth-closed", "gaze-left", "gaze-right", "gaze-closed"};
+    Performer performer(Pack::load(living_pack::make({"think"}, "", living_pack::rigJSON(patches))));
+    ASSERT_TRUE(performer.living());
+    BehaviorInputs inputs;
+    inputs.phase = AgentActivity::Generating;
+    double t = 0;
+    bool talked = false, acting = false;
+    auto step = [&] {
+        t += 1.0 / 60;
+        inputs.cursor = std::pair{0.5 * std::sin(t), 0.2 * std::cos(0.7 * t)};
+        inputs.over = std::fabs(inputs.cursor->first) < 0.2;
+        performer.step(1.0 / 60, 3, &inputs);
+        talked = talked || performer.director().talking();
+        acting = acting || performer.isActing();
+    };
+    // A minute first: each path's first run fills its tables once.
+    for (int n = 0; n < 3600; ++n) step();
+    EXPECT_TRUE(talked);
+    EXPECT_TRUE(acting);
+    int quiet = 0;
+    for (int window = 0; window < 60; ++window) {
+        const int starts = performer.director().motionStarts();
+        allocations = 0;
+        counting = true;
+        for (int n = 0; n < 20; ++n) step();
+        counting = false;
+        if (performer.director().motionStarts() == starts) {
+            ++quiet;
+            EXPECT_EQ(allocations, 0) << "allocations in a living window without new actions";
         }
     }
     EXPECT_GT(quiet, 0);

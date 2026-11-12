@@ -170,6 +170,16 @@ CharacterManifest CharacterManifest::decode(std::string_view text) {
     auto preview = c["preview"].string();
     if (!preview) throw PackFailure(PackError::Format, "preview");
     m.preview = *preview;
+    if (const auto states = c["states"]; states && !states.isNull()) {
+        if (!states.isObject()) throw PackFailure(PackError::Format, "states");
+        std::map<std::string, std::string> map;
+        for (const auto& [state, path] : states.members()) {
+            auto p = path.string();
+            if (!p) throw PackFailure(PackError::Format, "states");
+            map[state] = *p;
+        }
+        m.states = std::move(map);
+    }
     return m;
 }
 
@@ -182,6 +192,11 @@ void CharacterManifest::validate(const std::optional<std::string>& appVersion) c
         if (!pack_layout::isSafe(path)) throw PackFailure(PackError::UnsafePath, path);
     }
     if (!pack_layout::isSafe(preview)) throw PackFailure(PackError::UnsafePath, preview);
+    if (states) {
+        for (const auto& [state, path] : *states) {
+            if (!pack_layout::isSafe(path)) throw PackFailure(PackError::UnsafePath, path);
+        }
+    }
     if (minApp && appVersion) {
         const auto needed = SemanticVersion::parse(*minApp);
         const auto current = SemanticVersion::parse(*appVersion);

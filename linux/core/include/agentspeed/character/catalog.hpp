@@ -71,6 +71,8 @@ struct CharacterManifest {
     std::optional<std::string> minApp;
     std::map<std::string, std::string> poses;
     std::string preview = "preview.png";
+    // The mood poses of a living pack by state (CHARACTERS 1, 5 Behavior); unknown states are kept and ignored.
+    std::optional<std::map<std::string, std::string>> states;
 
     bool operator==(const CharacterManifest&) const = default;
 

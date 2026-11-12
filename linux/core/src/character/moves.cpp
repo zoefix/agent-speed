@@ -21,15 +21,6 @@ const std::vector<std::string>& face() {
     static const std::vector<std::string> v = {"yawn", "hum"};
     return v;
 }
-const std::vector<std::string>& arm() {
-    static const std::vector<std::string> v = {"wave", "peace", "fist", "idea", "chin", "hairtuck",
-                                               "present", "hip", "hug", "raise", "open"};
-    return v;
-}
-const std::vector<std::string>& combos() {
-    static const std::vector<std::string> v = {"cheer", "hooray", "eureka", "ponder", "cuddle", "proud"};
-    return v;
-}
 
 MotionSpec headGesture(const std::string& name) {
     CurveSet c;

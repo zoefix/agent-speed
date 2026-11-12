@@ -37,6 +37,23 @@ std::pair<std::int64_t, std::size_t> repeatRun(const std::vector<const Action*>&
 
 }  // namespace
 
+std::optional<std::int64_t> repeatFailure(const std::deque<Action>& actions) {
+    const Action* newest = nullptr;
+    const Action* previous = nullptr;
+    for (const auto& action : actions) {
+        if (!action.resultMs) continue;
+        const std::int64_t at = *action.resultMs;
+        if (newest && at < *newest->resultMs) {
+            if (!previous || at >= *previous->resultMs) previous = &action;
+        } else {
+            previous = newest;
+            newest = &action;
+        }
+    }
+    if (newest && newest->failed == true && !newest->seeded && previous && previous->failed == true) return newest->resultMs;
+    return std::nullopt;
+}
+
 Signals signalsOf(const std::deque<Action>& actions, std::int64_t now) {
     std::vector<const Action*> recent;
     for (const auto& a : actions) {

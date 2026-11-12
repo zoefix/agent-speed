@@ -4,6 +4,7 @@
 #include <cmath>
 #include <map>
 
+#include "agentspeed/character/arm_gestures.hpp"
 #include "agentspeed/character/moves.hpp"
 
 namespace agentspeed::character {
@@ -23,6 +24,18 @@ const std::vector<std::string>& poolOf(Band b) {
         {Band::Redline, {"fist", "raise", "peace", "jumpjoy", "run", "spin", "hops", "cheer", "hooray", "jump"}},
     };
     return pools.at(b);
+}
+
+// The idle pool while she waits, before yawning and stretching join it.
+const std::vector<std::string>& waitEarly() {
+    static const std::vector<std::string> early = [] {
+        std::vector<std::string> out;
+        for (const auto& a : poolOf(Band::Idle)) {
+            if (a != "yawn" && a != "stretch") out.push_back(a);
+        }
+        return out;
+    }();
+    return early;
 }
 
 std::pair<double, double> gapOf(Band b) {
@@ -50,7 +63,7 @@ bool contains(const std::vector<std::string>& v, const std::string& s) {
 }  // namespace
 
 Director::Director(const std::vector<Param>& params, std::uint64_t seed, Side out, Side book, double orb, bool celebrate,
-                   MotionProfile profile)
+                   MotionProfile profile, const std::vector<RigDocument::Variant>* variants, const std::vector<std::string>& states)
     : space_(params), slots_(space_), profile_(std::move(profile)), out_(out), book_(book), orb_(orb),
       celebrate_(celebrate), rng_(seed), beat_(profile_.tempo) {
     const auto n = static_cast<std::size_t>(space_.count());
@@ -85,6 +98,8 @@ Director::Director(const std::vector<Param>& params, std::uint64_t seed, Side ou
     grooveOut_.reserve(32);
     grooveTouched_.reserve(32);
     events.reserve(8);
+    pool_.reserve(64);
+    recent_.reserve(8);
     int k = 0;
     for (Side side : {Side::Left, Side::Right}) {
         if (space_.isParam(std::string("Finger.") + name(side) + ".0")) {
@@ -95,13 +110,32 @@ Director::Director(const std::vector<Param>& params, std::uint64_t seed, Side ou
         }
         ++k;
     }
+    if (variants) setVariants(*variants);
+    const auto& f = faces();
+    if (!states.empty() || !f.expressions.empty() || !f.mouths.empty() || !f.gazes.empty()) {
+        behavior_.emplace(seed, states);
+        refreshBehaviorOptions();
+    }
 }
 
 void Director::setSides(Side out, Side book, std::optional<Band> poseBand) {
+    setSides(out, book, poseBand ? std::string(name(*poseBand)) : poseName_, nullptr);
+}
+
+void Director::setSides(Side out, Side book, const std::string& pose, const std::vector<RigDocument::Variant>* variants) {
     out_ = out;
     book_ = book;
-    if (poseBand) poseBand_ = *poseBand;
-    const auto hand = profile_.poseHand(poseBand_);
+    if (variants) {
+        if (gesture_ && std::any_of(gesture_->motion.entries.begin(), gesture_->motion.entries.end(),
+                                    [](const Motion::Entry& e) { return e.name.starts_with("Var."); })) {
+            gesture_.reset();
+        }
+        setVariants(*variants);
+        refreshBehaviorOptions();
+        snapFaces_ = true;
+    }
+    poseName_ = pose;
+    const auto hand = profile_.poseHand(poseName_);
     for (auto& h : hands_) {
         h.holds = h.side == book;
         h.setMode(hand);
@@ -117,9 +151,26 @@ bool Director::can(std::initializer_list<const char*> names) const {
 }
 
 std::optional<MotionSpec> Director::spec(const std::string& gid) {
-    if (contains(gestures::arm(), gid) || contains(gestures::combos(), gid)) return std::nullopt;
     if (grounded && contains(kAirborne, gid)) return std::nullopt;
-    if (gid == "jumpjoy") return can({"PosY", "Squash"}) ? std::optional(moves::jump(out_, book_, true)) : std::nullopt;
+    if (const auto a = arm_gestures::arms().find(gid); a != arm_gestures::arms().end()) {
+        const auto* m = arm(gid);
+        if (!m) return std::nullopt;
+        return arm_gestures::armGesture(*m, a->second.hold, a->second.flourish, a->second.expression,
+                                        a->second.tiptoe && space_.isParam(std::string("FootPoint")));
+    }
+    if (const auto c = arm_gestures::combos().find(gid); c != arm_gestures::combos().end()) {
+        const auto* bookArm = arm(c->second.book);
+        const auto* freeArm = arm(c->second.free);
+        if (!bookArm || !freeArm) return std::nullopt;
+        return arm_gestures::combo(gid, *bookArm, *freeArm, c->second.hold, c->second.expression);
+    }
+    if (gid == "jumpjoy") {
+        if (!can({"PosY", "Squash"})) return std::nullopt;
+        const auto cheer = spec("cheer");
+        auto body = moves::jump(out_, book_, !cheer);
+        if (!cheer) return body;
+        return keys::merge("jumpjoy", {&*cheer, &body}, {0, 0.2}, std::string("happy"));
+    }
     if (gid == "step") {
         if (!can({"PosX", "PosY"})) return std::nullopt;
         const double away = -orb_ * kStage;
@@ -137,7 +188,11 @@ std::optional<MotionSpec> Director::spec(const std::string& gid) {
     }
     if (contains(moves::names(), gid)) return can({"PosY", "Squash"}) ? moves::make(gid, out_, book_) : std::nullopt;
     if (contains(gestures::head(), gid)) return gestures::headGesture(gid);
-    if (contains(gestures::face(), gid) && contains(profile_.signature, gid)) return gestures::faceGesture(gid);
+    if (contains(gestures::face(), gid)) {
+        // A living pack yawns and hums in every pose: the face and the lips follow when the pose has patches.
+        const char* face = gid == "yawn" ? "sleepy" : "talk";
+        if (faces().faceIds.count(face) || contains(profile_.signature, gid) || active_) return gestures::faceGesture(gid);
+    }
     return std::nullopt;
 }
 
@@ -150,6 +205,13 @@ bool Director::startGesture(const std::string& gid) {
     hard.reserve(motion.entries.size());
     for (const auto& e : motion.entries) {
         hard.push_back(std::any_of(kHard.begin(), kHard.end(), [&](const std::string& p) { return e.name.starts_with(p); }));
+    }
+    for (const auto& e : motion.entries) {
+        const auto slot = static_cast<std::size_t>(e.slot);
+        if (e.name.find('@') != std::string::npos && springs_[slot]) {
+            springs_[slot]->snap(e.curve.start());
+            springLive_[slot] = true;
+        }
     }
     gesture_ = Playing{std::move(motion), std::move(hard)};
     motionStarts_ += 1;
@@ -173,10 +235,17 @@ void Director::setLevel(int level) {
         const bool rising = band > *band_;
         band_ = band;
         playGroove(band);
-        if (rising && celebrate_ && (!gesture_ || gesture_->t > 0.5 * gesture_->motion.duration)) {
-            for (const auto& gid : rng_.sample(kCelebrations, kCelebrations.size())) {
-                if (startGesture(gid)) break;
+        if (rising) {
+            if (celebrate_ && (!gesture_ || gesture_->t > 0.5 * gesture_->motion.duration)) {
+                for (const auto& gid : rng_.sample(kCelebrations, kCelebrations.size())) {
+                    if (startGesture(gid)) break;
+                }
             }
+            eventFace_ = band == Band::Redline ? "surprised" : "happy";
+            eventUntil_ = time_ + 1.2;
+        } else {
+            eventFace_ = "smile";
+            eventUntil_ = time_ + 1.5;
         }
         nextGesture_ = time_ + 1.5;
     }
@@ -215,33 +284,61 @@ void Director::blendGrooves(double dt) {
     }
 }
 
+double Director::idleShare(int slot) const {
+    if (gesture_) {
+        for (const auto& e : gesture_->motion.entries) {
+            if (e.slot == slot) return 1 - gesture_->w;
+        }
+    }
+    return 1;
+}
+
 void Director::addIdle(int slot, double v) {
     const auto& p = space_.params()[static_cast<std::size_t>(slot)];
     if (!p) return;
-    double share = 1.0;
-    if (gesture_) {
-        const auto& entries = gesture_->motion.entries;
-        if (std::any_of(entries.begin(), entries.end(), [slot](const Motion::Entry& e) { return e.slot == slot; })) {
-            share = 1 - gesture_->w;
-        }
-    }
-    write(slot, std::min(std::max(values_[static_cast<std::size_t>(slot)] + share * v, p->min), p->max));
+    write(slot, std::min(std::max(values_[static_cast<std::size_t>(slot)] + idleShare(slot) * v, p->min), p->max));
 }
 
-void Director::applyGesture(double dt) {
-    if (!gesture_) {
-        if (time_ >= nextGesture_) {
-            std::vector<std::string> pool;
-            for (const auto& g : profile_.pool(poolOf(*band_), *band_)) {
-                if (!contains(recent_, g)) pool.push_back(g);
+std::pair<double, double> Director::currentGaps() const {
+    const Band band = band_.value_or(Band::Idle);
+    return active_ && behavior_ ? behavior_->gaps(band, &gapOf) : gapOf(band);
+}
+
+void Director::fillPool() {
+    const Band band = band_.value_or(Band::Idle);
+    if (!active_ || !behavior_) {
+        profile_.pool(poolOf(band), band, pool_);
+    } else {
+        const auto [actions, signature] = behavior_->pool(band, poolOf(band), poolOf(Band::Idle), waitEarly());
+        if (signature) {
+            profile_.pool(*actions, *signature, pool_);
+        } else {
+            pool_.clear();
+            for (const auto& a : *actions) {
+                if (profile_.allows(a)) pool_.push_back(&a);
             }
-            rng_.shuffle(pool);
-            for (const auto& gid : pool) {
-                if (startGesture(gid)) break;
+        }
+    }
+    pool_.erase(std::remove_if(pool_.begin(), pool_.end(), [this](const std::string* a) { return contains(recent_, *a); }),
+                pool_.end());
+}
+
+const Motion* Director::applyGesture(double dt) {
+    if (!gesture_) {
+        if (active_) {
+            for (const auto& gid : behavior_->takeQueue()) {
+                if (startGesture(gid)) return nullptr;
+            }
+        }
+        if (time_ >= nextGesture_ && !(active_ && behavior_->attending())) {
+            fillPool();
+            rng_.shuffle(pool_);
+            for (const auto* gid : pool_) {
+                if (startGesture(*gid)) break;
             }
             nextGesture_ = time_ + 1.0;
         }
-        return;
+        return nullptr;
     }
     Playing& g = *gesture_;
     g.t += dt;
@@ -261,14 +358,17 @@ void Director::applyGesture(double dt) {
     if (g.t >= m.duration) {
         stageX_ += m.travel;
         gesture_.reset();
-        const auto gap = gapOf(*band_);
+        const auto gap = currentGaps();
         nextGesture_ = time_ + rng_.uniform(gap.first * profile_.gap, gap.second * profile_.gap);
+        return nullptr;
     }
+    return &m;
 }
 
-void Director::update(double dt) {
+void Director::update(double dt, const BehaviorInputs* inputs) {
     constexpr double pi = math::kPi;
     time_ += dt;
+    feel(dt, inputs);
     intensity_ += (static_cast<double>(level_) / 13 - intensity_) * std::min(1.0, dt * 2.5);
     const double s = intensity_, t = time_;
     beat_.update(dt, band_.value_or(Band::Idle));
@@ -283,7 +383,7 @@ void Director::update(double dt) {
         }
     }
     blendGrooves(dt);
-    applyGesture(dt);
+    const Motion* playing = applyGesture(dt);
     auto v = [this](int slot) { return values_[static_cast<std::size_t>(slot)]; };
     write(slots_.posX, v(slots_.posX) + stageX_);
     if (armsHeld_) {
@@ -306,6 +406,11 @@ void Director::update(double dt) {
 
     breathPhase_ += dt / (4.2 - 2.4 * s);
     write(slots_.breath, std::max(v(slots_.breath), 0.5 - 0.5 * std::cos(2 * pi * breathPhase_)));
+    if (active_) {
+        const auto& target = behavior_->lookTarget();
+        look(slots_.angleX, target.angleX);
+        look(slots_.angleY, target.angleY);
+    }
     const double amp = 0.06 + 0.12 * s;
     write(slots_.angleX, v(slots_.angleX) + amp * (std::sin(t * 0.83) + 0.5 * std::sin(t * 1.91 + 1.3)));
     write(slots_.angleY, v(slots_.angleY) + amp * 0.7 * std::sin(t * 1.17 + 0.4));
@@ -336,7 +441,15 @@ void Director::update(double dt) {
     write(slots_.eyeBallX, std::max(-1.0, std::min(1.0, v(slots_.eyeBallX) + 0.35 * gazeX_)));
     write(slots_.eyeBallY, std::max(-1.0, std::min(1.0, v(slots_.eyeBallY) + 0.35 * gazeY_)));
 
-    const double openness = blink(dt);
+    double openness;
+    if (active_) {
+        const auto& target = behavior_->lookTarget();
+        look(slots_.eyeBallX, target.eyeBallX);
+        look(slots_.eyeBallY, target.eyeBallY);
+        openness = livingFace(dt, playing);
+    } else {
+        openness = blink(dt);
+    }
     for (int slot : slots_.eyeOpen) {
         const auto i = static_cast<std::size_t>(slot);
         if (present_[i]) values_[i] = std::min(values_[i], openness);

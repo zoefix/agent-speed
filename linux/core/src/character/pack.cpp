@@ -1,8 +1,10 @@
 #include "agentspeed/character/pack.hpp"
 
+#include <algorithm>
 #include <fstream>
 #include <sstream>
 
+#include "agentspeed/character/behavior.hpp"
 #include "agentspeed/character/error.hpp"
 #include "agentspeed/character/json_read.hpp"
 
@@ -80,6 +82,13 @@ PackManifest PackManifest::decode(std::string_view text) {
     m.poses = stringMap(c, "poses");
     m.preview = jr::needString(c, "preview");
     if (auto motion = c["motion"]; motion.isObject()) m.motion = MotionProfile::decode(motion);
+    if (auto states = c["states"]; states.isObject()) {
+        try {
+            m.states = stringMap(c, "states");
+        } catch (const CharacterError&) {
+            m.states.clear();
+        }
+    }
     return m;
 }
 
@@ -165,9 +174,31 @@ std::shared_ptr<const Pack> Pack::load(const fs::path& rootIn) {
         }
         Rig rig(doc);
         const fs::path atlas = resolve(rig.atlasFile, dir);
-        pack->poses.push_back(Pose{band, std::move(rig), atlas});
+        pack->poses.push_back(Pose{band, std::move(rig), atlas, std::nullopt});
     }
     if (pack->poses.empty() || pack->poses.front().band != Band::Idle) throw CharacterError(Kind::MissingIdlePose, "idle");
+    // A mood pose that is missing or unreadable shows the band pose instead; one that leads outside is refused.
+    for (const auto& [state, folder] : m.states) (void)resolve(folder, root);
+    for (const auto& state : Behavior::stateNames()) {
+        auto folder = m.states.find(state);
+        if (folder == m.states.end()) continue;
+        const fs::path dir = resolve(folder->second, root);
+        auto text = readFile(resolve("rig.json", dir));
+        if (!text) continue;
+        std::optional<Rig> rig;
+        try {
+            rig.emplace(RigDocument::decode(*text));
+        } catch (const CharacterError&) {
+            continue;
+        }
+        const fs::path atlas = resolve(rig->atlasFile, dir);
+        if (!fs::is_regular_file(atlas, ec)) continue;
+        pack->poses.push_back(Pose{Band::Idle, std::move(*rig), atlas, state});
+        pack->states.push_back(state);
+    }
+    const auto& idleVariants = pack->poses.front().rig.variants;
+    pack->living = !m.states.empty() ||
+                   std::any_of(idleVariants.begin(), idleVariants.end(), [](const RigDocument::Variant& v) { return v.kind == "patch"; });
     return pack;
 }
 

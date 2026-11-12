@@ -213,7 +213,16 @@ void CharacterStyle::step(const Frame& f) {
     Lap lap;
     stage_->calm = false;
     stage_->amplitude = f.effects.level == 0 ? 0 : f.effects.level == 1 ? 0.5 : 1;
-    stage_->step(dt, content_.level);
+    // A living pack's inputs (CHARACTERS 5, Behavior): the orb's agents, and the pointer read now, while she draws.
+    std::optional<ac::BehaviorInputs> inputs;
+    if (content_.live && stage_->current().living()) {
+        const auto& current = stage_->current();
+        const auto g = geometry(f, current);
+        const LiveGeometry live{f.center, f.s, 2 * f.center.x(), content_.contentScale, current.faceCenter(g.feetX, g.feetY, g.ppp),
+                                g.height, g.bodyDX};
+        inputs = liveReader_.read(*content_.live, f.time, live, silhouette_ ? &*silhouette_ : nullptr);
+    }
+    stage_->step(dt, content_.level, inputs ? &*inputs : nullptr);
     const auto& performer = stage_->current();
     if (loaded_.size() > 1 && !stage_->incoming() && !stage_->outgoing()) {
         loaded_ = {{performer.pack().id(), performer.packPointer()}};
@@ -553,9 +562,9 @@ void CharacterStyle::drawPose(Scene& scene, const Frame& f, const ac::Performer&
 
 void CharacterStyle::drawCharacter(Scene& scene, const Frame& f, const ac::Performer& performer, double alpha, double now) {
     const auto g = geometry(f, performer);
-    // Keep the pose the band asks for resident too, so a swap finds its atlas ready.
-    if (const auto band = performer.band()) {
-        const int wanted = performer.poseIndex(*band);
+    // Keep the pose the band or the mood asks for resident too, so a swap finds its atlas ready.
+    if (performer.band()) {
+        const int wanted = performer.wantedPose();
         if (wanted != performer.activePose()) (void)atlas(performer, wanted, g.ppp, now);
     }
     if (const auto fading = performer.fadingPose()) {
@@ -980,6 +989,23 @@ void CharacterStyle::drawPeak(Scene& scene, const Frame& f) {
     const Rgba gold{1, 200.0f / 255, 80.0f / 255, 1};
     const Pen pen{QPointF(x, peak->y), peak->scale, 0, peak->alpha * f.alpha};
     chip(scene, pen, f.dark, content_.peakLabel, m.peak, 0, f.dark ? gold : gold.darkened(0.35), gold.opacity(0.5));
+}
+
+QString CharacterStyle::behaviorTrace() const {
+    if (!stage_) return QStringLiteral("-");
+    const auto& performer = stage_->current();
+    const auto& d = performer.director();
+    const auto text = [](auto value) { return value ? QString::fromUtf8(std::string(*value).c_str()) : QStringLiteral("-"); };
+    const auto angle = d.value("AngleX");
+    QString out = QStringLiteral("mood=%1 pose=%2 face=%3 gaze=%4 mouth=%5 action=%6 angleX=%7 acting=%8")
+                      .arg(d.mood() ? QString::fromUtf8(std::string(ac::moodName(*d.mood())).c_str()) : QStringLiteral("-"),
+                           QString::fromStdString(performer.pack().poses[static_cast<std::size_t>(performer.activePose())].name()),
+                           text(d.expression()), text(d.gazePatch()), text(d.mouthShape()), text(d.activeGesture()),
+                           angle ? QString::number(*angle, 'f', 2) : QStringLiteral("-"),
+                           performer.isActing() ? QStringLiteral("true") : QStringLiteral("false"));
+    if (liveReader_.lastFace) out += QStringLiteral(" faceAt=%1,%2").arg(liveReader_.lastFace->first, 0, 'f', 1).arg(liveReader_.lastFace->second, 0, 'f', 1);
+    if (liveReader_.lastPointer) out += QStringLiteral(" pointer=%1,%2").arg(liveReader_.lastPointer->x(), 0, 'f', 1).arg(liveReader_.lastPointer->y(), 0, 'f', 1);
+    return out;
 }
 
 }  // namespace orb
