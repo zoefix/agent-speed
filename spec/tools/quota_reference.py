@@ -781,6 +781,61 @@ def vendor_cases(now_ms):
     antigravity_status = {"userStatus": {"cascadeModelConfigData": {"clientModelConfigs": [
         {"label": "Gemini 3 Pro", "quotaInfo": {"remainingFraction": 0.6, "resetTime": "2026-11-10T22:00:00Z"}},
         {"label": "x", "quotaInfo": {}}]}}}
+    desktop_args = ["language_server", "--standalone", "--override_ide_name", "antigravity", "--subclient_type", "hub",
+                    "--https_server_port", "0", "--csrf_token", "csrf-token-1", "--app_data_dir", "antigravity"]
+    servers = [
+        ("macos", "/Applications/Antigravity.app/Contents/Resources/bin/language_server", desktop_args),
+        ("macos", "/Applications/Antigravity.app/Contents/Resources/bin/language_server", ["language_server"]),
+        ("macos", "/usr/local/bin/language_server", ["language_server", "--stdio"]),
+        ("macos", "/opt/lsp/language_server", ["language_server", "--app_data_dir", "/Users/me/.gemini/antigravity"]),
+        ("macos", "/opt/lsp/language_server", ["language_server", "--app_data_dir=/Users/me/.gemini/Antigravity-IDE"]),
+        ("macos", "/opt/lsp/language_server", ["language_server", "--app_data_dir", "/tmp/other", "--name", "x"]),
+        ("macos", "/opt/lsp/language_server", ["language_server", "--antigravity"]),
+        ("macos", "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/"
+                  "language_server_macos_arm", ["language_server_macos_arm"]),
+        ("macos", "/Users/me/.local/share/agy/language_server_macos_arm", ["x", "--app_data_dir", "antigravity-cli"]),
+        ("macos", "/usr/local/bin/language_serverx", ["language_serverx", "--app_data_dir", "antigravity"]),
+        ("macos", "/usr/local/bin/Language_Server", ["Language_Server", "--app_data_dir", "antigravity"]),
+        ("windows", "C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\language_server.exe",
+         ["language_server.exe", "--app_data_dir", "antigravity"]),
+        ("windows", "C:\\Tools\\LANGUAGE_SERVER.EXE", ["LANGUAGE_SERVER.EXE", "--app_data_dir=antigravity"]),
+        ("windows", "C:\\Tools\\language_server.exe", ["language_server.exe"]),
+    ]
+    usage = {"input_tokens": 0, "output_tokens": 0, "total_tokens": 0}
+    observed_report = {"status": "SUCCESS", "response": "group\tbucket\tremaining\n", "num_turns": 0, "usage": usage,
+                       "command": {"name": "usage", "data": {"groups": [
+                           {"name": "Gemini Models", "buckets": [
+                               {"id": "gemini-weekly", "name": "Weekly Limit Remaining", "window": "weekly",
+                                "remaining_fraction": 0.9548, "reset_time": "2026-11-21T02:28:26Z"}]},
+                           {"name": "Claude and GPT models", "buckets": [
+                               {"id": "3p-weekly", "window": "weekly", "remaining_fraction": 1,
+                                "reset_time": "2026-11-21T08:37:43Z"}]}]}}}
+    mixed_report = {"status": "SUCCESS", "command": {"name": "usage", "data": {"groups": [
+        {"displayName": "Gemini 4 Argon", "name": "ignored", "buckets": [
+            {"id": "argon-5h", "remainingFraction": 0.5, "remaining_fraction": 0.9, "reset_time": 1794800000},
+            {"id": "argon-weekly", "remaining_fraction": 0.25, "disabled": True},
+            {"id": "argon-daily", "remaining_fraction": 0.1},
+            {"bucketId": "weekly", "id": "5h", "remaining": {"remainingFraction": 0.8}}]},
+        "not a group",
+        {"name": "Gemini Models", "buckets": [{"name": "Five hour", "remaining_fraction": "0.5"}]}]}}}
+    def report(**changes):
+        out = json.loads(json.dumps(observed_report))
+        out.update(changes)
+        return out
+    cli_reports = [
+        ("observed", json.dumps(observed_report) + "\n"),
+        ("mixedNames", json.dumps(mixed_report)),
+        ("failedStatus", json.dumps(report(status="ERROR"))),
+        ("otherCommand", json.dumps(report(command={"name": "help", "data": observed_report["command"]["data"]}))),
+        ("dataNotAnObject", json.dumps(report(command={"name": "usage", "data": []}))),
+        ("noCommand", json.dumps({"status": "SUCCESS", "response": "Weekly 95%"})),
+        ("noWindows", json.dumps(report(command={"name": "usage", "data": {"groups": []}}))),
+        ("notJson", "Please sign in to Antigravity: https://accounts.google.com/...\n"),
+        ("empty", ""),
+        ("array", "[]"),
+    ]
+    agy_versions = ["1.5.9\n", "1.1.11", "1.1.10", "1.10.0", "  2.0.0  ", "1.2", "v1.5.9", "agy 1.5.9", "1.5.9-beta",
+                    "1.5.9\n1.6.0", "", "1.5.x"]
     kimi_new = {"usages": {"limit_5h": {"used_ratio": 0.25, "reset_time": "2026-11-10T22:00:00Z"},
                            "limit_7d": {"used_ratio": 0.5, "reset_time": iso},
                            "limit_month_total": {"used_ratio": 0.125, "reset_time": "2026-12-01T00:00:00Z"},
@@ -829,6 +884,12 @@ def vendor_cases(now_ms):
         "devin": {"rows": devin_rows, "expected": v.devin_windows(devin_rows)},
         "antigravity": {"body": antigravity, "expected": v.antigravity_windows(antigravity)},
         "antigravityStatus": {"body": antigravity_status, "expected": v.antigravity_status_windows(antigravity_status)},
+        "antigravityServers": [{"platform": plat, "executable": exe, "arguments": args,
+                                "expected": v.antigravity_server(exe, args, windows=plat == "windows")}
+                               for plat, exe, args in servers],
+        "antigravityCli": [{"name": n, "stdout": text, "expected": v.antigravity_cli_windows(text)} for n, text in cli_reports],
+        "agyVersions": [{"text": t, "version": list(v.agy_version(t)) if v.agy_version(t) else None,
+                         "supported": v.agy_supported(t)} for t in agy_versions],
         "kimiCurrent": {"body": kimi_new, "expected": v.kimi_windows(kimi_new)},
         "kimiLegacy": {"body": kimi_old, "expected": v.kimi_windows(kimi_old)},
         "geminiProject": {"body": gemini_load, "expected": v.gemini_project(gemini_load)},

@@ -74,6 +74,8 @@ class Env:
         self.platform = case.get("platform", "macos")
         self.home = case.get("home", "/Users/dev")
         self.vars = case.get("env", {})
+        # Agent Speed's own process (METRICS 10.5): it and its descendants are never agent processes.
+        self.app_pid = case.get("appPid")
 
     def norm(self, path: str | None) -> str:
         if not path:
@@ -168,6 +170,18 @@ def _is_hermes(env: Env, proc: dict) -> bool:
     return False
 
 
+ANTIGRAVITY_APPS = ("/Antigravity.app/", "/Antigravity IDE.app/", "/Gemini.app/")
+
+
+def _is_antigravity_server(env: Env, exe: str, args: list[str]) -> bool:
+    """A plain `language_server` counts only inside one of the apps or with `--app_data_dir` and antigravity."""
+    path = exe.replace("\\", "/")
+    if any(app.lower() in path.lower() if env.platform == "windows" else app in path for app in ANTIGRAVITY_APPS):
+        return True
+    flagged = any(a == "--app_data_dir" or a.startswith("--app_data_dir=") for a in args)
+    return flagged and any("antigravity" in a.lower() for a in args)
+
+
 def match_source(env: Env, proc: dict, ancestors: list[dict]) -> str | None:
     """The source whose agent-process row (METRICS 10.5) matches, or None."""
     exe = proc.get("exe") or ""
@@ -200,7 +214,7 @@ def match_source(env: Env, proc: dict, ancestors: list[dict]) -> str | None:
         return "gemini"
     if name == "omp" or "/@oh-my-pi/" in script or "/oh-my-pi/" in script:
         return "omp"
-    if name == "agy" or name.startswith("language_server_"):
+    if name == "agy" or name.startswith("language_server_") or (name == "language_server" and _is_antigravity_server(env, exe, args)):
         return "antigravity"
     if name in ("zcode", "zcode-cli") or "/@zcode/cli/" in script:
         return "zcode"
@@ -256,6 +270,9 @@ class ProcessTable:
                 seen.add((cursor["pid"], cursor["start"]))
                 ancestors.append(cursor)
                 cursor = parent(cursor)
+            if self.env.app_pid is not None and any(x["pid"] == self.env.app_pid for x in [p] + ancestors):
+                self.known[key] = {"role": None, "source": None, "root": None}
+                continue
             nearest = None
             for a in ancestors:
                 c = self.known.get((a["pid"], a["start"]))

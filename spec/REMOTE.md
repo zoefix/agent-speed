@@ -444,7 +444,7 @@ browsers, and no key the user pasted into the app.
 | `claudeCode` | the status line bridge of the host (11.3), per host, off by default |
 | `grokBuild` | the log (9.2); live when the app's `quotaGrokBuildLive` is on |
 | `kimi`, `gemini`, `droid` | the vendor API with the host's own sign-in (9.5, 9.6, 9.7; Droid's key from the host's `~/.factory/.env` or the SSH command's environment) |
-| `antigravity` | the `agy` language server on the host's loopback (9.4) |
+| `antigravity` | the `agy` language server on the host's loopback (9.4); agy's usage report (9.4 *CLI usage report*) does not run on hosts yet, so agy 1.2.2 and later show no quota there |
 
 Not on hosts:
 - `claudeDesktop`, `devin`: desktop apps.
