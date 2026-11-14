@@ -3412,8 +3412,8 @@ The app keeps a **process table** of the current user's processes (on Windows: o
 ticks 10.10 gives: pid, parent pid, start time,
 executable path and, only for script hosts (`node`, `bun`, `deno`, with or without `.exe`), Python hosts (`python`,
 `pythonw`, or `python` followed by digits and dots such as `python3` and `python3.14`, compared case-insensitively on
-both platforms because macOS framework builds run `Python`; with or without `.exe`) and WorkBuddy's executables
-(below), the argument list; on macOS, for WorkBuddy, also the bundle id of the app whose `Contents/MacOS`
+both platforms because macOS framework builds run `Python`; with or without `.exe`), WorkBuddy's executables and a
+plain `language_server` (below), the argument list; on macOS, for WorkBuddy, also the bundle id of the app whose `Contents/MacOS`
 holds the executable (`CFBundleIdentifier` of its `Contents/Info.plist`, read once per app path).
 macOS: `proc_listallpids`, `proc_pidinfo(PROC_PIDTBSDINFO)`, `proc_pidpath`, `sysctl(KERN_PROCARGS2)`. Windows: one
 `NtQuerySystemInformation(SystemSessionProcessInformation)` listing of the session (pid, parent pid, create time; no
@@ -3441,7 +3441,7 @@ desktop app that runs its agent on its own executable, so its row needs the argu
 | `opencode` | `name` in `opencode`, `opencode-cli` (desktop sidecar `opencode-cli serve`), or starting with `opencode-` followed by an OS and architecture (npm-vendored); or a script host running `opencode-ai/bin/opencode`. |
 | `gemini` | A script host whose arguments contain `/@google/gemini-cli/` (npm, Homebrew `…/libexec/lib/node_modules/@google/gemini-cli/…`), or `name == gemini` for a native build. Gemini CLI relaunches itself as a child; the child is a descendant either way. |
 | `omp` | `name == omp`, or a script host whose arguments contain `/@oh-my-pi/` or `/oh-my-pi/`. |
-| `antigravity` | `name == agy`, or `name` starts with `language_server_` (the Antigravity language server, started by the CLI, the desktop app and the IDE with `--app_data_dir`). |
+| `antigravity` | `name == agy`, or `name` starts with `language_server_` (the Antigravity language server, started by the CLI, the desktop app and the IDE with `--app_data_dir`), or `name == language_server` (the desktop app 2.32.1's server, `Antigravity.app/Contents/Resources/bin/language_server`, observed 2026-11-14) whose arguments contain `--app_data_dir` (or `--app_data_dir=…`) and an argument containing `antigravity` (case-insensitive), or whose path is inside `Antigravity.app`, `Antigravity IDE.app` or `Gemini.app` (QUOTAS 9.4). The plain name is generic, so it never counts alone. |
 | `workbuddy`, `workbuddyAi` | The embedded CodeBuddy Code CLI, which makes the model calls itself: an executable of the edition — macOS: in the app with bundle id `com.tencent.workbuddy.mac` (WorkBuddy) or `com.workbuddy.workbuddy-ai` (WorkBuddy AI), whose main executable is named `Electron`; Windows: `name` `WorkBuddy` or `WorkBuddyAI` — whose arguments after the first contain a path with `/app.asar.unpacked/cli/` (the CLI entry `…/app.asar.unpacked/cli/bin/codebuddy`, run with `ELECTRON_RUN_AS_NODE`). Observed in the 5.8 code: pooled `--prewarm` processes that later serve one conversation each (`--serve --session-id <id>`; the command line does not change when one is taken from the pool), cold `--serve` starts, and the fallback `--acp` with first argument `wb-acp:<id>`. Not verified with a running app; the Windows install folder is unknown, so only the name is used. |
 | `pi` | `name == pi` (release binaries), or a script host whose arguments contain `/@earendil-works/pi-coding-agent/` or `/@mariozechner/pi-coding-agent/` (npm, and the installers' `<agent dir>/install/releases/<version>/node_modules/…`, started by the `<agent dir>/bin/pi` launcher). |
 | `openclaw` | `name == openclaw` (standalone builds), or a script host whose arguments after the first contain `/openclaw.mjs` (the npm package's `bin`, which may respawn itself with the same script; git checkouts) or `/openclaw/dist/` (services started on `dist/entry.js` or `dist/entry.mjs` of the npm or pnpm package). The Gateway process sends OpenClaw's own model requests. The agents it starts for delegated turns match their own rows and count for their sources: Claude Code and Codex app servers, like their turns (4.14); Gemini CLI too, although its turns count under `openclaw`. The Windows Hub's Gateway runs inside WSL, outside the process table. Not verified with a running OpenClaw; the macOS app's bundled runtime is assumed to run the same `openclaw.mjs`. |
@@ -3461,6 +3461,10 @@ Claude Desktop chats are in section 2; only the agent processes they start count
 above. WorkBuddy's main process, its helpers, renderers and its daemon (the same executable running
 `app.asar/main/daemon-app-server-entry.js`, which starts the CLI processes) are app processes like these, so the
 CLI processes are roots and their children are their tools.
+
+**Agent Speed's own processes**: the app's own process and its descendants are never agent processes and never part
+of one, whatever they run (the `agy` of the Antigravity usage report, QUOTAS 9.4, would otherwise count as Antigravity
+running and keep its own route going). The app is the table entry with its own pid and start time.
 
 **Ancestry**: a process's parent is the table entry with its parent pid whose start time is not later than its own
 (otherwise the link is broken: the pid was reused). The **nearest** ancestor-or-self that is an agent process decides:

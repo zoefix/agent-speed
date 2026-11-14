@@ -123,6 +123,7 @@ internal sealed class QuotaService : IDisposable
             ZcodeKey = _zcodeKeys.Read,
             Browser = sandboxed ? null : new BrowserCookieReader(),
             Antigravity = _antigravity,
+            AntigravityReport = OperatingSystem.IsWindows() && !sandboxed ? new AgyUsageReport(Home) : null,
         })
         {
             Log = message => AppLog.Info("Quota: " + message),

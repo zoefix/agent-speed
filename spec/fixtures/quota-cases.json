@@ -1712,6 +1712,313 @@
     }
    ]
   },
+  "antigravityServers": [
+   {
+    "platform": "macos",
+    "executable": "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    "arguments": [
+     "language_server",
+     "--standalone",
+     "--override_ide_name",
+     "antigravity",
+     "--subclient_type",
+     "hub",
+     "--https_server_port",
+     "0",
+     "--csrf_token",
+     "csrf-token-1",
+     "--app_data_dir",
+     "antigravity"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+    "arguments": [
+     "language_server"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/usr/local/bin/language_server",
+    "arguments": [
+     "language_server",
+     "--stdio"
+    ],
+    "expected": false
+   },
+   {
+    "platform": "macos",
+    "executable": "/opt/lsp/language_server",
+    "arguments": [
+     "language_server",
+     "--app_data_dir",
+     "/Users/me/.gemini/antigravity"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/opt/lsp/language_server",
+    "arguments": [
+     "language_server",
+     "--app_data_dir=/Users/me/.gemini/Antigravity-IDE"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/opt/lsp/language_server",
+    "arguments": [
+     "language_server",
+     "--app_data_dir",
+     "/tmp/other",
+     "--name",
+     "x"
+    ],
+    "expected": false
+   },
+   {
+    "platform": "macos",
+    "executable": "/opt/lsp/language_server",
+    "arguments": [
+     "language_server",
+     "--antigravity"
+    ],
+    "expected": false
+   },
+   {
+    "platform": "macos",
+    "executable": "/Applications/Antigravity IDE.app/Contents/Resources/app/extensions/antigravity/bin/language_server_macos_arm",
+    "arguments": [
+     "language_server_macos_arm"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/Users/me/.local/share/agy/language_server_macos_arm",
+    "arguments": [
+     "x",
+     "--app_data_dir",
+     "antigravity-cli"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "macos",
+    "executable": "/usr/local/bin/language_serverx",
+    "arguments": [
+     "language_serverx",
+     "--app_data_dir",
+     "antigravity"
+    ],
+    "expected": false
+   },
+   {
+    "platform": "macos",
+    "executable": "/usr/local/bin/Language_Server",
+    "arguments": [
+     "Language_Server",
+     "--app_data_dir",
+     "antigravity"
+    ],
+    "expected": false
+   },
+   {
+    "platform": "windows",
+    "executable": "C:\\Users\\me\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\language_server.exe",
+    "arguments": [
+     "language_server.exe",
+     "--app_data_dir",
+     "antigravity"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "windows",
+    "executable": "C:\\Tools\\LANGUAGE_SERVER.EXE",
+    "arguments": [
+     "LANGUAGE_SERVER.EXE",
+     "--app_data_dir=antigravity"
+    ],
+    "expected": true
+   },
+   {
+    "platform": "windows",
+    "executable": "C:\\Tools\\language_server.exe",
+    "arguments": [
+     "language_server.exe"
+    ],
+    "expected": false
+   }
+  ],
+  "antigravityCli": [
+   {
+    "name": "observed",
+    "stdout": "{\"status\": \"SUCCESS\", \"response\": \"group\\tbucket\\tremaining\\n\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}, \"command\": {\"name\": \"usage\", \"data\": {\"groups\": [{\"name\": \"Gemini Models\", \"buckets\": [{\"id\": \"gemini-weekly\", \"name\": \"Weekly Limit Remaining\", \"window\": \"weekly\", \"remaining_fraction\": 0.9548, \"reset_time\": \"2026-11-21T02:28:26Z\"}]}, {\"name\": \"Claude and GPT models\", \"buckets\": [{\"id\": \"3p-weekly\", \"window\": \"weekly\", \"remaining_fraction\": 1, \"reset_time\": \"2026-11-21T08:37:43Z\"}]}]}}}\n",
+    "expected": [
+     {
+      "kind": "sevenDay",
+      "name": "Gemini",
+      "minutes": 10080,
+      "usedPercent": 4.52,
+      "resetsAtMs": 1795228106000
+     },
+     {
+      "kind": "sevenDay",
+      "name": "Claude/GPT",
+      "minutes": 10080,
+      "usedPercent": 0.0,
+      "resetsAtMs": 1795250263000
+     }
+    ]
+   },
+   {
+    "name": "mixedNames",
+    "stdout": "{\"status\": \"SUCCESS\", \"command\": {\"name\": \"usage\", \"data\": {\"groups\": [{\"displayName\": \"Gemini 4 Argon\", \"name\": \"ignored\", \"buckets\": [{\"id\": \"argon-5h\", \"remainingFraction\": 0.5, \"remaining_fraction\": 0.9, \"reset_time\": 1794800000}, {\"id\": \"argon-weekly\", \"remaining_fraction\": 0.25, \"disabled\": true}, {\"id\": \"argon-daily\", \"remaining_fraction\": 0.1}, {\"bucketId\": \"weekly\", \"id\": \"5h\", \"remaining\": {\"remainingFraction\": 0.8}}]}, \"not a group\", {\"name\": \"Gemini Models\", \"buckets\": [{\"name\": \"Five hour\", \"remaining_fraction\": \"0.5\"}]}]}}}",
+    "expected": [
+     {
+      "kind": "fiveHour",
+      "name": "Gemini Argon",
+      "minutes": 300,
+      "usedPercent": 50.0,
+      "resetsAtMs": 1794800000000
+     },
+     {
+      "kind": "sevenDay",
+      "name": "Gemini Argon",
+      "minutes": 10080,
+      "usedPercent": 20.0,
+      "resetsAtMs": null
+     }
+    ]
+   },
+   {
+    "name": "failedStatus",
+    "stdout": "{\"status\": \"ERROR\", \"response\": \"group\\tbucket\\tremaining\\n\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}, \"command\": {\"name\": \"usage\", \"data\": {\"groups\": [{\"name\": \"Gemini Models\", \"buckets\": [{\"id\": \"gemini-weekly\", \"name\": \"Weekly Limit Remaining\", \"window\": \"weekly\", \"remaining_fraction\": 0.9548, \"reset_time\": \"2026-11-21T02:28:26Z\"}]}, {\"name\": \"Claude and GPT models\", \"buckets\": [{\"id\": \"3p-weekly\", \"window\": \"weekly\", \"remaining_fraction\": 1, \"reset_time\": \"2026-11-21T08:37:43Z\"}]}]}}}",
+    "expected": null
+   },
+   {
+    "name": "otherCommand",
+    "stdout": "{\"status\": \"SUCCESS\", \"response\": \"group\\tbucket\\tremaining\\n\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}, \"command\": {\"name\": \"help\", \"data\": {\"groups\": [{\"name\": \"Gemini Models\", \"buckets\": [{\"id\": \"gemini-weekly\", \"name\": \"Weekly Limit Remaining\", \"window\": \"weekly\", \"remaining_fraction\": 0.9548, \"reset_time\": \"2026-11-21T02:28:26Z\"}]}, {\"name\": \"Claude and GPT models\", \"buckets\": [{\"id\": \"3p-weekly\", \"window\": \"weekly\", \"remaining_fraction\": 1, \"reset_time\": \"2026-11-21T08:37:43Z\"}]}]}}}",
+    "expected": null
+   },
+   {
+    "name": "dataNotAnObject",
+    "stdout": "{\"status\": \"SUCCESS\", \"response\": \"group\\tbucket\\tremaining\\n\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}, \"command\": {\"name\": \"usage\", \"data\": []}}",
+    "expected": null
+   },
+   {
+    "name": "noCommand",
+    "stdout": "{\"status\": \"SUCCESS\", \"response\": \"Weekly 95%\"}",
+    "expected": null
+   },
+   {
+    "name": "noWindows",
+    "stdout": "{\"status\": \"SUCCESS\", \"response\": \"group\\tbucket\\tremaining\\n\", \"num_turns\": 0, \"usage\": {\"input_tokens\": 0, \"output_tokens\": 0, \"total_tokens\": 0}, \"command\": {\"name\": \"usage\", \"data\": {\"groups\": []}}}",
+    "expected": null
+   },
+   {
+    "name": "notJson",
+    "stdout": "Please sign in to Antigravity: https://accounts.google.com/...\n",
+    "expected": null
+   },
+   {
+    "name": "empty",
+    "stdout": "",
+    "expected": null
+   },
+   {
+    "name": "array",
+    "stdout": "[]",
+    "expected": null
+   }
+  ],
+  "agyVersions": [
+   {
+    "text": "1.5.9\n",
+    "version": [
+     1,
+     5,
+     9
+    ],
+    "supported": true
+   },
+   {
+    "text": "1.1.11",
+    "version": [
+     1,
+     1,
+     11
+    ],
+    "supported": true
+   },
+   {
+    "text": "1.1.10",
+    "version": [
+     1,
+     1,
+     10
+    ],
+    "supported": false
+   },
+   {
+    "text": "1.10.0",
+    "version": [
+     1,
+     10,
+     0
+    ],
+    "supported": true
+   },
+   {
+    "text": "  2.0.0  ",
+    "version": [
+     2,
+     0,
+     0
+    ],
+    "supported": true
+   },
+   {
+    "text": "1.2",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "v1.5.9",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "agy 1.5.9",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "1.5.9-beta",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "1.5.9\n1.6.0",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "",
+    "version": null,
+    "supported": false
+   },
+   {
+    "text": "1.5.x",
+    "version": null,
+    "supported": false
+   }
+  ],
   "kimiCurrent": {
    "body": {
     "usages": {

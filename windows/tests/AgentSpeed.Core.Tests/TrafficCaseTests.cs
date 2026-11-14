@@ -44,6 +44,21 @@ public sealed class TrafficCaseTests
         Assert.True(names.Length >= 6);
         Assert.Contains("classify-macos", names);
         Assert.Contains("classify-windows", names);
+        Assert.Contains("classify-antigravity-macos", names);
+        Assert.Contains("classify-antigravity-windows", names);
+    }
+
+    /// <summary>A plain <c>language_server</c> is judged by its arguments, so the table reads them (METRICS 10.5).</summary>
+    [Fact]
+    public void APlainLanguageServerHasItsArgumentsRead()
+    {
+        var testCase = Document.Value["cases"]!.AsArray().Single(c => c!["name"]!.GetValue<string>() == "classify-antigravity-windows")!.AsObject();
+        var runner = new TrafficCaseRunner(testCase);
+        runner.Run();
+        var read = runner.Inspector.ArgumentReads.Select(i => i.Pid).ToHashSet();
+        Assert.Contains(4101, read);
+        Assert.Contains(4110, read);
+        Assert.DoesNotContain(4202, read);
     }
 
     [Theory]
@@ -232,7 +247,23 @@ internal sealed class TrafficCaseRunner
     {
         var kind = _case["platform"]?.GetValue<string>() == "windows" ? TrafficPlatformKind.Windows : TrafficPlatformKind.MacOS;
         var env = _case["env"]?.AsObject().ToDictionary(e => e.Key, e => e.Value!.GetValue<string>());
-        return new TrafficPlatform(kind, _case["home"]?.GetValue<string>() ?? "/Users/dev", env);
+        return new TrafficPlatform(kind, _case["home"]?.GetValue<string>() ?? "/Users/dev", env, App());
+    }
+
+    /// <summary><c>appPid</c>: Agent Speed's own process, the first listed process with that pid (METRICS 10.5).</summary>
+    private ProcessIdentity? App()
+    {
+        if (_case["appPid"]?.GetValue<int>() is not { } pid)
+        {
+            return null;
+        }
+
+        return _case["samples"]!.AsArray()
+            .SelectMany(s => s!["processes"]?.AsArray() ?? [])
+            .Select(r => r!.AsObject())
+            .Where(r => r["pid"]!.GetValue<int>() == pid)
+            .Select(r => (ProcessIdentity?)FixtureInspector.Identity(r))
+            .FirstOrDefault();
     }
 
     public TimeZoneInfo Zone()

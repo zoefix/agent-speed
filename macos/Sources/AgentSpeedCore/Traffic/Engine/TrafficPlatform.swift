@@ -10,16 +10,19 @@ struct TrafficPlatform: Sendable {
     var kind: Kind
     var home: String
     var environment: [String: String]
+    /// Agent Speed's own process: it and its descendants are never agent processes (METRICS 10.5).
+    var appPid: Int32?
 
-    init(kind: Kind, home: String, environment: [String: String] = [:]) {
+    init(kind: Kind, home: String, environment: [String: String] = [:], appPid: Int32? = nil) {
         self.kind = kind
         self.home = home
         self.environment = environment
+        self.appPid = appPid
     }
 
-    /// This Mac: the current user's home folder.
+    /// This Mac: the current user's home folder and this process.
     static var current: TrafficPlatform {
-        TrafficPlatform(kind: .macos, home: FileManager.default.homeDirectoryForCurrentUser.path)
+        TrafficPlatform(kind: .macos, home: FileManager.default.homeDirectoryForCurrentUser.path, appPid: getpid())
     }
 
     var isWindows: Bool { kind == .windows }

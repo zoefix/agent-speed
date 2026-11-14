@@ -20,9 +20,26 @@ public struct AntigravityServer: Equatable, Sendable {
     }
 }
 
+/// One look at the processes (QUOTAS 9.4): the servers to ask, and whether a user's `agy` runs, with a server or
+/// without (Agent Speed's own excepted).
+public struct AntigravityScan: Equatable, Sendable {
+    public var servers: [AntigravityServer]
+    public var agyRuns: Bool
+
+    public init(servers: [AntigravityServer], agyRuns: Bool) {
+        self.servers = servers
+        self.agyRuns = agyRuns
+    }
+}
+
 /// Finds the running servers; never starts Antigravity.
 public protocol AntigravityLocating: Sendable {
     func servers() -> [AntigravityServer]
+    func scan() -> AntigravityScan
+}
+
+extension AntigravityLocating {
+    public func scan() -> AntigravityScan { AntigravityScan(servers: servers(), agyRuns: false) }
 }
 
 /// The rules of QUOTAS 9.4 *Servers* and *Ports*, as pure functions over what a process lister found.
@@ -30,12 +47,20 @@ enum AntigravityRules {
     static let appBundles = ["/Antigravity.app/", "/Antigravity IDE.app/", "/Gemini.app/"]
     static let environmentNames: Set<String> = ["ANTIGRAVITY_CSRF_TOKEN", "ANTIGRAVITY_LS_ADDRESS"]
 
-    /// A `language_server_*` executable of Antigravity: its arguments name `--app_data_dir` and antigravity, or it
-    /// lies inside one of the apps.
+    /// A `language_server_*` or plain `language_server` executable of Antigravity: its arguments name
+    /// `--app_data_dir` and antigravity, or it lies inside one of the apps. The plain name never counts alone.
     static func isLanguageServer(executable: String, arguments: [String]) -> Bool {
-        let name = (executable as NSString).lastPathComponent
-        guard name.hasPrefix("language_server_") else { return false }
-        if appBundles.contains(where: executable.contains) { return true }
+        guard isServerName((executable as NSString).lastPathComponent) else { return false }
+        return appBundles.contains(where: executable.contains) || namesAppData(arguments)
+    }
+
+    /// `language_server_*`, or exactly `language_server` (the desktop app 2.32.1's).
+    static func isServerName(_ name: String) -> Bool {
+        name.hasPrefix("language_server_") || name == "language_server"
+    }
+
+    /// `--app_data_dir` (or `--app_data_dir=…`) and an argument containing antigravity, in any case.
+    static func namesAppData(_ arguments: [String]) -> Bool {
         let flagged = arguments.contains { $0 == "--app_data_dir" || $0.hasPrefix("--app_data_dir=") }
         return flagged && arguments.contains { $0.lowercased().contains("antigravity") }
     }

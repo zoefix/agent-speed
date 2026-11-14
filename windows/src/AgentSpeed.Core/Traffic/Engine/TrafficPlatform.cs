@@ -1,3 +1,5 @@
+using System.Runtime.Versioning;
+
 namespace AgentSpeed.Core.Traffic.Engine;
 
 public enum TrafficPlatformKind
@@ -16,16 +18,19 @@ internal sealed class TrafficPlatform
     private readonly KeyValuePair<string, string>[] _environment;
     private readonly string _home;
 
-    public TrafficPlatform(TrafficPlatformKind kind, string home, IReadOnlyDictionary<string, string>? environment = null)
+    /// <param name="app">Agent Speed's own process: it and its descendants are never agent processes (METRICS 10.5).</param>
+    public TrafficPlatform(TrafficPlatformKind kind, string home, IReadOnlyDictionary<string, string>? environment = null, ProcessIdentity? app = null)
     {
         Kind = kind;
+        App = app;
         _home = (home ?? string.Empty).Replace('\\', '/');
         _environment = environment is null
             ? []
             : [.. environment.Select(e => new KeyValuePair<string, string>($"%{e.Key}%", e.Value.Replace('\\', '/')))];
     }
 
-    /// <summary>This Windows user: home folder, <c>%LOCALAPPDATA%</c> and <c>%APPDATA%</c>.</summary>
+    /// <summary>This Windows user: home folder, <c>%LOCALAPPDATA%</c> and <c>%APPDATA%</c>, and this process.</summary>
+    [SupportedOSPlatform("windows")]
     public static TrafficPlatform CurrentWindows() => new(
         TrafficPlatformKind.Windows,
         Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
@@ -33,9 +38,13 @@ internal sealed class TrafficPlatform
         {
             ["LOCALAPPDATA"] = Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData),
             ["APPDATA"] = Environment.GetFolderPath(Environment.SpecialFolder.ApplicationData),
-        });
+        },
+        Windows.ProcessReader.Current());
 
     public TrafficPlatformKind Kind { get; }
+
+    /// <summary>Agent Speed's own process, when known.</summary>
+    public ProcessIdentity? App { get; }
 
     public bool IsWindows => Kind == TrafficPlatformKind.Windows;
 

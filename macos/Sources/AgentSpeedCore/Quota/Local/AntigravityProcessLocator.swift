@@ -1,48 +1,77 @@
 import Darwin
 import Foundation
 
-/// The macOS side of QUOTAS 9.4: the user's `language_server_*` and `agy` processes from libproc, the arguments of a
-/// language server, the two `ANTIGRAVITY_*` variables of an `agy` process's own environment (`KERN_PROCARGS2`; no
-/// other process's environment is ever read, and no other variable is kept), their listening TCP sockets on
-/// loopback (`proc_pidfdinfo`), and the daemon files while their pid runs.
+/// The macOS side of QUOTAS 9.4: the user's `language_server_*`, `language_server` and `agy` processes from libproc,
+/// the arguments of a language server, the two `ANTIGRAVITY_*` variables of an `agy` process's own environment
+/// (`KERN_PROCARGS2`; no other process's environment is ever read, and no other variable is kept), their listening TCP
+/// sockets on loopback (`proc_pidfdinfo`), and the daemon files while their pid runs. Agent Speed's own descendants
+/// (the usage report's `agy`) are passed over.
 public final class AntigravityProcessLocator: AntigravityLocating, @unchecked Sendable {
     private let home: URL
     private let reader = ProcessReader()
     private let lock = NSLock()
+    private let appPid: Int32
 
-    public init(home: URL = FileManager.default.homeDirectoryForCurrentUser) {
+    public init(home: URL = FileManager.default.homeDirectoryForCurrentUser, appPid: Int32 = getpid()) {
         self.home = home
+        self.appPid = appPid
     }
 
-    public func servers() -> [AntigravityServer] {
+    public func servers() -> [AntigravityServer] { scan().servers }
+
+    public func scan() -> AntigravityScan {
         lock.lock()
         defer { lock.unlock() }
         var found: [AntigravityServer] = []
+        var agyRuns = false
+        let entries = reader.list(nowMs: Clock.milliseconds(Date()))
+        let own = Self.descendants(of: appPid, in: entries)
         var pids: Set<Int32> = []
-        for entry in reader.list(nowMs: Clock.milliseconds(Date())) {
+        for entry in entries where !own.contains(entry.pid) {
             pids.insert(entry.pid)
-            guard let executable = reader.executablePath(of: entry) else { continue }
+            guard found.count < 4, let executable = reader.executablePath(of: entry) else { continue }
             let name = (executable as NSString).lastPathComponent
-            if name.hasPrefix("language_server_") {
+            if AntigravityRules.isServerName(name) {
                 let arguments = reader.arguments(of: entry) ?? []
                 guard AntigravityRules.isLanguageServer(executable: executable, arguments: arguments) else { continue }
                 found.append(AntigravityRules.languageServer(pid: entry.pid, arguments: arguments,
                                                              listening: Self.listeningPorts(entry.pid)))
             } else if name == "agy" {
+                agyRuns = true
                 let environment = Self.environment(of: entry.pid, names: AntigravityRules.environmentNames)
                 if let server = AntigravityRules.agy(pid: entry.pid, environment: environment,
                                                      listening: Self.listeningPorts(entry.pid)) {
                     found.append(server)
                 }
             }
-            if found.count >= 4 { break }
         }
         for file in AntigravityRules.daemonFiles(home: home) {
             guard let data = QuotaCredentials.file(file), let server = AntigravityRules.daemon(data),
                   pids.contains(server.pid), !found.contains(where: { $0.pid == server.pid }) else { continue }
             found.append(server)
         }
-        return found
+        return AntigravityScan(servers: found, agyRuns: agyRuns)
+    }
+
+    /// `root` and every process below it, following parent links whose start time is not later than the child's.
+    static func descendants(of root: Int32, in entries: [ProcessEntry]) -> Set<Int32> {
+        let byPid = Dictionary(entries.map { ($0.pid, $0) }, uniquingKeysWith: { first, _ in first })
+        var own: Set<Int32> = [root]
+        var outside: Set<Int32> = []
+        for entry in entries {
+            var chain: [Int32] = []
+            var cursor = entry
+            var verdict = false
+            while true {
+                if own.contains(cursor.pid) { verdict = true; break }
+                if outside.contains(cursor.pid) || chain.count > 64 { break }
+                chain.append(cursor.pid)
+                guard let parent = byPid[cursor.ppid], parent.pid != cursor.pid, parent.startUs <= cursor.startUs else { break }
+                cursor = parent
+            }
+            if verdict { own.formUnion(chain) } else { outside.formUnion(chain) }
+        }
+        return own
     }
 
     /// Only `names` of the process's environment; the other strings are passed over and never kept.

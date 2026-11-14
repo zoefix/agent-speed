@@ -33,10 +33,13 @@ std::vector<Window> devinWindows(const std::vector<DevinRow>& rows);
 // A launch folder `YYYYMMDDTHHMMSS` read as wall time in `zone`.
 std::optional<std::int64_t> devinLaunchMs(std::string_view name, const TimeZone& zone);
 
-// 9.4 Antigravity: `RetrieveUserQuotaSummary` and the IDE server's `GetUserStatus`.
+// 9.4 Antigravity: `RetrieveUserQuotaSummary`, the IDE server's `GetUserStatus` and agy's usage report.
 std::optional<std::string> antigravityGroupName(const json::Value& displayName);
 std::vector<Window> antigravitySummaryWindows(const json::Value& body);
 std::vector<Window> antigravityStatusWindows(const json::Value& body);
+// `agy -p /usage --output-format json`: `status == "SUCCESS"`, `command.name == "usage"` and the summary in snake case
+// as `command.data`; nullopt for anything else or a report without a window.
+std::optional<std::vector<Window>> antigravityCliWindows(std::string_view output);
 
 // 9.5 Kimi Code: the current `usages` shape, else the legacy `limits` / `usage` one.
 std::vector<Window> kimiWindows(const json::Value& body);

@@ -56,6 +56,7 @@ add_executable(agentspeed_tests
     quota_estimator_test.cpp
     quota_window_feed_test.cpp
     # Quota phase 2
+    quota_agy_report_test.cpp
     quota_antigravity_test.cpp
     quota_cookies_test.cpp
     quota_local_routes_test.cpp

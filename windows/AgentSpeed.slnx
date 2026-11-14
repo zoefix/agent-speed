@@ -8,6 +8,7 @@
   </Folder>
   <Folder Name="/tests/">
     <Project Path="tests/AgentSpeed.Core.Tests/AgentSpeed.Core.Tests.csproj" />
+    <Project Path="tests/AgentSpeed.FakeAgy/AgentSpeed.FakeAgy.csproj" />
     <Project Path="tests/AgentSpeed.Presentation.Tests/AgentSpeed.Presentation.Tests.csproj" />
     <Project Path="tests/AgentSpeed.StatuslineHelper.Tests/AgentSpeed.StatuslineHelper.Tests.csproj" />
     <Project Path="tests/AgentSpeed.TrafficHelper.Tests/AgentSpeed.TrafficHelper.Tests.csproj" />

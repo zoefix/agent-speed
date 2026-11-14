@@ -36,6 +36,9 @@ internal sealed class FetchResult(QuotaRoute route, QuotaFingerprint credential,
 
     public int? StatusCode { get; set; }
 
+    /// <summary>What a failure is logged as when it is not the route's host (agy's usage report).</summary>
+    public string? LogHost { get; set; }
+
     /// <summary>Gemini: the project learned for this token (<c>Learned</c> false when none was asked).</summary>
     public (bool Learned, string? Project) GeminiProject { get; set; }
 
@@ -159,8 +162,11 @@ internal sealed class GeminiFetch(QuotaFingerprint credential, string token, (bo
     }
 }
 
-/// <summary>The servers' addresses in order, until one answers (QUOTAS 9.4); a 404 falls back to <c>GetUserStatus</c>.</summary>
-internal sealed class AntigravityFetch(QuotaFingerprint credential, IReadOnlyList<AntigravityServer> servers, string userAgent)
+/// <summary>
+/// The servers' addresses in order, until one answers (QUOTAS 9.4); a 404 falls back to <c>GetUserStatus</c>. When none
+/// answers (or there is none), agy's usage report runs when given, and its outcome is the round's.
+/// </summary>
+internal sealed class AntigravityFetch(QuotaFingerprint credential, IReadOnlyList<AntigravityServer> servers, string userAgent, IAntigravityReport? report)
     : FetchPlan(QuotaRoute.Antigravity, credential)
 {
     protected override async Task<FetchResult> ExecuteAsync(IQuotaHttpTransport transport, Func<long> now, CancellationToken cancellationToken)
@@ -208,6 +214,21 @@ internal sealed class AntigravityFetch(QuotaFingerprint credential, IReadOnlyLis
                 result.ObservedMs = answer.DateMs ?? answer.ArrivedMs;
                 return result;
             }
+        }
+
+        if (report is not null)
+        {
+            var answer = await report.RunAsync(now, cancellationToken).ConfigureAwait(false);
+            result.StatusCode = null;
+            result.LogHost = "agy";
+            if (answer.Windows is { Count: > 0 } windows)
+            {
+                result.Outcome = QuotaCadence.Outcome.Success;
+                result.Windows = windows;
+                result.ObservedMs = answer.EndedMs;
+            }
+
+            return result;
         }
 
         if (denied)

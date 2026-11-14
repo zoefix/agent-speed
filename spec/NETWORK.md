@@ -272,7 +272,9 @@ the credential itself.
   never to Anthropic, never with anything but the headers QUOTAS 9 lists. The section 1 rule against credentials and
   identifiers applies to every other feature unchanged.
 - **Transport**: HTTPS, redirects never followed, the system proxy, timeout 10 s, cap 256 KiB. The Antigravity reader
-  talks to `127.0.0.1` only (2 s, no proxy, a self-signed certificate accepted there alone).
+  talks to `127.0.0.1` only (2 s, no proxy, a self-signed certificate accepted there alone). When no Antigravity
+  server answers, its usage report runs `agy -p /usage` (QUOTAS 9.4): agy then asks Google with its own sign-in, and
+  Agent Speed only reads the report agy prints.
 - **When**: at most every 5 minutes per source while the source runs or the dashboard is open; 15 minutes after a
   failure; stopped after `401`/`403` until the credential changes.
 - **Failures** are silent like every other request, logged with host and status only.
@@ -286,4 +288,4 @@ the credential itself.
 | ZCode | `api.z.ai` or `open.bigmodel.cn` (the user's region) |
 | Qoder (browser session, off by default) | `qoder.com`, `qoder.com.cn` |
 | WorkBuddy (browser session, off by default) | `www.workbuddy.cn` |
-| Antigravity | `127.0.0.1` |
+| Antigravity | `127.0.0.1`; agy's own requests for its usage report |

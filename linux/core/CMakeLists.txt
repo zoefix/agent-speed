@@ -165,8 +165,10 @@ add_library(agentspeed_quota STATIC
     src/quota/cookies/header.cpp
     src/quota/cookies/reader.cpp
     src/quota/cookies/stores.cpp
+    src/quota/routes/agy_report.cpp
     src/quota/routes/antigravity.cpp
     src/quota/routes/cadence.cpp
+    src/quota/routes/child_process.cpp
     src/quota/routes/credentials.cpp
     src/quota/routes/files.cpp
     src/quota/routes/fingerprint.cpp
@@ -185,7 +187,8 @@ add_library(agentspeed_quota STATIC
     src/quota/vendors/values.cpp
     src/quota/vendors/zai.cpp
 )
-target_link_libraries(agentspeed_quota PUBLIC agentspeed_base agentspeed_statusline_kit)
+find_package(Threads REQUIRED)
+target_link_libraries(agentspeed_quota PUBLIC agentspeed_base agentspeed_statusline_kit Threads::Threads)
 if(AGENTSPEED_STATIC)
     target_link_libraries(agentspeed_quota PUBLIC ${ZLIB_STATIC_LDFLAGS})
 else()

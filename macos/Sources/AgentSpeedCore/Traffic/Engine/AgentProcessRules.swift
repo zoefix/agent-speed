@@ -53,11 +53,12 @@ struct AgentProcessRules: Sendable {
     private static let workbuddyExecutables: [String: SourceKind] = ["workbuddy": .workbuddy, "workbuddyai": .workbuddyAi]
     private static let workbuddyCLI = "/app.asar.unpacked/cli/"
 
-    /// The rules read a process's arguments only for script hosts, `claude` executables (the Chrome bridge check) and
-    /// WorkBuddy's executables; everything else is decided by the path.
+    /// The rules read a process's arguments only for script hosts, `claude` executables (the Chrome bridge check),
+    /// WorkBuddy's executables and a plain `language_server`; everything else is decided by the path.
     func needsArguments(executable: String, bundleIdentifier: () -> String?) -> Bool {
         let name = platform.name(executable)
         return Self.scriptHosts.contains(name.lowercased()) || isPythonHost(executable) || name == "claude"
+            || name == "language_server"
             || platform.isUnder(executable, ["~/.local/share/claude/versions"])
             || workbuddyEdition(executable: executable, bundleIdentifier: bundleIdentifier) != nil
     }
@@ -66,6 +67,13 @@ struct AgentProcessRules: Sendable {
     func workbuddyEdition(executable: String, bundleIdentifier: () -> String?) -> SourceKind? {
         if platform.isWindows { return Self.workbuddyExecutables[platform.name(executable)] }
         return bundleIdentifier().flatMap { Self.workbuddyBundles[$0] }
+    }
+
+    /// A plain `language_server` is Antigravity's only inside one of its apps or with `--app_data_dir` and antigravity.
+    func isAntigravityServer(_ executable: String, arguments: [String]) -> Bool {
+        let path = platform.normalize(executable)
+        let inApp = AntigravityRules.appBundles.contains { path.contains(platform.isWindows ? $0.lowercased() : $0) }
+        return inApp || AntigravityRules.namesAppData(arguments)
     }
 
     func isScriptHost(_ executable: String) -> Bool {
@@ -147,6 +155,7 @@ struct AgentProcessRules: Sendable {
         if script.contains("/@google/gemini-cli/") || name == "gemini" { return .gemini }
         if name == "omp" || script.contains("/@oh-my-pi/") || script.contains("/oh-my-pi/") { return .omp }
         if name == "agy" || name.hasPrefix("language_server_") { return .antigravity }
+        if name == "language_server", isAntigravityServer(executable, arguments: arguments() ?? []) { return .antigravity }
         if name == "zcode" || name == "zcode-cli" || script.contains("/@zcode/cli/") { return .zcode }
         if name == "kimi" || name == "kimi-code" || script.contains("/@moonshot-ai/kimi-code/") { return .kimi }
         if name == "grok" || name == "grok-build" { return .grokBuild }

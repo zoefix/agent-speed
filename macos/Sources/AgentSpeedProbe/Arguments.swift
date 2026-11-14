@@ -16,6 +16,7 @@ struct ProbeArguments {
         case syncRates(directory: String, currency: String)
         /// The quotas this computer holds (QUOTAS 3–6), read-only.
         case dumpQuota
+        case antigravityReport
     }
 
     var mode: Mode
@@ -63,6 +64,7 @@ struct ProbeArguments {
                                [--devin LOCATION]... [--qoder LOCATION]... [--qoder-cli LOCATION]...
                LOCATION: a path, or @auto for the source's automatic roots; repeat a flag to read several
                AgentSpeedProbe --sync-prices DIR | --sync-rates DIR CURRENCY | --dump-quota [--codex LOCATION]...
+               AgentSpeedProbe --antigravity-report   (runs agy's usage report once, QUOTAS 9.4)
         """
 
     static func parse(_ arguments: [String]) -> ProbeArguments? {
@@ -88,6 +90,8 @@ struct ProbeArguments {
                 mode = .dumpHistory
             case "--dump-quota":
                 mode = .dumpQuota
+            case "--antigravity-report":
+                mode = .antigravityReport
             case "--dump-unpriced":
                 dumpsUnpriced = true
             case "--now":

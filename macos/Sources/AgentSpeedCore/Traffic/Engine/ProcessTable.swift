@@ -126,6 +126,10 @@ final class ProcessTable {
         for ancestor in ancestors.reversed() where records[ancestor.identity]?.isClassified == false {
             classify(ancestor, current: current, inspector: inspector)
         }
+        if let app = rules.platform.appPid, entry.pid == app || ancestors.contains(where: { $0.pid == app }) {
+            records[identity]?.processClass = nil
+            return
+        }
         let nearest = ancestors.lazy.compactMap { self.records[$0.identity]?.processClass }.first { $0.isAgentMember }
         let executable = record.executable
         let ancestorExecutables = ancestors.map { records[$0.identity]?.executable ?? "" }

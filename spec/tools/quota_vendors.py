@@ -9,6 +9,7 @@ from __future__ import annotations
 import hashlib
 import json
 import math
+import re
 import subprocess
 from datetime import datetime, timezone
 
@@ -184,6 +185,72 @@ def antigravity_windows(body):
                 continue
             out.append(win(kind, (1 - remaining) * 100, time_ms(bucket.get("resetTime")), name=name))
     return out
+
+
+ANTIGRAVITY_APPS = ("/Antigravity.app/", "/Antigravity IDE.app/", "/Gemini.app/")
+AGY_MINIMUM = (1, 1, 11)
+CLI_SNAKE = {"bucketId": "id", "displayName": "name", "remainingFraction": "remaining_fraction", "resetTime": "reset_time"}
+
+
+def antigravity_server(executable, arguments, windows=False):
+    """9.4 Servers: a `language_server_*` or plain `language_server` executable of Antigravity: its arguments name
+    `--app_data_dir` and antigravity, or it lies inside one of the apps. The plain name never counts alone."""
+    path = executable.replace("\\", "/")
+    name = path.rsplit("/", 1)[-1]
+    if windows:
+        name = name.lower()
+        name = name[:-4] if name.endswith(".exe") else name
+    if not (name.startswith("language_server_") or name == "language_server"):
+        return False
+    if any(app in path for app in ANTIGRAVITY_APPS):
+        return True
+    flagged = any(a == "--app_data_dir" or a.startswith("--app_data_dir=") for a in arguments)
+    return flagged and any("antigravity" in a.lower() for a in arguments)
+
+
+def agy_version(text):
+    """9.4 Version: the trimmed `agy --version` output as (major, minor, patch), else None."""
+    trimmed = text.strip()
+    if not re.fullmatch(r"[0-9]+\.[0-9]+\.[0-9]+", trimmed):
+        return None
+    return tuple(int(part) for part in trimmed.split("."))
+
+
+def agy_supported(text):
+    version = agy_version(text)
+    return version is not None and version >= AGY_MINIMUM
+
+
+def _camel(item, names):
+    out = dict(item)
+    for camel, snake in names.items():
+        if camel not in out and snake in out:
+            out[camel] = out[snake]
+    return out
+
+
+def antigravity_cli_windows(stdout):
+    """9.4 CLI usage report: the windows of `agy -p /usage --output-format json`, None for a failure."""
+    try:
+        report = json.loads(stdout)
+    except ValueError:
+        return None
+    if not isinstance(report, dict) or report.get("status") != "SUCCESS":
+        return None
+    command = report.get("command")
+    if not isinstance(command, dict) or command.get("name") != "usage" or not isinstance(command.get("data"), dict):
+        return None
+    data = dict(command["data"])
+    groups = []
+    for group in data.get("groups") or []:
+        if not isinstance(group, dict):
+            groups.append(group)
+            continue
+        group = _camel(group, {"displayName": "name"})
+        group["buckets"] = [_camel(b, CLI_SNAKE) if isinstance(b, dict) else b for b in group.get("buckets") or []]
+        groups.append(group)
+    data["groups"] = groups
+    return antigravity_windows(data) or None
 
 
 def antigravity_status_windows(body):

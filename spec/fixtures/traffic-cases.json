@@ -1844,6 +1844,267 @@
   {
    "platform": "macos",
    "home": "/Users/dev",
+   "name": "classify-antigravity-macos",
+   "appPid": 300,
+   "_comment": "METRICS 10.5: the desktop app 2.32.1's plain language_server counts only inside the app or with --app_data_dir and antigravity; Agent Speed's own agy (the usage report of QUOTAS 9.4) and its descendants never count.",
+   "samples": [
+    {
+     "t": 1000000,
+     "processes": [
+      {
+       "pid": 1,
+       "ppid": 0,
+       "start": 0,
+       "exe": "/sbin/launchd"
+      },
+      {
+       "pid": 100,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/Applications/Antigravity.app/Contents/MacOS/Antigravity"
+      },
+      {
+       "pid": 101,
+       "ppid": 100,
+       "start": 2000,
+       "exe": "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+       "args": [
+        "/Applications/Antigravity.app/Contents/Resources/bin/language_server",
+        "--standalone",
+        "--override_ide_name",
+        "antigravity",
+        "--subclient_type",
+        "hub",
+        "--https_server_port",
+        "0",
+        "--csrf_token",
+        "csrf-token-1",
+        "--app_data_dir",
+        "antigravity"
+       ]
+      },
+      {
+       "pid": 102,
+       "ppid": 101,
+       "start": 3000,
+       "exe": "/bin/zsh"
+      },
+      {
+       "pid": 110,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/usr/local/bin/language_server",
+       "args": [
+        "/usr/local/bin/language_server",
+        "--stdio"
+       ]
+      },
+      {
+       "pid": 111,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/opt/lsp/language_server",
+       "args": [
+        "/opt/lsp/language_server",
+        "--app_data_dir",
+        "/Users/dev/.gemini/antigravity"
+       ]
+      },
+      {
+       "pid": 112,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/opt/lsp/language_server",
+       "args": [
+        "/opt/lsp/language_server",
+        "--app_data_dir",
+        "/tmp/other"
+       ]
+      },
+      {
+       "pid": 113,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/usr/local/bin/language_serverx",
+       "args": [
+        "/usr/local/bin/language_serverx",
+        "--app_data_dir",
+        "antigravity"
+       ]
+      },
+      {
+       "pid": 200,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/System/Applications/Utilities/Terminal.app/Contents/MacOS/Terminal"
+      },
+      {
+       "pid": 201,
+       "ppid": 200,
+       "start": 2000,
+       "exe": "/bin/zsh"
+      },
+      {
+       "pid": 202,
+       "ppid": 201,
+       "start": 3000,
+       "exe": "/Users/dev/.local/bin/agy"
+      },
+      {
+       "pid": 203,
+       "ppid": 202,
+       "start": 4000,
+       "exe": "/usr/bin/git"
+      },
+      {
+       "pid": 300,
+       "ppid": 1,
+       "start": 1000,
+       "exe": "/Applications/Agent Speed.app/Contents/MacOS/AgentSpeed"
+      },
+      {
+       "pid": 301,
+       "ppid": 300,
+       "start": 5000,
+       "exe": "/Users/dev/.local/bin/agy",
+       "args": [
+        "/Users/dev/.local/bin/agy",
+        "-p",
+        "/usage",
+        "--output-format",
+        "json",
+        "--print-timeout",
+        "90s"
+       ]
+      },
+      {
+       "pid": 302,
+       "ppid": 301,
+       "start": 6000,
+       "exe": "/Users/dev/.local/share/agy/language_server_macos_arm",
+       "args": [
+        "language_server_macos_arm",
+        "--app_data_dir",
+        "antigravity-cli"
+       ]
+      },
+      {
+       "pid": 303,
+       "ppid": 300,
+       "start": 7000,
+       "exe": "/usr/bin/nettop"
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "classes": {
+     "1": null,
+     "100": null,
+     "101": "antigravity/agent",
+     "102": "antigravity/tool",
+     "110": null,
+     "111": "antigravity/agent",
+     "112": null,
+     "113": null,
+     "200": null,
+     "201": null,
+     "202": "antigravity/agent",
+     "203": "antigravity/tool",
+     "300": null,
+     "301": null,
+     "302": null,
+     "303": null
+    }
+   }
+  },
+  {
+   "platform": "windows",
+   "home": "C:\\Users\\dev",
+   "env": {
+    "LOCALAPPDATA": "C:\\Users\\dev\\AppData\\Local",
+    "APPDATA": "C:\\Users\\dev\\AppData\\Roaming"
+   },
+   "name": "classify-antigravity-windows",
+   "appPid": 4300,
+   "_comment": "METRICS 10.5 on Windows: language_server.exe compared without case and .exe; Agent Speed's own agy.exe never counts (paths unverified).",
+   "samples": [
+    {
+     "t": 1000000,
+     "processes": [
+      {
+       "pid": 4,
+       "ppid": 0,
+       "start": 0,
+       "exe": "C:\\Windows\\explorer.exe"
+      },
+      {
+       "pid": 4101,
+       "ppid": 4,
+       "start": 2000,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\Antigravity\\resources\\bin\\Language_Server.exe",
+       "args": [
+        "Language_Server.exe",
+        "--app_data_dir",
+        "antigravity",
+        "--csrf_token",
+        "t"
+       ]
+      },
+      {
+       "pid": 4110,
+       "ppid": 4,
+       "start": 2000,
+       "exe": "C:\\Tools\\language_server.exe",
+       "args": [
+        "language_server.exe",
+        "--stdio"
+       ]
+      },
+      {
+       "pid": 4202,
+       "ppid": 4,
+       "start": 3000,
+       "exe": "C:\\Users\\dev\\.local\\bin\\agy.exe"
+      },
+      {
+       "pid": 4300,
+       "ppid": 4,
+       "start": 1000,
+       "exe": "C:\\Users\\dev\\AppData\\Local\\Programs\\AgentSpeed\\AgentSpeed.exe"
+      },
+      {
+       "pid": 4301,
+       "ppid": 4300,
+       "start": 5000,
+       "exe": "C:\\Users\\dev\\.local\\bin\\agy.exe",
+       "args": [
+        "agy.exe",
+        "-p",
+        "/usage",
+        "--output-format",
+        "json",
+        "--print-timeout",
+        "90s"
+       ]
+      }
+     ]
+    }
+   ],
+   "expected": {
+    "classes": {
+     "4": null,
+     "4101": "antigravity/agent",
+     "4110": null,
+     "4202": "antigravity/agent",
+     "4300": null,
+     "4301": null
+    }
+   }
+  },
+  {
+   "platform": "macos",
+   "home": "/Users/dev",
    "name": "deltas-rates-tools",
    "rateTimes": [
     1792490403000,

@@ -21,6 +21,8 @@ public struct QuotaVendorEnvironment: Sendable {
     public var zcodeKey: @Sendable () -> String?
     public var browser: any BrowserSessionReading
     public var antigravity: any AntigravityLocating
+    /// agy's own usage report, for when no Antigravity server answers (QUOTAS 9.4).
+    public var antigravityReport: any AntigravityReporting
     public var now: @Sendable () -> Int64
 
     public init(home: URL = FileManager.default.homeDirectoryForCurrentUser,
@@ -31,6 +33,7 @@ public struct QuotaVendorEnvironment: Sendable {
                 zcodeKey: @escaping @Sendable () -> String?,
                 browser: (any BrowserSessionReading)? = nil,
                 antigravity: (any AntigravityLocating)? = nil,
+                antigravityReport: (any AntigravityReporting)? = nil,
                 now: @escaping @Sendable () -> Int64 = { Int64((Date().timeIntervalSince1970 * 1000).rounded(.down)) }) {
         self.home = home
         self.variables = variables
@@ -40,6 +43,7 @@ public struct QuotaVendorEnvironment: Sendable {
         self.zcodeKey = zcodeKey
         self.browser = browser ?? BrowserCookieReader(home: home)
         self.antigravity = antigravity ?? AntigravityProcessLocator(home: home)
+        self.antigravityReport = antigravityReport ?? AgyUsageReport(home: home, variables: variables, now: now)
         self.now = now
     }
 }

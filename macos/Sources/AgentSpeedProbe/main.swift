@@ -30,6 +30,8 @@ case .syncPrices(let directory):
     print(await NetworkSync.prices(directory: URL(fileURLWithPath: directory, isDirectory: true)))
 case .dumpQuota:
     DumpQuota.run(configuration: arguments.configuration)
+case .antigravityReport:
+    DumpQuota.antigravityReport()
 case .syncRates(let directory, let currency):
     print(await NetworkSync.rates(directory: URL(fileURLWithPath: directory, isDirectory: true), currency: currency))
 }

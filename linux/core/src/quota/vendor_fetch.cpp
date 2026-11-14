@@ -125,10 +125,30 @@ private:
     std::optional<std::optional<std::string>> project_;
 };
 
+// The report's outcome replaces the servers'; `done` keeps no reference to the report, whose thread calls it.
+void runReport(const Context& context, VendorService::FetchResult base, const std::shared_ptr<AgyReport>& reporter) {
+    auto held = std::make_shared<VendorService::FetchResult>(std::move(base));
+    held->status = 0;
+    held->noCertificates = false;
+    const bool started = reporter && reporter->start([context, held](AgyReportResult result) {
+        held->outcome = result.ok ? Outcome::Success : Outcome::Failure;
+        if (result.ok) {
+            held->windows = std::move(result.windows);
+            held->observedMs = result.observedMs;
+        }
+        deliver(context, std::move(*held));
+    });
+    if (!started) {
+        held->outcome = Outcome::Failure;
+        deliver(context, std::move(*held));
+    }
+}
+
 class AntigravityChain : public std::enable_shared_from_this<AntigravityChain> {
 public:
-    AntigravityChain(Context context, VendorService::FetchResult base, std::vector<AntigravityServer> servers)
-        : context_(std::move(context)), base_(std::move(base)), servers_(std::move(servers)) {}
+    AntigravityChain(Context context, VendorService::FetchResult base, std::vector<AntigravityServer> servers,
+                     std::shared_ptr<AgyReport> report)
+        : context_(std::move(context)), base_(std::move(base)), servers_(std::move(servers)), report_(std::move(report)) {}
     ~AntigravityChain() {
         for (auto& server : servers_) {
             for (auto& endpoint : server.endpoints) {
@@ -155,6 +175,10 @@ public:
             }
             auto self = shared_from_this();
             ask(context_, std::move(*request), base_.startedMs, [self](Answer answer) { self->summary(std::move(answer)); });
+            return;
+        }
+        if (report_) {
+            runReport(context_, std::move(base_), report_);
             return;
         }
         base_.outcome = denied_ ? Outcome::Denied : Outcome::Failure;
@@ -199,6 +223,7 @@ private:
     Context context_;
     VendorService::FetchResult base_;
     std::vector<AntigravityServer> servers_;
+    std::shared_ptr<AgyReport> report_;
     std::size_t server_ = 0;
     std::size_t endpoint_ = 0;
     bool denied_ = false;
@@ -228,8 +253,13 @@ void gemini(const Context& context, VendorService::FetchResult base, std::string
     std::make_shared<GeminiChain>(context, std::move(base), std::move(token), std::move(project))->start();
 }
 
-void antigravity(const Context& context, VendorService::FetchResult base, std::vector<AntigravityServer> servers) {
-    std::make_shared<AntigravityChain>(context, std::move(base), std::move(servers))->next();
+void antigravity(const Context& context, VendorService::FetchResult base, std::vector<AntigravityServer> servers,
+                 std::shared_ptr<AgyReport> report) {
+    std::make_shared<AntigravityChain>(context, std::move(base), std::move(servers), std::move(report))->next();
+}
+
+void agyReport(const Context& context, VendorService::FetchResult base, const std::shared_ptr<AgyReport>& report) {
+    runReport(context, std::move(base), report);
 }
 
 }  // namespace agentspeed::quota::fetch

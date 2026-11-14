@@ -48,7 +48,25 @@ final class ScriptedQuotaTransport: QuotaHTTPTransport, Sendable {
 
 struct FixedAntigravity: AntigravityLocating {
     var found: [AntigravityServer]
+    var agyRuns = false
     func servers() -> [AntigravityServer] { found }
+    func scan() -> AntigravityScan { AntigravityScan(servers: found, agyRuns: agyRuns) }
+}
+
+/// agy's usage report from a script: whether a binary exists, and what each report returns.
+final class FixedReport: AntigravityReporting, @unchecked Sendable {
+    var binary: Bool
+    var answer: (windows: [QuotaWindow], observedMs: Int64)?
+    private(set) var reports = 0
+    init(binary: Bool = true, answer: (windows: [QuotaWindow], observedMs: Int64)?) {
+        self.binary = binary
+        self.answer = answer
+    }
+    func available() -> Bool { binary }
+    func report() -> (windows: [QuotaWindow], observedMs: Int64)? {
+        reports += 1
+        return answer
+    }
 }
 
 final class FixedBrowser: BrowserSessionReading, @unchecked Sendable {
@@ -65,9 +83,11 @@ final class FixedBrowser: BrowserSessionReading, @unchecked Sendable {
 extension QuotaVendorEnvironment {
     static func test(home: URL, transport: ScriptedQuotaTransport, variables: [String: String] = [:],
                      zcodeKey: String? = nil, browser: FixedBrowser = FixedBrowser(nil),
-                     antigravity: [AntigravityServer] = [], nowMs: Int64 = QuotaServiceTests.now) -> QuotaVendorEnvironment {
+                     antigravity: [AntigravityServer] = [], agyRuns: Bool = false, report: FixedReport? = nil,
+                     nowMs: Int64 = QuotaServiceTests.now) -> QuotaVendorEnvironment {
         QuotaVendorEnvironment(home: home, variables: variables, transport: transport, userAgent: "AgentSpeed/9.9.9 (macOS)",
                                timeZone: { TimeZone(identifier: "Asia/Taipei")! }, zcodeKey: { zcodeKey }, browser: browser,
-                               antigravity: FixedAntigravity(found: antigravity), now: { nowMs })
+                               antigravity: FixedAntigravity(found: antigravity, agyRuns: agyRuns), antigravityReport: report,
+                               now: { nowMs })
     }
 }

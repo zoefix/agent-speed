@@ -31,6 +31,9 @@ agentspeed::traffic::Env linuxEnv() {
     agentspeed::traffic::Env env;
     env.platform = agentspeed::traffic::Platform::Linux;
     if (const char* home = std::getenv("HOME")) env.home = home;
+    const auto self = agentspeed::traffic::sampler::ownProcess();
+    env.appPid = self.first;
+    env.appStart = self.second;
     return env;
 }
 
@@ -63,6 +66,8 @@ void QuotaWorker::start() {
     quota::VendorServiceOptions options;
     options.wake = [this] { QMetaObject::invokeMethod(this, &QuotaWorker::tick, Qt::QueuedConnection); };
     options.log = [](std::string_view host, int status) { qInfo("quota: %.*s %d", static_cast<int>(host.size()), host.data(), status); };
+    // QUOTAS 9.4: agy's usage report, on this computer only (never on a remote host).
+    options.agyReport = std::make_shared<quota::AgyReporter>(quota::VendorEnvironment::system());
     vendors_ = std::make_unique<quota::VendorService>(quota::VendorEnvironment::system(), *transport_, *secrets_, std::move(options));
     desktop_ = std::make_unique<quota::desktop::Reader>(quota::desktopCacheFolder(environment));
     const auto paths = quota::bridge::Paths::forComputer(environment);

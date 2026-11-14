@@ -45,6 +45,8 @@ struct VendorEnvironment {
     std::function<std::optional<std::string>(std::string_view)> variable;
     std::shared_ptr<Files> files;
     std::string procRoot = "/proc";
+    // Agent Speed's own process in `procRoot` (METRICS 10.5), whose descendants are never Antigravity's; 0: none.
+    std::int64_t selfPid = 0;
     // Where a browser's cookie store is copied for reading; empty: $TMPDIR, else /tmp.
     std::string tempFolder;
     // `uname -m` (`x86_64`, `aarch64`); empty: this machine's.

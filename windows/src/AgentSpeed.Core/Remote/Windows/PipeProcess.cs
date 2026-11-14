@@ -198,7 +198,7 @@ internal sealed class PipeProcess : IRemoteProcess
     }
 
     /// <summary><c>name=value\0</c> … <c>\0</c>, sorted by name without case as Windows expects.</summary>
-    private static string EnvironmentBlock(IReadOnlyDictionary<string, string> environment)
+    internal static string EnvironmentBlock(IReadOnlyDictionary<string, string> environment)
     {
         var block = new StringBuilder();
         foreach (var (name, value) in environment.OrderBy(e => e.Key, StringComparer.OrdinalIgnoreCase))

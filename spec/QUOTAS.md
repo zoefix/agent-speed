@@ -463,7 +463,7 @@ Sources with no quota to show:
 | Route | Sources | Default |
 | --- | --- | --- |
 | Local file | Grok Build (log), Devin | on |
-| Loopback server | Antigravity | on |
+| Loopback server, else the agent's own usage report (9.4) | Antigravity | on |
 | Vendor API with the agent's own sign-in | Kimi Code, Gemini CLI, Factory Droid (its API key), Grok Build (live) | on; Grok Build live off |
 | Vendor API with a key the user enters | ZCode | off until a key is saved |
 | Vendor website with the browser's session | Qoder IDE and Qoder CLI, WorkBuddy and WorkBuddy AI | off; turning it on asks first (9.10) |
@@ -547,15 +547,26 @@ Devin CLI. Users of the CLI alone have no local quota.
 
 ### 9.4 Antigravity
 
-The running language server answers a quota request on loopback. Antigravity is never started for it.
+The running language server answers a quota request on loopback. When none answers, Agent Speed runs the `agy`
+CLI's own usage report (*CLI usage report*, below; user's choice 2026-11-14, "參考 CodexBar 的實現", after agy 1.2.2
+stopped answering a request without its CSRF token). Nothing else of Antigravity is ever started, and its sign-in (its
+token file, the keychain) is never read.
 - **Servers**, from the process table (METRICS 10.5):
-  - An executable named `language_server_*` whose arguments contain `--app_data_dir` and `antigravity`, or whose path
-    is inside `Antigravity.app`, `Antigravity IDE.app` or `Gemini.app`. It takes `--csrf_token`,
-    `--extension_server_port` and `--extension_server_csrf_token`.
+  - An executable named `language_server_*` or exactly `language_server` (`language_server.exe` on Windows,
+    unverified) whose arguments contain `--app_data_dir` and `antigravity`, or whose path is inside `Antigravity.app`,
+    `Antigravity IDE.app` or `Gemini.app`. A plain `language_server` never counts on its name alone, which is generic.
+    It takes `--csrf_token`, `--extension_server_port` and `--extension_server_csrf_token`. Observed 2026-11-14: the
+    desktop app 2.32.1 runs `Antigravity.app/Contents/Resources/bin/language_server --standalone
+    --override_ide_name antigravity --subclient_type hub … --https_server_port 0 --csrf_token <t> --app_data_dir
+    antigravity …`, and its listening ports answered the summary over HTTP and HTTPS.
   - Or an `agy` process. Its token comes from its own environment, `ANTIGRAVITY_CSRF_TOKEN`, with the address from
     `ANTIGRAVITY_LS_ADDRESS` (`host:port`). On macOS this is `KERN_PROCARGS2`, on Linux `/proc/<pid>/environ`; there
-    is none on Windows.
+    is none on Windows. Since agy 1.2.2 (seen with 1.5.9, 2026-11-14) the server runs inside `agy` itself, listens
+    on 127.0.0.1 over HTTPS and HTTP, and answers `401 missing CSRF token`: the token is in neither its environment,
+    its arguments nor a daemon file (only its child processes get `ANTIGRAVITY_CSRF_TOKEN`). The usage report takes
+    over then.
   - Only that one process is read: never the environment of every process, as Tokei does.
+  - Agent Speed's own `agy` (the report below) is never a server.
   - Daemon files `~/.gemini/antigravity/daemon/ls_*.json`, `~/.gemini/antigravity-ide/daemon/ls_*.json`
     (`pid`, `csrfToken`, `httpsPort`, `httpPort`), used while that pid runs.
 - **Ports**:
@@ -588,7 +599,54 @@ The running language server answers a quota request on loopback. Antigravity is 
   - Reset: `resetTime` (ISO 8601 or epoch).
 - **GetUserStatus → windows**: `userStatus.cascadeModelConfigData.clientModelConfigs[].quotaInfo`
   (`remainingFraction`, `resetTime`) → `fiveHour` named by the config's `label`.
-- **Runs**: one of the servers above runs. **Signed in**: the last request succeeded.
+- **CLI usage report** (CodexBar's route for agy 1.2.2 and later, 2026-11-14). A round in which no server answered
+  (none found, or every address failed or refused; an answer without windows is an answer) runs it, and its outcome
+  is the round's. It runs only while an `agy` process runs (METRICS 10.5, Agent Speed's own excepted) or the dashboard
+  is open, under the route's cadence (9.1: at most every 5 minutes, 15 after a failure) and its network rule
+  (`networkEnabled`, the source and `quotaAntigravity` on): agy itself asks Google for the values with its own
+  sign-in. A refusal from the servers stops the route (9.1) only in a round that cannot run the report. Without an
+  agy binary there is no report, and the round keeps the servers' outcome (none found: not running).
+  - **Binary**: `~/.local/bin/agy` (agy's installer), else the first `agy` on the app's `PATH`. Windows
+    `%USERPROFILE%\.local\bin\agy.exe`, else `agy.exe` on `PATH`; Linux as macOS. Both are unverified. It must be a
+    regular executable file.
+  - **Version**: `agy --version`, killed after 3 s, with at most 4 KiB of output. The trimmed output must be
+    `<major>.<minor>.<patch>` in digits and at least `1.1.11`: older print modes sent an unknown slash command to the
+    model as a prompt, which spends the user's quota. A version read is kept per binary (its resolved path, size,
+    modification time and file id) and asked again only when one of them changes; an output that is no version, or
+    a run that timed out, is asked again at the next round. An unknown or older version runs no report, and the round
+    is a failure. `--version` runs with the report's standard input, working folder and environment (below).
+  - **Run**: `agy -p /usage --output-format json --print-timeout 90s`.
+    - Standard input is the null device. Standard error is discarded unread. Standard output is read up to 1 MiB;
+      more kills the process and is a failure.
+    - The working folder is a new private folder (0700) in the temporary folder, removed afterwards.
+    - The environment is the app's with `AGY_CLI_DISABLE_AUTO_UPDATE=true` (agy ignores `1`). A signed-out agy must
+      not open a browser to sign in: `PATH` starts with the private folder, which holds `open` and `xdg-open` scripts
+      that exit 1 (`#!/bin/sh`, `exit 1`, mode 0700), and `BROWSER` names the `open` script. Windows: `open.cmd` and
+      `xdg-open.cmd` (`@exit /b 1`), `BROWSER` naming the first (unverified: how agy opens a browser there).
+    - It is killed after 100 s. Its process group (Windows: a job object that kills its processes when closed) is
+      killed once it ends or is killed, so that no descendant stays.
+    - Seen with agy 1.5.9 (2026-11-14): 6.3 s wall time, 0.3 s CPU, no turn and no token (no model call).
+  - **Report**: standard output is a JSON object with `status == "SUCCESS"`, `command.name == "usage"` and an
+    object `command.data`; anything else is a failure, whatever the exit code.
+    - `command.data` is a summary in snake case: a group's `name` stands for `displayName`, and a bucket's `id`,
+      `name`, `remaining_fraction` and `reset_time` for `bucketId`, `displayName`, `remainingFraction` and
+      `resetTime` (the camel-case member wins where both appear). Then the summary's rules apply.
+    - A report without a window is a failure. `observedMs` is when the process ended.
+
+    ```json
+    {"status": "SUCCESS", "response": "…", "num_turns": 0, "usage": {…},
+     "command": {"name": "usage", "data": {"groups": [
+       {"name": "Gemini Models", "buckets": [{"id": "gemini-weekly", "name": "Weekly Limit Remaining",
+        "window": "weekly", "remaining_fraction": 0.9548, "reset_time": "2026-11-21T02:28:26Z"}]},
+       {"name": "Claude and GPT models", "buckets": [{"id": "3p-weekly", "window": "weekly",
+        "remaining_fraction": 1, "reset_time": "2026-11-21T08:37:43Z"}]}]}}}
+    ```
+
+    gives `Gemini 7d` at 5 % and `Claude/GPT 7d` at 0 %.
+  - **Agent Speed's own `agy`** never counts as a running `agy` (section 6 and METRICS 10.5) and is never asked as a
+    server; it would otherwise keep the route running by itself.
+- **Runs**: one of the servers above runs, or an `agy` process (Agent Speed's own excepted). **Signed in**: the last
+  request or report succeeded.
 
 ### 9.5 Kimi Code
 
@@ -1066,6 +1124,7 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
     percent, confidence, reset state, set change, a size drop counting as unsent, `[]` once when switched off, a new
     run, leaving).
 - Phase 2: every response shape of section 9 (Grok config from a log and from the API, Devin rows, Antigravity
-  summaries and `GetUserStatus`, Kimi current and legacy, Gemini buckets, Factory limits, z.ai limits, Qoder and
-  WorkBuddy summaries), named-window labels and order, and Chrome cookie decryption vectors for macOS `v10`, Linux
+  summaries and `GetUserStatus`, its servers' executables, agy's usage reports and versions, Kimi current and legacy,
+  Gemini buckets, Factory limits, z.ai limits, Qoder and WorkBuddy summaries), named-window labels and order, and
+  Chrome cookie decryption vectors for macOS `v10`, Linux
   `v10`/`v11` (with and without the host hash) and Windows `v10` (AES-GCM, given key).

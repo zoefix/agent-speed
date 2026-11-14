@@ -84,7 +84,8 @@ public sealed class AntigravityEndToEndTests : IDisposable
 
         var port = int.Parse(File.ReadAllText(portFile).Trim(), System.Globalization.CultureInfo.InvariantCulture);
         await WarmUp(port);
-        using var locator = new AntigravityProcessLocator(_root);
+        // The stand-in is this test's child, which a locator for this process would take as Agent Speed's own.
+        using var locator = new AntigravityProcessLocator(_root, app: null);
         var server = Assert.Single(locator.Servers(), s => s.Pid == _server.Id);
         Assert.Contains(server.Endpoints, e => e.Port == port && e.Scheme == "http" && e.Token == "tok-123");
 
@@ -113,6 +114,8 @@ public sealed class AntigravityEndToEndTests : IDisposable
     private sealed class OnlyPid(IAntigravityLocator inner, int pid) : IAntigravityLocator
     {
         public IReadOnlyList<AntigravityServer> Servers() => [.. inner.Servers().Where(s => s.Pid == pid)];
+
+        public bool AgyRuns => false;
     }
 
     public void Dispose()

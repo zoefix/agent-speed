@@ -450,7 +450,7 @@ TEST(QuotaVendorService, DeferredAnswersArriveWithTheNextTick) {
     f.service->tick(in);
     EXPECT_EQ(f.transport.sent.size(), 1u) << "one request in flight per route";
     f.transport.completeAll();
-    EXPECT_EQ(f.wakes, 1);
+    EXPECT_EQ(f.wakes.load(), 1);
     // Applied; six minutes after the first request the next one is due at once.
     readings = f.service->tick(in);
     EXPECT_TRUE(readings.snapshot(SourceKind::Kimi).has_value());

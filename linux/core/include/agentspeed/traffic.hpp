@@ -26,6 +26,9 @@ struct Env {
     Platform platform = Platform::Linux;
     std::string home;
     std::map<std::string, std::string> vars;  // Windows %VAR% values
+    // Agent Speed's own process (METRICS 10.5): it and its descendants are never agent processes. The start time,
+    // when known, must match too.
+    std::optional<std::int64_t> appPid, appStart;
     std::string norm(const std::string& path) const;
     std::string name(const std::string& exe) const;
 };

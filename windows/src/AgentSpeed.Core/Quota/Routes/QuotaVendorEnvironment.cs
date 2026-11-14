@@ -30,6 +30,9 @@ public sealed class QuotaVendorEnvironment
 
     public IAntigravityLocator? Antigravity { get; init; }
 
+    /// <summary>agy's own usage report, run when no Antigravity server gives windows (QUOTAS 9.4); null runs none.</summary>
+    public IAntigravityReport? AntigravityReport { get; init; }
+
     public Func<long> Now { get; init; } = () => DateTimeOffset.UtcNow.ToUnixTimeMilliseconds();
 
     /// <summary>The log Grok Build writes; null takes <see cref="GrokLogReader.DefaultFile"/>.</summary>

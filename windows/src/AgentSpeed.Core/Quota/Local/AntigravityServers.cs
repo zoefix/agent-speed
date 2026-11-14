@@ -33,25 +33,28 @@ public sealed record AntigravityServer
     public override int GetHashCode() => HashCode.Combine(Pid, Endpoints.Count);
 }
 
-/// <summary>Finds the running servers; never starts Antigravity.</summary>
+/// <summary>Finds the running servers; never starts Antigravity. Agent Speed's own processes are left out (METRICS 10.5).</summary>
 public interface IAntigravityLocator
 {
     IReadOnlyList<AntigravityServer> Servers();
+
+    /// <summary>A user's <c>agy</c> ran at the last <see cref="Servers"/> (QUOTAS 9.4 <i>CLI usage report</i>).</summary>
+    bool AgyRuns { get; }
 }
 
 /// <summary>The rules of QUOTAS 9.4 <i>Servers</i> and <i>Ports</i> on Windows, as pure functions over what a process listing found.</summary>
 public static class AntigravityRules
 {
     /// <summary>
-    /// A <c>language_server_*</c> executable of Antigravity: its arguments name <c>--app_data_dir</c> and antigravity, or it
-    /// lies inside an <c>Antigravity</c> or <c>Antigravity IDE</c> install folder.
+    /// A <c>language_server_*</c> executable or a plain <c>language_server.exe</c> (the desktop app's, unverified on
+    /// Windows) of Antigravity: its arguments name <c>--app_data_dir</c> and antigravity, or it lies inside an
+    /// <c>Antigravity</c> or <c>Antigravity IDE</c> install folder. The plain name, which is generic, never counts alone.
     /// </summary>
     public static bool IsLanguageServer(string executable, IReadOnlyList<string> arguments)
     {
         ArgumentNullException.ThrowIfNull(executable);
         ArgumentNullException.ThrowIfNull(arguments);
-        var name = Path.GetFileName(executable.Replace('/', '\\'));
-        if (!name.StartsWith("language_server_", StringComparison.OrdinalIgnoreCase))
+        if (!IsServerName(executable))
         {
             return false;
         }
@@ -64,6 +67,18 @@ public static class AntigravityRules
 
         var flagged = arguments.Any(a => a == "--app_data_dir" || a.StartsWith("--app_data_dir=", StringComparison.Ordinal));
         return flagged && arguments.Any(a => a.Contains("antigravity", StringComparison.OrdinalIgnoreCase));
+    }
+
+    /// <summary>The file name is <c>language_server_*</c> or exactly <c>language_server</c>, with or without <c>.exe</c>, in any case.</summary>
+    public static bool IsServerName(string executable)
+    {
+        var name = Path.GetFileName(executable.Replace('/', '\\'));
+        if (name.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            name = name[..^4];
+        }
+
+        return name.StartsWith("language_server_", StringComparison.OrdinalIgnoreCase) || name.Equals("language_server", StringComparison.OrdinalIgnoreCase);
     }
 
     /// <summary><c>--name value</c> or <c>--name=value</c>.</summary>

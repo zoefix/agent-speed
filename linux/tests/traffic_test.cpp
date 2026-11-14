@@ -57,6 +57,49 @@ void expectPair(const RatePair& got, const json::Value& want, const std::string&
 
 }  // namespace
 
+// METRICS 10.5: Agent Speed's own process is the entry with its pid and start time; a reused pid is not it.
+TEST(Traffic, TheAppAndItsDescendantsAreNeverAgents) {
+    Env env;
+    env.platform = Platform::Linux;
+    env.home = "/home/dev";
+    env.appPid = 50;
+    env.appStart = 1000;
+    ProcessTable table(env);
+    const auto proc = [](std::int64_t pid, std::int64_t ppid, std::int64_t start, std::string exe, std::vector<std::string> args = {}) {
+        Process p;
+        p.pid = pid;
+        p.ppid = ppid;
+        p.start = start;
+        p.exe = std::move(exe);
+        p.args = std::move(args);
+        return p;
+    };
+    table.refresh({proc(1, 0, 0, "/sbin/init"), proc(50, 1, 1000, "/usr/bin/agent-speed"),
+                   proc(51, 50, 2000, "/home/dev/.local/bin/agy", {"agy", "-p", "/usage"}),
+                   proc(52, 51, 3000, "/home/dev/.local/share/agy/language_server_linux_x64", {"x", "--app_data_dir", "antigravity"}),
+                   proc(60, 1, 1500, "/home/dev/.local/bin/agy"),
+                   proc(70, 1, 1500, "/opt/antigravity/resources/bin/language_server", {"language_server", "--app_data_dir=.antigravity"}),
+                   proc(71, 1, 1500, "/opt/lsp/language_server", {"language_server", "--stdio"})});
+    const auto source = [&](std::int64_t pid, std::int64_t start) -> std::optional<SourceKind> {
+        const auto* c = table.classify({pid, start});
+        return c ? c->source : std::nullopt;
+    };
+    EXPECT_EQ(source(50, 1000), std::nullopt);
+    EXPECT_EQ(source(51, 2000), std::nullopt);
+    EXPECT_EQ(source(52, 3000), std::nullopt);
+    EXPECT_EQ(source(60, 1500), SourceKind::Antigravity);
+    EXPECT_EQ(source(70, 1500), SourceKind::Antigravity);
+    EXPECT_EQ(source(71, 1500), std::nullopt);
+
+    // The same pid with another start time is another process.
+    Env reused = env;
+    reused.appStart = 999;
+    ProcessTable other(reused);
+    other.refresh({proc(1, 0, 0, "/sbin/init"), proc(50, 1, 1000, "/usr/bin/agent-speed"),
+                   proc(51, 50, 2000, "/home/dev/.local/bin/agy")});
+    EXPECT_EQ(other.classify({51, 2000})->source, SourceKind::Antigravity);
+}
+
 TEST(Traffic, FormatsBytes) {
     fixtures::JsonFile file(fixtures::fixtureDir() / "traffic-cases.json");
     ASSERT_TRUE(file.ok);
@@ -81,6 +124,7 @@ TEST(Traffic, MatchesTheReferenceCases) {
         env.platform = platform == "windows" ? Platform::Windows : platform == "linux" ? Platform::Linux : Platform::MacOS;
         env.home = c["home"].string().value_or("/Users/dev");
         for (const auto& [k, v] : c["env"].members()) env.vars[k] = *v.string();
+        env.appPid = fixtures::optInt(c["appPid"]);
         const auto tz = fixtures::optInt(c["tzOffsetMs"]).value_or(0);
         Engine engine(env, [tz](std::int64_t t) { return utcDate(t + tz); });
         std::vector<AgentFacts> agents;
@@ -220,6 +264,9 @@ TEST(TrafficSampler, ReadsThisMachine) {
     const auto self = std::find_if(processes.begin(), processes.end(), [](const Process& p) { return p.pid == ::getpid(); });
     ASSERT_NE(self, processes.end());
     EXPECT_FALSE(self->exe.empty());
+    const auto own = sampler::ownProcess();
+    EXPECT_EQ(own.first, self->pid);
+    EXPECT_EQ(own.second, self->start);
     bool ok = false;
     sampler::tcpSockets(ok);
     sampler::SocketCounters counters("test");
