@@ -150,13 +150,14 @@ def split_objects(layers, min_share=0.05, bridge=4):
 HEAD_TAGS = ("face", "front hair", "back hair", "headwear")
 
 
-def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35):
+def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35, halo_fill=0.25):
     """Gives the head what the split drew of it into the top: topwear above the upper `above` of the face (a white
     beret the split takes for the white blouse) becomes a `headwear` layer named `hat`, so it turns with the head.
     It keeps the top's place in the draw order while it sits on the head; a hat the art shows tossed above the head
     (the median gap between its lower edge and the head's top, column by column, over a tenth of its height; a stray
     strand of hair may still touch it) is set down on it, its lower `overlap` over the head's top, and drawn over the
-    hair.
+    hair. A halo (its pixels over opacity 0.5 fill under `halo_fill` of its box: a ring, a crown of thorns) floats
+    above the head in every pose and stays where the art draws it.
     Returns the layers and how many hats it lifted."""
     fx0, fy0, fx1, fy1 = face_box
     cut = int(fy0 + above * (fy1 - fy0))
@@ -184,7 +185,8 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35):
             if len(hat_rows) and len(head_rows):
                 gaps.append(head_rows.min() - hat_rows.max())
         height = ys.max() - ys.min()
-        if not gaps or np.median(gaps) <= 0.1 * height:
+        halo = (rgba[..., 3] > 0.5).sum() < halo_fill * (height + 1) * (xs.max() - xs.min() + 1)
+        if halo or not gaps or np.median(gaps) <= 0.1 * height:
             out.append(Layer("hat", "headwear", rgba))
             continue
         dy = int(np.median(gaps) + overlap * height)

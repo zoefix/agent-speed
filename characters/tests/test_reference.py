@@ -1099,6 +1099,26 @@ class LayerTests(unittest.TestCase):
             ys = np.nonzero(hat.alpha[:, 100] > 0.5)[0]
             self.assertGreaterEqual(ys.max(), 90 + (10 if seated else -1))
 
+    def test_a_halo_floating_above_the_head_stays_where_the_art_draws_it(self):
+        from characters.rig.layers import Layer, lift_hats
+
+        def layer(name, tag, *boxes):
+            rgba = np.zeros((300, 200, 4), np.float32)
+            for y0, y1, x0, x1 in boxes:
+                rgba[y0:y1, x0:x1] = 1
+            return Layer(name, tag, rgba)
+        ring = ((10, 13, 30, 170), (57, 60, 30, 170), (13, 57, 30, 33), (13, 57, 167, 170))
+        top = layer("topwear", "topwear", (150, 250, 60, 140), *ring)
+        hair = layer("front hair", "front hair", (90, 110, 70, 130))
+        parts, lifted = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], (80, 100, 120, 140))
+        self.assertEqual(lifted, 1)
+        self.assertEqual([q.name for q in parts], ["face", "topwear", "hat", "front hair"])
+        hat = parts[2]
+        self.assertEqual(hat.alpha[11, 100], 1.0)
+        self.assertEqual(hat.alpha[35, 31], 1.0)
+        self.assertEqual(hat.alpha[35, 100], 0.0)
+        self.assertEqual(top.alpha[11, 100], 0.0)
+
     def test_a_robe_front_drawn_into_the_arm_layer_goes_to_the_body_up_to_the_ink_line(self):
         from characters.rig.layers import Layer, split_body_from_arms
         ref = np.ones((200, 200, 3), np.float32)

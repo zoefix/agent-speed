@@ -154,7 +154,9 @@ Such a piece leaves its layer and joins the prop. Topwear above the upper 30 % o
 opacity 0.5: a white beret the split takes for the white blouse, a crown) becomes a `headwear` layer named `hat` that
 follows the head, kept in the top's place in the draw order; when the art shows it tossed above the head (the median
 gap, column by column, between its lower edge and the head's top is over a tenth of its height) it is set down so its
-lower 35 % covers the head's top, and drawn over the hair. The objects layer the split made is cut into its pieces (gaps up
+lower 35 % covers the head's top, and drawn over the hair. A halo (its pixels over opacity 0.5 fill under a quarter
+of its box: a ring, a crown of thorns) floats above the head in every pose and stays where the art draws it. The
+objects layer the split made is cut into its pieces (gaps up
 to 8 px closed; pieces of at least 5 % of the layer, smaller bits joining the nearest piece), so a fan in one hand and
 a purse in the other each follow their own holder: a piece follows the hand (wrist to fingertip segment, or the hand's
 keypoints) that comes within 0.6 face widths of it, else the body (`lower` below the waist, `chest` above), and
