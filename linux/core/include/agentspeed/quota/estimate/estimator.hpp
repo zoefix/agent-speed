@@ -13,6 +13,7 @@
 #include "agentspeed/history.hpp"
 #include "agentspeed/quota/estimate/engine.hpp"
 #include "agentspeed/quota/estimate/sign_in.hpp"
+#include "agentspeed/quota/estimate/window_feed.hpp"
 
 // The app's quota estimate (QUOTAS 10): the engine's inputs as the history, the live engine, the quota readers and the
 // remote hosts feed them, rebuilt on demand, and the install id and estimate.json on disk. Thread-safe: every thread
@@ -47,7 +48,8 @@ public:
     // QUOTAS 10.1 key timeline: a sign-in as read now (nullopt: signed out, which changes nothing).
     void setCodexAccount(std::int64_t at, const std::optional<SignedInAccount>& account);
     void setClaudeAccount(std::int64_t at, const std::optional<SignedInAccount>& account);
-    // QUOTAS 10.4: a new vendor value; a run of equal values keeps its first and last.
+    // QUOTAS 10.4: a new vendor value; a run of equal values keeps its first and last. Claude Code's goes window by
+    // window (QUOTAS 5.6 Estimate), so it may be handed over whenever it changes.
     void addSnapshot(SnapshotEvent snapshot);
     void setPriceVersion(int version);
 
@@ -65,6 +67,8 @@ public:
 
 private:
     void prune(std::int64_t nowMs);
+    // With the lock held.
+    void append(SnapshotEvent snapshot);
 
     std::string folder_;
     std::optional<std::string> install_;
@@ -86,6 +90,7 @@ private:
     };
     std::vector<SnapshotEvent> snapshots_;
     std::map<std::pair<std::string, std::string>, Run> lastSnapshot_;
+    WindowFeed windowFeed_;
     Store stored_;
     std::shared_ptr<const Engine> built_;
     std::set<std::string> shownAccounts_;

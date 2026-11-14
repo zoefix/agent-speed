@@ -6,8 +6,10 @@
 #include <QFile>
 #include <functional>
 
+#include "../quota_test_support.hpp"
 #include "agentspeed/json.hpp"
 #include "agentspeed/quota/codex.hpp"
+#include "agentspeed/quota/paths.hpp"
 #include "quota/quota_worker.hpp"
 
 // QUOTAS 9.1 in the app's worker: a source is read only while it is enabled in Data sources and its quota switch is
@@ -70,6 +72,7 @@ protected:
         worker_.reset();
         QDir(home() + QStringLiteral("/.config/Claude")).removeRecursively();
         QDir(home() + QStringLiteral("/.local/share/agent-speed")).removeRecursively();
+        QFile::remove(home() + QStringLiteral("/.claude.json"));
     }
     void observeCodex() {
         agentspeed::json::Document doc;
@@ -131,6 +134,41 @@ TEST_F(QuotaWorkerGate, ADisabledSourceReadsAndShowsNothing) {
     // The bridge is off: no Claude Code row and no CLI status.
     EXPECT_FALSE(find(last_, SourceKind::ClaudeCode));
     EXPECT_EQ(last_.cliState, QStringLiteral("off"));
+}
+
+// QUOTAS 5.6: Claude Code's row joins the bridge's file with the CLI's usage cache, read only while the bridge's switch
+// is on: the fixtures' observed join, Fable 7d at the cache's time.
+TEST_F(QuotaWorkerGate, ClaudeCodeJoinsTheUsageCache) {
+    const auto account = QString::fromStdString(quota::claudeAccountFile(quota::processEnvironment()));
+    // The scratch home of the app tests, never a real one.
+    ASSERT_EQ(account, home() + QStringLiteral("/.claude.json"));
+    ASSERT_TRUE(home().startsWith(QDir::tempPath())) << home().toStdString();
+    agentspeed::json::Value join, observed;
+    for (const auto& item : quota_test::section("claudeCodeCache")["joins"].elements()) {
+        if (item["name"].equals("observed")) join = item;
+    }
+    for (const auto& item : quota_test::section("claudeCodeCache")["files"].elements()) {
+        if (item["name"].equals("observed")) observed = item;
+    }
+    ASSERT_TRUE(join && observed);
+    write(account, QByteArray::fromStdString(*observed["text"].string()));
+    write(home() + QStringLiteral("/.local/share/agent-speed/quota/claude-cli.json"),
+          R"({"version":1,"receivedMs":1794338473000,"windows":{"five_hour":{"used_percentage":52,"resets_at":1794344400},)"
+          R"("seven_day":{"used_percentage":80,"resets_at":1794621600}}})");
+    QuotaWorkerSettings s;
+    s.enabled = {SourceKind::ClaudeCode};
+    s.switchesOn = {"quotaClaudeDesktop"};
+    apply(s);
+    ASSERT_TRUE(pump([&] { return publications_ > 0; }));
+    EXPECT_FALSE(find(last_, SourceKind::ClaudeCode)) << "the bridge's switch is off: nothing of Claude Code is read";
+
+    s.switchesOn = {"quotaClaudeCli"};
+    apply(s);
+    ASSERT_TRUE(pump([&] {
+        const auto* c = find(last_, SourceKind::ClaudeCode);
+        return c && c->snapshot && c->snapshot->windows.size() == 3;
+    }));
+    quota_test::expectSnapshot(find(last_, SourceKind::ClaudeCode)->snapshot, join["expected"]);
 }
 
 TEST_F(QuotaWorkerGate, PhaseTwoSourcesFollowTheSameRule) {

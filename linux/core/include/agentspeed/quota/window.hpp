@@ -32,6 +32,8 @@ struct Window {
     std::optional<std::int64_t> minutes;
     double usedPercent = 0;
     std::optional<std::int64_t> resetsAtMs;
+    // Set only in a snapshot that joins two observations (Claude Code, QUOTAS 5.6): the time of this window's value.
+    std::optional<std::int64_t> observedMs;
     bool operator==(const Window&) const = default;
 };
 
@@ -45,6 +47,9 @@ struct Snapshot {
     std::vector<Window> windows;
     bool operator==(const Snapshot&) const = default;
 };
+
+// QUOTAS 2: a window's time, its own `observedMs` else its snapshot's (its age and `quota.updated` follow it).
+inline std::int64_t timeOf(const Window& window, const Snapshot& snapshot) { return window.observedMs.value_or(snapshot.observedMs); }
 
 // QUOTAS 2 Order: unnamed windows by length (null minutes and credits last; equal lengths in kind order), then the
 // named ones grouped by name in first-seen order, each group the same way. Stable.

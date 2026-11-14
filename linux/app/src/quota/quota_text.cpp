@@ -46,11 +46,13 @@ QString updatedTime(std::int64_t observedMs, std::int64_t nowMs) {
 QVariantList lines(const quota::Snapshot& snapshot, std::int64_t nowMs, const Strings& strings, const quota::QuotaFormat& format,
                    const std::vector<agentspeed::quota::estimate::Entry>* estimates, const quota_estimate_text::Money& money) {
     QVariantList out;
-    const auto age = format.age(snapshot.observedMs, nowMs);
-    const auto updated = strings.fmt(QStringLiteral("quota.updated"), {updatedTime(snapshot.observedMs, nowMs)});
     const auto separator = strings.t(QStringLiteral("list.separator"));
     for (const auto& shown : quota::shown(snapshot, nowMs)) {
         QVariantMap line;
+        // QUOTAS 2: the window's own time (Claude Code's `Fable 7d` from the CLI's cache can be older than the rest).
+        const auto at = quota::timeOf(shown.window, snapshot);
+        const auto age = format.age(at, nowMs);
+        const auto updated = strings.fmt(QStringLiteral("quota.updated"), {updatedTime(at, nowMs)});
         const auto label = text(format.label(shown.window));
         const auto pace = quota::pace(shown.window, nowMs);
         int percent = shown.percent;

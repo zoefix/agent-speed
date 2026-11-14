@@ -31,8 +31,8 @@ private:
     std::optional<double> helloOffsetMs_;
 };
 
-// The message with every time of an agent, response or tool line converted to local time (t − δ); nullopt when a
-// converted time leaves the years 2000–2100 (the line is then invalid). Durations are unchanged.
+// The message with every time of an agent, response, tool or quota line converted to local time (t − δ); nullopt when
+// a converted time leaves the years 2000–2100 (the line is then invalid). Durations are unchanged.
 std::optional<RelayMessage> converted(const RelayMessage& message, std::int64_t offsetMs);
 
 }  // namespace agentspeed::remote

@@ -75,7 +75,8 @@ void Connection::apply(RelayMessage message) {
     } else if (const auto* removed = std::get_if<AgentRemoved>(&message)) {
         session_.agentIds.erase(removed->id);
         notify(HostEvent::Message{std::move(message), seeded});
-    } else if (std::holds_alternative<RemoteResponse>(message) || std::holds_alternative<RemoteTool>(message)) {
+    } else if (std::holds_alternative<RemoteResponse>(message) || std::holds_alternative<RemoteTool>(message) ||
+               std::holds_alternative<HostQuota>(message)) {
         emitConverted(message);
     } else if (std::holds_alternative<HistoryDone>(message)) {
         notify(HostEvent::Message{std::move(message), seeded});

@@ -227,6 +227,34 @@ const std::string kClaudeAccount = R"({"numStartups":3,"oauthAccount":{"accountU
                                    R"("organizationUuid":"org-1","organizationType":"claude_max",)"
                                    R"("organizationRateLimitTier":"default_claude_max_20x","displayName":"secret-name"}})";
 
+// QUOTAS 5.6: a `.claude.json` of the fixtures' `claudeCodeCache` files, and the bridge's quota file of its `observed`
+// join (52 % and 80 %, received 5 minutes before the fixtures' now).
+std::string claudeFile(const char* name) {
+    static const fixtures::JsonFile file(fixtures::fixtureDir() / "quota-cases.json");
+    for (const auto& item : file.root()["claudeCodeCache"]["files"].elements()) {
+        if (item["name"].equals(name)) return *item["text"].string();
+    }
+    ADD_FAILURE() << "no file " << name;
+    return {};
+}
+const std::string kJoinedBridge = R"({"version":1,"receivedMs":1794338473000,"windows":{"five_hour":{"used_percentage":52,)"
+                                  R"("resets_at":1794344400},"seven_day":{"used_percentage":80,"resets_at":1794621600}}})";
+
+// The last `quota` line of a source as the relay wrote it.
+std::string lastQuotaLine(const std::string& lines, const std::string& source) {
+    const auto prefix = R"({"t":"quota","q":{"source":")" + source + "\"";
+    std::string found;
+    std::size_t pos = 0;
+    while (pos < lines.size()) {
+        const auto end = lines.find('\n', pos);
+        const auto line = lines.substr(pos, end - pos);
+        if (line.rfind(prefix, 0) == 0) found = line;
+        if (end == std::string::npos) break;
+        pos = end + 1;
+    }
+    return found;
+}
+
 std::string codexRateLimits(const std::string& plan) {
     return R"({"limit_id":"codex","plan_type":)" + plan + R"(,"primary":{"used_percent":23.0,"window_minutes":10080,"resets_at":1794897479}})";
 }
@@ -447,6 +475,64 @@ TEST(RelayQuotaSession, CodexAndTheClaudeCodeBridgeFile) {
     EXPECT_EQ(rig.reports(SourceKind::Codex).size(), 1u);
     // An unchanged report is not sent again.
     EXPECT_EQ(rig.reports(SourceKind::ClaudeCode).size(), 1u);
+}
+
+// REMOTE 11.3: the host's Claude Code usage cache joins its bridge file; each window carries its own time.
+TEST(RelayQuotaSession, TheClaudeCodeUsageCacheJoinsTheBridgeFile) {
+    Rig rig;
+    rig.home.write(".claude.json", claudeFile("observed"));
+    rig.home.write("relay/quota/claude-cli.json", kJoinedBridge);
+    rig.start({SourceKind::ClaudeCode});
+    rig.configure({SourceKind::ClaudeCode}, false);
+    const auto joined = [&] {
+        const auto q = rig.last(SourceKind::ClaudeCode);
+        return q && q->snapshot.windows.size() == 3 && q->plan;
+    };
+    ASSERT_TRUE(rig.runUntil(joined)) << rig.dump();
+    const auto claude = *rig.last(SourceKind::ClaudeCode);
+    static const fixtures::JsonFile cases(fixtures::fixtureDir() / "quota-cases.json");
+    for (const auto& item : cases.root()["claudeCodeCache"]["joins"].elements()) {
+        if (item["name"].equals("observed")) quota2_test::expectWindows(claude.snapshot.windows, item["expected"]["windows"]);
+    }
+    EXPECT_EQ(claude.snapshot.observedMs, 1794338473000);
+    ASSERT_EQ(claude.snapshot.windows[2].name, "Fable");
+    EXPECT_EQ(claude.snapshot.windows[2].observedMs, 1794330373747);
+    EXPECT_EQ(claude.snapshot.windows[0].observedMs, 1794338473000);
+    EXPECT_EQ(lastQuotaLine(rig.dump(), "claudeCode"),
+              R"({"t":"quota","q":{"source":"claudeCode","observedMs":1794338473000,"windows":[)"
+              R"({"kind":"fiveHour","name":null,"minutes":300,"usedPercent":52,"resetsAtMs":1794344400000,"observedMs":1794338473000},)"
+              R"({"kind":"sevenDay","name":null,"minutes":10080,"usedPercent":80,"resetsAtMs":1794621600000,"observedMs":1794338473000},)"
+              R"({"kind":"modelWeek","name":"Fable","minutes":10080,"usedPercent":100,"resetsAtMs":1794621599593,"observedMs":1794330373747}],)"
+              R"("running":false,"signedIn":true,"status":"ok","account":null,"plan":"claude_max","tier":"default_claude_max_20x"}})");
+    // The uuids stay on the host.
+    EXPECT_EQ(rig.dump().find("6f1c2a7e-0b3d-4c5e-9f8a-1b2c3d4e5f60"), std::string::npos);
+    EXPECT_EQ(rig.dump().find("user@example.com"), std::string::npos);
+
+    // Another account signed in: the cache is not this account's, and the bridge's windows go alone, without times.
+    rig.home.write(".claude.json", claudeFile("otherAccount"));
+    rig.home.touch(".claude.json", 5);
+    rig.now += 61'000;
+    ASSERT_TRUE(rig.runUntil([&] { return rig.last(SourceKind::ClaudeCode)->snapshot.windows.size() == 2; })) << rig.dump();
+    const auto alone = *rig.last(SourceKind::ClaudeCode);
+    EXPECT_EQ(alone.snapshot.observedMs, 1794338473000);
+    for (const auto& w : alone.snapshot.windows) EXPECT_FALSE(w.observedMs);
+    EXPECT_EQ(lastQuotaLine(rig.dump(), "claudeCode").find("\"observedMs\":1794338473000}"), std::string::npos) << rig.dump();
+}
+
+// Without the bridge's file the cache alone is the snapshot, unchanged; Claude Code out of the config, its line goes.
+TEST(RelayQuotaSession, TheUsageCacheAloneIsAClaudeCodeSnapshot) {
+    Rig rig;
+    rig.home.write(".claude.json", claudeFile("observed"));
+    rig.start({SourceKind::ClaudeCode});
+    rig.configure({SourceKind::ClaudeCode}, false);
+    ASSERT_TRUE(rig.runUntil([&] { return rig.hasWindows(SourceKind::ClaudeCode); })) << rig.dump();
+    const auto claude = *rig.last(SourceKind::ClaudeCode);
+    EXPECT_EQ(claude.snapshot.observedMs, 1794330373747);
+    ASSERT_EQ(claude.snapshot.windows.size(), 3u);
+    for (const auto& w : claude.snapshot.windows) EXPECT_FALSE(w.observedMs);
+    rig.configure({}, false);
+    rig.settle(3);
+    EXPECT_EQ(rig.removed(), std::vector<SourceKind>{SourceKind::ClaudeCode});
 }
 
 TEST(RelayQuotaSession, AccountKeysPlansAndTiersFromTheHostsSignIns) {
