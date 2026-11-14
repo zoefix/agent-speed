@@ -18,6 +18,9 @@ namespace agentspeed::traffic::sampler {
 
 Interfaces machineCounters();
 
+// This process as `ProcessReader` lists it (pid and start time): Agent Speed's own process of METRICS 10.5.
+Key ownProcess();
+
 class ProcessReader {
 public:
     ProcessReader();

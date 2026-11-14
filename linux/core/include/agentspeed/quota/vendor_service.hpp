@@ -13,6 +13,7 @@
 #include "agentspeed/model.hpp"
 #include "agentspeed/quota/cookies/reader.hpp"
 #include "agentspeed/quota/http.hpp"
+#include "agentspeed/quota/routes/agy_report.hpp"
 #include "agentspeed/quota/routes/antigravity.hpp"
 #include "agentspeed/quota/routes/cadence.hpp"
 #include "agentspeed/quota/routes/environment.hpp"
@@ -22,12 +23,13 @@
 #include "agentspeed/quota/window.hpp"
 
 // QUOTAS 9: the phase 2 readers behind one service. Local files when they change (checked every 60 s), the loopback
-// language server, and the vendor requests with the agents' own sign-ins, the user's ZCode key and the browser's
-// session, each under the rules of 9.1 and NETWORK 9. Credentials are read right before their request and live only
-// inside it.
+// language server (else agy's own usage report), and the vendor requests with the agents' own sign-ins, the user's
+// ZCode key and the browser's session, each under the rules of 9.1 and NETWORK 9. Credentials are read right before
+// their request and live only inside it.
 //
 // Threading: every call, and the transport's completions, on one thread (the app's quota worker; the relay's loop).
-// A completion is queued and applied by the next `tick`; `wake` asks for that tick soon.
+// A completion is queued and applied by the next `tick`; `wake` asks for that tick soon (agy's report calls it from its
+// own thread).
 namespace agentspeed::quota {
 
 // One reader per switch. Grok Build's log and its live request share the `grokBuild` snapshot (the newer wins);
@@ -85,7 +87,7 @@ struct RouteReading {
 
 struct VendorReadings {
     std::map<VendorRoute, RouteReading> routes;
-    // An Antigravity language server runs (QUOTAS 9.4 Runs).
+    // An Antigravity language server or a user's `agy` runs (QUOTAS 9.4 Runs).
     bool antigravityRuns = false;
     std::set<SourceKind> running;
     bool operator==(const VendorReadings&) const = default;
@@ -105,6 +107,9 @@ struct VendorServiceOptions {
     // Null: the real readers.
     std::shared_ptr<cookies::SessionReader> browser;
     std::shared_ptr<AntigravityLocator> antigravity;
+    // agy's usage report when no Antigravity server gives windows (QUOTAS 9.4): the app's alone; null runs none (a
+    // remote host, REMOTE 11).
+    std::shared_ptr<AgyReport> agyReport;
     // A completion is waiting for `tick` (may be called inside `tick` with a synchronous transport).
     std::function<void()> wake;
     // A failed request: its host and status (0 without an answer). Nothing else is ever logged.

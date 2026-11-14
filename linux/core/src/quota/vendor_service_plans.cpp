@@ -285,7 +285,9 @@ void VendorService::planZcode(const VendorInputs& in) {
                   [](const json::Value& body, std::int64_t nowMs) { return vendors::zaiWindows(body, nowMs); });
 }
 
-// Antigravity: the servers are looked for only when a request could go out.
+// Antigravity: the servers are looked for only when a request could go out. When none gives windows, agy's usage
+// report runs instead (QUOTAS 9.4), where this service has one, while a user's agy runs or the dashboard is open and a
+// binary exists; without it, a round with no server asks nothing, as before.
 void VendorService::planAntigravity(const VendorInputs& in) {
     auto& st = state(VendorRoute::Antigravity);
     if (!in.networkEnabled) {
@@ -298,17 +300,22 @@ void VendorService::planAntigravity(const VendorInputs& in) {
         return;
     }
     if (!st.cadence.waited(in.nowMs)) return;
-    auto servers = antigravity().servers();
-    antigravityRuns_ = !servers.empty();
+    auto& locator = antigravity();
+    auto servers = locator.servers();
+    const bool agyRuns = locator.agyRuns();
+    antigravityRuns_ = !servers.empty() || agyRuns;
     std::set<std::int64_t> pids;
     for (const auto& server : servers) pids.insert(server.pid);
     for (auto it = forgottenTokens_.begin(); it != forgottenTokens_.end();) it = pids.count(*it) ? std::next(it) : forgottenTokens_.erase(it);
-    if (servers.empty()) {
+    std::shared_ptr<AgyReport> report;
+    if (options_.agyReport && (in.dashboardOpen || agyRuns) && options_.agyReport->available()) report = options_.agyReport;
+    if (servers.empty() && !report) {
         st.reading.status = statusOf(VendorStatusKind::NotRunning);
         st.reading.signedIn = false;
         return;
     }
-    std::string identity;
+    // The report alone keeps one credential of its own; with servers, theirs.
+    std::string identity = servers.empty() ? "agy -p /usage" : "";
     for (auto& server : servers) {
         identity += std::to_string(server.pid) + ":";
         for (auto& endpoint : server.endpoints) {
@@ -330,7 +337,12 @@ void VendorService::planAntigravity(const VendorInputs& in) {
     base.startedMs = in.nowMs;
     base.host = std::string(requests::hosts::kLoopback);
     st.inFlight = true;
-    fetch::antigravity(fetch::Context{&transport_, inbox_}, std::move(base), std::move(servers));
+    const fetch::Context context{&transport_, inbox_};
+    if (servers.empty()) {
+        fetch::agyReport(context, std::move(base), report);
+    } else {
+        fetch::antigravity(context, std::move(base), std::move(servers), std::move(report));
+    }
 }
 
 // Qoder, WorkBuddy: the browser is read only when a request is due: every 5 minutes, 15 after a failure or a refusal

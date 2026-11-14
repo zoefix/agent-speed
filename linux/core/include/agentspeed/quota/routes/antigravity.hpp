@@ -11,7 +11,7 @@
 
 // QUOTAS 9.4 Servers and Ports on Linux: the running Antigravity language servers and the loopback addresses to ask
 // them on. Antigravity is never started. Only an `agy` process's own environment is read (two variables of it), never
-// any other process's.
+// any other process's. Agent Speed's own processes and their descendants (METRICS 10.5) are never servers.
 namespace agentspeed::quota {
 
 struct AntigravityEndpoint {
@@ -31,8 +31,10 @@ AntigravityServer antigravityServer(std::int64_t pid, const std::vector<Antigrav
 
 namespace antigravity {
 
-// A `language_server_*` executable whose arguments name `--app_data_dir` and antigravity.
-bool isLanguageServer(std::string_view executable, const std::vector<std::string>& arguments);
+// A `language_server_*` or plain `language_server` executable whose arguments name `--app_data_dir` and
+// antigravity, or which lies inside `Antigravity.app`, `Antigravity IDE.app` or `Gemini.app`. `windows`: Windows
+// paths, the name compared without case and `.exe`.
+bool isLanguageServer(std::string_view executable, const std::vector<std::string>& arguments, bool windows = false);
 // `--name value` or `--name=value`.
 std::optional<std::string> flag(std::string_view name, const std::vector<std::string>& arguments);
 // The extension server's port first (its own token, else `--csrf_token`), then each listening loopback port over
@@ -47,6 +49,13 @@ std::optional<AntigravityServer> daemon(std::string_view text);
 std::map<std::uint64_t, int> listeningSockets(std::string_view table);
 // `NAME=value` entries of an environ block (NUL-separated), only the named ones.
 std::map<std::string, std::string> environmentValues(std::string_view block, const std::vector<std::string_view>& names);
+// `/proc/<pid>/stat`: the parent pid and the start time (clock ticks since boot).
+struct ProcStat {
+    std::int64_t ppid = 0;
+    std::uint64_t start = 0;
+    bool operator==(const ProcStat&) const = default;
+};
+std::optional<ProcStat> procStat(std::string_view text);
 
 }  // namespace antigravity
 
@@ -54,19 +63,26 @@ class AntigravityLocator {
 public:
     virtual ~AntigravityLocator() = default;
     virtual std::vector<AntigravityServer> servers() = 0;
+    // The last `servers()` saw an `agy` process of the user's (QUOTAS 9.4 Runs; Agent Speed's own excepted), with or
+    // without a server.
+    virtual bool agyRuns() const { return false; }
 };
 
 // The user's processes from `<procRoot>` (their `exe` links, and the `cmdline` of a language server), each server's
 // sockets from `<procRoot>/<pid>/fd` matched to `<procRoot>/net/tcp` and `tcp6`, and the daemon files of
-// `~/.gemini/antigravity/daemon` and `~/.gemini/antigravity-ide/daemon` while their pid runs.
+// `~/.gemini/antigravity/daemon` and `~/.gemini/antigravity-ide/daemon` while their pid runs. A candidate's ancestry
+// (`<procRoot>/<pid>/stat`) is read only when `selfPid` is set, to leave out the descendants of the app.
 class ProcAntigravityLocator final : public AntigravityLocator {
 public:
     explicit ProcAntigravityLocator(VendorEnvironment env) : env_(std::move(env)) {}
     std::vector<AntigravityServer> servers() override;
+    bool agyRuns() const override { return agyRuns_; }
 
 private:
     std::vector<int> listeningPorts(std::int64_t pid, std::optional<std::map<std::uint64_t, int>>& sockets);
+    bool ownedByApp(std::int64_t pid, std::map<std::int64_t, std::optional<antigravity::ProcStat>>& stats);
     VendorEnvironment env_;
+    bool agyRuns_ = false;
 };
 
 }  // namespace agentspeed::quota

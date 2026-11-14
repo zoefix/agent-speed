@@ -167,6 +167,7 @@ VendorEnvironment VendorEnvironment::system() {
         return std::string(value);
     };
     env.files = systemFiles();
+    env.selfPid = ::getpid();
     return env;
 }
 

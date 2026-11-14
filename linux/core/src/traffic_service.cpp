@@ -17,6 +17,9 @@ Env linuxEnv() {
     Env env;
     env.platform = Platform::Linux;
     if (const char* home = std::getenv("HOME")) env.home = home;
+    const auto self = agentspeed::traffic::sampler::ownProcess();
+    env.appPid = self.first;
+    env.appStart = self.second;
     return env;
 }
 

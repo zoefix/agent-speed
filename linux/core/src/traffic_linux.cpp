@@ -46,6 +46,26 @@ bool isNumber(const char* name) {
     return true;
 }
 
+long clockTicks() {
+    const long ticks = ::sysconf(_SC_CLK_TCK);
+    return ticks > 0 ? ticks : 100;
+}
+
+// `/proc/<pid>/stat`: the parent pid and the start time in milliseconds since boot.
+std::optional<std::pair<std::int64_t, std::int64_t>> statFields(const std::string& stat, long ticksPerSecond) {
+    const auto close = stat.rfind(')');
+    if (close == std::string::npos || close + 2 > stat.size()) return std::nullopt;
+    std::istringstream fields(stat.substr(close + 2));
+    std::string state;
+    std::int64_t ppid = 0;
+    fields >> state >> ppid;
+    std::string skip;
+    for (int i = 0; i < 17; ++i) fields >> skip;  // fields 5 … 21
+    std::uint64_t startTicks = 0;
+    fields >> startTicks;
+    return std::pair{ppid, static_cast<std::int64_t>(startTicks * 1000 / static_cast<std::uint64_t>(ticksPerSecond))};
+}
+
 bool loopback4(const __be32 address) { return (ntohl(address) >> 24) == 127; }
 
 bool loopback6(const __be32 address[4]) {
@@ -141,9 +161,12 @@ Interfaces machineCounters() {
     return out;
 }
 
-ProcessReader::ProcessReader() : ticksPerSecond_(::sysconf(_SC_CLK_TCK)), uid_(::getuid()) {
-    if (ticksPerSecond_ <= 0) ticksPerSecond_ = 100;
+Key ownProcess() {
+    const auto fields = statFields(readFile("/proc/self/stat"), clockTicks());
+    return {::getpid(), fields ? fields->second : 0};
 }
+
+ProcessReader::ProcessReader() : ticksPerSecond_(clockTicks()), uid_(::getuid()) {}
 
 std::vector<Process> ProcessReader::read() {
     std::vector<Process> out;
@@ -155,21 +178,12 @@ std::vector<Process> ProcessReader::read() {
         const std::string base = std::string("/proc/") + entry->d_name;
         struct stat st {};
         if (::stat(base.c_str(), &st) != 0 || st.st_uid != uid_) continue;
-        const auto stat = readFile(base + "/stat");
-        const auto close = stat.rfind(')');
-        if (close == std::string::npos) continue;
-        std::istringstream fields(stat.substr(close + 2));
-        std::string state;
-        std::int64_t ppid = 0;
-        fields >> state >> ppid;
-        std::string skip;
-        for (int i = 0; i < 17; ++i) fields >> skip;  // fields 5 … 21
-        std::uint64_t startTicks = 0;
-        fields >> startTicks;
+        const auto fields = statFields(readFile(base + "/stat"), ticksPerSecond_);
+        if (!fields) continue;
         Process p;
         p.pid = std::stoll(entry->d_name);
-        p.ppid = ppid;
-        p.start = static_cast<std::int64_t>(startTicks * 1000 / static_cast<std::uint64_t>(ticksPerSecond_));
+        p.ppid = fields->first;
+        p.start = fields->second;
         const Key key{p.pid, p.start};
         alive.insert(key);
         auto it = cache_.find(key);
