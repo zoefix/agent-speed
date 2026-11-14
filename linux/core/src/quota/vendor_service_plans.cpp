@@ -327,6 +327,8 @@ void VendorService::planAntigravity(const VendorInputs& in) {
         }
         identity += ";";
     }
+    // A refusal recorded in a round that could not run the report does not stop one that can (QUOTAS 9.4).
+    if (report) identity += "|report";
     const CredentialId credential{fingerprintOf(identity), 0};
     wipe(identity);
     if (!gate(VendorRoute::Antigravity, in, credential, st)) return;

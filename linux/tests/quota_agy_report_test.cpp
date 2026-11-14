@@ -410,6 +410,12 @@ TEST(QuotaAgyReport, NoReportWithoutARunningAgyOrTheDashboardOrABinary) {
     auto readings = r.settle();
     EXPECT_EQ(readings.status(VendorRoute::Antigravity)->kind, VendorStatusKind::Denied);
     EXPECT_FALSE(fs::exists(r.agy.log()));
+    // Once the dashboard opens the report may run, and that refusal no longer stops the route.
+    r.in.dashboardOpen = true;
+    r.in.nowMs = kNow + 20 * kMinute;
+    readings = r.settle();
+    EXPECT_EQ(readings.status(VendorRoute::Antigravity)->kind, VendorStatusKind::Ok);
+    EXPECT_EQ(r.agy.count("report"), 1);
 
     // No server, agy runs, but no binary to run: nothing is asked.
     ReportFixture bare;
