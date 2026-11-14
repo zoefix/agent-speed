@@ -10,7 +10,7 @@ namespace AgentSpeed.Core.Quota;
 public sealed class QuotaSignIn
 {
     public const long RereadMs = 60_000;
-    private const long MaxFileBytes = 64L * 1024 * 1024;
+    internal const long MaxFileBytes = 64L * 1024 * 1024;
 
     private sealed class Marker(string path, Func<ReadOnlySpan<byte>, bool> test)
     {

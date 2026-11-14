@@ -87,7 +87,7 @@ internal static class QuotaDemo
                     : [new("claude-opus-5-5", 0.812), new("claude-fable-5-2", 0.171), new("claude-haiku-5-5", 0.017)];
                 var tag = AccountKeys.ReportTag(origin, AccountKeys.Key(AccountKeys.Salt, "demo", EstimateNames.Source(snapshot.Source)));
                 entries.Add(new QuotaReportEntry(tag, snapshot.Source, [snapshot.Source], e.Plan, e.Tier, window.Kind, window.Name, window.Minutes ?? 0,
-                    window.UsedPercent, now - snapshot.ObservedMs, window.ResetsAtMs - now, Math.Round(e.LivePercent, 1), e.Estimated, e.UsedMicroUsd,
+                    window.UsedPercent, now - snapshot.TimeOf(window), window.ResetsAtMs - now, Math.Round(e.LivePercent, 1), e.Estimated, e.UsedMicroUsd,
                     e.UsedMicroUsd * 97 / 100, 0, estimate, mix, 8) { AtMs = now });
             }
         }

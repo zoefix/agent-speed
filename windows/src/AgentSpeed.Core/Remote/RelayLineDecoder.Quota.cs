@@ -7,8 +7,8 @@ namespace AgentSpeed.Core.Remote;
 
 /// <summary>
 /// The relay's quota lines (REMOTE 11.1), validated by REMOTE 5.6: at most 16 windows of the QUOTAS kinds, names of at most
-/// 64 characters of display text, minutes 1–527 040 or null, percents finite 0–1000, times within 2000–2100. A source a
-/// host cannot read is ignored.
+/// 64 characters of display text, minutes 1–527 040 or null, percents finite 0–1000, times within 2000–2100 (a window's own
+/// <c>observedMs</c> too). A source a host cannot read is ignored.
 /// </summary>
 internal sealed partial class RelayLineDecoder
 {
@@ -112,7 +112,8 @@ internal sealed partial class RelayLineDecoder
         }
 
         var resets = w.OptionalTime("resetsAtMs");
-        return QuotaWindow.Of(kind, used, resets, string.IsNullOrEmpty(name) ? null : name, (int?)minutes);
+        var observed = w.OptionalTime("observedMs");
+        return QuotaWindow.Of(kind, used, resets, string.IsNullOrEmpty(name) ? null : name, (int?)minutes) with { ObservedMs = observed };
     }
 
     private RelayMessage.QuotaRemoved? DecodeQuotaRemoved(RemoteFields f) =>
