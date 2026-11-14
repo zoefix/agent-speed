@@ -89,7 +89,8 @@ struct TrafficCaseRunner {
         platform = TrafficPlatform(
             kind: TrafficPlatform.Kind(rawValue: testCase.string("platform") ?? "macos") ?? .macos,
             home: testCase.string("home") ?? "/Users/dev",
-            environment: testCase["env"] as? [String: String] ?? [:])
+            environment: testCase["env"] as? [String: String] ?? [:],
+            appPid: testCase.int64("appPid").map { Int32($0) })
         timeZone = TimeZone(secondsFromGMT: Int((testCase.int64("tzOffsetMs") ?? 0) / 1000)) ?? .gmt
     }
 

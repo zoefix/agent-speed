@@ -7,8 +7,8 @@ struct FetchPlan: Sendable {
         case single(QuotaHTTPRequest, parse: @Sendable (JSONValue, Int64) -> [QuotaWindow]?)
         /// `loadCodeAssist` (when the token's project is not known yet), then `retrieveUserQuota`.
         case gemini(token: String, project: String??, userAgent: String)
-        /// The servers' addresses in order, until one answers.
-        case antigravity([AntigravityServer], userAgent: String)
+        /// The servers' addresses in order, until one answers; else agy's usage report when it may run.
+        case antigravity([AntigravityServer], userAgent: String, report: (any AntigravityReporting)?)
         /// The browser's session, read off the actor (macOS may ask for a keychain item meanwhile), then one request
         /// unless that very session was refused before.
         case browser(reader: any BrowserSessionReading, sites: [String], refused: QuotaFingerprint?, userAgent: String)
@@ -132,7 +132,8 @@ extension QuotaVendorService {
     // MARK: Antigravity (QUOTAS 9.4)
 
     /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open), the
-    /// network is on and the last request is old enough.
+    /// network is on and the last request is old enough. agy's usage report backs them while a user's agy runs or
+    /// the dashboard is open and an agy binary exists; such a round is not stopped by a server's refusal.
     private func antigravityPlan(_ round: QuotaVendorRound, _ state: inout RouteState) -> FetchPlan? {
         guard round.networkEnabled else {
             state.reading.status = .networkOff
@@ -147,10 +148,13 @@ extension QuotaVendorService {
             let wait = state.cadence.lastOutcome == .success ? QuotaCadence.intervalMs : QuotaCadence.failureWaitMs
             if round.nowMs - last < wait { return nil }
         }
-        var servers = environment.antigravity.servers()
-        antigravityRuns = !servers.isEmpty
+        let scan = environment.antigravity.scan()
+        var servers = scan.servers
+        antigravityRuns = !servers.isEmpty || scan.agyRuns
         forgottenTokens.formIntersection(servers.map(\.pid))
-        guard !servers.isEmpty else {
+        let reportable = scan.agyRuns || round.dashboardOpen
+        let report = reportable && environment.antigravityReport.available() ? environment.antigravityReport : nil
+        guard !servers.isEmpty || report != nil else {
             state.reading.status = .notRunning
             state.reading.signedIn = false
             return nil
@@ -160,10 +164,11 @@ extension QuotaVendorService {
         }
         let identity = servers.map { server in
             "\(server.pid):" + server.endpoints.map { "\($0.scheme)\($0.port)\($0.token ?? "")" }.joined(separator: ",")
-        }.joined(separator: ";")
+        }.joined(separator: ";") + (report == nil ? "" : ";report")
         let fingerprint = QuotaFingerprint(identity)
         guard gate(.antigravity, round, credential: fingerprint, state: &state) else { return nil }
-        return FetchPlan(route: .antigravity, credential: fingerprint, kind: .antigravity(servers, userAgent: environment.userAgent))
+        return FetchPlan(route: .antigravity, credential: fingerprint,
+                         kind: .antigravity(servers, userAgent: environment.userAgent, report: report))
     }
 
     // MARK: Browser sessions (QUOTAS 9.9, 9.10)
@@ -227,8 +232,8 @@ extension FetchPlan {
                 result.outcome = .failure
             }
             return result
-        case .antigravity(let servers, let userAgent):
-            return await antigravity(servers, userAgent: userAgent, transport, now: now)
+        case .antigravity(let servers, let userAgent, let report):
+            return await antigravity(servers, userAgent: userAgent, report: report, transport, now: now)
         case .browser(let reader, let sites, let refused, let userAgent):
             return await browser(reader, sites: sites, refused: refused, userAgent: userAgent, transport, now: now)
         }
@@ -268,8 +273,8 @@ extension FetchPlan {
         return result
     }
 
-    private func antigravity(_ servers: [AntigravityServer], userAgent: String, _ transport: any QuotaHTTPTransport,
-                             now: @Sendable () -> Int64) async -> FetchResult {
+    private func antigravity(_ servers: [AntigravityServer], userAgent: String, report: (any AntigravityReporting)?,
+                             _ transport: any QuotaHTTPTransport, now: @Sendable () -> Int64) async -> FetchResult {
         var result = FetchResult(route: route, credential: credential, outcome: .failure)
         var denied = false
         for server in servers {
@@ -295,6 +300,19 @@ extension FetchPlan {
                 result.observedMs = answer.dateMs ?? answer.arrivedMs
                 return result
             }
+        }
+        if let report {
+            // No server answered: agy's report decides the round (QUOTAS 9.4).
+            let reported = await withCheckedContinuation { continuation in
+                DispatchQueue.global(qos: .utility).async { continuation.resume(returning: report.report()) }
+            }
+            result.statusCode = nil
+            if let reported {
+                result.outcome = .success
+                result.windows = reported.windows
+                result.observedMs = reported.observedMs
+            }
+            return result
         }
         if denied { result.outcome = .denied }
         return result

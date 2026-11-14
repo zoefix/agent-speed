@@ -33,6 +33,24 @@ enum DumpQuota {
         if let desktop { print("claudeDesktop snapshot \((nowMs - desktop.observedMs) / 60_000) min old") }
     }
 
+    /// `--antigravity-report`: agy's usage report once (QUOTAS 9.4), the windows only.
+    static func antigravityReport() {
+        let report = AgyUsageReport(home: FileManager.default.homeDirectoryForCurrentUser,
+                                    variables: ProcessInfo.processInfo.environment)
+        guard report.available() else {
+            print("antigravity: no agy binary")
+            return
+        }
+        let started = Date()
+        guard let result = report.report() else {
+            print(String(format: "antigravity: no report (%.1f s)", Date().timeIntervalSince(started)))
+            return
+        }
+        let snapshot = QuotaSnapshot(source: .antigravity, observedMs: result.observedMs, windows: result.windows)
+        print(line("antigravity", snapshot, nowMs: result.observedMs)
+            + String(format: " (%.1f s)", Date().timeIntervalSince(started)))
+    }
+
     static func line(_ name: String, _ snapshot: QuotaSnapshot?, nowMs: Int64) -> String {
         guard let snapshot else { return "\(name): none" }
         let format = QuotaFormat(strings: QuotaStrings(resetIn: "resets in %@", resetAt: "resets %@", minutes: "%d min",

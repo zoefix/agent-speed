@@ -47,6 +47,54 @@ public enum AntigravitySummary {
         return windows
     }
 
+    /// agy's usage report (QUOTAS 9.4 *CLI usage report*): `status` SUCCESS, `command.name` usage and
+    /// `command.data` a summary in snake case; nil for anything else or a report without a window.
+    static func cliWindows(_ stdout: Data) -> [QuotaWindow]? {
+        guard let report = (try? JSONParser.parse(stdout))?.object, report["status"]?.string == "SUCCESS",
+              let command = report["command"]?.object, command["name"]?.string == "usage",
+              var summary = command["data"]?.object else { return nil }
+        if let groups = summary["groups"]?.array {
+            summary["groups"] = .array(groups.map { group in
+                guard var members = group.object else { return group }
+                members = camelCase(members, ["displayName": "name"])
+                if let buckets = members["buckets"]?.array {
+                    members["buckets"] = .array(buckets.map { bucket in
+                        bucket.object.map { .object(camelCase($0, cliBucketNames)) } ?? bucket
+                    })
+                }
+                return .object(members)
+            })
+        }
+        let windows = summaryWindows(.object(summary))
+        return windows.isEmpty ? nil : windows
+    }
+
+    static let cliBucketNames = ["bucketId": "id", "displayName": "name", "remainingFraction": "remaining_fraction",
+                                 "resetTime": "reset_time"]
+
+    /// Each camel-case member the object lacks, from its snake-case name.
+    private static func camelCase(_ members: [String: JSONValue], _ names: [String: String]) -> [String: JSONValue] {
+        var out = members
+        for (camel, snake) in names where out[camel] == nil {
+            if let value = members[snake] { out[camel] = value }
+        }
+        return out
+    }
+
+    /// `agy --version`: the trimmed output as `major.minor.patch` in digits; nil for anything else.
+    static func agyVersion(_ text: String) -> [Int]? {
+        let trimmed = text.trimmingCharacters(in: .whitespacesAndNewlines)
+        let parts = trimmed.split(separator: ".", omittingEmptySubsequences: false)
+        guard parts.count == 3, parts.allSatisfy({ !$0.isEmpty && $0.allSatisfy { ("0"..."9").contains($0) } }) else { return nil }
+        let numbers = parts.compactMap { Int($0) }
+        return numbers.count == 3 ? numbers : nil
+    }
+
+    /// At least 1.1.11: older print modes sent an unknown slash command to the model.
+    static func agySupported(_ version: [Int]) -> Bool {
+        version.lexicographicallyPrecedes([1, 1, 11]) == false
+    }
+
     static func statusWindows(_ body: JSONValue) -> [QuotaWindow] {
         let configs = body["userStatus"]?["cascadeModelConfigData"]?["clientModelConfigs"]?.array ?? []
         return configs.compactMap { config in
