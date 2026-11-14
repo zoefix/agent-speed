@@ -526,19 +526,22 @@ token file, the keychain) is never read.
   - Reset: `resetTime` (ISO 8601 or epoch).
 - **GetUserStatus → windows**: `userStatus.cascadeModelConfigData.clientModelConfigs[].quotaInfo`
   (`remainingFraction`, `resetTime`) → `fiveHour` named by the config's `label`.
-- **CLI usage report** (CodexBar's route for agy 1.2.2 and later, 2026-11-14). A round whose servers gave no windows
-  (none found, or every address failed or refused) runs it, and its outcome is the round's. It runs only while an
-  `agy` process runs (METRICS 10.5, Agent Speed's own excepted) or the dashboard is open, under the route's cadence
-  (9.1: at most every 5 minutes, 15 after a failure) and its network rule (`networkEnabled`, the source and
-  `quotaAntigravity` on): agy itself asks Google for the values with its own sign-in.
+- **CLI usage report** (CodexBar's route for agy 1.2.2 and later, 2026-11-14). A round in which no server answered
+  (none found, or every address failed or refused; an answer without windows is an answer) runs it, and its outcome
+  is the round's. It runs only while an `agy` process runs (METRICS 10.5, Agent Speed's own excepted) or the dashboard
+  is open, under the route's cadence (9.1: at most every 5 minutes, 15 after a failure) and its network rule
+  (`networkEnabled`, the source and `quotaAntigravity` on): agy itself asks Google for the values with its own
+  sign-in. A refusal from the servers stops the route (9.1) only in a round that cannot run the report. Without an
+  agy binary there is no report, and the round keeps the servers' outcome (none found: not running).
   - **Binary**: `~/.local/bin/agy` (agy's installer), else the first `agy` on the app's `PATH`. Windows
     `%USERPROFILE%\.local\bin\agy.exe`, else `agy.exe` on `PATH`; Linux as macOS. Both are unverified. It must be a
     regular executable file.
   - **Version**: `agy --version`, killed after 3 s, with at most 4 KiB of output. The trimmed output must be
     `<major>.<minor>.<patch>` in digits and at least `1.1.11`: older print modes sent an unknown slash command to the
-    model as a prompt, which spends the user's quota. The version is kept per binary (its resolved path, size,
-    modification time and file id) and asked again only when one of them changes. An unknown or older version runs
-    no report, and the round is a failure.
+    model as a prompt, which spends the user's quota. A version read is kept per binary (its resolved path, size,
+    modification time and file id) and asked again only when one of them changes; an output that is no version, or
+    a run that timed out, is asked again at the next round. An unknown or older version runs no report, and the round
+    is a failure. `--version` runs with the report's standard input, working folder and environment (below).
   - **Run**: `agy -p /usage --output-format json --print-timeout 90s`.
     - Standard input is the null device. Standard error is discarded unread. Standard output is read up to 1 MiB;
       more kills the process and is a failure.
