@@ -208,8 +208,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   its lowest drawn row (section 6). A pose draws feet when it has a `footwear` part, or `legwear` whose lowest row is
   at least 2 % of the canvas height below the hem of the `bottomwear` (of the `topwear` without one): tall boots or
   talons the split drew with the legs. The rest check is the layers composited at rest on white against the
-  art, leaving out where a hat the build set down on the head was drawn and now is: the mean absolute difference
-  over the canvas (0 to 255) must be at most 1.0 and the share of pixels off by more
+  art, leaving out where a hat the build set down on the head was drawn and now is, and the shadow drawn on the
+  floor that Recovery leaves out (grown by 4 px over what no layer covers; with `--matte` only): the mean absolute
+  difference over the canvas (0 to 255) must be at most 1.0 and the share of pixels off by more
   than 32 at most 0.55 %. Every sound pose built so far stays at or under 0.82 and 0.40 %; Claude's `think` without
   its boots read 1.16 and 0.70 %. `--check` stops after the layers and prints both checks as JSON, without a
   package. The pack refuses a pose or mood pose that draws no feet when the idle pose does (the lowest row of a

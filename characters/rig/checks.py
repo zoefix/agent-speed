@@ -16,7 +16,7 @@ FEET = "footwear"
 
 def rest_metrics(frame, reference, ignore=None):
     """The rest check of a frame (RGB in 0..1) against the art; pixels in `ignore` (a hat the build set down on the
-    head on purpose) count as matching."""
+    head on purpose, the shadow drawn on the floor) count as matching."""
     diff = np.abs(np.asarray(frame, np.float32) - reference).mean(axis=2) * 255
     if ignore is not None:
         diff[ignore] = 0

@@ -51,6 +51,19 @@ def _drawn(ids, labels, reference, figure, min_figure, max_chroma):
     return [i for i, score, c in zip(ids, scores, chroma) if score >= min_figure or c >= max_chroma]
 
 
+def floor_shadow(parts, reference, figure, bare=None, grow=4, min_figure=0.5, max_chroma=0.15):
+    """The shadow drawn on the floor, which recover_missing leaves out: the grey blobs of the art no layer covers that
+    the figure matte scores below `min_figure`, grown by `grow` px over what no layer covers. The rest check leaves it
+    out; a part the split left out is drawn figure and still counts. None without a matte."""
+    if figure is None:
+        return None
+    labels, sizes, covered, _ = _missing(parts, reference, bare)
+    ids = list(range(1, len(sizes) + 1))
+    drawn = set(_drawn(ids, labels, reference, figure, min_figure, max_chroma))
+    shadow = np.isin(labels, [i for i in ids if i not in drawn])
+    return ndimage.binary_dilation(shadow, iterations=grow) & ~covered
+
+
 def _touch(blob, masks, ring=4):
     """Share of a ring around `blob` that lies on any of `masks`."""
     band = ndimage.binary_dilation(blob, iterations=ring) & ~blob

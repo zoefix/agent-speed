@@ -553,6 +553,24 @@ class AppendageTests(unittest.TestCase):
         ref[120:135, 120:175] = (0.9, 0.3, 0.6)
         self.assertEqual(recover_missing(parts, ref, {"tail": True}, figure=figure), ["tail"])
 
+    def test_the_rest_check_leaves_out_the_floor_shadow_and_still_counts_a_part_left_out(self):
+        from characters.rig.appendages import floor_shadow
+        from characters.rig.checks import rest_metrics, rest_problems
+        from characters.rig.layers import composite
+        parts, ref = self.scene()
+        figure = np.ones(ref.shape[:2], np.float32)
+        figure[120:135, 120:175] = 0.05
+        frame = composite(parts)
+        self.assertEqual(len(rest_problems(rest_metrics(frame, ref))), 2)
+        shadow = floor_shadow(parts, ref, figure)
+        self.assertTrue(shadow[120:135, 120:175].all())
+        self.assertFalse(shadow[60:160, 80:120].any())
+        self.assertEqual(rest_problems(rest_metrics(frame, ref, shadow)), [])
+        self.assertFalse(floor_shadow(parts, ref, np.ones(ref.shape[:2], np.float32)).any())
+        ref[120:135, 120:175] = (0.9, 0.3, 0.6)
+        self.assertFalse(floor_shadow(parts, ref, figure).any())
+        self.assertIsNone(floor_shadow(parts, ref, None))
+
     def test_shoes_the_split_left_out_become_footwear(self):
         from characters.rig.appendages import recover_missing
         from characters.rig.layers import Layer
