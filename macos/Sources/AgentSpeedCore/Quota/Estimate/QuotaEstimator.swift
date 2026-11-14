@@ -33,6 +33,7 @@ public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     private var claudeProfiles: [QuotaClaudeProfile] = []
     private var snapshots: [QuotaEstimateSnapshot] = []
     private var lastSnapshot: [QuotaEstimateSource: Int64] = [:]
+    private var feeds: [QuotaEstimateSource: QuotaWindowFeed] = [:]
     private var stored = QuotaEstimateStore.empty
     private var enabled: Set<String> = []
 
@@ -155,10 +156,22 @@ public final class QuotaEstimator: QuotaSpendSink, @unchecked Sendable {
     }
 
     /// A source's snapshot (Claude CLI, Desktop with its organization's key, phase 2, a host's with the relay's key).
+    /// Claude Code's arrives window by window (QUOTAS 5.6).
     public func snapshot(_ snapshot: QuotaSnapshot, host: String? = nil, orgKey: String? = nil,
                          account: String? = nil, plan: String? = nil, tier: String? = nil) {
         queue.async { [self] in
             let source = QuotaEstimateSource(source: snapshot.source.rawValue, host: host)
+            if snapshot.source == .claudeCode {
+                let groups = feeds[source, default: QuotaWindowFeed()].take(snapshot)
+                guard !groups.isEmpty else { return }
+                for group in groups {
+                    snapshots.append(QuotaEstimateSnapshot(
+                        source: source.source, host: host, observedMs: group.observedMs, windows: group.windows,
+                        orgKey: orgKey, account: account, plan: plan, tier: tier))
+                }
+                needsBuild()
+                return
+            }
             guard snapshot.source != .codex || host != nil, lastSnapshot[source] != snapshot.observedMs else { return }
             lastSnapshot[source] = snapshot.observedMs
             snapshots.append(QuotaEstimateSnapshot(

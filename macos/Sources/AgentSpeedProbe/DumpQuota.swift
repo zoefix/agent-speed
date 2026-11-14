@@ -2,8 +2,8 @@ import AgentSpeedCore
 import Foundation
 
 /// `--dump-quota`: the account limits this computer holds, read-only (QUOTAS 3–6): Codex from today's rollouts,
-/// Claude Desktop from its cache, the Claude CLI from the bridge's quota file, and the running and signed-in checks
-/// (booleans only; no credential is printed).
+/// Claude Desktop from its cache, the Claude CLI from the bridge's quota file joined with Claude Code's usage cache
+/// (5.6), and the running and signed-in checks (booleans only; no credential or id is printed).
 enum DumpQuota {
     static func run(configuration: MonitorConfiguration) {
         let nowMs = Int64(Date().timeIntervalSince1970 * 1000)
@@ -22,7 +22,11 @@ enum DumpQuota {
         let data = FileManager.default.homeDirectoryForCurrentUser.appendingPathComponent("Library/Application Support/AgentSpeed")
         var cli = ClaudeCliQuotaReader(file: ClaudeStatusLineBridge(data: data).quotaFile)
         cli.refresh()
-        print(line("claudeCode", cli.snapshot, nowMs: nowMs))
+        var cache = ClaudeCodeUsageCache()
+        cache.refresh(nowMs: nowMs)
+        print(line("claudeCode bridge", cli.snapshot, nowMs: nowMs))
+        print(line("claudeCode cache", cache.snapshot, nowMs: nowMs))
+        print(line("claudeCode", ClaudeCodeQuota.join(bridge: cli.snapshot, cache: cache.snapshot), nowMs: nowMs))
 
         var codexSignIn = QuotaSignIn(.codex, file: QuotaSignIn.codexFile)
         var claudeSignIn = QuotaSignIn(.claudeCode, file: QuotaSignIn.claudeFile)
@@ -41,9 +45,11 @@ enum DumpQuota {
                                  locale: Locale(identifier: "en-US"))
         let windows = snapshot.shown(nowMs: nowMs).map { window in
             let reset = window.resetsAtMs.map { format.resetLong($0, nowMs: nowMs) } ?? "no reset"
-            return "\(window.label) \(window.percentText) (\(reset))"
+            let own = window.window.observedMs.flatMap { format.age(observedMs: $0, nowMs: nowMs) }.map { ", \($0)" } ?? ""
+            return "\(window.label) \(window.percentText) (\(reset)\(own))"
         }
-        let age = format.age(observedMs: snapshot.observedMs, nowMs: nowMs).map { ", \($0)" } ?? ""
+        let shared = snapshot.windows.allSatisfy { $0.observedMs == nil }
+        let age = shared ? format.age(observedMs: snapshot.observedMs, nowMs: nowMs).map { ", \($0)" } ?? "" : ""
         return "\(name): " + (windows.isEmpty ? "no windows" : windows.joined(separator: " · ")) + age
     }
 }

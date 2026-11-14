@@ -60,13 +60,18 @@ public struct QuotaWindow: Equatable, Hashable, Sendable {
     public var minutes: Int?
     public var usedPercent: Double
     public var resetsAtMs: Int64?
+    /// The time of this window's own value in a snapshot that joins two observations (QUOTAS 2, 5.6); nil: the
+    /// snapshot's.
+    public var observedMs: Int64?
 
-    public init(kind: QuotaWindowKind, name: String? = nil, minutes: Int? = nil, usedPercent: Double, resetsAtMs: Int64?) {
+    public init(kind: QuotaWindowKind, name: String? = nil, minutes: Int? = nil, usedPercent: Double, resetsAtMs: Int64?,
+                observedMs: Int64? = nil) {
         self.kind = kind
         self.name = name
         self.minutes = minutes ?? kind.fixedMinutes
         self.usedPercent = usedPercent
         self.resetsAtMs = resetsAtMs
+        self.observedMs = observedMs
     }
 
     /// A non-empty name.
@@ -143,6 +148,9 @@ public struct QuotaSnapshot: Equatable, Hashable, Sendable {
 
     /// How old the values are.
     public func ageMs(nowMs: Int64) -> Int64 { nowMs - observedMs }
+
+    /// A window's time: its own `observedMs`, else the snapshot's (QUOTAS 2).
+    public func time(of window: QuotaWindow) -> Int64 { window.observedMs ?? observedMs }
 }
 
 /// A window as drawn: a window whose reset time has passed shows `0%`, an empty bar and no reset time until a newer
