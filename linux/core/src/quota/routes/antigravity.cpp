@@ -20,6 +20,9 @@ constexpr std::size_t kEnvironBytes = 1 << 20;
 constexpr std::size_t kTableBytes = 16 << 20;
 constexpr std::size_t kDaemonBytes = 64 << 10;
 constexpr std::size_t kDaemonFiles = 16;
+constexpr std::size_t kStatBytes = 4 << 10;
+constexpr std::size_t kMaxAncestors = 64;
+constexpr std::string_view kApps[] = {"/Antigravity.app/", "/Antigravity IDE.app/", "/Gemini.app/"};
 constexpr std::string_view kTokenVariable = "ANTIGRAVITY_CSRF_TOKEN";
 constexpr std::string_view kAddressVariable = "ANTIGRAVITY_LS_ADDRESS";
 
@@ -99,8 +102,18 @@ AntigravityServer antigravityServer(std::int64_t pid, const std::vector<Antigrav
 
 namespace antigravity {
 
-bool isLanguageServer(std::string_view executable, const std::vector<std::string>& arguments) {
-    if (baseName(executable).substr(0, 16) != "language_server_") return false;
+bool isLanguageServer(std::string_view executable, const std::vector<std::string>& arguments, bool windows) {
+    std::string path(executable);
+    std::replace(path.begin(), path.end(), '\\', '/');
+    std::string name(baseName(path));
+    if (windows) {
+        name = lower(name);
+        if (name.size() >= 4 && name.compare(name.size() - 4, 4, ".exe") == 0) name.resize(name.size() - 4);
+    }
+    if (name.rfind("language_server_", 0) != 0 && name != "language_server") return false;
+    for (const auto app : kApps) {
+        if (path.find(app) != std::string::npos) return true;
+    }
     const bool flagged = std::any_of(arguments.begin(), arguments.end(), [](const std::string& a) {
         return a == "--app_data_dir" || a.rfind("--app_data_dir=", 0) == 0;
     });
@@ -219,7 +232,47 @@ std::map<std::string, std::string> environmentValues(std::string_view block, con
     return found;
 }
 
+std::optional<ProcStat> procStat(std::string_view text) {
+    const auto close = text.rfind(')');
+    if (close == std::string_view::npos) return std::nullopt;
+    auto rest = text.substr(close + 1);
+    while (!rest.empty() && (rest.back() == '\n' || rest.back() == ' ')) rest.remove_suffix(1);
+    // After the name: state (field 3), ppid (4), …, starttime (22).
+    const auto f = fields(rest);
+    if (f.size() < 20) return std::nullopt;
+    const auto ppid = integer<std::int64_t>(f[1]);
+    const auto start = integer<std::uint64_t>(f[19]);
+    if (!ppid || !start) return std::nullopt;
+    return ProcStat{*ppid, *start};
+}
+
 }  // namespace antigravity
+
+// The candidate or one of its ancestors is the app: each parent started no later than its child (else the pid was
+// reused and the chain ends there).
+bool ProcAntigravityLocator::ownedByApp(std::int64_t pid, std::map<std::int64_t, std::optional<antigravity::ProcStat>>& stats) {
+    if (env_.selfPid <= 0) return false;
+    auto& files = env_.fs();
+    const auto statOf = [&](std::int64_t of) {
+        auto [it, inserted] = stats.try_emplace(of);
+        if (inserted && of > 0) {
+            if (const auto text = files.read(fsx::join(fsx::join(env_.procRoot, std::to_string(of)), "stat"), kStatBytes)) {
+                it->second = antigravity::procStat(*text);
+            }
+        }
+        return it->second;
+    };
+    auto cursor = pid;
+    auto info = statOf(cursor);
+    for (std::size_t depth = 0; info && depth < kMaxAncestors; ++depth) {
+        if (cursor == env_.selfPid) return true;
+        const auto parent = statOf(info->ppid);
+        if (!parent || parent->start > info->start) return false;
+        cursor = info->ppid;
+        info = parent;
+    }
+    return false;
+}
 
 std::vector<int> ProcAntigravityLocator::listeningPorts(std::int64_t pid, std::optional<std::map<std::uint64_t, int>>& sockets) {
     auto& files = env_.fs();
@@ -257,7 +310,9 @@ std::vector<AntigravityServer> ProcAntigravityLocator::servers() {
     std::sort(pids.begin(), pids.end());
     std::vector<AntigravityServer> found;
     std::set<std::int64_t> own;
+    std::map<std::int64_t, std::optional<antigravity::ProcStat>> stats;
     std::optional<std::map<std::uint64_t, int>> sockets;
+    agyRuns_ = false;
     for (const auto pid : pids) {
         const auto folder = fsx::join(env_.procRoot, std::to_string(pid));
         auto exe = files.readLink(fsx::join(folder, "exe"));
@@ -267,17 +322,20 @@ std::vector<AntigravityServer> ProcAntigravityLocator::servers() {
         if (exe->size() > kDeleted.size() && exe->compare(exe->size() - kDeleted.size(), kDeleted.size(), kDeleted) == 0) {
             exe->resize(exe->size() - kDeleted.size());
         }
-        if (found.size() >= kMaxServers) continue;
         const auto name = baseName(*exe);
-        if (name.substr(0, 16) == "language_server_") {
+        const bool isServer = name.substr(0, 16) == "language_server_" || name == "language_server";
+        if (!isServer && name != "agy") continue;
+        if (ownedByApp(pid, stats)) continue;
+        if (!isServer) agyRuns_ = true;
+        if (found.size() >= kMaxServers) continue;
+        if (isServer) {
             const auto cmdline = files.read(fsx::join(folder, "cmdline"), kCmdlineBytes);
             if (!cmdline) continue;
             auto arguments = nulSeparated(*cmdline);
-            if (!arguments.empty()) arguments.erase(arguments.begin());
             if (!antigravity::isLanguageServer(*exe, arguments)) continue;
             found.push_back(antigravity::languageServer(pid, arguments, listeningPorts(pid, sockets)));
             for (auto& argument : arguments) wipe(argument);
-        } else if (name == "agy") {
+        } else {
             auto block = files.read(fsx::join(folder, "environ"), kEnvironBytes);
             if (!block) continue;
             auto values = antigravity::environmentValues(*block, {kTokenVariable, kAddressVariable});
@@ -302,7 +360,7 @@ std::vector<AntigravityServer> ProcAntigravityLocator::servers() {
             if (!text) continue;
             auto server = antigravity::daemon(*text);
             wipe(*text);
-            if (!server || !own.count(server->pid)) continue;
+            if (!server || !own.count(server->pid) || ownedByApp(server->pid, stats)) continue;
             const bool known = std::any_of(found.begin(), found.end(), [&](const AntigravityServer& s) { return s.pid == server->pid; });
             if (!known) found.push_back(std::move(*server));
         }

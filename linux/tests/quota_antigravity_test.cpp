@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <filesystem>
+
 #include "agentspeed/quota/routes/antigravity.hpp"
 #include "quota_vendor_support.hpp"
 
@@ -103,6 +105,88 @@ TEST(QuotaAntigravity, ServersFromAFakeProcTreeReadingOnlyAgysOwnEnvironment) {
         EXPECT_EQ(path.find("/proc/100/environ"), std::string::npos) << path;
         EXPECT_EQ(path.find("/proc/300/cmdline"), std::string::npos) << path;
     }
+}
+
+}  // namespace
+
+namespace {
+
+// `/proc/<pid>/stat` with the parent and the start time (field 22).
+std::string statLine(std::int64_t pid, std::string_view comm, std::int64_t ppid, std::uint64_t start) {
+    std::string out = std::to_string(pid) + " (" + std::string(comm) + ") S " + std::to_string(ppid);
+    for (int field = 5; field <= 21; ++field) out += " 0";
+    return out + " " + std::to_string(start) + " 4096 12\n";
+}
+
+TEST(QuotaAntigravity, ProcStatGivesTheParentAndTheStartTime) {
+    EXPECT_EQ(antigravity::procStat(statLine(7, "a) (b", 3, 99)), (antigravity::ProcStat{3, 99}));
+    EXPECT_FALSE(antigravity::procStat("7 (agy) S 3 0 0").has_value());
+    EXPECT_FALSE(antigravity::procStat("").has_value());
+}
+
+// QUOTAS 9.4: the desktop app's plain `language_server` with its arguments; METRICS 10.5: the app's own agy and its
+// server, a pid the app reused excepted, are never servers, never "agy runs", and their environment is never read.
+TEST(QuotaAntigravity, PlainServersCountAndTheAppsOwnProcessesNever) {
+    TempHome home;
+    home.link("proc/1/exe", "/usr/lib/systemd/systemd");
+    home.write("proc/1/stat", statLine(1, "systemd", 0, 1));
+    home.link("proc/50/exe", "/usr/bin/agent-speed");
+    home.write("proc/50/stat", statLine(50, "agent-speed", 1, 100));
+    // The report's agy, its server and a daemon file naming it.
+    home.link("proc/51/exe", "/home/u/.local/share/agy/agy");
+    home.write("proc/51/stat", statLine(51, "agy", 50, 200));
+    home.write("proc/51/environ", nul({"ANTIGRAVITY_CSRF_TOKEN=own-tok", "ANTIGRAVITY_LS_ADDRESS=127.0.0.1:6100"}));
+    home.link("proc/52/exe", "/home/u/.local/share/agy/language_server_linux_x64");
+    home.write("proc/52/stat", statLine(52, "language_server", 51, 300));
+    home.write("proc/52/cmdline", nul({"language_server_linux_x64", "--app_data_dir", "antigravity-cli", "--csrf_token", "own"}));
+    home.write(".gemini/antigravity/daemon/ls_own.json", R"({"pid": 51, "csrfToken": "own-d", "httpPort": 6200})");
+    // The desktop app's plain server, and a generic one.
+    home.link("proc/60/exe", "/opt/Antigravity/resources/bin/language_server");
+    home.write("proc/60/stat", statLine(60, "language_server", 1, 150));
+    home.write("proc/60/cmdline", nul({"/opt/Antigravity/resources/bin/language_server", "--standalone", "--override_ide_name",
+                                       "antigravity", "--csrf_token", "t60", "--app_data_dir", "antigravity"}));
+    home.link("proc/60/fd/3", "socket:[7777]");
+    home.link("proc/61/exe", "/usr/bin/language_server");
+    home.write("proc/61/stat", statLine(61, "language_server", 1, 150));
+    home.write("proc/61/cmdline", nul({"language_server", "--stdio"}));
+    // The user's agy, which serves nothing it can be asked without a token.
+    home.link("proc/70/exe", "/home/u/.local/bin/agy");
+    home.write("proc/70/stat", statLine(70, "agy", 1, 150));
+    home.write("proc/70/environ", nul({"PATH=/bin"}));
+    home.write("proc/net/tcp", std::string(kTcpHeader) + tcpLine("0100007F:9C40", "0A", 7777));
+
+    auto files = std::make_shared<quota2_test::CountingFiles>();
+    auto env = VendorEnvironment::fixed(home.path.string(), {}, files);
+    env.procRoot = home.file("proc");
+    env.selfPid = 50;
+    ProcAntigravityLocator locator(env);
+    EXPECT_EQ(locator.servers(), (std::vector<AntigravityServer>{{60, {{"http", 0x9C40, "t60"}, {"https", 0x9C40, "t60"}}}}));
+    EXPECT_TRUE(locator.agyRuns());
+    for (const auto& path : files->touched) {
+        EXPECT_EQ(path.find("/proc/51/environ"), std::string::npos) << path;
+        EXPECT_EQ(path.find("/proc/52/cmdline"), std::string::npos) << path;
+    }
+
+    // Only the app's own agy left: no agy runs.
+    std::filesystem::remove_all(home.file("proc/70"));
+    locator.servers();
+    EXPECT_FALSE(locator.agyRuns());
+
+    // A process under a pid the app reused (it started before the app) is not the app's.
+    home.link("proc/80/exe", "/home/u/.local/bin/agy");
+    home.write("proc/80/stat", statLine(80, "agy", 50, 50));
+    home.write("proc/80/environ", nul({"PATH=/bin"}));
+    locator.servers();
+    EXPECT_TRUE(locator.agyRuns());
+
+    // Without the app's pid, its agy is like any other.
+    env.selfPid = 0;
+    ProcAntigravityLocator unaware(env);
+    const auto all = unaware.servers();
+    ASSERT_EQ(all.size(), 3u);
+    EXPECT_EQ(all[0], (AntigravityServer{51, {{"http", 6100, "own-tok"}, {"https", 6100, "own-tok"}}}));
+    EXPECT_EQ(all[1].pid, 52);
+    EXPECT_EQ(all[2].pid, 60);
 }
 
 }  // namespace

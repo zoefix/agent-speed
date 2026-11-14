@@ -1,5 +1,6 @@
 #pragma once
 
+#include <atomic>
 #include <map>
 #include <memory>
 #include <optional>
@@ -50,11 +51,14 @@ public:
 class FakeLocator final : public agentspeed::quota::AntigravityLocator {
 public:
     std::vector<agentspeed::quota::AntigravityServer> list;
+    // A user's agy runs (QUOTAS 9.4 Runs).
+    bool agy = false;
     int calls = 0;
     std::vector<agentspeed::quota::AntigravityServer> servers() override {
         ++calls;
         return list;
     }
+    bool agyRuns() const override { return agy; }
 };
 
 inline const char* kFirefoxUa = "Mozilla/5.0 (X11; Linux x86_64; rv:144.0) Gecko/20100101 Firefox/144.0";
@@ -96,8 +100,11 @@ struct ServiceFixture {
     std::shared_ptr<FakeLocator> locator = std::make_shared<FakeLocator>();
     std::map<std::string, std::string> variables;
     Vendors vendors;
-    int wakes = 0;
+    // A report's thread wakes the service too.
+    std::atomic<int> wakes = 0;
     std::vector<std::pair<std::string, int>> logged;
+    // agy's usage report (QUOTAS 9.4); none unless a test gives one. Destroyed after the service, before `wakes`.
+    std::shared_ptr<agentspeed::quota::AgyReport> agyReport;
     std::unique_ptr<VendorService> service;
 
     explicit ServiceFixture(std::set<VendorRoute> available = {agentspeed::quota::kVendorRoutes.begin(),
@@ -123,6 +130,7 @@ struct ServiceFixture {
         options.available = std::move(available);
         options.browser = sessions;
         options.antigravity = locator;
+        options.agyReport = agyReport;
         options.wake = [this] { ++wakes; };
         options.log = [this](std::string_view host, int status) { logged.emplace_back(std::string(host), status); };
         service = std::make_unique<VendorService>(std::move(env), transport, secrets, std::move(options));

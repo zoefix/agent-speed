@@ -79,8 +79,12 @@ void single(const Context& context, VendorService::FetchResult base, http::Reque
 // `loadCodeAssist` when the token's project is not known yet, then `retrieveUserQuota`.
 void gemini(const Context& context, VendorService::FetchResult base, std::string token,
             std::optional<std::optional<std::string>> project);
-// The servers' addresses in order, until one answers.
-void antigravity(const Context& context, VendorService::FetchResult base, std::vector<AntigravityServer> servers);
+// The servers' addresses in order, until one answers; when none gives windows, `report` (if any) instead, whose
+// outcome is the round's.
+void antigravity(const Context& context, VendorService::FetchResult base, std::vector<AntigravityServer> servers,
+                 std::shared_ptr<AgyReport> report);
+// agy's usage report alone (no server found).
+void agyReport(const Context& context, VendorService::FetchResult base, const std::shared_ptr<AgyReport>& report);
 
 }  // namespace fetch
 

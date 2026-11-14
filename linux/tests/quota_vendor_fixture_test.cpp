@@ -2,6 +2,8 @@
 
 #include "agentspeed/quota/cookies/crypto.hpp"
 #include "agentspeed/quota/cookies/header.hpp"
+#include "agentspeed/quota/routes/agy_report.hpp"
+#include "agentspeed/quota/routes/antigravity.hpp"
 #include "agentspeed/quota/vendors/parsers.hpp"
 #include "fixture_support.hpp"
 #include "quota_vendor_support.hpp"
@@ -74,6 +76,55 @@ TEST(QuotaVendorFixtures, AntigravitySummaryAndStatus) {
     quota2_test::expectWindows(vendors::antigravitySummaryWindows(summary.root()), vendorCase("antigravity")["expected"]);
     const Body status(vendorCase("antigravityStatus")["body"]);
     quota2_test::expectWindows(vendors::antigravityStatusWindows(status.root()), vendorCase("antigravityStatus")["expected"]);
+}
+
+// QUOTAS 9.4 Servers: each executable with its platform's rules.
+TEST(QuotaVendorFixtures, AntigravityServers) {
+    const auto list = vendorCase("antigravityServers");
+    ASSERT_EQ(list.size(), 14u);
+    for (const auto& c : list.elements()) {
+        const auto executable = *c["executable"].string();
+        std::vector<std::string> arguments;
+        for (const auto& a : c["arguments"].elements()) arguments.push_back(*a.string());
+        const bool windows = c["platform"].equals("windows");
+        EXPECT_EQ(agentspeed::quota::antigravity::isLanguageServer(executable, arguments, windows), c["expected"].isTrue())
+            << executable << " " << fixtures::compactJson(c["arguments"]);
+    }
+}
+
+// QUOTAS 9.4 CLI usage report: agy's standard output to windows, or a failure.
+TEST(QuotaVendorFixtures, AntigravityCliReports) {
+    const auto list = vendorCase("antigravityCli");
+    ASSERT_EQ(list.size(), 10u);
+    for (const auto& c : list.elements()) {
+        SCOPED_TRACE(*c["name"].string());
+        const auto windows = vendors::antigravityCliWindows(*c["stdout"].string());
+        if (c["expected"].isNull()) {
+            EXPECT_FALSE(windows.has_value());
+        } else {
+            ASSERT_TRUE(windows.has_value());
+            quota2_test::expectWindows(*windows, c["expected"]);
+        }
+    }
+}
+
+TEST(QuotaVendorFixtures, AgyVersions) {
+    namespace agy = agentspeed::quota::agy;
+    const auto list = vendorCase("agyVersions");
+    ASSERT_EQ(list.size(), 12u);
+    for (const auto& c : list.elements()) {
+        const auto text = *c["text"].string();
+        SCOPED_TRACE(fixtures::compactJson(c["text"]));
+        const auto version = agy::version(text);
+        if (c["version"].isNull()) {
+            EXPECT_FALSE(version.has_value());
+        } else {
+            ASSERT_TRUE(version.has_value());
+            ASSERT_EQ(c["version"].size(), 3u);
+            for (std::uint32_t i = 0; i < 3; ++i) EXPECT_EQ((*version)[i], static_cast<std::uint64_t>(*c["version"].at(i).truncated()));
+        }
+        EXPECT_EQ(agy::supported(text), c["supported"].isTrue());
+    }
 }
 
 TEST(QuotaVendorFixtures, KimiCurrentAndLegacy) {
