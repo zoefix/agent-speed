@@ -337,8 +337,8 @@ holds the per-model weekly limits that the status line lacks (Claude Code builds
   integer part (the fraction dropped) is a time within the years 2000–2100 (REMOTE 5.6) and whose `utilization` is an
   object, and when the two uuids are equal or either is missing. A uuid is missing unless it is a non-empty string.
   Otherwise the file has no cache, and neither has a missing file.
-- **A file that does not parse** (Claude Code rewrites it often) keeps the previous cache value, and the next check
-  reads it again even when it is unchanged.
+- **A file that does not parse** (Claude Code rewrites it often), or that exists but cannot be read, keeps the
+  previous cache value, and the next check after the minute reads it again even when it is unchanged.
 - **Windows.** `utilization` follows 4.3's rules, so a `weekly_scoped` limit is a `modelWeek` named by its model
   (`Fable 7d`). The cache part's `observedMs` is `fetchedAtMs`.
 

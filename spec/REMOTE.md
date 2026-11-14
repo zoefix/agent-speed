@@ -333,7 +333,8 @@ pairs: `δ = now_remote − (t_send + t_receive) / 2` with the round-trip `t_rec
 after `hello` and every 30 s, keeps the last 8 samples and uses the one with the smallest round trip. Until the first
 sample, `hello.now` gives `δ` (round trip unknown).
 
-Every time in `agent`, `response` and `tool` lines is converted to local time as `t − δ` when the line is applied
+Every time in `agent`, `response`, `tool` and `quota` lines (11.1: the line's and each window's `observedMs`, each
+`resetsAtMs`) is converted to local time as `t − δ` when the line is applied
 (`δ` rounded to whole milliseconds; values that would leave 2000–2100 make the line invalid). Durations are
 unchanged, so speeds are unchanged. History days (8) are labelled by the relay with the host's clock in the app's time
 zone; the offset is not applied (a response within `|δ|` of midnight may fall on the neighbouring day). With
