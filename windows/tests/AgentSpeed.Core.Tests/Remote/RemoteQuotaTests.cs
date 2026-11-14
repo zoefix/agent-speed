@@ -15,6 +15,15 @@ internal static class QuotaLines
         ["kind"] = kind, ["name"] = name, ["minutes"] = minutes, ["usedPercent"] = used, ["resetsAtMs"] = resets,
     };
 
+    /// <summary>A window of a joined Claude Code line, with its own time (QUOTAS 5.6, REMOTE 11.1).</summary>
+    public static Dictionary<string, object?> Window(long? observed, string kind = "fiveHour", string? name = null, long? minutes = 300, double used = 25.5,
+        long? resets = L.BaseMs + 3_600_000)
+    {
+        var window = Window(kind, name, minutes, used, resets);
+        window["observedMs"] = observed;
+        return window;
+    }
+
     public static string Quota(
         string source = "kimi", long observed = L.BaseMs, string status = "ok", IEnumerable<Dictionary<string, object?>>? windows = null,
         bool running = true, bool signedIn = true) => L.Json(new()
@@ -134,6 +143,28 @@ public sealed class RemoteQuotaTests
         var edge = QuotaLines.Quota(windows: Enumerable.Range(0, 16).Select(_ => QuotaLines.Window(name: new string('名', 64), minutes: 527_040, used: 1000)));
         Assert.Equal(16, Assert.IsType<RelayMessage.Quota>(Message(edge)).Value.Snapshot.Windows.Count);
         Assert.IsType<RelayMessage.Quota>(Message(QuotaLines.Quota(windows: [QuotaLines.Window("credits", minutes: null, resets: null, used: 0)])));
+    }
+
+    [Fact]
+    public void AJoinedClaudeCodeLineCarriesEachWindowsOwnTime()
+    {
+        var line = QuotaLines.Quota(source: "claudeCode", windows:
+        [
+            QuotaLines.Window(), QuotaLines.Window(observed: null, kind: "sevenDay", minutes: 10080),
+            QuotaLines.Window(L.BaseMs - 7_200_000, "modelWeek", "Fable", 10080, 100),
+        ]);
+        var report = Assert.IsType<RelayMessage.Quota>(Message(line)).Value;
+        Assert.Equal(SourceKind.ClaudeCode, report.Source);
+        Assert.Equal(["5h", "7d", "Fable 7d"], report.Snapshot.Windows.Select(w => QuotaWindows.Label(w)));
+        Assert.Equal(new long?[] { null, null, L.BaseMs - 7_200_000 }, report.Snapshot.Windows.Select(w => w.ObservedMs));
+        Assert.Equal([L.BaseMs, L.BaseMs, L.BaseMs - 7_200_000], report.Snapshot.Windows.Select(report.Snapshot.TimeOf));
+
+        Assert.Equal("observedMs", InvalidField(QuotaLines.Quota(source: "claudeCode", windows: [QuotaLines.Window(1_000)])));
+        Assert.Equal("observedMs", InvalidField(QuotaLines.Quota(source: "claudeCode", windows: [QuotaLines.Window(5_000_000_000_000)])));
+        var at = L.BaseMs - 1_000;
+        var text = QuotaLines.Quota(source: "claudeCode", windows: [QuotaLines.Window(at)]);
+        Assert.Equal("observedMs", InvalidField(L.Replaced(text, $"\"observedMs\":{at},", $"\"observedMs\":\"{at}\",")));
+        Assert.Equal("observedMs", InvalidField(L.Replaced(text, $"\"observedMs\":{at},", $"\"observedMs\":{at}.5,")));
     }
 
     [Fact]
@@ -311,6 +342,16 @@ public sealed class RemoteQuotaTests
         run.Send(QuotaLines.Quota(status: "failed", observed: observed));
         harness.Settle();
         Assert.Equal(QuotaRouteStatus.Of(QuotaStatusKind.Failed), Assert.IsType<RelayMessage.Quota>(Assert.Single(harness.Events.Messages).Message).Value.Status);
+
+        // A window's own time too; one that leaves 2000–2100 drops the line like any other time.
+        harness.Events.Clear();
+        run.Send(QuotaLines.Quota(source: "claudeCode", observed: observed,
+            windows: [QuotaLines.Window(observed - 60_000), QuotaLines.Window(observed: null, kind: "sevenDay", minutes: 10080)]));
+        run.Send(QuotaLines.Quota(source: "claudeCode", observed: observed, windows: [QuotaLines.Window(RemoteFields.EarliestMs + 1_000)]));
+        harness.Settle();
+        var joined = Assert.Single(harness.Events.Messages.Select(m => m.Message).OfType<RelayMessage.Quota>()).Value;
+        Assert.Equal(new long?[] { observed - 62_000, null }, joined.Snapshot.Windows.Select(w => w.ObservedMs));
+        Assert.Equal(observed - 2_000, joined.Snapshot.ObservedMs);
     }
 
     [Fact]

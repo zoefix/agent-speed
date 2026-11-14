@@ -23,6 +23,20 @@ public sealed class QuotaTextTests
 
     private static Localizer Loc(string language) => new(Table, language);
 
+    private static QuotaSnapshot Snapshot(JsonElement s) => new(SourceKind.ClaudeCode, s.GetProperty("observedMs").GetInt64(),
+        [.. s.GetProperty("windows").EnumerateArray().Select(w => new QuotaWindow(
+            w.GetProperty("kind").GetString() switch
+            {
+                "fiveHour" => QuotaWindowKind.FiveHour,
+                "sevenDay" => QuotaWindowKind.SevenDay,
+                _ => QuotaWindowKind.ModelWeek,
+            },
+            w.GetProperty("name").ValueKind == JsonValueKind.Null ? null : w.GetProperty("name").GetString(),
+            w.GetProperty("minutes").GetInt32(),
+            w.GetProperty("usedPercent").GetDouble(),
+            w.GetProperty("resetsAtMs").GetInt64(),
+            w.TryGetProperty("observedMs", out var observed) ? (long?)observed.GetInt64() : null))]);
+
     [Fact]
     public void ResetTextsInEveryLanguage()
     {
@@ -94,6 +108,30 @@ public sealed class QuotaTextTests
         var shown = QuotaWindows.Shown(snapshot, Now);
         Assert.Equal("7d 已用 94%，3 小時後重置", QuotaText.Spoken(shown[0], Now, loc, Zone));
         Assert.Equal("Fable 7d 已用 27%", QuotaText.Spoken(shown[1], Now, loc, Zone));
+    }
+
+    [Theory]
+    [InlineData("ages")]
+    [InlineData("cacheOnlyAges")]
+    public void EachLineShowsTheAgeAndUpdateOfItsOwnWindow(string key)
+    {
+        var c = Root.GetProperty("claudeCodeCache").GetProperty(key);
+        var now = c.GetProperty("nowMs").GetInt64();
+        var snapshot = Snapshot(c.GetProperty("snapshot"));
+        var expected = c.GetProperty("expected").EnumerateArray().ToList();
+        foreach (var language in new[] { LanguageCodes.ZhHant, LanguageCodes.ZhHans, LanguageCodes.En, LanguageCodes.Ja })
+        {
+            var loc = Loc(language);
+            var lines = QuotaLines.Of(snapshot, now, loc, Zone);
+            Assert.Equal(expected.Select(e => e.GetProperty("label").GetString()), lines.Select(l => l.Label));
+            for (var i = 0; i < lines.Count; i++)
+            {
+                var age = expected[i].GetProperty("age").GetProperty(language);
+                Assert.Equal(age.ValueKind == JsonValueKind.Null ? string.Empty : " · " + age.GetString(), lines[i].Age);
+                var updated = QuotaText.Updated(expected[i].GetProperty("observedMs").GetInt64(), now, loc, Zone);
+                Assert.StartsWith(updated, lines[i].Tooltip, StringComparison.Ordinal);
+            }
+        }
     }
 
     [Fact]

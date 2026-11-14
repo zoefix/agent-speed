@@ -23,7 +23,8 @@ public enum QuotaWindowKind
 /// <param name="Name">A model group (<c>Fable</c>, <c>Gemini</c>); null for the account's own windows.</param>
 /// <param name="Minutes">The window's length; null for credits.</param>
 /// <param name="ResetsAtMs">When the window starts over; null while unknown.</param>
-public sealed record QuotaWindow(QuotaWindowKind Kind, string? Name, int? Minutes, double UsedPercent, long? ResetsAtMs)
+/// <param name="ObservedMs">The time of this window's own value in a snapshot that joins two observations (QUOTAS 5.6); null elsewhere.</param>
+public sealed record QuotaWindow(QuotaWindowKind Kind, string? Name, int? Minutes, double UsedPercent, long? ResetsAtMs, long? ObservedMs = null)
 {
     public const int FiveHourMinutes = 300;
     public const int WeekMinutes = 10080;
@@ -42,10 +43,20 @@ public sealed record QuotaWindow(QuotaWindowKind Kind, string? Name, int? Minute
         }, usedPercent, resetsAtMs);
 }
 
-/// <summary>The quota of one source: when the vendor computed it and the windows its account has (QUOTAS 2).</summary>
+/// <summary>
+/// The quota of one source: when the vendor computed it and the windows its account has (QUOTAS 2). In a joined Claude Code
+/// snapshot each window carries its own time and <see cref="ObservedMs"/> is the newest of them.
+/// </summary>
 public sealed record QuotaSnapshot(SourceKind Source, long ObservedMs, IReadOnlyList<QuotaWindow> Windows)
 {
     public bool HasWindows => Windows.Count > 0;
+
+    /// <summary>A window's time (QUOTAS 2): its own <see cref="QuotaWindow.ObservedMs"/>, else the snapshot's.</summary>
+    public long TimeOf(QuotaWindow window)
+    {
+        ArgumentNullException.ThrowIfNull(window);
+        return window.ObservedMs ?? ObservedMs;
+    }
 
     public bool Equals(QuotaSnapshot? other) =>
         other is not null && Source == other.Source && ObservedMs == other.ObservedMs && Windows.SequenceEqual(other.Windows);

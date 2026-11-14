@@ -47,7 +47,7 @@ internal sealed record QuotaInputs(QuotaSettings Quota, IReadOnlySet<SourceKind>
 
 /// <summary>
 /// The quotas of this computer (QUOTAS): Codex from the live monitor's rollouts, Claude Desktop from its cache, the
-/// Claude CLI from the bridge's quota file, the phase 2 readers of QUOTAS 9 through the vendor service, every remote
+/// Claude CLI from the bridge's quota file joined with Claude Code's usage cache (5.6), the phase 2 readers of QUOTAS 9 through the vendor service, every remote
 /// host's lines (REMOTE 11), and which of their apps run and are signed in. Polls on a worker every 5 s (each reader
 /// keeps its own cadence; a vendor round every 15 s runs beside it) and publishes <see cref="State"/> on the UI thread.
 /// Each poll also feeds the quota estimate (QUOTAS 10) and shows each window's estimate from its latest build. Nothing
@@ -73,6 +73,7 @@ internal sealed class QuotaService : IDisposable
     private readonly Timer _timer;
     private readonly DesktopQuotaReader _desktop;
     private readonly ClaudeCliQuotaReader _cli;
+    private readonly ClaudeCodeUsageCache _cliCache = ClaudeCodeUsageCache.ForThisComputer();
     private readonly QuotaSignIn _signIn = QuotaSignIn.ForThisComputer();
     private readonly QuotaPresence? _presence = QuotaPresence.ForThisComputer();
     private readonly QuotaVendorService _vendor;
@@ -414,11 +415,13 @@ internal sealed class QuotaService : IDisposable
                 _helperEnsured = Bridge.EnsureHelper();
             }
 
-            // The bridge stays switchable while Claude Code is disabled (it can always be restored); its file is not read.
+            // The bridge stays switchable while Claude Code is disabled (it can always be restored); its files are not read.
             if (shown.Contains(SourceKind.ClaudeCode))
             {
                 _cli.Poll();
+                _cliCache.Poll();
             }
+
             if (now - Interlocked.Read(ref _bridgeCheckedMs) >= BridgeCheckMs)
             {
                 _cliStatus = Bridge.Status();
@@ -448,7 +451,7 @@ internal sealed class QuotaService : IDisposable
             snapshots[SourceKind.ClaudeDesktop] = desktop;
         }
 
-        if (shown.Contains(SourceKind.ClaudeCode) && _cli.Snapshot is { } cli)
+        if (shown.Contains(SourceKind.ClaudeCode) && ClaudeCodeRoutes.Join(_cli.Snapshot, _cliCache.Snapshot) is { } cli)
         {
             snapshots[SourceKind.ClaudeCode] = cli;
         }
