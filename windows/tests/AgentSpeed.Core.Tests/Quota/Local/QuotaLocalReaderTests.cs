@@ -143,7 +143,8 @@ public sealed class QuotaLocalReaderTests : IDisposable
     }
 
     /// <summary>
-    /// On a real session the locator finds only processes that run as <c>language_server_*</c> (a CI runner may run one), and
+    /// On a real session the locator finds only processes that run as <c>language_server_*</c> or <c>language_server</c> (a CI
+    /// runner may run one), and
     /// none from an empty home's daemon files.
     /// </summary>
     [WindowsFact]
@@ -153,7 +154,8 @@ public sealed class QuotaLocalReaderTests : IDisposable
         using var locator = new AntigravityProcessLocator(_root);
         var servers = locator.Servers();
         var running = System.Diagnostics.Process.GetProcesses()
-            .Where(p => p.ProcessName.StartsWith("language_server_", StringComparison.OrdinalIgnoreCase))
+            .Where(p => p.ProcessName.StartsWith("language_server_", StringComparison.OrdinalIgnoreCase)
+                || p.ProcessName.Equals("language_server", StringComparison.OrdinalIgnoreCase))
             .Select(p => p.Id)
             .ToHashSet();
         Assert.All(servers, s => Assert.Contains(s.Pid, running));

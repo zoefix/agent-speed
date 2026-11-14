@@ -30,6 +30,12 @@ internal sealed unsafe class ProcessReader : IProcessLister, IDisposable
         _session = TrafficNative.ProcessIdToSessionId(TrafficNative.GetCurrentProcessId(), out var session) ? session : uint.MaxValue;
     }
 
+    /// <summary>This process as a listing names it: Agent Speed's own process (METRICS 10.5).</summary>
+    public static ProcessIdentity? Current() =>
+        TrafficNative.GetProcessTimes(TrafficNative.GetCurrentProcess(), out var created, out _, out _, out _) && created > 0
+            ? ProcessIdentity.FromFileTime(TrafficNative.GetCurrentProcessId(), (ulong)created)
+            : null;
+
     public bool List(List<ProcessEntry> entries)
     {
         entries.Clear();

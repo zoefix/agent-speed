@@ -44,6 +44,8 @@ internal sealed class FakeLocator : IAntigravityLocator
 
     public int Calls { get; private set; }
 
+    public bool AgyRuns { get; set; }
+
     public IReadOnlyList<AntigravityServer> Servers()
     {
         Calls++;
@@ -61,7 +63,7 @@ internal sealed class QuotaVendorHarness : IDisposable
 
     private static int _stamps;
 
-    public QuotaVendorHarness(IQuotaHttpTransport? transport = null)
+    public QuotaVendorHarness(IQuotaHttpTransport? transport = null, IAntigravityReport? report = null)
     {
         Home = Path.Combine(Path.GetTempPath(), "agentspeed-quota-" + Guid.NewGuid().ToString("N"));
         Directory.CreateDirectory(Home);
@@ -85,6 +87,7 @@ internal sealed class QuotaVendorHarness : IDisposable
             ZcodeKey = Keys.Read,
             Browser = Browser,
             Antigravity = Locator,
+            AntigravityReport = report,
             Now = () => Now,
         });
     }

@@ -189,7 +189,9 @@ public sealed partial class QuotaVendorService
 
     /// <summary>
     /// The servers are looked for only when a request could go out: the agent runs (or the dashboard is open), the
-    /// network is on and the last request is old enough.
+    /// network is on and the last round is old enough. While a user's agy runs or the dashboard is open and an agy binary
+    /// is there, a round whose servers give no windows runs agy's own usage report, whose outcome is the round's (QUOTAS
+    /// 9.4): a refusal of the servers then stops nothing. Without a binary the route is what it was without the report.
     /// </summary>
     private FetchPlan? AntigravityPlan(QuotaVendorRound round, RouteState state, int generation)
     {
@@ -213,9 +215,11 @@ public sealed partial class QuotaVendorService
         }
 
         var servers = locator.Servers().ToList();
-        _antigravityRuns = servers.Count > 0;
+        var agyRuns = locator.AgyRuns;
+        _antigravityRuns = servers.Count > 0 || agyRuns;
         _forgottenTokens.IntersectWith(servers.Select(s => s.Pid));
-        if (servers.Count == 0)
+        var report = (round.DashboardOpen || agyRuns) && _environment.AntigravityReport is { } cli && cli.CanRun() ? cli : null;
+        if (servers.Count == 0 && report is null)
         {
             state.Status = QuotaRouteStatus.Of(QuotaStatusKind.NotRunning);
             state.SignedIn = false;
@@ -225,8 +229,23 @@ public sealed partial class QuotaVendorService
         servers = [.. servers.Select(s => _forgottenTokens.Contains(s.Pid) ? s.WithoutTokens() : s)];
         var identity = string.Join(';', servers.Select(s => s.Pid + ":" + string.Join(',', s.Endpoints.Select(e => e.Scheme + e.Port + e.Token))));
         var fingerprint = QuotaFingerprint.Of(identity);
-        return Gate(QuotaRoute.Antigravity, round, fingerprint, state)
-            ? new AntigravityFetch(fingerprint, servers, _environment.UserAgent) { Generation = generation }
+        if (report is null)
+        {
+            return Gate(QuotaRoute.Antigravity, round, fingerprint, state)
+                ? new AntigravityFetch(fingerprint, servers, _environment.UserAgent, null) { Generation = generation }
+                : null;
+        }
+
+        if (state.Account is { } account && account != fingerprint)
+        {
+            state.Snapshot = null;
+            state.Status = null;
+        }
+
+        state.Account = fingerprint;
+        state.Host = QuotaRoute.Antigravity.Host();
+        return state.Cadence.IsDue(round.NowMs, fingerprint) || state.Cadence.IsDenied(fingerprint)
+            ? new AntigravityFetch(fingerprint, servers, _environment.UserAgent, report) { Generation = generation }
             : null;
     }
 

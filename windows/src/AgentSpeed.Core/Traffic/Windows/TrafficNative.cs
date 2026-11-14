@@ -99,6 +99,10 @@ internal static partial class TrafficNative
     [LibraryImport("kernel32.dll")]
     public static partial uint GetCurrentProcessId();
 
+    /// <summary>The pseudo handle of this process (never closed).</summary>
+    [LibraryImport("kernel32.dll")]
+    public static partial IntPtr GetCurrentProcess();
+
     [DefaultDllImportSearchPaths(DllImportSearchPath.System32)]
     [LibraryImport("shell32.dll", EntryPoint = "CommandLineToArgvW", StringMarshalling = StringMarshalling.Utf16)]
     public static unsafe partial IntPtr CommandLineToArgv(char* commandLine, out int count);

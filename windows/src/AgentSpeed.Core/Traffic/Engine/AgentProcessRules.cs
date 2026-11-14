@@ -35,6 +35,11 @@ internal sealed class AgentProcessRules
 
     private const string WorkBuddyCli = "/app.asar.unpacked/cli/";
 
+    /// <summary>Antigravity desktop app 2.32.1's server; the name is generic, so it counts only with Antigravity's marks.</summary>
+    private const string PlainLanguageServer = "language_server";
+
+    private static readonly string[] AntigravityApps = ["/Antigravity.app/", "/Antigravity IDE.app/", "/Gemini.app/"];
+
     private readonly TrafficPlatform _platform;
     private readonly string[] _claudeDesktopCode;
     private readonly string[] _claudeDesktopApp;
@@ -72,14 +77,14 @@ internal sealed class AgentProcessRules
     }
 
     /// <summary>
-    /// The rules read a process's arguments only for script hosts, <c>claude</c> executables (the Chrome bridge check) and
-    /// WorkBuddy's executables; everything else is decided by the path.
+    /// The rules read a process's arguments only for script hosts, <c>claude</c> executables (the Chrome bridge check),
+    /// WorkBuddy's executables and a plain <c>language_server</c>; everything else is decided by the path.
     /// </summary>
     public bool NeedsArguments(string executable, Func<string?> bundle)
     {
         var name = _platform.Name(executable);
         return IsScriptHostName(name) || IsPythonHostName(name) || name == "claude" || _platform.IsUnder(executable, _claudeVersions)
-            || WorkBuddyEdition(name, bundle) is not null;
+            || name == PlainLanguageServer || WorkBuddyEdition(name, bundle) is not null;
     }
 
     private static Dictionary<string, SourceKind> Editions(Func<string, SourceKind?> sources, params (string Key, string Source)[] pairs)
@@ -246,7 +251,8 @@ internal sealed class AgentProcessRules
             return SourceKind.Omp;
         }
 
-        if (name == "agy" || name.StartsWith("language_server_", StringComparison.Ordinal))
+        if (name == "agy" || name.StartsWith("language_server_", StringComparison.Ordinal)
+            || (name == PlainLanguageServer && IsAntigravityServer(executable, arguments())))
         {
             return SourceKind.Antigravity;
         }
@@ -303,6 +309,19 @@ internal sealed class AgentProcessRules
         }
 
         return null;
+    }
+
+    /// <summary>Inside one of Antigravity's apps, or with <c>--app_data_dir</c> and an argument naming antigravity.</summary>
+    private bool IsAntigravityServer(string executable, IReadOnlyList<string>? arguments)
+    {
+        var path = executable.Replace('\\', '/');
+        if (AntigravityApps.Any(app => path.Contains(app, _platform.PathComparison)))
+        {
+            return true;
+        }
+
+        return arguments is not null && arguments.Any(a => a == "--app_data_dir" || a.StartsWith("--app_data_dir=", StringComparison.Ordinal))
+            && arguments.Any(a => a.Contains("antigravity", StringComparison.OrdinalIgnoreCase));
     }
 
     private static bool IsChromeBridge(IReadOnlyList<string>? arguments) => arguments?.Contains("--chrome-native-host") ?? false;
