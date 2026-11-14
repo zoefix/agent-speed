@@ -38,6 +38,7 @@ internal sealed class ProcessTable
     }
 
     private readonly long _exitedRetentionMs;
+    private readonly ProcessIdentity? _app;
     private readonly Dictionary<ProcessIdentity, Record> _records = new();
     private HashSet<ProcessIdentity> _alive = new();
     private HashSet<ProcessIdentity> _present = new();
@@ -50,6 +51,7 @@ internal sealed class ProcessTable
     {
         Rules = rules ?? new AgentProcessRules(platform);
         _exitedRetentionMs = exitedRetentionMs;
+        _app = platform.App;
     }
 
     public AgentProcessRules Rules { get; }
@@ -181,6 +183,12 @@ internal sealed class ProcessTable
             {
                 Classify(ancestors[i], inspector);
             }
+        }
+
+        // Agent Speed's own process and its descendants (the usage report's agy) are never part of an agent (METRICS 10.5).
+        if (_app is { } app && (entry.Identity == app || ancestors.Any(a => a.Identity == app)))
+        {
+            return;
         }
 
         ProcessClass? nearest = null;

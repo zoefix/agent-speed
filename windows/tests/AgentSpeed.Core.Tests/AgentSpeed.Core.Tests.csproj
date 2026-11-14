@@ -22,7 +22,16 @@
 
   <ItemGroup>
     <ProjectReference Include="../../src/AgentSpeed.Core/AgentSpeed.Core.csproj" />
+    <!-- QUOTAS 9.4: the stand-in agy the usage report tests run, copied to fake-agy/ beside the tests. -->
+    <ProjectReference Include="../AgentSpeed.FakeAgy/AgentSpeed.FakeAgy.csproj" ReferenceOutputAssembly="false" />
   </ItemGroup>
+
+  <Target Name="CopyFakeAgy" AfterTargets="Build">
+    <ItemGroup>
+      <FakeAgyFiles Include="$(MSBuildThisFileDirectory)../AgentSpeed.FakeAgy/bin/$(Configuration)/$(TargetFramework)/agy.*" />
+    </ItemGroup>
+    <Copy SourceFiles="@(FakeAgyFiles)" DestinationFolder="$(OutDir)fake-agy" SkipUnchangedFiles="true" />
+  </Target>
 
   <ItemGroup>
     <!-- REMOTE 3.1: stand-ins for the relays the app embeds; aarch64's digest is deliberately wrong. -->

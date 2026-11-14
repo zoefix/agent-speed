@@ -1,7 +1,9 @@
 using System.Text;
 using System.Text.Json;
 using AgentSpeed.Core.Quota;
+using AgentSpeed.Core.Quota.Local;
 using AgentSpeed.Core.Quota.Vendors;
+using AgentSpeed.Core.Traffic.Engine;
 
 namespace AgentSpeed.Core.Tests.Quota.Vendors;
 
@@ -51,6 +53,69 @@ public sealed class QuotaVendorFixtureTests
         var c = Case(name);
         var body = c.GetProperty("body");
         AssertWindows(c.GetProperty("expected"), name == "antigravity" ? AntigravitySummary.SummaryWindows(body) : AntigravitySummary.StatusWindows(body));
+    }
+
+    public static TheoryData<int> AntigravityServerCases() => Indices("antigravityServers");
+
+    public static TheoryData<int> AntigravityCliCases() => Indices("antigravityCli");
+
+    public static TheoryData<int> AgyVersionCases() => Indices("agyVersions");
+
+    private static TheoryData<int> Indices(string name)
+    {
+        var data = new TheoryData<int>();
+        for (var i = 0; i < Case(name).GetArrayLength(); i++)
+        {
+            data.Add(i);
+        }
+
+        return data;
+    }
+
+    /// <summary>
+    /// QUOTAS 9.4 <i>Servers</i> with the Windows rules for the Windows cases; METRICS 10.5 takes a plain
+    /// <c>language_server</c> the same way, which the traffic rules check on both platforms.
+    /// </summary>
+    [Theory]
+    [MemberData(nameof(AntigravityServerCases))]
+    public void AntigravityServersMatchTheReference(int index)
+    {
+        var c = Case("antigravityServers")[index];
+        var windows = c.GetProperty("platform").GetString() == "windows";
+        var executable = c.GetProperty("executable").GetString()!;
+        string[] arguments = [.. c.GetProperty("arguments").EnumerateArray().Select(a => a.GetString()!)];
+        var expected = c.GetProperty("expected").GetBoolean();
+        if (windows)
+        {
+            Assert.Equal(expected, AntigravityRules.IsLanguageServer(executable, arguments));
+        }
+
+        var platform = new TrafficPlatform(windows ? TrafficPlatformKind.Windows : TrafficPlatformKind.MacOS, windows ? @"C:\Users\me" : "/Users/me");
+        if (!platform.Name(executable).StartsWith("language_server_", StringComparison.OrdinalIgnoreCase))
+        {
+            Assert.Equal(expected, new AgentProcessRules(platform).Source(executable, () => arguments, []) == SourceKind.Antigravity);
+        }
+    }
+
+    [Theory]
+    [MemberData(nameof(AntigravityCliCases))]
+    public void AntigravityCliReportsMatchTheReference(int index)
+    {
+        var c = Case("antigravityCli")[index];
+        var stdout = Encoding.UTF8.GetBytes(c.GetProperty("stdout").GetString()!);
+        AssertWindows(c.GetProperty("expected"), AntigravityCliReport.Windows(stdout));
+    }
+
+    [Theory]
+    [MemberData(nameof(AgyVersionCases))]
+    public void AgyVersionsMatchTheReference(int index)
+    {
+        var c = Case("agyVersions")[index];
+        var text = c.GetProperty("text").GetString()!;
+        var version = c.GetProperty("version");
+        (int, int, int)? expected = version.ValueKind == JsonValueKind.Null ? null : (version[0].GetInt32(), version[1].GetInt32(), version[2].GetInt32());
+        Assert.Equal(expected, AntigravityCliReport.Version(text));
+        Assert.Equal(c.GetProperty("supported").GetBoolean(), AntigravityCliReport.Supported(text));
     }
 
     [Theory]
@@ -117,7 +182,8 @@ public sealed class QuotaVendorFixtureTests
     [Fact]
     public void EveryVendorCaseIsCovered()
     {
-        string[] covered = ["grokLog", "grokApi", "grokUnknown", "devin", "antigravity", "antigravityStatus", "kimiCurrent", "kimiLegacy",
+        string[] covered = ["grokLog", "grokApi", "grokUnknown", "devin", "antigravity", "antigravityStatus", "antigravityServers", "antigravityCli",
+            "agyVersions", "kimiCurrent", "kimiLegacy",
             "geminiProject", "gemini", "droidEnv", "droid", "zcode", "zcodeFailure", "qoder", "qoderPercent", "workbuddy",
             "userAgent", "cookies", "cookieHeader"];
         Assert.Equal(covered.Order(StringComparer.Ordinal), Vendors.EnumerateObject().Select(p => p.Name).Order(StringComparer.Ordinal));
