@@ -30,7 +30,7 @@ inline std::int64_t fixtureNow() { return *cases().root()["now"].truncated(); }
 
 inline fs::path entryFile(const std::string& name) { return fixtures::fixtureDir() / "quota" / name; }
 
-// A fixture window `{kind, name, minutes, usedPercent, resetsAtMs}`.
+// A fixture window `{kind, name, minutes, usedPercent, resetsAtMs}`, with `observedMs` in a joined snapshot.
 inline agentspeed::quota::Window windowOf(const Value& v) {
     agentspeed::quota::Window w;
     w.kind = *agentspeed::quota::kindFromId(*v["kind"].string());
@@ -38,6 +38,7 @@ inline agentspeed::quota::Window windowOf(const Value& v) {
     w.minutes = fixtures::optInt(v["minutes"]);
     w.usedPercent = *v["usedPercent"].number();
     w.resetsAtMs = fixtures::optInt(v["resetsAtMs"]);
+    w.observedMs = fixtures::optInt(v["observedMs"]);
     return w;
 }
 
@@ -57,7 +58,27 @@ inline void expectWindows(const std::vector<agentspeed::quota::Window>& got, con
         EXPECT_EQ(got[i].minutes, expected[i].minutes);
         EXPECT_DOUBLE_EQ(got[i].usedPercent, expected[i].usedPercent);
         EXPECT_EQ(got[i].resetsAtMs, expected[i].resetsAtMs);
+        EXPECT_EQ(got[i].observedMs, expected[i].observedMs);
     }
+}
+
+// A fixture snapshot `{source, observedMs, windows}`; null is none.
+inline std::optional<agentspeed::quota::Snapshot> snapshotOf(const Value& v) {
+    if (!v.valid() || v.isNull()) return std::nullopt;
+    agentspeed::quota::Snapshot s;
+    s.source = *agentspeed::sourceFromId(*v["source"].string());
+    s.observedMs = *v["observedMs"].truncated();
+    s.windows = windowsOf(v["windows"]);
+    return s;
+}
+
+inline void expectSnapshot(const std::optional<agentspeed::quota::Snapshot>& got, const Value& want) {
+    const auto expected = snapshotOf(want);
+    ASSERT_EQ(got.has_value(), expected.has_value());
+    if (!got) return;
+    EXPECT_EQ(got->source, expected->source);
+    EXPECT_EQ(got->observedMs, expected->observedMs);
+    expectWindows(got->windows, want["windows"]);
 }
 
 // A fresh folder under the system's temporary folder, removed with everything in it.

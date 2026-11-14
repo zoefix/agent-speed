@@ -5,6 +5,7 @@
 #include <QMetaObject>
 
 #include "agentspeed/quota/bridge.hpp"
+#include "agentspeed/quota/cli_cache.hpp"
 #include "agentspeed/quota/cli_quota.hpp"
 #include "agentspeed/quota/codex.hpp"
 #include "agentspeed/quota/desktop_reader.hpp"
@@ -66,6 +67,7 @@ void QuotaWorker::start() {
     desktop_ = std::make_unique<quota::desktop::Reader>(quota::desktopCacheFolder(environment));
     const auto paths = quota::bridge::Paths::forComputer(environment);
     cliFile_ = std::make_unique<quota::cli::FileReader>(paths.quotaFile());
+    cliCache_ = std::make_unique<quota::cli::CacheReader>(quota::claudeAccountFile(environment));
     bridge_ = std::make_unique<quota::bridge::Bridge>(paths);
     codexMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::Codex, quota::codexAuthFile(environment));
     claudeMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::ClaudeCode, quota::claudeAccountFile(environment));
@@ -191,6 +193,9 @@ void QuotaWorker::tick() {
         cliCheckedMs_ = nowMs;
         cliFile_->refresh(true);
     }
+    // Claude Code's usage cache with the signed-in marker's cadence (QUOTAS 5.6, 6).
+    cliCache_->refresh(nowMs, cliOn);
+    cliSnapshot_ = quota::cli::joined(cliFile_->snapshot(), cliCache_->snapshot());
     refreshBridge(nowMs);
     // Whether a ZCode key is saved, asked of the keyring only once its switch is on (nothing is unlocked or read).
     if (!zcodeKeyKnown_ && enabled(SourceKind::ZCode) && on("quotaZcode")) {
@@ -229,9 +234,16 @@ void QuotaWorker::feedEstimate(std::int64_t nowMs, bool codexOn, bool cliOn, boo
     estimator_->setClaudeAccount(nowMs, claudeAccount_->account());
     const auto feed = [&](SourceKind source, const std::optional<quota::Snapshot>& snapshot, std::optional<std::string> orgKey) {
         if (!snapshot || snapshot->windows.empty()) return;
-        const auto fed = fedMs_.find(source);
-        if (fed != fedMs_.end() && fed->second == snapshot->observedMs) return;
-        fedMs_[source] = snapshot->observedMs;
+        // Claude Code's windows each have their own time (QUOTAS 5.6 Estimate): the estimator takes those that moved
+        // forward whenever the snapshot changes, though its newest time may stay.
+        if (source == SourceKind::ClaudeCode) {
+            if (cliFed_ == snapshot) return;
+            cliFed_ = snapshot;
+        } else {
+            const auto fed = fedMs_.find(source);
+            if (fed != fedMs_.end() && fed->second == snapshot->observedMs) return;
+            fedMs_[source] = snapshot->observedMs;
+        }
         est::SnapshotEvent event;
         event.source = std::string(agentspeed::sourceId(source));
         event.observedMs = snapshot->observedMs;
@@ -239,7 +251,7 @@ void QuotaWorker::feedEstimate(std::int64_t nowMs, bool codexOn, bool cliOn, boo
         event.orgKey = std::move(orgKey);
         estimator_->addSnapshot(std::move(event));
     };
-    if (cliOn) feed(SourceKind::ClaudeCode, cliFile_->snapshot(), std::nullopt);
+    if (cliOn) feed(SourceKind::ClaudeCode, cliSnapshot_, std::nullopt);
     if (desktopOn) {
         const auto& url = desktop_->snapshotUrl();
         feed(SourceKind::ClaudeDesktop, desktop_->snapshot(), url ? est::desktopOrgKey(*url, salt) : std::nullopt);
@@ -264,7 +276,7 @@ void QuotaWorker::publish(std::int64_t nowMs) {
         out.sources.push_back({SourceKind::Codex, codex_->snapshot(), runs(SourceKind::Codex), codexMarker_->signedIn()});
     }
     if (enabled(SourceKind::ClaudeCode) && on("quotaClaudeCli")) {
-        out.sources.push_back({SourceKind::ClaudeCode, cliFile_->snapshot(), runs(SourceKind::ClaudeCode), claudeMarker_->signedIn()});
+        out.sources.push_back({SourceKind::ClaudeCode, cliSnapshot_, runs(SourceKind::ClaudeCode), claudeMarker_->signedIn()});
     }
     if (enabled(SourceKind::ClaudeDesktop) && on("quotaClaudeDesktop")) {
         out.sources.push_back({SourceKind::ClaudeDesktop, desktop_->snapshot(), runs(SourceKind::ClaudeDesktop),

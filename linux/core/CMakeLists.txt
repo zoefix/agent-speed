@@ -149,6 +149,8 @@ add_library(agentspeed_quota STATIC
     # Phase 1 (QUOTAS 2–8)
     src/quota/bridge.cpp
     src/quota/bridge_settings.cpp
+    src/quota/cli_cache.cpp
+    src/quota/cli_join.cpp
     src/quota/codex.cpp
     src/quota/content_decoding.cpp
     src/quota/desktop_entry.cpp
@@ -207,6 +209,7 @@ add_library(agentspeed_estimate STATIC
     src/quota/estimate/sign_in.cpp
     src/quota/estimate/store_file.cpp
     src/quota/estimate/vote.cpp
+    src/quota/estimate/window_feed.cpp
 )
 target_link_libraries(agentspeed_estimate PUBLIC agentspeed_quota OpenSSL::Crypto)
 endif()

@@ -22,6 +22,7 @@ class RunningSources;
 class SignInMarker;
 class VendorService;
 namespace cli {
+class CacheReader;
 class FileReader;
 }
 }  // namespace agentspeed::quota
@@ -30,11 +31,12 @@ class ProcessReader;
 }
 
 // REMOTE 11 on the host: what the app's quota config asks for, read with the CLI routes of QUOTAS (Codex's rollouts,
-// the host's Claude Code bridge, Grok Build's log and live request, Antigravity's loopback server, Kimi, Gemini and
-// Droid with the host's own sign-ins) and sent as `quota`, `quotaRemoved` and `quotaBridge` lines. Nothing is read
-// for a source that is not in the config's `sources` and enabled in `start`, and nothing asks the network unless the
-// config's `network` is on. Codex's and Claude Code's lines carry their account key (with the config's salt), plan and
-// tier (QUOTAS 10.1, 10.2). Driven by the relay's loop; requests run on the transport's own thread.
+// the host's Claude Code bridge and usage cache, Grok Build's log and live request, Antigravity's loopback server,
+// Kimi, Gemini and Droid with the host's own sign-ins) and sent as `quota`, `quotaRemoved` and `quotaBridge` lines.
+// Nothing is read for a source that is not in the config's `sources` and enabled in `start`, and nothing asks the
+// network unless the config's `network` is on. Codex's and Claude Code's lines carry their account key (with the
+// config's salt), plan and tier (QUOTAS 10.1, 10.2). Driven by the relay's loop; requests run on the transport's own
+// thread.
 namespace agentspeed::relay {
 
 class RelayTransport;
@@ -104,6 +106,7 @@ private:
     std::shared_ptr<CodexPlans> codexPlans_;
     std::unique_ptr<HostBridge> bridge_;
     std::unique_ptr<quota::cli::FileReader> cliFile_;
+    std::unique_ptr<quota::cli::CacheReader> cliCache_;
     std::unique_ptr<quota::SignInMarker> codexMarker_, claudeMarker_;
     std::unique_ptr<AccountFile> codexAccount_, claudeAccount_;
     std::unique_ptr<quota::RunningSources> runningSources_;

@@ -22,6 +22,7 @@ namespace bridge {
 class Bridge;
 }
 namespace cli {
+class CacheReader;
 class FileReader;
 }
 namespace desktop {
@@ -54,8 +55,9 @@ Q_DECLARE_METATYPE(QuotaWorkerSettings)
 
 
 // Reads every quota route on its own thread (QUOTAS 3–9): the Codex collector the monitor feeds, Claude Desktop's
-// cache, the Claude CLI quota file and its bridge, the signed-in markers, the running agents, and the phase 2 vendor
-// service with the Qt transport and the Secret Service. One tick a second runs what is due.
+// cache, the Claude CLI quota file and its bridge, Claude Code's usage cache, the signed-in markers, the running
+// agents, and the phase 2 vendor service with the Qt transport and the Secret Service. One tick a second runs what is
+// due.
 class QuotaWorker : public QObject {
     Q_OBJECT
 public:
@@ -99,6 +101,9 @@ private:
     std::unique_ptr<agentspeed::quota::VendorService> vendors_;
     std::unique_ptr<agentspeed::quota::desktop::Reader> desktop_;
     std::unique_ptr<agentspeed::quota::cli::FileReader> cliFile_;
+    std::unique_ptr<agentspeed::quota::cli::CacheReader> cliCache_;
+    // QUOTAS 5.6: the bridge's snapshot joined with the usage cache's, as shown and estimated.
+    std::optional<agentspeed::quota::Snapshot> cliSnapshot_, cliFed_;
     std::unique_ptr<agentspeed::quota::bridge::Bridge> bridge_;
     std::unique_ptr<agentspeed::quota::SignInMarker> codexMarker_, claudeMarker_;
     std::unique_ptr<agentspeed::quota::RunningSources> running_;

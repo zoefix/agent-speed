@@ -73,6 +73,16 @@ std::optional<RelayMessage> converted(const RelayMessage& message, std::int64_t 
         t.action.callMs = *call;
         return t;
     }
+    if (const auto* quota = std::get_if<HostQuota>(&message)) {
+        auto q = *quota;
+        const auto observed = shift(q.snapshot.observedMs, delta);
+        if (!observed) return std::nullopt;
+        q.snapshot.observedMs = *observed;
+        for (auto& w : q.snapshot.windows) {
+            if (!shiftOptional(w.resetsAtMs, delta) || !shiftOptional(w.observedMs, delta)) return std::nullopt;
+        }
+        return q;
+    }
     return message;
 }
 

@@ -3,6 +3,7 @@
 #include <algorithm>
 #include <chrono>
 
+#include "agentspeed/quota/cli_cache.hpp"
 #include "agentspeed/quota/cli_quota.hpp"
 #include "agentspeed/quota/presence.hpp"
 #include "agentspeed/quota/vendor_service.hpp"
@@ -86,6 +87,7 @@ void QuotaSession::build() {
     const auto folder = absoluteFolder(options_.folder);
     bridge_ = std::make_unique<HostBridge>(folder, environment_, options_.self);
     cliFile_ = std::make_unique<quota::cli::FileReader>(bridge_->paths().quotaFile());
+    cliCache_ = std::make_unique<quota::cli::CacheReader>(quota::claudeAccountFile(environment_));
     codexMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::Codex, quota::codexAuthFile(environment_));
     claudeMarker_ = std::make_unique<quota::SignInMarker>(quota::SignInKind::ClaudeCode, quota::claudeAccountFile(environment_));
     codexAccount_ = std::make_unique<AccountFile>(AccountKind::Codex, quota::codexAuthFile(environment_));
@@ -174,6 +176,8 @@ void QuotaSession::refresh(std::int64_t nowMs, std::int64_t steady) {
         cliCheckedMs_ = steady;
         cliFile_->refresh(true);
     }
+    // REMOTE 11.3: the host's Claude Code usage cache with the signed-in marker's cadence (QUOTAS 5.6).
+    cliCache_->refresh(nowMs, cliOn);
     codexMarker_->refresh(nowMs, codexOn);
     claudeMarker_->refresh(nowMs, cliOn);
     refreshAccounts(nowMs);
@@ -200,7 +204,7 @@ remote::HostQuota QuotaSession::reportOf(SourceKind source) const {
             if (snapshot) r.plan = codexPlans_->plan(snapshot->observedMs);
             break;
         case SourceKind::ClaudeCode: {
-            snapshot = cliFile_->snapshot();
+            snapshot = quota::cli::joined(cliFile_->snapshot(), cliCache_->snapshot());
             r.signedIn = claudeMarker_->signedIn();
             const auto& facts = claudeAccount_->facts();
             r.account = facts.account;

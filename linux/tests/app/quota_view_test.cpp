@@ -2,6 +2,7 @@
 
 #include <QDateTime>
 
+#include "../quota_test_support.hpp"
 #include "quota/quota_text.hpp"
 #include "quota/quota_view.hpp"
 #include "strings.hpp"
@@ -61,6 +62,47 @@ TEST(QuotaText, LinesCarryEveryColumnInQuotasTwoOrder) {
     EXPECT_EQ(lineAt(lines, 2).value("label").toString(), QStringLiteral("Fable 7d"));
     EXPECT_EQ(quota_text::level(80), QStringLiteral("warning"));
     EXPECT_EQ(quota_text::level(79), QStringLiteral("normal"));
+}
+
+// QUOTAS 2, DESIGN 4: a line's age and its tooltip's `quota.updated` follow the window's own time. The fixtures' joined
+// Claude Code snapshot: Fable 7d from the CLI's cache is 2 hours old beside the bridge's fresh 5h and 7d.
+TEST(QuotaText, EachLineTakesItsWindowsOwnTime) {
+    for (const char* name : {"ages", "cacheOnlyAges"}) {
+        SCOPED_TRACE(name);
+        const auto c = quota_test::section("claudeCodeCache")[name];
+        const auto snapshot = quota_test::snapshotOf(c["snapshot"]);
+        ASSERT_TRUE(snapshot);
+        const auto now = *c["nowMs"].truncated();
+        const auto expected = c["expected"].elements();
+        Strings strings;
+        for (const char* language : {"zh-Hant", "zh-Hans", "en", "ja"}) {
+            SCOPED_TRACE(language);
+            strings.setChoice(QString::fromUtf8(language));
+            const auto lines = quota_text::lines(*snapshot, now, strings, quota_text::format(strings));
+            ASSERT_EQ(lines.size(), static_cast<qsizetype>(expected.size()));
+            for (std::size_t i = 0; i < expected.size(); ++i) {
+                const auto line = lineAt(lines, static_cast<int>(i));
+                EXPECT_EQ(line.value("label").toString(), QString::fromStdString(*expected[i]["label"].string()));
+                const auto age = fixtures::optString(expected[i]["age"][language]);
+                EXPECT_EQ(line.value("age").toString(), age ? QString::fromStdString(*age) : QString());
+                const auto at = *expected[i]["observedMs"].truncated();
+                const auto updated = strings.fmt(QStringLiteral("quota.updated"), {quota_text::updatedTime(at, now)});
+                const auto tooltip = line.value("tooltip").toString();
+                EXPECT_TRUE(tooltip.split(QLatin1Char('\n')).contains(updated)) << tooltip.toStdString();
+            }
+        }
+    }
+    // The joined snapshot: only Fable 7d says it is old, and its tooltip gives the cache's time.
+    const auto c = quota_test::section("claudeCodeCache")["ages"];
+    Strings strings;
+    strings.setChoice(QStringLiteral("en"));
+    const auto lines = quota_text::lines(*quota_test::snapshotOf(c["snapshot"]), *c["nowMs"].truncated(), strings, quota_text::format(strings));
+    ASSERT_EQ(lines.size(), 3);
+    EXPECT_TRUE(lineAt(lines, 0).value("age").toString().isEmpty());
+    EXPECT_TRUE(lineAt(lines, 1).value("age").toString().isEmpty());
+    EXPECT_EQ(lineAt(lines, 2).value("age").toString(), QStringLiteral("updated 2 h ago"));
+    EXPECT_NE(lineAt(lines, 2).value("tooltip").toString(), lineAt(lines, 1).value("tooltip").toString());
+    EXPECT_EQ(lineAt(lines, 2).value("percentText").toString(), QStringLiteral("100%"));
 }
 
 TEST(QuotaText, MonthAndCreditsFollowTheLanguage) {

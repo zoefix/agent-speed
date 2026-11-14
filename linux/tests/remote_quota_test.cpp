@@ -4,6 +4,7 @@
 #include <filesystem>
 #include <fstream>
 
+#include "agentspeed/remote_clock.hpp"
 #include "agentspeed/remote_connection.hpp"
 #include "agentspeed/remote_host.hpp"
 #include "agentspeed/remote_protocol.hpp"
@@ -158,6 +159,50 @@ TEST(RemoteQuota, EveryWindowRuleOfSectionElevenOne) {
     EXPECT_TRUE(invalid(quotaLine(seventeen)));
     EXPECT_TRUE(invalid(quotaLine("[7]")));
     EXPECT_TRUE(invalid(quotaLine("{}")));
+}
+
+// QUOTAS 5.6: a joined Claude Code window carries its own time; absent and null are none, anything else must be a time.
+TEST(RemoteQuota, AWindowsOwnTime) {
+    const auto window = [](const std::string& extra) {
+        return quotaLine(oneWindow(R"("kind":"modelWeek","name":"Fable","minutes":10080,"usedPercent":100,"resetsAtMs":1794621599593)" + extra),
+                         "claudeCode");
+    };
+    auto q = decoded<HostQuota>(window(R"(,"observedMs":1794330373747)"));
+    EXPECT_EQ(q.snapshot.windows[0].observedMs, 1794330373747);
+    EXPECT_EQ(q.snapshot.observedMs, 1794338773000);
+    EXPECT_EQ(quota::timeOf(q.snapshot.windows[0], q.snapshot), 1794330373747);
+    EXPECT_FALSE(decoded<HostQuota>(window(R"(,"observedMs":null)")).snapshot.windows[0].observedMs);
+    q = decoded<HostQuota>(window(""));
+    EXPECT_FALSE(q.snapshot.windows[0].observedMs);
+    EXPECT_EQ(quota::timeOf(q.snapshot.windows[0], q.snapshot), 1794338773000);
+    for (const auto* bad : {"946684799999", "4133980800000", "1794330373747.5", R"("1794330373747")", "true", "-1"}) {
+        EXPECT_TRUE(invalid(window(std::string(R"(,"observedMs":)") + bad))) << bad;
+    }
+}
+
+// REMOTE 6 and 11.1: a quota line's times are the host's; the line's time, each reset and each window's own time become
+// local, and one that leaves 2000–2100 makes the line invalid.
+TEST(RemoteQuota, TheLinesTimesAreConvertedToLocalTime) {
+    auto q = decoded<HostQuota>(quotaLine(R"([{"kind":"fiveHour","minutes":300,"usedPercent":1,"resetsAtMs":1794344400000,)"
+                                          R"("observedMs":1794338473000},{"kind":"sevenDay","minutes":10080,"usedPercent":2,"resetsAtMs":null}])",
+                                          "claudeCode"));
+    const auto local = converted(q, 2000);
+    ASSERT_TRUE(local);
+    const auto& c = std::get<HostQuota>(*local);
+    EXPECT_EQ(c.snapshot.observedMs, 1794338773000 - 2000);
+    EXPECT_EQ(c.snapshot.windows[0].resetsAtMs, 1794344400000 - 2000);
+    EXPECT_EQ(c.snapshot.windows[0].observedMs, 1794338473000 - 2000);
+    EXPECT_FALSE(c.snapshot.windows[1].resetsAtMs);
+    EXPECT_FALSE(c.snapshot.windows[1].observedMs);
+    EXPECT_DOUBLE_EQ(c.snapshot.windows[1].usedPercent, 2);
+    q.snapshot.windows[0].observedMs = kEarliestMs + 10;
+    EXPECT_FALSE(converted(q, 100));
+    q.snapshot.windows[0].observedMs.reset();
+    q.snapshot.windows[0].resetsAtMs = kLatestMs;
+    EXPECT_FALSE(converted(q, -1));
+    EXPECT_TRUE(converted(q, 1));
+    q.snapshot.observedMs = kEarliestMs;
+    EXPECT_FALSE(converted(q, 1));
 }
 
 TEST(RemoteQuota, EveryFieldOfTheQuotaObjectIsChecked) {
@@ -329,6 +374,21 @@ TEST_F(RemoteQuotaConnection, StartCarriesTheConfigAndChangesFollowWithoutARecon
     connection_->setQuota(switches, true);
     EXPECT_EQ(relay.written.size(), sent);
     EXPECT_EQ(transport_.launched.size(), launched);
+}
+
+TEST_F(RemoteQuotaConnection, QuotaLinesReachTheSinkInLocalTime) {
+    auto& relay = run(true, QuotaSwitches{{SourceKind::ClaudeCode}, true, false, true, {}});
+    // The host's clock is 5 s ahead.
+    relay.line(helloLine(kNow + 5'000));
+    relay.line(quotaLine(R"([{"kind":"modelWeek","name":"Fable","minutes":10080,"usedPercent":100,"resetsAtMs":1794621599593,)"
+                         R"("observedMs":1794330373747}])",
+                         "claudeCode"));
+    const auto got = messages();
+    ASSERT_EQ(got.size(), 1u);
+    const auto& q = std::get<HostQuota>(got[0]);
+    EXPECT_EQ(q.snapshot.observedMs, 1794338773000 - 5'000);
+    EXPECT_EQ(q.snapshot.windows[0].resetsAtMs, 1794621599593 - 5'000);
+    EXPECT_EQ(q.snapshot.windows[0].observedMs, 1794330373747 - 5'000);
 }
 
 TEST_F(RemoteQuotaConnection, QuotaLinesReachTheSinkAndInvalidOnesAreCounted) {
