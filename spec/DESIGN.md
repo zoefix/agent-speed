@@ -2133,7 +2133,8 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
      `3 小時 12 分後重置`, `週五 09:00 重置`) while no line of the section has an amount, else the short reset (QUOTAS 7:
      `42m`, `3h`, `週五`; user's choice 2026-11-11: one line, `US$4,938 / ≈5,742  週五`), and none when even the short
      resets do not fit beside the bar at its shortest (52 pt); the tooltip then opens with the long reset. While the
-     snapshot is more than 1 hour old, ` · ` and `quota.age` follow in tertiary.
+     line's window is more than 1 hour old (its own time, QUOTAS 2: a Claude Code `Fable 7d` from the CLI's cache can
+     be older than the `5h` and `7d` beside it), ` · ` and `quota.age` follow in tertiary.
    - **Percent** (QUOTAS 10.7; user's choice 2026-11-11): the live percent. While it is extrapolated, a leading `≈` in
      the secondary token, kerned 1 pt to the digits; the bar follows the same value. A new vendor value replaces it
      with the usual crossfade, and the `≈` fades with it.
@@ -2152,7 +2153,7 @@ Sections (top to bottom, 16 pt spacing, hairline separators):
    - Motion: a bar eases to its new length (0.4 s, ease-out); a reset empties it over 0.6 s; texts crossfade in 0.2 s.
      Reduce Motion: lengths change at once.
    - Tooltip of a line: the long reset when the row shows the short one or none (above), then `quota.updated` with
-     the snapshot's time (time only today, else date and time) and, while known, `quota.pace`. While an estimate
+     the window's time (QUOTAS 2; time only today, else date and time) and, while known, `quota.pace`. While an estimate
      exists, a hairline, then in secondary text: `quota.estimate.used`; `quota.estimate.cap` with the published range
      (or `quota.estimate.atLeast`); `quota.estimate.account` while a cap exists; `quota.estimate.coverage` (integer
      percent) while known; the confidence line (`quota.estimate.confidence.*`) with `quota.estimate.windows` after

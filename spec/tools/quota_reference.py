@@ -3,7 +3,8 @@
 
 Standard library only, plus the `zstd` and `brotli` command-line tools for compressed cache bodies. It implements
 the window model, the Codex reader, the Claude Desktop cache entry reader, the Claude CLI status line helper and its
-settings edits, and the text formats; it writes and checks spec/fixtures/quota-cases.json and spec/fixtures/quota/.
+settings edits, Claude Code's usage cache and its join with the bridge, and the text formats; it writes and checks
+spec/fixtures/quota-cases.json and spec/fixtures/quota/.
 
     python3 spec/tools/quota_reference.py --check-fixtures
     python3 spec/tools/quota_reference.py --write
@@ -59,6 +60,10 @@ WEEKDAYS = {
 }
 HOUR_MS = 3_600_000
 DAY_MS = 24 * HOUR_MS
+CLAUDE_FILE_LIMIT = 64 << 20
+EARLIEST_MS = 946_684_800_000
+LATEST_MS = 4_133_980_799_999
+UNPARSED = "unparsed"
 
 
 # ---------- model (section 2) ----------
@@ -395,6 +400,101 @@ def cli_snapshot(stored):
         if w:
             windows.append(window(kind, float(w["used_percentage"]), int(w["resets_at"] * 1000)))
     return {"source": "claudeCode", "observedMs": stored["receivedMs"], "windows": windows}
+
+
+def window_time(w, snapshot):
+    """Section 2: a window's own `observedMs`, else its snapshot's."""
+    return w["observedMs"] if w.get("observedMs") is not None else snapshot["observedMs"]
+
+
+# ---------- Claude Code's usage cache (section 5.6) ----------
+
+def uuid_text(value):
+    return value if isinstance(value, str) and value else None
+
+
+def cache_part(text):
+    """One read of `.claude.json`: the cache part, None (no cache) or UNPARSED (the previous value stays)."""
+    if text is None or len(text.encode("utf-8")) > CLAUDE_FILE_LIMIT:
+        return None
+    try:
+        doc = json.loads(text)
+    except ValueError:
+        return UNPARSED
+    if not isinstance(doc, dict):
+        return None
+    cache = doc.get("cachedUsageUtilization")
+    if not isinstance(cache, dict):
+        return None
+    fetched, body = cache.get("fetchedAtMs"), cache.get("utilization")
+    if not is_number(fetched) or not isinstance(body, dict) or not EARLIEST_MS <= fetched < LATEST_MS + 1:
+        return None
+    account = doc.get("oauthAccount")
+    signed_in = uuid_text(account.get("accountUuid")) if isinstance(account, dict) else None
+    cached = uuid_text(cache.get("accountUuid"))
+    if signed_in and cached and signed_in != cached:
+        return None
+    return {"source": "claudeCode", "observedMs": int(fetched), "windows": desktop_windows(body)}
+
+
+def cache_read(previous, text):
+    part = cache_part(text)
+    return previous if part == UNPARSED else part
+
+
+def same_window(a, b):
+    ra, rb = a["resetsAtMs"], b["resetsAtMs"]
+    return (ra is None and rb is None) or (ra is not None and rb is not None and abs(rb - ra) <= SAME_WINDOW_MS)
+
+
+def newer_period(old, new):
+    ro, rn = old["resetsAtMs"], new["resetsAtMs"]
+    return rn is not None and (ro is None or rn - ro > SAME_WINDOW_MS)
+
+
+def join_claude_code(bridge, cache):
+    """5.6 *Joining the routes*: window by window (kind and name), each window with its own observedMs."""
+    if cache is None or bridge is None:
+        return bridge if cache is None else cache
+    tb, tc = bridge["observedMs"], cache["observedMs"]
+    by_id = {(w["kind"], w.get("name")): w for w in cache["windows"]}
+    joined, taken = [], set()
+    for w in bridge["windows"]:
+        c = by_id.get((w["kind"], w.get("name")))
+        if c is None:
+            joined.append(dict(w, observedMs=tb))
+            continue
+        taken.add((c["kind"], c.get("name")))
+        if same_window(w, c):
+            joined.append(dict(c if c["usedPercent"] > w["usedPercent"] else w, observedMs=max(tb, tc)))
+        elif newer_period(w, c):
+            joined.append(dict(c, observedMs=tc))
+        else:
+            joined.append(dict(w, observedMs=tb))
+    joined += [dict(c, observedMs=tc) for c in cache["windows"] if (c["kind"], c.get("name")) not in taken]
+    observed = max((w["observedMs"] for w in joined), default=max(tb, tc))
+    return {"source": "claudeCode", "observedMs": observed, "windows": ordered(joined)}
+
+
+def estimate_feed(last, snapshot):
+    """5.6 *Estimate*: the snapshots the estimate gets from one `claudeCode` snapshot, oldest first, each window only
+    when its time is later than its last one; `last` maps (kind, name, minutes) to that time and is updated."""
+    groups = {}
+    for w in snapshot["windows"]:
+        t, key = window_time(w, snapshot), "%s:%s:%s" % (w["kind"], w.get("name") or "", w["minutes"])
+        if key in last and t <= last[key]:
+            continue
+        last[key] = t
+        plain = {k: v for k, v in w.items() if k != "observedMs"}
+        groups.setdefault(t, []).append(plain)
+    return [{"observedMs": t, "windows": ws} for t, ws in sorted(groups.items())]
+
+
+def window_ages(snapshot, now_ms):
+    """Each window's time and age texts (section 2, DESIGN 4)."""
+    return [{"label": label(w), "observedMs": window_time(w, snapshot),
+             "age": {lang: age_text(window_time(w, snapshot), now_ms, lang) for lang in LANGS}}
+            for w in ordered(snapshot["windows"])]
 
 
 def helper_line(stored, now_ms):
@@ -741,8 +841,151 @@ def build_cases(now_ms):
              window("sevenDay", 8, None, name="Gemini"), window("fiveHour", 9, None)]
     cases["order"] = {"windows": mixed, "expected": [label(w) for w in ordered(mixed)]}
     cases["vendors"] = vendor_cases(now_ms)
+    cases["claudeCodeCache"] = claude_code_cache_cases(now_ms)
     cases["percents"] = [[v, percent(v)] for v in (0, 0.49, 0.5, 22.5, 99.6, 100, 103.4, -2)]
     return cases
+
+
+ACCOUNT = "6f1c2a7e-0b3d-4c5e-9f8a-1b2c3d4e5f60"
+OTHER_ACCOUNT = "0d9e8f7a-6b5c-4d3e-8f2a-9b8c7d6e5f40"
+
+
+def claude_file(cache=None, oauth=None, extra=None, cache_first=False):
+    """A `.claude.json` text as Claude Code writes it, with the keys around the cache that a reader must skip."""
+    doc = {"cachedUsageUtilization": cache} if cache_first else {}
+    doc |= {"numStartups": 412, "theme": "dark", "tipsHistory": {"memory-command": 3},
+           "projects": {"/Users/me/work/app": {"allowedTools": [], "history": [{"display": "fix the build"}],
+                                                "cachedUsageUtilization": {"fetchedAtMs": 1, "utilization": {}}}},
+           "oauthAccount": oauth if oauth is not None else {
+               "accountUuid": ACCOUNT, "emailAddress": "user@example.com",
+               "organizationUuid": "1a2b3c4d-5e6f-4a7b-8c9d-0e1f2a3b4c5d", "organizationType": "claude_max",
+               "organizationRateLimitTier": "default_claude_max_20x"},
+           "userID": "0" * 64}
+    if oauth == "absent":
+        del doc["oauthAccount"]
+    if cache is not None and not cache_first:
+        doc["cachedUsageUtilization"] = cache
+    doc.update(extra or {})
+    return json.dumps(doc, indent=2, ensure_ascii=False) + "\n"
+
+
+def claude_code_cache_cases(now_ms):
+    fetched = now_ms - 2 * HOUR_MS - 20 * 60_000 + 747
+    utilization = {
+        "five_hour": {"utilization": 42, "resets_at": "2026-11-10T20:59:59.593791+00:00"},
+        "seven_day": {"utilization": 78, "resets_at": "2026-11-14T01:59:59.593809+00:00"},
+        "seven_day_oauth_apps": None, "seven_day_opus": None, "seven_day_sonnet": None, "iguana_necktie": None,
+        "extra_usage": {"is_enabled": False, "monthly_limit": None},
+        "limits": [
+            {"kind": "session", "percent": 42, "resets_at": "2026-11-10T20:59:59.593791+00:00", "scope": None,
+             "is_active": False, "severity": "normal", "group": "session"},
+            {"kind": "weekly_all", "percent": 78, "resets_at": "2026-11-14T01:59:59.593809+00:00", "scope": None,
+             "is_active": False, "severity": "warning", "group": "weekly"},
+            {"kind": "weekly_scoped", "percent": 100, "resets_at": "2026-11-14T01:59:59.593936+00:00",
+             "scope": {"model": {"id": None, "display_name": "Fable"}, "surface": None}, "is_active": True,
+             "severity": "critical", "group": "weekly"}],
+    }
+    cache = {"fetchedAtMs": fetched, "accountUuid": ACCOUNT, "utilization": utilization}
+    observed = claude_file(cache)
+    files = [
+        ("observed", observed),
+        ("noOauthAccount", claude_file(cache, oauth="absent")),
+        ("oauthAccountNotAnObject", claude_file(cache, oauth="signed out")),
+        ("noCachedUuid", claude_file({k: v for k, v in cache.items() if k != "accountUuid"})),
+        ("emptyCachedUuid", claude_file(dict(cache, accountUuid=""))),
+        ("cachedUuidNotAString", claude_file(dict(cache, accountUuid=7))),
+        ("otherAccount", claude_file(dict(cache, accountUuid=OTHER_ACCOUNT))),
+        ("otherAccountBeforeOauthAccount", claude_file(dict(cache, accountUuid=OTHER_ACCOUNT), cache_first=True)),
+        ("oauthAccountWithoutUuid", claude_file(cache, oauth={"emailAddress": "user@example.com"})),
+        ("fetchedAtFraction", claude_file(dict(cache, fetchedAtMs=fetched + 0.875))),
+        ("fetchedAtString", claude_file(dict(cache, fetchedAtMs=str(fetched)))),
+        ("fetchedAtBoolean", claude_file(dict(cache, fetchedAtMs=True))),
+        ("fetchedAtBefore2000", claude_file(dict(cache, fetchedAtMs=946_684_799_999))),
+        ("fetchedAtAfter2100", claude_file(dict(cache, fetchedAtMs=4_133_980_800_000))),
+        ("fetchedAtMissing", claude_file({k: v for k, v in cache.items() if k != "fetchedAtMs"})),
+        ("utilizationArray", claude_file(dict(cache, utilization=[utilization]))),
+        ("utilizationMissing", claude_file({k: v for k, v in cache.items() if k != "utilization"})),
+        ("utilizationWithoutWindows", claude_file(dict(cache, utilization={"five_hour": None, "limits": []}))),
+        ("cacheNull", claude_file(None, extra={"cachedUsageUtilization": None})),
+        ("cacheArray", claude_file(None, extra={"cachedUsageUtilization": [cache]})),
+        ("noCache", claude_file()),
+        ("notAnObject", "[1, 2]\n"),
+        ("doesNotParse", observed[: len(observed) // 2]),
+        ("empty", ""),
+    ]
+    file_cases = [{"name": n, "text": t, "expected": cache_part(t)} for n, t in files]
+
+    texts = [observed, observed[:100], claude_file(dict(cache, accountUuid=OTHER_ACCOUNT)), observed[:-3], observed]
+    reads, value = [], None
+    for t in texts:
+        value = cache_read(value, t)
+        reads.append(value)
+
+    part = cache_part(observed)
+    received = now_ms - 5 * 60_000
+
+    def bridge(five=None, week=None, at=received):
+        ws = []
+        if five:
+            ws.append(window("fiveHour", float(five[0]), five[1] * 1000))
+        if week:
+            ws.append(window("sevenDay", float(week[0]), week[1] * 1000))
+        return {"source": "claudeCode", "observedMs": at, "windows": ws}
+
+    def cached(windows, at=fetched):
+        return {"source": "claudeCode", "observedMs": at, "windows": windows}
+
+    five_r, week_r = 1794344400, 1794621600
+    fable = [w for w in part["windows"] if w["kind"] == "modelWeek"]
+    joins = [
+        ("observed", bridge((52, five_r), (80, week_r)), part),
+        ("cacheHigherInTheSameWindow", bridge((52, five_r), (80, week_r)),
+         cached([window("sevenDay", 81.0, week_r * 1000 - 407)] + fable)),
+        ("tieKeepsTheBridge", bridge(None, (80, week_r)), cached([window("sevenDay", 80.0, week_r * 1000 + 59_000)])),
+        ("sixtySecondsApart", bridge((52, five_r), (80, week_r)),
+         cached([window("fiveHour", 60.0, five_r * 1000 + 60_000), window("sevenDay", 85.0, week_r * 1000 + 60_001)])),
+        ("cacheInANewerPeriod", bridge((97, five_r - 5 * 3600), (80, week_r)),
+         cached([window("fiveHour", 3.0, five_r * 1000)])),
+        ("bridgeInANewerPeriod", bridge((4, five_r + 5 * 3600), (80, week_r)),
+         cached([window("fiveHour", 42.0, five_r * 1000), window("sevenDay", 99.0, week_r * 1000 - 61_000)])),
+        ("bridgeOlderThanTheCache", bridge((52, five_r), (80, week_r), at=fetched - 60_000), part),
+        ("nullResets", bridge((52, five_r), (80, week_r)),
+         cached([window("fiveHour", 90.0, None), window("modelWeek", 12.0, None, name="Opus")])),
+        ("cacheOnly", None, part),
+        ("bridgeOnly", bridge((52, five_r), (80, week_r)), None),
+        ("noWindows", bridge(), cached([])),
+        ("neither", None, None),
+    ]
+    join_cases = [{"name": n, "bridge": b, "cache": c, "expected": join_claude_code(b, c)} for n, b, c in joins]
+
+    later_fetch = received + 60_000
+    steps = [
+        join_claude_code(bridge((52, five_r), (80, week_r)), part),
+        join_claude_code(bridge((52, five_r), (80, week_r)), part),
+        join_claude_code(bridge((53, five_r), (80, week_r), at=received + 30_000), part),
+        join_claude_code(bridge((53, five_r), (80, week_r), at=received + 30_000),
+                         cached([window("fiveHour", 50.0, five_r * 1000 - 407), window("sevenDay", 81.0, week_r * 1000)]
+                                + fable, at=received + 10_000)),
+        join_claude_code(bridge((53, five_r), (80, week_r), at=received + 30_000),
+                         cached([window("fiveHour", 54.0, five_r * 1000)] + [dict(fable[0], usedPercent=100.0)],
+                                at=later_fetch)),
+        join_claude_code(bridge((53, five_r), (80, week_r), at=received + 30_000),
+                         cached([window("fiveHour", 2.0, five_r * 1000 + 5 * HOUR_MS)], at=received + 20_000)),
+    ]
+    last, feed = {}, []
+    for snap in steps:
+        feed.append({"snapshot": snap, "expected": estimate_feed(last, snap)})
+
+    shown_now = join_claude_code(bridge((52, five_r), (80, week_r)), part)
+    return {
+        "files": file_cases,
+        "reads": {"texts": texts, "expected": reads},
+        "joins": join_cases,
+        "feed": feed,
+        "ages": {"nowMs": now_ms, "snapshot": shown_now, "expected": window_ages(shown_now, now_ms),
+                 "shown": shown(shown_now, now_ms)},
+        "cacheOnlyAges": {"nowMs": now_ms, "snapshot": part, "expected": window_ages(part, now_ms)},
+    }
 
 
 def vendor_cases(now_ms):

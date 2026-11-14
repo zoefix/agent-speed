@@ -7,7 +7,9 @@ app runs and is signed in. The UI is DESIGN 4 (Sources), 2a.6 (*Readouts*, 額�
 checked by `spec/tools/quota_reference.py --check-fixtures`. Status: specified 2026-11-10 (user's request); phase 1
 covers Codex, Claude Desktop and Claude Code; phase 2 (section 9) adds Grok Build, Devin, Antigravity, Kimi Code,
 Gemini CLI, Factory Droid, ZCode, Qoder and WorkBuddy. Section 10 (2026-11-11) estimates each window's cap in
-API-equivalent dollars, shows the amount used and reports both when the user shares quotas.
+API-equivalent dollars, shows the amount used and reports both when the user shares quotas. Section 5.6 (2026-11-13,
+user's choice "讀本機暫存") adds Claude Code's own usage cache, which holds the per-model weekly limits (`Fable 7d`) that
+the status line lacks.
 
 ## 1. Principles
 
@@ -21,22 +23,23 @@ API-equivalent dollars, shows the amount used and reports both when the user sha
   Anthropic does not permit third-party developers to "collect, store, or intermediate Claude.ai credentials or session
   tokens" (Claude Code, *Legal and compliance*). This rules out the `api/oauth/usage` endpoint that some tools call with
   Claude Code's token. For the Claude CLI account (section 5), the only official source is the `rate_limits` field
-  that Claude Code passes to a status line command. The Claude Desktop account (section 4) is read from the response
-  Desktop itself cached; that cache is not a documented interface (section 8).
+  that Claude Code passes to a status line command. It has no per-model weekly limit, so the CLI account also reads
+  the usage response Claude Code itself cached in its config file (5.6). The Claude Desktop account (section 4) is
+  read from the response Desktop itself cached. Neither cache is a documented interface (section 8).
 - **Dynamic windows.** Only the windows an account has are shown. Some plans have no 5-hour window (observed
   2026-11-10: a Claude Ultra account and a Codex `promax` plan with a weekly window only); such an account shows its
   weekly window alone, with no placeholder for the missing one.
 - **Each account on its own.** Claude Desktop and the Claude CLI may be signed in to different accounts (the user's
   case), so `claudeDesktop` and `claudeCode` each carry their own snapshot and are never merged. Only the estimate
   pools their spend, when they are provably one personal account (10.1).
-- **Phase 1 needs no network.** The Codex and Claude Desktop readers only read local files. The Claude CLI bridge
-  writes one value into Claude Code's settings, and only after the user turns it on (section 5). Phase 2's vendor
-  requests follow section 9.1 and NETWORK 9.
+- **Phase 1 needs no network.** The Codex, Claude Desktop and Claude Code cache readers only read local files. The
+  Claude CLI bridge writes one value into Claude Code's settings, and only after the user turns it on (section 5).
+  Phase 2's vendor requests follow section 9.1 and NETWORK 9.
 
 ## 2. Model
 
 A **snapshot** belongs to one source: `{source, observedMs, windows}`. `observedMs` is when the vendor computed the
-values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, usedPercent, resetsAtMs}`:
+values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, usedPercent, resetsAtMs, observedMs}`:
 
 | `kind` | Meaning | Label (every language) |
 | --- | --- | --- |
@@ -49,6 +52,9 @@ values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, 
   integer, clamped to 0…100 (`100%` once a window is exhausted, even when the vendor says 103).
 - `resetsAtMs` may be null (unknown).
 - `minutes` is 300 for `fiveHour`, 10080 for `sevenDay` and `modelWeek`, the vendor's value for `other`.
+- `observedMs` is null except in a snapshot that joins two observations (Claude Code, 5.6). There each window carries
+  the time of its own value, and the snapshot's `observedMs` is the newest of them. A window's **time** is its own
+  `observedMs`, else the snapshot's; every other source's windows all share the snapshot's.
 - **Order**: windows without a name first, by `minutes` (shortest first; equal lengths in kind order `fiveHour`,
   `other`, `sevenDay`, `modelWeek`, `month`, `credits`; `credits` and any window with null minutes last). Then the
   named windows, grouped by name in the order the vendor lists the names, each group by `minutes` the same way.
@@ -57,9 +63,9 @@ values (section 3, 4, 5 say which time). A **window** is `{kind, name, minutes, 
 snapshot arrives, and its pace mark (DESIGN 4) is hidden. Claude Code itself drops a window from the status line once
 its reset time passes (section 5), so a newer CLI snapshot simply lacks it.
 
-**Age.** `age = now − observedMs`. A snapshot is never thrown away for its age. Its age shows once it is older than
-1 hour (`quota.age`, DESIGN 4). The 額度 card (DESIGN 2a.6) only lists sources whose app runs and is signed in
-(section 6).
+**Age.** A window's `age = now − ` its time. A snapshot is never thrown away for its age. A window's age shows once it
+is older than 1 hour (`quota.age`, DESIGN 4), so a stale `Fable 7d` line says so while the fresh `5h` and `7d` lines
+beside it do not. The 額度 card (DESIGN 2a.6) only lists sources whose app runs and is signed in (section 6).
 
 ## 3. Codex
 
@@ -297,6 +303,69 @@ Quota file:
 **Known approximation.** `/login` to another account within a window keeps the higher of the two accounts' values
 until that window resets. The status line JSON names no account.
 
+### 5.6 The usage cache
+
+Claude Code keeps the claude.ai usage response it fetched last in its global config file, the `.claude.json` of
+section 6 (observed with Claude Code 2.1.325, 2026-11-13; read since the user's choice that day, "讀本機暫存"). The
+response has the shape of Desktop's body (4.3), so it
+holds the per-model weekly limits that the status line lacks (Claude Code builds `rate_limits` from `five_hour`,
+`seven_day` and, behind a gateway, `spend_limit` only):
+
+```json
+{"cachedUsageUtilization": {"fetchedAtMs": 1794635153747, "accountUuid": "<the account's uuid>",
+  "utilization": {"five_hour": {"utilization": 42, "resets_at": "2026-11-14T06:19:59.593791+00:00"},
+                  "seven_day": {"utilization": 78, "resets_at": "2026-11-19T02:00:00.593809+00:00"},
+                  "seven_day_opus": null, "seven_day_sonnet": null,
+                  "limits": [{"kind": "weekly_scoped", "percent": 100,
+                              "resets_at": "2026-11-19T01:59:59.593936+00:00",
+                              "scope": {"model": {"id": null, "display_name": "Fable"}, "surface": null},
+                              "is_active": true, "severity": "critical", "group": "weekly"}]}}}
+```
+
+- **How Claude Code keeps it.** It writes the value only when it fetches usage, at least 60 s apart, on its own
+  events rather than a timer, so the value can be tens of minutes or hours old (seen 2026-11-13: unchanged for 40
+  minutes while the CLI ran). It clears it when the signed-in account's uuid differs from `accountUuid`, and ignores
+  a value older than 1 hour for its own display. Agent Speed shows a value of any age, with each window's age
+  (section 2).
+- **Route.** A second route of the `claudeCode` snapshot, read while `quotaClaudeCli` is on and the source is enabled
+  (DESIGN 5). It has no switch or text of its own, and the invitation (DESIGN 4) does not change.
+- **Reading.** The file of section 6, with its cadence: at most once a minute, and again when its size or
+  modification time changes. A file larger than 64 MiB is not read. Only the top-level `cachedUsageUtilization` and
+  `oauthAccount.accountUuid` are looked at; every other value is skipped unread. The two uuids are compared in memory
+  and never kept, logged, shown or sent.
+- **Valid.** The file has a cache when `cachedUsageUtilization` is an object whose `fetchedAtMs` is a number whose
+  integer part (the fraction dropped) is a time within the years 2000–2100 (REMOTE 5.6) and whose `utilization` is an
+  object, and when the two uuids are equal or either is missing. A uuid is missing unless it is a non-empty string.
+  Otherwise the file has no cache, and neither has a missing file.
+- **A file that does not parse** (Claude Code rewrites it often) keeps the previous cache value, and the next check
+  reads it again even when it is unchanged.
+- **Windows.** `utilization` follows 4.3's rules, so a `weekly_scoped` limit is a `modelWeek` named by its model
+  (`Fable 7d`). The cache part's `observedMs` is `fetchedAtMs`.
+
+**Joining the routes.** The `claudeCode` snapshot joins the bridge's (5.5 *Reader*) and the cache's, window by
+window. A window is identified by its `kind` and `name`.
+- A window in one part only comes from that part.
+- A window in both takes the value the helper's rule (5.5 step 2) picks, the bridge's being the stored one:
+  - the cache's replaces it when its `resetsAtMs` is more than 60 s later (a newer period);
+  - within 60 s it is the same window, and the higher `usedPercent` wins (the bridge's on a tie);
+  - an earlier one is ignored.
+  - A null reset counts as earlier than any time, and two null resets as the same window.
+- Each window of the joined snapshot carries its own `observedMs` (section 2). Within the same window it is the newer
+  of the two parts' times: usage only grows, so the higher value holds at the later time too. A value of a newer
+  period keeps its own part's time.
+- The snapshot's `observedMs` is its newest window's, or the newer part's when it has no window. With one part, the
+  snapshot is that part unchanged.
+
+**Estimate.** The `claudeCode` snapshot (of this computer or of a host) reaches the estimate window by window
+(10.4): each window is an observation at its own time. A window gives one only when its time is later than that of the
+last observation of the same window (source, machine, `kind`, `name` and `minutes`) given to the estimate in this
+run. A value that does not move forward is skipped: the same values read again, or a cache value older than the
+bridge's newest one. So the observations of every window arrive in the order of their times, and an old cache value
+never lands after a newer bridge value.
+
+**Known approximation.** The bridge and the cache take their values from different responses of the same counters;
+within a window the higher value is shown, so a difference in rounding between the two shows as the higher one.
+
 ## 6. Running and signed in
 
 The 額度 card lists a source only while its app runs, it is signed in to a subscription, and it has a snapshot with
@@ -338,7 +407,8 @@ at least one window.
 ## 8. Privacy and risks
 
 - What is read: Codex's rollout lines (already read for speed), the Claude Desktop usage entry, the helper's quota
-  file, and the two signed-in markers of section 6. Only the snapshot is kept in memory. Written: the bridge's files
+  file, the two signed-in markers of section 6, and `.claude.json`'s `cachedUsageUtilization` with
+  `oauthAccount.accountUuid` (5.6). Only the snapshot is kept in memory. Written: the bridge's files
   (section 5) and the estimate's install id and store (10.1, 10.4), which hold account keys (keyed hashes), never ids.
 - What leaves the computer: with the 額度 sharing switch on and a service that takes them, the report entries of
   REPORTING-EXTENSIONS 11 (each account's tag for that service, percent, spend, estimate, plan and tier, model mix);
@@ -350,6 +420,9 @@ at least one window.
   - Every check is strict, so the reader then finds nothing: the Desktop rows stop showing a quota. They never show a
     wrong number.
   - The fixtures pin the observed format (2026-11-10, Claude Desktop with Claude Code 2.1.321).
+- **Claude Code's usage cache** (5.6) is Claude Code's private format too. An update may stop writing it, rename the
+  key or change the body; the strict checks then find no cache, and the Claude Code rows show the bridge's windows
+  alone. The fixtures pin the observed format (Claude Code 2.1.325, observed 2026-11-13).
 - **The bridge** changes one value in Claude Code's settings and restores it. If the user removes Agent Speed without
   turning the bridge off, the status line keeps running the copy in `<data>/bin`, which still prints their previous
   status line or the quota line.
@@ -797,8 +870,9 @@ R)`: `t` its `observedMs`, `R` its reset.
   `fiveHour` window whose `R` is a whole hour, `S⁺` is one more hour earlier (the reset may be rounded up). An
   observation with `t` outside `[S⁺ − 1 min, R + 1 min]` is skipped.
 - **Sources of observations.** Codex: every token count line with rate limits (3), so that history exists at the
-  first launch. Claude CLI: each change of the quota file (5.5). Desktop: each new cache entry (4.4). Phase 2: each
-  response. Remote hosts: each quota line.
+  first launch. Claude CLI: each change of the quota file (5.5) or of the usage cache (5.6), each window at its own
+  time and in time order (5.6 *Estimate*). Desktop: each new cache entry (4.4). Phase 2: each response. Remote hosts:
+  each quota line.
 - **Store.** `<data>/quota/estimate.json` (0600, a temporary file then a rename, written at most once a minute and at
   quit): `{"version": 2, "observations": [...], "instances": [...], "keys": [...]}` (version 1 keyed accounts with a
   random salt and is replaced) with the last 8 days of
@@ -952,6 +1026,11 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
 - Bodies: the 5-hour window present or null, scoped limits, `seven_day_opus`.
 - The helper's merge (newer window, same window with lower and higher values, earlier window, missing window) and its
   line.
+- Claude Code's usage cache (5.6, `claudeCodeCache`): `.claude.json` texts (the observed shape with a `Fable 7d` at
+  100 %; either uuid missing, empty or not an object; another account; malformed or missing fields; `fetchedAtMs`
+  outside 2000–2100 or with a fraction; a nested decoy; a file that does not parse), reads in a row keeping the
+  previous value, joins (the observed case, the cache higher in the same window, a newer period either way, a tie,
+  null resets, one part only, no windows), the estimate's window-by-window feed, and each window's age texts.
 - Turning the bridge on and off: no file, no `statusLine`, an existing one with `padding`, already ours, replaced by
   the user, not an object.
 - Reset passed, labels and order, and the long and short reset texts in the four languages for fixed `now` values in

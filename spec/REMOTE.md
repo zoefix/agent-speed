@@ -441,7 +441,7 @@ browsers, and no key the user pasted into the app.
 | Source on a host | Route (QUOTAS) |
 | --- | --- |
 | `codex` | rollout `rate_limits` (3) |
-| `claudeCode` | the status line bridge of the host (11.3), per host, off by default |
+| `claudeCode` | the status line bridge of the host and its Claude Code usage cache (11.3, QUOTAS 5.6), per host, off by default |
 | `grokBuild` | the log (9.2); live when the app's `quotaGrokBuildLive` is on |
 | `kimi`, `gemini`, `droid` | the vendor API with the host's own sign-in (9.5, 9.6, 9.7; Droid's key from the host's `~/.factory/.env` or the SSH command's environment) |
 | `antigravity` | the `agy` language server on the host's loopback (9.4) |
@@ -467,12 +467,15 @@ Not on hosts:
     (QUOTAS 10.1); the host's streamed responses (5) feed the ledger of QUOTAS 10.3. Older relays send none of the
     three: their sources are accounts of their own;
   - `{"t": "quotaRemoved", "source"}` when a source's snapshot goes.
-- `windows` is an array of at most 16 `{kind, name, minutes, usedPercent, resetsAtMs}` (QUOTAS 2, 9.1).
+- `windows` is an array of at most 16 `{kind, name, minutes, usedPercent, resetsAtMs, observedMs}` (QUOTAS 2, 9.1).
   - `name` ≤ 64 characters or null.
   - `kind` one of the QUOTAS kinds.
   - `minutes` 1–527 040 or null.
   - `usedPercent` finite, 0–1000.
   - `resetsAtMs` a time or null.
+  - `observedMs` a time or null (absent counts as null): the window's own time in a joined Claude Code snapshot
+    (QUOTAS 5.6), whose line `observedMs` is then the newest window's. The relay sends it only there. The app converts
+    it like every other time (6). An older app ignores it and shows every window at the line's time.
 - `status` is one of `ok`, `noCredential`, `expired`, `denied`, `failed`, `networkOff`, `noCertificates`,
   `notRunning`.
 - The bridge reports `{"t": "quotaBridge", "state", "settingsPath"}`, with `state` from QUOTAS 5.4 (`off`,
@@ -497,6 +500,9 @@ The relay lists `/proc` every 15 s while `sources` is not empty: each process's 
 - **Settings file**: `$CLAUDE_CONFIG_DIR/settings.json`, else `~/.claude/settings.json`, edited exactly as QUOTAS
   5.2–5.4. The sidecar and backup are `<folder>/quota/claude-statusline-previous.json` and
   `claude-settings.backup.json`; the quota file is `<folder>/quota/claude-cli.json`.
+- **Usage cache**: while `claudeCode` is in `sources`, the relay also reads the host's `$CLAUDE_CONFIG_DIR/.claude.json`
+  (else `~/.claude.json`) as QUOTAS 5.6 says, and its `claudeCode` line carries the joined snapshot, each window with
+  its own `observedMs` once both parts exist (11.1). The uuids stay on the host.
 - **Turning off**: `claudeBridge` false, or the host removed from the app, restores as QUOTAS 5.3.
 - **Removing a host** whose bridge is on first connects and turns it off (2.4). If the host cannot be reached, the
   confirmation says that its status line keeps running the helper in `<folder>` until the bridge is turned off from a
