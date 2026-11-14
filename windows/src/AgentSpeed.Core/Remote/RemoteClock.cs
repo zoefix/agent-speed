@@ -115,7 +115,7 @@ internal static class RelayMessageTimes
         }
     }
 
-    /// <summary>The snapshot's time, every reset and the time of an <c>ok</c> status.</summary>
+    /// <summary>The snapshot's time, every reset and window time, and the time of an <c>ok</c> status.</summary>
     private static RemoteQuotaReport? Converted(RemoteQuotaReport report, long delta)
     {
         var snapshot = report.Snapshot;
@@ -127,12 +127,12 @@ internal static class RelayMessageTimes
         var windows = new List<QuotaWindow>(snapshot.Windows.Count);
         foreach (var window in snapshot.Windows)
         {
-            if (!ShiftOptional(window.ResetsAtMs, delta, out var resets))
+            if (!ShiftOptional(window.ResetsAtMs, delta, out var resets) || !ShiftOptional(window.ObservedMs, delta, out var windowObserved))
             {
                 return null;
             }
 
-            windows.Add(window with { ResetsAtMs = resets });
+            windows.Add(window with { ResetsAtMs = resets, ObservedMs = windowObserved });
         }
 
         var status = report.Status;

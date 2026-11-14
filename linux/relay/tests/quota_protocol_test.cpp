@@ -228,6 +228,34 @@ TEST(RelayQuotaProtocol, BoundsWindowsAsTheAppValidatesThem) {
     EXPECT_EQ(kept[0].kind, quota::Kind::FiveHour);
 }
 
+// QUOTAS 5.6, REMOTE 11.1: only a joined Claude Code window carries its own time; every other window goes without one.
+TEST(RelayQuotaProtocol, AWindowsOwnTimeOnlyWhenItHasOne) {
+    auto plain = hostReport({quota::makeWindow(quota::Kind::FiveHour, 52, 1794344400000)}, SourceKind::ClaudeCode);
+    auto line = quotaLine(plain);
+    EXPECT_EQ(line.find("\"observedMs\":null"), std::string::npos) << line;
+    EXPECT_NE(line.find(R"({"kind":"fiveHour","name":null,"minutes":300,"usedPercent":52,"resetsAtMs":1794344400000})"), std::string::npos)
+        << line;
+
+    auto fable = quota::makeWindow(quota::Kind::ModelWeek, 100, 1794621599593, std::string("Fable"));
+    fable.observedMs = 1794330373747;
+    auto five = quota::makeWindow(quota::Kind::FiveHour, 52, 1794344400000);
+    five.observedMs = kNow;
+    auto r = hostReport({five, fable}, SourceKind::ClaudeCode);
+    line = quotaLine(r);
+    EXPECT_NE(line.find(R"("usedPercent":100,"resetsAtMs":1794621599593,"observedMs":1794330373747})"), std::string::npos) << line;
+    const auto message = decoded(line);
+    const auto* q = std::get_if<remote::HostQuota>(&message);
+    ASSERT_TRUE(q);
+    EXPECT_EQ(q->snapshot, r.snapshot);
+
+    // A time the app would refuse is none: the window then shows at the line's time.
+    fable.observedMs = 900'000'000'000;
+    const auto windows = roundTrip({fable});
+    ASSERT_EQ(windows.size(), 1u);
+    EXPECT_FALSE(windows[0].observedMs);
+    EXPECT_EQ(windows[0].resetsAtMs, 1794621599593);
+}
+
 TEST(RelayQuotaProtocol, SendsNothingTheAppWouldRefuse) {
     auto r = hostReport({});
     r.snapshot.observedMs = 900'000'000'000;  // 1998

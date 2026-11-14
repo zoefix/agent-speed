@@ -1,7 +1,8 @@
 import Foundation
 
 /// The relay's quota lines (REMOTE 11.1), validated by REMOTE 5.6: at most 16 windows of the QUOTAS kinds, names of
-/// at most 64 characters of display text, minutes 1–527 040 or null, percents finite 0–1000, times within 2000–2100.
+/// at most 64 characters of display text, minutes 1–527 040 or null, percents finite 0–1000, times within 2000–2100
+/// (a window's own `observedMs` too, QUOTAS 5.6).
 /// A source a host cannot read is ignored.
 extension RelayLineDecoder {
     static let quotaStatuses: [String: QuotaRouteStatus] = [
@@ -66,8 +67,9 @@ extension RelayLineDecoder {
         let used = try w.number("usedPercent")
         guard (0...RemoteQuotaReport.maxUsedPercent).contains(used) else { throw RemoteLineError(.outOfRange, "usedPercent") }
         let resets = try w.optionalTime("resetsAtMs")
+        let observed = try w.optionalTime("observedMs")
         return QuotaWindow(kind: kind, name: name.flatMap { $0.isEmpty ? nil : $0 }, minutes: minutes.map { Int($0) },
-                           usedPercent: used, resetsAtMs: resets)
+                           usedPercent: used, resetsAtMs: resets, observedMs: observed)
     }
 
     func quotaRemoved(_ f: RemoteFields) throws(RemoteLineError) -> RelayMessage? {

@@ -77,6 +77,27 @@ struct RemoteQuotaTests {
         if case .message = decode(edge) {} else { Issue.record("edge: \(decode(edge))") }
     }
 
+    /// QUOTAS 5.6: a joined Claude Code line carries each window's own time; absent or null is the line's.
+    @Test func aWindowCarriesItsOwnTime() throws {
+        var fable = Self.window(kind: "modelWeek", name: "Fable", minutes: 10080, used: 100)
+        fable["observedMs"] = RelayLines.baseMs - 7_200_000
+        var five = Self.window()
+        five["observedMs"] = NSNull()
+        let line = Self.quotaLine(source: "claudeCode", windows: [five, Self.window(kind: "sevenDay", minutes: 10080), fable])
+        guard case .message(.quota(let report)) = decode(line) else {
+            Issue.record("not a quota line: \(decode(line))")
+            return
+        }
+        #expect(report.snapshot.windows.map(\.observedMs) == [nil, nil, RelayLines.baseMs - 7_200_000])
+        #expect(report.snapshot.time(of: report.snapshot.windows[2]) == RelayLines.baseMs - 7_200_000)
+        #expect(report.snapshot.time(of: report.snapshot.windows[0]) == RelayLines.baseMs)
+        var bad = Self.window()
+        bad["observedMs"] = 1_000
+        #expect(invalidField(Self.quotaLine(source: "claudeCode", windows: [bad])) == "observedMs")
+        bad["observedMs"] = "1794338473000"
+        #expect(invalidField(Self.quotaLine(source: "claudeCode", windows: [bad])) == "observedMs")
+    }
+
     @Test func sourcesAHostCannotReadAreIgnored() {
         #expect(decode(Self.quotaLine(source: "claudeDesktop")) == .ignored)
         #expect(decode(Self.quotaLine(source: "zcode")) == .ignored)
@@ -184,7 +205,9 @@ struct RemoteQuotaTests {
         harness.remoteOffsetMs = 2_000
         let run = try harness.connect()
         let observed = harness.nowMs + 2_000
-        run.send(Self.quotaLine(observed: observed, windows: [Self.window(resets: observed + 60_000)]))
+        var window = Self.window(resets: observed + 60_000)
+        window["observedMs"] = observed - 600_000
+        run.send(Self.quotaLine(observed: observed, windows: [window]))
         run.send(#"{"t":"quotaBridge","state":"ok","settingsPath":"~/.claude/settings.json"}"#)
         run.send(#"{"t":"quotaRemoved","source":"kimi"}"#)
         harness.settle()
@@ -194,6 +217,7 @@ struct RemoteQuotaTests {
         }
         #expect(quota.first?.snapshot.observedMs == observed - 2_000)
         #expect(quota.first?.snapshot.windows.first?.resetsAtMs == observed + 58_000)
+        #expect(quota.first?.snapshot.windows.first?.observedMs == observed - 602_000)
         #expect(quota.first?.status == .ok(observed - 2_000))
         let kinds = harness.events.messages.map { "\($0.0)".prefix(10) }
         #expect(kinds.contains { $0.hasPrefix("quotaBridg") })

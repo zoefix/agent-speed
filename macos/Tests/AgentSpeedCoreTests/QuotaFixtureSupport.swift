@@ -19,7 +19,8 @@ enum QuotaFixtures {
         QuotaWindow(kind: QuotaWindowKind(rawValue: object["kind"] as? String ?? "") ?? .other,
                     name: object["name"] as? String, minutes: (object["minutes"] as? NSNumber)?.intValue,
                     usedPercent: (object["usedPercent"] as? NSNumber)?.doubleValue ?? .nan,
-                    resetsAtMs: (object["resetsAtMs"] as? NSNumber)?.int64Value)
+                    resetsAtMs: (object["resetsAtMs"] as? NSNumber)?.int64Value,
+                    observedMs: (object["observedMs"] as? NSNumber)?.int64Value)
     }
 
     static func windows(_ value: Any?) -> [QuotaWindow] {

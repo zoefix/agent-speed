@@ -40,6 +40,8 @@ void writeWindow(JsonOut& j, const quota::Window& w) {
     j.key("minutes").optionalInteger(w.minutes);
     j.key("usedPercent").number(w.usedPercent);
     j.key("resetsAtMs").optionalInteger(w.resetsAtMs);
+    // Only a joined Claude Code window has a time of its own (QUOTAS 5.6); the others go without one.
+    if (w.observedMs) j.key("observedMs").integer(*w.observedMs);
     j.endObject();
 }
 
@@ -70,6 +72,7 @@ std::vector<quota::Window> sendableWindows(const std::vector<quota::Window>& win
         if (w.minutes && (*w.minutes < 1 || *w.minutes > remote::quotas::kMaxMinutes)) w.minutes.reset();
         if (w.kind == quota::Kind::Other && !w.minutes) continue;
         if (w.resetsAtMs && !validTime(*w.resetsAtMs)) w.resetsAtMs.reset();
+        if (w.observedMs && !validTime(*w.observedMs)) w.observedMs.reset();
         if (w.name) w.name = displayText(*w.name, remote::quotas::kNameCharacters);
         out.push_back(std::move(w));
     }

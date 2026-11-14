@@ -44,6 +44,7 @@ add_executable(agentspeed_tests
     quota_http_test.cpp
     # Quota phase 1
     quota_bridge_test.cpp
+    quota_cli_cache_test.cpp
     quota_codex_test.cpp
     quota_desktop_test.cpp
     quota_format_test.cpp
@@ -53,6 +54,7 @@ add_executable(agentspeed_tests
     quota_estimate_fixture_test.cpp
     quota_estimate_pipeline_test.cpp
     quota_estimator_test.cpp
+    quota_window_feed_test.cpp
     # Quota phase 2
     quota_antigravity_test.cpp
     quota_cookies_test.cpp

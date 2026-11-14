@@ -120,6 +120,14 @@ void Estimator::setClaudeAccount(std::int64_t at, const std::optional<SignedInAc
 
 void Estimator::addSnapshot(SnapshotEvent snapshot) {
     const std::lock_guard lock(mutex_);
+    if (!feedsByWindow(snapshot.source)) {
+        append(std::move(snapshot));
+        return;
+    }
+    for (auto& event : windowFeed_.take(snapshot)) append(std::move(event));
+}
+
+void Estimator::append(SnapshotEvent snapshot) {
     const auto id = std::make_pair(snapshot.machine, snapshot.source);
     const auto same = [&](const SnapshotEvent& a) {
         return a.windows == snapshot.windows && a.orgKey == snapshot.orgKey && a.account == snapshot.account && a.plan == snapshot.plan &&

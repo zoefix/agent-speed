@@ -55,7 +55,7 @@ public static class QuotaText
         return WeekdayOrDate(Local(resetsAtMs, zone), Local(nowMs, zone), loc);
     }
 
-    /// <summary><c>quota.age</c> once the snapshot is an hour old (whole hours, from a day whole days); null before.</summary>
+    /// <summary><c>quota.age</c> once the window's time is an hour ago (whole hours, from a day whole days); null before.</summary>
     public static string? Age(long observedMs, long nowMs, Localizer loc)
     {
         ArgumentNullException.ThrowIfNull(loc);
@@ -78,7 +78,7 @@ public static class QuotaText
         return loc.Format("quota.pace", (int)Math.Round(Math.Clamp(pace, 0, 1) * 100, MidpointRounding.AwayFromZero));
     }
 
-    /// <summary><c>quota.updated</c> with the snapshot's time: the time alone today, else the date and time.</summary>
+    /// <summary><c>quota.updated</c> with the window's time: the time alone today, else the date and time.</summary>
     public static string Updated(long observedMs, long nowMs, Localizer loc, TimeZoneInfo? zone = null)
     {
         ArgumentNullException.ThrowIfNull(loc);

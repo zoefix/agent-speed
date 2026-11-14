@@ -87,8 +87,10 @@ extension RelayMessage {
             guard let observed = shift(report.snapshot.observedMs) else { return nil }
             var windows = report.snapshot.windows
             for index in windows.indices {
-                guard let resets = shiftOptional(windows[index].resetsAtMs) else { return nil }
+                guard let resets = shiftOptional(windows[index].resetsAtMs),
+                      let windowObserved = shiftOptional(windows[index].observedMs) else { return nil }
                 windows[index].resetsAtMs = resets
+                windows[index].observedMs = windowObserved
             }
             if case .ok(let at) = report.status {
                 guard let local = shift(at) else { return nil }

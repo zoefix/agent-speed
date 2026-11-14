@@ -7,7 +7,8 @@ namespace AgentSpeed.Core.Quota.Estimate;
 /// The estimate's inputs (QUOTAS 10.1–10.4) as they arrive, each under the input gate: the history's share with its cut, the
 /// live engine's responses by key (folded per minute an hour after they end, except this computer's Codex ones, which take
 /// a token count line), Codex's lines, the sign-in keys (only changes), the snapshots of the sources whose quota switch is on
-/// (runs of equal values keep their first and last) and the hosts' quota lines. Everything older than 8 days goes.
+/// (runs of equal values keep their first and last; Claude Code's window by window) and the hosts' quota lines. Everything
+/// older than 8 days goes.
 /// </summary>
 public sealed partial class QuotaEstimator
 {
@@ -25,6 +26,7 @@ public sealed partial class QuotaEstimator
     private readonly List<ClaudeProfile> _profiles = [];
     private readonly Dictionary<SourceKind, List<EstimateSnapshot>> _snapshots = [];
     private readonly Dictionary<(string Host, SourceKind Source), List<HostSnapshot>> _hostSnapshots = [];
+    private readonly Dictionary<(string? Host, SourceKind Source), QuotaWindowFeed> _feeds = [];
     private HashSet<SourceKind> _enabled = [];
 
     private EstimateSpend Spend => _spend ??= new EstimateSpend(() => _pricing?.Current ?? Pricing.PriceBook.Bundled);
@@ -147,7 +149,8 @@ public sealed partial class QuotaEstimator
         var org = snapshot.Source == SourceKind.ClaudeDesktop && desktopOrganization is { Length: > 0 } uuid
             ? AccountKeys.Key(AccountKeys.Salt, AccountKeys.DesktopVendor, uuid)
             : null;
-        var item = new EstimateSnapshot(snapshot.Source, snapshot.ObservedMs, snapshot.Windows, org);
+        Func<EstimateSnapshot, EstimateSnapshot, bool>? sameTime =
+            snapshot.Source == SourceKind.ClaudeCode ? null : static (a, b) => a.ObservedMs == b.ObservedMs;
         lock (_gate)
         {
             if (!_snapshots.TryGetValue(snapshot.Source, out var list))
@@ -156,8 +159,11 @@ public sealed partial class QuotaEstimator
                 _snapshots.Add(snapshot.Source, list);
             }
 
-            _dirty |= AddThinned(list, item, static (a, b) => a.ObservedMs == b.ObservedMs,
-                static (a, b) => a.DesktopOrgKey == b.DesktopOrgKey && a.Windows.SequenceEqual(b.Windows));
+            foreach (var part in Parts(null, snapshot))
+            {
+                _dirty |= AddThinned(list, new EstimateSnapshot(part.Source, part.ObservedMs, part.Windows, org), sameTime,
+                    static (a, b) => a.DesktopOrgKey == b.DesktopOrgKey && a.Windows.SequenceEqual(b.Windows));
+            }
         }
     }
 
@@ -171,7 +177,8 @@ public sealed partial class QuotaEstimator
             return;
         }
 
-        var item = new HostSnapshot(report.HostId, snapshot.Source, snapshot.ObservedMs, snapshot.Windows, report.Account, report.Plan, report.Tier);
+        Func<HostSnapshot, HostSnapshot, bool>? sameTime =
+            snapshot.Source == SourceKind.ClaudeCode ? null : static (a, b) => a.ObservedMs == b.ObservedMs;
         lock (_gate)
         {
             var key = (report.HostId, snapshot.Source);
@@ -181,8 +188,12 @@ public sealed partial class QuotaEstimator
                 _hostSnapshots.Add(key, list);
             }
 
-            _dirty |= AddThinned(list, item, static (a, b) => a.ObservedMs == b.ObservedMs,
-                static (a, b) => a.Account == b.Account && a.Plan == b.Plan && a.Tier == b.Tier && a.Windows.SequenceEqual(b.Windows));
+            foreach (var part in Parts(report.HostId, snapshot))
+            {
+                var item = new HostSnapshot(report.HostId, part.Source, part.ObservedMs, part.Windows, report.Account, report.Plan, report.Tier);
+                _dirty |= AddThinned(list, item, sameTime,
+                    static (a, b) => a.Account == b.Account && a.Plan == b.Plan && a.Tier == b.Tier && a.Windows.SequenceEqual(b.Windows));
+            }
         }
     }
 
@@ -196,13 +207,41 @@ public sealed partial class QuotaEstimator
                 _hostSnapshots.Remove(key);
                 _dirty = true;
             }
+
+            foreach (var key in _feeds.Keys.Where(k => k.Host == hostId).ToList())
+            {
+                _feeds.Remove(key);
+            }
         }
     }
 
-    /// <summary>Appends a new value; within a run of equal values only its first and last stay. False when it was already there.</summary>
-    private static bool AddThinned<T>(List<T> list, T item, Func<T, T, bool> sameTime, Func<T, T, bool> sameValues)
+    /// <summary>
+    /// What a snapshot gives the estimate: a Claude Code one window by window at each window's own time, skipping a window
+    /// whose time did not move forward (QUOTAS 5.6 <i>Estimate</i>); any other source's whole. Under the input gate.
+    /// </summary>
+    private IReadOnlyList<QuotaSnapshot> Parts(string? host, QuotaSnapshot snapshot)
     {
-        if (list.Count > 0 && sameTime(list[^1], item))
+        if (snapshot.Source != SourceKind.ClaudeCode)
+        {
+            return [snapshot];
+        }
+
+        if (!_feeds.TryGetValue((host, snapshot.Source), out var feed))
+        {
+            feed = new QuotaWindowFeed();
+            _feeds.Add((host, snapshot.Source), feed);
+        }
+
+        return feed.Next(snapshot);
+    }
+
+    /// <summary>
+    /// Appends a new value; within a run of equal values only its first and last stay. False when it was already there (the
+    /// same time as the last; without <paramref name="sameTime"/>, the caller gives each value once).
+    /// </summary>
+    private static bool AddThinned<T>(List<T> list, T item, Func<T, T, bool>? sameTime, Func<T, T, bool> sameValues)
+    {
+        if (sameTime is not null && list.Count > 0 && sameTime(list[^1], item))
         {
             return false;
         }

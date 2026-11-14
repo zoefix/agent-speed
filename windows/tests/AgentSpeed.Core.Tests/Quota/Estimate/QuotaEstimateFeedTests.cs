@@ -386,6 +386,79 @@ public sealed class QuotaEstimateFeedTests : IDisposable
         Assert.Null(estimator.Display(SourceKind.Kimi, null, EstimateNames.WindowId(window), Now));
     }
 
+    // MARK: Claude Code window by window (QUOTAS 5.6 Estimate)
+
+    [Fact]
+    public void ClaudeCodesWindowsReachTheEstimateEachAtItsOwnTime()
+    {
+        var auth = _temp.WriteFile("codex/auth.json", "{}");
+        var claude = _temp.WriteFile("claude/.claude.json",
+            """{"oauthAccount":{"accountUuid":"user-1","organizationUuid":"org-1","organizationType":"claude_max"}}""");
+        var estimator = new QuotaEstimator(null, null, (auth, claude), clock: () => Now);
+        estimator.SetEnabled([SourceKind.ClaudeCode]);
+        estimator.RefreshSignIns(Now - 10 * Hour, codex: false, claude: true);
+        foreach (var snapshot in ClaudeCodeSteps())
+        {
+            estimator.Snapshot(snapshot);
+        }
+
+        Assert.True(estimator.BuildIfDue());
+        AssertClaudeCodeObservations(estimator);
+    }
+
+    [Fact]
+    public void AHostsClaudeCodeLinesReachTheEstimateWindowByWindow()
+    {
+        var estimator = new QuotaEstimator(null, null, clock: () => Now);
+        foreach (var snapshot in ClaudeCodeSteps())
+        {
+            estimator.HostQuota(new RemoteQuotaReport("H", snapshot, true, true, QuotaRouteStatus.Ok(snapshot.ObservedMs)));
+        }
+
+        Assert.True(estimator.BuildIfDue());
+        AssertClaudeCodeObservations(estimator);
+    }
+
+    /// <summary>
+    /// The bridge's 5h and 7d five minutes ago joined with the cache's Fable 7d two hours ago; the same again; a newer cache
+    /// with only Fable moved (the snapshot's newest time stays); then the cache alone, older than the bridge's values.
+    /// </summary>
+    private static IEnumerable<QuotaSnapshot> ClaudeCodeSteps()
+    {
+        var bridgeAt = Now - 5 * Minute;
+        QuotaSnapshot Joined(double fable, long fableAt) => new(SourceKind.ClaudeCode, bridgeAt,
+        [
+            QuotaWindow.Of(QuotaWindowKind.FiveHour, 52, Now + 2 * Hour) with { ObservedMs = bridgeAt },
+            QuotaWindow.Of(QuotaWindowKind.SevenDay, 80, Now + 3 * Day) with { ObservedMs = bridgeAt },
+            QuotaWindow.Of(QuotaWindowKind.ModelWeek, fable, Now + 3 * Day, "Fable") with { ObservedMs = fableAt },
+        ]);
+
+        yield return Joined(90, Now - 2 * Hour);
+        yield return Joined(90, Now - 2 * Hour);
+        yield return Joined(95, Now - 90 * Minute);
+        yield return new QuotaSnapshot(SourceKind.ClaudeCode, Now - 100 * Minute,
+        [
+            QuotaWindow.Of(QuotaWindowKind.FiveHour, 50, Now + 2 * Hour),
+            QuotaWindow.Of(QuotaWindowKind.SevenDay, 79, Now + 3 * Day),
+            QuotaWindow.Of(QuotaWindowKind.ModelWeek, 95, Now + 3 * Day, "Fable"),
+        ]);
+    }
+
+    private static void AssertClaudeCodeObservations(QuotaEstimator estimator)
+    {
+        var five = EstimateNames.WindowId(QuotaWindowKind.FiveHour, null, QuotaWindow.FiveHourMinutes);
+        var week = EstimateNames.WindowId(QuotaWindowKind.SevenDay, null, QuotaWindow.WeekMinutes);
+        var fable = EstimateNames.WindowId(QuotaWindowKind.ModelWeek, "Fable", QuotaWindow.WeekMinutes);
+        var observed = estimator.Latest!.Model.Observations.Where(o => o.Source == SourceKind.ClaudeCode)
+            .Select(o => (o.WindowId, o.T, o.P)).OrderBy(o => o.T).ThenBy(o => o.WindowId, StringComparer.Ordinal).ToList();
+        Assert.Equal(
+            new List<(string, long, double)>
+            {
+                (fable, Now - 2 * Hour, 90), (fable, Now - 90 * Minute, 95), (five, Now - 5 * Minute, 52), (week, Now - 5 * Minute, 80),
+            }.OrderBy(o => o.Item2).ThenBy(o => o.Item1, StringComparer.Ordinal),
+            observed);
+    }
+
     // MARK: Helpers
 
     private string StorePath => _temp.Combine("store", "history.sqlite");

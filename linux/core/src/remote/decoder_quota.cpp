@@ -36,6 +36,8 @@ quota::Window window(const Fields& w) {
     out.usedPercent = w.number("usedPercent");
     if (out.usedPercent < 0 || out.usedPercent > quotas::kMaxUsedPercent) fail(LineError::Kind::OutOfRange, w.name("usedPercent"));
     out.resetsAtMs = w.optionalTime("resetsAtMs");
+    // QUOTAS 5.6: a joined Claude Code window's own time; absent from other windows and older relays.
+    out.observedMs = w.optionalTime("observedMs");
     return out;
 }
 

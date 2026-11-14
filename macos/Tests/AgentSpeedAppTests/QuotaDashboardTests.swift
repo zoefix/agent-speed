@@ -106,6 +106,25 @@ struct QuotaDashboardTests {
         #expect(model.quotaLines(.claudeCode).isEmpty, "the bridge is off")
     }
 
+    /// QUOTAS 5.6: the Claude Code row joins the bridge and Claude Code's cache; a stale `Fable 7d` from the cache
+    /// says so, and the fresh lines beside it do not.
+    @Test func eachJoinedWindowShowsItsOwnAge() throws {
+        let model = Self.model()
+        model.settings.quotaClaudeCli = true
+        let cache = QuotaSnapshot(source: .claudeCode, observedMs: Self.now - 2 * 3_600_000 - 20 * 60_000, windows: [
+            QuotaWindow(kind: .sevenDay, usedPercent: 78, resetsAtMs: Self.now + 2 * 86_400_000 - 407),
+            QuotaWindow(kind: .modelWeek, name: "Fable", usedPercent: 100, resetsAtMs: Self.now + 2 * 86_400_000 - 407),
+        ])
+        let joined = try #require(ClaudeCodeQuota.join(bridge: Self.cli, cache: cache))
+        model.quota.preview(desktop: nil, cli: joined, nowMs: Self.now)
+        let lines = model.quotaLines(.claudeCode)
+        #expect(lines.map(\.label) == ["7d", "Fable 7d"])
+        #expect(lines.map(\.percentText) == ["86%", "100%"])
+        #expect(lines.map(\.age) == [nil, "2 小時前更新"])
+        #expect(lines[0].updated != lines[1].updated)
+        #expect(model.quota.listedSources.contains(.claudeCode))
+    }
+
     @Test func anAgeThatDoesNotFitMovesToTheTooltip() {
         let model = Self.model()
         let short = QuotaSnapshot(source: .claudeDesktop, observedMs: Self.now - 5 * 3_600_000, windows: [

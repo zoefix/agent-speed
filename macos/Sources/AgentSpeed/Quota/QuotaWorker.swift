@@ -2,7 +2,8 @@ import AgentSpeedCore
 import Foundation
 
 /// The quota readers' file work, off the main thread (QUOTAS 4–6): the Claude Desktop cache, the Claude CLI's quota
-/// file, the bridge's status, the signed-in markers and the light process listing. One serial queue runs it.
+/// file joined with Claude Code's usage cache (5.6), the bridge's status, the signed-in markers and the light process
+/// listing. One serial queue runs it.
 final class QuotaWorker: @unchecked Sendable {
     /// What one round should look at.
     struct Request: Sendable {
@@ -36,6 +37,7 @@ final class QuotaWorker: @unchecked Sendable {
     let bridge: ClaudeStatusLineBridge
     private let desktopReader: DesktopQuotaReader
     private var cliReader: ClaudeCliQuotaReader
+    private var usageCache: ClaudeCodeUsageCache
     private var codexSignIn: QuotaSignIn
     private var claudeSignIn: QuotaSignIn
     private lazy var processes = QuotaProcessScan()
@@ -47,6 +49,7 @@ final class QuotaWorker: @unchecked Sendable {
         self.bridge = bridge
         codexSignIn = QuotaSignIn(.codex, file: signInFiles.codex)
         claudeSignIn = QuotaSignIn(.claudeCode, file: signInFiles.claude)
+        usageCache = ClaudeCodeUsageCache(file: signInFiles.claude)
         desktopReader = DesktopQuotaReader(folder: desktopFolder)
         cliReader = ClaudeCliQuotaReader(file: bridge.quotaFile)
     }
@@ -80,8 +83,12 @@ final class QuotaWorker: @unchecked Sendable {
         }
         if request.cli {
             cliReader.refresh()
-            result.cli = .some(cliReader.snapshot)
+            // The cache keeps the signed-in marker's cadence (QUOTAS 5.6).
+            if request.claudeSignIn { usageCache.refresh(nowMs: request.nowMs) }
+            result.cli = .some(ClaudeCodeQuota.join(bridge: cliReader.snapshot, cache: usageCache.snapshot))
             result.cliReceivedMs = .some(cliReader.receivedMs)
+        } else {
+            usageCache.reset()
         }
         if request.bridgeStatus { result.bridgeStatus = bridge.status() }
         if request.codexSignIn || request.claudeSignIn {

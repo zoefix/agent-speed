@@ -291,16 +291,29 @@ public sealed class QuotaFixtureTests
         _ => QuotaWindowKind.Other,
     };
 
+    /// <summary>A fixture window; <c>observedMs</c> is present only in a joined Claude Code snapshot (QUOTAS 5.6).</summary>
     internal static QuotaWindow ReadWindow(JsonElement w) => new(
         Kind(w.GetProperty("kind").GetString()!),
         w.GetProperty("name").ValueKind == JsonValueKind.Null ? null : w.GetProperty("name").GetString(),
         w.GetProperty("minutes").ValueKind == JsonValueKind.Null ? null : w.GetProperty("minutes").GetInt32(),
         w.GetProperty("usedPercent").GetDouble(),
-        NullableLong(w.GetProperty("resetsAtMs")));
+        NullableLong(w.GetProperty("resetsAtMs")),
+        w.TryGetProperty("observedMs", out var observed) ? NullableLong(observed) : null);
 
-    private static List<QuotaWindow> ReadWindows(JsonElement array) => [.. array.EnumerateArray().Select(ReadWindow)];
+    internal static List<QuotaWindow> ReadWindows(JsonElement array) => [.. array.EnumerateArray().Select(ReadWindow)];
 
-    private static void AssertSnapshot(JsonElement expected, QuotaSnapshot? actual)
+    /// <summary>A fixture snapshot <c>{source, observedMs, windows}</c>; null for a JSON null.</summary>
+    internal static QuotaSnapshot? ReadSnapshot(JsonElement s) => s.ValueKind == JsonValueKind.Null
+        ? null
+        : new QuotaSnapshot(s.GetProperty("source").GetString() switch
+        {
+            "codex" => SourceKind.Codex,
+            "claudeDesktop" => SourceKind.ClaudeDesktop,
+            "claudeCode" => SourceKind.ClaudeCode,
+            var other => throw new InvalidDataException(other),
+        }, s.GetProperty("observedMs").GetInt64(), ReadWindows(s.GetProperty("windows")));
+
+    internal static void AssertSnapshot(JsonElement expected, QuotaSnapshot? actual)
     {
         if (expected.ValueKind == JsonValueKind.Null)
         {

@@ -174,8 +174,8 @@ public enum QuotaTone
 /// <param name="Pace">The pace mark, 0…1; null while the reset is unknown or passed.</param>
 /// <param name="ResetLong">The dashboard's reset text; empty while unknown or passed.</param>
 /// <param name="ResetShort">The orb card's reset text; empty while unknown or passed.</param>
-/// <param name="Age">` · ` and <c>quota.age</c> while the snapshot is over an hour old; empty otherwise.</param>
-/// <param name="Tooltip"><c>quota.updated</c>, then <c>quota.pace</c> on its own line while known.</param>
+/// <param name="Age">` · ` and <c>quota.age</c> while the window's time (QUOTAS 2) is over an hour ago; empty otherwise.</param>
+/// <param name="Tooltip"><c>quota.updated</c> with the window's time, then <c>quota.pace</c> on its own line while known.</param>
 /// <param name="Spoken">The window as the dashboard row speaks it: with its amount and cap and, while extrapolated, the estimated note.</param>
 public sealed record QuotaLine(string Label, int Percent, double Bar, QuotaTone Tone, double? Pace, string ResetLong, string ResetShort, string Age,
     string Tooltip, string Spoken, bool Passed)
@@ -214,8 +214,8 @@ public static class QuotaLines
     {
         ArgumentNullException.ThrowIfNull(snapshot);
         ArgumentNullException.ThrowIfNull(loc);
-        var age = QuotaText.Age(snapshot.ObservedMs, nowMs, loc) is { } text ? " · " + text : string.Empty;
-        var updated = QuotaText.Updated(snapshot.ObservedMs, nowMs, loc, zone);
+        var snapshotAge = Age(snapshot.ObservedMs, nowMs, loc);
+        var snapshotUpdated = QuotaText.Updated(snapshot.ObservedMs, nowMs, loc, zone);
         var shown = QuotaWindows.Shown(snapshot, nowMs, QuotaText.Labels(loc));
         var cost = estimates?.Cost;
         var note = loc["quota.estimate.note"];
@@ -223,6 +223,10 @@ public static class QuotaLines
         for (var i = 0; i < lines.Length; i++)
         {
             var vendor = shown[i];
+            var time = snapshot.TimeOf(vendor.Window);
+            var (age, updated) = time == snapshot.ObservedMs
+                ? (snapshotAge, snapshotUpdated)
+                : (Age(time, nowMs, loc), QuotaText.Updated(time, nowMs, loc, zone));
             var estimate = estimates?.Of(snapshot.Source, vendor, nowMs);
             var w = estimate is null ? vendor : QuotaEstimateText.Live(vendor, estimate);
             var pace = w.ResetsAtMs is not { } next ? null
@@ -254,4 +258,6 @@ public static class QuotaLines
         ArgumentNullException.ThrowIfNull(loc);
         return string.Join(loc["list.separator"], lines.Select(l => l.Spoken));
     }
+
+    private static string Age(long timeMs, long nowMs, Localizer loc) => QuotaText.Age(timeMs, nowMs, loc) is { } text ? " · " + text : string.Empty;
 }

@@ -148,6 +148,11 @@ extension AppModel {
         let age = format.age(observedMs: snapshot.observedMs, nowMs: now)
         let updated = l10n("quota.updated", Self.quotaTime(snapshot.observedMs, nowMs: now, locale: l10n.locale))
         return snapshot.shown(nowMs: now, words: format.strings.words).map { shown in
+            // A joined Claude Code window has its own time (QUOTAS 2, 5.6).
+            let time = snapshot.time(of: shown.window)
+            let ownAge = time == snapshot.observedMs ? age : format.age(observedMs: time, nowMs: now)
+            let ownUpdated = time == snapshot.observedMs
+                ? updated : l10n("quota.updated", Self.quotaTime(time, nowMs: now, locale: l10n.locale))
             var window = shown
             let estimate = quota.estimateLine(snapshot.source, host: host, window: shown.window)
             if let estimate { window = window.live(estimate) }
@@ -160,10 +165,10 @@ extension AppModel {
                 pace: pace,
                 reset: window.resetsAtMs.map { format.resetLong($0, nowMs: now) },
                 resetShort: window.resetsAtMs.map { format.resetShort($0, nowMs: now) },
-                age: age,
+                age: ownAge,
                 level: QuotaLevel(percent: window.percent),
                 passed: window.passed,
-                updated: updated,
+                updated: ownUpdated,
                 paceText: pace.map(format.paceText),
                 spoken: l10n.quotaWindowSpoken(window, nowMs: now)
             )
