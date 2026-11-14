@@ -83,12 +83,13 @@ bool CacheReader::refresh(std::int64_t nowMs, bool enabled) {
     result.parsed = true;
     if (read.status == files::ReadStatus::Ok) {
         result = readCache(read.bytes);
-    } else if (read.status != files::ReadStatus::TooLarge) {
-        stamp_.reset();
+    } else if (read.status == files::ReadStatus::Failed) {
+        result.parsed = false;
     }
     // The file holds the account's details: nothing of it outlives the read.
     if (!read.bytes.empty()) ::explicit_bzero(read.bytes.data(), read.bytes.size());
-    // Claude Code rewrites the file often: one that does not parse keeps the value and is read again at the next check.
+    // Claude Code rewrites the file often: one that does not parse, or cannot be read, keeps the value and is read again
+    // at the next check.
     if (!result.parsed) {
         stamp_.reset();
         return false;
