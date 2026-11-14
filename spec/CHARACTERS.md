@@ -154,7 +154,9 @@ Such a piece leaves its layer and joins the prop. Topwear above the upper 30 % o
 opacity 0.5: a white beret the split takes for the white blouse, a crown) becomes a `headwear` layer named `hat` that
 follows the head, kept in the top's place in the draw order; when the art shows it tossed above the head (the median
 gap, column by column, between its lower edge and the head's top is over a tenth of its height) it is set down so its
-lower 35 % covers the head's top, and drawn over the hair. The objects layer the split made is cut into its pieces (gaps up
+lower 35 % covers the head's top, and drawn over the hair. A halo (its pixels over opacity 0.5 fill under a quarter
+of its box: a ring, a crown of thorns) floats above the head in every pose and stays where the art draws it. The
+objects layer the split made is cut into its pieces (gaps up
 to 8 px closed; pieces of at least 5 % of the layer, smaller bits joining the nearest piece), so a fan in one hand and
 a purse in the other each follow their own holder: a piece follows the hand (wrist to fingertip segment, or the hand's
 keypoints) that comes within 0.6 face widths of it, else the body (`lower` below the waist, `chest` above), and
@@ -206,7 +208,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   its lowest drawn row (section 6). A pose draws feet when it has a `footwear` part, or `legwear` whose lowest row is
   at least 2 % of the canvas height below the hem of the `bottomwear` (of the `topwear` without one): tall boots or
   talons the split drew with the legs. The rest check is the layers composited at rest on white against the
-  art: the mean absolute difference over the canvas (0 to 255) must be at most 1.0 and the share of pixels off by more
+  art, leaving out where a hat the build set down on the head was drawn and now is, and the shadow drawn on the
+  floor that Recovery leaves out (grown by 4 px over what no layer covers; with `--matte` only): the mean absolute
+  difference over the canvas (0 to 255) must be at most 1.0 and the share of pixels off by more
   than 32 at most 0.55 %. Every sound pose built so far stays at or under 0.82 and 0.40 %; Claude's `think` without
   its boots read 1.16 and 0.70 %. `--check` stops after the layers and prints both checks as JSON, without a
   package. The pack refuses a pose or mood pose that draws no feet when the idle pose does (the lowest row of a

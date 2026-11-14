@@ -212,15 +212,17 @@ def main(argv=None):
     if hints.get("bodyInArms"):
         parts, moved = layers.split_body_from_arms(parts, arm_joints, reference, face_box)
         print(f"body drawn into the arms cut out along the ink lines: {moved} px")
-    parts, hats = layers.lift_hats(parts, face_box)
+    parts, hats, hat_moved = layers.lift_hats(parts, face_box)
     if hats:
         print(f"hats drawn into the top given to the head: {hats}")
     print(f"hidden legs repainted from the legs that show: {layers.fill_hidden_legs(parts)} px")
     layers.grow_underlays(parts)
+    shadow = appendages.floor_shadow(parts, reference, figure, bare=bare)
+    rest_ignore = hat_moved if shadow is None else hat_moved | shadow
     feet = checks.has_feet(checks.layer_bottoms(parts), size[1])
     problems = checks.feet_problems(checks.pose_has_feet(args.idle), feet) if args.idle else []
     if args.check:
-        rest = checks.rest_metrics(layers.composite(parts), reference)
+        rest = checks.rest_metrics(layers.composite(parts), reference, rest_ignore)
         problems += checks.rest_problems(rest)
         print(json.dumps({"check": args.name, "feet": feet, "footwear": any(p.tag == checks.FEET for p in parts),
                           **rest, "problems": problems}))
@@ -305,7 +307,7 @@ def main(argv=None):
         print(f"behind the arms: {filled} px repainted from variants, {unknown} px left as See-Through guessed")
         for v in loaded:
             v.backdrop = None
-    rest = checks.rest_metrics(layers.composite(parts), reference)
+    rest = checks.rest_metrics(layers.composite(parts), reference, rest_ignore)
     problems = checks.rest_problems(rest)
     if problems:
         refuse(args.name, args.out, problems)
