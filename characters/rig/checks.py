@@ -14,9 +14,12 @@ REST_LIMITS = {"mean_abs_diff": 1.0, "px_diff_gt_32_pct": 0.55}
 FEET = "footwear"
 
 
-def rest_metrics(frame, reference):
-    """The rest check of a frame (RGB in 0..1) against the art."""
+def rest_metrics(frame, reference, ignore=None):
+    """The rest check of a frame (RGB in 0..1) against the art; pixels in `ignore` (a hat the build set down on the
+    head on purpose) count as matching."""
     diff = np.abs(np.asarray(frame, np.float32) - reference).mean(axis=2) * 255
+    if ignore is not None:
+        diff[ignore] = 0
     return {"mean_abs_diff": round(float(diff.mean()), 3),
             "px_diff_gt_32_pct": round(float((diff > 32).mean() * 100), 3)}
 

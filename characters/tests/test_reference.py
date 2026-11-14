@@ -736,6 +736,9 @@ class CheckTests(unittest.TestCase):
         frame = ref.copy()
         frame[75:80, 30:70] = 1.0
         self.assertEqual(len(rest_problems(rest_metrics(frame, ref))), 2)
+        moved = np.zeros((100, 100), bool)
+        moved[75:80, 30:70] = True
+        self.assertEqual(rest_problems(rest_metrics(frame, ref, moved)), [])
 
     def test_the_limits_pass_every_sound_pose_and_stop_the_one_without_boots(self):
         from characters.rig.checks import rest_problems
@@ -1088,7 +1091,7 @@ class LayerTests(unittest.TestCase):
         for gap, seated in ((0, False), (30, True)):
             hair = layer("front hair", "front hair", (90, 110, 70, 130))
             top = layer("topwear", "topwear", (150, 250, 60, 140), (50 - gap, 90 - gap, 70, 130))
-            parts, lifted = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], face)
+            parts, lifted, moved = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], face)
             self.assertEqual(lifted, 1)
             names = [q.name for q in parts]
             hat = parts[names.index("hat")]
@@ -1098,6 +1101,9 @@ class LayerTests(unittest.TestCase):
             self.assertEqual(names.index("hat"), 3 if seated else 2)
             ys = np.nonzero(hat.alpha[:, 100] > 0.5)[0]
             self.assertGreaterEqual(ys.max(), 90 + (10 if seated else -1))
+            self.assertEqual(bool(moved.any()), seated)
+            if seated:
+                self.assertTrue(moved[60 - gap, 100] and moved[ys.max(), 100])
 
     def test_a_halo_floating_above_the_head_stays_where_the_art_draws_it(self):
         from characters.rig.layers import Layer, lift_hats
@@ -1110,7 +1116,7 @@ class LayerTests(unittest.TestCase):
         ring = ((10, 13, 30, 170), (57, 60, 30, 170), (13, 57, 30, 33), (13, 57, 167, 170))
         top = layer("topwear", "topwear", (150, 250, 60, 140), *ring)
         hair = layer("front hair", "front hair", (90, 110, 70, 130))
-        parts, lifted = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], (80, 100, 120, 140))
+        parts, lifted, moved = lift_hats([layer("face", "face", (100, 140, 80, 120)), top, hair], (80, 100, 120, 140))
         self.assertEqual(lifted, 1)
         self.assertEqual([q.name for q in parts], ["face", "topwear", "hat", "front hair"])
         hat = parts[2]
@@ -1118,6 +1124,7 @@ class LayerTests(unittest.TestCase):
         self.assertEqual(hat.alpha[35, 31], 1.0)
         self.assertEqual(hat.alpha[35, 100], 0.0)
         self.assertEqual(top.alpha[11, 100], 0.0)
+        self.assertFalse(moved.any())
 
     def test_a_robe_front_drawn_into_the_arm_layer_goes_to_the_body_up_to_the_ink_line(self):
         from characters.rig.layers import Layer, split_body_from_arms

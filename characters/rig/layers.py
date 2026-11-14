@@ -158,7 +158,8 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35, halo_fill=
     strand of hair may still touch it) is set down on it, its lower `overlap` over the head's top, and drawn over the
     hair. A halo (its pixels over opacity 0.5 fill under `halo_fill` of its box: a ring, a crown of thorns) floats
     above the head in every pose and stays where the art draws it.
-    Returns the layers and how many hats it lifted."""
+    Returns the layers, how many hats it lifted and the pixels a hat set down left or covered, which the rest check
+    leaves out."""
     fx0, fy0, fx1, fy1 = face_box
     cut = int(fy0 + above * (fy1 - fy0))
     head = np.zeros(layers[0].alpha.shape, bool)
@@ -166,6 +167,7 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35, halo_fill=
         if layer.tag in HEAD_TAGS:
             head |= layer.alpha > 0.5
     out, seated, lifted = [], [], 0
+    shifted = np.zeros(head.shape, bool)
     for layer in layers:
         out.append(layer)
         if layer.tag != "topwear":
@@ -193,7 +195,8 @@ def lift_hats(layers, face_box, above=0.3, min_px=1000, overlap=0.35, halo_fill=
         moved = np.zeros_like(rgba)
         moved[dy:] = rgba[:rgba.shape[0] - dy]
         seated.append(Layer("hat", "headwear", moved))
-    return out + seated, lifted
+        shifted |= hat | (moved[..., 3] > 0.02)
+    return out + seated, lifted, shifted
 
 
 FRONT_OF_TAIL = ("legwear", "bottomwear", "topwear")
