@@ -16,6 +16,7 @@ public struct QuotaEstimateSpend: Equatable, Sendable {
     public var costMicroUsd: Int64?
     /// Input plus output tokens.
     public var tokens: Int64
+    var tokenContribution: QuotaTokenContribution?
     public var requests: Int64
     /// The transcript, for Codex's token count lines.
     public var file: String?

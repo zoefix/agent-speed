@@ -13,6 +13,8 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
     /// When the response's first content was written (METRICS 3.3); nil for sources whose logs do not say.
     public var firstMs: Int64?
     public var usage: TokenUsage
+    /// Native quota counters whose presence was verified before normalizing missing fields.
+    var quotaTokenCounts: QuotaTokenCounts?
     public var requestCount: Int
     public var modes: ExecutionModes
     /// False while only a streaming snapshot of the usage was written (METRICS 3.3). Codex usage is always final.

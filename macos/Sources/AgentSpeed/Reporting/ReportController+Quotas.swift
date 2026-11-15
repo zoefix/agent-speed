@@ -12,7 +12,9 @@ extension ReportController {
     /// The entries now for the service of `document`, each account tagged for its api origin (the origin reports go
     /// to); none without the quota estimate.
     func currentQuotaEntries(for document: ReportDiscovery) -> [QuotaReportEntry] {
-        quotaEntries?(ReportClock.unixMs, document.api.origin) ?? []
+        let includeTokenUsage = document.extensions?.quotaTokenUsage == true
+            && preferences.sections.contains(.models) && document.sections.contains(.models)
+        return quotaEntries?(ReportClock.unixMs, document.api.origin, includeTokenUsage) ?? []
     }
 
     /// The body as sent with this report's `quotas`, recording what it carried in `cadence`.

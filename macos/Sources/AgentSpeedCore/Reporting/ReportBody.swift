@@ -131,7 +131,7 @@ public enum ReportBody {
     public static let maxCount = 100_000
     public static let maxWindowMs: Int64 = 900_000
 
-    /// The body as sent: within `bodyLimit`, dropping `quotas` first (REPORTING-EXTENSIONS 11.3), then the per-model
+    /// The body as sent: within `bodyLimit`, dropping optional quota tokens first, then `quotas` (REPORTING-EXTENSIONS 11.3), then the per-model
     /// breakdowns, then `models`, then `sources` when it would not fit; the top-level `perfScore` (or legacy
     /// `taskScore`) always stays (METRICS 11.10 *Size*).
     public static func data(_ envelope: ReportEnvelope, _ content: ReportWindowContent, _ sample: ReportSample,
@@ -146,6 +146,11 @@ public enum ReportBody {
         let scores = options.scoreMode
         var document = json(envelope, content, sample, options, scores: scores)
         var data = document.compactData
+        if !options.fits(data), options.quotas != nil, options.extensions.quotaTokenUsage {
+            options.extensions.quotaTokenUsage = false
+            document = json(envelope, content, sample, options, scores: scores)
+            data = document.compactData
+        }
         if !options.fits(data), options.quotas != nil {
             options.quotas = nil
             document = json(envelope, content, sample, options, scores: scores)
@@ -238,7 +243,10 @@ public enum ReportBody {
             break
         }
         if let quotas = options.quotas {
-            members.append(.init("quotas", .array(quotas.prefix(QuotaEstimateConstants.maxEntries).map(\.json))))
+            let includeTokenUsage = options.extensions.quotaEstimate && options.extensions.quotaTokenUsage
+                && options.sections.contains(.models)
+            let entries = quotas.prefix(QuotaEstimateConstants.maxEntries).map { $0.json(includeTokenUsage: includeTokenUsage) }
+            members.append(.init("quotas", .array(entries)))
         }
         if let realtime = envelope.realtime {
             let mixed = sections.contains(.traffic) && sample.traffic.status == .ok
