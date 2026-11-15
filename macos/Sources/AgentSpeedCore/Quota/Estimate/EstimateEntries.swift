@@ -115,14 +115,16 @@ extension QuotaEstimateBuild {
     /// The report entries for the service of api origin `origin` at `nowMs` (REPORTING-EXTENSIONS 11.2), at most 16,
     /// of the sources `included` lets through. Each carries its account's tag for that service, which also orders
     /// entries that tie otherwise (two accounts of one source and window).
-    public func entries(nowMs: Int64, origin: String, including included: (String) -> Bool = { _ in true })
+    public func entries(nowMs: Int64, origin: String, includeTokenUsage: Bool = false,
+                        including included: (String) -> Bool = { _ in true })
         -> [QuotaReportEntry] {
         let tagged = current.filter { included($0.source) }.map {
             (base: $0, tag: QuotaAccounts.reportTag(origin: origin, key: $0.account))
         }
         return tagged.stableSorted { ($0.base.rank, $0.tag) < ($1.base.rank, $1.tag) }
             .prefix(QuotaEstimateConstants.maxEntries).map {
-                QuotaReportEntry($0.base, account: $0.tag, nowMs: nowMs, ledger: ledger, priceVersion: priceVersion)
+                QuotaReportEntry($0.base, account: $0.tag, nowMs: nowMs, ledger: ledger, priceVersion: priceVersion,
+                                 includeTokenUsage: includeTokenUsage)
             }
     }
 

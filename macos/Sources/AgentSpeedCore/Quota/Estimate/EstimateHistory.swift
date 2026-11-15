@@ -9,11 +9,16 @@ extension QuotaEstimateSpend {
     init?(_ record: ResponseRecord, cost: Int64?, models: QuotaModelIds) {
         guard Self.sources.contains(record.source) else { return nil }
         let claude = record.source == .claudeCode || record.source == .claudeDesktop
+        let ids = models.ids(model: record.model, provider: record.provider)
         self.init(source: record.source.rawValue, host: record.host == RemoteHost.localId ? nil : record.host,
-                  model: models.id(model: record.model, provider: record.provider), startMs: record.startMs,
+                  model: ids.ledger, startMs: record.startMs,
                   endMs: record.endMs, costMicroUsd: cost, tokens: Int64(record.usage.total),
                   requests: Int64(record.requestCount), file: record.agentId, provider: record.provider,
                   cloudRoute: claude && models.isCloudRoute(record.model))
+        if record.source == .codex, record.isFinal, let counts = record.quotaTokenCounts {
+            tokenContribution = QuotaTokenContribution(counts: counts, model: ids.reported,
+                                                       earliestEndMs: record.endMs, latestEndMs: record.endMs)
+        }
     }
 }
 
@@ -21,7 +26,11 @@ extension QuotaEstimateSpend {
 public final class QuotaModelIds: @unchecked Sendable {
     private let lock = NSLock()
     private var version: Int?
-    private var ids: [String: String] = [:]
+    struct IDs {
+        var ledger: String
+        var reported: String?
+    }
+    private var modelIDs: [String: IDs] = [:]
     private var cloud: [String: Bool] = [:]
     private let table: () -> PriceTable
 
@@ -34,12 +43,15 @@ public final class QuotaModelIds: @unchecked Sendable {
     }
 
     /// The entry's id when the table knows the model (priced or free), else the model as logged.
-    func id(model: String?, provider: String?) -> String {
-        guard let model, !model.isEmpty else { return ReportModelIds.unknown }
+    func ids(model: String?, provider: String?) -> IDs {
+        guard let model, !model.isEmpty else { return IDs(ledger: ReportModelIds.unknown, reported: nil) }
         let key = "\(provider ?? "")\u{1F}\(model)"
-        return cached(\.ids, key) {
+        return cached(\.modelIDs, key) {
             let id = $0.reportModelId(model: model, provider: provider)
-            return id == ReportModelIds.unknown || id == ReportModelIds.local ? model.lowercased() : id
+            if id == ReportModelIds.unknown || id == ReportModelIds.local {
+                return IDs(ledger: model.lowercased(), reported: nil)
+            }
+            return IDs(ledger: id, reported: id)
         }
     }
 
@@ -55,7 +67,7 @@ public final class QuotaModelIds: @unchecked Sendable {
         return lock.withLock {
             if version != current.version {
                 version = current.version
-                ids.removeAll()
+                modelIDs.removeAll()
                 cloud.removeAll()
             }
             if let hit = self[keyPath: path][key] { return hit }
@@ -79,7 +91,7 @@ extension ModelResolver {
 /// count lines with the response each reports.
 public struct QuotaEstimateFile: Equatable, Sendable {
     /// Bumped when the contributions change; files of another version are analysed again when recent.
-    public static let version: Int64 = 1
+    public static let version: Int64 = 2
 
     public var spend: [QuotaEstimateSpend]
     public var lines: [QuotaCodexLine]
@@ -129,6 +141,7 @@ public struct QuotaEstimateFile: Equatable, Sendable {
         struct Key: Hashable {
             var source: String
             var model: String
+            var reportedModel: String?
             var minute: Int64
             var line: QuotaCodexLine.ID?
             var priced: Bool
@@ -136,7 +149,8 @@ public struct QuotaEstimateFile: Equatable, Sendable {
         var order: [Key] = []
         var sums: [Key: QuotaEstimateSpend] = [:]
         for s in spend {
-            let key = Key(source: s.source, model: s.model, minute: QuotaEstimateLedger.minute(of: s.endMs),
+            let key = Key(source: s.source, model: s.model, reportedModel: s.tokenContribution?.model,
+                          minute: QuotaEstimateLedger.minute(of: s.endMs),
                           line: s.codexLine, priced: s.costMicroUsd != nil)
             guard var sum = sums[key] else {
                 order.append(key)
@@ -148,6 +162,9 @@ public struct QuotaEstimateFile: Equatable, Sendable {
             }
             sum.costMicroUsd = sum.costMicroUsd.map { $0 + (s.costMicroUsd ?? 0) }
             sum.tokens += s.tokens
+            sum.tokenContribution = sum.tokenContribution.flatMap { left in
+                s.tokenContribution.flatMap { left.adding($0) }
+            }
             sum.requests += s.requests
             sum.endMs = max(sum.endMs, s.endMs)
             if let start = s.startMs { sum.startMs = min(sum.startMs ?? start, start) }

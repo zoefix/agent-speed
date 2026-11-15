@@ -781,6 +781,24 @@ unpriced requests, and the input + output tokens of priced and of unpriced respo
 - A `modelWeek` window counts only the models whose price-table id contains each word of the window's name as a
   `-`-separated token, case-insensitive (`Fable` ↔ `claude-fable-5-2`).
 
+### 10.3.1 Optional measured Token mix in reports
+
+When discovery advertises integer `quotaTokenUsage: 1` alongside `quotaEstimate: 1`, clients may add
+`quotas[].tokenUsage` to the existing opt-in quota report. The macOS implementation also requires the
+model-sharing switch and starts with local Codex transcripts. The member uses the same account,
+window, model filter and local spend records as `usedMicroUsd` for the active cycle. Its counts are
+observed locally and are not an estimate of the account's whole subscription allotment.
+
+- `inputTokens` already includes cache reads and writes. `outputTokens` already includes reasoning.
+  Total Token usage is their sum. The cache and reasoning detail fields are null if not explicitly
+  reported on every matching record.
+- `models` is the complete partition of both totals. Use public price-table model IDs and a single
+  `model: null` row for unknown IDs. Keep the existing cost `mix` separate.
+- Omit the member if response counters are missing, if spend records in a boundary minute include
+  responses outside the active window, or if the model partition cannot be sent completely.
+  Older stored spend rows keep their original estimates while recent transcripts rebuild their
+  contributions. If size requires it, drop the optional counters before dropping `quotas`.
+
 ### 10.4 Observations
 
 Every window with a numeric `usedPercent` and a known `resetsAtMs` gives an observation `(account, window, t, tLo, p,

@@ -116,7 +116,7 @@ public final class QuotaEstimateBuild: @unchecked Sendable {
         for (i, s) in inputs.spend.enumerated() {
             guard let account = accounts[i] else { continue }
             ledger.add(account: account, source: s.source, model: s.model, endMs: s.endMs, cost: s.costMicroUsd,
-                       requests: s.requests, tokens: s.tokens)
+                       requests: s.requests, tokens: s.tokens, tokenContribution: s.tokenContribution)
         }
         self.ledger = ledger
         spendAccounts = accounts

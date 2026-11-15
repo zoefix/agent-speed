@@ -8,6 +8,31 @@ struct CodexRawUsage: Equatable, Sendable {
     var output = 0
     var reasoning = 0
     var total = 0
+    struct Field: OptionSet, Sendable {
+        let rawValue: UInt8
+        static let input = Self(rawValue: 1 << 0)
+        static let cached = Self(rawValue: 1 << 1)
+        static let cacheWrite = Self(rawValue: 1 << 2)
+        static let output = Self(rawValue: 1 << 3)
+        static let reasoning = Self(rawValue: 1 << 4)
+    }
+
+    var measured: Field = []
+
+    var quotaTokenCounts: QuotaTokenCounts? {
+        guard measured.contains(.input), measured.contains(.output) else { return nil }
+        let counts = QuotaTokenCounts(input: Int64(input), output: Int64(output),
+                                     cachedInput: measured.contains(.cached) ? Int64(cached) : nil,
+                                     cacheWriteInput: measured.contains(.cacheWrite) ? Int64(cacheWrite) : nil,
+                                     reasoning: measured.contains(.reasoning) ? Int64(reasoning) : nil)
+        return counts.isValid ? counts : nil
+    }
+
+    mutating func set(_ field: Field, _ property: WritableKeyPath<Self, Int>, _ raw: Int64?) {
+        self[keyPath: property] = TokenCount.clamp(raw)
+        if let raw, (0...TokenCount.ceiling).contains(raw) { measured.insert(field) }
+        else { measured.remove(field) }
+    }
 
     static let zero = CodexRawUsage()
 
@@ -23,7 +48,8 @@ struct CodexRawUsage: Equatable, Sendable {
             cacheWrite: cacheWrite - previous.cacheWrite,
             output: output - previous.output,
             reasoning: reasoning - previous.reasoning,
-            total: total - previous.total
+            total: total - previous.total,
+            measured: measured.intersection(previous.measured)
         )
         let hasNegative = usage.input < 0 || usage.cached < 0 || usage.cacheWrite < 0 || usage.output < 0
             || usage.reasoning < 0 || usage.total < 0
@@ -388,15 +414,15 @@ enum CodexLineExtractor {
         var usage = CodexRawUsage()
         while let key = try scanner.nextMember() {
             if scanner.key(key, is: "input_tokens") {
-                usage.input = TokenCount.clamp(try scanner.readInteger())
+                usage.set(.input, \.input, try scanner.readInteger())
             } else if scanner.key(key, is: "cached_input_tokens") {
-                usage.cached = TokenCount.clamp(try scanner.readInteger())
+                usage.set(.cached, \.cached, try scanner.readInteger())
             } else if scanner.key(key, is: "cache_write_input_tokens") {
-                usage.cacheWrite = TokenCount.clamp(try scanner.readInteger())
+                usage.set(.cacheWrite, \.cacheWrite, try scanner.readInteger())
             } else if scanner.key(key, is: "output_tokens") {
-                usage.output = TokenCount.clamp(try scanner.readInteger())
+                usage.set(.output, \.output, try scanner.readInteger())
             } else if scanner.key(key, is: "reasoning_output_tokens") {
-                usage.reasoning = TokenCount.clamp(try scanner.readInteger())
+                usage.set(.reasoning, \.reasoning, try scanner.readInteger())
             } else if scanner.key(key, is: "total_tokens") {
                 usage.total = TokenCount.clamp(try scanner.readInteger())
             } else {

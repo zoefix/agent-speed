@@ -39,10 +39,10 @@ extension QuotaController {
 
     /// The report's entries at `nowMs` for the service of api origin `origin` (REPORTING-EXTENSIONS 11.2): only
     /// sources whose quota is read here or on a host (11.1).
-    func reportEntries(nowMs: Int64, origin: String) -> [QuotaReportEntry] {
+    func reportEntries(nowMs: Int64, origin: String, includeTokenUsage: Bool) -> [QuotaReportEntry] {
         guard let build = estimateBuild else { return [] }
         let hosts = settings.remoteQuotaSwitches.sources
-        return build.entries(nowMs: nowMs, origin: origin) { name in
+        return build.entries(nowMs: nowMs, origin: origin, includeTokenUsage: includeTokenUsage) { name in
             guard let source = SourceKind(rawValue: name) else { return false }
             return settings.showsQuota(source) || hosts.contains(source)
         }

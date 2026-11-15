@@ -22,9 +22,9 @@ struct QuotaEstimateReportPreviewTests {
         defer { rig.tearDown() }
         let build = QuotaEstimatePreviews.demoBuild(now: Self.now)
         var origins: [String] = []
-        rig.report.quotaEntries = { _, origin in
+        rig.report.quotaEntries = { _, origin, includeTokenUsage in
             origins.append(origin)
-            return build.entries(nowMs: Self.now, origin: origin)
+            return build.entries(nowMs: Self.now, origin: origin, includeTokenUsage: includeTokenUsage)
         }
         rig.report.preview(.reporting, username: "zoe-mbp")
         #expect(rig.report.discovery?.extensions?.quotaEstimate == true)

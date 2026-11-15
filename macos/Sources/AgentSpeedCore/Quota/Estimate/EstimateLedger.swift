@@ -7,6 +7,7 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         var account: String
         var source: String
         var model: String
+        var reportedModel: String?
         var minute: Int64
     }
 
@@ -15,6 +16,7 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         var unpricedRequests: Int64 = 0
         var pricedTokens: Int64 = 0
         var unpricedTokens: Int64 = 0
+        var tokenContribution: QuotaTokenContribution?
     }
 
     /// The prefix sums of one set of accounts and one model filter.
@@ -45,9 +47,18 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
 
     /// Adds one response, or a minute's worth of them; a nil cost is unpriced.
     func add(account: String, source: String, model: String, endMs: Int64, cost: Int64?, requests: Int64 = 1,
-             tokens: Int64 = 0) {
-        let key = Key(account: account, source: source, model: model, minute: Self.minute(of: endMs))
-        var row = rows[key] ?? Row()
+             tokens: Int64 = 0, tokenContribution: QuotaTokenContribution? = nil) {
+        let key = Key(account: account, source: source, model: model, reportedModel: tokenContribution?.model,
+                      minute: Self.minute(of: endMs))
+        let previous = rows[key]
+        var row = previous ?? Row()
+        if let previous {
+            row.tokenContribution = previous.tokenContribution.flatMap { left in
+                tokenContribution.flatMap { left.adding($0) }
+            }
+        } else {
+            row.tokenContribution = tokenContribution
+        }
         if let cost {
             row.cost += cost
             row.pricedTokens += tokens
@@ -165,6 +176,32 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         return totals.sorted { ($1.value, $0.key) < ($0.value, $1.key) }.prefix(top).map {
             (model: $0.key, share: QuotaEstimateRounding.halfAway(Double($0.value) / Double(whole), digits: 3))
         }
+    }
+
+    /// Match the exact account/model selector and minute rows used by `outer` for reported spend.
+    /// If a boundary minute straddles the reset or contains data outside the observation, the counts
+    /// of the actual window cannot be separated from that spend snapshot, so omit the breakdown.
+    func tokenUsage(account: String, name: String?, start: Int64, end: Int64) -> QuotaTokenUsage? {
+        guard start <= end else { return nil }
+        let minutes = Self.minute(of: start)...Self.minute(of: end)
+        var total: QuotaTokenCounts?
+        var models: [String: QuotaTokenUsage.Model] = [:]
+        for (key, row) in rows where key.account == account && minutes.contains(key.minute)
+            && Self.modelMatches(key.model, name: name) {
+            guard let evidence = row.tokenContribution, evidence.earliestEndMs >= start, evidence.latestEndMs <= end,
+                  evidence.counts.isValid else { return nil }
+            let next: QuotaTokenCounts? = if let total { total.adding(evidence.counts) } else { evidence.counts }
+            guard let next else { return nil }
+            total = next
+            let id = evidence.model ?? ""
+            var model = models[id] ?? .init(id: evidence.model, input: 0, output: 0)
+            model.input += evidence.counts.input
+            model.output += evidence.counts.output
+            models[id] = model
+            guard models.count <= 128 else { return nil }
+        }
+        guard let total else { return nil }
+        return QuotaTokenUsage(counts: total, models: models.keys.sorted().compactMap { models[$0] })
     }
 
     static func lowerBound(_ values: [Int64], _ x: Int64) -> Int {

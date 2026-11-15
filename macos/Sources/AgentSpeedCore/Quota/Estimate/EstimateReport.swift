@@ -39,9 +39,11 @@ public struct QuotaReportEntry: Equatable, Sendable {
     public var estimate: Estimate
     public var mix: [Mix]
     public var priceVersion: Int
+    var tokenUsage: QuotaTokenUsage?
 
     /// `account`: the tag sent for the account (`QuotaAccounts.reportTag`), empty where nothing is sent.
-    init(_ base: QuotaEntryBase, account: String, nowMs: Int64, ledger: QuotaEstimateLedger, priceVersion: Int) {
+    init(_ base: QuotaEntryBase, account: String, nowMs: Int64, ledger: QuotaEstimateLedger, priceVersion: Int,
+         includeTokenUsage: Bool = false) {
         let accounts: Set<String> = [base.account]
         let filter = base.modelName
         let cap = base.estimate.cap
@@ -81,6 +83,9 @@ public struct QuotaReportEntry: Equatable, Sendable {
             windows: base.estimate.windows)
         mix = ledger.mix(accounts, filter, start, nowMs).map { Mix(model: $0.model, share: $0.share) }
         self.priceVersion = priceVersion
+        if includeTokenUsage, !passed, base.source == "codex" {
+            tokenUsage = ledger.tokenUsage(account: base.account, name: filter, start: start, end: nowMs)
+        }
     }
 
     /// The fields the send cadence compares, for entries that only carry those.
@@ -105,8 +110,10 @@ public struct QuotaReportEntry: Equatable, Sendable {
     }
 
     /// The entry as sent, members in the schema's order.
-    public var json: ReportJSON {
-        .object([
+    public var json: ReportJSON { json(includeTokenUsage: false) }
+
+    func json(includeTokenUsage: Bool) -> ReportJSON {
+        let entry: ReportJSON = .object([
             "account": .string(account),
             "source": .string(source),
             "sources": .array(sources.map(ReportJSON.string)),
@@ -134,6 +141,9 @@ public struct QuotaReportEntry: Equatable, Sendable {
             "mix": .array(mix.map { .object(["model": .string($0.model), "share": .decimal($0.share, decimals: 3)]) }),
             "priceVersion": .int(priceVersion),
         ])
+        guard includeTokenUsage, let tokenUsage, case .object(var members) = entry else { return entry }
+        members.append(.init("tokenUsage", tokenUsage.json))
+        return .object(members)
     }
 
     /// `(account, window)`: one entry per account and window in a report.

@@ -57,7 +57,9 @@ enum QuotaEstimatePreviews {
             model.report.preview(.off, username: "")
         }
         let build = demoBuild(now: now)
-        model.report.quotaEntries = { _, origin in build.entries(nowMs: now, origin: origin) }
+        model.report.quotaEntries = { _, origin, includeTokenUsage in
+            build.entries(nowMs: now, origin: origin, includeTokenUsage: includeTokenUsage)
+        }
         model.report.preview(.reporting, username: "小明的 MacBook Pro")
         for dark in [false, true] {
             let scheme = dark ? "dark" : "light"

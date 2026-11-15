@@ -140,7 +140,7 @@ struct CodexParser: Sendable {
             sawModernUsage = true
             let key = responseId ?? "codex:\(threadId ?? state.thread?.id ?? agentId):\(timestamp)"
             guard deduper.claim(key, for: fileID) == .new else { return }
-            complete(key: key, usage: usage.normalized, modes: state.modes.merging(requestModes), at: timestamp, emit: emit)
+            complete(key: key, usage: usage.normalized, quotaCounts: usage.quotaTokenCounts, modes: state.modes.merging(requestModes), at: timestamp, emit: emit)
 
         case .legacyUsage(let threadId, let info):
             if sawModernUsage {
@@ -150,6 +150,7 @@ struct CodexParser: Sendable {
             }
             guard let info, let total = info.total else { return }
             let tokens: CodexRawUsage
+            let hasUsageBaseline = previousLegacyTotals != nil || info.last != nil
             if let previous = previousLegacyTotals {
                 let (delta, hasNegative) = total.delta(since: previous)
                 if delta.total == 0 { return }
@@ -160,7 +161,8 @@ struct CodexParser: Sendable {
             previousLegacyTotals = total
             let key = "codex-legacy:\(threadId ?? state.thread?.id ?? agentId):\(total.total)"
             guard deduper.claim(key, for: fileID) == .new else { return }
-            complete(key: key, usage: tokens.normalized, modes: state.modes, at: timestamp, emit: emit)
+            complete(key: key, usage: tokens.normalized, quotaCounts: hasUsageBaseline ? tokens.quotaTokenCounts : nil,
+                     modes: state.modes, at: timestamp, emit: emit)
 
         case .turnEnded:
             state.setPhase(.idle, at: timestamp)
@@ -196,9 +198,10 @@ struct CodexParser: Sendable {
     }
 
     /// `modes`: a snapshot of the context, plus the response's own request facts.
-    private mutating func complete(key: String, usage: TokenUsage, modes: ExecutionModes, at timestamp: Int64,
+    private mutating func complete(key: String, usage: TokenUsage, quotaCounts: QuotaTokenCounts?,
+                                   modes: ExecutionModes, at timestamp: Int64,
                                    emit: (ResponseUpsert) -> Void) {
-        let record = ResponseRecord(
+        var record = ResponseRecord(
             key: key,
             source: .codex,
             agentId: agentId,
@@ -210,6 +213,7 @@ struct CodexParser: Sendable {
             modes: modes,
             firstMs: streaming ? firstOutputMs : nil
         )
+        record.quotaTokenCounts = quotaCounts
         finishWithoutUsage(at: timestamp)
         emit(ResponseUpsert(record: record, isCompletion: true))
     }
