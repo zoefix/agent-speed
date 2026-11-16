@@ -2601,7 +2601,8 @@ Per agent `a` at `nowMs`, evaluated on every engine tick (500 ms) with that tick
 - **Sub-score** of a present component = `1000 × r_i` (clamped): the score that component alone would give. The card
   shows it beside the measure.
 - **Absent components** carry a reason: `notRecorded` when the agent's source never records what the component
-  measures — L for every source but Claude (both), Codex and Devin (no `firstMs`, 3.3); N, U and S for sources without
+  measures — L for every source but Claude (both), Codex, Devin, WorkBuddy and CodeBuddy Code (no `firstMs`, 3.3; the
+  last three have it from measured attempts, 4.9); N, U and S for sources without
   actions (6.10); R for DeepSeek Harness, whose output does not split out reasoning (the sources *Live thinking*
   leaves out of `w'`); H for Hermes Agent, whose log line states a cache read only when the provider reported one
   (4.15) — and `fewSamples` otherwise (including `n < 3`, when every component is absent). Each component also

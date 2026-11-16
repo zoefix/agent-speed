@@ -29,7 +29,8 @@ FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtur
 SOURCE_ORDER = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
                 "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin",
                 "qoder", "qoderCli", "codebuddyCode")
-LATENCY_SOURCES = ("codex", "claudeCode", "claudeDesktop", "devin")  # 4.1, 4.2, 4.17: firstMs
+LATENCY_SOURCES = ("codex", "claudeCode", "claudeDesktop", "devin", "workbuddy", "workbuddyAi",
+                   "codebuddyCode")  # 4.1, 4.2, 4.17, 4.9: firstMs
 ACTION_SOURCES = ("codex", "claudeCode", "claudeDesktop", "omp", "pi", "openclaw", "droid")  # 6.10
 NO_REASONING = thinking.NO_SEPARATE_REASONING                         # 4.3: output does not split out reasoning
 NO_CACHE = ("hermes",)                                                # 4.15: the cache read is optional on its line
