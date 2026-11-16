@@ -122,9 +122,25 @@ struct ClaudeParser: Sendable {
         case .assistant:
             consumeAssistant(line, tools: tools, at: timestamp, deduper: &deduper, emit: emit)
 
+        case .system:
+            noteRetryWait(line)
+
         case .attachment, .other:
             break
         }
+    }
+
+    /// A failed attempt that Claude Code retries: nothing is generated until the next one starts (METRICS 4.1).
+    private mutating func noteRetryWait(_ line: ClaudeLine) {
+        if line.isRetryWait && state.phase == .generating { state.inFlightStartMs = nil }
+    }
+
+    /// A synthetic line creates no response; Claude Code's API error message also ends the turn (METRICS 4.1).
+    private mutating func consumeSynthetic(_ line: ClaudeLine, at timestamp: Int64) {
+        guard line.isApiError else { return }
+        state.setPhase(.idle, at: timestamp)
+        pendingStartMs = nil
+        preciseStart = false
     }
 
     private var ultracodeFact: ExecutionModeFact? {
@@ -146,7 +162,7 @@ struct ClaudeParser: Sendable {
         deduper: inout Deduper,
         emit: (ResponseUpsert) -> Void
     ) {
-        guard line.model != Self.syntheticModel else { return }
+        guard line.model != Self.syntheticModel else { return consumeSynthetic(line, at: timestamp) }
         guard let key = line.messageId ?? line.requestId ?? line.uuid else { return }
         let claim = deduper.claim(key, for: fileID)
         // Another file's message is copied history (METRICS 3.5): no response and no actions.
@@ -232,6 +248,8 @@ struct ClaudeParser: Sendable {
             }
         case .assistant:
             consumeQoderAssistant(line, at: timestamp, deduper: &deduper, emit: emit)
+        case .system:
+            noteRetryWait(line)
         case .apiRequest, .attachment, .other:
             break
         }
@@ -249,7 +267,8 @@ struct ClaudeParser: Sendable {
     /// its key, sets the model and consumes the pending start; `firstMs` null, `fast` false, no execution modes.
     private mutating func consumeQoderAssistant(_ line: ClaudeLine, at timestamp: Int64, deduper: inout Deduper,
                                                 emit: (ResponseUpsert) -> Void) {
-        guard line.model != Self.syntheticModel, let raw = line.messageId ?? line.uuid else { return }
+        guard line.model != Self.syntheticModel else { return consumeSynthetic(line, at: timestamp) }
+        guard let raw = line.messageId ?? line.uuid else { return }
         let key = Self.qoderKeyPrefix + raw
         let claim = deduper.claim(key, for: fileID)
         // Another file's message is copied history (METRICS 3.5).

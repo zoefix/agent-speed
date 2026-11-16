@@ -68,6 +68,43 @@ struct ParserBehaviorTests {
         #expect(continued.state.phase == .generating)
     }
 
+    @Test func claudeApiErrorMessageEndsTheTurnAndOtherSyntheticLinesDoNot() {
+        var deduper = Deduper()
+        let synthetic = #"{"type":"assistant","entrypoint":"cli","cwd":"/w/p","uuid":"s1","isApiErrorMessage":true,"error":"rate_limit","message":{"id":"x1","model":"<synthetic>","role":"assistant","stop_reason":"stop_sequence","content":[{"type":"text","text":"limit"}],"usage":{"input_tokens":0,"output_tokens":0}},"timestamp":"2026-10-20T10:00:05Z"}"#
+        let (failed, upserts) = Self.run(.claude, [
+            Self.claudeUser("2026-10-20T10:00:00Z", content: #""go""#),
+            synthetic,
+        ], deduper: &deduper)
+        #expect(upserts.isEmpty)
+        #expect(failed.state.phase == .idle)
+        #expect(failed.state.inFlightStartMs == nil)
+        let (other, _) = Self.run(.claude, [
+            Self.claudeUser("2026-10-20T10:01:00Z", content: #""go""#),
+            synthetic.replacingOccurrences(of: #""isApiErrorMessage":true,"#, with: ""),
+        ], deduper: &deduper)
+        #expect(other.state.phase == .generating)
+        #expect(other.state.inFlightStartMs == 1_792_490_460_000)
+    }
+
+    @Test func claudeRetryWaitStopsTheInFlightEstimateUntilTheNextAttempt() {
+        var deduper = Deduper()
+        let retry = #"{"type":"system","subtype":"api_error","level":"error","entrypoint":"cli","cwd":"/w/p","error":{"status":529},"retryInMs":8000,"retryAttempt":1,"maxRetries":10,"timestamp":"2026-10-20T10:00:02Z"}"#
+        let request = #"{"type":"api-request","entrypoint":"cli","cwd":"/w/p","timestamp":"2026-10-20T10:00:10Z"}"#
+        let (waiting, _) = Self.run(.claude, [Self.claudeUser("2026-10-20T10:00:00Z", content: #""go""#), retry],
+                                    deduper: &deduper)
+        #expect(waiting.state.phase == .generating)
+        #expect(waiting.state.inFlightStartMs == nil)
+        #expect(waiting.state.phaseSinceMs == 1_792_490_400_000)
+        let (retried, upserts) = Self.run(.claude, [
+            Self.claudeUser("2026-10-20T10:00:00Z", content: #""go""#), retry, request,
+            Self.claudeAssistant("2026-10-20T10:00:14Z", id: "r1", output: 40, stop: #""end_turn""#),
+        ], deduper: &deduper)
+        #expect(upserts.first?.record.startMs == 1_792_490_410_000)
+        #expect(retried.state.phase == .idle)
+        let (idle, _) = Self.run(.claude, [retry], deduper: &deduper)
+        #expect(idle.state.phase == .idle)
+    }
+
     @Test func claudeMergesRepeatedLinesAndMarksOnlyTheFirstAsCompletion() {
         var deduper = Deduper()
         let (parser, upserts) = Self.run(.claude, [
