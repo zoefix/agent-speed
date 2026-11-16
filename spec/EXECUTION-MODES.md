@@ -59,7 +59,7 @@ Mode changes affect their native scope and time, not earlier responses. Upserts 
 - Kimi: exact official IDs `k3.1-pro-highspeed` and `kimi-for-coding-highspeed` are selected `modelVariant:highspeed`.
   The recorded model is requested metadata, not proof of the provider's served model. No substring matching.
   Reasoning effort: see *Reasoning effort and speed*.
-- WorkBuddy/WorkBuddy AI: `providerData.requestModelId` `fast-model`, `balanced-model`, `deep-model` are selected
+- WorkBuddy/WorkBuddy AI and CodeBuddy Code: `providerData.requestModelId` `fast-model`, `balanced-model`, `deep-model` are selected
   routing facts: they pick a model at a credit rate, all three with the same default effort, so they are neither an
   effort nor a speed. A synthetic compatibility `service_tier:"standard"` is not served evidence.
 - Antigravity: Planning/Fast is a workflow dimension only when its actual native field is known; `/fast` was removed
@@ -243,6 +243,8 @@ facts, and one that names no effort has no effort facts.
   names, not speed. Only the session-current effort exists.
 - **WorkBuddy, WorkBuddy AI** (METRICS 4.9): routing facts only. The effort of a request exists in the CLI's memory and
   is written to no transcript, and the service reports no tier. Only the session-current and configured efforts exist.
+- **CodeBuddy Code** (METRICS 4.20): WorkBuddy's routing facts. The CLI keeps a session's effort in memory and has no
+  `workbuddy.db`, so only the configured effort exists.
 - **Hermes Agent** (METRICS 4.15): no facts. `API call #` lines have no effort or tier, and the log lines that do name a
   `reasoning_config` carry no session id. Only the session-current effort and the configured values exist.
 - **Kimi Code CLI** (per wire file, METRICS 4.11): the context holds one effort fact and one model-variant fact.
@@ -332,10 +334,12 @@ CSV, live reports or performance statistics. Evidence `configured`, scope `confi
 | Gemini CLI | `<home>/.gemini/settings.json` (`<home>` as METRICS 2; not a workspace's); for a user location, the `settings.json` beside its `tmp` folder (METRICS 2.1) | below | `effort` |
 | Antigravity | `config/config.json` in the folder that holds the store (`~/.gemini`) | `userSettings.vertexServiceTier` | `serviceTier`, provider `google` |
 | WorkBuddy, WorkBuddy AI | `<data folder>/settings.json` | `reasoningEffort` | `effort` |
+| CodeBuddy Code | `<config folder>/settings.json`, the folder that holds the root's `projects` | `reasoningEffort` | `effort` |
 | Hermes Agent | the profile's `config.yaml` (METRICS 4.15) | `agent.reasoning_effort`, `agent.service_tier` | `hermesEffort`, `hermesServiceTier` |
 
 - Several locations (METRICS 2.1): an agent takes the files of the root it is read under (Codex's `config.toml` of
-  that Codex home, Antigravity's `config.json` beside that store, WorkBuddy's files in that data folder, Gemini CLI's
+  that Codex home, Antigravity's `config.json` beside that store, WorkBuddy's files in that data folder (CodeBuddy
+  Code's in that config folder), Gemini CLI's
   file of that root); a source's own configured value is its first detected root's.
 - Gemini CLI: of `modelConfigs.overrides` and then `modelConfigs.customOverrides`, in order, an entry counts only when
   its `match` is an object with the one member `model` equal to the agent's model. The last such entry whose
@@ -379,6 +383,7 @@ and the mode CSV keep it unknown. `configured` stays forbidden in reports.
 | Antigravity | recorded per generation or run | served, when a value appears; configured `vertexServiceTier` | yes; a third party saw the model-name fields |
 | Grok Build | session-current | no local data | yes |
 | WorkBuddy, WorkBuddy AI | session-current; configured `reasoningEffort` | no local data (`fast-model` and its siblings are routing) | yes |
+| CodeBuddy Code | configured `reasoningEffort` | no local data (as WorkBuddy) | yes |
 | Hermes Agent | session-current; configured `agent.reasoning_effort` | configured `agent.service_tier` only | yes |
 | Gemini CLI | configured only | no local data | yes |
 | Devin | no local data | no local data | yes |
@@ -391,7 +396,7 @@ What would settle the rules checked only against shipped code:
 | Grok `reasoning_effort` | A real `summary.json`, before and after `/effort`. |
 | ZCode `variant`, card `provider_id` | `select query_source, provider_id, model_id, variant, count(*) from model_usage group by 1,2,3,4` over a session with an accelerated turn. |
 | WorkBuddy `thought_level` | `select id, model, thought_level from sessions limit 20`, compared with the file names under `projects`: that `sessions.id` is the transcript's name is inferred. |
-| WorkBuddy, Antigravity, Gemini config keys | The real files with the key set; Antigravity's mapping of `vertexServiceTier` to `config.json` is inferred from the descriptor's JSON name. |
+| WorkBuddy, CodeBuddy Code, Antigravity, Gemini config keys | The real files with the key set; Antigravity's mapping of `vertexServiceTier` to `config.json` is inferred from the descriptor's JSON name. |
 | Antigravity model name and `thinking_level` | One CLI and one IDE database: decode `executor_metadata` 10→1→28, 10→1→56→19 and `gen_metadata` 1→21, polling during a long answer to see when the executor row is written. That `thinking_level` reaches the database at all is inferred. |
 | Antigravity `service_tier` | A database from the Vertex path with `vertexServiceTier = "priority"`: decode `model_usage` field 13 for the real string. |
 | omp `thinking_level_change`, `requestControls` | A real session file with a manual change and an `auto` session; the version that added `requestControls.effort` was not pinned down. |

@@ -19,7 +19,8 @@ SPEC = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 CASES = os.path.join(SPEC, "fixtures", "unpriced-cases.json")
 FORMAT = 1
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli")
+           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
+           "codebuddyCode")
 REASONS = ("noModel", "notInTable", "noFastPrice", "unpriceable", "noDate")
 MAX_SCALARS = 120
 ELLIPSIS = "…"

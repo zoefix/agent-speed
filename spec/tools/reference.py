@@ -273,7 +273,8 @@ class FileState:
         # workbuddy
         self.cwd = None
         self.open_calls = OrderedDict()
-        if source in WB_FOLDERS:
+        self.wb_measured = set()  # keys whose start came from measured attempts
+        if source in WB_SOURCES:
             self.source_decided = True
             rel = [p for p in re.split(r"[\\/]", os.path.relpath(path, root) if root else path) if p]
             self.is_subagent = len(rel) == 4 and rel[2] == "subagents"
@@ -758,7 +759,8 @@ def process_file(state, dedupe, start_offset=0, max_lines=None):
     if state.source == "droid":
         return droid_read(state, dedupe, start_offset, max_lines)
     handler = {"codex": codex_line, "deepseek": dsh_event, "gemini": gemini_record, "omp": omp_line, "pi": pi_line,
-               "workbuddy": workbuddy_line, "workbuddyAi": workbuddy_line}.get(state.source, claude_line)
+               "workbuddy": workbuddy_line, "workbuddyAi": workbuddy_line,
+               "codebuddyCode": workbuddy_line}.get(state.source, claude_line)
     if state.source in ("omp", "pi") and start_offset > 0:
         omp_read_header(state, dedupe)
     if state.path.endswith(".zstd"):
@@ -2693,6 +2695,7 @@ class DroidTail:
 # ----------------------------------------------------------------------------- WorkBuddy (METRICS 4.9)
 
 WB_FOLDERS = OrderedDict([("workbuddy", ".workbuddy"), ("workbuddyAi", ".workbuddy-ai")])
+WB_SOURCES = ("workbuddy", "workbuddyAi", "codebuddyCode")  # the sources that write this format (4.9, 4.20)
 WB_USER_PREFIXES = ("custom:", "custom-local:")
 
 
@@ -2745,6 +2748,20 @@ def wb_idle(state):
     state.open_calls.clear()
 
 
+def wb_measured(pd, ts):
+    """(measured start, first token) of the call's last attempt in `rawUsage.model_calls` (4.9 Timing model)."""
+    raw = pd.get("rawUsage")
+    attempts = raw.get("model_calls") if isinstance(raw, dict) else None
+    if not isinstance(attempts, list) or not attempts or not isinstance(attempts[-1], dict):
+        return None, None
+    duration, ttft = attempts[-1].get("duration_ms"), attempts[-1].get("time_to_first_token_ms")
+    if not finite(duration) or trunc64(duration) <= 0:
+        return None, None
+    start = max(ts - trunc64(duration), INT64_MIN)
+    first = start + trunc64(ttft) if finite(ttft) and 0 < trunc64(ttft) <= trunc64(duration) else None
+    return start, first
+
+
 def wb_response(state, key, pd, ts, dedupe):
     """Creates or merges the response of one model call from a line that carries usage (4.9 step 3)."""
     if not isinstance(pd.get("usage"), dict) and not isinstance(pd.get("rawUsage"), dict):
@@ -2753,18 +2770,25 @@ def wb_response(state, key, pd, ts, dedupe):
     if tokens["input"] == 0 and tokens["output"] == 0:
         return
     model, provider = wb_model(pd)
+    measured, first = wb_measured(pd, ts)
     resp = state.responses.get(key)
     if resp is None:
         dedupe.claim(key, state.path)
-        emit(state, key, state.pending, ts, tokens, model, provider=provider)
+        emit(state, key, state.pending if measured is None else measured, ts, tokens, model, provider=provider,
+             first=first)
         state.pending = None
         resp = state.responses[key]
+        if measured is not None:
+            state.wb_measured.add(key)
     else:
         resp["endMs"] = max(resp["endMs"], ts)
         for f in TOKEN_FIELDS:
             resp[f] = max(resp[f], tokens.get(f, 0))
         resp["model"] = model or resp["model"]
         resp["provider"] = provider or resp["provider"]
+        if measured is not None and key not in state.wb_measured:
+            state.wb_measured.add(key)
+            resp["startMs"], resp["firstMs"] = measured, first
         note_completed(state, resp)
     state.model = resp["model"] or state.model
 
@@ -2855,6 +2879,18 @@ def workbuddy_roots(home=None, settings=None):
         path = chosen or os.path.join(home, folder)
         roots.append((source, path if os.path.basename(path) == "projects" else os.path.join(path, "projects")))
     return roots
+
+
+def codebuddy_root(home=None, setting=None, env=None):
+    """(source, projects folder) of CodeBuddy Code (METRICS 4.20): `$CODEBUDDY_CONFIG_DIR` when not blank, else
+    `~/.codebuddy`; a setting names a config folder or its `projects` folder."""
+    env = os.environ if env is None else env
+    chosen = (setting or "").rstrip("/\\")
+    if chosen:
+        return "codebuddyCode", chosen if os.path.basename(chosen) == "projects" else os.path.join(chosen, "projects")
+    var = env.get("CODEBUDDY_CONFIG_DIR") or ""
+    return "codebuddyCode", os.path.join(var if var.strip() else os.path.join(home or os.path.expanduser("~"),
+                                                                             ".codebuddy"), "projects")
 
 
 def discover_workbuddy(projects, limit=20_000):
@@ -3737,6 +3773,13 @@ def check_fixtures():
             failures.append("workbuddy discover: expected %r got %r" % (wb["discover"], found))
         failures += check_traces(root, expected, wb["traces"])
         failures += check_workbuddy_roots()
+    cb = expected.get("codebuddyCode")
+    if cb:
+        found = sorted(os.path.relpath(p, root).replace(os.sep, "/") for p in discover_workbuddy(fixture_cb_root(root)[1]))
+        if found != cb["discover"]:
+            failures.append("codebuddyCode discover: expected %r got %r" % (cb["discover"], found))
+        failures += check_traces(root, expected, cb["traces"])
+        failures += check_codebuddy_roots()
     hm = expected.get("hermes")
     if hm:
         failures += check_hermes(root, hm, dedupe)
@@ -4413,6 +4456,31 @@ def check_workbuddy_roots():
     return failures
 
 
+def check_codebuddy_roots():
+    """The config folder: `$CODEBUDDY_CONFIG_DIR` when not blank, else `~/.codebuddy`; a setting names a config folder
+    or its `projects` folder."""
+    failures = []
+    home = os.path.join(os.sep, "home", "dev")
+    cases = [
+        ({}, None, os.path.join(home, ".codebuddy", "projects")),
+        ({"CODEBUDDY_CONFIG_DIR": "/data/cb"}, None, "/data/cb/projects"),
+        ({"CODEBUDDY_CONFIG_DIR": "/data/cb/projects"}, None, "/data/cb/projects/projects"),
+        ({"CODEBUDDY_CONFIG_DIR": " \t"}, None, os.path.join(home, ".codebuddy", "projects")),
+        ({"CODEBUDDY_CONFIG_DIR": "/data/cb"}, "/work/cb/", "/work/cb/projects"),
+        ({}, "/work/cb/projects", "/work/cb/projects"),
+    ]
+    for env, setting, want in cases:
+        got = codebuddy_root(home, setting, env)
+        if got != ("codebuddyCode", want):
+            failures.append("codebuddyCode root %r %r: expected %r got %r" % (env, setting, want, got))
+    return failures
+
+
+def fixture_cb_root(root):
+    """The fixture folder `codebuddy` plays a CodeBuddy Code config folder (`~/.codebuddy`)."""
+    return codebuddy_root(setting=os.path.join(root, "codebuddy"))
+
+
 def fixture_wb_roots(root):
     """The fixture folder `workbuddy` plays the home folder of both WorkBuddy editions."""
     return workbuddy_roots(os.path.join(root, "workbuddy"))
@@ -4435,6 +4503,8 @@ def fixture_source(rel):
         return "droid"
     if rel.startswith("qoder-cli/"):
         return "qoderCli"
+    if rel.startswith("codebuddy/"):
+        return "codebuddyCode"
     for prefix, source in (("codex/", "codex"), ("dsh/", "deepseek"), ("gemini/", "gemini"), ("omp/", "omp"), ("pi/", "pi"),
                            ("workbuddy/.workbuddy/", "workbuddy"), ("workbuddy/.workbuddy-ai/", "workbuddyAi")):
         if rel.startswith(prefix):
@@ -4471,13 +4541,16 @@ def fixture_context(root, state):
         state.configured_facts = workbuddy_configured(os.path.join(data, "settings.json"))
         state.session_facts = workbuddy_session_fact(os.path.join(data, "workbuddy.db"),
                                                      os.path.basename(state.path)[:-len(".jsonl")])
+    elif state.source == "codebuddyCode":
+        state.configured_facts = workbuddy_configured(os.path.join(root, "codebuddy", "settings.json"))
 
 
 def fixture_state(root, rel):
     path = os.path.join(root, rel)
     source = fixture_source(rel)
-    if source in WB_FOLDERS:
-        return FileState(path, source, next((r for _, r in fixture_wb_roots(root) if path.startswith(r + os.sep)), None))
+    if source in WB_SOURCES:
+        roots = fixture_wb_roots(root) + [fixture_cb_root(root)]
+        return FileState(path, source, next((r for _, r in roots if path.startswith(r + os.sep)), None))
     omp_root = next((r for r in fixture_omp_roots(root) if path.startswith(r + os.sep)), None)
     return FileState(path, source, omp_root if source == "omp" else None)
 
@@ -4502,7 +4575,8 @@ def fixture_history(root, expected, config=HISTORY_PRICES):
                                          os.path.join(copy, "dsh", "sessions"), os.path.join(copy, "opencode", "opencode.db"),
                                          [os.path.join(copy, "gemini", "tmp")], fixture_omp_roots(copy),
                                          antigravity_stores(gemini_dir=os.path.join(copy, "antigravity")),
-                                         fixture_wb_roots(copy), pi_dirs=fixture_pi_roots(copy),
+                                         fixture_wb_roots(copy) + [fixture_cb_root(copy)],
+                                         pi_dirs=fixture_pi_roots(copy),
                                          openclaw_dbs=[db for r in fixture_openclaw_dirs(copy) for db in
                                                        discover_openclaw(r)],
                                          hermes_dirs=fixture_hermes_dirs(copy), hermes_tz=hermes_zone(expected),
@@ -4868,6 +4942,8 @@ def main():
     parser.add_argument("--workbuddy", default=None, help="WorkBuddy data folder (~/.workbuddy) or its projects folder")
     parser.add_argument("--workbuddy-ai", default=None,
                         help="WorkBuddy AI data folder (~/.workbuddy-ai) or its projects folder")
+    parser.add_argument("--codebuddy-code", default=None,
+                        help="CodeBuddy Code config folder (~/.codebuddy) or its projects folder")
     parser.add_argument("--openclaw", default=None,
                         help="OpenClaw state folder, agent folder or openclaw-agent.sqlite (replaces the automatic roots)")
     parser.add_argument("--droid", default=None,
@@ -4910,7 +4986,8 @@ def main():
     hermes_dirs = hermes_setting_folders(args.hermes) if args.hermes else hermes_log_folders(hermes_home())
     ag_stores = ([s for a in args.antigravity for s in antigravity_stores(setting=a)] if args.antigravity
                  else antigravity_stores())
-    wb_roots = workbuddy_roots(settings={"workbuddy": args.workbuddy, "workbuddyAi": args.workbuddy_ai})
+    wb_roots = workbuddy_roots(settings={"workbuddy": args.workbuddy, "workbuddyAi": args.workbuddy_ai}) + [
+        codebuddy_root(home, args.codebuddy_code)]
     zcode_root = args.zcode or os.path.join(os.environ.get("ZCODE_DATA_BASE_DIR") or home, ".zcode", "cli", "db")
     kimi_root = args.kimi or os.path.join(os.environ.get("KIMI_CODE_HOME") or os.path.join(home, ".kimi-code"), "sessions")
     grok_root = args.grok or os.path.join(os.environ.get("GROK_HOME") or os.path.join(home, ".grok"), "sessions")

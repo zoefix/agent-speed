@@ -8,7 +8,7 @@ shared fixtures in `spec/fixtures/`.
 
 | Term | Meaning |
 | --- | --- |
-| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition), `qoder` (Qoder IDE, Alibaba), `qoderCli` (Qoder CLI). This is the append-only *source order*. |
+| Source | `codex`, `claudeCode`, `claudeDesktop`, `deepseek` (display name **DSH**, DeepSeek Harness), `opencode`, `gemini` (Gemini CLI), `omp` (oh-my-pi), `antigravity` (Google Antigravity), `workbuddy` (Tencent WorkBuddy, China edition), `workbuddyAi` (WorkBuddy AI, international edition), `zcode` (ZCode), `kimi` (Kimi Code CLI), `grokBuild` (Grok Build), `pi` (Pi Coding Agent), `openclaw` (OpenClaw), `hermes` (Hermes Agent, Nous Research), `droid` (Factory Droid), `devin` (Devin CLI, Cognition), `qoder` (Qoder IDE, Alibaba), `qoderCli` (Qoder CLI), `codebuddyCode` (CodeBuddy Code, Tencent's CLI). This is the append-only *source order*. |
 | Agent | One transcript file. Agent id = absolute file path. Sub-agents have their own files and are separate agents. (OpenCode: one per session row, 4.5; Antigravity: one per conversation database, 4.8; OpenClaw: one per transcript window, 4.14; Hermes Agent: one per session id of a log folder, 4.15; Factory Droid: one per session transcript with its settings file, 4.16; Devin: one per session of a CLI database, 4.17; Qoder IDE: one per chat session of a database, 4.18.) |
 | Response | One model API call that produced a usage record. |
 | Phase | `generating` (a request is in flight), `tools` (model finished, waiting for tool results), `idle` |
@@ -41,14 +41,15 @@ from cumulative session counters (4.16).
 | Devin CLI (`devin`: interactive, `-p`, `devin acp`) | the CLI database (4.17): `$CHISEL_SESSION_DB`, else `$XDG_DATA_HOME/devin/cli/sessions.db`, else `~/.local/share/devin/cli/sessions.db` (Windows `%APPDATA%\devin\cli\sessions.db`) | a folder: the CLI folder that holds `sessions.db`, or its `devin` data folder: one database (4.17) |
 | Qoder IDE (the agent chat of the editor; international and China editions) | `<data>/Qoder/SharedClientCache/cache/db/local.db` and `<data>/QoderCN/SharedClientCache/cache/db/local.db`, with `<data>` = macOS `~/Library/Application Support`, Windows `%APPDATA%`, Linux `$XDG_CONFIG_HOME`, else `~/.config` (4.18) | the IDE's data folder, its `SharedClientCache` folder, or the folder that holds `local.db`: one database (4.18) |
 | Qoder CLI (`qodercli`, `qoderclicn`: interactive, `-p`) | `$QODER_CONFIG_DIR/projects`, else `~/.qoder/projects`; `$QODERCN_CONFIG_DIR/projects`, else `~/.qoder-cn/projects` (4.19) | a config folder or its `projects` folder: that `projects` folder |
+| CodeBuddy Code (`codebuddy`, `cbc`: interactive, `-p`, ACP, Web UI) | `$CODEBUDDY_CONFIG_DIR/projects` when the variable is not blank, else `~/.codebuddy/projects` (4.20) | a config folder or its `projects` folder: that `projects` folder |
 
 `~` is `HOME` on macOS and `%USERPROFILE%` on Windows. Claude Code and Claude Desktop share one root; each file is
 assigned to a source by its `entrypoint` field (section 4.1). Ordinary Claude Desktop chat conversations are not stored
 locally and are out of scope.
 
 Discovery: recursive enumeration of `*.jsonl` (Codex also `*.jsonl.zst`, 5.3; DeepSeek: `session.v<N>.jsonl.zstd` or `session.v<N>.jsonl`; Gemini CLI:
-fixed depths, see 4.6; omp and Pi: see 4.7 and 4.13; Antigravity: conversation databases, see 4.8; WorkBuddy: fixed
-depths, see 4.9; OpenClaw: agent databases, see 4.14; Hermes Agent: `agent.log` and its rotated files, see
+fixed depths, see 4.6; omp and Pi: see 4.7 and 4.13; Antigravity: conversation databases, see 4.8; WorkBuddy and
+CodeBuddy Code: fixed depths, see 4.9 and 4.20; OpenClaw: agent databases, see 4.14; Hermes Agent: `agent.log` and its rotated files, see
 4.15; Factory Droid: one or two levels below the root, each transcript with its settings file, see 4.16; Devin: one
 SQLite database, see 4.17; Qoder IDE: one SQLite database per edition, see 4.18),
 maximum depth 6, never follow symlinks, at most 20 000 files per root.
@@ -66,16 +67,16 @@ today (4.17). Qoder IDE likewise counts the chat sessions with a row today (4.18
 ### 2.1 Location lists
 
 Every source group of the settings (DESIGN 5) has a *location list* (issue #45): Claude Code and Claude Desktop share
-one, every other source has its own. The nineteen lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
+one, every other source has its own. The twenty lists are named `codex`, `claude`, `dsh`, `opencode`, `gemini`,
 `omp`, `antigravity`, `workbuddy`, `workbuddyAi`, `zcode`, `kimi`, `grokBuild`, `pi`, `openclaw`, `hermes`, `droid`,
-`devin`, `qoder`, `qoderCli`.
+`devin`, `qoder`, `qoderCli`, `codebuddyCode`.
 
 - **Entries.** An entry is either `automatic` — every root of the table's *Root* column, derived from the environment
   whenever roots are resolved, exactly as before lists existed (Codex: the sessions root and the agent-scoped Codex home
   of every OpenClaw agent database; Gemini CLI: both `tmp` folders; omp: the default root and every profile;
   Antigravity: the native stores and, on Windows, valid T3 Code ACP stores; Pi: its sessions root and its custom session folder; OpenClaw: every state folder;
   Hermes Agent: the home; Devin: the CLI database; Qoder IDE: the database of each edition; Qoder CLI: both config
-  folders) — or a *user location*: one absolute path, read as the table's
+  folders; CodeBuddy Code: its config folder's `projects`) — or a *user location*: one absolute path, read as the table's
   last column says.
 - **Shape.** 1 to 8 entries, each at most once. A user location is absolute and normalized (no `.` or `..` segment, no
   trailing separator). `automatic` appears at most once and, when present, first; user locations keep the order in which
@@ -120,7 +121,7 @@ one, every other source has its own. The nineteen lists are named `codex`, `clau
      a ZCode data directory, its `.zcode/cli/db` folder and its `db.sqlite`, an OpenClaw agent folder and its
      `openclaw-agent.sqlite`, a Devin data folder and its `cli` folder (both name one `sessions.db`), a Qoder IDE data
      folder, its `SharedClientCache` folder and its `cache/db` folder (all name one `local.db`), a Qoder CLI config
-     folder and its `projects` folder. A Hermes home and
+     folder and its `projects` folder, a CodeBuddy Code config folder and its `projects` folder. A Hermes home and
      its `logs` folder differ (the home has profiles);
   3. refused (*already in the default location*) when `automatic` is in the list and the location is the same as one of
      the roots the automatic entry reads now (Codex's OpenClaw Codex homes included);
@@ -209,7 +210,8 @@ false (Codex records only the user's speed setting, not the tier a request was b
 - Minimum duration: if `endMs - startMs < 500 ms`, use `startMs' = endMs - 500`.
 - `speed = output / ((endMs - startMs') / 1000)` — this is end-to-end output speed and includes time to first token.
 - `firstMs` = when the response's first content was written (Claude 4.1, Codex 4.2), or its first token arrived
-  (Devin 4.17), else null: no other source's log says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
+  (Devin 4.17; WorkBuddy and CodeBuddy Code when the call's attempts are measured, 4.9), else null: no other source's
+  log says it. `firstMs − startMs` is the response's first-content latency (6.9 L); it is never part of the interval.
 
 ### 3.4 Deduplication
 A global, bounded (65 536 entries, FIFO eviction) set of response keys shared by all files of all sources.
@@ -250,7 +252,7 @@ is malformed (section 4).
 
 Each parser is a per-file state machine fed complete lines in order. It produces:
 - response upserts (`key`, `source`, `agentId`, `model`, `startMs`, `endMs`, `firstMs`, normalized tokens; `firstMs`
-  is null for every source but Claude, Codex and Devin)
+  is null for every source but Claude, Codex, Devin, WorkBuddy and CodeBuddy Code)
 - the actions of 6.10 (sources with tool calls)
 - phase updates (`phase`, `phaseSinceMs`, `inFlightStartMs`; `inFlightStartMs` is null whenever the phase is not
   `generating`)
@@ -1002,8 +1004,10 @@ thinking (`output_tokens == thinking_output_tokens + response_output_tokens` on 
 
 Tencent WorkBuddy is an Electron desktop agent in two editions built from one code base. They differ only in branding,
 service and data folder, so they are two sources with one parser. Each conversation runs in an embedded CodeBuddy Code
-CLI, which appends one plain-text JSONL transcript per session. No line records when a request started, so the start
-is inferred from the line before it, as for Gemini CLI. Evidence: `spec/research/workbuddy.md`.
+CLI, which appends one plain-text JSONL transcript per session. Before CLI 2.184.0 no line records when a request
+started, so the start is inferred from the line before it, as for Gemini CLI; from 2.184.0 the call's measured duration
+gives it. The standalone CLI writes the same format (4.20). Evidence: `spec/research/workbuddy.md`,
+`spec/research/codebuddy.md`.
 
 | Source | App (macOS bundle id) | Windows executable | Data folder | Service |
 | --- | --- | --- | --- | --- |
@@ -1012,9 +1016,11 @@ is inferred from the line before it, as for Gemini CLI. Evidence: `spec/research
 
 #### Format eras
 
-Only one era is known: app 5.8.3 (China edition) and 5.8.4 (international edition), both embedding CodeBuddy Code
-2.161.0 with byte-identical transcript code. Older and newer versions have not been inspected, so the parser is
-tolerant: unknown line types and fields are ignored, and a timestamp may be a number or an ISO string.
+One format, two inspected versions: app 5.8.3 (China edition) and 5.8.4 (international edition), both embedding
+CodeBuddy Code 2.161.0 with byte-identical transcript code, and the standalone CodeBuddy Code 2.184.0 (4.20), whose
+transcript code is its own WorkBuddy build's and adds the *measured attempts* of every call (`rawUsage.model_calls`,
+*Timing model*) and a few fact lines. Other versions have not been inspected, so the parser is tolerant: unknown line
+types and fields are ignored, and a timestamp may be a number or an ISO string.
 
 #### Roots and discovery
 
@@ -1022,7 +1028,7 @@ tolerant: unknown line types and fields are ignored, and a timestamp may be a nu
   `projects` folder and reads that `projects` folder. The app's own `WORKBUDDY_CONFIG_DIR` / `CODEBUDDY_CONFIG_DIR` are **not**
   honoured: both editions read the same names, `CODEBUDDY_CONFIG_DIR` also moves the standalone CodeBuddy Code CLI, and
   the app sets them only on itself and its children (a launched app sees no shell variables).
-- The standalone CodeBuddy Code CLI (`~/.codebuddy`, same format) is not a WorkBuddy source. The Windows fallback
+- The standalone CodeBuddy Code CLI (`~/.codebuddy`, same format) is its own source, `codebuddyCode` (4.20). The Windows fallback
   folders of older releases (`C:\ProgramData\WorkBuddy\users\<hash>\.workbuddy` and others) are not read: 5.8 merges them
   into the data folder at launch.
 - Layout: `<root>/<slug>/<session>.jsonl` is a main session (`<slug>` is the working directory with `/`, `\` and `:`
@@ -1063,20 +1069,31 @@ U+2028, U+2029, U+202F, U+205F, U+3000); *trimmed* removes that whitespace at bo
 | `function_call_result` | the result of one tool call (`callId`); the results of a step are written together when every tool of the step finished |
 | `reasoning`, `function_call`, `message` with `role == "assistant"` | output items of one model call, written one by one after the stream ended. An assistant `message` with `providerData.skipRun == true` is a notice written by the CLI (hook output, interruption, error, content-filter notice), never model output. |
 | `model-usage` | usage of a model call whose last output item lacked raw usage, or that had no output item to carry it (reasoning only, empty); written when the run ends, with the earlier time the stream ended |
-| anything else (`session-meta`, `credit-usage`, `summary`, `ai-title`, `custom-title`, `topic`, `file-history-snapshot`, `goal-progress`, `goal-result`, `resend-fork-notice`, `turn-metrics`, `acp-terminal-state`, `role == "system"`, unknown types) | only `lastLineMs` and `cwd` |
+| anything else (`session-meta`, `credit-usage`, `summary`, `ai-title`, `custom-title`, `topic`, `file-history-snapshot`, `goal-progress`, `goal-result`, `goal-state`, `resend-fork-notice`, `turn-metrics`, `acp-terminal-state`, `request-recovery`, `context-usage`, `checkpoint-restore`, `role == "system"`, unknown types) | only `lastLineMs` and `cwd` |
 
 #### Timing model
 
-- The transcript has no request start, time to first token or duration (they exist only in the CLI's memory and
-  telemetry; `turn-metrics` is never written by the runtime WorkBuddy uses, and it measures turns, not calls).
+- Before CLI 2.184.0 the transcript has no request start, time to first token or duration (they exist only in the
+  CLI's memory and telemetry; `turn-metrics`, written only by interactive sessions and never by the runtime WorkBuddy
+  uses, measures turns, not calls). From 2.184.0 the line that carries a call's usage also carries the call's measured
+  attempts (below).
 - A user line is appended after the `UserPromptSubmit` hooks, while the request is being assembled; compaction that the
   new message needs runs before it and writes its own lines first. A model call's output items are created after the
   stream's final event and appended a few milliseconds apart; the last one carries the usage. Tool results are stamped
   when the CLI picks them up, which can be a few milliseconds after the next request was sent.
-- Therefore `startMs` = the latest input line before the call (the user line, or the tool result that completed the
-  step) and `endMs` = the line that carries the call's usage (the latest when several do). The interval includes time
-  to first token and the assembly of the request; there is no record while a request is in flight, so the phase comes
-  from the input lines.
+- Therefore, without measured attempts, `startMs` = the latest input line before the call (the user line, or the tool
+  result that completed the step) and `endMs` = the line that carries the call's usage (the latest when several do).
+  The interval includes time to first token and the assembly of the request; there is no record while a request is in
+  flight, so the phase comes from the input lines.
+- *Measured attempts* (CLI 2.184.0 and later): `providerData.rawUsage.model_calls` is an array with one object per
+  attempt of the call, the attempt that produced the response last (`attempt_no`; `duration_ms`, from the attempt's
+  start to the end of its stream; `time_to_first_token_ms`, to its first chunk with content, reasoning or a tool call;
+  `result`, `finish_reason`, `model`, `output_tokens`). A line has a *measured start* when `rawUsage` is an object whose
+  `model_calls` is a non-empty array whose last element is an object with a finite `duration_ms` (3.6) whose truncated
+  value `d` is > 0: the measured start is `ts − d` (saturating). It also has a *first token*, `ts − d + t`, when that
+  element's `time_to_first_token_ms` is a finite number whose truncated value `t` is > 0 and ≤ `d`. Only the last
+  element is read: earlier attempts failed, wrote no usage and are not part of the call's interval. The interval
+  `[ts − d, endMs]` excludes the request's assembly and includes the time to first token.
 
 State: `pendingStartMs`, `openCalls` (tool call id → response key), `phase`.
 
@@ -1096,10 +1113,12 @@ Output items and `model-usage`:
    neither has no key and is ignored entirely, like a line whose key was first seen in another file: no response, no
    phase change, `openCalls` and `pendingStartMs` unchanged (only the any-line row applies).
 2. Usage: when `providerData.usage` or `providerData.rawUsage` is an object and the normalized `input` or `output` is
-   > 0 — a new key emits a response with `startMs = pendingStartMs`, `endMs = ts`, `final = true`, `model` and
-   `provider` below, then `pendingStartMs = null`; a known key (same file) is an update (4.4): `endMs = max`, every
-   token field `= max(previous, new)`, `model = new ?? previous`, `provider = new ?? previous` (so a `custom` model
-   keeps its provider when a later line of the call lacks the prefix).
+   > 0 — a new key emits a response with `startMs` = the line's measured start, else `pendingStartMs`; `firstMs` = the
+   line's first token (null without one); `endMs = ts`, `final = true`, `model` and `provider` below, then
+   `pendingStartMs = null`; a known key (same file) is an update (4.4): `endMs = max`, every token field
+   `= max(previous, new)`, `model = new ?? previous`, `provider = new ?? previous` (so a `custom` model keeps its
+   provider when a later line of the call lacks the prefix), and when no earlier line of the call had a measured start
+   and this one has, `startMs` and `firstMs` become this line's (the first measured start of a call is kept).
 3. Phase:
    - `model-usage`: the run has ended → phase `idle`, `pendingStartMs = null`, `openCalls` cleared.
    - First, drop the `openCalls` entries of other keys (calls left without a result).
@@ -1137,8 +1156,8 @@ missing. Values follow 3.2: missing or non-numeric values are 0, numbers are tru
 Input follows the OpenAI convention: `inputTokens` (= `prompt_tokens`) already includes cache reads and writes (the
 CLI's own cost code subtracts both from it). DeepSeek's `prompt_cache_miss_tokens` are uncached input, never cache
 writes, although the CLI counts them as writes. The `max` keeps a value that one of the two objects lacks (DeepSeek's
-hits are often only in `rawUsage`). `totalTokens`, `requests`, `credit` and the line's top-level `message.usage`
-(derived by the CLI, with DeepSeek misses as writes) are not used.
+hits are often only in `rawUsage`). `totalTokens`, `requests`, `credit`, `model_calls` (timing only) and the line's
+top-level `message.usage` (derived by the CLI, with DeepSeek misses as writes) are not used.
 
 #### Models and cost
 
@@ -1190,12 +1209,15 @@ hits are often only in `rawUsage`). `totalTokens`, `requests`, `credit` and the 
 
 #### Known approximations (to verify with real data)
 
-- Derived from the code of WorkBuddy 5.8.3 / 5.8.4 (CLI 2.161.0, evidence in `spec/research/workbuddy.md`); no real
-  session file has been read. Verify with `python3 spec/tools/reference.py --dump-today --workbuddy <data folder>`
-  (or `--workbuddy-ai`).
-- The start is inferred: work done between the user line and the request (memory context, other interceptors) counts as
-  generation time, and a tool result picked up late moves the start a few milliseconds past the real request start.
-  Calls after a pre-message compaction start at the user line written after it.
+- Derived from the code of WorkBuddy 5.8.3 / 5.8.4 (CLI 2.161.0, evidence in `spec/research/workbuddy.md`) and of
+  CodeBuddy Code 2.184.0 (`spec/research/codebuddy.md`); no real session file has been read. Verify with
+  `python3 spec/tools/reference.py --dump-today --workbuddy <data folder>` (or `--workbuddy-ai`, `--codebuddy-code`).
+- Without measured attempts the start is inferred: work done between the user line and the request (memory context,
+  other interceptors) counts as generation time, and a tool result picked up late moves the start a few milliseconds
+  past the real request start. Calls after a pre-message compaction start at the user line written after it.
+- With measured attempts the interval starts `d` before the usage line, which is written a few milliseconds after the
+  stream ended, so the start is a few milliseconds late. That `duration_ms` and `time_to_first_token_ms` mean what the
+  code says has not been checked against a stopwatch.
 - Whether the service reports the chosen model for routing slots (otherwise those calls stay unpriced), and what the
   catalog suffixes mean.
 - Whether `prompt_tokens` includes cache writes for Anthropic models behind Tencent's OpenAI-style service (`input` is at
@@ -2264,6 +2286,43 @@ analysis of Qoder CLI 1.1.86 and two signed-in runs); fixtures: `spec/tools/qode
   separately. Verified with the international CLI on macOS; the China edition's folder and variables are read from its
   bundle, whose usage rule is the same code.
 
+### 4.20 CodeBuddy Code
+
+CodeBuddy Code is Tencent's terminal coding agent (npm `@tencent-ai/codebuddy-code`; commands `codebuddy`,
+`codebuddy-code`, `cbc`; interactive, `-p`, ACP, its Web UI and SDK). It is the CLI that WorkBuddy embeds, run on its
+own, and it writes WorkBuddy's transcript format (4.9) to its own config folder. Evidence: `spec/research/codebuddy.md`
+(static analysis of CodeBuddy Code 2.184.0; **not yet verified with real signed-in sessions**); fixtures:
+`spec/tools/workbuddy_fixtures.py` (`spec/fixtures/codebuddy`). Every rule of 4.9 applies, with these differences:
+
+- **Root** (section 2): `<config>/projects`, with `<config>` = `$CODEBUDDY_CONFIG_DIR` when that variable is not blank
+  (4.9 *Blank*; the value is used as it is, as the CLI does), else `~/.codebuddy`. A user location is a config folder or
+  its `projects` folder, read as that `projects` folder. Discovery, layout and sub-agents are 4.9's (the CLI never
+  writes `cloud/`; its stream-json logs `<slug>/<x>/stdio/*.jsonl`, written only with `CODEBUDDY_CODE_PERSIST_STDIO`,
+  match neither shape). A customized (white-label) build that names another folder is not looked for.
+- **Detected** when the root exists (the general rule of section 2, not WorkBuddy's data-folder rule): the CodeBuddy
+  IDE and its plugins keep settings in `~/.codebuddy` without writing transcripts there. The session count is
+  WorkBuddy's: the main session files (DESIGN 5).
+- **Source**: every file is `codebuddyCode`.
+- **Lines**: 4.9's. Interactive sessions also write `turn-metrics` (one per finished turn or background task:
+  *anything else*). From CLI 2.184.0 every call's usage line carries its measured attempts (4.9 *Timing model*); older
+  CLIs are timed by inference.
+- **Effort** (EXECUTION-MODES): no session-current value (the CLI keeps a session's choice in memory and has no
+  `workbuddy.db`); the configured value is `reasoningEffort` of `<config>/settings.json`, as WorkBuddy's. The routing
+  facts of `fast-model` and its siblings are WorkBuddy's.
+- **Models and cost**: 4.9's. The npm build's catalog is WorkBuddy AI's (`auto` by default, routing slots, DeepSeek,
+  GPT, Gemini, GLM, Kimi, Hunyuan ids); the service replaces it at run time.
+- **Actions** (6.10): none, as WorkBuddy.
+- **Parents** (6.7): WorkBuddy's.
+- **Traffic** (10.5): a script host whose arguments contain `/@tencent-ai/codebuddy-code/` (npm).
+- **History** (8): per file, like WorkBuddy. Adding the source needs no analysis version of its own.
+- **Known approximations**: derived from the code only; verify with `python3 spec/tools/reference.py --dump-today
+  --codebuddy-code ~/.codebuddy` and the list in `spec/research/codebuddy.md`. Interactive sessions are deleted by the
+  CLI after `cleanupPeriodDays` (default 30) without activity; the daily history keeps their aggregates (8). Agent
+  Speed sees `CODEBUDDY_CONFIG_DIR` only when its own environment has it (an app started from the macOS Finder does
+  not see shell variables); such a folder is added as a user location. When the variable names a WorkBuddy data
+  folder, the same files are read by two sources: their calls count once, under the source that reads them first
+  (3.4), their sessions twice. The CodeBuddy IDE and the IDE plugins are not read.
+
 ## 5. Reading files
 
 - Startup reading order (it decides which file owns a duplicated key): files sorted by modification time ascending,
@@ -2438,6 +2497,7 @@ Parent links (`parentId`, an agent id or null):
 - Qoder IDE: a session whose `chat_session.parent_session_id` is not blank has the parent
   `<database path>#<parent_session_id>` when that session is a tracked agent (4.18).
 - Qoder CLI: as Claude (`<project folder>/<session id>/subagents/…` under `<project folder>/<session id>.jsonl`).
+- CodeBuddy Code: as WorkBuddy (4.20).
 - Self references and cycles resolve to null.
 
 List:
@@ -2836,7 +2896,7 @@ performance records of 6.11 — are stored, never requests, keys in plain text, 
 
 Scope: every discovered file of every enabled source with no date filter and no file-count limit (Codex `.jsonl.zst`,
 all Gemini roots with legacy `.json`, every omp root including profiles, every Antigravity conversation database
-of every store, both WorkBuddy roots, the rotated logs of every Hermes Agent profile, every Factory Droid session
+of every store, both WorkBuddy roots and CodeBuddy Code's, the rotated logs of every Hermes Agent profile, every Factory Droid session
 with its sidecar, and every row of Devin's and Qoder IDE's databases included), plus Codex `archived_sessions` (the sibling of the sessions root) and the whole OpenCode
 database. Parsing uses exactly the rules of section 4 (same state machines, dedupe, copied-history rules) over whole
 files and complete database reads, in startup order (5; an Antigravity database's time is the newer of its `.db` and
@@ -2863,7 +2923,8 @@ logs (4.15) are cached by file identity instead of path: a rotation renames a lo
 contributions and keys under its new name, and the oldest log, which rotation deletes, keeps its contributions like any
 deleted file. Daily totals are the sums over files. The history store is versioned: a parser change bumps the version
 and triggers a full recomputation that keeps previously stored days for which no logs exist any more (analysis version
-11: Grok Build reasoning counted apart, 4.12; 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses, EXECUTION-MODES; 9: the
+12: the measured attempts of WorkBuddy calls, 4.9, which change their duration and `firstMs`; 11: Grok Build reasoning
+counted apart, 4.12; 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses, EXECUTION-MODES; 9: the
 performance records of 6.11, with `firstMs` (3.3) and the action times (6.10), and the retired task records
 dropped; 8: the task records of the retired task score; 7: the unpriced facts of 9.10; 6: the Codex ordinal rule of
 3.5). "Clear history"
@@ -2880,7 +2941,9 @@ Devin (4.17): contributions are kept per CLI session, with the identity of 4.17 
 analysis version either; nor does its `firstMs`, which only the performance records (6.11) use.
 
 Qoder IDE (4.18): contributions are kept per chat session, with the identity of 4.18 *History*; Qoder CLI (4.19) per file,
-like Claude. Adding the two sources needs no new analysis version.
+like Claude. Adding the two sources needs no new analysis version. CodeBuddy Code (4.20): per file, like WorkBuddy; the
+source needs no analysis version of its own (version 12 is for the WorkBuddy files that already carry measured
+attempts).
 
 Cost (9.7): every row also has `costMicroUsd` and `unpricedRequests`, every model `costMicroUsd` and
 `unpricedRequests`, and every date a `priceVersion`. The cost feature bumps the store version; days kept from an
@@ -3450,6 +3513,7 @@ desktop app that runs its agent on its own executable, so its row needs the argu
 | `devin` | `name == devin`: the CLI, one native executable (Devin's install script, the Homebrew cask, the Windows installers), interactive, `devin -p` or `devin acp` — also when Devin Desktop or another client starts `devin acp` as its local agent, whose sessions are in the database (4.17). Devin Desktop's own executables (macOS `Devin.app/Contents/MacOS/Devin` and its helpers; Windows `%LOCALAPPDATA%\Programs\Devin\Devin.exe`, an assumed path, since Windows compares names case-insensitively) are app processes, never Devin agents. From Devin's documentation and a third-party reader; not verified with a running Devin. |
 | `qoder` | `name == Qoder` and the executable lies in a `resources/bin/<platform>/` folder of a Qoder IDE install (macOS `…/Qoder IDE.app/Contents/Resources/app/resources/bin/aarch64_darwin/Qoder`; observed 2026-11-10): the IDE's agent core, which makes the model calls. The IDE's own processes (its `Contents/MacOS/Qoder`, Electron helpers) are app processes, below. |
 | `qoderCli` | `name` in `qodercli`, `qoderclicn` (native installers), or a script host whose arguments contain `/@qoder-ai/qodercli/` (npm `bundle/qodercli.js`). |
+| `codebuddyCode` | A script host whose arguments contain `/@tencent-ai/codebuddy-code/`: the npm package's `bin/codebuddy`, which the `codebuddy`, `codebuddy-code` and `cbc` links start (Windows: npm's shims run `node.exe` on the same path), and its `bin/cbc-prewarm` and `bin/codebuddy-lowmem`. No native build was found. WorkBuddy's embedded copy runs from `app.asar.unpacked/cli/` and is WorkBuddy's row. Read from the npm package; not verified with a running CLI. |
 
 The desktop apps' own processes are **not** agent processes, nor are their Electron or Tauri helpers: macOS
 `/Applications/{Claude,ChatGPT,Codex,OpenCode,Antigravity,Devin,Qoder IDE}.app/Contents/MacOS/<name>`; Windows executables directly in
@@ -3516,7 +3580,7 @@ parent's process). Each tick, for every root agent process `P` of source `s` wit
 `cwd`; Codex: `session_meta`/`turn_context` `cwd`; dsh: header `cwd`; OpenCode: `session_v2.directory`; Gemini CLI: the
 `.project_root` content; omp: header `cwd`; Antigravity: the decoded path of the first workspace URI; WorkBuddy: the
 latest `cwd`; Pi and OpenClaw: header `cwd`; Factory Droid: `session_start.cwd`; Devin: `sessions.working_directory`;
-Qoder IDE: the path of `chat_session.project_uri`; Qoder CLI: the latest `cwd`.
+Qoder IDE: the path of `chat_session.project_uri`; Qoder CLI and CodeBuddy Code: the latest `cwd`.
 Null when absent.
 It is metadata only (no effect on tokens or history).
 
