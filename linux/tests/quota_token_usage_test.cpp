@@ -196,10 +196,14 @@ TEST(QuotaTokenUsageReport, TheExtensionNeedsTheIntegerOne) {
     ASSERT_TRUE(both);
     EXPECT_TRUE(both->has("quotaTokenUsage"));
     EXPECT_EQ(both->extensions.at("quotaTokenUsage"), 1);
+    // The quota section itself is kept too (REPORTING-EXTENSIONS 11.1), as on macOS and Windows.
+    EXPECT_TRUE(both->has("quotaEstimate"));
+    EXPECT_EQ(both->extensions.at("quotaEstimate"), 1);
     for (const auto* value : {"true", R"("1")", "2", "1.5", "null", "1.0", "1e0", "-1", "{}"}) {
-        const auto other = discoveryWith(std::string(R"({"quotaTokenUsage":)") + value + "}");
+        const auto other = discoveryWith(std::string(R"({"quotaTokenUsage":)") + value + R"(,"quotaEstimate":)" + value + "}");
         ASSERT_TRUE(other) << value;
         EXPECT_FALSE(other->has("quotaTokenUsage")) << value;
+        EXPECT_FALSE(other->has("quotaEstimate")) << value;
     }
     // Stored with the identity and read back.
     const auto stored = report::parseDiscoveryBody(report::discoveryJson(*both), *report::ServiceUrl::parse("https://radar.example"));
