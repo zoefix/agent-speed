@@ -83,6 +83,11 @@ final class AgentModeContext {
                 rootFiles[root.path] = Watched(path: (folder as NSString).appendingPathComponent("settings.json"), empty: .empty,
                                                read: ConfiguredModes.workBuddy(path:))
                 workBuddy[root.path] = WorkBuddyStore(path: (folder as NSString).appendingPathComponent("workbuddy.db"))
+            case .codebuddyCode:
+                // Only the configured value: the CLI keeps no session database (EXECUTION-MODES).
+                let folder = TranscriptLocations.workbuddyDataFolder(ofRoot: root.path)
+                rootFiles[root.path] = Watched(path: (folder as NSString).appendingPathComponent("settings.json"), empty: .empty,
+                                               read: ConfiguredModes.workBuddy(path:))
             case .gemini:
                 guard let file = geminiSettings[root.path] else { break }
                 geminiFiles[root.path] = file

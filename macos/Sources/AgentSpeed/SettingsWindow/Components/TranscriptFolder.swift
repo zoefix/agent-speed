@@ -43,6 +43,7 @@ extension TranscriptFolder {
         case .devin: [LiveMonitor.defaultDevinRoot]
         case .qoder: LiveMonitor.defaultQoderRoots
         case .qoderCli: LiveMonitor.defaultQoderCliRoots
+        case .codebuddyCode: [LiveMonitor.defaultCodebuddyCodeRoot]
         }
     }
 
@@ -69,6 +70,7 @@ extension TranscriptFolder {
         case .devin: "mac.settings.sources.chooseDevin"
         case .qoder: "mac.settings.sources.chooseQoder"
         case .qoderCli: "mac.settings.sources.chooseQoderCli"
+        case .codebuddyCode: "mac.settings.sources.chooseCodebuddyCode"
         }
     }
 
@@ -94,6 +96,7 @@ extension TranscriptFolder {
         case .devin: "settings.sources.devinHint"
         case .qoder: "settings.sources.qoderHint"
         case .qoderCli: "settings.sources.qoderCliHint"
+        case .codebuddyCode: "settings.sources.codebuddyCodeHint"
         }
     }
 
@@ -140,7 +143,7 @@ extension TranscriptFolder {
             let found = defaultURLs.filter(isReadable)
             return found.isEmpty ? [defaultURL] : found
         case .codex, .claude, .dsh, .opencode, .gemini, .workbuddy, .workbuddyAi, .zcode, .kimi, .grokBuild, .hermes, .droid,
-             .devin, .qoder, .qoderCli:
+             .devin, .qoder, .qoderCli, .codebuddyCode:
             return defaultURLs
         }
     }

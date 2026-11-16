@@ -164,6 +164,7 @@ public sealed class ParserFixtureTests
         SourceKind.OpenClaw => "openclaw",
         SourceKind.Droid => "droid",
         SourceKind.QoderCli => "qoderCli",
+        SourceKind.CodeBuddyCode => "codebuddyCode",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
@@ -215,6 +216,12 @@ public sealed class ParserFixtureTests
             var session = WorkBuddyPaths.SessionId(parser.AgentId);
             store.Refresh([session]);
             return (store.Of(session), configured.Of(parser.Source, root, parser.AgentId, parser.Model));
+        }
+
+        // CodeBuddy Code has no session database, only the config folder's settings (EXECUTION-MODES).
+        if (relative.StartsWith("codebuddy/", StringComparison.Ordinal))
+        {
+            return (parser.SessionModes, configured.Of(parser.Source, CodeBuddyCodeFixture.Root, parser.AgentId, parser.Model));
         }
 
         var folder = parser.Source switch
@@ -299,10 +306,12 @@ public sealed class ParserFixtureTests
             return FeedLines(PiParser.ForPath(path, deduper), content, sink, maxLines);
         }
 
-        if (relative.StartsWith("workbuddy/", StringComparison.Ordinal))
+        // CodeBuddy Code writes WorkBuddy's format to its own config folder (METRICS 4.20).
+        if (relative.StartsWith("workbuddy/", StringComparison.Ordinal) || relative.StartsWith("codebuddy/", StringComparison.Ordinal))
         {
-            var source = WorkBuddyFixture.SourceOf(relative);
-            var workBuddy = new WorkBuddyParser(path, deduper, source, WorkBuddyFixture.RootOf(source));
+            var workBuddy = relative.StartsWith("codebuddy/", StringComparison.Ordinal)
+                ? new WorkBuddyParser(path, deduper, SourceKind.CodeBuddyCode, CodeBuddyCodeFixture.Root)
+                : new WorkBuddyParser(path, deduper, WorkBuddyFixture.SourceOf(relative), WorkBuddyFixture.RootOf(WorkBuddyFixture.SourceOf(relative)));
             if (maxLines is not null)
             {
                 return FeedLines(workBuddy, content, sink, maxLines);

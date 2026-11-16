@@ -15,7 +15,8 @@ namespace relay_test {
 
 namespace {
 
-// Each fixture folder plays one folder of the home (parser-expected.json `_comment`); "" lays out its entries.
+// Each fixture folder plays one folder of the home (parser-expected.json `_comment`); "" lays out its entries. The
+// `workbuddy` folder's `.codebuddy` (which WorkBuddy must not read) is left out: `codebuddy` plays CodeBuddy Code's.
 const std::vector<std::pair<std::string, std::string>> kFolders = {
     {"codex", ".codex"},
     {"claude", ".claude"},
@@ -26,13 +27,15 @@ const std::vector<std::pair<std::string, std::string>> kFolders = {
     {"gemini/projects.json", ".gemini/projects.json"},
     {"antigravity", ".gemini"},
     {"omp", ".omp"},
-    {"workbuddy", ""},
+    {"workbuddy/.workbuddy", ".workbuddy"},
+    {"workbuddy/.workbuddy-ai", ".workbuddy-ai"},
     {"pi/agent", ".pi/agent"},
     {"pi/custom-sessions", "pi/custom-sessions"},
     {"openclaw", ""},
     {"hermes/home", ".hermes"},
     {"droid", ""},
     {"qoder-cli", ".qoder"},
+    {"codebuddy", ".codebuddy"},
 };
 
 bool under(const std::string& path, const std::string& prefix) {

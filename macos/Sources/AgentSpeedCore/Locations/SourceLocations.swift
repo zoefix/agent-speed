@@ -22,6 +22,7 @@ public enum TranscriptFolder: String, CaseIterable, Sendable {
     case devin
     case qoder
     case qoderCli
+    case codebuddyCode
 
     /// The sources read through this folder's list, in source order.
     public var sources: [SourceKind] { SourceKind.allCases.filter { $0.transcriptFolder == self } }
@@ -57,6 +58,7 @@ extension SourceKind {
         case .devin: .devin
         case .qoder: .qoder
         case .qoderCli: .qoderCli
+        case .codebuddyCode: .codebuddyCode
         }
     }
 }

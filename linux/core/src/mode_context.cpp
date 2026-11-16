@@ -2,6 +2,7 @@
 
 #include <vector>
 
+#include "agentspeed/codebuddy.hpp"
 #include "agentspeed/fs_util.hpp"
 
 namespace agentspeed {
@@ -79,6 +80,10 @@ void ModeContext::addRoot(RootFamily family, const std::string& root) {
             stores_[root].path = fsx::join(folder, "workbuddy.db");
             break;
         }
+        // The configured value only: the CLI keeps a session's effort in memory and has no `workbuddy.db`.
+        case RootFamily::CodeBuddyCode:
+            configs_[root] = Config{fsx::join(codebuddy::configFolderOf(root), "settings.json"), configured::workBuddy, {}, {}};
+            break;
         default:
             break;
     }

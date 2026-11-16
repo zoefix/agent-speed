@@ -66,7 +66,8 @@ struct Folder {
         RootSettings s;
         s.claude = (root / "claude/projects").string();
         for (auto* other : {&s.codex, &s.dsh, &s.openCode, &s.gemini, &s.omp, &s.antigravity, &s.workBuddy, &s.workBuddyAi, &s.zcode,
-                            &s.kimi, &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli}) {
+                            &s.kimi, &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli,
+                            &s.codeBuddyCode}) {
             *other = (root / "none").string();
         }
         MonitorConfig c;

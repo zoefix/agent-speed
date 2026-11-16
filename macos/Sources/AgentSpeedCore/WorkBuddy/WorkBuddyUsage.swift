@@ -22,6 +22,36 @@ struct WorkBuddyRawUsage: Equatable, Sendable {
     var detailCachedTokens: JSONNumber?
     /// `completion_tokens_details.reasoning_tokens`
     var detailReasoningTokens: JSONNumber?
+    /// The last element of `model_calls` when it is an object (CLI 2.184.0+); nil for anything else.
+    var lastAttempt: WorkBuddyAttemptNumbers?
+}
+
+/// `duration_ms` and `time_to_first_token_ms` of one element of `rawUsage.model_calls`.
+struct WorkBuddyAttemptNumbers: Equatable, Sendable {
+    var durationMs: JSONNumber?
+    var firstTokenMs: JSONNumber?
+}
+
+/// The measured attempt that answered a call (METRICS 4.9 Timing model), in truncated milliseconds.
+struct WorkBuddyAttempt: Equatable, Sendable {
+    /// Above 0.
+    var durationMs: Int64
+    /// Above 0 and at most `durationMs`; nil otherwise.
+    var firstTokenMs: Int64?
+
+    init?(_ numbers: WorkBuddyAttemptNumbers?) {
+        guard let duration = numbers?.durationMs, duration.isFinite, duration.truncated > 0 else { return nil }
+        durationMs = duration.truncated
+        if let first = numbers?.firstTokenMs, first.isFinite, first.truncated > 0, first.truncated <= durationMs {
+            firstTokenMs = first.truncated
+        }
+    }
+
+    /// The call's start for a line written at `timestamp`, saturating.
+    func start(endingAt timestamp: Int64) -> Int64 {
+        let (start, overflow) = timestamp.subtractingReportingOverflow(durationMs)
+        return overflow ? .min : start
+    }
 }
 
 /// Normalized tokens of one WorkBuddy model call (METRICS 4.9 Tokens): per field the larger of the two records.

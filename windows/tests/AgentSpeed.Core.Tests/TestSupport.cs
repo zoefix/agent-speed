@@ -219,6 +219,19 @@ internal static class QoderCliFixture
     public static System.Text.Json.JsonElement Expected => ParserFixtureTests.Expected.GetProperty("qoderCli");
 }
 
+/// <summary>
+/// The fixture folder <c>codebuddy</c> plays a CodeBuddy Code config folder (<c>~/.codebuddy</c>): its root is
+/// <c>codebuddy/projects</c> and its <c>settings.json</c> gives the configured effort (METRICS 4.20).
+/// </summary>
+internal static class CodeBuddyCodeFixture
+{
+    public static string Root => RootIn(FixtureLocator.FixturesDirectory);
+
+    public static string RootIn(string fixtures) => WorkBuddy.CodeBuddyCodePaths.RootOf(Path.Combine(fixtures, "codebuddy"));
+
+    public static System.Text.Json.JsonElement Expected => ParserFixtureTests.Expected.GetProperty("codebuddyCode");
+}
+
 /// <summary>The fixture folder <c>omp</c> plays <c>~/.omp</c>: its automatic roots are the default root and every profile.</summary>
 internal static class OmpFixture
 {

@@ -26,6 +26,7 @@ enum class RootFamily {
     Devin,
     Qoder,
     QoderCli,
+    CodeBuddyCode,
 };
 
 RootFamily familyOf(SourceKind source);

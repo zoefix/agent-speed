@@ -865,14 +865,15 @@ final class TranscriptSession {
         return sources
     }
 
-    /// Agents of each source with at least one line today; WorkBuddy, Kimi Code CLI, Grok Build, Pi, Factory Droid and
-    /// Qoder CLI count main sessions only (DESIGN 5).
+    /// Agents of each source with at least one line today; WorkBuddy, Kimi Code CLI, Grok Build, Pi, Factory Droid,
+    /// Qoder CLI and CodeBuddy Code count main sessions only (DESIGN 5).
     func sessionCounts(todayStartMs: Int64) -> [SourceKind: Int] {
         var counts: [SourceKind: Int] = [:]
         for file in files.values {
             let state = file.state
             guard let last = state.lastLineMs, last >= todayStartMs, enabledSources.contains(state.source) else { continue }
-            if file.family.isWorkBuddy || [.kimi, .grokBuild, .pi, .droid, .qoderCli].contains(file.family), state.isSubagent {
+            if file.family.writesWorkBuddyFormat || [.kimi, .grokBuild, .pi, .droid, .qoderCli].contains(file.family),
+               state.isSubagent {
                 continue
             }
             counts[state.source, default: 0] += 1

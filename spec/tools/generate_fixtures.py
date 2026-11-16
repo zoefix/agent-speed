@@ -906,6 +906,13 @@ order += qoder_cli["order"]
 files.update(qoder_cli["files"])
 mtimes.update(qoder_cli["mtimes"])
 
+# --- CodeBuddy Code: WorkBuddy's transcript format in the standalone CLI's own folder (workbuddy_fixtures.py) --------
+codebuddy = workbuddy_fixtures.write_codebuddy_fixtures(ROOT)
+assert min(codebuddy["mtimes"].values()) > max(mtimes.values())
+order += codebuddy["order"]
+files.update(codebuddy["files"])
+mtimes.update(codebuddy["mtimes"])
+
 with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as f:
     json.dump({"_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the "
                            "Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this "
@@ -937,10 +944,13 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                            "CLI: the folder `qoder-cli` plays a config folder (~/.qoder), so its root is "
                            "qoder-cli/projects; `qoderCli.discover` lists what discovery finds there and its `traces` "
                            "work like the omp ones (spec/tools/qoder_fixtures.py; its day totals are in "
-                           "qoder-expected.json `cli.history`). Every "
+                           "qoder-expected.json `cli.history`). CodeBuddy Code: the folder `codebuddy` plays a config "
+                           "folder (~/.codebuddy), so its root is codebuddy/projects; `codebuddyCode.discover` lists "
+                           "what discovery finds there and its `traces` work like the omp ones. Every "
                            "agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the "
                            "files the fixture folders play: codex/config.toml, gemini/settings.json, "
-                           "antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and "
+                           "antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, "
+                           "codebuddy/settings.json, and "
                            "hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
                "order": order, "files": files, "mtimes": mtimes,
                "opencode": {"database": opencode_rel, "agents": opencode_expected},
@@ -955,7 +965,8 @@ with open(os.path.join(ROOT, "parser-expected.json"), "w", encoding="utf-8") as 
                             "traceSeqs": openclaw["traceSeqs"], "traces": openclaw["traces"]},
                "hermes": hermes,
                "droid": dict(droid["droid"], traces=traces_droid),
-               "qoderCli": {"discover": qoder_cli["discover"], "traces": qoder_cli["traces"]}},
+               "qoderCli": {"discover": qoder_cli["discover"], "traces": qoder_cli["traces"]},
+               "codebuddyCode": {"discover": codebuddy["discover"], "traces": codebuddy["traces"]}},
               f, indent=2, ensure_ascii=False)
     f.write("\n")
 

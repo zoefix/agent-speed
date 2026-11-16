@@ -174,6 +174,8 @@ struct AgentProcessRules: Sendable {
             || script.contains("/@qodercn-ai/qoderclicn/") {
             return .qoderCli
         }
+        // The standalone CodeBuddy Code CLI from npm; WorkBuddy's embedded copy runs from `app.asar.unpacked/cli/`.
+        if script.contains("/@tencent-ai/codebuddy-code/") { return .codebuddyCode }
         // Only the embedded CodeBuddy Code CLI is the agent; the app, its helpers and its daemon are not.
         if let edition = workbuddyEdition(executable: executable, bundleIdentifier: bundleIdentifier),
            (arguments() ?? []).dropFirst().contains(where: { platform.normalize($0).contains(Self.workbuddyCLI) }) {

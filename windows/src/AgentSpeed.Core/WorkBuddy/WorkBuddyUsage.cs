@@ -31,6 +31,9 @@ internal struct WorkBuddyUsage
     public long? CacheCreationInput;
     public long? PromptCacheWrite;
 
+    /// <summary>The last attempt of <c>rawUsage.model_calls</c>, timing only (METRICS 4.9 Timing model).</summary>
+    public WorkBuddyAttempt? Attempt;
+
     /// <summary>
     /// Input includes cache reads and writes (the OpenAI convention); DeepSeek's <c>prompt_cache_miss_tokens</c> are
     /// uncached input and never a cache write.
@@ -61,6 +64,7 @@ internal struct WorkBuddyUsage
         HasRaw = false;
         PromptTokens = CompletionTokens = CompletionReasoning = 0;
         CacheReadInput = PromptDetailsCached = PromptCacheHit = CacheCreationInput = PromptCacheWrite = null;
+        Attempt = null;
     }
 
     /// <summary>Reads <c>providerData.usage</c>; the reader is on its object and ends on its EndObject.</summary>
@@ -156,6 +160,11 @@ internal struct WorkBuddyUsage
             {
                 reader.Read();
                 PromptCacheWrite = ReadPositive(ref reader);
+            }
+            else if (reader.ValueTextEquals("model_calls"u8))
+            {
+                reader.Read();
+                Attempt = WorkBuddyAttempt.ReadLast(ref reader);
             }
             else
             {

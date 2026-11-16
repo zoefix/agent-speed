@@ -301,6 +301,7 @@ White-hot core for highlights: `#FFF7D6`. With overdrive `o > 0`, highlights ble
 | Devin | `#557F14` fern |
 | Qoder IDE | `#B3329D` orchid |
 | Qoder CLI | `#7E61B6` heather |
+| CodeBuddy Code | `#18AB06` leaf |
 
 Pink is `#EC4899`, not the lighter `#F472B6` (too close to coral and lilac); lime is `#84CC16`, not the lighter `#A3E635`, which nearly vanishes on light backgrounds.
 
@@ -337,6 +338,14 @@ against `#1E1E1E`: 3.5; against white: 4.7). Like every source it has no icon an
 `source.devin` "Devin", in source order (METRICS 1) after Factory Droid.
 
 Qoder IDE and Qoder CLI, one product line, take two members of one purple family, as the two WorkBuddy editions share teal: orchid `#B3329D` (OKLCH L 0.55, C 0.20, h 336°) for the editor and heather `#7E61B6` (L 0.56, C 0.13, h 298°), bluer and quieter, for the CLI. The magenta–violet stretch between Antigravity's pink and Pi's violet is the last one with room: orchid is at least 0.126 (OKLab) from every other source color and from the slate `#7C8798` (closest: Antigravity pink 0.126, Pi violet 0.145, Kimi rose 0.170), heather at least 0.124 (closest: Pi violet 0.124, WorkBuddy AI ocean 0.124, slate 0.125, orchid 0.126); both read on both appearances (contrast against `#1E1E1E`: 3.1 and 3.4; against white: 5.4 and 4.9). Like every source they have no icon and no short name: their dots and `source.qoder` "Qoder IDE" and `source.qoderCli` "Qoder CLI", in source order (METRICS 1) after Devin.
+
+CodeBuddy Code takes leaf `#18AB06` (OKLCH L 0.64, C 0.21, h 142°). Its brand green `#00BC90` (the CLI's logo) is
+WorkBuddy's teal again, 0.064 (OKLab) from WorkBuddy jade and 0.069 from Codex mint, and no darker teal reaches 0.12
+from WorkBuddy AI ocean and Devin fern. Leaf keeps the green and leaves the teal: it sits between WorkBuddy jade, omp
+lime and Devin fern and is at least 0.13 from every other source color and from the slate `#7C8798` (closest: Devin
+fern 0.131, omp lime 0.131, WorkBuddy jade 0.132, Codex mint 0.157) and reads on both appearances (contrast against
+`#1E1E1E`: 5.5; against white: 3.1). Like every source it has no icon and no short name: its dot and
+`source.codebuddyCode` "CodeBuddy Code", in source order (METRICS 1) after Qoder CLI.
 
 The two WorkBuddy editions share one app icon, teal-green (`#0EC8A8` → `#05C890`), which is nearly Codex mint (OKLab
 distance about 0.04; the closest existing pair, coral and amber, is 0.11 apart). So both take a darker member of that teal family,
@@ -2397,6 +2406,7 @@ rows, section 10); the file name is `agent-speed-history-<code>-<first date>-<la
 | `devin` | `devin` |
 | `qoder` | `qoder` |
 | `qoderCli` | `qoder-cli` |
+| `codebuddyCode` | `codebuddy-code` |
 
 Empty state (the range has neither token usage nor agent traffic, section 10): centered muted gauge glyph,
 `history.empty` and `history.empty.hint`. First launch after upgrading:
@@ -2868,8 +2878,10 @@ with Mica). Sections:
     and as a user location shows `source.folderMissing`; caption `settings.sources.antigravityHint`); WorkBuddy and
     WorkBuddy AI main session files (a data folder without `projects` shows `source.sessions` with 0; captions
     `settings.sources.workbuddyHint` and `settings.sources.workbuddyAiHint`, which also say that cloud conversations are
-    not counted). Pi, OpenClaw, Hermes Agent, Factory Droid, Devin, Qoder IDE and Qoder CLI sit in source order after
-    Grok Build. Devin's
+    not counted); CodeBuddy Code its main session files like WorkBuddy (METRICS 4.20; a config folder without `projects`
+    is not found; caption `settings.sources.codebuddyCodeHint`, which also says that the CodeBuddy IDE and plugins are
+    not read and that the CLI deletes sessions after 30 days by default). Pi, OpenClaw, Hermes Agent, Factory Droid,
+    Devin, Qoder IDE, Qoder CLI and CodeBuddy Code sit in source order after Grok Build. Devin's
     automatic entry names the CLI folder that holds `sessions.db` (`~/.local/share/devin/cli`); with `$CHISEL_SESSION_DB`
     it names that database's folder and is found while that file exists, whatever its name.
   - Add Folder… accepts what METRICS 2 names for the source: omp one `sessions` folder; Pi one folder
@@ -2878,7 +2890,8 @@ with Mica). Sections:
     the `.factory` folder or its `sessions` folder; Devin the CLI folder that holds `sessions.db` or its `devin` data
     folder (`mac.settings.sources.chooseDevin` on macOS); Qoder IDE the IDE's data folder, its `SharedClientCache`
     folder or the folder that holds `local.db` (`mac.settings.sources.chooseQoder`); Qoder CLI a config folder (`.qoder`)
-    or its `projects` folder (`mac.settings.sources.chooseQoderCli`);
+    or its `projects` folder (`mac.settings.sources.chooseQoderCli`); CodeBuddy Code a config folder (`.codebuddy`) or
+    its `projects` folder (`mac.settings.sources.chooseCodebuddyCode`);
     Antigravity one store folder or its `conversations` folder;
     WorkBuddy the data folder or its `projects` folder.
   - **Storage**: one settings value `sourceLocations`, the JSON document

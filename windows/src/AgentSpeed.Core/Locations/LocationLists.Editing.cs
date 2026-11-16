@@ -81,7 +81,8 @@ public sealed partial class LocationLists
     /// The root or database a location names, resolved: two locations are the same when their keys are equal (a WorkBuddy data
     /// folder and its <c>projects</c>, a <c>.factory</c> folder and its <c>sessions</c>, an OpenCode folder and its
     /// <c>opencode.db</c>, a Devin data folder and its <c>cli</c> folder, a Qoder IDE data folder, its <c>SharedClientCache</c> and
-    /// its <c>cache/db</c> folder, a Qoder CLI config folder and its <c>projects</c>, …; a Hermes home and its <c>logs</c> folder differ).
+    /// its <c>cache/db</c> folder, a Qoder CLI or CodeBuddy Code config folder and its <c>projects</c>, …; a Hermes home and its
+    /// <c>logs</c> folder differ).
     /// </summary>
     public static string LocationKey(string path, LocationFolder folder) => folder switch
     {

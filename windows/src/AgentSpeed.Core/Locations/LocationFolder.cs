@@ -25,6 +25,7 @@ public enum LocationFolder
     Devin,
     Qoder,
     QoderCli,
+    CodeBuddyCode,
 }
 
 public static class LocationFolders
@@ -55,6 +56,7 @@ public static class LocationFolders
         LocationFolder.Devin => "devin",
         LocationFolder.Qoder => "qoder",
         LocationFolder.QoderCli => "qoderCli",
+        LocationFolder.CodeBuddyCode => "codebuddyCode",
         _ => throw new ArgumentOutOfRangeException(nameof(folder)),
     };
 
@@ -98,6 +100,7 @@ public static class LocationFolders
         SourceKind.Devin => LocationFolder.Devin,
         SourceKind.Qoder => LocationFolder.Qoder,
         SourceKind.QoderCli => LocationFolder.QoderCli,
+        SourceKind.CodeBuddyCode => LocationFolder.CodeBuddyCode,
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 

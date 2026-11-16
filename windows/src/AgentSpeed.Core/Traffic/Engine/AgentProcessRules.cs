@@ -301,6 +301,12 @@ internal sealed class AgentProcessRules
             return SourceKind.QoderCli;
         }
 
+        // The standalone CodeBuddy Code CLI from npm; WorkBuddy's embedded copy runs from `app.asar.unpacked/cli/`.
+        if (script.Contains("/@tencent-ai/codebuddy-code/", StringComparison.Ordinal))
+        {
+            return SourceKind.CodeBuddyCode;
+        }
+
         // WorkBuddy's embedded CLI, never its app, helper or daemon processes (the same executable without the CLI entry).
         if (WorkBuddyEdition(name, bundle ?? (() => null)) is { } edition && arguments() is { Count: > 1 } args
             && args.Skip(1).Any(a => _platform.Normalize(a).Contains(WorkBuddyCli, StringComparison.Ordinal)))

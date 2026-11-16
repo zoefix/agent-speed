@@ -30,7 +30,8 @@ HERMES_SCRIPTS = {"hermes", "hermes-agent", "hermes-acp"}
 # Qoder IDE's agent core: `resources/bin/<platform>/Qoder` inside the IDE (METRICS 10.5); the IDE's own executable is not.
 QODER_CORE = re.compile(r"/resources/bin/[^/]+/[^/]+$", re.IGNORECASE)
 SOURCES = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli")
+           "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
+           "codebuddyCode")
 
 
 # ---------------------------------------------------------------------------------------------------- formatting
@@ -236,6 +237,8 @@ def match_source(env: Env, proc: dict, ancestors: list[dict]) -> str | None:
         return "qoder"
     if name in ("qodercli", "qoderclicn") or "/@qoder-ai/qodercli/" in script or "/@qodercn-ai/qoderclicn/" in script:
         return "qoderCli"
+    if "/@tencent-ai/codebuddy-code/" in script:
+        return "codebuddyCode"
     edition = WORKBUDDY_APPS[env.platform].get(proc.get("bundle") if env.platform == "macos" else name)
     if edition and any(WORKBUDDY_CLI in env.norm(a) for a in args[1:]):
         return edition

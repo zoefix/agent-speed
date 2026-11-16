@@ -86,9 +86,9 @@ internal static class PerfEvaluator
         List<long>? latencies = null;
         foreach (var response in sample)
         {
-            if (response.FirstMs is { } first && response.StartMs is { } start && first >= start)
+            if (SpeedMath.LatencyMs(response) is { } latency)
             {
-                (latencies ??= new List<long>(sample.Count)).Add(first - start);
+                (latencies ??= new List<long>(sample.Count)).Add(latency);
             }
         }
 
@@ -158,9 +158,9 @@ internal static class PerfEvaluator
             var ms = DurationMs(response);
             output += response.Tokens.Output;
             duration += ms;
-            if (response.FirstMs is { } first && response.StartMs is { } start && first >= start)
+            if (SpeedMath.LatencyMs(response) is { } latency)
             {
-                latencies.Add(first - start);
+                latencies.Add(latency);
             }
 
             var reasoning = Math.Min(response.Tokens.Reasoning, response.Tokens.Output);

@@ -18,6 +18,7 @@ enum class LinkKind {
     AntigravityConversation,
     WorkBuddyPath,
     WorkBuddyAiPath,
+    CodeBuddyCodePath,
     ZCodeSession,
     KimiSession,
     GrokBuildSession,

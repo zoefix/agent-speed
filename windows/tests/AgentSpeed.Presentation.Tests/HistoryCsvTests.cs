@@ -210,6 +210,7 @@ public class HistoryCsvTests
     [InlineData(SourceKind.Devin, "devin")]
     [InlineData(SourceKind.Qoder, "qoder")]
     [InlineData(SourceKind.QoderCli, "qoder-cli")]
+    [InlineData(SourceKind.CodeBuddyCode, "codebuddy-code")]
     [InlineData((SourceKind)99, "unknown")]
     public void SourceIdsAreStable(SourceKind? source, string id)
     {

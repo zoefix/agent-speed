@@ -45,6 +45,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Devin, "devin/cli")]
     [InlineData(SourceKind.Qoder, "Qoder/SharedClientCache")]
     [InlineData(SourceKind.QoderCli, ".qoder")]
+    [InlineData(SourceKind.CodeBuddyCode, ".codebuddy")]
     public void ALocationAndToggleRoundTripAndReachTheMonitor(SourceKind kind, string relative)
     {
         var folder = LocationFolders.Of(kind);
@@ -69,6 +70,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Devin, """{ "version": 1, "sources": { "codex": true, "droid": false, "droidRoot": null } }""")]
     [InlineData(SourceKind.Qoder, """{ "version": 1, "sources": { "codex": true, "devin": false, "devinRoot": null } }""")]
     [InlineData(SourceKind.QoderCli, """{ "version": 1, "sources": { "codex": true, "devin": true, "qoder": false } }""")]
+    [InlineData(SourceKind.CodeBuddyCode, """{ "version": 1, "sources": { "codex": true, "qoder": true, "qoderCli": false } }""")]
     public void OlderSettingsFilesKeepANewSourceOnWithItsAutomaticRoots(SourceKind kind, string json)
     {
         var s = SettingsSerializer.Deserialize(json);

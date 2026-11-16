@@ -17,7 +17,9 @@ constexpr const char* kOtherOwner = "\x01other";
 
 // METRICS 3.3: the widened duration of a measured response.
 std::optional<std::int64_t> measuredDuration(const ParsedResponse& r) {
-    if (!r.startMs || r.endMs < *r.startMs || r.endMs - *r.startMs > 15 * 60'000) return std::nullopt;
+    if (!r.startMs || r.endMs < *r.startMs) return std::nullopt;
+    // Unsigned, so a saturated start (METRICS 3.6) cannot overflow the difference.
+    if (static_cast<std::uint64_t>(r.endMs) - static_cast<std::uint64_t>(*r.startMs) > 15 * 60'000u) return std::nullopt;
     return r.endMs - std::min(*r.startMs, r.endMs - 500);
 }
 

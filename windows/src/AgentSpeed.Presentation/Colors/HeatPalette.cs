@@ -95,6 +95,7 @@ public static class HeatPalette
         SourceKind.Devin => Rgba.FromHex("#557F14"),
         SourceKind.Qoder => Rgba.FromHex("#B3329D"),
         SourceKind.QoderCli => Rgba.FromHex("#7E61B6"),
+        SourceKind.CodeBuddyCode => Rgba.FromHex("#18AB06"),
         _ => Neutral,
     };
 

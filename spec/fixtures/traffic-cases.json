@@ -1057,6 +1057,68 @@
        "args": [
         "qoder"
        ]
+      },
+      {
+       "pid": 1700,
+       "ppid": 101,
+       "start": 9900,
+       "exe": "/opt/homebrew/Cellar/node/24.1.0/bin/node",
+       "args": [
+        "node",
+        "/opt/homebrew/lib/node_modules/@tencent-ai/codebuddy-code/bin/codebuddy"
+       ]
+      },
+      {
+       "pid": 1701,
+       "ppid": 1700,
+       "start": 9910,
+       "exe": "/bin/zsh",
+       "args": [
+        "/bin/zsh",
+        "-c",
+        "npm test"
+       ]
+      },
+      {
+       "pid": 1702,
+       "ppid": 1700,
+       "start": 9920,
+       "exe": "/opt/homebrew/Cellar/node/24.1.0/bin/node",
+       "args": [
+        "node",
+        "/opt/homebrew/lib/node_modules/@tencent-ai/codebuddy-code/bin/cbc-prewarm"
+       ]
+      },
+      {
+       "pid": 1703,
+       "ppid": 100,
+       "start": 9930,
+       "exe": "/Users/dev/.nvm/versions/node/v24.1.0/bin/node",
+       "args": [
+        "node",
+        "/Users/dev/.nvm/versions/node/v24.1.0/lib/node_modules/@tencent-ai/codebuddy-code/bin/codebuddy",
+        "-p",
+        "hi"
+       ]
+      },
+      {
+       "pid": 1704,
+       "ppid": 100,
+       "start": 9940,
+       "exe": "/Users/dev/.local/bin/codebuddy",
+       "args": [
+        "codebuddy"
+       ]
+      },
+      {
+       "pid": 1705,
+       "ppid": 100,
+       "start": 9950,
+       "exe": "/opt/homebrew/Cellar/node/24.1.0/bin/node",
+       "args": [
+        "node",
+        "/Users/dev/src/codebuddy-code/bin/codebuddy"
+       ]
       }
      ]
     }
@@ -1163,7 +1225,13 @@
      "1604": "qoderCli/agent",
      "1605": "qoderCli/tool",
      "1606": "qoderCli/agent",
-     "1607": null
+     "1607": null,
+     "1700": "codebuddyCode/agent",
+     "1701": "codebuddyCode/tool",
+     "1702": "codebuddyCode/self",
+     "1703": "codebuddyCode/agent",
+     "1704": null,
+     "1705": null
     }
    }
   },
@@ -1620,6 +1688,25 @@
         "node.exe",
         "C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@qodercn-ai\\qoderclicn\\bundle\\qodercli.js"
        ]
+      },
+      {
+       "pid": 1700,
+       "ppid": 4,
+       "start": 9900,
+       "exe": "C:\\Program Files\\nodejs\\node.exe",
+       "args": [
+        "C:\\Program Files\\nodejs\\node.exe",
+        "C:\\Users\\dev\\AppData\\Roaming\\npm\\node_modules\\@tencent-ai\\codebuddy-code\\bin\\codebuddy"
+       ]
+      },
+      {
+       "pid": 1701,
+       "ppid": 1700,
+       "start": 9910,
+       "exe": "C:\\Windows\\System32\\WindowsPowerShell\\v1.0\\powershell.exe",
+       "args": [
+        "powershell.exe"
+       ]
       }
      ]
     }
@@ -1674,7 +1761,9 @@
      "1600": null,
      "1601": "qoder/agent",
      "1602": "qoder/tool",
-     "1603": "qoderCli/agent"
+     "1603": "qoderCli/agent",
+     "1700": "codebuddyCode/agent",
+     "1701": "codebuddyCode/tool"
     }
    }
   },

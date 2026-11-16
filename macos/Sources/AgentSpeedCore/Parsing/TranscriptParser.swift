@@ -23,6 +23,8 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     case droid
     /// Qoder CLI: Claude Code's transcript format, read by the Claude parser with its own rules (METRICS 4.19).
     case qoderCli
+    /// CodeBuddy Code: the WorkBuddy format in the standalone CLI's own folder (METRICS 4.20).
+    case codebuddyCode
 
     /// Nil for sources that are not read from transcript files: OpenCode, ZCode and OpenClaw keep databases
     /// (`OpencodeSource`, `ZcodeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
@@ -42,6 +44,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .pi: self = .pi
         case .droid: self = .droid
         case .qoderCli: self = .qoderCli
+        case .codebuddyCode: self = .codebuddyCode
         case .opencode, .zcode, .openclaw, .hermes, .devin, .qoder: return nil
         }
     }
@@ -62,6 +65,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .pi: [.pi]
         case .droid: [.droid]
         case .qoderCli: [.qoderCli]
+        case .codebuddyCode: [.codebuddyCode]
         }
     }
 
@@ -75,7 +79,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .gemini: .geminiSession
         case .omp: .ompSession
         case .antigravity: .antigravityDatabase
-        case .workbuddy, .workbuddyAi: .workbuddySession
+        case .workbuddy, .workbuddyAi, .codebuddyCode: .workbuddySession
         case .kimi: .kimiSession
         case .grokBuild: .grokBuildSession
         case .pi: .piSession
@@ -88,6 +92,9 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
 
     /// The two WorkBuddy editions.
     var isWorkBuddy: Bool { self == .workbuddy || self == .workbuddyAi }
+
+    /// Families that write the WorkBuddy format (METRICS 4.9): both editions and CodeBuddy Code (4.20).
+    var writesWorkBuddyFormat: Bool { isWorkBuddy || self == .codebuddyCode }
 
     /// The stat that identifies one transcript of this family; nil unless it is a regular file.
     func stat(_ path: String) -> FileStat? {
@@ -169,7 +176,7 @@ struct TranscriptParser: Sendable {
         case .gemini: gemini = GeminiParser(agentId: agentId, fileID: fileID)
         case .omp: omp = OmpParser(agentId: agentId, fileID: fileID, root: root)
         case .antigravity: antigravity = AntigravityParser(agentId: agentId, fileID: fileID)
-        case .workbuddy, .workbuddyAi:
+        case .workbuddy, .workbuddyAi, .codebuddyCode:
             workbuddy = WorkBuddyParser(source: family.sources[0], agentId: agentId, fileID: fileID, root: root)
         case .kimi: kimi = KimiParser(agentId: agentId, fileID: fileID)
         case .grokBuild: grokBuild = GrokBuildParser(agentId: agentId, fileID: fileID)
@@ -196,7 +203,7 @@ struct TranscriptParser: Sendable {
         case .gemini:
             .gemini(gemini?.isDocument == true ? GeminiLineExtractor.extractDocument(bytes) : GeminiLineExtractor.extract(bytes))
         case .omp: .omp(OmpLineExtractor.extract(bytes))
-        case .workbuddy, .workbuddyAi: .workbuddy(WorkBuddyLineExtractor.extract(bytes))
+        case .workbuddy, .workbuddyAi, .codebuddyCode: .workbuddy(WorkBuddyLineExtractor.extract(bytes))
         case .antigravity: nil
         case .kimi: .kimi(KimiLineExtractor.extract(bytes))
         case .grokBuild: .grokBuild(GrokBuildLine.extract(bytes))
@@ -418,7 +425,7 @@ enum TranscriptDecoder {
         case .antigravity:
             let (batch, read) = reader.readDatabase()
             return Output(lines: .antigravity(batch), read: read)
-        case .workbuddy, .workbuddyAi:
+        case .workbuddy, .workbuddyAi, .codebuddyCode:
             return extract(WorkBuddyLineExtractor.extract, reader: &reader, family: family, tools: false, wrap: DecodedLines.workbuddy)
         case .kimi:
             return extract(KimiLineExtractor.extract, reader: &reader, family: family, tools: false, wrap: DecodedLines.kimi)

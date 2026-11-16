@@ -50,6 +50,9 @@ internal enum LinkKind : byte
 
     /// <summary>Qoder IDE: a sub-agent session names <c>&lt;database&gt;#&lt;parent_session_id&gt;</c>, a session of its own database (METRICS 4.18).</summary>
     QoderSession,
+
+    /// <summary>CodeBuddy Code: by the <c>subagents</c> folder layout, like WorkBuddy, within its own source (METRICS 4.20).</summary>
+    CodeBuddyCodePath,
 }
 
 /// <summary>What one transcript says about its parent (METRICS 6.7).</summary>
@@ -77,7 +80,12 @@ internal readonly record struct AgentLink(
             antigravity.CreatedMs),
         WorkBuddyParser workBuddy => new AgentLink(
             workBuddy.AgentId,
-            workBuddy.Source == SourceKind.WorkBuddyAi ? LinkKind.WorkBuddyAiPath : LinkKind.WorkBuddyPath,
+            workBuddy.Source switch
+            {
+                SourceKind.WorkBuddyAi => LinkKind.WorkBuddyAiPath,
+                SourceKind.CodeBuddyCode => LinkKind.CodeBuddyCodePath,
+                _ => LinkKind.WorkBuddyPath,
+            },
             null,
             ParentLinks.ClaudeParentPath(workBuddy.AgentId),
             null),
@@ -114,7 +122,7 @@ internal readonly record struct AgentLink(
 }
 
 /// <summary>
-/// Resolves parent agent ids (METRICS 6.7): Claude, omp and WorkBuddy by path, Codex by parent thread, dsh, OpenCode and
+/// Resolves parent agent ids (METRICS 6.7): Claude, omp, WorkBuddy and CodeBuddy Code by path, Codex by parent thread, dsh, OpenCode and
 /// Gemini by parent session, Antigravity by parent conversation.
 /// </summary>
 internal static class ParentLinks
@@ -181,7 +189,7 @@ internal static class ParentLinks
                     }
 
                     break;
-                case LinkKind.WorkBuddyPath or LinkKind.WorkBuddyAiPath:
+                case LinkKind.WorkBuddyPath or LinkKind.WorkBuddyAiPath or LinkKind.CodeBuddyCodePath:
                     // Nested sub-agents are stored flat under the main session, so they attach to it.
                     if (agent.ParentThreadId is { } main && byPath.TryGetValue(main, out var mainSession) && mainSession.Kind == agent.Kind)
                     {
@@ -241,7 +249,7 @@ internal static class ParentLinks
 
     private static bool IsPathKind(LinkKind kind) =>
         kind is LinkKind.Path or LinkKind.OmpPath or LinkKind.PiPath or LinkKind.WorkBuddyPath or LinkKind.WorkBuddyAiPath
-            or LinkKind.DroidPath;
+            or LinkKind.CodeBuddyCodePath or LinkKind.DroidPath;
 
     // Copies of one conversation in several stores: the one in the child's own conversations folder, then ordinal path.
     private static AgentLink PreferredCopy(List<AgentLink> copies, string child, bool group = false)

@@ -51,7 +51,8 @@ public static class AutomaticLocations
     /// <summary>
     /// A location of the folder exists and is read: a folder (OpenCode, ZCode and OpenClaw also a database file); an Antigravity
     /// <c>*-backup</c> store never is (METRICS 4.8); a Devin folder only while it holds the CLI's database (METRICS 4.17), a Qoder
-    /// IDE folder only while it holds the chat database (METRICS 4.18).
+    /// IDE folder only while it holds the chat database (METRICS 4.18), a CodeBuddy Code config folder only while it holds
+    /// <c>projects</c> (the CodeBuddy IDE keeps settings there too, METRICS 4.20).
     /// </summary>
     public static bool IsReadable(LocationFolder folder, string path)
     {
@@ -71,6 +72,11 @@ public static class AutomaticLocations
         if (folder == LocationFolder.Qoder)
         {
             return Qoder.QoderPaths.DatabaseOf(path) is not null;
+        }
+
+        if (folder == LocationFolder.CodeBuddyCode)
+        {
+            path = WorkBuddy.CodeBuddyCodePaths.RootOf(path);
         }
 
         try

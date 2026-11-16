@@ -28,7 +28,7 @@ public sealed class UnpricedHistoryTests : IDisposable
         _temp.Combine("opencode"), []);
 
     [Fact]
-    public void TheAnalysisVersionIsEleven() => Assert.Equal(11, HistoryAnalyzer.AnalysisVersion);
+    public void TheAnalysisVersionIsTwelve() => Assert.Equal(12, HistoryAnalyzer.AnalysisVersion);
 
     [Fact]
     public void EveryFixtureDayReadsBackItsFactsFromTheSideTable()
@@ -50,6 +50,7 @@ public sealed class UnpricedHistoryTests : IDisposable
             DroidRoot: DroidFixture.RootIn(copy))
         {
             QoderCliRoots = [QoderCliFixture.RootIn(copy)],
+            CodeBuddyCodeRoots = [CodeBuddyCodeFixture.RootIn(copy)],
         };
         var document = JsonNode.Parse(File.ReadAllText(Path.Combine(FixtureLocator.FixturesDirectory, "history-expected.json")))!;
         var pricing = document["prices"]!;

@@ -18,6 +18,7 @@ add_executable(agentspeed_tests
     character_stretch_test.cpp
     character_wings_test.cpp
     claude_api_error_test.cpp
+    codebuddy_test.cpp
     current_values_test.cpp
     devin_fixture_test.cpp
     devin_source_test.cpp
@@ -131,6 +132,7 @@ if(AGENTSPEED_BUILD_APP)
         app/character_live_test.cpp
         app/character_quota_test.cpp
         app/character_readings_test.cpp
+        app/codebuddy_settings_test.cpp
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp

@@ -66,7 +66,7 @@ void expectResponseModes(Collector& sink, const json::Value& want) {
 }
 
 // What the fixture folders play for an agent's current values: `codex/config.toml`, `gemini/settings.json`,
-// `antigravity/config/config.json`, and the settings and database of the `workbuddy` data folders.
+// `antigravity/config/config.json`, the settings and database of the `workbuddy` data folders and `codebuddy/settings.json`.
 void expectFixtureCurrent(const TranscriptParser& parser, const std::string& agentId, const json::Value& want) {
     const auto root = fixtures::fixtureDir();
     auto session = parser.sessionModes();
@@ -90,6 +90,9 @@ void expectFixtureCurrent(const TranscriptParser& parser, const std::string& age
             if (const auto it = read.find(id); it != read.end()) session = it->second;
             break;
         }
+        case SourceKind::CodeBuddyCode:
+            config = configured::workBuddy((root / "codebuddy/settings.json").string());
+            break;
         default:
             break;
     }
@@ -111,6 +114,10 @@ std::unique_ptr<TranscriptParser> parserFor(const std::string& relative, const s
         const bool ai = relative.rfind("workbuddy/.workbuddy-ai/", 0) == 0;
         const auto root = (fixtures::fixtureDir() / (ai ? "workbuddy/.workbuddy-ai/projects" : "workbuddy/.workbuddy/projects")).string();
         return std::make_unique<WorkBuddyParser>(agentId, deduper, ai ? SourceKind::WorkBuddyAi : SourceKind::WorkBuddy, root);
+    }
+    // The folder `codebuddy` plays a CodeBuddy Code config folder (`~/.codebuddy`): the WorkBuddy parser with METRICS 4.20.
+    if (relative.rfind("codebuddy/", 0) == 0) {
+        return std::make_unique<WorkBuddyParser>(agentId, deduper, SourceKind::CodeBuddyCode, (fixtures::fixtureDir() / "codebuddy/projects").string());
     }
     if (relative.rfind("pi/", 0) == 0) return PiParser::forPath(agentId, deduper);
     if (relative.rfind("droid/", 0) == 0) return std::make_unique<droid::Parser>(agentId, deduper);
@@ -221,7 +228,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 65);
+    EXPECT_EQ(checked, 68);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);

@@ -2,6 +2,7 @@
 
 #include <charconv>
 #include <cmath>
+#include <limits>
 
 #include "agentspeed/json.hpp"
 #include "agentspeed/rfc3339.hpp"
@@ -59,6 +60,7 @@ struct WorkBuddyParser::Line {
     bool incomplete = false, skipRun = false, partialAborted = false, hasError = false, compaction = false;
     bool hasUsage = false;
     TokenCounts tokens;
+    std::optional<workbuddy::Attempt> attempt;
 };
 
 namespace workbuddy {
@@ -104,6 +106,26 @@ std::pair<std::optional<std::string>, std::optional<std::string>> resolveModel(c
         }
     }
     return {model, std::nullopt};
+}
+
+std::int64_t Attempt::startMs(std::int64_t ts) const {
+    constexpr auto kMin = std::numeric_limits<std::int64_t>::min();
+    return ts < kMin + durationMs ? kMin : ts - durationMs;
+}
+
+std::optional<Attempt> lastAttempt(const json::Value& rawUsage) {
+    if (!rawUsage.isObject()) return std::nullopt;
+    const auto calls = rawUsage["model_calls"];
+    if (!calls.isArray() || calls.size() == 0) return std::nullopt;
+    const auto last = calls.at(calls.size() - 1);
+    if (!last.isObject()) return std::nullopt;
+    const auto duration = last["duration_ms"].truncated();
+    if (!duration || *duration <= 0) return std::nullopt;
+    Attempt attempt{*duration, std::nullopt};
+    if (const auto first = last["time_to_first_token_ms"].truncated(); first && *first > 0 && *first <= *duration) {
+        attempt.firstTokenMs = first;
+    }
+    return attempt;
 }
 
 }  // namespace workbuddy
@@ -166,6 +188,7 @@ std::optional<Line> readLine(std::string_view text, bool& malformed) {
             promptCacheHit = readPositive(raw["prompt_cache_hit_tokens"]);
             cacheCreationInput = readPositive(raw["cache_creation_input_tokens"]);
             promptCacheWrite = readPositive(raw["prompt_cache_write_tokens"]);
+            line.attempt = workbuddy::lastAttempt(raw);
         }
         line.hasUsage = usage.isObject() || raw.isObject();
         const std::int64_t cached = std::max(
@@ -193,14 +216,18 @@ WorkBuddyParser::WorkBuddyParser(std::string agentId, Deduper& deduper, SourceKi
 }
 
 AgentLink WorkBuddyParser::link() const {
-    return {agentId(), edition_ == SourceKind::WorkBuddyAi ? LinkKind::WorkBuddyAiPath : LinkKind::WorkBuddyPath,
-            std::nullopt, parent_links::claudeParentPath(agentId()), std::nullopt, 0};
+    // As Claude, within the same source: nested sub-agents are stored flat under the main session.
+    const auto kind = edition_ == SourceKind::WorkBuddyAi     ? LinkKind::WorkBuddyAiPath
+                      : edition_ == SourceKind::CodeBuddyCode ? LinkKind::CodeBuddyCodePath
+                                                              : LinkKind::WorkBuddyPath;
+    return {agentId(), kind, std::nullopt, parent_links::claudeParentPath(agentId()), std::nullopt, 0};
 }
 
 void WorkBuddyParser::reset() {
     TranscriptParser::reset();
     openCalls_.clear();
     responses_.clear();
+    measured_.clear();
     pendingStartMs_.reset();
     setSource(edition_);
     setSubagent(pathIsSubagent_);
@@ -311,12 +338,18 @@ void WorkBuddyParser::upsert(const std::string& key, const Line& line, std::int6
         response.modes = native::routing(line.requestModelId);
         pendingStartMs_.reset();
     }
+    // The first line of a call with a measured attempt gives its start and first token; later ones change neither.
+    if (line.attempt && measured_.insert(key).second) {
+        const auto start = line.attempt->startMs(ts);
+        response.startMs = start;
+        response.firstMs = line.attempt->firstTokenMs ? std::optional<std::int64_t>(start + *line.attempt->firstTokenMs) : std::nullopt;
+    }
     setModel(response.model);
     setModes(response.modes);
     if (previous != responses_.end()) {
         const auto& p = previous->second;
-        if (p.endMs == response.endMs && p.tokens == response.tokens && p.model == response.model &&
-            p.provider == response.provider && p.modes == response.modes) {
+        if (p.startMs == response.startMs && p.firstMs == response.firstMs && p.endMs == response.endMs &&
+            p.tokens == response.tokens && p.model == response.model && p.provider == response.provider && p.modes == response.modes) {
             return;
         }
     }

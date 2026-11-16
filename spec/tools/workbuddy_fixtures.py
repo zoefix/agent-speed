@@ -1,15 +1,17 @@
 #!/usr/bin/env python3
-"""WorkBuddy session fixtures (METRICS 4.9), used by generate_fixtures.py.
+"""WorkBuddy and CodeBuddy Code session fixtures (METRICS 4.9, 4.20), used by generate_fixtures.py.
 
   python3 spec/tools/workbuddy_fixtures.py OUT_DIR
 
 OUT_DIR/workbuddy plays the role of the home folder `~`: `.workbuddy` is the China edition's data folder (source
 `workbuddy`) and `.workbuddy-ai` the international edition's (source `workbuddyAi`). Files are laid out as the embedded
 CodeBuddy Code CLI (2.161.0, in WorkBuddy 5.8.3 / 5.8.4) writes them, with the key order and fields of its
-`transformItemForSaveAsync`; every text is a synthetic placeholder. The returned expectations have the shape of
-spec/fixtures/parser-expected.json (`order`, `files`, `mtimes`) plus `discover` (what discovery must find in both
-`projects` folders) and `traces` (phase checkpoints after a given physical line of a file). Expected values are written
-by hand, independently of reference.py.
+`transformItemForSaveAsync`; every text is a synthetic placeholder. OUT_DIR/codebuddy plays the standalone CLI's config
+folder `~/.codebuddy` (source `codebuddyCode`, `write_codebuddy_fixtures`), with the lines CodeBuddy Code 2.184.0 adds:
+the measured attempts `rawUsage.model_calls`, `turn-metrics` and the newer fact lines. The returned expectations have
+the shape of spec/fixtures/parser-expected.json (`order`, `files`, `mtimes`) plus `discover` (what discovery must find
+in the `projects` folders) and `traces` (phase checkpoints after a given physical line of a file). Expected values are
+written by hand, independently of reference.py.
 """
 import hashlib
 import json
@@ -701,6 +703,223 @@ def write_fixtures(out_dir):
                     "main session with their original timestamps and messageIds, so every copied response is owned "
                     "by the main session. Line 19 of the main session is an end-of-run model-usage line for an "
                     "earlier call (an earlier timestamp): it merges into that call's response.",
+        "order": order,
+        "mtimes": mtimes,
+        "discover": sorted(files),
+        "files": {rel: files[rel] for rel in order},
+        "traces": traces,
+    }
+
+
+def attempts(*rows):
+    """`rawUsage.model_calls` as CodeBuddy Code 2.184.0 stamps it: one object per attempt, the answering one last."""
+    out = []
+    for number, row in enumerate(rows, 1):
+        entry = {"attempt_no": number}
+        entry.update(row)
+        out.append(entry)
+    return out
+
+
+def write_codebuddy_fixtures(out_dir):
+    """The standalone CodeBuddy Code CLI (METRICS 4.20): OUT_DIR/codebuddy plays its config folder `~/.codebuddy`."""
+    def p(rel):
+        full = os.path.join(out_dir, *rel.split("/"))
+        os.makedirs(os.path.dirname(full), exist_ok=True)
+        return full
+
+    day = "2026-10-23"
+    files, traces, mtimes = {}, [], {}
+
+    def at(clock):
+        return ms(clock, day)
+
+    def trace(rel, line, phase, in_flight=None):
+        traces.append(dict(file=rel, afterLine=line, phase=phase, inFlightStartMs=in_flight))
+
+    def expect(rel, project, model, phase, in_flight, last, responses, parent=None, sub=False, malformed=0):
+        files[rel] = dict(source="codebuddyCode", project=project, model=model, isSubagent=sub, parentFile=parent,
+                          phase=phase, inFlightStartMs=in_flight, lastLineMs=last, malformedLines=malformed,
+                          responses=responses)
+
+    def measured(r, first):
+        r["firstMs"] = first
+        return r
+
+    def glm(seed, **kw):
+        return Call(seed, "glm-5.3", name="GLM-5.3", **kw)
+
+    nova, nova_slug = "/Users/dev/projects/nova", "Users-dev-projects-nova"
+
+    # ==== Project nova: an interactive session of CLI 2.184.0 ---------------------------------------------------------
+    m_id = uid("cb-nova-main")
+    m_rel = "codebuddy/projects/%s/%s.jsonl" % (nova_slug, m_id)
+    m = Session("cb-nova-main", nova, m_id)
+    m.raw({"type": "session-meta", "id": uid("cb-nova-meta"), "sessionId": m_id, "timestamp": at("08:59:59.990"),
+           "meta": {"codebuddy.ai/mainAgent": "main", "codebuddy.ai/hostKind": "cli"}})                   # 1
+    # Turn 1: reasoning, then the answer; its raw usage carries the one attempt with its time to first token.
+    m.user(at("09:00:00.000"), "(prompt 1)", startsNewUserRequest=True)                                  # 2
+    c1 = glm("cb1")
+    m.reasoning(at("09:00:05.200"), c1)                                                                    # 3
+    m.say(at("09:00:05.204"), c1, "(answer 1)", usage(12000, 400, 9000, 100),
+          raw(12000, 400, cached=9000, reasoning=100,
+              model_calls=attempts({"duration_ms": 4800, "result": "success", "time_to_first_token_ms": 900,
+                                    "finish_reason": "stop", "model": "glm-5.3", "output_tokens": 400})))  # 4
+    m.item("turn-metrics", at("09:00:05.300"), custom=True, durationMs=5300, tokenDelta=12400)            # 5
+    m.item("context-usage", at("09:00:05.310"), custom=True, categories={"(category)": 1})                # 6
+    # Turn 2: a tool call whose first attempt failed (only the last attempt counts, and its time to first token is
+    # longer than its duration, so it has none), then a call whose usage line lacks raw usage: the end-of-run
+    # model-usage line (written later, stamped earlier) brings its attempts and moves its start.
+    m.user(at("09:01:00.000"), "(prompt 2)", startsNewUserRequest=True)                                  # 7
+    c2 = glm("cb2")
+    m.tool_call(at("09:01:09.000"), c2, "call_cb1", "Read", {"file_path": "(path)"},
+                usage(13000, 80, 12000, 0),
+                raw(13000, 80, cached=12000,
+                    model_calls=attempts({"duration_ms": 3000, "result": "failed"},
+                                         {"duration_ms": 2500, "result": "success", "time_to_first_token_ms": 3000,
+                                          "finish_reason": "tool_calls"})))                             # 8
+    m.tool_result(at("09:01:12.000"), c2, "call_cb1", "Read", "(file content)")                         # 9
+    c3 = glm("cb3", step=2)
+    m.say(at("09:01:15.000"), c3, "(answer 2)", usage(13400, 260, 13000, 0))                            # 10
+    m.model_usage(at("09:01:14.990"), c3, usage(13400, 260, 13000, 0),
+                  raw(13400, 260, cached=13000,
+                      model_calls=attempts({"duration_ms": 2400.7, "result": "success",
+                                            "time_to_first_token_ms": 600.9})))                         # 11
+    # Turns 3 to 9: attempts that give no measured start, so the start is the user line.
+    no_start = [
+        {"duration_ms": 1000},                                     # an object, not an array
+        [],                                                        # empty
+        [{"duration_ms": 900}, "(text)"],                          # the last element is not an object
+        [{"duration_ms": "2500"}],                                 # a string
+        [{"duration_ms": 0.9, "time_to_first_token_ms": 0.5}],     # truncates to 0
+        [{"duration_ms": "@inf"}],                                 # not finite
+        [{"duration_ms": True}],                                   # not a number
+    ]
+    plain = []
+    for i, value in enumerate(no_start):
+        start = "09:02:%02d.000" % (i * 5)
+        end = "09:02:%02d.000" % (i * 5 + 3)
+        m.user(at(start), "(prompt)", startsNewUserRequest=True)
+        call = glm("cb-plain-%d" % i)
+        line = m.say(at(end), call, "(answer)", usage(1000 + i, 20 + i), raw(1000 + i, 20 + i, model_calls=value))
+        if value == [{"duration_ms": "@inf"}]:
+            m.patch(line, inf="1e999")
+        plain.append((call, start, end, 1000 + i, 20 + i))
+    # Turn 10: the measured start lies before the user line (the attempt is longer than the time since), and the
+    # time to first token equals the duration.
+    m.user(at("09:03:00.000"), "(prompt)", startsNewUserRequest=True)                                   # 26
+    c10 = glm("cb10")
+    m.say(at("09:03:01.000"), c10, "(answer)", usage(2000, 30), raw(2000, 30, model_calls=attempts(
+        {"duration_ms": 1200.9, "time_to_first_token_ms": 1200.4, "result": "success"})))               # 27
+    # Turn 11: an attempt longer than 15 minutes: the response counts in totals but never in speed (3.3), and a
+    # negative time to first token gives none.
+    m.user(at("09:04:00.000"), "(prompt)", startsNewUserRequest=True)                                   # 28
+    c11 = glm("cb11")
+    m.say(at("09:04:30.000"), c11, "(answer)", usage(2100, 40), raw(2100, 40, model_calls=attempts(
+        {"duration_ms": 1_200_000, "time_to_first_token_ms": -5, "result": "success"})))                # 29
+    # Turn 12: a sub-agent task, then the answer; the turn's metrics line ends the file.
+    m.user(at("09:05:00.000"), "(prompt)", startsNewUserRequest=True)                                   # 30
+    c12 = glm("cb12")
+    m.tool_call(at("09:05:02.000"), c12, "call_cb2", "Task", {"description": "(task)"},
+                usage(14000, 60, 13500, 0), raw(14000, 60, cached=13500, model_calls=attempts(
+                    {"duration_ms": 1500, "time_to_first_token_ms": 400, "result": "success"})))         # 31
+    sub_name = "agent-%s" % uid("cb-nova-sub")
+    m.tool_result(at("09:05:30.000"), c12, "call_cb2", "Task", "(sub-agent report)",
+                  toolResult={"content": "(sub-agent report)", "renderer": {"type": "text"},
+                              "subAgent": {"sessionId": sub_name}})                                     # 32
+    c13 = glm("cb13", step=2)
+    m.say(at("09:05:33.000"), c13, "(answer)", usage(14300, 220, 14000, 20), raw(14300, 220, 14000, 20,
+          model_calls=attempts({"duration_ms": 2800, "time_to_first_token_ms": 700, "result": "success"})))  # 33
+    m.item("turn-metrics", at("09:05:33.100"), custom=True, durationMs=33100, tokenDelta=14520)          # 34
+    m.write(p(m_rel))
+    m_responses = [
+        measured(resp("glm-5.3", c1.message_id, at("09:00:00.404"), at("09:00:05.204"), 12000, 9000, 0, 400, 100),
+                 at("09:00:01.304")),
+        resp("glm-5.3", c2.message_id, at("09:01:06.500"), at("09:01:09.000"), 13000, 12000, 0, 80, 0),
+        measured(resp("glm-5.3", c3.message_id, at("09:01:12.590"), at("09:01:15.000"), 13400, 13000, 0, 260, 0),
+                 at("09:01:13.190")),
+    ] + [resp("glm-5.3", call.message_id, at(start), at(end), inp, 0, 0, out, 0)
+         for call, start, end, inp, out in plain] + [
+        measured(resp("glm-5.3", c10.message_id, at("09:02:59.800"), at("09:03:01.000"), 2000, 0, 0, 30, 0),
+                 at("09:03:01.000")),
+        resp("glm-5.3", c11.message_id, at("08:44:30.000"), at("09:04:30.000"), 2100, 0, 0, 40, 0),
+        measured(resp("glm-5.3", c12.message_id, at("09:05:00.500"), at("09:05:02.000"), 14000, 13500, 0, 60, 0),
+                 at("09:05:00.900")),
+        measured(resp("glm-5.3", c13.message_id, at("09:05:30.200"), at("09:05:33.000"), 14300, 14000, 0, 220, 20),
+                 at("09:05:30.900")),
+    ]
+    expect(m_rel, "nova", "glm-5.3", "idle", None, at("09:05:33.100"), m_responses)
+    for line, phase, in_flight in (
+            (1, "idle", None), (2, "generating", at("09:00:00.000")), (3, "generating", at("09:00:00.000")),
+            (4, "idle", None), (5, "idle", None), (6, "idle", None), (7, "generating", at("09:01:00.000")),
+            (8, "tools", None), (9, "generating", at("09:01:12.000")), (10, "idle", None), (11, "idle", None),
+            (12, "generating", at("09:02:00.000")), (25, "idle", None), (26, "generating", at("09:03:00.000")),
+            (27, "idle", None), (30, "generating", at("09:05:00.000")), (31, "tools", None),
+            (32, "generating", at("09:05:30.000")), (33, "idle", None), (34, "idle", None)):
+        trace(m_rel, line, phase, in_flight)
+    mtimes[m_rel] = at("09:05:34.000")
+
+    # ---- Its sub-agent, filed under the main session.
+    sub_rel = "codebuddy/projects/%s/%s/subagents/%s.jsonl" % (nova_slug, m_id, sub_name)
+    s = Session("cb-nova-sub", nova, uid("cb-nova-sub-runtime"))
+    s.user(at("09:05:02.100"), "(task prompt)", agent="code-explorer")                                   # 1
+    s1 = Call("cbs1", "glm-5.3-flash", name="GLM-5.3-Flash", agent="code-explorer")
+    s.say(at("09:05:10.000"), s1, "(report)", usage(4000, 300, 0, 60), raw(4000, 300, cached=0, reasoning=60,
+          model_calls=attempts({"duration_ms": 7000, "time_to_first_token_ms": 1500, "result": "success"})))  # 2
+    s.write(p(sub_rel))
+    expect(sub_rel, "nova", "glm-5.3-flash", "idle", None, at("09:05:10.000"), [
+        measured(resp("glm-5.3-flash", s1.message_id, at("09:05:03.000"), at("09:05:10.000"), 4000, 0, 0, 300, 60),
+                 at("09:05:04.500")),
+    ], parent=m_rel, sub=True)
+    mtimes[sub_rel] = at("09:05:11.000")
+
+    # ==== Project vega on Windows: an older CLI without measured attempts, ending with a request in flight ----------
+    v_id = uid("cb-vega")
+    v_rel = "codebuddy/projects/C-Users-dev-projects-vega/%s.jsonl" % v_id
+    v = Session("cb-vega", "C:\\Users\\dev\\projects\\vega", v_id)
+    v.user(at("09:10:00.000"), "(prompt)", startsNewUserRequest=True)                                   # 1
+    v1 = Call("cbv1", "kimi-k3", request="fast-model", name="Fast")
+    v.say(at("09:10:03.000"), v1, "(answer)", usage(6000, 150, 5000, 0), raw(6000, 150, cached=5000))   # 2
+    v.user(at("09:10:30.000"), "(prompt)", startsNewUserRequest=True)                                   # 3
+    v.write(p(v_rel))
+    expect(v_rel, "vega", "kimi-k3", "generating", at("09:10:30.000"), at("09:10:30.000"), [
+        resp("kimi-k3", v1.message_id, at("09:10:00.000"), at("09:10:03.000"), 6000, 5000, 0, 150, 0),
+    ])
+    trace(v_rel, 2, "idle")
+    trace(v_rel, 3, "generating", at("09:10:30.000"))
+    mtimes[v_rel] = at("09:10:31.000")
+
+    # ==== Discovery decoys: none of these is a session transcript --------------------------------------------------
+    usage_line = json.dumps(m.lines[3], separators=(",", ":")) + "\n"
+    decoys = {
+        "codebuddy/projects/%s/%s.meta.json" % (nova_slug, m_id): '{"title":"(title)"}\n',
+        "codebuddy/projects/%s/%s/tool-results/call_cb1.jsonl" % (nova_slug, m_id): usage_line,
+        "codebuddy/projects/%s/%s/stdio/2026-10-23T09-00-00-000Z-4242.jsonl" % (nova_slug, uid("cb-stdio")):
+            usage_line,
+        "codebuddy/projects/%s/%s/subagents/workflows/wf_1/journal.jsonl" % (nova_slug, m_id): usage_line,
+        "codebuddy/projects/stray.jsonl": usage_line,
+        "codebuddy/history.jsonl": '{"display":"(prompt)","timestamp":1792746000000}\n',
+        "codebuddy/traces/4242/%s.jsonl" % uid("cb-trace"): usage_line,
+        "codebuddy/settings.json": json.dumps({"reasoningEffort": "high", "cleanupPeriodDays": 30,
+                                               "env": {"NOTE": "the rest of this file is never read"}}) + "\n",
+    }
+    for rel, content in decoys.items():
+        with open(p(rel), "w", encoding="utf-8", newline="\n") as fh:
+            fh.write(content)
+
+    # No session-current effort (the CLI has no workbuddy.db): every agent shows the settings file's value.
+    for expected in files.values():
+        expected.update(effort=dict(mode="high", evidence="configured"), speed=None,
+                        responseModes={r["key"]: dict(effort=None, speed=None) for r in expected["responses"]})
+
+    order = sorted(mtimes, key=lambda rel: (mtimes[rel], rel))
+    for rel in order:
+        os.utime(p(rel), (mtimes[rel] / 1000, mtimes[rel] / 1000))
+    return {
+        "_comment": "CodeBuddy Code: the folder `codebuddy` plays the config folder ~/.codebuddy, so its root is "
+                    "codebuddy/projects; `discover` lists what discovery finds there. Calls whose usage line carries "
+                    "`rawUsage.model_calls` start `duration_ms` before that line and have `firstMs` from "
+                    "`time_to_first_token_ms` (METRICS 4.9 Timing model); the others start at the latest input line.",
         "order": order,
         "mtimes": mtimes,
         "discover": sorted(files),

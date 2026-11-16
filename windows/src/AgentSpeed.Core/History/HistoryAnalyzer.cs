@@ -68,9 +68,10 @@ internal sealed partial class HistoryAnalyzer
     /// 8: the task records of the retired task score. 9: the performance records of the side table <c>perf_records</c>, with
     /// each response's first-content time and each tool call's result time and model (METRICS 6.11). 10: the effort and speed
     /// of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses (EXECUTION-MODES). 11: Grok Build reasoning counted
-    /// apart from its output (METRICS 4.12).
+    /// apart from its output (METRICS 4.12). 12: the measured attempts of WorkBuddy calls, which change their duration and
+    /// <c>firstMs</c> (METRICS 4.9).
     /// </summary>
-    public const int AnalysisVersion = 11;
+    public const int AnalysisVersion = 12;
 
     private const string OpenCodeFamily = "opencode";
     private const string ZoneMeta = "timeZone";

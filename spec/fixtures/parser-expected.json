@@ -1,5 +1,5 @@
 {
-  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Qoder CLI: the folder `qoder-cli` plays a config folder (~/.qoder), so its root is qoder-cli/projects; `qoderCli.discover` lists what discovery finds there and its `traces` work like the omp ones (spec/tools/qoder_fixtures.py; its day totals are in qoder-expected.json `cli.history`). Every agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the files the fixture folders play: codex/config.toml, gemini/settings.json, antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, and hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
+  "_comment": "Process files in `order` with one shared dedupe set, then the OpenCode database, then the Antigravity databases in `antigravity.order` (same dedupe set). Paths are relative to this folder. `mtimes` (Unix ms) give the modification times that produce both orders; apply them to a copy of this folder before computing daily history. `traces` (Gemini, omp) give the phase after feeding a file up to and including physical line `afterLine` (after the files before it in `order`). omp: the folder `omp` plays ~/.omp, so its automatic roots are omp/agent/sessions and omp/profiles/*/agent/sessions; `omp.discover` lists what discovery finds there. Antigravity: the folder `antigravity` plays ~/.gemini (stores antigravity-cli, antigravity, antigravity-ide); each database is one agent whose id is its path; `{\"unsupported\": true}` marks a database that contributes no agent; reading must not create any file (no -wal or -shm). WorkBuddy: the folder `workbuddy` plays the home folder (data folders .workbuddy and .workbuddy-ai); `workbuddy.discover` lists what discovery finds in both projects folders; its `traces` work like the omp ones. Pi: the folder `pi` plays ~/.pi with this folder as home (pi/agent/settings.json names the custom session folder ~/pi/custom-sessions); `pi.discover` lists what discovery finds in both roots; its `traces` work like the omp ones. OpenClaw: the folder `openclaw` plays the home folder (state folders .openclaw and the profile .openclaw-work); after the OpenCode and Antigravity databases, the agent databases of `openclaw.dbOrder` are read with the same dedupe set, each one agent per transcript window (agent id `<database>#<session id>`, relative to this folder); `{\"unsupported\": true}` marks a database without session tables; `openclaw.discover` lists the databases discovery finds, `openclaw.codexDiscover` the rollouts of the Codex roots next to them (METRICS 2); a trace gives the phase of a window after its row `afterSeq`, after the databases before it; reading must not create any file. Hermes Agent: see `hermes._comment`; its log files are not in `order` (one parser state per log folder) but their modification times are in `mtimes`. Factory Droid: see `droid._comment`; its transcripts are in `order` (each read with its sidecar, whose modification time is in `mtimes` too) and its `traces` work like the omp ones. Qoder CLI: the folder `qoder-cli` plays a config folder (~/.qoder), so its root is qoder-cli/projects; `qoderCli.discover` lists what discovery finds there and its `traces` work like the omp ones (spec/tools/qoder_fixtures.py; its day totals are in qoder-expected.json `cli.history`). CodeBuddy Code: the folder `codebuddy` plays a config folder (~/.codebuddy), so its root is codebuddy/projects; `codebuddyCode.discover` lists what discovery finds there and its `traces` work like the omp ones. Every agent's `effort` and `speed` are the current values of EXECUTION-MODES, so they follow the files the fixture folders play: codex/config.toml, gemini/settings.json, antigravity/config/config.json, workbuddy/*/workbuddy.db and settings.json, codebuddy/settings.json, and hermes/home's state.db and config.yaml; `responseModes` never depends on them.",
   "order": [
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl",
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-20-subagent.jsonl",
@@ -65,7 +65,10 @@
     "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl",
     "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl",
     "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl",
-    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl"
+    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl",
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2/subagents/agent-0f42e38d-5944-426a-a882-9de8312a9bb8.jsonl",
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+    "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl"
   ],
   "files": {
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-00-00-modern.jsonl": {
@@ -4308,6 +4311,386 @@
       "effort": null,
       "speed": null,
       "responseModes": {}
+    },
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2/subagents/agent-0f42e38d-5944-426a-a882-9de8312a9bb8.jsonl": {
+      "source": "codebuddyCode",
+      "project": "nova",
+      "model": "glm-5.3-flash",
+      "isSubagent": true,
+      "parentFile": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792746310000,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "913360b77bc488ff3459f24e65f61cc7",
+          "startMs": 1792746303000,
+          "endMs": 1792746310000,
+          "firstMs": 1792746304500,
+          "input": 4000,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 300,
+          "reasoning": 60,
+          "model": "glm-5.3-flash",
+          "provider": null,
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "913360b77bc488ff3459f24e65f61cc7": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl": {
+      "source": "codebuddyCode",
+      "project": "nova",
+      "model": "glm-5.3",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792746333100,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "0f7db25642f061a1d37eee6ff70763e7",
+          "startMs": 1792746000404,
+          "endMs": 1792746005204,
+          "firstMs": 1792746001304,
+          "input": 12000,
+          "cachedInput": 9000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 400,
+          "reasoning": 100,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "78a4ee35707c2379d2b8a4882ea3b0f3",
+          "startMs": 1792746066500,
+          "endMs": 1792746069000,
+          "firstMs": null,
+          "input": 13000,
+          "cachedInput": 12000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 80,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "e24140bdac286c1ceaa79e790a785762",
+          "startMs": 1792746072590,
+          "endMs": 1792746075000,
+          "firstMs": 1792746073190,
+          "input": 13400,
+          "cachedInput": 13000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 260,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "f9043e84e8a0c3deeba1bb2ef9ded8d8",
+          "startMs": 1792746120000,
+          "endMs": 1792746123000,
+          "firstMs": null,
+          "input": 1000,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 20,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "d7cf19f4e0e1e8323d045fd41e8955a3",
+          "startMs": 1792746125000,
+          "endMs": 1792746128000,
+          "firstMs": null,
+          "input": 1001,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 21,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "3fc0f830ddc3376fead67556513011b4",
+          "startMs": 1792746130000,
+          "endMs": 1792746133000,
+          "firstMs": null,
+          "input": 1002,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 22,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "a9433be0921e8b39c7158159aa671279",
+          "startMs": 1792746135000,
+          "endMs": 1792746138000,
+          "firstMs": null,
+          "input": 1003,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 23,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "07a3f874bc9f29d7e7246f25fb8f1e50",
+          "startMs": 1792746140000,
+          "endMs": 1792746143000,
+          "firstMs": null,
+          "input": 1004,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 24,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "5d46ce5a49822d42478d0616c1536ab4",
+          "startMs": 1792746145000,
+          "endMs": 1792746148000,
+          "firstMs": null,
+          "input": 1005,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 25,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "400283c0ac92a7d36abea89839f0afed",
+          "startMs": 1792746150000,
+          "endMs": 1792746153000,
+          "firstMs": null,
+          "input": 1006,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 26,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "c592a99ae70647ee12cda9f62c738e9b",
+          "startMs": 1792746179800,
+          "endMs": 1792746181000,
+          "firstMs": 1792746181000,
+          "input": 2000,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 30,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "32cbfe7f434cffdfc71898e0d27dea62",
+          "startMs": 1792745070000,
+          "endMs": 1792746270000,
+          "firstMs": null,
+          "input": 2100,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 40,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "12699bf90d53833f1a3fd5bcfebda7ca",
+          "startMs": 1792746300500,
+          "endMs": 1792746302000,
+          "firstMs": 1792746300900,
+          "input": 14000,
+          "cachedInput": 13500,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 60,
+          "reasoning": 0,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        },
+        {
+          "key": "7be2b1534298bf5bb13861b0cd6e98ed",
+          "startMs": 1792746330200,
+          "endMs": 1792746333000,
+          "firstMs": 1792746330900,
+          "input": 14300,
+          "cachedInput": 14000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 220,
+          "reasoning": 20,
+          "model": "glm-5.3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "0f7db25642f061a1d37eee6ff70763e7": {
+          "effort": null,
+          "speed": null
+        },
+        "78a4ee35707c2379d2b8a4882ea3b0f3": {
+          "effort": null,
+          "speed": null
+        },
+        "e24140bdac286c1ceaa79e790a785762": {
+          "effort": null,
+          "speed": null
+        },
+        "f9043e84e8a0c3deeba1bb2ef9ded8d8": {
+          "effort": null,
+          "speed": null
+        },
+        "d7cf19f4e0e1e8323d045fd41e8955a3": {
+          "effort": null,
+          "speed": null
+        },
+        "3fc0f830ddc3376fead67556513011b4": {
+          "effort": null,
+          "speed": null
+        },
+        "a9433be0921e8b39c7158159aa671279": {
+          "effort": null,
+          "speed": null
+        },
+        "07a3f874bc9f29d7e7246f25fb8f1e50": {
+          "effort": null,
+          "speed": null
+        },
+        "5d46ce5a49822d42478d0616c1536ab4": {
+          "effort": null,
+          "speed": null
+        },
+        "400283c0ac92a7d36abea89839f0afed": {
+          "effort": null,
+          "speed": null
+        },
+        "c592a99ae70647ee12cda9f62c738e9b": {
+          "effort": null,
+          "speed": null
+        },
+        "32cbfe7f434cffdfc71898e0d27dea62": {
+          "effort": null,
+          "speed": null
+        },
+        "12699bf90d53833f1a3fd5bcfebda7ca": {
+          "effort": null,
+          "speed": null
+        },
+        "7be2b1534298bf5bb13861b0cd6e98ed": {
+          "effort": null,
+          "speed": null
+        }
+      }
+    },
+    "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl": {
+      "source": "codebuddyCode",
+      "project": "vega",
+      "model": "kimi-k3",
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "generating",
+      "inFlightStartMs": 1792746630000,
+      "lastLineMs": 1792746630000,
+      "malformedLines": 0,
+      "responses": [
+        {
+          "key": "5cc1d1ea5487709a058d4041281de8be",
+          "startMs": 1792746600000,
+          "endMs": 1792746603000,
+          "firstMs": null,
+          "input": 6000,
+          "cachedInput": 5000,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "output": 150,
+          "reasoning": 0,
+          "model": "kimi-k3",
+          "provider": null,
+          "fast": false,
+          "final": true
+        }
+      ],
+      "effort": {
+        "mode": "high",
+        "evidence": "configured"
+      },
+      "speed": null,
+      "responseModes": {
+        "5cc1d1ea5487709a058d4041281de8be": {
+          "effort": null,
+          "speed": null
+        }
+      }
     }
   },
   "mtimes": {
@@ -4404,7 +4787,10 @@
     "qoder-cli/projects/-Users-dev-projects-atlas/3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b/subagents/agent-5d1e7a.jsonl": 1792674204000,
     "qoder-cli/projects/-Users-dev-projects-borealis/8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18.jsonl": 1792675504000,
     "qoder-cli/projects/-Users-dev-projects-atlas/c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d.jsonl": 1792676409000,
-    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl": 1792677006000
+    "qoder-cli/projects/-Users-dev-projects-borealis/e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b.jsonl": 1792677006000,
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl": 1792746334000,
+    "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2/subagents/agent-0f42e38d-5944-426a-a882-9de8312a9bb8.jsonl": 1792746311000,
+    "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl": 1792746631000
   },
   "opencode": {
     "database": "opencode/opencode.db",
@@ -11690,6 +12076,147 @@
         "afterLine": 5,
         "phase": "generating",
         "inFlightStartMs": 1792677000000
+      }
+    ]
+  },
+  "codebuddyCode": {
+    "discover": [
+      "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl",
+      "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+      "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2/subagents/agent-0f42e38d-5944-426a-a882-9de8312a9bb8.jsonl"
+    ],
+    "traces": [
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 1,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 2,
+        "phase": "generating",
+        "inFlightStartMs": 1792746000000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 3,
+        "phase": "generating",
+        "inFlightStartMs": 1792746000000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 4,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 5,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 6,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 7,
+        "phase": "generating",
+        "inFlightStartMs": 1792746060000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 8,
+        "phase": "tools",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 9,
+        "phase": "generating",
+        "inFlightStartMs": 1792746072000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 10,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 11,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 12,
+        "phase": "generating",
+        "inFlightStartMs": 1792746120000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 25,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 26,
+        "phase": "generating",
+        "inFlightStartMs": 1792746180000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 27,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 30,
+        "phase": "generating",
+        "inFlightStartMs": 1792746300000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 31,
+        "phase": "tools",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 32,
+        "phase": "generating",
+        "inFlightStartMs": 1792746330000
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 33,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/Users-dev-projects-nova/3aa9b700-dbaa-4d96-adf7-9cfbc7523bc2.jsonl",
+        "afterLine": 34,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl",
+        "afterLine": 2,
+        "phase": "idle",
+        "inFlightStartMs": null
+      },
+      {
+        "file": "codebuddy/projects/C-Users-dev-projects-vega/4ff5179d-5157-4a8e-ae07-65aa8a4b00c4.jsonl",
+        "afterLine": 3,
+        "phase": "generating",
+        "inFlightStartMs": 1792746630000
       }
     ]
   }

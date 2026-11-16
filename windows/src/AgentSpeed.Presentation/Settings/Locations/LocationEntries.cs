@@ -66,6 +66,7 @@ public static class LocationEntries
         LocationFolder.Devin => "settings.sources.devinHint",
         LocationFolder.Qoder => "settings.sources.qoderHint",
         LocationFolder.QoderCli => "settings.sources.qoderCliHint",
+        LocationFolder.CodeBuddyCode => "settings.sources.codebuddyCodeHint",
         _ => null,
     };
 

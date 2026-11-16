@@ -582,6 +582,12 @@
     "en": "Choose Qoder CLI's .qoder folder or its projects folder",
     "ja": "Qoder CLI の .qoder フォルダまたは projects フォルダを選択"
   },
+  "mac.settings.sources.chooseCodebuddyCode": {
+    "zh-Hant": "選擇 CodeBuddy Code 的 .codebuddy 資料夾或 projects 資料夾",
+    "zh-Hans": "选择 CodeBuddy Code 的 .codebuddy 文件夹或 projects 文件夹",
+    "en": "Choose CodeBuddy Code's .codebuddy folder or its projects folder",
+    "ja": "CodeBuddy Code の .codebuddy フォルダまたは projects フォルダを選択"
+  },
   "mac.update.relaunching": {
     "zh-Hant": "正在重新啟動…",
     "zh-Hans": "正在重新启动…",

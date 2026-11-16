@@ -13,7 +13,8 @@ final class HistoryAnalyzer {
     /// 8: the task records of the retired task score. 9: the performance records (METRICS 6.11).
     /// 10: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses.
     /// 11: Grok Build reasoning counted apart from its output (METRICS 4.12).
-    static let analysisVersion: Int64 = 11
+    /// 12: the measured attempts of WorkBuddy calls (METRICS 4.9), which change their duration and `firstMs`.
+    static let analysisVersion: Int64 = 12
     /// The current price table version of the last complete run; when it changes, files with unpriced responses are
     /// analysed again (METRICS 9.7).
     static let priceVersionKey = "priceTableVersion"

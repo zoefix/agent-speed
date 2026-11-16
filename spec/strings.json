@@ -5706,6 +5706,12 @@
     "en": "Qoder CLI",
     "ja": "Qoder CLI"
   },
+  "source.codebuddyCode": {
+    "zh-Hant": "CodeBuddy Code",
+    "zh-Hans": "CodeBuddy Code",
+    "en": "CodeBuddy Code",
+    "ja": "CodeBuddy Code"
+  },
   "settings.sources.zcodeHint": {
     "zh-Hant": "讀取 ZCode 的本機工作階段資料庫；可選擇資料目錄或包含 db.sqlite 的資料夾。",
     "zh-Hans": "读取 ZCode 的本地会话数据库；可选择数据目录或包含 db.sqlite 的文件夹。",
@@ -5765,6 +5771,12 @@
     "zh-Hans": "Qoder CLI 的会话文件夹，通常是 ~/.qoder/projects（国内版为 ~/.qoder-cn/projects），也可以选择 .qoder 文件夹。使用 Qoder 自家的模型时，Qoder CLI 不会把 token 用量存到本机，这里只能看到会话和状态；以 QODER_EXPOSE_TOKEN_USAGE=1（国内版为 QODERCN_EXPOSE_TOKEN_USAGE=1）启动 qodercli，或使用自定义模型，才会有 token 和速度。",
     "en": "Qoder CLI's session folder, usually ~/.qoder/projects (the China edition: ~/.qoder-cn/projects). You can also choose the .qoder folder. With Qoder's own models, Qoder CLI keeps no token usage on disk, so only sessions and status show here; start qodercli with QODER_EXPOSE_TOKEN_USAGE=1 (China edition: QODERCN_EXPOSE_TOKEN_USAGE=1), or use a custom model, to get tokens and speed.",
     "ja": "Qoder CLI のセッションフォルダです。通常は ~/.qoder/projects（中国版は ~/.qoder-cn/projects）にあり、.qoder フォルダも選べます。Qoder 独自のモデルでは Qoder CLI がトークン使用量をローカルに保存しないため、ここではセッションと状態だけが表示されます。トークンと速度を表示するには QODER_EXPOSE_TOKEN_USAGE=1（中国版は QODERCN_EXPOSE_TOKEN_USAGE=1）を付けて qodercli を起動するか、カスタムモデルを使ってください。"
+  },
+  "settings.sources.codebuddyCodeHint": {
+    "zh-Hant": "CodeBuddy Code 命令列工具的工作階段資料夾，通常是 ~/.codebuddy/projects，也可以選擇 .codebuddy 資料夾。對話紀錄只會讀取、不會變更；CodeBuddy IDE 和 IDE 外掛的對話不會計入。CodeBuddy Code 預設會刪除 30 天沒用過的工作階段，已經計入的用量會留在用量歷史。",
+    "zh-Hans": "CodeBuddy Code 命令行工具的会话文件夹，通常是 ~/.codebuddy/projects，也可以选择 .codebuddy 文件夹。对话记录只会读取、不会更改；CodeBuddy IDE 和 IDE 插件的对话不计入。CodeBuddy Code 默认会删除 30 天未使用的会话，已计入的用量会保留在用量历史中。",
+    "en": "The session folder of the CodeBuddy Code command-line tool, usually ~/.codebuddy/projects. You can also choose the .codebuddy folder. Conversations are only read, never changed; the CodeBuddy IDE and its plugins are not counted. CodeBuddy Code deletes sessions unused for 30 days by default; usage already counted stays in Usage History.",
+    "ja": "CodeBuddy Code（コマンドラインツール）のセッションフォルダです。通常は ~/.codebuddy/projects にあり、.codebuddy フォルダも選べます。会話は読み取るだけで、変更しません。CodeBuddy IDE と IDE プラグインの会話は集計されません。CodeBuddy Code は 30 日間使われていないセッションを既定で削除しますが、集計済みの使用量は使用履歴に残ります。"
   },
   "mode.label": {
     "zh-Hant": "執行模式",

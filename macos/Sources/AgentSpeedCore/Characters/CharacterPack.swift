@@ -309,7 +309,7 @@ public enum CharacterVendors {
         case .kimi: "moonshot"
         case .grokBuild: "xai"
         case .zcode: "zhipu"
-        case .workbuddy, .workbuddyAi: "tencent"
+        case .workbuddy, .workbuddyAi, .codebuddyCode: "tencent"
         default: nil
         }
     }

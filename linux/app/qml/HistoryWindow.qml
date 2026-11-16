@@ -144,7 +144,8 @@ Window {
         var all = history.rows
         for (var i = 0; i < all.length; ++i) seen[all[i].source] = true
         var order = ["codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
-                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli"]
+                     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
+                     "codebuddyCode"]
         return order.filter(function(s) { return seen[s] && prefs.disabledSources.indexOf(s) < 0 })
     }
     readonly property var chartSeries: {
@@ -175,7 +176,8 @@ Window {
         return named + (a === b ? a : a + " – " + b) + " · " + Format.fill(S.tr2(S.rev, "history.summary.activeDays"), [total.activeDays])
     }
     function sourceCode(id) {
-        var codes = { claudeCode: "claude-code", claudeDesktop: "claude-desktop", workbuddyAi: "workbuddy-ai", qoderCli: "qoder-cli" }
+        var codes = { claudeCode: "claude-code", claudeDesktop: "claude-desktop", workbuddyAi: "workbuddy-ai", qoderCli: "qoder-cli",
+                      codebuddyCode: "codebuddy-code" }
         return id === "all" ? "all" : (codes[id] || id)
     }
 

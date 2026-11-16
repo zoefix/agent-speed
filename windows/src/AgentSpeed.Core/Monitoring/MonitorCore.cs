@@ -696,7 +696,7 @@ internal sealed partial class MonitorCore : IDisposable
         return RefreshAgentContext() || changed;
     }
 
-    /// <summary>Files of that source with at least one line today; WorkBuddy counts main sessions only (DESIGN 5).</summary>
+    /// <summary>Files of that source with at least one line today; the WorkBuddy format counts main sessions only (DESIGN 5).</summary>
     public int SessionCount(SourceKind kind, long todayStartMs)
     {
         if (kind == SourceKind.OpenCode)
@@ -729,7 +729,7 @@ internal sealed partial class MonitorCore : IDisposable
             return _qoder?.ActiveSessionCount(todayStartMs) ?? 0;
         }
 
-        var mainOnly = WorkBuddyPaths.IsWorkBuddy(kind)
+        var mainOnly = WorkBuddyPaths.WritesWorkBuddyFormat(kind)
             || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid or SourceKind.QoderCli;
         var count = 0;
         foreach (var tracked in _files.Values)

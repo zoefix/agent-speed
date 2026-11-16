@@ -71,4 +71,7 @@ internal struct WorkBuddyLine
     public bool HasUsage;
 
     public TokenCounts Tokens;
+
+    /// <summary>The call's measured attempt (CLI 2.184.0 and later), when the line carries one.</summary>
+    public WorkBuddyAttempt? Attempt;
 }

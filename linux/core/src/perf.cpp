@@ -101,8 +101,10 @@ std::string_view formId(Form form) {
 }
 
 bool recordsLatency(SourceKind source) {
+    // WorkBuddy and CodeBuddy Code have firstMs from measured attempts (METRICS 4.9).
     return source == SourceKind::Codex || source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop ||
-           source == SourceKind::Devin;
+           source == SourceKind::Devin || source == SourceKind::WorkBuddy || source == SourceKind::WorkBuddyAi ||
+           source == SourceKind::CodeBuddyCode;
 }
 bool recordsReasoning(SourceKind source) { return source != SourceKind::Deepseek; }
 bool recordsCache(SourceKind source) { return source != SourceKind::Hermes; }

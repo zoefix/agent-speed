@@ -278,6 +278,7 @@ std::unique_ptr<TranscriptParser> makeParser(RootFamily family, const std::strin
         case RootFamily::Antigravity: return std::make_unique<antigravity::Parser>(path, deduper);
         case RootFamily::WorkBuddy: return std::make_unique<WorkBuddyParser>(path, deduper, SourceKind::WorkBuddy, root);
         case RootFamily::WorkBuddyAi: return std::make_unique<WorkBuddyParser>(path, deduper, SourceKind::WorkBuddyAi, root);
+        case RootFamily::CodeBuddyCode: return std::make_unique<WorkBuddyParser>(path, deduper, SourceKind::CodeBuddyCode, root);
         case RootFamily::Kimi: return std::make_unique<KimiParser>(path, deduper);
         case RootFamily::GrokBuild: return std::make_unique<GrokParser>(path, deduper);
         case RootFamily::Pi: return PiParser::forPath(path, deduper);

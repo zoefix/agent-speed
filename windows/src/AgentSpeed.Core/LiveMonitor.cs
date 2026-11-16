@@ -214,6 +214,12 @@ public sealed class LiveMonitor : IDisposable
     /// </summary>
     public static IReadOnlyList<string> DefaultQoderCliRoots => Qoder.QoderCliPaths.AutomaticRoots();
 
+    /// <summary>
+    /// CodeBuddy Code's root: <c>%CODEBUDDY_CONFIG_DIR%\projects</c> when the variable is not blank, else <c>~\.codebuddy\projects</c>
+    /// (METRICS 2, 4.20).
+    /// </summary>
+    public static string DefaultCodeBuddyCodeRoot => WorkBuddy.CodeBuddyCodePaths.AutomaticRoot();
+
     /// <summary>Every automatic OpenClaw state folder: the override alone, else <c>.openclaw</c> and its profiles.</summary>
     public static IReadOnlyList<string> DefaultOpenClawRoots => OpenClaw.OpenClawPaths.AutomaticStateFolders();
 

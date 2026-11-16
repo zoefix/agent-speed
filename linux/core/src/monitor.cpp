@@ -49,7 +49,7 @@ std::int64_t nextEpoch() {
 
 std::set<SourceKind> MonitorConfig::allSources() {
     std::set<SourceKind> all;
-    for (int k = 0; k <= static_cast<int>(SourceKind::QoderCli); ++k) all.insert(static_cast<SourceKind>(k));
+    for (int k = 0; k <= static_cast<int>(SourceKind::CodeBuddyCode); ++k) all.insert(static_cast<SourceKind>(k));
     return all;
 }
 
@@ -102,6 +102,7 @@ bool Monitor::familyEnabled(RootFamily family) const {
         case RootFamily::Devin: return e.contains(SourceKind::Devin);
         case RootFamily::Qoder: return e.contains(SourceKind::Qoder);
         case RootFamily::QoderCli: return e.contains(SourceKind::QoderCli);
+        case RootFamily::CodeBuddyCode: return e.contains(SourceKind::CodeBuddyCode);
     }
     return false;
 }
@@ -617,7 +618,7 @@ int Monitor::sessionCount(SourceKind kind, std::int64_t todayStartMs) const {
     }
     const bool mainOnly = kind == SourceKind::WorkBuddy || kind == SourceKind::WorkBuddyAi || kind == SourceKind::Kimi ||
                           kind == SourceKind::GrokBuild || kind == SourceKind::Pi || kind == SourceKind::Droid ||
-                          kind == SourceKind::QoderCli;
+                          kind == SourceKind::QoderCli || kind == SourceKind::CodeBuddyCode;
     int count = 0;
     for (const auto& [path, file] : files_) {
         const auto& p = *file->parser;

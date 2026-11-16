@@ -41,7 +41,7 @@ public sealed class QoderSettingsTests
 
         Assert.False(settings.IsSourceEnabled(SourceKind.Droid));
         Assert.Equal((LocationFolder.Qoder, LocationFolder.QoderCli), (LocationFolders.Of(SourceKind.Qoder), LocationFolders.Of(SourceKind.QoderCli)));
-        Assert.Equal([LocationFolder.Devin, LocationFolder.Qoder, LocationFolder.QoderCli], LocationFolders.All.TakeLast(3));
+        Assert.Equal([LocationFolder.Devin, LocationFolder.Qoder, LocationFolder.QoderCli], LocationFolders.All.SkipLast(1).TakeLast(3));
     }
 
     [Fact]

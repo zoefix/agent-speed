@@ -217,7 +217,8 @@ bool isTranscriptName(std::string_view name, RootFamily family) {
         case RootFamily::Pi: return isOmpName(name);
         case RootFamily::Antigravity: return paths::isAntigravityDatabaseName(name);
         case RootFamily::WorkBuddy:
-        case RootFamily::WorkBuddyAi: return isWorkBuddyName(name);
+        case RootFamily::WorkBuddyAi:
+        case RootFamily::CodeBuddyCode: return isWorkBuddyName(name);
         case RootFamily::Droid: return droid::isTranscriptName(name);
         case RootFamily::Claude:
         case RootFamily::QoderCli: break;
@@ -246,7 +247,8 @@ std::vector<DiscoveredFile> enumerate(const std::string& root, RootFamily family
         }
         case RootFamily::Antigravity: return antigravity(root, limit);
         case RootFamily::WorkBuddy:
-        case RootFamily::WorkBuddyAi: return workBuddy(root, limit);
+        case RootFamily::WorkBuddyAi:
+        case RootFamily::CodeBuddyCode: return workBuddy(root, limit);
         case RootFamily::Kimi: return harness(root, true, limit);
         case RootFamily::GrokBuild: return harness(root, false, limit);
         case RootFamily::Droid: return droidSessions(root, limit);
@@ -283,7 +285,8 @@ bool isAcceptablePath(const std::string& root, const std::string& path, RootFami
             return s && s->regular;
         }
         case RootFamily::WorkBuddy:
-        case RootFamily::WorkBuddyAi: {
+        case RootFamily::WorkBuddyAi:
+        case RootFamily::CodeBuddyCode: {
             if (!isAcceptablePath(root, path, RootFamily::Claude) || !isWorkBuddyName(name)) return false;
             const auto parts = *fsx::partsBelow(root, path);
             const auto slug = [](const std::string& p) { return p.front() != '.' && p != "cloud"; };

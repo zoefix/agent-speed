@@ -20,6 +20,7 @@ struct ParserFixtureTests {
         if relative.hasPrefix("workbuddy/.workbuddy/") { return .workbuddy }
         if relative.hasPrefix("droid/") { return .droid }
         if relative.hasPrefix("qoder-cli/") { return .qoderCli }
+        if relative.hasPrefix("codebuddy/") { return .codebuddyCode }
         return relative.hasPrefix("dsh/") ? .dsh : .claude
     }
 
@@ -33,12 +34,13 @@ struct ParserFixtureTests {
         PiHome(environment: ["PI_CODING_AGENT_DIR": root.appendingPathComponent("pi/agent").path], home: root)
     }
 
-    /// The root an omp or WorkBuddy fixture was found under; nil for other families.
+    /// The root an omp, WorkBuddy or CodeBuddy Code fixture was found under; nil for other families.
     static func root(of relative: String) -> String? {
         let path = Fixtures.root.appendingPathComponent(relative).path
         switch family(of: relative) {
         case .omp: return ompRoots.first { path.hasPrefix($0 + "/") }
         case .workbuddy, .workbuddyAi: return WorkBuddyTests.fixtureRoots.map(\.1).first { path.hasPrefix($0 + "/") }
+        case .codebuddyCode: return CodeBuddyTests.fixtureRoot
         default: return nil
         }
     }

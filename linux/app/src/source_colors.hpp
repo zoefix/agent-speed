@@ -16,6 +16,7 @@ inline QColor sourceColor(const QString& id) {
         {QStringLiteral("grokBuild"), 0x8290A6}, {QStringLiteral("pi"), 0xA855F7},
         {QStringLiteral("openclaw"), 0xDE2E1F},  {QStringLiteral("hermes"), 0xB8860B},
         {QStringLiteral("droid"), 0x9E5F46},     {QStringLiteral("devin"), 0x557F14},
-        {QStringLiteral("qoder"), 0xB3329D},     {QStringLiteral("qoderCli"), 0x7E61B6}};
+        {QStringLiteral("qoder"), 0xB3329D},     {QStringLiteral("qoderCli"), 0x7E61B6},
+        {QStringLiteral("codebuddyCode"), 0x18AB06}};
     return QColor(colors.value(id, 0x7C8798));
 }

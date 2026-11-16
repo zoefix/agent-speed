@@ -64,7 +64,7 @@ std::vector<std::string> rootsOf(const SourceLocations& l, RootFamily family) {
 
 TEST(LocationLists, EveryListStartsAutomaticOnly) {
     const LocationLists lists;
-    EXPECT_EQ(locationListOrder().size(), 19u);
+    EXPECT_EQ(locationListOrder().size(), 20u);
     for (const auto family : locationListOrder()) {
         EXPECT_EQ(lists[family], LocationList{kAutomatic}) << listName(family);
         EXPECT_EQ(listNamed(listName(family)), family);

@@ -84,7 +84,7 @@ private:
             c.source = r.source;
             c.output = r.tokens.output;
             if (r.startMs && r.endMs > *r.startMs) {
-                c.speed = static_cast<double>(r.tokens.output) * 1000.0 / static_cast<double>(r.endMs - *r.startMs);
+                c.speed = static_cast<double>(r.tokens.output) * 1000.0 / (static_cast<double>(r.endMs) - static_cast<double>(*r.startMs));
             }
             c.host = host;
             completions_.push_back(c);

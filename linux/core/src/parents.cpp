@@ -14,7 +14,8 @@ std::string folderOf(const std::string& path) {
 
 bool isPathKind(LinkKind kind) {
     return kind == LinkKind::Path || kind == LinkKind::OmpPath || kind == LinkKind::PiPath ||
-           kind == LinkKind::WorkBuddyPath || kind == LinkKind::WorkBuddyAiPath || kind == LinkKind::DroidPath;
+           kind == LinkKind::WorkBuddyPath || kind == LinkKind::WorkBuddyAiPath || kind == LinkKind::CodeBuddyCodePath ||
+           kind == LinkKind::DroidPath;
 }
 
 bool createdBefore(const AgentLink& a, const AgentLink& b) {
@@ -98,6 +99,7 @@ std::map<std::string, std::string> resolve(const std::vector<AgentLink>& agents)
             case LinkKind::DroidPath:
             case LinkKind::WorkBuddyPath:
             case LinkKind::WorkBuddyAiPath:
+            case LinkKind::CodeBuddyCodePath:
                 if (agent.parentThreadId) {
                     const auto it = byPath.find(*agent.parentThreadId);
                     if (it != byPath.end() && it->second->kind == agent.kind) parent = it->second->id;

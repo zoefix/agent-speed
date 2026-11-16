@@ -24,6 +24,7 @@ extension SourceKind {
         case .devin: RGBColor(hex: 0x557F14)
         case .qoder: RGBColor(hex: 0xB3329D)
         case .qoderCli: RGBColor(hex: 0x7E61B6)
+        case .codebuddyCode: RGBColor(hex: 0x18AB06)
         }
     }
 

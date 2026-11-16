@@ -38,7 +38,7 @@ internal sealed class PerfRecorder(Func<long, string?> dayOf)
         }
 
         var model = response.Model ?? string.Empty;
-        long? latency = response.FirstMs is { } first && response.StartMs is { } start && first >= start ? first - start : null;
+        var latency = SpeedMath.LatencyMs(response);
         Record(day, source, model).AddResponse(source, response.Tokens.Output, response.Tokens.Reasoning, response.Tokens.Input,
             response.Tokens.CachedInput, interval.DurationMs, latency);
         Active(agentId, source, model, interval.StartMs, interval.EndMs);
@@ -80,7 +80,7 @@ internal sealed class PerfRecorder(Func<long, string?> dayOf)
     private void Active(string agentId, SourceKind source, string model, long start, long end)
     {
         var key = (agentId, model);
-        var added = _covered.TryGetValue(key, out var covered) ? Math.Max(0, end - Math.Max(start, covered)) : Math.Max(0, end - start);
+        var added = _covered.TryGetValue(key, out var covered) ? (covered >= end ? 0 : end - Math.Max(start, covered)) : Math.Max(0, end - start);
         _covered[key] = _covered.ContainsKey(key) ? Math.Max(covered, end) : end;
         if (added > 0 && dayOf(end) is { } day)
         {

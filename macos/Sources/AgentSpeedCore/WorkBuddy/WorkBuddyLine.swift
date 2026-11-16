@@ -30,6 +30,8 @@ struct WorkBuddyCall: Equatable, Sendable {
     /// `custom` for a model of the user's own provider (`custom:` / `custom-local:` ids).
     var provider: String?
     var modes: ExecutionModes = .empty
+    /// The measured attempt of `rawUsage.model_calls`, when the line carries one.
+    var attempt: WorkBuddyAttempt?
 }
 
 /// One WorkBuddy session line. Content, arguments and tool output are never captured.
@@ -181,6 +183,7 @@ enum WorkBuddyLineExtractor {
         if data.usage != nil || data.rawUsage != nil {
             call.tokens = WorkBuddyTokens.normalize(data.usage, data.rawUsage)
         }
+        call.attempt = WorkBuddyAttempt(data.rawUsage?.lastAttempt)
         let model = [data.model, data.requestModelId].lazy.compactMap { $0.map(stripped) }.first { !$0.isEmpty }
         guard let model else { return call }
         if let rest = userModel(model) {
@@ -274,11 +277,38 @@ enum WorkBuddyLineExtractor {
                 raw.detailCachedTokens = try scanDetailNumber(&scanner, field: "cached_tokens")
             } else if scanner.key(key, is: "completion_tokens_details") {
                 raw.detailReasoningTokens = try scanDetailNumber(&scanner, field: "reasoning_tokens")
+            } else if scanner.key(key, is: "model_calls") {
+                raw.lastAttempt = try scanLastAttempt(&scanner)
             } else {
                 try scanner.skipValue()
             }
         }
         return raw
+    }
+
+    /// The last element of `model_calls` when the value is a non-empty array whose last element is an object.
+    private static func scanLastAttempt(_ scanner: inout JSONScanner) throws(JSONScanError) -> WorkBuddyAttemptNumbers? {
+        guard try scanner.beginArrayIfPresent() else {
+            try scanner.skipValue()
+            return nil
+        }
+        var last: WorkBuddyAttemptNumbers?
+        while try scanner.nextElement() {
+            last = nil
+            guard try scanner.beginObjectIfPresent() else { continue }
+            var attempt = WorkBuddyAttemptNumbers()
+            while let key = try scanner.nextMember() {
+                if scanner.key(key, is: "duration_ms") {
+                    attempt.durationMs = try scanner.readNumber()
+                } else if scanner.key(key, is: "time_to_first_token_ms") {
+                    attempt.firstTokenMs = try scanner.readNumber()
+                } else {
+                    try scanner.skipValue()
+                }
+            }
+            last = attempt
+        }
+        return last
     }
 
     /// `field` of a details object; nil when the value is not an object or lacks a number.

@@ -68,8 +68,9 @@ public enum PerfFormula {
     /// Fewer values than this leave a component out (and fewer sample responses leave the score out).
     public static let minimumSamples = 3
 
-    /// Sources whose logs say when the first content was written (METRICS 4.1, 4.2).
-    static let latencySources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop, .devin]
+    /// Sources whose logs say when the first content was written or arrived (METRICS 4.1, 4.2, 4.9, 4.17).
+    static let latencySources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop, .devin, .workbuddy, .workbuddyAi,
+                                                  .codebuddyCode]
     /// Sources with tool calls (METRICS 6.10).
     static let actionSources: Set<SourceKind> = [.codex, .claudeCode, .claudeDesktop, .omp, .pi, .openclaw, .droid]
 

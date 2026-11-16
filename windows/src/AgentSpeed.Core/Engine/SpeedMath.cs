@@ -16,16 +16,31 @@ internal static class SpeedMath
     /// <summary>The widened speed interval <c>[start', end]</c>, or false when the response never counts as speed.</summary>
     public static bool TryGetSpeedInterval(ParsedResponse response, out Interval interval)
     {
-        if (response.StartMs is not { } start || response.EndMs < start || response.EndMs - start > MaxIntervalMs)
+        if (response.StartMs is not { } start || !TrySpan(start, response.EndMs, out var span) || span > MaxIntervalMs)
         {
             interval = default;
             return false;
         }
 
-        var effectiveStart = response.EndMs - start < MinDurationMs ? response.EndMs - MinDurationMs : start;
-        interval = new Interval(effectiveStart, response.EndMs);
+        var end = response.EndMs;
+        var effectiveStart = span >= MinDurationMs ? start : end < long.MinValue + MinDurationMs ? long.MinValue : end - MinDurationMs;
+        interval = new Interval(effectiveStart, end);
         return true;
     }
+
+    /// <summary>
+    /// <c>end − start</c> when <c>end ≥ start</c> and the difference fits 64 bits; a saturated start (METRICS 3.6) can lie farther
+    /// from the end than that.
+    /// </summary>
+    public static bool TrySpan(long startMs, long endMs, out long spanMs)
+    {
+        spanMs = unchecked(endMs - startMs);
+        return endMs >= startMs && spanMs >= 0;
+    }
+
+    /// <summary>The first-content latency <c>firstMs − startMs</c> (METRICS 6.9 L), or null without both times in order.</summary>
+    public static long? LatencyMs(ParsedResponse response) =>
+        response.FirstMs is { } first && response.StartMs is { } start && TrySpan(start, first, out var latency) ? latency : null;
 
     public static long Overlap(long a0, long a1, long b0, long b1) => Math.Max(0, Math.Min(a1, b1) - Math.Max(a0, b0));
 

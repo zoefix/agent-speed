@@ -8,7 +8,11 @@ internal static class WorkBuddyPaths
 {
     public const string ProjectsFolder = "projects";
 
+    /// <summary>The two WorkBuddy editions: their data-folder detection and <c>workbuddy.db</c> are theirs alone.</summary>
     public static bool IsWorkBuddy(SourceKind source) => source is SourceKind.WorkBuddy or SourceKind.WorkBuddyAi;
+
+    /// <summary>The sources that write this format (METRICS 4.9, 4.20): both editions and CodeBuddy Code.</summary>
+    public static bool WritesWorkBuddyFormat(SourceKind source) => IsWorkBuddy(source) || source == SourceKind.CodeBuddyCode;
 
     /// <summary>The data folder's name below the home folder.</summary>
     public static string FolderName(SourceKind source) => source switch

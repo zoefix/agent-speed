@@ -40,6 +40,7 @@ public sealed class HistoryTests : IDisposable
             DroidRoot: DroidFixture.RootIn(copy))
         {
             QoderCliRoots = [QoderCliFixture.RootIn(copy)],
+            CodeBuddyCodeRoots = [CodeBuddyCodeFixture.RootIn(copy)],
         };
         var document = JsonNode.Parse(File.ReadAllText(Path.Combine(FixtureLocator.FixturesDirectory, "history-expected.json")))!;
         var pricing = document["prices"]!;
