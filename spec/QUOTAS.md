@@ -806,8 +806,9 @@ A refusal leaves the browser out.
 The vendors show a percent, never the size of the limit. Agent Speed estimates each window's cap in API-equivalent US
 dollars (METRICS 9) from the vendor's percent and the spend it measured itself, so that it can show the amount used
 and the cap, extrapolate the percent between vendor values, and report both to services that collect statistics
-(REPORTING-EXTENSIONS 11). User's request and decisions 2026-11-11 ("就算這個人沒用完額度也能預估出來…要做到極致的完美";
-the UI of 10.8, the live percent of 10.7, the 額度 sharing switch on by default, the plan but no account id in reports).
+(REPORTING-EXTENSIONS 11), with the token counts of that spend when a service asks for them (REPORTING-EXTENSIONS 12).
+User's request and decisions 2026-11-11 ("就算這個人沒用完額度也能預估出來…要做到極致的完美"; the UI of 10.8, the live
+percent of 10.7, the 額度 sharing switch on by default, the plan but no account id in reports).
 The reference is `spec/tools/quota_estimate.py`, the simulation `quota_estimate_sim.py` (10.9) and the run over this
 computer's own logs `quota_estimate_local.py`. Everything in this section is an estimate: it is shown with `≈` and
 reported with its confidence, never as the vendor's number.
@@ -898,7 +899,8 @@ equal keys are one account); a chain never seen live is an account of its own, k
 ### 10.3 Spend ledger
 
 Rows per (account, source, price-table model id, UTC minute of the response's `endMs`): `costMicroUsd` (METRICS 9.3),
-unpriced requests, and the input + output tokens of priced and of unpriced responses. Kept for the last 8 days.
+unpriced requests, the input + output tokens of priced and of unpriced responses, and the token counts below. Kept for
+the last 8 days.
 - Fed by the history analysis (the same parsing, dedupe and copied-history rules as METRICS 8, kept as per-file
   per-minute contributions for minutes within 8 days), the live engine (an update replaces a response's earlier
   contribution, as in history) and remote hosts' streamed responses.
@@ -911,6 +913,35 @@ unpriced requests, and the input + output tokens of priced and of unpriced respo
     reviewer has no price and would otherwise leave no upper bound at all.
 - A `modelWeek` window counts only the models whose price-table id contains each word of the window's name as a
   `-`-separated token, case-insensitive (`Fable` ↔ `claude-fable-5-2`).
+- **Token counts** (issue #68; the owner's choice 2026-11-16 to build it on every platform). Each row also sums its
+  responses' `input` and `output` (METRICS 3.2: `input` holds cache reads and writes once, `output` reasoning once) and
+  three details, clamped per response: `cachedInput` (at most `input`), `cacheWriteInput` (at most `input −
+  cachedInput`) and `reasoning` (at most `output`). A detail the source's logs do not report is *missing*, and a row
+  with a missing detail keeps it missing; the parsers write 0 for an absent field (METRICS 3.2), so a 0 there would
+  claim a measurement. Claude's logs almost never carry thinking tokens and Codex's no cache writes:
+
+  | Source | `cachedInput` | `cacheWriteInput` | `reasoning` |
+  | --- | --- | --- | --- |
+  | `codex` | yes | missing | yes |
+  | `claudeCode`, `claudeDesktop` | yes | yes | missing |
+  | `gemini`, `antigravity` | yes | missing | yes |
+  | every other source with a quota | missing | missing | missing |
+
+  - A row also keeps whether its model is *public*: an id of the price table (the report id of METRICS 11.3), not a
+    logged name the table does not know, a local runtime or an empty model. A row whose contributions disagree is not
+    public.
+  - A row that holds a response recorded without counts is *unmeasured*: its counts are unknown, never 0. These are
+    the history's per-file contributions stored before the counts existed (version 1 of the stored form, now 2; each
+    platform's history store keeps a version per file): they decode as unmeasured, and a file of an older version is
+    analysed again while it is recent (METRICS 8), so its counts come from its logs again. A contribution whose file
+    is gone stays unmeasured until it leaves the 8 days. No count is ever made up or carried from another window,
+    account or device.
+  - `T(a, b)`, the counts of the rows `outer` sums (the minutes touching `[a, b]`, the account and the `modelWeek`
+    filter): `null` when a row is unmeasured, when more than 16 models remain or when a total exceeds
+    2^53 − 1. Otherwise `inputTokens` = Σ `input`, `outputTokens` = Σ `output`, each detail its Σ or `null` when a row
+    misses it, and `models`, one row per public model plus one row (`model` null) for every other model, each with Σ
+    `input` and Σ `output`; rows whose two sums are 0 are left out, the rest ordered by model id, the null row last.
+    So the models add up to the totals exactly. No rows: zeros, details 0, no models (a measured zero).
 
 ### 10.4 Observations
 
@@ -1103,6 +1134,11 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
   dropped weights), weights and half-lives, the estimate (published range, confidence, the lowered-cap rule), a plan
   change, the live percent before and after a reset, report entries (rounding of micro-USD and percent, checked
   against `report-schema.json`) and the send cadence. Some values are also checked against hand-worked numbers.
+- Token counts (10.3, `tokenUsage` in the same file): each source's details and the clamps, `T` over ledger rows (the
+  issue's example worked by hand: 100 input tokens with 60 cache reads and 10 writes, 20 output tokens with 5
+  reasoning, a model outside the table in the null row; zero usage; a row without counts inside and outside the span;
+  missing details; a `modelWeek` filter; 17 models; a model without tokens; an unsafe total), report entries before
+  and after a reset, and the receiver's checks (sums, details above their total, a model twice, a reserved id).
 - The estimate pipeline (`pipeline` in the same file, from `spec/tools/quota_estimate_pipeline.py`): small raw inputs
   (responses with start, end, model and cost or tokens; Codex token count lines; `auth.json` and `.claude.json`
   changes; quota snapshots with Desktop's organization; a stored `estimate.json`) and the outputs a port must match,
@@ -1122,7 +1158,14 @@ bound, so no estimate yet) and Desktop's 7d and Fable 7d had just reset (0 %).
     another version ignored;
   - report entries (order, rounding, Desktop of a team organization) and a 15-step send cadence (spend only, 60 s,
     percent, confidence, reset state, set change, a size drop counting as unsent, `[]` once when switched off, a new
-    run, leaving).
+    run, leaving);
+  - token counts (`tokens`, the service advertising `quotaTokenUsage`): Codex and Claude accounts (details per source,
+    a model outside the table, the Fable window's filter), the same without the extension (no `tokenUsage`), a later
+    heartbeat (the same snapshot), two Codex accounts, one account on two devices (one tag, each device its own
+    counts), a weekly and a five-hour window after their reset, a response recorded without counts (null blocks while
+    `usedMicroUsd` still counts it) and an account with no usage (a measured zero). The HTTP and WebSocket examples
+    `spec/fixtures/report-examples/report-quotas.json` and `report-quotas-websocket.json` carry the first case's
+    entries; `test_reporting_extensions.py` checks that they are equal and valid.
 - Phase 2: every response shape of section 9 (Grok config from a log and from the API, Devin rows, Antigravity
   summaries and `GetUserStatus`, its servers' executables, agy's usage reports and versions, Kimi current and legacy,
   Gemini buckets, Factory limits, z.ai limits, Qoder and WorkBuddy summaries), named-window labels and order, and

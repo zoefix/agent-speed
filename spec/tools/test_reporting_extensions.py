@@ -11,6 +11,7 @@ import uuid
 import zlib
 
 import execution_modes_reference as modes
+import quota_estimate as quota
 import report_reference as ref
 import report_perf_score as perf_score
 from report_profile_reference import PNG_MAGIC, sanitize_avatar
@@ -402,6 +403,77 @@ class PerfScoreTests(unittest.TestCase):
         public_json = json.dumps(self.models(service)[1])
         for device_id in self.ids:
             self.assertNotIn(device_id, public_json)
+
+
+class QuotaTokenUsageTests(unittest.TestCase):
+    """REPORTING-EXTENSIONS 12: the `tokenUsage` of each `quotas` entry."""
+
+    @staticmethod
+    def examples():
+        examples = ref.load_examples()
+        return examples["report-quotas"], examples["report-quotas-websocket"]
+
+    def test_http_and_websocket_carry_the_same_quotas(self):
+        http, ws = self.examples()
+        self.assertEqual(http["quotas"], ws["quotas"])
+        self.assertEqual(list(ws)[-2:], ["quotas", "realtime"])
+        cases = json.loads(quota.CASES.read_text(encoding="utf-8"))
+        piped = next(c for c in cases["pipeline"]["tokens"] if c["name"] == "Codex and Claude accounts")
+        self.assertEqual(http["quotas"], piped["expected"]["entries"])
+        schema = ref.load_schema()
+        for document in (http, ws):
+            self.assertEqual(ref.report_errors(document, schema), [])
+
+    def test_counts_add_up_and_details_stay_inside(self):
+        schema = ref.load_schema()
+        http, _ = self.examples()
+        for change, pointer in (("model", "/quotas/2/tokenUsage/models"),
+                                ("reasoning", "/quotas/0/tokenUsage/reasoningTokens"),
+                                ("cache", "/quotas/2/tokenUsage/cachedInputTokens")):
+            broken = copy.deepcopy(http)
+            if change == "model":
+                broken["quotas"][2]["tokenUsage"]["models"][0]["inputTokens"] += 1
+            elif change == "reasoning":
+                broken["quotas"][0]["tokenUsage"]["reasoningTokens"] = 201
+            else:
+                broken["quotas"][2]["tokenUsage"]["cachedInputTokens"] = 2301
+            self.assertTrue(any(e.startswith(pointer) for e in ref.report_errors(broken, schema)), change)
+
+    def test_null_and_absent_blocks_are_valid_and_zero_is_not_null(self):
+        schema = ref.load_schema()
+        http, _ = self.examples()
+        document = copy.deepcopy(http)
+        document["quotas"][0]["tokenUsage"] = None
+        del document["quotas"][1]["tokenUsage"]
+        self.assertEqual(ref.report_errors(document, schema), [])
+        document["quotas"][0]["tokenUsage"] = {"inputTokens": 0, "outputTokens": 0, "cachedInputTokens": None,
+                                               "cacheWriteInputTokens": None, "reasoningTokens": None, "models": []}
+        self.assertEqual(ref.report_errors(document, schema), [])
+        document["quotas"][0]["tokenUsage"]["models"] = [{"model": "unknown", "inputTokens": 0, "outputTokens": 0}]
+        self.assertTrue(ref.report_errors(document, schema))
+        document["quotas"][0]["tokenUsage"] = {"inputTokens": -1, "outputTokens": 0, "cachedInputTokens": None,
+                                               "cacheWriteInputTokens": None, "reasoningTokens": None, "models": []}
+        self.assertTrue(ref.report_errors(document, schema))
+
+    def test_the_extension_needs_both_integers_and_the_switch(self):
+        both = {"quotaEstimate": 1, "quotaTokenUsage": 1}
+        self.assertTrue(quota.token_usage_active(both))
+        self.assertFalse(quota.token_usage_active(both, quota_switch=False))
+        self.assertFalse(quota.token_usage_active({"quotaTokenUsage": 1}))
+        for value in (True, "1", 2, None, 1.0):
+            self.assertFalse(quota.token_usage_active({"quotaEstimate": 1, "quotaTokenUsage": value}), value)
+        self.assertFalse(quota.token_usage_active(None))
+
+    def test_no_identifiers_in_the_block(self):
+        http, _ = self.examples()
+        for entry in http["quotas"]:
+            usage = entry["tokenUsage"]
+            self.assertEqual(set(usage), {"inputTokens", "outputTokens", "cachedInputTokens", "cacheWriteInputTokens",
+                                          "reasoningTokens", "models"})
+            for row in usage["models"]:
+                self.assertEqual(set(row), {"model", "inputTokens", "outputTokens"})
+                self.assertNotIn(row["model"], quota.RESERVED_MODELS)
+        self.assertNotIn("claude-mystery-1", json.dumps(http))
 
 
 if __name__ == "__main__":
