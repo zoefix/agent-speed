@@ -1,6 +1,6 @@
 import Foundation
 
-/// Per-file WorkBuddy / WorkBuddy AI state machine (METRICS 4.9). Both editions write the same format.
+/// Per-file state machine of the WorkBuddy format (METRICS 4.9): both WorkBuddy editions and CodeBuddy Code (4.20).
 struct WorkBuddyParser: Sendable {
     /// A call's usage repeats within its run (last output item, then `model-usage`), so recent keys are enough.
     static let mergeMemory = 1024
@@ -16,6 +16,8 @@ struct WorkBuddyParser: Sendable {
     private var openCalls: [String: String] = [:]
     private var responses: [String: ResponseRecord] = [:]
     private var responseOrder: [String] = []
+    /// Keys whose start came from a measured attempt; it is kept once set.
+    private var measuredKeys: Set<String> = []
 
     /// `root` is the `projects` folder the file was found under.
     init(source: SourceKind, agentId: String, fileID: FileID, root: String?) {
@@ -121,11 +123,22 @@ struct WorkBuddyParser: Sendable {
             existing.modes = existing.modes.merging(call.modes)
             if let model = call.model { existing.model = model }
             if let provider = call.provider { existing.provider = provider }
+            if let attempt = call.attempt, measuredKeys.insert(key).inserted {
+                let start = attempt.start(endingAt: timestamp)
+                existing.startMs = start
+                existing.firstMs = attempt.firstTokenMs.map { start + $0 }
+            }
             record = existing
         } else {
-            record = ResponseRecord(key: key, source: state.source, agentId: agentId, model: call.model,
-                                    startMs: pendingStartMs, endMs: timestamp, usage: tokens, isFinal: true,
-                                    provider: call.provider, modes: call.modes)
+            let start = call.attempt?.start(endingAt: timestamp)
+            var created = ResponseRecord(key: key, source: state.source, agentId: agentId, model: call.model,
+                                         startMs: start ?? pendingStartMs, endMs: timestamp, usage: tokens, isFinal: true,
+                                         provider: call.provider, modes: call.modes)
+            if let start, let attempt = call.attempt {
+                created.firstMs = attempt.firstTokenMs.map { start + $0 }
+                measuredKeys.insert(key)
+            }
+            record = created
             pendingStartMs = nil
             remember(key)
         }
@@ -145,7 +158,10 @@ struct WorkBuddyParser: Sendable {
         responseOrder.append(key)
         guard responseOrder.count > Self.mergeMemory * 2 else { return }
         let evicted = responseOrder.prefix(responseOrder.count - Self.mergeMemory)
-        for old in evicted { responses[old] = nil }
+        for old in evicted {
+            responses[old] = nil
+            measuredKeys.remove(old)
+        }
         responseOrder.removeFirst(evicted.count)
     }
 

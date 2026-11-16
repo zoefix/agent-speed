@@ -32,6 +32,8 @@ public enum SourceKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case qoder
     /// Qoder CLI (`qodercli`): Claude Code's transcript format in its own folder.
     case qoderCli
+    /// CodeBuddy Code (`codebuddy`, Tencent): the WorkBuddy format in the standalone CLI's own folder.
+    case codebuddyCode
 
     public var id: String { rawValue }
 }
@@ -474,7 +476,8 @@ public struct MonitorConfiguration: Equatable, Sendable {
         droidRoot: URL? = nil,
         devinRoot: URL? = nil,
         qoderRoot: URL? = nil,
-        qoderCliRoot: URL? = nil
+        qoderCliRoot: URL? = nil,
+        codebuddyCodeRoot: URL? = nil
     ) {
         self.enabledSources = enabledSources
         self.locations = locations
@@ -483,6 +486,7 @@ public struct MonitorConfiguration: Equatable, Sendable {
             (.omp, ompRoot), (.antigravity, antigravityRoot), (.workbuddy, workbuddyRoot), (.workbuddyAi, workbuddyAiRoot),
             (.zcode, zcodeRoot), (.kimi, kimiRoot), (.grokBuild, grokBuildRoot), (.pi, piRoot), (.openclaw, openclawRoot),
             (.hermes, hermesRoot), (.droid, droidRoot), (.devin, devinRoot), (.qoder, qoderRoot), (.qoderCli, qoderCliRoot),
+            (.codebuddyCode, codebuddyCodeRoot),
         ]
         for case let (folder, url?) in single { self.locations[folder] = [.path(url.path)] }
     }

@@ -184,6 +184,7 @@ enum HistoryLogicChecks {
         check("csv source id of Devin", HistoryCSV.sourceID(.devin) == "devin")
         check("csv source ids of Qoder IDE and Qoder CLI",
               HistoryCSV.sourceID(.qoder) == "qoder" && HistoryCSV.sourceID(.qoderCli) == "qoder-cli")
+        check("csv source id of CodeBuddy Code", HistoryCSV.sourceID(.codebuddyCode) == "codebuddy-code")
         check("settings saved before Factory Droid load with it on and its sessions folder", droidSettingsUpgrade())
         check("a Factory Droid folder added in Sources is read next to ~/.factory/sessions", droidFolderSetting())
         let risky = DaySummary(

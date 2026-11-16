@@ -17,6 +17,7 @@ extension TranscriptFamily {
         case .pi: .pi
         case .droid: .droid
         case .qoderCli: .qoderCli
+        case .codebuddyCode: .codebuddyCode
         }
     }
 }
@@ -36,13 +37,13 @@ extension MonitorConfiguration {
     // MARK: - File-based families
 
     /// The root a user location names for a file-based family: an Antigravity store's `conversations` folder, a
-    /// WorkBuddy data folder's `projects`, a Kimi Code CLI or Grok Build data directory's `sessions`, a `.factory`
+    /// WorkBuddy data folder's or CodeBuddy Code config folder's `projects`, a Kimi Code CLI or Grok Build data directory's `sessions`, a `.factory`
     /// folder's `sessions`; any other location is the root itself.
     static func userRoot(_ path: String, family: TranscriptFamily) -> URL {
         let url = URL(fileURLWithPath: path, isDirectory: true)
         switch family {
         case .antigravity: return TranscriptLocations.antigravityConversations(url)
-        case .workbuddy, .workbuddyAi: return TranscriptLocations.workbuddyProjects(url)
+        case .workbuddy, .workbuddyAi, .codebuddyCode: return TranscriptLocations.workbuddyProjects(url)
         case .kimi, .grokBuild: return TranscriptLocations.sessionsFolder(url)
         case .droid: return DroidPaths.sessionsFolder(url)
         case .qoderCli: return QoderPaths.cliProjectsFolder(url)
@@ -56,7 +57,7 @@ extension MonitorConfiguration {
         let replaced = automaticRoots[family].map { urls in
             switch family {
             case .antigravity: urls.map(TranscriptLocations.antigravityConversations)
-            case .workbuddy, .workbuddyAi: urls.map(TranscriptLocations.workbuddyProjects)
+            case .workbuddy, .workbuddyAi, .codebuddyCode: urls.map(TranscriptLocations.workbuddyProjects)
             case .kimi, .grokBuild: urls.map(TranscriptLocations.sessionsFolder)
             case .qoderCli: urls.map(QoderPaths.cliProjectsFolder)
             default: urls

@@ -144,6 +144,11 @@ public final class LiveMonitor {
     /// (the automatic entry of its location list).
     public nonisolated static var defaultQoderCliRoots: [URL] { TranscriptLocations.defaultQoderCliRoots }
 
+    /// CodeBuddy Code's `projects` folder: `$CODEBUDDY_CONFIG_DIR` or `~/.codebuddy` (the automatic entry, METRICS 4.20).
+    public nonisolated static var defaultCodebuddyCodeRoot: URL {
+        TranscriptLocations.defaultRoots(for: .codebuddyCode)[0]
+    }
+
     /// The sessions folder a configured Factory Droid folder names: its `sessions` folder when it has one (a `.factory`
     /// folder), else the folder itself (METRICS 4.16).
     public nonisolated static func droidSessionsFolder(_ url: URL) -> URL { DroidPaths.sessionsFolder(url) }

@@ -41,7 +41,7 @@ enum AgentParents {
             if member.family == .omp { ompIds.insert(member.id) }
             if member.family == .pi { piIds.insert(member.id) }
             if member.family == .droid { droidIds.insert(member.id) }
-            if member.family.isWorkBuddy { workbuddyIds[member.family, default: []].insert(member.id) }
+            if member.family.writesWorkBuddyFormat { workbuddyIds[member.family, default: []].insert(member.id) }
             guard member.family == .codex || member.family == .dsh,
                   let thread = member.thread, let threadId = thread.id else { continue }
             if let earliest = threads[member.family]?[threadId],
@@ -86,7 +86,7 @@ enum AgentParents {
                         return ordinal(lhs.id, precedes: rhs.id)
                     }?.id
                 }
-            case .workbuddy, .workbuddyAi:
+            case .workbuddy, .workbuddyAi, .codebuddyCode:
                 // As Claude, within the same edition: nested sub-agents are stored flat under the main session.
                 parent = claudeParentPath(of: member.id).flatMap { workbuddyIds[member.family]?.contains($0) == true ? $0 : nil }
             }

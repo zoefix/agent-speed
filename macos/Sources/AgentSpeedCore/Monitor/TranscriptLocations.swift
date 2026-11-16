@@ -132,6 +132,20 @@ enum TranscriptLocations {
         return normalized.appendingPathComponent("projects", isDirectory: true)
     }
 
+    /// CodeBuddy Code's config folder (METRICS 4.20): `$CODEBUDDY_CONFIG_DIR` when it is not blank, used as it is, else
+    /// `~/.codebuddy`.
+    static var defaultCodebuddyCodeConfigFolder: URL {
+        codebuddyCodeConfigFolder(environment: ProcessInfo.processInfo.environment, home: home)
+    }
+
+    static func codebuddyCodeConfigFolder(environment: [String: String], home: URL) -> URL {
+        if let value = environment["CODEBUDDY_CONFIG_DIR"],
+           value.unicodeScalars.contains(where: { !JSONScanner.isPythonWhitespace($0.value) }) {
+            return URL(fileURLWithPath: value, isDirectory: true)
+        }
+        return home.appendingPathComponent(".codebuddy", isDirectory: true)
+    }
+
     /// The data folder whose `projects` folder is `root`: a WorkBuddy source is detected when it exists.
     static func workbuddyDataFolder(ofRoot root: String) -> String {
         (TranscriptDiscovery.normalizedRoot(root) as NSString).deletingLastPathComponent
@@ -200,6 +214,7 @@ enum TranscriptLocations {
         case .pi: defaultPiRoots
         case .droid: [defaultDroidRoot]
         case .qoderCli: defaultQoderCliRoots
+        case .codebuddyCode: [defaultCodebuddyCodeConfigFolder.appendingPathComponent("projects", isDirectory: true)]
         }
     }
 

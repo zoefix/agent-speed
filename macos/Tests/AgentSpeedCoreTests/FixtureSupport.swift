@@ -69,7 +69,8 @@ func expectModeFields(
 }
 
 /// What the fixture folders play for an agent's current values: `codex/config.toml`, `gemini/settings.json`,
-/// `antigravity/config/config.json`, and the settings and database of the `workbuddy` data folders.
+/// `antigravity/config/config.json`, the settings and database of the `workbuddy` data folders, and
+/// `codebuddy/settings.json`.
 func fixtureCurrent(_ state: AgentState, agentId: String) -> EffortAndSpeed {
     let root = Fixtures.root
     var session = state.sessionModes, configured = ExecutionModes.empty
@@ -86,6 +87,8 @@ func fixtureCurrent(_ state: AgentState, agentId: String) -> EffortAndSpeed {
         configured = ConfiguredModes.workBuddy(path: data.appendingPathComponent("settings.json").path)
         let id = ((agentId as NSString).lastPathComponent as NSString).deletingPathExtension
         session = SessionModes.workBuddy(databasePath: data.appendingPathComponent("workbuddy.db").path, sessions: [id])[id] ?? .empty
+    case .codebuddyCode:
+        configured = ConfiguredModes.workBuddy(path: root.appendingPathComponent("codebuddy/settings.json").path)
     default:
         break
     }
