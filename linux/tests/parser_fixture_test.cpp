@@ -221,7 +221,7 @@ TEST(ParserFixtures, ClaudeAndCodexMatchTheReference) {
         }
         ++checked;
     }
-    EXPECT_EQ(checked, 63);
+    EXPECT_EQ(checked, 65);
     std::map<std::string, std::string> gotParents;
     for (const auto& [id, parent] : parent_links::resolve(facts)) gotParents[id] = parent;
     EXPECT_EQ(gotParents, wantParents);

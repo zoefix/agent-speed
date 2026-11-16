@@ -10,7 +10,7 @@ namespace {
 
 constexpr std::string_view kInterruptPrefix = "[Request interrupted by user";
 
-enum class Kind { Other, User, Assistant, ApiRequest, Attachment };
+enum class Kind { Other, User, Assistant, ApiRequest, Attachment, System };
 enum class Marker { None, SessionEnter, SessionExit, WorkflowKeyword };
 enum class StopReason { Missing, ToolUse, PauseTurn, Other };
 
@@ -26,6 +26,10 @@ struct Line {
     Marker marker = Marker::None;
     bool toolEndsTurn = false;
     bool hasToolUse = false;
+    // `isApiErrorMessage == true` on a synthetic assistant line: Claude Code gave up on the request.
+    bool apiError = false;
+    // `subtype == "api_error"` on a system line: an attempt failed and another one follows.
+    bool retryWait = false;
     StopReason stopReason = StopReason::Missing;
     std::optional<std::string> key;
     std::optional<std::string> model;
@@ -90,6 +94,7 @@ Line read(const json::Value& root, std::string_view raw, bool qoder = false) {
     else if (type.equals("user")) line.kind = Kind::User;
     else if (type.equals("api-request")) line.kind = Kind::ApiRequest;
     else if (type.equals("attachment")) line.kind = Kind::Attachment;
+    else if (type.equals("system")) line.kind = Kind::System;
     if (const auto ts = root["timestamp"]; ts.isString()) {
         if (auto text = ts.string()) line.timestampMs = parseTimestamp(*text);
     }
@@ -99,6 +104,8 @@ Line read(const json::Value& root, std::string_view raw, bool qoder = false) {
     line.cwd = root["cwd"].nonEmptyString();
     line.sidechain = root["isSidechain"].isTrue();
     line.toolEndsTurn = root["toolEndsTurn"].isTrue();
+    line.apiError = line.kind == Kind::Assistant && root["isApiErrorMessage"].isTrue();
+    line.retryWait = line.kind == Kind::System && root["subtype"].equals("api_error");
     line.meta = root["isMeta"].isTrue();
     if (hints.ultra) {
         const auto attachment = root["attachment"];
@@ -263,6 +270,10 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
                 setPhase(Phase::Generating, ts, pendingStartMs_);
             }
             return;
+        case Kind::System:
+            // A failed attempt that Claude Code retries: nothing is generated until the next one starts.
+            if (line.retryWait && phase() == Phase::Generating) setPhase(Phase::Generating, ts, std::nullopt);
+            return;
         case Kind::Other:
         case Kind::Attachment:
             return;
@@ -270,7 +281,16 @@ void ClaudeParser::handle(const json::Value& root, std::string_view text, Respon
             break;
     }
 
-    if (line.model == "<synthetic>" || !line.key) return;
+    if (line.model == "<synthetic>") {
+        // No response; Claude Code's API error message also ends the turn (METRICS 4.1).
+        if (line.apiError) {
+            pendingStartMs_.reset();
+            preciseStart_ = false;
+            setPhase(Phase::Idle, ts, std::nullopt);
+        }
+        return;
+    }
+    if (!line.key) return;
     const std::string& key = *line.key;
     ParsedResponse response;
     bool isCompletion = false;
@@ -360,12 +380,25 @@ void ClaudeParser::handleQoder(const json::Value& root, std::string_view text, R
             }
             return;
         case Kind::Assistant: break;
+        case Kind::System:
+            // A failed attempt that Claude Code retries: nothing is generated until the next one starts.
+            if (line.retryWait && phase() == Phase::Generating) setPhase(Phase::Generating, ts, std::nullopt);
+            return;
         case Kind::ApiRequest:
         case Kind::Attachment:
         case Kind::Other: return;
     }
 
-    if (line.model == "<synthetic>" || !line.key) return;
+    if (line.model == "<synthetic>") {
+        // No response; Claude Code's API error message also ends the turn (METRICS 4.1).
+        if (line.apiError) {
+            pendingStartMs_.reset();
+            preciseStart_ = false;
+            setPhase(Phase::Idle, ts, std::nullopt);
+        }
+        return;
+    }
+    if (!line.key) return;
     const std::string key = "qodercli:" + *line.key;
     std::string owner;
     const bool claimed = deduper().tryClaim(key, agentId(), &owner);
