@@ -10,7 +10,7 @@ struct QuotaEstimatePipelineTests {
     static var pipeline: [String: Any] { F.object(F.cases["pipeline"]) }
 
     @Test(arguments: ["ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live",
-                      "store", "report"])
+                      "store", "report", "tokens"])
     func group(_ name: String) throws {
         let cases = F.list(Self.pipeline[name])
         #expect(!cases.isEmpty)
@@ -35,11 +35,12 @@ struct QuotaEstimatePipelineTests {
     @Test func everyGroupIsCovered() {
         let groups = Set(Self.pipeline.keys)
         #expect(groups == ["ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live",
-                           "store", "report", "cadence"])
+                           "store", "report", "tokens", "cadence"])
         #expect(F.list(Self.pipeline["claude"]).count == 6)
         #expect(F.list(Self.pipeline["inference"]).count == 4)
         #expect(F.list(Self.pipeline["store"]).count == 6)
         #expect(F.list(Self.pipeline["report"]).count == 2)
+        #expect(F.list(Self.pipeline["tokens"]).count == 10)
     }
 
     /// QUOTAS 10.2, 10.8: the display data marks an inferred plan, a plan the CLI names stays unmarked, and the inferred
@@ -162,7 +163,8 @@ struct QuotaEstimatePipelineTests {
                 inputs.spend.append(QuotaEstimateSpend(
                     source: F.string(event["source"])!, model: F.string(event["model"])!, startMs: F.int(event["startMs"]),
                     endMs: F.int(event["endMs"])!, costMicroUsd: F.int(event["costMicroUsd"]),
-                    tokens: F.int(event["tokens"]) ?? 0, file: F.string(event["file"]),
+                    tokens: F.int(event["tokens"]) ?? 0, counts: F.counts(event["counts"]),
+                    publicModel: event["publicModel"] as? Bool ?? true, file: F.string(event["file"]),
                     provider: F.string(event["provider"]), cloudRoute: F.string(event["cloudRoute"]) != nil))
             case "tokenCount":
                 let ts = F.int(event["ts"])!
@@ -235,7 +237,10 @@ struct QuotaEstimatePipelineTests {
             }
         }
         if want.contains("entries") {
-            out["entries"] = build.entries(nowMs: now, origin: F.string(input["origin"])!).map { F.foundation($0.json) }
+            let tokens = input["tokenUsage"] as? Bool ?? false
+            out["entries"] = build.entries(nowMs: now, origin: F.string(input["origin"])!).map {
+                F.foundation($0.json(tokenUsage: tokens))
+            }
         }
         if want.contains("store") {
             out["store"] = F.foundation(try build.store().encoded())

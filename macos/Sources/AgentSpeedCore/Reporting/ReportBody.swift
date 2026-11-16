@@ -146,6 +146,11 @@ public enum ReportBody {
         let scores = options.scoreMode
         var document = json(envelope, content, sample, options, scores: scores)
         var data = document.compactData
+        if !options.fits(data), options.quotas != nil, options.extensions.quotaTokenUsage {
+            options.extensions.quotaTokenUsage = false
+            document = json(envelope, content, sample, options, scores: scores)
+            data = document.compactData
+        }
         if !options.fits(data), options.quotas != nil {
             options.quotas = nil
             document = json(envelope, content, sample, options, scores: scores)
@@ -238,7 +243,10 @@ public enum ReportBody {
             break
         }
         if let quotas = options.quotas {
-            members.append(.init("quotas", .array(quotas.prefix(QuotaEstimateConstants.maxEntries).map(\.json))))
+            let tokens = options.extensions.quotaTokenUsage
+            members.append(.init("quotas", .array(quotas.prefix(QuotaEstimateConstants.maxEntries).map {
+                $0.json(tokenUsage: tokens)
+            })))
         }
         if let realtime = envelope.realtime {
             let mixed = sections.contains(.traffic) && sample.traffic.status == .ok

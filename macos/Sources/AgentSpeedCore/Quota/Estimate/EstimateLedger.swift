@@ -1,7 +1,8 @@
 import Foundation
 
 /// The spend ledger of QUOTAS 10.3: rows per (account, source, price-table model, UTC minute of the response's end)
-/// with their sums. Filled once, then read from any thread: the per-account series are cached behind a lock.
+/// with their sums and token counts. Filled once, then read from any thread: the per-account series are cached behind
+/// a lock.
 public final class QuotaEstimateLedger: @unchecked Sendable {
     struct Key: Hashable {
         var account: String
@@ -15,6 +16,10 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         var unpricedRequests: Int64 = 0
         var pricedTokens: Int64 = 0
         var unpricedTokens: Int64 = 0
+        /// Nil once a response recorded without counts joined the row (unmeasured).
+        var counts: QuotaTokenCounts? = .zero
+        /// The model is an id of the price table, for every response of the row.
+        var publicModel = true
     }
 
     /// The prefix sums of one set of accounts and one model filter.
@@ -28,6 +33,8 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         var rate: Double?
         /// The priced rows with a cost, by minute, for the model mix.
         var spent: [(minute: Int64, model: String, cost: Int64)] = []
+        /// Every row's token counts, by minute (QUOTAS 10.3 `T`).
+        var counted: [(minute: Int64, model: String?, counts: QuotaTokenCounts?)] = []
     }
 
     private struct SeriesKey: Hashable {
@@ -43,9 +50,9 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
 
     var isEmpty: Bool { rows.isEmpty }
 
-    /// Adds one response, or a minute's worth of them; a nil cost is unpriced.
+    /// Adds one response, or a minute's worth of them; a nil cost is unpriced, nil `counts` unmeasured.
     func add(account: String, source: String, model: String, endMs: Int64, cost: Int64?, requests: Int64 = 1,
-             tokens: Int64 = 0) {
+             tokens: Int64 = 0, counts: QuotaTokenCounts?, publicModel: Bool = true) {
         let key = Key(account: account, source: source, model: model, minute: Self.minute(of: endMs))
         var row = rows[key] ?? Row()
         if let cost {
@@ -55,6 +62,8 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
             row.unpricedRequests += requests
             row.unpricedTokens += tokens
         }
+        row.counts = QuotaTokenCounts.merge(row.counts, counts)
+        row.publicModel = row.publicModel && publicModel
         rows[key] = row
         lock.withLock { cache.removeAll() }
     }
@@ -86,6 +95,7 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         var perMinute: [Int64: (cost: Int64, unpriced: Int64, tokens: Int64)] = [:]
         var rates: [String: (cost: Int64, tokens: Int64)] = [:]
         var spent: [(minute: Int64, model: String, cost: Int64)] = []
+        var counted: [(minute: Int64, model: String?, counts: QuotaTokenCounts?)] = []
         for (rowKey, row) in rows where accounts.contains(rowKey.account) && Self.modelMatches(rowKey.model, name: name) {
             var value = perMinute[rowKey.minute] ?? (0, 0, 0)
             value.cost += row.cost
@@ -97,6 +107,7 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
             rate.tokens += row.pricedTokens
             rates[rowKey.model] = rate
             if row.cost > 0 { spent.append((rowKey.minute, rowKey.model, row.cost)) }
+            counted.append((rowKey.minute, row.publicModel ? rowKey.model : nil, row.counts))
         }
         var out = Series()
         out.minutes = perMinute.keys.sorted()
@@ -109,6 +120,7 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         }
         out.rate = rates.values.filter { $0.tokens > 0 }.map { Double($0.cost) / Double($0.tokens) }.max()
         out.spent = spent.sorted { ($0.minute, $0.model) < ($1.minute, $1.model) }
+        out.counted = counted.sorted { $0.minute < $1.minute }
         lock.withLock { cache[key] = out }
         return out
     }
@@ -165,6 +177,29 @@ public final class QuotaEstimateLedger: @unchecked Sendable {
         return totals.sorted { ($1.value, $0.key) < ($0.value, $1.key) }.prefix(top).map {
             (model: $0.key, share: QuotaEstimateRounding.halfAway(Double($0.value) / Double(whole), digits: 3))
         }
+    }
+
+    /// `T`: the token counts of the rows `outer` sums (REPORTING-EXTENSIONS 12 `tokenUsage`); nil when a row is
+    /// unmeasured, past 16 models or an unsafe total.
+    func tokenUsage(_ accounts: Set<String>, _ name: String?, _ start: Int64, _ end: Int64) -> QuotaTokenUsage? {
+        let series = series(accounts, name)
+        let first = Self.minute(of: start), last = Self.minute(of: end)
+        var low = 0, high = series.counted.count
+        while low < high {
+            let mid = (low + high) / 2
+            if series.counted[mid].minute < first { low = mid + 1 } else { high = mid }
+        }
+        var total = QuotaTokenCounts.zero
+        var models: [String?: (input: Int64, output: Int64)] = [:]
+        while low < series.counted.count, series.counted[low].minute <= last {
+            guard let counts = series.counted[low].counts else { return nil }
+            total = total.adding(counts)
+            let sums = models[series.counted[low].model] ?? (0, 0)
+            models[series.counted[low].model] = (QuotaTokenCounts.add(sums.input, counts.input),
+                                                 QuotaTokenCounts.add(sums.output, counts.output))
+            low += 1
+        }
+        return QuotaTokenUsage(counts: total, models: models)
     }
 
     static func lowerBound(_ values: [Int64], _ x: Int64) -> Int {

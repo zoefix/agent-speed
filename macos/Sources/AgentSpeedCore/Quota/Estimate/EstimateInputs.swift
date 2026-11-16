@@ -16,6 +16,10 @@ public struct QuotaEstimateSpend: Equatable, Sendable {
     public var costMicroUsd: Int64?
     /// Input plus output tokens.
     public var tokens: Int64
+    /// The token counts of QUOTAS 10.3; nil when recorded without them (unmeasured).
+    public var counts: QuotaTokenCounts?
+    /// `model` is an id of the price table.
+    public var publicModel: Bool
     public var requests: Int64
     /// The transcript, for Codex's token count lines.
     public var file: String?
@@ -27,8 +31,8 @@ public struct QuotaEstimateSpend: Equatable, Sendable {
     public var cloudRoute: Bool
 
     public init(source: String, host: String? = nil, model: String, startMs: Int64?, endMs: Int64, costMicroUsd: Int64?,
-                tokens: Int64 = 0, requests: Int64 = 1, file: String? = nil, codexLine: QuotaCodexLine.ID? = nil,
-                provider: String? = nil, cloudRoute: Bool = false) {
+                tokens: Int64 = 0, counts: QuotaTokenCounts? = nil, publicModel: Bool = true, requests: Int64 = 1,
+                file: String? = nil, codexLine: QuotaCodexLine.ID? = nil, provider: String? = nil, cloudRoute: Bool = false) {
         self.source = source
         self.host = host
         self.model = model
@@ -36,6 +40,8 @@ public struct QuotaEstimateSpend: Equatable, Sendable {
         self.endMs = endMs
         self.costMicroUsd = costMicroUsd
         self.tokens = tokens
+        self.counts = counts
+        self.publicModel = publicModel
         self.requests = requests
         self.file = file
         self.codexLine = codexLine

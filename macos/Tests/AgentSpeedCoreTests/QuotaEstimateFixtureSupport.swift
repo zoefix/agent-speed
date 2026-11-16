@@ -50,9 +50,17 @@ enum EstimateFixtures {
         for r in rows {
             ledger.add(account: string(r["account"]) ?? "a", source: string(r["source"]) ?? "codex",
                        model: string(r["model"]) ?? "gpt-5.5", endMs: int(r["at"])!, cost: int(r["cost"]),
-                       requests: int(r["requests"]) ?? 1)
+                       requests: int(r["requests"]) ?? 1, counts: counts(r["counts"]),
+                       publicModel: r["public"] as? Bool ?? true)
         }
         return ledger
+    }
+
+    /// The token counts of a row or response (QUOTAS 10.3); nil when absent (unmeasured).
+    static func counts(_ value: Any?) -> QuotaTokenCounts? {
+        guard let c = value as? [String: Any] else { return nil }
+        return QuotaTokenCounts(input: int(c["input"])!, output: int(c["output"])!, cachedInput: int(c["cachedInput"]),
+                                cacheWriteInput: int(c["cacheWriteInput"]), reasoning: int(c["reasoning"]))
     }
 
     static func window(_ w: [String: Any]) -> QuotaWindow {

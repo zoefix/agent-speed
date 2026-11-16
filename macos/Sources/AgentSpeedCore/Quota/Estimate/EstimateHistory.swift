@@ -9,11 +9,13 @@ extension QuotaEstimateSpend {
     init?(_ record: ResponseRecord, cost: Int64?, models: QuotaModelIds) {
         guard Self.sources.contains(record.source) else { return nil }
         let claude = record.source == .claudeCode || record.source == .claudeDesktop
+        let model = models.entry(model: record.model, provider: record.provider)
         self.init(source: record.source.rawValue, host: record.host == RemoteHost.localId ? nil : record.host,
-                  model: models.id(model: record.model, provider: record.provider), startMs: record.startMs,
-                  endMs: record.endMs, costMicroUsd: cost, tokens: Int64(record.usage.total),
-                  requests: Int64(record.requestCount), file: record.agentId, provider: record.provider,
-                  cloudRoute: claude && models.isCloudRoute(record.model))
+                  model: model.id, startMs: record.startMs, endMs: record.endMs, costMicroUsd: cost,
+                  tokens: Int64(record.usage.total),
+                  counts: QuotaTokenCounts(source: record.source.rawValue, usage: record.usage),
+                  publicModel: model.isPublic, requests: Int64(record.requestCount), file: record.agentId,
+                  provider: record.provider, cloudRoute: claude && models.isCloudRoute(record.model))
     }
 }
 
@@ -21,7 +23,7 @@ extension QuotaEstimateSpend {
 public final class QuotaModelIds: @unchecked Sendable {
     private let lock = NSLock()
     private var version: Int?
-    private var ids: [String: String] = [:]
+    private var ids: [String: (id: String, isPublic: Bool)] = [:]
     private var cloud: [String: Bool] = [:]
     private let table: () -> PriceTable
 
@@ -35,11 +37,16 @@ public final class QuotaModelIds: @unchecked Sendable {
 
     /// The entry's id when the table knows the model (priced or free), else the model as logged.
     func id(model: String?, provider: String?) -> String {
-        guard let model, !model.isEmpty else { return ReportModelIds.unknown }
+        entry(model: model, provider: provider).id
+    }
+
+    /// The id with whether it is the table's (public, METRICS 11.3) rather than the logged name.
+    func entry(model: String?, provider: String?) -> (id: String, isPublic: Bool) {
+        guard let model, !model.isEmpty else { return (ReportModelIds.unknown, false) }
         let key = "\(provider ?? "")\u{1F}\(model)"
         return cached(\.ids, key) {
             let id = $0.reportModelId(model: model, provider: provider)
-            return id == ReportModelIds.unknown || id == ReportModelIds.local ? model.lowercased() : id
+            return id == ReportModelIds.unknown || id == ReportModelIds.local ? (model.lowercased(), false) : (id, true)
         }
     }
 
@@ -78,8 +85,9 @@ extension ModelResolver {
 /// One analysed file's share of the ledger (QUOTAS 10.3): its spend within 8 days per minute, and its Codex token
 /// count lines with the response each reports.
 public struct QuotaEstimateFile: Equatable, Sendable {
-    /// Bumped when the contributions change; files of another version are analysed again when recent.
-    public static let version: Int64 = 1
+    /// Bumped when the contributions change; files of another version are analysed again when recent. 2: token counts
+    /// (QUOTAS 10.3); version 1 rows decode as unmeasured.
+    public static let version: Int64 = 2
 
     public var spend: [QuotaEstimateSpend]
     public var lines: [QuotaCodexLine]
@@ -148,6 +156,8 @@ public struct QuotaEstimateFile: Equatable, Sendable {
             }
             sum.costMicroUsd = sum.costMicroUsd.map { $0 + (s.costMicroUsd ?? 0) }
             sum.tokens += s.tokens
+            sum.counts = QuotaTokenCounts.merge(sum.counts, s.counts)
+            sum.publicModel = sum.publicModel && s.publicModel
             sum.requests += s.requests
             sum.endMs = max(sum.endMs, s.endMs)
             if let start = s.startMs { sum.startMs = min(sum.startMs ?? start, start) }

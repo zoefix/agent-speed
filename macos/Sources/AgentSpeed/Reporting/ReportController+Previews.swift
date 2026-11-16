@@ -30,7 +30,7 @@ extension ReportController {
     /// The example service, which also advertises the performance score (METRICS 11.10) and the quota estimate
     /// (REPORTING-EXTENSIONS 11); `websocket` adds the WebSocket capability with these settings (METRICS 11.9).
     static func discovery(websocket: String?) -> ReportDiscovery {
-        let extensions = (websocket == nil ? "" : #""reportWebSocket":1,"#) + #""perfScore":1,"quotaEstimate":1"#
+        let extensions = (websocket == nil ? "" : #""reportWebSocket":1,"#) + #""perfScore":1,"quotaEstimate":1,"quotaTokenUsage":1"#
         let stream = websocket.map { #","websocket":\#($0)"# } ?? ""
         let document = """
         {"protocol":"agent-speed-report","versions":[1],
