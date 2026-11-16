@@ -1,6 +1,8 @@
 using System.Runtime.ExceptionServices;
 using System.IO;
 using System.Windows;
+using System.Windows.Automation.Peers;
+using System.Windows.Automation.Provider;
 using System.Windows.Controls;
 using System.Windows.Controls.Primitives;
 using System.Windows.Threading;
@@ -67,11 +69,10 @@ public sealed class ApiPageTests
                         var report = (RadioButton)page.FindName("ReportSegmentButton");
                         var lan = (RadioButton)page.FindName("LanSegmentButton");
                         AssertSelection(page, model, report, lan);
-                        // Actual WPF group changes must not become model writes, even when both controls are
-                        // temporarily inconsistent with the model during binding activation.
+                        // Unchecking is a side effect of the group, not an instruction to select the other pane.
                         var before = model.ApiShowsLan;
-                        var other = before ? report : lan;
-                        other.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+                        var selected = before ? lan : report;
+                        selected.SetCurrentValue(ToggleButton.IsCheckedProperty, false);
                         Assert.Equal(before, model.ApiShowsLan);
                         report.GetBindingExpression(ToggleButton.IsCheckedProperty)!.UpdateTarget();
                         lan.GetBindingExpression(ToggleButton.IsCheckedProperty)!.UpdateTarget();
@@ -80,9 +81,17 @@ public sealed class ApiPageTests
                         {
                             var next = !model.ApiShowsLan;
                             var button = next ? lan : report;
-                            // RadioButton.OnClick first checks the button, then raises Click (mouse/keyboard).
-                            button.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
-                            button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                            if (i % 2 == 0)
+                            {
+                                // UI Automation selects without raising Click.
+                                var peer = new RadioButtonAutomationPeer(button);
+                                ((ISelectionItemProvider)peer.GetPattern(PatternInterface.SelectionItem)!).Select();
+                            }
+                            else
+                            {
+                                button.SetCurrentValue(ToggleButton.IsCheckedProperty, true);
+                                button.RaiseEvent(new RoutedEventArgs(ButtonBase.ClickEvent));
+                            }
                             Drain();
                             Assert.Equal(next, model.ApiShowsLan);
                             AssertSelection(page, model, report, lan);

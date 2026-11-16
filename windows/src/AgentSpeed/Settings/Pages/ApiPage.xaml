@@ -7,6 +7,7 @@
              xmlns:controls="clr-namespace:AgentSpeed.Controls"
              Focusable="False">
     <UserControl.Resources>
+        <pages:ApiSegmentSelectionConverter x:Key="ApiSegmentSelection" />
         <!-- The pane's two segments: a little taller than the compact segmented rows, the same Fluent look. -->
         <Style x:Key="PaneSegment" TargetType="RadioButton" BasedOn="{StaticResource SegmentedItem}">
             <Setter Property="Height" Value="30" />
@@ -21,9 +22,9 @@
                                  AutomationProperties.Name="{loc:Loc settings.report}">
             <UniformGrid Columns="2">
                 <RadioButton x:Name="ReportSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.report}"
-                             IsChecked="{Binding ApiShowsReport, Mode=OneWay}" Click="OnReportSegmentClick" AutomationProperties.Name="{loc:Loc lan.segment.report}" />
+                             IsChecked="{Binding ApiShowsLan, Mode=TwoWay, Converter={StaticResource ApiSegmentSelection}, ConverterParameter=False}" AutomationProperties.Name="{loc:Loc lan.segment.report}" />
                 <RadioButton x:Name="LanSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.lan}"
-                             IsChecked="{Binding ApiShowsLan, Mode=OneWay}" Click="OnLanSegmentClick" AutomationProperties.Name="{loc:Loc lan.segment.lan}" />
+                             IsChecked="{Binding ApiShowsLan, Mode=TwoWay, Converter={StaticResource ApiSegmentSelection}, ConverterParameter=True}" AutomationProperties.Name="{loc:Loc lan.segment.lan}" />
             </UniformGrid>
         </controls:SegmentedGroup>
         <Grid>
