@@ -7,7 +7,10 @@ enum ResponseTiming {
 
     /// The widened start (`startMs'`) of a valid interval, or nil when the interval does not count as speed.
     static func effectiveStart(startMs: Int64?, endMs: Int64) -> Int64? {
-        guard let startMs, endMs >= startMs, endMs - startMs <= maxIntervalMs else { return nil }
+        guard let startMs, endMs >= startMs else { return nil }
+        // A saturated start (METRICS 3.6) can be farther than Int64 spans from the end.
+        let (span, overflow) = endMs.subtractingReportingOverflow(startMs)
+        guard !overflow, span <= maxIntervalMs else { return nil }
         return min(startMs, endMs - minDurationMs)
     }
 

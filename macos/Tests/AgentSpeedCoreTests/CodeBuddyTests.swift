@@ -142,9 +142,14 @@ struct CodeBuddyTests {
     }
 
     /// A start before Int64.min saturates (METRICS 3.6): year 0000 minus a duration that truncates to 2^63 − 1.
-    @Test func aMeasuredStartSaturates() {
+    @Test func aMeasuredStartSaturates() throws {
         let line = #"{"id":"a","timestamp":"0000-01-01T00:00:00Z","type":"message","role":"assistant","status":"completed","providerData":{"messageId":"m1",\#(Self.attempts(#"[{"duration_ms":1e19,"time_to_first_token_ms":5}]"#))},"cwd":"/w/x"}"#
         let run = Self.run([line])
         #expect(run.responses.first?.startMs == Int64.min && run.responses.first?.firstMs == Int64.min + 5)
+        // A later line of the call can move the end far enough that the interval no longer fits in Int64.
+        let later = #"{"id":"b","timestamp":1e19,"type":"model-usage","providerData":{"messageId":"m1",\#(WorkBuddyTests.usage(1000, 40))},"cwd":"/w/x"}"#
+        let merged = try #require(Self.run([line, later]).responses.first)
+        #expect(merged.startMs == Int64.min && merged.endMs == Int64.max && !merged.isMeasured)
+        #expect(ResponseTiming.effectiveStart(startMs: .min, endMs: .max) == nil)
     }
 }
