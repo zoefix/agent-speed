@@ -5,8 +5,8 @@ public readonly record struct QuotaMixShare(string Model, double Share);
 
 /// <summary>
 /// The spend ledger of QUOTAS 10.3: rows per (account, source, price-table model, UTC minute of the end) with the cost,
-/// unpriced requests and the tokens of priced and unpriced responses. Sums read prefix sums cached per (account, window
-/// name), so they cost two binary searches. Thread-safe for reads once filled.
+/// unpriced requests, the tokens of priced and unpriced responses and their token counts. Sums read prefix sums cached per
+/// (account, window name), so they cost two binary searches. Thread-safe for reads once filled.
 /// </summary>
 public sealed class SpendLedger
 {
@@ -18,9 +18,16 @@ public sealed class SpendLedger
         public long Unpriced;
         public long PricedTokens;
         public long UnpricedTokens;
+
+        /// <summary>Null once a response recorded without counts joined the row (unmeasured).</summary>
+        public QuotaTokenCounts? Counts = QuotaTokenCounts.Zero;
+
+        /// <summary>The model is an id of the price table, for every response of the row.</summary>
+        public bool PublicModel = true;
     }
 
-    private sealed class Series(long[] minutes, long[] cost, long[] unpriced, long[] unpricedTokens, double? rate, Dictionary<string, (long[] Minutes, long[] Cost)> models)
+    private sealed class Series(long[] minutes, long[] cost, long[] unpriced, long[] unpricedTokens, double? rate, Dictionary<string, (long[] Minutes, long[] Cost)> models,
+        (long Minute, string? Model, QuotaTokenCounts? Counts)[] counted)
     {
         public long[] Minutes { get; } = minutes;
 
@@ -33,6 +40,9 @@ public sealed class SpendLedger
         public double? Rate { get; } = rate;
 
         public Dictionary<string, (long[] Minutes, long[] Cost)> Models { get; } = models;
+
+        /// <summary>Every row's token counts by minute, its model null when not the table's (QUOTAS 10.3 <c>T</c>).</summary>
+        public (long Minute, string? Model, QuotaTokenCounts? Counts)[] Counted { get; } = counted;
     }
 
     private readonly Dictionary<RowKey, Row> _rows = [];
@@ -43,7 +53,9 @@ public sealed class SpendLedger
 
     public static long MinuteOf(long ms) => FloorDiv(ms, EstimateLimits.Minute) * EstimateLimits.Minute;
 
-    public void Add(string account, SourceKind source, string model, long endMs, long? costMicroUsd, long requests = 1, long tokens = 0)
+    /// <summary>Adds one response, or a minute's worth of them; a null cost is unpriced, null <paramref name="counts"/> unmeasured.</summary>
+    public void Add(string account, SourceKind source, string model, long endMs, long? costMicroUsd, long requests = 1, long tokens = 0,
+        QuotaTokenCounts? counts = null, bool publicModel = true)
     {
         ArgumentNullException.ThrowIfNull(account);
         ArgumentNullException.ThrowIfNull(model);
@@ -67,6 +79,8 @@ public sealed class SpendLedger
                 row.UnpricedTokens += tokens;
             }
 
+            row.Counts = QuotaTokenCounts.Merge(row.Counts, counts);
+            row.PublicModel &= publicModel;
             _cache.Clear();
         }
     }
@@ -164,6 +178,55 @@ public sealed class SpendLedger
         return shares;
     }
 
+    /// <summary>
+    /// <c>T</c>: the token counts of the rows <see cref="Outer"/> sums (REPORTING-EXTENSIONS 12 <c>tokenUsage</c>); null when
+    /// a row is unmeasured, past 16 models or an unsafe total.
+    /// </summary>
+    public QuotaTokenUsage? TokenUsage(string account, string? name, long start, long end)
+    {
+        var counted = SeriesOf(account, name).Counted;
+        var first = MinuteOf(start);
+        var last = MinuteOf(end);
+        var low = 0;
+        var high = counted.Length;
+        while (low < high)
+        {
+            var mid = (low + high) / 2;
+            if (counted[mid].Minute < first)
+            {
+                low = mid + 1;
+            }
+            else
+            {
+                high = mid;
+            }
+        }
+
+        var total = QuotaTokenCounts.Zero;
+        var models = new Dictionary<string, (long Input, long Output)>(StringComparer.Ordinal);
+        (long Input, long Output) others = default;
+        for (; low < counted.Length && counted[low].Minute <= last; low++)
+        {
+            if (counted[low].Counts is not { } counts)
+            {
+                return null;
+            }
+
+            total = total.Adding(counts);
+            if (counted[low].Model is { } model)
+            {
+                var sums = models.GetValueOrDefault(model);
+                models[model] = (QuotaTokenCounts.Add(sums.Input, counts.Input), QuotaTokenCounts.Add(sums.Output, counts.Output));
+            }
+            else
+            {
+                others = (QuotaTokenCounts.Add(others.Input, counts.Input), QuotaTokenCounts.Add(others.Output, counts.Output));
+            }
+        }
+
+        return QuotaTokenUsage.Of(total, models, others);
+    }
+
     private (long Cost, long Unpriced, long Tokens, double? Rate) Range(string account, string? name, long firstMinute, long lastMinute)
     {
         var series = SeriesOf(account, name);
@@ -201,12 +264,15 @@ public sealed class SpendLedger
             var perMinute = new SortedDictionary<long, (long Cost, long Unpriced, long Tokens)>();
             var rates = new Dictionary<string, (long Cost, long Tokens)>(StringComparer.Ordinal);
             var perModel = new Dictionary<string, SortedDictionary<long, long>>(StringComparer.Ordinal);
+            var counted = new List<(long Minute, string? Model, QuotaTokenCounts? Counts)>();
             foreach (var (k, row) in _rows)
             {
                 if (!string.Equals(k.Account, account, StringComparison.Ordinal) || !ModelMatches(k.Model, name))
                 {
                     continue;
                 }
+
+                counted.Add((k.Minute, row.PublicModel ? k.Model : null, row.Counts));
 
                 perMinute.TryGetValue(k.Minute, out var v);
                 perMinute[k.Minute] = (v.Cost + row.Cost, v.Unpriced + row.Unpriced, v.Tokens + row.UnpricedTokens);
@@ -262,7 +328,8 @@ public sealed class SpendLedger
                 models.Add(model, (m, sums));
             }
 
-            var series = new Series(minutes, cost, unpriced, tokens, rate, models);
+            counted.Sort(static (a, b) => a.Minute.CompareTo(b.Minute));
+            var series = new Series(minutes, cost, unpriced, tokens, rate, models, [.. counted]);
             _cache[key] = series;
             return series;
         }

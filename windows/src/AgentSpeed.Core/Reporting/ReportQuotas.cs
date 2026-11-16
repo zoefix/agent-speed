@@ -2,20 +2,24 @@ using AgentSpeed.Core.Quota.Estimate;
 
 namespace AgentSpeed.Core.Reporting;
 
-/// <summary>The <c>quotas</c> member of a report (REPORTING-EXTENSIONS 11.2), members in the schema's order.</summary>
+/// <summary>
+/// The <c>quotas</c> member of a report (REPORTING-EXTENSIONS 11.2), members in the schema's order; with
+/// <c>tokenUsage</c> (REPORTING-EXTENSIONS 12) last, the counts or null, for a service that advertises <c>quotaTokenUsage</c>.
+/// </summary>
 public static class ReportQuotas
 {
-    public static ReportJson Json(IReadOnlyList<QuotaReportEntry> entries)
+    public static ReportJson Json(IReadOnlyList<QuotaReportEntry> entries, bool tokenUsage = false)
     {
         ArgumentNullException.ThrowIfNull(entries);
-        return ReportJson.Array(entries.Select(Entry));
+        return ReportJson.Array(entries.Select(e => Entry(e, tokenUsage)));
     }
 
-    public static ReportJson Entry(QuotaReportEntry e)
+    public static ReportJson Entry(QuotaReportEntry e, bool tokenUsage = false)
     {
         ArgumentNullException.ThrowIfNull(e);
         var estimate = e.Estimate;
-        return ReportJson.Object(
+        var members = new List<(string, ReportJson)>
+        {
             ("account", ReportJson.Of(e.Account)),
             ("source", ReportJson.Of(ReportBody.SourceId(e.Source))),
             ("sources", ReportJson.Array(e.Sources.Select(s => ReportJson.Of(ReportBody.SourceId(s))))),
@@ -42,7 +46,33 @@ public static class ReportQuotas
                 ("accountUsedMicroUsd", ReportJson.OfOptional(estimate.AccountUsedMicroUsd)),
                 ("windows", ReportJson.Of(estimate.Windows)))),
             ("mix", ReportJson.Array(e.Mix.Select(m => ReportJson.Object(("model", ReportJson.Of(m.Model)), ("share", ReportJson.Decimal(m.Share, 3)))))),
-            ("priceVersion", ReportJson.Of(e.PriceVersion)));
+            ("priceVersion", ReportJson.Of(e.PriceVersion)),
+        };
+        if (tokenUsage)
+        {
+            members.Add(("tokenUsage", TokenUsage(e.TokenUsage)));
+        }
+
+        return ReportJson.Object(members);
+    }
+
+    /// <summary>A <c>quotaTokenUsage</c> block; null when the counts are not completely known.</summary>
+    public static ReportJson TokenUsage(QuotaTokenUsage? usage)
+    {
+        if (usage is null)
+        {
+            return ReportJson.Null;
+        }
+
+        var counts = usage.Counts;
+        return ReportJson.Object(
+            ("inputTokens", ReportJson.Of(counts.Input)),
+            ("outputTokens", ReportJson.Of(counts.Output)),
+            ("cachedInputTokens", ReportJson.OfOptional(counts.CachedInput)),
+            ("cacheWriteInputTokens", ReportJson.OfOptional(counts.CacheWriteInput)),
+            ("reasoningTokens", ReportJson.OfOptional(counts.Reasoning)),
+            ("models", ReportJson.Array(usage.Models.Select(m => ReportJson.Object(
+                ("model", Text(m.Model)), ("inputTokens", ReportJson.Of(m.InputTokens)), ("outputTokens", ReportJson.Of(m.OutputTokens)))))));
     }
 
     private static ReportJson Text(string? value) => value is null ? ReportJson.Null : ReportJson.Of(value);

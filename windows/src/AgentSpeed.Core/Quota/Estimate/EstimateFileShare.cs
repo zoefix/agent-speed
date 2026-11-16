@@ -11,8 +11,11 @@ namespace AgentSpeed.Core.Quota.Estimate;
 /// </summary>
 public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses, IReadOnlyList<CodexTokenLine> Lines)
 {
-    /// <summary>Bumped when the share's contents change: stored shares of another version are made again while their file is recent.</summary>
-    public const int Version = 1;
+    /// <summary>
+    /// Bumped when the share's contents change: stored shares of another version are made again while their file is recent.
+    /// 2: token counts (QUOTAS 10.3); version 1 rows decode as unmeasured.
+    /// </summary>
+    public const int Version = 2;
 
     public static EstimateFileShare Empty { get; } = new([], []);
 
@@ -27,7 +30,11 @@ public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses
         return spend.Count == 0 && kept.Count == 0 ? Empty : new EstimateFileShare(spend, kept);
     }
 
-    /// <summary>The share as stored: compact JSON, the file implied by its row.</summary>
+    /// <summary>
+    /// The share as stored: compact JSON, the file implied by its row. Responses are <c>[source, model, start, end, cost, tokens,
+    /// requests, provider, cloudRoute, counts, public]</c> with counts <c>[input, output, cachedInput, cacheWriteInput,
+    /// reasoning]</c> or null; version 1 rows end after <c>cloudRoute</c>.
+    /// </summary>
     public byte[] Encode()
     {
         var buffer = new ArrayBufferWriter<byte>();
@@ -47,6 +54,22 @@ public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses
                 w.WriteNumberValue(r.Requests);
                 Text(w, r.Provider);
                 w.WriteBooleanValue(r.CloudRoute);
+                if (r.Counts is { } counts)
+                {
+                    w.WriteStartArray();
+                    w.WriteNumberValue(counts.Input);
+                    w.WriteNumberValue(counts.Output);
+                    Number(w, counts.CachedInput);
+                    Number(w, counts.CacheWriteInput);
+                    Number(w, counts.Reasoning);
+                    w.WriteEndArray();
+                }
+                else
+                {
+                    w.WriteNullValue();
+                }
+
+                w.WriteBooleanValue(r.PublicModel);
                 w.WriteEndArray();
             }
 
@@ -80,7 +103,7 @@ public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses
         return buffer.WrittenSpan.ToArray();
     }
 
-    /// <summary>A stored share of <paramref name="file"/>; null when it does not parse.</summary>
+    /// <summary>A stored share of <paramref name="file"/>; null when it does not parse or a count is negative.</summary>
     public static EstimateFileShare? Decode(ReadOnlySpan<byte> data, string file)
     {
         ArgumentNullException.ThrowIfNull(file);
@@ -96,9 +119,16 @@ public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses
             var responses = new List<EstimateResponse>();
             foreach (var r in root.GetProperty("r").EnumerateArray())
             {
+                var length = r.GetArrayLength();
                 var source = SourceNames.Parse(r[0].GetString()) ?? throw new FormatException();
+                var (counts, isPublic) = length switch
+                {
+                    9 => (null, true),
+                    11 => (Counts(r[9]), r[10].GetBoolean()),
+                    _ => throw new FormatException(),
+                };
                 responses.Add(new EstimateResponse(source, source == SourceKind.Codex ? file : null, Long(r[2]), r[3].GetInt64(), r[1].GetString()!,
-                    Long(r[4]), r[5].GetInt64(), r[7].GetString(), r[8].GetBoolean(), null, r[6].GetInt64()));
+                    Long(r[4]), r[5].GetInt64(), r[7].GetString(), r[8].GetBoolean(), null, r[6].GetInt64(), counts, isPublic));
             }
 
             var lines = new List<CodexTokenLine>();
@@ -124,6 +154,23 @@ public sealed record EstimateFileShare(IReadOnlyList<EstimateResponse> Responses
     }
 
     private static long? Long(JsonElement e) => e.ValueKind == JsonValueKind.Null ? null : e.GetInt64();
+
+    /// <summary>A row's stored counts: null (unmeasured) or five integers, none negative.</summary>
+    private static QuotaTokenCounts? Counts(JsonElement e)
+    {
+        if (e.ValueKind == JsonValueKind.Null)
+        {
+            return null;
+        }
+
+        if (e.GetArrayLength() != 5)
+        {
+            throw new FormatException();
+        }
+
+        var counts = new QuotaTokenCounts(e[0].GetInt64(), e[1].GetInt64(), Long(e[2]), Long(e[3]), Long(e[4]));
+        return counts.IsValid ? counts : throw new FormatException();
+    }
 
     private static void Number(Utf8JsonWriter w, long? value)
     {

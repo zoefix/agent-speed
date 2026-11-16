@@ -78,6 +78,7 @@ public sealed class ReportQuotaTests
     {
         var assumed = ReportDiscovery.Assumed(Service, "Example")!;
         Assert.True(assumed.Extensions.QuotaEstimate);
+        Assert.True(assumed.Extensions.QuotaTokenUsage);
         Assert.True(assumed.Extensions.PerfScore);
     }
 

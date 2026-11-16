@@ -32,18 +32,38 @@ internal static class EstimateFixture
 
     public static SourceKind Source(string? name) => EstimateNames.ParseSource(name) ?? throw new InvalidDataException(name);
 
-    /// <summary>The reference's <c>ledger_from</c>: account <c>a</c>, source codex, model gpt-5.5 unless named, no tokens.</summary>
+    /// <summary>
+    /// The reference's <c>ledger_from</c>: account <c>a</c>, source codex, model gpt-5.5 unless named, no tokens; the token
+    /// counts when given (else unmeasured) and the model public unless <c>public</c> is false.
+    /// </summary>
     public static SpendLedger LedgerFrom(JsonElement rows)
     {
         var ledger = new SpendLedger();
         foreach (var r in rows.EnumerateArray())
         {
             ledger.Add(OptionalString(r, "account") ?? "a", EstimateNames.ParseSource(OptionalString(r, "source")) ?? SourceKind.Codex,
-                OptionalString(r, "model") ?? "gpt-5.5", r.GetProperty("at").GetInt64(), OptionalLong(r, "cost"), OptionalLong(r, "requests") ?? 1);
+                OptionalString(r, "model") ?? "gpt-5.5", r.GetProperty("at").GetInt64(), OptionalLong(r, "cost"), OptionalLong(r, "requests") ?? 1,
+                counts: Counts(r, "counts"), publicModel: OptionalBool(r, "public") ?? true);
         }
 
         return ledger;
     }
+
+    /// <summary>The token counts of a row or response (QUOTAS 10.3); null when absent (unmeasured).</summary>
+    public static QuotaTokenCounts? Counts(JsonElement e, string name)
+    {
+        if (!e.TryGetProperty(name, out var c) || c.ValueKind != JsonValueKind.Object)
+        {
+            return null;
+        }
+
+        static long? Exact(JsonElement c, string name) => c.GetProperty(name).ValueKind == JsonValueKind.Null ? null : c.GetProperty(name).GetInt64();
+        return new QuotaTokenCounts(c.GetProperty("input").GetInt64(), c.GetProperty("output").GetInt64(), Exact(c, "cachedInput"),
+            Exact(c, "cacheWriteInput"), Exact(c, "reasoning"));
+    }
+
+    public static bool? OptionalBool(JsonElement e, string name) =>
+        e.TryGetProperty(name, out var v) && v.ValueKind is JsonValueKind.True or JsonValueKind.False ? v.GetBoolean() : null;
 
     public static QuotaObservation Observation(JsonElement o, string account = "a") => new(
         account, Source(OptionalString(o, "source")), EstimateNames.ParseKind(o.GetProperty("kind").GetString())!.Value,
@@ -64,9 +84,10 @@ internal static class EstimateFixture
 
     public static JsonElement ToElement(JsonNode? node) => Parse(node?.ToJsonString() ?? "null");
 
-    public static JsonElement EntryJson(QuotaReportEntry entry) => Parse(ReportQuotas.Entry(entry).ToCompactString());
+    public static JsonElement EntryJson(QuotaReportEntry entry, bool tokenUsage = false) => Parse(ReportQuotas.Entry(entry, tokenUsage).ToCompactString());
 
-    public static JsonElement EntriesJson(IEnumerable<QuotaReportEntry> entries) => Parse(ReportQuotas.Json([.. entries]).ToCompactString());
+    public static JsonElement EntriesJson(IEnumerable<QuotaReportEntry> entries, bool tokenUsage = false) =>
+        Parse(ReportQuotas.Json([.. entries], tokenUsage).ToCompactString());
 
     /// <summary>Deep equality: integers exactly, other numbers within 1e-3 (the reference rounds to three decimals).</summary>
     public static void AssertSame(JsonElement expected, JsonElement actual, string path)

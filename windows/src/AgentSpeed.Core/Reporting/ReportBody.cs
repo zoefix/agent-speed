@@ -97,6 +97,9 @@ public sealed record ReportOptions(
     /// <summary>The report carries the <c>quotas</c> member.</summary>
     public bool CarriesQuotas => Quotas is not null && Extensions.QuotaEstimate;
 
+    /// <summary>Its entries carry <c>tokenUsage</c> (REPORTING-EXTENSIONS 12): the service advertises <c>quotaTokenUsage</c> too.</summary>
+    public bool CarriesTokenUsage => CarriesQuotas && Extensions.QuotaTokenUsage;
+
     /// <summary>The report carries <c>models</c> by consent: the service lists it, <c>maxModels</c> ≥ 1 and the user's switch is on.</summary>
     private bool ModelsShared => MaxModels >= 1 && (ModelsDroppedForSize || Sections.Contains(ReportSection.Models));
 
@@ -127,8 +130,8 @@ public static class ReportBody
     private static readonly SourceKind[] SourceOrder = Enum.GetValues<SourceKind>();
 
     /// <summary>
-    /// The body as sent: within the body limit, dropping <c>quotas</c> first (REPORTING-EXTENSIONS 11.3), then the per-model
-    /// breakdowns, <c>models</c> and <c>sources</c> when it would not fit.
+    /// The body as sent: within the body limit, dropping the entries' <c>tokenUsage</c> first (REPORTING-EXTENSIONS 12), then
+    /// <c>quotas</c> (11.3), then the per-model breakdowns, <c>models</c> and <c>sources</c> when it would not fit.
     /// </summary>
     public static byte[] Data(ReportEnvelope envelope, ReportWindowContent content, ReportSample sample, ReportOptions options) =>
         Fitted(envelope, content, sample, options).Data;
@@ -138,6 +141,13 @@ public static class ReportBody
     {
         var document = Json(envelope, content, sample, options);
         var data = document.ToCompactBytes();
+        if (!Fits(data, options) && options.CarriesTokenUsage)
+        {
+            options = options with { Extensions = options.Extensions with { QuotaTokenUsage = false } };
+            document = Json(envelope, content, sample, options);
+            data = document.ToCompactBytes();
+        }
+
         if (!Fits(data, options) && options.CarriesQuotas)
         {
             options = options with { Quotas = null };
@@ -251,7 +261,7 @@ public static class ReportBody
 
         if (options is { Quotas: { } quotas, Extensions.QuotaEstimate: true })
         {
-            members.Add(("quotas", ReportQuotas.Json([.. quotas.Take(EstimateLimits.MaxEntries)])));
+            members.Add(("quotas", ReportQuotas.Json([.. quotas.Take(EstimateLimits.MaxEntries)], options.Extensions.QuotaTokenUsage)));
         }
 
         if (options.Stream is { } stream)

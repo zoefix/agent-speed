@@ -98,12 +98,13 @@ public sealed class QuotaEstimatePipelineTests
     public void EveryGroupIsCovered()
     {
         var groups = Root.GetProperty("pipeline").EnumerateObject().ToDictionary(g => g.Name, g => g.Value);
-        Assert.Equal(["cadence", "chains", "classes", "claude", "inference", "keys", "ledger", "live", "loweredCap", "planChange", "report", "store"],
+        Assert.Equal(["cadence", "chains", "classes", "claude", "inference", "keys", "ledger", "live", "loweredCap", "planChange", "report", "store", "tokens"],
             groups.Keys.Order(StringComparer.Ordinal));
         Assert.Equal(6, groups["claude"].GetArrayLength());
         Assert.Equal(4, groups["inference"].GetArrayLength());
         Assert.Equal(6, groups["store"].GetArrayLength());
         Assert.Equal(2, groups["report"].GetArrayLength());
+        Assert.Equal(10, groups["tokens"].GetArrayLength());
     }
 
     /// <summary>
@@ -167,7 +168,7 @@ public sealed class QuotaEstimatePipelineTests
         Assert.False(Shown(half, halfEvaluation, SourceKind.ClaudeDesktop, PlanInference.FiveHour, halfNow)!.PlanInferred);
     }
 
-    private static JsonElement Case(string group, string name) =>
+    internal static JsonElement Case(string group, string name) =>
         Root.GetProperty("pipeline").GetProperty(group).EnumerateArray().Single(x => x.GetProperty("name").GetString() == name);
 
     /// <summary>
@@ -222,7 +223,7 @@ public sealed class QuotaEstimatePipelineTests
     }
 
     /// <summary>The model of a case's events and its evaluation at the case's <c>now</c>.</summary>
-    private static (EstimateModel Model, EstimateEvaluation Evaluation) Evaluate(JsonElement inp)
+    internal static (EstimateModel Model, EstimateEvaluation Evaluation) Evaluate(JsonElement inp)
     {
         var salt = Convert.FromHexString(inp.GetProperty("salt").GetString()!);
         var input = new EstimateInput();
@@ -328,7 +329,8 @@ public sealed class QuotaEstimatePipelineTests
 
         if (want.Contains("entries"))
         {
-            result["entries"] = JsonNode.Parse(EntriesJson(evaluation.Entries(now, inp.GetProperty("origin").GetString()!)).GetRawText());
+            var tokens = OptionalBool(inp, "tokenUsage") ?? false;
+            result["entries"] = JsonNode.Parse(EntriesJson(evaluation.Entries(now, inp.GetProperty("origin").GetString()!), tokens).GetRawText());
         }
 
         if (want.Contains("store"))
@@ -353,7 +355,7 @@ public sealed class QuotaEstimatePipelineTests
                 input.Responses.Add(new EstimateResponse(
                     Source(e.GetProperty("source").GetString()), OptionalString(e, "file"), OptionalLong(e, "startMs"), e.GetProperty("endMs").GetInt64(),
                     e.GetProperty("model").GetString()!, OptionalLong(e, "costMicroUsd"), OptionalLong(e, "tokens") ?? 0, OptionalString(e, "provider"),
-                    OptionalString(e, "cloudRoute") is not null));
+                    OptionalString(e, "cloudRoute") is not null, Counts: Counts(e, "counts"), PublicModel: OptionalBool(e, "publicModel") ?? true));
                 break;
             case "tokenCount":
                 var ts = e.GetProperty("ts").GetInt64();

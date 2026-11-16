@@ -5,11 +5,14 @@ namespace AgentSpeed.Core.Quota.Estimate;
 /// unpriced, <paramref name="Tokens"/> the input + output tokens. <paramref name="Provider"/> is Codex's
 /// <c>model_provider</c>; <paramref name="CloudRoute"/> marks a Claude model id in a Bedrock or Vertex form.
 /// <paramref name="Host"/> is the remote host the response came from, null on this computer. <paramref name="Requests"/>
-/// counts the responses a row of the history's per-minute sums stands for.
+/// counts the responses a row of the history's per-minute sums stands for. <paramref name="Counts"/> are the token counts of
+/// QUOTAS 10.3, null when recorded without them (unmeasured); <paramref name="PublicModel"/> says <paramref name="Model"/>
+/// is an id of the price table rather than a logged name, which is never sent.
 /// </summary>
 public sealed record EstimateResponse(
     SourceKind Source, string? File, long? StartMs, long EndMs, string Model, long? CostMicroUsd, long Tokens,
-    string? Provider = null, bool CloudRoute = false, string? Host = null, long Requests = 1);
+    string? Provider = null, bool CloudRoute = false, string? Host = null, long Requests = 1, QuotaTokenCounts? Counts = null,
+    bool PublicModel = true);
 
 /// <summary>A Codex token count line with rate limits (QUOTAS 3): its file, time, windows and raw <c>plan_type</c>.</summary>
 public sealed record CodexTokenLine(string File, long Ts, IReadOnlyList<QuotaWindow> Windows, string? PlanType);

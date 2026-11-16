@@ -358,7 +358,7 @@ public sealed class QuotaEstimateFixtureTests
         Assert.True(QuotaReportCadence.ShouldSend([a with { Account = another }], [a], 0, 5_000, false));
     }
 
-    private static CapEstimate EstimateOf(JsonElement e) => new(
+    internal static CapEstimate EstimateOf(JsonElement e) => new(
         e.GetProperty("confidence").GetString() switch
         {
             "high" => EstimateConfidence.High,
@@ -368,7 +368,7 @@ public sealed class QuotaEstimateFixtureTests
         },
         OptionalDouble(e, "cap"), OptionalDouble(e, "low"), OptionalDouble(e, "high"), e.GetProperty("windows").GetInt32());
 
-    private static EntryBasis Basis(JsonElement acc, CapEstimate estimate) => new(
+    internal static EntryBasis Basis(JsonElement acc, CapEstimate estimate) => new(
         Source(acc.GetProperty("source").GetString()), [.. acc.GetProperty("sources").EnumerateArray().Select(s => Source(s.GetString()))],
         OptionalString(acc, "plan"), OptionalString(acc, "tier"), EstimateNames.ParseKind(acc.GetProperty("kind").GetString())!.Value,
         OptionalString(acc, "name"), acc.GetProperty("minutes").GetInt32(), acc.GetProperty("p").GetDouble(), acc.GetProperty("t").GetInt64(),

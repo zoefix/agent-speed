@@ -24,6 +24,12 @@ public sealed record QuotaReportEntry(
     /// <summary><see cref="Plan"/> and <see cref="Tier"/> were inferred from the quota (QUOTAS 10.2); reports send them alike.</summary>
     public bool PlanInferred { get; init; }
 
+    /// <summary>
+    /// The token counts of the same spend as <see cref="UsedMicroUsd"/> (REPORTING-EXTENSIONS 12); null when they are not
+    /// completely known. Sent only to a service that advertises <c>quotaTokenUsage</c>.
+    /// </summary>
+    public QuotaTokenUsage? TokenUsage { get; init; }
+
     /// <summary>The reset the live percent counts to: the vendor's, or the next instance's after it passed.</summary>
     public long? ResetsAtMs => ResetsInMs is { } inMs ? AtMs + inMs : null;
 
