@@ -20,6 +20,24 @@ internal sealed partial class ApiPage
         DataContextChanged += (_, _) => Attach(DataContext as SettingsViewModel);
     }
 
+    // Group-driven unchecking and binding initialization must never write back to the model.
+    // Click also covers keyboard activation, without reacting to Checked during binding transfer.
+    private void OnReportSegmentClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel model)
+        {
+            model.ApiShowsLan = false;
+        }
+    }
+
+    private void OnLanSegmentClick(object sender, RoutedEventArgs e)
+    {
+        if (DataContext is SettingsViewModel model)
+        {
+            model.ApiShowsLan = true;
+        }
+    }
+
     private void Attach(SettingsViewModel? model)
     {
         if (_model is not null)

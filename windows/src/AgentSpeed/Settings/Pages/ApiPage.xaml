@@ -21,9 +21,9 @@
                                  AutomationProperties.Name="{loc:Loc settings.report}">
             <UniformGrid Columns="2">
                 <RadioButton x:Name="ReportSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.report}"
-                             IsChecked="{Binding ApiShowsReport, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc lan.segment.report}" />
+                             IsChecked="{Binding ApiShowsReport, Mode=OneWay}" Click="OnReportSegmentClick" AutomationProperties.Name="{loc:Loc lan.segment.report}" />
                 <RadioButton x:Name="LanSegmentButton" Style="{StaticResource PaneSegment}" GroupName="ApiSegment" Content="{loc:Loc lan.segment.lan}"
-                             IsChecked="{Binding ApiShowsLan, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc lan.segment.lan}" />
+                             IsChecked="{Binding ApiShowsLan, Mode=OneWay}" Click="OnLanSegmentClick" AutomationProperties.Name="{loc:Loc lan.segment.lan}" />
             </UniformGrid>
         </controls:SegmentedGroup>
         <Grid>
