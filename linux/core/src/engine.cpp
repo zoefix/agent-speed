@@ -95,7 +95,9 @@ std::int64_t estimateStart(const Agent& a, const std::vector<Response>& response
 }  // namespace
 
 std::optional<std::pair<std::int64_t, std::int64_t>> interval(const Response& r) {
-    if (!r.startMs || r.endMs < *r.startMs || r.endMs - *r.startMs > 15 * 60'000) return std::nullopt;
+    if (!r.startMs || r.endMs < *r.startMs) return std::nullopt;
+    // Unsigned, so a saturated start (METRICS 3.6) cannot overflow the difference.
+    if (static_cast<std::uint64_t>(r.endMs) - static_cast<std::uint64_t>(*r.startMs) > 15 * 60'000u) return std::nullopt;
     return std::make_pair(std::min(*r.startMs, r.endMs - 500), r.endMs);
 }
 

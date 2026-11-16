@@ -57,6 +57,7 @@ const char* familyName(RootFamily family) {
         case RootFamily::Devin: return "Devin";
         case RootFamily::Qoder: return "Qoder";
         case RootFamily::QoderCli: return "QoderCli";
+        case RootFamily::CodeBuddyCode: return "CodeBuddyCode";
     }
     return "?";
 }

@@ -64,7 +64,7 @@ std::string geminiSettingsOf(const std::vector<std::string>& roots, const Enviro
 
 // The root a user location names (METRICS 2, last column): an Antigravity store's `conversations`, a WorkBuddy data
 // folder's `projects`, a Kimi Code CLI or Grok Build data directory's `sessions`, a `.factory` folder's `sessions`, a
-// Qoder CLI config folder's `projects`; any other location is the root itself.
+// Qoder CLI or CodeBuddy Code config folder's `projects`; any other location is the root itself.
 std::string userRoot(const std::string& path, RootFamily family);
 
 // A Hermes Agent root (METRICS 2, 4.15): the automatic home, or a user location (a home or one `logs` folder).
@@ -73,7 +73,7 @@ using HermesRoot = hermes::Root;
 // What the location lists read now (METRICS 2.1): per source the union of its entries' roots, in list order, each once.
 struct SourceLocations {
     std::vector<std::string> codexRoots, claudeRoots, dshRoots, geminiRoots, ompRoots, antigravityStores, workBuddyRoots,
-        workBuddyAiRoots, kimiRoots, grokBuildRoots, piRoots, droidRoots, qoderCliRoots;
+        workBuddyAiRoots, kimiRoots, grokBuildRoots, piRoots, droidRoots, qoderCliRoots, codeBuddyCodeRoots;
     // One root per database: a root naming the database file of an earlier root is left out.
     std::vector<std::string> openCodeRoots, zcodeRoots;
     // OpenClaw's roots as resolved (the state folders found, then the user locations), and the user locations alone.

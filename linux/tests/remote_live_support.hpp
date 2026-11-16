@@ -82,7 +82,8 @@ inline remote::FeedChange agentChange(const remote::RemoteAgent& a) { return rem
 inline MonitorConfig emptyConfig(std::set<SourceKind> enabled = {SourceKind::Codex, SourceKind::ClaudeCode}) {
     RootSettings s;
     for (auto* root : {&s.codex, &s.claude, &s.dsh, &s.openCode, &s.gemini, &s.omp, &s.antigravity, &s.workBuddy, &s.workBuddyAi, &s.zcode,
-                       &s.kimi, &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli}) {
+                       &s.kimi, &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli,
+                       &s.codeBuddyCode}) {
         *root = "/nonexistent-remote-test/root";
     }
     MonitorConfig config;
@@ -99,7 +100,8 @@ inline MonitorConfig fixtureConfig(std::set<SourceKind> enabled) {
     s.codex = agentspeed::fsx::normalize((fixtures::fixtureDir() / "codex/sessions").string());
     s.claude = agentspeed::fsx::normalize((fixtures::fixtureDir() / "claude/projects").string());
     for (auto* root : {&s.dsh, &s.openCode, &s.gemini, &s.omp, &s.antigravity, &s.workBuddy, &s.workBuddyAi, &s.zcode, &s.kimi,
-                       &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli}) {
+                       &s.grokBuild, &s.pi, &s.openClaw, &s.hermes, &s.droid, &s.devin, &s.qoder, &s.qoderCli,
+                       &s.codeBuddyCode}) {
         *root = "/nonexistent-remote-test/root";
     }
     config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");

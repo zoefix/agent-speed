@@ -1,5 +1,7 @@
 #include <gtest/gtest.h>
 
+#include <algorithm>
+
 #include <QDir>
 #include <QFile>
 #include <QJsonDocument>
@@ -41,7 +43,7 @@ protected:
 
 }  // namespace
 
-TEST_F(QoderSettings, BothSourcesSitLastWithTheirOwnListsAndCaptions) {
+TEST_F(QoderSettings, BothSourcesSitAfterDevinWithTheirOwnListsAndCaptions) {
     {
         QSettings settings;
         settings.setValue(QStringLiteral("sources/disabled"), QStringList{QStringLiteral("hermes")});
@@ -59,8 +61,11 @@ TEST_F(QoderSettings, BothSourcesSitLastWithTheirOwnListsAndCaptions) {
 
     SourceLocationsView view(prefs);
     const auto groups = view.groups();
-    ASSERT_GE(groups.size(), 2);
-    const auto ide = groups[groups.size() - 2].toMap(), cli = groups.back().toMap();
+    const auto devin = std::find_if(groups.begin(), groups.end(), [](const QVariant& g) {
+        return g.toMap().value(QStringLiteral("list")).toString() == QStringLiteral("devin");
+    });
+    ASSERT_LT(devin - groups.begin() + 2, groups.size());
+    const auto ide = (devin + 1)->toMap(), cli = (devin + 2)->toMap();
     EXPECT_EQ(ide.value(QStringLiteral("list")).toString(), QStringLiteral("qoder"));
     EXPECT_EQ(ide.value(QStringLiteral("sources")).toStringList(), QStringList{QStringLiteral("qoder")});
     EXPECT_EQ(ide.value(QStringLiteral("hint")).toString(), QStringLiteral("settings.sources.qoderHint"));

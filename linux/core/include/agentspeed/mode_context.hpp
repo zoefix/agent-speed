@@ -10,8 +10,9 @@
 
 namespace agentspeed {
 
-// What file-based agents show beyond their own facts: configured values and WorkBuddy's session-current effort. Files
-// are checked at startup and at every rediscovery and read again only when their size or modification time changed.
+// What file-based agents show beyond their own facts: configured values and the session-current effort of both WorkBuddy
+// editions (CodeBuddy Code has no session database). Files are checked at startup and at every rediscovery and read
+// again only when their size or modification time changed.
 class ModeContext {
 public:
     // A root of an enabled source; the files of a disabled source are never read.

@@ -13,7 +13,7 @@ namespace agentspeed {
 // METRICS 1: the append-only source order.
 enum class SourceKind : std::uint8_t {
     Codex, ClaudeCode, ClaudeDesktop, Deepseek, OpenCode, Gemini, Omp, Antigravity, WorkBuddy, WorkBuddyAi, ZCode,
-    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid, Devin, Qoder, QoderCli,
+    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid, Devin, Qoder, QoderCli, CodeBuddyCode,
 };
 
 std::string_view sourceId(SourceKind source);
@@ -52,7 +52,8 @@ struct ParsedResponse {
     std::optional<std::string> model;
     std::optional<std::int64_t> startMs;
     std::int64_t endMs = 0;
-    // METRICS 3.3: when the first content was written (Claude, Codex) or the first token arrived (Devin).
+    // METRICS 3.3: when the first content was written (Claude, Codex) or the first token arrived (Devin; WorkBuddy and
+    // CodeBuddy Code when the call's attempts are measured).
     std::optional<std::int64_t> firstMs;
     TokenCounts tokens;
     bool final = true;

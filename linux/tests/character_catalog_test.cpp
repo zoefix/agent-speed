@@ -391,6 +391,9 @@ TEST(CharacterVendors, UnknownModelsFallBackToTheSourcesVendor) {
     EXPECT_EQ(reading.rates, (std::map<std::string, double>{{"google", 12}}));
     EXPECT_EQ(reading.fastestModel, "some-future-model");
     EXPECT_EQ(reading.fastestVendor, "google");
+    // CodeBuddy Code's routing slots, like WorkBuddy's, fall back to Tencent.
+    const auto codebuddy = VendorReading::of({agent(SourceKind::CodeBuddyCode, "balanced-model", 9)}, nullptr);
+    EXPECT_EQ(codebuddy.rates, (std::map<std::string, double>{{"tencent", 9}}));
 }
 
 // Every roster character's spec names the vendor its models resolve to, so Auto picks her.

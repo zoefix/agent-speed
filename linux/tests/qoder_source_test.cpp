@@ -488,7 +488,8 @@ TEST(Qoder, SameLocationsAndTheAutomaticEntry) {
 TEST(Qoder, ListsAndFamiliesOfBothSources) {
     const auto& order = locationListOrder();
     ASSERT_GE(order.size(), 3u);
-    EXPECT_EQ(std::vector<RootFamily>(order.end() - 3, order.end()), (std::vector<RootFamily>{RootFamily::Devin, RootFamily::Qoder, RootFamily::QoderCli}));
+    EXPECT_EQ(std::vector<RootFamily>(order.end() - 4, order.end() - 1),
+              (std::vector<RootFamily>{RootFamily::Devin, RootFamily::Qoder, RootFamily::QoderCli}));
     EXPECT_EQ(listName(RootFamily::Qoder), "qoder");
     EXPECT_EQ(listName(RootFamily::QoderCli), "qoderCli");
     EXPECT_EQ(familyOf(SourceKind::Qoder), RootFamily::Qoder);
@@ -496,7 +497,7 @@ TEST(Qoder, ListsAndFamiliesOfBothSources) {
     EXPECT_EQ(sourceId(SourceKind::Qoder), "qoder");
     EXPECT_EQ(sourceId(SourceKind::QoderCli), "qoderCli");
     EXPECT_EQ(sourceFromId("qoderCli"), SourceKind::QoderCli);
-    EXPECT_EQ(*MonitorConfig::allSources().rbegin(), SourceKind::QoderCli) << "last in the source order";
+    EXPECT_EQ(*std::next(MonitorConfig::allSources().rbegin()), SourceKind::QoderCli) << "before CodeBuddy Code in the source order";
 }
 
 TEST(Qoder, CliLocationsAreProjectsFolders) {

@@ -1,6 +1,7 @@
 #include <algorithm>
 #include <set>
 
+#include "agentspeed/codebuddy.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/harness.hpp"
@@ -35,6 +36,7 @@ SourceKind sourceOf(RootFamily family) {
         case RootFamily::Devin: return SourceKind::Devin;
         case RootFamily::Qoder: return SourceKind::Qoder;
         case RootFamily::QoderCli: return SourceKind::QoderCli;
+        case RootFamily::CodeBuddyCode: return SourceKind::CodeBuddyCode;
     }
     return SourceKind::Codex;
 }
@@ -107,6 +109,7 @@ std::string userRoot(const std::string& path, RootFamily family) {
         case RootFamily::GrokBuild: return harness::sessionsOf(path);
         case RootFamily::Droid: return droid::rootOf(path);
         case RootFamily::QoderCli: return qoder::cliProjectsOf(path);
+        case RootFamily::CodeBuddyCode: return codebuddy::projectsOf(path);
         default: return path;
     }
 }
@@ -183,6 +186,7 @@ SourceLocations SourceLocations::resolve(const LocationLists& lists, const Envir
     l.piRoots = rootsOf(RootFamily::Pi, itself);
     l.droidRoots = rootsOf(RootFamily::Droid, droid::rootOf);
     l.qoderCliRoots = rootsOf(RootFamily::QoderCli, qoder::cliProjectsOf);
+    l.codeBuddyCodeRoots = rootsOf(RootFamily::CodeBuddyCode, codebuddy::projectsOf);
 
     std::vector<std::string> stores;
     for (const auto& entry : lists[RootFamily::Antigravity]) {
@@ -275,6 +279,7 @@ std::vector<std::pair<RootFamily, std::string>> SourceLocations::fileRoots() con
     add(RootFamily::Pi, pis);
     add(RootFamily::Droid, droidRoots);
     add(RootFamily::QoderCli, qoderCliRoots);
+    add(RootFamily::CodeBuddyCode, codeBuddyCodeRoots);
     return roots;
 }
 

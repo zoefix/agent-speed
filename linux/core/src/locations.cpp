@@ -8,6 +8,7 @@
 #include <regex>
 #include <set>
 
+#include "agentspeed/codebuddy.hpp"
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/hermes.hpp"
@@ -112,6 +113,7 @@ RootFamily familyOf(SourceKind source) {
         case SourceKind::Devin: return RootFamily::Devin;
         case SourceKind::Qoder: return RootFamily::Qoder;
         case SourceKind::QoderCli: return RootFamily::QoderCli;
+        case SourceKind::CodeBuddyCode: return RootFamily::CodeBuddyCode;
         default: return RootFamily::Claude;
     }
 }
@@ -345,6 +347,7 @@ std::string SourceLocations::defaultRoot(SourceKind source, const Environment& e
         case RootFamily::Devin: return devin::Root::database(devin::automaticDatabase(environment, home)).displayFolder();
         case RootFamily::Qoder: return qoder::Root::database(qoder::automaticDatabases(environment, home).front()).displayFolder();
         case RootFamily::QoderCli: return qoder::cliRoots(environment, home).front();
+        case RootFamily::CodeBuddyCode: return codebuddy::automaticRoot(environment, home);
     }
     return {};
 }

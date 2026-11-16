@@ -45,6 +45,7 @@ add_library(agentspeed_base STATIC
     src/antigravity.cpp
     src/board.cpp
     src/claude_parser.cpp
+    src/codebuddy_paths.cpp
     src/codex_parser.cpp
     src/configured_modes.cpp
     src/dedupe.cpp

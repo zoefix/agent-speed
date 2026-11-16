@@ -23,7 +23,7 @@ std::string codexConfigPath(const std::string& sessionsRoot);
 ExecutionModes codex(const std::string& path);
 // `userSettings.vertexServiceTier` of `config/config.json` in the folder that holds an Antigravity store.
 ExecutionModes antigravity(const std::string& path);
-// `reasoningEffort` of a WorkBuddy data folder's `settings.json`.
+// `reasoningEffort` of a WorkBuddy data folder's or a CodeBuddy Code config folder's `settings.json`.
 ExecutionModes workBuddy(const std::string& path);
 GeminiEfforts gemini(const std::string& path);
 

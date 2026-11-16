@@ -322,7 +322,8 @@ std::optional<std::string> fallback(SourceKind source) {
         case SourceKind::GrokBuild: return "xai";
         case SourceKind::ZCode: return "zhipu";
         case SourceKind::WorkBuddy:
-        case SourceKind::WorkBuddyAi: return "tencent";
+        case SourceKind::WorkBuddyAi:
+        case SourceKind::CodeBuddyCode: return "tencent";
         default: return std::nullopt;
     }
 }

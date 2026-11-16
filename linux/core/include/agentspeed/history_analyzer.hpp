@@ -39,8 +39,9 @@ public:
     // The parsers' analysis version: a change re-analyses every file.
     // 2: task records; 3: performance records instead (METRICS 6.11); 4: the effort and speed breakdowns
     // (EXECUTION-MODES); 5: the effort and speed of omp, OpenClaw, Kimi, ZCode, Antigravity and Droid responses;
-    // 6: Grok Build reasoning counted apart from its output (METRICS 4.12).
-    static constexpr int kVersion = 6;
+    // 6: Grok Build reasoning counted apart from its output (METRICS 4.12); 7: the measured attempts of WorkBuddy calls
+    // (METRICS 4.9), which change their duration and `firstMs`.
+    static constexpr int kVersion = 7;
 
     Analyzer(Store& store, std::shared_ptr<pricing::PriceBook> prices, std::shared_ptr<const TimeZone> hermesZone = nullptr);
 

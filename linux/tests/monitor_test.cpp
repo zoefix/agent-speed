@@ -34,6 +34,7 @@ MonitorConfig fixtureConfig(std::set<SourceKind> enabled) {
     s.devin = fixturePath("devin/share/devin");
     s.qoder = fixturePath("qoder/home/Library/Application Support/Qoder");
     s.qoderCli = fixturePath("qoder-cli");
+    s.codeBuddyCode = fixturePath("codebuddy");
     MonitorConfig config;
     config.locations = SourceLocations::resolve(s, processEnvironment(), "/nonexistent-home");
     config.enabled = std::move(enabled);
