@@ -10,6 +10,8 @@
     "claude/projects/-Users-dev-projects-nova/s-cli/subagents/agent-abc.jsonl",
     "claude/projects/-Users-dev-projects-orbit/s-desk.jsonl",
     "claude/projects/-Users-dev-projects-orbit/s-desk/subagents/agent-wf1.jsonl",
+    "claude/projects/-Users-dev-projects-nova/s-limit.jsonl",
+    "claude/projects/-Users-dev-projects-nova/s-retry.jsonl",
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd",
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd",
     "claude/projects/-Users-dev-projects-vega/s-vega.jsonl",
@@ -672,6 +674,36 @@
           }
         }
       }
+    },
+    "claude/projects/-Users-dev-projects-nova/s-limit.jsonl": {
+      "source": "claudeCode",
+      "project": "nova",
+      "model": null,
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "idle",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792490660000,
+      "malformedLines": 0,
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
+    },
+    "claude/projects/-Users-dev-projects-nova/s-retry.jsonl": {
+      "source": "claudeCode",
+      "project": "nova",
+      "model": null,
+      "isSubagent": false,
+      "parentFile": null,
+      "phase": "generating",
+      "inFlightStartMs": null,
+      "lastLineMs": 1792490671000,
+      "malformedLines": 0,
+      "responses": [],
+      "effort": null,
+      "speed": null,
+      "responseModes": {}
     },
     "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": {
       "source": "deepseek",
@@ -4288,8 +4320,10 @@
     "claude/projects/-Users-dev-projects-nova/s-cli/subagents/agent-abc.jsonl": 1792490547000,
     "claude/projects/-Users-dev-projects-orbit/s-desk.jsonl": 1792490586000,
     "claude/projects/-Users-dev-projects-orbit/s-desk/subagents/agent-wf1.jsonl": 1792490587000,
-    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": 1792490650000,
-    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd": 1792490657000,
+    "claude/projects/-Users-dev-projects-nova/s-limit.jsonl": 1792490661000,
+    "claude/projects/-Users-dev-projects-nova/s-retry.jsonl": 1792490672000,
+    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-main/session.v4.jsonl.zstd": 1792490673000,
+    "dsh/sessions/--Users-dev-projects-quasar--/session-dsh-sub/session.v4.jsonl.zstd": 1792490674000,
     "claude/projects/-Users-dev-projects-vega/s-vega.jsonl": 1792490786000,
     "claude/projects/-Users-dev-projects-vega/s-fork.jsonl": 1792490826000,
     "codex/sessions/2026/10/20/rollout-2026-10-20T10-08-00-tools.jsonl": 1792490899000,

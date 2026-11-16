@@ -277,11 +277,16 @@ State: `pendingStartMs` (nullable), `preciseStart` (bool), `phase`.
 | `type == "user"`, content contains a text block (or string content) starting with `[Request interrupted by user` | phase `idle`, `pendingStartMs = null`, `preciseStart = false` |
 | `type == "user"` with `toolEndsTurn == true` (the result of a tool that ends the agent's run, such as a sub-agent's `StructuredOutput` or `SubagentHandback`; no request follows) | phase `idle`, `pendingStartMs = null`, `preciseStart = false` |
 | other `type == "user"` | if not `preciseStart`: `pendingStartMs = ts`; phase `generating` (`inFlightStartMs = pendingStartMs`) |
+| `type == "system"` with `subtype == "api_error"` (an attempt failed and Claude Code waits `retryInMs` before the next one, which starts with its own `api-request` line) | if the phase is `generating`: `inFlightStartMs = null` (no output is produced until the next attempt); nothing else changes |
 | `type == "assistant"` | see below |
 | anything else | only updates `lastLineMs` |
 
 Assistant line:
-1. `key = message.id`, else `requestId`, else `uuid`. Skip the line if `message.model == "<synthetic>"`.
+1. `key = message.id`, else `requestId`, else `uuid`. A line with `message.model == "<synthetic>"` creates no response
+   and is skipped; when it also has `isApiErrorMessage == true` (Claude Code gave up on the request: a rate limit, an
+   overload after its retries, an authentication or request error) it first ends the turn: phase `idle`,
+   `pendingStartMs = null`, `preciseStart = false`. Other synthetic lines (such as the one that closes a resumed
+   interrupted turn) change nothing.
 2. If `key` was first seen in another file: ignore the line entirely.
 3. If `key` is new: create the response with `startMs = pendingStartMs` (may be null) and `firstMs = ts` (the line
    that created it), then `pendingStartMs = null`, `preciseStart = false`.
