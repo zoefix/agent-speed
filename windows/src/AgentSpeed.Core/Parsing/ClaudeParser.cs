@@ -122,6 +122,13 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
 
                 SetPhase(AgentPhase.Generating, ts, _pendingStartMs);
                 break;
+            // A failed attempt that Claude Code retries: nothing is generated until the next one starts.
+            case ClaudeLineKind.System when line.IsRetryWait && Phase == AgentPhase.Generating:
+                SetPhase(AgentPhase.Generating, ts, null);
+                break;
+            case ClaudeLineKind.Assistant when IsSynthetic(in line):
+                ApplySynthetic(in line, ts);
+                break;
             case ClaudeLineKind.Assistant when _qoderCli:
                 ApplyQoderCliAssistant(in line, ts, sink);
                 break;
@@ -131,11 +138,26 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
         }
     }
 
+    private static bool IsSynthetic(in ClaudeLine line) => string.Equals(line.Model, "<synthetic>", StringComparison.Ordinal);
+
+    /// <summary>A synthetic line creates no response; Claude Code's API error message also ends the turn (METRICS 4.1).</summary>
+    private void ApplySynthetic(in ClaudeLine line, long ts)
+    {
+        if (!line.IsApiError)
+        {
+            return;
+        }
+
+        _pendingStartMs = null;
+        _preciseStart = false;
+        SetPhase(AgentPhase.Idle, ts, null);
+    }
+
     protected override ClaudeLine Extract(ReadOnlySpan<byte> line) => ClaudeLineReader.Read(line);
 
     private void ApplyAssistant(in ClaudeLine line, long ts, IResponseSink sink)
     {
-        if (string.Equals(line.Model, "<synthetic>", StringComparison.Ordinal) || line.Key is not { } key)
+        if (line.Key is not { } key)
         {
             return;
         }
@@ -214,7 +236,7 @@ internal sealed class ClaudeParser : TranscriptParser<ClaudeLine>
     /// </summary>
     private void ApplyQoderCliAssistant(in ClaudeLine line, long ts, IResponseSink sink)
     {
-        if (string.Equals(line.Model, "<synthetic>", StringComparison.Ordinal) || (line.MessageId ?? line.Uuid) is not { } id)
+        if ((line.MessageId ?? line.Uuid) is not { } id)
         {
             return;
         }

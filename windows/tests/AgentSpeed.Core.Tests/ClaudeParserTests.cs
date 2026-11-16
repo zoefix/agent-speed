@@ -72,6 +72,46 @@ public sealed class ClaudeParserTests
     }
 
     [Fact]
+    public void ApiErrorMessageEndsTheTurnAndOtherSyntheticLinesDoNot()
+    {
+        var failed = new ClaudeParser(AgentA, new Deduper());
+        var sink = new RecordingSink();
+        var error = Assistant(T0 + 5000, "x1", 0, "\"stop_sequence\"", model: "<synthetic>",
+            extra: ",\"isApiErrorMessage\":true,\"error\":\"rate_limit\"");
+
+        Feed.Lines(failed, sink, UserText(T0, "go"), error);
+        Assert.Empty(sink.Latest);
+        Assert.Equal(AgentPhase.Idle, failed.Phase);
+        Assert.Null(failed.InFlightStartMs);
+
+        var other = new ClaudeParser(AgentB, new Deduper());
+        Feed.Lines(other, sink, UserText(T0, "go"), Assistant(T0 + 5000, "x2", 0, "\"stop_sequence\"", model: "<synthetic>"));
+        Assert.Empty(sink.Latest);
+        Assert.Equal(AgentPhase.Generating, other.Phase);
+        Assert.Equal(T0, other.InFlightStartMs);
+    }
+
+    [Fact]
+    public void RetryWaitStopsTheInFlightEstimateUntilTheNextAttempt()
+    {
+        var retry = $$"""{"type":"system","subtype":"api_error","level":"error","timestamp":"{{Ts.Iso(T0 + 2000)}}","error":{"status":529},"retryInMs":8000,"retryAttempt":1,"maxRetries":10}""";
+        var parser = new ClaudeParser(AgentA, new Deduper());
+        var sink = new RecordingSink();
+
+        Feed.Lines(parser, sink, UserText(T0, "go"), retry);
+        Assert.Equal(AgentPhase.Generating, parser.Phase);
+        Assert.Null(parser.InFlightStartMs);
+        Assert.Equal(T0, parser.PhaseSinceMs);
+
+        Feed.Lines(parser, sink, ApiRequest(T0 + 10_000), Assistant(T0 + 14_000, "r1", 40));
+        Assert.Equal(T0 + 10_000, Assert.Single(sink.Latest).StartMs);
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+
+        Feed.Lines(parser, sink, retry);
+        Assert.Equal(AgentPhase.Idle, parser.Phase);
+    }
+
+    [Fact]
     public void UserLineAfterApiRequestKeepsThePreciseStart()
     {
         var parser = new ClaudeParser(AgentA, new Deduper());

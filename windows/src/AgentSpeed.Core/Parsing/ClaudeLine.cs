@@ -10,6 +10,7 @@ internal enum ClaudeLineKind : byte
     Assistant,
     ApiRequest,
     Attachment,
+    System,
 }
 
 /// <summary>The ultracode markers among <c>attachment.type</c> values (EXECUTION-MODES, Claude Code).</summary>
@@ -55,6 +56,12 @@ internal struct ClaudeLine
     /// <summary><c>toolEndsTurn == true</c>: the tool result ends the agent's run, no request follows.</summary>
     public bool ToolEndsTurn;
     public bool HasToolUse;
+
+    /// <summary><c>isApiErrorMessage == true</c>: on a synthetic assistant line, Claude Code gave up on the request.</summary>
+    public bool IsApiError;
+
+    /// <summary><c>subtype == "api_error"</c>: on a system line, an attempt failed and another one follows.</summary>
+    public bool IsRetryWait;
     public StopReasonKind StopReason;
     public string? Cwd;
     public string? MessageId;
@@ -159,6 +166,7 @@ internal static class ClaudeLineReader
                 : reader.ValueTextEquals("user"u8) ? ClaudeLineKind.User
                 : reader.ValueTextEquals("api-request"u8) ? ClaudeLineKind.ApiRequest
                 : reader.ValueTextEquals("attachment"u8) ? ClaudeLineKind.Attachment
+                : reader.ValueTextEquals("system"u8) ? ClaudeLineKind.System
                 : ClaudeLineKind.Other;
             JsonScan.SkipValue(ref reader);
         }
@@ -206,6 +214,18 @@ internal static class ClaudeLineReader
         {
             reader.Read();
             result.ToolEndsTurn = reader.TokenType == JsonTokenType.True;
+            JsonScan.SkipValue(ref reader);
+        }
+        else if (reader.ValueTextEquals("isApiErrorMessage"u8))
+        {
+            reader.Read();
+            result.IsApiError = reader.TokenType == JsonTokenType.True;
+            JsonScan.SkipValue(ref reader);
+        }
+        else if (reader.ValueTextEquals("subtype"u8))
+        {
+            reader.Read();
+            result.IsRetryWait = reader.TokenType == JsonTokenType.String && reader.ValueTextEquals("api_error"u8);
             JsonScan.SkipValue(ref reader);
         }
         else if (reader.ValueTextEquals("isMeta"u8))
