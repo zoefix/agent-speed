@@ -503,6 +503,48 @@ expect(rel, source="claudeDesktop", project="orbit", model="claude-sonnet-5-5", 
        responseModes={"msg_W": {"effort": mode("medium"), "speed": mode("fast", "served", "anthropic")}})
 
 
+def synthetic(ms, mid, api_error=None, **kw):
+    """A `<synthetic>` assistant line; `api_error` = (error, status) makes it Claude Code's API error message."""
+    extra = dict(isApiErrorMessage=True, error=api_error[0], apiErrorStatus=api_error[1]) if api_error else {}
+    return claude("assistant", ms, uuid="uuid-" + mid, **extra, **kw,
+                  message={"id": mid, "type": "message", "role": "assistant", "model": "<synthetic>",
+                           "content": [{"type": "text"}], "stop_reason": "stop_sequence",
+                           "usage": cl_usage(0, 0, 0, 0)})
+
+
+def retry(ms, wait_ms, attempt, **kw):
+    return claude("system", ms, subtype="api_error", level="error", error={"status": 429}, retryInMs=wait_ms,
+                  retryAttempt=attempt, maxRetries=10, **kw)
+
+
+# --- Claude Code: a request that fails after a retry ends the turn (4.1) -------
+rel = "claude/projects/-Users-dev-projects-nova/s-limit.jsonl"
+k = dict(session="s-limit")
+write_jsonl(rel, [
+    user(at(4, 10), "Tag it", **k),
+    claude("api-request", at(4, 10, 50), id="api-L2", **k),
+    retry(at(4, 11), 8000, 1, **k),
+    claude("api-request", at(4, 19), id="api-L3", **k),
+    synthetic(at(4, 20), "msg_L_err", api_error=("rate_limit", 429), **k),
+])
+expect(rel, source="claudeCode", project="nova", model=None, isSubagent=False, parentFile=None,
+       phase="idle", inFlightStartMs=None, lastLineMs=at(4, 20), malformedLines=0,
+       responses=[], effort=None, speed=None, responseModes={})
+
+# --- Claude Code: waiting for a retry, after a synthetic line that is no error --
+rel = "claude/projects/-Users-dev-projects-nova/s-retry.jsonl"
+k = dict(session="s-retry")
+write_jsonl(rel, [
+    user(at(4, 30), "Continue", **k),
+    synthetic(at(4, 30, 100), "msg_R_none", **k),
+    claude("api-request", at(4, 30, 200), id="api-R1", **k),
+    retry(at(4, 31), 4000, 1, **k),
+])
+expect(rel, source="claudeCode", project="nova", model=None, isSubagent=False, parentFile=None,
+       phase="generating", inFlightStartMs=None, lastLineMs=at(4, 31), malformedLines=0,
+       responses=[], effort=None, speed=None, responseModes={})
+
+
 # --- DeepSeek Harness (dsh): zstd frame streams ------------------------------
 
 

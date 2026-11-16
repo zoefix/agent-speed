@@ -533,11 +533,15 @@ def claude_line(state, obj, dedupe):
             if not state.precise:
                 state.pending = ts
             state.phase, state.in_flight = "generating", state.pending
+    elif kind == "system" and obj.get("subtype") == "api_error":
+        if state.phase == "generating":
+            state.in_flight = None
     elif kind == "assistant" and qoder_cli:
         qoder_cli_assistant(state, obj, dedupe, ts)
     elif kind == "assistant":
         message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
         if message.get("model") == "<synthetic>":
+            claude_api_error(state, obj)
             return
         key = message.get("id") or obj.get("requestId") or obj.get("uuid")
         if not isinstance(key, str) or not key:
@@ -584,6 +588,12 @@ def claude_line(state, obj, dedupe):
             state.phase, state.in_flight = "idle", None
 
 
+def claude_api_error(state, obj):
+    """A synthetic assistant line with `isApiErrorMessage` ends the turn (METRICS 4.1, assistant step 1)."""
+    if obj.get("isApiErrorMessage") is True:
+        state.phase, state.pending, state.precise, state.in_flight = "idle", None, False, None
+
+
 def qoder_cli_tokens(usage):
     """Claude's tokens (3.2) except `input`: Qoder's `input_tokens` already includes the cache when it covers it."""
     tokens = claude_tokens(usage)
@@ -598,6 +608,7 @@ def qoder_cli_assistant(state, obj, dedupe, ts):
     effort or speed facts, `firstMs` null (one line per call, written when the call ends)."""
     message = obj.get("message") if isinstance(obj.get("message"), dict) else {}
     if message.get("model") == "<synthetic>":
+        claude_api_error(state, obj)
         return
     raw = message.get("id") or obj.get("uuid")
     if not isinstance(raw, str) or not raw:

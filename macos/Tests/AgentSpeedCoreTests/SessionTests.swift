@@ -39,8 +39,8 @@ struct SessionTests {
         let session = TranscriptSession(configuration: configuration)
         let fixtureDay = Clock.milliseconds(Calendar.current.startOfDay(for: Date(timeIntervalSince1970: 1_792_490_400)))
         let summary = session.seed(todayStartMs: fixtureDay)
-        #expect(summary.filesRead == 14)
-        #expect(summary.filesDiscovered == 14)
+        #expect(summary.filesRead == 16)
+        #expect(summary.filesDiscovered == 16)
         #expect(Set(session.responses.map(\.key)) == [
             "resp-1", "resp-2", "resp-3", "resp-4", "codex-legacy:thread-legacy:20213", "codex-legacy:thread-legacy:41000",
             "resp-z1", "resp-z2", "resp-p1", "resp-p2", "resp-t1", "resp-t2", "resp-t3", "resp-t4",
@@ -83,7 +83,7 @@ struct SessionTests {
             // Only the parent's other sub-agents (the paginated Codex one) may come between them.
             #expect(agents[(parent + 1)...child].allSatisfy { $0.parentId == agents[parent].id })
         }
-        #expect(agents.count == 14)
+        #expect(agents.count == 16)
         #expect(agents.filter { $0.parentId != nil }.count == 5)
         _ = directory
     }

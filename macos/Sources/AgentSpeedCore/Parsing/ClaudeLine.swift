@@ -5,6 +5,7 @@ enum ClaudeLineType: Sendable {
     case user
     case apiRequest
     case attachment
+    case system
     case other
 }
 
@@ -52,14 +53,19 @@ struct ClaudeLine: Equatable, Sendable {
     var toolEndsTurn = false
     /// `message.content` contains a block of type `tool_use`.
     var hasToolUse = false
+    /// An assistant line with `isApiErrorMessage == true`: Claude Code gave up on the request.
+    var isApiError = false
+    /// A system line with `subtype == "api_error"`: an attempt failed and another one follows.
+    var isRetryWait = false
 }
 
 /// Decodes the fields of a Claude transcript line that METRICS 4.1 needs. Conversation text is never captured.
 enum ClaudeLineExtractor {
-    private static let lineTypes: [StaticString] = ["assistant", "user", "api-request", "attachment"]
+    private static let lineTypes: [StaticString] = ["assistant", "user", "api-request", "attachment", "system"]
     private static let stopReasons: [StaticString] = ["pause_turn", "tool_use"]
     private static let attachments: [StaticString] = ["ultra_effort_enter", "ultra_effort_exit", "workflow_keyword_request"]
     private static let interruptPrefix: StaticString = "[Request interrupted by user"
+    private static let retrySubtype: [StaticString] = ["api_error"]
 
     static func extract(_ bytes: UnsafeRawBufferPointer) -> LineExtraction<ClaudeLine> {
         var scanner = JSONScanner(bytes)
@@ -79,6 +85,7 @@ enum ClaudeLineExtractor {
                     case 1: line.type = .user
                     case 2: line.type = .apiRequest
                     case 3: line.type = .attachment
+                    case 4: line.type = .system
                     default: line.type = .other
                     }
                 } else if scanner.key(key, is: "timestamp") {
@@ -95,6 +102,10 @@ enum ClaudeLineExtractor {
                     line.isSidechain = try scanner.readBool() ?? false
                 } else if scanner.key(key, is: "toolEndsTurn") {
                     line.toolEndsTurn = try scanner.readBool() ?? false
+                } else if scanner.key(key, is: "isApiErrorMessage") {
+                    line.isApiError = try scanner.readBool() ?? false
+                } else if scanner.key(key, is: "subtype") {
+                    line.isRetryWait = try scanner.readStringMatch(retrySubtype) == 0
                 } else if scanner.key(key, is: "isMeta") {
                     isMeta = try scanner.readBool() ?? false
                 } else if scanner.key(key, is: "perTurnEffort") {
@@ -124,7 +135,11 @@ enum ClaudeLineExtractor {
                 line.isInterrupt = false
                 line.toolEndsTurn = false
             }
-            if line.type != .assistant { line.hasToolUse = false }
+            if line.type != .assistant {
+                line.hasToolUse = false
+                line.isApiError = false
+            }
+            if line.type != .system { line.isRetryWait = false }
             if line.type != .attachment { line.attachment = nil }
             line.isPrompt = line.type == .user && !isMeta && hasPromptContent
             if line.type == .assistant, let raw = perTurnEffort ?? effort {
