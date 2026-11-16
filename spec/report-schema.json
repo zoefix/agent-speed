@@ -935,6 +935,10 @@
         "quotaEstimate": {
           "type": "integer",
           "minimum": 1
+        },
+        "quotaTokenUsage": {
+          "type": "integer",
+          "minimum": 1
         }
       }
     },
@@ -1253,7 +1257,7 @@
       }
     },
     "quotaEntry": {
-      "description": "QUOTAS 11, REPORTING-EXTENSIONS 11 (extension quotaEstimate): one subscription account-window of the device. account is the account's tag for this service: a keyed hash of the account's key and the service's origin, the same for one account on all of the user's devices and different for every service; no account id, e-mail or key is ever sent. usedPercent is the vendor's value; livePercent extrapolates it with the measured spend; usedMicroUsd is the spend this device measured in the window; estimate is the cap in API-equivalent micro-USD inferred on the device. Times are offsets from sentAt. A window whose reset has passed has usedPercent, percentAgeMs and observedUsedMicroUsd null.",
+      "description": "QUOTAS 11, REPORTING-EXTENSIONS 11 (extension quotaEstimate): one subscription account-window of the device. account is the account's tag for this service: a keyed hash of the account's key and the service's origin, the same for one account on all of the user's devices and different for every service; no account id, e-mail or key is ever sent. usedPercent is the vendor's value; livePercent extrapolates it with the measured spend; usedMicroUsd is the spend this device measured in the window; estimate is the cap in API-equivalent micro-USD inferred on the device. Times are offsets from sentAt. A window whose reset has passed has usedPercent, percentAgeMs and observedUsedMicroUsd null. tokenUsage (REPORTING-EXTENSIONS 12) is present only when the service advertises quotaTokenUsage.",
       "type": "object",
       "required": [
         "account",
@@ -1484,6 +1488,91 @@
         "priceVersion": {
           "type": "integer",
           "minimum": 1
+        },
+        "tokenUsage": {
+          "$ref": "#/$defs/quotaTokenUsage"
+        }
+      }
+    },
+    "quotaTokenUsage": {
+      "description": "QUOTAS 10.3, REPORTING-EXTENSIONS 12 (extension quotaTokenUsage): the input and output tokens of the same responses usedMicroUsd sums (same account, window, span and model filter), a cumulative snapshot of the current window that a later report replaces. inputTokens holds cache reads and writes once, outputTokens reasoning once; the three details are null where the logs do not report them. models is the complete partition by price-table model, the models outside the table in the one row with model null; its inputTokens and outputTokens add up to the totals exactly. The block is null when the counts are not completely known (a response recorded before they were kept), never 0. Present only when the service advertises quotaTokenUsage.",
+      "type": [
+        "object",
+        "null"
+      ],
+      "required": [
+        "inputTokens",
+        "outputTokens",
+        "cachedInputTokens",
+        "cacheWriteInputTokens",
+        "reasoningTokens",
+        "models"
+      ],
+      "properties": {
+        "inputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "outputTokens": {
+          "type": "integer",
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cachedInputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "cacheWriteInputTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "reasoningTokens": {
+          "type": [
+            "integer",
+            "null"
+          ],
+          "minimum": 0,
+          "maximum": 9007199254740991
+        },
+        "models": {
+          "type": "array",
+          "maxItems": 16,
+          "items": {
+            "type": "object",
+            "required": [
+              "model",
+              "inputTokens",
+              "outputTokens"
+            ],
+            "properties": {
+              "model": {
+                "type": [
+                  "string",
+                  "null"
+                ],
+                "pattern": "^[a-z0-9][a-z0-9._:-]{0,63}$"
+              },
+              "inputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              },
+              "outputTokens": {
+                "type": "integer",
+                "minimum": 0,
+                "maximum": 9007199254740991
+              }
+            }
+          }
         }
       }
     },

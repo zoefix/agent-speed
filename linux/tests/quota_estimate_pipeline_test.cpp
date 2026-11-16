@@ -103,9 +103,9 @@ Json plansJson(const est::Engine& engine) {
     return Json::object(std::move(members));
 }
 
-Json entriesJson(const std::vector<est::Entry>& entries) {
+Json entriesJson(const std::vector<est::Entry>& entries, bool tokenUsage = false) {
     std::vector<Json> out;
-    for (const auto& e : entries) out.push_back(e.json());
+    for (const auto& e : entries) out.push_back(e.json(tokenUsage));
     return Json::array(std::move(out));
 }
 
@@ -167,7 +167,9 @@ void check(const Value& c) {
     if (want["instances"].valid()) expectJson(instancesJson(engine).compact(), want["instances"], "instances");
     if (want["estimates"].valid()) expectJson(estimatesJson(engine).compact(), want["estimates"], "estimates");
     if (want["plans"].valid()) expectJson(plansJson(engine).compact(), want["plans"], "plans");
-    if (want["entries"].valid()) expectJson(entriesJson(engine.entries(r.now, r.origin)).compact(), want["entries"], "entries");
+    if (want["entries"].valid()) {
+        expectJson(entriesJson(engine.entries(r.now, r.origin), input["tokenUsage"].isTrue()).compact(), want["entries"], "entries");
+    }
     if (want["store"].valid()) {
         const auto text = est::storeJson(engine.store());
         expectJson(text, want["store"], "store");
@@ -204,6 +206,7 @@ TEST(QuotaEstimatePipeline, PlanChange) { checkGroup("planChange"); }
 TEST(QuotaEstimatePipeline, LivePercent) { checkGroup("live"); }
 TEST(QuotaEstimatePipeline, Store) { checkGroup("store"); }
 TEST(QuotaEstimatePipeline, ReportEntries) { checkGroup("report"); }
+TEST(QuotaEstimatePipeline, TokenUsage) { checkGroup("tokens"); }
 
 Value pipelineCase(const char* group, const std::string& name) {
     for (const auto& c : cases().root()["pipeline"][group].elements()) {
@@ -291,8 +294,9 @@ TEST(QuotaEstimatePipeline, DesktopsPlanByRatioOrNone) {
 
 // Every pipeline group of the fixture has a test above.
 TEST(QuotaEstimatePipeline, EveryGroupIsCovered) {
-    const std::set<std::string> covered{"ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live", "store", "report", "cadence"};
+    const std::set<std::string> covered{"ledger", "chains", "claude", "inference", "keys", "classes", "loweredCap", "planChange", "live", "store", "report", "tokens", "cadence"};
     for (const auto& [name, _] : cases().root()["pipeline"].members()) EXPECT_TRUE(covered.contains(name)) << name;
+    EXPECT_EQ(cases().root()["pipeline"]["tokens"].size(), 10u);
 }
 
 TEST(QuotaEstimatePipeline, SendCadence) {

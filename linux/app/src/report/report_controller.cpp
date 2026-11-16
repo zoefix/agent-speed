@@ -245,9 +245,11 @@ std::optional<std::vector<agentspeed::report::Json>> ReportController::quotaSect
     const auto entries = on ? estimator_->entries(sentAtMs, api->origin()) : std::vector<agentspeed::quota::estimate::Entry>{};
     const auto sent = reporter.step(sentAtMs, entries, on, leaving);
     if (!sent) return std::nullopt;
+    // REPORTING-EXTENSIONS 12: each entry's token counts only for a service that advertises `quotaTokenUsage`.
+    const bool tokens = discovery.has("quotaTokenUsage");
     std::vector<agentspeed::report::Json> out;
     out.reserve(sent->size());
-    for (const auto& e : *sent) out.push_back(e.json());
+    for (const auto& e : *sent) out.push_back(e.json(tokens));
     return out;
 }
 

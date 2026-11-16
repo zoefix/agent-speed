@@ -4,8 +4,10 @@ namespace AgentSpeed.Core.Reporting;
 /// <param name="ExecutionModesVersion">The negotiated execution-modes version while <paramref name="ExecutionModes"/> is on: 1, or 2,
 /// which adds the reasoning effort (EXECUTION-MODES, Report extension).</param>
 /// <param name="QuotaEstimate">The subscription quotas with their estimated caps (REPORTING-EXTENSIONS 11), behind the user's own switch.</param>
+/// <param name="QuotaTokenUsage">The token counts of each quota entry's spend (REPORTING-EXTENSIONS 12); only with <paramref name="QuotaEstimate"/>.</param>
 public sealed record ReportExtensions(bool ModelHarnessRequests = false, bool ExecutionModes = false, bool ProfileAvatar = false, bool SharedIdentity = false,
-    bool ReportWebSocket = false, bool TaskScore = false, bool PerfScore = false, int ExecutionModesVersion = 1, bool QuotaEstimate = false)
+    bool ReportWebSocket = false, bool TaskScore = false, bool PerfScore = false, int ExecutionModesVersion = 1, bool QuotaEstimate = false,
+    bool QuotaTokenUsage = false)
 {
     /// <summary>The execution-modes versions this client knows; any other number is not advertised.</summary>
     public const int NewestModesVersion = 2;
@@ -22,6 +24,9 @@ public sealed record ReportExtensions(bool ModelHarnessRequests = false, bool Ex
     /// <summary>The name of the quota estimate extension (REPORTING-EXTENSIONS 11).</summary>
     public const string QuotaEstimateName = "quotaEstimate";
 
+    /// <summary>The name of the quota token counts extension (REPORTING-EXTENSIONS 12).</summary>
+    public const string QuotaTokenUsageName = "quotaTokenUsage";
+
     public bool HasProfile => ProfileAvatar || SharedIdentity;
     public ReportJson Json => ReportJson.Object(new[]
     {
@@ -29,6 +34,7 @@ public sealed record ReportExtensions(bool ModelHarnessRequests = false, bool Ex
         (Name: "profileAvatar", On: ProfileAvatar, Version: 1), (Name: "sharedIdentity", On: SharedIdentity, Version: 1),
         (Name: ReportWebSocketProtocol.Extension, On: ReportWebSocket, Version: 1), (Name: TaskScoreName, On: TaskScore, Version: 1),
         (Name: PerfScoreName, On: PerfScore, Version: 1), (Name: QuotaEstimateName, On: QuotaEstimate, Version: 1),
+        (Name: QuotaTokenUsageName, On: QuotaTokenUsage, Version: 1),
     }.Where(e => e.On).Select(e => (e.Name, ReportJson.Of(e.Version))));
 }
 

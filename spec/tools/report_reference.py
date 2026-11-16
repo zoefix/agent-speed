@@ -547,6 +547,11 @@ def report_errors(report, schema: dict, *, strict: bool = True, sections: tuple 
 
     errors += [path + ": " + reason for path, reason in perf_score_errors(report) + legacy_errors(report)]
     errors += conformance(report)
+    from quota_estimate import token_usage_errors
+
+    for index, entry in enumerate(report.get("quotas", [])):
+        errors += [path + ": " + reason for path, reason in
+                   token_usage_errors(entry.get("tokenUsage"), "/quotas/%d/tokenUsage" % index)]
     live, peak, delta = report["live"], report["peak"], report["delta"]
     rates = [("live.outputTokS", live["outputTokS"]), ("live.totalTokS", live["totalTokS"]),
              ("peak.outputTokS", peak["outputTokS"]), ("peak.totalTokS", peak["totalTokS"])]

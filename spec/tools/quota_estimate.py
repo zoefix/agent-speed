@@ -3,7 +3,8 @@
 
 Standard library only, deterministic. It implements the account keys and merge rule, the spend ledger and its sums,
 observations, window instances and segments, the interval vote, the live percent, the report entries of the
-`quotaEstimate` extension and their send cadence; it writes and checks spec/fixtures/quota-estimate-cases.json.
+`quotaEstimate` extension and their send cadence, and the token counts of the `quotaTokenUsage` extension; it writes and
+checks spec/fixtures/quota-estimate-cases.json.
 
     python3 spec/tools/quota_estimate.py --check-fixtures
     python3 spec/tools/quota_estimate.py --write
@@ -47,6 +48,14 @@ PLAN_PATTERN = re.compile(r"^[a-z0-9_.-]{1,64}$")
 SEND_EVERY_MS = 60_000
 PRECISION_FLOOR = 0.02
 HIGH_WIDTH = 0.08
+TOKEN_MODELS = 16
+MAX_SAFE_INTEGER = 9_007_199_254_740_991
+TOKEN_DETAILS = ("cachedInput", "cacheWriteInput", "reasoning")
+# 10.3 Token counts: the details each source's logs report; every other detail, and every detail of another source, is
+# missing (null), never 0.
+TOKEN_FIELDS = {"codex": ("cachedInput", "reasoning"), "claudeCode": ("cachedInput", "cacheWriteInput"),
+                "claudeDesktop": ("cachedInput", "cacheWriteInput"), "gemini": ("cachedInput", "reasoning"),
+                "antigravity": ("cachedInput", "reasoning")}
 
 
 # 10.1 Accounts
@@ -144,26 +153,52 @@ def model_matches(model, name):
     return all(part in tokens for part in name.lower().split())
 
 
+def token_counts(source, usage):
+    """10.3 Token counts: a response's counts from its normalized usage (METRICS 3.2), each detail clamped (cache reads
+    at most the input, cache writes at most the rest of it, reasoning at most the output) and the details the source's
+    logs lack missing."""
+    inp, out = usage["input"], usage["output"]
+    cached = min(usage["cachedInput"], inp)
+    clamped = {"cachedInput": cached, "cacheWriteInput": min(usage["cacheWriteInput"], inp - cached),
+               "reasoning": min(usage["reasoning"], out)}
+    kept = TOKEN_FIELDS.get(source, ())
+    return {"input": inp, "output": out, **{f: clamped[f] if f in kept else None for f in TOKEN_DETAILS}}
+
+
+def merge_counts(a, b):
+    """Two contributions to one row: unmeasured when either is, a detail missing when either misses it."""
+    if a is None or b is None:
+        return None
+    return {f: None if a[f] is None or b[f] is None else a[f] + b[f] for f in ("input", "output") + TOKEN_DETAILS}
+
+
 class Ledger:
-    """Rows per (account, source, model, minute): [costMicroUsd, unpricedRequests, pricedTokens, unpricedTokens]."""
+    """Rows per (account, source, model, minute): [costMicroUsd, unpricedRequests, pricedTokens, unpricedTokens], with
+    their token counts (None: unmeasured) and whether the model is an id of the price table."""
 
     def __init__(self):
         self.rows = {}
+        self.counts = {}
+        self.public = {}
         self.cache = {}
 
-    def add(self, account, source, model, end_ms, cost, requests=1, tokens=0):
-        row = self.rows.setdefault((account, source, model, minute_of(end_ms)), [0, 0, 0, 0])
+    def add(self, account, source, model, end_ms, cost, requests=1, tokens=0, counts=None, public=True):
+        """`counts`: the token counts of `token_counts`, None when the response was recorded without them."""
+        key = (account, source, model, minute_of(end_ms))
+        row = self.rows.setdefault(key, [0, 0, 0, 0])
         if cost is None:
             row[1] += requests
             row[3] += tokens
         else:
             row[0] += cost
             row[2] += tokens
+        self.counts[key] = merge_counts(self.counts[key], counts) if key in self.counts else counts
+        self.public[key] = self.public.get(key, True) and public
         self.cache.clear()
 
     def prune(self, now_ms):
         for k in [k for k in self.rows if k[3] < now_ms - KEEP_MS]:
-            del self.rows[k]
+            del self.rows[k], self.counts[k], self.public[k]
         self.cache.clear()
 
     def _series(self, accounts, name):
@@ -222,6 +257,30 @@ class Ledger:
             return []
         ranked = sorted(totals.items(), key=lambda kv: (-kv[1], kv[0]))[:top]
         return [{"model": m, "share": round_half_away(c / whole, 3)} for m, c in ranked]
+
+    def token_usage(self, accounts, name, start, end):
+        """10.3 `T(a, b)`: the token counts of the minutes touching [start, end], the rows `outer` sums (REPORTING-
+        EXTENSIONS 12 `tokenUsage`). None when a row is unmeasured, more than 16 models remain or a total is unsafe."""
+        totals = dict.fromkeys(("input", "output") + TOKEN_DETAILS, 0)
+        models = {}
+        first, last = minute_of(start), minute_of(end)
+        for key, counts in self.counts.items():
+            acc, _src, model, minute = key
+            if acc not in accounts or not model_matches(model, name) or not first <= minute <= last:
+                continue
+            if counts is None:
+                return None
+            totals = merge_counts(totals, counts)
+            sums = models.setdefault(model if self.public[key] else None, [0, 0])
+            sums[0] += counts["input"]
+            sums[1] += counts["output"]
+        rows = sorted(((m, v) for m, v in models.items() if v[0] or v[1]), key=lambda kv: (kv[0] is None, kv[0] or ""))
+        if len(rows) > TOKEN_MODELS or max(totals["input"], totals["output"]) > MAX_SAFE_INTEGER:
+            return None
+        return {"inputTokens": totals["input"], "outputTokens": totals["output"],
+                "cachedInputTokens": totals["cachedInput"], "cacheWriteInputTokens": totals["cacheWriteInput"],
+                "reasoningTokens": totals["reasoning"],
+                "models": [{"model": m, "inputTokens": i, "outputTokens": o} for m, (i, o) in rows]}
 
 
 # 10.4 Observations
@@ -540,9 +599,9 @@ def micro(x):
     return None if x is None else int(math.floor(x + 0.5))
 
 
-def report_entry(acc, now_ms, ledger, price_version, origin):
+def report_entry(acc, now_ms, ledger, price_version, origin, token_usage=False):
     """acc: {account, source, sources, plan, tier, kind, name, minutes, p, t, R, S, accounts, estimate,
-    firstAfterReset}; origin: the service's api origin."""
+    firstAfterReset}; origin: the service's api origin; token_usage: the service advertises `quotaTokenUsage`."""
     est = acc["estimate"]
     cap = est.get("cap")
     name = acc["name"] if acc["kind"] == "modelWeek" else None
@@ -555,7 +614,7 @@ def report_entry(acc, now_ms, ledger, price_version, origin):
     coverage = None
     if cap and acc["p"] >= 5:
         coverage = round_half_away(min(1.0, max(0.0, observed / (cap * acc["p"] / 100))), 3)
-    return {
+    entry = {
         "account": report_account(origin, acc["account"]),
         "source": acc["source"],
         "sources": acc["sources"],
@@ -582,6 +641,9 @@ def report_entry(acc, now_ms, ledger, price_version, origin):
         "mix": ledger.mix(acc["accounts"], name, start, now_ms),
         "priceVersion": price_version,
     }
+    if token_usage:
+        entry["tokenUsage"] = ledger.token_usage(acc["accounts"], name, start, now_ms)
+    return entry
 
 
 def entry_identity(e):
@@ -608,6 +670,41 @@ def should_send(entries, last_sent, last_sent_ms, now_ms, leaving=False):
     return False
 
 
+RESERVED_MODELS = ("local", "unknown", "other")
+
+
+def token_usage_active(extensions, quota_switch=True):
+    """REPORTING-EXTENSIONS 12.1: entries carry `tokenUsage` when the 額度 switch is on and the document advertises both
+    `quotaEstimate` and `quotaTokenUsage` as the JSON integer 1."""
+    def one(name):
+        value = (extensions or {}).get(name)
+        return type(value) is int and value == 1
+    return bool(quota_switch) and one("quotaEstimate") and one("quotaTokenUsage")
+
+
+def token_usage_errors(usage, pointer="/quotas/0/tokenUsage"):
+    """REPORTING-EXTENSIONS 12.4: what a schema cannot check of a `tokenUsage` block, as (JSON Pointer, reason)."""
+    if usage is None:
+        return []
+    errors = []
+    models = usage["models"]
+    if (sum(m["inputTokens"] for m in models) != usage["inputTokens"]
+            or sum(m["outputTokens"] for m in models) != usage["outputTokens"]):
+        errors.append((pointer + "/models", "the models do not add up to the totals"))
+    if (usage["cachedInputTokens"] or 0) + (usage["cacheWriteInputTokens"] or 0) > usage["inputTokens"]:
+        errors.append((pointer + "/cachedInputTokens", "cache reads and writes above the input"))
+    if usage["reasoningTokens"] is not None and usage["reasoningTokens"] > usage["outputTokens"]:
+        errors.append((pointer + "/reasoningTokens", "reasoning above the output"))
+    seen = set()
+    for i, m in enumerate(models):
+        if m["model"] in RESERVED_MODELS:
+            errors.append(("%s/models/%d/model" % (pointer, i), "a reserved id: unknown models are null"))
+        elif m["model"] in seen:
+            errors.append(("%s/models/%d/model" % (pointer, i), "a model twice"))
+        seen.add(m["model"])
+    return errors
+
+
 # Fixtures
 
 REPORT_ORIGIN = "https://radar.example"
@@ -626,7 +723,7 @@ def ledger_from(rows):
     led = Ledger()
     for r in rows:
         led.add(r.get("account", "a"), r.get("source", "codex"), r.get("model", "gpt-5.5"), r["at"], r.get("cost"),
-                r.get("requests", 1))
+                r.get("requests", 1), counts=r.get("counts"), public=r.get("public", True))
     return led
 
 
@@ -892,6 +989,105 @@ def report_cases():
             "cadence": cadence}
 
 
+def counts(i, o, cached, write, reasoning):
+    return {"input": i, "output": o, "cachedInput": cached, "cacheWriteInput": write, "reasoning": reasoning}
+
+
+def token_cases():
+    """QUOTAS 10.3 Token counts, REPORTING-EXTENSIONS 12: per-source counts, sums over ledger rows, report entries and
+    the checks a receiver makes."""
+    def usage(i, cached, write, o, reasoning):
+        return {"input": i, "cachedInput": cached, "cacheWriteInput": write, "output": o, "reasoning": reasoning}
+
+    sources = [{"source": source, "usage": u, "why": why, "expected": token_counts(source, u)} for source, u, why in (
+        ("codex", usage(1000, 600, 0, 200, 50), "Codex logs cache reads and reasoning, never cache writes: missing"),
+        ("codex", usage(100, 150, 0, 20, 30), "a cache read above the input and reasoning above the output are clamped"),
+        ("claudeCode", usage(1300, 1000, 200, 80, 0), "Claude logs cache reads and writes; thinking tokens almost never: "
+         "missing, not 0"),
+        ("claudeDesktop", usage(500, 300, 300, 10, 0), "cache writes at most the input left after the reads"),
+        ("gemini", usage(900, 400, 0, 120, 60), "Gemini CLI: cache reads and thoughts"),
+        ("antigravity", usage(700, 200, 0, 90, 30), "Antigravity: cache reads and thinking"),
+        ("grokBuild", usage(800, 500, 100, 90, 40), "a source whose logs write 0 for what they lack: every detail "
+         "missing"))]
+    R = T0 + 7 * DAY
+    S = R - 10080 * MINUTE
+    rows = [
+        {"account": "a", "model": "gpt-6.1-sol", "at": S + HOUR, "cost": 3_000_000, "counts": counts(50, 10, 30, 5, 3)},
+        {"account": "a", "model": "gpt-6.1-sol", "at": S + 2 * HOUR, "cost": 2_000_000, "counts": counts(30, 5, 20, 5, 2)},
+        {"account": "a", "model": "acme-internal-7", "public": False, "at": S + 3 * HOUR, "cost": None,
+         "counts": counts(20, 5, 10, 0, 0)},
+        {"account": "b", "model": "gpt-5.5", "at": S + HOUR, "cost": 1_000_000, "counts": counts(400, 40, 100, None, 10)},
+        {"account": "b", "model": "gpt-5.5", "at": S + 2 * HOUR, "cost": 1_000_000},
+        {"account": "c", "source": "codex", "model": "gpt-5.5", "at": S + HOUR, "cost": 1_000_000,
+         "counts": counts(400, 40, 100, None, 10)},
+        {"account": "c", "source": "claudeCode", "model": "claude-opus-5-5", "at": S + HOUR, "cost": 2_000_000,
+         "counts": counts(900, 60, 500, 300, None)},
+        {"account": "d", "source": "claudeCode", "model": "claude-fable-5-2", "at": S + HOUR, "cost": 2_000_000,
+         "counts": counts(300, 30, 200, 50, None)},
+        {"account": "d", "source": "claudeCode", "model": "claude-opus-5-5", "at": S + HOUR, "cost": 4_000_000,
+         "counts": counts(700, 70, 500, 100, None)},
+        {"account": "f", "model": "gpt-5.5", "at": S + HOUR, "cost": 1_000_000, "counts": counts(100, 10, 50, None, 0)},
+        {"account": "f", "model": "gpt-5.4-mini", "at": S + HOUR, "cost": 0, "counts": counts(0, 0, 0, None, 0)},
+        {"account": "g", "model": "gpt-5.5", "at": S + HOUR, "cost": 1, "counts": counts(5 * 10 ** 15, 1, 0, 0, 0)},
+        {"account": "g", "model": "gpt-5.5", "at": S + 2 * HOUR, "cost": 1, "counts": counts(5 * 10 ** 15, 1, 0, 0, 0)},
+    ]
+    rows += [{"account": "e", "model": "model-%02d" % i, "at": S + HOUR, "cost": 1, "counts": counts(1, 1, 0, 0, 0)}
+             for i in range(TOKEN_MODELS + 1)]
+    led = ledger_from(rows)
+    sums = []
+    for name, why, account, window, a, b in (
+            ("the issue's example", "inputTokens 100 = Σ input, which already holds the 60 cache reads and 10 writes; "
+             "outputTokens 20 holds the 5 reasoning tokens; the model outside the price table is the null row",
+             "a", None, S, S + 5 * HOUR),
+            ("zero usage", "no row in the span: zeros and no models, a measured zero", "a", None, S + 4 * HOUR,
+             S + 5 * HOUR),
+            ("a row without counts", "a row recorded before the ledger kept counts makes the whole block null, never 0",
+             "b", None, S, S + 5 * HOUR),
+            ("the row without counts outside the span", "only the rows the span touches count", "b", None, S,
+             S + HOUR + 30_000),
+            ("a missing detail", "Codex has no cache writes and Claude no reasoning: both details are null, the "
+             "totals and the cache reads stay", "c", None, S, S + 5 * HOUR),
+            ("modelWeek filter", "a Fable window counts only claude-fable-* rows, as its usedMicroUsd", "d", "Fable", S,
+             S + 5 * HOUR),
+            ("seventeen models", "more than 16 models: the block is null", "e", None, S, S + 5 * HOUR),
+            ("a model without tokens", "a model whose input and output are 0 is left out of the models", "f", None, S,
+             S + 5 * HOUR),
+            ("an unsafe total", "an input above 2^53 - 1 makes the block null", "g", None, S, S + 5 * HOUR)):
+        sums.append({"name": name, "why": why, "accounts": [account], "window": window, "a": a, "b": b,
+                     "expected": led.token_usage({account}, window, a, b)})
+    est = {"confidence": "medium", "cap": 512_345_678.4, "low": 480_000_000.5, "high": 546_000_000.49, "windows": 2}
+    base = {"account": account_key(ACCOUNT_SALT, "codex", "acct-1"), "source": "codex", "sources": ["codex"],
+            "plan": "promax", "tier": None, "kind": "sevenDay", "name": None, "minutes": 10080, "p": 23.456,
+            "t": S + 3 * HOUR, "R": R, "S": S, "accounts": {"a"}, "estimate": est}
+    entries = [{"name": label, "now": now, "expected": report_entry(base, now, led, 8, REPORT_ORIGIN, token_usage=True)}
+               for label, now in (("live", S + 4 * HOUR), ("reset passed", R + HOUR))]
+    valid = sums[0]["expected"]
+
+    def broken(**change):
+        u = json.loads(json.dumps(valid))
+        for path, value in change.items():
+            if path == "models":
+                u["models"] = value
+            else:
+                u[path] = value
+        return u
+
+    validation = [{"name": name, "tokenUsage": u, "expected": [list(e) for e in token_usage_errors(u)]}
+                  for name, u in (
+        ("the example", valid),
+        ("unmeasured", None),
+        ("a model off by one", broken(models=[dict(valid["models"][0], inputTokens=81), valid["models"][1]])),
+        ("cache above the input", broken(cachedInputTokens=95)),
+        ("missing details", broken(cachedInputTokens=None, cacheWriteInputTokens=None, reasoningTokens=None)),
+        ("reasoning above the output", broken(reasoningTokens=21)),
+        ("a model twice", broken(models=[valid["models"][0], dict(valid["models"][0], inputTokens=0, outputTokens=0),
+                                         valid["models"][1]])),
+        ("a reserved id", broken(models=[valid["models"][0], dict(valid["models"][1], model="unknown")])))]
+    return {"maxModels": TOKEN_MODELS, "fields": {k: list(v) for k, v in TOKEN_FIELDS.items()}, "sources": sources,
+            "rows": rows, "sums": sums, "origin": REPORT_ORIGIN, "input": dict(base, accounts=["a"]), "entries": entries,
+            "validation": validation}
+
+
 def build_cases():
     return {
         "_comment": "QUOTAS 10 and REPORTING-EXTENSIONS 11 cases, written by spec/tools/quota_estimate.py --write.",
@@ -908,6 +1104,7 @@ def build_cases():
         "plan": plan_cases(),
         "live": live_cases(),
         "report": report_cases(),
+        "tokenUsage": token_cases(),
         "pipeline": pipeline_cases(),
     }
 
@@ -945,7 +1142,52 @@ HAND = {
     "pipeline/store": {"observations": 256, "instances": 64, "keys": 1},
     "pipeline/cadence": ["entries", "absent", "entries", "absent", "entries", "entries", "entries", "[]", "absent",
                          "entries", "entries", "entries", "entries", "absent", "entries"],
+    # The issue's example (#68): 60 cache reads and 10 writes inside the 100 input tokens, 5 reasoning inside the 20
+    # output tokens; total 120, not 195.
+    "tokenUsage/example": {"inputTokens": 100, "outputTokens": 20, "cachedInputTokens": 60, "cacheWriteInputTokens": 10,
+                           "reasoningTokens": 5, "models": [{"model": "gpt-6.1-sol", "inputTokens": 80, "outputTokens": 15},
+                                                            {"model": None, "inputTokens": 20, "outputTokens": 5}]},
+    "tokenUsage/null": ["a row without counts", "seventeen models", "an unsafe total"],
+    "tokenUsage/validation": [[], [], ["/quotas/0/tokenUsage/models"], ["/quotas/0/tokenUsage/cachedInputTokens"], [],
+                              ["/quotas/0/tokenUsage/reasoningTokens"], ["/quotas/0/tokenUsage/models/1/model"],
+                              ["/quotas/0/tokenUsage/models/1/model"]],
 }
+
+
+def token_hand_errors(cases):
+    errors = []
+    tu = cases["tokenUsage"]
+    sums = {c["name"]: c["expected"] for c in tu["sums"]}
+    if sums["the issue's example"] != HAND["tokenUsage/example"]:
+        errors.append("tokenUsage: the issue's example differs")
+    if tu["entries"][0]["expected"]["tokenUsage"] != HAND["tokenUsage/example"]:
+        errors.append("tokenUsage: the live entry differs from the issue's example")
+    if [n for n, v in sums.items() if v is None] != HAND["tokenUsage/null"]:
+        errors.append("tokenUsage: the null blocks differ")
+    if [[e[0] for e in c["expected"]] for c in tu["validation"]] != HAND["tokenUsage/validation"]:
+        errors.append("tokenUsage: validation differs from the worked values")
+    blocks = [v for v in sums.values() if v] + [e["expected"]["tokenUsage"] for e in tu["entries"]]
+    pipe = {c["name"]: c["expected"]["entries"] for c in cases["pipeline"]["tokens"]}
+    blocks += [e["tokenUsage"] for es in pipe.values() for e in es if e.get("tokenUsage")]
+    for b in blocks:
+        problems = token_usage_errors(b)
+        if problems or not b["outputTokens"] >= (b["reasoningTokens"] or 0):
+            errors.append("tokenUsage: a computed block breaks its rules: %r" % (problems,))
+    first, plain = pipe["Codex and Claude accounts"], pipe["extension not advertised"]
+    if [{k: v for k, v in e.items() if k != "tokenUsage"} for e in first] != plain or any("tokenUsage" in e for e in plain):
+        errors.append("tokenUsage: without the extension the entries are not the same minus tokenUsage")
+    if [e["tokenUsage"] for e in first] != [e["tokenUsage"] for e in pipe["a later heartbeat"]]:
+        errors.append("tokenUsage: a later heartbeat without new responses changed the counts")
+    a, b = pipe["one account on a first device"][0], pipe["the account on a second device"][0]
+    if a["account"] != b["account"] or a["tokenUsage"] == b["tokenUsage"]:
+        errors.append("tokenUsage: two devices of one account")
+    if [e["tokenUsage"] is None for e in pipe["a response recorded without counts"]] != [True, True, False]:
+        errors.append("tokenUsage: an unmeasured response")
+    for name in ("five-hour after reset, no use yet", "zero usage"):
+        u = pipe[name][0]["tokenUsage"]
+        if (u["inputTokens"], u["outputTokens"], u["models"]) != (0, 0, []):
+            errors.append("tokenUsage: %s is not a measured zero" % name)
+    return errors
 
 
 def hand_errors(cases):
@@ -989,15 +1231,17 @@ def check():
     cases = json.loads(expected)
     piped = [e for group in cases["pipeline"].values() if isinstance(group, list)
              for c in group for e in c["expected"].get("entries", [])]
-    errors = hand_errors(cases) + schema_check([e["expected"] for e in cases["report"]["entries"]] + piped)
+    tokens = [e["expected"] for e in cases["tokenUsage"]["entries"]]
+    errors = (hand_errors(cases) + token_hand_errors(cases)
+              + schema_check([e["expected"] for e in cases["report"]["entries"]] + piped + tokens))
     if errors:
         print("\n".join(errors), file=sys.stderr)
         return 1
     pipeline = ", ".join("%s %d" % (k, len(v) if isinstance(v, list) else len(v["steps"]))
                          for k, v in cases["pipeline"].items())
-    print("quota estimate fixtures: ok (%d segment, %d vote, %d live, %d report cases; pipeline: %s)" % (
+    print("quota estimate fixtures: ok (%d segment, %d vote, %d live, %d report, %d token cases; pipeline: %s)" % (
         len(cases["segments"]), len(cases["vote"]), len(cases["live"]["cases"]), len(cases["report"]["entries"]),
-        pipeline))
+        len(cases["tokenUsage"]["sums"]), pipeline))
     return 0
 
 

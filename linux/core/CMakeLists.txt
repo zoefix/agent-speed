@@ -100,6 +100,8 @@ add_library(agentspeed_base STATIC
     src/qoder_history.cpp
     src/qoder_paths.cpp
     src/qoder_source.cpp
+    # QUOTAS 10.3: the token counts the history keeps per response for the estimate's ledger.
+    src/quota/estimate/tokens.cpp
     src/report/perf.cpp
     src/report/values.cpp
     src/report/json_writer.cpp

@@ -1,8 +1,9 @@
 """The quota estimate pipeline (QUOTAS 10.1-10.8, REPORTING-EXTENSIONS 11.3): raw events to report entries.
 
 An Engine takes responses, Codex token count lines, Claude profile and Codex sign-in changes, and quota snapshots,
-resolves accounts (keys, Codex chains, the Desktop merge rule), fills the ledger, builds observations, instances and
-cap classes, persists them (estimate.json) and produces report entries. A Reporter applies the send cadence.
+resolves accounts (keys, Codex chains, the Desktop merge rule), fills the ledger (with each response's token counts),
+builds observations, instances and cap classes, persists them (estimate.json) and produces report entries, with their
+`tokenUsage` when the service advertises it. A Reporter applies the send cadence.
 Used by quota_estimate.py for the `pipeline` fixture cases.
 """
 
@@ -245,7 +246,8 @@ class Engine:
             else:
                 acc = qe.pair_key(self.salt, self.install, r.get("machine", "local"), src)
             r["_account"] = acc
-            ledger.add(acc, src, r["model"], r["endMs"], r.get("costMicroUsd"), tokens=r.get("tokens", 0))
+            ledger.add(acc, src, r["model"], r["endMs"], r.get("costMicroUsd"), tokens=r.get("tokens", 0),
+                       counts=r.get("counts"), public=r.get("publicModel", True))
             source_accounts.setdefault(acc, set()).add(src)
         obs = []
         for ln in lines:
@@ -351,8 +353,9 @@ class Engine:
                 out[k] = (plan, tier, rule)
         return out
 
-    def entries(self, now_ms):
-        """Report entries (REPORTING-EXTENSIONS 11.2): one per account-window, its newest instance."""
+    def entries(self, now_ms, token_usage=False):
+        """Report entries (REPORTING-EXTENSIONS 11.2): one per account-window, its newest instance; `token_usage`: with
+        the `tokenUsage` of REPORTING-EXTENSIONS 12."""
         insts, ests = self.estimates(now_ms)
         inferred = self.inferred_plans(ests)
         current = {}
@@ -381,7 +384,7 @@ class Engine:
             for o in sorted(self.obs, key=lambda o: o["t"]):
                 if o["account"] == account and o["name"] and o["name"] not in names:
                     names.append(o["name"])
-            e = qe.report_entry(acc, now_ms, self.ledger, self.price_version, self.origin)
+            e = qe.report_entry(acc, now_ms, self.ledger, self.price_version, self.origin, token_usage)
             rows.append(((source_rank(sources[0]), window_rank(e["window"], names), last["source"], e["account"]), e))
         return [e for _, e in sorted(rows, key=lambda r: r[0])][:MAX_ENTRIES]
 
@@ -460,9 +463,13 @@ def sec(ms):
     return ms // 1000 * 1000
 
 
-def resp(source, end, cost, model="gpt-5.5", start=None, file=None, tokens=1000, **extra):
+def resp(source, end, cost, model="gpt-5.5", start=None, file=None, tokens=1000, counts=None, **extra):
+    """`counts`: the response's token counts as the ledger keeps them (QUOTAS 10.3); absent: recorded without them."""
     r = {"type": "response", "source": source, "file": file, "startMs": end - 20_000 if start is None else start,
          "endMs": end, "model": model, "costMicroUsd": cost, "tokens": tokens}
+    if counts is not None:
+        r["counts"] = counts
+        r["tokens"] = counts["input"] + counts["output"]
     r.update(extra)
     return r
 
@@ -475,8 +482,8 @@ def line(file, ts, plan, five=None, week=None):
     return {"type": "tokenCount", "file": file, "ts": ts, "rateLimits": rl}
 
 
-def codex_turn(file, end, cost, plan, five=None, week=None, model="gpt-5.5"):
-    return [resp("codex", end, cost, model=model, file=file), line(file, end + 1_500, plan, five, week)]
+def codex_turn(file, end, cost, plan, five=None, week=None, model="gpt-5.5", counts=None):
+    return [resp("codex", end, cost, model=model, file=file, counts=counts), line(file, end + 1_500, plan, five, week)]
 
 
 def claude_windows(five=None, week=None, fable=None):
@@ -567,7 +574,7 @@ def run(inp):
     if "plans" in want:
         out["plans"] = {k: dict(zip(("plan", "tier", "rule"), v)) for k, v in eng.inferred_plans(ests).items()}
     if "entries" in want:
-        out["entries"] = eng.entries(now)
+        out["entries"] = eng.entries(now, inp.get("tokenUsage", False))
     if "store" in want:
         out["store"] = eng.store(now)
     if "storeCounts" in want:
@@ -845,6 +852,76 @@ def report_cases():
     return out
 
 
+def tokens(i, o, cached=None, write=None, reasoning=None):
+    return qe.counts(i, o, cached, write, reasoning)
+
+
+def token_cases():
+    """REPORTING-EXTENSIONS 12: `tokenUsage` from raw events, the service advertising `quotaTokenUsage`."""
+    t = BASE + HOUR
+    R5, R7 = BASE + 5 * HOUR, BASE + 6 * DAY
+    mixed = [profile(BASE), {"type": "codexAuth", "at": BASE, "accountId": "acct-a"},
+             resp("claudeCode", t, 4_000_000, model=OPUS, start=t - 40_000, counts=tokens(1300, 80, 1000, 200)),
+             resp("claudeCode", t + 2 * MINUTE, 1_000_000, model=FABLE, counts=tokens(300, 30, 200, 50)),
+             resp("claudeCode", t + 3 * MINUTE, None, model="claude-mystery-1", publicModel=False,
+                  counts=tokens(200, 20, 100, 0)),
+             resp("claudeDesktop", t + 4 * MINUTE, 2_000_000, model=OPUS, counts=tokens(500, 10, 300, 200)),
+             snap("claudeCode", t + 5 * MINUTE, five=(3, R5), week=(1, R7), fable=(2, R7)),
+             snap("claudeDesktop", t + 6 * MINUTE, org="org-1", five=(3, R5), week=(1, R7))]
+    mixed += codex_turn("a", t + 7 * MINUTE, 3_000_000, "pro", five=(2, sec(R5 + 3 * MINUTE)), week=(1, sec(R7 + HOUR)),
+                        counts=tokens(1000, 200, 600, None, 50))
+    now = t + 30 * MINUTE
+    out = [case("Codex and Claude accounts", "each entry counts the input and output of the responses its usedMicroUsd "
+                "sums: Claude's 7-day and 5-hour windows the CLI's and Desktop's Opus, the Fable and the model outside the "
+                "price table (the null row; it is unpriced, so it adds no micro-USD but its tokens count), the Fable window "
+                "only the Fable response; Codex has no cache writes and Claude no reasoning (null)", mixed, now,
+                outputs=["responses", "entries"], tokenUsage=True),
+           case("extension not advertised", "the same entries without tokenUsage", mixed, now, outputs=["entries"]),
+           case("a later heartbeat", "ten minutes later with no new response the counts are the same snapshot: a "
+                "repeated report replaces the earlier one, it adds nothing", mixed, now + 10 * MINUTE,
+                outputs=["entries"], tokenUsage=True)]
+    two = [{"type": "codexAuth", "at": BASE, "accountId": "acct-a"}]
+    two += codex_turn("a", t, 3_000_000, "pro", week=(40, sec(R7)), counts=tokens(5000, 300, 4000, None, 100))
+    two += [{"type": "codexAuth", "at": t + HOUR, "accountId": "acct-b"}]
+    two += codex_turn("b", t + 2 * HOUR, 2_000_000, "pro", week=(10, sec(R7 - 20 * HOUR)),
+                      counts=tokens(2000, 100, 1500, None, 20))
+    out.append(case("two Codex accounts", "each account's entry counts only its own responses", two, t + 3 * HOUR,
+                    outputs=["entries"], tokenUsage=True))
+    for label, end, c in (("one account on a first device", t, tokens(5000, 300, 4000, None, 100)),
+                          ("the account on a second device", t + 20 * MINUTE, tokens(700, 70, 500, None, 7))):
+        ev = [{"type": "codexAuth", "at": BASE, "accountId": "acct-a"}]
+        ev += codex_turn("a", end, 1_000_000, "pro", week=(40, sec(R7)), counts=c)
+        out.append(case(label, "two devices send the same account tag, each with the counts of its own responses (a "
+                        "receiver keeps one snapshot per device)", ev, t + HOUR, outputs=["entries"], tokenUsage=True))
+    R = BASE + 7 * DAY
+    week = [profile(BASE)]
+    for i in range(1, 4):
+        end = R - (8 - 2 * i) * HOUR
+        week += [resp("claudeCode", end, 40_000_000, model=OPUS, counts=tokens(10_000 * i, 500, 8_000 * i, 1_000)),
+                 snap("claudeCode", end + 3 * MINUTE, week=(i * 10, R))]
+    week += [resp("claudeCode", R + 7 * DAY + 2 * HOUR, 20_000_000, model=OPUS, counts=tokens(3000, 40, 2000, 500))]
+    out.append(case("weekly after reset", "1.5 weeks after R the window restarted at R + 1 week: only the response after "
+                    "that counts, the earlier window's tokens never carry over", week, R + 7 * DAY + 12 * HOUR,
+                    outputs=["entries"], tokenUsage=True))
+    five = [profile(BASE), resp("claudeCode", t, 10_000_000, model=OPUS, counts=tokens(900, 90, 800, 0)),
+            snap("claudeCode", t + 3 * MINUTE, five=(10, R5))]
+    out.append(case("five-hour after reset, no use yet", "after R with no local response the new window is empty: zero "
+                    "counts and no models, a measured zero", five, R5 + 30 * MINUTE, outputs=["entries"],
+                    tokenUsage=True))
+    old = [profile(BASE), resp("claudeCode", t, 4_000_000, model=OPUS),
+           resp("claudeCode", t + 2 * MINUTE, 1_000_000, model=FABLE, counts=tokens(300, 30, 200, 50)),
+           snap("claudeCode", t + 5 * MINUTE, five=(3, R5), week=(1, R7), fable=(2, R7))]
+    out.append(case("a response recorded without counts", "the Opus response comes from a history file analysed before "
+                    "the ledger kept counts: the 5-hour and 7-day blocks are null (never 0 or an estimate) while their "
+                    "usedMicroUsd still counts it; the Fable window does not hold it and keeps its counts", old,
+                    t + 30 * MINUTE, outputs=["entries"], tokenUsage=True))
+    idle = [profile(BASE, org_type="claude_team"), snap("claudeDesktop", t, org="org-1", week=(12, R7))]
+    out.append(case("zero usage", "an account with a vendor percent but no response here: inputTokens and outputTokens "
+                    "0 and no models, unlike the null of an unmeasured window", idle, t + HOUR, outputs=["entries"],
+                    tokenUsage=True))
+    return out
+
+
 def reporter_case():
     e = {"account": "0123456789abcdef", "sources": ["codex"], "window": {"kind": "sevenDay", "name": None, "minutes": 10080},
          "usedPercent": 20.0,
@@ -909,5 +986,6 @@ def cases():
         "live": live_cases(),
         "store": store_cases(),
         "report": report_cases(),
+        "tokens": token_cases(),
         "cadence": reporter_case(),
     }

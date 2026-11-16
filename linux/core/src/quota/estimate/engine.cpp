@@ -205,7 +205,7 @@ void Engine::build(std::int64_t nowMs) {
     const auto take = [&](std::size_t i, const std::string& account) {
         const auto& r = responses_[i];
         responseAccounts_[i] = account;
-        ledger_->add(account, r.source, r.model, r.endMs, r.cost, r.requests, r.tokens);
+        ledger_->add(account, r.source, r.model, r.endMs, r.cost, r.requests, r.tokens, r.counts, r.publicModel);
     };
     const auto subscription = [](const Response& r) {
         if (r.source == "codex") return !r.provider || *r.provider == "openai";

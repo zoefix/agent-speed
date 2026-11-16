@@ -22,6 +22,10 @@ namespace agentspeed::quota::estimate {
 
 // A response of the history or of the live engine in the ledger's form; `machine` is kLocal or the host's id.
 Response responseOf(const history::EstimateResponse& response, const std::string& machine = std::string(kLocal));
+// A response the live engine holds, this computer's or a host's (`machine`), priced at `cost`, with the model ids of
+// `table` and its token counts (QUOTAS 10.3).
+Response liveResponseOf(const ParsedResponse& response, const std::string& machine, std::optional<std::int64_t> cost,
+                        const pricing::PriceTable& table);
 // A token count line's rate limits, as the history keeps them (compact JSON) or as a parser hands them over.
 std::optional<CodexLine> codexLineOf(const std::string& agentId, std::int64_t ts, std::string_view rateLimits);
 std::optional<CodexLine> codexLineOf(const std::string& agentId, std::int64_t ts, const json::Value& rateLimits);

@@ -4594,6 +4594,1065 @@
    }
   ]
  },
+ "tokenUsage": {
+  "maxModels": 16,
+  "fields": {
+   "codex": [
+    "cachedInput",
+    "reasoning"
+   ],
+   "claudeCode": [
+    "cachedInput",
+    "cacheWriteInput"
+   ],
+   "claudeDesktop": [
+    "cachedInput",
+    "cacheWriteInput"
+   ],
+   "gemini": [
+    "cachedInput",
+    "reasoning"
+   ],
+   "antigravity": [
+    "cachedInput",
+    "reasoning"
+   ]
+  },
+  "sources": [
+   {
+    "source": "codex",
+    "usage": {
+     "input": 1000,
+     "cachedInput": 600,
+     "cacheWriteInput": 0,
+     "output": 200,
+     "reasoning": 50
+    },
+    "why": "Codex logs cache reads and reasoning, never cache writes: missing",
+    "expected": {
+     "input": 1000,
+     "output": 200,
+     "cachedInput": 600,
+     "cacheWriteInput": null,
+     "reasoning": 50
+    }
+   },
+   {
+    "source": "codex",
+    "usage": {
+     "input": 100,
+     "cachedInput": 150,
+     "cacheWriteInput": 0,
+     "output": 20,
+     "reasoning": 30
+    },
+    "why": "a cache read above the input and reasoning above the output are clamped",
+    "expected": {
+     "input": 100,
+     "output": 20,
+     "cachedInput": 100,
+     "cacheWriteInput": null,
+     "reasoning": 20
+    }
+   },
+   {
+    "source": "claudeCode",
+    "usage": {
+     "input": 1300,
+     "cachedInput": 1000,
+     "cacheWriteInput": 200,
+     "output": 80,
+     "reasoning": 0
+    },
+    "why": "Claude logs cache reads and writes; thinking tokens almost never: missing, not 0",
+    "expected": {
+     "input": 1300,
+     "output": 80,
+     "cachedInput": 1000,
+     "cacheWriteInput": 200,
+     "reasoning": null
+    }
+   },
+   {
+    "source": "claudeDesktop",
+    "usage": {
+     "input": 500,
+     "cachedInput": 300,
+     "cacheWriteInput": 300,
+     "output": 10,
+     "reasoning": 0
+    },
+    "why": "cache writes at most the input left after the reads",
+    "expected": {
+     "input": 500,
+     "output": 10,
+     "cachedInput": 300,
+     "cacheWriteInput": 200,
+     "reasoning": null
+    }
+   },
+   {
+    "source": "gemini",
+    "usage": {
+     "input": 900,
+     "cachedInput": 400,
+     "cacheWriteInput": 0,
+     "output": 120,
+     "reasoning": 60
+    },
+    "why": "Gemini CLI: cache reads and thoughts",
+    "expected": {
+     "input": 900,
+     "output": 120,
+     "cachedInput": 400,
+     "cacheWriteInput": null,
+     "reasoning": 60
+    }
+   },
+   {
+    "source": "antigravity",
+    "usage": {
+     "input": 700,
+     "cachedInput": 200,
+     "cacheWriteInput": 0,
+     "output": 90,
+     "reasoning": 30
+    },
+    "why": "Antigravity: cache reads and thinking",
+    "expected": {
+     "input": 700,
+     "output": 90,
+     "cachedInput": 200,
+     "cacheWriteInput": null,
+     "reasoning": 30
+    }
+   },
+   {
+    "source": "grokBuild",
+    "usage": {
+     "input": 800,
+     "cachedInput": 500,
+     "cacheWriteInput": 100,
+     "output": 90,
+     "reasoning": 40
+    },
+    "why": "a source whose logs write 0 for what they lack: every detail missing",
+    "expected": {
+     "input": 800,
+     "output": 90,
+     "cachedInput": null,
+     "cacheWriteInput": null,
+     "reasoning": null
+    }
+   }
+  ],
+  "rows": [
+   {
+    "account": "a",
+    "model": "gpt-6.1-sol",
+    "at": 1793926800000,
+    "cost": 3000000,
+    "counts": {
+     "input": 50,
+     "output": 10,
+     "cachedInput": 30,
+     "cacheWriteInput": 5,
+     "reasoning": 3
+    }
+   },
+   {
+    "account": "a",
+    "model": "gpt-6.1-sol",
+    "at": 1793930400000,
+    "cost": 2000000,
+    "counts": {
+     "input": 30,
+     "output": 5,
+     "cachedInput": 20,
+     "cacheWriteInput": 5,
+     "reasoning": 2
+    }
+   },
+   {
+    "account": "a",
+    "model": "acme-internal-7",
+    "public": false,
+    "at": 1793934000000,
+    "cost": null,
+    "counts": {
+     "input": 20,
+     "output": 5,
+     "cachedInput": 10,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "b",
+    "model": "gpt-5.5",
+    "at": 1793926800000,
+    "cost": 1000000,
+    "counts": {
+     "input": 400,
+     "output": 40,
+     "cachedInput": 100,
+     "cacheWriteInput": null,
+     "reasoning": 10
+    }
+   },
+   {
+    "account": "b",
+    "model": "gpt-5.5",
+    "at": 1793930400000,
+    "cost": 1000000
+   },
+   {
+    "account": "c",
+    "source": "codex",
+    "model": "gpt-5.5",
+    "at": 1793926800000,
+    "cost": 1000000,
+    "counts": {
+     "input": 400,
+     "output": 40,
+     "cachedInput": 100,
+     "cacheWriteInput": null,
+     "reasoning": 10
+    }
+   },
+   {
+    "account": "c",
+    "source": "claudeCode",
+    "model": "claude-opus-5-5",
+    "at": 1793926800000,
+    "cost": 2000000,
+    "counts": {
+     "input": 900,
+     "output": 60,
+     "cachedInput": 500,
+     "cacheWriteInput": 300,
+     "reasoning": null
+    }
+   },
+   {
+    "account": "d",
+    "source": "claudeCode",
+    "model": "claude-fable-5-2",
+    "at": 1793926800000,
+    "cost": 2000000,
+    "counts": {
+     "input": 300,
+     "output": 30,
+     "cachedInput": 200,
+     "cacheWriteInput": 50,
+     "reasoning": null
+    }
+   },
+   {
+    "account": "d",
+    "source": "claudeCode",
+    "model": "claude-opus-5-5",
+    "at": 1793926800000,
+    "cost": 4000000,
+    "counts": {
+     "input": 700,
+     "output": 70,
+     "cachedInput": 500,
+     "cacheWriteInput": 100,
+     "reasoning": null
+    }
+   },
+   {
+    "account": "f",
+    "model": "gpt-5.5",
+    "at": 1793926800000,
+    "cost": 1000000,
+    "counts": {
+     "input": 100,
+     "output": 10,
+     "cachedInput": 50,
+     "cacheWriteInput": null,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "f",
+    "model": "gpt-5.4-mini",
+    "at": 1793926800000,
+    "cost": 0,
+    "counts": {
+     "input": 0,
+     "output": 0,
+     "cachedInput": 0,
+     "cacheWriteInput": null,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "g",
+    "model": "gpt-5.5",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 5000000000000000,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "g",
+    "model": "gpt-5.5",
+    "at": 1793930400000,
+    "cost": 1,
+    "counts": {
+     "input": 5000000000000000,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-00",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-01",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-02",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-03",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-04",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-05",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-06",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-07",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-08",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-09",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-10",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-11",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-12",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-13",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-14",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-15",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   },
+   {
+    "account": "e",
+    "model": "model-16",
+    "at": 1793926800000,
+    "cost": 1,
+    "counts": {
+     "input": 1,
+     "output": 1,
+     "cachedInput": 0,
+     "cacheWriteInput": 0,
+     "reasoning": 0
+    }
+   }
+  ],
+  "sums": [
+   {
+    "name": "the issue's example",
+    "why": "inputTokens 100 = Σ input, which already holds the 60 cache reads and 10 writes; outputTokens 20 holds the 5 reasoning tokens; the model outside the price table is the null row",
+    "accounts": [
+     "a"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    }
+   },
+   {
+    "name": "zero usage",
+    "why": "no row in the span: zeros and no models, a measured zero",
+    "accounts": [
+     "a"
+    ],
+    "window": null,
+    "a": 1793937600000,
+    "b": 1793941200000,
+    "expected": {
+     "inputTokens": 0,
+     "outputTokens": 0,
+     "cachedInputTokens": 0,
+     "cacheWriteInputTokens": 0,
+     "reasoningTokens": 0,
+     "models": []
+    }
+   },
+   {
+    "name": "a row without counts",
+    "why": "a row recorded before the ledger kept counts makes the whole block null, never 0",
+    "accounts": [
+     "b"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": null
+   },
+   {
+    "name": "the row without counts outside the span",
+    "why": "only the rows the span touches count",
+    "accounts": [
+     "b"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793926830000,
+    "expected": {
+     "inputTokens": 400,
+     "outputTokens": 40,
+     "cachedInputTokens": 100,
+     "cacheWriteInputTokens": null,
+     "reasoningTokens": 10,
+     "models": [
+      {
+       "model": "gpt-5.5",
+       "inputTokens": 400,
+       "outputTokens": 40
+      }
+     ]
+    }
+   },
+   {
+    "name": "a missing detail",
+    "why": "Codex has no cache writes and Claude no reasoning: both details are null, the totals and the cache reads stay",
+    "accounts": [
+     "c"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": {
+     "inputTokens": 1300,
+     "outputTokens": 100,
+     "cachedInputTokens": 600,
+     "cacheWriteInputTokens": null,
+     "reasoningTokens": null,
+     "models": [
+      {
+       "model": "claude-opus-5-5",
+       "inputTokens": 900,
+       "outputTokens": 60
+      },
+      {
+       "model": "gpt-5.5",
+       "inputTokens": 400,
+       "outputTokens": 40
+      }
+     ]
+    }
+   },
+   {
+    "name": "modelWeek filter",
+    "why": "a Fable window counts only claude-fable-* rows, as its usedMicroUsd",
+    "accounts": [
+     "d"
+    ],
+    "window": "Fable",
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": {
+     "inputTokens": 300,
+     "outputTokens": 30,
+     "cachedInputTokens": 200,
+     "cacheWriteInputTokens": 50,
+     "reasoningTokens": null,
+     "models": [
+      {
+       "model": "claude-fable-5-2",
+       "inputTokens": 300,
+       "outputTokens": 30
+      }
+     ]
+    }
+   },
+   {
+    "name": "seventeen models",
+    "why": "more than 16 models: the block is null",
+    "accounts": [
+     "e"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": null
+   },
+   {
+    "name": "a model without tokens",
+    "why": "a model whose input and output are 0 is left out of the models",
+    "accounts": [
+     "f"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": {
+     "inputTokens": 100,
+     "outputTokens": 10,
+     "cachedInputTokens": 50,
+     "cacheWriteInputTokens": null,
+     "reasoningTokens": 0,
+     "models": [
+      {
+       "model": "gpt-5.5",
+       "inputTokens": 100,
+       "outputTokens": 10
+      }
+     ]
+    }
+   },
+   {
+    "name": "an unsafe total",
+    "why": "an input above 2^53 - 1 makes the block null",
+    "accounts": [
+     "g"
+    ],
+    "window": null,
+    "a": 1793923200000,
+    "b": 1793941200000,
+    "expected": null
+   }
+  ],
+  "origin": "https://radar.example",
+  "input": {
+   "account": "eccb796a3815310b",
+   "source": "codex",
+   "sources": [
+    "codex"
+   ],
+   "plan": "promax",
+   "tier": null,
+   "kind": "sevenDay",
+   "name": null,
+   "minutes": 10080,
+   "p": 23.456,
+   "t": 1793934000000,
+   "R": 1794528000000,
+   "S": 1793923200000,
+   "accounts": [
+    "a"
+   ],
+   "estimate": {
+    "confidence": "medium",
+    "cap": 512345678.4,
+    "low": 480000000.5,
+    "high": 546000000.49,
+    "windows": 2
+   }
+  },
+  "entries": [
+   {
+    "name": "live",
+    "now": 1793937600000,
+    "expected": {
+     "account": "84f626294f8e56b4",
+     "source": "codex",
+     "sources": [
+      "codex"
+     ],
+     "plan": "promax",
+     "tier": null,
+     "window": {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080
+     },
+     "usedPercent": 23.46,
+     "percentAgeMs": 3600000,
+     "resetsInMs": 590400000,
+     "livePercent": 23.5,
+     "liveEstimated": false,
+     "usedMicroUsd": 5000000,
+     "observedUsedMicroUsd": 5000000,
+     "unpricedRequests": 1,
+     "estimate": {
+      "capMicroUsd": 512345678,
+      "lowMicroUsd": 480000001,
+      "highMicroUsd": 546000000,
+      "confidence": "medium",
+      "coverage": 0.042,
+      "accountUsedMicroUsd": 120175802,
+      "windows": 2
+     },
+     "mix": [
+      {
+       "model": "gpt-6.1-sol",
+       "share": 1.0
+      }
+     ],
+     "priceVersion": 8,
+     "tokenUsage": {
+      "inputTokens": 100,
+      "outputTokens": 20,
+      "cachedInputTokens": 60,
+      "cacheWriteInputTokens": 10,
+      "reasoningTokens": 5,
+      "models": [
+       {
+        "model": "gpt-6.1-sol",
+        "inputTokens": 80,
+        "outputTokens": 15
+       },
+       {
+        "model": null,
+        "inputTokens": 20,
+        "outputTokens": 5
+       }
+      ]
+     }
+    }
+   },
+   {
+    "name": "reset passed",
+    "now": 1794531600000,
+    "expected": {
+     "account": "84f626294f8e56b4",
+     "source": "codex",
+     "sources": [
+      "codex"
+     ],
+     "plan": "promax",
+     "tier": null,
+     "window": {
+      "kind": "sevenDay",
+      "name": null,
+      "minutes": 10080
+     },
+     "usedPercent": null,
+     "percentAgeMs": null,
+     "resetsInMs": 601200000,
+     "livePercent": 0.0,
+     "liveEstimated": true,
+     "usedMicroUsd": 0,
+     "observedUsedMicroUsd": null,
+     "unpricedRequests": 0,
+     "estimate": {
+      "capMicroUsd": 512345678,
+      "lowMicroUsd": 480000001,
+      "highMicroUsd": 546000000,
+      "confidence": "medium",
+      "coverage": 0.042,
+      "accountUsedMicroUsd": 0,
+      "windows": 2
+     },
+     "mix": [],
+     "priceVersion": 8,
+     "tokenUsage": {
+      "inputTokens": 0,
+      "outputTokens": 0,
+      "cachedInputTokens": 0,
+      "cacheWriteInputTokens": 0,
+      "reasoningTokens": 0,
+      "models": []
+     }
+    }
+   }
+  ],
+  "validation": [
+   {
+    "name": "the example",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": []
+   },
+   {
+    "name": "unmeasured",
+    "tokenUsage": null,
+    "expected": []
+   },
+   {
+    "name": "a model off by one",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 81,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": [
+     [
+      "/quotas/0/tokenUsage/models",
+      "the models do not add up to the totals"
+     ]
+    ]
+   },
+   {
+    "name": "cache above the input",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 95,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": [
+     [
+      "/quotas/0/tokenUsage/cachedInputTokens",
+      "cache reads and writes above the input"
+     ]
+    ]
+   },
+   {
+    "name": "missing details",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": null,
+     "cacheWriteInputTokens": null,
+     "reasoningTokens": null,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": []
+   },
+   {
+    "name": "reasoning above the output",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 21,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": [
+     [
+      "/quotas/0/tokenUsage/reasoningTokens",
+      "reasoning above the output"
+     ]
+    ]
+   },
+   {
+    "name": "a model twice",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 0,
+       "outputTokens": 0
+      },
+      {
+       "model": null,
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": [
+     [
+      "/quotas/0/tokenUsage/models/1/model",
+      "a model twice"
+     ]
+    ]
+   },
+   {
+    "name": "a reserved id",
+    "tokenUsage": {
+     "inputTokens": 100,
+     "outputTokens": 20,
+     "cachedInputTokens": 60,
+     "cacheWriteInputTokens": 10,
+     "reasoningTokens": 5,
+     "models": [
+      {
+       "model": "gpt-6.1-sol",
+       "inputTokens": 80,
+       "outputTokens": 15
+      },
+      {
+       "model": "unknown",
+       "inputTokens": 20,
+       "outputTokens": 5
+      }
+     ]
+    },
+    "expected": [
+     [
+      "/quotas/0/tokenUsage/models/1/model",
+      "a reserved id: unknown models are null"
+     ]
+    ]
+   }
+  ]
+ },
  "pipeline": {
   "ledger": [
    {
@@ -11735,6 +12794,2369 @@
         }
        ],
        "priceVersion": 8
+      }
+     ]
+    }
+   }
+  ],
+  "tokens": [
+   {
+    "name": "Codex and Claude accounts",
+    "why": "each entry counts the input and output of the responses its usedMicroUsd sums: Claude's 7-day and 5-hour windows the CLI's and Desktop's Opus, the Fable and the model outside the price table (the null row; it is unpriced, so it adds no micro-USD but its tokens count), the Fable window only the Fable response; Codex has no cache writes and Claude no reasoning (null)",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927793000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1380,
+       "counts": {
+        "input": 1300,
+        "output": 80,
+        "cachedInput": 1000,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927933000,
+       "endMs": 1793927953000,
+       "model": "claude-fable-5-2",
+       "costMicroUsd": 1000000,
+       "tokens": 330,
+       "counts": {
+        "input": 300,
+        "output": 30,
+        "cachedInput": 200,
+        "cacheWriteInput": 50,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927993000,
+       "endMs": 1793928013000,
+       "model": "claude-mystery-1",
+       "costMicroUsd": null,
+       "tokens": 220,
+       "counts": {
+        "input": 200,
+        "output": 20,
+        "cachedInput": 100,
+        "cacheWriteInput": 0,
+        "reasoning": null
+       },
+       "publicModel": false
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928053000,
+       "endMs": 1793928073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 510,
+       "counts": {
+        "input": 500,
+        "output": 10,
+        "cachedInput": 300,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928133000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793928233000,
+       "endMs": 1793928253000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 3000000,
+       "tokens": 1200,
+       "counts": {
+        "input": 1000,
+        "output": 200,
+        "cachedInput": 600,
+        "cacheWriteInput": null,
+        "reasoning": 50
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793928254500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "primary": {
+         "used_percent": 2,
+         "window_minutes": 300,
+         "resets_at": 1793942413
+        },
+        "secondary": {
+         "used_percent": 1,
+         "window_minutes": 10080,
+         "resets_at": 1794446233
+        }
+       }
+      }
+     ],
+     "now": 1793929633000,
+     "outputs": [
+      "responses",
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "responses": [
+      "08504137119396d6",
+      "08504137119396d6",
+      "08504137119396d6",
+      "08504137119396d6",
+      "01fccfd8942a9ddb"
+     ],
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1378500,
+       "resetsInMs": 12780000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 1000,
+        "outputTokens": 200,
+        "cachedInputTokens": 600,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 50,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 1000,
+          "outputTokens": 200
+         }
+        ]
+       }
+      },
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1378500,
+       "resetsInMs": 516600000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 1000,
+        "outputTokens": 200,
+        "cachedInputTokens": 600,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 50,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 1000,
+          "outputTokens": 200
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 1440000,
+       "resetsInMs": 12600000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": 219351497,
+        "lowMicroUsd": 125000000,
+        "highMicroUsd": 384920635,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 6580545,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 2300,
+        "outputTokens": 140,
+        "cachedInputTokens": 1600,
+        "cacheWriteInputTokens": 450,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         },
+         {
+          "model": "claude-opus-5-5",
+          "inputTokens": 1800,
+          "outputTokens": 90
+         },
+         {
+          "model": null,
+          "inputTokens": 200,
+          "outputTokens": 20
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1440000,
+       "resetsInMs": 513000000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 2300,
+        "outputTokens": 140,
+        "cachedInputTokens": 1600,
+        "cacheWriteInputTokens": 450,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         },
+         {
+          "model": "claude-opus-5-5",
+          "inputTokens": 1800,
+          "outputTokens": 90
+         },
+         {
+          "model": null,
+          "inputTokens": 200,
+          "outputTokens": 20
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1500000,
+       "resetsInMs": 513000000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-fable-5-2",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 300,
+        "outputTokens": 30,
+        "cachedInputTokens": 200,
+        "cacheWriteInputTokens": 50,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "extension not advertised",
+    "why": "the same entries without tokenUsage",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927793000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1380,
+       "counts": {
+        "input": 1300,
+        "output": 80,
+        "cachedInput": 1000,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927933000,
+       "endMs": 1793927953000,
+       "model": "claude-fable-5-2",
+       "costMicroUsd": 1000000,
+       "tokens": 330,
+       "counts": {
+        "input": 300,
+        "output": 30,
+        "cachedInput": 200,
+        "cacheWriteInput": 50,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927993000,
+       "endMs": 1793928013000,
+       "model": "claude-mystery-1",
+       "costMicroUsd": null,
+       "tokens": 220,
+       "counts": {
+        "input": 200,
+        "output": 20,
+        "cachedInput": 100,
+        "cacheWriteInput": 0,
+        "reasoning": null
+       },
+       "publicModel": false
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928053000,
+       "endMs": 1793928073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 510,
+       "counts": {
+        "input": 500,
+        "output": 10,
+        "cachedInput": 300,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928133000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793928233000,
+       "endMs": 1793928253000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 3000000,
+       "tokens": 1200,
+       "counts": {
+        "input": 1000,
+        "output": 200,
+        "cachedInput": 600,
+        "cacheWriteInput": null,
+        "reasoning": 50
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793928254500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "primary": {
+         "used_percent": 2,
+         "window_minutes": 300,
+         "resets_at": 1793942413
+        },
+        "secondary": {
+         "used_percent": 1,
+         "window_minutes": 10080,
+         "resets_at": 1794446233
+        }
+       }
+      }
+     ],
+     "now": 1793929633000,
+     "outputs": [
+      "entries"
+     ]
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1378500,
+       "resetsInMs": 12780000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1378500,
+       "resetsInMs": 516600000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 1440000,
+       "resetsInMs": 12600000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": 219351497,
+        "lowMicroUsd": 125000000,
+        "highMicroUsd": 384920635,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 6580545,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1440000,
+       "resetsInMs": 513000000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1500000,
+       "resetsInMs": 513000000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-fable-5-2",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8
+      }
+     ]
+    }
+   },
+   {
+    "name": "a later heartbeat",
+    "why": "ten minutes later with no new response the counts are the same snapshot: a repeated report replaces the earlier one, it adds nothing",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927793000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1380,
+       "counts": {
+        "input": 1300,
+        "output": 80,
+        "cachedInput": 1000,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927933000,
+       "endMs": 1793927953000,
+       "model": "claude-fable-5-2",
+       "costMicroUsd": 1000000,
+       "tokens": 330,
+       "counts": {
+        "input": 300,
+        "output": 30,
+        "cachedInput": 200,
+        "cacheWriteInput": 50,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927993000,
+       "endMs": 1793928013000,
+       "model": "claude-mystery-1",
+       "costMicroUsd": null,
+       "tokens": 220,
+       "counts": {
+        "input": 200,
+        "output": 20,
+        "cachedInput": 100,
+        "cacheWriteInput": 0,
+        "reasoning": null
+       },
+       "publicModel": false
+      },
+      {
+       "type": "response",
+       "source": "claudeDesktop",
+       "file": null,
+       "startMs": 1793928053000,
+       "endMs": 1793928073000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 2000000,
+       "tokens": 510,
+       "counts": {
+        "input": 500,
+        "output": 10,
+        "cachedInput": 300,
+        "cacheWriteInput": 200,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928133000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793928193000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793928233000,
+       "endMs": 1793928253000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 3000000,
+       "tokens": 1200,
+       "counts": {
+        "input": 1000,
+        "output": 200,
+        "cachedInput": 600,
+        "cacheWriteInput": null,
+        "reasoning": 50
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793928254500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "primary": {
+         "used_percent": 2,
+         "window_minutes": 300,
+         "resets_at": 1793942413
+        },
+        "secondary": {
+         "used_percent": 1,
+         "window_minutes": 10080,
+         "resets_at": 1794446233
+        }
+       }
+      }
+     ],
+     "now": 1793930233000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1978500,
+       "resetsInMs": 12180000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 1000,
+        "outputTokens": 200,
+        "cachedInputTokens": 600,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 50,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 1000,
+          "outputTokens": 200
+         }
+        ]
+       }
+      },
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1978500,
+       "resetsInMs": 516000000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 1000,
+        "outputTokens": 200,
+        "cachedInputTokens": 600,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 50,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 1000,
+          "outputTokens": 200
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 2040000,
+       "resetsInMs": 12000000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": 219351497,
+        "lowMicroUsd": 125000000,
+        "highMicroUsd": 384920635,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 6580545,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 2300,
+        "outputTokens": 140,
+        "cachedInputTokens": 1600,
+        "cacheWriteInputTokens": 450,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         },
+         {
+          "model": "claude-opus-5-5",
+          "inputTokens": 1800,
+          "outputTokens": 90
+         },
+         {
+          "model": null,
+          "inputTokens": 200,
+          "outputTokens": 20
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 2040000,
+       "resetsInMs": 512400000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 7000000,
+       "observedUsedMicroUsd": 7000000,
+       "unpricedRequests": 1,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.857
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.143
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 2300,
+        "outputTokens": 140,
+        "cachedInputTokens": 1600,
+        "cacheWriteInputTokens": 450,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         },
+         {
+          "model": "claude-opus-5-5",
+          "inputTokens": 1800,
+          "outputTokens": 90
+         },
+         {
+          "model": null,
+          "inputTokens": 200,
+          "outputTokens": 20
+         }
+        ]
+       }
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode",
+        "claudeDesktop"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 2100000,
+       "resetsInMs": 512400000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-fable-5-2",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 300,
+        "outputTokens": 30,
+        "cachedInputTokens": 200,
+        "cacheWriteInputTokens": 50,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "two Codex accounts",
+    "why": "each account's entry counts only its own responses",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 3000000,
+       "tokens": 5300,
+       "counts": {
+        "input": 5000,
+        "output": 300,
+        "cachedInput": 4000,
+        "cacheWriteInput": null,
+        "reasoning": 100
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793927834500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 40,
+         "window_minutes": 10080,
+         "resets_at": 1794442633
+        }
+       }
+      },
+      {
+       "type": "codexAuth",
+       "at": 1793931433000,
+       "accountId": "acct-b"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "b",
+       "startMs": 1793935013000,
+       "endMs": 1793935033000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 2000000,
+       "tokens": 2100,
+       "counts": {
+        "input": 2000,
+        "output": 100,
+        "cachedInput": 1500,
+        "cacheWriteInput": null,
+        "reasoning": 20
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "b",
+       "ts": 1793935034500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 10,
+         "window_minutes": 10080,
+         "resets_at": 1794370633
+        }
+       }
+      }
+     ],
+     "now": 1793938633000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 10798500,
+       "resetsInMs": 504000000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 3000000,
+       "observedUsedMicroUsd": 3000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 5000,
+        "outputTokens": 300,
+        "cachedInputTokens": 4000,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 100,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 5000,
+          "outputTokens": 300
+         }
+        ]
+       }
+      },
+      {
+       "account": "bbb0043d651656d5",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 10.0,
+       "percentAgeMs": 3598500,
+       "resetsInMs": 432000000,
+       "livePercent": 10.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 2000000,
+       "observedUsedMicroUsd": 2000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 2000,
+        "outputTokens": 100,
+        "cachedInputTokens": 1500,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 20,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 2000,
+          "outputTokens": 100
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "one account on a first device",
+    "why": "two devices send the same account tag, each with the counts of its own responses (a receiver keeps one snapshot per device)",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 1000000,
+       "tokens": 5300,
+       "counts": {
+        "input": 5000,
+        "output": 300,
+        "cachedInput": 4000,
+        "cacheWriteInput": null,
+        "reasoning": 100
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793927834500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 40,
+         "window_minutes": 10080,
+         "resets_at": 1794442633
+        }
+       }
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 3598500,
+       "resetsInMs": 511200000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 5000,
+        "outputTokens": 300,
+        "cachedInputTokens": 4000,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 100,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 5000,
+          "outputTokens": 300
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "the account on a second device",
+    "why": "two devices send the same account tag, each with the counts of its own responses (a receiver keeps one snapshot per device)",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "codexAuth",
+       "at": 1793924233000,
+       "accountId": "acct-a"
+      },
+      {
+       "type": "response",
+       "source": "codex",
+       "file": "a",
+       "startMs": 1793929013000,
+       "endMs": 1793929033000,
+       "model": "gpt-5.5",
+       "costMicroUsd": 1000000,
+       "tokens": 770,
+       "counts": {
+        "input": 700,
+        "output": 70,
+        "cachedInput": 500,
+        "cacheWriteInput": null,
+        "reasoning": 7
+       }
+      },
+      {
+       "type": "tokenCount",
+       "file": "a",
+       "ts": 1793929034500,
+       "rateLimits": {
+        "limit_id": "codex",
+        "plan_type": "pro",
+        "secondary": {
+         "used_percent": 40,
+         "window_minutes": 10080,
+         "resets_at": 1794442633
+        }
+       }
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "68d5852f82ed75c4",
+       "source": "codex",
+       "sources": [
+        "codex"
+       ],
+       "plan": "pro",
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 40.0,
+       "percentAgeMs": 2398500,
+       "resetsInMs": 511200000,
+       "livePercent": 40.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "gpt-5.5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 700,
+        "outputTokens": 70,
+        "cachedInputTokens": 500,
+        "cacheWriteInputTokens": null,
+        "reasoningTokens": 7,
+        "models": [
+         {
+          "model": "gpt-5.5",
+          "inputTokens": 700,
+          "outputTokens": 70
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "weekly after reset",
+    "why": "1.5 weeks after R the window restarted at R + 1 week: only the response after that counts, the earlier window's tokens never carry over",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1794507413000,
+       "endMs": 1794507433000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 40000000,
+       "tokens": 10500,
+       "counts": {
+        "input": 10000,
+        "output": 500,
+        "cachedInput": 8000,
+        "cacheWriteInput": 1000,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1794507613000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 10,
+         "resetsAtMs": 1794529033000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1794514613000,
+       "endMs": 1794514633000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 40000000,
+       "tokens": 20500,
+       "counts": {
+        "input": 20000,
+        "output": 500,
+        "cachedInput": 16000,
+        "cacheWriteInput": 1000,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1794514813000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 20,
+         "resetsAtMs": 1794529033000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1794521813000,
+       "endMs": 1794521833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 40000000,
+       "tokens": 30500,
+       "counts": {
+        "input": 30000,
+        "output": 500,
+        "cachedInput": 24000,
+        "cacheWriteInput": 1000,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1794522013000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 30,
+         "resetsAtMs": 1794529033000
+        }
+       ]
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1795141013000,
+       "endMs": 1795141033000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 20000000,
+       "tokens": 3040,
+       "counts": {
+        "input": 3000,
+        "output": 40,
+        "cachedInput": 2000,
+        "cacheWriteInput": 500,
+        "reasoning": null
+       }
+      }
+     ],
+     "now": 1795177033000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": null,
+       "percentAgeMs": null,
+       "resetsInMs": 561600000,
+       "livePercent": 5.0,
+       "liveEstimated": true,
+       "usedMicroUsd": 20000000,
+       "observedUsedMicroUsd": null,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 400222408,
+        "lowMicroUsd": 387096774,
+        "highMicroUsd": 413793103,
+        "confidence": "low",
+        "coverage": 0.999,
+        "accountUsedMicroUsd": 20000000,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 3000,
+        "outputTokens": 40,
+        "cachedInputTokens": 2000,
+        "cacheWriteInputTokens": 500,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-opus-5-5",
+          "inputTokens": 3000,
+          "outputTokens": 40
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "five-hour after reset, no use yet",
+    "why": "after R with no local response the new window is empty: zero counts and no models, a measured zero",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 10000000,
+       "tokens": 990,
+       "counts": {
+        "input": 900,
+        "output": 90,
+        "cachedInput": 800,
+        "cacheWriteInput": 0,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928013000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 10,
+         "resetsAtMs": 1793942233000
+        }
+       ]
+      }
+     ],
+     "now": 1793944033000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": null,
+       "percentAgeMs": null,
+       "resetsInMs": null,
+       "livePercent": 0.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 0,
+       "observedUsedMicroUsd": null,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 100503782,
+        "lowMicroUsd": 90909091,
+        "highMicroUsd": 111111111,
+        "confidence": "low",
+        "coverage": 0.995,
+        "accountUsedMicroUsd": 0,
+        "windows": 1
+       },
+       "mix": [],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cachedInputTokens": 0,
+        "cacheWriteInputTokens": 0,
+        "reasoningTokens": 0,
+        "models": []
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "a response recorded without counts",
+    "why": "the Opus response comes from a history file analysed before the ledger kept counts: the 5-hour and 7-day blocks are null (never 0 or an estimate) while their usedMicroUsd still counts it; the Fable window does not hold it and keeps its counts",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_max",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927813000,
+       "endMs": 1793927833000,
+       "model": "claude-opus-5-5",
+       "costMicroUsd": 4000000,
+       "tokens": 1000
+      },
+      {
+       "type": "response",
+       "source": "claudeCode",
+       "file": null,
+       "startMs": 1793927933000,
+       "endMs": 1793927953000,
+       "model": "claude-fable-5-2",
+       "costMicroUsd": 1000000,
+       "tokens": 330,
+       "counts": {
+        "input": 300,
+        "output": 30,
+        "cachedInput": 200,
+        "cacheWriteInput": 50,
+        "reasoning": null
+       }
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeCode",
+       "observedMs": 1793928133000,
+       "windows": [
+        {
+         "kind": "fiveHour",
+         "name": null,
+         "minutes": 300,
+         "usedPercent": 3,
+         "resetsAtMs": 1793942233000
+        },
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 1,
+         "resetsAtMs": 1794442633000
+        },
+        {
+         "kind": "modelWeek",
+         "name": "Fable",
+         "minutes": 10080,
+         "usedPercent": 2,
+         "resetsAtMs": 1794442633000
+        }
+       ]
+      }
+     ],
+     "now": 1793929633000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "fiveHour",
+        "name": null,
+        "minutes": 300
+       },
+       "usedPercent": 3.0,
+       "percentAgeMs": 1500000,
+       "resetsInMs": 12600000,
+       "livePercent": 3.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 5000000,
+       "observedUsedMicroUsd": 5000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 176776695,
+        "lowMicroUsd": 125000000,
+        "highMicroUsd": 250000000,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 5303301,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.8
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.2
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": null
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 1.0,
+       "percentAgeMs": 1500000,
+       "resetsInMs": 513000000,
+       "livePercent": 1.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 5000000,
+       "observedUsedMicroUsd": 5000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [
+        {
+         "model": "claude-opus-5-5",
+         "share": 0.8
+        },
+        {
+         "model": "claude-fable-5-2",
+         "share": 0.2
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": null
+      },
+      {
+       "account": "bad4311b75a5c6e6",
+       "source": "claudeCode",
+       "sources": [
+        "claudeCode"
+       ],
+       "plan": "claude_max",
+       "tier": "default_claude_max_20x",
+       "window": {
+        "kind": "modelWeek",
+        "name": "Fable",
+        "minutes": 10080
+       },
+       "usedPercent": 2.0,
+       "percentAgeMs": 1500000,
+       "resetsInMs": 513000000,
+       "livePercent": 2.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 1000000,
+       "observedUsedMicroUsd": 1000000,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": 57735027,
+        "lowMicroUsd": 33333333,
+        "highMicroUsd": 100000000,
+        "confidence": "low",
+        "coverage": null,
+        "accountUsedMicroUsd": 1154701,
+        "windows": 1
+       },
+       "mix": [
+        {
+         "model": "claude-fable-5-2",
+         "share": 1.0
+        }
+       ],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 300,
+        "outputTokens": 30,
+        "cachedInputTokens": 200,
+        "cacheWriteInputTokens": 50,
+        "reasoningTokens": null,
+        "models": [
+         {
+          "model": "claude-fable-5-2",
+          "inputTokens": 300,
+          "outputTokens": 30
+         }
+        ]
+       }
+      }
+     ]
+    }
+   },
+   {
+    "name": "zero usage",
+    "why": "an account with a vendor percent but no response here: inputTokens and outputTokens 0 and no models, unlike the null of an unmeasured window",
+    "input": {
+     "salt": "d13b09702c0f72697ef581414d80b2c30f9d230980e5c58420ae7704d0095b3d",
+     "install": "00112233445566778899aabbccddeeff",
+     "origin": "https://radar.example",
+     "events": [
+      {
+       "type": "claudeProfile",
+       "at": 1793924233000,
+       "org": "org-1",
+       "account": "user-1",
+       "orgType": "claude_team",
+       "tier": "default_claude_max_20x"
+      },
+      {
+       "type": "snapshot",
+       "source": "claudeDesktop",
+       "observedMs": 1793927833000,
+       "windows": [
+        {
+         "kind": "sevenDay",
+         "name": null,
+         "minutes": 10080,
+         "usedPercent": 12,
+         "resetsAtMs": 1794442633000
+        }
+       ],
+       "org": "org-1"
+      }
+     ],
+     "now": 1793931433000,
+     "outputs": [
+      "entries"
+     ],
+     "tokenUsage": true
+    },
+    "expected": {
+     "entries": [
+      {
+       "account": "acc3c4f963e9699f",
+       "source": "claudeDesktop",
+       "sources": [
+        "claudeDesktop"
+       ],
+       "plan": null,
+       "tier": null,
+       "window": {
+        "kind": "sevenDay",
+        "name": null,
+        "minutes": 10080
+       },
+       "usedPercent": 12.0,
+       "percentAgeMs": 3600000,
+       "resetsInMs": 511200000,
+       "livePercent": 12.0,
+       "liveEstimated": false,
+       "usedMicroUsd": 0,
+       "observedUsedMicroUsd": 0,
+       "unpricedRequests": 0,
+       "estimate": {
+        "capMicroUsd": null,
+        "lowMicroUsd": null,
+        "highMicroUsd": null,
+        "confidence": "none",
+        "coverage": null,
+        "accountUsedMicroUsd": null,
+        "windows": 0
+       },
+       "mix": [],
+       "priceVersion": 8,
+       "tokenUsage": {
+        "inputTokens": 0,
+        "outputTokens": 0,
+        "cachedInputTokens": 0,
+        "cacheWriteInputTokens": 0,
+        "reasoningTokens": 0,
+        "models": []
+       }
       }
      ]
     }

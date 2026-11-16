@@ -159,6 +159,7 @@ agentspeed::report::Options ReportController::options(const agentspeed::report::
     options.extensions.taskScore = discovery.has("taskScore");
     options.extensions.executionModes = discovery.has("executionModes");
     options.extensions.executionModesVersion = discovery.has("executionModes") ? discovery.extensions.at("executionModes") : 1;
+    options.extensions.quotaTokenUsage = discovery.has("quotaTokenUsage");
     return options;
 }
 

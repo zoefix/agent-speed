@@ -39,6 +39,9 @@ public struct QuotaReportEntry: Equatable, Sendable {
     public var estimate: Estimate
     public var mix: [Mix]
     public var priceVersion: Int
+    /// The token counts of the same spend (REPORTING-EXTENSIONS 12); nil when they are not completely known. Sent
+    /// only to a service that advertises `quotaTokenUsage`.
+    public var tokenUsage: QuotaTokenUsage?
 
     /// `account`: the tag sent for the account (`QuotaAccounts.reportTag`), empty where nothing is sent.
     init(_ base: QuotaEntryBase, account: String, nowMs: Int64, ledger: QuotaEstimateLedger, priceVersion: Int) {
@@ -81,6 +84,7 @@ public struct QuotaReportEntry: Equatable, Sendable {
             windows: base.estimate.windows)
         mix = ledger.mix(accounts, filter, start, nowMs).map { Mix(model: $0.model, share: $0.share) }
         self.priceVersion = priceVersion
+        tokenUsage = ledger.tokenUsage(accounts, filter, start, nowMs)
     }
 
     /// The fields the send cadence compares, for entries that only carry those.
@@ -104,9 +108,12 @@ public struct QuotaReportEntry: Equatable, Sendable {
         priceVersion = 1
     }
 
-    /// The entry as sent, members in the schema's order.
-    public var json: ReportJSON {
-        .object([
+    /// The entry as sent to a service without `quotaTokenUsage`.
+    public var json: ReportJSON { json(tokenUsage: false) }
+
+    /// The entry as sent, members in the schema's order; `tokenUsage` adds the member (the counts or null).
+    public func json(tokenUsage withTokens: Bool) -> ReportJSON {
+        guard case .object(var members) = ReportJSON.object([
             "account": .string(account),
             "source": .string(source),
             "sources": .array(sources.map(ReportJSON.string)),
@@ -133,7 +140,9 @@ public struct QuotaReportEntry: Equatable, Sendable {
             ]),
             "mix": .array(mix.map { .object(["model": .string($0.model), "share": .decimal($0.share, decimals: 3)]) }),
             "priceVersion": .int(priceVersion),
-        ])
+        ]) else { return .null }
+        if withTokens { members.append(.init("tokenUsage", tokenUsage?.json ?? .null)) }
+        return .object(members)
     }
 
     /// `(account, window)`: one entry per account and window in a report.

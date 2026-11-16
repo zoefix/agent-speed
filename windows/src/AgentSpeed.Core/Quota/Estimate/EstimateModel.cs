@@ -118,7 +118,7 @@ public sealed partial class EstimateModel
             _accounts[i] = account;
             if (account is not null)
             {
-                Ledger.Add(account, r.Source, r.Model, r.EndMs, r.CostMicroUsd, r.Requests, r.Tokens);
+                Ledger.Add(account, r.Source, r.Model, r.EndMs, r.CostMicroUsd, r.Requests, r.Tokens, r.Counts, r.PublicModel);
             }
         }
     }

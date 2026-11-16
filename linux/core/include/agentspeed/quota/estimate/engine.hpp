@@ -35,6 +35,9 @@ struct Response {
     std::string model;
     std::optional<std::int64_t> cost;
     std::int64_t tokens = 0;
+    // QUOTAS 10.3: nullopt when recorded without them (unmeasured); `publicModel`: `model` is a price-table id.
+    std::optional<Counts> counts;
+    bool publicModel = false;
     std::int64_t requests = 1;
     std::optional<std::string> provider;
     // A Claude model id in a Bedrock or Vertex form (METRICS 9.2 cloud step).

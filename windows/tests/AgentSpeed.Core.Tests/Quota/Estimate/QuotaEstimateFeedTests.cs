@@ -128,6 +128,22 @@ public sealed class QuotaEstimateFeedTests : IDisposable
         Assert.Equal(0, late.FilesAnalyzed);
     }
 
+    [Fact]
+    public void ASharesTokenCountsComeFromItsLogsAndAFormerVersionIsAnalysedAgain()
+    {
+        var file = WriteCodexRollout("2026/10/20/rollout-c.jsonl", 2);
+        var (_, share) = Analyse();
+        Assert.All(share.Files[file].Responses, r => Assert.Equal(new QuotaTokenCounts(100, 10, 0, null, 0), r.Counts));
+        using (var connection = SqliteConnection.Open(StorePath, SqliteOpenMode.ReadWriteCreate))
+        {
+            connection.Execute("UPDATE estimate_files SET version = 1");
+        }
+
+        var (again, stored) = Analyse();
+        Assert.Equal(1, again.FilesAnalyzed);
+        Assert.Equal(share.Files[file].Responses, stored.Files[file].Responses);
+    }
+
     // MARK: Sign-in keys and Desktop's organization
 
     [Fact]

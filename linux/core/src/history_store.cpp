@@ -218,6 +218,23 @@ std::optional<DayAggregate> decode(std::string_view text) {
     return d;
 }
 
+// QUOTAS 10.3: `[input, output, cachedInput, cacheWriteInput, reasoning]`, a missing detail null; null when unmeasured.
+void appendCounts(std::string& out, const std::optional<quota::estimate::Counts>& counts) {
+    if (!counts) {
+        out += "null";
+        return;
+    }
+    out += '[' + std::to_string(counts->input) + ',' + std::to_string(counts->output) + ',';
+    appendOptional(out, counts->cachedInput);
+    out += ',';
+    appendOptional(out, counts->cacheWriteInput);
+    out += ',';
+    appendOptional(out, counts->reasoning);
+    out += ']';
+}
+
+// Rows `[agent, source, model, provider, start, end, cost, tokens, requests, cloudRoute, counts, public]`; rows of
+// version 1 end after `cloudRoute`.
 std::string encodeEstimate(const EstimateFile& e) {
     std::map<std::string, std::size_t> agents;
     std::string names;
@@ -246,7 +263,9 @@ std::string encodeEstimate(const EstimateFile& e) {
         appendOptional(rows, r.startMs);
         rows += ',' + std::to_string(r.endMs) + ',';
         appendOptional(rows, r.costMicroUsd);
-        rows += ',' + std::to_string(r.tokens) + ',' + std::to_string(r.requests) + (r.cloudRoute ? ",true]" : ",false]");
+        rows += ',' + std::to_string(r.tokens) + ',' + std::to_string(r.requests) + (r.cloudRoute ? ",true," : ",false,");
+        appendCounts(rows, r.counts);
+        rows += r.publicModel ? ",true]" : ",false]";
     }
     std::string lines;
     for (const auto& l : e.lines) {
@@ -285,10 +304,25 @@ std::optional<EstimateFile> decodeEstimate(std::string_view text) {
         out = integer(v);
         return out.has_value();
     };
+    // A version 2 row's counts: five counts, the details may be null, none negative and each within its clamp.
+    const auto counts = [&](const json::Value& v, std::optional<quota::estimate::Counts>& out) {
+        if (v.isNull()) return true;
+        const auto values = v.elements();
+        if (!v.isArray() || values.size() != 5) return false;
+        const auto input = integer(values[0]), output = integer(values[1]);
+        if (!input || !output) return false;
+        quota::estimate::Counts decoded{*input, *output, std::nullopt, std::nullopt, std::nullopt};
+        if (!optionalInteger(values[2], decoded.cachedInput) || !optionalInteger(values[3], decoded.cacheWriteInput) ||
+            !optionalInteger(values[4], decoded.reasoning) || !decoded.valid()) {
+            return false;
+        }
+        out = decoded;
+        return true;
+    };
     EstimateFile e;
     for (const auto& row : root["r"].elements()) {
         const auto c = row.elements();
-        if (c.size() != 10) return std::nullopt;
+        if (c.size() != 10 && c.size() != 12) return std::nullopt;
         const auto* agent = agentOf(c[0]);
         const auto source = c[1].isString() ? sourceFromId(*c[1].string()) : std::nullopt;
         const auto endMs = integer(c[5]), tokens = integer(c[7]), requests = integer(c[8]);
@@ -305,6 +339,8 @@ std::optional<EstimateFile> decodeEstimate(std::string_view text) {
         r.tokens = *tokens;
         r.requests = *requests;
         r.cloudRoute = c[9].isTrue();
+        if (c.size() == 12 && (!c[11].isBool() || !counts(c[10], r.counts))) return std::nullopt;
+        r.publicModel = c.size() == 12 && c[11].isTrue();
         e.responses.push_back(std::move(r));
     }
     for (const auto& row : root["l"].elements()) {

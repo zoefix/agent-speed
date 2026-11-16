@@ -20,16 +20,20 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
     public var perfScore: Bool
     /// The subscription quotas with their estimated caps (REPORTING-EXTENSIONS 11), behind its own switch.
     public var quotaEstimate: Bool
+    /// The token counts of each quota entry's spend (REPORTING-EXTENSIONS 12); only with `quotaEstimate`.
+    public var quotaTokenUsage: Bool
     public static let none = ReportExtensions()
 
     public init(modelHarnessRequests: Bool = false, executionModes: Bool = false, executionModesVersion: Int? = nil,
                 profileAvatar: Bool = false, sharedIdentity: Bool = false, reportWebSocket: Bool = false,
-                taskScore: Bool = false, perfScore: Bool = false, quotaEstimate: Bool = false) {
+                taskScore: Bool = false, perfScore: Bool = false, quotaEstimate: Bool = false,
+                quotaTokenUsage: Bool = false) {
         self.modelHarnessRequests = modelHarnessRequests
         self.executionModesVersion = executionModesVersion.map { Self.modeVersions.contains($0) ? $0 : 0 } ?? (executionModes ? 1 : 0)
         self.profileAvatar = profileAvatar; self.sharedIdentity = sharedIdentity
         self.reportWebSocket = reportWebSocket; self.taskScore = taskScore; self.perfScore = perfScore
         self.quotaEstimate = quotaEstimate
+        self.quotaTokenUsage = quotaTokenUsage
     }
 
     /// The execution-modes versions this client knows; any other number is not advertised.
@@ -44,12 +48,13 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
         self.init(modelHarnessRequests: supported("modelHarnessRequests"), executionModesVersion: version("executionModes"),
                   profileAvatar: supported("profileAvatar"), sharedIdentity: supported("sharedIdentity"),
                   reportWebSocket: supported("reportWebSocket"), taskScore: supported("taskScore"),
-                  perfScore: supported("perfScore"), quotaEstimate: supported("quotaEstimate"))
+                  perfScore: supported("perfScore"), quotaEstimate: supported("quotaEstimate"),
+                  quotaTokenUsage: supported("quotaTokenUsage"))
     }
 
     private enum CodingKeys: CodingKey {
         case modelHarnessRequests, executionModes, profileAvatar, sharedIdentity, reportWebSocket, taskScore, perfScore
-        case quotaEstimate
+        case quotaEstimate, quotaTokenUsage
     }
     public init(from decoder: any Decoder) throws {
         let c = try decoder.container(keyedBy: CodingKeys.self)
@@ -58,7 +63,8 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
         self.init(modelHarnessRequests: supported(.modelHarnessRequests), executionModesVersion: modes,
                   profileAvatar: supported(.profileAvatar), sharedIdentity: supported(.sharedIdentity),
                   reportWebSocket: supported(.reportWebSocket), taskScore: supported(.taskScore),
-                  perfScore: supported(.perfScore), quotaEstimate: supported(.quotaEstimate))
+                  perfScore: supported(.perfScore), quotaEstimate: supported(.quotaEstimate),
+                  quotaTokenUsage: supported(.quotaTokenUsage))
     }
     public func encode(to encoder: any Encoder) throws {
         var c = encoder.container(keyedBy: CodingKeys.self)
@@ -70,6 +76,7 @@ public struct ReportExtensions: Equatable, Codable, Sendable {
         if taskScore { try c.encode(1, forKey: .taskScore) }
         if perfScore { try c.encode(1, forKey: .perfScore) }
         if quotaEstimate { try c.encode(1, forKey: .quotaEstimate) }
+        if quotaTokenUsage { try c.encode(1, forKey: .quotaTokenUsage) }
     }
 }
 

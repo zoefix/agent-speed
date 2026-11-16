@@ -326,7 +326,7 @@ public sealed partial class QuotaEstimator
         }
     }
 
-    /// <summary>Sums responses that share host, source, model, minute, pricing, route and provider.</summary>
+    /// <summary>Sums responses that share host, source, model, minute, pricing, route and provider, with their token counts.</summary>
     private static List<EstimateResponse> Fold(IEnumerable<EstimateResponse> responses)
     {
         var order = new List<(string?, SourceKind, string, long, bool, bool, string?)>();
@@ -348,6 +348,8 @@ public sealed partial class QuotaEstimator
                 Requests = sum.Requests + r.Requests,
                 EndMs = Math.Max(sum.EndMs, r.EndMs),
                 StartMs = sum.StartMs is { } a && r.StartMs is { } b ? Math.Min(a, b) : sum.StartMs ?? r.StartMs,
+                Counts = QuotaTokenCounts.Merge(sum.Counts, r.Counts),
+                PublicModel = sum.PublicModel && r.PublicModel,
             };
         }
 

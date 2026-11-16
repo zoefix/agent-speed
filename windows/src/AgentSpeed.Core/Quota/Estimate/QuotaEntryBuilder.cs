@@ -44,6 +44,7 @@ public static class QuotaEntryBuilder
         {
             AtMs = nowMs,
             PlanInferred = b.PlanInferred,
+            TokenUsage = ledger.TokenUsage(b.Account, name, start, nowMs),
         };
     }
 }

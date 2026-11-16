@@ -10,9 +10,11 @@
 #include <future>
 #include <thread>
 
+#include "agentspeed/price_book.hpp"
 #include "agentspeed/quota/estimate/estimator.hpp"
 #include "agentspeed/remote_coordinator.hpp"
 #include "agentspeed/remote_transport.hpp"
+#include "remote_live_support.hpp"
 
 // The posix_spawn transport for real, and the whole connection over a stand-in for ssh that runs the remote command
 // with /bin/sh, against the real relay executable (REMOTE 10, end to end without a network).
@@ -297,7 +299,8 @@ TEST_F(RemoteEndToEnd, InstallsRunsSyncsHistoryAndStopsTheRelay) {
 }
 
 // QUOTAS 10.1, REMOTE 11.1: the app sends its salt; the relay keys the host's Codex sign-in with it and sends the key,
-// the plan and no id; the host's source and this computer's of the same key are one account in the estimate.
+// the plan and no id; the host's source and this computer's of the same key are one account in the estimate, whose
+// spend and token counts (QUOTAS 10.3) hold the host's streamed response beside this computer's.
 TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
     const auto quotaFolder = root_ / "app/quota";
     quota::estimate::Estimator estimator(quotaFolder.string());
@@ -310,7 +313,8 @@ TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
     std::ofstream(root_ / "home/.codex/auth.json") << R"({"auth_mode":"chatgpt","tokens":{"access_token":"secret-e2e","account_id":"acct-e2e"}})";
 
     const auto host = Host::make("7A0D6B0A-1111-4222-8333-444455556666", "dev@devbox", std::nullopt, true, std::string("~/.cache/agent-speed"));
-    auto hub = coordinator(std::make_shared<Feed>());
+    auto feed = std::make_shared<Feed>();
+    auto hub = coordinator(feed);
     std::mutex mutex;
     std::optional<HostQuota> received;
     std::vector<std::string> lines;
@@ -329,6 +333,17 @@ TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
         std::lock_guard lock(mutex);
         return received && received->account;
     }));
+    ASSERT_TRUE(eventually([&] {
+        for (const auto& change : feed->take()) {
+            const auto* r = std::get_if<feed::Response>(&change);
+            if (r && r->response.record.tokens.output == 300) return true;
+        }
+        return false;
+    }));
+    // The host's lines as the app's monitor holds them.
+    Monitor monitor(remote_live::emptyConfig({SourceKind::Codex}));
+    monitor.start(now_, now_ - now_ % 86'400'000);
+    monitor.applyRemote(feed->attach(), now_);
     hub->stop();
     const auto key = quota::estimate::accountKey(estimator.salt(), "codex", "acct-e2e");
     EXPECT_EQ(received->account, key);
@@ -347,8 +362,27 @@ TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
     response.model = "gpt-5.5";
     response.cost = 7'000'000;
     response.tokens = 2000;
+    response.counts = quota::estimate::Counts{1500, 500, 1000, std::nullopt, 100};
+    response.publicModel = true;
     response.provider = "openai";
     estimator.putLive({{"local\x1fresp-local", response}});
+    // The host's response, priced and converted as the app feeds the live engine's responses.
+    const auto table = pricing::PriceBook::bundled();
+    std::vector<std::pair<std::string, quota::estimate::Response>> hosted;
+    std::optional<std::int64_t> hostCost;
+    monitor.forEachPriced([&](const ParsedResponse& r, const std::string& machine, std::optional<std::int64_t> cost) {
+        if (machine != host.id) return;
+        hostCost = cost;
+        hosted.emplace_back(machine + "\x1f" + r.key, quota::estimate::liveResponseOf(r, machine, cost, *table));
+    });
+    ASSERT_EQ(hosted.size(), 1u);
+    ASSERT_TRUE(hostCost);
+    const auto& streamed = hosted.front().second;
+    EXPECT_EQ(streamed.machine, host.id);
+    EXPECT_EQ(streamed.model, "gpt-5.1");
+    EXPECT_TRUE(streamed.publicModel);
+    EXPECT_EQ(streamed.counts, (quota::estimate::Counts{1000, 300, 0, std::nullopt, 0}));
+    estimator.putLive(hosted);
     agentspeed::json::Document doc;
     ASSERT_TRUE(doc.parse(limits));
     auto line = quota::estimate::codexLineOf("local-agent", response.endMs + 1'000, doc.root());
@@ -371,7 +405,12 @@ TEST_F(RemoteEndToEnd, AHostsCodexQuotaSharesTheLocalAccountOfItsKey) {
     EXPECT_EQ(shown.at("codex@" + host.id).front().account, key);
     for (const auto& e : shown.at("codex@" + host.id)) {
         EXPECT_EQ(e.plan, "pro");
-        EXPECT_EQ(e.usedMicroUsd, 7'000'000) << e.kind;  // this computer's spend counts in the shared account
+        // This computer's spend and the host's count in the shared account.
+        EXPECT_EQ(e.usedMicroUsd, 7'000'000 + *hostCost) << e.kind;
+        ASSERT_TRUE(e.tokenUsage) << e.kind;
+        EXPECT_EQ(e.tokenUsage->counts, (quota::estimate::Counts{2500, 800, 1000, std::nullopt, 100})) << e.kind;
+        const std::vector<quota::estimate::ModelTokens> models{{"gpt-5.1", 1000, 300}, {"gpt-5.5", 1500, 500}};
+        EXPECT_EQ(e.tokenUsage->models, models) << e.kind;
     }
     // Nothing of the salt, the key or the id is written on the host.
     for (const auto& entry : fs::recursive_directory_iterator(root_ / "home/.cache")) {

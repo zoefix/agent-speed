@@ -24,10 +24,17 @@ Response responseOf(const history::EstimateResponse& e, const std::string& machi
     r.model = e.model;
     r.cost = e.costMicroUsd;
     r.tokens = e.tokens;
+    r.counts = e.counts;
+    r.publicModel = e.publicModel;
     r.requests = e.requests;
     r.provider = e.provider;
     r.cloudRoute = e.cloudRoute;
     return r;
+}
+
+Response liveResponseOf(const ParsedResponse& response, const std::string& machine, std::optional<std::int64_t> cost,
+                        const pricing::PriceTable& table) {
+    return responseOf(history::estimateResponseOf(response, response.source, cost, table, table), machine);
 }
 
 std::optional<CodexLine> codexLineOf(const std::string& agentId, std::int64_t ts, const json::Value& rateLimits) {
