@@ -303,6 +303,25 @@ bool fits(const std::string& data, const Options& options) {
     return static_cast<int>(data.size()) <= options.bodyLimit && (!options.stream || messageBytes(data) <= static_cast<std::size_t>(options.stream->maxMessageBytes));
 }
 
+// REPORTING-EXTENSIONS 12: `tokenUsage` goes only to a service that advertises `quotaTokenUsage`.
+Json quotaEntries(const std::vector<Json>& entries, bool tokenUsage) {
+    if (tokenUsage) return Json::array(entries);
+    std::vector<Json> out;
+    out.reserve(entries.size());
+    for (const auto& entry : entries) {
+        if (entry.kind() != Json::Kind::Object || !entry.find("tokenUsage")) {
+            out.push_back(entry);
+            continue;
+        }
+        std::vector<Json::Member> members;
+        for (const auto& member : entry.members()) {
+            if (member.first != "tokenUsage") members.push_back(member);
+        }
+        out.push_back(Json::object(std::move(members)));
+    }
+    return Json::array(std::move(out));
+}
+
 }  // namespace
 
 const char* sectionName(Section section) {
@@ -458,7 +477,7 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
     } else if (score == ScoreExtension::Legacy) {
         json.add("taskScore", legacyValue(perf.thinking));
     }
-    if (options.quotas) json.add("quotas", Json::array(*options.quotas));
+    if (options.quotas) json.add("quotas", quotaEntries(*options.quotas, options.extensions.quotaTokenUsage));
     if (options.stream) {
         const bool mixed = sections.contains(Section::Traffic) && sample.traffic.status == TrafficStatus::Ok;
         json.add("realtime", realtime(mixed, envelope.sentAtMs, options.stream->observationAgeMs));
@@ -469,6 +488,11 @@ Json body(const Envelope& envelope, const WindowContent& content, const Sample& 
 Fitted fitted(const Envelope& envelope, const WindowContent& content, const Sample& sample, Options options) {
     auto document = body(envelope, content, sample, options);
     auto data = document.compact();
+    if (!fits(data, options) && options.quotas && options.extensions.quotaTokenUsage) {
+        options.extensions.quotaTokenUsage = false;
+        document = body(envelope, content, sample, options);
+        data = document.compact();
+    }
     bool quotasDropped = false;
     if (!fits(data, options) && options.quotas) {
         options.quotas.reset();

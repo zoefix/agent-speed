@@ -11,7 +11,7 @@ namespace {
 
 constexpr std::array kSections = {"sources", "models", "cost", "traffic"};
 constexpr std::array kExtensions = {"modelHarnessRequests", "executionModes", "profileAvatar", "sharedIdentity", "perfScore",
-                                    "taskScore", "reportWebSocket"};
+                                    "taskScore", "reportWebSocket", "quotaTokenUsage"};
 constexpr std::string_view kWsPath = "/v1/reports/ws";
 constexpr std::string_view kSubprotocol = "agent-speed-report.v1";
 

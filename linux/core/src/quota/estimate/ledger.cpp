@@ -58,7 +58,8 @@ Ledger& Ledger::operator=(const Ledger& other) {
 }
 
 void Ledger::add(const std::string& account, const std::string& source, const std::string& model, std::int64_t endMs,
-                 std::optional<std::int64_t> cost, std::int64_t requests, std::int64_t tokens) {
+                 std::optional<std::int64_t> cost, std::int64_t requests, std::int64_t tokens, const std::optional<Counts>& counts,
+                 bool publicModel) {
     auto& row = rows_[{account, source, model, minuteOf(endMs)}];
     if (!cost) {
         row.unpricedRequests += requests;
@@ -67,6 +68,8 @@ void Ledger::add(const std::string& account, const std::string& source, const st
         row.cost += *cost;
         row.pricedTokens += tokens;
     }
+    row.counts = merged(row.counts, counts);
+    row.publicModel = row.publicModel && publicModel;
     const std::lock_guard lock(mutex_);
     cache_.clear();
 }
@@ -82,6 +85,7 @@ const Ledger::Series& Ledger::series(const std::string& account, const std::stri
     if (const auto it = cache_.find(key); it != cache_.end()) return it->second;
     std::map<std::int64_t, std::array<std::int64_t, 3>> per;
     std::map<std::string, std::pair<std::int64_t, std::int64_t>> rates;
+    std::vector<Counted> counted;
     for (auto it = rows_.lower_bound({account, std::string(), std::string(), INT64_MIN}); it != rows_.end() && std::get<0>(it->first) == account; ++it) {
         const auto& model = std::get<2>(it->first);
         if (!modelMatches(model, name)) continue;
@@ -92,6 +96,7 @@ const Ledger::Series& Ledger::series(const std::string& account, const std::stri
         auto& r = rates[model];
         r.first += it->second.cost;
         r.second += it->second.pricedTokens;
+        counted.push_back({std::get<3>(it->first), it->second.publicModel ? std::optional<std::string>(model) : std::nullopt, it->second.counts});
     }
     Series s;
     s.cost.push_back(0);
@@ -108,6 +113,8 @@ const Ledger::Series& Ledger::series(const std::string& account, const std::stri
         const double rate = static_cast<double>(r.first) / static_cast<double>(r.second);
         if (!s.rate || rate > *s.rate) s.rate = rate;
     }
+    std::stable_sort(counted.begin(), counted.end(), [](const Counted& a, const Counted& b) { return a.minute < b.minute; });
+    s.counted = std::move(counted);
     return cache_.emplace(key, std::move(s)).first->second;
 }
 
@@ -160,6 +167,22 @@ std::vector<MixShare> Ledger::mix(const std::string& account, const std::optiona
     std::vector<MixShare> out;
     for (const auto& [model, c] : ranked) out.push_back({model, roundHalfAway(static_cast<double>(c) / static_cast<double>(whole), 3)});
     return out;
+}
+
+std::optional<TokenUsage> Ledger::tokenUsage(const std::string& account, const std::optional<std::string>& name, std::int64_t start,
+                                             std::int64_t end) const {
+    const auto first = minuteOf(start), last = minuteOf(end);
+    Counts total = Counts::zero();
+    ModelSums models;
+    const std::lock_guard lock(mutex_);
+    const auto& counted = series(account, name.value_or(std::string())).counted;
+    auto it = std::lower_bound(counted.begin(), counted.end(), first, [](const Counted& c, std::int64_t minute) { return c.minute < minute; });
+    for (; it != counted.end() && it->minute <= last; ++it) {
+        if (!it->counts) return std::nullopt;
+        total = total.plus(*it->counts);
+        models.add(it->model, *it->counts);
+    }
+    return tokenUsageOf(total, models);
 }
 
 }  // namespace agentspeed::quota::estimate

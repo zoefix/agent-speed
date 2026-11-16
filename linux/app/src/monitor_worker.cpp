@@ -657,8 +657,7 @@ void MonitorWorker::feedEstimate(qint64 now) {
     monitor_->forEachPriced([&](const agentspeed::ParsedResponse& r, const std::string& host, std::optional<std::int64_t> cost) {
         if (!agentspeed::history::isQuotaSource(r.source)) return;
         const auto machine = host == agentspeed::remote::kLocalHost ? std::string(agentspeed::quota::estimate::kLocal) : host;
-        responses.emplace_back(machine + "\x1f" + r.key,
-                               agentspeed::quota::estimate::responseOf(agentspeed::history::estimateResponseOf(r, r.source, cost, *table, *table), machine));
+        responses.emplace_back(machine + "\x1f" + r.key, agentspeed::quota::estimate::liveResponseOf(r, machine, cost, *table));
     });
     estimator->setPriceVersion(table->version());
     estimator->putLive(std::move(responses));

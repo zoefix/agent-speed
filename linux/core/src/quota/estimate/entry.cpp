@@ -22,12 +22,12 @@ Identity identityOf(const Entry& e) { return {e.accountTag, e.kind, e.name, e.mi
 
 }  // namespace
 
-Json Entry::json() const {
+Json Entry::json(bool withTokenUsage) const {
     std::vector<Json> sourceIds;
     for (const auto& s : sources) sourceIds.push_back(Json::of(s));
     std::vector<Json> mixItems;
     for (const auto& m : mix) mixItems.push_back(Json::object({{"model", Json::of(m.model)}, {"share", Json::decimal(m.share, 3)}}));
-    return Json::object({
+    auto out = Json::object({
         {"account", Json::of(accountTag)},
         {"source", Json::of(source)},
         {"sources", Json::array(std::move(sourceIds))},
@@ -52,6 +52,8 @@ Json Entry::json() const {
         {"mix", Json::array(std::move(mixItems))},
         {"priceVersion", Json::of(priceVersion)},
     });
+    if (withTokenUsage) out.add("tokenUsage", tokenUsage ? tokenUsage->json() : Json::null());
+    return out;
 }
 
 Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger, int priceVersion, std::string_view origin) {
@@ -97,6 +99,7 @@ Entry reportEntry(const EntryInput& in, std::int64_t nowMs, const Ledger& ledger
     e.windows = est.windows;
     e.mix = ledger.mix(in.account, name, start, nowMs);
     e.priceVersion = priceVersion;
+    e.tokenUsage = ledger.tokenUsage(in.account, name, start, nowMs);
     return e;
 }
 

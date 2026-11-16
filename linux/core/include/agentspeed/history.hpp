@@ -12,6 +12,7 @@
 
 #include "agentspeed/dedupe.hpp"
 #include "agentspeed/model.hpp"
+#include "agentspeed/quota/estimate/tokens.hpp"
 
 namespace agentspeed {
 class TimeZone;
@@ -122,6 +123,10 @@ struct EstimateResponse {
     std::int64_t requests = 1;
     // A Claude model id in a Bedrock or Vertex form (METRICS 9.2 cloud step).
     bool cloudRoute = false;
+    // QUOTAS 10.3 token counts; nullopt for a row stored before them (version 1: unmeasured).
+    std::optional<quota::estimate::Counts> counts;
+    // `model` is the price table's id, not the logged name.
+    bool publicModel = false;
     bool operator==(const EstimateResponse&) const = default;
 };
 // A Codex `token_count` line whose `payload.rate_limits` is an object (QUOTAS 3), within 8 days.
@@ -133,7 +138,8 @@ struct EstimateLine {
     bool operator==(const EstimateLine&) const = default;
 };
 struct EstimateFile {
-    static constexpr int kVersion = 1;
+    // Files of another version are analysed again while recent. 2: token counts (QUOTAS 10.3).
+    static constexpr int kVersion = 2;
     // 0: never analysed for the estimate.
     int version = 0;
     std::vector<EstimateResponse> responses;
@@ -145,7 +151,8 @@ inline constexpr std::int64_t kEstimateKeepMs = 8LL * 24 * 3'600'000;
 // The sources with a quota (QUOTAS 3–5, 9); only their spend is kept for the estimate.
 bool isQuotaSource(SourceKind source);
 // QUOTAS 10.3: one response in the estimate's form, priced at `cost`: the model id of `table` (else of `latest`, else
-// the logged model lowercased) and the cloud route by `table`'s resolver. The live engine's responses take it too.
+// the logged model lowercased, not public), the cloud route by `table`'s resolver and the token counts. The live
+// engine's responses, this computer's and the hosts', take it too.
 EstimateResponse estimateResponseOf(const ParsedResponse& response, SourceKind source, std::optional<std::int64_t> cost,
                                     const pricing::PriceTable& table, const pricing::PriceTable& latest);
 // QUOTAS 10.3: the final responses that ended at or after `sinceMs`, of a quota source only, each priced as

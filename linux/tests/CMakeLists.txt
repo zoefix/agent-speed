@@ -54,6 +54,7 @@ add_executable(agentspeed_tests
     quota_estimate_fixture_test.cpp
     quota_estimate_pipeline_test.cpp
     quota_estimator_test.cpp
+    quota_token_usage_test.cpp
     quota_window_feed_test.cpp
     # Quota phase 2
     quota_agy_report_test.cpp

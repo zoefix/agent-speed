@@ -343,7 +343,9 @@ EstimateResponse estimateResponseOf(const ParsedResponse& r, SourceKind source, 
     e.requests = r.requestCount;
     e.model = table.reportModelId(r.model, r.provider);
     if (e.model == "unknown" && latest.version() != table.version()) e.model = latest.reportModelId(r.model, r.provider);
-    if (e.model == "unknown" || e.model == "local") e.model = r.model ? pricing::lower(*r.model) : std::string();
+    e.publicModel = e.model != "unknown" && e.model != "local" && e.model != "other";
+    if (!e.publicModel) e.model = r.model ? pricing::lower(*r.model) : std::string();
+    e.counts = quota::estimate::countsOf(sourceId(source), r.tokens);
     e.cloudRoute = (source == SourceKind::ClaudeCode || source == SourceKind::ClaudeDesktop) && r.model && isCloudForm(table.resolver(), *r.model);
     return e;
 }

@@ -7,6 +7,7 @@
 #include <vector>
 
 #include "agentspeed/quota/estimate/ledger.hpp"
+#include "agentspeed/quota/estimate/tokens.hpp"
 #include "agentspeed/quota/estimate/vote.hpp"
 #include "agentspeed/report_json.hpp"
 
@@ -56,6 +57,8 @@ struct Entry {
     int windows = 0;
     std::vector<MixShare> mix;
     int priceVersion = 1;
+    // REPORTING-EXTENSIONS 12: the token counts of the same spend; nullopt when not completely known.
+    std::optional<TokenUsage> tokenUsage;
     // Not reported: the unrounded live percent, the reset instant, the account and whether the plan was inferred
     // (QUOTAS 10.2, shown as such in 10.8), for the display.
     double liveExact = 0;
@@ -63,7 +66,9 @@ struct Entry {
     std::string account;
     bool planInferred = false;
 
-    report::Json json() const;
+    // The entry as sent, members in the schema's order; `withTokenUsage` (the service advertises `quotaTokenUsage`)
+    // adds `tokenUsage` last, the counts or null.
+    report::Json json(bool withTokenUsage = false) const;
     bool operator==(const Entry&) const = default;
 };
 

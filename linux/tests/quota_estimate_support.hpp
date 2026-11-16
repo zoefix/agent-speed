@@ -3,6 +3,7 @@
 #include <gtest/gtest.h>
 
 #include <cmath>
+#include <map>
 #include <optional>
 #include <string>
 #include <vector>
@@ -10,6 +11,7 @@
 #include "agentspeed/json.hpp"
 #include "agentspeed/quota/codex.hpp"
 #include "agentspeed/quota/estimate/engine.hpp"
+#include "agentspeed/quota/estimate/entry.hpp"
 #include "agentspeed/report_json.hpp"
 #include "fixture_support.hpp"
 
@@ -121,15 +123,51 @@ inline est::Observation observation(const Value& v, const std::string& account =
     return o;
 }
 
-// The reference's ledger_from(): account `a` (or `account`), source codex, model gpt-5.5 unless stated.
-inline est::Ledger ledgerFrom(const Value& rows, const std::string& account = "a") {
+// QUOTAS 10.3: a row's or response's token counts; nullopt when absent (recorded without them).
+inline std::optional<est::Counts> countsFrom(const Value& v) {
+    if (!v.isObject()) return std::nullopt;
+    return est::Counts{integer(v["input"]), integer(v["output"]), fixtures::optInt(v["cachedInput"]), fixtures::optInt(v["cacheWriteInput"]),
+                       fixtures::optInt(v["reasoning"])};
+}
+
+// The reference's ledger_from(): account `a` (or `account`), source codex, model gpt-5.5 unless stated; `rename` maps
+// a row's account to the one the port keys it by.
+inline est::Ledger ledgerFrom(const Value& rows, const std::string& account = "a", const std::map<std::string, std::string>& rename = {}) {
     est::Ledger led;
     for (const auto& r : rows.elements()) {
         const auto cost = optNumber(r["cost"]);
-        led.add(textOf(r["account"]).value_or(account), textOf(r["source"]).value_or("codex"), textOf(r["model"]).value_or("gpt-5.5"), integer(r["at"]),
-                cost ? std::optional<std::int64_t>(static_cast<std::int64_t>(*cost)) : std::nullopt, r["requests"].valid() ? integer(r["requests"]) : 1);
+        auto owner = textOf(r["account"]).value_or(account);
+        if (const auto it = rename.find(owner); it != rename.end()) owner = it->second;
+        led.add(owner, textOf(r["source"]).value_or("codex"), textOf(r["model"]).value_or("gpt-5.5"), integer(r["at"]),
+                cost ? std::optional<std::int64_t>(static_cast<std::int64_t>(*cost)) : std::nullopt, r["requests"].valid() ? integer(r["requests"]) : 1, 0,
+                countsFrom(r["counts"]), r["public"].valid() ? r["public"].isTrue() : true);
     }
     return led;
+}
+
+// The reference's report_entry() input.
+inline est::EntryInput reportInput(const Value& v) {
+    est::EntryInput in;
+    in.source = *v["source"].string();
+    for (const auto& s : v["sources"].elements()) in.sources.push_back(*s.string());
+    in.plan = textOf(v["plan"]);
+    in.tier = textOf(v["tier"]);
+    in.kind = *v["kind"].string();
+    in.name = textOf(v["name"]);
+    in.minutes = integer(v["minutes"]);
+    in.p = number(v["p"]);
+    in.t = integer(v["t"]);
+    in.R = integer(v["R"]);
+    in.S = integer(v["S"]);
+    // The reference keys the ledger by `accounts` and the tag by `account`; the port keys both by the account.
+    in.account = *v["account"].string();
+    const auto e = v["estimate"];
+    in.estimate.confidence = est::confidenceFromId(*e["confidence"].string()).value_or(est::Confidence::None);
+    in.estimate.cap = optNumber(e["cap"]);
+    in.estimate.low = optNumber(e["low"]);
+    in.estimate.high = optNumber(e["high"]);
+    in.estimate.windows = static_cast<int>(integer(e["windows"]));
+    return in;
 }
 
 inline agentspeed::quota::Window windowOf(const Value& w) {
@@ -154,6 +192,8 @@ inline void addEvent(est::Engine& engine, const est::Salt& salt, const Value& e)
         r.model = *e["model"].string();
         if (const auto cost = optNumber(e["costMicroUsd"])) r.cost = static_cast<std::int64_t>(*cost);
         r.tokens = e["tokens"].valid() ? integer(e["tokens"]) : 0;
+        r.counts = countsFrom(e["counts"]);
+        r.publicModel = e["publicModel"].valid() ? e["publicModel"].isTrue() : true;
         r.provider = textOf(e["provider"]);
         r.cloudRoute = textOf(e["cloudRoute"]).has_value();
         engine.add(std::move(r));

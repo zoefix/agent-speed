@@ -297,30 +297,6 @@ TEST(QuotaEstimateFixture, LivePercent) {
     }
 }
 
-est::EntryInput reportInput(const Value& v) {
-    est::EntryInput in;
-    in.source = *v["source"].string();
-    for (const auto& s : v["sources"].elements()) in.sources.push_back(*s.string());
-    in.plan = textOf(v["plan"]);
-    in.tier = textOf(v["tier"]);
-    in.kind = *v["kind"].string();
-    in.name = textOf(v["name"]);
-    in.minutes = integer(v["minutes"]);
-    in.p = number(v["p"]);
-    in.t = integer(v["t"]);
-    in.R = integer(v["R"]);
-    in.S = integer(v["S"]);
-    // The reference keys the ledger by `accounts` and the tag by `account`; the port keys both by the account.
-    in.account = *v["account"].string();
-    const auto e = v["estimate"];
-    in.estimate.confidence = est::confidenceFromId(*e["confidence"].string()).value_or(est::Confidence::None);
-    in.estimate.cap = optNumber(e["cap"]);
-    in.estimate.low = optNumber(e["low"]);
-    in.estimate.high = optNumber(e["high"]);
-    in.estimate.windows = static_cast<int>(integer(e["windows"]));
-    return in;
-}
-
 TEST(QuotaEstimateFixture, ReportEntries) {
     const auto c = root()["report"];
     const auto origin = *c["origin"].string();

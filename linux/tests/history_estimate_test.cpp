@@ -156,6 +156,12 @@ TEST(HistoryEstimate, CodexRolloutKeepsItsRecentResponseAndRateLimitLine) {
     EXPECT_GT(*r.costMicroUsd, 0);
     EXPECT_EQ(r.costMicroUsd, days[0].totals.costMicroUsd);
     EXPECT_EQ(r.tokens, days[0].totals.input + days[0].totals.output);
+    // QUOTAS 10.3: Codex's counts with its cache reads and reasoning; it logs no cache writes.
+    const auto& t = days[0].totals;
+    EXPECT_EQ(r.counts, (quota::estimate::Counts{t.input, t.output, t.cachedInput, std::nullopt, t.reasoning}));
+    EXPECT_GT(t.cachedInput, 0);
+    EXPECT_GT(t.reasoning, 0);
+    EXPECT_TRUE(r.publicModel);
 
     ASSERT_EQ(spend.lines.size(), 1u);
     EXPECT_EQ(spend.lines[0].agentId, path);
@@ -222,6 +228,8 @@ TEST(HistoryEstimate, ClaudeModelsInACloudFormAreMarked) {
         EXPECT_EQ(r.model, "claude-opus-5-5");
         EXPECT_EQ(r.tokens, 150);
         EXPECT_TRUE(r.costMicroUsd.has_value());
+        EXPECT_EQ(r.counts, (quota::estimate::Counts{100, 50, 0, 0, std::nullopt}));
+        EXPECT_TRUE(r.publicModel);
     }
     EXPECT_FALSE(spend.responses[0].cloudRoute);
     EXPECT_TRUE(spend.responses[1].cloudRoute);
@@ -249,6 +257,8 @@ TEST(HistoryEstimate, StoreRoundTripsTheEstimate) {
     a.costMicroUsd = 1'234;
     a.tokens = 99;
     a.requests = 2;
+    a.counts = quota::estimate::Counts{90, 9, 80, std::nullopt, 9};
+    a.publicModel = true;
     EstimateResponse b;
     b.source = SourceKind::ClaudeDesktop;
     b.agentId = "/x/other \"agent\"\n";
@@ -279,6 +289,60 @@ TEST(HistoryEstimate, StoreRoundTripsTheEstimate) {
     EXPECT_EQ(estimateRows(*store), 1);
     store->clear();
     EXPECT_EQ(estimateRows(*store), 0);
+}
+
+// QUOTAS 10.3: version 2 rows end with the counts and the public flag; a version 1 row is unmeasured, never 0, and a
+// row that breaks the form rejects the file's whole estimate.
+TEST(HistoryEstimate, StoredRowsKeepTheCountsAndOldRowsStayUnmeasured) {
+    EXPECT_EQ(EstimateFile::kVersion, 2);
+    const auto decoded = [](const std::string& tail) {
+        return decodeEstimate(R"({"a":["/a"],"r":[[0,"codex","gpt-5.5","openai",1,2,3,990,1,false)" + tail + "]],\"l\":[]}");
+    };
+    const auto v2 = decoded(",[900,90,800,null,9],true");
+    ASSERT_TRUE(v2);
+    ASSERT_EQ(v2->responses.size(), 1u);
+    EXPECT_EQ(v2->responses[0].counts, (quota::estimate::Counts{900, 90, 800, std::nullopt, 9}));
+    EXPECT_TRUE(v2->responses[0].publicModel);
+    const auto unmeasured = decoded(",null,false");
+    ASSERT_TRUE(unmeasured);
+    EXPECT_FALSE(unmeasured->responses[0].counts);
+    EXPECT_FALSE(unmeasured->responses[0].publicModel);
+    const auto v1 = decoded("");
+    ASSERT_TRUE(v1);
+    ASSERT_EQ(v1->responses.size(), 1u);
+    EXPECT_FALSE(v1->responses[0].counts) << "a version 1 row is unmeasured, never 0";
+    EXPECT_FALSE(v1->responses[0].publicModel);
+    EXPECT_EQ(v1->responses[0].tokens, 990);
+    for (const auto* broken : {",[1,2],true", ",[1,-2,null,null,null],true", ",[10,2,11,null,null],true", ",[10,2,6,5,null],true",
+                               ",[10,2,null,null,3],true", ",[10.5,2,null,null,null],true", ",[1,2,null,null,null],1", ",\"x\",true",
+                               ",[1,2,null,null,null]", ",null,true,false"}) {
+        EXPECT_FALSE(decoded(broken)) << broken;
+    }
+}
+
+// A file stored at version 1 is analysed again while recent, so its counts come from its logs again.
+TEST(HistoryEstimate, ARecentFileStoredAtVersion1IsAnalysedAgainForItsCounts) {
+    Temp temp;
+    const auto t0 = nowMs() - 3'600'000;
+    const auto path = (temp.root / "codex" / "sessions" / "2026" / "11" / "11" / "rollout-recent.jsonl").string();
+    write(path, codexRollout(t0, "thread-recent"));
+    auto store = Store::open(temp.store());
+    {
+        Analyzer analyzer(*store, std::make_shared<pricing::PriceBook>());
+        EXPECT_EQ(analyzer.run(locationsIn(temp), kEnabled, TimeZone::utc(), "UTC").filesPlanned, 1);
+    }
+    store->connection().execute("UPDATE estimate_spend SET version = 1, data = '{\"a\":[\"" + path + "\"],\"r\":[[0,\"codex\",\"gpt-5.5\",\"openai\"," +
+                                std::to_string(t0 + 500) + "," + std::to_string(t0 + 4000) + ",1000,12800,1,false]],\"l\":[]}'");
+    Analyzer upgraded(*store, std::make_shared<pricing::PriceBook>());
+    const auto before = upgraded.estimateSpend(0);
+    ASSERT_EQ(before.responses.size(), 1u);
+    EXPECT_FALSE(before.responses[0].counts);
+    EXPECT_EQ(upgraded.run(locationsIn(temp), kEnabled, TimeZone::utc(), "UTC").filesPlanned, 1);
+    const auto after = upgraded.estimateSpend(0);
+    ASSERT_EQ(after.responses.size(), 1u);
+    ASSERT_TRUE(after.responses[0].counts);
+    EXPECT_EQ(after.responses[0].counts->input, upgraded.days().at(0).totals.input);
+    EXPECT_EQ(upgraded.run(locationsIn(temp), kEnabled, TimeZone::utc(), "UTC").filesPlanned, 0);
 }
 
 TEST(HistoryEstimate, ARecentFileStoredWithoutItsEstimateIsAnalysedOnceMore) {
