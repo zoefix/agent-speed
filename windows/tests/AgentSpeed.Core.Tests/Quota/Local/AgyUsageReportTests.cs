@@ -1,5 +1,6 @@
 using System.Diagnostics;
 using System.Runtime.Versioning;
+using System.Security.AccessControl;
 using System.Security.Principal;
 using AgentSpeed.Core.Quota.Local;
 using AgentSpeed.Core.Tests.Quota.Cookies;
@@ -43,10 +44,14 @@ public sealed class AgyUsageReportTests : IDisposable
         Assert.False(Directory.Exists(folder), "the private folder is removed afterwards");
         foreach (var call in _agy.Calls())
         {
-            var access = call["access"]!.GetValue<string>();
-            Assert.StartsWith("D:P", access, StringComparison.Ordinal);
-            Assert.EndsWith($"(A;OICI;FA;;;{user})", access, StringComparison.Ordinal);
-            Assert.Equal(1, access.Count(c => c == '('));
+            // Parsed, because SDDL names some accounts by an alias (the built-in Administrator as LA, as on CI runners).
+            var access = new RawSecurityDescriptor(call["access"]!.GetValue<string>());
+            Assert.True(access.ControlFlags.HasFlag(ControlFlags.DiscretionaryAclProtected));
+            var ace = Assert.IsType<CommonAce>(Assert.Single(access.DiscretionaryAcl!));
+            Assert.Equal(AceQualifier.AccessAllowed, ace.AceQualifier);
+            Assert.Equal(user, ace.SecurityIdentifier.Value);
+            Assert.Equal(InheritanceFlags.ContainerInherit | InheritanceFlags.ObjectInherit, ace.InheritanceFlags);
+            Assert.Equal(0x1F01FF, ace.AccessMask);
             Assert.Equal(2u, call["stdin"]!["type"]!.GetValue<uint>());
             Assert.False(call["stdin"]!["console"]!.GetValue<bool>());
             Assert.Equal(0, call["stdin"]!["read"]!.GetValue<int>());
