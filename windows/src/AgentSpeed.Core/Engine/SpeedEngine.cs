@@ -31,6 +31,9 @@ internal sealed class SpeedEngine
     /// <summary>Older responses that appear while running update totals silently (METRICS 6.4).</summary>
     public const long CompletionEventWindowMs = 120_000;
 
+    // The longest span a TimeSpan holds, for the duration of a response that never counts as speed.
+    private const long MaxDurationMs = long.MaxValue / TimeSpan.TicksPerMillisecond;
+
     private static readonly int SourceCount = Enum.GetValues<SourceKind>().Length;
 
     private readonly Dictionary<string, Stored> _responses = new(StringComparer.Ordinal);
@@ -1023,9 +1026,9 @@ internal sealed class SpeedEngine
             duration = TimeSpan.FromMilliseconds(interval.DurationMs);
             speed = response.Final ? response.Tokens.Output / (interval.DurationMs / 1000.0) : null;
         }
-        else if (response.StartMs is { } start && response.EndMs >= start)
+        else if (response.StartMs is { } start && SpeedMath.TrySpan(start, response.EndMs, out var span) && span <= MaxDurationMs)
         {
-            duration = TimeSpan.FromMilliseconds(response.EndMs - start);
+            duration = TimeSpan.FromMilliseconds(span);
         }
 
         return new ResponseSummary(

@@ -106,7 +106,7 @@ public static class CharacterVendors
         SourceKind.Kimi => "moonshot",
         SourceKind.GrokBuild => "xai",
         SourceKind.ZCode => "zhipu",
-        SourceKind.WorkBuddy or SourceKind.WorkBuddyAi => "tencent",
+        SourceKind.WorkBuddy or SourceKind.WorkBuddyAi or SourceKind.CodeBuddyCode => "tencent",
         _ => null,
     };
 }

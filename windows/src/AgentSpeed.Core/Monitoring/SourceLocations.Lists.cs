@@ -48,6 +48,9 @@ internal sealed partial record SourceLocations
     /// <summary>Qoder CLI's <c>projects</c> folders in list order (METRICS 4.19): both editions' automatic roots, then the user locations.</summary>
     public IReadOnlyList<string> QoderCliRoots { get; init; } = [];
 
+    /// <summary>CodeBuddy Code's <c>projects</c> folders in list order (METRICS 4.20): the automatic root, then the user locations.</summary>
+    public IReadOnlyList<string> CodeBuddyCodeRoots { get; init; } = [];
+
     /// <summary>Gemini CLI's <c>settings.json</c> for each of its roots (EXECUTION-MODES); a root missing here takes the default rule.</summary>
     public IReadOnlyDictionary<string, string> GeminiSettings { get; init; } = NoSettings;
 

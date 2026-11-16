@@ -118,6 +118,7 @@ internal sealed class JsonLine
         SourceKind.Devin => "devin",
         SourceKind.Qoder => "qoder",
         SourceKind.QoderCli => "qoderCli",
+        SourceKind.CodeBuddyCode => "codebuddyCode",
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

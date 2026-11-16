@@ -3,9 +3,10 @@ using AgentSpeed.Core.Parsing;
 namespace AgentSpeed.Core.WorkBuddy;
 
 /// <summary>
-/// WorkBuddy session state machine (METRICS 4.9), shared by both editions. No line records when a request started, so
-/// a call starts at the latest input line before it (the user line, or the tool result that completed the step) and
-/// ends at the line that carries its usage; the phase follows the input and output lines.
+/// Session state machine of the WorkBuddy format (METRICS 4.9), shared by both WorkBuddy editions and CodeBuddy Code (4.20).
+/// A call ends at the line that carries its usage and starts at its measured attempt's start when that line carries one,
+/// else at the latest input line before it (the user line, or the tool result that completed the step); the phase follows
+/// the input and output lines.
 /// </summary>
 internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
 {
@@ -16,13 +17,16 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
     // Tool call id → the key of the model call that made it, while its result is outstanding.
     private readonly Dictionary<string, string> _openCalls = new(StringComparer.Ordinal);
     private readonly Dictionary<string, ParsedResponse> _responses = new(StringComparer.Ordinal);
+
+    // Keys whose start came from a measured attempt: the first measured start of a call is kept.
+    private readonly HashSet<string> _measured = new(StringComparer.Ordinal);
     private readonly List<string> _staleCalls = [];
     private long? _pendingStartMs;
 
-    /// <param name="source"><see cref="SourceKind.WorkBuddy"/> or <see cref="SourceKind.WorkBuddyAi"/>, by the root.</param>
+    /// <param name="source"><see cref="SourceKind.WorkBuddy"/>, <see cref="SourceKind.WorkBuddyAi"/> or <see cref="SourceKind.CodeBuddyCode"/>, by the root.</param>
     /// <param name="root">The <c>projects</c> folder the file was found in: sub-agents are decided by the path below it.</param>
     public WorkBuddyParser(string agentId, IDeduper deduper, SourceKind source, string root)
-        : base(agentId, deduper, Edition(source))
+        : base(agentId, deduper, FormatSource(source))
     {
         _pathIsSubagent = WorkBuddyDiscovery.IsSubagentPath(root, agentId);
         RestorePathState();
@@ -33,6 +37,7 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
         base.Reset();
         _openCalls.Clear();
         _responses.Clear();
+        _measured.Clear();
         _pendingStartMs = null;
         RestorePathState();
     }
@@ -80,8 +85,8 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
 
     protected override WorkBuddyLine Extract(ReadOnlySpan<byte> line) => WorkBuddyLineReader.Read(line);
 
-    private static SourceKind Edition(SourceKind source) =>
-        WorkBuddyPaths.IsWorkBuddy(source) ? source : throw new ArgumentOutOfRangeException(nameof(source), source, null);
+    private static SourceKind FormatSource(SourceKind source) =>
+        WorkBuddyPaths.WritesWorkBuddyFormat(source) ? source : throw new ArgumentOutOfRangeException(nameof(source), source, null);
 
     private void ApplyToolResult(in WorkBuddyLine line, long ts)
     {
@@ -162,6 +167,7 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
     {
         ParsedResponse response;
         bool isCompletion;
+        var measured = line.Attempt?.Times(ts);
         if (_responses.TryGetValue(key, out var previous))
         {
             response = previous with
@@ -172,6 +178,11 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
                 Provider = line.Provider ?? previous.Provider,
                 Modes = previous.Modes.Merge(ExecutionModeNative.Routing(line.RequestModelId)),
             };
+            if (measured is { } times && _measured.Add(key))
+            {
+                response = response with { StartMs = times.StartMs, FirstMs = times.FirstMs };
+            }
+
             isCompletion = false;
         }
         else
@@ -179,8 +190,13 @@ internal sealed class WorkBuddyParser : TranscriptParser<WorkBuddyLine>
             // A key this file claimed before a reset is replayed as an update.
             isCompletion = Deduper.TryClaim(key, AgentId, out _);
             response = new ParsedResponse(
-                key, Source, AgentId, line.Model, _pendingStartMs, ts, line.Tokens, Final: true, Provider: line.Provider)
-            { Modes = ExecutionModeNative.Routing(line.RequestModelId) };
+                key, Source, AgentId, line.Model, measured?.StartMs ?? _pendingStartMs, ts, line.Tokens, Final: true, Provider: line.Provider)
+            { Modes = ExecutionModeNative.Routing(line.RequestModelId), FirstMs = measured?.FirstMs };
+            if (measured is not null)
+            {
+                _measured.Add(key);
+            }
+
             _pendingStartMs = null;
         }
 

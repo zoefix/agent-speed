@@ -55,7 +55,7 @@ internal sealed class ReportPerfLedger(ReportCounters counters)
             return false;
         }
 
-        long? latency = response.FirstMs is { } first && response.StartMs is { } start && first >= start ? first - start : null;
+        var latency = SpeedMath.LatencyMs(response);
         var key = new ReportModelKey(modelId, response.Source);
         counters.PerfRow(key).AddResponse(response.Source, response.Tokens.Output, response.Tokens.Reasoning, response.Tokens.Input,
             response.Tokens.CachedInput, interval.DurationMs, latency);

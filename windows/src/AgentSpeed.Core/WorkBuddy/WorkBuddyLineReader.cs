@@ -82,7 +82,7 @@ internal static class WorkBuddyLineReader
         value is not null && TrimWhiteSpace(value) is { Length: > 0 } trimmed ? trimmed : null;
 
     // Whitespace is Python's str.isspace() (METRICS 4.9): .NET's white space plus the separators U+001C–U+001F.
-    private static bool IsWhiteSpace(char c) => char.IsWhiteSpace(c) || c is >= '\u001c' and <= '\u001f';
+    internal static bool IsWhiteSpace(char c) => char.IsWhiteSpace(c) || c is >= '\u001c' and <= '\u001f';
 
     private static string TrimWhiteSpace(string value)
     {
@@ -135,6 +135,7 @@ internal static class WorkBuddyLineReader
             Provider = provider,
             HasUsage = data.Usage.HasCore || data.Usage.HasRaw,
             Tokens = data.Usage.Normalize(),
+            Attempt = data.Usage.Attempt,
         };
     }
 

@@ -50,6 +50,9 @@ internal enum RootFamily
 
     /// <summary>A Qoder CLI <c>projects</c> folder: Claude's transcript format, read by the Claude parser's Qoder CLI rules (METRICS 4.19).</summary>
     QoderCli,
+
+    /// <summary>A CodeBuddy Code <c>projects</c> folder: WorkBuddy's layout and parser, detected by the folder itself (METRICS 4.20).</summary>
+    CodeBuddyCode,
 }
 
 /// <summary>Per-family file rules: names, parser and the sources it can produce (METRICS 2 and 4).</summary>
@@ -60,7 +63,7 @@ internal static class Families
         [
             RootFamily.Codex, RootFamily.Claude, RootFamily.DeepSeek, RootFamily.Gemini, RootFamily.Omp, RootFamily.Antigravity,
             RootFamily.WorkBuddy, RootFamily.WorkBuddyAi, RootFamily.Kimi, RootFamily.GrokBuild, RootFamily.Pi, RootFamily.Droid,
-            RootFamily.QoderCli,
+            RootFamily.QoderCli, RootFamily.CodeBuddyCode,
         ];
 
     public static TranscriptNaming Naming(RootFamily family) => family switch
@@ -70,7 +73,7 @@ internal static class Families
         RootFamily.Gemini => TranscriptNaming.GeminiSession,
         RootFamily.Omp => TranscriptNaming.OmpSession,
         RootFamily.Antigravity => TranscriptNaming.AntigravityDatabase,
-        RootFamily.WorkBuddy or RootFamily.WorkBuddyAi => TranscriptNaming.WorkBuddySession,
+        RootFamily.WorkBuddy or RootFamily.WorkBuddyAi or RootFamily.CodeBuddyCode => TranscriptNaming.WorkBuddySession,
         RootFamily.OpenCode => TranscriptNaming.OpenCodeDatabase,
         RootFamily.ZCode => TranscriptNaming.ZCodeDatabase,
         RootFamily.Kimi => TranscriptNaming.KimiSession,
@@ -84,7 +87,7 @@ internal static class Families
         _ => TranscriptNaming.Jsonl,
     };
 
-    /// <param name="root">The root the file was found in (omp and WorkBuddy decide sub-agents by the path below it).</param>
+    /// <param name="root">The root the file was found in (omp and the WorkBuddy format decide sub-agents by the path below it).</param>
     /// <param name="quota">Receives Codex's limits (QUOTAS 3); only this computer's live files pass one.</param>
     public static TranscriptParser CreateParser(RootFamily family, string path, IDeduper deduper, string root = "",
         Quota.CodexQuotaCollector? quota = null) => family switch
@@ -102,6 +105,7 @@ internal static class Families
         RootFamily.Pi => Pi.PiParser.ForPath(path, deduper),
         RootFamily.Droid => new Droid.DroidParser(path, deduper),
         RootFamily.QoderCli => ClaudeParser.ForQoderCli(path, deduper),
+        RootFamily.CodeBuddyCode => new WorkBuddyParser(path, deduper, SourceKind.CodeBuddyCode, root),
         _ => throw new ArgumentOutOfRangeException(nameof(family)),
     };
 
@@ -133,6 +137,7 @@ internal static class Families
         RootFamily.Devin => enabled.Contains(SourceKind.Devin),
         RootFamily.Qoder => enabled.Contains(SourceKind.Qoder),
         RootFamily.QoderCli => enabled.Contains(SourceKind.QoderCli),
+        RootFamily.CodeBuddyCode => enabled.Contains(SourceKind.CodeBuddyCode),
         _ => false,
     };
 
@@ -156,6 +161,7 @@ internal static class Families
         SourceKind.Devin => RootFamily.Devin,
         SourceKind.Qoder => RootFamily.Qoder,
         SourceKind.QoderCli => RootFamily.QoderCli,
+        SourceKind.CodeBuddyCode => RootFamily.CodeBuddyCode,
         _ => RootFamily.Claude,
     };
 }

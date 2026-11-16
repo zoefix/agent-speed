@@ -27,6 +27,7 @@ internal sealed class ConfiguredValues
         SourceKind.Gemini => Get(geminiSettings ?? GeminiSettingsPath(root), Gemini).ByModel.GetValueOrDefault(model ?? string.Empty) ?? ExecutionModes.Empty,
         SourceKind.Antigravity when AntigravityConfigPath(agentId) is { } path => Get(path, Antigravity).Modes,
         SourceKind.WorkBuddy or SourceKind.WorkBuddyAi => Get(WorkBuddySettingsPath(root), WorkBuddy).Modes,
+        SourceKind.CodeBuddyCode => Get(CodeBuddyCodePaths.SettingsPath(root), WorkBuddy).Modes,
         _ => ExecutionModes.Empty,
     };
 
@@ -110,6 +111,7 @@ internal sealed class ConfiguredValues
         return new ConfigValue(ExecutionModeNative.GoogleTier(tier, ExecutionModeEvidence.Configured, ExecutionModeScope.Configuration));
     }
 
+    /// <summary><c>reasoningEffort</c> of WorkBuddy's data folder or CodeBuddy Code's config folder.</summary>
     internal static ConfigValue WorkBuddy(string path)
     {
         using var document = ConfigFile.Json(path);

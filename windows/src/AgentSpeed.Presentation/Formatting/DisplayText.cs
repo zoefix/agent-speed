@@ -76,6 +76,7 @@ public static class DisplayText
         SourceKind.Devin => "source.devin",
         SourceKind.Qoder => "source.qoder",
         SourceKind.QoderCli => "source.qoderCli",
+        SourceKind.CodeBuddyCode => "source.codebuddyCode",
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
     };
 
