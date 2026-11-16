@@ -240,15 +240,19 @@ internal sealed class SettingsViewModel : ObservableObject
 
     private Lan.LanPaneViewModel? _lan;
 
-    /// <summary>The API pane shows 區域網路; kept while the app runs, never stored, 即時上報 at launch (DESIGN 14).</summary>
+    /// <summary>
+    /// The API pane shows 區域網路; kept while the app runs, never stored, 即時上報 at launch (DESIGN 14). Bound to the two
+    /// segment buttons, which write false when their group unchecks them: only a check selects, as in every other
+    /// segmented choice, so buttons of two settings windows can never flip each other back and forth (issue #72).
+    /// </summary>
     public bool ApiShowsLan
     {
         get => _apiShowsLan;
         set
         {
-            if (Set(ref _apiShowsLan, value))
+            if (value)
             {
-                OnPropertyChanged(nameof(ApiShowsReport));
+                ShowApiSegment(lan: true);
             }
         }
     }
@@ -256,7 +260,21 @@ internal sealed class SettingsViewModel : ObservableObject
     public bool ApiShowsReport
     {
         get => !_apiShowsLan;
-        set => ApiShowsLan = !value;
+        set
+        {
+            if (value)
+            {
+                ShowApiSegment(lan: false);
+            }
+        }
+    }
+
+    public void ShowApiSegment(bool lan)
+    {
+        if (Set(ref _apiShowsLan, lan, nameof(ApiShowsLan)))
+        {
+            OnPropertyChanged(nameof(ApiShowsReport));
+        }
     }
 
     private bool _apiShowsLan;

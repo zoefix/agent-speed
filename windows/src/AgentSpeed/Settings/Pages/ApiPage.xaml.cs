@@ -18,6 +18,9 @@ internal sealed partial class ApiPage
     {
         InitializeComponent();
         DataContextChanged += (_, _) => Attach(DataContext as SettingsViewModel);
+        // The settings model outlives the window: a closed window's page must not stay subscribed to it (issue #72).
+        Unloaded += (_, _) => Attach(null);
+        Loaded += (_, _) => Attach(DataContext as SettingsViewModel);
     }
 
     private void Attach(SettingsViewModel? model)

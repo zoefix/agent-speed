@@ -80,7 +80,7 @@ internal sealed partial class AppController
                 OpenSettings("report");
                 if (_settingsModel is { } model)
                 {
-                    model.ApiShowsLan = op == "lan-segment";
+                    model.ShowApiSegment(op == "lan-segment");
                 }
 
                 return true;
