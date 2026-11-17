@@ -388,13 +388,13 @@ public sealed class QoderSourceTests : IDisposable
         Assert.False(deduper.TryClaim("qodercli:k1", "/p/b.jsonl", out var owner));
         Assert.Equal("/p/a.jsonl", owner);
 
-        // Zero usage is no usage; the pending start was consumed, so the next call starts at its own prompt.
+        // Zero usage is no usage; the pending start was consumed, and k1 keeps the start its first line took (#73).
         parser.Feed(Utf8(Assistant("k2", 3_000, """{"input_tokens":0,"output_tokens":0,"billable":true}""")), sink);
         parser.Feed(Utf8(User(4_000)), sink);
         parser.Feed(Utf8(Assistant("k1", 5_000, """{"input_tokens":12,"cache_read_input_tokens":4000,"cache_creation_input_tokens":1800,"output_tokens":64}""")), sink);
         var (response, completion) = Assert.Single(sink.Emissions);
         Assert.True(completion, "the key's first response is its completion");
-        Assert.Equal(("qodercli:k1", 4_000L, 5_000L, (long?)null), (response.Key, response.StartMs, response.EndMs, response.FirstMs));
+        Assert.Equal(("qodercli:k1", 1_000L, 5_000L, (long?)null), (response.Key, response.StartMs, response.EndMs, response.FirstMs));
         Assert.Equal(new TokenCounts(5_812, 4_000, 1_800, 64), response.Tokens);
         Assert.Equal((false, ExecutionModes.Empty), (response.Fast, response.Modes));
 
@@ -405,6 +405,28 @@ public sealed class QoderSourceTests : IDisposable
         fork.Feed(Utf8(Assistant("k1", 5_000, """{"input_tokens":12,"output_tokens":64}""", stop: "tool_use")), forkSink);
         Assert.Empty(forkSink.Emissions);
         Assert.Equal(((string?)null, AgentPhase.Generating), (fork.Model, fork.Phase));
+    }
+
+    /// <summary>The Qoder desktop app writes one call as several lines of one message id, only the last with usage (#73).</summary>
+    [Fact]
+    public void QoderCliSplitCallKeepsTheStartOfItsFirstLine()
+    {
+        static string Line(long ms, string stop, string blocks, string? usage) =>
+            "{\"type\":\"assistant\",\"timestamp\":\"" + Iso(ms) + "\",\"message\":{\"id\":\"c1\",\"model\":\"auto\",\"stop_reason\":"
+            + stop + ",\"content\":" + blocks + (usage is null ? string.Empty : ",\"usage\":" + usage) + "}}";
+        var sink = new RecordingSink();
+        var parser = ClaudeParser.ForQoderCli("/p/s.jsonl", new Deduper());
+        parser.Feed(Utf8("{\"type\":\"user\",\"timestamp\":\"" + Iso(1_000) + "\",\"message\":{\"role\":\"user\",\"content\":\"go\"}}"), sink);
+        parser.Feed(Utf8(Line(9_010, "null", """[{"type":"thinking","thinking":"x"}]""", null)), sink);
+        Assert.Equal((AgentPhase.Generating, (long?)1_000), (parser.Phase, parser.InFlightStartMs));
+        parser.Feed(Utf8(Line(9_011, "null", """[{"type":"text","text":"y"}]""", null)), sink);
+        Assert.Equal((AgentPhase.Generating, (long?)1_000), (parser.Phase, parser.InFlightStartMs));
+        parser.Feed(Utf8(Line(9_011, "\"tool_use\"", """[{"type":"tool_use","id":"t1","name":"Read","input":{}}]""",
+            """{"input_tokens":120127,"output_tokens":2307,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}""")), sink);
+        var (response, completion) = Assert.Single(sink.Emissions);
+        Assert.True(completion);
+        Assert.Equal(("qodercli:c1", 1_000L, 9_011L, 2_307L), (response.Key, response.StartMs, response.EndMs, response.Tokens.Output));
+        Assert.Equal(AgentPhase.Tools, parser.Phase);
     }
 
     [Fact]
