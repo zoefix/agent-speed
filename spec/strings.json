@@ -1524,6 +1524,18 @@
     "en": "Fade when idle",
     "ja": "待機中は薄くする"
   },
+  "settings.orb.hideIdle": {
+    "zh-Hant": "閒置時隱藏",
+    "zh-Hans": "空闲时隐藏",
+    "en": "Hide when idle",
+    "ja": "待機中は隠す"
+  },
+  "settings.orb.hideIdleHint": {
+    "zh-Hant": "閒置 60 秒後隱藏，agent 一開始工作就回來。",
+    "zh-Hans": "空闲 60 秒后隐藏，agent 一开始工作就回来。",
+    "en": "Hides after 60 seconds idle and comes back as soon as an agent starts working.",
+    "ja": "待機が 60 秒続くと隠れ、エージェントが動き出すとすぐに戻ります。"
+  },
   "settings.orb.allSpaces": {
     "zh-Hant": "在所有桌面顯示",
     "zh-Hans": "在所有桌面显示",

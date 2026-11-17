@@ -430,6 +430,15 @@ value in the idle tier of section 1 all that time, counted from launch at the ea
 its opacity over 0.6 s ease-in-out; restore instantly on activity (the tier leaves idle), hover or a drag, or when the
 switch is turned off, and fade again about 2 s after the pointer leaves. Reduce Motion: the fade is a cut too. The fade
 is the only motion it adds: once faded, an idle window draws no more than an idle one that is not faded.
+Optional "hide when idle" (setting, per orb, 2b, off by default; issue #64's idea; boards do not have it): after the
+same 60 s idle, with the same hover and drag deferral, the orb fades to 0 over 0.6 s ease-in-out and its window then
+leaves the screen: nothing is drawn, the pointer passes through where it was (moving over that place never brings it
+back), and its name plate, source chip and character cards go with it. It keeps its position and its place for
+placement, snapping and magnets, and its sources keep being followed. It returns at its place with its own opacity,
+over 0.12 s, on activity (the orb's tier leaves idle); turning this switch off, or turning the orb's `visible` or the
+master switch on (in Settings or the quick menu), also brings it back and starts the 60 s again. Reduce
+Motion: both changes are cuts. With fade when idle on as well, hiding replaces the fade (no 45 % step). Hiding is
+never written to `visible`: an orb the user hid stays hidden, and the master switch hides every orb as before.
 
 Hover: the orb scales to 1.03 (spring), the title label crossfades to a compact info line
 (`今日 1.2M · 3 個 agent`, counted over the orb's sources), and the cursor shows it is draggable. An orb tracking a
@@ -1219,6 +1228,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
       "alwaysOnTop": true,
       "clickThrough": false,
       "fadeWhenIdle": false,
+      "hideWhenIdle": false,
       "allSpaces": true,
       "visible": true,
       "redlineOutput": null,
@@ -1246,6 +1256,7 @@ Persisted as one JSON value in the settings store (key `orbs`), written atomical
 | `characterReadouts` | `character` style only: the cards beside her (2a.6, *Readouts*), an object of booleans `intelligence`, `thinking`, `latency`, `network`, `cost`, `agents`, `models`, `quota` (default true) and `model` (default false). A missing key or a value that is not a boolean takes its default; written only when it differs from the defaults. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `opacity` | 0.4–1.0. |
 | `alwaysOnTop`, `clickThrough`, `fadeWhenIdle`, `allSpaces` | As the former global settings, now per orb (`allSpaces` macOS only). |
+| `hideWhenIdle` | Section 2, *hide when idle*; default `false`. Added without a format change: absent or not a boolean reads `false`, and older builds ignore it. Copied by Add, Duplicate and Split; Merge keeps the target's. |
 | `visible` | Hides one orb without removing it. |
 | `redlineOutput`, `redlineTotal` | `null` = the General redline of that metric; otherwise this orb's redline (same ranges). Heat, tiers and titles of the orb use it. |
 | `unit` | `"tokens"` (tok/s, default) or `"cost"` (the money unit of section 9); unknown → `"tokens"`. Copied by Add, Duplicate and Split. Heat, tiers and titles always follow tokens. |
@@ -1301,8 +1312,9 @@ be removed (Remove is disabled; the master switch hides it).
   it is docked to).
 - **Z-order**: all orbs use the window level of their `alwaysOnTop`; among orbs the last dragged or clicked is in front.
   Because snapping prevents overlap, the order rarely shows. Orbs never take keyboard focus (non-activating, as today).
-- **Click-through** and **fade when idle** are per orb. Fade uses the orb's own idle state (its sources idle for 60 s)
-  and multiplies its opacity (section 2 has the rule; a board's fade is the same, on its own sources, 2c).
+- **Click-through**, **fade when idle** and **hide when idle** are per orb. Fade and hide use the orb's own idle state
+  (its sources idle for 60 s); fade multiplies its opacity (section 2 has both rules; a board's fade is the same, on
+  its own sources, 2c; boards do not hide).
 - **Master switch**: hides or shows all orbs. Turning it on while every orb is individually hidden makes them all
   visible. The quick menu (menu bar / tray) keeps one item, `menu.showOrb` / `menu.hideOrb` with one orb and
   `menu.showOrbs` / `menu.hideOrbs` with several; with several orbs it adds a `settings.orb` submenu listing each orb
@@ -3068,7 +3080,8 @@ accent color for selection, no extra borders. The pane scrolls when taller than 
    - `orbs.showName` popup — `orbs.showName.auto` with the current automatic result, a separator, `orbs.showName.on`,
      `orbs.showName.off` (2b Name plate); changing it fades the desktop plate in or out live.
    - Switches: `menu.alwaysOnTop`; `menu.clickThrough` with the platform hint (the orb is then controlled from the menu
-     bar / taskbar orb submenu); `settings.orb.fadeIdle`; `settings.orb.allSpaces` (macOS). Footer: the platform's
+     bar / taskbar orb submenu); `settings.orb.fadeIdle`; `settings.orb.hideIdle` with the caption
+     `settings.orb.hideIdleHint`; `settings.orb.allSpaces` (macOS). Footer: the platform's
      Reset Position for this orb (it returns to the default corner, or to the creation placement rule when another orb
      is there).
    - **`orbs.advanced`** disclosure (collapsed; its summary lists `orbs.name`, `titles.theme`, `settings.redline`):
