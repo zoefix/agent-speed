@@ -220,6 +220,7 @@ class FileState:
         self.prev_legacy = None
         # claude, qoder cli (METRICS 4.19: its source never changes)
         self.precise = False
+        self.qoder_starts = {}  # qoder cli: the start a key's first usage-less line consumed (issue #73)
         if source == "qoderCli":
             self.source_decided = True
         # deepseek, gemini
@@ -629,7 +630,8 @@ def qoder_cli_assistant(state, obj, dedupe, ts):
         tokens = None
     if tokens is not None:
         if resp is None:
-            emit(state, key, state.pending, ts, tokens, message.get("model"), stop is not None)
+            begin = state.qoder_starts.pop(key) if key in state.qoder_starts else state.pending
+            emit(state, key, begin, ts, tokens, message.get("model"), stop is not None)
             state.pending, state.precise = None, False
             resp = state.responses[key]
         else:
@@ -644,6 +646,8 @@ def qoder_cli_assistant(state, obj, dedupe, ts):
         if resp is not None:
             resp["final"] = resp["final"] or stop is not None
             note_completed(state, resp)
+        elif key not in state.qoder_starts:
+            state.qoder_starts[key] = state.pending
         state.pending, state.precise = None, False
         if isinstance(message.get("model"), str) and message["model"]:
             state.model = message["model"]
@@ -652,7 +656,7 @@ def qoder_cli_assistant(state, obj, dedupe, ts):
     if stop == "tool_use" or (stop is None and has_tool_use):
         state.phase, state.in_flight = "tools", None
     elif stop is None or stop == "pause_turn":
-        begin = resp["startMs"] if resp is not None else start
+        begin = resp["startMs"] if resp is not None else state.qoder_starts.get(key, start)
         state.phase, state.in_flight = "generating", begin if begin is not None else ts
     else:
         state.phase, state.in_flight = "idle", None

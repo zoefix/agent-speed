@@ -494,8 +494,9 @@ def write_cli_fixtures(root):
     `traces` (phase after a physical line, after the files before it in `order`) and `history` (UTC day totals)."""
     root = Path(root)
     atlas, borealis = "/Users/dev/projects/atlas", "/Users/dev/projects/borealis"
-    s1, s3, s4, s5 = ("3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b", "8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18",
-                      "c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d", "e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b")
+    s1, s3, s4, s5, s6 = ("3f2c9a10-7b1e-4c8d-9a21-5e6f70819a2b", "8c41d2e7-2f90-4b6a-a3c5-91e07d4b6f18",
+                          "c7a9e3f1-5b2d-4e8a-9c10-2d3f4a5b6c7d", "e2b8f4a6-1c3d-4f5e-8a7b-9c0d1e2f3a4b",
+                          "5d7e9f10-2a3b-4c5d-8e6f-7a8b9c0d1e2f")
     files, mtimes, traces = {}, {}, []
 
     def trace(rel, line, phase, in_flight=None):
@@ -605,6 +606,29 @@ def write_cli_fixtures(root):
     trace(plain_fork_rel, 2, "generating", cli_at(13, 20, 0))
     trace(plain_fork_rel, 4, "generating", cli_at(13, 20, 3, 300))
     trace(plain_fork_rel, 5, "generating", cli_at(13, 50, 0))
+
+    # ---- The Qoder desktop app (0.5.13): one call written as several lines of one message.id, only the last with
+    # usage (issue #73); the response keeps the start its first line consumed.
+    split_rel = cli_file(s6, borealis)
+    t = Transcript(s6, borealis)
+    t.user(cli_at(14, 0, 0), 51, "Check that the build passes.")                                              # 1
+    t.assistant(cli_at(14, 0, 9, 10), 52, 10, [dict(type="thinking", thinking="Run the build.")], None)         # 2
+    t.assistant(cli_at(14, 0, 9, 11), 53, 10, [text("Running the build.")], None)                              # 3
+    t.assistant(cli_at(14, 0, 9, 11), 54, 10, [tool_use(10, "Bash", {"command": "npm run build"})], "tool_use",
+                tokens=exposed(30000, 200, 29000, request=10))                                                 # 4
+    t.result(cli_at(14, 0, 9, 300), 55, 10, 54, "Build succeeded")                                             # 5
+    t.assistant(cli_at(14, 0, 12), 56, 11, [text("The build passes.")], None)                                  # 6
+    t.assistant(cli_at(14, 0, 12, 1), 57, 11, [text("The build passes.")], "end_turn",
+                tokens=exposed(30300, 40, 29500, request=11))                                                  # 7
+    t.write(root / split_rel)
+    files[split_rel] = cli_expect("auto", "borealis", "idle", cli_at(14, 0, 12, 1), [
+        cli_response(uid(1, 10), cli_at(14, 0, 0), cli_at(14, 0, 9, 11), 30000, 29000, 200),
+        cli_response(uid(1, 11), cli_at(14, 0, 9, 300), cli_at(14, 0, 12, 1), 30300, 29500, 40)])
+    mtimes[split_rel] = cli_at(14, 0, 14)
+    trace(split_rel, 2, "generating", cli_at(14, 0, 0))
+    trace(split_rel, 3, "generating", cli_at(14, 0, 0))
+    trace(split_rel, 4, "tools")
+    trace(split_rel, 6, "generating", cli_at(14, 0, 9, 300))
 
     # ---- An event log: Qoder CLI's own record of the run, outside the projects folder; never read.
     log = root / "qoder-cli/logs/sessions" / encoded(atlas) / s1 / "segments/run-1.jsonl"

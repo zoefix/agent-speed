@@ -1097,27 +1097,27 @@
     {
       "date": "2026-10-22",
       "source": "qoderCli",
-      "requests": 6,
-      "input": 91781,
-      "cachedInput": 87908,
+      "requests": 8,
+      "input": 152081,
+      "cachedInput": 146408,
       "cacheWriteInput": 2300,
-      "output": 672,
+      "output": 912,
       "reasoning": 0,
-      "measuredOutput": 672,
-      "measuredMs": 16693,
+      "measuredOutput": 912,
+      "measuredMs": 28405,
       "unfinalized": 0,
       "costMicroUsd": 13536,
-      "unpricedRequests": 4,
+      "unpricedRequests": 6,
       "priceVersion": 2,
-      "agents": 3,
+      "agents": 4,
       "models": {
         "auto": {
-          "requests": 4,
-          "output": 567,
-          "measuredOutput": 567,
-          "measuredMs": 13653,
+          "requests": 6,
+          "output": 807,
+          "measuredOutput": 807,
+          "measuredMs": 25365,
           "costMicroUsd": 0,
-          "unpricedRequests": 4
+          "unpricedRequests": 6
         },
         "claude-sonnet-4-5": {
           "requests": 2,
@@ -1133,7 +1133,7 @@
           "model": "auto",
           "provider": null,
           "fast": false,
-          "requests": 4
+          "requests": 6
         }
       ]
     },
@@ -7002,9 +7002,9 @@
       "day": "2026-10-22",
       "source": "qoderCli",
       "model": "auto",
-      "n": 4,
-      "outputSum": 567,
-      "durationMsSum": 13653,
+      "n": 6,
+      "outputSum": 807,
+      "durationMsSum": 25365,
       "latencyBins": [
         0,
         0,
@@ -7074,13 +7074,13 @@
       "reasonN": 0,
       "reasonOutput": 0,
       "reasonDurationMsSum": 0,
-      "cacheN": 4,
-      "cacheInput": 82969,
-      "cacheCached": 81408,
+      "cacheN": 6,
+      "cacheInput": 143269,
+      "cacheCached": 139908,
       "toolN": 0,
       "toolLnSum": 0.0,
       "toolFailed": 0,
-      "activeMs": 13653
+      "activeMs": 25365
     },
     {
       "day": "2026-10-22",
