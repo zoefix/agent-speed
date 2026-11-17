@@ -108,12 +108,13 @@ struct OrbHideWhenIdleWindowTests {
         if stage.model.accessibility.reduceMotion {
             #expect(stage.panel.alphaValue < 0.01, "Reduce Motion: a cut (AGENT_SPEED_REDUCE_MOTION=1 runs this)")
         }
-        // It draws nothing and takes no pointer from the moment it starts to fade.
+        // It draws nothing from the moment it starts to fade; the pointer reaches it until it is ordered out.
         #expect(!window.interaction.isVisibleOnScreen)
-        #expect(!window.pointer.isRunning)
-        #expect(stage.panel.ignoresMouseEvents)
+        #expect(window.pointer.isRunning != stage.model.accessibility.reduceMotion)
+        #expect(stage.panel.ignoresMouseEvents, "the pointer is not on it")
         try await Self.waitUntil { !stage.panel.isVisible }
         #expect(!stage.panel.isVisible, "ordered out after the fade")
+        #expect(!window.pointer.isRunning)
         #expect(stage.model.orbs.orb(stage.id)?.visible == true, "never written to visible")
         #expect(stage.model.settings.orbsVisible)
     }
@@ -151,20 +152,63 @@ struct OrbHideWhenIdleWindowTests {
         #expect(window.isHiddenWhileIdle && !window.isShown)
     }
 
-    @Test func thePointerOverItsOldPlaceNeverBringsItBack() async throws {
+    @Test(arguments: ["hover", "drag"])
+    func aHoverOrADragDuringTheFadeBringsItBack(_ gesture: String) async throws {
+        let stage = Self.stage()
+        defer { stage.window.close() }
+        let window = stage.window
+        stage.pass(60)
+        #expect(window.isHiddenWhileIdle && !window.isShown)
+        guard !stage.model.accessibility.reduceMotion else {
+            #expect(!window.pointer.isRunning && stage.panel.ignoresMouseEvents, "Reduce Motion: a cut, with no fade to catch")
+            return
+        }
+        #expect(window.pointer.isRunning && stage.panel.isVisible, "still on screen and under the pointer")
+        if gesture == "hover" {
+            window.pointer.onMove?(window.center, true)
+            #expect(window.interaction.isHovered && !stage.panel.ignoresMouseEvents, "the disc takes the pointer")
+        } else {
+            // What a press that moves on the disc sets (a drag starts only where the disc takes the pointer).
+            window.interaction.isDragging = true
+        }
+        try await Self.waitUntil { window.isShown && stage.panel.alphaValue > 0.99 }
+        #expect(window.isShown && !window.isHiddenWhileIdle)
+        #expect(stage.panel.alphaValue > 0.99, "back to full")
+        try await Task.sleep(for: .milliseconds(700))
+        #expect(stage.panel.isVisible && window.isShown, "the fade's order-out was dropped")
+
+        // It hides again 1.5 s after the pointer leaves or the drag ends, as the fade does.
+        if gesture == "hover" {
+            window.pointer.onMove?(CGPoint(x: Self.away.x + 1_000, y: Self.away.y + 1_000), true)
+            #expect(!window.interaction.isHovered)
+        } else {
+            window.interaction.isDragging = false
+        }
+        stage.pass(0)
+        stage.pass(1.4)
+        #expect(window.isShown)
+        stage.pass(0.1)
+        #expect(window.isHiddenWhileIdle && !window.isShown)
+        try await Self.waitUntil { !stage.panel.isVisible }
+        #expect(!stage.panel.isVisible && !window.pointer.isRunning)
+    }
+
+    @Test func thePointerPassesThroughOnceItHasLeftTheScreen() async throws {
         let stage = Self.stage()
         defer { stage.window.close() }
         let window = stage.window
         let place = window.center
         stage.pass(60)
         try await Self.waitUntil { !stage.panel.isVisible }
+        #expect(!window.pointer.isRunning)
         window.pointer.onMove?(place, true)
         window.hostPointerMoved()
         window.pointerMayHaveMoved()
+        #expect(!window.interaction.isHovered && stage.panel.ignoresMouseEvents, "nothing over its old place reaches it")
         stage.pass(30)
+        try await Task.sleep(for: .milliseconds(200))
         #expect(window.isHiddenWhileIdle && !window.isShown)
-        #expect(!window.interaction.isHovered && !window.pointer.isRunning && stage.panel.ignoresMouseEvents)
-        #expect(!stage.panel.isVisible)
+        #expect(!window.pointer.isRunning && !stage.panel.isVisible)
     }
 
     @Test func itsPlateAndChipGoWithIt() async throws {
@@ -246,6 +290,7 @@ struct OrbHideWhenIdleWindowTests {
         let window = stage.window
         stage.pass(60)
         window.setShown(false)
+        #expect(!window.pointer.isRunning, "hidden by the user during the fade: the pointer goes at once")
         stage.work()
         try await Self.waitUntil { !stage.panel.isVisible }
         #expect(!window.isHiddenWhileIdle && !window.isShown)

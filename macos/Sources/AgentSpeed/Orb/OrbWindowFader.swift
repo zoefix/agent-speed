@@ -26,8 +26,9 @@ final class OrbWindowFader {
         self.panel = panel
     }
 
-    /// Fades in, or fades out and orders the panel out; `motion` defaults to 0.2 s ease-out.
-    func setShown(_ shown: Bool, motion: IdleFade.Motion? = nil) {
+    /// Fades in, or fades out and orders the panel out, then calls `orderedOut` (not when shown again first);
+    /// `motion` defaults to 0.2 s ease-out.
+    func setShown(_ shown: Bool, motion: IdleFade.Motion? = nil, orderedOut: (@MainActor () -> Void)? = nil) {
         guard shown != isShown, let panel else { return }
         isShown = shown
         let duration = motion?.duration ?? 0.2
@@ -42,6 +43,7 @@ final class OrbWindowFader {
             fade(to: 0, duration: duration, timing: timing) { [weak self] in
                 guard let self, !self.isShown else { return }
                 self.panel?.orderOut(nil)
+                orderedOut?()
             }
         }
     }

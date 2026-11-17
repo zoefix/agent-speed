@@ -70,6 +70,8 @@ final class OrbWindowController {
     private var wantsShown = false
     /// Off the screen after 60 s idle (DESIGN 2, hide when idle); never written to `visible`.
     private(set) var isHiddenWhileIdle = false
+    /// Fading out while idle: it still takes the pointer, so a hover or a drag brings it back, until it is ordered out.
+    private var isLeaving = false
     private var isClosing = false
     /// Waiting for a staggered entrance to start (the disc still sits at its origin).
     private var isEntering = false
@@ -410,12 +412,19 @@ final class OrbWindowController {
 
     private func present(motion: IdleFade.Motion? = nil) {
         let shown = wantsOnScreen
-        guard !isClosing, shown != fader.isShown else { return }
+        guard !isClosing else { return }
+        guard shown != fader.isShown else {
+            // Hidden by the user during the idle fade: the pointer goes at once.
+            if !wantsShown { endLeaving() }
+            return
+        }
         if shown {
+            isLeaving = false
             fader.setShown(true, motion: motion)
         } else {
             animator.finish()
-            fader.setShown(false, motion: motion)
+            isLeaving = wantsShown && (motion?.duration ?? 0) > 0
+            fader.setShown(false, motion: motion) { [weak self] in self?.endLeaving() }
             chipPanel.hide()
             host.setHighlighted(false)
         }
@@ -424,6 +433,15 @@ final class OrbWindowController {
         updateTracking()
         updateVisibleOnScreen()
     }
+
+    private func endLeaving() {
+        guard isLeaving else { return }
+        isLeaving = false
+        updateTracking()
+    }
+
+    /// Shown, or still fading out while idle.
+    private var takesPointer: Bool { fader.isShown || isLeaving }
 
     private func updateVisibleOnScreen() {
         let visible = fader.isShown && visibility.allowsVisibility
@@ -440,7 +458,7 @@ final class OrbWindowController {
     // MARK: Pointer
 
     private func updateTracking() {
-        if fader.isShown, !config.clickThrough {
+        if takesPointer, !config.clickThrough {
             pointer.start()
         } else {
             pointer.stop()
@@ -462,7 +480,7 @@ final class OrbWindowController {
     /// everything else clicks through.
     private func updatePointer(at location: NSPoint) {
         guard drag == nil else { return }
-        let interactive = fader.isShown && !config.clickThrough && !pointer.isForeignDragActive && !isClosing
+        let interactive = takesPointer && !config.clickThrough && !pointer.isForeignDragActive && !isClosing
         let live = runtime.feed.characterLive
         if live.pointerAllowed != interactive { live.pointerAllowed = interactive }
         let inside = interactive && host.discContains(screenPoint: location)
