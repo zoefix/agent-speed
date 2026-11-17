@@ -16,6 +16,9 @@ internal interface IOrbAttachment
 
     /// <summary>The window's rectangle for the disc drawn at <paramref name="center"/> (physical px); null while hidden.</summary>
     PixelRect? Arrange(PointD center, double scale);
+
+    /// <summary>The orb left the screen (hide when idle) or came back: the window goes and returns with it.</summary>
+    void SetAway(bool away);
 }
 
 /// <summary>Moves several top-level windows at once (one <c>DeferWindowPos</c> batch, so they move in the same frame).</summary>

@@ -35,6 +35,15 @@ public sealed class IdleFade
         return false;
     }
 
+    /// <summary>Starts the 60 s again from now while idle (an orb's hide-when-idle switch changed).</summary>
+    public void Rearm(double now)
+    {
+        if (!double.IsNaN(_idleSince))
+        {
+            _idleSince = now;
+        }
+    }
+
     /// <summary>Starts the fade when switched on, idle for 60 s and not under the pointer; true when it began.</summary>
     public bool TryFade(bool enabled, bool engaged, bool reduceMotion, double now)
     {

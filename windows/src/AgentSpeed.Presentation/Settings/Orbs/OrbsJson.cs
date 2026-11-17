@@ -105,6 +105,7 @@ public static class OrbsJson
         writer.WriteBoolean("alwaysOnTop", orb.AlwaysOnTop);
         writer.WriteBoolean("clickThrough", orb.ClickThrough);
         writer.WriteBoolean("fadeWhenIdle", orb.FadeWhenIdle);
+        writer.WriteBoolean("hideWhenIdle", orb.HideWhenIdle);
         writer.WriteBoolean("allSpaces", orb.AllSpaces);
         writer.WriteBoolean("visible", orb.Visible);
         WriteNullable(writer, "redlineOutput", orb.RedlineOutput);
@@ -189,6 +190,7 @@ public static class OrbsJson
             AlwaysOnTop = ReadBool(element, "alwaysOnTop", true),
             ClickThrough = ReadBool(element, "clickThrough", false),
             FadeWhenIdle = ReadBool(element, "fadeWhenIdle", false),
+            HideWhenIdle = ReadBool(element, "hideWhenIdle", false),
             AllSpaces = ReadBool(element, "allSpaces", true),
             Visible = ReadBool(element, "visible", true),
             RedlineOutput = ReadNumber(element, "redlineOutput"),

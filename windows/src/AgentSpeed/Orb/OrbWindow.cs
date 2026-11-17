@@ -14,7 +14,7 @@ using AgentSpeed.Presentation.Motion;
 namespace AgentSpeed.Orb;
 
 /// <summary>Window options of one orb (DESIGN 2b, per orb).</summary>
-internal readonly record struct OrbWindowOptions(bool AlwaysOnTop, bool ClickThrough, bool FadeWhenIdle, bool Dimmed, bool ReduceMotion);
+internal readonly record struct OrbWindowOptions(bool AlwaysOnTop, bool ClickThrough, bool FadeWhenIdle, bool HideWhenIdle, bool Dimmed, bool ReduceMotion);
 
 /// <summary>
 /// One floating orb window drawn by WPF, the fallback when Direct3D 11 is unavailable (<see cref="Gpu.GpuOrbWindow"/> is the
@@ -59,7 +59,9 @@ internal sealed class OrbWindow : Window, IOrbWindow
     private bool _moving;
     private bool _following;
     private MotionFrames _frames;
-    private readonly IdleFade _idleFade = new();
+    private readonly OrbIdle _idle = new();
+    private bool _away;
+    private int _opacityRun;
     private bool _hovering;
     private bool _discHover;
     private bool _plateHover;
@@ -126,6 +128,10 @@ internal sealed class OrbWindow : Window, IOrbWindow
     public OrbSurface Surface { get; }
 
     IOrbSurface IOrbWindow.Surface => Surface;
+
+    public bool IsAway => _away;
+
+    public event EventHandler? AwayChanged;
 
     /// <summary>Name plates bind to the window's Opacity property directly.</summary>
     event EventHandler? IOrbWindow.OpacityChanged
@@ -219,6 +225,10 @@ internal sealed class OrbWindow : Window, IOrbWindow
         if (!_attachments.Contains(attachment))
         {
             _attachments.Add(attachment);
+            if (_away)
+            {
+                attachment.SetAway(true);
+            }
         }
     }
 
@@ -318,12 +328,16 @@ internal sealed class OrbWindow : Window, IOrbWindow
 
         var clickThroughChanged = options.ClickThrough != _options.ClickThrough || _hwnd == 0;
         _options = options;
-        if (!options.FadeWhenIdle)
+        var returning = _idle.Hidden;
+        if (_idle.Configure(options.FadeWhenIdle, options.HideWhenIdle, options.ReduceMotion, _clock()) && returning && !_idle.Hidden)
         {
-            _idleFade.Restore();
+            ComeBack();
+            ApplyOpacity(IdleHide.ReturnSeconds, EasingMode.EaseOut);
         }
-
-        ApplyOpacity();
+        else
+        {
+            ApplyOpacity();
+        }
         if (clickThroughChanged)
         {
             SetClickThrough(options.ClickThrough, force: true);
@@ -409,10 +423,21 @@ internal sealed class OrbWindow : Window, IOrbWindow
         }
     }
 
-    /// <summary>The orb's own idle state drives "fade when idle" (its sources idle for 60 s).</summary>
+    /// <summary>The orb's own idle state drives "fade when idle" and "hide when idle" (its sources idle for 60 s).</summary>
     public void NoteActivity(bool active)
     {
-        if (_idleFade.NoteActivity(active, _clock()))
+        var returning = _idle.Hidden;
+        if (!_idle.NoteActivity(active, _clock(), _options.ReduceMotion))
+        {
+            return;
+        }
+
+        if (returning)
+        {
+            ComeBack();
+            ApplyOpacity(IdleHide.ReturnSeconds, EasingMode.EaseOut);
+        }
+        else
         {
             ApplyOpacity();
         }
@@ -854,34 +879,102 @@ internal sealed class OrbWindow : Window, IOrbWindow
     private void Housekeeping()
     {
         Surface.Paused = WindowEffects.IsCloaked(_hwnd);
-        if (_idleFade.TryFade(_options.FadeWhenIdle, engaged: Surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, _clock()))
+        if (_idle.Tick(engaged: Surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, _clock()))
         {
-            ApplyOpacity(animated: true);
+            ApplyOpacity(IdleFade.FadeSeconds, EasingMode.EaseInOut);
         }
     }
 
     private void Restore()
     {
-        if (_idleFade.Restore())
+        var returning = _idle.Hidden;
+        if (_idle.Engage(_clock(), _options.ReduceMotion))
         {
-            ApplyOpacity();
+            ApplyOpacity(returning ? IdleHide.ReturnSeconds : 0, EasingMode.EaseOut);
         }
     }
 
-    private void ApplyOpacity(bool animated = false)
+    /// <summary>
+    /// Sets the window's opacity (× 55 % while every source is unavailable, × the idle fade or hide) at once or over
+    /// <paramref name="seconds"/>; once hidden and at 0 the window leaves the screen.
+    /// </summary>
+    private void ApplyOpacity(double seconds = 0, EasingMode easing = EasingMode.EaseInOut)
     {
-        var target = (_options.Dimmed ? 0.55 : 1) * (_idleFade.Faded ? IdleFade.Factor : 1);
-        if (animated && !_options.ReduceMotion)
+        var target = (_options.Dimmed ? 0.55 : 1) * _idle.Target;
+        var run = ++_opacityRun;
+        if (seconds > 0 && !_options.ReduceMotion)
         {
-            BeginAnimation(OpacityProperty, new DoubleAnimation(target, TimeSpan.FromSeconds(IdleFade.FadeSeconds))
+            var animation = new DoubleAnimation(target, TimeSpan.FromSeconds(seconds)) { EasingFunction = new CubicEase { EasingMode = easing } };
+            animation.Completed += (_, _) =>
             {
-                EasingFunction = new CubicEase { EasingMode = EasingMode.EaseInOut },
-            });
+                if (run == _opacityRun)
+                {
+                    Leave();
+                }
+            };
+            BeginAnimation(OpacityProperty, animation);
         }
         else
         {
             BeginAnimation(OpacityProperty, null);
             Opacity = target;
+            Leave();
         }
+    }
+
+    /// <summary>
+    /// Hide when idle faded the orb out (DESIGN 2): the window leaves the screen with its plates and lets the pointer
+    /// through; its position, options and feed stay.
+    /// </summary>
+    private void Leave()
+    {
+        if (_away || !_idle.Hidden || !IsVisible)
+        {
+            return;
+        }
+
+        _away = true;
+        _passThrough = false;
+        _passThroughPoll.Stop();
+        ApplyTransparentStyle(_options.ClickThrough);
+        _hoverGrace?.Stop();
+        _discHover = false;
+        _plateHover = false;
+        SetHover(false);
+        Hide();
+        foreach (var attachment in _attachments)
+        {
+            attachment.SetAway(true);
+        }
+
+        AwayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Back on the screen at its place, at 0 until the caller fades it to its own opacity.</summary>
+    private void ComeBack()
+    {
+        if (!_away)
+        {
+            return;
+        }
+
+        _away = false;
+        _opacityRun++;
+        BeginAnimation(OpacityProperty, null);
+        Opacity = 0;
+        if (_hasCenter)
+        {
+            PlaceAt(_center);
+        }
+
+        Show();
+        WindowEffects.AddExtendedStyle(_hwnd, WS_EX.TOOLWINDOW | WS_EX.NOACTIVATE);
+        ApplyTransparentStyle(_options.ClickThrough);
+        foreach (var attachment in _attachments)
+        {
+            attachment.SetAway(false);
+        }
+
+        AwayChanged?.Invoke(this, EventArgs.Empty);
     }
 }

@@ -34,6 +34,7 @@ internal sealed class OrbPlate : IOrbAttachment
     private bool _frames;
     private int _calmFrames;
     private double _lastHover;
+    private bool _away;
 
     public OrbPlate(IOrbWindow orb, PlateWindow window, Func<double> clock)
     {
@@ -236,6 +237,25 @@ internal sealed class OrbPlate : IOrbAttachment
         return new PixelRect(plateLeft - padLeft, plateTop - padTop, padLeft + right, padTop + bottom);
     }
 
+    /// <summary>Its orb left the screen (hide when idle): the window hides, and shows again with the orb if it still should.</summary>
+    public void SetAway(bool away)
+    {
+        if (_away == away)
+        {
+            return;
+        }
+
+        _away = away;
+        if (!away)
+        {
+            Reposition();
+        }
+        else if (!Window.IsClosed)
+        {
+            Window.Hide();
+        }
+    }
+
     public void Close()
     {
         StopFrames();
@@ -386,7 +406,7 @@ internal sealed class OrbPlate : IOrbAttachment
 
     private void Reposition()
     {
-        if (!_animation.IsVisible || Window.IsClosed || _orb.Handle == 0 || !_orb.HasCenter)
+        if (_away || !_animation.IsVisible || Window.IsClosed || _orb.Handle == 0 || !_orb.HasCenter)
         {
             return;
         }

@@ -41,6 +41,9 @@ public sealed record OrbDefinition
 
     public bool FadeWhenIdle { get; init; }
 
+    /// <summary>DESIGN 2 "hide when idle": an idle orb leaves the screen until its agents work again (off by default).</summary>
+    public bool HideWhenIdle { get; init; }
+
     /// <summary>macOS only; kept for the round trip.</summary>
     public bool AllSpaces { get; init; } = true;
 

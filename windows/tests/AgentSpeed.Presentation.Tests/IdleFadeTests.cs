@@ -84,6 +84,21 @@ public class IdleFadeTests
     }
 
     [Fact]
+    public void RearmingStartsTheSixtySecondsAgainOnlyWhileIdle()
+    {
+        var fade = IdleSince(0);
+        fade.Rearm(50);
+        Assert.False(fade.TryFade(true, false, false, 109.9));
+        Assert.True(fade.TryFade(true, false, false, 110));
+
+        var active = new IdleFade();
+        active.Rearm(50);
+        active.NoteActivity(false, 70);
+        Assert.False(active.TryFade(true, false, false, 129.9));
+        Assert.True(active.TryFade(true, false, false, 130));
+    }
+
+    [Fact]
     public void SwitchedOffOrNeverIdleItNeverFades()
     {
         var fade = IdleSince(0);

@@ -512,6 +512,9 @@
                 <controls:SettingsCard Header="{loc:Loc settings.orb.fadeIdle}" Icon="&#xE708;" Description="{Binding FadeHint}">
                     <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding FadeWhenIdle, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc settings.orb.fadeIdle}" />
                 </controls:SettingsCard>
+                <controls:SettingsCard Header="{loc:Loc settings.orb.hideIdle}" Icon="&#xED1A;" Description="{loc:Loc settings.orb.hideIdleHint}">
+                    <CheckBox Style="{StaticResource ToggleSwitch}" IsChecked="{Binding HideWhenIdle, Mode=TwoWay}" AutomationProperties.Name="{loc:Loc settings.orb.hideIdle}" />
+                </controls:SettingsCard>
                 <Button Style="{StaticResource LinkButton}" Content="{loc:Loc win.settings.resetPosition}" Command="{Binding ResetPositionCommand}"
                         Margin="2,2,0,0" FontSize="12" />
             </StackPanel>
