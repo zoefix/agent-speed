@@ -292,14 +292,21 @@ struct OrbHideWhenIdleWindowTests {
         #expect(window.fader.isDimmed && window.isShown, "fade when idle takes over")
     }
 
-    @Test func turningItOnHidesAnOrbThatHasBeenIdleLongEnough() {
-        let stage = Self.stage { _, _ in }
+    @Test func turningItOnStartsAFreshSixtySecondsAtFullOpacity() async throws {
+        let stage = Self.stage { orbs, id in orbs.setFadeWhenIdle(true, of: id) }
         defer { stage.window.close() }
         let window = stage.window
         stage.pass(90)
-        #expect(window.isShown)
+        #expect(window.isShown && window.fader.isDimmed, "long idle: faded to 45 %")
         stage.edit { orbs, id in orbs.setHideWhenIdle(true, of: id) }
-        #expect(window.isHiddenWhileIdle && !window.isShown)
+        #expect(window.isShown && !window.isHiddenWhileIdle, "not hidden at once")
+        #expect(!window.fader.isDimmed, "hiding replaces the fade, so it is back at full")
+        try await Self.waitUntil { stage.panel.alphaValue > 0.99 }
+        #expect(stage.panel.alphaValue > 0.99)
+        stage.pass(59)
+        #expect(window.isShown && !window.fader.isDimmed)
+        stage.pass(1)
+        #expect(window.isHiddenWhileIdle && !window.isShown && !window.fader.isDimmed)
     }
 
     @Test func itIsOffByDefault() {

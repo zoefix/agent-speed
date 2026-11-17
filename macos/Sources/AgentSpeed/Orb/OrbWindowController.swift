@@ -210,9 +210,10 @@ final class OrbWindowController {
         self.config = config
         applyConfiguration()
         if previous.sources != config.sources { showSourcesBriefly() }
-        if previous.hideWhenIdle, !config.hideWhenIdle {
+        // Hide when idle turned either way starts the 60 s again (DESIGN 2).
+        if previous.hideWhenIdle != config.hideWhenIdle {
             dimmer?.rearm()
-        } else if previous.fadeWhenIdle != config.fadeWhenIdle || previous.hideWhenIdle != config.hideWhenIdle {
+        } else if previous.fadeWhenIdle != config.fadeWhenIdle {
             dimmer?.refresh()
         }
     }
