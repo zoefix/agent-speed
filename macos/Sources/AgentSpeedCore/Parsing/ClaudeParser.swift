@@ -27,6 +27,9 @@ struct ClaudeParser: Sendable {
     private var responseOrder: [String] = []
     /// Qoder CLI keys this file claimed with a line that had no usage (no response yet).
     private var silentKeys: Set<String> = []
+    /// The start the first usage-less line of a silent key consumed: the line of that key that carries usage takes it
+    /// (METRICS 4.19; the Qoder desktop app splits one call into several lines of one message id, issue #73).
+    private var silentStarts: [String: Int64] = [:]
     /// Ultracode (EXECUTION-MODES, Claude Code): on for the session between enter and exit markers, and for one turn
     /// after a workflow keyword until the next prompt.
     private var ultraSession = false
@@ -227,6 +230,7 @@ struct ClaudeParser: Sendable {
         for old in evicted {
             responses[old] = nil
             silentKeys.remove(old)
+            silentStarts[old] = nil
         }
         responseOrder.removeFirst(evicted.count)
     }
@@ -287,9 +291,10 @@ struct ClaudeParser: Sendable {
                 next = existing
                 isCompletion = false
             } else {
-                next = ResponseRecord(key: key, source: .qoderCli, agentId: agentId, model: line.model,
-                                      startMs: pendingStartMs, endMs: timestamp, usage: usage, isFinal: hasStopReason)
                 let wasSilent = silentKeys.remove(key) != nil
+                let begin = wasSilent ? silentStarts.removeValue(forKey: key) : pendingStartMs
+                next = ResponseRecord(key: key, source: .qoderCli, agentId: agentId, model: line.model,
+                                      startMs: begin, endMs: timestamp, usage: usage, isFinal: hasStopReason)
                 isCompletion = claim == .new || wasSilent
                 pendingStartMs = nil
                 preciseStart = false
@@ -310,6 +315,7 @@ struct ClaudeParser: Sendable {
             if let model = line.model { state.model = model }
             if claim == .new {
                 silentKeys.insert(key)
+                silentStarts[key] = start
                 remember(key)
             }
         }
@@ -319,7 +325,7 @@ struct ClaudeParser: Sendable {
         case .none where line.hasToolUse:
             state.setPhase(.tools, at: timestamp)
         case .none, .pauseTurn:
-            let begin = record.map(\.startMs) ?? start
+            let begin = record.map(\.startMs) ?? silentStarts[key] ?? start
             state.setPhase(.generating, at: timestamp, inFlightStartMs: begin ?? timestamp)
         case .other:
             state.setPhase(.idle, at: timestamp)

@@ -231,7 +231,7 @@ struct QoderFixtureTests {
         let (expected, results) = try ParserFixtureTests.runFixtures()
         let files = try #require(expected["files"] as? [String: [String: Any]])
         let qoder = files.filter { $0.key.hasPrefix("qoder-cli/") }
-        #expect(qoder.count == 5)
+        #expect(qoder.count == 6)
         for (relative, spec) in qoder {
             let summary = OmpTests.summary(try #require(results[relative]))
             for (field, wanted) in spec where !["parentFile", "effort", "speed", "responseModes"].contains(field) {
@@ -246,7 +246,7 @@ struct QoderFixtureTests {
 
     @Test func cliTracesMatchPhaseAfterEveryCheckpoint() throws {
         let traces = try #require(try Self.cliFixtures["traces"] as? [[String: Any]])
-        #expect(traces.count == 12)
+        #expect(traces.count == 16)
         for trace in traces {
             let file = try #require(trace.string("file"))
             let afterLine = trace.int("afterLine")
