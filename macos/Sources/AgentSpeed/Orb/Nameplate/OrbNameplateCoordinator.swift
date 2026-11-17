@@ -9,6 +9,8 @@ protocol OrbNameplateHost: AnyObject {
     var disc: OrbDisc { get }
     var screen: NSScreen? { get }
     var isShown: Bool { get }
+    /// Shown, or hidden while idle: a hidden orb shows no plate but still keeps the others away from its place.
+    var holdsPlace: Bool { get }
     /// True while dragged or springing to a new position: placement waits until it rests.
     var isMovingForNameplate: Bool { get }
     var nameplate: OrbNameplateController { get }
@@ -48,7 +50,7 @@ final class OrbNameplateCoordinator {
         var changed = false
         var byScreen: [(screen: NSScreen, hosts: [OrbNameplateHost])] = []
         for host in all {
-            guard host.isShown, let screen = host.screen else {
+            guard host.holdsPlace, let screen = host.screen else {
                 changed = apply(nil, to: host) || changed
                 continue
             }
@@ -61,7 +63,7 @@ final class OrbNameplateCoordinator {
         for (screen, hosts) in byScreen {
             let requests = hosts.map { host in
                 let plate = host.nameplate
-                return NameplateRequest(id: host.id, disc: host.disc, wantsPlate: plate.wantsPlate) { budget in
+                return NameplateRequest(id: host.id, disc: host.disc, wantsPlate: host.isShown && plate.wantsPlate) { budget in
                     plate.content?.restWidth(budget: budget)
                 }
             }

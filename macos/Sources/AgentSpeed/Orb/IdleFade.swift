@@ -2,7 +2,7 @@ import QuartzCore
 
 /// "Fade when idle" (DESIGN 2), one rule for every orb and board window: after 60 s idle the window fades to 45 % of
 /// its opacity over 0.6 s ease-in-out and comes back in 0.12 s on activity, hover or a drag; with Reduce Motion both
-/// are cuts.
+/// are cuts. An orb's "hide when idle" takes the same timing and motion, fading to 0 instead.
 enum IdleFade {
     static let alpha: CGFloat = 0.45
     static let idleDelay: TimeInterval = 60

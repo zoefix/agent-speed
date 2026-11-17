@@ -22,7 +22,7 @@ protocol OrbWindowManaging: AnyObject {
 }
 
 /// One floating orb window (DESIGN 2, 2b): placement, drag with edge snapping and orb-to-orb magnetism, click-through
-/// outside the disc, visibility and idle fading, its own style, size, opacity and window options from its
+/// outside the disc, visibility and idle fading or hiding, its own style, size, opacity and window options from its
 /// configuration, its source chip, accessibility and context menu.
 @MainActor
 final class OrbWindowController {
@@ -37,16 +37,17 @@ final class OrbWindowController {
     private(set) var config: OrbConfig
     private let model: AppModel
     private weak var manager: OrbWindowManaging?
-    private let interaction: OrbInteraction
+    let interaction: OrbInteraction
     private let panel: OrbPanel
     private let animator: OrbWindowAnimator
-    private let pointer = OrbWindowPointerTracker()
-    private let fader: OrbWindowFader
+    let pointer = OrbWindowPointerTracker()
+    let fader: OrbWindowFader
     private let visibility: OrbWindowVisibilityMonitor
-    private var dimmer: OrbWindowIdleDimmer?
+    private let idleNow: @MainActor () -> TimeInterval
+    private(set) var dimmer: OrbWindowIdleDimmer?
     private var reporter: OrbAccessibilityReporter?
     private var loops: [ObservationLoop] = []
-    private let chipPanel = OrbChipPanel(interactive: false)
+    let chipPanel = OrbChipPanel(interactive: false)
     /// The name plate (DESIGN 2b, Name plate); while it shows, the source chip folds into it.
     private(set) lazy var nameplate = OrbNameplateController(parent: panel, delegate: self)
     private var chipTimer: Timer?
@@ -67,11 +68,17 @@ final class OrbWindowController {
     private var cursorPushed = false
     private var appliedDiameter: CGFloat
     private var wantsShown = false
+    /// Off the screen after 60 s idle (DESIGN 2, hide when idle); never written to `visible`.
+    private(set) var isHiddenWhileIdle = false
+    /// Fading out while idle: it still takes the pointer, so a hover or a drag brings it back, until it is ordered out.
+    private var isLeaving = false
     private var isClosing = false
     /// Waiting for a staggered entrance to start (the disc still sits at its origin).
     private var isEntering = false
 
-    init(model: AppModel, runtime: OrbRuntime, manager: OrbWindowManaging) {
+    init(model: AppModel, runtime: OrbRuntime, manager: OrbWindowManaging,
+         idleNow: @escaping @MainActor () -> TimeInterval = { Clock.now }) {
+        self.idleNow = idleNow
         self.model = model
         self.runtime = runtime
         self.manager = manager
@@ -151,10 +158,11 @@ final class OrbWindowController {
             if self.chipPanel.isShown { self.showChip(refreshOnly: true) }
         })
         loops.append(ObservationLoop { [weak self] in self?.refreshNameplate() })
-        dimmer = OrbWindowIdleDimmer(gauge: runtime.feed.gauge, enabled: { [weak self] in self?.config.fadeWhenIdle ?? false },
-                                     interaction: interaction) { [weak self] dimmed in
-            guard let self else { return }
-            self.fader.setDimmed(dimmed, reduceMotion: self.model.accessibility.reduceMotion)
+        dimmer = OrbWindowIdleDimmer(gauge: runtime.feed.gauge, enabled: { [weak self] in
+            guard let self else { return false }
+            return self.config.fadeWhenIdle || self.config.hideWhenIdle
+        }, interaction: interaction, now: idleNow) { [weak self] idle in
+            self?.applyIdle(idle)
         }
         reporter = OrbAccessibilityReporter(model: model, runtime: runtime, host: host)
         installAccessibilityActions()
@@ -204,7 +212,12 @@ final class OrbWindowController {
         self.config = config
         applyConfiguration()
         if previous.sources != config.sources { showSourcesBriefly() }
-        if previous.fadeWhenIdle != config.fadeWhenIdle { dimmer?.refresh() }
+        // Hide when idle turned either way starts the 60 s again (DESIGN 2).
+        if previous.hideWhenIdle != config.hideWhenIdle {
+            dimmer?.rearm()
+        } else if previous.fadeWhenIdle != config.fadeWhenIdle {
+            dimmer?.refresh()
+        }
     }
 
     private func applyConfiguration() {
@@ -259,6 +272,8 @@ final class OrbWindowController {
     var center: CGPoint { animator.targetState.center }
     var disc: OrbDisc { OrbDisc(center: center, radius: radius) }
     var isShown: Bool { fader.isShown }
+    /// Shown, or only hidden while idle: its place stays taken for placement, snapping, magnets and the plates.
+    var holdsPlace: Bool { fader.isShown || (wantsShown && isHiddenWhileIdle && !isClosing) }
     var level: NSWindow.Level { panel.level }
     var screen: NSScreen? { Self.screen(containing: center) }
 
@@ -365,15 +380,51 @@ final class OrbWindowController {
 
     // MARK: Visibility
 
-    /// Shows or hides the window (its `visible` flag and the master switch).
+    /// Shows or hides the window (its `visible` flag and the master switch). Shown again, an orb that hides when idle
+    /// starts its 60 s again.
     func setShown(_ shown: Bool) {
+        if shown, !wantsShown, config.hideWhenIdle { dimmer?.rearm() }
         wantsShown = shown
-        guard !isClosing, shown != fader.isShown else { return }
+        present()
+    }
+
+    /// The idle verdict: "hide when idle" takes the window off the screen and replaces "fade when idle".
+    private func applyIdle(_ idle: Bool) {
+        let hide = idle && config.hideWhenIdle
+        let dim = idle && config.fadeWhenIdle && !hide
+        guard hide != isHiddenWhileIdle else {
+            fader.setDimmed(dim, reduceMotion: reduceMotion)
+            return
+        }
+        isHiddenWhileIdle = hide
+        let motion = IdleFade.motion(dimming: hide, reduceMotion: reduceMotion)
+        // The dimmed state changes while the panel is off, so its alpha animates once.
+        if hide {
+            present(motion: motion)
+            fader.setDimmed(dim, reduceMotion: reduceMotion)
+        } else {
+            fader.setDimmed(dim, reduceMotion: reduceMotion)
+            present(motion: motion)
+        }
+    }
+
+    private var wantsOnScreen: Bool { wantsShown && !isHiddenWhileIdle }
+
+    private func present(motion: IdleFade.Motion? = nil) {
+        let shown = wantsOnScreen
+        guard !isClosing else { return }
+        guard shown != fader.isShown else {
+            // Hidden by the user during the idle fade: the pointer goes at once.
+            if !wantsShown { endLeaving() }
+            return
+        }
         if shown {
-            fader.setShown(true)
+            isLeaving = false
+            fader.setShown(true, motion: motion)
         } else {
             animator.finish()
-            fader.setShown(false)
+            isLeaving = wantsShown && (motion?.duration ?? 0) > 0
+            fader.setShown(false, motion: motion) { [weak self] in self?.endLeaving() }
             chipPanel.hide()
             host.setHighlighted(false)
         }
@@ -382,6 +433,15 @@ final class OrbWindowController {
         updateTracking()
         updateVisibleOnScreen()
     }
+
+    private func endLeaving() {
+        guard isLeaving else { return }
+        isLeaving = false
+        updateTracking()
+    }
+
+    /// Shown, or still fading out while idle.
+    private var takesPointer: Bool { fader.isShown || isLeaving }
 
     private func updateVisibleOnScreen() {
         let visible = fader.isShown && visibility.allowsVisibility
@@ -398,7 +458,7 @@ final class OrbWindowController {
     // MARK: Pointer
 
     private func updateTracking() {
-        if fader.isShown, !config.clickThrough {
+        if takesPointer, !config.clickThrough {
             pointer.start()
         } else {
             pointer.stop()
@@ -420,7 +480,7 @@ final class OrbWindowController {
     /// everything else clicks through.
     private func updatePointer(at location: NSPoint) {
         guard drag == nil else { return }
-        let interactive = fader.isShown && !config.clickThrough && !pointer.isForeignDragActive && !isClosing
+        let interactive = takesPointer && !config.clickThrough && !pointer.isForeignDragActive && !isClosing
         let live = runtime.feed.characterLive
         if live.pointerAllowed != interactive { live.pointerAllowed = interactive }
         let inside = interactive && host.discContains(screenPoint: location)
@@ -601,7 +661,7 @@ final class OrbWindowController {
     /// Shows the chip, or widens the plate to it, for 2 s (also after a sources change).
     private func showSourcesBriefly(after delay: TimeInterval = 0) {
         let show = { @MainActor [weak self] in
-            guard let self, self.fader.isShown || self.wantsShown else { return }
+            guard let self, self.fader.isShown || self.wantsOnScreen else { return }
             self.chipUntil = Clock.now + 2
             self.showChip()
             self.chipTimer?.invalidate()
@@ -633,7 +693,7 @@ final class OrbWindowController {
             if !refreshOnly { nameplate.setExpanded(true) }
             return
         }
-        guard fader.isShown || wantsShown, let items = chipItems() else {
+        guard fader.isShown || wantsOnScreen, let items = chipItems() else {
             chipPanel.hide()
             return
         }
