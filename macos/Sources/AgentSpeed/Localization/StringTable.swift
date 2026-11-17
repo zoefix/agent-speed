@@ -1048,6 +1048,8 @@ enum StringTable {
         "settings.orb": Entry("懸浮窗", "悬浮窗", "Floating Orb", "フローティングオーブ"),
         "settings.orb.allSpaces": Entry("在所有桌面顯示", "在所有桌面显示", "Show on all Spaces", "すべてのデスクトップに表示"),
         "settings.orb.fadeIdle": Entry("閒置時淡出", "空闲时淡出", "Fade when idle", "待機中は薄くする"),
+        "settings.orb.hideIdle": Entry("閒置時隱藏", "空闲时隐藏", "Hide when idle", "待機中は隠す"),
+        "settings.orb.hideIdleHint": Entry("閒置 60 秒後隱藏，agent 一開始工作就回來。", "空闲 60 秒后隐藏，agent 一开始工作就回来。", "Hides after 60 seconds idle and comes back as soon as an agent starts working.", "待機が 60 秒続くと隠れ、エージェントが動き出すとすぐに戻ります。"),
         "settings.orb.opacity": Entry("不透明度", "不透明度", "Opacity", "不透明度"),
         "settings.orb.show": Entry("顯示懸浮窗", "显示悬浮窗", "Show floating orb", "フローティングオーブを表示"),
         "settings.orb.size": Entry("大小", "大小", "Size", "サイズ"),

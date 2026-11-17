@@ -1,6 +1,7 @@
 import AppKit
 
-/// Owns the panel's alpha: fade in/out for the visibility setting and the dimmed state of "fade when idle".
+/// Owns the panel's alpha: fade in/out for the visibility setting and "hide when idle", and the dimmed state of "fade
+/// when idle".
 @MainActor
 final class OrbWindowFader {
     private weak var panel: NSWindow?
@@ -25,17 +26,20 @@ final class OrbWindowFader {
         self.panel = panel
     }
 
-    func setShown(_ shown: Bool) {
+    /// Fades in, or fades out and orders the panel out; `motion` defaults to 0.2 s ease-out.
+    func setShown(_ shown: Bool, motion: IdleFade.Motion? = nil) {
         guard shown != isShown, let panel else { return }
         isShown = shown
+        let duration = motion?.duration ?? 0.2
+        let timing = motion?.timing ?? .easeOut
         if shown {
             if !panel.isVisible {
                 panel.alphaValue = 0
                 panel.orderFrontRegardless()
             }
-            fade(to: targetAlpha, duration: 0.2, timing: .easeOut)
+            fade(to: targetAlpha, duration: duration, timing: timing)
         } else {
-            fade(to: 0, duration: 0.2, timing: .easeOut) { [weak self] in
+            fade(to: 0, duration: duration, timing: timing) { [weak self] in
                 guard let self, !self.isShown else { return }
                 self.panel?.orderOut(nil)
             }
@@ -97,9 +101,9 @@ final class OrbWindowFader {
     }
 }
 
-/// Dims an orb or a board after 60 s of idle speed (setting "fade when idle", per window, from the window's own gauge;
-/// the rule is `IdleFade`). Event driven: one one-shot timer for the exact moment the dim is due, recomputed whenever
-/// the tier or the pointer state changes, and on `refresh()` when the setting changes.
+/// Tells an orb or a board when it has been idle for 60 s (settings "fade when idle" and an orb's "hide when idle", per
+/// window, from the window's own gauge; the rule is `IdleFade`). Event driven: one one-shot timer for the exact moment
+/// it is due, recomputed whenever the tier or the pointer state changes, and on `refresh()` when a setting changes.
 @MainActor
 final class OrbWindowIdleDimmer {
     private let gauge: LiveGauge
@@ -107,7 +111,7 @@ final class OrbWindowIdleDimmer {
     private let interaction: OrbInteraction
     private let apply: (Bool) -> Void
     private let now: @MainActor () -> TimeInterval
-    private let armedAt: TimeInterval
+    private var armedAt: TimeInterval
     private var pointerLeftAt: TimeInterval = -.infinity
     private var wasEngaged = false
     private var timer: Timer?
@@ -137,6 +141,12 @@ final class OrbWindowIdleDimmer {
 
     /// Decides again (the switch changed; the setting is not observed).
     func refresh() {
+        evaluate()
+    }
+
+    /// Starts the 60 s again from now (a hidden orb shown again).
+    func rearm() {
+        armedAt = now()
         evaluate()
     }
 

@@ -59,7 +59,8 @@ struct DocumentCodingTests {
         #expect(orbs[1]["sources"] as? [String] == ["codex"])
         #expect(orbs[0].keys.contains("name") && orbs[0]["name"] is NSNull)
         #expect(orbs[0].keys.contains("redlineOutput") && orbs[0]["redlineOutput"] is NSNull)
-        for key in ["id", "style", "size", "opacity", "alwaysOnTop", "clickThrough", "fadeWhenIdle", "allSpaces", "visible", "redlineTotal"] {
+        for key in ["id", "style", "size", "opacity", "alwaysOnTop", "clickThrough", "fadeWhenIdle", "hideWhenIdle", "allSpaces",
+                    "visible", "redlineTotal"] {
             #expect(orbs[0].keys.contains(key), "missing \(key)")
         }
         let layouts = try #require(object["layouts"] as? [String: [String: [String: Any]]])

@@ -37,6 +37,7 @@ public enum OrbEditing {
             alwaysOnTop: template.alwaysOnTop,
             clickThrough: template.clickThrough,
             fadeWhenIdle: template.fadeWhenIdle,
+            hideWhenIdle: template.hideWhenIdle,
             allSpaces: template.allSpaces,
             visible: true,
             titleTheme: template.titleTheme,

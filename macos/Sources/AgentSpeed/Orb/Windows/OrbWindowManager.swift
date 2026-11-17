@@ -214,7 +214,7 @@ final class OrbWindowManager {
         guard let first = windows[original], let screen = first.screen ?? Self.primaryScreen else { return }
         let visible = screen.visibleFrame
         let excluded = Set(children + [original])
-        let otherIds = windows.keys.filter { !excluded.contains($0) && windows[$0]?.isShown == true && windows[$0]?.screen == screen }
+        let otherIds = windows.keys.filter { !excluded.contains($0) && windows[$0]?.holdsPlace == true && windows[$0]?.screen == screen }
         let others = otherIds.compactMap { windows[$0]?.disc }
         let radii = children.compactMap { windows[$0]?.radius }
         let layout = OrbPlacement.splitLayout(origin: first.disc, radii: radii, visible: visible, others: others,
@@ -323,9 +323,10 @@ final class OrbWindowManager {
 // MARK: - OrbWindowManaging
 
 extension OrbWindowManager: OrbWindowManaging {
+    /// An orb hidden while idle keeps its place (DESIGN 2, hide when idle).
     func otherDiscs(excluding id: String, on screen: NSScreen) -> [OrbDisc] {
         windows.values.compactMap { window in
-            guard window.id != id, window.isShown, window.screen == screen else { return nil }
+            guard window.id != id, window.holdsPlace, window.screen == screen else { return nil }
             return window.disc
         }
     }

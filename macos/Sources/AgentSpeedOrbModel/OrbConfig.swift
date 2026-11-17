@@ -18,6 +18,8 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
     public var alwaysOnTop: Bool
     public var clickThrough: Bool
     public var fadeWhenIdle: Bool
+    /// Takes the orb off the screen while idle, until its tier leaves idle (DESIGN 2, hide when idle).
+    public var hideWhenIdle: Bool
     /// macOS only.
     public var allSpaces: Bool
     public var visible: Bool
@@ -52,6 +54,7 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
         alwaysOnTop: Bool = true,
         clickThrough: Bool = false,
         fadeWhenIdle: Bool = false,
+        hideWhenIdle: Bool = false,
         allSpaces: Bool = true,
         visible: Bool = true,
         redlineOutput: Double? = nil,
@@ -73,6 +76,7 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
         self.alwaysOnTop = alwaysOnTop
         self.clickThrough = clickThrough
         self.fadeWhenIdle = fadeWhenIdle
+        self.hideWhenIdle = hideWhenIdle
         self.allSpaces = allSpaces
         self.visible = visible
         self.redlineOutput = Self.cleanRedline(redlineOutput)
@@ -121,7 +125,7 @@ public struct OrbConfig: Equatable, Hashable, Identifiable, Sendable {
 
 extension OrbConfig: Codable {
     enum CodingKeys: String, CodingKey {
-        case id, name, sources, style, size, opacity, alwaysOnTop, clickThrough, fadeWhenIdle, allSpaces, visible
+        case id, name, sources, style, size, opacity, alwaysOnTop, clickThrough, fadeWhenIdle, hideWhenIdle, allSpaces, visible
         case redlineOutput, redlineTotal, titleTheme, unit, traffic, showName, hosts, character, characterReadouts
     }
 
@@ -144,6 +148,7 @@ extension OrbConfig: Codable {
             alwaysOnTop: value(Bool.self, .alwaysOnTop) ?? true,
             clickThrough: value(Bool.self, .clickThrough) ?? false,
             fadeWhenIdle: value(Bool.self, .fadeWhenIdle) ?? false,
+            hideWhenIdle: value(Bool.self, .hideWhenIdle) ?? false,
             allSpaces: value(Bool.self, .allSpaces) ?? true,
             visible: value(Bool.self, .visible) ?? true,
             redlineOutput: value(Double.self, .redlineOutput),
@@ -175,6 +180,7 @@ extension OrbConfig: Codable {
         try container.encode(alwaysOnTop, forKey: .alwaysOnTop)
         try container.encode(clickThrough, forKey: .clickThrough)
         try container.encode(fadeWhenIdle, forKey: .fadeWhenIdle)
+        try container.encode(hideWhenIdle, forKey: .hideWhenIdle)
         try container.encode(allSpaces, forKey: .allSpaces)
         try container.encode(visible, forKey: .visible)
         try container.encode(redlineOutput, forKey: .redlineOutput)

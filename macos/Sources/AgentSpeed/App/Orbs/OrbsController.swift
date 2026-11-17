@@ -407,6 +407,10 @@ final class OrbsController {
         setDocument(OrbEditing.setToggle(\.fadeWhenIdle, value, of: id, in: document))
     }
 
+    func setHideWhenIdle(_ value: Bool, of id: String) {
+        setDocument(OrbEditing.setToggle(\.hideWhenIdle, value, of: id, in: document))
+    }
+
     func setAllSpaces(_ value: Bool, of id: String) {
         setDocument(OrbEditing.setToggle(\.allSpaces, value, of: id, in: document))
     }

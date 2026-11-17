@@ -113,6 +113,9 @@ struct OrbSwitchesSection: View {
             SettingToggle(title: l10n("settings.orb.fadeIdle"), isOn: Binding(
                 get: { orb.fadeWhenIdle }, set: { orbs.setFadeWhenIdle($0, of: id) }
             ))
+            SettingToggle(title: l10n("settings.orb.hideIdle"), subtitle: l10n("settings.orb.hideIdleHint"), isOn: Binding(
+                get: { orb.hideWhenIdle }, set: { orbs.setHideWhenIdle($0, of: id) }
+            ))
             SettingToggle(title: l10n("settings.orb.allSpaces"), isOn: Binding(
                 get: { orb.allSpaces }, set: { orbs.setAllSpaces($0, of: id) }
             ))
