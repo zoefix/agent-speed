@@ -575,13 +575,13 @@ TEST(QoderCli, ALineWithoutUsageClaimsItsKeyAndConsumesTheStart) {
     ASSERT_EQ(sink.emitted.size(), 2u);
     EXPECT_EQ(sink.emitted[1].first.tokens, (TokenCounts{125, 100, 20, 7, 0, 0}));
 
-    // The first usage of a key a line without usage claimed is its completion.
+    // The first usage of a key a line without usage claimed is its completion, with the start that line consumed (#73).
     line(R"({"type":"assistant","message":{"id":"m1","model":"auto","stop_reason":"tool_use","usage":{"input_tokens":900,"output_tokens":30}},"timestamp":")" +
          isoOf(t + 23'000) + R"("})");
     ASSERT_EQ(sink.emitted.size(), 3u);
     EXPECT_EQ(sink.emitted[2].first.key, "qodercli:m1");
     EXPECT_TRUE(sink.emitted[2].second);
-    EXPECT_EQ(sink.emitted[2].first.startMs, std::nullopt);
+    EXPECT_EQ(sink.emitted[2].first.startMs, t + 1'000);
 
     // Another file's copy of a claimed key is copied history, with or without usage.
     ClaudeParser copy("/q/projects/-w-atlas/s2.jsonl", deduper, ClaudeParser::Variant::QoderCli);
@@ -649,4 +649,35 @@ TEST(QoderCli, TheMonitorCountsMainSessionsOnly) {
     std::ofstream(temp.file("cn/projects/-w-beta/s3.jsonl"), std::ios::app) << line("assistant", "m4", kNowMs, true);
     EXPECT_TRUE(monitor.poll(kNowMs + 1000, kTodayStartMs));
     EXPECT_EQ(monitor.takeCompletions().size(), 1u);
+}
+
+// METRICS 4.19, issue #73: the Qoder desktop app writes one call as several lines of one message id, only the last
+// with usage; the response keeps the start its first line consumed, and the in-flight estimate uses it meanwhile.
+TEST(QoderCli, ACallSplitAcrossLinesOfOneIdKeepsItsStart) {
+    Deduper deduper;
+    ClaudeParser parser("/q/projects/-w-atlas/s2.jsonl", deduper, ClaudeParser::Variant::QoderCli);
+    Collector sink;
+    const auto t = kDayStart + 3'600'000;
+    const auto line = [&](const std::string& json) { parser.feed(json, sink); };
+    const auto part = [&](std::int64_t at, const std::string& stop, const std::string& blocks, const std::string& usage) {
+        line(R"({"type":"assistant","message":{"id":"c1","model":"auto","stop_reason":)" + stop + R"(,"content":)" + blocks +
+             usage + R"(},"timestamp":")" + isoOf(at) + R"("})");
+    };
+    line(R"({"type":"user","cwd":"/w/atlas","message":{"role":"user","content":"go"},"timestamp":")" + isoOf(t) + R"("})");
+    part(t + 9'010, "null", R"([{"type":"thinking","thinking":"x"}])", "");
+    EXPECT_EQ(parser.phase(), Phase::Generating);
+    EXPECT_EQ(parser.inFlightStartMs(), t);
+    part(t + 9'011, "null", R"([{"type":"text","text":"y"}])", "");
+    EXPECT_EQ(parser.inFlightStartMs(), t) << "the key's kept start, not the line's own time";
+    EXPECT_TRUE(sink.emitted.empty());
+    part(t + 9'011, R"("tool_use")", R"([{"type":"tool_use","id":"t1","name":"Read","input":{}}])",
+         R"(,"usage":{"input_tokens":120127,"output_tokens":2307,"cache_read_input_tokens":0,"cache_creation_input_tokens":0})");
+    ASSERT_EQ(sink.emitted.size(), 1u);
+    const auto& [response, completion] = sink.emitted[0];
+    EXPECT_TRUE(completion);
+    EXPECT_EQ(response.key, "qodercli:c1");
+    EXPECT_EQ(response.startMs, t);
+    EXPECT_EQ(response.endMs, t + 9'011);
+    EXPECT_EQ(response.tokens.output, 2307);
+    EXPECT_EQ(parser.phase(), Phase::Tools);
 }

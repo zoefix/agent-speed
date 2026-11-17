@@ -211,11 +211,11 @@ void ClaudeParser::remember(const ParsedResponse& response) {
     recent_[response.key] = response;
 }
 
-void ClaudeParser::rememberSilent(const std::string& key) {
+void ClaudeParser::rememberSilent(const std::string& key, std::optional<std::int64_t> start) {
     if (recent_.contains(key) || silent_.contains(key)) return;
     makeRoom();
     recentOrder_.push_back(key);
-    silent_.insert(key);
+    silent_.emplace(key, start);
 }
 
 void ClaudeParser::feed(std::string_view text, ResponseSink& sink) {
@@ -427,7 +427,8 @@ void ClaudeParser::handleQoder(const json::Value& root, std::string_view text, R
             next.source = SourceKind::QoderCli;
             next.agentId = agentId();
             next.model = line.model;
-            next.startMs = pendingStartMs_;
+            const auto silent = silent_.find(key);
+            next.startMs = silent != silent_.end() ? silent->second : pendingStartMs_;
             next.endMs = ts;
             next.tokens = usage;
             next.final = stopped;
@@ -450,10 +451,11 @@ void ClaudeParser::handleQoder(const json::Value& root, std::string_view text, R
         pendingStartMs_.reset();
         preciseStart_ = false;
         setModel(line.model);
-        if (claimed) rememberSilent(key);
+        if (claimed) rememberSilent(key, start);
     }
 
-    const auto begin = record ? record->startMs : start;
+    const auto kept = silent_.find(key);
+    const auto begin = record ? record->startMs : kept != silent_.end() ? kept->second : start;
     switch (line.stopReason) {
         case StopReason::ToolUse:
             setPhase(Phase::Tools, ts, std::nullopt);

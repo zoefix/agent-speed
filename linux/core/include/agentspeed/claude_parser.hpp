@@ -28,7 +28,7 @@ private:
     void handleQoder(const json::Value& root, std::string_view text, ResponseSink& sink);
     // Keeps a key in the merge memory: with its response, or claimed by a Qoder CLI line without usage.
     void remember(const ParsedResponse& response);
-    void rememberSilent(const std::string& key);
+    void rememberSilent(const std::string& key, std::optional<std::int64_t> start);
     void makeRoom();
     bool ultracode() const { return ultraSession_ || ultraTurn_; }
     void refreshModes();
@@ -38,8 +38,9 @@ private:
     std::optional<std::int64_t> pendingStartMs_;
     bool preciseStart_ = false;
     std::unordered_map<std::string, ParsedResponse> recent_;
-    // Qoder CLI keys this file claimed with a line without usage (no response yet).
-    std::unordered_set<std::string> silent_;
+    // Qoder CLI keys this file claimed with a line without usage (no response yet), each with the start its first line
+    // consumed: the line of that key that carries usage takes it (METRICS 4.19; issue #73's split calls).
+    std::unordered_map<std::string, std::optional<std::int64_t>> silent_;
     std::deque<std::string> recentOrder_;
     // Reasoning effort: the ultracode switches, the latest response's facts and the latest line effort.
     bool ultraSession_ = false;
