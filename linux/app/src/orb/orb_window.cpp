@@ -121,7 +121,10 @@ OrbWindow::~OrbWindow() {
     }
 }
 
-void OrbWindow::placeAt(QPointF globalCenter) { setPosition((globalCenter - center()).toPoint()); }
+void OrbWindow::placeAt(QPointF globalCenter) {
+    ++placements_;
+    setPosition((globalCenter - center()).toPoint());
+}
 
 bool OrbWindow::dark() const {
     return forcedDark_ || Appearance::instance().dark();
@@ -154,6 +157,7 @@ QString OrbWindow::networkScope() const {
 
 void OrbWindow::resizeToFootprint(QPointF discCenter) {
     resize(qCeil(side()), qCeil(side()));
+    ++placements_;
     setPosition((discCenter - center()).toPoint());
     bodyDirty_ = true;
     applyShape();
@@ -198,21 +202,41 @@ bool OrbWindow::openGLAvailable() const {
 }
 
 void OrbWindow::setShown(bool visible) {
+    if (visible != shown_) {
+        // An orb the user hides is no longer away; turning its visible or the master switch on brings back an orb hidden
+        // when idle and starts its 60 s again.
+        away_ = false;
+        if (visible) {
+            idle_.rearmHide(now());
+            updateIdle(true);
+        }
+    }
     shown_ = visible;
-    if (visible == isVisible()) return;
+    if ((visible && !away_) == isVisible()) return;
     if (visible && !openGLAvailable()) {
         qWarning("the floating orb needs OpenGL, which is not available here");
         return;
     }
     if (visible) {
-        resumePending_ = true;
-        show();
-        QTimer::singleShot(60, this, [this] { applyShape(); });
+        showInPlace();
     } else {
         hide();
         frameTimer_.stop();
         wakeTimer_.stop();
     }
+}
+
+// Shows the window where it is placed: some window managers place a window anew when it is mapped again, so a move that
+// is not ours within the first 60 ms is undone.
+void OrbWindow::showInPlace() {
+    const QPoint at = position();
+    const int placement = placements_;
+    resumePending_ = true;
+    show();
+    QTimer::singleShot(60, this, [this, at, placement] {
+        applyShape();
+        if (isVisible() && placement == placements_ && !dragging_ && !snap_ && !follow_.isActive() && position() != at) setPosition(at);
+    });
 }
 
 void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline) {
@@ -232,7 +256,7 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
         applyFlags();
     }
     opacity_ = config.opacity;
-    fadeWhenIdle_ = config.fadeWhenIdle;
+    idle_.configure(config.fadeWhenIdle, config.hideWhenIdle, now());
     const QStringList sources = config.sources.value_or(QStringList());
     const QString theme = config.titleTheme.value_or(QString());
     const bool changed = sources != sources_ || config.unit != unit_ || theme != theme_ || config.traffic != traffic_ ||
@@ -244,7 +268,7 @@ void OrbWindow::apply(const OrbConfig& config, const QString& name, int redline)
     traffic_ = config.traffic;
     gauge_.setRedline(redline);
     applyOpacity();
-    updateFade();
+    updateIdle();
     updateLabel();
     if (unitChanged) announceUnit();
     if (changed || readoutsChanged) requestFrame();
@@ -289,15 +313,41 @@ void OrbWindow::setHighlighted(bool on) {
     requestFrame();
 }
 
-// The orb's opacity, × 55 % while every source is unavailable, × the fade when idle (DESIGN 2, 2b).
+// The orb's opacity, × 55 % while every source is unavailable, × the fade or the hide when idle (DESIGN 2, 2b).
 void OrbWindow::applyOpacity() {
-    const double opacity = opacity_ * (unavailable_.isEmpty() ? 1.0 : 0.55) * fadeMotion_.factor();
-    if (std::abs(QWindow::opacity() - opacity) > 0.0005) setOpacity(opacity);
+    const double opacity = opacity_ * (unavailable_.isEmpty() ? 1.0 : 0.55) * fadeMotion_.factor() * hideMotion_.factor();
+    // Exact, so a fade ends at its value (the 0.12 s return's last step is smaller than any threshold).
+    if (QWindow::opacity() != opacity) setOpacity(opacity);
 }
 
-// Fade when idle (DESIGN 2): the orb's tier idle for 60 s; activity, hover or a drag brings it back at once.
-void OrbWindow::updateFade() {
-    if (idleFade_.update(fadeWhenIdle_, gauge_.tier() == Tier::Idle, hovered_ || dragging_, now())) fadeMotion_.setFaded(idleFade_.faded());
+// Fade and hide when idle (DESIGN 2): the orb's tier idle for 60 s. Activity brings it back, and so do hover and a drag
+// while it is on the screen.
+void OrbWindow::updateIdle(bool cut) {
+    const bool wasHidden = idle_.hidden();
+    if (!idle_.update(gauge_.tier() == Tier::Idle, hovered_ || dragging_, !away_, now())) return;
+    fadeMotion_.setFaded(idle_.faded(), cut);
+    if (idle_.hidden() == wasHidden) return;
+    if (!idle_.hidden()) comeBack();
+    hideMotion_.setHidden(idle_.hidden(), cut);
+    emit idleHiddenChanged(id_);
+}
+
+// Hide when idle faded the orb out (DESIGN 2): the window leaves the screen, so nothing is drawn and the pointer passes
+// through; its position, its place among the orbs and its sources stay.
+void OrbWindow::leave() {
+    if (away_ || !shown_ || !idle_.hidden()) return;
+    away_ = true;
+    hide();
+    frameTimer_.stop();
+    wakeTimer_.stop();
+    emit idleHiddenChanged(id_);
+}
+
+// Back on the screen at its place, at 0 until the return brings its own opacity.
+void OrbWindow::comeBack() {
+    if (!away_) return;
+    away_ = false;
+    if (shown_ && openGLAvailable()) showInPlace();
 }
 
 void OrbWindow::setDiameter(double diameter) {
@@ -467,7 +517,7 @@ void OrbWindow::applySnapshot(const QVariantMap& snap) {
         if (!row.value(QStringLiteral("status")).toString().isEmpty()) unavailableSources_.push_back(row.value(QStringLiteral("source")).toString());
     }
     gauge_.update(unavailable_.isEmpty() ? snap.value(QStringLiteral("liveOutput")).toDouble() : 0.0, t);
-    updateFade();
+    updateIdle();
     if (dimChanged) applyOpacity();
     const auto e = effects();
     bool events = false;
@@ -1024,7 +1074,7 @@ void OrbWindow::setHovered(bool hovered) {
     hovered_ = hovered;
     hoverChangedAt_ = now();
     setCursor(hovered ? Qt::OpenHandCursor : Qt::ArrowCursor);
-    updateFade();
+    updateIdle();
     emit hoverChanged(id_, hovered);
     requestFrame();
 }

@@ -18,6 +18,8 @@
 #include "orb/character/character_readings.hpp"
 #include "orb/gauge.hpp"
 #include "orb/idle_fade.hpp"
+#include "orb/idle_hide.hpp"
+#include "orb/orb_idle.hpp"
 #include "orb/readout.hpp"
 #include "orb/renderer.hpp"
 #include "orb/shared_layers.hpp"
@@ -64,8 +66,11 @@ public:
     void setCelebratePeaks(bool on) { celebratePeaks_ = on; }
     // What a living character reacts to (CHARACTERS 5, Behavior), the same object for the orb's life.
     const std::shared_ptr<CharacterLive>& characterLive() const { return characterLive_; }
-    // The master switch and the orb's own visibility together.
+    // The master switch and the orb's own visibility together. Turning it on brings back an orb hidden when idle.
     void setShown(bool shown);
+    // Hide when idle (DESIGN 2): fading out or off the screen; off the screen, where it keeps its place among the orbs.
+    bool idleHidden() const { return idle_.hidden() || away_; }
+    bool away() const { return away_; }
     // Settings highlight (DESIGN 2b Identity at a glance): an accent ring outside the disc.
     void setHighlighted(bool on);
     // The other orbs' discs, for orb-to-orb snapping and alignment.
@@ -111,6 +116,8 @@ signals:
     void dragChanged(const QString& id, bool dragging);
     void cornerRequested(const QString& id);
     void settingsRequested(const QString& id);
+    // Hide when idle began, ended, or the window left the screen (idleHidden(), away()).
+    void idleHiddenChanged(const QString& id);
 
 protected:
     void initializeGL() override;
@@ -156,7 +163,11 @@ private:
     void applyFlags();
     void applyShape();
     void applyOpacity();
-    void updateFade();
+    // `cut`: the orb was shown again, so no motion.
+    void updateIdle(bool cut = false);
+    void leave();
+    void comeBack();
+    void showInPlace();
     void setStyle(const QString& style);
     void setDiameter(double diameter);
     // `guides` receives the alignment guides (facing disc edges) of the snapped position.
@@ -286,9 +297,11 @@ private:
     bool forcedDark_ = false;
     bool shown_ = false;
     double opacity_ = 1;
-    bool fadeWhenIdle_ = false;
-    IdleFade idleFade_;
+    OrbIdle idle_;
     IdleFadeMotion fadeMotion_{[this] { applyOpacity(); }};
+    IdleHideMotion hideMotion_{[this] { applyOpacity(); }, [this] { leave(); }};
+    bool away_ = false;
+    int placements_ = 0;
     QStringList sources_;  // empty: all sources
     QString unit_ = QStringLiteral("tokens");
     QString theme_;

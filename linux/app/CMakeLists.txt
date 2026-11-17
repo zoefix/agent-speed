@@ -73,11 +73,13 @@ qt_add_executable(agent-speed
     src/orb/color.cpp
     src/orb/gauge.cpp
     src/orb/idle_fade.cpp
+    src/orb/idle_hide.cpp
     src/orb/led_math.cpp
     src/orb/led_style.cpp
     src/orb/liquid_style.cpp
     src/orb/minimal_style.cpp
     src/orb/needle_style.cpp
+    src/orb/orb_idle.cpp
     src/orb/orb_window.cpp
     src/orb/align_guide.cpp
     src/orb/preview.cpp

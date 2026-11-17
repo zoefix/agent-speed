@@ -546,6 +546,15 @@ SettingsPage {
             }
         }
         SettingsRow {
+            label: S.tr2(S.rev, "settings.orb.hideIdle")
+            caption: S.tr2(S.rev, "settings.orb.hideIdleHint")
+            ToggleSwitch {
+                label: S.tr2(S.rev, "settings.orb.hideIdle")
+                checked: page.current ? page.current.hideWhenIdle : false
+                onToggled: (on) => page.set("hideWhenIdle", on)
+            }
+        }
+        SettingsRow {
             label: ""
             divider: false
             PillButton {

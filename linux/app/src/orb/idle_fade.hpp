@@ -14,6 +14,9 @@ public:
 
     // The window's state at `now` (seconds on a monotonic clock); true when it fades or comes back.
     bool update(bool enabled, bool idle, bool engaged, double now);
+    // The 60 s start again from `now` (an orb's hide when idle switch changed or it was shown again); the next update
+    // applies it.
+    void rearm(double now) { lastActive_ = now; }
     bool faded() const { return faded_; }
 
 private:

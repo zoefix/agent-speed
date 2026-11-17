@@ -273,6 +273,7 @@ QVariantList OrbManager::list() const {
         m.insert(QStringLiteral("alwaysOnTop"), c.alwaysOnTop);
         m.insert(QStringLiteral("clickThrough"), c.clickThrough);
         m.insert(QStringLiteral("fadeWhenIdle"), c.fadeWhenIdle);
+        m.insert(QStringLiteral("hideWhenIdle"), c.hideWhenIdle);
         m.insert(QStringLiteral("traffic"), c.traffic);
         m.insert(QStringLiteral("unit"), c.unit);
         m.insert(QStringLiteral("showName"), c.showName ? QVariant(*c.showName) : QVariant());
@@ -362,6 +363,8 @@ void OrbManager::sync() {
             });
             connect(window, &QWindow::xChanged, this, [this] { plateTimer_.start(0); });
             connect(window, &QWindow::yChanged, this, [this] { plateTimer_.start(0); });
+            // Hide when idle (DESIGN 2): the name plate and the source chip go and come back with the orb.
+            connect(window, &orb::OrbWindow::idleHiddenChanged, this, [this] { plateTimer_.start(0); });
             created.push_back(c.id);
         }
         syncWindow(c, orb);
@@ -492,6 +495,8 @@ void OrbManager::set(const QString& id, const QString& key, const QVariant& valu
         c.clickThrough = value.toBool();
     } else if (key == QLatin1String("fadeWhenIdle")) {
         c.fadeWhenIdle = value.toBool();
+    } else if (key == QLatin1String("hideWhenIdle")) {
+        c.hideWhenIdle = value.toBool();
     } else if (key == QLatin1String("visible")) {
         c.visible = value.toBool();
     } else if (key == QLatin1String("traffic")) {
@@ -848,12 +853,13 @@ void OrbManager::placeAll() {
     layoutPlates();
 }
 
+// The discs on the screen, and those of orbs hidden when idle: they keep their place (DESIGN 2).
 std::vector<orb::Disc> OrbManager::discs(const QString& except) const {
     std::vector<orb::Disc> out;
     for (const auto& c : store_.orbs()) {
         if (c.id == except) continue;
         const auto it = orbs_.find(c.id);
-        if (it == orbs_.end() || !it->second.window->isVisible()) continue;
+        if (it == orbs_.end() || !(it->second.window->isVisible() || it->second.window->away())) continue;
         out.push_back({it->second.window->discCenter(), c.footprintDiameter() / 2});
     }
     return out;
@@ -949,7 +955,7 @@ void OrbManager::layoutPlates() {
         if (it == orbs_.end()) continue;
         auto& orb = it->second;
         auto* window = orb.window.get();
-        const bool visible = window->isVisible();
+        const bool visible = window->isVisible() && !window->idleHidden();
         const bool plate = platesShown(c.id);
         const bool chipWanted = visible && (window->hovered() || window->dragging() || now < orb.chipUntil);
         const bool chip = chipWanted && (count() > 1 || !c.tracksAll() || !c.tracksAllHosts());

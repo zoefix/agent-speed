@@ -136,6 +136,7 @@ if(AGENTSPEED_BUILD_APP)
         app/devin_settings_test.cpp
         app/lan_loopback_test.cpp
         app/orb_character_test.cpp
+        app/orb_hide_idle_test.cpp
         app/orb_size_test.cpp
         app/qoder_settings_test.cpp
         app/quota_transport_test.cpp
@@ -157,6 +158,8 @@ if(AGENTSPEED_BUILD_APP)
         ../app/src/orb/character/character_quota.cpp
         ../app/src/orb/character/character_readings.cpp
         ../app/src/orb/idle_fade.cpp
+        ../app/src/orb/idle_hide.cpp
+        ../app/src/orb/orb_idle.cpp
         ../app/src/orbs/orbs_store.cpp
         ../app/src/orbs/size_slider_action.cpp
         ../app/src/preferences.cpp
