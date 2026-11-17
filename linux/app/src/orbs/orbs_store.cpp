@@ -53,6 +53,7 @@ OrbConfig OrbConfig::fromJson(const QJsonObject& o) {
     c.alwaysOnTop = o.value(QStringLiteral("alwaysOnTop")).toBool(true);
     c.clickThrough = o.value(QStringLiteral("clickThrough")).toBool(false);
     c.fadeWhenIdle = o.value(QStringLiteral("fadeWhenIdle")).toBool(false);
+    c.hideWhenIdle = o.value(QStringLiteral("hideWhenIdle")).toBool(false);
     c.visible = o.value(QStringLiteral("visible")).toBool(true);
     c.redlineOutput = optionalInt(o.value(QStringLiteral("redlineOutput")));
     c.redlineTotal = optionalInt(o.value(QStringLiteral("redlineTotal")));
@@ -113,6 +114,7 @@ OrbConfig OrbConfig::childOf(const OrbConfig& from, const QString& id) {
     c.alwaysOnTop = from.alwaysOnTop;
     c.clickThrough = from.clickThrough;
     c.fadeWhenIdle = from.fadeWhenIdle;
+    c.hideWhenIdle = from.hideWhenIdle;
     c.titleTheme = from.titleTheme;
     c.unit = from.unit;
     c.traffic = from.traffic;
@@ -138,6 +140,7 @@ QJsonObject OrbConfig::toJson() const {
     o.insert(QStringLiteral("alwaysOnTop"), alwaysOnTop);
     o.insert(QStringLiteral("clickThrough"), clickThrough);
     o.insert(QStringLiteral("fadeWhenIdle"), fadeWhenIdle);
+    o.insert(QStringLiteral("hideWhenIdle"), hideWhenIdle);
     o.insert(QStringLiteral("visible"), visible);
     o.insert(QStringLiteral("redlineOutput"), json(redlineOutput));
     o.insert(QStringLiteral("redlineTotal"), json(redlineTotal));

@@ -23,6 +23,8 @@ struct OrbConfig {
     bool alwaysOnTop = true;
     bool clickThrough = false;
     bool fadeWhenIdle = false;
+    // DESIGN 2 "hide when idle": an idle orb leaves the screen until its agents work again. Never written to `visible`.
+    bool hideWhenIdle = false;
     bool visible = true;
     std::optional<int> redlineOutput, redlineTotal;
     std::optional<QString> titleTheme;

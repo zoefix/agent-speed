@@ -100,6 +100,19 @@ TEST(IdleFadeRule, SwitchingItOffRestores) {
     EXPECT_FALSE(fade.update(false, true, false, 500));
 }
 
+TEST(IdleFadeRule, RearmingStartsTheSixtySecondsAgain) {
+    IdleFade fade;
+    fade.update(true, true, false, 0);
+    fade.rearm(50);
+    EXPECT_FALSE(fade.update(true, true, false, 60));
+    EXPECT_FALSE(fade.update(true, true, false, 109.9));
+    EXPECT_TRUE(fade.update(true, true, false, 110));
+
+    fade.rearm(200);
+    EXPECT_TRUE(fade.update(true, true, false, 200)) << "a faded window comes back";
+    EXPECT_FALSE(fade.faded());
+}
+
 TEST(IdleFadeMotion, FadesOverSixTenthsOfASecondAndComesBackAtOnce) {
     int applied = 0;
     IdleFadeMotion motion([&] { ++applied; });
