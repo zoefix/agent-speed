@@ -437,8 +437,11 @@ back), and its name plate, source chip and character cards go with it. It keeps 
 placement, snapping and magnets, and its sources keep being followed. It returns at its place with its own opacity,
 over 0.12 s, on activity (the orb's tier leaves idle); turning this switch off, or turning the orb's `visible` or the
 master switch on (in Settings or the quick menu), also brings it back and starts the 60 s again. Reduce
-Motion: both changes are cuts. With fade when idle on as well, hiding replaces the fade (no 45 % step). Hiding is
-never written to `visible`: an orb the user hid stays hidden, and the master switch hides every orb as before.
+Motion: both changes are cuts. With fade when idle on as well, hiding replaces the fade (no 45 % step). Turning this
+switch on starts the 60 s afresh: an orb that is already idle stays (at its full opacity, even where the fade had
+dimmed it) until then. During the 0.6 s fade a hover or a drag brings it back, as for the fade; once it has left the
+screen nothing under the pointer does. Hiding is never written to `visible`: an orb the user hid stays hidden, and
+the master switch hides every orb as before.
 
 Hover: the orb scales to 1.03 (spring), the title label crossfades to a compact info line
 (`今日 1.2M · 3 個 agent`, counted over the orb's sources), and the cursor shows it is draggable. An orb tracking a
