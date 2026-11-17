@@ -87,7 +87,7 @@ struct OrbHideWhenIdleWindowTests {
     }
 
     /// Waits for the window animations, which run on the main thread and end later while other tests keep it busy.
-    static func waitUntil(timeout: Double = 5, _ condition: () -> Bool) async throws {
+    static func waitUntil(timeout: Double = 15, _ condition: () -> Bool) async throws {
         let deadline = Date().addingTimeInterval(timeout)
         while !condition(), Date() < deadline {
             try await Task.sleep(for: .milliseconds(50))

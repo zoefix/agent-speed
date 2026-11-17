@@ -256,7 +256,7 @@ public sealed class QoderFixtureTests : IDisposable
         using var store = HistoryStore.Open(_temp.Combine("history", "history.sqlite"));
         var analyzer = new HistoryAnalyzer(store);
         var report = analyzer.Run(locations, enabled, TimeZoneInfo.Utc, CancellationToken.None);
-        Assert.Equal(5, report.FilesAnalyzed);
+        Assert.Equal(6, report.FilesAnalyzed);
 
         var wanted = Expected.GetProperty("cli").GetProperty("history");
         var days = analyzer.Days(enabled);

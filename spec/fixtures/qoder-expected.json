@@ -996,21 +996,21 @@
   },
   "history": {
    "2026-10-22": {
-    "requests": 6,
-    "input": 91781,
-    "cachedInput": 87908,
+    "requests": 8,
+    "input": 152081,
+    "cachedInput": 146408,
     "cacheWriteInput": 2300,
-    "output": 672,
+    "output": 912,
     "reasoning": 0,
-    "measuredOutput": 672,
-    "measuredMs": 16693,
-    "agents": 3,
+    "measuredOutput": 912,
+    "measuredMs": 28405,
+    "agents": 4,
     "models": {
      "auto": {
-      "requests": 4,
-      "output": 567,
-      "measuredOutput": 567,
-      "measuredMs": 13653
+      "requests": 6,
+      "output": 807,
+      "measuredOutput": 807,
+      "measuredMs": 25365
      },
      "claude-sonnet-4-5": {
       "requests": 2,

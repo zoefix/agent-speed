@@ -2275,7 +2275,12 @@ analysis of Qoder CLI 1.1.86 and two signed-in runs); fixtures: `spec/tools/qode
   carries billing fields) — creates no response, but claims its key for the file (3.4), so a copy in another file is
   ignored; it applies steps 5 and 6 (final, phase), sets the agent's `model` to `message.model`, and consumes the
   pending start (`pendingStartMs = null`, `preciseStart = false`), so the next call starts at its own prompt or tool
-  result. With usage, tokens are Claude's (3.2) except `input`: Qoder's `input_tokens` already includes the cache read
+  result. The start it consumes stays with its key: the Qoder desktop app (0.5.13, runtime 1.1.86-hotfix.5.2) writes
+  one call as several lines of the same `message.id` (its thinking, text and tool_use blocks), only the last with
+  usage (issue #73), and the line of that key that creates the response takes the start the key's first line
+  consumed (null when it had none); while the key is still without usage, step 6's `generating` uses that start as
+  `inFlightStartMs`. A key's kept start is dropped once it creates its response. With usage, tokens are Claude's
+  (3.2) except `input`: Qoder's `input_tokens` already includes the cache read
   for its own models (research run: 20 341 input with 20 096 cached), so `input = input_tokens` when
   `input_tokens ≥ cache_read_input_tokens + cache_creation_input_tokens`, else Claude's sum (a custom Anthropic
   provider's own accounting). `firstMs` null (each call is one line, written when it ends); `fast` false.

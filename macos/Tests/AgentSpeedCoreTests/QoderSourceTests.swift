@@ -382,6 +382,31 @@ struct QoderSourceTests {
 
     // MARK: - Qoder CLI
 
+    /// The Qoder desktop app writes one call as several lines of one message id, only the last with usage (#73):
+    /// the response keeps the start its first line consumed, so it is measured.
+    @Test func aCallSplitAcrossLinesOfOneIdKeepsItsStart() throws {
+        let home = try TempDirectory()
+        let formatter = ISO8601DateFormatter()
+        formatter.formatOptions = [.withInternetDateTime, .withFractionalSeconds]
+        func at(_ ms: Int64) -> String { formatter.string(from: Date(timeIntervalSince1970: Double(ms) / 1000)) }
+        let now = Self.nowMs - 60_000
+        try home.write(".qoder/projects/-w-atlas/s2.jsonl", """
+            {"type":"user","cwd":"/w/atlas","entrypoint":"cli","uuid":"u1","message":{"role":"user","content":"Check"},"timestamp":"\(at(now))"}
+            {"type":"assistant","cwd":"/w/atlas","uuid":"u2","message":{"id":"c1","model":"auto","stop_reason":null,"content":[{"type":"thinking","thinking":"x"}]},"timestamp":"\(at(now + 9_010))"}
+            {"type":"assistant","cwd":"/w/atlas","uuid":"u3","message":{"id":"c1","model":"auto","stop_reason":null,"content":[{"type":"text","text":"y"}]},"timestamp":"\(at(now + 9_011))"}
+            {"type":"assistant","cwd":"/w/atlas","uuid":"u4","message":{"id":"c1","model":"auto","stop_reason":"tool_use","content":[{"type":"tool_use","id":"t1","name":"Read","input":{}}],"usage":{"input_tokens":120127,"output_tokens":2307,"cache_read_input_tokens":0,"cache_creation_input_tokens":0}},"timestamp":"\(at(now + 9_011))"}
+
+            """)
+        var configuration = MonitorConfiguration(enabledSources: [.qoderCli])
+        configuration.automaticRoots[.qoderCli] = [home.file(".qoder"), home.file(".qoder-cn")]
+        let session = TranscriptSession(configuration: configuration)
+        _ = session.seed(todayStartMs: Self.todayStartMs)
+        let response = try #require(session.responses.first)
+        #expect(session.responses.count == 1)
+        #expect(response.key == "qodercli:c1" && response.startMs == now && response.endMs == now + 9_011)
+        #expect(response.isMeasured && response.usage.output == 2_307)
+    }
+
     /// Qoder's own model keeps no usage: the session, its phase and model show, no tokens; a custom model's call counts.
     @Test func cliCallsWithoutUsageShowActivityButNoTokens() throws {
         let home = try TempDirectory()
