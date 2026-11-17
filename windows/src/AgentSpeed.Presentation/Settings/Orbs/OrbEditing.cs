@@ -222,6 +222,8 @@ public static class OrbEditing
 
     public static OrbsDocument SetFadeWhenIdle(OrbsDocument document, string id, bool value) => Update(document, id, o => o with { FadeWhenIdle = value });
 
+    public static OrbsDocument SetHideWhenIdle(OrbsDocument document, string id, bool value) => Update(document, id, o => o with { HideWhenIdle = value });
+
     public static OrbsDocument SetAllSpaces(OrbsDocument document, string id, bool value) => Update(document, id, o => o with { AllSpaces = value });
 
     public static OrbsDocument SetVisible(OrbsDocument document, string id, bool value) => Update(document, id, o => o with { Visible = value });
@@ -330,6 +332,7 @@ public static class OrbEditing
         AlwaysOnTop = template.AlwaysOnTop,
         ClickThrough = template.ClickThrough,
         FadeWhenIdle = template.FadeWhenIdle,
+        HideWhenIdle = template.HideWhenIdle,
         AllSpaces = template.AllSpaces,
         RedlineOutput = template.RedlineOutput,
         RedlineTotal = template.RedlineTotal,

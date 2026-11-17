@@ -632,6 +632,18 @@ internal sealed partial class OrbsPaneViewModel : ObservableObject
         }
     }
 
+    public bool HideWhenIdle
+    {
+        get => Orb?.HideWhenIdle ?? false;
+        set
+        {
+            if (SelectedId is { } id)
+            {
+                Update(d => OrbEditing.SetHideWhenIdle(d, id, value));
+            }
+        }
+    }
+
     public bool AdvancedExpanded { get => _advancedExpanded; set => Set(ref _advancedExpanded, value); }
 
     public string AdvancedSummary =>
@@ -923,6 +935,7 @@ internal sealed partial class OrbsPaneViewModel : ObservableObject
         OnPropertyChanged(nameof(AlwaysOnTop));
         OnPropertyChanged(nameof(ClickThrough));
         OnPropertyChanged(nameof(FadeWhenIdle));
+        OnPropertyChanged(nameof(HideWhenIdle));
         OnPropertyChanged(nameof(ShowNameAutoText));
         OnPropertyChanged(nameof(ShowNameIndex));
         OnPropertyChanged(nameof(NamePlaceholder));

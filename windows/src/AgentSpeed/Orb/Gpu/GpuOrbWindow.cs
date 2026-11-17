@@ -52,7 +52,9 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
     private bool _moving;
     private bool _following;
     private MotionFrames _frames;
-    private readonly IdleFade _idleFade = new();
+    private readonly OrbIdle _idle = new();
+    private bool _away;
+    private bool _leavePosted;
     private bool _hovering;
     private bool _discHover;
     private bool _plateHover;
@@ -116,11 +118,15 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
 
     public bool IsVisible => !_closed && _host.IsVisible;
 
+    public bool IsAway => _away;
+
     public double Opacity => _opacity;
 
     System.Windows.Automation.Provider.IRawElementProviderSimple? IOrbHostInput.AutomationProvider => _automation;
 
     public event EventHandler? OpacityChanged;
+
+    public event EventHandler? AwayChanged;
 
     public event EventHandler? DashboardRequested;
 
@@ -198,6 +204,10 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
         if (!_attachments.Contains(attachment))
         {
             _attachments.Add(attachment);
+            if (_away)
+            {
+                attachment.SetAway(true);
+            }
         }
     }
 
@@ -264,9 +274,10 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
         _host.Topmost = options.AlwaysOnTop;
         var clickThroughChanged = options.ClickThrough != _options.ClickThrough;
         _options = options;
-        if (!options.FadeWhenIdle)
+        var returning = _idle.Hidden;
+        if (_idle.Configure(options.FadeWhenIdle, options.HideWhenIdle, options.ReduceMotion, _clock()) && returning && !_idle.Hidden)
         {
-            _idleFade.Restore();
+            ComeBack();
         }
 
         ApplyOpacity();
@@ -364,10 +375,18 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
 
     public void NoteActivity(bool active)
     {
-        if (_idleFade.NoteActivity(active, _clock()))
+        var returning = _idle.Hidden;
+        if (!_idle.NoteActivity(active, _clock(), _options.ReduceMotion))
         {
-            ApplyOpacity();
+            return;
         }
+
+        if (returning)
+        {
+            ComeBack();
+        }
+
+        ApplyOpacity();
     }
 
     public void BringToFront()
@@ -939,18 +958,92 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
     private void Housekeeping()
     {
         _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
-        if (_idleFade.TryFade(_options.FadeWhenIdle, engaged: _surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, _clock()))
+        var now = _clock();
+
+        // The last frame of the hide normally takes the window off the screen; this covers a surface that drew no frames.
+        if (_idle.IsAway(now))
         {
+            Leave();
+            return;
+        }
+
+        if (_idle.Tick(engaged: _surface.Scene.HoverBlend >= 0.01, _options.ReduceMotion, now))
+        {
+            if (_idle.Hidden)
+            {
+                HideHint();
+            }
+
             ApplyOpacity();
         }
     }
 
     private void Restore()
     {
-        if (_idleFade.Restore())
+        if (_idle.Engage(_clock(), _options.ReduceMotion))
         {
             ApplyOpacity();
         }
+    }
+
+    /// <summary>
+    /// Hide when idle faded the orb out (DESIGN 2): the window leaves the screen with its plates, draws nothing and lets the
+    /// pointer through; its position, options and feed stay.
+    /// </summary>
+    private void Leave()
+    {
+        _leavePosted = false;
+        if (_away || _closed || !_idle.IsAway(_clock()))
+        {
+            return;
+        }
+
+        _away = true;
+        _housekeeping.Stop();
+        _passThroughPoll.Stop();
+        _passThrough = false;
+        _host.Transparent = _options.ClickThrough;
+        _hoverGrace?.Stop();
+        _discHover = false;
+        _plateHover = false;
+        SetUnitHover(false);
+        HideHint();
+        SetHover(false);
+        SetOpacity(0);
+        _surface.Visible = false;
+        _host.Hide();
+        foreach (var attachment in _attachments)
+        {
+            attachment.SetAway(true);
+        }
+
+        AwayChanged?.Invoke(this, EventArgs.Empty);
+    }
+
+    /// <summary>Back on the screen at its place, from 0 to its own opacity (the caller applies it).</summary>
+    private void ComeBack()
+    {
+        if (!_away || _closed)
+        {
+            return;
+        }
+
+        _away = false;
+        if (_hasCenter)
+        {
+            PlaceAt(_center);
+        }
+
+        _surface.Visible = true;
+        _host.Show();
+        _surface.Paused = WindowEffects.IsCloaked(_host.Handle);
+        _housekeeping.Start();
+        foreach (var attachment in _attachments)
+        {
+            attachment.SetAway(false);
+        }
+
+        AwayChanged?.Invoke(this, EventArgs.Empty);
     }
 
     private void ApplyOpacity()
@@ -959,8 +1052,8 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
         _surface.Kick();
     }
 
-    // × 55 % while every source is unavailable, × the idle fade.
-    private double CurrentOpacity(double now) => (_options.Dimmed ? 0.55 : 1) * _idleFade.Value(now);
+    // × 55 % while every source is unavailable, × the idle fade or hide.
+    private double CurrentOpacity(double now) => (_options.Dimmed ? 0.55 : 1) * _idle.Value(now);
 
     private void SetOpacity(double opacity)
     {
@@ -975,7 +1068,14 @@ internal sealed class GpuOrbWindow : IOrbWindow, IOrbHostInput, IOrbCharacterPoi
     {
         var opacity = CurrentOpacity(now);
         SetOpacity(opacity);
-        var demand = _idleFade.IsFading(now) ? FrameClass.Fps30 : FrameClass.None;
+        var demand = _idle.IsReturning(now) ? FrameClass.Fps60 : _idle.IsMoving(now) ? FrameClass.Fps30 : FrameClass.None;
+        if (!_away && !_leavePosted && _idle.IsAway(now))
+        {
+            // This frame draws the orb at 0; the window leaves once it is presented.
+            _leavePosted = true;
+            Dispatcher.CurrentDispatcher.BeginInvoke(DispatcherPriority.Normal, Leave);
+        }
+
         var scale = 1.0;
         var appear = now - _appearStart;
         if (double.IsFinite(_appearStart) && appear >= 0 && appear < 0.5)
