@@ -1,8 +1,8 @@
 {
   "_comment": "API list prices for API-equivalent costs (METRICS 9). USD per million tokens. Edit by hand: raise version by one, set updated and each changed entry's checked date, add tests for new id forms, run python3 spec/tools/prices.py. Apps sync this file from main daily (spec/NETWORK.md).",
   "schema": 1,
-  "version": 8,
-  "updated": "2026-11-10",
+  "version": 9,
+  "updated": "2026-11-17",
   "currency": "USD",
   "unit": "perMillionTokens",
   "providers": {
@@ -666,6 +666,88 @@
       "source": "https://www.anthropic.com/news/claude-3-family",
       "checked": "2026-10-22",
       "note": "Cache prices derived from the standard multipliers."
+    },
+    {
+      "id": "gpt-6.2-astra",
+      "provider": "openai",
+      "name": "GPT-6.2 Astra",
+      "status": "current",
+      "prices": {
+        "input": 8,
+        "cachedInput": 0.4,
+        "cacheWrite": 10,
+        "output": 40
+      },
+      "tiers": [
+        {
+          "above": 272000,
+          "input": 16,
+          "cachedInput": 0.8,
+          "cacheWrite": 20,
+          "output": 60
+        }
+      ],
+      "fast": {
+        "prices": {
+          "input": 16,
+          "cachedInput": 0.8,
+          "cacheWrite": 20,
+          "output": 80
+        },
+        "tiers": [
+          {
+            "above": 272000,
+            "input": 32,
+            "cachedInput": 1.6,
+            "cacheWrite": 40,
+            "output": 120
+          }
+        ]
+      },
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-17",
+      "note": "Cache writes (30-minute lifetime) cost 1.25x input; 12-hour writes (2.5x) are not separated in logs and are priced as 30-minute writes. Ultrafast mode (its own prices, a promotion through 2027-02-28) is not recorded in logs."
+    },
+    {
+      "id": "gpt-6.2-sol",
+      "provider": "openai",
+      "name": "GPT-6.2 Sol",
+      "status": "current",
+      "prices": {
+        "input": 2,
+        "cachedInput": 0.1,
+        "cacheWrite": 2.5,
+        "output": 10
+      },
+      "tiers": [
+        {
+          "above": 272000,
+          "input": 4,
+          "cachedInput": 0.2,
+          "cacheWrite": 5,
+          "output": 15
+        }
+      ],
+      "fast": {
+        "prices": {
+          "input": 4,
+          "cachedInput": 0.2,
+          "cacheWrite": 5,
+          "output": 20
+        },
+        "tiers": [
+          {
+            "above": 272000,
+            "input": 8,
+            "cachedInput": 0.4,
+            "cacheWrite": 10,
+            "output": 30
+          }
+        ]
+      },
+      "source": "https://developers.openai.com/api/docs/pricing",
+      "checked": "2026-11-17",
+      "note": "Cache writes (30-minute lifetime) cost 1.25x input; 12-hour writes (2.5x) are not separated in logs and are priced as 30-minute writes. Ultrafast mode (its own prices, a promotion through 2027-02-28) is not recorded in logs."
     },
     {
       "id": "gpt-6-astra",
@@ -4602,6 +4684,30 @@
     {
       "model": "gpt-6.1-sol",
       "expect": "gpt-6.1-sol"
+    },
+    {
+      "model": "gpt-6.2-astra",
+      "expect": "gpt-6.2-astra"
+    },
+    {
+      "model": "openai/gpt-6.2-astra",
+      "expect": "gpt-6.2-astra"
+    },
+    {
+      "model": "gpt-6.2-astra-fast",
+      "expect": "gpt-6.2-astra fast"
+    },
+    {
+      "model": "gpt-6.2-sol",
+      "expect": "gpt-6.2-sol"
+    },
+    {
+      "model": "openai/gpt-6.2-sol",
+      "expect": "gpt-6.2-sol"
+    },
+    {
+      "model": "gpt-6.2-sol-fast",
+      "expect": "gpt-6.2-sol fast"
     },
     {
       "model": "gpt-6.1-terra",
