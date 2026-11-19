@@ -302,6 +302,7 @@ White-hot core for highlights: `#FFF7D6`. With overdrive `o > 0`, highlights ble
 | Qoder IDE | `#B3329D` orchid |
 | Qoder CLI | `#7E61B6` heather |
 | CodeBuddy Code | `#18AB06` leaf |
+| OpenBitFun | `#F800F8` fuchsia |
 
 Pink is `#EC4899`, not the lighter `#F472B6` (too close to coral and lilac); lime is `#84CC16`, not the lighter `#A3E635`, which nearly vanishes on light backgrounds.
 
@@ -2422,6 +2423,7 @@ rows, section 10); the file name is `agent-speed-history-<code>-<first date>-<la
 | `qoder` | `qoder` |
 | `qoderCli` | `qoder-cli` |
 | `codebuddyCode` | `codebuddy-code` |
+| `openbitfun` | `openbitfun` |
 
 Empty state (the range has neither token usage nor agent traffic, section 10): centered muted gauge glyph,
 `history.empty` and `history.empty.hint`. First launch after upgrading:
@@ -2895,8 +2897,10 @@ with Mica). Sections:
     `settings.sources.workbuddyHint` and `settings.sources.workbuddyAiHint`, which also say that cloud conversations are
     not counted); CodeBuddy Code its main session files like WorkBuddy (METRICS 4.20; a config folder without `projects`
     is not found; caption `settings.sources.codebuddyCodeHint`, which also says that the CodeBuddy IDE and plugins are
-    not read and that the CLI deletes sessions after 30 days by default). Pi, OpenClaw, Hermes Agent, Factory Droid,
-    Devin, Qoder IDE, Qoder CLI and CodeBuddy Code sit in source order after Grok Build. Devin's
+    not read and that the CLI deletes sessions after 30 days by default). OpenBitFun counts today's main sessions
+    (METRICS 4.21). The shared hint describes the default usage ledger, round timing and the diagnostic trace
+    fallback (`settings.sources.openbitfunHint`). Pi, OpenClaw, Hermes Agent, Factory Droid,
+    Devin, Qoder IDE, Qoder CLI, CodeBuddy Code and OpenBitFun sit in source order after Grok Build. Devin's
     automatic entry names the CLI folder that holds `sessions.db` (`~/.local/share/devin/cli`); with `$CHISEL_SESSION_DB`
     it names that database's folder and is found while that file exists, whatever its name.
   - Add Folder… accepts what METRICS 2 names for the source: omp one `sessions` folder; Pi one folder
@@ -2906,7 +2910,8 @@ with Mica). Sections:
     folder (`mac.settings.sources.chooseDevin` on macOS); Qoder IDE the IDE's data folder, its `SharedClientCache`
     folder or the folder that holds `local.db` (`mac.settings.sources.chooseQoder`); Qoder CLI a config folder (`.qoder`)
     or its `projects` folder (`mac.settings.sources.chooseQoderCli`); CodeBuddy Code a config folder (`.codebuddy`) or
-    its `projects` folder (`mac.settings.sources.chooseCodebuddyCode`);
+    its `projects` folder (`mac.settings.sources.chooseCodebuddyCode`); OpenBitFun its data folder (`.openbitfun`)
+    or its `projects` folder (`mac.settings.sources.chooseOpenBitFun`);
     Antigravity one store folder or its `conversations` folder;
     WorkBuddy the data folder or its `projects` folder.
   - **Storage**: one settings value `sourceLocations`, the JSON document

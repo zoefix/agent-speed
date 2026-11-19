@@ -194,6 +194,12 @@ TEST(RemoteDecoder, MissingAndMistypedFields) {
     EXPECT_TRUE(invalid(replace(remote_test::agentLine("/a"), R"("source":"codex")", R"("source":"unknownTool")")));
     EXPECT_TRUE(invalid(replace(remote_test::responseLine("k", "/a", kNow), R"("final":true)", R"("final":null)")));
     EXPECT_TRUE(invalid(replace(remote_test::responseLine("k", "/a", kNow), R"("output":100)", R"("output":"100")")));
+    auto withdrawal = remote_test::responseLine("k", "/a", kNow);
+    withdrawal = replace(withdrawal, R"("source":"codex")", R"("source":"openbitfun")");
+    withdrawal = replace(withdrawal, R"("requestCount":1)", R"("requestCount":0,"traceRoundKey":"openbitfun:round:s:t:r")");
+    const auto record = std::get<RemoteResponse>(decoded(withdrawal)).record;
+    EXPECT_EQ(record.requestCount, 0);
+    EXPECT_EQ(record.traceRoundKey, "openbitfun:round:s:t:r");
     EXPECT_TRUE(invalid(replace(remote_test::responseLine("k", "/a", kNow), R"("requestCount":1)", R"("requestCount":0)")));
     EXPECT_TRUE(invalid(replace(remote_test::responseLine("k", "/a", kNow), R"("key":"k")", R"("key":"")")));
     EXPECT_TRUE(invalid(R"({"t":"agentRemoved","id":""})"));

@@ -17,6 +17,7 @@ struct Stat {
     bool directory = false;
     bool regular = false;
     bool link = false;
+    std::int64_t contentSignature = 0;
 };
 
 struct Entry {

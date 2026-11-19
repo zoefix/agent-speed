@@ -2,7 +2,10 @@ using System.IO.Enumeration;
 
 namespace AgentSpeed.Core.IO;
 
-internal readonly record struct DiscoveredFile(string Path, long Length, DateTime LastWriteUtc);
+internal readonly record struct DiscoveredFile(string Path, long Length, DateTime LastWriteUtc)
+{
+    public long ContentSignature { get; init; }
+}
 
 /// <summary>Which file names a root's transcripts have (METRICS 2).</summary>
 internal enum TranscriptNaming
@@ -51,6 +54,7 @@ internal enum TranscriptNaming
 
     /// <summary><c>local.db</c> and its WAL in one folder (Qoder IDE, METRICS 4.18); not enumerated.</summary>
     QoderDatabase,
+    OpenBitFunSession,
 }
 
 /// <summary>Recursive transcript enumeration that never follows reparse points or symlinks (METRICS 2).</summary>
@@ -74,6 +78,7 @@ internal static class TranscriptDiscovery
                 or TranscriptNaming.HermesLog or TranscriptNaming.DevinDatabase or TranscriptNaming.QoderDatabase => false,
             TranscriptNaming.KimiSession => fileName.SequenceEqual("wire.jsonl"),
             TranscriptNaming.GrokBuildSession => fileName.SequenceEqual("updates.jsonl"),
+            TranscriptNaming.OpenBitFunSession => fileName.SequenceEqual("metadata.json"),
             TranscriptNaming.OmpSession or TranscriptNaming.PiSession => Omp.OmpDiscovery.IsSessionFileName(fileName),
             TranscriptNaming.AntigravityDatabase => Antigravity.AntigravityPaths.IsDatabaseName(fileName),
             TranscriptNaming.WorkBuddySession => WorkBuddy.WorkBuddyDiscovery.IsSessionFileName(fileName),
@@ -169,14 +174,21 @@ internal static class TranscriptDiscovery
                     !entry.IsDirectory
                     && (entry.Attributes & FileAttributes.ReparsePoint) == 0
                     && IsTranscriptName(entry.FileName, naming),
-                ShouldRecursePredicate = static (ref FileSystemEntry entry) =>
-                    (entry.Attributes & FileAttributes.ReparsePoint) == 0,
+                ShouldRecursePredicate = (ref FileSystemEntry entry) =>
+                {
+                    if ((entry.Attributes & FileAttributes.ReparsePoint) != 0) return false;
+                    if (naming != TranscriptNaming.OpenBitFunSession) return true;
+                    var parts = Path.GetRelativePath(root, entry.ToFullPath()).Split(Path.DirectorySeparatorChar);
+                    return parts.Length <= 3 && parts.All(part => !part.StartsWith('.'))
+                        && (parts.Length < 2 || parts[1] == "sessions");
+                },
             };
 
             foreach (var file in enumerable)
             {
                 cancellationToken.ThrowIfCancellationRequested();
-                files.Add(file);
+                if (naming != TranscriptNaming.OpenBitFunSession) files.Add(file);
+                else if (IsAcceptablePath(root, file.Path, naming)) files.Add(OpenBitFun.OpenBitFunFiles.Stat(file.Path));
                 if (++scanned >= scanCap)
                 {
                     break;
@@ -256,6 +268,12 @@ internal static class TranscriptDiscovery
         if (Parsing.PathText.ComponentCount(relative) > MaxDepth + 1)
         {
             return false;
+        }
+
+        if (naming == TranscriptNaming.OpenBitFunSession)
+        {
+            var parts = relative.Split(['/', '\\'], StringSplitOptions.RemoveEmptyEntries);
+            if (parts.Length != 4 || parts[1] != "sessions" || parts.Any(part => part.StartsWith('.'))) return false;
         }
 
         try

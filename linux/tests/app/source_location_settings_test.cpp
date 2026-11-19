@@ -149,11 +149,12 @@ TEST_F(SourceLocationSettings, EntriesAsSettingsShowsThem) {
     EXPECT_FALSE(missing.value(QStringLiteral("canReveal")).toBool());
     EXPECT_EQ(missing.value(QStringLiteral("key")).toString(), QStringLiteral("path:/nonexistent/sessions"));
     const auto groups = view.groups();
-    ASSERT_EQ(groups.size(), 20);
+    ASSERT_EQ(groups.size(), 21);
     EXPECT_EQ(groups[0].toMap().value(QStringLiteral("list")).toString(), QStringLiteral("codex"));
     EXPECT_EQ(groups[1].toMap().value(QStringLiteral("sources")).toStringList(), QStringList{QStringLiteral("claudeCode")});
     EXPECT_EQ(groups[13].toMap().value(QStringLiteral("list")).toString(), QStringLiteral("openclaw"));
     EXPECT_TRUE(groups[13].toMap().value(QStringLiteral("acceptsFile")).toBool());
+    EXPECT_EQ(groups[20].toMap().value(QStringLiteral("list")).toString(), QStringLiteral("openbitfun"));
     EXPECT_EQ(view.displayPath(QtEnvironment::home() + QStringLiteral("/work")), QStringLiteral("~/work"));
 }
 

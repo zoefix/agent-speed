@@ -25,6 +25,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     case qoderCli
     /// CodeBuddy Code: the WorkBuddy format in the standalone CLI's own folder (METRICS 4.20).
     case codebuddyCode
+    case openbitfun
 
     /// Nil for sources that are not read from transcript files: OpenCode, ZCode and OpenClaw keep databases
     /// (`OpencodeSource`, `ZcodeSource`, `OpenClawSource`); Hermes Agent's log sets share one state per folder
@@ -43,6 +44,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: self = .grokBuild
         case .pi: self = .pi
         case .droid: self = .droid
+        case .openbitfun: self = .openbitfun
         case .qoderCli: self = .qoderCli
         case .codebuddyCode: self = .codebuddyCode
         case .opencode, .zcode, .openclaw, .hermes, .devin, .qoder: return nil
@@ -64,6 +66,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .grokBuild: [.grokBuild]
         case .pi: [.pi]
         case .droid: [.droid]
+        case .openbitfun: [.openbitfun]
         case .qoderCli: [.qoderCli]
         case .codebuddyCode: [.codebuddyCode]
         }
@@ -83,6 +86,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
         case .kimi: .kimiSession
         case .grokBuild: .grokBuildSession
         case .pi: .piSession
+        case .openbitfun: .openbitfunSession
         case .droid: .droidSession
         }
     }
@@ -98,6 +102,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
 
     /// The stat that identifies one transcript of this family; nil unless it is a regular file.
     func stat(_ path: String) -> FileStat? {
+        if self == .openbitfun { return OpenBitFunPaths.stat(path) }
         if isDatabase { return FileStat.databaseStat(path) }
         if self == .grokBuild { return GrokBuildParser.stat(path) }
         if self == .droid { return DroidPaths.stat(path) }
@@ -108,6 +113,7 @@ enum TranscriptFamily: String, CaseIterable, Sendable {
     /// The transcript a changed path belongs to: an Antigravity `<id>.db-wal` stands for `<id>.db`, a Factory Droid
     /// `<id>.settings.json` for `<id>.jsonl`.
     func transcriptPath(forChanged path: String) -> String {
+        if self == .openbitfun { return OpenBitFunPaths.metadata(forChanged: path) }
         if self == .droid { return DroidPaths.transcriptPath(ofSidecar: path) ?? path }
         if self == .grokBuild, (path as NSString).lastPathComponent == "summary.json" {
             return ((path as NSString).deletingLastPathComponent as NSString).appendingPathComponent("updates.jsonl")
@@ -143,6 +149,7 @@ enum DecodedLines: Sendable {
     case kimi([LineExtraction<KimiLine>])
     case grokBuild([LineExtraction<GrokBuildLine>])
     case pi([LineExtraction<PiLine>])
+    case openbitfun(OpenBitFunBatch)
     /// With where the reader began (METRICS 4.16 Allocation).
     case droid([DroidLineRead], start: Int64?)
 }
@@ -162,6 +169,7 @@ struct TranscriptParser: Sendable {
     private var grokBuild: GrokBuildParser?
     private var pi: PiParser?
     private var droid: DroidParser?
+    private var openbitfun: OpenBitFunParser?
 
     /// `root` is the root folder the file was discovered under (omp and WorkBuddy derive `isSubagent` from it,
     /// METRICS 4.7, 4.9).
@@ -181,12 +189,13 @@ struct TranscriptParser: Sendable {
         case .kimi: kimi = KimiParser(agentId: agentId, fileID: fileID)
         case .grokBuild: grokBuild = GrokBuildParser(agentId: agentId, fileID: fileID)
         case .pi: pi = PiParser(agentId: agentId, fileID: fileID)
+        case .openbitfun: openbitfun = OpenBitFunParser(agentId: agentId, fileID: fileID)
         case .droid: droid = DroidParser(agentId: agentId, fileID: fileID)
         }
     }
 
     var state: AgentState {
-        codex?.state ?? claude?.state ?? dsh?.state ?? gemini?.state ?? omp?.state ?? workbuddy?.state ?? kimi?.state ?? grokBuild?.state ?? pi?.state ?? droid?.state ?? antigravity!.state
+        codex?.state ?? claude?.state ?? dsh?.state ?? gemini?.state ?? omp?.state ?? workbuddy?.state ?? kimi?.state ?? grokBuild?.state ?? pi?.state ?? droid?.state ?? openbitfun?.state ?? antigravity!.state
     }
 
     /// An Antigravity database without the expected tables (`unsupportedFormat`).
@@ -204,7 +213,7 @@ struct TranscriptParser: Sendable {
             .gemini(gemini?.isDocument == true ? GeminiLineExtractor.extractDocument(bytes) : GeminiLineExtractor.extract(bytes))
         case .omp: .omp(OmpLineExtractor.extract(bytes))
         case .workbuddy, .workbuddyAi, .codebuddyCode: .workbuddy(WorkBuddyLineExtractor.extract(bytes))
-        case .antigravity: nil
+        case .antigravity, .openbitfun: nil
         case .kimi: .kimi(KimiLineExtractor.extract(bytes))
         case .grokBuild: .grokBuild(GrokBuildLine.extract(bytes))
         case .pi: .pi(PiLineExtractor.extract(bytes))
@@ -243,6 +252,7 @@ struct TranscriptParser: Sendable {
         grokBuild?.noteMalformedLine()
         pi?.noteMalformedLine()
         droid?.noteMalformedLine()
+        openbitfun?.noteMalformedLine()
     }
 
     /// `tools`: the line's tool calls and results (METRICS 6.10).
@@ -319,6 +329,7 @@ struct TranscriptParser: Sendable {
                 pi?.consume(extraction, tools: toolsOf(index), deduper: &deduper, emit: emit)
                 drainToolCompletions(onToolResult)
             }
+        case .openbitfun(let batch): openbitfun?.consume(batch, deduper: &deduper, emit: emit)
         case .droid(let lines, let start):
             droid?.noteReadStart(start)
             for (index, line) in lines.enumerated() {
@@ -433,6 +444,9 @@ enum TranscriptDecoder {
             return extract(GrokBuildLine.extract, reader: &reader, family: family, tools: false, wrap: DecodedLines.grokBuild)
         case .pi:
             return extract(PiLineExtractor.extract, reader: &reader, family: family, tools: readsTools, wrap: DecodedLines.pi)
+        case .openbitfun:
+            let (batch, read) = reader.readOpenBitFun()
+            return Output(lines: .openbitfun(batch), read: read)
         case .droid:
             var lines: [DroidLineRead] = []
             var toolLines: [[ToolEvent]] = []

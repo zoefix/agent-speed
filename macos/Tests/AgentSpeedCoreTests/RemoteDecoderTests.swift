@@ -259,6 +259,12 @@ struct RemoteDecoderTests {
         #expect(invalid(#"{"t":"clock","id":-9007199254740993,"now":1780000000000}"#)?.kind == .outOfRange)
         #expect(invalid(#"{"t":"clock","id":123456789012345678901234567890,"now":1780000000000}"#)?.kind == .outOfRange)
         #expect(invalid(#"{"t":"historyDone","days":-1,"analyzed":0}"#)?.kind == .outOfRange)
+        guard case .response(let withdrawal) = message(responseLine {
+            $0["source"] = "openbitfun"
+            $0["requestCount"] = 0
+            $0["traceRoundKey"] = "openbitfun:round:session:turn:round"
+        }) else { return }
+        #expect(withdrawal.record.requestCount == 0 && withdrawal.record.traceRoundKey == "openbitfun:round:session:turn:round")
         #expect(invalid(responseLine { $0["requestCount"] = 0 })?.kind == .outOfRange)
         #expect(invalid(responseLine { $0["requestCount"] = 100_001 })?.kind == .outOfRange)
     }

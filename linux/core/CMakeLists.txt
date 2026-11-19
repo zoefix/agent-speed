@@ -43,6 +43,8 @@ add_library(agentspeed_base STATIC
     "${AGENTSPEED_CURRENCIES_CPP}"
     src/actions.cpp
     src/antigravity.cpp
+    src/openbitfun.cpp
+    src/openbitfun_ledger.cpp
     src/board.cpp
     src/claude_parser.cpp
     src/codebuddy_paths.cpp

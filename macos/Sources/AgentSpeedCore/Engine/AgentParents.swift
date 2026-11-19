@@ -42,7 +42,7 @@ enum AgentParents {
             if member.family == .pi { piIds.insert(member.id) }
             if member.family == .droid { droidIds.insert(member.id) }
             if member.family.writesWorkBuddyFormat { workbuddyIds[member.family, default: []].insert(member.id) }
-            guard member.family == .codex || member.family == .dsh,
+            guard member.family == .codex || member.family == .dsh || member.family == .openbitfun,
                   let thread = member.thread, let threadId = thread.id else { continue }
             if let earliest = threads[member.family]?[threadId],
                earliest.createdMs < thread.createdMs
@@ -55,7 +55,7 @@ enum AgentParents {
         for member in members {
             let parent: String?
             switch member.family {
-            case .codex, .dsh:
+            case .codex, .dsh, .openbitfun:
                 parent = member.thread?.parentId.flatMap { threads[member.family]?[$0]?.id }
             case .claude, .qoderCli:
                 parent = claudeParentPath(of: member.id).flatMap { ids.contains($0) ? $0 : nil }

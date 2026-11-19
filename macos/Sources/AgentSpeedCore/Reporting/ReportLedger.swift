@@ -7,20 +7,13 @@ struct ReportLedger: Sendable {
 
     /// The values a counted response has added so far, field by field.
     private struct Reported: Sendable {
-        var requests: Int64
-        var unpricedRequests: Int64
-        var output: Int64
-        var input: Int64
-        var cachedInput: Int64
-        var cacheWriteInput: Int64
-        var reasoning: Int64
-        var measuredOutput: Int64
-        var measuredMs: Int64
-        var costMicroUsd: Int64
+        var usage: ReportUsage
+        var traceRound: String?
         var endMs: Int64
         var modes: [ExecutionModeAttribution]
     }
 
+    private var traceRounds: [String: (usage: ReportUsage, members: Int)] = [:]
     private var counted: [String: Reported] = [:]
     /// Insertion order for the FIFO bound; entries already removed are skipped.
     private var order: [String] = []
@@ -40,13 +33,8 @@ struct ReportLedger: Sendable {
         }
         var values = Self.values(of: record)
         values.modes = Self.freezing(currentEffort, into: values.modes)
-        var usage = ReportUsage(
-            requests: values.requests, output: values.output, input: values.input, cachedInput: values.cachedInput,
-            cacheWriteInput: values.cacheWriteInput, reasoning: values.reasoning, measuredOutput: values.measuredOutput,
-            measuredMs: values.measuredMs, costMicroUsd: values.costMicroUsd
-        )
-        usage.unpricedRequests = values.unpricedRequests
-        counters.add(usage, to: ReportModelKey(modelId: modelId, source: record.source), modes: values.modes)
+        let added = reportGrowth(values.usage, record: record, previous: nil)
+        counters.add(added, to: ReportModelKey(modelId: modelId, source: record.source), modes: values.modes)
         counted[record.key] = values
         order.append(record.key)
         evictOverflow()
@@ -56,38 +44,52 @@ struct ReportLedger: Sendable {
     mutating func grow(_ record: ResponseRecord, modelId: String) {
         guard var reported = counted[record.key] else { return }
         let values = Self.values(of: record)
-        var usage = ReportUsage()
-        func step(_ new: Int64, _ old: inout Int64) -> Int64 {
-            let added = max(0, new - old)
-            old = max(old, new)
-            return added
-        }
-        usage.requests = step(values.requests, &reported.requests)
-        usage.unpricedRequests = step(values.unpricedRequests, &reported.unpricedRequests)
-        usage.output = step(values.output, &reported.output)
-        usage.input = step(values.input, &reported.input)
-        usage.cachedInput = step(values.cachedInput, &reported.cachedInput)
-        usage.cacheWriteInput = step(values.cacheWriteInput, &reported.cacheWriteInput)
-        usage.reasoning = step(values.reasoning, &reported.reasoning)
-        usage.measuredOutput = step(values.measuredOutput, &reported.measuredOutput)
-        usage.measuredMs = step(values.measuredMs, &reported.measuredMs)
-        usage.costMicroUsd = step(values.costMicroUsd, &reported.costMicroUsd)
+        let growth = values.usage - reported.usage
+        let added = reportGrowth(growth, record: record, previous: reported)
+        reported.usage += growth
+        reported.traceRound = reported.traceRound ?? record.traceRoundKey
         reported.endMs = max(reported.endMs, record.endMs)
         counted[record.key] = reported
-        counters.add(usage, to: ReportModelKey(modelId: modelId, source: record.source), modes: reported.modes)
+        counters.add(added, to: ReportModelKey(modelId: modelId, source: record.source), modes: reported.modes)
+    }
+
+    /// A native round and the sum of its diagnostic attempts describe the same usage (METRICS 4.21).
+    private mutating func reportGrowth(_ growth: ReportUsage, record: ResponseRecord, previous: Reported?) -> ReportUsage {
+        guard record.source == .openbitfun else { return growth }
+        let old = previous?.usage ?? .zero
+        if let round = previous?.traceRound ?? record.traceRoundKey {
+            var traces = traceRounds[round] ?? (.zero, 0)
+            if previous?.traceRound == nil {
+                traces.usage += old  // A legacy trace may first acquire a round when its turn is written.
+                traces.members += 1
+            }
+            let covered = (counted[round]?.usage ?? .zero) - traces.usage
+            traces.usage += growth
+            traceRounds[round] = traces
+            return growth - covered
+        }
+        return traceRounds[record.key].map { growth - ($0.usage - old) } ?? growth
+    }
+
+    private mutating func forget(_ key: String) {
+        if let round = counted.removeValue(forKey: key)?.traceRound {
+            traceRounds[round]?.members -= 1
+            if traceRounds[round]?.members == 0 && counted[round] == nil { traceRounds[round] = nil }
+        }
+        if traceRounds[key]?.members == 0 { traceRounds[key] = nil }
     }
 
     /// Forgets counted keys whose response left the engine's retention (by its latest end).
     mutating func prune(before cutoffMs: Int64) {
         guard counted.values.contains(where: { $0.endMs < cutoffMs }) else { return }
-        counted = counted.filter { $0.value.endMs >= cutoffMs }
+        for (key, value) in counted where value.endMs < cutoffMs { forget(key) }
         order = order[head...].filter { counted[$0] != nil }
         head = 0
     }
 
     private mutating func evictOverflow() {
         while counted.count > Self.maxCountedKeys, head < order.count {
-            counted[order[head]] = nil
+            forget(order[head])
             head += 1
         }
         if head > 4096, head * 2 > order.count {
@@ -114,14 +116,13 @@ struct ReportLedger: Sendable {
     private static func values(of record: ResponseRecord) -> Reported {
         let usage = record.usage
         let measured = record.isFinal ? TimedResponse(record) : nil
-        return Reported(
-            requests: Int64(record.requestCount), unpricedRequests: record.costMicroUsd == nil ? Int64(record.requestCount) : 0,
-            output: Int64(usage.output), input: Int64(usage.input), cachedInput: Int64(usage.cachedInput),
-            cacheWriteInput: Int64(usage.cacheWriteInput), reasoning: Int64(usage.reasoning),
+        let totals = ReportUsage(
+            requests: Int64(record.requestCount), output: Int64(usage.output), input: Int64(usage.input),
+            cachedInput: Int64(usage.cachedInput), cacheWriteInput: Int64(usage.cacheWriteInput), reasoning: Int64(usage.reasoning),
             measuredOutput: measured == nil ? 0 : Int64(usage.output), measuredMs: measured?.durationMs ?? 0,
-            costMicroUsd: record.costMicroUsd ?? 0, endMs: record.endMs,
-            modes: record.modes.reportedAttributions
+            costMicroUsd: record.costMicroUsd ?? 0, unpricedRequests: record.costMicroUsd == nil ? Int64(record.requestCount) : 0
         )
+        return Reported(usage: totals, traceRound: record.traceRoundKey, endMs: record.endMs, modes: record.modes.reportedAttributions)
     }
 }
 

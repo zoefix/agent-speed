@@ -64,6 +64,7 @@ public static class HistoryCsv
         SourceKind.Qoder => "qoder",
         SourceKind.QoderCli => "qoder-cli",
         SourceKind.CodeBuddyCode => "codebuddy-code",
+        SourceKind.OpenBitFun => "openbitfun",
         _ => "unknown",
     };
 

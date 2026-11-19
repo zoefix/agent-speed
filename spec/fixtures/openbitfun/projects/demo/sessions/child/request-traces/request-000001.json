@@ -1,0 +1,27 @@
+{
+  "version": 1,
+  "trace_id": "child-a",
+  "session_id": "child",
+  "capture_mode": "usage_only",
+  "recorded_at": "2026-10-20T12:00:06.000+00:00",
+  "request": {
+    "model_id": "gpt-5",
+    "provider": "openai",
+    "attempt_number": 1
+  },
+  "timing": {
+    "started_at": "2026-10-20T12:00:06.000+00:00",
+    "finished_at": "2026-10-20T12:00:07.000+00:00",
+    "duration_ms": 1000
+  },
+  "response": {
+    "status": "completed",
+    "usage": {
+      "promptTokenCount": 100,
+      "candidatesTokenCount": 70,
+      "cachedContentTokenCount": 20,
+      "cacheCreationTokenCount": 0,
+      "reasoningTokenCount": 15
+    }
+  }
+}

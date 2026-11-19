@@ -1,0 +1,132 @@
+{
+  "todayStartMs": 1792454400000,
+  "nowMs": 1792497613000,
+  "files": [
+    {
+      "path": "openbitfun/projects/demo/sessions/main/metadata.json",
+      "project": "fixture-project",
+      "parent": null,
+      "isSubagent": false,
+      "phase": "generating",
+      "responses": [
+        {
+          "key": "openbitfun:request-a",
+          "startMs": 1792497600100,
+          "endMs": 1792497602100,
+          "firstMs": null,
+          "input": 200,
+          "output": 100,
+          "cachedInput": 50,
+          "cacheWriteInput": 20,
+          "cacheWrite1hInput": 0,
+          "reasoning": 30,
+          "model": "gpt-5",
+          "provider": "openai",
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "openbitfun:request-b",
+          "startMs": 1792497603000,
+          "endMs": 1792497604000,
+          "firstMs": null,
+          "input": 80,
+          "output": 40,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": "gpt-5",
+          "provider": "openai",
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        },
+        {
+          "key": "openbitfun:long",
+          "startMs": null,
+          "endMs": 1792497610000,
+          "firstMs": null,
+          "input": 100,
+          "output": 30,
+          "cachedInput": 0,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 0,
+          "model": "gpt-5",
+          "provider": "openai",
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        }
+      ]
+    },
+    {
+      "path": "openbitfun/projects/demo/sessions/child/metadata.json",
+      "project": "fixture-project",
+      "parent": "main",
+      "isSubagent": true,
+      "phase": "idle",
+      "responses": [
+        {
+          "key": "openbitfun:child-a",
+          "startMs": 1792497606000,
+          "endMs": 1792497607000,
+          "firstMs": null,
+          "input": 100,
+          "output": 70,
+          "cachedInput": 20,
+          "cacheWriteInput": 0,
+          "cacheWrite1hInput": 0,
+          "reasoning": 15,
+          "model": "gpt-5",
+          "provider": "openai",
+          "final": true,
+          "fast": false,
+          "requestCount": 1
+        }
+      ]
+    },
+    {
+      "path": "openbitfun/projects/copy/sessions/main/metadata.json",
+      "project": "fixture-project",
+      "parent": null,
+      "isSubagent": false,
+      "phase": "idle",
+      "responses": []
+    }
+  ],
+  "totals": {
+    "requests": 4,
+    "input": 480,
+    "output": 240,
+    "measuredOutput": 210,
+    "measuredMs": 4000,
+    "average": 52.5
+  },
+  "ledger": {
+    "root": "openbitfun/ledger",
+    "metadata": "openbitfun/ledger-project/sessions/session/metadata.json",
+    "phase": "generating",
+    "responses": [
+      {
+        "key": "openbitfun:round:session:turn:finished",
+        "startMs": 1792497602000,
+        "endMs": 1792497604000,
+        "firstMs": null,
+        "input": 40,
+        "output": 200,
+        "cachedInput": 4,
+        "cacheWriteInput": 2,
+        "cacheWrite1hInput": 0,
+        "reasoning": 6,
+        "model": "gpt-5",
+        "provider": "openai",
+        "final": true,
+        "fast": false,
+        "requestCount": 2
+      }
+    ]
+  }
+}

@@ -5,10 +5,10 @@
 namespace agentspeed {
 
 namespace {
-constexpr std::array<std::string_view, 21> kSourceIds = {
+constexpr std::array<std::string_view, 22> kSourceIds = {
     "codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity", "workbuddy",
     "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin", "qoder", "qoderCli",
-    "codebuddyCode"};
+    "codebuddyCode", "openbitfun"};
 }
 
 std::string_view sourceId(SourceKind source) { return kSourceIds[static_cast<std::size_t>(source)]; }

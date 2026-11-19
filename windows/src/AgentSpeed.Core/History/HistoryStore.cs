@@ -737,6 +737,7 @@ internal static class SourceNames
         SourceKind.Qoder => "qoder",
         SourceKind.QoderCli => "qoderCli",
         SourceKind.CodeBuddyCode => "codebuddyCode",
+        SourceKind.OpenBitFun => "openbitfun",
         _ => throw new ArgumentOutOfRangeException(nameof(source)),
     };
 
@@ -763,6 +764,7 @@ internal static class SourceNames
         "qoder" => SourceKind.Qoder,
         "qoderCli" => SourceKind.QoderCli,
         "codebuddyCode" => SourceKind.CodeBuddyCode,
+        "openbitfun" => SourceKind.OpenBitFun,
         _ => null,
     };
 }

@@ -13,7 +13,7 @@ namespace agentspeed {
 // METRICS 1: the append-only source order.
 enum class SourceKind : std::uint8_t {
     Codex, ClaudeCode, ClaudeDesktop, Deepseek, OpenCode, Gemini, Omp, Antigravity, WorkBuddy, WorkBuddyAi, ZCode,
-    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid, Devin, Qoder, QoderCli, CodeBuddyCode,
+    Kimi, GrokBuild, Pi, OpenClaw, Hermes, Droid, Devin, Qoder, QoderCli, CodeBuddyCode, OpenBitFun,
 };
 
 std::string_view sourceId(SourceKind source);
@@ -61,6 +61,7 @@ struct ParsedResponse {
     bool fast = false;
     std::int64_t requestCount = 1;
     ExecutionModes modes;
+    std::optional<std::string> traceRoundKey = std::nullopt;
     bool operator==(const ParsedResponse&) const = default;
 };
 

@@ -30,6 +30,8 @@ internal sealed record ParsedResponse(
     /// <summary><c>local</c>, or the id of the remote host the response was read on (REMOTE 2.2).</summary>
     public string Host { get; init; } = Remote.RemoteHost.LocalId;
 
+    public string? TraceRoundKey { get; init; }
+
     public long Requests => Math.Clamp(RequestCount, 0, TokenCounts.MaxValue);
 }
 

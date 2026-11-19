@@ -24,7 +24,7 @@ std::int64_t minutesOf(const Window& w) { return w.minutes.value_or(defaultMinut
 
 int sourceRank(const std::string& source) {
     const auto kind = sourceFromId(source);
-    return kind ? static_cast<int>(*kind) : static_cast<int>(SourceKind::CodeBuddyCode) + 1;
+    return kind ? static_cast<int>(*kind) : static_cast<int>(SourceKind::OpenBitFun) + 1;
 }
 
 using WindowRank = std::tuple<int, int, std::int64_t, int>;

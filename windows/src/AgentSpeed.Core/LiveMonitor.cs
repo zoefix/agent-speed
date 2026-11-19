@@ -219,6 +219,7 @@ public sealed class LiveMonitor : IDisposable
     /// (METRICS 2, 4.20).
     /// </summary>
     public static string DefaultCodeBuddyCodeRoot => WorkBuddy.CodeBuddyCodePaths.AutomaticRoot();
+    public static string DefaultOpenBitFunRoot => OpenBitFun.OpenBitFunFiles.DefaultRoot;
 
     /// <summary>Every automatic OpenClaw state folder: the override alone, else <c>.openclaw</c> and its profiles.</summary>
     public static IReadOnlyList<string> DefaultOpenClawRoots => OpenClaw.OpenClawPaths.AutomaticStateFolders();

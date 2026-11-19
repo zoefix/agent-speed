@@ -83,7 +83,7 @@ Rectangle {
                 enabled: section.rows.some(function(r) { return r.requests > 0 || r.output > 0 })
                 onClicked: {
                     var codes = { claudeCode: "claude-code", claudeDesktop: "claude-desktop", workbuddyAi: "workbuddy-ai", qoderCli: "qoder-cli",
-                                  codebuddyCode: "codebuddy-code" }
+                                  codebuddyCode: "codebuddy-code", openbitfun: "openbitfun" }
                     var code = section.source === "all" ? "all" : (codes[section.source] || section.source)
                     var path = history.chooseCsvPath("agent-speed-modes-" + code + "-" + section.first + "-" + section.last + ".csv")
                     if (path.length > 0) history.exportModeCsv(path, section.first, section.last, section.source, section.host)

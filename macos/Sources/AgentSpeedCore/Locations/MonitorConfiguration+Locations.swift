@@ -18,6 +18,7 @@ extension TranscriptFamily {
         case .droid: .droid
         case .qoderCli: .qoderCli
         case .codebuddyCode: .codebuddyCode
+        case .openbitfun: .openbitfun
         }
     }
 }
@@ -47,6 +48,7 @@ extension MonitorConfiguration {
         case .kimi, .grokBuild: return TranscriptLocations.sessionsFolder(url)
         case .droid: return DroidPaths.sessionsFolder(url)
         case .qoderCli: return QoderPaths.cliProjectsFolder(url)
+        case .openbitfun: return OpenBitFunPaths.projects(url)
         case .codex, .claude, .dsh, .gemini, .omp, .pi: return url
         }
     }
@@ -60,6 +62,7 @@ extension MonitorConfiguration {
             case .workbuddy, .workbuddyAi, .codebuddyCode: urls.map(TranscriptLocations.workbuddyProjects)
             case .kimi, .grokBuild: urls.map(TranscriptLocations.sessionsFolder)
             case .qoderCli: urls.map(QoderPaths.cliProjectsFolder)
+            case .openbitfun: urls.map(OpenBitFunPaths.projects)
             default: urls
             }
         }

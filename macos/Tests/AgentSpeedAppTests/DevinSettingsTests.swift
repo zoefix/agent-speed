@@ -23,7 +23,7 @@ struct DevinSettingsTests {
         #expect(settings.isEnabled(.devin) && !settings.isEnabled(.hermes))
         #expect(settings.sourceLocations[.devin] == [.automatic])
         #expect(SourceKind.devin.transcriptFolder == .devin
-            && TranscriptFolder.allCases.suffix(4) == [.devin, .qoder, .qoderCli, .codebuddyCode])
+            && TranscriptFolder.allCases.suffix(5) == [.devin, .qoder, .qoderCli, .codebuddyCode, .openbitfun])
     }
 
     @Test func theAutomaticEntryNamesTheCliFolderOnly() {

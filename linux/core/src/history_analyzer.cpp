@@ -58,6 +58,7 @@ const char* familyName(RootFamily family) {
         case RootFamily::Qoder: return "Qoder";
         case RootFamily::QoderCli: return "QoderCli";
         case RootFamily::CodeBuddyCode: return "CodeBuddyCode";
+        case RootFamily::OpenBitFun: return "OpenBitFun";
     }
     return "?";
 }
@@ -415,7 +416,7 @@ void Analyzer::planFiles(const SourceLocations& locations, const std::set<Source
             for (const auto& file : discovery::enumerate(folder, family, discovery::kUnlimited)) {
                 if (!seen.insert(file.path).second) continue;
                 ++report.filesDiscovered;
-                const auto modified = family == RootFamily::Droid ? droidIdentity(file) : file.writeNs;
+                const auto modified = family == RootFamily::Droid ? droidIdentity(file) : file.writeNs ^ file.contentSignature;
                 const auto* previous = previousOf(file.path);
                 if (unchanged(previous, familyName(family), file.length, modified, force, file.writeNs)) continue;
                 if (previous) work.replaced.insert(previous->id);
@@ -483,7 +484,7 @@ void Analyzer::analyzeFiles(Work& work, KeyLedger& ledger, const DayLabeler& lab
         entry.path = file.path;
         entry.family = familyName(file.family);
         entry.size = file.family == RootFamily::Droid ? file.size : result.length;
-        entry.modified = file.family == RootFamily::Droid ? file.identity : result.writeNs;
+        entry.modified = (file.family == RootFamily::Droid || file.family == RootFamily::OpenBitFun) ? file.identity : result.writeNs;
         entry.version = kVersion;
         contribute(entry, sink.items(), parser->source(), labeler);
         entry.estimate.lines = std::move(lines);

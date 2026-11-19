@@ -134,6 +134,8 @@ public final class LiveMonitor {
         TranscriptLocations.defaultQoderRoots.map { URL(fileURLWithPath: $0.displayFolder, isDirectory: true) }
     }
 
+    public nonisolated static var defaultOpenBitFunRoot: URL { OpenBitFunPaths.defaultRoot }
+
     /// Whether a folder names a Qoder IDE database now: `local.db` in it, in its `cache/db` or in its
     /// `SharedClientCache/cache/db` folder (METRICS 4.18).
     public nonisolated static func qoderLocationExists(_ url: URL) -> Bool {

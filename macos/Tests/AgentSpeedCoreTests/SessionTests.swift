@@ -15,6 +15,7 @@ struct SessionTests {
             try directory.write(relative, bytes: Array(bytes), modified: start.addingTimeInterval(TimeInterval(index)))
         }
         let configuration = MonitorConfiguration(
+            locations: SourceLocations([.openbitfun: [.path(directory.file("missing-openbitfun").path)]]),
             codexRoot: directory.file("codex/sessions"),
             claudeRoot: directory.file("claude/projects"),
             dshRoot: directory.file("dsh/sessions"),

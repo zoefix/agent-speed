@@ -22,7 +22,8 @@ struct CodeBuddySettingsTests {
         let settings = AppSettings(defaults: defaults)
         #expect(settings.isEnabled(.codebuddyCode) && !settings.isEnabled(.devin))
         #expect(settings.sourceLocations[.codebuddyCode] == [.automatic])
-        #expect(TranscriptFolder.allCases.last == .codebuddyCode && SourceKind.allCases.last == .codebuddyCode)
+        #expect(TranscriptFolder.allCases.suffix(2) == [.codebuddyCode, .openbitfun]
+            && SourceKind.allCases.suffix(2) == [.codebuddyCode, .openbitfun])
     }
 
     @Test func theAutomaticEntryNamesTheProjectsFolder() {

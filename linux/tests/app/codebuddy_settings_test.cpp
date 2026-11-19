@@ -39,7 +39,7 @@ protected:
 
 }  // namespace
 
-TEST_F(CodeBuddySettings, TheSourceSitsLastWithItsOwnListAndCaption) {
+TEST_F(CodeBuddySettings, TheSourceHasItsOwnListAndCaption) {
     {
         QSettings settings;
         settings.setValue(QStringLiteral("sources/disabled"), QStringList{QStringLiteral("hermes")});
@@ -54,7 +54,9 @@ TEST_F(CodeBuddySettings, TheSourceSitsLastWithItsOwnListAndCaption) {
     EXPECT_TRUE(stored.contains(SourceKind::WorkBuddy)) << "its own switch";
 
     SourceLocationsView view(prefs);
-    const auto group = view.groups().back().toMap();
+    const auto groups = view.groups();
+    ASSERT_GT(groups.size(), 19);
+    const auto group = groups[19].toMap();
     EXPECT_EQ(group.value(QStringLiteral("list")).toString(), QStringLiteral("codebuddyCode"));
     EXPECT_EQ(group.value(QStringLiteral("sources")).toStringList(), QStringList{QStringLiteral("codebuddyCode")});
     EXPECT_EQ(group.value(QStringLiteral("hint")).toString(), QStringLiteral("settings.sources.codebuddyCodeHint"));

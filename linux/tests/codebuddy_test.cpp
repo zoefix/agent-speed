@@ -241,7 +241,7 @@ TEST(CodeBuddyRoots, AUserLocationIsReadAsItsProjectsFolder) {
     EXPECT_EQ(l.codeBuddyCodeRoots, (std::vector<std::string>{"/data/cb/projects", "/work/cb/projects"})) << "each root once";
     const auto roots = l.fileRoots();
     ASSERT_FALSE(roots.empty());
-    EXPECT_EQ(roots.back(), (std::pair<RootFamily, std::string>{RootFamily::CodeBuddyCode, "/work/cb/projects"}));
+    EXPECT_NE(std::find(roots.begin(), roots.end(), std::pair<RootFamily, std::string>{RootFamily::CodeBuddyCode, "/work/cb/projects"}), roots.end());
     EXPECT_TRUE(SourceLocations::resolve(LocationLists(), environmentOf({}), "/h").codeBuddyCodeRoots ==
                 std::vector<std::string>{"/h/.codebuddy/projects"});
     EXPECT_TRUE(SourceLocations::resolve(LocationLists(), environmentOf({}), "/h").workBuddyRoots ==
@@ -274,17 +274,18 @@ TEST(CodeBuddyRoots, AConfigFolderAndItsProjectsFolderAreOneLocation) {
     EXPECT_FALSE(locationEntry(RootFamily::CodeBuddyCode, DataLocation::automaticEntry(), environmentOf({}), temp.file("none")).exists);
 }
 
-TEST(CodeBuddyRoots, TheSourceAndItsListComeLast) {
+TEST(CodeBuddyRoots, TheSourceAndItsListFollowQoderCli) {
     const auto& order = locationListOrder();
-    EXPECT_EQ(order.size(), 20u);
-    EXPECT_EQ(order.back(), RootFamily::CodeBuddyCode);
+    ASSERT_GT(order.size(), 19u);
+    EXPECT_EQ(order[18], RootFamily::QoderCli);
+    EXPECT_EQ(order[19], RootFamily::CodeBuddyCode);
     EXPECT_EQ(listName(RootFamily::CodeBuddyCode), "codebuddyCode");
     EXPECT_EQ(listNamed("codebuddyCode"), RootFamily::CodeBuddyCode);
     EXPECT_EQ(familyOf(SourceKind::CodeBuddyCode), RootFamily::CodeBuddyCode);
     EXPECT_EQ(sourceId(SourceKind::CodeBuddyCode), "codebuddyCode");
     EXPECT_EQ(sourceFromId("codebuddyCode"), SourceKind::CodeBuddyCode);
-    EXPECT_EQ(*MonitorConfig::allSources().rbegin(), SourceKind::CodeBuddyCode) << "last in the source order";
-    EXPECT_EQ(MonitorConfig::allSources().size(), 21u);
+    EXPECT_TRUE(MonitorConfig::allSources().contains(SourceKind::CodeBuddyCode));
+    EXPECT_EQ(static_cast<int>(SourceKind::CodeBuddyCode), static_cast<int>(SourceKind::QoderCli) + 1);
 }
 
 // MARK: - Discovery
