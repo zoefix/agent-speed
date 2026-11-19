@@ -105,6 +105,9 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     fx0, fy0, fx1, fy1 = lm["face"]
     center_x = (fx0 + fx1) / 2
     vlayers, image, report, matrix = _aligned(spec, base_reference, size, center_x)
+    found_arms = pose.arms(spec["image"], size, center_x, matrix)
+    if not any(layer.name == f"handwear.{side}" for layer in vlayers):
+        vlayers = L.drop_empty(L.split_by_arms(vlayers, found_arms, image))
     arm = next((layer for layer in vlayers if layer.name == f"handwear.{side}"), None)
     if arm is None or arm.alpha.max() < 0.3:
         raise ValueError(f"{vid}: no handwear.{side} layer")
@@ -118,7 +121,7 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     backdrop = _backdrop(ordered, owner)
 
     base_arm = lm["arms"][side]
-    joints = pose.arms(spec["image"], size, center_x, matrix).get(side)
+    joints = found_arms.get(side)
     found = skeleton.arm_from_joints(joints) if joints else skeleton.find_arm(arm.alpha, anchor=base_arm["shoulder"])
     report["pose"] = bool(joints)
     upper_b, upper_v = _angle(base_arm["shoulder"], base_arm["elbow"]), _angle(found["shoulder"], found["elbow"])
