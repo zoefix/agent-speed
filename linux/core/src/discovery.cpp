@@ -7,6 +7,7 @@
 #include "agentspeed/droid.hpp"
 #include "agentspeed/fs_util.hpp"
 #include "agentspeed/grok_parser.hpp"
+#include "agentspeed/openbitfun.hpp"
 #include "agentspeed/path_text.hpp"
 #include "agentspeed/sqlite.hpp"
 
@@ -211,6 +212,7 @@ bool isTranscriptName(std::string_view name, RootFamily family) {
         case RootFamily::Hermes:
         case RootFamily::Devin:
         case RootFamily::Qoder: return false;
+        case RootFamily::OpenBitFun: return name == "metadata.json";
         case RootFamily::Kimi: return name == "wire.jsonl";
         case RootFamily::GrokBuild: return name == "updates.jsonl";
         case RootFamily::Omp:
@@ -229,6 +231,21 @@ bool isTranscriptName(std::string_view name, RootFamily family) {
 std::vector<DiscoveredFile> enumerate(const std::string& root, RootFamily family, std::size_t limit) {
     if (root.empty()) return {};
     switch (family) {
+        case RootFamily::OpenBitFun: {
+            std::vector<DiscoveredFile> files;
+            for (const auto& project : fsx::list(root)) {
+                if (!project.stat.directory || project.name.starts_with(".")) continue;
+                const auto sessions = fsx::join(project.path, "sessions");
+                if (!fsx::isPlainDirectory(sessions)) continue;
+                for (const auto& session : fsx::list(sessions)) {
+                    if (!session.stat.directory || session.name.starts_with(".")) continue;
+                    const auto path = fsx::join(session.path, "metadata.json");
+                    if (const auto stat = openbitfun::statOf(path)) files.push_back({path, stat->length, stat->writeNs, stat->contentSignature});
+                }
+            }
+            keepNewest(files, limit);
+            return files;
+        }
         case RootFamily::Gemini: return gemini(root, limit);
         case RootFamily::OpenCode:
         case RootFamily::ZCode:
@@ -300,6 +317,11 @@ bool isAcceptablePath(const std::string& root, const std::string& path, RootFami
             if (!noDotPart(parts)) return false;
             return family == RootFamily::Kimi ? parts.size() == 5 && parts[2] == "agents" && parts[4] == "wire.jsonl"
                                               : parts.size() == 3 && parts[2] == "updates.jsonl";
+        }
+        case RootFamily::OpenBitFun: {
+            const auto parts = fsx::partsBelow(root, path);
+            return name == "metadata.json" && parts && parts->size() == 4 && (*parts)[1] == "sessions"
+                && noDotPart(*parts) && fsx::noLinkBelow(root, path);
         }
         case RootFamily::Droid: {
             if (!droid::isTranscriptName(name)) return false;

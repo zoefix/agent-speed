@@ -28,7 +28,7 @@ FIXTURE = os.path.join(os.path.dirname(os.path.abspath(__file__)), "..", "fixtur
 
 SOURCE_ORDER = ("codex", "claudeCode", "claudeDesktop", "deepseek", "opencode", "gemini", "omp", "antigravity",
                 "workbuddy", "workbuddyAi", "zcode", "kimi", "grokBuild", "pi", "openclaw", "hermes", "droid", "devin",
-                "qoder", "qoderCli", "codebuddyCode")
+                "qoder", "qoderCli", "codebuddyCode", "openbitfun")
 LATENCY_SOURCES = ("codex", "claudeCode", "claudeDesktop", "devin", "workbuddy", "workbuddyAi",
                    "codebuddyCode")  # 4.1, 4.2, 4.17, 4.9: firstMs
 ACTION_SOURCES = ("codex", "claudeCode", "claudeDesktop", "omp", "pi", "openclaw", "droid")  # 6.10

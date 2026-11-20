@@ -104,6 +104,7 @@ internal sealed partial record SourceLocations(
             QoderRoots = QoderRootsOf(configuration),
             QoderCliRoots = Roots(LocationFolder.QoderCli),
             CodeBuddyCodeRoots = Roots(LocationFolder.CodeBuddyCode),
+            OpenBitFunRoots = Roots(LocationFolder.OpenBitFun),
         };
     }
 
@@ -169,6 +170,7 @@ internal sealed partial record SourceLocations(
             (RootFamily.Droid, [DroidRoot, .. MoreDroidRoots]),
             (RootFamily.QoderCli, QoderCliRoots),
             (RootFamily.CodeBuddyCode, CodeBuddyCodeRoots),
+            (RootFamily.OpenBitFun, OpenBitFunRoots),
         ];
         foreach (var (family, roots) in families)
         {

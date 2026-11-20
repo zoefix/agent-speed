@@ -3,6 +3,8 @@ import Foundation
 /// One model response as produced by a transcript parser (METRICS 4).
 public struct ResponseRecord: Equatable, Hashable, Sendable {
     public var key: String
+    /// The native round that covers this diagnostic attempt, for live report reconciliation.
+    var traceRoundKey: String?
     public var source: SourceKind
     /// Absolute transcript path.
     public var agentId: String
@@ -56,7 +58,7 @@ public struct ResponseRecord: Equatable, Hashable, Sendable {
         self.endMs = endMs
         self.usage = usage
         self.modes = modes
-        self.requestCount = min(100_000, max(1, requestCount))
+        self.requestCount = min(100_000, max(source == .openbitfun ? 0 : 1, requestCount))
         self.isFinal = isFinal
         self.provider = provider.flatMap { $0.isEmpty ? nil : $0 }
         self.fast = fast

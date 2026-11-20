@@ -77,6 +77,7 @@ public static class DisplayText
         SourceKind.Qoder => "source.qoder",
         SourceKind.QoderCli => "source.qoderCli",
         SourceKind.CodeBuddyCode => "source.codebuddyCode",
+        SourceKind.OpenBitFun => "source.openbitfun",
         _ => throw new ArgumentOutOfRangeException(nameof(source), source, null),
     };
 

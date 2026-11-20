@@ -367,6 +367,14 @@ public sealed class RemoteDecoderTests
         Assert.Equal(RemoteLineErrorKind.WrongType, Invalid("""{"t":"clock","id":1e3,"now":1780000000000}"""));
         Assert.Equal(RemoteLineErrorKind.OutOfRange, Invalid("""{"t":"historyDone","days":-1,"analyzed":0}"""));
         Assert.Equal(RemoteLineErrorKind.OutOfRange, Invalid("""{"t":"status","sources":[],"malformed":-1,"unreadable":0,"partialHistory":false}"""));
+        var withdrawal = Assert.IsType<RelayMessage.Response>(Message(L.Response(r =>
+        {
+            r["source"] = "openbitfun";
+            r["requestCount"] = 0;
+            r["traceRoundKey"] = "openbitfun:round:session:turn:round";
+        }))).Value.Record;
+        Assert.Equal(0, withdrawal.RequestCount);
+        Assert.Equal("openbitfun:round:session:turn:round", withdrawal.TraceRoundKey);
         Assert.Equal(RemoteLineErrorKind.OutOfRange, Invalid(L.Response(r => r["requestCount"] = 0)));
         Assert.Equal(RemoteLineErrorKind.OutOfRange, Invalid(L.Response(r => r["requestCount"] = 100_001)));
         Assert.Equal(100_000, Assert.IsType<RelayMessage.Response>(Message(L.Response(r => r["requestCount"] = 100_000))).Value.Record.RequestCount);

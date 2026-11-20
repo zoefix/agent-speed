@@ -410,6 +410,9 @@ internal sealed partial class MonitorCore : IDisposable
         {
             var path = incoming;
             path = DroidTranscriptOf(path);
+            var metadata = OpenBitFun.OpenBitFunFiles.MetadataOf(path);
+            if (metadata != path && _roots.Any(root => root.Family == RootFamily.OpenBitFun
+                && TranscriptDiscovery.IsAcceptablePath(root.Path, metadata, TranscriptNaming.OpenBitFunSession))) path = metadata;
             if (Path.GetFileName(path) == "summary.json")
             {
                 var updates = Path.Combine(Path.GetDirectoryName(path) ?? string.Empty, "updates.jsonl");
@@ -563,7 +566,8 @@ internal sealed partial class MonitorCore : IDisposable
                 Remove(tracked);
                 changed = true;
             }
-            else if (tracked.Dirty || stamp.Length != tracked.KnownLength || stamp.WriteUtc != tracked.KnownWriteUtc)
+            else if (tracked.Dirty || stamp.Length != tracked.KnownLength || stamp.LastWriteUtc != tracked.KnownWriteUtc
+                || tracked.Tailer is OpenBitFun.OpenBitFunTailer reader && reader.ContentSignature != stamp.ContentSignature)
             {
                 changed |= ReadLive(tracked);
             }
@@ -680,7 +684,8 @@ internal sealed partial class MonitorCore : IDisposable
                 {
                     changed |= AddRuntimeFile(root, file.Path, todayStartMs, file);
                 }
-                else if (file.Length != tracked.KnownLength || file.LastWriteUtc != tracked.KnownWriteUtc)
+                else if (file.Length != tracked.KnownLength || file.LastWriteUtc != tracked.KnownWriteUtc
+                    || tracked.Tailer is OpenBitFun.OpenBitFunTailer reader && reader.ContentSignature != file.ContentSignature)
                 {
                     changed |= ReadLive(tracked);
                 }
@@ -730,7 +735,7 @@ internal sealed partial class MonitorCore : IDisposable
         }
 
         var mainOnly = WorkBuddyPaths.WritesWorkBuddyFormat(kind)
-            || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid or SourceKind.QoderCli;
+            || kind is SourceKind.Kimi or SourceKind.GrokBuild or SourceKind.Pi or SourceKind.Droid or SourceKind.QoderCli or SourceKind.OpenBitFun;
         var count = 0;
         foreach (var tracked in _files.Values)
         {
@@ -1229,7 +1234,7 @@ internal sealed partial class MonitorCore : IDisposable
 
     private bool ReadLive(TrackedFile tracked)
     {
-        if (ReadWholeFilesInBackground && tracked.Tailer is WholeFileTailer)
+        if (ReadWholeFilesInBackground && tracked.Tailer is (WholeFileTailer or OpenBitFun.OpenBitFunTailer))
         {
             StartBackgroundRead(tracked);
             return false;
@@ -1506,17 +1511,21 @@ internal sealed partial class MonitorCore : IDisposable
     }
 
     /// <summary>Size and time as the tracker compares them; Antigravity combines the database and its <c>-wal</c>.</summary>
-    private static (long Length, DateTime WriteUtc)? Stamp(TrackedFile tracked)
+    private static DiscoveredFile? Stamp(TrackedFile tracked)
     {
         if (tracked.Tailer is AntigravityTailer)
         {
-            return AntigravityStamp.Of(tracked.Path) is { } stamp ? (stamp.Length, stamp.LastWriteUtc) : null;
+            return AntigravityStamp.Of(tracked.Path) is { } stamp ? new(tracked.Path, stamp.Length, stamp.LastWriteUtc) : null;
         }
 
         try
         {
+            if (tracked.Parser is OpenBitFun.OpenBitFunParser)
+            {
+                return OpenBitFun.OpenBitFunFiles.Stat(tracked.Path);
+            }
             var info = new FileInfo(tracked.Path);
-            return info.Exists ? (info.Length, tracked.Parser switch
+            return info.Exists ? new(tracked.Path, info.Length, tracked.Parser switch
             {
                 GrokBuild.GrokParser => GrokBuild.GrokFiles.Modified(tracked.Path, info.LastWriteTimeUtc),
                 Droid.DroidParser => Droid.DroidPaths.Modified(tracked.Path, info.LastWriteTimeUtc),

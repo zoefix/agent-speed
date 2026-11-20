@@ -31,8 +31,8 @@ public sealed class CodeBuddySettingsTests
         Assert.False(settings.IsSourceEnabled(SourceKind.QoderCli));
         Assert.Equal(LocationLists.AutomaticOnly, settings.Locations[LocationFolder.CodeBuddyCode]);
         Assert.Contains(SourceKind.CodeBuddyCode, settings.ToMonitorConfiguration().EnabledSources);
-        Assert.Equal(LocationFolder.CodeBuddyCode, LocationFolders.All[^1]);
-        Assert.Equal(SourceKind.CodeBuddyCode, Enum.GetValues<SourceKind>()[^1]);
+        Assert.Equal([LocationFolder.CodeBuddyCode, LocationFolder.OpenBitFun], LocationFolders.All.TakeLast(2));
+        Assert.Equal([SourceKind.CodeBuddyCode, SourceKind.OpenBitFun], Enum.GetValues<SourceKind>().TakeLast(2));
 
         var off = SettingsSerializer.Deserialize(SettingsSerializer.Serialize(settings.WithSourceEnabled(SourceKind.CodeBuddyCode, false)));
         Assert.False(off.IsSourceEnabled(SourceKind.CodeBuddyCode));

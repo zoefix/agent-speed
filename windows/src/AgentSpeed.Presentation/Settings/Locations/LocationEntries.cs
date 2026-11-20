@@ -67,6 +67,7 @@ public static class LocationEntries
         LocationFolder.Qoder => "settings.sources.qoderHint",
         LocationFolder.QoderCli => "settings.sources.qoderCliHint",
         LocationFolder.CodeBuddyCode => "settings.sources.codebuddyCodeHint",
+        LocationFolder.OpenBitFun => "settings.sources.openbitfunHint",
         _ => null,
     };
 

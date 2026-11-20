@@ -205,6 +205,19 @@ TEST(RelayLines, EncodesResponsesToolsAndParents) {
     EXPECT_TRUE(line.root()["completion"].isTrue());
     EXPECT_TRUE(line.root()["project"].equals("orbit"));
 
+    ParsedResponse withdrawn;
+    withdrawn.key = "openbitfun:attempt";
+    withdrawn.source = SourceKind::OpenBitFun;
+    withdrawn.agentId = "/projects/demo/sessions/s/metadata.json";
+    withdrawn.endMs = kNow;
+    withdrawn.requestCount = 0;
+    withdrawn.traceRoundKey = "openbitfun:round:s:t:r";
+    Parsed correction(responseLine(withdrawn, false, std::nullopt));
+    ASSERT_TRUE(correction.ok);
+    EXPECT_EQ(correction.root()["r"]["requestCount"].truncated(), 0);
+    EXPECT_TRUE(correction.root()["r"]["traceRoundKey"].equals(*withdrawn.traceRoundKey));
+    EXPECT_TRUE(correction.root()["r"]["startMs"].isNull());
+
     auto other = response();
     other.startMs = std::nullopt;
     other.firstMs = 5;

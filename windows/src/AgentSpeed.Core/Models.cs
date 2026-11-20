@@ -50,6 +50,7 @@ public enum SourceKind
 
     /// <summary>CodeBuddy Code (Tencent's CLI): WorkBuddy's transcript format in its own config folder, METRICS 4.20.</summary>
     CodeBuddyCode,
+    OpenBitFun,
 }
 
 public enum AgentPhase
@@ -350,6 +351,7 @@ public abstract record SpeedEvent
 /// <param name="QoderRoot">A Qoder IDE data folder, its <c>SharedClientCache</c> folder or the folder that holds <c>local.db</c>, in place of its list.</param>
 /// <param name="QoderCliRoot">A Qoder CLI config folder or its <c>projects</c> folder in place of its list.</param>
 /// <param name="CodeBuddyCodeRoot">A CodeBuddy Code config folder or its <c>projects</c> folder in place of its list.</param>
+/// <param name="OpenBitFunRoot">An OpenBitFun data folder or its <c>projects</c> folder in place of its list.</param>
 public sealed record MonitorConfiguration(
     IReadOnlySet<SourceKind> EnabledSources,
     string? CodexRoot = null,
@@ -371,7 +373,8 @@ public sealed record MonitorConfiguration(
     string? DevinRoot = null,
     string? QoderRoot = null,
     string? QoderCliRoot = null,
-    string? CodeBuddyCodeRoot = null)
+    string? CodeBuddyCodeRoot = null,
+    string? OpenBitFunRoot = null)
 {
     public static MonitorConfiguration Default { get; } =
         new(new HashSet<SourceKind>(Enum.GetValues<SourceKind>()));
@@ -405,6 +408,7 @@ public sealed record MonitorConfiguration(
         LocationFolder.Qoder => QoderRoot,
         LocationFolder.QoderCli => QoderCliRoot,
         LocationFolder.CodeBuddyCode => CodeBuddyCodeRoot,
+        LocationFolder.OpenBitFun => OpenBitFunRoot,
         _ => null,
     };
 

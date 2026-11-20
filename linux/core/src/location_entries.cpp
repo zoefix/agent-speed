@@ -39,6 +39,7 @@ std::string defaultOf(RootFamily list, const Environment& environment, const std
         case RootFamily::Qoder: return SourceLocations::defaultRoot(SourceKind::Qoder, environment, home);
         case RootFamily::QoderCli: return SourceLocations::defaultRoot(SourceKind::QoderCli, environment, home);
         case RootFamily::CodeBuddyCode: return SourceLocations::defaultRoot(SourceKind::CodeBuddyCode, environment, home);
+        case RootFamily::OpenBitFun: return SourceLocations::defaultRoot(SourceKind::OpenBitFun, environment, home);
         default: return {};
     }
 }

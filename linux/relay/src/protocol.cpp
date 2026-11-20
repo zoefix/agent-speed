@@ -306,7 +306,8 @@ std::string responseLine(const ParsedResponse& r, bool completion, const std::op
     j.key("cacheWrite1hInput").integer(clamp(r.tokens.cacheWrite1hInput));
     j.key("output").integer(clamp(r.tokens.output));
     j.key("reasoning").integer(clamp(r.tokens.reasoning));
-    j.key("requestCount").integer(std::clamp<std::int64_t>(r.requestCount, 1, kMaxRequestCount));
+    j.key("requestCount").integer(std::clamp<std::int64_t>(r.requestCount, r.source == SourceKind::OpenBitFun ? 0 : 1, kMaxRequestCount));
+    if (r.traceRoundKey) j.key("traceRoundKey").optionalString(boundedText(r.traceRoundKey, kMaxKey));
     j.key("modes");
     writeModes(j, r.modes);
     j.key("final").boolean(r.final);

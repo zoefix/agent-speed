@@ -12,6 +12,7 @@ internal sealed class ReportLedger
     public const int MaxCountedKeys = 65_536;
 
     private readonly Dictionary<string, Reported> _counted = new(StringComparer.Ordinal);
+    private readonly Dictionary<string, (ReportUsage Usage, int Members)> _traceRounds = new(StringComparer.Ordinal);
     private readonly Queue<string> _order = new();
 
     public ReportCounters Counters { get; } = new();
@@ -36,14 +37,12 @@ internal sealed class ReportLedger
             values = values with { Modes = values.Modes.WithLedgerEffort(effort) };
         }
 
-        var usage = new ReportUsage(values.Requests, values.Output, values.Input, values.CachedInput, values.CacheWriteInput, values.Reasoning,
-            values.MeasuredOutput, values.MeasuredMs, values.CostMicroUsd, values.UnpricedRequests);
-        Counters.Add(usage, new ReportModelKey(modelId, response.Source), values.Modes);
+        Counters.Add(ReportGrowth(values.Usage, response, null), new ReportModelKey(modelId, response.Source), values.Modes);
         _counted[response.Key] = values;
         _order.Enqueue(response.Key);
         while (_counted.Count > MaxCountedKeys && _order.TryDequeue(out var oldest))
         {
-            _counted.Remove(oldest);
+            Forget(oldest);
         }
     }
 
@@ -56,23 +55,37 @@ internal sealed class ReportLedger
         }
 
         var now = Values(response);
-        var usage = new ReportUsage(
-            Step(now.Requests, reported.Requests),
-            Step(now.Output, reported.Output),
-            Step(now.Input, reported.Input),
-            Step(now.CachedInput, reported.CachedInput),
-            Step(now.CacheWriteInput, reported.CacheWriteInput),
-            Step(now.Reasoning, reported.Reasoning),
-            Step(now.MeasuredOutput, reported.MeasuredOutput),
-            Step(now.MeasuredMs, reported.MeasuredMs),
-            Step(now.CostMicroUsd, reported.CostMicroUsd), Step(now.UnpricedRequests, reported.UnpricedRequests));
-        _counted[response.Key] = new Reported(
-            Math.Max(reported.Output, now.Output), Math.Max(reported.Input, now.Input), Math.Max(reported.CachedInput, now.CachedInput),
-            Math.Max(reported.CacheWriteInput, now.CacheWriteInput), Math.Max(reported.Reasoning, now.Reasoning),
-            Math.Max(reported.MeasuredOutput, now.MeasuredOutput), Math.Max(reported.MeasuredMs, now.MeasuredMs),
-            Math.Max(reported.CostMicroUsd, now.CostMicroUsd), Math.Max(reported.EndMs, now.EndMs),
-            Math.Max(reported.Requests, now.Requests), Math.Max(reported.UnpricedRequests, now.UnpricedRequests)) { Modes = reported.Modes };
-        Counters.Add(usage, new ReportModelKey(modelId, response.Source), reported.Modes);
+        var growth = now.Usage - reported.Usage;
+        Counters.Add(ReportGrowth(growth, response, reported), new ReportModelKey(modelId, response.Source), reported.Modes);
+        _counted[response.Key] = reported with { Usage = reported.Usage + growth, EndMs = Math.Max(reported.EndMs, now.EndMs),
+            TraceRound = reported.TraceRound ?? response.TraceRoundKey };
+    }
+
+    // METRICS 4.21: only growth beyond what the other representation of the same round already reported.
+    private ReportUsage ReportGrowth(ReportUsage growth, ParsedResponse response, Reported? previous)
+    {
+        if (response.Source != SourceKind.OpenBitFun) return growth;
+        var old = previous?.Usage ?? default;
+        if ((previous?.TraceRound ?? response.TraceRoundKey) is { } round)
+        {
+            var traces = _traceRounds.GetValueOrDefault(round);
+            if (previous?.TraceRound is null) { traces.Usage += old; traces.Members++; }
+            var covered = _counted.GetValueOrDefault(round).Usage - traces.Usage;
+            _traceRounds[round] = (traces.Usage + growth, traces.Members);
+            return growth - covered;
+        }
+        return _traceRounds.TryGetValue(response.Key, out var group) ? growth - (group.Usage - old) : growth;
+    }
+
+    private void Forget(string key)
+    {
+        if (_counted.Remove(key, out var value) && value.TraceRound is { } round)
+        {
+            var group = _traceRounds[round];
+            if (--group.Members == 0 && !_counted.ContainsKey(round)) _traceRounds.Remove(round);
+            else _traceRounds[round] = group;
+        }
+        if (_traceRounds.TryGetValue(key, out var traces) && traces.Members == 0) _traceRounds.Remove(key);
     }
 
     /// <summary>Forgets counted keys whose response left the engine's retention (by its latest end).</summary>
@@ -94,7 +107,7 @@ internal sealed class ReportLedger
 
         foreach (var key in expired)
         {
-            _counted.Remove(key);
+            Forget(key);
         }
 
         var kept = _order.Where(_counted.ContainsKey).ToArray();
@@ -105,23 +118,15 @@ internal sealed class ReportLedger
         }
     }
 
-    private static long Step(long now, long before) => Math.Max(0, now - before);
-
     private static Reported Values(ParsedResponse response)
     {
         var tokens = response.Tokens;
         var measured = response.Final && SpeedMath.TryGetSpeedInterval(response, out var interval) ? interval.DurationMs : (long?)null;
-        return new Reported(
-            tokens.Output, tokens.Input, tokens.CachedInput, tokens.CacheWriteInput, tokens.Reasoning,
-            measured is null ? 0 : tokens.Output, measured ?? 0, response.CostMicroUsd ?? 0, response.EndMs,
-            response.Requests, response.CostMicroUsd is null ? response.Requests : 0) { Modes = response.Modes };
+        var usage = new ReportUsage(response.Requests, tokens.Output, tokens.Input, tokens.CachedInput, tokens.CacheWriteInput,
+            tokens.Reasoning, measured is null ? 0 : tokens.Output, measured ?? 0, response.CostMicroUsd ?? 0,
+            response.CostMicroUsd is null ? response.Requests : 0);
+        return new(usage, response.EndMs, response.Modes, response.TraceRoundKey);
     }
 
-    /// <summary>The values a counted response has added so far, field by field.</summary>
-    private readonly record struct Reported(
-        long Output, long Input, long CachedInput, long CacheWriteInput, long Reasoning, long MeasuredOutput, long MeasuredMs,
-        long CostMicroUsd, long EndMs, long Requests, long UnpricedRequests)
-    {
-        public ExecutionModes Modes { get; init; } = ExecutionModes.Empty;
-    }
+    private readonly record struct Reported(ReportUsage Usage, long EndMs, ExecutionModes Modes, string? TraceRound);
 }

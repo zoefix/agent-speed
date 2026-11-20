@@ -303,6 +303,7 @@ public static class ReportBody
         SourceKind.Qoder => "qoder",
         SourceKind.QoderCli => "qoderCli",
         SourceKind.CodeBuddyCode => "codebuddyCode",
+        SourceKind.OpenBitFun => "openbitfun",
         _ => throw new ArgumentOutOfRangeException(nameof(kind)),
     };
 

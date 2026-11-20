@@ -37,7 +37,7 @@ internal sealed record ProbeOptions(
         "--watch N [--remote DESTINATION... [--history] [--history-store PATH]] | --sync-prices DIR | --sync-rates DIR CURRENCY) [--prices PATH] " +
         "[--codex PATH]... [--claude PATH]... [--dsh PATH]... [--opencode PATH]... [--gemini PATH]... [--omp PATH]... [--antigravity PATH]... " +
         "[--workbuddy PATH]... [--workbuddy-ai PATH]... [--zcode PATH]... [--kimi PATH]... [--grok-build PATH]... [--pi PATH]... " +
-        "[--openclaw PATH]... [--hermes PATH]... [--droid PATH]... [--devin PATH]... [--qoder PATH]... [--qoder-cli PATH]... [--codebuddy-code PATH]...  (each source flag is repeatable; @auto is the automatic entry, METRICS 2.1)";
+        "[--openclaw PATH]... [--hermes PATH]... [--droid PATH]... [--devin PATH]... [--qoder PATH]... [--qoder-cli PATH]... [--codebuddy-code PATH]... [--openbitfun PATH]...  (each source flag is repeatable; @auto is the automatic entry, METRICS 2.1)";
 
     /// <summary>The source flags and the location list each one adds to.</summary>
     private static readonly Dictionary<string, LocationFolder> SourceFlags = new(StringComparer.Ordinal)
@@ -62,6 +62,7 @@ internal sealed record ProbeOptions(
         ["--qoder"] = LocationFolder.Qoder,
         ["--qoder-cli"] = LocationFolder.QoderCli,
         ["--codebuddy-code"] = LocationFolder.CodeBuddyCode,
+        ["--openbitfun"] = LocationFolder.OpenBitFun,
     };
 
     /// <summary>

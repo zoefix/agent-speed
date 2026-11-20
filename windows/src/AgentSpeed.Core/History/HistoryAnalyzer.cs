@@ -371,7 +371,7 @@ internal sealed partial class HistoryAnalyzer
                 plan.Discovered++;
                 // An Antigravity database's size and time already combine its -wal (METRICS 8); a Factory Droid
                 // session's identity adds its sidecar and its parent's (4.16).
-                var modified = family == RootFamily.Droid ? DroidIdentity(file) : file.LastWriteUtc.Ticks;
+                var modified = family == RootFamily.Droid ? DroidIdentity(file) : file.LastWriteUtc.Ticks ^ file.ContentSignature;
                 var previous = _entries.GetValueOrDefault(file.Path);
                 if (previous is not null && !zoneChanged && previous.Version == _options.Version
                     && string.Equals(previous.Family, familyName, StringComparison.Ordinal)
@@ -383,7 +383,7 @@ internal sealed partial class HistoryAnalyzer
 
                 plan.Files.Add(new PlannedFile(file.Path, family, root, file.Length, file.LastWriteUtc, previous)
                 {
-                    Identity = family == RootFamily.Droid ? modified : null,
+                    Identity = family is RootFamily.Droid or RootFamily.OpenBitFun ? modified : null,
                 });
             }
         }

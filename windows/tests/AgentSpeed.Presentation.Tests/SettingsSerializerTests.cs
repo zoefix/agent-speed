@@ -304,7 +304,7 @@ public class SettingsSerializerTests
             SourceKind.Codex, SourceKind.ClaudeDesktop, SourceKind.DeepSeek, SourceKind.OpenCode, SourceKind.Gemini,
             SourceKind.Omp, SourceKind.Antigravity, SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.ZCode, SourceKind.Kimi, SourceKind.GrokBuild,
             SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid, SourceKind.Devin, SourceKind.Qoder, SourceKind.QoderCli,
-            SourceKind.CodeBuddyCode,
+            SourceKind.CodeBuddyCode, SourceKind.OpenBitFun,
         ]));
         Assert.Equal([DataLocation.At(Temp("c"))], config.ListOf(LocationFolder.Codex));
         Assert.Equal(LocationLists.AutomaticOnly, config.ListOf(LocationFolder.Claude));
@@ -327,7 +327,7 @@ public class SettingsSerializerTests
             SourceKind.Codex, SourceKind.ClaudeCode, SourceKind.ClaudeDesktop, SourceKind.OpenCode, SourceKind.Gemini,
             SourceKind.Omp, SourceKind.Antigravity, SourceKind.WorkBuddy, SourceKind.WorkBuddyAi, SourceKind.ZCode, SourceKind.Kimi, SourceKind.GrokBuild,
             SourceKind.Pi, SourceKind.OpenClaw, SourceKind.Hermes, SourceKind.Droid, SourceKind.Devin, SourceKind.Qoder, SourceKind.QoderCli,
-            SourceKind.CodeBuddyCode,
+            SourceKind.CodeBuddyCode, SourceKind.OpenBitFun,
         ]));
         Assert.Equal([DataLocation.At(dsh)], config.ListOf(LocationFolder.Dsh));
         Assert.NotEqual(AppSettings.Default.ToMonitorConfiguration(), AppSettings.Default.WithLocations(withDsh).ToMonitorConfiguration());

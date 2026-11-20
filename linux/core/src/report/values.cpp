@@ -110,11 +110,12 @@ void Ledger::count(const ParsedResponse& response, std::optional<std::int64_t> c
             values.modes = values.modes.with(ModeFact{ModeKind::Effort, frozen.mode, frozen.mode, evidence, std::nullopt, ModeScope::Session});
         }
     }
-    counters_.add(values.usage, {modelId, response.source}, &values.modes);
+    counters_.add(reportGrowth(values.usage, response, nullptr), {modelId, response.source}, &values.modes);
+    values.traceRound = response.traceRoundKey;
     counted_[response.key] = values;
     order_.push_back(response.key);
     while (counted_.size() > kMaxCountedKeys && !order_.empty()) {
-        counted_.erase(order_.front());
+        forget(order_.front());
         order_.pop_front();
     }
 }
@@ -124,23 +125,51 @@ void Ledger::grow(const ParsedResponse& response, std::optional<std::int64_t> co
     if (it == counted_.end()) return;
     auto& reported = it->second;
     const auto now = valuesOf(response, costMicroUsd);
-    const auto added = now.usage - reported.usage;
-    auto& r = reported.usage;
-    const auto& n = now.usage;
-    r = {std::max(r.requests, n.requests),       std::max(r.output, n.output),
-         std::max(r.input, n.input),             std::max(r.cachedInput, n.cachedInput),
-         std::max(r.cacheWriteInput, n.cacheWriteInput), std::max(r.reasoning, n.reasoning),
-         std::max(r.measuredOutput, n.measuredOutput),   std::max(r.measuredMs, n.measuredMs),
-         std::max(r.costMicroUsd, n.costMicroUsd),       std::max(r.unpricedRequests, n.unpricedRequests)};
+    const auto growth = now.usage - reported.usage;
+    const auto added = reportGrowth(growth, response, &reported);
+    reported.usage += growth;
+    if (!reported.traceRound) reported.traceRound = response.traceRoundKey;
     reported.endMs = std::max(reported.endMs, now.endMs);
     counters_.add(added, {modelId, response.source}, &reported.modes);
+}
+
+// METRICS 4.21: the native round and its diagnostic attempts cover the same requests.
+Usage Ledger::reportGrowth(const Usage& growth, const ParsedResponse& response, const Reported* previous) {
+    if (response.source != SourceKind::OpenBitFun) return growth;
+    const auto old = previous ? previous->usage : Usage{};
+    if (const auto& round = previous && previous->traceRound ? previous->traceRound : response.traceRoundKey) {
+        auto& traces = traceRounds_[*round];
+        if (!previous || !previous->traceRound) {
+            traces.usage += old;
+            ++traces.members;
+        }
+        const auto native = counted_.find(*round);
+        const auto covered = (native != counted_.end() ? native->second.usage : Usage{}) - traces.usage;
+        traces.usage += growth;
+        return growth - covered;
+    }
+    const auto traces = traceRounds_.find(response.key);
+    return traces != traceRounds_.end() ? growth - (traces->second.usage - old) : growth;
+}
+
+void Ledger::forget(const std::string& key) {
+    const auto entry = counted_.find(key);
+    if (entry == counted_.end()) return;
+    if (const auto& round = entry->second.traceRound) {
+        auto group = traceRounds_.find(*round);
+        if (--group->second.members == 0 && !counted_.contains(*round)) traceRounds_.erase(group);
+    }
+    counted_.erase(entry);
+    const auto group = traceRounds_.find(key);
+    if (group != traceRounds_.end() && group->second.members == 0) traceRounds_.erase(group);
 }
 
 void Ledger::prune(std::int64_t cutoffMs) {
     bool removed = false;
     for (auto it = counted_.begin(); it != counted_.end();) {
         if (it->second.endMs < cutoffMs) {
-            it = counted_.erase(it);
+            const auto key = (it++)->first;
+            forget(key);
             removed = true;
         } else {
             ++it;

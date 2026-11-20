@@ -34,6 +34,8 @@ public enum SourceKind: String, CaseIterable, Codable, Sendable, Identifiable {
     case qoderCli
     /// CodeBuddy Code (`codebuddy`, Tencent): the WorkBuddy format in the standalone CLI's own folder.
     case codebuddyCode
+    /// OpenBitFun: per-request usage and timing traces grouped by session.
+    case openbitfun
 
     public var id: String { rawValue }
 }

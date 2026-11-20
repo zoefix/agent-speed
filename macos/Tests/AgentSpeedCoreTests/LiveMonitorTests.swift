@@ -19,6 +19,7 @@ struct LiveMonitorTests {
         let directory = try TempDirectory()
         let store = SpeedStore()
         let monitor = LiveMonitor(store: store, configuration: MonitorConfiguration(
+            locations: SourceLocations([.openbitfun: [.path(directory.file("missing-openbitfun").path)]]),
             codexRoot: directory.file("missing-codex"),
             claudeRoot: directory.file("missing-claude"),
             dshRoot: directory.file("missing-dsh"),

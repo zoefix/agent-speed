@@ -46,6 +46,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Qoder, "Qoder/SharedClientCache")]
     [InlineData(SourceKind.QoderCli, ".qoder")]
     [InlineData(SourceKind.CodeBuddyCode, ".codebuddy")]
+    [InlineData(SourceKind.OpenBitFun, ".openbitfun")]
     public void ALocationAndToggleRoundTripAndReachTheMonitor(SourceKind kind, string relative)
     {
         var folder = LocationFolders.Of(kind);
@@ -71,6 +72,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Qoder, """{ "version": 1, "sources": { "codex": true, "devin": false, "devinRoot": null } }""")]
     [InlineData(SourceKind.QoderCli, """{ "version": 1, "sources": { "codex": true, "devin": true, "qoder": false } }""")]
     [InlineData(SourceKind.CodeBuddyCode, """{ "version": 1, "sources": { "codex": true, "qoder": true, "qoderCli": false } }""")]
+    [InlineData(SourceKind.OpenBitFun, """{ "version": 1, "sources": { "codex": true, "qoderCli": false } }""")]
     public void OlderSettingsFilesKeepANewSourceOnWithItsAutomaticRoots(SourceKind kind, string json)
     {
         var s = SettingsSerializer.Deserialize(json);
@@ -109,6 +111,7 @@ public sealed class HarnessSourceSettingsTests
     [InlineData(SourceKind.Droid, "droid")]
     [InlineData(SourceKind.Devin, "devin")]
     [InlineData(SourceKind.Qoder, "qoder")]
+    [InlineData(SourceKind.OpenBitFun, "openbitfun")]
     public void EverySurfaceUsesTheSameStableSourceIdentifier(SourceKind kind, string id)
     {
         Assert.Equal(id, ReportBody.SourceId(kind));

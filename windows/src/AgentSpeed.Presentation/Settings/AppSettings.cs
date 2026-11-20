@@ -197,6 +197,7 @@ public sealed record AppSettings
     public bool QoderCliEnabled { get; init; } = true;
 
     public bool CodeBuddyCodeEnabled { get; init; } = true;
+    public bool OpenBitFunEnabled { get; init; } = true;
 
     /// <summary>
     /// The stored <c>sourceLocations</c> value (DESIGN 5, METRICS 2.1); null while it is absent, and then the lists come from
@@ -335,6 +336,7 @@ public sealed record AppSettings
         SourceKind.Qoder => QoderEnabled,
         SourceKind.QoderCli => QoderCliEnabled,
         SourceKind.CodeBuddyCode => CodeBuddyCodeEnabled,
+        SourceKind.OpenBitFun => OpenBitFunEnabled,
         _ => false,
     };
 
@@ -376,6 +378,7 @@ public sealed record AppSettings
         SourceKind.Qoder => this with { QoderEnabled = enabled },
         SourceKind.QoderCli => this with { QoderCliEnabled = enabled },
         SourceKind.CodeBuddyCode => this with { CodeBuddyCodeEnabled = enabled },
+        SourceKind.OpenBitFun => this with { OpenBitFunEnabled = enabled },
         _ => this,
     };
 

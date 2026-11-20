@@ -1,4 +1,5 @@
 #include "agentspeed/tailer.hpp"
+#include "agentspeed/openbitfun.hpp"
 
 #include <fcntl.h>
 #include <sys/stat.h>
@@ -260,6 +261,7 @@ TailResult DatabaseTailer::read(TranscriptParser& parser, ResponseSink& sink) {
 }
 
 std::unique_ptr<Tailer> makeTailer(RootFamily family, const std::string& path) {
+    if (family == RootFamily::OpenBitFun) return std::make_unique<openbitfun::SessionTailer>(path);
     if (family == RootFamily::Antigravity) return std::make_unique<DatabaseTailer>(path);
     if (family != RootFamily::GrokBuild && family != RootFamily::Droid) {
         if (fsx::endsWithNoCase(path, ".zstd")) return std::make_unique<FrameTailer>(path);
@@ -283,6 +285,7 @@ std::unique_ptr<TranscriptParser> makeParser(RootFamily family, const std::strin
         case RootFamily::GrokBuild: return std::make_unique<GrokParser>(path, deduper);
         case RootFamily::Pi: return PiParser::forPath(path, deduper);
         case RootFamily::Droid: return std::make_unique<droid::Parser>(path, deduper);
+        case RootFamily::OpenBitFun: return std::make_unique<openbitfun::Parser>(path, deduper);
         case RootFamily::QoderCli: return std::make_unique<ClaudeParser>(path, deduper, ClaudeParser::Variant::QoderCli);
         default: return std::make_unique<ClaudeParser>(path, deduper);
     }

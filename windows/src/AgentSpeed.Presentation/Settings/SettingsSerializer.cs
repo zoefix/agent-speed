@@ -120,6 +120,7 @@ public static class SettingsSerializer
             w.WriteBoolean("qoder", s.QoderEnabled);
             w.WriteBoolean("qoderCli", s.QoderCliEnabled);
             w.WriteBoolean("codebuddyCode", s.CodeBuddyCodeEnabled);
+            w.WriteBoolean("openbitfun", s.OpenBitFunEnabled);
             // The single folders of an earlier version go back exactly as loaded, so a downgrade still finds them (METRICS 2.1).
             foreach (var (folder, path) in s.LegacyRoots)
             {
@@ -320,6 +321,7 @@ public static class SettingsSerializer
             QoderEnabled = ReadBool(sources, "qoder", d.QoderEnabled),
             QoderCliEnabled = ReadBool(sources, "qoderCli", d.QoderCliEnabled),
             CodeBuddyCodeEnabled = ReadBool(sources, "codebuddyCode", d.CodeBuddyCodeEnabled),
+            OpenBitFunEnabled = ReadBool(sources, "openbitfun", d.OpenBitFunEnabled),
             LegacyRoots = ReadLegacyRoots(sources),
             StoredLocations = root.TryGetProperty("sourceLocations", out var locations) ? LocationLists.Read(locations) : null,
             HistoryWindow = ReadWindowFrame(history is { } h ? Child(h, "window") : null),

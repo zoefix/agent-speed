@@ -247,6 +247,7 @@ public class PaletteTests
     [InlineData(SourceKind.Qoder, "#B3329D")]
     [InlineData(SourceKind.QoderCli, "#7E61B6")]
     [InlineData(SourceKind.CodeBuddyCode, "#18AB06")]
+    [InlineData(SourceKind.OpenBitFun, "#F800F8")]
     public void SourceColorsMatchDesign(SourceKind source, string hex)
     {
         Assert.Equal(hex, HeatPalette.SourceColor(source).ToHex());

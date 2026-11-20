@@ -1,0 +1,114 @@
+{
+  "records": [
+    {
+      "session_id": "session",
+      "turn_id": "turn",
+      "timestamp": "2026-10-20T12:00:04.000+00:00",
+      "effective_model_name": "gpt-5",
+      "input_tokens": 8,
+      "output_tokens": 15,
+      "cached_tokens": 2,
+      "cache_write_tokens": 1,
+      "token_details": {
+        "reasoningTokenCount": 3,
+        "openbitfunModelRequest": {
+          "version": 1,
+          "roundId": "finished",
+          "attemptId": "a",
+          "usageKnown": true,
+          "channel": {
+            "protocol": "openai"
+          }
+        }
+      }
+    },
+    {
+      "session_id": "session",
+      "turn_id": "turn",
+      "timestamp": "2026-10-20T12:00:04.000+00:00",
+      "effective_model_name": "gpt-5",
+      "input_tokens": 30,
+      "output_tokens": 175,
+      "cached_tokens": 2,
+      "cache_write_tokens": 1,
+      "token_details": {
+        "reasoningTokenCount": 3,
+        "openbitfunModelRequest": {
+          "version": 1,
+          "roundId": "finished",
+          "attemptId": "b",
+          "usageKnown": true,
+          "channel": {
+            "protocol": "openai"
+          }
+        }
+      }
+    },
+    {
+      "session_id": "session",
+      "turn_id": "turn",
+      "timestamp": "2026-10-20T12:00:04.000+00:00",
+      "effective_model_name": "gpt-5",
+      "input_tokens": 10,
+      "output_tokens": 25,
+      "cached_tokens": 2,
+      "cache_write_tokens": 1,
+      "token_details": {
+        "reasoningTokenCount": 3,
+        "openbitfunModelRequest": {
+          "version": 1,
+          "roundId": "finished",
+          "attemptId": "a",
+          "usageKnown": true,
+          "channel": {
+            "protocol": "openai"
+          }
+        }
+      }
+    },
+    {
+      "session_id": "session",
+      "turn_id": "turn",
+      "timestamp": "2026-10-20T12:00:04.000+00:00",
+      "effective_model_name": "gpt-5",
+      "input_tokens": 4,
+      "output_tokens": 50,
+      "cached_tokens": 2,
+      "cache_write_tokens": 1,
+      "token_details": {
+        "reasoningTokenCount": 3,
+        "openbitfunModelRequest": {
+          "version": 1,
+          "roundId": "pending",
+          "attemptId": "c",
+          "usageKnown": true,
+          "channel": {
+            "protocol": "openai"
+          }
+        }
+      }
+    },
+    {
+      "session_id": "other",
+      "turn_id": "turn",
+      "timestamp": "2026-10-20T12:00:04.000+00:00",
+      "effective_model_name": "gpt-5",
+      "input_tokens": 100,
+      "output_tokens": 900,
+      "cached_tokens": 2,
+      "cache_write_tokens": 1,
+      "token_details": {
+        "reasoningTokenCount": 3,
+        "openbitfunModelRequest": {
+          "version": 1,
+          "roundId": "finished",
+          "attemptId": "a",
+          "usageKnown": true,
+          "channel": {
+            "protocol": "openai"
+          }
+        }
+      }
+    }
+  ]
+}

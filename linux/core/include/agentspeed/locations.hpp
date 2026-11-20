@@ -73,7 +73,7 @@ using HermesRoot = hermes::Root;
 // What the location lists read now (METRICS 2.1): per source the union of its entries' roots, in list order, each once.
 struct SourceLocations {
     std::vector<std::string> codexRoots, claudeRoots, dshRoots, geminiRoots, ompRoots, antigravityStores, workBuddyRoots,
-        workBuddyAiRoots, kimiRoots, grokBuildRoots, piRoots, droidRoots, qoderCliRoots, codeBuddyCodeRoots;
+        workBuddyAiRoots, kimiRoots, grokBuildRoots, piRoots, droidRoots, qoderCliRoots, codeBuddyCodeRoots, openBitFunRoots;
     // One root per database: a root naming the database file of an earlier root is left out.
     std::vector<std::string> openCodeRoots, zcodeRoots;
     // OpenClaw's roots as resolved (the state folders found, then the user locations), and the user locations alone.

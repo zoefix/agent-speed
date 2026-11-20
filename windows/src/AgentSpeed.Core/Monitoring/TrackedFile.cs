@@ -53,6 +53,7 @@ internal enum RootFamily
 
     /// <summary>A CodeBuddy Code <c>projects</c> folder: WorkBuddy's layout and parser, detected by the folder itself (METRICS 4.20).</summary>
     CodeBuddyCode,
+    OpenBitFun,
 }
 
 /// <summary>Per-family file rules: names, parser and the sources it can produce (METRICS 2 and 4).</summary>
@@ -63,7 +64,7 @@ internal static class Families
         [
             RootFamily.Codex, RootFamily.Claude, RootFamily.DeepSeek, RootFamily.Gemini, RootFamily.Omp, RootFamily.Antigravity,
             RootFamily.WorkBuddy, RootFamily.WorkBuddyAi, RootFamily.Kimi, RootFamily.GrokBuild, RootFamily.Pi, RootFamily.Droid,
-            RootFamily.QoderCli, RootFamily.CodeBuddyCode,
+            RootFamily.QoderCli, RootFamily.CodeBuddyCode, RootFamily.OpenBitFun,
         ];
 
     public static TranscriptNaming Naming(RootFamily family) => family switch
@@ -82,6 +83,7 @@ internal static class Families
         RootFamily.OpenClaw => TranscriptNaming.OpenClawDatabase,
         RootFamily.Hermes => TranscriptNaming.HermesLog,
         RootFamily.Droid => TranscriptNaming.DroidSession,
+        RootFamily.OpenBitFun => TranscriptNaming.OpenBitFunSession,
         RootFamily.Devin => TranscriptNaming.DevinDatabase,
         RootFamily.Qoder => TranscriptNaming.QoderDatabase,
         _ => TranscriptNaming.Jsonl,
@@ -106,6 +108,7 @@ internal static class Families
         RootFamily.Droid => new Droid.DroidParser(path, deduper),
         RootFamily.QoderCli => ClaudeParser.ForQoderCli(path, deduper),
         RootFamily.CodeBuddyCode => new WorkBuddyParser(path, deduper, SourceKind.CodeBuddyCode, root),
+        RootFamily.OpenBitFun => new OpenBitFun.OpenBitFunParser(path, deduper),
         _ => throw new ArgumentOutOfRangeException(nameof(family)),
     };
 
@@ -113,6 +116,7 @@ internal static class Families
     public static TranscriptTailer CreateTailer(RootFamily family, string path) =>
         family == RootFamily.Antigravity ? new AntigravityTailer(path)
         : family == RootFamily.GrokBuild ? new GrokBuild.GrokTailer(path)
+        : family == RootFamily.OpenBitFun ? new OpenBitFun.OpenBitFunTailer(path)
         : family == RootFamily.Droid ? new Droid.DroidTailer(path) : TranscriptTailer.For(path);
 
     /// <summary>True when any source of the family is enabled.</summary>
@@ -138,6 +142,7 @@ internal static class Families
         RootFamily.Qoder => enabled.Contains(SourceKind.Qoder),
         RootFamily.QoderCli => enabled.Contains(SourceKind.QoderCli),
         RootFamily.CodeBuddyCode => enabled.Contains(SourceKind.CodeBuddyCode),
+        RootFamily.OpenBitFun => enabled.Contains(SourceKind.OpenBitFun),
         _ => false,
     };
 
@@ -162,6 +167,7 @@ internal static class Families
         SourceKind.Qoder => RootFamily.Qoder,
         SourceKind.QoderCli => RootFamily.QoderCli,
         SourceKind.CodeBuddyCode => RootFamily.CodeBuddyCode,
+        SourceKind.OpenBitFun => RootFamily.OpenBitFun,
         _ => RootFamily.Claude,
     };
 }

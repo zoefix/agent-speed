@@ -103,6 +103,9 @@ Agent Speed 只讀取 agent 本來就寫在你電腦上的紀錄：
 | ZCode | `~/.zcode/cli/db/db.sqlite`（或 `$ZCODE_DATA_BASE_DIR/.zcode/cli/db`） |
 | Kimi Code CLI（TypeScript v2） | `~/.kimi-code/sessions`（或 `$KIMI_CODE_HOME/sessions`） |
 | Grok Build | `~/.grok/sessions`（或 `$GROK_HOME/sessions`） |
+| OpenBitFun | `~/.openbitfun/projects` (`OPENBITFUN_HOME` / `OPENBITFUN_E2E_HOME`) |
+
+在 macOS、Windows 和 Linux 上，Agent Speed 都會自動讀取 OpenBitFun 的每日用量記錄，結合模型輪次耗時計算速度。每次獨立的請求嘗試只計一次，輪次耗時包含首個 token 的等待時間和該輪內的重試。工作階段沒有用量記錄時，會使用既有且包含完成時間的診斷請求追蹤（`usage_only` 或 `full`）。
 
 Grok Build 提供每回合、每模型的原生批次紀錄：Token、API 耗時與實際呼叫數交給同一套速度引擎計算。子 agent 用量已合併在父工作階段中，因此只計算一次，仍會顯示子 agent 的活動狀態；上游未保存每次呼叫的獨立時間線，無法重建批次內的並行速度。
 

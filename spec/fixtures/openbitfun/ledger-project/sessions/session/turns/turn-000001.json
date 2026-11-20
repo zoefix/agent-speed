@@ -1,0 +1,21 @@
+{
+  "sessionId": "session",
+  "turnId": "turn",
+  "status": "inprogress",
+  "modelRounds": [
+    {
+      "id": "finished",
+      "status": "completed",
+      "startTime": 1792497601000,
+      "endTime": 1792497604000,
+      "durationMs": 2000,
+      "attemptCount": 2
+    },
+    {
+      "id": "pending",
+      "status": "streaming",
+      "startTime": 1792497605000,
+      "attemptCount": 1
+    }
+  ]
+}

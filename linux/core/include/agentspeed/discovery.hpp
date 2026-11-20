@@ -20,6 +20,7 @@ struct DiscoveredFile {
     std::int64_t length = 0;
     // The time that orders startup reads; Grok Build and Factory Droid take the newer of the session's two files.
     std::int64_t writeNs = 0;
+    std::int64_t contentSignature = 0;
 };
 
 // Families without transcript files (OpenCode, ZCode, OpenClaw, Hermes) enumerate nothing.

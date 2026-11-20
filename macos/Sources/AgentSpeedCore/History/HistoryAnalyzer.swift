@@ -243,7 +243,7 @@ final class HistoryAnalyzer {
                 let previous = entries[path]
                 let droidIdentity = family == .droid ? DroidHistoryIdentity(path: path, stat: stat, parents: &droidParents) : nil
                 let size = droidIdentity?.size ?? stat.size
-                let modified = droidIdentity?.modified ?? stat.modifiedNs
+                let modified = droidIdentity?.modified ?? (stat.modifiedNs ^ stat.contentSignature)
                 let estimateMissing = estimateVersions[path] != QuotaEstimateFile.version
                     && modified / 1_000_000 >= (options.nowMs ?? Self.clockMs()) - QuotaEstimateConstants.keepMs
                 if let previous, !zoneChanged, previous.version == options.analysisVersion,
@@ -641,7 +641,7 @@ final class HistoryAnalyzer {
                     id: file.previous?.id,
                     family: file.family.rawValue,
                     size: file.droidIdentity?.size ?? stat.size,
-                    modified: file.droidIdentity?.modified ?? stat.modifiedNs,
+                    modified: file.droidIdentity?.modified ?? (stat.modifiedNs ^ stat.contentSignature),
                     version: options.analysisVersion,
                     days: days
                 )

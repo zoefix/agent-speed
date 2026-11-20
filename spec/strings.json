@@ -8051,5 +8051,17 @@
     "zh-Hans": "主机上找不到 HTTPS 证书，无法查询",
     "en": "No HTTPS certificates on the host, so it cannot ask",
     "ja": "ホストに HTTPS 証明書がないため問い合わせできません"
+  },
+  "source.openbitfun": {
+    "zh-Hant": "OpenBitFun",
+    "zh-Hans": "OpenBitFun",
+    "en": "OpenBitFun",
+    "ja": "OpenBitFun"
+  },
+  "settings.sources.openbitfunHint": {
+    "zh-Hant": "選擇 OpenBitFun 的 projects 資料夾（通常是 ~/.openbitfun/projects）或它的上層資料夾。Agent Speed 自動讀取每日用量記錄和模型輪次耗時。工作階段沒有用量記錄時，會使用已有的診斷請求追蹤。",
+    "zh-Hans": "选择 OpenBitFun 的 projects 文件夹（通常是 ~/.openbitfun/projects）或它的上级文件夹。Agent Speed 自动读取每日用量记录和模型轮次耗时。会话没有用量记录时，会使用已有的诊断请求追踪。",
+    "en": "Choose the OpenBitFun projects folder (usually ~/.openbitfun/projects) or its parent. Agent Speed reads daily usage records and model-round timing automatically. Sessions without usage records use available diagnostic request traces.",
+    "ja": "OpenBitFun の projects フォルダ（通常は ~/.openbitfun/projects）か、その親フォルダを選択します。日別の使用量記録とモデルラウンドの所要時間を自動で読み取ります。使用量記録がないセッションでは、既存の診断用リクエスト追跡を使用します。"
   }
 }

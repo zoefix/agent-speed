@@ -211,6 +211,7 @@ public class HistoryCsvTests
     [InlineData(SourceKind.Qoder, "qoder")]
     [InlineData(SourceKind.QoderCli, "qoder-cli")]
     [InlineData(SourceKind.CodeBuddyCode, "codebuddy-code")]
+    [InlineData(SourceKind.OpenBitFun, "openbitfun")]
     [InlineData((SourceKind)99, "unknown")]
     public void SourceIdsAreStable(SourceKind? source, string id)
     {

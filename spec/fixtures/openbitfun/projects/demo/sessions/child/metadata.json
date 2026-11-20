@@ -1,0 +1,10 @@
+{
+  "session_id": "child",
+  "session_kind": "subagent",
+  "workspace_path": "/work/fixture-project",
+  "created_at": 1792497606000,
+  "relationship": {
+    "kind": "subagent",
+    "parent_session_id": "main"
+  }
+}
