@@ -928,6 +928,47 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(skirt.alpha[130, 110], 1.0)
         self.assertLess(skirt.rgba[130, 110, 0], 0.5)
 
+    def test_a_plume_on_the_hat_taken_for_tail_goes_to_the_hat(self):
+        from characters.rig.layers import tail_off_head
+        hat = self.layer("headwear", (0.8, 0.1, 0.1), (10, 45, 60, 140))
+        tail = self.layer("tail", (0.95, 0.95, 0.95), (5, 30, 140, 170), (120, 190, 150, 170), (20, 60, 185, 195))
+        parts, moved = tail_off_head([tail, hat], (70, 40, 130, 80))
+        self.assertEqual(moved, 25 * 30)
+        self.assertEqual([q.name for q in parts], ["tail", "headwear"])
+        self.assertEqual(hat.alpha[15, 150], 1.0)
+        self.assertTrue(np.allclose(hat.rgba[15, 150, :3], 0.95))
+        self.assertTrue(np.allclose(hat.rgba[20, 100, :3], (0.8, 0.1, 0.1)))
+        self.assertEqual(tail.alpha[15, 150], 0.0)
+        self.assertEqual(tail.alpha[150, 160], 1.0)
+        self.assertEqual(tail.alpha[40, 190], 1.0)
+
+    def test_a_tail_that_was_only_the_plume_goes(self):
+        from characters.rig.layers import tail_off_head
+        hat = self.layer("headwear", (0.8, 0.1, 0.1), (10, 45, 60, 140))
+        tail = self.layer("tail", (0.95, 0.95, 0.95), (5, 30, 140, 170))
+        parts, moved = tail_off_head([tail, hat], (70, 40, 130, 80))
+        self.assertEqual(moved, 25 * 30)
+        self.assertEqual([q.name for q in parts], ["headwear"])
+
+    def test_a_tassel_the_art_shows_over_the_tail_stays_in_front_of_it(self):
+        from characters.rig.layers import tail_alone
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 40:180] = 0.2
+        ref[60:190, 100:140] = 0.1
+        ref[70:110, 112:128] = (0.9, 0.8, 0.3)
+        skirt = self.layer("bottomwear", (0.2, 0.2, 0.2), (40, 160, 40, 180), (60, 190, 100, 140))
+        skirt.rgba[60:190, 100:140, :3] = 0.1
+        skirt.rgba[70:110, 112:128, :3] = (0.9, 0.8, 0.3)
+        tail = self.layer("tail", (0.1, 0.1, 0.1), (60, 190, 100, 140))
+        tail.rgba[70:110, 112:128, :3] = 0.5
+        parts, _ = tail_alone([tail, skirt], ref)
+        self.assertEqual([q.name for q in parts], ["bottomwear", "tail", "bottomwear front"])
+        front = parts[2]
+        self.assertGreater(front.alpha[90, 120], 0.5)
+        self.assertEqual(front.alpha[150, 120], 0.0)
+        self.assertTrue(np.allclose(front.rgba[90, 120, :3], (0.9, 0.8, 0.3)))
+        self.assertLess(tail.rgba[90, 120, :3].max(), 0.2)
+
     def test_a_tail_drawn_into_the_front_hair_goes_back_to_the_tail_but_the_strand_stays(self):
         from characters.rig.layers import tail_from_hair
         ref = np.ones((200, 200, 3), np.float32)

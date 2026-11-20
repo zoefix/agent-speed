@@ -129,7 +129,9 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
 ### Appendages
 
 `characters/rig/appendages.py` rigs tails, wings and animal ears from the See-Through layers. A character's spec
-(`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `tail`,
+(`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `tail`, `tailSwing`
+(a number, 1 by default, that scales the tail's turns, *Tail* below: a big tail over clothes that hide much of it
+swings less far, so less of what the art never drew shows),
 `wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
 move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
 cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
@@ -221,7 +223,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   border) area of such near-white pixels whose mean score is below 0.8, or below 0.99 when most of the area is outside
   every layer of the split (opacity above 0.5): a gap framed by raised arms can score 0.93, but white clothing is in a
   layer. Every layer is transparent there, so white clothing (high scores) stays and the gaps show the desktop.
-- **One tail**: the split also paints the tail into the layers around it. What it drew of the tail into the front
+- **One tail**: the split also paints the tail into the layers around it, and may take a hat's white plume for tail:
+  a piece of the tail layer (pieces 3 px apart are one) wholly above the chin that touches the headwear (within
+  3 px) joins the headwear, and a tail left with nothing goes. What it drew of the tail into the front
   hair (a strand hanging over the tail takes the tail with it) goes back to the tail: a watershed over the art's
   gradient grows the hair from its pixels above the chin and the tail from the hair within 3 px of the tail layer;
   what the tail reaches, from where it narrows below half its widest row down (a strand is narrow, a tail wide),
@@ -230,7 +234,9 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   holds 90 % of the tail layer and is at most 2.5 times its size); the back hair's pixels inside it, in pieces of at
   least 500 px that touch the tail layer, join the tail (the top of a tail behind long hair), and the back hair is
   repainted there. Notches in the stitched tail's outline (closed by a disk of radius 15 px) are filled with the art
-  where no layer drawn over it hides them, so the rest pose is unchanged. The tail is then made opaque inside its
+  where no layer drawn over it hides them, so the rest pose is unchanged; bare paper between the tufts of a furry
+  outline (the matte's, *Recovery*) is left out, so it never stays on the tail as white specks.
+  The tail is then made opaque inside its
   outline (eroded by 2 px) where no layer drawn over it hides it; what those layers hide of it keeps its opacity but
   takes a blur of the tail that shows (3 px inside its outline), so See-Through's dark guess there never shows as a
   band once the tail swings out. It is also opaque wherever a layer behind it
@@ -238,7 +244,14 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   tail with at least 15 % of a 4 px ring on it (the tail's base, cut short) joins the tail layer. A `legwear`,
   `bottomwear` or `topwear` layer drawn over the tail is in front of it only if the art shows the clothes there: when
   on at least half of their overlap (2000 px or more) the tail layer's own paint matches the art (mean channel
-  difference, 5 px box, under 0.06), the tail is what shows, so it moves to just above those layers. A layer drawn
+  difference, 5 px box, under 0.06), the tail is what shows, so it moves to just above those layers. What the art
+  shows of such a layer over the tail all the same becomes a layer of its own, `<name> front`, just above the tail
+  (and keeps its paint in the layer under the tail too), so the tail never carries it when it swings: a coat's strap
+  and tassel over the tail's root. Its seeds lie at least 4 px inside the tail's outline, where the layer's paint
+  matches the art, the tail's does not, and the layer's stands apart from the tail's colors the art shows around
+  there (a blur of them as for tail copies; mean channel difference over 0.15, 5 px box: a white skirt by a white
+  tail tip is no seed), in pieces of 40 px or more; each runs on up to 12 px over the rest of what the layer's paint
+  matches there, then 2 px over the layer. The tail under it takes that blur of the tail around it. A layer drawn
   under the tail whose paint matches the tail's on at least half of their overlap holds a copy too (the back hair
   under a tail curling up). Each such copy is repainted (for a layer over the tail the copy grown by 2 px, for one
   under it everything the tail covers at over 0.05 opacity, its ink outline and soft edge too): inside the layer's
@@ -260,7 +273,7 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   smoothstep(0.58, 0.75, u)`, `tail2 = smoothstep(0.25, 0.42, u) · (1 − tail3)`, the rest `tail1`, which hands over
   to the lower body below `u = 0.1`. `TailSwish` turns `tail1` ±16° and `tail2` ±10°; the physics chain `tail`
   (stiffness 28, damping 5, wind 0.7, anchored to the hip and pushed along x by `TailSwish`) drives `TailBend1`–`3`
-  (−8°, −12°, −16° per unit).
+  (−8°, −12°, −16° per unit). The `tailSwing` hint scales these driver turns (not the chain's own angles).
 - **Wings**: per image side, the bone `wing.<side>` (parent the chest) pivots at the wing pixel nearest the spine
   point (neck x, chin + 0.45 × chin-to-waist); a vertex weighs `smoothstep(0.03, 0.15, distance / reach)` on the
   wing of its side, the rest the chest. `WingFlap` turns them ±14° (both rise for +1) and widens them by 8 %.

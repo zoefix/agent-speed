@@ -279,6 +279,34 @@ def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, 
     return int(piece.sum())
 
 
+def tail_off_head(layers, face_box, bridge=3, reach=3):
+    """Gives the hat what the split took for tail on it (a hat's white plume): each piece of the tail layer (pieces
+    `bridge` px apart are one) that lies wholly above the chin and touches the headwear (within `reach` px) joins
+    the headwear. A tail left with nothing goes. Returns the layers and the pixels moved."""
+    tail = next((layer for layer in layers if layer.tag == "tail"), None)
+    hat = next((layer for layer in layers if layer.tag == "headwear"), None)
+    if tail is None or hat is None:
+        return layers, 0
+    mask = tail.alpha > 0.02
+    labels, count = ndimage.label(ndimage.binary_closing(mask, iterations=bridge) | mask)
+    if not count:
+        return layers, 0
+    near = ndimage.binary_dilation(hat.alpha > 0.5, iterations=reach)
+    rows = np.broadcast_to(np.arange(mask.shape[0])[:, None], mask.shape)
+    lowest = np.asarray(ndimage.maximum(rows, labels, range(1, count + 1)))
+    touching = np.asarray(ndimage.maximum(near, labels, range(1, count + 1))) > 0
+    piece = np.isin(labels, 1 + np.flatnonzero(touching & (lowest < face_box[3]))) & mask
+    if not piece.any():
+        return layers, 0
+    take = piece & (tail.alpha > hat.alpha)
+    hat.rgba[..., :3] = np.where(take[..., None], tail.rgba[..., :3], hat.rgba[..., :3])
+    hat.rgba[..., 3] = np.where(piece, np.maximum(hat.alpha, tail.alpha), hat.alpha)
+    tail.rgba[..., 3] = np.where(piece, 0.0, tail.alpha)
+    if tail.alpha.max() < 0.12:
+        layers = [layer for layer in layers if layer is not tail]
+    return layers, int(piece.sum())
+
+
 def tail_from_back_hair(layers, mask, reach=3, min_px=500):
     """Gives the tail what the split drew of it into the back hair (the top of a tail behind long hair), so it swings
     with the rest: the back hair's pixels inside `mask` (segment.tail_mask) in pieces that touch the tail layer
@@ -306,12 +334,13 @@ def tail_from_back_hair(layers, mask, reach=3, min_px=500):
     return int(piece.sum())
 
 
-def seal_tail(layers, reference, core=2, notch=15, rim=3):
+def seal_tail(layers, reference, core=2, notch=15, rim=3, paper=None):
     """Makes the tail whole where it shows. The pieces it was stitched from (a recovered base, a piece from the hair)
     meet with soft edges and leave notches between them, which show the backdrop as a crack once the tail swings over
     it. Notches up to about 2 * `notch` px across (the tail's outline closed by a disk of radius `notch`) are filled
-    with the art as it shows there, so the rest pose is unchanged; then the tail is opaque inside its outline (eroded
-    by `core` px).
+    with the art as it shows there, so the rest pose is unchanged, except the bare `paper` (matte.paper) between the
+    tufts of a furry outline, which would stay on the tail as white specks; then the tail is opaque inside its outline
+    (eroded by `core` px).
     What layers drawn over it hide keeps its opacity (See-Through's guess there would show as a slab once the tail
     swings out) but takes a blur of the tail that shows, `rim` px inside its outline, so it is no dark band either."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
@@ -324,6 +353,8 @@ def seal_tail(layers, reference, core=2, notch=15, rim=3):
     disk = xx * xx + yy * yy <= notch * notch
     closed = ndimage.binary_fill_holes(ndimage.binary_closing(solid, structure=disk))
     gap = closed & ~solid & ~hidden
+    if paper is not None:
+        gap &= ~paper
     tail.rgba[..., :3] = np.where(gap[..., None], reference, tail.rgba[..., :3])
     tail.rgba[..., 3] = np.where(gap, 1.0, tail.alpha)
     inside = ndimage.binary_erosion(ndimage.binary_fill_holes(tail.alpha > 0.5), iterations=core)
@@ -349,6 +380,8 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
     `share` of their overlap (`min_px` or more) the tail layer's own paint matches the art, the tail is what shows, so
     the tail moves to just above those layers and their copy is repainted. A layer drawn under the tail whose paint
     matches the tail's on at least `share` of their overlap holds a copy too, which is repainted (_repaint_copy).
+    What the art shows of such a clothing layer over the tail (a coat's strap and tassel over the tail's root) stays in
+    front of it as its own layer, `<name> front`, just above the tail, so the tail never carries it when it swings.
     Returns the layers and the names of the layers whose copy was repainted."""
     index = next((k for k, layer in enumerate(layers) if layer.tag == "tail"), None)
     if index is None:
@@ -356,7 +389,9 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
     tail = layers[index]
     mask = tail.alpha > 0.5
     shown = ndimage.uniform_filter(np.abs(tail.rgba[..., :3] - reference).mean(axis=2), 5) < 0.06
-    covered, repainted = [], []
+    inner = ndimage.binary_erosion(mask, iterations=4)
+    covered, repainted, fronts = [], [], []
+    expected = None
     for k, layer in enumerate(layers):
         if k == index:
             continue
@@ -365,8 +400,18 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
             continue
         if k > index and layer.tag in FRONT_OF_TAIL and (shown & overlap).sum() >= share * overlap.sum():
             covered.append(k)
-            cleared = _repaint_copy(layer, ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02), mask)
-            tail.rgba[..., 3] = np.where(cleared, 1.0, tail.alpha)
+            if expected is None:
+                # The tail's colors as the art shows them around each pixel: its paint where hidden is a guess.
+                expected = _smooth_fill(tail.rgba[..., :3].copy(), mask & shown)
+            front = _clothes_in_front(layer, expected, reference, overlap & ~shown, inner)
+            if front.any():
+                rgba = layer.rgba.copy()
+                rgba[..., 3] = np.where(front, rgba[..., 3], 0.0)
+                fronts.append(Layer(f"{layer.name} front", layer.tag, rgba, layer.side))
+            copy = ndimage.binary_dilation(mask, iterations=2) & (layer.alpha > 0.02) & ~front
+            if copy.any():
+                cleared = _repaint_copy(layer, copy, mask & ~front)
+                tail.rgba[..., 3] = np.where(cleared, 1.0, tail.alpha)
             repainted.append(layer.name)
         elif k < index:
             same = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail.rgba[..., :3]).mean(axis=2), 5) < 0.06
@@ -375,10 +420,36 @@ def tail_alone(layers, reference, share=0.5, min_px=2000):
                 copy = (tail.alpha > 0.05) & (layer.alpha > 0.02)
                 _repaint_copy(layer, copy, copy)
                 repainted.append(layer.name)
+    if fronts:
+        # Under what stays in front, the tail's paint is a guess; it takes the tail around it that the art shows.
+        under = np.logical_or.reduce([f.alpha > 0.02 for f in fronts]) & (tail.alpha > 0.05)
+        tail.rgba[..., :3] = np.where(under[..., None], expected, tail.rgba[..., :3])
     if covered:
         layers = [layer for k, layer in enumerate(layers) if k != index]
-        layers.insert(max(covered), tail)
+        at = max(covered)
+        layers[at:at] = [tail] + fronts
     return layers, repainted
+
+
+def _clothes_in_front(layer, tail_colors, reference, candidates, inner, min_px=40, reach=12, grow=2, apart=0.15):
+    """The pixels of `layer` the art shows in front of the tail (a coat's strap and tassel over the tail's root).
+    Seeds: among `candidates` (where the tail's paint does not match the art) within `inner` (the tail 4 px in from
+    its outline, where the 5 px boxes never straddle it), those where the layer's own paint matches the art and
+    stands apart from `tail_colors` (the tail's colors that the art shows around there; mean channel difference over
+    `apart`: a white skirt by a white tail tip is no seed), in pieces of at least `min_px`. Each runs on up to `reach`
+    px over the candidates the layer's paint matches (the rest of a tassel whose dark cord looks like fur), then
+    `grow` px over the layer for its rim."""
+    own = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - reference).mean(axis=2), 5) < 0.06
+    unlike = ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - tail_colors).mean(axis=2), 5) > apart
+    allowed = candidates & own & (layer.alpha > 0.5)
+    seeds = allowed & unlike & inner
+    labels, count = ndimage.label(seeds)
+    if not count:
+        return seeds
+    sizes = np.asarray(ndimage.sum(seeds, labels, range(1, count + 1)))
+    seeds = np.isin(labels, 1 + np.flatnonzero(sizes >= min_px))
+    front = ndimage.binary_dilation(seeds, iterations=reach, mask=allowed) | seeds
+    return ndimage.binary_dilation(front, iterations=grow) & (layer.alpha > 0.02)
 
 
 def drop_empty(layers, threshold=0.12):

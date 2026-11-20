@@ -35,7 +35,7 @@ def linear(pid, bone, channel, amount):
     return drive(pid, bone, channel, [(-1, -amount), (1, amount)])
 
 
-def build(lm, bone_names):
+def build(lm, bone_names, tail_swing=1.0):
     fw = lm["faceWidth"]
     has = set(bone_names).__contains__
     params = [
@@ -131,7 +131,7 @@ def build(lm, bone_names):
         drivers.append(linear("Skirt", "skirt", "rotate", -5))
         physics.append(chain("skirt", lm["waist"], [lm["hem"] - lm["waist"][1]], ["Skirt"], [5], fw,
                              stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
-    appendage_controls(lm, has, fw, params, drivers, physics)
+    appendage_controls(lm, has, fw, params, drivers, physics, tail_swing)
     return params, drivers, physics
 
 
@@ -142,14 +142,15 @@ WING_FLAP, WING_SPREAD = 14.0, 0.08
 EAR_TWITCH = 12.0
 
 
-def appendage_controls(lm, has, fw, params, drivers, physics):
-    """Parameters, drivers and physics of tails, wings and animal ears (spec/CHARACTERS.md, Appendages)."""
+def appendage_controls(lm, has, fw, params, drivers, physics, tail_swing=1.0):
+    """Parameters, drivers and physics of tails, wings and animal ears (spec/CHARACTERS.md, Appendages). The tail's
+    turns scale by `tail_swing` (the `tailSwing` hint), so a tail over clothes it hides swings less far."""
     if has("tail1") and "tail" in lm:
         t = lm["tail"]
         params += [param("TailSwish"), param("TailBend1"), param("TailBend2"), param("TailBend3")]
-        drivers += [linear("TailSwish", "tail1", "rotate", TAIL_SWISH[0]),
-                    linear("TailSwish", "tail2", "rotate", TAIL_SWISH[1])]
-        drivers += [linear(f"TailBend{i + 1}", bone, "rotate", -d) for i, (bone, d) in
+        drivers += [linear("TailSwish", "tail1", "rotate", TAIL_SWISH[0] * tail_swing),
+                    linear("TailSwish", "tail2", "rotate", TAIL_SWISH[1] * tail_swing)]
+        drivers += [linear(f"TailBend{i + 1}", bone, "rotate", -d * tail_swing) for i, (bone, d) in
                     enumerate(zip(("tail1", "tail2", "tail3"), TAIL_BEND))]
         lengths = [t["length"] / 3] * 3
         spec = chain("tail", t["root"], lengths, ["TailBend1", "TailBend2", "TailBend3"], list(TAIL_BEND), fw,

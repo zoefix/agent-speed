@@ -161,8 +161,8 @@ def main(argv=None):
     ap.add_argument("--out")
     ap.add_argument("--variants")
     ap.add_argument("--sam", help="Segment Anything ViT-B checkpoint for precise hand outlines")
-    ap.add_argument("--spec", help="the character's spec: its `rig` hints "
-                                   "(tail, wings, ears, staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
+    ap.add_argument("--spec", help="the character's spec: its `rig` hints (tail, tailSwing, wings, ears, "
+                                   "staticObjects, legsInSkirt, rigidLower, bodyInArms, props)")
     ap.add_argument("--matte", help="anime figure matte (isnetis.onnx) that tells bare paper from white art")
     ap.add_argument("--band", help="the pose band this art shows, for band-specific hints (props)")
     ap.add_argument("--idle", help="the character's idle pose (its built package): refuse this pose if it draws no "
@@ -190,7 +190,11 @@ def main(argv=None):
         bare = matte.paper(reference, figure, covered=layers.coverage(parts) > 0.5)
         print(f"bare paper: {int(bare.sum())} px, {matte.clear_paper(parts, bare)} layer px cleared")
     print("\n".join(appendages.recover(parts, reference, hints, bare=bare, figure=figure)))
-    moved = layers.tail_from_hair(parts, reference, skeleton.box(next(p for p in parts if p.tag == "face").alpha))
+    face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
+    parts, moved = layers.tail_off_head(parts, face_box)
+    if moved:
+        print(f"tail on the hat given to the hat: {moved} px")
+    moved = layers.tail_from_hair(parts, reference, face_box)
     if moved:
         print(f"tail drawn into the front hair given back to the tail: {moved} px")
     tail_layer = next((p for p in parts if p.tag == "tail"), None)
@@ -199,7 +203,7 @@ def main(argv=None):
         moved = layers.tail_from_back_hair(parts, segment.tail_mask(reference, tail_layer.alpha, args.sam))
         if moved:
             print(f"tail drawn into the back hair given back to the tail: {moved} px")
-    layers.seal_tail(parts, reference)
+    layers.seal_tail(parts, reference, paper=bare)
     parts, copies = layers.tail_alone(parts, reference)
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
@@ -351,7 +355,7 @@ def main(argv=None):
         uv = vertices - np.array([x0, y0], np.float32) + np.array([ax, ay], np.float32)
         entries.append(package.part_entry(layer, order, vertices, uv, triangles, bone_idx, weights))
 
-    plist, drivers, physics = params.build(lm, list(bone_index))
+    plist, drivers, physics = params.build(lm, list(bone_index), tail_swing=float(hints.get("tailSwing", 1.0)))
     vparams, vdrivers, part_drivers, vmeta = params.variant_controls(loaded, {e["name"] for e in entries})
     path = package.write(args.out, args.name, size, sheet, bones, plist + vparams, drivers + vdrivers, physics,
                          entries, landmark_summary(lm), part_drivers, vmeta)
