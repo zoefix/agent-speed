@@ -21,6 +21,7 @@ import json
 from pathlib import Path
 
 import numpy as np
+from scipy import ndimage
 
 from ..reference.motions.profile import AT_MOUTH
 from . import appendages, atlas, checks, hands, layers, mesh, package, params, patches, pose, skeleton, variants
@@ -106,15 +107,33 @@ def prop_hint(hints, band):
     return prop, None
 
 
-def object_bone(layer, lm):
-    """The bone an object follows: the hand holding it (within 0.6 face widths of it; for a prop, the hand nearest
-    it), or its forearm when that hand has no rig; an object no hand holds goes with the body, the hips below the
-    waist and the chest above."""
+def touches_hand(layer, parts, side, reach=6):
+    """Whether the hand of `side` (its hand layer, or its sleeve when the hand has none) comes within `reach` px of an
+    object piece."""
+    near = ndimage.binary_dilation(layer.alpha > 0.3, iterations=reach)
+    own = [p for p in parts if p.tag == "hand" and p.side == side] or \
+          [p for p in parts if p.tag == "handwear" and p.side == side]
+    return any((near & (p.alpha > 0.5)).any() for p in own)
+
+
+def touches_arm(layer, parts, side, reach=6):
+    """Whether the arm of `side` (its sleeve or hand layers) comes within `reach` px of an object piece."""
+    near = ndimage.binary_dilation(layer.alpha > 0.3, iterations=reach)
+    return any((near & (p.alpha > 0.5)).any() for p in parts if p.tag in ("hand", "handwear") and p.side == side)
+
+
+def object_bone(layer, lm, parts=None):
+    """The bone an object follows: the hand holding it (within 0.6 face widths of it and, given the `parts`, touched
+    by that arm's sleeve or hand; for a prop, the hand nearest it), or its forearm when that hand has no rig; an object
+    no hand holds (a pendant hanging from the belt by the hand) goes with the body, the hips below the waist and the
+    chest above."""
     if layer.name.startswith("prop"):
         bone = skeleton.attach_object(layer, lm)
         side = bone.split(".", 1)[1] if bone else None
     else:
         side = skeleton.holding_side(layer, lm, 0.6 * lm["faceWidth"])
+        if side is not None and parts is not None and not touches_arm(layer, parts, side):
+            side = None
     if side is None:
         ys = np.nonzero(layer.alpha > 0.3)[0]
         return "lower" if len(ys) and ys.mean() > lm["waist"][1] else "chest"
@@ -207,11 +226,16 @@ def main(argv=None):
     parts, copies = layers.tail_alone(parts, reference)
     if copies:
         print(f"copies of the tail repainted in: {', '.join(copies)}")
-    layers.reproject(parts, reference)
+    arms_taken = layers.objects_over_arms(parts, reference)
+    owner = layers.reproject(parts, reference)
+    print(f"hidden paint settled: {layers.clean_hidden(parts, owner)} px")
     fx0, _, fx1, _ = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     parts = layers.split_pairs(parts, (fx0 + fx1) / 2)
     arm_joints = pose.arms(args.reference, size, (fx0 + fx1) / 2)
     parts = layers.split_objects(layers.drop_empty(layers.split_by_arms(parts, arm_joints, reference)))
+    parts, behind = layers.arms_behind_objects(parts, arms_taken)
+    if behind:
+        print(f"arms behind a held object the art shows over them: {behind} px")
     face_box = skeleton.box(next(p for p in parts if p.tag == "face").alpha)
     if hints.get("bodyInArms"):
         parts, moved = layers.split_body_from_arms(parts, arm_joints, reference, face_box)
@@ -221,6 +245,7 @@ def main(argv=None):
         print(f"hats drawn into the top given to the head: {hats}")
     print(f"hidden legs repainted from the legs that show: {layers.fill_hidden_legs(parts)} px")
     layers.grow_underlays(parts)
+    print(f"gaps under moving parts filled: {layers.fill_enclosed_under(parts)} px")
     shadow = appendages.floor_shadow(parts, reference, figure, bare=bare)
     rest_ignore = hat_moved if shadow is None else hat_moved | shadow
     feet = checks.has_feet(checks.layer_bottoms(parts), size[1])
@@ -260,9 +285,10 @@ def main(argv=None):
     if tail_lm is not None:
         backed = layers.back_tail_root(parts, tail_lm["root"], 0.35 * tail_lm["length"])
         print(f"behind the tail's root filled from the layers under it: {backed} px")
-    held = sorted(((float(p.alpha.sum()), object_bone(p, lm)) for p in parts if p.tag == "objects"), reverse=True)
+    held = sorted(((float(p.alpha.sum()), object_bone(p, lm, parts)) for p in parts if p.tag == "objects"),
+                  reverse=True)
     object_side = next((bone.split(".", 1)[1] for _, bone in held if bone.split(".")[0] in ("hand", "forearm")), None)
-    object_attach = {p.name: object_bone(p, lm) for p in parts if p.tag == "objects"}
+    object_attach = {p.name: object_bone(p, lm, parts) for p in parts if p.tag == "objects"}
     for name in object_attach:
         if hints.get("staticObjects") and not name.startswith("prop"):
             object_attach[name] = "lower"
@@ -274,8 +300,20 @@ def main(argv=None):
             if bone.split(".")[0] in ("hand", "forearm"):
                 object_attach[name] = "head"
     lm["objectSide"] = object_side
+    # An object both hands hold (an abacus) stays with the body; both arms then keep near it (params.TWO_HANDED_SWING).
+    for p in parts:
+        if (p.tag == "objects" and not p.name.startswith("prop") and not hints.get("staticObjects")
+                and all(touches_hand(p, parts, s) for s in ("left", "right"))):
+            ys = np.nonzero(p.alpha > 0.3)[0]
+            object_attach[p.name] = "lower" if ys.mean() > lm["waist"][1] else "chest"
+            lm["twoHanded"] = True
+            print(f"{p.name} held in both hands: goes with the body")
 
     loaded, rejected = [], []
+    # A static object (a wheelchair with its stand) stays the base's: a gesture on its side swaps the arm alone, so no
+    # second copy of the object fades in with it.
+    held_side = None if hints.get("staticObjects") else object_side
+    hidden = layers.ARM_TAGS if hints.get("staticObjects") else layers.HIDDEN_TAGS
     if args.variants:
         base_names = [p.name for p in parts]
         patch_base = None
@@ -283,7 +321,7 @@ def main(argv=None):
             if spec["kind"] == "patch" and patch_base is None:
                 patch_base = patches.Base(parts, reference, lm["face"])
             try:
-                v = variants.load(spec, reference, size, lm, object_side, base_names, patch_base)
+                v = variants.load(spec, reference, size, lm, held_side, base_names, patch_base, hidden)
             except patches.Rejected as e:
                 rejected.append(spec["id"])
                 print(f"variant {spec['id']:<11} rejected: {e}")
@@ -305,9 +343,9 @@ def main(argv=None):
         for v in loaded:
             if v.backdrop is not None:
                 patch, patch_tags[f"backdrop.{v.side}@{v.id}"] = layers.backdrop_patch(
-                    parts, v.backdrop, f"backdrop.{v.side}@{v.id}", v.side)
+                    parts, v.backdrop, f"backdrop.{v.side}@{v.id}", v.side, hidden=hidden)
                 v.parts.insert(0, patch)
-        filled, unknown = layers.fill_hidden(parts, backdrops)
+        filled, unknown = layers.fill_hidden(parts, backdrops, hidden=hidden)
         print(f"behind the arms: {filled} px repainted from variants, {unknown} px left as See-Through guessed")
         for v in loaded:
             v.backdrop = None
@@ -355,7 +393,10 @@ def main(argv=None):
         uv = vertices - np.array([x0, y0], np.float32) + np.array([ax, ay], np.float32)
         entries.append(package.part_entry(layer, order, vertices, uv, triangles, bone_idx, weights))
 
-    plist, drivers, physics = params.build(lm, list(bone_index), tail_swing=float(hints.get("tailSwing", 1.0)))
+    pose_name = args.band or (args.name.split("-", 1)[1] if args.name and "-" in args.name else None)
+    swing = {**hints.get("swing", {}), **hints.get("poseSwing", {}).get(pose_name, {})}
+    plist, drivers, physics = params.build(lm, list(bone_index), tail_swing=float(hints.get("tailSwing", 1.0)),
+                                           swing={k: float(v) for k, v in swing.items()})
     vparams, vdrivers, part_drivers, vmeta = params.variant_controls(loaded, {e["name"] for e in entries})
     path = package.write(args.out, args.name, size, sheet, bones, plist + vparams, drivers + vdrivers, physics,
                          entries, landmark_summary(lm), part_drivers, vmeta)

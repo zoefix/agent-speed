@@ -43,6 +43,7 @@
  "rig": {
   "tail": true,
   "wings": true,
-  "legsInSkirt": true
+  "legsInSkirt": true,
+  "swing": {"Arm.right": 0.35, "Forearm.right": 0.35}
  }
 }

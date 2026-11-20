@@ -118,7 +118,9 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
 - `face`: eyes, brows and mouth of a split face edit, with `Mouth.<id>` for its mouth (section 5).
 - `patch`: one part cut from an edit that changes only the face, with `region` `face` (the whole face: an
   expression), `mouth` or `eyes`. Its part `face@<id>` is fully in by `Var` 0.5 while the parts it replaces fade out
-  to 1. Patches lie right above the face and below the bangs, by region: `face` lowest, then `mouth`, then `eyes`,
+  to 1. Under the layers kept above it (the bangs) a patch shows the base face, by their opacity softened by a 2.5 px
+  blur raised 1.5 times (from 0.15 to 0.6), so the bangs' stair-stepped edges never show as a hard switch from the
+  edit. Patches lie right above the face and below the bangs, by region: `face` lowest, then `mouth`, then `eyes`,
   so a blink or a gaze shows over an expression and a talking mouth over it too. Ids name what they show:
   `expr-<name>` (region `face`: `smile`, `laugh`, `wink`, `surprised`, `pout`, `shy`, `thinking`, `sleepy`, `yawn`,
   `focused`, `smug`, `worried`, `excited`), `mouth-<a|i|u|o|closed>` (region `mouth`) and
@@ -132,9 +134,12 @@ A pose's `variants` (characters/README.md) are parts that swap in over its drawn
 (`characters/specs/<id>.json`) may carry build hints in `rig`, which stay out of the manifest: `tail`, `tailSwing`
 (a number, 1 by default, that scales the tail's turns, *Tail* below: a big tail over clothes that hide much of it
 swings less far, so less of what the art never drew shows),
-`wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object that does not
-move with the hand, such as a desk) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer
-cloth or a slit: legs and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
+`wings`, `ears` (animal ears; horns and fins beside the head stay still without it), `staticObjects` (a held object
+that does not move with the hand, such as a desk; a gesture on its side swaps the arm alone and leaves the object the
+base's), `swing` (parameter id prefixes to factors on their drivers, such as `{"Arm.right": 0.35}`: a part whose
+hidden art shows when it swings far moves less; `Lift`, `Bend` and `Var` stay), `poseSwing` (the same per pose,
+over `swing`) and `legsInSkirt` (the split draws the legs into the skirt layer too, through sheer cloth or a slit: legs
+and shoes take the skirt's weights, `lower` to `skirt` to `skirtHem` down to the hem, and there
 is no `foot` bone, so no `FootLift` or `FootPoint`; otherwise a lifted foot or a swinging hem shows each leg twice;
 the hint also suits long-skirted art whose boots peek out under a hem that barely covers their tops, which would
 otherwise part from the hem in a hop or a flare. With it, each blob of drawn art no layer covers (blobs as in
@@ -267,6 +272,21 @@ pivot between them and tear the raised leg from the skirt, so legs and shoes fol
   pixel that shows (over 10 px below the layers above, 2 px inside the outline) and is opaque where See-Through's
   guess is over 0.3 (ramping to it below), within a 45-degree cone above or below that pixel (6 px wider); the rest of
   the guess goes. A hem that swings up then shows the leg running on in its own colors, not a faint grey second pair.
+- **Objects over arms**: the split draws the arms above the held objects. Where an object's paint is nearer the art
+  than an arm's drawn above it (by 0.05 in mean channel difference, 5 px box), in pieces of 300 px or more, the arm
+  leaves those pixels to the object before the art is painted on the layers; once the arms are split, each piece goes
+  back to the nearest arm (hidden) and the object is drawn right above that arm, unless that arm also lies over the
+  object on 300 px or more elsewhere. A book held against a sleeve then never moves with the sleeve.
+- **Hidden paint**: what See-Through guessed of a layer under the layers drawn over it, where it stands apart from a
+  blur of the colors that layer shows (mean channel difference over 0.3: a dark slab on a white blouse, a hand drawn
+  into the book under it), takes that blur, so a part moving away uncovers the layer's own colors.
+- **Gaps under moving parts**: a gap of 30 px or more that the layers drawn below a sleeve, hand, object, the bangs or
+  the tail enclose where that part covers them joins the layer holding most of its rim, in a blur of its colors.
+- **Held objects**: an object piece follows a hand only when that arm's sleeve or hand comes within 6 px of it (a
+  pendant hanging from the belt by the hand stays with the body). One both hands touch (their hand layers, or their
+  sleeves without one) goes with the body (`lower` below the waist, `chest` above) and both arms swing 0.2 of their
+  `Arm`/`Forearm` turns; otherwise the arm holding an object swings 0.5 of them (what the art hides behind it is a
+  guess). `Lift` and `Bend` keep their range: a variant's lead turns the old arm by them.
 - **Tail**: the root is the tail pixel touching another layer (back hair excepted) nearest the waist; the midline is
   the geodesic path inside the tail to its farthest pixel. Bones `tail1`–`tail3` (parent the lower body, then each
   other) pivot at 0, 1/3 and 2/3 of its length. A vertex at geodesic fraction `u` weighs `tail3 =

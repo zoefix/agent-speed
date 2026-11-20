@@ -18,6 +18,13 @@ VARIANT_ARM_RANGE = 60.0
 LIFT_RANGE = 60.0
 VARIANT_FOREARM_RANGE = 90.0
 BEND_RANGE = 90.0
+# The arm holding an object swings this much of the free arm's turns: what the art hides behind a book or a fan is a
+# guess, which a wide swing of the object would uncover.
+HELD_SWING = 0.5
+# An object held in both hands: both arms keep to this much, so neither hand leaves it.
+TWO_HANDED_SWING = 0.2
+# Parameters a `swing` hint may not scale: a variant's lead turns the old arm by Lift and Bend toward the new one.
+UNSCALED = ("Lift.", "Bend.", "Var.")
 # How far the irises travel at EyeBall ±1, in face widths: a small glance, never sliding off to show the white.
 IRIS_TRAVEL = (0.017, 0.009)
 POS_X, POS_Y, HIP_X, HIP_COUNTER = 3.0, 2.0, 0.17, 0.08
@@ -35,7 +42,9 @@ def linear(pid, bone, channel, amount):
     return drive(pid, bone, channel, [(-1, -amount), (1, amount)])
 
 
-def build(lm, bone_names, tail_swing=1.0):
+def build(lm, bone_names, tail_swing=1.0, swing=None):
+    """Parameters, drivers and physics chains. `swing` maps parameter id prefixes to factors on their drivers' turns
+    and moves (the `swing` and `poseSwing` hints: a part whose hidden art shows when it swings far moves less)."""
     fw = lm["faceWidth"]
     has = set(bone_names).__contains__
     params = [
@@ -95,10 +104,11 @@ def build(lm, bone_names, tail_swing=1.0):
     physics = []
     for side, (upper, lower) in ARM_RANGES.items():
         if has(f"arm.{side}"):
+            held = TWO_HANDED_SWING if lm.get("twoHanded") else HELD_SWING if side == lm.get("objectSide") else 1.0
             params += [param(f"Arm.{side}"), param(f"Forearm.{side}"), param(f"Lift.{side}"), param(f"Bend.{side}")]
-            drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper))
+            drivers.append(linear(f"Arm.{side}", f"arm.{side}", "rotate", upper * held))
             drivers.append(linear(f"Lift.{side}", f"arm.{side}", "rotate", LIFT_RANGE))
-            drivers.append(linear(f"Forearm.{side}", f"forearm.{side}", "rotate", lower))
+            drivers.append(linear(f"Forearm.{side}", f"forearm.{side}", "rotate", lower * held))
             drivers.append(linear(f"Bend.{side}", f"forearm.{side}", "rotate", BEND_RANGE))
 
     for side, hand in lm.get("hands", {}).items():
@@ -132,6 +142,10 @@ def build(lm, bone_names, tail_swing=1.0):
         physics.append(chain("skirt", lm["waist"], [lm["hem"] - lm["waist"][1]], ["Skirt"], [5], fw,
                              stiffness=55, damping=7.5, wind=0.4, head=0.0, hip=HIP_X))
     appendage_controls(lm, has, fw, params, drivers, physics, tail_swing)
+    for d in drivers:
+        factor = next((f for prefix, f in (swing or {}).items() if d["param"].startswith(prefix)), None)
+        if factor is not None and not d["param"].startswith(UNSCALED):
+            d["keys"] = [[k, v * factor] for k, v in d["keys"]]
     return params, drivers, physics
 
 

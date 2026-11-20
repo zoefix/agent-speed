@@ -14,6 +14,8 @@ DRAW_ORDER = [
 PAIRED = {"handwear", "ears", "eyewhite", "irides", "eyelash", "eyebrow"}
 NO_GROWTH = {"eyewhite", "irides", "eyelash", "eyebrow", "nose", "mouth", "eyewear", "earwear"}
 HIDDEN_TAGS = ("handwear", "hand", "objects")
+# With a static object (a wheelchair) only the arms hide what a gesture reveals: the object stays put in every pose.
+ARM_TAGS = ("handwear", "hand")
 
 
 @dataclass
@@ -277,6 +279,101 @@ def tail_from_hair(layers, reference, face_box, core=3, min_px=2000, below=0.8, 
     tail.rgba[..., 3] = np.where(piece, np.maximum(tail.alpha, hair.alpha), tail.alpha)
     hair.rgba[..., 3] = np.where(piece, 0.0, hair.alpha)
     return int(piece.sum())
+
+
+def _own_paint(layer, reference, tol=0.06):
+    """Where a layer's own paint matches the art (mean channel difference over a 5 px box under `tol`)."""
+    return ndimage.uniform_filter(np.abs(layer.rgba[..., :3] - reference).mean(axis=2), 5) < tol
+
+
+def _settle(layer, shown, hidden, apart):
+    """Repaints the `hidden` pixels whose paint stands apart from a blur of the colors the layer shows."""
+    if not hidden.any() or shown.sum() < 50:
+        return 0
+    expected = _smooth_fill(layer.rgba[..., :3], shown)
+    off = hidden & (np.abs(layer.rgba[..., :3] - expected).mean(axis=2) > apart)
+    layer.rgba[..., :3] = np.where(off[..., None], expected, layer.rgba[..., :3])
+    return int(off.sum())
+
+
+def clean_hidden(layers, owner, apart=0.3, skip=NO_GROWTH):
+    """Settles what See-Through guessed behind the layers over each layer (`owner`, from reproject): a guess that
+    stands apart from the layer's own colors the art shows around it (mean channel difference over `apart` from a
+    blur of them: a dark slab on a white blouse, a hand drawn into the book under it) takes that blur, so a part that
+    moves away uncovers the layer's own colors. Returns the pixels repainted."""
+    total = 0
+    for i, layer in enumerate(layers):
+        if layer.tag not in skip:
+            total += _settle(layer, owner == i, (layer.alpha > 0.5) & (owner != i), apart)
+    return total
+
+
+def objects_over_arms(layers, reference, margin=0.05, min_px=300):
+    """Takes out of the arms what the art shows of a held object over them (a book held against a sleeve: the split
+    draws the arms above the objects): where an object's paint is nearer the art than the paint of an arm layer drawn
+    above it (by `margin` in mean channel difference over a 5 px box; See-Through's object paint is near, not equal),
+    in pieces of at least `min_px`, the arm leaves the pixels to the object, so the art there is painted on the object.
+    Returns what it took, for arms_behind_objects to give back as the part of the arm behind the object once the arms
+    are split."""
+    taken = []
+    for io, obj in enumerate(layers):
+        if obj.tag != "objects":
+            continue
+        d_obj = None
+        for arm in layers[io + 1:]:
+            if arm.tag not in ARM_TAGS:
+                continue
+            overlap = (obj.alpha > 0.5) & (arm.alpha > 0.5)
+            if overlap.sum() < min_px:
+                continue
+            if d_obj is None:
+                d_obj = ndimage.uniform_filter(np.abs(obj.rgba[..., :3] - reference).mean(axis=2), 5)
+            d_arm = ndimage.uniform_filter(np.abs(arm.rgba[..., :3] - reference).mean(axis=2), 5)
+            wins = ndimage.binary_opening(overlap & (d_obj + margin < d_arm), iterations=2)
+            wins = ndimage.binary_closing(wins, iterations=3) & overlap
+            labels, count = ndimage.label(wins)
+            if not count:
+                continue
+            sizes = np.asarray(ndimage.sum(wins, labels, range(1, count + 1)))
+            front = np.isin(labels, 1 + np.flatnonzero(sizes >= min_px))
+            if front.any():
+                behind = arm.rgba.copy()
+                behind[..., 3] = np.where(front, arm.alpha, 0.0)
+                arm.rgba[..., 3] = np.where(front, 0.0, arm.alpha)
+                taken.append((arm.tag, behind))
+    return taken
+
+
+def arms_behind_objects(layers, taken, min_px=300, apart=0.3):
+    """Gives each split arm what objects_over_arms took near it (each pixel to the nearest arm of that tag), its paint
+    settled against the arm's own colors (_settle), and draws the objects it lies under right above that arm. An arm
+    the art also shows over the same object (at least `min_px` of it drawn over the object elsewhere) keeps the object
+    under it and stays without those pixels. Returns the layers and the pixels given back."""
+    given = 0
+    for tag, behind in taken:
+        mask = behind[..., 3] > 0.02
+        arms = [layer for layer in layers if layer.tag == tag]
+        if not arms or not mask.any():
+            continue
+        dist = np.stack([ndimage.distance_transform_edt(~(arm.alpha > 0.5)) for arm in arms])
+        nearest = np.argmin(dist, axis=0)
+        for k, arm in enumerate(arms):
+            mine = mask & (nearest == k)
+            if mine.sum() < min_px:
+                continue
+            objects = [layer for layer in layers if layer.tag == "objects" and (layer.alpha[mine] > 0.5).any()]
+            if any(((obj.alpha > 0.5) & (arm.alpha > 0.5) & ~mine).sum() >= min_px for obj in objects):
+                continue
+            shown = arm.alpha > 0.5
+            arm.rgba[..., :3] = np.where(mine[..., None], behind[..., :3], arm.rgba[..., :3])
+            arm.rgba[..., 3] = np.where(mine, behind[..., 3], arm.alpha)
+            _settle(arm, shown, mine, apart)
+            given += int(mine.sum())
+            for obj in objects:
+                if layers.index(obj) < layers.index(arm):
+                    layers.remove(obj)
+                    layers.insert(layers.index(arm) + 1, obj)
+    return layers, given
 
 
 def tail_off_head(layers, face_box, bridge=3, reach=3):
@@ -675,8 +772,46 @@ def grow_underlays(layers, radius=10, seam=3):
         layer.rgba[..., 3] = np.where(grow, 1.0, layer.alpha)
 
 
-def _behind_arms(layers, margin):
-    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in HIDDEN_TAGS]
+MOVING_TAGS = ("handwear", "hand", "objects", "front hair", "tail")
+
+
+def fill_enclosed_under(layers, moving=MOVING_TAGS, min_px=30, pad=70):
+    """Fills the gaps the layers under a moving part leave inside themselves where that part covers them (a sleeve
+    hanging over a torso the split left open): each gap of at least `min_px` the layers drawn below the part enclose
+    joins the one of them that holds most of its rim, in a blur of that layer's colors (_smooth_fill), so the part
+    moving away uncovers that layer instead of the background. Returns the pixels filled."""
+    filled = 0
+    for m, part in enumerate(layers):
+        if part.tag not in moving or m == 0:
+            continue
+        lower = coverage(layers[:m]) > 0.5
+        gaps = ndimage.binary_fill_holes(lower) & ~lower & (part.alpha > 0.5)
+        gaps = ndimage.binary_opening(gaps, iterations=1)
+        labels, count = ndimage.label(gaps)
+        if not count:
+            continue
+        owner = owner_map(layers[:m])
+        for k, sl in enumerate(ndimage.find_objects(labels)):
+            y0, y1 = max(0, sl[0].start - pad), sl[0].stop + pad
+            x0, x1 = max(0, sl[1].start - pad), sl[1].stop + pad
+            gap = labels[y0:y1, x0:x1] == k + 1
+            if gap.sum() < min_px:
+                continue
+            rim = owner[y0:y1, x0:x1][ndimage.binary_dilation(gap, iterations=2) & ~gap]
+            rim = rim[rim >= 0]
+            if not len(rim):
+                continue
+            layer = layers[int(np.bincount(rim).argmax())]
+            view = layer.rgba[y0:y1, x0:x1]
+            colors = _smooth_fill(view[..., :3].copy(), view[..., 3] > 0.5)
+            view[..., :3] = np.where(gap[..., None], colors, view[..., :3])
+            view[..., 3] = np.where(gap, 1.0, view[..., 3])
+            filled += int(gap.sum())
+    return filled
+
+
+def _behind_arms(layers, margin, hidden=HIDDEN_TAGS):
+    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in hidden]
     return hidden_ids, ndimage.binary_dilation(np.isin(owner_map(layers), hidden_ids), iterations=margin)
 
 
@@ -684,15 +819,16 @@ def _revealed(backdrop, guard):
     return ~ndimage.binary_dilation(backdrop["hidden"] > 0.02, iterations=guard)
 
 
-def fill_hidden(layers, backdrops, guard=4):
+def fill_hidden(layers, backdrops, guard=4, hidden=HIDDEN_TAGS):
     """Repaints what the arms and the held object cover with what the pose variants show there.
 
     See-Through guesses the art behind an arm; once the arm moves that guess shows. Each backdrop is a variant image
     split into layers and aligned to the base canvas. Every area behind an arm takes as much as it can from the one
     variant that reveals most of it. Only pixels the arms cover fully, on layers drawn below them, change, so the
-    rest pose stays the same.
+    rest pose stays the same. `hidden` are the tags that cover what the variants reveal (ARM_TAGS with a static
+    object).
     """
-    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in HIDDEN_TAGS]
+    hidden_ids = [i for i, layer in enumerate(layers) if layer.tag in hidden]
     behind = coverage([layers[i] for i in hidden_ids]) > 0.98
     floor = min(hidden_ids)
     index = {layer.name: i for i, layer in enumerate(layers)}
@@ -728,9 +864,9 @@ def fill_hidden(layers, backdrops, guard=4):
     return filled, int(todo.sum())
 
 
-def backdrop_patch(layers, backdrop, name, side, margin=3, guard=4):
+def backdrop_patch(layers, backdrop, name, side, margin=3, guard=4, hidden=HIDDEN_TAGS):
     """One variant's own art for the area its replaced arm used to cover, plus the tag that owns each pixel."""
-    _, behind = _behind_arms(layers, margin)
+    _, behind = _behind_arms(layers, margin, hidden)
     region = behind & _revealed(backdrop, guard)
     alpha = np.where(region, backdrop["coverage"], 0.0).astype(np.float32)
     tags = np.array(backdrop["tags"] + [""])[backdrop["owner"]]

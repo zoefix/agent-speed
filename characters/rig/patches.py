@@ -42,8 +42,11 @@ COLOR_RING = (1.0, 8.0)
 MIN_RING_PX = 200
 # Spreads are matched only where the ring has some (ink, hair); a flat ring of skin matches the mean alone.
 GAIN_RANGE, MIN_SPREAD = (0.8, 1.25), 0.02
-# The edit gives way to the base face where the layers kept above the patch cover it by this much (from, to).
+# The edit gives way to the base face where the layers kept above the patch cover it by this much (from, to), the
+# cover softened by a blur of COVER_SOFTEN px raised by COVER_LIFT: See-Through's bangs have stair-stepped edges, and a
+# hard switch from the edit to the base along them shows those steps wherever the edit drew a strand elsewhere.
 COVER_RAMP = (0.15, 0.6)
+COVER_SOFTEN, COVER_LIFT = 2.5, 1.5
 # A pixel changed when the edit and the art, both blurred by CHANGE_SIGMA px, differ by CHANGE_LEVEL in a channel.
 # An edit must change MIN_CHANGED face widths squared of its region (a pucker of a small mouth is a few dozen px),
 # and MIN_CHANGED_OVER_NOISE times the share it changed around the head (a redrawn but unchanged face).
@@ -256,7 +259,8 @@ def cut(base, path, region):
     if moved < MIN_CHANGED * base.fw ** 2 or share < MIN_CHANGED_OVER_NOISE * noise:
         raise Rejected(f"the {region} region barely changed: {moved} px ({share:.2%} of it, "
                        f"{noise:.2%} around the head)")
-    w = smoothstep(COVER_RAMP[0], COVER_RAMP[1], r["cover"])[..., None]
+    cover = np.maximum(r["cover"], COVER_LIFT * ndimage.gaussian_filter(r["cover"], COVER_SOFTEN))
+    w = smoothstep(COVER_RAMP[0], COVER_RAMP[1], cover)[..., None]
     rgba = np.zeros(base.shape + (4,), np.float32)
     rgba[..., :3] = edit * (1 - w) + r["under"] * w
     rgba[..., 3] = r["alpha"]

@@ -928,6 +928,48 @@ class TailCopyTests(unittest.TestCase):
         self.assertEqual(skirt.alpha[130, 110], 1.0)
         self.assertLess(skirt.rgba[130, 110, 0], 0.5)
 
+    def test_a_book_the_art_shows_over_a_sleeve_is_drawn_over_that_arm(self):
+        from characters.rig.layers import arms_behind_objects, objects_over_arms, reproject
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 40:120] = 0.9
+        ref[80:140, 60:140] = 0.1
+        book = self.layer("objects", (0.1, 0.1, 0.1), (80, 140, 60, 140))
+        sleeve = self.layer("handwear", (0.9, 0.9, 0.9), (40, 160, 40, 120))
+        parts = [book, sleeve]
+        taken = objects_over_arms(parts, ref)
+        reproject(parts, ref)
+        self.assertEqual(sleeve.alpha[110, 100], 0.0)
+        self.assertLess(book.rgba[110, 100, 0], 0.2)
+        parts, given = arms_behind_objects(parts, taken)
+        self.assertGreater(given, 0)
+        self.assertEqual([q.tag for q in parts], ["handwear", "objects"])
+        self.assertEqual(sleeve.alpha[110, 100], 1.0)
+        self.assertGreater(sleeve.rgba[110, 100, 0], 0.8)
+
+    def test_a_dark_guess_behind_an_arm_takes_the_layers_own_colors(self):
+        from characters.rig.layers import clean_hidden, reproject
+        ref = np.ones((200, 200, 3), np.float32)
+        ref[40:160, 40:160] = 0.9
+        ref[80:120, 80:120] = (0.9, 0.7, 0.6)
+        blouse = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 160))
+        blouse.rgba[85:115, 85:115, :3] = 0.1
+        arm = self.layer("handwear", (0.9, 0.7, 0.6), (80, 120, 80, 120))
+        owner = reproject([blouse, arm], ref)
+        self.assertGreater(clean_hidden([blouse, arm], owner), 0)
+        self.assertGreater(blouse.rgba[100, 100, :3].min(), 0.8)
+        self.assertTrue(np.allclose(blouse.rgba[50, 50, :3], 0.9))
+
+    def test_a_gap_the_torso_leaves_under_a_sleeve_is_filled_from_the_torso(self):
+        from characters.rig.layers import fill_enclosed_under
+        torso = self.layer("topwear", (0.9, 0.9, 0.9), (40, 160, 40, 160))
+        torso.rgba[80:120, 80:120, 3] = 0.0
+        sleeve = self.layer("handwear", (0.3, 0.3, 0.8), (70, 130, 70, 130))
+        open_gap = self.layer("topwear", (0.9, 0.9, 0.9), (0, 0, 0, 0))
+        self.assertGreater(fill_enclosed_under([torso, sleeve]), 1500)
+        self.assertEqual(torso.alpha[100, 100], 1.0)
+        self.assertTrue(np.allclose(torso.rgba[100, 100, :3], 0.9))
+        self.assertEqual(open_gap.alpha.max(), 0.0)
+
     def test_a_plume_on_the_hat_taken_for_tail_goes_to_the_hat(self):
         from characters.rig.layers import tail_off_head
         hat = self.layer("headwear", (0.8, 0.1, 0.1), (10, 45, 60, 140))

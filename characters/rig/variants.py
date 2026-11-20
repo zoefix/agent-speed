@@ -78,14 +78,14 @@ def _wrap(d):
     return (d + 180) % 360 - 180
 
 
-def _backdrop(ordered, owner):
+def _backdrop(ordered, owner, hidden=L.HIDDEN_TAGS):
     rgb = np.zeros(owner.shape + (3,), np.float32)
     for i, layer in enumerate(ordered):
         mine = owner == i
         rgb[mine] = layer.rgba[..., :3][mine]
     return {"names": [layer.name for layer in ordered], "tags": [layer.tag for layer in ordered], "owner": owner,
             "rgb": rgb, "coverage": L.coverage(ordered),
-            "hidden": L.coverage([layer for layer in ordered if layer.tag in L.HIDDEN_TAGS])}
+            "hidden": L.coverage([layer for layer in ordered if layer.tag in hidden])}
 
 
 def _meet(gap, base_range, variant_range):
@@ -100,7 +100,7 @@ def _rename(layer, vid):
     return L.Layer(f"{layer.name}@{vid}", layer.tag, layer.rgba, layer.side)
 
 
-def arm_variant(spec, base_reference, size, lm, object_side):
+def arm_variant(spec, base_reference, size, lm, object_side, hidden=L.HIDDEN_TAGS):
     vid, side = spec["id"], spec["side"]
     fx0, fy0, fx1, fy1 = lm["face"]
     center_x = (fx0 + fx1) / 2
@@ -118,7 +118,7 @@ def arm_variant(spec, base_reference, size, lm, object_side):
     front = spec.get("front", top < lm["chin"] + 0.3 * (fy1 - fy0))
     ordered = [layer for layer in vlayers if layer not in take] + take if front else vlayers
     owner = L.reproject(ordered, image)
-    backdrop = _backdrop(ordered, owner)
+    backdrop = _backdrop(ordered, owner, hidden)
 
     base_arm = lm["arms"][side]
     joints = found_arms.get(side)
@@ -169,9 +169,9 @@ def patch_variant(spec, base):
     return Variant(vid, "patch", None, [L.Layer(f"face@{vid}", "face", rgba)], replaces, report=report, region=region)
 
 
-def load(spec, base_reference, size, lm, object_side, base_names, patch_base=None):
+def load(spec, base_reference, size, lm, object_side, base_names, patch_base=None, hidden=L.HIDDEN_TAGS):
     if spec["kind"] == "arm":
-        return arm_variant(spec, base_reference, size, lm, object_side)
+        return arm_variant(spec, base_reference, size, lm, object_side, hidden)
     if spec["kind"] == "face":
         return face_variant(spec, base_reference, size, lm, base_names)
     if spec["kind"] == "patch":
